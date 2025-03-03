@@ -983,7 +983,7 @@ def main():
         default="_seg.npy",
     )
     parser.add_argument("--no-training", action="store_true", help="Skip training and only evaluate the model")
-    parser.add_argument("--autoencoder", type=str, help="Path to autoencoder model", required=True)
+    parser.add_argument("--autoencoder", type=str, help="Path to autoencoder model")
     parser.add_argument("--diameter", type=int, default=35, help="Expected diameter of neurons for cellpose")
     parser.add_argument("--px", type=float, default=0.32e-6, help="Meters per pixel")
     parser.add_argument("--z", type=float, default=1e-6, help="Meters per z-slice")
@@ -1023,6 +1023,22 @@ def main():
     device = args.device
     print(f"Using device: {device}")
 
+    if args.analyze_grid_results:
+        print(f"Analyzing grid search results from {args.analyze_grid_results}")
+        visualize_grid_search_results(args.analyze_grid_results)
+
+        # Load and print top models
+        results_df = pd.read_csv(args.analyze_grid_results)
+        if not results_df.empty:
+            print("\nTop 10 models by AUC:")
+            top_auc = results_df.sort_values("auc", ascending=False).head(10)
+            print(top_auc[["model_name", "auc", "precision", "recall", "f1"]])
+
+            print("\nTop 10 models by F1:")
+            top_f1 = results_df.sort_values("f1", ascending=False).head(10)
+            print(top_f1[["model_name", "auc", "precision", "recall", "f1"]])
+        return
+
     # Load autoencoder model
     autoencoder = NeuronAutoencoder().to(device)
     autoencoder.load_state_dict(torch.load(args.autoencoder, map_location=device)["model_state_dict"])
@@ -1037,22 +1053,6 @@ def main():
     print(f"Total samples: {len(features)}")
     print(f"Healthy cells: {np.sum(labels == 1)} ({np.mean(labels == 1) * 100:.1f}%)")
     print(f"Unhealthy cells: {np.sum(labels == 0)} ({np.mean(labels == 0) * 100:.1f}%)")
-
-    if args.analyze_grid_results:
-        print(f"Analyzing grid search results from {args.analyze_grid_results}")
-        visualize_grid_search_results(args.analyze_grid_results)
-
-        # Load and print top models
-        results_df = pd.read_csv(args.analyze_grid_results)
-        if not results_df.empty:
-            print("\nTop 5 models by AUC:")
-            top_auc = results_df.sort_values("auc", ascending=False).head(5)
-            print(top_auc[["model_name", "auc", "precision", "recall", "f1"]])
-
-            print("\nTop 5 models by F1:")
-            top_f1 = results_df.sort_values("f1", ascending=False).head(5)
-            print(top_f1[["model_name", "auc", "precision", "recall", "f1"]])
-        return
 
     if args.grid_search:
         print("\nPerforming grid search over hyperparameters...")

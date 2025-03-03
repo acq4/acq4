@@ -92,10 +92,10 @@ def train_autoencoder(
         print(f"Saved model to {save_path}")
         if sig:
             raise KeyboardInterrupt
+
     signal.signal(signal.SIGINT, do_save)
 
     for epoch in tqdm(range(num_epochs), desc="Training"):
-
         model.train()
         total_loss = 0
 
@@ -131,8 +131,8 @@ def visualize_reconstructions(model: NeuronAutoencoder, regions: List[np.ndarray
     You can zoom, pan, and adjust contrast in real-time!
     """
     # Set pyqtgraph to use white background for better contrast
-    pg.setConfigOption('background', 'w')
-    pg.setConfigOption('foreground', 'k')
+    pg.setConfigOption("background", "w")
+    pg.setConfigOption("foreground", "k")
 
     # Create the application if it doesn't exist
     app = QtWidgets.QApplication.instance()
@@ -140,7 +140,7 @@ def visualize_reconstructions(model: NeuronAutoencoder, regions: List[np.ndarray
         app = QtWidgets.QApplication([])
 
     # Create a colormap that works well for neuroscience data
-    colormap = pg.colormap.get('viridis')
+    colormap = pg.colormap.get("viridis")
 
     model.eval()
     device = next(model.parameters()).device
@@ -224,11 +224,221 @@ def visualize_reconstructions(model: NeuronAutoencoder, regions: List[np.ndarray
             windows.append(win)  # Keep reference to prevent garbage collection
 
     # Start Qt event loop if not already running
-    if app is not None and not (hasattr(app, '_in_event_loop') and app._in_event_loop):
+    if app is not None and not (hasattr(app, "_in_event_loop") and app._in_event_loop):
         print("🔬 Interactive neuron visualization running! Close windows to continue...")
         app.exec_()
 
     return windows
+
+
+def visualize_z_stack_comparison(model: NeuronAutoencoder, regions: List[np.ndarray], seed: int = 42):
+    """
+    Visualize all z-layers of original and reconstructed neurons side by side.
+
+    Args:
+        model: Trained autoencoder model
+        regions: List of neuron regions to visualize
+        seed: Random seed for consistent cell order
+
+    Returns:
+        Reference to Qt application window
+    """
+    # Set random seed for reproducible cell ordering
+    np.random.seed(seed)
+
+    # Set pyqtgraph to use white background for better contrast
+    pg.setConfigOption("background", "w")
+    pg.setConfigOption("foreground", "k")
+
+    # Create the application if it doesn't exist
+    app = QtWidgets.QApplication.instance()
+    if app is None:
+        app = QtWidgets.QApplication([])
+
+    # Create a colormap that works well for neuroscience data
+    colormap = pg.colormap.get("viridis")
+
+    # Ensure model is in eval mode
+    model.eval()
+    device = next(model.parameters()).device
+
+    # Create main window
+    main_window = QtWidgets.QMainWindow()
+    main_window.setWindowTitle("Z-Stack Neuron Autoencoder Viewer")
+    main_window.resize(1200, 800)
+
+    # Create central widget with scroll area for z-layers
+    central_widget = QtWidgets.QWidget()
+    main_layout = QtWidgets.QVBoxLayout()
+    central_widget.setLayout(main_layout)
+
+    # Header with title
+    header = QtWidgets.QLabel("🧠 Z-Stack Neuron Autoencoder Viewer")
+    header.setAlignment(QtCore.Qt.AlignCenter)
+    header.setStyleSheet("font-weight: bold; font-size: 18px; margin: 10px;")
+    main_layout.addWidget(header)
+
+    # Create a scroll area for the z-stack images
+    scroll_area = QtWidgets.QScrollArea()
+    scroll_area.setWidgetResizable(True)
+    scroll_container = QtWidgets.QWidget()
+    scroll_layout = QtWidgets.QVBoxLayout(scroll_container)
+    scroll_area.setWidget(scroll_container)
+
+    # Add scroll area to main layout
+    main_layout.addWidget(scroll_area)
+
+    # Create a widget for the controls
+    control_widget = QtWidgets.QWidget()
+    control_layout = QtWidgets.QHBoxLayout()
+    control_widget.setLayout(control_layout)
+
+    # Create cell counter label
+    cell_counter = QtWidgets.QLabel("Cell 1/?")
+    cell_counter.setStyleSheet("font-weight: bold; font-size: 14px;")
+
+    # Create next button with an index tracker
+    next_button = QtWidgets.QPushButton("🔍 Next Random Cell")
+    next_button.setStyleSheet("font-size: 14px; padding: 5px 15px;")
+
+    # Add controls to layout
+    control_layout.addWidget(cell_counter)
+    control_layout.addStretch()
+    control_layout.addWidget(next_button)
+
+    # Add control widget to main layout
+    main_layout.addWidget(control_widget)
+
+    # Set central widget
+    main_window.setCentralWidget(central_widget)
+
+    # Track current cell index
+    cell_indices = list(range(len(regions)))
+    np.random.shuffle(cell_indices)
+    current_index = [0]  # Using list for mutable reference
+
+    # Create placeholders for image views
+    image_views = []
+
+    def update_cell_display():
+        # Clear existing layout first
+        for i in reversed(range(scroll_layout.count())):
+            widget = scroll_layout.itemAt(i).widget()
+            if widget is not None:
+                widget.deleteLater()
+
+        # Clear image views list
+        image_views.clear()
+
+        # Get current cell index
+        idx = cell_indices[current_index[0]]
+
+        # Process data
+        region = regions[idx]
+        region_norm = (region - region.min()) / (region.max() - region.min() + 1e-8)
+        region_tensor = torch.FloatTensor(region_norm).to(device)
+
+        # Create batch dimension
+        if len(region_tensor.shape) == 4:
+            region_tensor = region_tensor.unsqueeze(0)
+
+        # Get reconstruction
+        with torch.no_grad():
+            reconstructed, _ = model(region_tensor)
+            reconstructed = reconstructed.cpu().numpy()[0]
+
+        # Update counter
+        cell_counter.setText(f"Cell {current_index[0] + 1}/{len(cell_indices)}")
+
+        # For each z-slice, create a row with original and reconstructed
+        num_z_layers = region.shape[0]
+
+        # Add header row
+        header_row = QtWidgets.QWidget()
+        header_layout = QtWidgets.QHBoxLayout()
+        header_row.setLayout(header_layout)
+
+        # Create column headers
+        original_header = QtWidgets.QLabel("Original")
+        original_header.setAlignment(QtCore.Qt.AlignCenter)
+        original_header.setStyleSheet("font-weight: bold; font-size: 14px;")
+
+        reconstructed_header = QtWidgets.QLabel("Reconstructed")
+        reconstructed_header.setAlignment(QtCore.Qt.AlignCenter)
+        reconstructed_header.setStyleSheet("font-weight: bold; font-size: 14px;")
+
+        # Add column headers to layout with equal spacing
+        header_layout.addWidget(QtWidgets.QLabel("Z-Layer"))
+        header_layout.addWidget(original_header)
+        header_layout.addWidget(reconstructed_header)
+
+        # Add header row to scroll layout
+        scroll_layout.addWidget(header_row)
+
+        # Add each z-layer
+        for z in range(num_z_layers):
+            # Create row widget and layout
+            row_widget = QtWidgets.QWidget()
+            row_layout = QtWidgets.QHBoxLayout()
+            row_widget.setLayout(row_layout)
+
+            # Create z-layer label
+            z_label = QtWidgets.QLabel(f"Layer {z}")
+            z_label.setAlignment(QtCore.Qt.AlignCenter)
+
+            # Create original image view
+            original_view = pg.ImageView()
+            original_view.ui.histogram.hide()
+            original_view.ui.roiBtn.hide()
+            original_view.ui.menuBtn.hide()
+            original_view.setImage(region_norm[z])
+            original_view.getView().setDefaultPadding(0)
+            original_view.getView().setAspectLocked(True)
+
+            # Create reconstructed image view
+            recon_view = pg.ImageView()
+            recon_view.ui.histogram.hide()
+            recon_view.ui.roiBtn.hide()
+            recon_view.ui.menuBtn.hide()
+            recon_view.setImage(reconstructed[z])
+            recon_view.getView().setDefaultPadding(0)
+            recon_view.getView().setAspectLocked(True)
+
+            # Link views for synchronized zooming/panning
+            original_view.getView().linkView(original_view.getView().XAxis, recon_view.getView())
+            original_view.getView().linkView(original_view.getView().YAxis, recon_view.getView())
+
+            # Store references to image views to prevent garbage collection
+            image_views.append((original_view, recon_view))
+
+            # Add views to layout
+            row_layout.addWidget(z_label)
+            row_layout.addWidget(original_view)
+            row_layout.addWidget(recon_view)
+
+            # Add row to scroll layout
+            scroll_layout.addWidget(row_widget)
+
+    # Define action for next button
+    def next_cell():
+        current_index[0] = (current_index[0] + 1) % len(cell_indices)
+        update_cell_display()
+
+    # Connect button to action
+    next_button.clicked.connect(next_cell)
+
+    # Initial display
+    update_cell_display()
+
+    # Show window
+    main_window.show()
+
+    # Start Qt event loop if not already running
+    if app is not None and not (hasattr(app, "_in_event_loop") and app._in_event_loop):
+        print("🔬 Interactive z-stack visualization running! Close window to continue...")
+        app.exec_()
+
+    return main_window
 
 
 def main():
@@ -241,20 +451,21 @@ def main():
     parser.add_argument("--batch-size", type=int, default=32, help="Training batch size")
     parser.add_argument("--learning-rate", type=float, default=1e-3, help="Adam optimizer learning rate")
     parser.add_argument("--viz-only", action="store_true", help="Visualize reconstructions only")
+    parser.add_argument("--seed", type=int, default=42, help="Random seed for visualization")
     args = parser.parse_args()
 
     if args.viz_only:
         model = NeuronAutoencoder()
         model.load_state_dict(torch.load(args.save_path)["model_state_dict"])
     else:
-        del args.viz_only
-        model = train_autoencoder(**vars(args))
+        model = train_autoencoder(**{k: v for k, v in vars(args).items() if k not in ["viz_only", "seed"]})
 
     # Get some test regions for visualization
     test_img = tifffile.imread(args.image_paths[0])
     test_regions = detect_and_extract_normalized_neurons(test_img, xy_scale=args.px, z_scale=args.z)
 
-    return visualize_reconstructions(model, test_regions)
+    # Use the new visualization function instead
+    return visualize_z_stack_comparison(model, test_regions, seed=args.seed)
 
 
 if __name__ == "__main__":
