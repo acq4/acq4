@@ -227,7 +227,7 @@ class AutomationDebugWindow(Qt.QWidget):
             frame = _future.waitFor(self.cameraDevice.acquireFrames(1)).getResult()[0]
         with self.cameraDevice.ensureRunning():
             frame = _future.waitFor(self.cameraDevice.acquireFrames(1)).getResult()[0]
-        return _future.waitFor(detect_neurons(frame.data())).getResult()
+        return _future.waitFor(detect_neurons(frame.data(), "cellpose")).getResult()
 
     @future_wrap
     def _detectNeuronsZStack(self, _future: Future) -> list:
