@@ -22,7 +22,7 @@ from acq4.util.imaging.object_detection import get_cellpose_masks
 
 
 class NeuronClassifier(nn.Module):
-    def __init__(self, input_size=64, hidden_sizes=None, dropout=0.3):
+    def __init__(self, input_size=64, hidden_sizes=None, dropout=0.5):
         """
         Neural network classifier for healthy neurons
 
@@ -172,13 +172,19 @@ def train_neural_classifier(features, labels, device="cuda", class_weight=None):
         criterion = nn.BCELoss()
 
     optimizer = optim.Adam(model.parameters(), lr=0.001, weight_decay=1e-5)
+    # optimizer = optim.AdamW(model.parameters(), lr=0.001, weight_decay=1e-4)
     n_epochs = 1000
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, "min", patience=n_epochs // 10, factor=0.5, verbose=True)
-
+    # scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, "min", patience=n_epochs // 10, factor=0.5, verbose=True)
+    scheduler = optim.lr_scheduler.OneCycleLR(
+        optimizer,
+        max_lr=0.01,
+        epochs=n_epochs,
+        steps_per_epoch=len(train_loader)
+    )
     # Train the model
     best_val_loss = float("inf")
     best_model_state = None
-    patience = 30
+    patience = 50
     counter = 0
 
     print("Training neural network classifier...")
@@ -186,7 +192,7 @@ def train_neural_classifier(features, labels, device="cuda", class_weight=None):
         model.train()
         train_loss = 0.0
 
-        for inputs, targets in tqdm(train_loader, desc=f"Epoch {epoch + 1}/{n_epochs}", leave=False):
+        for inputs, targets in train_loader:
             inputs, targets = inputs.to(device), targets.to(device)
 
             # Forward pass
