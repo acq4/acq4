@@ -231,14 +231,17 @@ def visualize_reconstructions(model: NeuronAutoencoder, regions: List[np.ndarray
     return windows
 
 
-def visualize_z_stack_comparison(model: NeuronAutoencoder, regions: List[np.ndarray], seed: int = 42):
+def visualize_z_stack_comparison(model: NeuronAutoencoder, regions: List[np.ndarray], seed: int = 42, test_mode: bool = False):
     """
-    Visualize all z-layers of original and reconstructed neurons side by side.
+    Visualize all z-layers of original and reconstructed neurons in a horizontal row.
+    
+    Shows all original z-layers in one row, with reconstructions in a row below.
 
     Args:
         model: Trained autoencoder model
         regions: List of neuron regions to visualize
         seed: Random seed for consistent cell order
+        test_mode: If True, use random noise instead of real data (for UI testing)
 
     Returns:
         Reference to Qt application window
@@ -258,16 +261,17 @@ def visualize_z_stack_comparison(model: NeuronAutoencoder, regions: List[np.ndar
     # Create a colormap that works well for neuroscience data
     colormap = pg.colormap.get("viridis")
 
-    # Ensure model is in eval mode
-    model.eval()
-    device = next(model.parameters()).device
-
+    # Ensure model is in eval mode (if not in test mode)
+    if not test_mode and model is not None:
+        model.eval()
+        device = next(model.parameters()).device
+    
     # Create main window
     main_window = QtWidgets.QMainWindow()
     main_window.setWindowTitle("Z-Stack Neuron Autoencoder Viewer")
-    main_window.resize(1200, 800)
+    main_window.resize(1200, 600)
 
-    # Create central widget with scroll area for z-layers
+    # Create central widget
     central_widget = QtWidgets.QWidget()
     main_layout = QtWidgets.QVBoxLayout()
     central_widget.setLayout(main_layout)
@@ -278,15 +282,35 @@ def visualize_z_stack_comparison(model: NeuronAutoencoder, regions: List[np.ndar
     header.setStyleSheet("font-weight: bold; font-size: 18px; margin: 10px;")
     main_layout.addWidget(header)
 
-    # Create a scroll area for the z-stack images
-    scroll_area = QtWidgets.QScrollArea()
-    scroll_area.setWidgetResizable(True)
-    scroll_container = QtWidgets.QWidget()
-    scroll_layout = QtWidgets.QVBoxLayout(scroll_container)
-    scroll_area.setWidget(scroll_container)
-
-    # Add scroll area to main layout
-    main_layout.addWidget(scroll_area)
+    # Create a widget for the image display
+    display_widget = QtWidgets.QWidget()
+    display_layout = QtWidgets.QVBoxLayout()
+    display_widget.setLayout(display_layout)
+    
+    # Create rows for original and reconstructed images
+    original_row = QtWidgets.QWidget()
+    original_layout = QtWidgets.QHBoxLayout()
+    original_row.setLayout(original_layout)
+    
+    recon_row = QtWidgets.QWidget()
+    recon_layout = QtWidgets.QHBoxLayout()
+    recon_row.setLayout(recon_layout)
+    
+    # Add row labels
+    original_label = QtWidgets.QLabel("Original:")
+    original_label.setStyleSheet("font-weight: bold; font-size: 14px;")
+    original_layout.addWidget(original_label)
+    
+    recon_label = QtWidgets.QLabel("Reconstructed:")
+    recon_label.setStyleSheet("font-weight: bold; font-size: 14px;")
+    recon_layout.addWidget(recon_label)
+    
+    # Add rows to display layout
+    display_layout.addWidget(original_row)
+    display_layout.addWidget(recon_row)
+    
+    # Add display widget to main layout
+    main_layout.addWidget(display_widget)
 
     # Create a widget for the controls
     control_widget = QtWidgets.QWidget()
@@ -313,7 +337,10 @@ def visualize_z_stack_comparison(model: NeuronAutoencoder, regions: List[np.ndar
     main_window.setCentralWidget(central_widget)
 
     # Track current cell index
-    cell_indices = list(range(len(regions)))
+    if test_mode:
+        cell_indices = list(range(10))  # Just use 10 fake cells for testing
+    else:
+        cell_indices = list(range(len(regions)))
     np.random.shuffle(cell_indices)
     current_index = [0]  # Using list for mutable reference
 
@@ -321,11 +348,18 @@ def visualize_z_stack_comparison(model: NeuronAutoencoder, regions: List[np.ndar
     image_views = []
 
     def update_cell_display():
-        # Clear existing layout first
-        for i in reversed(range(scroll_layout.count())):
-            widget = scroll_layout.itemAt(i).widget()
-            if widget is not None:
-                widget.deleteLater()
+        # Clear existing views
+        for i in reversed(range(original_layout.count())):
+            if i > 0:  # Keep the label
+                widget = original_layout.itemAt(i).widget()
+                if widget is not None:
+                    widget.deleteLater()
+                    
+        for i in reversed(range(recon_layout.count())):
+            if i > 0:  # Keep the label
+                widget = recon_layout.itemAt(i).widget()
+                if widget is not None:
+                    widget.deleteLater()
 
         # Clear image views list
         image_views.clear()
@@ -334,58 +368,36 @@ def visualize_z_stack_comparison(model: NeuronAutoencoder, regions: List[np.ndar
         idx = cell_indices[current_index[0]]
 
         # Process data
-        region = regions[idx]
-        region_norm = (region - region.min()) / (region.max() - region.min() + 1e-8)
-        region_tensor = torch.FloatTensor(region_norm).to(device)
-
-        # Create batch dimension
-        if len(region_tensor.shape) == 4:
-            region_tensor = region_tensor.unsqueeze(0)
-
-        # Get reconstruction
-        with torch.no_grad():
-            reconstructed, _ = model(region_tensor)
-            reconstructed = reconstructed.cpu().numpy()[0]
+        if test_mode:
+            # Generate random noise for testing
+            num_z_layers = 5  # Fixed number of z-layers for testing
+            region_norm = np.random.rand(num_z_layers, 64, 64)  # Random noise
+            reconstructed = np.random.rand(num_z_layers, 64, 64)  # Random noise
+        else:
+            # Get real data
+            region = regions[idx]
+            region_norm = (region - region.min()) / (region.max() - region.min() + 1e-8)
+            region_tensor = torch.FloatTensor(region_norm).to(device)
+            
+            # Create batch dimension if needed
+            if len(region_tensor.shape) == 3:
+                region_tensor = region_tensor.unsqueeze(0)
+            
+            # Get reconstruction
+            with torch.no_grad():
+                reconstructed, _ = model(region_tensor)
+                reconstructed = reconstructed.cpu().numpy()[0]
+            
+            num_z_layers = region.shape[0]
 
         # Update counter
-        cell_counter.setText(f"Cell {current_index[0] + 1}/{len(cell_indices)}")
+        if test_mode:
+            cell_counter.setText(f"Test Cell {current_index[0] + 1}/10")
+        else:
+            cell_counter.setText(f"Cell {current_index[0] + 1}/{len(cell_indices)}")
 
-        # For each z-slice, create a row with original and reconstructed
-        num_z_layers = region.shape[0]
-
-        # Add header row
-        header_row = QtWidgets.QWidget()
-        header_layout = QtWidgets.QHBoxLayout()
-        header_row.setLayout(header_layout)
-
-        # Create column headers
-        original_header = QtWidgets.QLabel("Original")
-        original_header.setAlignment(QtCore.Qt.AlignCenter)
-        original_header.setStyleSheet("font-weight: bold; font-size: 14px;")
-
-        reconstructed_header = QtWidgets.QLabel("Reconstructed")
-        reconstructed_header.setAlignment(QtCore.Qt.AlignCenter)
-        reconstructed_header.setStyleSheet("font-weight: bold; font-size: 14px;")
-
-        # Add column headers to layout with equal spacing
-        header_layout.addWidget(QtWidgets.QLabel("Z-Layer"))
-        header_layout.addWidget(original_header)
-        header_layout.addWidget(reconstructed_header)
-
-        # Add header row to scroll layout
-        scroll_layout.addWidget(header_row)
-
-        # Add each z-layer
+        # Add each z-layer to the rows
         for z in range(num_z_layers):
-            # Create row widget and layout
-            row_widget = QtWidgets.QWidget()
-            row_layout = QtWidgets.QHBoxLayout()
-            row_widget.setLayout(row_layout)
-
-            # Create z-layer label
-            z_label = QtWidgets.QLabel(f"Layer {z}")
-            z_label.setAlignment(QtCore.Qt.AlignCenter)
-
             # Create original image view
             original_view = pg.ImageView()
             original_view.ui.histogram.hide()
@@ -394,7 +406,19 @@ def visualize_z_stack_comparison(model: NeuronAutoencoder, regions: List[np.ndar
             original_view.setImage(region_norm[z])
             original_view.getView().setDefaultPadding(0)
             original_view.getView().setAspectLocked(True)
-
+            
+            # Create z-layer label for original
+            z_label = QtWidgets.QLabel(f"Z{z}")
+            z_label.setAlignment(QtCore.Qt.AlignCenter)
+            z_label.setStyleSheet("font-size: 12px;")
+            
+            # Create a container for the image and its label
+            orig_container = QtWidgets.QWidget()
+            orig_container_layout = QtWidgets.QVBoxLayout()
+            orig_container.setLayout(orig_container_layout)
+            orig_container_layout.addWidget(z_label)
+            orig_container_layout.addWidget(original_view)
+            
             # Create reconstructed image view
             recon_view = pg.ImageView()
             recon_view.ui.histogram.hide()
@@ -403,6 +427,18 @@ def visualize_z_stack_comparison(model: NeuronAutoencoder, regions: List[np.ndar
             recon_view.setImage(reconstructed[z])
             recon_view.getView().setDefaultPadding(0)
             recon_view.getView().setAspectLocked(True)
+            
+            # Create z-layer label for reconstruction
+            recon_z_label = QtWidgets.QLabel(f"Z{z}")
+            recon_z_label.setAlignment(QtCore.Qt.AlignCenter)
+            recon_z_label.setStyleSheet("font-size: 12px;")
+            
+            # Create a container for the image and its label
+            recon_container = QtWidgets.QWidget()
+            recon_container_layout = QtWidgets.QVBoxLayout()
+            recon_container.setLayout(recon_container_layout)
+            recon_container_layout.addWidget(recon_z_label)
+            recon_container_layout.addWidget(recon_view)
 
             # Link views for synchronized zooming/panning
             original_view.getView().linkView(original_view.getView().XAxis, recon_view.getView())
@@ -412,12 +448,8 @@ def visualize_z_stack_comparison(model: NeuronAutoencoder, regions: List[np.ndar
             image_views.append((original_view, recon_view))
 
             # Add views to layout
-            row_layout.addWidget(z_label)
-            row_layout.addWidget(original_view)
-            row_layout.addWidget(recon_view)
-
-            # Add row to scroll layout
-            scroll_layout.addWidget(row_widget)
+            original_layout.addWidget(orig_container)
+            recon_layout.addWidget(recon_container)
 
     # Define action for next button
     def next_cell():
@@ -451,20 +483,26 @@ def main():
     parser.add_argument("--batch-size", type=int, default=32, help="Training batch size")
     parser.add_argument("--learning-rate", type=float, default=1e-3, help="Adam optimizer learning rate")
     parser.add_argument("--viz-only", action="store_true", help="Visualize reconstructions only")
+    parser.add_argument("--test-ui", action="store_true", help="Test UI with random noise images")
     parser.add_argument("--seed", type=int, default=42, help="Random seed for visualization")
     args = parser.parse_args()
 
+    # Test UI mode - bypass real work and show random noise
+    if args.test_ui:
+        print("🧪 Testing UI with random noise images...")
+        return visualize_z_stack_comparison(None, [], seed=args.seed, test_mode=True)
+    
     if args.viz_only:
         model = NeuronAutoencoder()
         model.load_state_dict(torch.load(args.save_path)["model_state_dict"])
     else:
-        model = train_autoencoder(**{k: v for k, v in vars(args).items() if k not in ["viz_only", "seed"]})
+        model = train_autoencoder(**{k: v for k, v in vars(args).items() if k not in ["viz_only", "test_ui", "seed"]})
 
     # Get some test regions for visualization
     test_img = tifffile.imread(args.image_paths[0])
     test_regions = detect_and_extract_normalized_neurons(test_img, xy_scale=args.px, z_scale=args.z)
 
-    # Use the new visualization function instead
+    # Use the visualization function
     return visualize_z_stack_comparison(model, test_regions, seed=args.seed)
 
 
