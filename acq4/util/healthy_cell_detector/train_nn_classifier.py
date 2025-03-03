@@ -176,10 +176,7 @@ def train_neural_classifier(features, labels, device="cuda", class_weight=None):
     n_epochs = 1000
     # scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, "min", patience=n_epochs // 10, factor=0.5, verbose=True)
     scheduler = optim.lr_scheduler.OneCycleLR(
-        optimizer,
-        max_lr=0.01,
-        epochs=n_epochs,
-        steps_per_epoch=len(train_loader)
+        optimizer, max_lr=0.01, epochs=n_epochs, steps_per_epoch=len(train_loader)
     )
     # Train the model
     best_val_loss = float("inf")
@@ -400,25 +397,33 @@ def load_classifier(path, device="cuda"):
     return ThresholdedNeuronClassifier(model, checkpoint["threshold"])
 
 
-def get_health_ordered_cells(image, classifier, autoencoder, diameter, xy_scale, z_scale, device="cuda"):
+def get_health_ordered_cells(
+    image: np.ndarray,
+    classifier: ThresholdedNeuronClassifier,
+    autoencoder: NeuronAutoencoder,
+    diameter: int,
+    xy_scale: float,
+    z_scale: float,
+    device="cuda",
+):
     """
     Use a trained classifier to identify healthy neurons in new images
 
     Parameters:
     -----------
-    image : numpy.ndarray
+    image
         3D image data
-    classifier : ThresholdedNeuronClassifier
+    classifier
         Trained classifier for healthy neuron detection
-    autoencoder : Autoencoder
+    autoencoder
         Trained autoencoder for feature extraction
-    diameter : float
+    diameter
         Expected diameter of neurons for cellpose
-    xy_scale : float
+    xy_scale
         Scale factor for xy dimensions
-    z_scale : float
+    z_scale
         Scale factor for z dimension
-    device : str
+    device
         Device to use for autoencoder inference
 
     Returns:
