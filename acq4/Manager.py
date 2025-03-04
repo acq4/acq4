@@ -4,6 +4,7 @@ import getopt
 import os
 import sys
 import time
+import argparse
 import weakref
 from collections import OrderedDict
 
@@ -52,10 +53,24 @@ class Manager(Qt.QObject):
     single = None
 
     @classmethod
-    def runFromCommandLine(self, argv=None):
+    def makeArgParser(cls):
+        parser = argparse.ArgumentParser(description="CQ4 control script")
+        parser.add_argument("--config", "-c", help="Configuration file to load", default=cls._getConfigFile())
+        parser.add_argument("--config-name", "-a", help="Named configuration to load", action="append")
+        parser.add_argument("--module", "-m", help="Module name to load", action="append")
+        parser.add_argument("--base-dir", "-b", help="Base directory to use")
+        parser.add_argument("--storage-dir", "-s", help="Storage directory to use")
+        parser.add_argument("--disable", "-d", help="Disable the device specified", action="append")
+        parser.add_argument("--disable-all", "-D", help="Disable all devices", action="store_true")
+        parser.add_argument("--exit-on-error", "-x", help="Whether to exit immidiately on the first exception during initial Manager setup", action="store_true")
+        parser.add_argument("--no-manager", "-n", help="Do not load manager module", action="store_true")
+        return parser
+
+    @classmethod
+    def runFromCommandLine(self, args):
         """Run the Manager from the command line."""
         m = Manager()
-        m.initFromCommandLine(argv)
+        m.initFromCommandLine(args)
         return m
 
     def __init__(self, configFile=None):
@@ -102,87 +117,34 @@ class Manager(Qt.QObject):
             else:
                 printExc("Error while configuring Manager:")
 
-    def initFromCommandLine(self, argv=None):
-        if argv is not None:
-            try:
-                opts, args = getopt.getopt(
-                    argv, 'c:a:x:m:b:s:d:nD',
-                    ['config=', 'config-name=', 'module=', 'base-dir=', 'storage-dir=',
-                     'disable=', 'no-manager', 'disable-all', 'exit-on-error'])
-            except getopt.GetoptError as err:
-                print(err)
-                print("""
-        Valid options are:
-            -x --exit-on-error Whether to exit immidiately on the first exception during initial Manager setup
-            -c --config=       Configuration file to load
-            -a --config-name=  Named configuration to load
-            -m --module=       Module name to load
-            -b --base-dir=     Base directory to use
-            -s --storage-dir=  Storage directory to use
-            -n --no-manager    Do not load manager module
-            -d --disable=      Disable the device specified
-            -D --disable-all   Disable all devices
-        """)
-                raise
-        else:
-            opts = []
+    def initFromCommandLine(self, args: argparse.Namespace):
+        self.exitOnError = args.exit_on_error
+        self.disableDevs = args.disable or []
+        self.disableAllDevs = args.disable_all
 
-        ## Handle command line options
-        configFile = None
-        loadModules = []
-        setBaseDir = None
-        setStorageDir = None
-        loadManager = True
-        loadConfigs = []
-        for o, a in opts:
-            if o in ['-c', '--config']:
-                configFile = a
-            elif o in ['-a', '--config-name']:
-                loadConfigs.append(a)
-            elif o in ['-m', '--module']:
-                loadModules.append(a)
-            elif o in ['-b', '--baseDir']:
-                setBaseDir = a
-            elif o in ['-s', '--storageDir']:
-                setStorageDir = a
-            elif o in ['-n', '--noManager']:
-                loadManager = False
-            elif o in ['-d', '--disable']:
-                self.disableDevs.append(a)
-            elif o in ['-D', '--disable-all']:
-                self.disableAllDevs = True
-            elif o == "--exit-on-error":
-                self.exitOnError = True
-            else:
-                print("Unhandled option", o, a)
-
-        ## Read in configuration file
-        if configFile is None:
-            configFile = self._getConfigFile()
-
-        self.configDir = os.path.dirname(configFile)
-        self.readConfig(configFile)
+        self.configDir = os.path.dirname(args.config)
+        self.readConfig(args.config)
 
         ## Act on options if they were specified..
         try:
-            for name in loadConfigs:
+            for name in (args.config_name or []):
                 self.loadDefinedConfig(name)
 
-            if setBaseDir is not None:
-                self.setBaseDir(setBaseDir)
-            if setStorageDir is not None:
-                self.setCurrentDir(setStorageDir)
-            if loadManager:
+            if args.base_dir is not None:
+                self.setBaseDir(args.base_dir)
+            if args.storage_dir is not None:
+                self.setCurrentDir(args.storage_dir)
+            if not args.no_manager:
                 self.showGUI()
                 self.createWindowShortcut('F1', self.gui.win)
-            for m in loadModules:
+            for m in (args.module or []):
                 try:
                     if m in self.definedModules:
                         self.loadDefinedModule(m)
                     else:
                         self.loadModule(m)
                 except:
-                    if not loadManager:
+                    if not not args.no_manager:
                         self.showGUI()
                     raise
 
@@ -196,7 +158,8 @@ class Manager(Qt.QObject):
                 self.quit()
                 raise Exception("No modules loaded during startup, exiting now.")
 
-    def _getConfigFile(self):
+    @staticmethod
+    def _getConfigFile():
         ## search all the default locations to find a configuration file.
         from acq4 import CONFIGPATH
         for path in CONFIGPATH:

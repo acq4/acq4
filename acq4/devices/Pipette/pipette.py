@@ -182,7 +182,7 @@ class Pipette(Device, OptomechDevice):
         self.currentMotionPlanner = plannerClass(self, position, speed, **kwds)
         future = self.currentMotionPlanner.move()
         if raiseErrors is not False:
-            future.raiseErrors(message=f"Move to {position} position failed; requested from:\n{{stack}}")
+            future.raiseErrors(message=f"Move to {position} position failed ({{error}}); requested from:\n{{stack}}")
 
         return future
 
@@ -574,14 +574,14 @@ class Pipette(Device, OptomechDevice):
         pos = self.globalPosition()
         future = self.scopeDevice().setGlobalPosition(pos, speed=speed)
         if raiseErrors:
-            future.raiseErrors("Focus on pipette tip failed; requested from:\n{stack})")
+            future.raiseErrors("Focus on pipette tip failed ({error}); requested from:\n{stack})")
         return future
 
     def focusTarget(self, speed='fast', raiseErrors=False):
         pos = self.targetPosition()
         future = self.scopeDevice().setGlobalPosition(pos, speed=speed)
         if raiseErrors:
-            future.raiseErrors("Focus on pipette target failed; requested from:\n{stack})")
+            future.raiseErrors("Focus on pipette target failed ({error}); requested from:\n{stack})")
         return future
 
     def positionChanged(self):

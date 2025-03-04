@@ -1,7 +1,6 @@
 import queue
-from collections import OrderedDict
-
 import sys
+from collections import OrderedDict
 from typing import Optional
 
 from acq4 import getManager
@@ -9,6 +8,7 @@ from acq4.util import Qt
 from acq4.util.debug import printExc
 from pyqtgraph import disconnect
 from . import states
+from ...util.threadrun import runInGuiThread
 
 
 class PatchPipetteStateManager(Qt.QObject):
@@ -49,7 +49,6 @@ class PatchPipetteStateManager(Qt.QObject):
     )
 
     sigStateChanged = Qt.Signal(object, object)  # self, PatchPipetteState
-    _sigStateChangeRequested = Qt.Signal(object, object)  # state, return queue
     sigProfileChanged = Qt.Signal(object, object)  # self, profile_name
 
     profiles: dict[str: dict[str: dict[str: object]]] = {}  # {profile_name: {state_name: {config_options}}}
@@ -62,8 +61,6 @@ class PatchPipetteStateManager(Qt.QObject):
         self.dev.sigActiveChanged.connect(self.activeChanged)
         self.currentJob = None
         self._profile = None
-
-        self._sigStateChangeRequested.connect(self._stateChangeRequested)
 
         if 'default' in self.listProfiles():
             self.setProfile('default')
@@ -164,33 +161,14 @@ class PatchPipetteStateManager(Qt.QObject):
         """Pipette has requested a state change; either accept and configure the new
         state or reject the new state.
 
-        Return the name of the state that has been chosen.
+        Return the state that has been chosen.
         """
-        # state changes involve the construction of numerous QObjects with signal/slot connections;
-        # the individual state classes assume that they are owned by a thread with an event loop.
-        # SO: we need to process state transitions in the main thread. If this method is called
-        # from the main thread, then the emit() below will be processed immediately. Otherwise,
-        # we wait until the main thread processes the signal and sends back the result.
-        returnQueue = queue.Queue()
-        self._sigStateChangeRequested.emit(state, returnQueue)
-        try:
-            success, ret = returnQueue.get(timeout=10)
-        except queue.Empty as e:
-            raise TimeoutError("State change request timed out.") from e
+        return runInGuiThread(self._stateChangeRequested, state)
 
-        if success:
-            return ret
-        sys.excepthook(*ret)
-        raise RuntimeError(f"Error requesting state change to {state!r}; original exception appears above.")
-
-    def _stateChangeRequested(self, state, returnQueue):
-        try:
-            if state not in self.stateHandlers:
-                raise ValueError(f"Unknown patch pipette state {state!r}")
-            ret = (True, self.configureState(state))
-        except Exception as exc:
-            ret = (False, sys.exc_info())
-        returnQueue.put(ret)
+    def _stateChangeRequested(self, state):
+        if state not in self.stateHandlers:
+            raise ValueError(f"Unknown patch pipette state {state!r}")
+        return self.configureState(state)
 
     def configureState(self, state, *args, **kwds):
         oldJob = self.currentJob
@@ -237,9 +215,7 @@ class PatchPipetteStateManager(Qt.QObject):
     def quit(self):
         disconnect(self.dev.sigStateChanged, self.stateChanged)
         disconnect(self.dev.sigActiveChanged, self.activeChanged)
-        self.stopJob()
-
-    ## Background job handling
+        self.stopJob(allowNextState=False)
 
     def stopJob(self, allowNextState=True):
         job = self.currentJob
@@ -251,9 +227,10 @@ class PatchPipetteStateManager(Qt.QObject):
                 job.wait(timeout=10)
             except job.Timeout:
                 printExc(f"Timed out waiting for job {job} to complete")
-            except Exception:
-                # hopefully someone else is watching this future for errors!
+            except job.Stopped:
                 pass
+            except Exception:
+                printExc(f"{self.dev.name()} failed in state {job.stateName}:")
             self.jobFinished(job, allowNextState=allowNextState)
 
     def jobStateChanged(self, job, state):
