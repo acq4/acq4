@@ -143,7 +143,7 @@ class Scientifica(SerialDevice):
                 SerialDevice.__init__(self, port=self.port, baudrate=baudrate)
                 try:
                     sci = self.send('scientifica', timeout=0.2)
-                except RuntimeError:
+                except TimeoutError:
                     # try again because prior communication at a different baud rate may have garbled serial communication.
                     sci = self.send('scientifica', timeout=1.0)
 
