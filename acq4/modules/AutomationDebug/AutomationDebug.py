@@ -248,7 +248,7 @@ class AutomationDebugWindow(Qt.QWidget):
             detect_neurons(
                 z_stack, autoencoder=autoencoder, classifier=classifier, xy_scale=pixel_size, z_scale=z_scale
             ),
-            _timeout=60,
+            timeout=60,
         ).getResult()
 
     @future_wrap
