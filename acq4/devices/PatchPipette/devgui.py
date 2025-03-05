@@ -13,14 +13,20 @@ class PatchPipetteDeviceGui(Qt.QWidget):
         self.setLayout(self.layout)
 
         self.cleanBtn = FutureButton(
-            self.doClean, 'Clean Pipette', stoppable=True, processing='Cleaning...', failure='Interrupted!')
+            self.doClean,
+            "Clean Pipette",
+            stoppable=True,
+            processing="Cleaning...",
+            failure="Interrupted!",
+            raiseOnError=False,
+        )
         self.positionBtnLayout = Qt.QHBoxLayout()
         self.positionBtnLayout.addWidget(self.cleanBtn)
 
-        positions = ['clean', 'rinse', 'extract', 'collect']
+        positions = ["clean", "rinse", "extract", "collect"]
         self.positionBtns = {}
         for pos in positions:
-            btn = pg.FeedbackButton(f'Set {pos.capitalize()} Pos')
+            btn = pg.FeedbackButton(f"Set {pos.capitalize()} Pos")
             btn.positionName = pos
             self.positionBtns[pos] = btn
             btn.clicked.connect(self.setPositionClicked)
@@ -30,7 +36,7 @@ class PatchPipetteDeviceGui(Qt.QWidget):
         self.layout.addLayout(self.positionBtnLayout, row, 0)
 
     def doClean(self):
-        return self.dev.setState('clean')
+        return self.dev.setState("clean")
 
     def setPositionClicked(self):
         btn = self.sender()
