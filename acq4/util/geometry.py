@@ -784,9 +784,10 @@ class Geometry:
         to_self_from_other = self.transform.inverse * to_my_parent_from_other_parent * other.transform
         xformed = other.transformed_to(self.transform, to_self_from_other)
         xformed_voxels = xformed.voxel_template(voxel_size)
-        # extend out the voxels by one in each positive direction, to account for sub-voxel movement
-        xformed_voxels.volume = np.pad(xformed_voxels.volume, 1, mode="constant")[1:, 1:, 1:]
-        xformed_voxels.volume = scipy.ndimage.binary_dilation(xformed_voxels.volume, iterations=1)
+        # this prevents two pipette tips from smashing into each other, but it makes it harder to deal
+        # with larger objects. we can leave this commented until we start needing to handle 2 pipettes.
+        # xformed_voxels.volume = np.pad(xformed_voxels.volume, 1, mode="constant")[1:, 1:, 1:]
+        # xformed_voxels.volume = scipy.ndimage.binary_dilation(xformed_voxels.volume, iterations=1)
         # TODO this is adding a scale=-1, but none of the transforms reflect this
         shadow = xformed_voxels.volume[::-1, ::-1, ::-1]
         other_origin = Point((0, 0, 0), other.parent_name)
