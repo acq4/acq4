@@ -40,8 +40,9 @@ class PipetteControl(Qt.QWidget):
         if isinstance(pipette, PatchPipette):
             self.pip.sigStateChanged.connect(self.patchStateChanged)
             self.pip.sigActiveChanged.connect(self.pipActiveChanged)
-            self.pip.clampDevice.sigTestPulseFinished.connect(self.updatePlots)
-            self.pip.clampDevice.sigAutoBiasChanged.connect(self._updateAutoBiasUi)
+            if self.pip.clampDevice is not None:
+                self.pip.clampDevice.sigTestPulseFinished.connect(self.updatePlots)
+                self.pip.clampDevice.sigAutoBiasChanged.connect(self._updateAutoBiasUi)
             if self.pip.pressureDevice is not None:
                 self.ui.pressureWidget.connectPressureDevice(self.pip.pressureDevice)
             self.pip.sigNewPipetteRequested.connect(self.newPipetteRequested)
@@ -398,12 +399,10 @@ class PlotWidget(Qt.QWidget):
             self._analysisLabel = None
         if self.mode == 'test pulse':
             self.plot.clear()
-            if tp.data:
-                self._plotTestPulse(tp)
+            self._plotTestPulse(tp)
         elif self.mode == 'tp analysis':
             self.plot.clear()
-            if tp.data:
-                tp.plot(self.plot, label=False)
+            tp.plot(self.plot, label=False)
             self._analysisLabel = tp.label_for_plot(self.plot.plotItem)
         else:
             analysis_by_mode = {

@@ -712,15 +712,18 @@ class DirHandle(FileHandle):
 
             fileClass = filetypes.getFileType(fileType)
 
-            ## Increment file name
+            # Add extension before incrementing
+            fileName = fileClass.addExtension(fileName)
+
+            # Increment file name
             if autoIncrement:
                 fileName = self.incrementFileName(fileName)
 
-            ## Write file
+            # Write file
             fileName = fileClass.write(obj, self, fileName, **kwargs)
 
             self._childChanged()
-            ## Write meta-info
+            # Write meta-info
             if '__object_type__' not in info:
                 info['__object_type__'] = fileType
             if '__timestamp__' not in info:

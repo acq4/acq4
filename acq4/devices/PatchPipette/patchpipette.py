@@ -157,6 +157,7 @@ class PatchPipette(Device):
         self.newPatchAttempt()
         self.setState('out')
         # todo: set calibration to average 
+        self.pipetteDevice.findNewPipette()
 
     def requestNewPipette(self):
         """Call to emit a signal requesting a new pipette.

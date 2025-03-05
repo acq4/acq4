@@ -17,7 +17,7 @@ from acq4.util.future import future_wrap
 from acq4.util.target import Target
 from pyqtgraph import Point
 from .planners import defaultMotionPlanners, PipettePathGenerator
-from .tracker import PipetteTracker
+from .tracker import ResnetPipetteTracker
 from ..RecordingChamber import RecordingChamber
 
 CamModTemplate = Qt.importTemplate('.cameraModTemplate')
@@ -129,7 +129,7 @@ class Pipette(Device, OptomechDevice):
 
         self._updateTransform()
 
-        self.tracker = PipetteTracker(self)
+        self.tracker = ResnetPipetteTracker(self)
         deviceManager.declareInterface(name, ['pipette'], self)
 
         target = self.readConfigFile('target').get('targetGlobalPosition', None)
@@ -160,7 +160,7 @@ class Pipette(Device, OptomechDevice):
         self.currentMotionPlanner = plannerClass(self, position, speed, **kwds)
         future = self.currentMotionPlanner.move()
         if raiseErrors is not False:
-            future.raiseErrors(message=f"Move to {position} position failed; requested from:\n{{stack}}")
+            future.raiseErrors(message=f"Move to {position} position failed ({{error}}); requested from:\n{{stack}}")
 
         return future
 
@@ -171,6 +171,9 @@ class Pipette(Device, OptomechDevice):
         """
         if pos is None:
             pos = self.globalPosition()
+        manip_pos = self._solveGlobalStagePosition(pos)
+        manip: Stage = self.parentDevice()
+        manip.checkLimits(manip.mapGlobalToDevicePosition(manip_pos))
 
         cache = self.readConfigFile('stored_positions')
         cache[name] = list(pos)
@@ -186,33 +189,7 @@ class Pipette(Device, OptomechDevice):
     def checkRangeOfMotion(self, pos, tolerance=500e-6):
         """Warn user if the position (in global coordinates) is within 500µm of the manipulator's range of motion."""
         manipulator: Stage = self.parentDevice()
-
-        def posToDeviceInternal(p):
-            p = self._solveGlobalStagePosition(p)
-            return manipulator.mapGlobalToDevicePosition(p)
-        pos = np.array(pos)
-        bad_axes = []
-        for axis in (0, 1, 2):
-            try:
-                bound = pos[:]
-                bound[axis] -= tolerance
-                manipulator.checkLimits(posToDeviceInternal(bound))
-                bound[axis] += 2 * tolerance
-                manipulator.checkLimits(posToDeviceInternal(bound))
-            except ValueError:
-                bad_axes.append(axis)
-        if bad_axes:
-            axis_names = {0: 'x', 1: 'y', 2: 'z'}
-            axes = ', '.join(axis_names[axis] for axis in bad_axes)
-            pos = posToDeviceInternal(pos)
-            raise HelpfulException(
-                f"The specified position is within ±{tolerance:g}m of the {axes} limit(s) of this manipulator "
-                f"and may not always be accessible, depending on your pipette pull consistency.",
-                reasons=[
-                    f"Manipulator limits: {manipulator.getLimits()}",
-                    f"Position: ({pos[0]:f}, {pos[1]:f}, {pos[2]:f})",
-                ],
-            )
+        manipulator.checkRangeOfMotion(self._solveGlobalStagePosition(pos), tolerance)
 
     def scopeDevice(self):
         if self._scopeDev is None:
@@ -546,14 +523,14 @@ class Pipette(Device, OptomechDevice):
         pos = self.globalPosition()
         future = self.scopeDevice().setGlobalPosition(pos, speed=speed)
         if raiseErrors:
-            future.raiseErrors("Focus on pipette tip failed; requested from:\n{stack})")
+            future.raiseErrors("Focus on pipette tip failed ({error}); requested from:\n{stack})")
         return future
 
     def focusTarget(self, speed='fast', raiseErrors=False):
         pos = self.targetPosition()
         future = self.scopeDevice().setGlobalPosition(pos, speed=speed)
         if raiseErrors:
-            future.raiseErrors("Focus on pipette target failed; requested from:\n{stack})")
+            future.raiseErrors("Focus on pipette target failed ({error}); requested from:\n{stack})")
         return future
 
     def positionChanged(self):
@@ -578,6 +555,12 @@ class Pipette(Device, OptomechDevice):
         """Return an object that records all motion updates from this pipette
         """
         return PipetteRecorder(self)
+    
+    def findNewPipette(self):
+        from acq4.devices.Pipette.calibration import calibratePipette
+        future = calibratePipette(self, self.imagingDevice(), self.scopeDevice())
+        self._last_calibration_future = future  # keep for easy debugging of calibration algorithm
+        return future
 
 
 class PipetteRecorder:

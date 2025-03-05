@@ -1,10 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-debug.py - Functions to aid in debugging 
-Copyright 2010  Luke Campagnola
-Distributed under MIT/X11 license. See license.txt for more information.
-"""
-
 import sys
 
 import pyqtgraph.debug as pgdebug
@@ -38,7 +31,7 @@ def createLogWindow(manager):
 
 
 def printExc(msg="", indent=4, prefix="|", msgType="error"):
-    """Print an error message followed by an indented exception backtrace
+    """Alert the user to an exception that has occurred, but without letting that exception propagate further.
     (This function is intended to be called within except: blocks)"""
     pgdebug.printExc(msg, indent, prefix)
     try:
@@ -48,7 +41,6 @@ def printExc(msg="", indent=4, prefix="|", msgType="error"):
             acq4.Manager.logExc(msg=msg, msgType=msgType)
     except Exception:
         pgdebug.printExc(f"[failed to log this error to manager] {msgType}: {msg}")
-    sys.excepthook(*sys.exc_info())
 
 
 def logMsg(msg, **kwargs):
@@ -78,7 +70,11 @@ def logMsg(msg, **kwargs):
 
 
 def logExc(msg, *args, **kwargs):
-    """Calls logMsg, but adds in the current exception and callstack. Must be called within an except block, and should only be called if the exception is not re-raised. Unhandled exceptions, or exceptions that reach the top of the callstack are automatically logged, so logging an exception that will be re-raised can cause the exception to be logged twice. Takes the same arguments as logMsg."""
+    """Calls logMsg, but adds in the current exception and callstack. Must be called within an
+    except block, and should only be called if the exception is not re-raised. Unhandled
+    exceptions, or exceptions that reach the top of the callstack are automatically logged, so
+    logging an exception that will be re-raised can cause the exception to be logged twice.
+    Takes the same arguments as logMsg."""
     global LOG_UI
     if LOG_UI is not None:
         try:

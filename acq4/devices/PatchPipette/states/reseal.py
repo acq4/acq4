@@ -114,9 +114,9 @@ class ResealState(PatchPipetteState):
     extractNucleus : bool
         Whether to attempt nucleus extraction during reseal (default True)
     nuzzlePressureLimit : float
-        Largest vacuum pressure (pascals, expected negative) to apply during nuzzling (default is -4 kPa)
+        Largest vacuum pressure (pascals, expected negative) to apply during nuzzling (default is -2 kPa)
     nuzzleDuration : float
-        Duration (seconds) to spend nuzzling (default is 15s)
+        Duration (seconds) to spend nuzzling (default is 30s)
     nuzzleInitialPressure : float
         Initial pressure (Pa) to apply during nuzzling (default is 0 Pa)
     nuzzleLateralWiggleRadius : float
@@ -128,7 +128,7 @@ class ResealState(PatchPipetteState):
     initialPressure : float
         Initial pressure (Pa) to apply after nucleus nuzzling, before retraction (default is -0.5 kPa)
     retractionPressure : float
-        Pressure (Pa) to apply during retraction (default is -4 kPa)
+        Pressure (Pa) to apply during retraction (default is -7 kPa)
     pressureChangeRate : float
         Rate at which pressure should change from initial/nuzzleLimit to retraction (default is 0.5 kPa / min)
     maxRetractionSpeed : float
@@ -171,7 +171,7 @@ class ResealState(PatchPipetteState):
 
     _parameterDefaultOverrides = {
         'initialClampMode': 'VC',
-        'initialVCHolding': -70e-3,
+        'initialVCHolding': -55e-3,
         'initialTestPulseEnable': True,
         'initialPressure': -0.5e3,
         'initialPressureSource': 'regulator',
@@ -179,15 +179,15 @@ class ResealState(PatchPipetteState):
     _parameterTreeConfig = {
         'extractNucleus': {'type': 'bool', 'default': True},
         'fallbackState': {'type': 'str', 'default': 'whole cell'},
-        'nuzzleDuration': {'type': 'float', 'default': 15, 'suffix': 's'},
+        'nuzzleDuration': {'type': 'float', 'default': 30, 'suffix': 's'},
         'nuzzleInitialPressure': {'type': 'float', 'default': 0, 'suffix': 'Pa'},
         'nuzzleLateralWiggleRadius': {'type': 'float', 'default': 5e-6, 'suffix': 'm'},
-        'nuzzlePressureLimit': {'type': 'float', 'default': -1e3, 'suffix': 'Pa'},
+        'nuzzlePressureLimit': {'type': 'float', 'default': -2e3, 'suffix': 'Pa'},
         'nuzzleRepetitions': {'type': 'int', 'default': 2},
         'nuzzleSpeed': {'type': 'float', 'default': 5e-6, 'suffix': 'm/s'},
         'pressureChangeRate': {'type': 'float', 'default': 0.5e3 / 60, 'suffix': 'Pa/s'},
         'resealTimeout': {'type': 'float', 'default': 10 * 60, 'suffix': 's'},
-        'retractionPressure': {'type': 'float', 'default': -4e3, 'suffix': 'Pa'},
+        'retractionPressure': {'type': 'float', 'default': -7e3, 'suffix': 'Pa'},
         'maxRetractionSpeed': {'type': 'float', 'default': 10e-6, 'suffix': 'm/s'},
         'retractionStepInterval': {'type': 'float', 'default': 5, 'suffix': 's'},
         'retractionSuccessDistance': {'type': 'float', 'default': 200e-6, 'suffix': 'm'},
@@ -207,6 +207,7 @@ class ResealState(PatchPipetteState):
     def __init__(self, *args, **kwds):
         super().__init__(*args, **kwds)
         self._pressureFuture = None
+        self._moveFuture = None
         self._lastResistance = None
         self._firstSuccessTime = None
         self._startPosition = np.array(self.dev.pipetteDevice.globalPosition())

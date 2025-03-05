@@ -1,32 +1,24 @@
 """
 Main ACQ4 invocation script
 """
-
 print("Loading ACQ4...")
 import os
 import sys
 
 if __package__ is None:
-    import acq4
+    import acq4  # noqa: F401
 
     __package__ = 'acq4'
 
-from .util import pg_setup  
+from .util import pg_setup  # noqa: F401
 from .Manager import Manager
 from .util.debug import installExceptionHandler
 
-
-# Pull some args out
-if "--profile" in sys.argv:
-    profile = True
-    sys.argv.pop(sys.argv.index('--profile'))
-else:
-    profile = False
-if "--callgraph" in sys.argv:
-    callgraph = True
-    sys.argv.pop(sys.argv.index('--callgraph'))
-else:
-    callgraph = False
+control_arg_parser = Manager.makeArgParser()
+control_arg_parser.add_argument("-profile", action="store_true", help="Run the program under the profiler")
+control_arg_parser.add_argument("--callgraph", action="store_true", help="Run the program under the callgraph profiler")
+control_arg_parser.add_argument("--threadtrace", action="store_true", help="Run a thread tracer in the background")
+args = control_arg_parser.parse_args()
 
 ## Enable stack trace output when a crash is detected
 from .util.debug import enableFaulthandler
@@ -39,6 +31,8 @@ from .util import Qt
 
 # Import pyqtgraph, get QApplication instance
 import pyqtgraph as pg
+if args.threadtrace:
+    tt = pg.debug.ThreadTrace()
 
 app = pg.mkQApp()
 
@@ -99,7 +93,7 @@ from pyqtgraph.util.garbage_collector import GarbageCollector
 gc = GarbageCollector(interval=1.0, debug=False)
 
 ## Create Manager. This configures devices and creates the main manager window.
-man = Manager.runFromCommandLine(argv=sys.argv[1:])
+man = Manager.runFromCommandLine(args)
 
 # If example config was loaded, offer more help to the user.
 message = f"""\
@@ -166,13 +160,13 @@ if interactive:
 
     atexit.register(save_history)
 else:
-    if profile:
+    if args.profile:
         import cProfile
 
         cProfile.run('app.exec_()', sort='cumulative')
         pg.exit()  # pg.exit() causes python to exit before Qt has a chance to clean up. 
         # this avoids otherwise irritating exit crashes.
-    elif callgraph:
+    elif args.callgraph:
         from pycallgraph import PyCallGraph
         from pycallgraph.output import GraphvizOutput
 
@@ -180,5 +174,5 @@ else:
             app.exec_()
     else:
         app.exec_()
-        pg.exit()  # pg.exit() causes python to exit before Qt has a chance to clean up. 
+        # pg.exit()  # pg.exit() causes python to exit before Qt has a chance to clean up. 
         # this avoids otherwise irritating exit crashes.

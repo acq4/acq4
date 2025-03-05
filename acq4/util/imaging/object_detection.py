@@ -16,6 +16,8 @@ import pyqtgraph as pg
 from pyqtgraph import SRTTransform3D
 from teleprox import ProcessSpawner
 from teleprox.shmem import SharedNDArray
+import coorx.image
+
 
 _lock = RLock()
 _remote_process: Optional[ProcessSpawner] = None
@@ -99,56 +101,148 @@ def get_pipette_detection_model():
     global _pipette_detection_model
     if _pipette_detection_model is None:
         import torch, os
-        import acq4.util.pipette_detection.torch_model_04
-        from acq4.util.pipette_detection.torch_model_04 import PipetteDetector
 
-        # initialize model
+        # Model 04
+        # import acq4.util.pipette_detection.torch_model_04
+        # from acq4.util.pipette_detection.torch_model_04 import PipetteDetector
+        # detector_path = os.path.dirname(acq4.util.pipette_detection.torch_model_04.__file__)
+        # model_file = os.path.join(detector_path, 'torch_models', '04_more_increased_difficulty.pth')
+
+        # Model 05
+        # import acq4.util.pipette_detection.torch_model_05
+        # from acq4.util.pipette_detection.torch_model_05 import PipetteDetector
+        # detector_path = os.path.dirname(acq4.util.pipette_detection.torch_model_05.__file__)
+        # model_file = os.path.join(detector_path, 'torch_models', '05_deeper_training.pth')
+
+        # Model 06
+        # import acq4.util.pipette_detection.torch_model_06
+        # from acq4.util.pipette_detection.torch_model_06 import PipetteDetector
+        # detector_path = os.path.dirname(acq4.util.pipette_detection.torch_model_06.__file__)
+        # model_file = os.path.join(detector_path, 'torch_models', '06_resnet50.pth')
+
+        # Model 08
+        import acq4.util.pipette_detection.torch_model_08
+        from acq4.util.pipette_detection.torch_model_08 import PipetteDetector
+        detector_path = os.path.dirname(acq4.util.pipette_detection.torch_model_08.__file__)
+        model_file = os.path.join(detector_path, 'torch_models', '08_aux_error_disabled.pth')
+
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         model = PipetteDetector()
         model.to(device)
-
-        # load model weights
-        detector_path = os.path.dirname(acq4.util.pipette_detection.torch_model_04.__file__)
-        model_file = os.path.join(detector_path, 'torch_models', '04_more_increased_difficulty.pth')
         model.load_state_dict(torch.load(model_file))
 
         _pipette_detection_model = model
     return _pipette_detection_model
 
 
-def do_pipette_tip_detection(data: np.ndarray, angle: float):
+analysis_window = None
+
+
+def do_pipette_tip_detection(data: np.ndarray, angle: float, show=True):
     """
     Parameters
     ----------
     data : image data shaped like [cols, rows]
     angle : angle of pipette in degrees, measured wittershins relative to pointing directly rightward
+
+    Returns
+    -------
+    pos_rc : tuple
+        (row, col) position of detected pipette
+    z_um : float
+        z position of pipette relative to focal plane in um
+    err : float
+        Indicator of confidence (model-specific)
     """
     import os
     import torch
-    from acq4.util.pipette_detection.torch_model_04 import make_image_tensor, pos_normalizer
-    from acq4.util.pipette_detection.test_data import make_rotated_crop
+    from acq4.util.pipette_detection.torch_model_08 import make_position_normalizer
 
+    global analysis_window
+
+    pos_normalizer = make_position_normalizer(image_size=400)
     model = get_pipette_detection_model()
 
+    image = coorx.image.Image(data, axes=(0, 1))
+
     # rotate and crop image
-    margin = (np.array(data.shape) - 400) // 2
-    crop = (slice(margin[0], margin[0]+400), slice(margin[1], margin[1]+400))
-    rot, tr = make_rotated_crop(data, -angle, crop)
-    # convert to 0-255 rgb
-    img = (rot - rot.min()) / (rot.max() - rot.min()) * 255
-    img = np.stack([img] * 3, axis=-1)[np.newaxis, ...]
+    # rot, tr = make_rotated_crop(data, -angle, crop=None)
+    rotated = image.rotate(-angle, reshape=False)
+    scaled = rotated.zoom(400 / rotated.shape[0])
+
+    scaled_pos_rc, z_um1, err1 = detect_pipette_once(model, scaled.image, pos_normalizer)
+
+    # position expressed in pixels relative to the rotated/zoomed image
+    # this must be mapped back to the original
+    rotated_pos_rc = scaled.point(scaled_pos_rc).mapped_to(rotated.cs)
+
+    # crop a 400x400 region around the detected position
+    row_start = int(np.clip(rotated_pos_rc[0] - 200, 0, image.shape[0] - 400))
+    col_start = int(np.clip(rotated_pos_rc[1] - 200, 0, image.shape[1] - 400))
+    cropped = rotated[row_start:row_start+400, col_start:col_start+400]
+    # print("detected position:", pos_rc2)
+    # print("image shape:", image.shape)
+    # print("cropping at", row_start, col_start)
+    # print("cropped shape:", cropped.shape)
+
+    # detect again
+    cropped_pos_rc, z_um3, err3 = detect_pipette_once(model, cropped.image, pos_normalizer)
+    image_pos_rc = cropped.point(cropped_pos_rc).mapped_to(image.cs)
+
+    if show:
+        if analysis_window is None:
+            w = pg.QtWidgets.QWidget()
+            l = pg.QtWidgets.QGridLayout()
+            w.setLayout(l)
+            w.views = []
+            for i in range(3):
+                imv = pg.ImageView()
+                imv.target = pg.TargetItem()
+                imv.view.addItem(imv.target)
+                w.views.append(imv)
+                w.addWidget(imv, 0, i)
+            analysis_window = w
+            w.resize(900, 300)
+
+        views = analysis_window.views
+        views[0].setImage(scaled.image.T)
+        views[0].target.setPos(*scaled_pos_rc[::-1])
+        views[1].setImage(cropped.image.T)
+        views[1].target.setPos(*cropped_pos_rc[::-1])
+        views[0].setImage(image.image.T)
+        views[0].target.setPos(*image_pos_rc[::-1])
+
+        w.show()
+
+    return image_pos_rc, z_um3, err3, locals()
+
+
+def detect_pipette_once(model, data, pos_normalizer):
+    import torch
+    from acq4.util.pipette_detection.torch_model_08 import make_image_tensor
+    from acq4.util.pipette_detection.training_data import normalize_image
+
+    # make into RGB batch (1, rows, cols, 3)
+    img = np.repeat(data[np.newaxis, ..., np.newaxis], 3, axis=-1)
+
+    # normalize image
+    normalized = normalize_image(img)
 
     # make prediction
-    image_tensor = make_image_tensor(img)
+    image_tensor = make_image_tensor(normalized)
     model.eval()  # set model to inference mode
     with torch.no_grad():
-        pred = model(image_tensor).cpu().numpy()
-    z, y, x, snr = pos_normalizer.denormalize(pred)[0]
+        pred_pos, pred_err = model(image_tensor)
+        pred_pos = pred_pos[0].cpu().numpy()
+        pred_err = pred_err[0].cpu().numpy()
 
-    # unrotate/uncrop prediction
-    pos_xy = tr.imap([y, x])
+    denorm_pos = pos_normalizer.denormalize(pred_pos)
+    denorm_err_pos = pos_normalizer.denormalize(pred_pos + pred_err)
+    err = np.linalg.norm(denorm_err_pos - denorm_pos)
 
-    return pos_xy, z, snr, locals()
+    z_um, row, col  = denorm_pos
+
+    return (row, col), z_um, err
 
 
 @future_wrap

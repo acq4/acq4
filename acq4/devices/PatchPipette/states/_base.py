@@ -1,15 +1,16 @@
 from __future__ import annotations
 
 import contextlib
-import numpy as np
 import queue
 import sys
 import threading
 from copy import deepcopy
-from typing import Any, Optional
+from typing import Any, Optional, Iterable
+
+import numpy as np
 
 from acq4.util import Qt
-from acq4.util.debug import printExc
+from acq4.util.debug import printExc, logExc
 from acq4.util.future import Future
 from neuroanalysis.test_pulse import PatchClampTestPulse
 from pyqtgraph import disconnect
@@ -33,7 +34,8 @@ class PatchPipetteState(Future):
     # state subclasses must set a string name
     stateName = None
 
-    # State classes may implement a run() method to be called in a background thread
+    # State classes may implement a run() method to be called in a background thread and it should call
+    # self.checkStop() frequently
     run = None
 
     _parameterTreeConfig = {
@@ -88,7 +90,6 @@ class PatchPipetteState(Future):
         Future.__init__(self)
 
         self.dev: PatchPipette = dev
-        self._moveFuture = None
 
         # generate full config by combining passed-in arguments with default config
         self.config = self.defaultConfig()
@@ -124,8 +125,8 @@ class PatchPipetteState(Future):
                 self._thread.start()
             else:
                 self._taskDone(interrupted=True, error=f"Not starting state thread; {self.dev.name()} is not active.")
-        except Exception as exc:
-            self._taskDone(interrupted=True, error=str(exc))
+        except Exception as e:
+            self._taskDone(interrupted=True, excInfo=sys.exc_info())
             raise
 
     def initializePressure(self):
@@ -158,7 +159,7 @@ class PatchPipetteState(Future):
                 tpParams = {}
         if ic_holding is not None:
             cdev.setHolding(mode="IC", value=ic_holding)
-        if ic_holding is not None:
+        if vc_holding is not None:
             cdev.setHolding(mode="VC", value=vc_holding)
 
         # enable test pulse if config requests it AND the device is "active"
@@ -209,27 +210,19 @@ class PatchPipetteState(Future):
         This calls the custom run() method for the state subclass and handles the possible
         error / exit / completion states.
         """
-        error = None
         excInfo = None
-        interrupted = False
+        interrupted = True
         try:
-            # run must be reimplemented in subclass and call self.checkStop() frequently
             self.nextState = self.run()
             interrupted = self.wasInterrupted()
-        except self.StopRequested as exc:
-            error = str(exc)
-            # state was stopped early by calling stop()
-            interrupted = True
-        except Exception as exc:
+        except Exception as e:
             # state aborted due to an error
-            interrupted = True
-            printExc(f"Error in {self.dev.name()} state {self.stateName}")
-            error = str(exc)
             excInfo = sys.exc_info()
         finally:
-            disconnect(self.dev.clampDevice.sigTestPulseFinished, self.testPulseFinished)
+            if self.dev.clampDevice is not None:
+                disconnect(self.dev.clampDevice.sigTestPulseFinished, self.testPulseFinished)
             if not self.isDone():
-                self._taskDone(interrupted=interrupted, error=error, excInfo=excInfo)
+                self._taskDone(interrupted=interrupted, excInfo=excInfo)
 
     def checkStop(self, delay=0):
         # extend checkStop to also see if the pipette was deactivated.
@@ -250,12 +243,12 @@ class PatchPipetteState(Future):
 
 class SteadyStateAnalysisBase(object):
     @classmethod
-    def plot_items(cls, *args, **kwargs) -> dict[str, iter[Qt.QGraphicsItem]]:
+    def plot_items(cls, *args, **kwargs) -> dict[str, Iterable[Qt.QGraphicsItem]]:
         """Returns data-independent plot items grouped by plot units."""
         return {}
 
     @classmethod
-    def plots_for_data(cls, data: iter[np.void], *args, **kwargs) -> dict[str, iter[dict[str, Any]]]:
+    def plots_for_data(cls, data: Iterable[np.void], *args, **kwargs) -> dict[str, Iterable[dict[str, Any]]]:
         """Given a list of datasets and init args, return the plotting arguments grouped by plot units."""
         return {}
 
@@ -275,5 +268,3 @@ class SteadyStateAnalysisBase(object):
         avg = prev_avg * (1 - alpha) + value * alpha
         ratio = np.log10(avg / prev_avg)
         return avg, ratio
-
-
