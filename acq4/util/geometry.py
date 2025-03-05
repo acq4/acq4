@@ -873,12 +873,10 @@ def are_colinear(l1, l2):
 
 class Plane:
     @classmethod
-    def wireframe(cls, *planes: "Plane", containing: np.ndarray = None) -> List[tuple[np.ndarray, np.ndarray]]:
+    def wireframe(cls, *planes: "Plane") -> List[tuple[np.ndarray, np.ndarray]]:
         """Given a set of intersecting planes, assumed to form a closed volume with side-length greater than 1e-9,
-        make a wireframe of that volume. Returns a list of segment endpoints. If containing is provided, the
-        wireframe will only describe the innermost containing volume that includes that point.
+        make a wireframe of that volume. Returns a list of segment endpoints.
         """
-        # TODO handle containing
         lines = []
         segments = ApproxDict()
         for i, plane in enumerate(planes):
@@ -923,6 +921,10 @@ class Plane:
         """Return the distance from the plane to a point, where positive
         directions are in the direction of the normal."""
         return np.dot(self.normal, pt - self.point)
+
+    def allows_point(self, pt: np.ndarray, tolerance=1e-9):
+        """Return whether a point is on the correct side of the boundary"""
+        return self.distance_to_point(pt) > -abs(tolerance)
 
     def intersecting_line(self, other: "Plane") -> Line | None:
         direction = np.cross(self.normal, other.normal)

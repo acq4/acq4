@@ -256,8 +256,11 @@ class VisualizerWindow(Qt.QMainWindow):
                 elif componentType == "voxels" and f"voxels of {dev.name()}" in self._path:
                     self._path[f"voxels of {dev.name()}"].setVisible(visible)
 
-    def addBounds(self, bounds, displayables_container: dict, containing=None):
-        for a, b in Plane.wireframe(*bounds, containing=containing):
+    def addBounds(self, bounds, displayables_container: dict):
+        for a, b in Plane.wireframe(*bounds):
+            for bound in bounds:
+                if not (bound.allows_point(a) and bound.allows_point(b)):
+                    continue
             if not self._testing and np.linalg.norm(a - b) > 0.1:
                 continue  # ignore bounds that are really far away
             edge = gl.GLLinePlotItem(pos=np.array([a, b]), color=(1, 0, 0, 0.2), width=4)
@@ -365,7 +368,7 @@ class VisualizerWindow(Qt.QMainWindow):
         self._path["dest target"] = dest_target
 
         # Add boundary visualization
-        self.addBounds(bounds, self._path, start)
+        self.addBounds(bounds, self._path)
 
     def addObstacleVolumeOutline(self, obstacle: Volume, to_global: Transform):
         self.newObstacleSignal.emit(obstacle, to_global, *obstacle.surface_mesh)
