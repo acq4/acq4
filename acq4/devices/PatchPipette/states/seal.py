@@ -167,7 +167,7 @@ class SealState(PatchPipetteState):
     pressureScanInterval : float
         Interval (seconds) between pressure scans during automatic pressure control. Default 10s.
     pressureScanRadius : float
-        Maximum distance (Pascals) from current pressure to scan during automatic pressure control. Default 5kPa.
+        Maximum distance (Pascals) from current pressure to scan during automatic pressure control. Default 2kPa.
     pressureScanDuration : float
         Duration (seconds) for each pressure scan during automatic pressure control. Default 5s.
     pressureScanTrust : float
@@ -184,7 +184,7 @@ class SealState(PatchPipetteState):
     }
     _parameterTreeConfig = {
         'pressureMode': {'type': 'str', 'default': 'user', 'limits': ['auto', 'user']},
-        'startingPressure': {'type': 'float', 'default': -1000},
+        'startingPressure': {'type': 'float', 'default': -3e3},
         'holdingThreshold': {'type': 'float', 'default': 100e6},
         'holdingPotential': {'type': 'float', 'default': -70e-3},
         'sealThreshold': {'type': 'float', 'default': 1e9},
@@ -194,9 +194,9 @@ class SealState(PatchPipetteState):
         'resistanceMonitorTau': {'type': 'float', 'default': 1, 'suffix': 's'},
         'delayBeforePressure': {'type': 'float', 'default': 0.0, 'suffix': 's'},
         'delayAfterSeal': {'type': 'float', 'default': 5.0, 'suffix': 's'},
-        'afterSealPressure': {'type': 'float', 'default': -1000, 'suffix': 'Pa'},
+        'afterSealPressure': {'type': 'float', 'default': -1e3, 'suffix': 'Pa'},
         'pressureScanInterval': {'type': 'float', 'default': 10.0, 'suffix': 's'},
-        'pressureScanRadius': {'type': 'float', 'default': 5 * kPa, 'suffix': 'Pa'},
+        'pressureScanRadius': {'type': 'float', 'default': 2 * kPa, 'suffix': 'Pa'},
         'pressureScanDuration': {'type': 'float', 'default': 5.0, 'suffix': 's'},
         'pressureScanTrust': {'type': 'float', 'default': 0.25},
     }
