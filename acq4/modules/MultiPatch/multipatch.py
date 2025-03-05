@@ -35,8 +35,8 @@ class MultiPatch(Module):
     moduleCategory = "Acquisition"
 
     def __init__(self, manager, name, config):
-        Module.__init__(self, manager, name, config) 
-        
+        Module.__init__(self, manager, name, config)
+
         self.win = MultiPatchWindow(self)
         self.win.show()
 
@@ -118,19 +118,19 @@ class MultiPatchWindow(Qt.QWidget):
         common_opts = dict(stoppable=True, failure="FAILED!", showStatus=False)
 
         self.ui.homeBtn.setOpts(future_producer=self._moveHome, **common_opts)
-        self.ui.nucleusHomeBtn.setOpts(future_producer=self._nucleusHome, **common_opts)
+        self.ui.nucleusHomeBtn.setOpts(future_producer=self._nucleusHome, raiseOnError=False, **common_opts)
         self.ui.coarseSearchBtn.setOpts(future_producer=self._coarseSearch, **common_opts)
         self.ui.fineSearchBtn.setOpts(future_producer=self._fineSearch, **common_opts)
         self.ui.aboveTargetBtn.setOpts(future_producer=self._aboveTarget, **common_opts)
         self.ui.autoCalibrateBtn.setOpts(future_producer=self._autoCalibrate, **common_opts)
-        self.ui.cellDetectBtn.setOpts(future_producer=self._cellDetect, **common_opts)
-        self.ui.breakInBtn.setOpts(future_producer=self._breakIn, **common_opts)
+        self.ui.cellDetectBtn.setOpts(future_producer=self._cellDetect, raiseOnError=False, **common_opts)
+        self.ui.breakInBtn.setOpts(future_producer=self._breakIn, raiseOnError=False, **common_opts)
         self.ui.toTargetBtn.setOpts(future_producer=self._toTarget, **common_opts)
-        self.ui.sealBtn.setOpts(future_producer=self._seal, **common_opts)
-        self.ui.reSealBtn.setOpts(future_producer=self._reSeal, **common_opts)
+        self.ui.sealBtn.setOpts(future_producer=self._seal, raiseOnError=False, **common_opts)
+        self.ui.reSealBtn.setOpts(future_producer=self._reSeal, raiseOnError=False, **common_opts)
         self.ui.approachBtn.setOpts(future_producer=self._approach, **common_opts)
-        self.ui.cleanBtn.setOpts(future_producer=self._clean, **common_opts)
-        self.ui.collectBtn.setOpts(future_producer=self._collect, **common_opts)
+        self.ui.cleanBtn.setOpts(future_producer=self._clean, raiseOnError=False, **common_opts)
+        self.ui.collectBtn.setOpts(future_producer=self._collect, raiseOnError=False, **common_opts)
 
         self.ui.profileCombo.currentIndexChanged.connect(self.profileComboChanged)
         self.ui.editProfileBtn.clicked.connect(self.openProfileEditor)
@@ -231,7 +231,7 @@ class MultiPatchWindow(Qt.QWidget):
             if isinstance(pip, PatchPipette):
                 pip.setState('out')
                 pip = pip.pipetteDevice
-            futures.append(pip.goHome(speed, raiseErrors=True))
+            futures.append(pip.goHome(speed))
         return MultiFuture(futures)
 
     def _nucleusHome(self):
@@ -252,7 +252,7 @@ class MultiPatchWindow(Qt.QWidget):
         speed = self.selectedSpeed(default='fast')
         for pip in self.selectedPipettes():
             pip.setState('bath')
-            futures.append(pip.pipetteDevice.goAboveTarget(speed, raiseErrors=True))
+            futures.append(pip.pipetteDevice.goAboveTarget(speed))
         return MultiFuture(futures)
 
     @future_wrap
@@ -272,7 +272,7 @@ class MultiPatchWindow(Qt.QWidget):
         return MultiFuture([
             (
                 pip.pipetteDevice if isinstance(pip, PatchPipette) else pip
-            ).goTarget(speed, raiseErrors=True)
+            ).goTarget(speed)
             for pip in self.selectedPipettes()
         ])
 
@@ -288,10 +288,11 @@ class MultiPatchWindow(Qt.QWidget):
         for pip in self.selectedPipettes():
             if isinstance(pip, PatchPipette):
                 pip.setState('bath')
-                futures.append(pip.pipetteDevice.goApproach(speed, raiseErrors=True))
-                pip.clampDevice.autoPipetteOffset()
+                futures.append(pip.pipetteDevice.goApproach(speed))
+                if pip.clampDevice is not None:
+                    pip.clampDevice.autoPipetteOffset()
             else:
-                futures.append(pip.goApproach(speed, raiseErrors=True))
+                futures.append(pip.goApproach(speed))
         return MultiFuture(futures)
 
     def _clean(self):
@@ -330,7 +331,7 @@ class MultiPatchWindow(Qt.QWidget):
             if isinstance(pip, PatchPipette):
                 pip.setState('bath')
                 pip = pip.pipetteDevice
-            futures.append(pip.goSearch(speed, distance=distance, raiseErrors=True))
+            futures.append(pip.goSearch(speed, distance=distance))
         return MultiFuture(futures)
 
     # def calibrateWithStage(self, pipettes, positions):
@@ -490,12 +491,12 @@ class MultiPatchWindow(Qt.QWidget):
         bl = self.xkdev.getBacklights()
         for i, ctrl in enumerate(self.pipCtrls):
             pip = ctrl.pip
-            bl[0, i+4, 0] = 1 if ctrl.active() else 0
-            bl[0, i+4, 1] = 2 if ctrl.pip.pipetteDevice.moving else 0
-            bl[1, i+4, 1] = 1 if pip in sel else 0
-            bl[1, i+4, 0] = 1 if ctrl.locked() else 0
-            bl[2, i+4, 1] = 1 if pip in sel else 0
-            bl[2, i+4, 0] = 1 if ctrl.selected() else 0
+            bl[0, i + 4, 0] = 1 if ctrl.active() else 0
+            bl[0, i + 4, 1] = 2 if ctrl.pip.pipetteDevice.moving else 0
+            bl[1, i + 4, 1] = 1 if pip in sel else 0
+            bl[1, i + 4, 0] = 1 if ctrl.locked() else 0
+            bl[2, i + 4, 1] = 1 if pip in sel else 0
+            bl[2, i + 4, 0] = 1 if ctrl.selected() else 0
 
         bl[1, 2] = 1 if self.ui.hideMarkersBtn.isChecked() else 0
         bl[0, 2] = 1 if self.ui.setTargetBtn.isChecked() else 0
@@ -503,7 +504,7 @@ class MultiPatchWindow(Qt.QWidget):
         bl[4, 1] = 1 if self.ui.slowBtn.isChecked() else 0
         bl[4, 2] = 1 if self.ui.fastBtn.isChecked() else 0
         bl[7, 2] = 1 if self.ui.recordBtn.isChecked() else 0
-        
+
         self.xkdev.setBacklights(bl, axis=1)
 
     def xkeysStateChanged(self, dev, changes):
