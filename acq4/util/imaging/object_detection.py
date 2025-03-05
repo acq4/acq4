@@ -184,9 +184,9 @@ def detect_neurons(
     model: str = "healthy-cellpose",
     classifier: str = None,
     autoencoder: str = None,
-    diameter: int = None,
-    xy_scale: float = None,
-    z_scale: float = None,
+    diameter: int = 35,
+    xy_scale: float = 0.32e-6,
+    z_scale: float = 1e-6,
     _future: Future = None,
 ) -> list:
     if do_3d := not isinstance(frames, Frame):
@@ -215,8 +215,8 @@ def do_neuron_detection(
     classifier: str = None,
     autoencoder: str = None,
     diameter: int = 35,
-    xy_scale: float = 0.32,
-    z_scale: float = 1,
+    xy_scale: float = 0.32e-6,
+    z_scale: float = 1e-6,
 ) -> list:
     if model == "healthy-cellpose":
         return _do_healthy_neuron_detection(data, transform, classifier, autoencoder, diameter, xy_scale, z_scale)
@@ -584,8 +584,8 @@ class CellRegionViewer(pg.QtWidgets.QMainWindow):
 @click.option("--classifier", default=None, type=str)
 @click.option("--autoencoder", default=None, type=str)
 @click.option("--diameter", default=35, type=int)
-@click.option("--xy-scale", default=0.32, type=float)
-@click.option("--z-scale", default=1, type=float)
+@click.option("--xy-scale", default=0.32e-6, type=float)
+@click.option("--z-scale", default=1e-6, type=float)
 def cli(image, model, angle, z, display, classifier, autoencoder, diameter, xy_scale, z_scale):
     null_xform = SRTTransform3D()
     if image[-3:] == ".ma":

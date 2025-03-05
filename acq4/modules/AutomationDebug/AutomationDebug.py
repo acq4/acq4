@@ -240,7 +240,7 @@ class AutomationDebugWindow(Qt.QWidget):
         z_stack = _future.waitFor(acquire_z_stack(self.cameraDevice, start, stop, 1 * µm)).getResult()
         self.cameraDevice.setFocusDepth(depth)  # no need to wait
         pixel_size = self.cameraDevice.getPixelSize()[0] / µm
-        z_scale = 1
+        z_scale = 1e-6
         man = self.module.manager
         autoencoder = man.config.get("misc", {}).get("autoencoderPath")
         classifier = man.config.get("misc", {}).get("classifierPath")
