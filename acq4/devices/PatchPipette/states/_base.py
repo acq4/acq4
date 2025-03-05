@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import contextlib
-import numpy as np
 import queue
 import sys
 import threading
 from copy import deepcopy
 from typing import Any, Optional, Iterable
+
+import numpy as np
 
 from acq4.util import Qt
 from acq4.util.debug import printExc, logExc
