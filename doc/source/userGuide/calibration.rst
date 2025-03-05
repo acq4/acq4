@@ -98,6 +98,70 @@ First we should ensure that the camera image is correctly rotated / mirrored suc
 
 The next step is to ensure that acq4 understands how the stage's x,y,z axes are oriented and scaled relative to the global coordinate system.
 
+0. Configure your stage. All stages have different limitations and idiosyncracies that require different handling to use with ACQ4.
+    - Scientifica SliceScope:  This can be configured using LinLab (provided by manufacturer), but we recommend configuring via the acq4 config
+      so that you know the parameters are being maintained correctly over time. The main factors to work out are:
+        - What are the axis scale values 
+            - Provided by manufacturer, they determine the relationship between motor steps and distance traveled.
+            - Affects the position values returned by the physical device
+            - Can be retrieved from the device if you are not sure what values to use: e.g. man.getDevice('SliceScope').dev.getAxisScale('X')
+        - Which axis scale values should be negative
+            - Determines which direction on the stage points toward more positive position values
+            - More importantly, determines which end of the range is zero. This is where auto calibration will take place, so it needs to be
+            a "safe" location. For a SliceScope z axis (with an inverted microscope), we want Z to be zero at the top of its range because it's safer 
+            to make automatic moves in that direction. For a non-inverted microscope, Z=0 should be at the bottom of its range. Likewise, condenser
+            devices should have their zero point _away_ from the sample holder.
+        - Objective lift/disp
+            - Set to avoid collisions while switching objectives and to automatically refocus after switching
+            - Note that these values depend on axisScale, so they should be configured afterwards
+            - Note also: ACQ4 itself does not care about these values. It does track the difference in focal plane between the objectives, but
+            the scientifica controller is responsible for deciding how to move the objectives during switching.
+        - What direction do you want your rotary controllers to turn
+            - Your choice, but be consistent about it
+            - Note that reversing an axisScale value also reverses the direction of the rotary controller
+        - How fast do you want the stage to move
+            - There are a few configurable speeds: "fast", "slow", and "user". 
+                - Fast: movements over long distances where vibration is not a factor to consider. Typically 3-5 mm, but this depends on 
+                the device, since some devices will "slip" and become miscalibrated if they are asked to move too quickly.
+                - Slow: Movements over shorter distances, made where vibration is a concern (because of patched cells)
+                - User: Speed to set for rotary controllers
+
+            SliceScope:
+                driver: 'Scientifica'
+                name: 'SliceScope'
+                baudrate: 38400
+                scale: (1e-06, 1e-06, -1e-06)
+                version: 2
+                slowSpeed: 100*um/s
+                fastSpeed: 5*mm/s
+                params:
+                    axisScale: (-4.03, 4.03, 6.4)  # set such that +X points right, +Y points away, +Z points _down_ (so that auto zero is safe)
+                    joyDirectionX: True  # CW = right
+                    joyDirectionY: True  # CW = away
+                    joyDirectionZ: True  # CW = down
+                transform:
+                    pos: -23.4*mm, -20.6*mm, 21.6 * mm
+            Condenser:
+                driver: 'Scientifica'
+                name: 'Condenser'
+                baudrate: 38400
+                scale: (-1e-06, -1e-06, 1e-06)
+                version: 2
+                monitorObjective: True
+                slowSpeed: 100*um/s
+                fastSpeed: 5*mm/s
+                params:
+                    axisScale: (-5.12, -5.12, -6.4)  # set such that +Z points _up_
+                    joyDirectionX: True
+                    joyDirectionY: True
+                    joyDirectionZ: True  # CW = down
+
+        - When you are convinced that these parameters are configured correctly, verify that you can auto-set the zero points for each axis
+
+    - Sensapex uMs stage:
+        - run zero-offset calibration
+
+
 1. Check z-axis scale and orientation. We assume that your stage's Z axis is vertical.
     a. The configuration for your stage device should have a ``scale:`` section that contains x,y,z scale factors to convert from hardware-reported
        position values to unscaled meters. These values are usually 1e-6 (most devices report their position in micrometers). If you are not certain 
