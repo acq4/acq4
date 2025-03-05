@@ -85,6 +85,8 @@ class Scientifica(Stage):
         self.userSpeed = None
         self.setUserSpeed(config.get("userSpeed", self._interpretSpeed('fast')))
 
+        self.autoZeroDirection = config.get('autoZeroDirection', (-1, -1, -1))
+
         self.driver.setPositionCallback(self._stageReportedPositionChange)
 
         # whether to monitor for changes to a MOC
@@ -241,7 +243,7 @@ class ScientificaGUI(StageInterface):
         nextRow += 1
         self.autoXZeroBtn = self.autoYZeroBtn = self.autoZZeroBtn = None
 
-        if dev.capabilities()["getPos"][0]:
+        if dev.capabilities()["getPos"][0] and dev.autoZeroDirection[0] is not None:
             self.xZeroBtn = Qt.QPushButton("Zero X")
             self.xZeroBtn.clicked.connect(self.zeroX)
             self.layout.addWidget(self.xZeroBtn, nextRow, 0)
@@ -249,7 +251,7 @@ class ScientificaGUI(StageInterface):
             self.layout.addWidget(self.autoXZeroBtn, nextRow, 1)
             nextRow += 1
 
-        if dev.capabilities()["getPos"][1]:
+        if dev.capabilities()["getPos"][1] and dev.autoZeroDirection[1] is not None:
             self.yZeroBtn = Qt.QPushButton("Zero Y")
             self.yZeroBtn.clicked.connect(self.zeroY)
             self.layout.addWidget(self.yZeroBtn, nextRow, 0)
@@ -257,7 +259,7 @@ class ScientificaGUI(StageInterface):
             self.layout.addWidget(self.autoYZeroBtn, nextRow, 1)
             nextRow += 1
 
-        if dev.capabilities()["getPos"][2]:
+        if dev.capabilities()["getPos"][2] and dev.autoZeroDirection[2] is not None:
             self.zZeroBtn = Qt.QPushButton("Zero Z")
             self.zZeroBtn.clicked.connect(self.zeroZ)
             self.layout.addWidget(self.zZeroBtn, nextRow, 0)
@@ -338,7 +340,8 @@ class ScientificaGUI(StageInterface):
             pos = self.dev.getPosition()
             globalStartPos = self.dev.globalPosition()
             dest = pos[:]
-            far_away = [-1e6, -1e6, -1e6]
+
+            far_away = [None if x is None else 1e6 * x for x in self.dev.autoZeroDirection]
             if axis is None:
                 dest = far_away
             else:
