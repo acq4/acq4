@@ -255,6 +255,7 @@ def test_find_path(geometry, viz=None):
         last_point = waypoint
 
 
+@pytest.mark.xfail(reason="we aren't currently building for multi-pipette planning")
 @pytest.mark.parametrize("offset", [(0, 0, 0), (1, 1, 1), (0.2, 0.2, 0.2), (0.6, 0.6, 0.6)])
 def test_grazing_paths(offset, viz=None):
     vx = 1.0
@@ -371,7 +372,7 @@ def test_bounds_prevent_path(geometry, cube, viz=None):
     do_viz(viz, {traveler: traveler_to_global})
 
 
-@pytest.mark.skip("This scenario is highly unlikely, but we may fix it at some point")
+@pytest.mark.xfail(reason="This scenario is highly unlikely, but we may fix it at some point")
 def test_paths_stay_inside_bounds(geometry, viz=None):
     voxel_size = 1
     sqrt3 = 3**0.5
