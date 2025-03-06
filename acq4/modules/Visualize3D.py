@@ -239,6 +239,7 @@ class VisualizerWindow(Qt.QMainWindow):
             if not self._testing and np.linalg.norm(a - b) > 0.1:
                 continue  # ignore bounds that are really far away
             edge = gl.GLLinePlotItem(pos=np.array([a, b]), color=(1, 0, 0, 0.2), width=4)
+            edge.setVisible(self.shouldShowPath)
             self.view.addItem(edge)
             displayables_container[(tuple(a), tuple(b))] = edge
 
@@ -306,18 +307,21 @@ class VisualizerWindow(Qt.QMainWindow):
         self.removePath()
 
         # Enable path planning controls
-        self.pathPlanToggler.setEnabled(True)
-        self.pathPlanToggler.setChecked(True)
+        if self.shouldShowPath:
+            self.pathPlanToggler.setEnabled(True)
+            self.pathPlanToggler.setChecked(True)
 
         # Add initial path line
         self._appendPath([start, stop])
 
         # Add start and destination markers
         start_target = gl.GLScatterPlotItem(pos=np.array([start]), color=(0, 0, 1, 1), size=10, pxMode=True)
+        start_target.setVisible(self.shouldShowPath)
         self.view.addItem(start_target)
         self._path["start target"] = start_target
 
         dest_target = gl.GLScatterPlotItem(pos=np.array([stop]), color=(0, 1, 0, 1), size=10, pxMode=True)
+        dest_target.setVisible(self.shouldShowPath)
         self.view.addItem(dest_target)
         self._path["dest target"] = dest_target
 
@@ -348,26 +352,26 @@ class VisualizerWindow(Qt.QMainWindow):
         mesh.setTransform((to_global * obstacle.transform * recenter_voxels).as_pyqtgraph())
         self.view.addItem(mesh)
         self._itemsByDevice[device]["obstacle"] = mesh
+        mesh_checkbox = self._itemsByDevice[device]["checkboxes"]["obstacle"]
+        was_disabled = mesh_checkbox.isDisabled()
+        mesh_checkbox.setDisabled(not generally_visible)
+        if generally_visible and was_disabled:
+            mesh.setVisible(self.shouldShowPath)
+            mesh_checkbox.setCheckState(0, Qt.Qt.Checked)
+        else:
+            mesh.setVisible(self.shouldShowPath and generally_visible and mesh_checkbox.checkState(0) == Qt.Qt.Checked)
 
         # Create volumetric visualization for raw voxels
         vol_data = np.zeros(obstacle.volume.T.shape + (4,), dtype=np.ubyte)
         vol_data[..., :3] = (30, 10, 10)
         vol_data[..., 3] = obstacle.volume.T * 5
         vol = gl.GLVolumeItem(vol_data, sliceDensity=10, smooth=False, glOptions="additive")
-        vol.setVisible(False)  # Initially hidden
         vol.setTransform((to_global * obstacle.transform).as_pyqtgraph())
         self.view.addItem(vol)
         self._itemsByDevice[device]["voxels"] = vol
-
-        # Enable obstacle checkboxes for this device
-        mesh_checkbox = self._itemsByDevice[device]["checkboxes"]["obstacle"]
-        was_disabled = mesh_checkbox.isDisabled()
-        mesh_checkbox.setDisabled(not generally_visible)
-        if generally_visible and was_disabled:
-            mesh.setVisible(generally_visible)
-            mesh_checkbox.setCheckState(0, Qt.Qt.Checked)
         vol_checkbox = self._itemsByDevice[device]["checkboxes"]["voxels"]
         vol_checkbox.setDisabled(not generally_visible)
+        vol.setVisible(self.shouldShowPath and generally_visible and vol_checkbox.checkState(0) == Qt.Qt.Checked)
 
     def updatePath(self, path, skip=3):
         self._pathUpdates.put((path, skip))
@@ -381,16 +385,13 @@ class VisualizerWindow(Qt.QMainWindow):
                 self.pathUpdateSignal.emit(path)
                 time.sleep(0.02)
 
-    @property
-    def hasPath(self):
-        return len(self._path) > 0
-
     def _appendPath(self, path):
         self._path.setdefault("paths", [])
         if len(self._path["paths"]) > 0:
             self._path["paths"][-1].color = (1, 0.7, 0, 0.02)
             self._path["paths"][-1].paint()
         path = gl.GLLinePlotItem(pos=np.array(path), color=(0.1, 1, 0.7, 1), width=1)
+        path.setVisible(self.shouldShowPath)
         self.view.addItem(path)
         self._path["paths"].append(path)
 
@@ -426,18 +427,18 @@ class VisualizerWindow(Qt.QMainWindow):
         self._path = {}
 
         for items in self._itemsByDevice.values():
+            items["checkboxes"]["obstacle"].setDisabled(True)
+            items["checkboxes"]["voxels"].setDisabled(True)
+            # TODO reuse these components
             if "obstacle" in items:
                 items["obstacle"].setVisible(False)
                 self.view.removeItem(items["obstacle"])
                 items["obstacle"].deleteLater()
-                items["checkboxes"]["obstacle"].setDisabled(True)
             if "voxels" in items:
-                # todo reuse these components
                 items["voxels"].setVisible(False)
                 self.view.removeItem(items["voxels"])
                 items["voxels"].deleteLater()
-                items["checkboxes"]["voxels"].setDisabled(True)
 
-        # Reset path plan toggle
-        self.pathPlanToggler.setChecked(False)
-        self.pathPlanToggler.setEnabled(False)
+    @property
+    def shouldShowPath(self):
+        return self.pathPlanToggler.isChecked() or not self.pathPlanToggler.isEnabled()
