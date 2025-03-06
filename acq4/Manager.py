@@ -1,12 +1,3 @@
-"""
-Manager.py -  Defines main Manager class for ACQ4
-
-This class must be invoked once to initialize the ACQ4 core system.
-The class is responsible for:
-    - Configuring devices
-    - Invoking/managing modules
-    - Creating and executing acquisition tasks. 
-"""
 import atexit
 import gc
 import getopt
