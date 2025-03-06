@@ -2,7 +2,7 @@ import os
 import queue
 import time
 from threading import Thread
-from typing import Union, Dict, Any, Optional
+from typing import Union
 
 import numpy as np
 
@@ -109,15 +109,13 @@ class VisualizerWindow(Qt.QMainWindow):
         self._pathWatcherThread.start()
 
         # Data structures
-        self._geometries = {}  # Maps devices to their visualization components
-        self._path: dict[object, GLGraphicsItem] = {}  # Path planning visualization elements
-        self._deviceObstacles = {}  # Maps devices to their obstacles
+        self._itemsByDevice = {}  # Maps devices to their visualization components
+        self._path: dict[object, GLGraphicsItem | list] = {}  # Path planning visualization elements
 
     def clear(self):
-        for dev in list(self._geometries.keys()):
+        for dev in list(self._itemsByDevice.keys()):
             self._removeDevice(dev)
-        self._geometries = {}
-        self._deviceObstacles = {}
+        self._itemsByDevice = {}
         self.removePath()
 
     def focus(self):
@@ -137,7 +135,7 @@ class VisualizerWindow(Qt.QMainWindow):
             return
 
         # Create device entry in data structure
-        self._geometries[dev] = {"checkboxes": {}}
+        self._itemsByDevice[dev] = {"checkboxes": {}}
 
         # Add geometry to the scene
         self.addGeometry(geom, dev)
@@ -150,7 +148,7 @@ class VisualizerWindow(Qt.QMainWindow):
         deviceItem.setFlags(deviceItem.flags() | Qt.Qt.ItemIsUserCheckable)
         deviceItem.setCheckState(0, Qt.Qt.Checked)
         deviceItem.setData(0, Qt.Qt.UserRole, dev)
-        self._geometries[dev]["tree_item"] = deviceItem
+        self._itemsByDevice[dev]["tree item"] = deviceItem
 
         # Create geometry sub-item
         geomItem = Qt.QTreeWidgetItem(deviceItem)
@@ -158,12 +156,12 @@ class VisualizerWindow(Qt.QMainWindow):
         geomItem.setFlags(geomItem.flags() | Qt.Qt.ItemIsUserCheckable)
         geomItem.setCheckState(0, Qt.Qt.Checked)
         geomItem.setData(0, Qt.Qt.UserRole, "geometry")
-        self._geometries[dev]["checkboxes"]["geometry"] = geomItem
+        self._itemsByDevice[dev]["checkboxes"]["geometry"] = geomItem
 
         # Add boundaries if available
         if bounds := dev.getBoundaries():
-            self._geometries[dev]["limits"] = {}
-            self.addBounds(bounds, self._geometries[dev]["limits"])
+            self._itemsByDevice[dev]["limits"] = {}
+            self.addBounds(bounds, self._itemsByDevice[dev]["limits"])
 
             # Create limits sub-item
             limitsItem = Qt.QTreeWidgetItem(deviceItem)
@@ -171,7 +169,7 @@ class VisualizerWindow(Qt.QMainWindow):
             limitsItem.setFlags(limitsItem.flags() | Qt.Qt.ItemIsUserCheckable)
             limitsItem.setCheckState(0, Qt.Qt.Unchecked)
             limitsItem.setData(0, Qt.Qt.UserRole, "limits")
-            self._geometries[dev]["checkboxes"]["limits"] = limitsItem
+            self._itemsByDevice[dev]["checkboxes"]["limits"] = limitsItem
 
             # Initially hide limits
             self.toggleDeviceLimitsVisibility(Qt.QtCore.Qt.Unchecked, dev.name())
@@ -186,7 +184,7 @@ class VisualizerWindow(Qt.QMainWindow):
         obstacleItem.setCheckState(0, Qt.Qt.Checked)
         obstacleItem.setDisabled(True)  # Disabled until path planning starts
         obstacleItem.setData(0, Qt.Qt.UserRole, "obstacle")
-        self._geometries[dev]["checkboxes"]["obstacle"] = obstacleItem
+        self._itemsByDevice[dev]["checkboxes"]["obstacle"] = obstacleItem
 
         # Create raw voxels sub-item (initially disabled)
         voxelsItem = Qt.QTreeWidgetItem(deviceItem)
@@ -195,66 +193,46 @@ class VisualizerWindow(Qt.QMainWindow):
         voxelsItem.setCheckState(0, Qt.Qt.Unchecked)
         voxelsItem.setDisabled(True)  # Disabled until path planning starts
         voxelsItem.setData(0, Qt.Qt.UserRole, "voxels")
-        self._geometries[dev]["checkboxes"]["voxels"] = voxelsItem
+        self._itemsByDevice[dev]["checkboxes"]["voxels"] = voxelsItem
 
-    def handleTreeItemChanged(self, item, column):
-        # Get the device and component type
+    def handleTreeItemChanged(self, item: Qt.QTreeWidgetItem, column):
         parentItem = item.parent()
+        visible = item.checkState(0) == Qt.Qt.Checked
 
-        # If this is a top-level device item
-        if parentItem is None or parentItem.parent() is None:
+        # A top-level device item
+        if parentItem is None:
             dev = item.data(0, Qt.Qt.UserRole)
-            visible = item.checkState(0) == Qt.Qt.Checked
 
-            # Update visibility of the device and enable/disable children
-            if dev in self._geometries:
-                # Update mesh visibility
-                self._geometries[dev]["mesh"].setVisible(visible)
+            if dev not in self._itemsByDevice:
+                return
 
-                # Enable/disable child items
-                for i in range(item.childCount()):
-                    childItem = item.child(i)
-                    childItem.setDisabled(not visible)
+            for ch in range(item.childCount()):
+                child = item.child(ch)
+                name = child.data(0, Qt.Qt.UserRole)
+                child.setDisabled(not visible or name not in self._itemsByDevice[dev])
+                if visible:
+                    self.handleTreeItemChanged(child, None)
 
-                    # If device is visible, apply child item states
-                    if visible:
-                        componentType = childItem.data(0, Qt.Qt.UserRole)
-                        childVisible = childItem.checkState(0) == Qt.Qt.Checked
-
-                        if componentType == "geometry":
-                            self._geometries[dev]["mesh"].setVisible(childVisible)
-                        elif componentType == "limits" and "limits" in self._geometries[dev]:
-                            self.toggleDeviceLimitsVisibility(
-                                Qt.QtCore.Qt.Checked if childVisible else Qt.QtCore.Qt.Unchecked,
-                                dev.name()
-                            )
-                        elif componentType == "obstacle" and dev in self._deviceObstacles:
-                            for obstacle in self._deviceObstacles[dev]:
-                                if obstacle in self._path:
-                                    self._path[obstacle].setVisible(childVisible)
-                        elif componentType == "voxels" and f"voxels of {dev.name()}" in self._path:
-                            self._path[f"voxels of {dev.name()}"].setVisible(childVisible)
-
-        # If this is a component item
-        else:
+            if not visible:
+                self.toggleDeviceLimitsVisibility(False, dev.name())
+                for item in self._itemsByDevice[dev].values():
+                    if hasattr(item, "setVisible"):
+                        item.setVisible(False)
+        else:  # This is a component item
             dev = parentItem.data(0, Qt.Qt.UserRole)
             componentType = item.data(0, Qt.Qt.UserRole)
-            visible = item.checkState(0) == Qt.Qt.Checked
 
-            if dev in self._geometries:
-                if componentType == "geometry":
-                    self._geometries[dev]["mesh"].setVisible(visible)
-                elif componentType == "limits" and "limits" in self._geometries[dev]:
+            if dev not in self._itemsByDevice:
+                return
+
+            if componentType in self._itemsByDevice[dev]:
+                if componentType == "limits":
                     self.toggleDeviceLimitsVisibility(
                         Qt.QtCore.Qt.Checked if visible else Qt.QtCore.Qt.Unchecked,
                         dev.name()
                     )
-                elif componentType == "obstacle" and dev in self._deviceObstacles:
-                    for obstacle in self._deviceObstacles[dev]:
-                        if obstacle in self._path:
-                            self._path[obstacle].setVisible(visible)
-                elif componentType == "voxels" and f"voxels of {dev.name()}" in self._path:
-                    self._path[f"voxels of {dev.name()}"].setVisible(visible)
+                else:
+                    self._itemsByDevice[dev][componentType].setVisible(visible)
 
     def addBounds(self, bounds, displayables_container: dict):
         for a, b in Plane.wireframe(*bounds):
@@ -269,7 +247,7 @@ class VisualizerWindow(Qt.QMainWindow):
 
     def toggleDeviceLimitsVisibility(self, state, dev_name=None):
         visible = state == Qt.QtCore.Qt.Checked
-        for key, data in self._geometries.items():
+        for key, data in self._itemsByDevice.items():
             if key.name() == dev_name:
                 for edge in data.get("limits", {}).values():
                     edge.setVisible(visible)
@@ -277,14 +255,14 @@ class VisualizerWindow(Qt.QMainWindow):
     def addGeometry(self, geom: Geometry, key=None):
         if key is None:
             key = geom.name
-        self._geometries.setdefault(key, {})
-        self._geometries[key]["geom"] = geom
+        self._itemsByDevice.setdefault(key, {})
+        self._itemsByDevice[key]["geom"] = geom
         mesh = geom.glMesh()
         self.view.addItem(mesh)
-        self._geometries[key]["mesh"] = mesh
+        self._itemsByDevice[key]["geometry"] = mesh
 
     def _removeDevice(self, dev):
-        if dev not in self._geometries:
+        if dev not in self._itemsByDevice:
             return
 
         # Disconnect signals
@@ -292,56 +270,36 @@ class VisualizerWindow(Qt.QMainWindow):
             dev.sigGeometryChanged.disconnect(self.handleGeometryChange)
             dev.sigGlobalTransformChanged.disconnect(self.handleTransformUpdate)
 
-        # Remove mesh from view
-        mesh = self._geometries[dev].get("mesh")
-        if mesh is not None:
-            self.view.removeItem(mesh)
-
         # Remove limits from view
-        for edge in self._geometries[dev].get("limits", {}).values():
+        for edge in self._itemsByDevice[dev].pop("limits", {}).values():
             self.view.removeItem(edge)
             edge.deleteLater()
 
-        # Remove obstacles associated with this device
-        if dev in self._deviceObstacles:
-            for obstacle in self._deviceObstacles[dev]:
-                if obstacle in self._path:
-                    self.view.removeItem(self._path[obstacle])
-                    self._path[obstacle].deleteLater()
-                    del self._path[obstacle]
-
-            # Remove voxel visualization if it exists
-            voxel_key = f"voxels of {dev.name()}"
-            if voxel_key in self._path:
-                self.view.removeItem(self._path[voxel_key])
-                self._path[voxel_key].deleteLater()
-                del self._path[voxel_key]
-
-            del self._deviceObstacles[dev]
-
         # Remove tree item
-        if "tree_item" in self._geometries[dev]:
-            tree_item = self._geometries[dev]["tree_item"]
+        if "tree item" in self._itemsByDevice[dev]:
+            tree_item = self._itemsByDevice[dev].pop("tree item")
             parent = tree_item.parent()
-            if parent is None:
-                index = self.deviceTree.indexOfTopLevelItem(tree_item)
-                self.deviceTree.takeTopLevelItem(index)
-            else:
-                parent.removeChild(tree_item)
+            parent.removeChild(tree_item)
+
+        # Remove everything else from view
+        for component in self._itemsByDevice[dev]:
+            self.view.removeItem(component)
+
+        del self._itemsByDevice[dev]
 
     def handleTransformUpdate(self, moved_device: OptomechDevice, cause_device: OptomechDevice):
-        geom = self._geometries.get(moved_device, {}).get("geom")
+        geom = self._itemsByDevice.get(moved_device, {}).get("geom")
         if geom is None:
             return
         xform = moved_device.globalPhysicalTransform() * geom.transform.as_pyqtgraph()
         self.setMeshTransform(moved_device, xform)
 
     def setMeshTransform(self, dev, xform):
-        self._geometries[dev]["mesh"].setTransform(xform)
+        self._itemsByDevice[dev]["geometry"].setTransform(xform)
 
     def handleGeometryChange(self, dev: OptomechDevice):
         self._removeDevice(dev)
-        self._geometries[dev] = {}
+        self._itemsByDevice[dev] = {}
         self.addDevice(dev)
 
     def startPath(self, start, stop, bounds):
@@ -375,55 +333,43 @@ class VisualizerWindow(Qt.QMainWindow):
 
     def _addObstacleVolumeOutline(self, obstacle: Volume, to_global: Transform, verts, faces):
         cs_name = obstacle.transform.systems[0].name
-
-        # Find the device this obstacle belongs to
-        associated_device = None
-        for dev in self._geometries:
-            if dev.name() in cs_name:
-                associated_device = dev
-                break
+        device = next((dev for dev in self._itemsByDevice if dev.name() in cs_name))
+        generally_visible = self._itemsByDevice[device]["checkboxes"]["geometry"].parent().checkState(
+            0) == Qt.Qt.Checked
 
         # Create mesh for obstacle surface
-        mesh = gl.MeshData(vertexes=verts, faces=faces)
-        m = gl.GLMeshItem(
-            meshdata=mesh, smooth=True, color=(0.1, 0.1, 0.3, 0.25), shader="balloon", glOptions="additive"
+        mesh_data = gl.MeshData(vertexes=verts, faces=faces)
+        mesh = gl.GLMeshItem(
+            meshdata=mesh_data, smooth=True, color=(0.1, 0.1, 0.3, 0.25), shader="balloon", glOptions="additive"
         )
         recenter_voxels = TTransform(
             offset=(0.5, 0.5, 0.5),
             from_cs=f"[isosurface of {cs_name}]",
             to_cs=cs_name,
         )
-        m.setTransform((to_global * obstacle.transform * recenter_voxels).as_pyqtgraph())
-        self.view.addItem(m)
-        self._path[obstacle] = m
+        mesh.setTransform((to_global * obstacle.transform * recenter_voxels).as_pyqtgraph())
+        self.view.addItem(mesh)
+        self._itemsByDevice[device]["obstacle"] = mesh
 
         # Create volumetric visualization for raw voxels
-        vol = np.zeros(obstacle.volume.T.shape + (4,), dtype=np.ubyte)
-        vol[..., :3] = (30, 10, 10)
-        vol[..., 3] = obstacle.volume.T * 5
-        v = gl.GLVolumeItem(vol, sliceDensity=10, smooth=False, glOptions="additive")
-        v.setTransform((to_global * obstacle.transform).as_pyqtgraph())
-        v.setVisible(False)  # Initially hidden
-        self.view.addItem(v)
-        self._path[f"voxels of {cs_name}"] = v
+        vol_data = np.zeros(obstacle.volume.T.shape + (4,), dtype=np.ubyte)
+        vol_data[..., :3] = (30, 10, 10)
+        vol_data[..., 3] = obstacle.volume.T * 5
+        vol = gl.GLVolumeItem(vol_data, sliceDensity=10, smooth=False, glOptions="additive")
+        vol.setVisible(False)  # Initially hidden
+        vol.setTransform((to_global * obstacle.transform).as_pyqtgraph())
+        self.view.addItem(vol)
+        self._itemsByDevice[device]["voxels"] = vol
 
-        # Associate obstacle with device
-        if associated_device is not None:
-            self._deviceObstacles.setdefault(associated_device, []).append(obstacle)
-
-            # Enable obstacle checkboxes for this device
-            if associated_device in self._geometries:
-                obstacle_item = self._geometries[associated_device]["checkboxes"].get("obstacle")
-                voxels_item = self._geometries[associated_device]["checkboxes"].get("voxels")
-
-                if obstacle_item is not None:
-                    obstacle_item.setDisabled(False)
-                if voxels_item is not None:
-                    voxels_item.setDisabled(False)
-
-                # If device has voxels item, associate it
-                if f"voxels of {associated_device.name()}" not in self._path:
-                    self._path[f"voxels of {associated_device.name()}"] = v
+        # Enable obstacle checkboxes for this device
+        mesh_checkbox = self._itemsByDevice[device]["checkboxes"]["obstacle"]
+        was_disabled = mesh_checkbox.isDisabled()
+        mesh_checkbox.setDisabled(not generally_visible)
+        if generally_visible and was_disabled:
+            mesh.setVisible(generally_visible)
+            mesh_checkbox.setCheckState(0, Qt.Qt.Checked)
+        vol_checkbox = self._itemsByDevice[device]["checkboxes"]["voxels"]
+        vol_checkbox.setDisabled(not generally_visible)
 
     def updatePath(self, path, skip=3):
         self._pathUpdates.put((path, skip))
@@ -437,9 +383,12 @@ class VisualizerWindow(Qt.QMainWindow):
                 self.pathUpdateSignal.emit(path)
                 time.sleep(0.02)
 
+    @property
+    def hasPath(self):
+        return len(self._path) > 0
+
     def _appendPath(self, path):
-        if "paths" not in self._path:
-            self._path["paths"] = []
+        self._path.setdefault("paths", [])
         if len(self._path["paths"]) > 0:
             self._path["paths"][-1].color = (1, 0.7, 0, 0.02)
             self._path["paths"][-1].paint()
@@ -452,77 +401,72 @@ class VisualizerWindow(Qt.QMainWindow):
 
         # Update visibility of path elements
         for key, viz in self._path.items():
-            if key == "paths" or key == "start target" or key == "dest target":
-                if isinstance(viz, list):
-                    for v in viz:
-                        v.setVisible(visible)
-                else:
-                    viz.setVisible(visible)
+            if isinstance(viz, list):
+                for v in viz:
+                    v.setVisible(visible)
+            else:
+                viz.setVisible(visible)
 
         # Enable/disable obstacle checkboxes in the tree
-        for dev, data in self._geometries.items():
-            if "checkboxes" in data:
-                obstacle_item = data["checkboxes"].get("obstacle")
-                voxels_item = data["checkboxes"].get("voxels")
-
-                if obstacle_item is not None:
-                    # Only enable if device has obstacles
-                    has_obstacles = dev in self._deviceObstacles and len(self._deviceObstacles[dev]) > 0
-                    obstacle_item.setDisabled(not (visible and has_obstacles))
-
-                    # Update visibility based on checkbox state if path plan is visible
-                    if visible and has_obstacles:
-                        show_obstacle = obstacle_item.checkState(0) == Qt.Qt.Checked
-                        for obstacle in self._deviceObstacles[dev]:
-                            if obstacle in self._path:
-                                self._path[obstacle].setVisible(show_obstacle)
-                    else:
-                        # Hide obstacles if path plan is hidden
-                        for obstacle in self._deviceObstacles.get(dev, []):
-                            if obstacle in self._path:
-                                self._path[obstacle].setVisible(False)
-
-                if voxels_item is not None:
-                    # Only enable if device has voxels
-                    voxel_key = f"voxels of {dev.name()}"
-                    has_voxels = voxel_key in self._path
-                    voxels_item.setDisabled(not (visible and has_voxels))
-
-                    # Update visibility based on checkbox state if path plan is visible
-                    if visible and has_voxels:
-                        show_voxels = voxels_item.checkState(0) == Qt.Qt.Checked
-                        self._path[voxel_key].setVisible(show_voxels)
-                    elif voxel_key in self._path:
-                        self._path[voxel_key].setVisible(False)
+        # for dev, data in self._itemsByDevice.items():
+        #     if "checkboxes" in data:
+        #         obstacle_item = data["checkboxes"].get("obstacle")
+        #         voxels_item = data["checkboxes"].get("voxels")
+        #
+        #         if obstacle_item is not None:
+        #             # Only enable if device has obstacles
+        #             has_obstacles = dev in self._deviceObstacles and len(self._deviceObstacles[dev]) > 0
+        #             obstacle_item.setDisabled(not (visible and has_obstacles))
+        #
+        #             # Update visibility based on checkbox state if path plan is visible
+        #             if visible and has_obstacles:
+        #                 show_obstacle = obstacle_item.checkState(0) == Qt.Qt.Checked
+        #                 for obstacle in self._deviceObstacles[dev]:
+        #                     if obstacle in self._path:
+        #                         self._path[obstacle].setVisible(show_obstacle)
+        #             else:
+        #                 # Hide obstacles if path plan is hidden
+        #                 for obstacle in self._deviceObstacles.get(dev, []):
+        #                     if obstacle in self._path:
+        #                         self._path[obstacle].setVisible(False)
+        #
+        #         if voxels_item is not None:
+        #             # Only enable if device has voxels
+        #             voxel_key = f"voxels of {dev.name()}"
+        #             has_voxels = voxel_key in self._path
+        #             voxels_item.setDisabled(not (visible and has_voxels))
+        #
+        #             # Update visibility based on checkbox state if path plan is visible
+        #             if visible and has_voxels:
+        #                 show_voxels = voxels_item.checkState(0) == Qt.Qt.Checked
+        #                 self._path[voxel_key].setVisible(show_voxels)
+        #             elif voxel_key in self._path:
+        #                 self._path[voxel_key].setVisible(False)
 
     def removePath(self):
-        # Remove path lines
-        for path in self._path.pop("paths", []):
-            self.view.removeItem(path)
-            path.deleteLater()
-
-        # Remove other path elements
         for key, viz in list(self._path.items()):
-            self.view.removeItem(viz)
-            viz.deleteLater()
-
-        # Clear path data
+            if isinstance(viz, list):
+                for kid in viz:
+                    self.view.removeItem(kid)
+                    kid.deleteLater()
+            else:
+                self.view.removeItem(viz)
+                viz.deleteLater()
         self._path = {}
+
+        for items in self._itemsByDevice.values():
+            if "obstacle" in items:
+                items["obstacle"].setVisible(False)
+                self.view.removeItem(items["obstacle"])
+                items["obstacle"].deleteLater()
+                items["checkboxes"]["obstacle"].setDisabled(True)
+            if "voxels" in items:
+                # todo reuse these components
+                items["voxels"].setVisible(False)
+                self.view.removeItem(items["voxels"])
+                items["voxels"].deleteLater()
+                items["checkboxes"]["voxels"].setDisabled(True)
 
         # Reset path plan toggle
         self.pathPlanToggler.setChecked(False)
         self.pathPlanToggler.setEnabled(False)
-
-        # Disable obstacle checkboxes in the tree
-        for dev, data in self._geometries.items():
-            if "checkboxes" in data:
-                obstacle_item = data["checkboxes"].get("obstacle")
-                voxels_item = data["checkboxes"].get("voxels")
-
-                if obstacle_item is not None:
-                    obstacle_item.setDisabled(True)
-                if voxels_item is not None:
-                    voxels_item.setDisabled(True)
-
-        # Clear device obstacles
-        self._deviceObstacles = {}
