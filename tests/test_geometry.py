@@ -536,6 +536,16 @@ def test_wireframe(cube):
     assert np.any(np.all(wireframe == np.array([[1, 1, 1], [1, 1, 0]]), axis=1))
 
 
+def test_allows_point():
+    plane = Plane(np.array((0, 0, 1)), np.array((0, 0, 0)))
+    assert plane.allows_point(np.array((0, 0, 0)))
+    assert plane.allows_point(np.array((0, 0, 1)))
+    assert plane.allows_point(np.array((0, 0, 1e-9)))
+    assert plane.allows_point(np.array((0, 0, -1e-10)))
+    assert not plane.allows_point(np.array((0, 0, -1e-9)))
+    assert not plane.allows_point(np.array((0, 0, -1)))
+
+
 def test_wireframe_acq4():
     bounds = [
         Plane(
