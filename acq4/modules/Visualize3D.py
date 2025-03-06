@@ -40,7 +40,7 @@ class Visualize3D(Module):
 
 class VisualizerWindow(Qt.QMainWindow):
     pathStartSignal = Qt.pyqtSignal(object, object, list)
-    newObstacleSignal = Qt.pyqtSignal(object, object, object, object)
+    newObstacleSignal = Qt.pyqtSignal(str, object, object, object, object)
     newDeviceSignal = Qt.pyqtSignal(object)
     pathUpdateSignal = Qt.pyqtSignal(object)
     focusEvent = Qt.pyqtSignal()
@@ -324,12 +324,13 @@ class VisualizerWindow(Qt.QMainWindow):
         # Add boundary visualization
         self.addBounds(bounds, self._path)
 
-    def addObstacleVolumeOutline(self, obstacle: Volume, to_global: Transform):
-        self.newObstacleSignal.emit(obstacle, to_global, *obstacle.surface_mesh)
+    def addObstacleVolumeOutline(self, name: str, obstacle: Volume, to_global: Transform):
+        self.newObstacleSignal.emit(name, obstacle, to_global, *obstacle.surface_mesh)
 
-    def _addObstacleVolumeOutline(self, obstacle: Volume, to_global: Transform, verts, faces):
-        cs_name = obstacle.transform.systems[0].name
-        device = next((dev for dev in self._itemsByDevice if dev.name() in cs_name))
+    def _addObstacleVolumeOutline(self, name: str, obstacle: Volume, to_global: Transform, verts, faces):
+        device = next((dev for dev in self._itemsByDevice if dev.name() in name), None)
+        if device is None:
+            raise ValueError(f"Could not find device associated with '{name}'")
         general_checkbox = self._itemsByDevice[device]["checkboxes"]["geometry"].parent()
         generally_visible = general_checkbox.checkState(0) == Qt.Qt.Checked
 
@@ -338,6 +339,7 @@ class VisualizerWindow(Qt.QMainWindow):
         mesh = gl.GLMeshItem(
             meshdata=mesh_data, smooth=True, color=(0.1, 0.1, 0.3, 0.25), shader="balloon", glOptions="additive"
         )
+        cs_name = obstacle.transform.systems[0].name
         recenter_voxels = TTransform(
             offset=(0.5, 0.5, 0.5),
             from_cs=f"[isosurface of {cs_name}]",

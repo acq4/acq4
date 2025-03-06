@@ -378,7 +378,9 @@ class GeometryMotionPlanner:
                 callback = visualizer.updatePath
             visualizer.startPath(start, stop, bounds)
             visualizer.addObstacleVolumeOutline(
-                traveler.voxel_template(self.voxel_size), to_global_from_traveler * traveler.transform
+                traveler.name,
+                traveler.voxel_template(self.voxel_size),
+                to_global_from_traveler * traveler.transform,
             )
         in_bounds, bound_plane = point_in_bounds(start.coordinates, bounds)
         if not in_bounds:
@@ -392,7 +394,7 @@ class GeometryMotionPlanner:
             obst_volume, to_global_from_obst = _o
             obst = list(self.geometries.keys())[i]
             if visualizer is not None:
-                visualizer.addObstacleVolumeOutline(obst_volume, to_global_from_obst)
+                visualizer.addObstacleVolumeOutline(obst.name, obst_volume, to_global_from_obst)
             # users will sometimes drive the hardware to where the motion planner would consider things impossible
             # TODO pull pipette out along its axis to start
             # if obst_volume.contains_point(to_global_from_obst.inverse.map(start)):
