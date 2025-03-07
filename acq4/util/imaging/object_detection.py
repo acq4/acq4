@@ -284,9 +284,10 @@ def do_neuron_detection(
     diameter: int = 35,
     xy_scale: float = 0.32e-6,
     z_scale: float = 1e-6,
+    n: int = 10,
 ) -> list:
     if model == "healthy-cellpose":
-        return _do_healthy_neuron_detection(data, transform, classifier, autoencoder, diameter, xy_scale, z_scale)
+        return _do_healthy_neuron_detection(data, transform, classifier, autoencoder, diameter, xy_scale, z_scale, n)
     elif model == "cellpose":
         return _do_neuron_detection_cellpose(data, transform, do_3d)
     elif model == "yolo":
@@ -304,7 +305,7 @@ def _do_healthy_neuron_detection(data: np.ndarray, transform, classifier, autoen
     autoencoder = NeuronAutoencoder.load(autoencoder).to("cuda" if torch.cuda.is_available() else "cpu")
     autoencoder.eval()
     cells = get_health_ordered_cells(data, classifier, autoencoder, diameter, xy_scale, z_scale)
-    return [(transform.map(center - diameter / 2), transform.map(center + diameter / 2)) for center in cells[:n]]
+    return [(transform.map(center[::-1] - diameter / 2), transform.map(center[::-1] + diameter / 2)) for center in cells[:n]]
 
 
 def _do_neuron_detection_yolo(data: np.ndarray, transform: SRTTransform3D) -> list:
@@ -653,7 +654,8 @@ class CellRegionViewer(pg.QtWidgets.QMainWindow):
 @click.option("--diameter", default=35, type=int)
 @click.option("--xy-scale", default=0.32e-6, type=float)
 @click.option("--z-scale", default=1e-6, type=float)
-def cli(image, model, angle, z, display, classifier, autoencoder, diameter, xy_scale, z_scale):
+@click.option("--count", default=10, type=int)
+def cli(image, model, angle, z, display, classifier, autoencoder, diameter, xy_scale, z_scale, count):
     null_xform = SRTTransform3D()
     if image[-3:] == ".ma":
         image = MetaArray(file=image)
@@ -679,7 +681,7 @@ def cli(image, model, angle, z, display, classifier, autoencoder, diameter, xy_s
     else:
         do_3d = data.ndim == 4 or (data.ndim == 3 and data.shape[-1] > 3)
         neurons = do_neuron_detection(
-            data, null_xform, model, do_3d, classifier, autoencoder, diameter, xy_scale, z_scale
+            data, null_xform, model, do_3d, classifier, autoencoder, diameter, xy_scale, z_scale, count
         )
         print(f"Detected {len(neurons)} neuron(s)")
 
