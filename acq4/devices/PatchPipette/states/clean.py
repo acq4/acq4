@@ -60,12 +60,7 @@ class CleanState(PatchPipetteState):
             if len(sequence) == 0:
                 continue
 
-            wellPos = pip.loadPosition(stage)
-            if wellPos is None:
-                raise ValueError(f"Device {pip.name()} does not have a stored {stage} position.")
-
-            path = pip.pathGenerator.safePath(pip.globalPosition(), wellPos, 'fast')
-            self.currentFuture = pip._movePath(path)
+            self.currentFuture = pip.moveTo(stage, "fast")
 
             # todo: if needed, we can check TP for capacitance changes here
             # and stop moving as soon as the fluid is detected
@@ -75,21 +70,12 @@ class CleanState(PatchPipetteState):
                 dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
                 self.checkStop(delay)
 
-            self.resetPosition()
-
+        pip.moveTo('home', 'fast').raiseErrors("trying to return home")
         dev.pipetteRecord()['cleanCount'] += 1
         dev.setTipClean(True)
-        self.dev.pipetteDevice.moveTo('home', 'fast')
         self.currentFuture = None
         dev.newPatchAttempt()
         return 'out'
-
-    def resetPosition(self):
-        if self.currentFuture is not None:
-            # play in reverse
-            fut = self.currentFuture
-            self.currentFuture = None
-            self.waitFor(fut.undo(), timeout=None)
 
     def cleanup(self):
         dev = self.dev
@@ -97,7 +83,5 @@ class CleanState(PatchPipetteState):
             dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
         except Exception:
             printExc("Error resetting pressure after clean")
-
-        self.resetPosition()
 
         super().cleanup()
