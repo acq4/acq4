@@ -45,6 +45,8 @@ class VisualizerWindow(Qt.QMainWindow):
     newDeviceSignal = Qt.pyqtSignal(object)
     pathUpdateSignal = Qt.pyqtSignal(object)
     focusEvent = Qt.pyqtSignal()
+    _obstacleCache = {}
+    _voxelsCache = {}
 
     def __init__(self, testing=False):
         super().__init__(None)
@@ -109,9 +111,23 @@ class VisualizerWindow(Qt.QMainWindow):
         self._pathWatcherThread.daemon = True
         self._pathWatcherThread.start()
 
-        # Data structures
         self._itemsByDevice = {}  # Maps devices to their visualization components
-        self._path: dict[object, GLGraphicsItem | list] = {}  # Path planning visualization elements
+
+        self._startTarget = gl.GLScatterPlotItem(pos=[], color=(0, 0, 1, 1), size=10, pxMode=True)
+        self._startTarget.setVisible(False)
+        self.view.addItem(self._startTarget)
+
+        self._destTarget = gl.GLScatterPlotItem(pos=[], color=(0, 1, 0, 1), size=10, pxMode=True)
+        self._destTarget.setVisible(False)
+        self.view.addItem(self._destTarget)
+
+        self._activePath = gl.GLLinePlotItem(color=(0.1, 1, 0.7, 0.5), width=1)
+        self._activePath.setVisible(False)
+        self.view.addItem(self._activePath)
+
+        self._previousPath = gl.GLLinePlotItem(color=(1, 0.7, 0, 0.01), width=1)
+        self._previousPath.setVisible(False)
+        self.view.addItem(self._previousPath)
 
     def clear(self):
         for dev in list(self._itemsByDevice.keys()):
@@ -315,19 +331,14 @@ class VisualizerWindow(Qt.QMainWindow):
         # Add initial path line
         self._appendPath([start, stop])
 
-        # Add start and destination markers
-        start_target = gl.GLScatterPlotItem(pos=np.array([start]), color=(0, 0, 1, 1), size=10, pxMode=True)
-        start_target.setVisible(self.shouldShowPath)
-        self.view.addItem(start_target)
-        self._path["start target"] = start_target
+        self._startTarget.setData(pos=np.array([start]))
+        self._startTarget.setVisible(self.shouldShowPath)
 
-        dest_target = gl.GLScatterPlotItem(pos=np.array([stop]), color=(0, 1, 0, 1), size=10, pxMode=True)
-        dest_target.setVisible(self.shouldShowPath)
-        self.view.addItem(dest_target)
-        self._path["dest target"] = dest_target
+        self._destTarget.setData(pos=np.array([stop]))
+        self._destTarget.setVisible(self.shouldShowPath)
 
         # Add boundary visualization
-        self.addBounds(bounds, self._path)
+        self.addBounds(bounds)
 
     @future_wrap
     def addObstacleVolumeOutline(self, name: str, obstacle: Volume, to_global: Transform, _future):
@@ -393,34 +404,24 @@ class VisualizerWindow(Qt.QMainWindow):
                 time.sleep(0.02)
 
     def _appendPath(self, path):
-        if "active" not in self._path:
-            self._path["active"] = gl.GLLinePlotItem(color=(0.1, 1, 0.7, 0.5), width=1)
-            self._path["active"].setVisible(self.shouldShowPath)
-            self.view.addItem(self._path["active"])
-            prev = []
+        if len(self._activePath.pos) > 0:
+            prev = self._activePath.pos
         else:
-            prev = self._path["active"].pos
-        if "previous" not in self._path:
-            self._path["previous"] = gl.GLLinePlotItem(color=(1, 0.7, 0, 0.01), width=1)
-            self._path["previous"].setVisible(self.shouldShowPath)
-            self.view.addItem(self._path["previous"])
-        elif len(self._path["previous"].pos) > 0:
-            prev = np.vstack((self._path["previous"].pos, prev))
+            prev = []
+        if len(self._previousPath.pos) > 0:
+            prev = np.vstack((self._previousPath.pos, prev))
 
-        self._path["previous"].setData(pos=prev)
-        self._path["previous"].paint()
-        self._path["active"].setData(pos=np.array(path + path[:-1][::-1]))  # it needs to walk back to the origin
+        self._previousPath.setData(pos=prev)
+        self._activePath.setData(pos=np.array(path + path[:-1][::-1]))  # it needs to walk back to the origin
 
     def togglePathPlan(self, state):
         visible = state == Qt.QtCore.Qt.Checked
 
-        # Update visibility of path elements
-        for key, viz in self._path.items():
-            if isinstance(viz, list):
-                for v in viz:
-                    v.setVisible(visible)
-            else:
-                viz.setVisible(visible)
+        self._activePath.setVisible(visible)
+        self._previousPath.setVisible(visible)
+        self._startTarget.setVisible(visible)
+        self._destTarget.setVisible(visible)
+
         for dev, items in self._itemsByDevice.items():
             generally_visible = items["checkboxes"]["geometry"].parent().checkState(0) == Qt.Qt.Checked
             if generally_visible:
@@ -432,28 +433,19 @@ class VisualizerWindow(Qt.QMainWindow):
                     items["voxels"].setVisible(visible and vox_visible)
 
     def removePath(self):
-        for key, viz in list(self._path.items()):
-            if isinstance(viz, list):
-                for kid in viz:
-                    self.view.removeItem(kid)
-                    kid.deleteLater()
-            else:
-                self.view.removeItem(viz)
-                viz.deleteLater()
-        self._path = {}
+        self._activePath.setVisible(False)
+        self._previousPath.setVisible(False)
+        self._startTarget.setVisible(False)
+        self._destTarget.setVisible(False)
 
         for items in self._itemsByDevice.values():
             items["checkboxes"]["obstacle"].setDisabled(True)
             items["checkboxes"]["voxels"].setDisabled(True)
-            # TODO reuse these components
+            # TODO have these components for each traveler
             if "obstacle" in items:
                 items["obstacle"].setVisible(False)
-                self.view.removeItem(items["obstacle"])
-                items["obstacle"].deleteLater()
             if "voxels" in items:
                 items["voxels"].setVisible(False)
-                self.view.removeItem(items["voxels"])
-                items["voxels"].deleteLater()
 
     @property
     def shouldShowPath(self):
