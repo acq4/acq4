@@ -235,8 +235,8 @@ class AutomationDebugWindow(Qt.QWidget):
         from acq4.util.imaging.object_detection import detect_neurons
 
         depth = self.cameraDevice.getFocusDepth()
-        start = depth - 10 * µm
-        stop = depth + 10 * µm
+        start = depth - 50 * µm
+        stop = depth + 50 * µm
         z_stack = _future.waitFor(acquire_z_stack(self.cameraDevice, start, stop, 1 * µm)).getResult()
         self.cameraDevice.setFocusDepth(depth)  # no need to wait
         pixel_size = self.cameraDevice.getPixelSize()[0] / µm
