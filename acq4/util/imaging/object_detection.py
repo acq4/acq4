@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from functools import lru_cache
 from threading import RLock
 from typing import Optional
 
@@ -7,12 +8,12 @@ import click
 import numpy as np
 import scipy.stats
 import tifffile
-from MetaArray import MetaArray
 from PIL import Image
 
+import pyqtgraph as pg
+from MetaArray import MetaArray
 from acq4.util.future import Future, future_wrap
 from acq4.util.imaging import Frame
-import pyqtgraph as pg
 from pyqtgraph import SRTTransform3D
 from teleprox import ProcessSpawner
 from teleprox.shmem import SharedNDArray
@@ -27,6 +28,7 @@ _yolo: "Optional[YOLO]" = None
 
 def _get_yolo() -> "YOLO":
     from yolo import YOLO  # todo put this someplace
+
     global _yolo
     if _yolo is None:
         _yolo = YOLO()
@@ -45,9 +47,7 @@ def normalize(image: Image, min_in=None, max_in=None):
         # max_in = 65535
     min_out = 0
     max_out = 255  # maxmimum intensity (output)
-    image = (image - np.uint16(min_in)) * (
-            ((max_out - min_out) / (max_in - min_in)) + min_out
-    )
+    image = (image - np.uint16(min_in)) * (((max_out - min_out) / (max_in - min_in)) + min_out)
     # image = (image - np.uint16(min_in)) * (
     #     (max_out / (max_in - min_in))
     # )
@@ -56,7 +56,7 @@ def normalize(image: Image, min_in=None, max_in=None):
     offset_h = int(image.shape[1] * 0.3)
     margin_w = int(image.shape[0] * 0.4)
     margin_h = int(image.shape[1] * 0.4)
-    image = image[offset_w:offset_w + margin_w, offset_h:offset_h + margin_h]
+    image = image[offset_w : offset_w + margin_w, offset_h : offset_h + margin_h]
     return Image.fromarray(image.astype(np.uint8))
 
 
@@ -95,8 +95,9 @@ def detect_pipette_tip(frame: Frame, angle: float, _future: Future) -> tuple[flo
         return rmt_this.do_pipette_tip_detection(rmt_array.data, angle, _timeout=60)
 
 
-
 _pipette_detection_model = None
+
+
 def get_pipette_detection_model():
     global _pipette_detection_model
     if _pipette_detection_model is None:
@@ -154,7 +155,6 @@ def do_pipette_tip_detection(data: np.ndarray, angle: float, show=True):
     err : float
         Indicator of confidence (model-specific)
     """
-    import os
     import torch
     from acq4.util.pipette_detection.torch_model_08 import make_position_normalizer
 
@@ -246,7 +246,16 @@ def detect_pipette_once(model, data, pos_normalizer):
 
 
 @future_wrap
-def detect_neurons(frames: Frame | list[Frame], model: str = "cellpose", _future: Future = None) -> list:
+def detect_neurons(
+    frames: Frame | list[Frame],
+    model: str = "healthy-cellpose",
+    classifier: str = None,
+    autoencoder: str = None,
+    diameter: int = 35,
+    xy_scale: float = 0.32e-6,
+    z_scale: float = 1e-6,
+    _future: Future = None,
+) -> list:
     if do_3d := not isinstance(frames, Frame):
         data = np.stack([frame.data() for frame in frames])
         transform = frames[0].globalTransform()
@@ -260,16 +269,43 @@ def detect_neurons(frames: Frame | list[Frame], model: str = "cellpose", _future
         rmt_array = rmt_process.client.transfer(shared_array)
         rmt_this = rmt_process.client._import("acq4.util.imaging.object_detection")
         _future.checkStop()
-        return rmt_this.do_neuron_detection(rmt_array.data, transform, model, do_3d, _timeout=60)
+        return rmt_this.do_neuron_detection(
+            rmt_array.data, transform, model, do_3d, classifier, autoencoder, diameter, xy_scale, z_scale, _timeout=60
+        )
 
 
-def do_neuron_detection(data: np.ndarray, transform: SRTTransform3D, model: str = "cellpose", do_3d: bool = False) -> list:
-    if model == 'cellpose':
+def do_neuron_detection(
+    data: np.ndarray,
+    transform: SRTTransform3D,
+    model: str = "healthy-cellpose",
+    do_3d: bool = False,
+    classifier: str = None,
+    autoencoder: str = None,
+    diameter: int = 35,
+    xy_scale: float = 0.32e-6,
+    z_scale: float = 1e-6,
+    n: int = 10,
+) -> list:
+    if model == "healthy-cellpose":
+        return _do_healthy_neuron_detection(data, transform, classifier, autoencoder, diameter, xy_scale, z_scale, n)
+    elif model == "cellpose":
         return _do_neuron_detection_cellpose(data, transform, do_3d)
-    elif model == 'yolo':
+    elif model == "yolo":
         return _do_neuron_detection_yolo(data, transform)
     else:
         raise ValueError(f"Unknown model {model}")
+
+
+def _do_healthy_neuron_detection(data: np.ndarray, transform, classifier, autoencoder, diameter, xy_scale, z_scale, n: int = 10):
+    from acq4.util.healthy_cell_detector.train_nn_classifier import get_health_ordered_cells, load_classifier
+    from acq4.util.healthy_cell_detector.models import NeuronAutoencoder
+    import torch
+
+    classifier = load_classifier(classifier)
+    autoencoder = NeuronAutoencoder.load(autoencoder).to("cuda" if torch.cuda.is_available() else "cpu")
+    autoencoder.eval()
+    cells = get_health_ordered_cells(data, classifier, autoencoder, diameter, xy_scale, z_scale)
+    return [(transform.map(center[::-1] - diameter / 2), transform.map(center[::-1] + diameter / 2)) for center in cells[:n]]
 
 
 def _do_neuron_detection_yolo(data: np.ndarray, transform: SRTTransform3D) -> list:
@@ -292,23 +328,12 @@ def _do_neuron_detection_yolo(data: np.ndarray, transform: SRTTransform3D) -> li
         start = transform.map((start_x, start_y))
         end = transform.map((end_x, end_y))
         return start, end
+
     return [xyxy_to_rect(box) for box in boxes]  # TODO filter by class? score?
 
 
 def _do_neuron_detection_cellpose(data: np.ndarray, transform: SRTTransform3D, do_3d: bool = False) -> list:
-    from cellpose import models
-
-    model = models.Cellpose(gpu=True, model_type="cyto3")
-    data = data[:, np.newaxis, :, 0:-2]  # add channel dimension, weird the shape
-    masks_pred, flows, styles, diams = model.eval(
-        [data],
-        diameter=35,
-        # niter=2000,
-        channel_axis=1,
-        z_axis=0 if do_3d else None,
-        stitch_threshold=0.25 if do_3d else 0,
-    )
-    mask = masks_pred[0]  # each distinct cell gets an id: 1, 2, ...
+    mask = get_cellpose_masks(data, do_3d, z_axis=0 if do_3d else None, stitch_threshold=0.25 if do_3d else 0)
 
     def bbox(num) -> tuple[tuple[float, ...], tuple[float, ...]]:
         match = mask == num
@@ -325,13 +350,312 @@ def _do_neuron_detection_cellpose(data: np.ndarray, transform: SRTTransform3D, d
     return boxes
 
 
+def get_cellpose_masks(data, diameter=35, stitch_threshold=0.25, z_axis=0):
+    model = get_cyto3_model()
+    # TODO do this without copying the data
+    if data.shape[-1] == data.shape[-2]:
+        data = data[:, np.newaxis, :, 0:-2]  # add channel dimension, weird the shape
+    else:
+        data = data[:, np.newaxis, :, :]  # add channel dimension
+    masks_pred, flows, styles, diams = model.eval(
+        [data],
+        diameter=diameter,
+        channel_axis=1,
+        z_axis=z_axis,
+        stitch_threshold=stitch_threshold,
+    )
+    return masks_pred[0]
+
+
+@lru_cache(maxsize=1)
+def get_cyto3_model():
+    from cellpose import models
+
+    return models.Cellpose(gpu=True, model_type="cyto3")
+
+
+class NeuronBoxViewer(pg.QtWidgets.QMainWindow):
+    """A GUI for viewing 3D image stacks with bounding boxes."""
+
+    def __init__(self, data, neurons, title="Cell Viewer"):
+        global viewer_window
+        super().__init__()
+        viewer_window = self
+
+        self.data = data
+        self.neurons = neurons
+        self.current_z = len(data) // 2 if len(data) > 1 else 0
+        self.max_z = len(data) - 1
+        self.cell_viewers = []  # Keep track of open cell viewers
+
+        # Setup UI
+        self.setWindowTitle(title)
+        self.resize(800, 600)
+
+        # Create central widget and layout
+        central_widget = pg.QtWidgets.QWidget()
+        layout = pg.QtWidgets.QVBoxLayout()
+        central_widget.setLayout(layout)
+        self.setCentralWidget(central_widget)
+
+        # Create image view
+        self.image_view = pg.ImageView()
+        layout.addWidget(self.image_view)
+
+        # Create controls
+        controls_layout = pg.QtWidgets.QHBoxLayout()
+        layout.addLayout(controls_layout)
+
+        # Z slider
+        slider_layout = pg.QtWidgets.QHBoxLayout()
+        controls_layout.addLayout(slider_layout)
+
+        slider_layout.addWidget(pg.QtWidgets.QLabel("Z Layer:"))
+        self.z_slider = pg.QtWidgets.QSlider(pg.QtCore.Qt.Horizontal)
+        self.z_slider.setMinimum(0)
+        self.z_slider.setMaximum(self.max_z)
+        self.z_slider.setValue(self.current_z)
+        self.z_slider.valueChanged.connect(self.update_z)
+        slider_layout.addWidget(self.z_slider)
+
+        self.z_label = pg.QtWidgets.QLabel(f"{self.current_z}/{self.max_z}")
+        slider_layout.addWidget(self.z_label)
+
+        # Navigation buttons
+        nav_layout = pg.QtWidgets.QHBoxLayout()
+        controls_layout.addLayout(nav_layout)
+
+        self.prev_button = pg.QtWidgets.QPushButton("⬅️ Previous")
+        self.prev_button.clicked.connect(self.prev_z)
+        nav_layout.addWidget(self.prev_button)
+
+        self.next_button = pg.QtWidgets.QPushButton("Next ➡️")
+        self.next_button.clicked.connect(self.next_z)
+        nav_layout.addWidget(self.next_button)
+
+        # Legend
+        legend_layout = pg.QtWidgets.QHBoxLayout()
+        controls_layout.addLayout(legend_layout)
+
+        legend_layout.addWidget(pg.QtWidgets.QLabel("Legend:"))
+
+        above_label = pg.QtWidgets.QLabel("Above")
+        above_label.setStyleSheet("color: blue")
+        legend_layout.addWidget(above_label)
+
+        current_label = pg.QtWidgets.QLabel("Current")
+        current_label.setStyleSheet("color: green")
+        legend_layout.addWidget(current_label)
+
+        below_label = pg.QtWidgets.QLabel("Below")
+        below_label.setStyleSheet("color: red")
+        legend_layout.addWidget(below_label)
+
+        # Instructions
+        instructions = pg.QtWidgets.QLabel("Click on a cell to view normalized 3D extraction")
+        instructions.setStyleSheet("color: #555; font-style: italic;")
+        layout.addWidget(instructions)
+
+        # Initialize display
+        self.roi_items = []
+        self.update_display()
+
+    def update_z(self, z):
+        self.current_z = z
+        self.z_label.setText(f"{self.current_z}/{self.max_z}")
+        self.update_display()
+
+    def prev_z(self):
+        if self.current_z > 0:
+            self.current_z -= 1
+            self.z_slider.setValue(self.current_z)
+
+    def next_z(self):
+        if self.current_z < self.max_z:
+            self.current_z += 1
+            self.z_slider.setValue(self.current_z)
+
+    def update_display(self):
+        # Update image
+        self.image_view.setImage(self.data[self.current_z], autoLevels=True)
+
+        # Clear existing ROIs
+        for roi in self.roi_items:
+            self.image_view.removeItem(roi)
+        self.roi_items = []
+
+        # Add new ROIs with appropriate colors
+        for i, neuron in enumerate(self.neurons):
+            start, end = neuron
+
+            # Determine if the bounding box is above, below, or at the current z-level
+            z_min, z_max = self._get_z_range(neuron)
+
+            if self.current_z < z_min:
+                pen = pg.mkPen("b", width=2)  # Blue for above
+                hover_pen = pg.mkPen("b", width=3)  # Slightly thicker on hover
+            elif self.current_z > z_max:
+                pen = pg.mkPen("r", width=2)  # Red for below
+                hover_pen = pg.mkPen("r", width=3)  # Slightly thicker on hover
+            else:
+                pen = pg.mkPen("g", width=2)  # Green for current
+                hover_pen = pg.mkPen("g", width=3)  # Slightly thicker on hover
+
+            # Create a clickable ROI
+            roi = ClickableROI(start[:2], size=end[:2] - start[:2], pen=pen, hover_pen=hover_pen, index=i, parent=self)
+            self.image_view.addItem(roi)
+            self.roi_items.append(roi)
+
+    def _get_z_range(self, neuron):
+        """Determine the z-range of a neuron bounding box."""
+        start, end = neuron
+
+        # If we have 3D coordinates
+        if len(start) > 2 and len(end) > 2:
+            return start[2], end[2]
+
+        # For 2D bounding boxes, we'll estimate a z-range
+        # This is just for demonstration - in a real application,
+        # you'd want to use actual 3D bounding boxes
+        z_span = min(5, self.max_z // 3)
+        center_z = np.random.randint(z_span, self.max_z - z_span)
+        return center_z - z_span, center_z + z_span
+
+    def open_cell_viewer(self, index):
+        """Open a normalized-for-autoencoder view of the selected cell"""
+        from acq4.util.healthy_cell_detector.utils import extract_region
+
+        neuron = self.neurons[index]
+        start, end = neuron
+
+        # Calculate center of the bounding box
+        center = ((start[0] + end[0]) / 2, (start[1] + end[1]) / 2)
+
+        # Add z coordinate if we're dealing with 3D data
+        if len(start) > 2 and len(end) > 2:
+            center = (center[0], center[1], (start[2] + end[2]) / 2)
+        else:
+            # Use current z if we don't have z coordinates in the bounding box
+            center = (center[0], center[1], self.current_z)
+
+        # Default values for resolution - these should be adjusted based on your data
+        xy_scale = 0.32e-6  # 0.32 µm per pixel
+        z_scale = 1e-6  # 1 µm per z-step
+
+        try:
+            # Extract the region around the cell center
+            region = extract_region(self.data, center, xy_scale, z_scale)
+
+            # Create a viewer for the extracted region
+            viewer = CellRegionViewer(region, f"Cell {index+1} Normalized")
+            viewer.show()
+
+            # Keep a reference to prevent garbage collection
+            self.cell_viewers.append(viewer)
+
+        except Exception as e:
+            print(f"Error extracting cell region: {e}")
+            pg.QtWidgets.QMessageBox.warning(self, "Extraction Error", f"Could not extract cell region: {str(e)}")
+
+
+class ClickableROI(pg.ROI):
+    """An ROI that can be clicked to open a cell viewer"""
+
+    def __init__(self, pos, size, index, parent, pen=None, hover_pen=None, **kwargs):
+        super().__init__(pos, size, pen=pen, **kwargs)
+        self.index = index
+        self.parent = parent
+        self.hover_pen = hover_pen if hover_pen is not None else pen
+        self.default_pen = pen
+        self.setAcceptHoverEvents(True)
+
+    def hoverEnterEvent(self, ev):
+        self.setPen(self.hover_pen)
+        self.update()
+
+    def hoverLeaveEvent(self, ev):
+        self.setPen(self.default_pen)
+        self.update()
+
+    def mouseClickEvent(self, ev):
+        if ev.button() == pg.QtCore.Qt.LeftButton:
+            self.parent.open_cell_viewer(self.index)
+            ev.accept()
+        else:
+            super().mouseClickEvent(ev)
+
+
+class CellRegionViewer(pg.QtWidgets.QMainWindow):
+    """A viewer for displaying extracted cell regions"""
+
+    def __init__(self, region_data, title="Cell Region Viewer"):
+        super().__init__()
+
+        # Region data should be shape (1, z, y, x) or (1, 1, y, x)
+        self.region_data = region_data
+
+        # Setup UI
+        self.setWindowTitle(title)
+        self.resize(400, 500)
+
+        # Create central widget and layout
+        central_widget = pg.QtWidgets.QWidget()
+        layout = pg.QtWidgets.QVBoxLayout()
+        central_widget.setLayout(layout)
+        self.setCentralWidget(central_widget)
+
+        # Create image view
+        self.image_view = pg.ImageView()
+        layout.addWidget(self.image_view)
+
+        # If we have a 3D region, add z controls
+        if region_data.shape[1] > 1:
+            # Z slider
+            slider_layout = pg.QtWidgets.QHBoxLayout()
+            layout.addLayout(slider_layout)
+
+            slider_layout.addWidget(pg.QtWidgets.QLabel("Z Layer:"))
+            self.z_slider = pg.QtWidgets.QSlider(pg.QtCore.Qt.Horizontal)
+            self.z_slider.setMinimum(0)
+            self.z_slider.setMaximum(region_data.shape[1] - 1)
+            self.z_slider.setValue(region_data.shape[1] // 2)
+            self.z_slider.valueChanged.connect(self.update_z)
+            slider_layout.addWidget(self.z_slider)
+
+            self.z_label = pg.QtWidgets.QLabel(f"{region_data.shape[1] // 2}/{region_data.shape[1] - 1}")
+            slider_layout.addWidget(self.z_label)
+
+            # Display initial z slice
+            self.current_z = region_data.shape[1] // 2
+            self.image_view.setImage(region_data[0, self.current_z])
+        else:
+            # Just display the 2D image
+            self.image_view.setImage(region_data[0, 0])
+
+    def update_z(self, z):
+        self.current_z = z
+        self.z_label.setText(f"{self.current_z}/{self.region_data.shape[1] - 1}")
+        self.image_view.setImage(self.region_data[0, self.current_z])
+
+
 @click.command()
 @click.argument("image", required=True)
-@click.option("--model", default="cellpose", show_default=True, type=click.Choice(["cellpose", "yolo", "pipette"]))
+@click.option(
+    "--model",
+    default="cellpose",
+    show_default=True,
+    type=click.Choice(["healthy-cellpose", "cellpose", "yolo", "pipette"]),
+)
 @click.option("--angle", default=0, show_default=True, type=float)
 @click.option("--z", default=0, show_default=True, type=int)
 @click.option("--display", is_flag=True, type=bool)
-def cli(image, model, angle, z, display):
+@click.option("--classifier", default=None, type=str)
+@click.option("--autoencoder", default=None, type=str)
+@click.option("--diameter", default=35, type=int)
+@click.option("--xy-scale", default=0.32e-6, type=float)
+@click.option("--z-scale", default=1e-6, type=float)
+@click.option("--count", default=10, type=int)
+def cli(image, model, angle, z, display, classifier, autoencoder, diameter, xy_scale, z_scale, count):
     null_xform = SRTTransform3D()
     if image[-3:] == ".ma":
         image = MetaArray(file=image)
@@ -342,6 +666,10 @@ def cli(image, model, angle, z, display):
         image = Image.open(image)
         data = np.array(image)
     print(f"image shape: {data.shape}")
+
+    # Always create QApplication for GUI
+    pg.mkQApp()
+
     if model == "pipette":
         # fill in 3 channels
         data = np.stack([data[z], data[z], data[z]], axis=-1)
@@ -352,17 +680,25 @@ def cli(image, model, angle, z, display):
         input("Press Enter to continue...")
     else:
         do_3d = data.ndim == 4 or (data.ndim == 3 and data.shape[-1] > 3)
-        neurons = do_neuron_detection(data, null_xform, model, do_3d)
+        neurons = do_neuron_detection(
+            data, null_xform, model, do_3d, classifier, autoencoder, diameter, xy_scale, z_scale, count
+        )
         print(f"Detected {len(neurons)} neuron(s)")
-        print(neurons)
+
+        # Prepare data for display
+        if do_3d:
+            # For 3D data, we already have a stack
+            display_data = data
+        else:
+            # For 2D data, create a fake stack with a single layer
+            display_data = data[np.newaxis, ...]
+
+        # Launch the viewer
         if display:
-            pg.mkQApp()
-            pg.image(data[0][:])
-            for neuron in neurons:
-                start, end = neuron
-                pg.plot([start[0], end[0]], [start[1], end[1]], pen="r")
-            pg.exec_()
+            viewer = NeuronBoxViewer(display_data, neurons, f"Cell Detector - {model}")
+            viewer.show()
+            pg.exec()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     cli()

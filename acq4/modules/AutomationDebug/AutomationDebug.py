@@ -17,7 +17,7 @@ from acq4.util.imaging.sequencer import acquire_z_stack
 from pyqtgraph import mkPen
 from pyqtgraph.units import µm
 
-UiTemplate = Qt.importTemplate('.window')
+UiTemplate = Qt.importTemplate(".window")
 
 
 class AutomationDebugWindow(Qt.QWidget):
@@ -54,15 +54,16 @@ class AutomationDebugWindow(Qt.QWidget):
             elif isinstance(dev, Camera):
                 self.ui.cameraSelector.addItem(name)
 
-        self.ui.trackFeaturesBtn.setOpts(future_producer=self.doFeatureTracking, 
-            processing="Stop tracking", stoppable=True)
+        self.ui.trackFeaturesBtn.setOpts(
+            future_producer=self.doFeatureTracking, processing="Stop tracking", stoppable=True
+        )
         self.ui.trackFeaturesBtn.sigFinished.connect(self._handleFeatureTrackingFinish)
         self._featureTracker = None
 
         self.ui.testPipetteBtn.setOpts(
             future_producer=self.doPipetteCalibrationTest,
             stoppable=True,
-            processing="Interrupt pipette\ncalibration test"
+            processing="Interrupt pipette\ncalibration test",
         )
         self.ui.testPipetteBtn.setToolTip("Start with the pipette calibrated and in the field of view")
         self.ui.testPipetteBtn.sigFinished.connect(self._handleCalibrationFinish)
@@ -94,7 +95,7 @@ class AutomationDebugWindow(Qt.QWidget):
                         f'....so bad. Why? Check man.getModule("AutomationDebug").failedCalibrations[{i}]'
                     )
             except Future.Stopped:
-                self.sigLogMessage.emit('Calibration interrupted by user request')
+                self.sigLogMessage.emit("Calibration interrupted by user request")
                 break
 
     @future_wrap
@@ -138,7 +139,7 @@ class AutomationDebugWindow(Qt.QWidget):
                 stack_data = stack_data[::-1]
             direction *= -1
             result = tracker.next_frame(ImageStack(stack_data, pix, step * direction))
-            z, y, x = result['updated_object_stack'].obj_center  # frame, row, col
+            z, y, x = result["updated_object_stack"].obj_center  # frame, row, col
             frame = stack[round(z)]
             target = frame.mapFromFrameToGlobal((x, y)) + (frame.depth,)
             pipette.setTarget(target)
@@ -226,7 +227,7 @@ class AutomationDebugWindow(Qt.QWidget):
             frame = _future.waitFor(self.cameraDevice.acquireFrames(1)).getResult()[0]
         with self.cameraDevice.ensureRunning():
             frame = _future.waitFor(self.cameraDevice.acquireFrames(1)).getResult()[0]
-        return _future.waitFor(detect_neurons(frame)).getResult()
+        return _future.waitFor(detect_neurons(frame, "cellpose")).getResult()
 
     @future_wrap
     def _detectNeuronsZStack(self, _future: Future) -> list:
@@ -234,11 +235,21 @@ class AutomationDebugWindow(Qt.QWidget):
         from acq4.util.imaging.object_detection import detect_neurons
 
         depth = self.cameraDevice.getFocusDepth()
-        start = depth - 10 * µm
-        stop = depth + 10 * µm
+        start = depth - 50 * µm
+        stop = depth + 50 * µm
         z_stack = _future.waitFor(acquire_z_stack(self.cameraDevice, start, stop, 1 * µm)).getResult()
         self.cameraDevice.setFocusDepth(depth)  # no need to wait
-        return _future.waitFor(detect_neurons(z_stack)).getResult()
+        pixel_size = self.cameraDevice.getPixelSize()[0] / µm
+        z_scale = 1e-6
+        man = self.module.manager
+        autoencoder = man.config.get("misc", {}).get("autoencoderPath")
+        classifier = man.config.get("misc", {}).get("classifierPath")
+        return _future.waitFor(
+            detect_neurons(
+                z_stack, autoencoder=autoencoder, classifier=classifier, xy_scale=pixel_size, z_scale=z_scale
+            ),
+            timeout=60,
+        ).getResult()
 
     @future_wrap
     def _autoTarget(self, _future):
