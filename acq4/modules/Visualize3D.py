@@ -10,10 +10,11 @@ from acq4.devices.Device import Device
 from acq4.devices.OptomechDevice import OptomechDevice
 from acq4.modules.Module import Module
 from acq4.util import Qt
+from acq4.util.future import future_wrap
 from acq4.util.geometry import Plane, Volume, Geometry
 from acq4.util.threadrun import runInGuiThread
 from coorx import Transform, TTransform
-from pyqtgraph import opengl as gl
+from pyqtgraph import opengl as gl, debug
 from pyqtgraph.opengl.GLGraphicsItem import GLGraphicsItem
 
 
@@ -328,10 +329,12 @@ class VisualizerWindow(Qt.QMainWindow):
         # Add boundary visualization
         self.addBounds(bounds, self._path)
 
-    def addObstacleVolumeOutline(self, name: str, obstacle: Volume, to_global: Transform):
+    @future_wrap
+    def addObstacleVolumeOutline(self, name: str, obstacle: Volume, to_global: Transform, _future):
         self.newObstacleSignal.emit(name, obstacle, to_global, *obstacle.surface_mesh)
 
     def _addObstacleVolumeOutline(self, name: str, obstacle: Volume, to_global: Transform, verts, faces):
+        profile = debug.Profiler()
         device = next((dev for dev in self._itemsByDevice if dev.name() in name), None)
         if device is None:
             raise ValueError(f"Could not find device associated with '{name}'")
@@ -351,6 +354,7 @@ class VisualizerWindow(Qt.QMainWindow):
         )
         mesh.setTransform((to_global * obstacle.transform * recenter_voxels).as_pyqtgraph())
         self.view.addItem(mesh)
+        profile.mark("mesh rendered")
         self._itemsByDevice[device]["obstacle"] = mesh
         mesh_checkbox = self._itemsByDevice[device]["checkboxes"]["obstacle"]
         was_disabled = mesh_checkbox.isDisabled()
@@ -360,6 +364,7 @@ class VisualizerWindow(Qt.QMainWindow):
             mesh_checkbox.setCheckState(0, Qt.Qt.Checked)
         else:
             mesh.setVisible(self.shouldShowPath and generally_visible and mesh_checkbox.checkState(0) == Qt.Qt.Checked)
+        profile.mark("mesh visible")
 
         # Create volumetric visualization for raw voxels
         vol_data = np.zeros(obstacle.volume.T.shape + (4,), dtype=np.ubyte)
@@ -368,10 +373,12 @@ class VisualizerWindow(Qt.QMainWindow):
         vol = gl.GLVolumeItem(vol_data, sliceDensity=10, smooth=False, glOptions="additive")
         vol.setTransform((to_global * obstacle.transform).as_pyqtgraph())
         self.view.addItem(vol)
+        profile.mark("voxels rendered")
         self._itemsByDevice[device]["voxels"] = vol
         vol_checkbox = self._itemsByDevice[device]["checkboxes"]["voxels"]
         vol_checkbox.setDisabled(not generally_visible)
         vol.setVisible(self.shouldShowPath and generally_visible and vol_checkbox.checkState(0) == Qt.Qt.Checked)
+        profile.finish()
 
     def updatePath(self, path, skip=3):
         self._pathUpdates.put((path, skip))
@@ -386,14 +393,23 @@ class VisualizerWindow(Qt.QMainWindow):
                 time.sleep(0.02)
 
     def _appendPath(self, path):
-        self._path.setdefault("paths", [])
-        if len(self._path["paths"]) > 0:
-            self._path["paths"][-1].color = (1, 0.7, 0, 0.02)
-            self._path["paths"][-1].paint()
-        path = gl.GLLinePlotItem(pos=np.array(path), color=(0.1, 1, 0.7, 1), width=1)
-        path.setVisible(self.shouldShowPath)
-        self.view.addItem(path)
-        self._path["paths"].append(path)
+        if "active" not in self._path:
+            self._path["active"] = gl.GLLinePlotItem(color=(0.1, 1, 0.7, 0.5), width=1)
+            self._path["active"].setVisible(self.shouldShowPath)
+            self.view.addItem(self._path["active"])
+            prev = []
+        else:
+            prev = self._path["active"].pos
+        if "previous" not in self._path:
+            self._path["previous"] = gl.GLLinePlotItem(color=(1, 0.7, 0, 0.01), width=1)
+            self._path["previous"].setVisible(self.shouldShowPath)
+            self.view.addItem(self._path["previous"])
+        elif len(self._path["previous"].pos) > 0:
+            prev = np.vstack((self._path["previous"].pos, prev))
+
+        self._path["previous"].setData(pos=prev)
+        self._path["previous"].paint()
+        self._path["active"].setData(pos=np.array(path + path[:-1][::-1]))  # it needs to walk back to the origin
 
     def togglePathPlan(self, state):
         visible = state == Qt.QtCore.Qt.Checked

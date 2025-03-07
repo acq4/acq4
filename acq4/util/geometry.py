@@ -7,7 +7,6 @@ from typing import List, Callable, Optional, Dict, Any, Generator
 
 import numba
 import numpy as np
-import scipy
 import trimesh
 from trimesh.voxel import VoxelGrid
 
@@ -329,7 +328,7 @@ class GeometryMotionPlanner:
         stop,
         bounds=None,
         callback=None,
-        visualizer=None,
+        visualizer: "VisualizerWindow" = None,
     ):
         """
         Return a path from *start* to *stop* in the global coordinate system that *traveling_object* can follow to avoid
@@ -376,12 +375,12 @@ class GeometryMotionPlanner:
         if visualizer is not None:
             if callback is None:
                 callback = visualizer.updatePath
-            visualizer.startPath(start, stop, bounds)
+            visualizer.startPath(start.coordinates, stop.coordinates, bounds)
             visualizer.addObstacleVolumeOutline(
                 traveler.name,
                 traveler.voxel_template(self.voxel_size),
                 to_global_from_traveler * traveler.transform,
-            )
+            ).raiseErrors("traveler failed to render")
         in_bounds, bound_plane = point_in_bounds(start.coordinates, bounds)
         if not in_bounds:
             raise ValueError(f"Starting point {start} is on the wrong side of the {bound_plane} boundary")
@@ -394,7 +393,7 @@ class GeometryMotionPlanner:
             obst_volume, to_global_from_obst = _o
             obst = list(self.geometries.keys())[i]
             if visualizer is not None:
-                visualizer.addObstacleVolumeOutline(obst.name, obst_volume, to_global_from_obst)
+                visualizer.addObstacleVolumeOutline(obst.name, obst_volume, to_global_from_obst).raiseErrors("obstacle failed to render")
             # users will sometimes drive the hardware to where the motion planner would consider things impossible
             # TODO pull pipette out along its axis to start
             # if obst_volume.contains_point(to_global_from_obst.inverse.map(start)):
