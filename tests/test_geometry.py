@@ -284,9 +284,9 @@ def test_grazing_paths(offset, viz=None):
             Point(np.array([2, 0, 2]), "global"),
             [],
         )
-        viz.addObstacleVolumeOutline(trav.voxel_template(vx), trav_to_global * trav.transform).wait()
+        viz.addObstacle(trav.voxel_template(vx), trav_to_global * trav.transform).wait()
         # viz.addObstacleVolumeOutline(obst.voxel_template(vx), obst_to_global * obst.transform).wait()
-        viz.addObstacleVolumeOutline(conv_obst, obst_to_global * obst.transform).wait()
+        viz.addObstacle(conv_obst, obst_to_global * obst.transform).wait()
         # to_obst_from_trav = obst.transform.inverse * to_obst_parent_from_trav_parent * trav.transform
         # xformed = trav.transformed_to(obst.transform, to_obst_from_trav)
         # xformed_voxels = xformed.voxel_template(vx)

@@ -328,7 +328,7 @@ class GeometryMotionPlanner:
         stop,
         bounds=None,
         callback=None,
-        visualizer: "VisualizerWindow" = None,
+        visualizer: "VisualizePathPlan" = None,
     ):
         """
         Return a path from *start* to *stop* in the global coordinate system that *traveling_object* can follow to avoid
@@ -359,10 +359,10 @@ class GeometryMotionPlanner:
         callback : callable
             A function to be called at each step of the path planning process (mostly to aid in visualization and
             debugging).
-        bounds : Planes
+        bounds : list[Plane]
             Planes that define the bounds of the space in which the path is to be found.
-        visualizer : window or None
-            If not None, a window to visualize the path planning process in real time.
+        visualizer : VisualizePathPlan or None
+            If not None, a VisualizePathPlan to visualize the path planning process.
 
         Returns
         -------
@@ -375,8 +375,8 @@ class GeometryMotionPlanner:
         if visualizer is not None:
             if callback is None:
                 callback = visualizer.updatePath
-            visualizer.startPath(start.coordinates, stop.coordinates, bounds)
-            visualizer.addObstacleVolumeOutline(
+            visualizer.startPath([start.coordinates, stop.coordinates], bounds)
+            visualizer.addObstacle(
                 traveler.name,
                 traveler.voxel_template(self.voxel_size),
                 to_global_from_traveler * traveler.transform,
@@ -393,7 +393,7 @@ class GeometryMotionPlanner:
             obst_volume, to_global_from_obst = _o
             obst = list(self.geometries.keys())[i]
             if visualizer is not None:
-                visualizer.addObstacleVolumeOutline(obst.name, obst_volume, to_global_from_obst).raiseErrors("obstacle failed to render")
+                visualizer.addObstacle(obst.name, obst_volume, to_global_from_obst).raiseErrors("obstacle failed to render")
             # users will sometimes drive the hardware to where the motion planner would consider things impossible
             # TODO pull pipette out along its axis to start
             # if obst_volume.contains_point(to_global_from_obst.inverse.map(start)):

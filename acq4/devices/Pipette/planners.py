@@ -269,7 +269,7 @@ class GeometryAwarePathGenerator(PipettePathGenerator):
             explanation = WAYPOINT_TO_AVOID_SAMPLE_TEAR
             globalStop = final_waypoint
 
-        viz = getManager().getModule("Visualize3D").window()
+        viz = getManager().getModule("Visualize3D").window().pathPlanVisualizer(self.pip)
         planner, from_pip_to_global = self._getPlanningContext()
         try:
             path = planner.find_path(
@@ -281,8 +281,7 @@ class GeometryAwarePathGenerator(PipettePathGenerator):
                 visualizer=viz,
             )
         except Exception as e:
-            if viz:
-                viz.focus()
+            viz.focus()
             raise ValueError(f"{error_explanation} {e}") from e
         if len(path) == 0:
             path = [(globalStop, speed, False, explanation)]
@@ -292,7 +291,7 @@ class GeometryAwarePathGenerator(PipettePathGenerator):
             path += [(goal[0], speed, False, explanation)]
         path = prepend_path + path + append_path
         if viz:
-            viz.updatePath([globalStart] + [p[0] for p in path], skip=1)
+            viz.endPath([globalStart] + [p[0] for p in path])
         return path
 
 

@@ -1,5 +1,5 @@
 import sys
-import traceback
+from functools import wraps
 
 from . import Qt
 from .future import Future
@@ -16,6 +16,13 @@ def runInThread(thread, func, *args, **kwds):
 def runInGuiThread(func, *args, **kwds):
     """Run a function the main GUI thread and return the result."""
     return ThreadCallFuture(None, func, *args, **kwds)()
+
+
+def inGuiThread(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        return runInGuiThread(func, *args, **kwargs)
+    return wrapper
 
 
 class ThreadCallFuture(Future):
