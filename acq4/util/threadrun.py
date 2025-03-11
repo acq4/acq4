@@ -16,18 +16,18 @@ def runInThread(thread, func, *args, **kwds):
 
 def runInGuiThread(func, *args, **kwds):
     """Run a function the main GUI thread and return the result."""
-    return ThreadCallFuture(None, func, *args, **kwds)()
+    gui_thread = Qt.QApplication.instance().thread()
+    curr_thread = Qt.QtCore.QThread.currentThread()
+    if gui_thread == curr_thread:
+        return func(*args, **kwds)
+    else:
+        return ThreadCallFuture(gui_thread, func, *args, **kwds)()
 
 
 def inGuiThread(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
-        gui_thread = Qt.QApplication.instance().thread()
-        curr_thread = Qt.QtCore.QThread.currentThread()
-        if gui_thread == curr_thread:
-            return func(*args, **kwargs)
-        else:
-            return runInGuiThread(func, *args, **kwargs)
+        return runInGuiThread(func, *args, **kwargs)
     return wrapper
 
 
