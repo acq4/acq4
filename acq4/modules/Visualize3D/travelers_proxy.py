@@ -12,10 +12,10 @@ from pyqtgraph import opengl as gl
 
 
 class VisualizePathPlan(Qt.QObject):
-    pathUpdateSignal = Qt.pyqtSignal(object, name="pathUpdateSignal")
+    pathUpdateSignal = Qt.pyqtSignal(object)
 
     def __init__(self, window, traveler: "OptomechDevice"):
-        super().__init__(None)
+        super().__init__()
         self._window = window
         self._traveler = traveler
 
@@ -26,7 +26,7 @@ class VisualizePathPlan(Qt.QObject):
         self._voxels = {}
 
         self._stopThread = False
-        self.pathUpdateSignal.connect(self._appendPath)
+        self.pathUpdateSignal.connect(self._appendPath, Qt.Qt.QueuedConnection)
         self._pathUpdates = queue.Queue()
         self._pathWatcherThread = Thread(target=self._watchForPathUpdates, daemon=True)
         self._pathWatcherThread.start()
@@ -35,10 +35,11 @@ class VisualizePathPlan(Qt.QObject):
     def _initGui(self):
         show_path = self._window.ensurePathTogglerExists(self._traveler)
         self._startTarget = self._window.target(show_path)
-        self._destTarget = self._window.target(show_path)
+        self._destTarget = self._window.target(show_path, color=(0, 1, 0, 1))
         self._activePath = self._window.path((0.1, 1, 0.7, 0.5), show_path)
         self._previousPath = self._window.path((1, 0.7, 0, 0.01), show_path)
 
+    @inGuiThread
     def reset(self):
         # todo mutexes?
         for edge in self._bounds:
@@ -52,12 +53,18 @@ class VisualizePathPlan(Qt.QObject):
         self._previousPath.setVisible(False)
         self._previousPath.setData(pos=[])
 
+    @inGuiThread
     def startPath(self, path, bounds):
         self.reset()
+        visible = self.shouldShowPath
 
-        self._bounds = self._window.createBounds(bounds, True)
+        self._bounds = self._window.createBounds(bounds, visible)
         self._startTarget.setData(pos=np.array([path[0]]))
+        self._startTarget.setVisible(visible)
         self._destTarget.setData(pos=np.array([path[-1]]))
+        self._destTarget.setVisible(visible)
+        self._activePath.setVisible(visible)
+        self._previousPath.setVisible(visible)
         self._appendPath(path)
 
     def focus(self):

@@ -1,4 +1,5 @@
 import sys
+import threading
 from functools import wraps
 
 from . import Qt
@@ -21,7 +22,12 @@ def runInGuiThread(func, *args, **kwds):
 def inGuiThread(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
-        return runInGuiThread(func, *args, **kwargs)
+        gui_thread = Qt.QApplication.instance().thread()
+        curr_thread = threading.current_thread()
+        if gui_thread == curr_thread:
+            return func(*args, **kwargs)
+        else:
+            return runInGuiThread(func, *args, **kwargs)
     return wrapper
 
 

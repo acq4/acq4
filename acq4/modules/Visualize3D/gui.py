@@ -64,8 +64,8 @@ class VisualizerWindow(Qt.QMainWindow):
 
         self._itemsByDevice = {}  # Maps devices to their visualization components
 
-    def target(self, visible=False):
-        target = gl.GLScatterPlotItem(pos=[], color=(0, 0, 1, 1), size=10, pxMode=True)
+    def target(self, visible=False, color=(0, 0, 1, 1)):
+        target = gl.GLScatterPlotItem(pos=[], color=color, size=10, pxMode=True)
         target.setVisible(visible)
         self.view.addItem(target)
         return target
