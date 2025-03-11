@@ -191,16 +191,11 @@ class VisualizerWindow(Qt.QMainWindow):
             for ch in range(item.childCount()):
                 child = item.child(ch)
                 child.setDisabled(not visible)
-                if visible:
-                    self.toggleVisibility(child, None)  # let each child decide if it's really visible
+                self.toggleVisibility(child, None)  # let each child decide if it's really visible
 
-            if not visible:
-                self.toggleDeviceLimitsVisibility(False, dev.name())
-                for item in self._itemsByDevice[dev].values():
-                    if hasattr(item, "setVisible"):
-                        item.setVisible(False)
         else:  # This is a component item
             dev = parentItem.data(0, Qt.Qt.UserRole)
+            visible = visible and parentItem.checkState(0) == Qt.Qt.Checked
             componentType = item.data(0, Qt.Qt.UserRole)
 
             if dev not in self._itemsByDevice:

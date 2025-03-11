@@ -23,7 +23,7 @@ def inGuiThread(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
         gui_thread = Qt.QApplication.instance().thread()
-        curr_thread = threading.current_thread()
+        curr_thread = Qt.QtCore.QThread.currentThread()
         if gui_thread == curr_thread:
             return func(*args, **kwargs)
         else:

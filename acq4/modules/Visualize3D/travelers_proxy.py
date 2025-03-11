@@ -178,7 +178,7 @@ class VisualizePathPlan(Qt.QObject):
                 del self._obstacles[name]
                 break
         for name, voxels in self._voxels.items():
-            if dev.name in name:
+            if dev.name() in name:
                 self._window.view.removeItem(voxels)
                 voxels.deleteLater()
                 del self._voxels[name]
