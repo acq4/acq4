@@ -12,8 +12,6 @@ from pyqtgraph import opengl as gl
 
 
 class VisualizePathPlan(Qt.QObject):
-    pathUpdateSignal = Qt.pyqtSignal(object)
-
     def __init__(self, window, traveler: "OptomechDevice"):
         super().__init__()
         self._window = window
@@ -26,7 +24,6 @@ class VisualizePathPlan(Qt.QObject):
         self._voxels = {}
 
         self._stopThread = False
-        self.pathUpdateSignal.connect(self._appendPath, Qt.Qt.QueuedConnection)
         self._pathUpdates = queue.Queue()
         self._pathWatcherThread = Thread(target=self._watchForPathUpdates, daemon=True)
         self._pathWatcherThread.start()
@@ -101,9 +98,10 @@ class VisualizePathPlan(Qt.QObject):
             path, skip = self._pathUpdates.get()
             n_updates += 1
             if self._window.testing or n_updates % skip == 0:
-                self.pathUpdateSignal.emit(path)
+                self._appendPath(path)
                 time.sleep(0.02)
 
+    @inGuiThread
     def _appendPath(self, path):
         if len(self._activePath.pos) > 0:
             prev = self._activePath.pos
