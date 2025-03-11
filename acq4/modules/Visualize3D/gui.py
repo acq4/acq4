@@ -250,34 +250,37 @@ class VisualizerWindow(Qt.QMainWindow):
     def _removeDevice(self, dev):
         if dev not in self._itemsByDevice:
             return
+        items = self._itemsByDevice[dev]
+        items.pop("geometry object", None)
 
         # Disconnect signals
-        if not self.testing:
+        if not self.testing:  # todo properly mock devices for the tests
             dev.sigGeometryChanged.disconnect(self.handleGeometryChange)
             dev.sigGlobalTransformChanged.disconnect(self.handleTransformUpdate)
 
         # Remove limits from view
-        for edge in self._itemsByDevice[dev].pop("limits", []):
+        for edge in items.pop("limits", []):
             self.view.removeItem(edge)
             edge.deleteLater()
 
         # Remove tree item
-        if "checkbox root" in self._itemsByDevice[dev]:
-            tree_item = self._itemsByDevice[dev].pop("checkbox root")
-            parent = tree_item.parent()
-            parent.removeChild(tree_item)
+        tree_item = items.pop("checkbox root")
+        index = self.deviceTree.indexOfTopLevelItem(tree_item)
+        if index != -1:
+            self.deviceTree.takeTopLevelItem(index)
+        items.pop("checkboxes", None)
 
-        if "path" in self._itemsByDevice[dev]:
-            path = self._itemsByDevice[dev].pop("path")
+        if "path" in items:
+            path = items.pop("path")
             path.safelyDestroy()
 
         # Remove everything else from view
-        for component in self._itemsByDevice[dev]:
+        for component in items.values():
             self.view.removeItem(component)
 
-        for other, items in self._itemsByDevice:
-            if "path" in items:
-                items["path"].removeDevice(dev)
+        for other, o_items in self._itemsByDevice.items():
+            if "path" in o_items:
+                o_items["path"].removeDevice(dev)
 
         del self._itemsByDevice[dev]
 
