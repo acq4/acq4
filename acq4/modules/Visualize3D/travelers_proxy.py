@@ -14,6 +14,7 @@ from pyqtgraph import opengl as gl
 class VisualizePathPlan(Qt.QObject):
     def __init__(self, window, traveler: "OptomechDevice"):
         super().__init__()
+        self.moveToThread(Qt.QApplication.instance().thread())
         self._window = window
         self._traveler = traveler
 
@@ -120,7 +121,7 @@ class VisualizePathPlan(Qt.QObject):
     @future_wrap
     def addObstacle(self, name, obstacle, to_global, _future):
         if name not in self._obstacles:
-            self._buildObstacleMesh(name, *obstacle.surface_mesh)
+            self._buildObstacleMesh(name, *obstacle.surface_mesh, blocking=True)
         cs_name = obstacle.transform.systems[0].name
         recenter_voxels = TTransform(
             offset=(0.5, 0.5, 0.5),
@@ -136,7 +137,7 @@ class VisualizePathPlan(Qt.QObject):
             vol_data = np.zeros(obstacle.volume.T.shape + (4,), dtype=np.ubyte)
             vol_data[..., :3] = (30, 10, 10)
             vol_data[..., 3] = obstacle.volume.T * 5
-            self._buildVoxelVolume(name, vol_data)
+            self._buildVoxelVolume(name, vol_data, blocking=True)
         vol_xform = (to_global * obstacle.transform).as_pyqtgraph()
         runInGuiThread(self._voxels[name].setTransform, vol_xform)
 
