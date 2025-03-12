@@ -51,14 +51,6 @@ class CleanState(PatchPipetteState):
 
         self.setState('cleaning')
 
-        # retract to safe position for visiting cleaning wells
-        startPos = pip.globalPosition()
-        safePos = pip.pathGenerator.safeYZPosition(startPos)
-        path = pip.pathGenerator.safePath(startPos, safePos, 'fast')
-        fut = pip._movePath(path)
-        if fut is not None:
-            self.waitFor(fut, timeout=None)
-
         for stage in ('clean', 'rinse'):
             self.checkStop()
 
@@ -68,22 +60,7 @@ class CleanState(PatchPipetteState):
             if len(sequence) == 0:
                 continue
 
-            wellPos = pip.loadPosition(stage)
-            if wellPos is None:
-                raise ValueError(f"Device {pip.name()} does not have a stored {stage} position.")
-
-            # lift up, then sideways, then down into well
-            waypoint1 = safePos.copy()
-            waypoint1[2] = wellPos[2] + config['approachHeight']
-            waypoint2 = wellPos.copy()
-            waypoint2[2] = waypoint1[2]
-            path = [
-                (waypoint1, 'fast', False, f"get to {waypoint1[2]} z"),
-                (waypoint2, 'fast', True, f"above the {stage}ing well"),
-                (wellPos, 'fast', False, f"into the {stage}ing well"),
-            ]
-
-            self.currentFuture = pip._movePath(path)
+            self.currentFuture = pip.moveTo(stage, "fast")
 
             # todo: if needed, we can check TP for capacitance changes here
             # and stop moving as soon as the fluid is detected
@@ -93,21 +70,12 @@ class CleanState(PatchPipetteState):
                 dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
                 self.checkStop(delay)
 
-            self.resetPosition()
-
+        pip.moveTo('home', 'fast').raiseErrors("trying to return home")
         dev.pipetteRecord()['cleanCount'] += 1
         dev.setTipClean(True)
-        self.dev.pipetteDevice.moveTo('home', 'fast')
         self.currentFuture = None
         dev.newPatchAttempt()
         return 'out'
-
-    def resetPosition(self):
-        if self.currentFuture is not None:
-            # play in reverse
-            fut = self.currentFuture
-            self.currentFuture = None
-            self.waitFor(fut.undo(), timeout=None)
 
     def cleanup(self):
         dev = self.dev
@@ -115,7 +83,5 @@ class CleanState(PatchPipetteState):
             dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
         except Exception:
             printExc("Error resetting pressure after clean")
-
-        self.resetPosition()
 
         super().cleanup()
