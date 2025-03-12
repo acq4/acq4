@@ -14,9 +14,13 @@ class VisualizerWindow(Qt.QMainWindow):
     newDeviceSignal = Qt.pyqtSignal(object)
     focusEvent = Qt.pyqtSignal()
 
-    def __init__(self, testing=False):
+    def __init__(self, expectedDevices=0, testing=False):
         super().__init__(None)
         self.testing = testing
+        self._devicesBeingAdded = expectedDevices
+        self._itemsByDevice = {}  # Maps devices to their visualization components
+        self._moduleReadyEvent = None
+
         self.setWindowTitle("3D Visualization of all Optomech Devices")
         self.setGeometry(50, 50, 1000, 600)
         self.setWindowIcon(Qt.QIcon(os.path.join(os.path.dirname(os.path.dirname(__file__)), "icons.svg")))
@@ -62,8 +66,6 @@ class VisualizerWindow(Qt.QMainWindow):
         self.newDeviceSignal.connect(self._addDevice)
         self.focusEvent.connect(self._focus)
 
-        self._itemsByDevice = {}  # Maps devices to their visualization components
-
     def target(self, visible=False, color=(0, 0, 1, 1)):
         target = gl.GLScatterPlotItem(pos=[], color=color, size=10, pxMode=True)
         target.setVisible(visible)
@@ -89,69 +91,76 @@ class VisualizerWindow(Qt.QMainWindow):
         self.activateWindow()
         self.raise_()
 
-    def addDevice(self, dev: "OptomechDevice"):
+    def addDevice(self, dev: "OptomechDevice", ready_event=None):
+        self._moduleReadyEvent = ready_event
         self.newDeviceSignal.emit(dev)
 
     def _addDevice(self, dev: Union[Device, "OptomechDevice"]):
-        dev.sigGeometryChanged.connect(self.handleGeometryChange)
-        if (geom := dev.getGeometry()) is None:
-            return
+        try:
+            dev.sigGeometryChanged.connect(self.handleGeometryChange)
+            if (geom := dev.getGeometry()) is None:
+                return
 
-        # Create device entry in data structure
-        self._itemsByDevice[dev] = {"checkboxes": {}}
+            # Create device entry in data structure
+            self._itemsByDevice[dev] = {"checkboxes": {}}
 
-        # Add geometry to the scene
-        self.addGeometry(geom, dev)
-        dev.sigGlobalTransformChanged.connect(self.handleTransformUpdate)
-        self.handleTransformUpdate(dev, dev)
+            # Add geometry to the scene
+            self.addGeometry(geom, dev)
+            dev.sigGlobalTransformChanged.connect(self.handleTransformUpdate)
+            self.handleTransformUpdate(dev, dev)
 
-        # Create tree item for this device
-        deviceItem = Qt.QTreeWidgetItem(self.deviceTree)
-        deviceItem.setText(0, dev.name())
-        deviceItem.setFlags(deviceItem.flags() | Qt.Qt.ItemIsUserCheckable)
-        deviceItem.setCheckState(0, Qt.Qt.Checked)
-        deviceItem.setData(0, Qt.Qt.UserRole, dev)
-        self._itemsByDevice[dev]["checkbox root"] = deviceItem
+            # Create tree item for this device
+            deviceItem = Qt.QTreeWidgetItem(self.deviceTree)
+            deviceItem.setText(0, dev.name())
+            deviceItem.setFlags(deviceItem.flags() | Qt.Qt.ItemIsUserCheckable)
+            deviceItem.setCheckState(0, Qt.Qt.Checked)
+            deviceItem.setData(0, Qt.Qt.UserRole, dev)
+            self._itemsByDevice[dev]["checkbox root"] = deviceItem
 
-        # Create geometry sub-item
-        geomItem = Qt.QTreeWidgetItem(deviceItem)
-        geomItem.setText(0, "Geometry")
-        geomItem.setFlags(geomItem.flags() | Qt.Qt.ItemIsUserCheckable)
-        geomItem.setCheckState(0, Qt.Qt.Checked)
-        geomItem.setData(0, Qt.Qt.UserRole, "geometry")
-        self._itemsByDevice[dev]["checkboxes"]["geometry"] = geomItem
+            # Create geometry sub-item
+            geomItem = Qt.QTreeWidgetItem(deviceItem)
+            geomItem.setText(0, "Geometry")
+            geomItem.setFlags(geomItem.flags() | Qt.Qt.ItemIsUserCheckable)
+            geomItem.setCheckState(0, Qt.Qt.Checked)
+            geomItem.setData(0, Qt.Qt.UserRole, "geometry")
+            self._itemsByDevice[dev]["checkboxes"]["geometry"] = geomItem
 
-        # Add boundaries if available
-        if bounds := dev.getBoundaries():
-            self._itemsByDevice[dev]["limits"] = self.createBounds(bounds, False)
+            # Add boundaries if available
+            if bounds := dev.getBoundaries():
+                self._itemsByDevice[dev]["limits"] = self.createBounds(bounds, False)
 
-            # Create limits sub-item
-            limitsItem = Qt.QTreeWidgetItem(deviceItem)
-            limitsItem.setText(0, "Range of Motion")
-            limitsItem.setFlags(limitsItem.flags() | Qt.Qt.ItemIsUserCheckable)
-            limitsItem.setCheckState(0, Qt.Qt.Unchecked)
-            limitsItem.setData(0, Qt.Qt.UserRole, "limits")
-            self._itemsByDevice[dev]["checkboxes"]["limits"] = limitsItem
+                # Create limits sub-item
+                limitsItem = Qt.QTreeWidgetItem(deviceItem)
+                limitsItem.setText(0, "Range of Motion")
+                limitsItem.setFlags(limitsItem.flags() | Qt.Qt.ItemIsUserCheckable)
+                limitsItem.setCheckState(0, Qt.Qt.Unchecked)
+                limitsItem.setData(0, Qt.Qt.UserRole, "limits")
+                self._itemsByDevice[dev]["checkboxes"]["limits"] = limitsItem
 
-            # Initially hide limits
-            self.toggleDeviceLimitsVisibility(False, dev.name())
+                # Initially hide limits
+                self.toggleDeviceLimitsVisibility(False, dev.name())
 
-            if hasattr(dev, "sigCalibrationChanged"):
-                dev.sigCalibrationChanged.connect(self.handleGeometryChange)
+                if hasattr(dev, "sigCalibrationChanged"):
+                    dev.sigCalibrationChanged.connect(self.handleGeometryChange)
 
-        obstacleItem = Qt.QTreeWidgetItem(deviceItem)
-        obstacleItem.setText(0, "Obstacle")
-        obstacleItem.setFlags(obstacleItem.flags() | Qt.Qt.ItemIsUserCheckable)
-        obstacleItem.setCheckState(0, Qt.Qt.Checked)
-        obstacleItem.setData(0, Qt.Qt.UserRole, "obstacle")
-        self._itemsByDevice[dev]["checkboxes"]["obstacle"] = obstacleItem
+            obstacleItem = Qt.QTreeWidgetItem(deviceItem)
+            obstacleItem.setText(0, "Obstacle")
+            obstacleItem.setFlags(obstacleItem.flags() | Qt.Qt.ItemIsUserCheckable)
+            obstacleItem.setCheckState(0, Qt.Qt.Unchecked)
+            obstacleItem.setData(0, Qt.Qt.UserRole, "obstacle")
+            self._itemsByDevice[dev]["checkboxes"]["obstacle"] = obstacleItem
 
-        voxelsItem = Qt.QTreeWidgetItem(deviceItem)
-        voxelsItem.setText(0, "Raw Obstacle Voxels")
-        voxelsItem.setFlags(voxelsItem.flags() | Qt.Qt.ItemIsUserCheckable)
-        voxelsItem.setCheckState(0, Qt.Qt.Unchecked)
-        voxelsItem.setData(0, Qt.Qt.UserRole, "voxels")
-        self._itemsByDevice[dev]["checkboxes"]["voxels"] = voxelsItem
+            voxelsItem = Qt.QTreeWidgetItem(deviceItem)
+            voxelsItem.setText(0, "Raw Obstacle Voxels")
+            voxelsItem.setFlags(voxelsItem.flags() | Qt.Qt.ItemIsUserCheckable)
+            voxelsItem.setCheckState(0, Qt.Qt.Unchecked)
+            voxelsItem.setData(0, Qt.Qt.UserRole, "voxels")
+            self._itemsByDevice[dev]["checkboxes"]["voxels"] = voxelsItem
+        finally:
+            self._devicesBeingAdded -= 1
+            if self._moduleReadyEvent is not None and self._devicesBeingAdded == 0:
+                self._moduleReadyEvent.set()
+                self._moduleReadyEvent = None
 
     def ensurePathTogglerExists(self, device):
         """Make sure the device has a toggle for showing its path plan. Returns whether that toggle is on."""
@@ -298,3 +307,4 @@ class VisualizerWindow(Qt.QMainWindow):
         self._removeDevice(dev)
         self._itemsByDevice[dev] = {}
         self.addDevice(dev)
+        # TODO reprime caches

@@ -1,6 +1,8 @@
+import threading
+
 from acq4.modules.Module import Module
+from acq4.util.threadrun import inGuiThread
 from .gui import VisualizerWindow
-from acq4.util.threadrun import runInGuiThread
 
 
 class Visualize3D(Module):
@@ -9,16 +11,17 @@ class Visualize3D(Module):
 
     win = None
 
-    @classmethod
-    def openWindow(cls):
-        if cls.win is None:
-            cls.win = VisualizerWindow()
-        cls.win.show()
-        cls.win.clear()
-
     def __init__(self, manager, name: str, config: dict):
         super().__init__(manager, name, config)
-        runInGuiThread(self.openWindow)
+        self.isReady = threading.Event()
+        self.openWindow(blocking=True)
         for dev in manager.listInterfaces("OptomechDevice"):
             dev = manager.getDevice(dev)
-            self.win.addDevice(dev)
+            self.win.addDevice(dev, self.isReady)
+
+    @inGuiThread
+    def openWindow(self):
+        if self.win is None:
+            self.win = VisualizerWindow(len(self.manager.listInterfaces("OptomechDevice")))
+        self.win.show()
+        self.win.clear()

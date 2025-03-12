@@ -17,7 +17,7 @@ class VisualizePathPlan(Qt.QObject):
         self._window = window
         self._traveler = traveler
 
-        self._initGui()
+        self._initGui(blocking=True)
 
         self._bounds = []
         self._obstacles = {}
@@ -50,9 +50,13 @@ class VisualizePathPlan(Qt.QObject):
         self._previousPath.setVisible(False)
         self._previousPath.setData(pos=[])
 
+    @future_wrap
+    def startPath(self, path, bounds, _future):
+        self._startPath(path, bounds)
+
     @inGuiThread
-    def startPath(self, path, bounds):
-        self.reset()
+    def _startPath(self, path, bounds):
+        self.reset(blocking=True)
         visible = self.shouldShowPath
 
         self._bounds = self._window.createBounds(bounds, visible)

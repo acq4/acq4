@@ -369,6 +369,7 @@ class GeometryMotionPlanner:
         path : list
             List of global positions to get from start to stop
         """
+        profile = debug.Profiler()
         start = Point(start, "global")
         stop = Point(stop, "global")
         bounds = [] if bounds is None else bounds
@@ -376,24 +377,17 @@ class GeometryMotionPlanner:
             if callback is None:
                 callback = visualizer.updatePath
             visualizer.startPath([start.coordinates, stop.coordinates], bounds)
-            visualizer.addObstacle(
-                traveler.name,
-                traveler.voxel_template(self.voxel_size),
-                to_global_from_traveler * traveler.transform,
-            ).raiseErrors("traveler failed to render")
         in_bounds, bound_plane = point_in_bounds(start.coordinates, bounds)
         if not in_bounds:
             raise ValueError(f"Starting point {start} is on the wrong side of the {bound_plane} boundary")
+        profile.mark("basic setup")
 
-        profile = debug.Profiler()
-        obstacles = self.make_convolved_obstacles(traveler, to_global_from_traveler)
+        obstacles = self.make_convolved_obstacles(traveler, to_global_from_traveler, visualizer)
         profile.mark("made convolved obstacles")
 
         for i, _o in enumerate(obstacles):
             obst_volume, to_global_from_obst = _o
             obst = list(self.geometries.keys())[i]
-            if visualizer is not None:
-                visualizer.addObstacle(obst.name, obst_volume, to_global_from_obst).raiseErrors("obstacle failed to render")
             # users will sometimes drive the hardware to where the motion planner would consider things impossible
             # TODO pull pipette out along its axis to start
             # if obst_volume.contains_point(to_global_from_obst.inverse.map(start)):
@@ -422,7 +416,13 @@ class GeometryMotionPlanner:
         profile.finish()
         return path[1:]
 
-    def make_convolved_obstacles(self, traveler, to_global_from_traveler):
+    def make_convolved_obstacles(self, traveler, to_global_from_traveler, visualizer=None):
+        # if visualizer:
+        #     visualizer.addObstacle(
+        #         traveler.name,
+        #         traveler.voxel_template(self.voxel_size),
+        #         to_global_from_traveler * traveler.transform,
+        #     ).raiseErrors("traveler failed to render")
         obstacles = []
         for obst, to_global_from_obst in self.geometries.items():
             if obst is traveler:
@@ -439,6 +439,10 @@ class GeometryMotionPlanner:
                 obst_volume = self._cache[cache_key]
 
             obstacles.append((obst_volume, to_global_from_obst))
+            if visualizer is not None:
+                visualizer.addObstacle(obst.name, obst_volume, to_global_from_obst).raiseErrors(
+                    "obstacle failed to render"
+                )
         return obstacles
 
 
@@ -903,7 +907,7 @@ class Plane:
         lines = set()
         segments = ApproxDict()
         for i, plane in enumerate(planes):
-            for other in planes[i + 1:]:
+            for other in planes[i + 1 :]:
                 line = plane.intersecting_line(other)
                 if line is not None:
                     lines.add(line)
