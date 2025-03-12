@@ -326,12 +326,17 @@ def visualize_z_stack_comparison(model: NeuronAutoencoder, regions: List[np.ndar
     cell_counter.setStyleSheet("font-weight: bold; font-size: 14px;")
 
     # Create next button with an index tracker
-    next_button = QtWidgets.QPushButton("🔍 Next Random Cell")
+    next_button = QtWidgets.QPushButton("🔍 Next Cell")
     next_button.setStyleSheet("font-size: 14px; padding: 5px 15px;")
+
+    # Create next button with an index tracker
+    prev_button = QtWidgets.QPushButton("<- Prev Cell")
+    prev_button.setStyleSheet("font-size: 14px; padding: 5px 15px;")
 
     # Add controls to layout
     control_layout.addWidget(cell_counter)
     control_layout.addStretch()
+    control_layout.addWidget(prev_button)
     control_layout.addWidget(next_button)
 
     # Add control widget to main layout
@@ -379,20 +384,20 @@ def visualize_z_stack_comparison(model: NeuronAutoencoder, regions: List[np.ndar
             reconstructed = np.random.rand(num_z_layers, 64, 64)  # Random noise
         else:
             # Get real data
-            region = regions[idx]
+            region = regions[idx].squeeze()
             region_norm = (region - region.min()) / (region.max() - region.min() + 1e-8)
-            region_tensor = torch.FloatTensor(region_norm).to(device)
+            region_tensor = torch.FloatTensor(region_norm).to(device).unsqueeze(0)  # channel
             
             # Create batch dimension if needed
-            if len(region_tensor.shape) == 3:
+            if len(region_tensor.shape) == 4:
                 region_tensor = region_tensor.unsqueeze(0)
             
             # Get reconstruction
             with torch.no_grad():
                 reconstructed, _ = model(region_tensor)
-                reconstructed = reconstructed.cpu().numpy()[0]
+                reconstructed = reconstructed.cpu().numpy().squeeze()
             
-            num_z_layers = region.shape[0]
+            num_z_layers = reconstructed.shape[0]
 
         # Update counter
         if test_mode:
@@ -414,9 +419,6 @@ def visualize_z_stack_comparison(model: NeuronAutoencoder, regions: List[np.ndar
             # Set fixed size to ensure images fill their space
             original_view.setMinimumSize(120, 120)
             original_view.setMaximumSize(200, 200)
-            
-            # Adjust view to fill the available space
-            original_view.getView().setRange(QtCore.QRectF(0, 0, region_norm[z].shape[0], region_norm[z].shape[1]), padding=0)
             
             # Create z-layer label for original
             z_label = QtWidgets.QLabel(f"Z{z}")
@@ -445,9 +447,6 @@ def visualize_z_stack_comparison(model: NeuronAutoencoder, regions: List[np.ndar
             recon_view.setMinimumSize(120, 120)
             recon_view.setMaximumSize(200, 200)
             
-            # Adjust view to fill the available space
-            recon_view.getView().setRange(QtCore.QRectF(0, 0, reconstructed[z].shape[0], reconstructed[z].shape[1]), padding=0)
-            
             # Create z-layer label for reconstruction
             recon_z_label = QtWidgets.QLabel(f"Z{z}")
             recon_z_label.setAlignment(QtCore.Qt.AlignCenter)
@@ -463,8 +462,12 @@ def visualize_z_stack_comparison(model: NeuronAutoencoder, regions: List[np.ndar
             recon_container_layout.addWidget(recon_view)
 
             # Link views for synchronized zooming/panning
-            original_view.getView().linkView(original_view.getView().XAxis, recon_view.getView())
-            original_view.getView().linkView(original_view.getView().YAxis, recon_view.getView())
+            # original_view.getView().setXLink(recon_view.getView())
+            # original_view.getView().setYLink(recon_view.getView())
+
+            # Adjust view to fill the available space
+            original_view.getView().enableAutoRange()
+            recon_view.getView().enableAutoRange()
 
             # Store references to image views to prevent garbage collection
             image_views.append((original_view, recon_view))
@@ -478,8 +481,13 @@ def visualize_z_stack_comparison(model: NeuronAutoencoder, regions: List[np.ndar
         current_index[0] = (current_index[0] + 1) % len(cell_indices)
         update_cell_display()
 
+    def prev_cell():
+        current_index[0] = (current_index[0] - 1) % len(cell_indices)
+        update_cell_display()
+
     # Connect button to action
     next_button.clicked.connect(next_cell)
+    prev_button.clicked.connect(prev_cell)
 
     # Initial display
     update_cell_display()

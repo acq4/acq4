@@ -7,21 +7,21 @@ class NeuronAutoencoder(nn.Module):
         super().__init__()
 
         # Encoder blocks broken down to access intermediate outputs
-        # Block 1: 1x5x63x63 -> 16x5x31x31
+        # Block 1: 1x20x63x63 -> 16x20x31x31
         self.enc_block1 = nn.Sequential(
             nn.Conv3d(1, 16, kernel_size=3, padding=1),
             nn.BatchNorm3d(16),
             nn.ReLU(),
         )
-        self.pool1 = nn.MaxPool3d(kernel_size=(1, 2, 2), stride=(1, 2, 2))
+        self.pool1 = nn.MaxPool3d(kernel_size=2, stride=2)
 
-        # Block 2: 16x5x31x31 -> 32x5x15x15
+        # Block 2: 16x10x31x31 -> 32x10x15x15
         self.enc_block2 = nn.Sequential(
             nn.Conv3d(16, 32, kernel_size=3, padding=1),
             nn.BatchNorm3d(32),
             nn.ReLU(),
         )
-        self.pool2 = nn.MaxPool3d(kernel_size=(1, 2, 2), stride=(1, 2, 2))
+        self.pool2 = nn.MaxPool3d(kernel_size=2, stride=2)
 
         # Block 3: 32x5x15x15 -> 64x5x7x7
         self.enc_block3 = nn.Sequential(
@@ -77,18 +77,18 @@ class NeuronAutoencoder(nn.Module):
             nn.ReLU(),
         )
 
-        # Block 4: (32+32)x5x15x15 -> 16x5x31x31
+        # Block 4: (32+32)x5x15x15 -> 16x10x31x31
         self.dec_block4 = nn.Sequential(
-            nn.ConvTranspose3d(64 + 32, 16, kernel_size=(1, 2, 2), stride=(1, 2, 2), output_padding=(0, 1, 1)),
+            nn.ConvTranspose3d(64 + 32, 16, kernel_size=2, stride=2, output_padding=(0, 1, 1)),
             # 32+32=64 input channels
             nn.BatchNorm3d(16),
             nn.ReLU(),
         )
 
-        # Block 5: (16+16)x5x31x31 -> 1x5x63x63
+        # Block 5: (16+16)x10x31x31 -> 1x20x63x63
         self.dec_block5 = nn.Sequential(
             nn.ConvTranspose3d(
-                32 + 16, 1, kernel_size=(1, 2, 2), stride=(1, 2, 2), padding=(0, 0, 0), output_padding=(0, 1, 1)
+                32 + 16, 1, kernel_size=2, stride=2, padding=(0, 0, 0), output_padding=(0, 1, 1)
             ),  # 16+16=32 input channels
             nn.BatchNorm3d(1),
             nn.ReLU(),

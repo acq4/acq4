@@ -122,7 +122,7 @@ def create_coordinate_grids(input_xy_resolution, input_z_resolution):
     xy_half_pixels = half_size / input_xy_resolution
     
     # Define the output dimensions in physical space
-    z_out = np.linspace(-z_half_pixels, z_half_pixels, 5)  # 5 z-layers across 20µm
+    z_out = np.linspace(-z_half_pixels, z_half_pixels, 20)  # 20 z-layers across 20µm
     y_out = np.linspace(-xy_half_pixels, xy_half_pixels, 63)  # 63 pixels across 20µm
     x_out = np.linspace(-xy_half_pixels, xy_half_pixels, 63)  # 63 pixels across 20µm
     
@@ -161,7 +161,7 @@ def extract_region_optimized(data: np.ndarray, center_coords, Z_scales, Y_scales
         Z_scales, Y_scales, X_scales: Pre-computed coordinate scaling grids
 
     Returns:
-        np.ndarray: Normalized chunk of shape (5, 63, 63)
+        np.ndarray: Normalized chunk of shape (20, 63, 63)
     """
     # pixel coordinates
     z_px, y_px, x_px = center_coords
@@ -216,7 +216,7 @@ def extract_region_optimized(data: np.ndarray, center_coords, Z_scales, Y_scales
         result = result.astype(np.float32) - _min
     else:
         result = (result - _min) / (_max - _min)
-    return result.astype(np.float32).reshape((1, 5, 63, 63))  # Add channel dimension
+    return result.astype(np.float32).reshape((1, 20, 63, 63))  # Add channel dimension
 
 
 def setup_extractor(input_xy_resolution, input_z_resolution):
