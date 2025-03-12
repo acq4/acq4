@@ -816,6 +816,27 @@ class Line:
             and np.linalg.norm(np.cross(self.direction, other.point - self.point)) < epsilon
         )
 
+    def __hash__(self):
+        # Normalize the direction vector
+        direction_norm = np.linalg.norm(self.direction)
+        if direction_norm < 1e-10:
+            raise ValueError("Direction vector cannot be zero")
+        unit_direction = self.direction / direction_norm
+
+        # Compute the moment vector
+        moment = np.cross(self.point, unit_direction)
+
+        # Make the representation canonical by ensuring the
+        # first non-zero component of direction is positive
+        for i in range(3):
+            if abs(unit_direction[i]) > 1e-10:
+                if unit_direction[i] < 0:
+                    unit_direction = -unit_direction
+                    moment = -moment
+                break
+
+        return hash((tuple(unit_direction), tuple(moment)))
+
     def intersecting_point(self, other: "Line", epsilon: float = 1e-12) -> np.ndarray | None:
         """
         Find the intersection point of two 3D lines, accounting for floating point precision.
@@ -875,23 +896,25 @@ def are_colinear(l1, l2):
 
 class Plane:
     @classmethod
-    def wireframe(cls, *planes: "Plane") -> List[tuple[np.ndarray, np.ndarray]]:
+    def wireframe(cls, *planes: "Plane", innermost=True) -> List[tuple[np.ndarray, np.ndarray]]:
         """Given a set of intersecting planes, assumed to form a closed volume with side-length greater than 1e-9,
         make a wireframe of that volume. Returns a list of segment endpoints.
         """
-        lines = []
+        lines = set()
         segments = ApproxDict()
         for i, plane in enumerate(planes):
-            for other in planes[i + 1 :]:
+            for other in planes[i + 1:]:
                 line = plane.intersecting_line(other)
                 if line is not None:
-                    lines.append(line)
+                    lines.add(line)
 
         for a, b, c in itertools.product(lines, lines, lines):
             if a == b or b == c or a == c:
                 continue
             if (start := a.intersecting_point(b)) is not None and (end := a.intersecting_point(c)) is not None:
                 if np.allclose(start, end, atol=1e-9):
+                    continue
+                if innermost and any(not p.allows_point(start) or not p.allows_point(end) for p in planes):
                     continue
                 start = tuple(start)  # tuples so we can key a dict
                 end = tuple(end)

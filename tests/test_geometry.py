@@ -577,14 +577,24 @@ def test_wireframe_acq4():
     assert wireframe.shape == (12, 2, 3)
 
 
+def test_nested_wireframes_only_show_the_innermost(cube):
+    inner_cube = [Plane(p.normal, p.point / 2) for p in cube]
+    edges = Plane.wireframe(*cube, *inner_cube)
+    assert len(edges) == 12
+    for e in edges:
+        for pt in e:
+            for val in pt:
+                assert val in [0, 0.5]
+
+
 def test_wireframe_rhomboid():
     rhomboid = [
         Plane(np.array([1, 0, 1]), np.array([0, 0, 0])),
         Plane(np.array([0, 1, 1]), np.array([0, 0, 0])),
         Plane(np.array([0, 0, 1]), np.array([0, 0, 0])),
-        Plane(np.array([1, 0, 1]), np.array([1, 1, 1])),
-        Plane(np.array([0, 1, 1]), np.array([1, 1, 1])),
-        Plane(np.array([0, 0, 1]), np.array([1, 1, 1])),
+        Plane(np.array([-1, 0, -1]), np.array([1, 1, 1])),
+        Plane(np.array([0, -1, -1]), np.array([1, 1, 1])),
+        Plane(np.array([0, 0, -1]), np.array([1, 1, 1])),
     ]
     wireframe = Plane.wireframe(*rhomboid)
     assert len(wireframe) == 12
