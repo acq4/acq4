@@ -1,6 +1,8 @@
 import contextlib
 import json
+import os
 import weakref
+from datetime import datetime
 from typing import List
 
 import numpy as np
@@ -12,12 +14,12 @@ from acq4.devices.OptomechDevice import OptomechDevice
 from acq4.devices.Stage import Stage, MovePathFuture
 from acq4.modules.Camera import CameraModuleInterface
 from acq4.util import Qt, ptime
-from acq4.util.HelpfulException import HelpfulException
 from acq4.util.future import future_wrap
 from acq4.util.target import Target
 from pyqtgraph import Point
 from .planners import defaultMotionPlanners, PipettePathGenerator
 from .tracker import ResnetPipetteTracker
+from ..Camera import Camera
 from ..RecordingChamber import RecordingChamber
 
 CamModTemplate = Qt.importTemplate('.cameraModTemplate')
@@ -197,7 +199,7 @@ class Pipette(Device, OptomechDevice):
             self._scopeDev = imdev.scopeDev
         return self._scopeDev
 
-    def imagingDevice(self):
+    def imagingDevice(self) -> Camera:
         if self._imagingDev is None:
             man = getManager()
             name = self.config.get('imagingDevice', None)
@@ -226,6 +228,18 @@ class Pipette(Device, OptomechDevice):
         iface = PipetteCamModInterface(self, mod, showUi=self._opts['showCameraModuleUI'])
         self._camInterfaces[iface] = None
         return iface
+
+    def saveManualCalibration(self):
+        cam: Camera = self.imagingDevice()
+        with cam.ensureRunning():
+            frame = cam.acquireFrames(1, ensureFreshFrames=True).getResult()[0]
+        path = os.path.join(self.configPath(), "manual-calibrations")
+        os.makedirs(path, exist_ok=True)
+        filename = f"calibration-{datetime.now().strftime('%Y%m%dT%H%M%S')}"
+        info = {
+            "pipette offset": self.offset,
+            **frame.info(),
+        }
 
     def resetGlobalPosition(self, pos):
         """Set the device transform such that the pipette tip is located at the global position *pos*.

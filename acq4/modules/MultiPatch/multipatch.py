@@ -1,4 +1,3 @@
-import contextlib
 import json
 import os
 import re
@@ -399,6 +398,7 @@ class MultiPatchWindow(Qt.QWidget):
         spos = pip.scopeDevice().globalPosition()
         pos = [pos.x(), pos.y(), spos.z()]
         pip.resetGlobalPosition(pos)
+        pip.saveManualCalibration()
 
         # if calibration stage positions were requested, then move the stage now
         if len(self._calibrateStagePositions) > 0:
