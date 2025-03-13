@@ -78,7 +78,7 @@ def train_autoencoder(
     best_loss = float("inf")
     epoch = -1
 
-    def do_save(sig, frame):
+    def do_save():
         nonlocal best_loss, epoch
         torch.save(
             {
@@ -90,10 +90,6 @@ def train_autoencoder(
             save_path,
         )
         print(f"Saved model to {save_path}")
-        if sig:
-            raise KeyboardInterrupt
-
-    signal.signal(signal.SIGINT, do_save)
 
     for epoch in tqdm(range(num_epochs), desc="Training"):
         model.train()
@@ -118,7 +114,7 @@ def train_autoencoder(
         # Save best model
         if save_path and avg_loss < best_loss:
             best_loss = avg_loss
-            do_save(None, None)
+            do_save()
 
     return model
 
