@@ -387,16 +387,15 @@ def load_classifier(path, device="cuda", input_size=64, hidden_sizes=(128, 64), 
     hidden_sizes = checkpoint.get("hidden_sizes", hidden_sizes)
     dropout = checkpoint.get("dropout", dropout)
     model = NeuronClassifier(input_size=input_size, hidden_sizes=hidden_sizes, dropout=dropout).to(device)
+    model = nn.Sequential(model, nn.Sigmoid())
 
     # Check if it's the full model or just the sequential part
     try:
         model.load_state_dict(checkpoint["model_state_dict"])
-    except RuntimeError:
-        # Might be the wrapper model
-        model.model.load_state_dict(checkpoint["model_state_dict"])
+    except RuntimeError as exc1:
+        model[0].load_state_dict(checkpoint["model_state_dict"])
 
     model.eval()
-    model = nn.Sequential(model, nn.Sigmoid())
     return ThresholdedNeuronClassifier(model, checkpoint["threshold"])
 
 
@@ -438,7 +437,7 @@ def get_health_ordered_cells(
     cells = np.array(list(cell_centers(masks, diameter)))
     if len(cells) == 0:
         return []
-    regions = [extract_region(image, center, xy_scale, z_scale) for center in cells]
+    regions = np.array([extract_region(image, center, xy_scale, z_scale) for center in cells])
     features = extract_features(regions, autoencoder, device)
     probabilities = classifier.predict_proba(features)[:, 1]  # Probability of being healthy
 
