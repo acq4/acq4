@@ -305,7 +305,7 @@ def _do_healthy_neuron_detection(data: np.ndarray, transform, classifier, autoen
     autoencoder = NeuronAutoencoder.load(autoencoder).to("cuda" if torch.cuda.is_available() else "cpu")
     autoencoder.eval()
     cells = get_health_ordered_cells(data, classifier, autoencoder, diameter, xy_scale, z_scale)
-    return [(transform.map(center[::-1] - diameter / 2), transform.map(center[::-1] + diameter / 2)) for center in cells[:n]]
+    return [(transform.map(center[::-1] - 31), transform.map(center[::-1] + 31)) for center in cells[:n]]
 
 
 def _do_neuron_detection_yolo(data: np.ndarray, transform: SRTTransform3D) -> list:
