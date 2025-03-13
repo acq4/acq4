@@ -39,6 +39,8 @@ class NeuronClassifier(nn.Module):
         """
         if hidden_sizes is None:
             hidden_sizes = [128, 64, 32]
+        self.hidden_sizes = hidden_sizes
+        self.dropout = dropout
         super().__init__()
 
         layers = []
@@ -118,7 +120,7 @@ class ThresholdedNeuronClassifier:
         return np.column_stack([neg_probs, pos_probs])
 
 
-def train_neural_classifier(features, labels, device="cuda", class_weight=None):
+def train_neural_classifier(features, labels, device="cuda", class_weight=None, hidden_sizes=None, dropout=None):
     """
     Train a neural network classifier
 
@@ -155,7 +157,7 @@ def train_neural_classifier(features, labels, device="cuda", class_weight=None):
 
     # Initialize model
     input_size = features.shape[1]
-    model = NeuronClassifier(input_size=input_size).to(device)
+    model = NeuronClassifier(input_size=input_size, hidden_sizes=hidden_sizes, dropout=dropout).to(device)
 
     # Calculate class weights if not provided
     if class_weight is None:
@@ -334,7 +336,7 @@ def visualize_training(model_result):
     plt.subplot(1, 2, 1)
     plt.plot(thresholds, precision[:-1], "b--", label="Precision")
     plt.plot(thresholds, recall[:-1], "g-", label="Recall")
-    plt.axvline(x=model_result["threshold"], color="r", linestyle="--", label="Optimal Threshold")
+    plt.axvline(x=0.6, color="r", linestyle="--", label="Optimal Threshold")
     plt.xlabel("Threshold")
     plt.ylabel("Score")
     plt.title("Precision and Recall vs. Threshold")
@@ -350,7 +352,7 @@ def visualize_training(model_result):
 
     plt.subplot(1, 2, 2)
     plt.plot(thresholds, fpr, "r-", label="False Positive Rate")
-    plt.axvline(x=model_result["threshold"], color="r", linestyle="--", label="Optimal Threshold")
+    plt.axvline(x=0.6, color="r", linestyle="--", label="Optimal Threshold")
     plt.xlabel("Threshold")
     plt.ylabel("False Positive Rate")
     plt.title("False Positive Rate vs. Threshold")
@@ -362,13 +364,15 @@ def visualize_training(model_result):
     plt.show()
 
 
-def save_classifier(classifier, path):
+def save_classifier(classifier: ThresholdedNeuronClassifier, path):
     """Save the trained classifier to a file"""
     torch.save(
         {
             "threshold": classifier.threshold,
             "model_state_dict": classifier.model.state_dict(),
             "input_size": next(classifier.model.parameters()).shape[1],
+            "hidden_sizes": classifier.model[0].hidden_sizes,
+            "dropout": classifier.model[0].dropout,
         },
         path,
     )
@@ -376,11 +380,13 @@ def save_classifier(classifier, path):
 
 
 @lru_cache(maxsize=1)
-def load_classifier(path, device="cuda"):
+def load_classifier(path, device="cuda", input_size=64, hidden_sizes=(128, 64), dropout=0.5):
     """Load a trained neural classifier from a file"""
     checkpoint = torch.load(path, map_location=device)
-    input_size = checkpoint.get("input_size", 64)
-    model = NeuronClassifier(input_size=input_size).to(device)
+    input_size = checkpoint.get("input_size", input_size)
+    hidden_sizes = checkpoint.get("hidden_sizes", hidden_sizes)
+    dropout = checkpoint.get("dropout", dropout)
+    model = NeuronClassifier(input_size=input_size, hidden_sizes=hidden_sizes, dropout=dropout).to(device)
     model = nn.Sequential(model, nn.Sigmoid())
 
     # Check if it's the full model or just the sequential part
@@ -993,6 +999,8 @@ def main():
         default=None,
         help="Weight for positive class (higher values emphasize healthy cells)",
     )
+    parser.add_argument("--hidden-sizes", type=str, default="(128, 64)", help="Model hidden layer sizes")
+    parser.add_argument("--dropout", type=float, default=0.5, help="Model dropout")
     parser.add_argument("--rf-model", type=str, default=None, help="Path to trained RandomForest model for comparison")
     parser.add_argument(
         "--device",
@@ -1030,12 +1038,12 @@ def main():
         # Load and print top models
         results_df = pd.read_csv(args.analyze_grid_results)
         if not results_df.empty:
-            print("\nTop 10 models by AUC:")
-            top_auc = results_df.sort_values("auc", ascending=False).head(10)
+            print("\nTop 20 models by AUC:")
+            top_auc = results_df.sort_values("auc", ascending=False).head(20)
             print(top_auc[["model_name", "auc", "precision", "recall", "f1"]])
 
-            print("\nTop 10 models by F1:")
-            top_f1 = results_df.sort_values("f1", ascending=False).head(10)
+            print("\nTop 20 models by F1:")
+            top_f1 = results_df.sort_values("f1", ascending=False).head(20)
             print(top_f1[["model_name", "auc", "precision", "recall", "f1"]])
         return
 
@@ -1073,7 +1081,7 @@ def main():
         return
 
     if args.no_training:
-        model = load_classifier(args.output, device=device)
+        model = load_classifier(args.output, device=device, hidden_sizes=eval(args.hidden_sizes), dropout=args.dropout)
         nn_results = {
             "model": model,
             "X_test": features,
@@ -1083,7 +1091,14 @@ def main():
         }
     else:
         # Train neural network classifier
-        nn_results = train_neural_classifier(features, labels, device=device, class_weight=args.class_weight)
+        nn_results = train_neural_classifier(
+            features,
+            labels,
+            device=device,
+            class_weight=args.class_weight,
+            hidden_sizes=eval(args.hidden_sizes),
+            dropout=args.dropout,
+        )
 
         # Save the model
         save_classifier(nn_results["model"], args.output)

@@ -296,7 +296,9 @@ def do_neuron_detection(
         raise ValueError(f"Unknown model {model}")
 
 
-def _do_healthy_neuron_detection(data: np.ndarray, transform, classifier, autoencoder, diameter, xy_scale, z_scale, n: int = 10):
+def _do_healthy_neuron_detection(
+    data: np.ndarray, transform, classifier, autoencoder, diameter, xy_scale, z_scale, n: int = 10
+):
     from acq4.util.healthy_cell_detector.train_nn_classifier import get_health_ordered_cells, load_classifier
     from acq4.util.healthy_cell_detector.models import NeuronAutoencoder
     import torch

@@ -245,8 +245,8 @@ class AutomationDebugWindow(Qt.QWidget):
         pixel_size = self.cameraDevice.getPixelSize()[0] / µm
         z_scale = 1e-6
         man = self.module.manager
-        autoencoder = man.config.get("misc", {}).get("autoencoderPath")
-        classifier = man.config.get("misc", {}).get("classifierPath")
+        autoencoder = man.config.get("misc", {}).get("autoencoderPath", None)
+        classifier = man.config.get("misc", {}).get("classifierPath", None)
         return _future.waitFor(
             detect_neurons(
                 z_stack, autoencoder=autoencoder, classifier=classifier, xy_scale=pixel_size, z_scale=z_scale
