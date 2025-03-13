@@ -387,7 +387,6 @@ def load_classifier(path, device="cuda", input_size=64, hidden_sizes=(128, 64), 
     hidden_sizes = checkpoint.get("hidden_sizes", hidden_sizes)
     dropout = checkpoint.get("dropout", dropout)
     model = NeuronClassifier(input_size=input_size, hidden_sizes=hidden_sizes, dropout=dropout).to(device)
-    model = nn.Sequential(model, nn.Sigmoid())
 
     # Check if it's the full model or just the sequential part
     try:
@@ -397,7 +396,7 @@ def load_classifier(path, device="cuda", input_size=64, hidden_sizes=(128, 64), 
         model.model.load_state_dict(checkpoint["model_state_dict"])
 
     model.eval()
-
+    model = nn.Sequential(model, nn.Sigmoid())
     return ThresholdedNeuronClassifier(model, checkpoint["threshold"])
 
 
