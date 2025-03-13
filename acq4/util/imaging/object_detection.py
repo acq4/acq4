@@ -479,7 +479,7 @@ class NeuronBoxViewer(pg.QtWidgets.QMainWindow):
 
     def update_display(self):
         # Update image
-        self.image_view.setImage(self.data[self.current_z], autoLevels=True)
+        self.image_view.setImage(self.data[self.current_z], autoLevels=True, autoRange=False)
 
         # Clear existing ROIs
         for roi in self.roi_items:
