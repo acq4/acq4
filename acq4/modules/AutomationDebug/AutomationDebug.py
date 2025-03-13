@@ -14,7 +14,7 @@ from acq4.modules.Module import Module
 from acq4.util import Qt
 from acq4.util.future import Future, future_wrap
 from acq4.util.imaging.sequencer import acquire_z_stack
-from pyqtgraph import mkPen
+from acq4.util.target import TargetBox
 from pyqtgraph.units import µm
 
 UiTemplate = Qt.importTemplate(".window")
@@ -39,8 +39,8 @@ class AutomationDebugWindow(Qt.QWidget):
         self.ui.clearBtn.clicked.connect(self.clearBoundingBoxes)
         self.ui.zStackDetectBtn.setOpts(future_producer=self._detectNeuronsZStack, stoppable=True)
         self.ui.zStackDetectBtn.sigFinished.connect(self._handleDetectResults)
-        self.ui.flatDetectBtn.setOpts(future_producer=self._detectNeuronsFlat, stoppable=True)
-        self.ui.flatDetectBtn.sigFinished.connect(self._handleDetectResults)
+        self.ui.testUIBtn.setOpts(future_producer=self._testUI, stoppable=True)
+        self.ui.testUIBtn.sigFinished.connect(self._handleDetectResults)
 
         self.ui.setTopLeftButton.clicked.connect(self._setTopLeft)
         self.ui.setBottomRightButton.clicked.connect(self._setBottomRight)
@@ -155,7 +155,7 @@ class AutomationDebugWindow(Qt.QWidget):
         if working:
             self.module.manager.getModule("Camera").window()  # make sure camera window is open
         self.ui.zStackDetectBtn.setEnabled(working == self.ui.zStackDetectBtn or not working)
-        self.ui.flatDetectBtn.setEnabled(working == self.ui.flatDetectBtn or not working)
+        self.ui.testUIBtn.setEnabled(working == self.ui.testUIBtn or not working)
         self.ui.autoTargetBtn.setEnabled(working == self.ui.autoTargetBtn or not working)
         self.ui.testPipetteBtn.setEnabled(working == self.ui.testPipetteBtn or not working)
         self.ui.trackFeaturesBtn.setEnabled(working == self.ui.trackFeaturesBtn or not working)
@@ -188,12 +188,13 @@ class AutomationDebugWindow(Qt.QWidget):
 
     def clearBoundingBoxes(self):
         cam_win: CameraWindow = self.module.manager.getModule("Camera").window()
-        for widget in self._previousBoxWidgets:
-            cam_win.removeItem(widget)
+        for box in self._previousBoxWidgets:
+            cam_win.removeItem(box)
+            self.scopeDevice.sigGlobalTransformChanged.disconnect(box.noticeFocusChange)
         self._previousBoxWidgets = []
         self._previousBoxBounds = []
 
-    def _handleDetectResults(self, neurons_fut: Future) -> list:
+    def _handleDetectResults(self, neurons_fut: Future) -> None:
         try:
             if neurons_fut.wasInterrupted():
                 return
@@ -205,10 +206,9 @@ class AutomationDebugWindow(Qt.QWidget):
         cam_win: CameraWindow = self.module.manager.getModule("Camera").window()
         self.clearBoundingBoxes()
         for start, end in bounding_boxes:
-            box = Qt.QGraphicsRectItem(Qt.QRectF(Qt.QPointF(start[0], start[1]), Qt.QPointF(end[0], end[1])))
-            box.setPen(mkPen("r", width=2))
-            box.setBrush(Qt.QBrush(Qt.QColor(0, 0, 0, 0)))
+            box = TargetBox(start, end)
             cam_win.addItem(box)
+            self.scopeDevice.sigGlobalTransformChanged.connect(box.noticeFocusChange)
             self._previousBoxWidgets.append(box)
             self._previousBoxBounds.append((start, end))
             # TODO label boxes
@@ -219,15 +219,18 @@ class AutomationDebugWindow(Qt.QWidget):
             # self._previousBoxWidgets.append(label)
 
     @future_wrap
-    def _detectNeuronsFlat(self, _future: Future):
-        self.sigWorking.emit(self.ui.flatDetectBtn)
-        from acq4.util.imaging.object_detection import detect_neurons
-
+    def _testUI(self, _future):
         with self.cameraDevice.ensureRunning():
             frame = _future.waitFor(self.cameraDevice.acquireFrames(1)).getResult()[0]
-        with self.cameraDevice.ensureRunning():
-            frame = _future.waitFor(self.cameraDevice.acquireFrames(1)).getResult()[0]
-        return _future.waitFor(detect_neurons(frame, "cellpose")).getResult()
+        points = np.random.random((20, 3))
+        points[:, 2] *= 20e-6
+        points[:, 1] *= frame.shape[0]
+        points[:, 0] *= frame.shape[1]
+        boxes = []
+        for pt in points:
+            center = frame.mapFromFrameToGlobal(pt)
+            boxes.append((center - 20e-6, center + 20e-6))
+        return boxes
 
     @future_wrap
     def _detectNeuronsZStack(self, _future: Future) -> list:
@@ -238,7 +241,7 @@ class AutomationDebugWindow(Qt.QWidget):
         start = depth - 40 * µm
         stop = depth + 40 * µm
         z_stack = _future.waitFor(acquire_z_stack(self.cameraDevice, start, stop, 1 * µm)).getResult()
-        self.cameraDevice.setFocusDepth(depth)  # no need to wait
+        self.cameraDevice.setFocusDepth(depth).raiseErrors("error restoring focus")  # no need to wait
         pixel_size = self.cameraDevice.getPixelSize()[0] / µm
         z_scale = 1e-6
         man = self.module.manager
