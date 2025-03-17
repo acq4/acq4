@@ -5,6 +5,7 @@ import weakref
 from datetime import datetime
 from typing import List
 
+import h5py
 import numpy as np
 
 import pyqtgraph as pg
@@ -21,6 +22,7 @@ from .planners import defaultMotionPlanners, PipettePathGenerator
 from .tracker import ResnetPipetteTracker
 from ..Camera import Camera
 from ..RecordingChamber import RecordingChamber
+from ...util.json_encoder import ACQ4JSONEncoder
 
 CamModTemplate = Qt.importTemplate('.cameraModTemplate')
 
@@ -43,12 +45,12 @@ class Pipette(Device, OptomechDevice):
 
     * pitch: The angle of the pipette (in degrees) relative to the horizontal plane.
       Positive values point downward. This option must be specified in the configuration.
-      If the value 'auto' is given, then the pitch is derived from the parent manipulator's X axis 
+      If the value 'auto' is given, then the pitch is derived from the parent manipulator's X axis
       (or other specified by parentAutoAxis) pitch.
     * yaw: The angle of the pipette (in degrees) relative to the global +X axis (points to the operator's right
       when facing the microscope).
       Positive values are clockwise from global +X. This option must be specified in the configuration.
-      If the value 'auto' is given, then the yaw is derived from the parent manipulator's X axis 
+      If the value 'auto' is given, then the yaw is derived from the parent manipulator's X axis
       (or other specified by parentAutoAxis) yaw.
     * parentAutoAxis: One of '+x' (default), '-x', '+y', '-y', '+z', or '-z' indicating the axis and direction in the
       parent manipulator's coordinate system that points along the pipette and toward the tip. This axis
@@ -61,7 +63,7 @@ class Pipette(Device, OptomechDevice):
       when searching for new pipette tips. For low working-distance objectives, this should be about 0.5 mm less
       than *searchHeight* to avoid collisions between the tip and the objective during search.
       Default is 1.5 mm.
-    * approachHeight: the distance to bring the pipette tip above the sample surface when beginning 
+    * approachHeight: the distance to bring the pipette tip above the sample surface when beginning
       a diagonal approach. Default is 100 um.
     * idleHeight: the distance to bring the pipette tip above the sample surface when in idle position
       Default is 1 mm.
@@ -121,7 +123,7 @@ class Pipette(Device, OptomechDevice):
         self._globalDirection = None
         self._localDirection = None
 
-        # timer used to emit sigMoveFinished when no motion is detected for a certain period 
+        # timer used to emit sigMoveFinished when no motion is detected for a certain period
         self.moveTimer = Qt.QTimer()
         self.moveTimer.timeout.connect(self.positionChangeFinished)
         self.sigGlobalTransformChanged.connect(self.positionChanged)
@@ -234,12 +236,22 @@ class Pipette(Device, OptomechDevice):
         with cam.ensureRunning():
             frame = cam.acquireFrames(1, ensureFreshFrames=True).getResult()[0]
         path = os.path.join(self.configPath(), "manual-calibrations")
+        path = self.dm.configFileName(path)
         os.makedirs(path, exist_ok=True)
         filename = f"calibration-{datetime.now().strftime('%Y%m%dT%H%M%S')}"
+        filename = os.path.join(path, filename)
         info = {
-            "pipette offset": self.offset,
+            "pipette offset": self.offset.tolist(),
+            "position": frame.globalPosition.tolist(),
             **frame.info(),
         }
+        with h5py.File(filename, "w") as fd:
+            dataset = fd.create_dataset("image", data=frame.data(), compression="gzip")
+            for k, v in info.items():
+                try:
+                    dataset.attrs[k] = v
+                except (ValueError, TypeError):
+                    dataset.attrs[k] = json.dumps(v, cls=ACQ4JSONEncoder)
 
     def resetGlobalPosition(self, pos):
         """Set the device transform such that the pipette tip is located at the global position *pos*.
