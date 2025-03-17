@@ -508,7 +508,7 @@ class NeuronBoxViewer(pg.QtWidgets.QMainWindow):
             start, end = neuron
 
             # Determine if the bounding box is above, below, or at the current z-level
-            z_min, z_max = self._get_z_range(neuron)
+            z_min, z_max = start[2], end[2]
 
             if self.current_z < z_min:
                 pen = pg.mkPen("b", width=2)  # Blue for above
@@ -524,21 +524,6 @@ class NeuronBoxViewer(pg.QtWidgets.QMainWindow):
             roi = ClickableROI(start[:2], size=end[:2] - start[:2], pen=pen, hover_pen=hover_pen, index=i, parent=self)
             self.image_view.addItem(roi)
             self.roi_items.append(roi)
-
-    def _get_z_range(self, neuron):
-        """Determine the z-range of a neuron bounding box."""
-        start, end = neuron
-
-        # If we have 3D coordinates
-        if len(start) > 2 and len(end) > 2:
-            return start[2], end[2]
-
-        # For 2D bounding boxes, we'll estimate a z-range
-        # This is just for demonstration - in a real application,
-        # you'd want to use actual 3D bounding boxes
-        z_span = min(5, self.max_z // 3)
-        center_z = np.random.randint(z_span, self.max_z - z_span)
-        return center_z - z_span, center_z + z_span
 
     def open_cell_viewer(self, index):
         """Open a normalized-for-autoencoder view of the selected cell"""
