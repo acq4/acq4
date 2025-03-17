@@ -49,12 +49,10 @@ def get_features_and_labels(image_paths, annotation_suffix, autoencoder, diamete
         # unhealthy cells are those whose centers are not within diameter of a healthy cell
         masks = get_cellpose_masks(img, diameter)
         any_cells = cell_centers(masks, diameter)
-        unhealthy_cells = []
-        for cell in any_cells:
-            if all(
-                np.linalg.norm(np.array(cell) - np.array(healthy_cell)) > diameter for healthy_cell in healthy_cells
-            ):
-                unhealthy_cells.append(cell)
+        unhealthy_cells = [
+            cell for cell in any_cells
+            if all(np.linalg.norm(np.array(cell) - np.array(good_cell)) > diameter for good_cell in healthy_cells)
+        ]
         unhealthy_regions = [extract_region(img, center, xy_scale, z_scale) for center in unhealthy_cells]
         unhealthy_features = extract_features(unhealthy_regions, autoencoder)
         features.append(unhealthy_features)

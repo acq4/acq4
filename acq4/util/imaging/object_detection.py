@@ -304,6 +304,7 @@ def _do_healthy_neuron_detection(
     import torch
 
     classifier = load_classifier(classifier)
+    classifier.model.eval()
     autoencoder = NeuronAutoencoder.load(autoencoder).to("cuda" if torch.cuda.is_available() else "cpu")
     autoencoder.eval()
     cells = get_health_ordered_cells(data, classifier, autoencoder, diameter, xy_scale, z_scale)
@@ -362,10 +363,26 @@ def get_cellpose_masks(data, diameter=35, stitch_threshold=0.25, z_axis=0):
     masks_pred, flows, styles, diams = model.eval(
         [data],
         diameter=diameter,
+        batch_size=1,
         channel_axis=1,
         z_axis=z_axis,
-        stitch_threshold=stitch_threshold,
+        do_3D=False,  # this version of do_3D tries to detect on XZ and YZ
+        stitch_threshold=stitch_threshold,  # this triggers the correct 3D algorithm
+        cellprob_threshold=0.0,
+        flow_threshold=None,
+        normalize={
+            'lowhigh': None,
+            'percentile': [1.0, 99.0],
+            'normalize': True,
+            'norm3D': True,
+            'sharpen_radius': 0,
+            'smooth_radius': 0,
+            'tile_norm_blocksize': 0,
+            'tile_norm_smooth3D': 1,
+            'invert': False,
+        },
     )
+    print(f"cellpose found {masks_pred[0].max()} distinct cells")
     return masks_pred[0]
 
 

@@ -21,6 +21,10 @@ from acq4.util.healthy_cell_detector.models import NeuronAutoencoder
 from acq4.util.healthy_cell_detector.train_rf_classifier import extract_features, get_features_and_labels
 from acq4.util.healthy_cell_detector.utils import extract_region, cell_centers
 from acq4.util.imaging.object_detection import get_cellpose_masks
+from acq4.util.healthy_cell_detector.train_rf_classifier import ThresholdClassifier
+
+
+_ = ThresholdClassifier  # needed for load
 
 
 class NeuronClassifier(nn.Module):
