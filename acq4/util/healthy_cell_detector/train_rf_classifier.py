@@ -11,7 +11,7 @@ from sklearn.metrics import precision_score, recall_score, f1_score
 from sklearn.model_selection import train_test_split, StratifiedKFold, GridSearchCV
 from tifffile import tifffile
 
-from acq4.util.healthy_cell_detector.models import NeuronAutoencoder
+from acq4.util.healthy_cell_detector.models import NeuronAutoencoder, ThresholdRFClassifier
 from acq4.util.healthy_cell_detector.utils import extract_region, cell_centers
 from acq4.util.imaging.object_detection import get_cellpose_masks
 
@@ -121,22 +121,9 @@ def train_classifier(features, labels):
     print("\nClassification Report with optimized threshold:")
     print(classification_report(y_test, y_pred))
 
-    thresholded_model = ThresholdClassifier(best_model, optimal_threshold)
+    thresholded_model = ThresholdRFClassifier(best_model, optimal_threshold)
 
     return thresholded_model, X_test, y_test, y_pred, y_pred_prob
-
-
-class ThresholdClassifier:
-    def __init__(self, base_classifier, threshold):
-        self.base_classifier = base_classifier
-        self.threshold = threshold
-
-    def predict(self, X):
-        probas = self.base_classifier.predict_proba(X)[:, 1]
-        return (probas >= self.threshold).astype(int)
-
-    def predict_proba(self, X):
-        return self.base_classifier.predict_proba(X)
 
 
 def evaluate_classifier(y_true, y_pred):

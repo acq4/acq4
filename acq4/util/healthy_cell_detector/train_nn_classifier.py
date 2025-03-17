@@ -17,111 +17,13 @@ from torch.utils.data import DataLoader, TensorDataset
 from tqdm import tqdm
 
 import pyqtgraph as pg
-from acq4.util.healthy_cell_detector.models import NeuronAutoencoder
+from acq4.util.healthy_cell_detector.models import NeuronAutoencoder, ThresholdRFClassifier, NeuronClassifier, \
+    ThresholdedNeuronClassifier
 from acq4.util.healthy_cell_detector.train_rf_classifier import extract_features, get_features_and_labels
 from acq4.util.healthy_cell_detector.utils import extract_region, cell_centers
 from acq4.util.imaging.object_detection import get_cellpose_masks
-from acq4.util.healthy_cell_detector.train_rf_classifier import ThresholdClassifier
 
-
-_ = ThresholdClassifier  # needed for load
-
-
-class NeuronClassifier(nn.Module):
-    def __init__(self, input_size=64, hidden_sizes=None, dropout=0.5):
-        """
-        Neural network classifier for healthy neurons
-
-        Parameters:
-        -----------
-        input_size : int
-            Size of input feature vector
-        hidden_sizes : list
-            List of hidden layer sizes
-        dropout : float
-            Dropout probability
-        """
-        if hidden_sizes is None:
-            hidden_sizes = [128, 64, 32]
-        self.hidden_sizes = hidden_sizes
-        self.dropout = dropout
-        super().__init__()
-
-        layers = []
-        prev_size = input_size
-
-        # Add hidden layers
-        for h_size in hidden_sizes:
-            layers.append(nn.Linear(prev_size, h_size))
-            layers.append(nn.BatchNorm1d(h_size))
-            layers.append(nn.ReLU())
-            layers.append(nn.Dropout(dropout))
-            prev_size = h_size
-
-        # Output layer
-        layers.append(nn.Linear(prev_size, 1))
-        layers.append(nn.Sigmoid())
-
-        self.model = nn.Sequential(*layers)
-
-    def forward(self, x):
-        return self.model(x)
-
-
-class ThresholdedNeuronClassifier:
-    def __init__(self, model, threshold=0.5):
-        """
-        Wrapper for neural network that applies a custom threshold for classification
-
-        Parameters:
-        -----------
-        model : nn.Module
-            PyTorch neural network model
-        threshold : float
-            Classification threshold
-        """
-        self.model = model
-        self.threshold = threshold
-        self.device = next(model.parameters()).device
-
-    def predict(self, X):
-        """
-        Predict class labels
-
-        Parameters:
-        -----------
-        X : numpy.ndarray
-            Input features
-
-        Returns:
-        --------
-        numpy.ndarray
-            Predicted class labels (0 or 1)
-        """
-        X_tensor = torch.tensor(X, dtype=torch.float32).to(self.device)
-        with torch.no_grad():
-            probas = self.model(X_tensor).cpu().numpy().flatten()
-        return (probas >= self.threshold).astype(int)
-
-    def predict_proba(self, X):
-        """
-        Predict class probabilities
-
-        Parameters:
-        -----------
-        X : numpy.ndarray
-            Input features
-
-        Returns:
-        --------
-        numpy.ndarray
-            Predicted probabilities (shape: [n_samples, 2])
-        """
-        X_tensor = torch.tensor(X, dtype=torch.float32).to(self.device)
-        with torch.no_grad():
-            pos_probs = self.model(X_tensor).cpu().numpy().flatten()
-            neg_probs = 1 - pos_probs
-        return np.column_stack([neg_probs, pos_probs])
+_ = ThresholdRFClassifier  # needed for load
 
 
 def train_neural_classifier(features, labels, device="cuda", class_weight=None, hidden_sizes=None, dropout=None):

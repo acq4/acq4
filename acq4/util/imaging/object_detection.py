@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from pickle import UnpicklingError
 from threading import RLock
 from typing import Optional
 
@@ -299,16 +300,23 @@ def do_neuron_detection(
 def _do_healthy_neuron_detection(
     data: np.ndarray, transform, classifier, autoencoder, diameter, xy_scale, z_scale, n: int = 10
 ):
-    from acq4.util.healthy_cell_detector.train_nn_classifier import get_health_ordered_cells, load_classifier
+    from acq4.util.healthy_cell_detector.train_nn_classifier import get_health_ordered_cells, load_classifier as nn_load
+    from acq4.util.healthy_cell_detector.train_rf_classifier import load_classifier as rf_load
     from acq4.util.healthy_cell_detector.models import NeuronAutoencoder
     import torch
 
-    classifier = load_classifier(classifier)
-    classifier.model.eval()
+    try:
+        classifier = nn_load(classifier)
+        classifier.model.eval()
+    except (AttributeError, UnpicklingError):
+        classifier = rf_load(classifier)
     autoencoder = NeuronAutoencoder.load(autoencoder).to("cuda" if torch.cuda.is_available() else "cpu")
     autoencoder.eval()
     cells = get_health_ordered_cells(data, classifier, autoencoder, diameter, xy_scale, z_scale)
-    return [(transform.map(center[::-1] - 31), transform.map(center[::-1] + 31)) for center in cells[:n]]
+    return [
+        (transform.map(center[::-1] - (31, 31, 10)), transform.map(center[::-1] + (31, 31, 10)))
+        for center in cells[:n]
+    ]
 
 
 def _do_neuron_detection_yolo(data: np.ndarray, transform: SRTTransform3D) -> list:

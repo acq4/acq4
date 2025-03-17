@@ -1,5 +1,7 @@
+import numpy as np
 import torch
 import torch.nn as nn
+from torch import nn as nn
 
 
 class NeuronAutoencoder(nn.Module):
@@ -165,3 +167,113 @@ class NeuronAutoencoder(nn.Module):
             )
 
         return reconstructed, latent
+
+
+class ThresholdRFClassifier:
+    def __init__(self, base_classifier, threshold):
+        self.base_classifier = base_classifier
+        self.threshold = threshold
+
+    def predict(self, X):
+        probas = self.base_classifier.predict_proba(X)[:, 1]
+        return (probas >= self.threshold).astype(int)
+
+    def predict_proba(self, X):
+        return self.base_classifier.predict_proba(X)
+
+
+class NeuronClassifier(nn.Module):
+    def __init__(self, input_size=64, hidden_sizes=None, dropout=0.5):
+        """
+        Neural network classifier for healthy neurons
+
+        Parameters:
+        -----------
+        input_size : int
+            Size of input feature vector
+        hidden_sizes : list
+            List of hidden layer sizes
+        dropout : float
+            Dropout probability
+        """
+        if hidden_sizes is None:
+            hidden_sizes = [128, 64, 32]
+        self.hidden_sizes = hidden_sizes
+        self.dropout = dropout
+        super().__init__()
+
+        layers = []
+        prev_size = input_size
+
+        # Add hidden layers
+        for h_size in hidden_sizes:
+            layers.append(nn.Linear(prev_size, h_size))
+            layers.append(nn.BatchNorm1d(h_size))
+            layers.append(nn.ReLU())
+            layers.append(nn.Dropout(dropout))
+            prev_size = h_size
+
+        # Output layer
+        layers.append(nn.Linear(prev_size, 1))
+        layers.append(nn.Sigmoid())
+
+        self.model = nn.Sequential(*layers)
+
+    def forward(self, x):
+        return self.model(x)
+
+
+class ThresholdedNeuronClassifier:
+    def __init__(self, model, threshold=0.5):
+        """
+        Wrapper for neural network that applies a custom threshold for classification
+
+        Parameters:
+        -----------
+        model : nn.Module
+            PyTorch neural network model
+        threshold : float
+            Classification threshold
+        """
+        self.model = model
+        self.threshold = threshold
+        self.device = next(model.parameters()).device
+
+    def predict(self, X):
+        """
+        Predict class labels
+
+        Parameters:
+        -----------
+        X : numpy.ndarray
+            Input features
+
+        Returns:
+        --------
+        numpy.ndarray
+            Predicted class labels (0 or 1)
+        """
+        X_tensor = torch.tensor(X, dtype=torch.float32).to(self.device)
+        with torch.no_grad():
+            probas = self.model(X_tensor).cpu().numpy().flatten()
+        return (probas >= self.threshold).astype(int)
+
+    def predict_proba(self, X):
+        """
+        Predict class probabilities
+
+        Parameters:
+        -----------
+        X : numpy.ndarray
+            Input features
+
+        Returns:
+        --------
+        numpy.ndarray
+            Predicted probabilities (shape: [n_samples, 2])
+        """
+        X_tensor = torch.tensor(X, dtype=torch.float32).to(self.device)
+        with torch.no_grad():
+            pos_probs = self.model(X_tensor).cpu().numpy().flatten()
+            neg_probs = 1 - pos_probs
+        return np.column_stack([neg_probs, pos_probs])
