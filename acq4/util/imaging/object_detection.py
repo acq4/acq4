@@ -16,6 +16,7 @@ from MetaArray import MetaArray
 from acq4.util.future import Future, future_wrap
 from acq4.util.imaging import Frame
 from pyqtgraph import SRTTransform3D
+from pyqtgraph.debug import printExc
 from teleprox import ProcessSpawner
 from teleprox.shmem import SharedNDArray
 import coorx.image
@@ -409,8 +410,8 @@ class NeuronBoxViewer(pg.QtWidgets.QMainWindow):
         super().__init__()
         viewer_window = self
 
-        self.data = data
-        self.neurons = neurons
+        self.data = data  # ijk
+        self.neurons = neurons  # [(start, end), ...] in xyz
         self.current_z = len(data) // 2 if len(data) > 1 else 0
         self.max_z = len(data) - 1
         self.cell_viewers = []  # Keep track of open cell viewers
@@ -541,37 +542,21 @@ class NeuronBoxViewer(pg.QtWidgets.QMainWindow):
         if len(start) > 2 and len(end) > 2:
             return start[2], end[2]
 
-        # For 2D bounding boxes, we'll estimate a z-range
-        # This is just for demonstration - in a real application,
-        # you'd want to use actual 3D bounding boxes
-        z_span = min(5, self.max_z // 3)
-        center_z = np.random.randint(z_span, self.max_z - z_span)
-        return center_z - z_span, center_z + z_span
+        return 0, 0
 
     def open_cell_viewer(self, index):
         """Open a normalized-for-autoencoder view of the selected cell"""
-        from acq4.util.healthy_cell_detector.utils import extract_region
-
         neuron = self.neurons[index]
         start, end = neuron
 
-        # Calculate center of the bounding box
-        center = ((start[0] + end[0]) / 2, (start[1] + end[1]) / 2)
-
-        # Add z coordinate if we're dealing with 3D data
-        if len(start) > 2 and len(end) > 2:
-            center = (center[0], center[1], (start[2] + end[2]) / 2)
-        else:
-            # Use current z if we don't have z coordinates in the bounding box
-            center = (center[0], center[1], self.current_z)
-
-        # Default values for resolution - these should be adjusted based on your data
-        xy_scale = 0.32e-6  # 0.32 µm per pixel
-        z_scale = 1e-6  # 1 µm per z-step
-
         try:
             # Extract the region around the cell center
-            region = extract_region(self.data, center, xy_scale, z_scale)
+            region = self.data[
+                     int(max(0, start[2])) : int(min(self.data.shape[0], end[2])),
+                     int(max(0, start[1])) : int(min(self.data.shape[1], end[1])),
+                     int(max(0, start[0])) : int(min(self.data.shape[2], end[0])),
+             ]
+            # region = extract_region(self.data, center, xy_scale, z_scale)
 
             # Create a viewer for the extracted region
             viewer = CellRegionViewer(region, f"Cell {index+1} Normalized")
@@ -581,7 +566,7 @@ class NeuronBoxViewer(pg.QtWidgets.QMainWindow):
             self.cell_viewers.append(viewer)
 
         except Exception as e:
-            print(f"Error extracting cell region: {e}")
+            printExc("Could not extract cell region")
             pg.QtWidgets.QMessageBox.warning(self, "Extraction Error", f"Could not extract cell region: {str(e)}")
 
 
@@ -618,7 +603,7 @@ class CellRegionViewer(pg.QtWidgets.QMainWindow):
     def __init__(self, region_data, title="Cell Region Viewer"):
         super().__init__()
 
-        # Region data should be shape (1, z, y, x) or (1, 1, y, x)
+        # Region data should be shape (z, y, x) or (1, y, x)
         self.region_data = region_data
 
         # Setup UI
@@ -636,7 +621,7 @@ class CellRegionViewer(pg.QtWidgets.QMainWindow):
         layout.addWidget(self.image_view)
 
         # If we have a 3D region, add z controls
-        if region_data.shape[1] > 1:
+        if region_data.shape[0] > 1:
             # Z slider
             slider_layout = pg.QtWidgets.QHBoxLayout()
             layout.addLayout(slider_layout)
@@ -644,25 +629,25 @@ class CellRegionViewer(pg.QtWidgets.QMainWindow):
             slider_layout.addWidget(pg.QtWidgets.QLabel("Z Layer:"))
             self.z_slider = pg.QtWidgets.QSlider(pg.QtCore.Qt.Horizontal)
             self.z_slider.setMinimum(0)
-            self.z_slider.setMaximum(region_data.shape[1] - 1)
-            self.z_slider.setValue(region_data.shape[1] // 2)
+            self.z_slider.setMaximum(region_data.shape[0] - 1)
+            self.z_slider.setValue(region_data.shape[0] // 2)
             self.z_slider.valueChanged.connect(self.update_z)
             slider_layout.addWidget(self.z_slider)
 
-            self.z_label = pg.QtWidgets.QLabel(f"{region_data.shape[1] // 2}/{region_data.shape[1] - 1}")
+            self.z_label = pg.QtWidgets.QLabel(f"{region_data.shape[0] // 2}/{region_data.shape[0] - 1}")
             slider_layout.addWidget(self.z_label)
 
             # Display initial z slice
-            self.current_z = region_data.shape[1] // 2
-            self.image_view.setImage(region_data[0, self.current_z])
+            self.current_z = region_data.shape[0] // 2
+            self.image_view.setImage(region_data[self.current_z])
         else:
             # Just display the 2D image
-            self.image_view.setImage(region_data[0, 0])
+            self.image_view.setImage(region_data[0])
 
     def update_z(self, z):
         self.current_z = z
-        self.z_label.setText(f"{self.current_z}/{self.region_data.shape[1] - 1}")
-        self.image_view.setImage(self.region_data[0, self.current_z])
+        self.z_label.setText(f"{self.current_z}/{self.region_data.shape[0] - 1}")
+        self.image_view.setImage(self.region_data[self.current_z])
 
 
 @click.command()
