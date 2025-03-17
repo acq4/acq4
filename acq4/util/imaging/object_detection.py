@@ -409,6 +409,10 @@ class NeuronBoxViewer(pg.QtWidgets.QMainWindow):
         global viewer_window
         super().__init__()
         viewer_window = self
+        
+        # Set up keyboard shortcuts
+        self.quit_shortcut = pg.QtWidgets.QShortcut(pg.QtGui.QKeySequence("Ctrl+Q"), self)
+        self.quit_shortcut.activated.connect(self.close)
 
         self.data = data  # ijk
         self.neurons = neurons  # [(start, end), ...] in xyz
