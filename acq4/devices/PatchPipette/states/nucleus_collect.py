@@ -17,6 +17,10 @@ class NucleusCollectState(PatchPipetteState):
         cleaning well.
     approachDistance : float
         Distance (m) from collection location to approach from.
+    sonicationDuration : float
+        Duration (s) to sonicate the pipette (default 5s).
+    sonicationFrequency : float
+        Frequency (Hz) to sonicate the pipette (default 150kHz).
     """
     stateName = 'collect'
 
@@ -28,6 +32,8 @@ class NucleusCollectState(PatchPipetteState):
     _parameterTreeConfig = {
         'pressureSequence': {'type': 'str', 'default': "[(60e3, 4.0), (-35e3, 1.0)] * 5"},
         'approachDistance': {'type': 'float', 'default': 30e-3, 'suffix': 's'},
+        'sonicationDuration': {'type': 'float', 'default': 5.0, 'suffix': 's'},
+        'sonicationFrequency': {'type': 'float', 'default': 150e3, 'suffix': 'Hz'},
     }
 
     def __init__(self, *args, **kwds):
@@ -48,6 +54,11 @@ class NucleusCollectState(PatchPipetteState):
 
         # self.waitFor([pip._moveToGlobal(self.approachPos, speed='fast')])
         self.waitFor(pip._moveToGlobal(self.collectionPos, speed='fast'), timeout=None)
+
+        if dev.sonicatorDevice is not None:
+            dev.sonicatorDevice.doProtocol(
+                'expel', duration=config['sonicationDuration'], frequency=config['sonicationFrequency']
+            ).raiseErrors("Error sonicating pipette")
 
         sequence = config['pressureSequence']
         if isinstance(sequence, str):

@@ -21,6 +21,10 @@ class CleanState(PatchPipetteState):
     approachHeight : float
         Distance (m) above the clean/rinse wells to approach from. This is needed to ensure the pipette avoids the well
         walls when approaching.
+    sonicationDuration : float
+        Duration (s) to sonicate the pipette (default 5s).
+    sonicationFrequency : float
+        Frequency (Hz) to sonicate the pipette (default 150kHz).
     """
     stateName = 'clean'
 
@@ -36,6 +40,8 @@ class CleanState(PatchPipetteState):
         'cleanSequence': {'type': 'str', 'default': "[(-35e3, 1.0), (100e3, 1.0)] * 5"},  # TODO
         'rinseSequence': {'type': 'str', 'default': "[(-35e3, 3.0), (100e3, 10.0)]"},  # TODO
         'approachHeight': {'type': 'float', 'default': 5e-3, 'suffix': 'm'},
+        'sonicationDuration': {'type': 'float', 'default': 5.0, 'suffix': 's'},
+        'sonicationFrequency': {'type': 'float', 'default': 150e3, 'suffix': 'Hz'},
     }
 
     def __init__(self, *args, **kwds):
@@ -88,6 +94,11 @@ class CleanState(PatchPipetteState):
             # todo: if needed, we can check TP for capacitance changes here
             # and stop moving as soon as the fluid is detected
             self.waitFor(self.currentFuture, timeout=None)
+
+            if dev.sonicatorDevice is not None:
+                dev.sonicatorDevice.doProtocol(
+                    'clean', duration=config['sonicationDuration'], frequency=config['sonicationFrequency']
+                ).raiseErrors("Error sonicating pipette")
 
             for pressure, delay in sequence:
                 dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
