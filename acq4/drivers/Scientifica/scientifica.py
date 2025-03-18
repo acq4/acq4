@@ -249,7 +249,10 @@ class Scientifica:
             else:
                 packet = self.send('P')
             try:
-                return [int(x) / self.ticksPerMicron for x in packet.split(b'\t')]
+                pos = [int(x) / self.ticksPerMicron for x in packet.split(b'\t')]
+                if len(pos) != 3:
+                    raise TypeError(f"Got wrong position length from scientifica controller ({pos})")
+                return pos
             except ValueError:
                 if _tryagain:
                     # packet corruption; clear and try again
