@@ -142,26 +142,25 @@ class ScientificaControlThread:
         fut.set_result(None)
 
     def send_move_command(self):
-            fut = self.current_move
-            speed = fut.kwds['speed']
-            pos = fut.kwds['pos']
-            with self.dev.serial.lock:
-                for i in range(3):
-                    try:
-                        # need to send 3 commands uninterrupted in sequence
-                        if speed is not None:
-                            self.dev.setSpeed(speed)
-                        ticks = [x * self.dev.ticksPerMicron for x in pos]
-                        self.dev.serial.send(b'ABS %d %d %d' % tuple(ticks))
-                        if speed is not None:
-                            self.dev.setSpeed(self.default_speed)
-                    except (TimeoutError, RuntimeError):
-                        if i >= 2:
-                            raise
-                        # ignore and retry
-                        self.dev.serial.flush()
-                    break
-
+        fut = self.current_move
+        speed = fut.kwds['speed']
+        pos = fut.kwds['pos']
+        with self.dev.serial.lock:
+            for i in range(3):
+                try:
+                    # need to send 3 commands uninterrupted in sequence
+                    if speed is not None:
+                        self.dev.setSpeed(speed)
+                    ticks = [x * self.dev.ticksPerMicron for x in pos]
+                    self.dev.serial.send(b'ABS %d %d %d' % tuple(ticks))
+                    if speed is not None:
+                        self.dev.setSpeed(self.default_speed)
+                except (TimeoutError, RuntimeError):
+                    if i >= 2:
+                        raise
+                    # ignore and retry
+                    self.dev.serial.flush()
+                break
 
     def check_position(self, miss_reason=None, recheck=True):
         """Check the current position and move status, and update the current move if necessary.
