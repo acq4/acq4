@@ -30,7 +30,7 @@ class Sonicator(Device):
                 step = kwargs.get("step", 1e3)
                 step_duration = kwargs.get("stepDuration", 100e-3)
                 frequency = start
-                while frequency < stop:
+                while frequency <= stop:
                     _future.waitFor(self.sonicate(frequency, step_duration, lock=False))
                     frequency += step
                 frequency -= step
@@ -40,13 +40,8 @@ class Sonicator(Device):
             else:
                 raise ValueError(f"Unrecognized sonication protocol '{mode}'")
 
-    def isBusy(self) -> bool:
-        available = self.actionLock.acquire(blocking=False)
-        if available:
-            self.actionLock.release()
-        return not available
-
     def sonicate(self, frequency: float, duration: float, lock: bool = True) -> Future:
+        # TODO the use of lock is ugly. can we keep things to a single thread?
         raise NotImplementedError()
 
     def deviceInterface(self, win):
