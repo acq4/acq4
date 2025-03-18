@@ -27,6 +27,21 @@ from ...util.json_encoder import ACQ4JSONEncoder
 CamModTemplate = Qt.importTemplate('.cameraModTemplate')
 
 
+def add_nested_metadata(group, metadata):
+    for key, value in metadata.items():
+        if isinstance(value, dict):
+            subgroup = group.create_group(key)
+            add_nested_metadata(subgroup, value)
+        elif isinstance(value, pg.SRTTransform3D):
+            subgroup = group.create_group(key)
+            add_nested_metadata(subgroup, value.saveState())
+        else:
+            try:
+                group.attrs[key] = value
+            except (ValueError, TypeError):
+                group.attrs[key] = json.dumps(value, cls=ACQ4JSONEncoder)
+
+
 class Pipette(Device, OptomechDevice):
     """Represents a pipette or electrode attached to a motorized manipulator.
 
@@ -246,12 +261,9 @@ class Pipette(Device, OptomechDevice):
             **frame.info(),
         }
         with h5py.File(filename, "w") as fd:
-            dataset = fd.create_dataset("image", data=frame.data(), compression="gzip")
-            for k, v in info.items():
-                try:
-                    dataset.attrs[k] = v
-                except (ValueError, TypeError):
-                    dataset.attrs[k] = json.dumps(v, cls=ACQ4JSONEncoder)
+            fd.create_dataset("image", data=frame.data(), compression="gzip")
+            info_group = fd.create_group("info")
+            add_nested_metadata(info_group, info)
 
     def resetGlobalPosition(self, pos):
         """Set the device transform such that the pipette tip is located at the global position *pos*.
