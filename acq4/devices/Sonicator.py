@@ -1,8 +1,11 @@
 from threading import RLock
 
+import numpy as np
+
+import pyqtgraph as pg
 from acq4.devices.Device import Device
 from acq4.util import Qt
-from acq4.util.future import future_wrap, Future
+from acq4.util.future import future_wrap, Future, FutureButton
 
 
 class Sonicator(Device):
@@ -58,165 +61,156 @@ class SonicatorGUI(Qt.QWidget):
     - Setting custom frequency
     - Visualizing the current sonication waveform
     """
-    
+
     def __init__(self, win, dev):
         Qt.QWidget.__init__(self)
         self.win = win
         self.dev = dev
         self.dev.sigSonicationChanged.connect(self.onSonicationChanged)
-        
+
         self.currentFrequency = 0.0
-        self.activeProtocol = None
-        
+
         self.setupUI()
-        
+
     def setupUI(self):
         """Create and arrange all UI elements"""
         self.layout = Qt.QVBoxLayout()
         self.setLayout(self.layout)
-        
+
         # Protocol controls
         protocolGroup = Qt.QGroupBox("Protocols")
         protocolLayout = Qt.QHBoxLayout()
         protocolGroup.setLayout(protocolLayout)
-        
-        self.cleanBtn = Qt.QPushButton("Clean")
-        self.quickCleanseBtn = Qt.QPushButton("Quick Cleanse")
-        self.expelBtn = Qt.QPushButton("Expel")
-        
-        self.cleanBtn.clicked.connect(lambda: self.runProtocol("clean"))
-        self.quickCleanseBtn.clicked.connect(lambda: self.runProtocol("quick cleanse"))
-        self.expelBtn.clicked.connect(lambda: self.runProtocol("expel"))
-        
+
+        self.cleanBtn = FutureButton(self.runCleanProtocol, "Clean", stoppable=True)
+        self.cleanBtn.sigFinished.connect(self.onProtocolFinished)
         protocolLayout.addWidget(self.cleanBtn)
+
+        self.quickCleanseBtn = FutureButton(self.runQuickCleanseProtocol, "Quick Cleanse", stoppable=True)
+        self.quickCleanseBtn.sigFinished.connect(self.onProtocolFinished)
         protocolLayout.addWidget(self.quickCleanseBtn)
+
+        self.expelBtn = FutureButton(self.runExpelProtocol, "Expel", stoppable=True)
+        self.expelBtn.sigFinished.connect(self.onProtocolFinished)
         protocolLayout.addWidget(self.expelBtn)
-        
+
         # Frequency control
         freqGroup = Qt.QGroupBox("Frequency Control")
         freqLayout = Qt.QFormLayout()
         freqGroup.setLayout(freqLayout)
-        
-        self.freqSpinBox = Qt.QSpinBox()
-        self.freqSpinBox.setRange(40000, 170000)  # 40kHz to 170kHz
-        self.freqSpinBox.setSingleStep(1000)  # 1kHz steps
-        self.freqSpinBox.setValue(150000)  # Default to 150kHz
-        self.freqSpinBox.setSuffix(" Hz")
-        
-        self.sonicateBtn = Qt.QPushButton("Sonicate")
-        self.sonicateBtn.clicked.connect(self.onSonicateClicked)
-        
-        self.durationSpinBox = Qt.QDoubleSpinBox()
-        self.durationSpinBox.setRange(0.1, 10.0)  # 0.1 to 10 seconds
-        self.durationSpinBox.setSingleStep(0.1)
-        self.durationSpinBox.setValue(1.0)
-        self.durationSpinBox.setSuffix(" s")
-        
-        freqLayout.addRow("Frequency:", self.freqSpinBox)
-        freqLayout.addRow("Duration:", self.durationSpinBox)
-        freqLayout.addRow("", self.sonicateBtn)
-        
-        # Status display
-        statusGroup = Qt.QGroupBox("Status")
-        statusLayout = Qt.QFormLayout()
-        statusGroup.setLayout(statusLayout)
-        
-        self.statusLabel = Qt.QLabel("Idle")
-        self.currentFreqLabel = Qt.QLabel("0 Hz")
-        
-        statusLayout.addRow("Status:", self.statusLabel)
-        statusLayout.addRow("Current Frequency:", self.currentFreqLabel)
-        
-        # Waveform visualization
-        waveformGroup = Qt.QGroupBox("Waveform")
-        waveformLayout = Qt.QVBoxLayout()
-        waveformGroup.setLayout(waveformLayout)
-        
-        import pyqtgraph as pg
+
+        self.currentFreqLabel = Qt.QLabel("Idle")
+        freqLayout.addRow("Current Action:", self.currentFreqLabel)
+
         self.waveformPlot = pg.PlotWidget()
-        self.waveformPlot.setMinimumHeight(100)
-        self.waveformPlot.setLabel('left', 'Amplitude')
-        self.waveformPlot.setLabel('bottom', 'Time', 's')
+        self.waveformPlot.setMinimumHeight(80)
+        self.waveformPlot.setInteractive(False)
         self.waveformCurve = self.waveformPlot.plot(pen='y')
-        
+        # freqLayout.addRow(self.waveformPlot)
+
+        self.freqSpinBox = pg.SpinBox(value=150000, siPrefix=True, suffix="Hz", bounds=[40000, 170000], dec=True)
+        freqLayout.addRow("Frequency:", self.freqSpinBox)
+
+        self.durationSpinBox = pg.SpinBox(value=1.0, siPrefix=True, suffix="s", bounds=[1e-6, 10.0], dec=True)
+        freqLayout.addRow("Duration:", self.durationSpinBox)
+
+        self.sonicateBtn = FutureButton(self.onSonicateClicked, "Sonicate")
+        self.sonicateBtn.sigFinished.connect(self.onProtocolFinished)
+        freqLayout.addRow("", self.sonicateBtn)
+
         # Initialize with flat line
         self.updateWaveform(0)
-        
-        waveformLayout.addWidget(self.waveformPlot)
-        
+
         # Add all groups to main layout
         self.layout.addWidget(protocolGroup)
         self.layout.addWidget(freqGroup)
-        self.layout.addWidget(statusGroup)
-        self.layout.addWidget(waveformGroup)
-        
-    def runProtocol(self, protocol):
+
+    def runCleanProtocol(self):
+        return self.runProtocol("clean")
+
+    def runQuickCleanseProtocol(self):
+        return self.runProtocol("quick cleanse")
+
+    def runExpelProtocol(self):
+        return self.runProtocol("expel")
+
+    def runProtocol(self, protocol) -> Future:
         """Run the specified protocol and update UI accordingly"""
-        self.activeProtocol = protocol
         self.updateButtonStates(True, protocol)
-        self.statusLabel.setText(f"Running: {protocol}")
-        
-        # Start the protocol and connect to its completion
-        future = self.dev.doProtocol(protocol)
-        future.addCallback(self.onProtocolFinished)
-        
+        return self.dev.doProtocol(protocol)
+
     def onProtocolFinished(self):
         """Called when a protocol completes"""
-        self.activeProtocol = None
         self.updateButtonStates(False)
-        self.statusLabel.setText("Idle")
-        
+
     def updateButtonStates(self, running, activeProtocol=None):
         """Enable/disable buttons based on current state"""
         self.cleanBtn.setEnabled(not running or activeProtocol == "clean")
         self.quickCleanseBtn.setEnabled(not running or activeProtocol == "quick cleanse")
         self.expelBtn.setEnabled(not running or activeProtocol == "expel")
-        self.sonicateBtn.setEnabled(not running)
+        self.sonicateBtn.setEnabled(not running or activeProtocol == "manual")
         self.freqSpinBox.setEnabled(not running)
         self.durationSpinBox.setEnabled(not running)
-        
+
     def onSonicateClicked(self):
         """Handle manual sonication button click"""
         frequency = self.freqSpinBox.value()
         duration = self.durationSpinBox.value()
-        
-        self.updateButtonStates(True)
-        self.statusLabel.setText(f"Sonicating at {frequency} Hz")
-        
-        future = self.dev.sonicate(frequency, duration)
-        future.addCallback(self.onSonicationFinished)
-        
-    def onSonicationFinished(self):
-        """Called when manual sonication completes"""
-        self.updateButtonStates(False)
-        self.statusLabel.setText("Idle")
-        
+
+        self.updateButtonStates(True, "manual")
+
+        return self.dev.sonicate(frequency, duration)
+
     def onSonicationChanged(self, frequency):
         """Called when the sonication frequency changes"""
         self.currentFrequency = frequency
-        
+
         # Update frequency display with formatted value
         if frequency > 0:
-            from pyqtgraph import siFormat
-            self.currentFreqLabel.setText(siFormat(frequency, suffix='Hz'))
+            self.currentFreqLabel.setText(pg.siFormat(frequency, suffix='Hz'))
         else:
-            self.currentFreqLabel.setText("0 Hz")
-            
+            self.currentFreqLabel.setText("Idle")
+
         # Update waveform visualization
         self.updateWaveform(frequency)
-        
+
     def updateWaveform(self, frequency):
         """Update the waveform visualization based on current frequency"""
-        import numpy as np
-        
         if frequency <= 0:
             # Flat line when not sonicating
             x = np.linspace(0, 0.1, 1000)
             y = np.zeros_like(x)
         else:
             # Simple sine wave visualization
-            period = 1.0 / frequency
-            x = np.linspace(0, min(5 * period, 0.0001), 1000)  # Show 5 cycles or max 0.1ms
+            x = np.linspace(0, 0.0001, 1000)  # Show 0.1ms
             y = np.sin(2 * np.pi * frequency * x)
-            
+
         self.waveformCurve.setData(x, y)
+
+
+if __name__ == "__main__":
+    import sys
+    from unittest.mock import MagicMock
+
+    from acq4.devices.MockSonicator import MockSonicator
+
+
+    class TestWindow(Qt.QtWidgets.QMainWindow):
+        def __init__(self):
+            super().__init__()
+            self.setWindowTitle("Sonicator Test")
+            self.resize(600, 500)
+
+            # Create a mock sonicator device
+            mock_manager = MagicMock()
+            self.sonicator = MockSonicator(mock_manager, dict(), "test_sonicator")
+
+            # Create and set the GUI as central widget
+            self.gui = self.sonicator.deviceInterface(self)
+            self.setCentralWidget(self.gui)
+
+
+    app = Qt.QtWidgets.QApplication(sys.argv)
+    window = TestWindow()
+    window.show()
+    sys.exit(app.exec_())

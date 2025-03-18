@@ -13,6 +13,7 @@ from ..Camera import Camera
 from ..Device import Device
 from ..Pipette import Pipette
 from ..PressureControl import PressureControl
+from ..Sonicator import Sonicator
 
 
 class PatchPipette(Device):
@@ -53,10 +54,9 @@ class PatchPipette(Device):
         self.pipetteDevice: Pipette = deviceManager.getDevice(pipName)
 
         clampName = config.pop('clampDevice', None)
-        if clampName is None:
-            self.clampDevice: Optional[PatchClamp] = None
-        else:
-            self.clampDevice: Optional[PatchClamp] = deviceManager.getDevice(clampName)
+        self.clampDevice: Optional[PatchClamp] = None
+        if clampName is not None:
+            self.clampDevice = deviceManager.getDevice(clampName)
             self.clampDevice.sigStateChanged.connect(self.clampStateChanged)
             self.clampDevice.sigAutoBiasChanged.connect(self._autoBiasChanged)
             self.clampDevice.sigTestPulseFinished.connect(self._testPulseFinished)
@@ -81,6 +81,11 @@ class PatchPipette(Device):
             self.pressureDevice = deviceManager.getDevice(config['pressureDevice'])
             self.pressureDevice.sigPressureChanged.connect(self.pressureChanged)
         self.userPressure = False
+
+        self.sonicatorDevice: Optional[Sonicator] = None
+        if 'sonicatorDevice' in config:
+            self.sonicatorDevice = deviceManager.getDevice(config['sonicatorDevice'])
+            self.sonicatorDevice.sigSonicationChanged.connect(self.sonicationChanged)
 
         self._initStateManager()
 
@@ -228,6 +233,9 @@ class PatchPipette(Device):
     def pressureChanged(self, dev, source, pressure):
         self.sigPressureChanged.emit(self, source, pressure)
         self.emitNewEvent('pressure_changed', OrderedDict([('source', source), ('pressure', pressure)]))
+
+    def sonicationChanged(self, frequency):
+        self.emitNewEvent('sonication_changed', {'frequency': frequency})
 
     def setSelected(self):
         pass
