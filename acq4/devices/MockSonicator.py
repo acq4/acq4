@@ -1,10 +1,12 @@
+import threading
+
 import numpy as np
+import pyaudio
+
 import pyqtgraph as pg
 from acq4.devices.Sonicator import Sonicator
 from acq4.util.future import future_wrap
 from pyqtgraph import siFormat
-import pyaudio
-import threading
 
 
 class MockSonicator(Sonicator):
@@ -14,35 +16,34 @@ class MockSonicator(Sonicator):
         self.stream = None
         self.audio_thread = None
         self.stop_audio = threading.Event()
-        
+
     def map_frequency(self, ultrasonic_freq):
         """Map ultrasonic frequency (40-170kHz) to audible range (100-2000Hz)"""
         # Linear mapping from ultrasonic to audible range
         min_ultrasonic, max_ultrasonic = 40e3, 170e3
         min_audible, max_audible = 100, 2000
-        
+
         # Normalize and map
         normalized = (ultrasonic_freq - min_ultrasonic) / (max_ultrasonic - min_ultrasonic)
-        audible = min_audible + normalized * (max_audible - min_audible)
-        return audible
-        
+        return min_audible + normalized * (max_audible - min_audible)
+
     def audio_callback(self, in_data, frame_count, time_info, status):
         if self.stop_audio.is_set():
-            return (np.zeros(frame_count, dtype=np.float32), pyaudio.paComplete)
-        
+            return np.zeros(frame_count, dtype=np.float32), pyaudio.paComplete
+
         # Generate sine wave at mapped frequency
         t = np.arange(frame_count) / self.sample_rate
         data = 0.5 * np.sin(2 * np.pi * self.audible_freq * t).astype(np.float32)
-        return (data, pyaudio.paContinue)
-    
+        return data, pyaudio.paContinue
+
     def play_sound(self, frequency, duration):
         """Play sound in a separate thread"""
         self.audible_freq = self.map_frequency(frequency)
         self.sample_rate = 44100
-        
+
         # Reset stop flag
         self.stop_audio.clear()
-        
+
         # Open audio stream
         self.stream = self.audio.open(
             format=pyaudio.paFloat32,
@@ -51,10 +52,10 @@ class MockSonicator(Sonicator):
             output=True,
             stream_callback=self.audio_callback
         )
-        
+
         # Start the stream
         self.stream.start_stream()
-        
+
         # Create a timer to stop the sound after duration
         def stop_sound():
             pg.QtCore.QThread.msleep(int(duration * 1000))
@@ -63,29 +64,32 @@ class MockSonicator(Sonicator):
                 self.stream.stop_stream()
                 self.stream.close()
                 self.stream = None
-        
+
         self.audio_thread = threading.Thread(target=stop_sound)
         self.audio_thread.start()
-    
+
     @future_wrap
     def sonicate(self, frequency, duration, lock=True, _future=None):
         if lock:
             self.actionLock.acquire()
         try:
             self.sigSonicationChanged.emit(frequency)
-            print(f"Sonicating at {siFormat(frequency, suffix='Hz')} (audible: {self.map_frequency(frequency):.1f}Hz) for {duration} seconds")
-            
+            print(
+                f"Sonicating at {siFormat(frequency, suffix='Hz')} (audible: "
+                f"{self.map_frequency(frequency):.1f}Hz) for {duration} seconds"
+            )
+
             # Play sound
             self.play_sound(frequency, duration)
-            
+
             # Wait for duration
             _future.sleep(duration)
-            
+
             self.sigSonicationChanged.emit(0.0)
         finally:
             if lock:
                 self.actionLock.release()
-    
+
     def release(self):
         """Clean up audio resources when device is released"""
         if self.stream:
@@ -93,9 +97,9 @@ class MockSonicator(Sonicator):
             self.stream.stop_stream()
             self.stream.close()
             self.stream = None
-        
+
         if self.audio:
             self.audio.terminate()
             self.audio = None
-        
+
         super().release()
