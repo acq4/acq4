@@ -96,7 +96,6 @@ class PipetteControl(Qt.QWidget):
         self.ui.icHoldingSpin.valueChanged.connect(self.icHoldingSpinChanged)
         self.ui.autoBiasTargetSpin.valueChanged.connect(self.autoBiasSpinChanged)
 
-        # self.ui.newPipetteBtn.clicked.connect(self.newPipetteClicked)
         self.ui.newPipetteBtn.setOpts(future_producer=self.newPipetteClicked, stoppable=True)
         self.ui.fouledCheck.stateChanged.connect(self.fouledCheckChanged)
         self.ui.brokenCheck.stateChanged.connect(self.brokenCheckChanged)
@@ -315,7 +314,6 @@ class PipetteControl(Qt.QWidget):
         self.ui.newPipetteBtn.setStyleSheet("QPushButton {border: 2px solid #F00;}")
 
     def newPipetteClicked(self):
-        print("click!")
         self.ui.newPipetteBtn.setStyleSheet("")
         return self.pip.newPipette()
 
