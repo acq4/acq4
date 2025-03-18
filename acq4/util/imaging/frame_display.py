@@ -151,3 +151,4 @@ class FrameDisplay(Qt.QObject):
         self.frameTimer.stop()
         self._imageItem = None
         self.hasQuit = True
+        pg.disconnect(self.sigDrawNewFrame, self._drawFrameInGui)
