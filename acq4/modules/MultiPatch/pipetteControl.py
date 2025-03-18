@@ -96,7 +96,7 @@ class PipetteControl(Qt.QWidget):
         self.ui.icHoldingSpin.valueChanged.connect(self.icHoldingSpinChanged)
         self.ui.autoBiasTargetSpin.valueChanged.connect(self.autoBiasSpinChanged)
 
-        self.ui.newPipetteBtn.clicked.connect(self.newPipetteClicked)
+        self.ui.newPipetteBtn.setOpts(future_producer=self.newPipetteClicked, stoppable=True)
         self.ui.fouledCheck.stateChanged.connect(self.fouledCheckChanged)
         self.ui.brokenCheck.stateChanged.connect(self.brokenCheckChanged)
 
@@ -315,7 +315,7 @@ class PipetteControl(Qt.QWidget):
 
     def newPipetteClicked(self):
         self.ui.newPipetteBtn.setStyleSheet("")
-        self.pip.newPipette()
+        return self.pip.newPipette()
 
     def tipCleanChanged(self, pip, clean):
         with pg.SignalBlock(self.ui.fouledCheck.stateChanged, self.fouledCheckChanged):

@@ -9,7 +9,7 @@ from acq4.util import Qt
 from acq4.util.future import Future, future_wrap
 from acq4.util.image_registration import imageTemplateMatch
 from acq4.util.imaging.sequencer import acquire_z_stack
-from .pipette_detection import TemplateMatchPipetteDetector, ResnetPipetteDetector
+from .pipette_detection import TemplateMatchPipetteDetector
 
 
 class PipetteTracker:
@@ -67,6 +67,7 @@ class ResnetPipetteTracker(PipetteTracker):
         # map pixel offsets back to physical coordinates
         tipPos = frame.mapFromFrameToGlobal(pg.Vector(xyOffset))
 
+
         return (tipPos.x(), tipPos.y(), tipPos.z() + zErr * 1e-6), performance
 
     def estimateOffset(self, img, pipetteAngle):
@@ -84,8 +85,7 @@ class CorrelationPipetteTracker(PipetteTracker):
 
     """
 
-    # detectorClass = TemplateMatchPipetteDetector
-    detectorClass = ResnetPipetteDetector
+    detectorClass = TemplateMatchPipetteDetector
 
     def __init__(self, pipette):
         PipetteTracker.__init__(self, pipette)
