@@ -9,23 +9,25 @@ from acq4.util.future import future_wrap
 from pyqtgraph import siFormat
 
 
+def map_frequency(source_freq, source_min=40e3, source_max=170e3):
+    """Map ultrasonic frequency (40-170kHz) to audible range (100-2000Hz)"""
+    # Linear mapping from ultrasonic to audible range
+    min_audible, max_audible = 100, 2000
+
+    # Normalize and map
+    normalized = (source_freq - source_min) / (source_max - source_min)
+    return min_audible + normalized * (max_audible - min_audible)
+
+
 class MockSonicator(Sonicator):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.audio = pyaudio.PyAudio()
         self.stream = None
+        self.sample_rate = 44100
+        self.audible_freq = 0.0
         self.audio_thread = None
         self.stop_audio = threading.Event()
-
-    def map_frequency(self, ultrasonic_freq):
-        """Map ultrasonic frequency (40-170kHz) to audible range (100-2000Hz)"""
-        # Linear mapping from ultrasonic to audible range
-        min_ultrasonic, max_ultrasonic = 40e3, 170e3
-        min_audible, max_audible = 100, 2000
-
-        # Normalize and map
-        normalized = (ultrasonic_freq - min_ultrasonic) / (max_ultrasonic - min_ultrasonic)
-        return min_audible + normalized * (max_audible - min_audible)
 
     def audio_callback(self, in_data, frame_count, time_info, status):
         if self.stop_audio.is_set():
@@ -38,8 +40,7 @@ class MockSonicator(Sonicator):
 
     def play_sound(self, frequency, duration):
         """Play sound in a separate thread"""
-        self.audible_freq = self.map_frequency(frequency)
-        self.sample_rate = 44100
+        self.audible_freq = map_frequency(frequency)
 
         # Reset stop flag
         self.stop_audio.clear()
@@ -76,7 +77,7 @@ class MockSonicator(Sonicator):
             self.sigSonicationChanged.emit(frequency)
             print(
                 f"Sonicating at {siFormat(frequency, suffix='Hz')} (audible: "
-                f"{self.map_frequency(frequency):.1f}Hz) for {duration} seconds"
+                f"{map_frequency(frequency):.1f}Hz) for {duration} seconds"
             )
 
             # Play sound
@@ -90,8 +91,7 @@ class MockSonicator(Sonicator):
             if lock:
                 self.actionLock.release()
 
-    def release(self):
-        """Clean up audio resources when device is released"""
+    def quit(self):
         if self.stream:
             self.stop_audio.set()
             self.stream.stop_stream()
@@ -102,4 +102,4 @@ class MockSonicator(Sonicator):
             self.audio.terminate()
             self.audio = None
 
-        super().release()
+        super().quit()
