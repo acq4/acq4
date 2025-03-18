@@ -94,7 +94,7 @@ def detect_pipette_tip(frame: Frame, angle: float, _future: Future) -> tuple[flo
         rmt_array = rmt_process.client.transfer(shared_array)
         rmt_this = rmt_process.client._import("acq4.util.imaging.object_detection")
         _future.checkStop()
-        return rmt_this.do_pipette_tip_detection(rmt_array.data, angle, _timeout=60)
+        return rmt_this.do_pipette_tip_detection(rmt_array.data, angle, _timeout=600)
 
 
 _pipette_detection_model = None
@@ -298,22 +298,29 @@ def do_neuron_detection(
         raise ValueError(f"Unknown model {model}")
 
 
+_classifier = None
+_autoencoder = None
+
+
 def _do_healthy_neuron_detection(
     data: np.ndarray, transform, classifier, autoencoder, diameter, xy_scale, z_scale, n: int = 10
 ):
+    global _classifier, _autoencoder
     from acq4.util.healthy_cell_detector.train_nn_classifier import get_health_ordered_cells, load_classifier as nn_load
     from acq4.util.healthy_cell_detector.train_rf_classifier import load_classifier as rf_load
     from acq4.util.healthy_cell_detector.models import NeuronAutoencoder
     import torch
 
-    try:
-        classifier = nn_load(classifier)
-        classifier.model.eval()
-    except (AttributeError, UnpicklingError):
-        classifier = rf_load(classifier)
-    autoencoder = NeuronAutoencoder.load(autoencoder).to("cuda" if torch.cuda.is_available() else "cpu")
-    autoencoder.eval()
-    cells = get_health_ordered_cells(data, classifier, autoencoder, diameter, xy_scale, z_scale)
+    if _classifier is None:
+        try:
+            _classifier = nn_load(classifier)
+            _classifier.model.eval()
+        except (AttributeError, UnpicklingError):
+            _classifier = rf_load(classifier)
+    if _autoencoder is None:
+        _autoencoder = NeuronAutoencoder.load(autoencoder).to("cuda" if torch.cuda.is_available() else "cpu")
+        _autoencoder.eval()
+    cells = get_health_ordered_cells(data, _classifier, _autoencoder, diameter, xy_scale, z_scale)
     return [
         (transform.map(center[::-1] - (31, 31, 10)), transform.map(center[::-1] + (31, 31, 10)))
         for center in cells[:n]
