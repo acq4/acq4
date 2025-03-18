@@ -18,6 +18,9 @@ class ThorlabsDC4100(LightSource):
     def setSourceActive(self, source, active):
         chan = self._sourceChannel(source)
         self.dev.set_led_channel_state(chan, active)
+        self.sourceConfigs[source]['active'] = active
+        self._updateXkeyLight(source)
+        self.sigLightChanged.emit(self, source)
 
     def sourceActive(self, source):
         chan = self._sourceChannel(source)
