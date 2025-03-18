@@ -1,12 +1,11 @@
 from collections import OrderedDict
+from typing import Optional
 
 import numpy as np
-from typing import Optional
 
 from acq4.devices.PatchClamp.patchclamp import PatchClamp
 from acq4.util import Qt
 from acq4.util import ptime
-from acq4.util.Mutex import Mutex
 from neuroanalysis.test_pulse import PatchClampTestPulse
 from .devgui import PatchPipetteDeviceGui
 from .statemanager import PatchPipetteStateManager
