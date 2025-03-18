@@ -23,7 +23,7 @@ class Sonicator(Device):
             if mode in {"clean", "expel"}:
                 duration = kwargs.get("duration", 5 if mode == "clean" else 1)
                 frequency = kwargs.get("frequency", 150e3)
-                _future.waitFor(self.sonicate(frequency, duration))
+                _future.waitFor(self.sonicate(frequency, duration, lock=False))
             elif mode == "quick cleanse":
                 start = kwargs.get("start", 140e3)
                 stop = kwargs.get("stop", 154e3)
@@ -31,11 +31,11 @@ class Sonicator(Device):
                 step_duration = kwargs.get("stepDuration", 100e-3)
                 frequency = start
                 while frequency < stop:
-                    _future.waitFor(self.sonicate(frequency, step_duration))
+                    _future.waitFor(self.sonicate(frequency, step_duration, lock=False))
                     frequency += step
                 frequency -= step
                 while frequency > start:
-                    _future.waitFor(self.sonicate(frequency, step_duration))
+                    _future.waitFor(self.sonicate(frequency, step_duration, lock=False))
                     frequency -= step
             else:
                 raise ValueError(f"Unrecognized sonication protocol '{mode}'")
@@ -46,7 +46,7 @@ class Sonicator(Device):
             self.actionLock.release()
         return not available
 
-    def sonicate(self, frequency: float, duration: float) -> Future:
+    def sonicate(self, frequency: float, duration: float, lock: bool = True) -> Future:
         raise NotImplementedError()
 
     def deviceInterface(self, win):
@@ -59,7 +59,7 @@ class SonicatorGUI(Qt.QWidget):
     Provides controls for:
     - Running predefined protocols (Clean, Quick Cleanse, Expel)
     - Setting custom frequency
-    - Visualizing the current sonication waveform
+    - (disabled) Visualizing the current sonication waveform
     """
 
     def __init__(self, win, dev):
@@ -95,18 +95,19 @@ class SonicatorGUI(Qt.QWidget):
         protocolLayout.addWidget(self.expelBtn)
 
         # Frequency control
-        freqGroup = Qt.QGroupBox("Frequency Control")
+        freqGroup = Qt.QGroupBox("Manual Control")
         freqLayout = Qt.QFormLayout()
         freqGroup.setLayout(freqLayout)
 
         self.currentFreqLabel = Qt.QLabel("Idle")
         freqLayout.addRow("Current Action:", self.currentFreqLabel)
 
-        self.waveformPlot = pg.PlotWidget()
-        self.waveformPlot.setMinimumHeight(80)
-        self.waveformPlot.setInteractive(False)
-        self.waveformCurve = self.waveformPlot.plot(pen='y')
+        # self.waveformPlot = pg.PlotWidget()
+        # self.waveformPlot.setMinimumHeight(80)
+        # self.waveformPlot.setInteractive(False)
+        # self.waveformCurve = self.waveformPlot.plot(pen='y')
         # freqLayout.addRow(self.waveformPlot)
+        # self.updateWaveform(0)
 
         self.freqSpinBox = pg.SpinBox(value=150000, siPrefix=True, suffix="Hz", bounds=[40000, 170000], dec=True)
         freqLayout.addRow("Frequency:", self.freqSpinBox)
@@ -114,12 +115,9 @@ class SonicatorGUI(Qt.QWidget):
         self.durationSpinBox = pg.SpinBox(value=1.0, siPrefix=True, suffix="s", bounds=[1e-6, 10.0], dec=True)
         freqLayout.addRow("Duration:", self.durationSpinBox)
 
-        self.sonicateBtn = FutureButton(self.onSonicateClicked, "Sonicate")
+        self.sonicateBtn = FutureButton(self.runManualSonication, "Sonicate")
         self.sonicateBtn.sigFinished.connect(self.onProtocolFinished)
         freqLayout.addRow("", self.sonicateBtn)
-
-        # Initialize with flat line
-        self.updateWaveform(0)
 
         # Add all groups to main layout
         self.layout.addWidget(protocolGroup)
@@ -149,10 +147,8 @@ class SonicatorGUI(Qt.QWidget):
         self.quickCleanseBtn.setEnabled(not running or activeProtocol == "quick cleanse")
         self.expelBtn.setEnabled(not running or activeProtocol == "expel")
         self.sonicateBtn.setEnabled(not running or activeProtocol == "manual")
-        self.freqSpinBox.setEnabled(not running)
-        self.durationSpinBox.setEnabled(not running)
 
-    def onSonicateClicked(self):
+    def runManualSonication(self):
         """Handle manual sonication button click"""
         frequency = self.freqSpinBox.value()
         duration = self.durationSpinBox.value()
@@ -172,20 +168,20 @@ class SonicatorGUI(Qt.QWidget):
             self.currentFreqLabel.setText("Idle")
 
         # Update waveform visualization
-        self.updateWaveform(frequency)
+        # self.updateWaveform(frequency)
 
-    def updateWaveform(self, frequency):
-        """Update the waveform visualization based on current frequency"""
-        if frequency <= 0:
-            # Flat line when not sonicating
-            x = np.linspace(0, 0.1, 1000)
-            y = np.zeros_like(x)
-        else:
-            # Simple sine wave visualization
-            x = np.linspace(0, 0.0001, 1000)  # Show 0.1ms
-            y = np.sin(2 * np.pi * frequency * x)
-
-        self.waveformCurve.setData(x, y)
+    # def updateWaveform(self, frequency):
+    #     """Update the waveform visualization based on current frequency"""
+    #     if frequency <= 0:
+    #         # Flat line when not sonicating
+    #         x = np.linspace(0, 0.1, 1000)
+    #         y = np.zeros_like(x)
+    #     else:
+    #         # Simple sine wave visualization
+    #         x = np.linspace(0, 0.0001, 1000)  # Show 0.1ms
+    #         y = np.sin(2 * np.pi * frequency * x)
+    #
+    #     self.waveformCurve.setData(x, y)
 
 
 if __name__ == "__main__":
