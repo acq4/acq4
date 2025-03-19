@@ -37,8 +37,9 @@ class DAQSonicator(Sonicator):
         if "digital" in config:
             daq_conf["channels"]["digital"] = config["digital"]
         self._daq = DAQGeneric(
-            name=f"__sonicator{self.name()}DAQ",
+            deviceManager,
             config=daq_conf,
+            name=f"__sonicator{self.name()}DAQ",
         )
 
     @future_wrap
