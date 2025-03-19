@@ -1,6 +1,7 @@
 import numpy as np
 
 from acq4.devices.DAQGeneric import DAQGeneric
+from acq4.devices.NiDAQ import NiDAQ
 from acq4.devices.Sonicator import Sonicator
 from acq4.util.future import Future, future_wrap
 from neuroanalysis.stimuli import Sine
@@ -19,7 +20,7 @@ class DAQSonicator(Sonicator):
         output (default 3.9 V/μs).
     analog : dict
         The config of the analog output channel. This controls the voltage output to the sonicator.
-    digital : dict
+    digital : dict (optional)
         The config of the digital output channel. This controls the power to the sonicator.
     """
 
@@ -27,14 +28,16 @@ class DAQSonicator(Sonicator):
         super().__init__(*args, **kwargs)
         self._capacitance = self.config.get("capacitance", 65 * nF)
         self._maxSlewRate = self.config.get("max slew rate", 3.9 * V / µs)
+        daq_conf = {
+            "channels": {
+                "analog": self.config["analog"],
+            },
+        }
+        if "digital" in self.config:
+            daq_conf["channels"]["digital"] = self.config["digital"]
         self._daq = DAQGeneric(
             name=f"__sonicator{self.name()}DAQ",
-            config={
-                "channels": {
-                    "analog": self.config["analog"],
-                    "digital": self.config["digital"],
-                },
-            },
+            config=daq_conf,
         )
 
     @future_wrap
@@ -46,18 +49,20 @@ class DAQSonicator(Sonicator):
             voltage = self.calcVoltage(frequency)
             wave = Sine(0, duration, frequency, voltage).eval(sample_rate=self._daq.sampleRate).data
             numPts = len(wave)
+            daq_name = self._daq.getDAQName("analog")
+            daq: NiDAQ = self.dm.getDevice(daq_name)
             cmd = {
                 "protocol": {"duration": duration},
-                self._daq.getDAQName("analog"): {
-                    "rate": 500_000,
+                daq_name: {
+                    "rate": daq.n.getDevAIMaxSingleChanRate(),
                     "numPts": numPts,
                 },
                 self._daq.name(): {
                     "analog": {"command": wave},
-                    "digital": {"command": np.ones(numPts)},
                 },
             }
-
+            if self._daq.hasChannel("digital"):
+                cmd[self._daq.name()]["digital"] = {"command": np.ones(numPts)}
             task = self.dm.createTask(cmd)
             _future.checkStop()
             task.execute()
