@@ -103,3 +103,28 @@ class MockSonicator(Sonicator):
             self.audio = None
 
         super().quit()
+
+
+if __name__ == "__main__":
+    import sys
+    from unittest.mock import MagicMock
+    from acq4.util import Qt
+
+    class TestWindow(Qt.QtWidgets.QMainWindow):
+        def __init__(self):
+            super().__init__()
+            self.setWindowTitle("Sonicator Test")
+            self.resize(600, 500)
+
+            # Create a mock sonicator device
+            mock_manager = MagicMock()
+            self.sonicator = MockSonicator(mock_manager, dict(), "test_sonicator")
+
+            # Create and set the GUI as central widget
+            self.gui = self.sonicator.deviceInterface(self)
+            self.setCentralWidget(self.gui)
+
+    app = Qt.QtWidgets.QApplication(sys.argv)
+    window = TestWindow()
+    window.show()
+    sys.exit(app.exec_())
