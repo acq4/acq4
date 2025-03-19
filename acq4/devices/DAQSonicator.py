@@ -53,7 +53,7 @@ class DAQSonicator(Sonicator):
             # sample_rate = daq.n.GetDevAIMaxSingleChanRate()
             sample_rate = 1_000_000
             voltage = self.calcVoltage(frequency)
-            wave = Sine(0, duration, frequency, voltage).eval(sample_rate=sample_rate).data
+            wave = Sine(0, duration, frequency, voltage).eval(n_pts=duration * sample_rate, sample_rate=sample_rate).data
             numPts = len(wave)
             cmd = {
                 "protocol": {"duration": duration},
