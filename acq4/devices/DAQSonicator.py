@@ -24,17 +24,18 @@ class DAQSonicator(Sonicator):
         The config of the digital output channel. This controls the power to the sonicator.
     """
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._capacitance = self.config.get("capacitance", 65 * nF)
-        self._maxSlewRate = self.config.get("max slew rate", 3.9 * V / µs)
+    def __init__(self, deviceManager, config: dict, name: str):
+        super().__init__(deviceManager, config, name)
+        self.config = config
+        self._capacitance = config.get("capacitance", 65 * nF)
+        self._maxSlewRate = config.get("max slew rate", 3.9 * V / µs)
         daq_conf = {
             "channels": {
-                "analog": self.config["analog"],
+                "analog": config["analog"],
             },
         }
-        if "digital" in self.config:
-            daq_conf["channels"]["digital"] = self.config["digital"]
+        if "digital" in config:
+            daq_conf["channels"]["digital"] = config["digital"]
         self._daq = DAQGeneric(
             name=f"__sonicator{self.name()}DAQ",
             config=daq_conf,
