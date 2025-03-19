@@ -50,7 +50,8 @@ class DAQSonicator(Sonicator):
             # Calculate the voltage required to hit the desired frequency
             daq_name = self._daq.getDAQName("analog")
             daq: NiDAQ = self.dm.getDevice(daq_name)
-            sample_rate = daq.n.getDevAIMaxSingleChanRate()
+            # sample_rate = daq.n.GetDevAIMaxSingleChanRate()
+            sample_rate = 1_000_000
             voltage = self.calcVoltage(frequency)
             wave = Sine(0, duration, frequency, voltage).eval(sample_rate=sample_rate).data
             numPts = len(wave)
