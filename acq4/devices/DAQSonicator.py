@@ -76,8 +76,8 @@ class DAQSonicator(Sonicator):
                 except Exception:
                     task.abort()
                     raise
-            self.sigSonicationChanged.emit(0)
         finally:
+            self.sigSonicationChanged.emit(0)
             if lock:
                 self.actionLock.release()
 

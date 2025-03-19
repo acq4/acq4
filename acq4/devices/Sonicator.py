@@ -25,6 +25,7 @@ class Sonicator(Device):
                 frequency = kwargs.get("frequency", 150e3)
                 _future.waitFor(self.sonicate(frequency, duration, lock=False))
             elif mode == "quick cleanse":
+                # TODO implement this as a chirp so we can get rid of the actionLock and thread shenanigans
                 start = kwargs.get("start", 140e3)
                 stop = kwargs.get("stop", 154e3)
                 step = kwargs.get("step", 1e3)
