@@ -22,6 +22,7 @@ from .planners import defaultMotionPlanners, PipettePathGenerator
 from .tracker import ResnetPipetteTracker
 from ..Camera import Camera
 from ..RecordingChamber import RecordingChamber
+from ...util.imaging.sequencer import acquire_z_stack
 from ...util.json_encoder import ACQ4JSONEncoder
 
 CamModTemplate = Qt.importTemplate('.cameraModTemplate')
@@ -246,10 +247,14 @@ class Pipette(Device, OptomechDevice):
         self._camInterfaces[iface] = None
         return iface
 
-    def saveManualCalibration(self):
+    @future_wrap
+    def saveManualCalibration(self, _future):
         cam: Camera = self.imagingDevice()
-        with cam.ensureRunning():
-            frame = cam.acquireFrames(1, ensureFreshFrames=True).getResult()[0]
+        depth = cam.getFocusDepth()
+        is_below_surface = depth <= self.scopeDevice().getSurfaceDepth()
+        scan_dist = np.random.randint(2, 40 if is_below_surface else 100) * 1e-6
+        step = scan_dist / 2
+        z_stack = _future.waitFor(acquire_z_stack(cam, depth - scan_dist, depth + scan_dist, step)).getResult()
         path = os.path.join(self.configPath(), "manual-calibrations")
         path = self.dm.configFileName(path)
         os.makedirs(path, exist_ok=True)
@@ -257,13 +262,15 @@ class Pipette(Device, OptomechDevice):
         filename = os.path.join(path, filename)
         info = {
             "pipette offset": self.offset.tolist(),
-            "position": frame.globalPosition.tolist(),
-            **frame.info(),
         }
         with h5py.File(filename, "w") as fd:
-            fd.create_dataset("image", data=frame.data(), compression="gzip")
-            info_group = fd.create_group("info")
-            add_nested_metadata(info_group, info)
+            # info_group = fd.create_group("info")
+            add_nested_metadata(fd, info)
+            for i, frame in enumerate(z_stack):
+                frame_info = {"position": frame.globalPosition.tolist(), **frame.info()}
+                frame_group = fd.create_group(f"z-stack/{i}")
+                add_nested_metadata(frame_group, frame_info)
+                frame_group.create_dataset("image", data=frame.data(), compression="gzip")
 
     def resetGlobalPosition(self, pos):
         """Set the device transform such that the pipette tip is located at the global position *pos*.

@@ -409,7 +409,7 @@ class MultiPatchWindow(Qt.QWidget):
         pos = [pos.x(), pos.y(), spos.z()]
         pip.resetGlobalPosition(pos)
         if self._shouldSaveCalibrationImages:
-            pip.saveManualCalibration()
+            pip.saveManualCalibration().raiseErrors("Failed to save calibration images")
 
         # if calibration stage positions were requested, then move the stage now
         if len(self._calibrateStagePositions) > 0:
