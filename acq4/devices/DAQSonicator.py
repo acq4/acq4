@@ -65,7 +65,7 @@ class DAQSonicator(Sonicator):
                     "analog": {"command": wave},
                 },
             }
-            if self._daq.hasChannel("digital"):
+            if "digital" in self.config:
                 cmd[self._daq.name()]["digital"] = {"command": np.ones(numPts)}
             task = self.dm.createTask(cmd)
             _future.checkStop()
