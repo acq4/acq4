@@ -48,15 +48,16 @@ class DAQSonicator(Sonicator):
             self.actionLock.acquire()
         try:
             # Calculate the voltage required to hit the desired frequency
-            voltage = self.calcVoltage(frequency)
-            wave = Sine(0, duration, frequency, voltage).eval(sample_rate=self._daq.sampleRate).data
-            numPts = len(wave)
             daq_name = self._daq.getDAQName("analog")
             daq: NiDAQ = self.dm.getDevice(daq_name)
+            sample_rate = daq.n.getDevAIMaxSingleChanRate()
+            voltage = self.calcVoltage(frequency)
+            wave = Sine(0, duration, frequency, voltage).eval(sample_rate=sample_rate).data
+            numPts = len(wave)
             cmd = {
                 "protocol": {"duration": duration},
                 daq_name: {
-                    "rate": daq.n.getDevAIMaxSingleChanRate(),
+                    "rate": sample_rate,
                     "numPts": numPts,
                 },
                 self._daq.name(): {
