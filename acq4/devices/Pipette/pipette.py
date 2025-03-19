@@ -1,8 +1,11 @@
 import contextlib
 import json
+import os
 import weakref
+from datetime import datetime
 from typing import List
 
+import h5py
 import numpy as np
 
 import pyqtgraph as pg
@@ -12,15 +15,32 @@ from acq4.devices.OptomechDevice import OptomechDevice
 from acq4.devices.Stage import Stage, MovePathFuture
 from acq4.modules.Camera import CameraModuleInterface
 from acq4.util import Qt, ptime
-from acq4.util.HelpfulException import HelpfulException
 from acq4.util.future import future_wrap
 from acq4.util.target import Target
 from pyqtgraph import Point
 from .planners import defaultMotionPlanners, PipettePathGenerator
 from .tracker import ResnetPipetteTracker
+from ..Camera import Camera
 from ..RecordingChamber import RecordingChamber
+from ...util.imaging.sequencer import acquire_z_stack
+from ...util.json_encoder import ACQ4JSONEncoder
 
 CamModTemplate = Qt.importTemplate('.cameraModTemplate')
+
+
+def add_nested_metadata(group, metadata):
+    for key, value in metadata.items():
+        if isinstance(value, dict):
+            subgroup = group.create_group(key)
+            add_nested_metadata(subgroup, value)
+        elif isinstance(value, pg.SRTTransform3D):
+            subgroup = group.create_group(key)
+            add_nested_metadata(subgroup, value.saveState())
+        else:
+            try:
+                group.attrs[key] = value
+            except (ValueError, TypeError):
+                group.attrs[key] = json.dumps(value, cls=ACQ4JSONEncoder)
 
 
 class Pipette(Device, OptomechDevice):
@@ -41,12 +61,12 @@ class Pipette(Device, OptomechDevice):
 
     * pitch: The angle of the pipette (in degrees) relative to the horizontal plane.
       Positive values point downward. This option must be specified in the configuration.
-      If the value 'auto' is given, then the pitch is derived from the parent manipulator's X axis 
+      If the value 'auto' is given, then the pitch is derived from the parent manipulator's X axis
       (or other specified by parentAutoAxis) pitch.
     * yaw: The angle of the pipette (in degrees) relative to the global +X axis (points to the operator's right
       when facing the microscope).
       Positive values are clockwise from global +X. This option must be specified in the configuration.
-      If the value 'auto' is given, then the yaw is derived from the parent manipulator's X axis 
+      If the value 'auto' is given, then the yaw is derived from the parent manipulator's X axis
       (or other specified by parentAutoAxis) yaw.
     * parentAutoAxis: One of '+x' (default), '-x', '+y', '-y', '+z', or '-z' indicating the axis and direction in the
       parent manipulator's coordinate system that points along the pipette and toward the tip. This axis
@@ -59,7 +79,7 @@ class Pipette(Device, OptomechDevice):
       when searching for new pipette tips. For low working-distance objectives, this should be about 0.5 mm less
       than *searchHeight* to avoid collisions between the tip and the objective during search.
       Default is 1.5 mm.
-    * approachHeight: the distance to bring the pipette tip above the sample surface when beginning 
+    * approachHeight: the distance to bring the pipette tip above the sample surface when beginning
       a diagonal approach. Default is 100 um.
     * idleHeight: the distance to bring the pipette tip above the sample surface when in idle position
       Default is 1 mm.
@@ -119,7 +139,7 @@ class Pipette(Device, OptomechDevice):
         self._globalDirection = None
         self._localDirection = None
 
-        # timer used to emit sigMoveFinished when no motion is detected for a certain period 
+        # timer used to emit sigMoveFinished when no motion is detected for a certain period
         self.moveTimer = Qt.QTimer()
         self.moveTimer.timeout.connect(self.positionChangeFinished)
         self.sigGlobalTransformChanged.connect(self.positionChanged)
@@ -197,7 +217,7 @@ class Pipette(Device, OptomechDevice):
             self._scopeDev = imdev.scopeDev
         return self._scopeDev
 
-    def imagingDevice(self):
+    def imagingDevice(self) -> Camera:
         if self._imagingDev is None:
             man = getManager()
             name = self.config.get('imagingDevice', None)
@@ -226,6 +246,36 @@ class Pipette(Device, OptomechDevice):
         iface = PipetteCamModInterface(self, mod, showUi=self._opts['showCameraModuleUI'])
         self._camInterfaces[iface] = None
         return iface
+
+    @future_wrap
+    def saveManualCalibration(self, _future):
+        cam: Camera = self.imagingDevice()
+        depth = cam.getFocusDepth()
+        is_below_surface = depth <= self.scopeDevice().getSurfaceDepth()
+        scan_dist = np.random.randint(2, 40 if is_below_surface else 100) * 1e-6
+        step = scan_dist / 2
+        try:
+            z_stack = _future.waitFor(
+                acquire_z_stack(cam, depth - scan_dist, depth + scan_dist, step)
+            ).getResult()
+        finally:
+            _future.waitFor(cam.setFocusDepth(depth))
+        path = os.path.join(self.configPath(), "manual-calibrations")
+        path = self.dm.configFileName(path)
+        os.makedirs(path, exist_ok=True)
+        filename = f"calibration-{datetime.now().strftime('%Y%m%dT%H%M%S')}"
+        filename = os.path.join(path, filename)
+        info = {
+            "pipette offset": self.offset.tolist(),
+        }
+        with h5py.File(filename, "w") as fd:
+            # info_group = fd.create_group("info")
+            add_nested_metadata(fd, info)
+            for i, frame in enumerate(z_stack):
+                frame_info = {"position": frame.globalPosition.tolist(), **frame.info()}
+                frame_group = fd.create_group(f"z-stack/{i}")
+                add_nested_metadata(frame_group, frame_info)
+                frame_group.create_dataset("image", data=frame.data(), compression="gzip")
 
     def resetGlobalPosition(self, pos):
         """Set the device transform such that the pipette tip is located at the global position *pos*.
