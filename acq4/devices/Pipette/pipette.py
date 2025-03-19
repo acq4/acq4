@@ -254,7 +254,12 @@ class Pipette(Device, OptomechDevice):
         is_below_surface = depth <= self.scopeDevice().getSurfaceDepth()
         scan_dist = np.random.randint(2, 40 if is_below_surface else 100) * 1e-6
         step = scan_dist / 2
-        z_stack = _future.waitFor(acquire_z_stack(cam, depth - scan_dist, depth + scan_dist, step)).getResult()
+        try:
+            z_stack = _future.waitFor(
+                acquire_z_stack(cam, depth - scan_dist, depth + scan_dist, step)
+            ).getResult()
+        finally:
+            _future.waitFor(cam.setFocusDepth(depth))
         path = os.path.join(self.configPath(), "manual-calibrations")
         path = self.dm.configFileName(path)
         os.makedirs(path, exist_ok=True)
