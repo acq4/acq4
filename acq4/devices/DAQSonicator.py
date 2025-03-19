@@ -68,8 +68,15 @@ class DAQSonicator(Sonicator):
             if "digital" in self.config:
                 cmd[self._daq.name()]["digital"] = {"command": np.ones(numPts)}
             task = self.dm.createTask(cmd)
-            _future.checkStop()
-            task.execute()
+            self.sigSonicationChanged.emit(frequency)
+            task.execute(block=False, processEvents=False)
+            while not task.isDone():
+                try:
+                    _future.sleep(0.1)
+                except Exception:
+                    task.abort()
+                    raise
+            self.sigSonicationChanged.emit(0)
         finally:
             if lock:
                 self.actionLock.release()
