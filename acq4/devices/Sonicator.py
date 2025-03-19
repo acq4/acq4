@@ -78,14 +78,17 @@ class SonicatorGUI(Qt.QWidget):
         protocolGroup.setLayout(protocolLayout)
 
         self.cleanBtn = FutureButton(self.runCleanProtocol, "Clean", stoppable=True)
+        self.cleanBtn.setToolTip("5s of 150kHz sonication")
         self.cleanBtn.sigFinished.connect(self.onProtocolFinished)
         protocolLayout.addWidget(self.cleanBtn)
 
         self.quickCleanseBtn = FutureButton(self.runQuickCleanseProtocol, "Quick Cleanse", stoppable=True)
+        self.quickCleanseBtn.setToolTip("Sweep from 140kHz to 154kHz and back in 1kHz/100ms steps")
         self.quickCleanseBtn.sigFinished.connect(self.onProtocolFinished)
         protocolLayout.addWidget(self.quickCleanseBtn)
 
         self.expelBtn = FutureButton(self.runExpelProtocol, "Expel", stoppable=True)
+        self.expelBtn.setToolTip("1s of 150kHz sonication")
         self.expelBtn.sigFinished.connect(self.onProtocolFinished)
         protocolLayout.addWidget(self.expelBtn)
 
