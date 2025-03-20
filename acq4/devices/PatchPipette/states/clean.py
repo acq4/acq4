@@ -103,7 +103,7 @@ class CleanState(PatchPipetteState):
 
             self.resetPosition()
             if sonication is not None:
-                sonication.wait()
+                self.waitFor(sonication)
 
         dev.pipetteRecord()['cleanCount'] += 1
         dev.setTipClean(True)

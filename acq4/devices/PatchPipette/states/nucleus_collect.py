@@ -66,7 +66,7 @@ class NucleusCollectState(PatchPipetteState):
             self.checkStop(delay)
 
         if sonication is not None:
-            sonication.wait()
+            self.waitFor(sonication)
 
         dev.pipetteRecord()['expelled_nucleus'] = True
         return 'out'
