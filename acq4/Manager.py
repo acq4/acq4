@@ -1086,8 +1086,6 @@ class Task:
                 t = ptime.time()
                 if self.startTime is None or t - self.startTime < self.cfg['duration']:
                     return False
-                # else:
-            # else:
             d = self._tasksDone()
             self._done = d
             return d
