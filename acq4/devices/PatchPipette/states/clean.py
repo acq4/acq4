@@ -93,14 +93,17 @@ class CleanState(PatchPipetteState):
             # and stop moving as soon as the fluid is detected
             self.waitFor(self.currentFuture, timeout=None)
 
+            sonication = None
             if dev.sonicatorDevice is not None:
-                dev.sonicatorDevice.doProtocol(config['sonicationProtocol']).raiseErrors("Error sonicating pipette")
+                sonication = dev.sonicatorDevice.doProtocol(config['sonicationProtocol'])
 
             for pressure, delay in sequence:
                 dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
                 self.checkStop(delay)
 
             self.resetPosition()
+            if sonication is not None:
+                sonication.wait()
 
         dev.pipetteRecord()['cleanCount'] += 1
         dev.setTipClean(True)

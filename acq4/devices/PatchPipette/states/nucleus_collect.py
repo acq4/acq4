@@ -53,8 +53,9 @@ class NucleusCollectState(PatchPipetteState):
         # self.waitFor([pip._moveToGlobal(self.approachPos, speed='fast')])
         self.waitFor(pip._moveToGlobal(self.collectionPos, speed='fast'), timeout=None)
 
+        sonication = None
         if dev.sonicatorDevice is not None:
-            dev.sonicatorDevice.doProtocol(config['sonicationProtocol']).raiseErrors("Error sonicating pipette")
+            sonication = dev.sonicatorDevice.doProtocol(config['sonicationProtocol'])
 
         sequence = config['pressureSequence']
         if isinstance(sequence, str):
@@ -63,6 +64,9 @@ class NucleusCollectState(PatchPipetteState):
         for pressure, delay in sequence:
             dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
             self.checkStop(delay)
+
+        if sonication is not None:
+            sonication.wait()
 
         dev.pipetteRecord()['expelled_nucleus'] = True
         return 'out'
