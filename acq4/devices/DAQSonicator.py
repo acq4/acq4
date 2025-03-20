@@ -109,7 +109,7 @@ class DAQSonicator(Sonicator):
             },
         }
         if "digital" in self.config:
-            cmd[self._daq.name()]["digital"] = {"command": np.ones(numPts)}
+            cmd[self._daq.name()]["digital"] = {"holding": 1}
         task = self.dm.createTask(cmd)
         task.execute(block=False, processEvents=False)
         while not task.isDone():
