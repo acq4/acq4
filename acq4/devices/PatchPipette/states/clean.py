@@ -21,6 +21,9 @@ class CleanState(PatchPipetteState):
     approachHeight : float
         Distance (m) above the clean/rinse wells to approach from. This is needed to ensure the pipette avoids the well
         walls when approaching.
+    sonicationProtocol : str
+        Protocol to use for sonication (default "clean"), or if supported, the full protocol definition for a custom
+        protocol.
     """
     stateName = 'clean'
 
@@ -36,6 +39,7 @@ class CleanState(PatchPipetteState):
         'cleanSequence': {'type': 'str', 'default': "[(-35e3, 1.0), (100e3, 1.0)] * 5"},  # TODO
         'rinseSequence': {'type': 'str', 'default': "[(-35e3, 3.0), (100e3, 10.0)]"},  # TODO
         'approachHeight': {'type': 'float', 'default': 5e-3, 'suffix': 'm'},
+        'sonicationProtocol': {'type': 'str', 'default': 'clean'},
     }
 
     def __init__(self, *args, **kwds):
@@ -97,11 +101,17 @@ class CleanState(PatchPipetteState):
             # and stop moving as soon as the fluid is detected
             self.waitFor(self.currentFuture, timeout=None)
 
+            sonication = None
+            if dev.sonicatorDevice is not None:
+                sonication = dev.sonicatorDevice.doProtocol(config['sonicationProtocol'])
+
             for pressure, delay in sequence:
                 dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
                 self.checkStop(delay)
 
             self.resetPosition()
+            if sonication is not None:
+                self.waitFor(sonication)
 
         dev.pipetteRecord()['cleanCount'] += 1
         dev.setTipClean(True)

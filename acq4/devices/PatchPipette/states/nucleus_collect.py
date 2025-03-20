@@ -17,6 +17,9 @@ class NucleusCollectState(PatchPipetteState):
         cleaning well.
     approachDistance : float
         Distance (m) from collection location to approach from.
+    sonicationProtocol : str
+        Protocol to use for sonication (default "expel"), or if supported, the full protocol definition for a custom
+        protocol.
     """
     stateName = 'collect'
 
@@ -28,6 +31,7 @@ class NucleusCollectState(PatchPipetteState):
     _parameterTreeConfig = {
         'pressureSequence': {'type': 'str', 'default': "[(60e3, 4.0), (-35e3, 1.0)] * 5"},
         'approachDistance': {'type': 'float', 'default': 30e-3, 'suffix': 's'},
+        'sonicationProtocol': {'type': 'str', 'default': 'expel'},
     }
 
     def __init__(self, *args, **kwds):
@@ -49,6 +53,10 @@ class NucleusCollectState(PatchPipetteState):
         # self.waitFor([pip._moveToGlobal(self.approachPos, speed='fast')])
         self.waitFor(pip._moveToGlobal(self.collectionPos, speed='fast'), timeout=None)
 
+        sonication = None
+        if dev.sonicatorDevice is not None:
+            sonication = dev.sonicatorDevice.doProtocol(config['sonicationProtocol'])
+
         sequence = config['pressureSequence']
         if isinstance(sequence, str):
             sequence = eval(sequence, units.__dict__)
@@ -56,6 +64,9 @@ class NucleusCollectState(PatchPipetteState):
         for pressure, delay in sequence:
             dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
             self.checkStop(delay)
+
+        if sonication is not None:
+            self.waitFor(sonication)
 
         dev.pipetteRecord()['expelled_nucleus'] = True
         return 'out'
