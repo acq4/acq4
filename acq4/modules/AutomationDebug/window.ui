@@ -64,9 +64,9 @@
          </widget>
         </item>
         <item>
-         <widget class="FutureButton" name="flatDetectBtn">
+         <widget class="FutureButton" name="testUIBtn">
           <property name="text">
-           <string>Neurons in single frame?</string>
+           <string>Test box UI</string>
           </property>
          </widget>
         </item>
