@@ -203,9 +203,9 @@ class ScientificaMoveFuture(MoveFuture):
     """Provides access to a move-in-progress on a Scientifica manipulator.
     """
     def __init__(self, dev: Scientifica, pos, speed: float, **kwds):
-        super().__init__(dev, pos, speed)
-        pos = np.array(pos)
-        self._moveReq = self.dev.driver.moveTo(pos, speed / 1e-6, **kwds)
+        self._moveReq = self.dev.driver.moveTo(np.array(pos), speed / 1e-6, **kwds)
+        targetPos = self._moveReq.target_pos  # will have None values filled in with current position
+        super().__init__(dev, targetPos, speed)
         self._moveReq.set_callback(self._requestFinished)
 
     def _requestFinished(self, moveReq):
