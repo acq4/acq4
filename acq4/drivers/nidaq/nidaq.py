@@ -261,9 +261,7 @@ class Task:
         self.StartTask()
 
     def stop(self):
-        print("calling nidaq.StopTask")
         self.StopTask()
-        print("nidaq.StopTask completed")
 
     def isDone(self):
         return self.IsTaskDone()
