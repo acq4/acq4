@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from acq4.util.debug import printExc
+from acq4.util.future import future_wrap
 from pyqtgraph import units
 from ._base import PatchPipetteState
 
@@ -113,25 +114,26 @@ class CleanState(PatchPipetteState):
         dev.newPatchAttempt()
         return 'out'
 
-    def resetPosition(self):
+    def resetPosition(self, _future=None):
         if self.currentFuture is not None:
             # play in reverse
             fut = self.currentFuture
             self.currentFuture = None
-            if not self.isDone():
+            if _future is not None:
+                _future.waitFor(fut.undo(), timeout=None)
+            else:
                 self.waitFor(fut.undo(), timeout=None)
 
-    def cleanup(self):
+    @future_wrap
+    def cleanup(self, _future):
         if self.sonication is not None and not self.sonication.isDone():
             if self.wasStopped():
                 self.sonication.stop("parent task stopped")
             else:
-                self.waitFor(self.sonication)
+                _future.waitFor(self.sonication)
         try:
             self.dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
         except Exception:
             printExc("Error resetting pressure after clean")
 
-        self.resetPosition()
-
-        super().cleanup()
+        self.resetPosition(_future)

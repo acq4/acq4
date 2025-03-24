@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from acq4.util.debug import printExc
+from acq4.util.future import future_wrap
 from pyqtgraph import units
 from ._base import PatchPipetteState
 
@@ -71,22 +72,22 @@ class NucleusCollectState(PatchPipetteState):
         dev.pipetteRecord()['expelled_nucleus'] = True
         return 'out'
 
-    def resetPosition(self):
+    def resetPosition(self, _future=None):
         pip = self.dev.pipetteDevice
-        if not self.isDone():
+        if self.isDone():
             # self.waitFor([pip._moveToGlobal(self.approachPos, speed='fast')])
-            self.waitFor(pip._moveToGlobal(self.startPos, speed='fast'), timeout=None)
+            _future.waitFor(pip._moveToGlobal(self.startPos, speed='fast'), timeout=None)
 
-    def cleanup(self):
+    @future_wrap
+    def cleanup(self, _future):
         if self.sonication is not None and not self.sonication.isDone():
             if self.wasStopped():
                 self.sonication.stop("parent task stopped")
             else:
-                self.waitFor(self.sonication)
+                _future.waitFor(self.sonication)
         try:
             self.dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
         except Exception:
             printExc("Error resetting pressure after collection")
 
-        self.resetPosition()
-        super().cleanup()
+        self.resetPosition(_future)
