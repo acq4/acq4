@@ -44,6 +44,7 @@ class CleanState(PatchPipetteState):
 
     def __init__(self, *args, **kwds):
         self.currentFuture = None
+        self.sonication = None
         super().__init__(*args, **kwds)
 
     def run(self):
@@ -93,17 +94,17 @@ class CleanState(PatchPipetteState):
             # and stop moving as soon as the fluid is detected
             self.waitFor(self.currentFuture, timeout=None)
 
-            sonication = None
             if dev.sonicatorDevice is not None:
-                sonication = dev.sonicatorDevice.doProtocol(config['sonicationProtocol'])
+                self.sonication = dev.sonicatorDevice.doProtocol(config['sonicationProtocol'])
 
             for pressure, delay in sequence:
                 dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
-                self.checkStop(delay)
+                self.sleep(delay)
+
+            if self.sonication is not None and not self.sonication.isDone():
+                self.waitFor(self.sonication)
 
             self.resetPosition()
-            if sonication is not None:
-                self.waitFor(sonication)
 
         dev.pipetteRecord()['cleanCount'] += 1
         dev.setTipClean(True)
@@ -117,7 +118,8 @@ class CleanState(PatchPipetteState):
             # play in reverse
             fut = self.currentFuture
             self.currentFuture = None
-            self.waitFor(fut.undo(), timeout=None)
+            if not self.isDone():
+                self.waitFor(fut.undo(), timeout=None)
 
     def cleanup(self):
         dev = self.dev
@@ -126,6 +128,11 @@ class CleanState(PatchPipetteState):
         except Exception:
             printExc("Error resetting pressure after clean")
 
+        if self.sonication is not None and not self.sonication.isDone():
+            if self.wasStopped():
+                self.sonication.stop("parent task stopped")
+            else:
+                self.waitFor(self.sonication)
         self.resetPosition()
 
         super().cleanup()

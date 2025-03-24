@@ -8,7 +8,7 @@ from acq4.devices.DAQGeneric import DAQGeneric
 from acq4.devices.Sonicator import Sonicator
 from acq4.util.future import future_wrap
 from neuroanalysis.stimuli import load_stimulus
-from pyqtgraph.units import nF, V, µs
+from pyqtgraph.units import nF, A
 
 
 def calculate_slew_rate(wave: np.ndarray, dt: float):
@@ -65,7 +65,8 @@ class DAQSonicator(Sonicator):
     def __init__(self, deviceManager, config: dict, name: str):
         super().__init__(deviceManager, config, name)
         self._capacitance = config.get("capacitance", 65 * nF)
-        self._maxSlewRate = config.get("max slew rate", 3.9 * V / µs)
+        self._maxCurrent = config.get("max current", 0.255 * A)
+        self._maxSlewRate = config.get("max slew rate", self._maxCurrent / self._capacitance)
         if "scale" not in config["analog"]:
             raise ValueError(
                 "Analog output config must specify 'scale' (daq V / piezo V) to convert to account for driver gain")
