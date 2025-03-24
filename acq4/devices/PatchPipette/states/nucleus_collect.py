@@ -78,17 +78,15 @@ class NucleusCollectState(PatchPipetteState):
             self.waitFor(pip._moveToGlobal(self.startPos, speed='fast'), timeout=None)
 
     def cleanup(self):
-        dev = self.dev
-        try:
-            dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
-        except Exception:
-            printExc("Error resetting pressure after collection")
-
         if self.sonication is not None and not self.sonication.isDone():
             if self.wasStopped():
                 self.sonication.stop("parent task stopped")
             else:
                 self.waitFor(self.sonication)
+        try:
+            self.dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
+        except Exception:
+            printExc("Error resetting pressure after collection")
 
         self.resetPosition()
         super().cleanup()

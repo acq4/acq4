@@ -122,17 +122,16 @@ class CleanState(PatchPipetteState):
                 self.waitFor(fut.undo(), timeout=None)
 
     def cleanup(self):
-        dev = self.dev
-        try:
-            dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
-        except Exception:
-            printExc("Error resetting pressure after clean")
-
         if self.sonication is not None and not self.sonication.isDone():
             if self.wasStopped():
                 self.sonication.stop("parent task stopped")
             else:
                 self.waitFor(self.sonication)
+        try:
+            self.dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
+        except Exception:
+            printExc("Error resetting pressure after clean")
+
         self.resetPosition()
 
         super().cleanup()

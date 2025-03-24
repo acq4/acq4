@@ -395,15 +395,13 @@ class DAQGenericTask(DeviceTask):
     def stop(self, abort=False):
         # with self.dev._DGLock:  ##not necessary
         ## Stop DAQ tasks before setting holding level.
-        # print "STOP"
         prof = Profiler(disabled=True)
         for ch in self.daqTasks:
-            # print "Stop task", self.daqTasks[ch]
             try:
                 self.daqTasks[ch].stop(abort=abort)
             except Exception:
                 printExc("Error while stopping DAQ task:")
-            prof(f'stop {ch}')
+            prof(f'stop {ch} (abort={abort})')
         for ch in self._DAQCmd:
             if 'holding' in self._DAQCmd[ch]:
                 self.dev.setChanHolding(ch, self._DAQCmd[ch]['holding'])
