@@ -292,10 +292,8 @@ class Task(DeviceTask):
         else:
             return True
         
-        
     def stop(self, wait=False, abort=False):
         if self.st.hasTasks():
-            #print "stopping ST..."
             self.st.stop(wait=wait, abort=abort)
             #print "   ST stopped"
         
