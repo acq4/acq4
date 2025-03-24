@@ -117,10 +117,7 @@ class DAQSonicator(Sonicator):
             try:
                 _future.sleep(0.1)
             except Exception:
-                @future_wrap
-                def abort(_future):
-                    task.abort()
-                abort().raiseErrors("errored while trying to stop task")
+                task.abort()
                 raise
         task.stop()
 
