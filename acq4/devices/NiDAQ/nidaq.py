@@ -293,10 +293,11 @@ class Task(DeviceTask):
             return True
         
     def stop(self, wait=False, abort=False):
+        print(f"nidaq.Task.stop(wait={wait}, abort={abort})")
         if self.st.hasTasks():
             self.st.stop(wait=wait, abort=abort)
-            #print "   ST stopped"
-        
+        print("nidaq.Task.stop() done")
+
     def getResult(self):
         ## Results should be collected by individual devices using getData
         return None
