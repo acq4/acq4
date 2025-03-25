@@ -1,17 +1,17 @@
 #!/cygdrive/c/Python25/python.exe
-import numpy as np
 import os
 import sys
 import time
 
+import numpy as np
+
+import acq4.util.ptime as ptime
 
 # Workaround for symlinks not working in windows
 modPath = os.path.split(__file__)[0]
 acq4Path = os.path.abspath(os.path.join(modPath, "..", "..", ".."))
 utilPath = os.path.join(acq4Path, "lib", "util")
 sys.path = [acq4Path, utilPath] + sys.path
-import acq4.util.ptime as ptime
-
 
 print("Starting up..")
 if sys.argv[-1] == "mock":
@@ -19,11 +19,10 @@ if sys.argv[-1] == "mock":
 else:
     from acq4.drivers.nidaq.nidaq import NIDAQ as n
 
-
 print("Assert num devs > 0:")
 assert len(n.listDevices()) > 0
 print("  OK")
-print("devices: %s" % n.listDevices())
+print(f"devices: {n.listDevices()}")
 dev = n.listDevices()[0]
 
 print("\nAnalog Channels:")
@@ -45,7 +44,7 @@ def finiteReadTest():
     task.CreateAIVoltageChan("/Dev1/ai0", "", n.Val_RSE, -1.0, 1.0, n.Val_Volts, None)
     task.CreateAIVoltageChan("/Dev1/ai1", "", n.Val_Cfg_Default, -10.0, 10.0, n.Val_Volts, None)
 
-    task.CfgSampClkTiming(None, 10000.0, n.Val_Rising, n.Val_FiniteSamps, 1000)
+    task.CfgSampClkTiming(None, 10000.0, n.Val_Rising, n.Val_FiniteSamps, 500)
     task.start()
     data = task.read()
     task.stop()
@@ -67,8 +66,7 @@ def contReadTest():
     task.stop()
 
 
-## Output task
-
+# Output task
 
 def outputTest():
     print("::::::::::::::::::  Analog Output Test  :::::::::::::::::::::")
@@ -85,7 +83,7 @@ def outputTest():
     task.stop()
 
 
-## Synchronized tasks
+# Synchronized tasks
 
 
 def syncADTest():
@@ -280,7 +278,7 @@ def analogSuperTaskTest():
     return data
 
 
-data = finiteReadTest()
+finiteReadTest()
 outputTest()
 syncAIOTest()
 contReadTest()
