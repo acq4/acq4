@@ -268,6 +268,17 @@
      </property>
     </widget>
    </item>
+   <item row="3" column="0">
+    <widget class="QPushButton" name="saveCalibrationsBtn">
+     <property name="text">
+      <string>Save Calibration</string>
+     </property>
+     <property name="checkable">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+
    <item row="3" column="1" colspan="2">
     <widget class="QPushButton" name="hideMarkersBtn">
      <property name="text">
