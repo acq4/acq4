@@ -1,9 +1,9 @@
 from collections import OrderedDict
-
-import numpy as np
-from MetaArray import MetaArray, axis
 from typing import Optional
 
+import numpy as np
+
+from MetaArray import MetaArray, axis
 from acq4.devices.DAQGeneric.taskGUI import DAQGenericTaskGui
 from acq4.devices.Device import Device, DeviceTask
 from acq4.util import Qt
@@ -294,27 +294,27 @@ class DAQGenericTask(DeviceTask):
         for ch in self._DAQCmd:
             # dev = self.dev.dm.getDevice(self.dev._DGConfig[ch]['channel'][0])
             dev = self.dev.dm.getDevice(self.dev.getDAQName(ch))
-            prof.mark(ch + ' get dev')
+            prof.mark(f'{ch} get dev')
             if 'preset' in self._DAQCmd[ch]:
                 with self.dev._DGLock:
                     daqChan = self.dev._DGConfig[ch]['channel']
                 # dev.setChannelValue(self.dev._DGConfig[ch]['channel'][1], self._DAQCmd[ch]['preset'])
                 preVal = self.mapping.mapToDaq(ch, self._DAQCmd[ch]['preset'])
                 dev.setChannelValue(daqChan, preVal)
-                prof.mark(ch + ' preset')
+                prof.mark(f'{ch} preset')
             elif 'holding' in self._DAQCmd[ch]:
                 self.dev.setChanHolding(ch, self._DAQCmd[ch]['holding'])
-                prof.mark(ch + ' set holding')
+                prof.mark(f'{ch} set holding')
             if 'recordInit' in self._DAQCmd[ch] and self._DAQCmd[ch]['recordInit']:
                 self.initialState[ch] = self.dev.getChannelValue(ch)
-                prof.mark(ch + ' record init')
+                prof.mark(f'{ch} record init')
         for ch in self.dev._DGConfig:
             ## record current holding value for all output channels (even those that were not buffered for this task)
             with self.dev._DGLock:
                 chanType = self.dev._DGConfig[ch]['type']
             if chanType in ['ao', 'do']:
                 self.holdingVals[ch] = self.dev.getChanHolding(ch)
-                prof.mark(ch + ' record holding')
+                prof.mark(f'{ch} record holding')
         prof.finish()
 
     def createChannels(self, daqTask):
