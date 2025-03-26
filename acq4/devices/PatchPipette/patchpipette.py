@@ -155,7 +155,7 @@ class PatchPipette(Device):
         self._pipetteRecord = None
         self.emitNewEvent('new_pipette', {})
         self.newPatchAttempt()
-        self.setState('out')
+        self.setState('bath')
         # todo: set calibration to average 
         self.pipetteDevice.findNewPipette()
 
