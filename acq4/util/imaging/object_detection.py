@@ -94,7 +94,7 @@ def detect_pipette_tip(frame: Frame, angle: float, _future: Future) -> tuple[flo
         rmt_array = rmt_process.client.transfer(shared_array)
         rmt_this = rmt_process.client._import("acq4.util.imaging.object_detection")
         _future.checkStop()
-        return rmt_this.do_pipette_tip_detection(rmt_array.data, angle, _timeout=600)
+        return rmt_this.do_pipette_tip_detection(rmt_array.data, angle, _timeout=60)
 
 
 _pipette_detection_model = None
@@ -272,7 +272,7 @@ def detect_neurons(
         rmt_this = rmt_process.client._import("acq4.util.imaging.object_detection")
         _future.checkStop()
         return rmt_this.do_neuron_detection(
-            rmt_array.data, transform, model, do_3d, classifier, autoencoder, diameter, xy_scale, z_scale, _timeout=60
+            rmt_array.data, transform, model, do_3d, classifier, autoencoder, diameter, xy_scale, z_scale, _timeout=600
         )
 
 
