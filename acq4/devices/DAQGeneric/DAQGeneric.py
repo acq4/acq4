@@ -109,8 +109,10 @@ class DAQGeneric(Device):
                 config[ch]['holding'] = 0.0
 
             ## It is possible to create virtual channels with no real hardware connection
-            if 'device' not in config[ch]:
-                # print "Assuming channel %s is virtual:" % ch, config[ch]
+            if 'device' in config[ch]:
+                daq = self.dm.getDevice(config[ch]['device'])
+                daq.verifyChannelBelongs(config[ch]['channel'])
+            else:
                 config[ch]['virtual'] = True
 
             ## set holding value for all output channels now

@@ -11,6 +11,8 @@ from acq4.util.debug import printExc
 class NiDAQ(Device):
     """
     Config options:
+        mock: bool. If True, use a mock device instead of the real one.
+        device: str | None. If set, force operations to a single device.
         defaultAIMode: 'mode'  # mode to use for ai channels by default ('rse', 'nrse', or 'diff')
         defaultAIRange: [-10, 10]  # default voltage range to use for AI ports
         defaultAORange: [-10, 10]  # default voltage range to use for AO ports
@@ -19,6 +21,7 @@ class NiDAQ(Device):
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
         self.config = config
+        self.exclusiveDevice = config.get('device', None)
         self._defaultAIRange = config.get('defaultAIRange', [-10, 10])
         self._defaultAORange = config.get('defaultAORange', [-10, 10])
 
@@ -49,6 +52,8 @@ class NiDAQ(Device):
         else:
             res = self.reserve(block=block)
 
+        self.verifyChannelBelongs(chan)
+
         if not block and not res:
             if delaySetIfBusy:
                 self.delayedSet[chan] = value
@@ -71,6 +76,10 @@ class NiDAQ(Device):
                 self.release()
         return True
 
+    def verifyChannelBelongs(self, chan):
+        if not chan.startswith(f"/{self.exclusiveDevice}/"):
+            raise ValueError(f"Channel {chan} does not belong to device {self.exclusiveDevice}")
+
     def release(self):
         ## take care of any channel-value-set requests that arrived while the device was locked
         try:
@@ -89,6 +98,7 @@ class NiDAQ(Device):
         if mode is None:
             mode = self.config.get('defaultAIMode', None)
 
+        self.verifyChannelBelongs(chan)
         res = self.reserve(block=block)
         if not res:  ## False means non-blocking lock attempt failed.
             return False
