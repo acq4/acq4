@@ -69,7 +69,8 @@ class DAQSonicator(Sonicator):
         self._maxSlewRate = config.get("max slew rate", self._maxCurrent / self._capacitance)
         if "scale" not in config["analog"]:
             raise ValueError(
-                "Analog output config must specify 'scale' (daq V / piezo V) to convert to account for driver gain")
+                "Analog output config must specify 'scale' (daq V / piezo V) to convert to account for driver gain"
+            )
         daq_conf = {
             "channels": {
                 "analog": config["analog"],
