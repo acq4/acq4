@@ -35,7 +35,7 @@ class Target(TargetItem):
 
 class TargetBox(Qt.QGraphicsRectItem):
     def __init__(self, start, end):
-        super().__init__(Qt.QRectF(Qt.QPointF(start[0], start[1]), Qt.QPointF(end[0], end[1])))
+        super().__init__(Qt.QRectF(Qt.QPointF(start[1], start[0]), Qt.QPointF(end[1], end[0])))
         self.setBrush(Qt.QBrush(Qt.QColor(0, 0, 0, 0)))
         self._zRange = sorted((start[2], end[2]))
         self._focus = 0
@@ -51,6 +51,5 @@ class TargetBox(Qt.QGraphicsRectItem):
         else:
             diff = (self._focus - sum(self._zRange) / 2)
             color = color_for_diff(diff)
-        print(self._focus, self._zRange, color)
         self.setPen(pg.mkPen(color))
         self.update()
