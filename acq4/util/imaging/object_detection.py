@@ -322,7 +322,10 @@ def _do_healthy_neuron_detection(
         _autoencoder.eval()
     cells = get_health_ordered_cells(data, _classifier, _autoencoder, diameter, xy_scale, z_scale)
     return [
-        (transform.map(center[::-1] - (31, 31, 10)), transform.map(center[::-1] + (31, 31, 10)))
+        (
+            transform.map((center[2] - 31, center[1] - 31, center[0] - 10)),
+            transform.map((center[2] + 31, center[0] + 31, center[1] + 10)),
+        )
         for center in cells[:n]
     ]
 
