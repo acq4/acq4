@@ -337,7 +337,7 @@ def get_health_ordered_cells(
     Returns:
     --------
     results : list of coordinates
-        List of neuron coordinates ordered by health status
+        List of neuron coordinates ordered by health status in ijk format
     """
     masks = get_cellpose_masks(image, diameter)
     cells = np.array(list(cell_centers(masks, diameter)))
