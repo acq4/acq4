@@ -200,7 +200,7 @@ def do_pipette_tip_detection(data: np.ndarray, angle: float, show=True):
                 imv.target = pg.TargetItem()
                 imv.view.addItem(imv.target)
                 w.views.append(imv)
-                w.addWidget(imv, 0, i)
+                l.addWidget(imv, 0, i)
             analysis_window = w
             w.resize(900, 300)
 
@@ -212,7 +212,7 @@ def do_pipette_tip_detection(data: np.ndarray, angle: float, show=True):
         views[0].setImage(image.image.T)
         views[0].target.setPos(*image_pos_rc[::-1])
 
-        w.show()
+        analysis_window.show()
 
     return image_pos_rc, z_um3, err3, locals()
 

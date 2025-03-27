@@ -75,11 +75,19 @@ class CleanState(PatchPipetteState):
             # lift up, then sideways, then down into well
             waypoint1 = safePos.copy()
             waypoint1[2] = wellPos[2] + config['approachHeight']
-            waypoint2 = wellPos.copy()
-            waypoint2[2] = waypoint1[2]
+
+            # move Y first
+            waypoint2 = waypoint1.copy()
+            waypoint2[1] = wellPos[1]
+
+            # now move X
+            waypoint3 = waypoint2.copy()
+            waypoint3[0] = wellPos[0]
+
             path = [
-                (waypoint1, 'fast', False, f"get to {waypoint1[2]} z"),
-                (waypoint2, 'fast', True, f"above the {stage}ing well"),
+                (waypoint1, 'fast', False, f"{stage}ing well approach height ({waypoint1[2]} z)"),
+                (waypoint2, 'fast', True, f"match y for {stage}ing well"),
+                (waypoint3, 'fast', True, f"above the {stage}ing well"),
                 (wellPos, 'fast', False, f"into the {stage}ing well"),
             ]
 
