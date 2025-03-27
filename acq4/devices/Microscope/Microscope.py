@@ -423,11 +423,11 @@ class ScopeGUI(Qt.QWidget):
             c = Qt.QComboBox()
             r = Qt.QRadioButton(obj)
 
-            xs = pg.SpinBox(step=1e-6, suffix='m', siPrefix=True)
-            ys = pg.SpinBox(step=1e-6, suffix='m', siPrefix=True)
-            zs = pg.SpinBox(step=1e-6, suffix='m', siPrefix=True)
-            xyss = pg.SpinBox(step=1e-7, bounds=(1e-10, None))
-            zss = pg.SpinBox(step=1e-7, bounds=(1e-10, None))
+            xs = pg.SpinBox(step=1e-6, suffix='m', siPrefix=True, compactHeight=False)
+            ys = pg.SpinBox(step=1e-6, suffix='m', siPrefix=True, compactHeight=False)
+            zs = pg.SpinBox(step=1e-6, suffix='m', siPrefix=True, compactHeight=False)
+            xyss = pg.SpinBox(step=1e-7, bounds=(1e-10, None), compactHeight=False)
+            zss = pg.SpinBox(step=1e-7, bounds=(1e-10, None), compactHeight=False)
 
             xs.index = ys.index = zs.index = xyss.index = zss.index = obj  ## used to determine which row has changed
             widgets = (r, c, xs, ys, zs, xyss, zss)

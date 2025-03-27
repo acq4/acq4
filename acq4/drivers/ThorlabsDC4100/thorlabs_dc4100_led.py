@@ -57,7 +57,7 @@ class ThorlabsDC4100:
 
     def set_led_channel_state(self, channel, led_on):
         # print('Setting LED channel {} to state {}'.format( channel, state ))
-        return self._send(COMMANDS["set_led_channel_state"].format(channel, 1 if led_on else 0))
+        return self._send(COMMANDS["set_led_channel_state"].format(channel, 1 if led_on else 0), expect_response=False)
 
     def set_brightness(self, channel, brightness):
         if not (0 <= brightness <= 100):
@@ -87,10 +87,12 @@ class ThorlabsDC4100:
     def manufacturer(self):
         return self._send(COMMANDS["manufacturer"])
 
-    def _send(self, command, retry=2):
+    def _send(self, command, expect_response=True, retry=2):
         with self.lock:
             while True:
                 self._write_to_LED(command)
+                if not expect_response:
+                    return
                 ret_value = self._read_from_LED().strip()
                 if ret_value.startswith("ERROR "):
                     if "10:Communication error" in ret_value and retry > 0:

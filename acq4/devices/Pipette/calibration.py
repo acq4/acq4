@@ -9,7 +9,7 @@ from .planners import PipetteMotionPlanner
 
 
 @future_wrap
-def calibratePipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=0.8e-3, _future=None):
+def calibratePipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=0.4e-3, _future=None):
     """
     Find the tip of a new pipette by moving it across the objective while recording from the imager.
     """
