@@ -199,10 +199,11 @@ class PatchPipetteState(Future):
                 tps.append(self.testPulseResults.get())
         return tps
 
-    def cleanup(self):
-        """Called after job completes, whether it failed or succeeded.
+    def cleanup(self) -> Future:
+        """Called after job completes, whether it failed or succeeded. Ask `self.wasInterrupted()` to see if the
+        state was stopped early. Return a Future that completes when cleanup is done.
         """
-        pass
+        return Future.immediate()
 
     def _runJob(self):
         """Function invoked in background thread.

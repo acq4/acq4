@@ -146,4 +146,4 @@ class BreakInState(PatchPipetteState):
             dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
         except Exception:
             printExc("Error resetting pressure after clean")
-        super().cleanup()
+        return super().cleanup()

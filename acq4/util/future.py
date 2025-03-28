@@ -110,9 +110,6 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
     def stop(self, reason="task stop requested"):
         """Stop the task (nicely).
 
-        This method may return another future if stopping the task is expected to
-        take time.
-
         Subclasses may extend this method and/or use checkStop to determine whether
         stop() has been called.
         """
@@ -366,7 +363,7 @@ class MultiFuture(Future):
     def stop(self, reason="task stop requested"):
         for f in self.futures:
             f.stop(reason=reason)
-        return Future.stop(self, reason)
+        return super().stop(reason=reason)
 
     def percentDone(self):
         return min(f.percentDone() for f in self.futures)
