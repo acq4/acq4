@@ -35,10 +35,10 @@ class DAQSonicator(Sonicator):
     max slew rate : float
         The maximum safe slew rate of the piezoelectric transducer in V/μs. This is used to calculate the voltage
         output (default 3.9 V/μs).
-    analog : dict
-        The config of the analog output channel. This controls the voltage output to the sonicator.
-    digital : dict (optional)
-        The config of the digital output channel. This controls the power to the sonicator.
+    command : dict
+        The config of the analog output channel in charge of the voltage output to the sonicator.
+    disable : dict (optional)
+        The config of the output channel on which a 5V signal will disable the sonicator.
     protocols : dict
         Each protocol is a dictionary, in line with the output of Stimulus.save(), for example::
             clean:
@@ -67,17 +67,18 @@ class DAQSonicator(Sonicator):
         self._capacitance = config.get("capacitance", 65 * nF)
         self._maxCurrent = config.get("max current", 0.255 * A)
         self._maxSlewRate = config.get("max slew rate", self._maxCurrent / self._capacitance)
-        if "scale" not in config["analog"]:
+        if "scale" not in config["command"]:
             raise ValueError(
-                "Analog output config must specify 'scale' (daq V / piezo V) to convert to account for driver gain"
+                "Command config must specify 'scale' (daq V / piezo V) to convert to account for driver gain"
             )
         daq_conf = {
             "channels": {
-                "analog": config["analog"],
+                "command": config["command"],
             },
         }
-        if "digital" in config:
-            daq_conf["channels"]["digital"] = config["digital"]
+        if "disable" in config:
+            config["disable"].setdefault("holding", 1)
+            daq_conf["channels"]["disable"] = config["disable"]
         self._daq = DAQGeneric(
             deviceManager,
             config=daq_conf,
@@ -99,7 +100,7 @@ class DAQSonicator(Sonicator):
         if slew_rate > self._maxSlewRate:
             raise ValueError(f"Waveform slew rate {slew_rate} V/s exceeds max slew rate {self._maxSlewRate} V/s")
         numPts = len(wave)
-        daq_name = self._daq.getDAQName("analog")
+        daq_name = self._daq.getDAQName("command")
         cmd = {
             "protocol": {"duration": duration},
             daq_name: {
@@ -107,11 +108,11 @@ class DAQSonicator(Sonicator):
                 "numPts": numPts,
             },
             self._daq.name(): {
-                "analog": {"command": wave},
+                "command": {"command": wave},
             },
         }
-        if "digital" in self.config:
-            cmd[self._daq.name()]["digital"] = {"holding": 1}
+        if "disable" in self.config:
+            cmd[self._daq.name()]["disable"] = {"preset": 0}
         task = self.dm.createTask(cmd)
         task.execute(block=False, processEvents=False)
         while not task.isDone():
