@@ -50,6 +50,9 @@ class Scientifica(Stage):
             else:
                 raise
 
+        if 'isManipulator' not in config:
+            config['isManipulator'] = self.driver.isManipulator()
+
         # Controllers reset their baud to 9600 after power cycle
         if baudrate is not None and self.driver.getBaudrate() != baudrate:
             self.driver.setBaudrate(baudrate)
@@ -171,7 +174,7 @@ class Scientifica(Stage):
                 self.stop()
             speed = self._interpretSpeed(speed)
 
-            self._lastMove = ScientificaMoveFuture(self, pos, speed)
+            self._lastMove = ScientificaMoveFuture(self, pos, speed, **kwds)
             return self._lastMove
 
     def deviceInterface(self, win):
@@ -199,10 +202,10 @@ class Scientifica(Stage):
 class ScientificaMoveFuture(MoveFuture):
     """Provides access to a move-in-progress on a Scientifica manipulator.
     """
-    def __init__(self, dev: Scientifica, pos, speed: float):
-        super().__init__(dev, pos, speed)
-        pos = np.array(pos)
-        self._moveReq = self.dev.driver.moveTo(pos, speed / 1e-6)
+    def __init__(self, dev: Scientifica, pos, speed: float, **kwds):
+        self._moveReq = dev.driver.moveTo(np.array(pos), speed / 1e-6, **kwds)
+        targetPos = self._moveReq.target_pos  # will have None values filled in with current position
+        super().__init__(dev, targetPos, speed)
         self._moveReq.set_callback(self._requestFinished)
 
     def _requestFinished(self, moveReq):
@@ -323,7 +326,7 @@ class ScientificaGUI(StageInterface):
         response = Qt.QMessageBox.question(
             self,
             "Caution: check for obstructions",
-            "This will move the stage to its limit. Please ensure such a movement is safe. Ready?",
+            f"This will move {self.dev.name()} to its limit. Please ensure such a movement is safe. Ready?",
             Qt.QMessageBox.Ok | Qt.QMessageBox.Cancel,
         )
         if response != Qt.QMessageBox.Ok:
@@ -336,29 +339,37 @@ class ScientificaGUI(StageInterface):
     def _doAutoZero(self, axis: int = None, _future: Future = None) -> None:
         self._savedLimits = self.dev.getLimits()
         try:
+            diff = np.zeros(3)  # keep track of offset changes
             self.dev.setLimits(None, None, None)
-            pos = self.dev.getPosition()
             globalStartPos = self.dev.globalPosition()
-            dest = pos[:]
 
+            # move to an excessively far position until we hit a limit switch
             far_away = [None if x is None else 1e6 * x for x in self.dev.autoZeroDirection]
-            if axis is None:
-                dest = far_away
-            else:
-                dest[axis] = far_away[axis]
-            self.dev._move(dest, "fast", False)  # this should definitely fail
-            _future.sleep(1)
-            while self.dev.driver.isMoving():
-                _future.sleep(0.1)
-            self.dev.stop()
-            before = self.dev.globalPosition()
-            if axis is None:
-                self.dev.driver.zeroPosition()
-            else:
-                self.dev.driver.zeroPosition('XYZ'[axis])
-            self.dev.getPosition(refresh=True)
-            after = self.dev.globalPosition()
-            diff = np.array(after) - np.array(before)
+            if axis is not None and far_away[axis] is None:
+                raise Exception(f"Requested auto zero for axis {'XYZ'[axis]}, but autoZeroDirection is disabled for this axis in the configuration.")
+
+            self._moveAndWait(far_away, axis, _future)
+            diff += self._zeroAxis(axis)
+
+            # This part is a pain: if the approach switch is enabled on the control cube, then it's possible for the
+            # X limit switch to stop the Z axis and vice-versa. To work around this, we need to calibrate
+            # these axes independently while ensuring that the other is moved away from its limit switch.
+            if self.dev.isManipulator and axis != 1:
+                for axis in (0, 2):
+                    otherAxis = 2 - axis
+                    # Move z (or x) 300 um in either direction, then try moving x (or z) far away.
+                    # If z (or x) is already at its limit, then at least one of these should get x (or z)
+                    # to its limit.
+                    # We need to try both directions because we don't know which limit switch is activated.
+                    for dir in (1, -1):
+                        currentPos = self.dev.getPosition()
+                        currentPos[otherAxis] += 300 * dir
+                        # small step to move z (x) away from its limit switch
+                        self._moveAndWait(currentPos, otherAxis, _future)
+                        # far step to get x (z) to its limit switch
+                        self._moveAndWait(far_away, axis, _future)
+                        diff += self._zeroAxis(axis)
+
             logMsg(f"Auto-zeroed {self.dev.name()} by {diff}")
             move_future = self.dev.moveToGlobal(globalStartPos + diff, "fast")
             slippedAxes = np.abs(diff) > 50e-6
@@ -374,3 +385,40 @@ class ScientificaGUI(StageInterface):
             self.sigBusyMoving.emit(False)
             self.dev.stop()
             self.dev.setLimits(*self._savedLimits)
+
+    def _moveAndWait(self, pos, axis, _future):
+        """Move to pos and wait for the move to complete. 
+        If axis is None, move all three axes to the specified position.
+        If axis is 0,1,2, move only the specified axis to pos[axis].
+
+        If the future does not reach its target, this is silently ignored.
+
+        Return True if the manipulator reached its target.
+        """
+        if axis is None:
+            dest = pos
+        else:
+            dest = [None, None, None]
+            dest[axis] = pos[axis]
+        f = self.dev._move(dest, "fast", False, attempts_allowed=1)
+        while not f.isDone():
+            _future.sleep(0.1)
+
+        # raise errors not related to missing the target
+        missed = f.wasInterrupted() and 'Stopped moving before reaching target' in f.errorMessage()
+        if f.wasInterrupted() and not missed:
+            f.wait()
+
+        return not missed
+
+    def _zeroAxis(self, axis):
+        """Zero an axis (or all three) and return the vector change in global position."""
+        before = self.dev.globalPosition()
+        if axis is None:
+            self.dev.driver.zeroPosition()
+        else:
+            self.dev.driver.zeroPosition('XYZ'[axis])
+        self.dev.getPosition(refresh=True)
+        after = self.dev.globalPosition()
+        diff = np.array(after) - np.array(before)
+        return diff
