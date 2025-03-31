@@ -460,6 +460,7 @@ class FutureButton(FeedbackButton):
             self.setEnabled(self._stoppable)
             self.setText(message, temporary=True)
             self.setToolTip(tip, temporary=True)
+            self.setStyleSheet("background-color: #AFA; color: #000;", temporary=True)
             if processEvents:
                 Qt.QtWidgets.QApplication.processEvents()
         else:
