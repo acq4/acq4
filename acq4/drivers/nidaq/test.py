@@ -1,17 +1,17 @@
 #!/cygdrive/c/Python25/python.exe
-import numpy as np
 import os
 import sys
 import time
 
+import numpy as np
+
+import acq4.util.ptime as ptime
 
 # Workaround for symlinks not working in windows
 modPath = os.path.split(__file__)[0]
 acq4Path = os.path.abspath(os.path.join(modPath, "..", "..", ".."))
 utilPath = os.path.join(acq4Path, "lib", "util")
 sys.path = [acq4Path, utilPath] + sys.path
-import acq4.util.ptime as ptime
-
 
 print("Starting up..")
 if sys.argv[-1] == "mock":
@@ -19,11 +19,12 @@ if sys.argv[-1] == "mock":
 else:
     from acq4.drivers.nidaq.nidaq import NIDAQ as n
 
+sample_rate = 5000.0
 
 print("Assert num devs > 0:")
 assert len(n.listDevices()) > 0
 print("  OK")
-print("devices: %s" % n.listDevices())
+print(f"devices: {n.listDevices()}")
 dev = n.listDevices()[0]
 
 print("\nAnalog Channels:")
@@ -45,7 +46,7 @@ def finiteReadTest():
     task.CreateAIVoltageChan("/Dev1/ai0", "", n.Val_RSE, -1.0, 1.0, n.Val_Volts, None)
     task.CreateAIVoltageChan("/Dev1/ai1", "", n.Val_Cfg_Default, -10.0, 10.0, n.Val_Volts, None)
 
-    task.CfgSampClkTiming(None, 10000.0, n.Val_Rising, n.Val_FiniteSamps, 1000)
+    task.CfgSampClkTiming(None, sample_rate, n.Val_Rising, n.Val_FiniteSamps, 1000)
     task.start()
     data = task.read()
     task.stop()
@@ -57,7 +58,7 @@ def contReadTest():
     print("::::::::::::::::::  Continuous Read Test  :::::::::::::::::::::")
     task = n.createTask()
     task.CreateAIVoltageChan("/Dev1/ai0", "", n.Val_RSE, -10.0, 10.0, n.Val_Volts, None)
-    task.CfgSampClkTiming(None, 10000.0, n.Val_Rising, n.Val_ContSamps, 4000)
+    task.CfgSampClkTiming(None, sample_rate, n.Val_Rising, n.Val_ContSamps, 4000)
     task.start()
     t = ptime.time()
     for i in range(0, 10):
@@ -67,14 +68,13 @@ def contReadTest():
     task.stop()
 
 
-## Output task
-
+# Output task
 
 def outputTest():
     print("::::::::::::::::::  Analog Output Test  :::::::::::::::::::::")
     task = n.createTask()
     task.CreateAOVoltageChan("/Dev1/ao0", "", -10.0, 10.0, n.Val_Volts, None)
-    task.CfgSampClkTiming(None, 10000.0, n.Val_Rising, n.Val_FiniteSamps, 1000)
+    task.CfgSampClkTiming(None, sample_rate, n.Val_Rising, n.Val_FiniteSamps, 1000)
 
     data = np.zeros((1000,), dtype=np.float64)
     data[200:400] = 5.0
@@ -85,17 +85,17 @@ def outputTest():
     task.stop()
 
 
-## Synchronized tasks
+# Synchronized tasks
 
 
 def syncADTest():
     print("::::::::::::::::::  A/D  Test  :::::::::::::::::::::")
     task1 = n.createTask()
     task1.CreateAIVoltageChan("/Dev1/ai0", "", n.Val_RSE, -10.0, 10.0, n.Val_Volts, None)
-    task1.CfgSampClkTiming(None, 10000.0, n.Val_Rising, n.Val_FiniteSamps, 100)
+    task1.CfgSampClkTiming(None, sample_rate, n.Val_Rising, n.Val_FiniteSamps, 100)
     task2 = n.createTask()
     task2.CreateDIChan("/Dev1/port0", "", n.Val_ChanForAllLines)
-    task2.CfgSampClkTiming("/Dev1/ai/SampleClock", 10000.0, n.Val_Rising, n.Val_FiniteSamps, 100)
+    task2.CfgSampClkTiming("/Dev1/ai/SampleClock", sample_rate, n.Val_Rising, n.Val_FiniteSamps, 100)
 
     print(task2.GetTaskChannels())
     task2.start()
@@ -115,12 +115,12 @@ def syncAIOTest():
     print("::::::::::::::::::  Sync Analog I/O Test  :::::::::::::::::::::")
     task1 = n.createTask()
     task1.CreateAIVoltageChan("/Dev1/ai0", "", n.Val_RSE, -10.0, 10.0, n.Val_Volts, None)
-    task1.CfgSampClkTiming("/Dev1/ao/SampleClock", 10000.0, n.Val_Rising, n.Val_FiniteSamps, 100)
+    task1.CfgSampClkTiming("/Dev1/ao/SampleClock", sample_rate, n.Val_Rising, n.Val_FiniteSamps, 100)
 
     task2 = n.createTask()
     task2.CreateAOVoltageChan("/Dev1/ao0", "", -10.0, 10.0, n.Val_Volts, None)
-    # task2.CfgSampClkTiming(None, 10000.0, nidaq.Val_Rising, nidaq.Val_FiniteSamps, 1000)
-    task2.CfgSampClkTiming(None, 10000.0, n.Val_Rising, n.Val_FiniteSamps, 100)
+    # task2.CfgSampClkTiming(None, sample_rate, nidaq.Val_Rising, nidaq.Val_FiniteSamps, 1000)
+    task2.CfgSampClkTiming(None, sample_rate, n.Val_Rising, n.Val_FiniteSamps, 100)
     # task2.CfgDigEdgeStartTrig("ai/StartTrigger", nidaq.Val_Rising)
 
     data1 = np.zeros((100,), dtype=np.float64)
@@ -143,21 +143,21 @@ def syncIOTest():
     print("::::::::::::::::::  Sync I/O Test  :::::::::::::::::::::")
     task1 = n.createTask()
     task1.CreateAIVoltageChan("/Dev1/ai0", "", n.Val_RSE, -10.0, 10.0, n.Val_Volts, None)
-    task1.CfgSampClkTiming(None, 10000.0, n.Val_Rising, n.Val_FiniteSamps, 100)
+    task1.CfgSampClkTiming(None, sample_rate, n.Val_Rising, n.Val_FiniteSamps, 100)
 
     task2 = n.createTask()
     task2.CreateAOVoltageChan("/Dev1/ao0", "", -10.0, 10.0, n.Val_Volts, None)
-    # task2.CfgSampClkTiming(None, 10000.0, nidaq.Val_Rising, nidaq.Val_FiniteSamps, 1000)
-    task2.CfgSampClkTiming("/Dev1/ai/SampleClock", 10000.0, n.Val_Rising, n.Val_FiniteSamps, 100)
+    # task2.CfgSampClkTiming(None, sample_rate, nidaq.Val_Rising, nidaq.Val_FiniteSamps, 1000)
+    task2.CfgSampClkTiming("/Dev1/ai/SampleClock", sample_rate, n.Val_Rising, n.Val_FiniteSamps, 100)
     # task2.CfgDigEdgeStartTrig("ai/StartTrigger", nidaq.Val_Rising)
 
     task3 = n.createTask()
     task3.CreateDIChan("/Dev1/port0/line0", "", n.Val_ChanForAllLines)
-    task3.CfgSampClkTiming("/Dev1/ai/SampleClock", 10000.0, n.Val_Rising, n.Val_FiniteSamps, 100)
+    task3.CfgSampClkTiming("/Dev1/ai/SampleClock", sample_rate, n.Val_Rising, n.Val_FiniteSamps, 100)
 
     task4 = n.createTask()
     task4.CreateDOChan("/Dev1/port0/line4", "", n.Val_ChanForAllLines)
-    task4.CfgSampClkTiming("/Dev1/ai/SampleClock", 10000.0, n.Val_Rising, n.Val_FiniteSamps, 100)
+    task4.CfgSampClkTiming("/Dev1/ai/SampleClock", sample_rate, n.Val_Rising, n.Val_FiniteSamps, 100)
 
     # task1.SetRefClkSrc("PXI_Clk10")
     # task2.SetRefClkSrc("PXI_Clk10")
@@ -192,7 +192,7 @@ def triggerTest():
     task.CreateAIVoltageChan("/Dev1/ai0", "", n.Val_RSE, -1.0, 1.0, n.Val_Volts, None)
     task.CreateAIVoltageChan("/Dev1/ai1", "", n.Val_Cfg_Default, -10.0, 10.0, n.Val_Volts, None)
 
-    task.CfgSampClkTiming(None, 10000.0, n.Val_Rising, n.Val_FiniteSamps, 1000)
+    task.CfgSampClkTiming(None, sample_rate, n.Val_Rising, n.Val_FiniteSamps, 1000)
     task.CfgDigEdgeStartTrig("/Dev1/PFI5", n.Val_Rising)
     print("Waiting for trigger..")
 
@@ -230,7 +230,7 @@ def superTaskTest():
     st.setWaveform("/Dev1/port0/line4", do[0])
     st.setWaveform("/Dev1/port0/line5", do[1])
 
-    st.configureClocks(rate=10000, nPts=1000)
+    st.configureClocks(rate=int(sample_rate), nPts=1000)
 
     # st.setTrigger('/Dev1/PFI5')
 
@@ -265,7 +265,7 @@ def analogSuperTaskTest():
     st.setWaveform("/Dev1/ao0", ao[0])
     st.setWaveform("/Dev1/ao1", ao[1])
 
-    st.configureClocks(rate=10000, nPts=1000)
+    st.configureClocks(rate=int(sample_rate), nPts=1000)
 
     # st.setTrigger('/Dev1/PFI5')
 
@@ -280,7 +280,7 @@ def analogSuperTaskTest():
     return data
 
 
-data = finiteReadTest()
+finiteReadTest()
 outputTest()
 syncAIOTest()
 contReadTest()

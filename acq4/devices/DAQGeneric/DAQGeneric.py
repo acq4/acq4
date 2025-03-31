@@ -1,9 +1,9 @@
 from collections import OrderedDict
-
-import numpy as np
-from MetaArray import MetaArray, axis
 from typing import Optional
 
+import numpy as np
+
+from MetaArray import MetaArray, axis
 from acq4.devices.DAQGeneric.taskGUI import DAQGenericTaskGui
 from acq4.devices.Device import Device, DeviceTask
 from acq4.util import Qt
@@ -93,7 +93,7 @@ class DAQGeneric(Device):
         self._DGHolding = {}
         for ch in config:
             if config[ch]['type'][0] != 'a' and ('scale' in config[ch] or 'offset' in config[ch]):
-                raise Exception("Scale/offset only allowed for analog channels. (%s.%s)" % (name, ch))
+                raise ValueError(f"Scale/offset only allowed for analog channels. ({name}.{ch})")
 
             if 'scale' not in config[ch]:
                 config[ch]['scale'] = 1  ## must be int to prevent accidental type conversion on digital data
@@ -101,27 +101,28 @@ class DAQGeneric(Device):
                 config[ch]['offset'] = 0
             if config[ch].get('invert', False):
                 if config[ch]['type'][0] != 'd':
-                    raise Exception("Inversion only allowed for digital channels. (%s.%s)" % (name, ch))
+                    raise ValueError(f"Inversion only allowed for digital channels. ({name}.{ch})")
                 config[ch]['scale'] = -1
                 config[ch]['offset'] = -1
 
-            # print "chan %s scale %f" % (ch, config[ch]['scale'])
             if 'holding' not in config[ch]:
                 config[ch]['holding'] = 0.0
 
             ## It is possible to create virtual channels with no real hardware connection
-            if 'device' not in config[ch]:
-                # print "Assuming channel %s is virtual:" % ch, config[ch]
+            if 'device' in config[ch]:
+                daq = self.dm.getDevice(config[ch]['device'])
+                daq.verifyChannelBelongs(config[ch]['channel'])
+            else:
                 config[ch]['virtual'] = True
 
             ## set holding value for all output channels now
             if config[ch]['type'][1] == 'o':
                 self.setChanHolding(ch, config[ch]['holding'])
-            # self._DGHolding[ch] = config[ch]['holding']
+                # self._DGHolding[ch] = config[ch]['holding']
 
         dm.declareInterface(name, ['daqChannelGroup'], self)
         for ch in config:
-            dm.declareInterface(name + "." + ch, ['daqChannel'], ChannelHandle(self, ch))
+            dm.declareInterface(f"{name}.{ch}", ['daqChannel'], ChannelHandle(self, ch))
 
     def mapToDAQ(self, channel, data):
         mapping = self.getMapping(chans=[channel])
@@ -151,12 +152,11 @@ class DAQGeneric(Device):
         prof = Profiler(disabled=True)
         with self._DGLock:
             prof('lock')
-            # print "set holding", channel, level
             ### Set correct holding level here...
             if level is None:
                 level = self._DGHolding[channel]
                 if level is None:
-                    raise Exception("No remembered holding level for channel %s" % channel)
+                    raise ValueError(f"No remembered holding level for channel {channel}")
             else:
                 self._DGHolding[channel] = level
 
@@ -164,7 +164,6 @@ class DAQGeneric(Device):
                 mapping = self.getMapping(channel)
             val = mapping.mapToDaq(channel, self._DGHolding[channel])
             prof('map')
-            # print "Set holding for channel %s: %f => %f" % (channel, self._DGHolding[channel], val)
 
             chConf = self._DGConfig[channel]
             isVirtual = chConf.get('virtual', False)
@@ -202,6 +201,14 @@ class DAQGeneric(Device):
             return self.mapFromDAQ(channel, val)
         else:
             return val
+
+    def setChannelValue(self, channel, value, block=True):
+        with self._DGLock:
+            daq = self._DGConfig[channel]['device']
+            chan = self._DGConfig[channel]['channel']
+        daqDev = self.dm.getDevice(daq)
+        value = self.mapToDAQ(channel, value)
+        daqDev.setChannelValue(chan, value, block=block)
 
     def reconfigureChannel(self, chan, config):
         """Allows reconfiguration of channel properties (including the actual DAQ channel name)"""
@@ -294,32 +301,31 @@ class DAQGenericTask(DeviceTask):
         for ch in self._DAQCmd:
             # dev = self.dev.dm.getDevice(self.dev._DGConfig[ch]['channel'][0])
             dev = self.dev.dm.getDevice(self.dev.getDAQName(ch))
-            prof.mark(ch + ' get dev')
+            prof.mark(f'{ch} get dev')
             if 'preset' in self._DAQCmd[ch]:
                 with self.dev._DGLock:
                     daqChan = self.dev._DGConfig[ch]['channel']
                 # dev.setChannelValue(self.dev._DGConfig[ch]['channel'][1], self._DAQCmd[ch]['preset'])
                 preVal = self.mapping.mapToDaq(ch, self._DAQCmd[ch]['preset'])
                 dev.setChannelValue(daqChan, preVal)
-                prof.mark(ch + ' preset')
+                prof.mark(f'{ch} preset')
             elif 'holding' in self._DAQCmd[ch]:
                 self.dev.setChanHolding(ch, self._DAQCmd[ch]['holding'])
-                prof.mark(ch + ' set holding')
+                prof.mark(f'{ch} set holding')
             if 'recordInit' in self._DAQCmd[ch] and self._DAQCmd[ch]['recordInit']:
                 self.initialState[ch] = self.dev.getChannelValue(ch)
-                prof.mark(ch + ' record init')
+                prof.mark(f'{ch} record init')
         for ch in self.dev._DGConfig:
             ## record current holding value for all output channels (even those that were not buffered for this task)
             with self.dev._DGLock:
                 chanType = self.dev._DGConfig[ch]['type']
             if chanType in ['ao', 'do']:
                 self.holdingVals[ch] = self.dev.getChanHolding(ch)
-                prof.mark(ch + ' record holding')
+                prof.mark(f'{ch} record holding')
         prof.finish()
 
     def createChannels(self, daqTask):
         self.daqTasks = {}
-        # print "createChannels"
 
         ## Is this the correct DAQ device for any of my channels?
         ## create needed channels + info
@@ -327,13 +333,10 @@ class DAQGenericTask(DeviceTask):
 
         chans = self.dev.listChannels()
         for ch in chans:
-            # print "  creating channel %s.." % ch
             if ch not in self._DAQCmd:
-                # print "    ignoring channel", ch, "not in command"
                 continue
             chConf = chans[ch]
             if chConf['device'] != daqTask.devName():
-                # print "    ignoring channel", ch, "wrong device"
                 continue
 
             ## Input channels are only used if the command has record: True
@@ -395,15 +398,13 @@ class DAQGenericTask(DeviceTask):
     def stop(self, abort=False):
         # with self.dev._DGLock:  ##not necessary
         ## Stop DAQ tasks before setting holding level.
-        # print "STOP"
         prof = Profiler(disabled=True)
         for ch in self.daqTasks:
-            # print "Stop task", self.daqTasks[ch]
             try:
                 self.daqTasks[ch].stop(abort=abort)
             except Exception:
                 printExc("Error while stopping DAQ task:")
-            prof(f'stop {ch}')
+            prof(f'stop {ch} (abort={abort})')
         for ch in self._DAQCmd:
             if 'holding' in self._DAQCmd[ch]:
                 self.dev.setChanHolding(ch, self._DAQCmd[ch]['holding'])

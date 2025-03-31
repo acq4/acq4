@@ -110,9 +110,6 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
     def stop(self, reason="task stop requested"):
         """Stop the task (nicely).
 
-        This method may return another future if stopping the task is expected to
-        take time.
-
         Subclasses may extend this method and/or use checkStop to determine whether
         stop() has been called.
         """
@@ -366,7 +363,7 @@ class MultiFuture(Future):
     def stop(self, reason="task stop requested"):
         for f in self.futures:
             f.stop(reason=reason)
-        return Future.stop(self, reason)
+        return super().stop(reason=reason)
 
     def percentDone(self):
         return min(f.percentDone() for f in self.futures)
@@ -463,6 +460,7 @@ class FutureButton(FeedbackButton):
             self.setEnabled(self._stoppable)
             self.setText(message, temporary=True)
             self.setToolTip(tip, temporary=True)
+            self.setStyleSheet("background-color: #AFA; color: #000;", temporary=True)
             if processEvents:
                 Qt.QtWidgets.QApplication.processEvents()
         else:
@@ -470,7 +468,7 @@ class FutureButton(FeedbackButton):
 
     def _controlTheFuture(self):
         if self._future is None:
-            self.processing(self._processing or ("Cancel" if self._stoppable else "Processing..."))
+            self.processing(self._processing or (f"Cancel {self.text()}" if self._stoppable else "Processing..."))
             try:
                 future = self._future = self._future_producer()
             except Exception:
