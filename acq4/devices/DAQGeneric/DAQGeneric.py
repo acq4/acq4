@@ -202,6 +202,14 @@ class DAQGeneric(Device):
         else:
             return val
 
+    def setChannelValue(self, channel, value, block=True):
+        with self._DGLock:
+            daq = self._DGConfig[channel]['device']
+            chan = self._DGConfig[channel]['channel']
+        daqDev = self.dm.getDevice(daq)
+        value = self.mapToDAQ(channel, value)
+        daqDev.setChannelValue(chan, value, block=block)
+
     def reconfigureChannel(self, chan, config):
         """Allows reconfiguration of channel properties (including the actual DAQ channel name)"""
         with self._DGLock:

@@ -886,6 +886,10 @@ class Task:
         self.startedDevs = []
         self.startTime = None
         self.stopTime = None
+        self.startedDevs = []
+        self.stopped = False
+        self.abortRequested = False
+        self._done = False
 
         # self.reserved = False
         try:

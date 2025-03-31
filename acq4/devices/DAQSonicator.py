@@ -39,6 +39,8 @@ class DAQSonicator(Sonicator):
         The config of the analog output channel in charge of the voltage output to the sonicator.
     disable : dict (optional)
         The config of the output channel on which a 5V signal will disable the sonicator.
+    overload : dict (optional)
+        The config of the input channel on which a 5V signal will indicate and overload.
     protocols : dict
         Each protocol is a dictionary, in line with the output of Stimulus.save(), for example::
             clean:
@@ -77,8 +79,9 @@ class DAQSonicator(Sonicator):
             },
         }
         if "disable" in config:
-            config["disable"].setdefault("holding", 1)
             daq_conf["channels"]["disable"] = config["disable"]
+        if "overload" in config:
+            daq_conf["channels"]["overload"] = config["overload"]
         self._daq = DAQGeneric(
             deviceManager,
             config=daq_conf,
@@ -111,17 +114,24 @@ class DAQSonicator(Sonicator):
                 "command": {"command": wave},
             },
         }
-        if "disable" in self.config:
-            cmd[self._daq.name()]["disable"] = {"preset": 0}
         task = self.dm.createTask(cmd)
-        task.execute(block=False, processEvents=False)
-        while not task.isDone():
-            try:
+        task.reserveDevices()
+        try:
+            if "disable" in self.config:
+                self._daq.setChannelValue("disable", 0)
+            if "overload" in self.config and self._daq.getChannelValue("overload"):
+                raise RuntimeError("Overload detected. Please check the sonicator device.")
+            task.execute(block=False, processEvents=False)
+            while not task.isDone():
                 _future.sleep(0.1)
-            except Exception:
+            if "overload" in self.config and self._daq.getChannelValue("overload"):
+                raise RuntimeError("Overload detected. Command likely required too much power.")
+        except Exception:
+            if task.stopped:
                 task.abort()
-                raise
-        task.stop()
+            raise
+        finally:
+            task.stop()
 
     def calcVoltage(self, frequency: float) -> float:
         """
