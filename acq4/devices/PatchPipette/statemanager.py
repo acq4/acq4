@@ -246,10 +246,10 @@ class PatchPipetteStateManager(Qt.QObject):
     def jobFinished(self, job, allowNextState=True):
         disconnect(job.sigStateChanged, self.jobStateChanged)
         disconnect(job.sigFinished, self.jobFinished)
-        cleanup = job.cleanup()
-        cleanup.allowNextState = allowNextState
-        cleanup.nextState = job.nextState
-        cleanup.sigFinished.connect(self.jobCleanupFinished)
+        if cleanup := job.cleanup():
+            cleanup.allowNextState = allowNextState
+            cleanup.nextState = job.nextState
+            cleanup.sigFinished.connect(self.jobCleanupFinished)
 
     def jobCleanupFinished(self, cleanup):
         cleanup.wait()

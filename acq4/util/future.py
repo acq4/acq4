@@ -467,7 +467,7 @@ class FutureButton(FeedbackButton):
 
     def _controlTheFuture(self):
         if self._future is None:
-            self.processing(self._processing or ("Cancel" if self._stoppable else "Processing..."))
+            self.processing(self._processing or (f"Cancel {self.text()}" if self._stoppable else "Processing..."))
             try:
                 future = self._future = self._future_producer()
             except Exception:
