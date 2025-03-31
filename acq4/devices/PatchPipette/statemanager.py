@@ -244,14 +244,17 @@ class PatchPipetteStateManager(Qt.QObject):
         self.dev.emitNewEvent("state_event", {'state': job.stateName, 'info': state})
 
     def jobFinished(self, job, allowNextState=True):
-        try:
-            job.cleanup().wait()
-        except Exception:
-            printExc(f"Error during {job.stateName} cleanup:")
         disconnect(job.sigStateChanged, self.jobStateChanged)
         disconnect(job.sigFinished, self.jobFinished)
-        if allowNextState and job.nextState is not None:
-            self.requestStateChange(job.nextState)
+        cleanup = job.cleanup()
+        cleanup.allowNextState = allowNextState
+        cleanup.nextState = job.nextState
+        cleanup.sigFinished.connect(self.jobCleanupFinished)
+
+    def jobCleanupFinished(self, cleanup):
+        cleanup.wait()
+        if cleanup.allowNextState and cleanup.nextState is not None:
+            self.requestStateChange(cleanup.nextState)
 
 
 class ProfileParameter(Parameter):
