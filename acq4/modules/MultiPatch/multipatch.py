@@ -398,7 +398,32 @@ class MultiPatchWindow(Qt.QWidget):
         pos = self._cammod.window().getView().mapSceneToView(ev.scenePos())
         spos = pip.scopeDevice().globalPosition()
         pos = [pos.x(), pos.y(), spos.z()]
-        pip.resetGlobalPosition(pos)
+        if pip.tipPositionIsReasonable(pos):
+            pip.setTipPosition(pos)
+        else:
+            reply = Qt.QMessageBox(self)
+            reply.setWindowTitle("Set tip position")
+            reply.setText("Tip position is outside of normal range.")
+            reply.addButton("Include", Qt.QMessageBox.ActionRole)
+            reply.addButton("Re-do", Qt.QMessageBox.RejectRole)
+            reply.addButton("Override", Qt.QMessageBox.AcceptRole)
+            reply.addButton("Temporary", Qt.QMessageBox.YesRole)
+            reply.setInformativeText(
+                "Do you want to include this outlier, re-do the tip selection, override all historic positions, or"
+                " only use this as a temporary position?"
+            )
+            reply.exec_()
+            if reply.buttonRole(reply.clickedButton()) == Qt.QMessageBox.ActionRole:
+                pip.setTipPosition(pos)
+            elif reply.buttonRole(reply.clickedButton()) == Qt.QMessageBox.RejectRole:
+                self._calibratePips.insert(0, pip)
+                return
+            elif reply.buttonRole(reply.clickedButton()) == Qt.QMessageBox.AcceptRole:
+                pip.overrideTipPosition(pos)
+            elif reply.buttonRole(reply.clickedButton()) == Qt.QMessageBox.YesRole:
+                pip.setTemporaryTipPosition(pos)
+            else:
+                raise AssertionError("Unknown button clicked")
 
         # if calibration stage positions were requested, then move the stage now
         if len(self._calibrateStagePositions) > 0:

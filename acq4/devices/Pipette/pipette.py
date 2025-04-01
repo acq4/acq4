@@ -227,6 +227,33 @@ class Pipette(Device, OptomechDevice):
         self._camInterfaces[iface] = None
         return iface
 
+    def tipPositionIsReasonable(self, pos) -> bool:
+        cal = self.readConfigFile('calibration')
+        if 'offset history' in cal and len(cal['offset history']) > 10:
+            avg = np.mean(cal['offset history'], axis=0)
+            sigma = np.std(np.linalg.norm(np.array(cal['offset history']) - avg, axis=1))
+            if np.linalg.norm(np.array(pos) - avg) > 3 * sigma:
+                return False
+        return True
+
+    def setTipPosition(self, pos):
+        self.resetGlobalPosition(pos)
+        cal = self.readConfigFile('calibration')
+        cal['offset'] = list(self.offset)
+        cal.setdefault('offset history', []).append(cal['offset'])
+        cal['offset history'] = cal['offset history'][-20:]
+        self.writeConfigFile(cal, 'calibration')
+
+    def overrideTipPosition(self, pos):
+        self.resetGlobalPosition(pos)
+        cal = self.readConfigFile('calibration')
+        cal['offset'] = list(self.offset)
+        cal['offset history'] = [cal['offset']]
+        self.writeConfigFile(cal, 'calibration')
+
+    def setTemporaryTipPosition(self, pos):
+        self.resetGlobalPosition(pos)
+
     def resetGlobalPosition(self, pos):
         """Set the device transform such that the pipette tip is located at the global position *pos*.
 
@@ -237,9 +264,6 @@ class Pipette(Device, OptomechDevice):
 
     def setOffset(self, offset):
         self.offset = np.array(offset)
-        cal = self.readConfigFile('calibration')
-        cal['offset'] = list(offset)
-        self.writeConfigFile(cal, 'calibration')
         self._updateTransform()
         self.sigCalibrationChanged.emit(self)
 
