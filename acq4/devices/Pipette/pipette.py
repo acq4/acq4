@@ -254,6 +254,13 @@ class Pipette(Device, OptomechDevice):
     def setTemporaryTipPosition(self, pos):
         self.resetGlobalPosition(pos)
 
+    def averageHistoricOffset(self):
+        cal = self.readConfigFile('calibration')
+        if 'offset history' in cal and len(cal['offset history']) > 0:
+            return np.mean(cal['offset history'], axis=0)
+        else:
+            return self.offset
+
     def resetGlobalPosition(self, pos):
         """Set the device transform such that the pipette tip is located at the global position *pos*.
 

@@ -156,7 +156,7 @@ class PatchPipette(Device):
         self.emitNewEvent('new_pipette', {})
         self.newPatchAttempt()
         self.setState('bath')
-        # todo: set calibration to average 
+        self.pipetteDevice.setOffset(self.pipetteDevice.averageHistoricOffset())
         return self.pipetteDevice.findNewPipette()
 
     def requestNewPipette(self):
