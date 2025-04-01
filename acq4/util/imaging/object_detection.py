@@ -260,7 +260,9 @@ def detect_neurons(
 ) -> list:
     if do_3d := not isinstance(frames, Frame):
         data = np.stack([frame.data() for frame in frames])
-        transform = frames[0].globalTransform()
+        # build a new transform whose xy is the same but whose z will properly map frame number to z
+        transform = SRTTransform3D(init=(frames[0].globalTransform()))
+        transform.setScale((transform.getScale()[0], transform.getScale()[1], transform.getScale()[2] * z_scale))
     else:
         data = frames.data()[np.newaxis, ...]
         transform = frames.globalTransform()
