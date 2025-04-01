@@ -401,26 +401,15 @@ class MultiPatchWindow(Qt.QWidget):
         if pip.tipPositionIsReasonable(pos):
             pip.setTipPosition(pos)
         else:
-            reply = Qt.QMessageBox(self)
-            reply.setWindowTitle("Set tip position")
-            reply.setText("Tip position is outside of normal range.")
-            reply.addButton("Include", Qt.QMessageBox.ActionRole)
-            reply.addButton("Re-do", Qt.QMessageBox.RejectRole)
-            reply.addButton("Override", Qt.QMessageBox.AcceptRole)
-            reply.addButton("Temporary", Qt.QMessageBox.YesRole)
-            reply.setInformativeText(
-                "Do you want to include this outlier, re-do the tip selection, override all historic positions, or"
-                " only use this as a temporary position?"
-            )
-            reply.exec_()
-            if reply.buttonRole(reply.clickedButton()) == Qt.QMessageBox.ActionRole:
+            button_text = self.promptUserForTipOutlierBehavior()
+            if button_text == "Include":
                 pip.setTipPosition(pos)
-            elif reply.buttonRole(reply.clickedButton()) == Qt.QMessageBox.RejectRole:
+            elif button_text == "Re-do":
                 self._calibratePips.insert(0, pip)
                 return
-            elif reply.buttonRole(reply.clickedButton()) == Qt.QMessageBox.AcceptRole:
+            elif button_text == "Override":
                 pip.overrideTipPosition(pos)
-            elif reply.buttonRole(reply.clickedButton()) == Qt.QMessageBox.YesRole:
+            elif button_text == "Temporary":
                 pip.setTemporaryTipPosition(pos)
             else:
                 raise AssertionError("Unknown button clicked")
@@ -433,6 +422,21 @@ class MultiPatchWindow(Qt.QWidget):
         if len(self._calibratePips) == 0:
             self.ui.calibrateBtn.setChecked(False)
             self.updateXKeysBacklight()
+
+    def promptUserForTipOutlierBehavior(self):
+        reply = Qt.QMessageBox(self)
+        reply.setWindowTitle("Tip position outlier")
+        reply.setText("Tip position is outside of normal range.")
+        reply.addButton("Include", Qt.QMessageBox.ActionRole)
+        reply.addButton("Re-do", Qt.QMessageBox.RejectRole)
+        reply.addButton("Override", Qt.QMessageBox.AcceptRole)
+        reply.addButton("Temporary", Qt.QMessageBox.YesRole)
+        reply.setInformativeText(
+            "Do you want to include this outlier, re-do the tip selection, override all historic positions, or"
+            " only use this as a temporary position?"
+        )
+        reply.exec_()
+        return reply.clickedButton().text()
 
     def cameraModuleClicked_setTarget(self, ev):
         if ev.button() != Qt.Qt.LeftButton:
