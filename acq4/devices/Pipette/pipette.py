@@ -222,6 +222,11 @@ class Pipette(Device, OptomechDevice):
         """Return a widget with a UI to put in the device rack"""
         return PipetteDeviceGui(self, win)
 
+    def cameraModuleInterface(self, mod):
+        iface = PipetteCamModInterface(self, mod, showUi=self._opts['showCameraModuleUI'])
+        self._camInterfaces[iface] = None
+        return iface
+
     def tipPositionIsReasonable(self, pos) -> bool:
         cal = self.readConfigFile('calibration')
         if 'offset history' in cal and len(cal['offset history']) > 10:
@@ -668,6 +673,250 @@ class PipetteRecorder:
 
     def store(self, filename):
         json.dump(self.events, open(f'{filename}.json', 'w'))
+
+
+class PipetteCamModInterface(CameraModuleInterface):
+    """**DEPRECATED** use MultiPatch module instead
+
+    Implements user interface for Pipette.
+    """
+    canImage = False
+
+    def __init__(self, dev: "Pipette", mod, showUi=True):
+        CameraModuleInterface.__init__(self, dev, mod)
+        self._haveTarget = False
+        self._showUi = showUi
+
+        self.ui = CamModTemplate()
+        self.ctrl = Qt.QWidget()
+        self.ui.setupUi(self.ctrl)
+
+        self.calibrateAxis = Axis([0, 0], 0, inverty=False)
+        self.calibrateAxis.setZValue(5000)
+        mod.addItem(self.calibrateAxis)
+        self.calibrateAxis.setVisible(False)
+
+        self.centerArrow = pg.ArrowItem()
+        self.centerArrow.setZValue(5000)
+        mod.addItem(self.centerArrow)
+
+        self.target = Target()
+        self.target.setZValue(5000)
+        mod.addItem(self.target)
+        self.target.setVisible(False)
+
+        # decide how / whether to add a label for the target
+        basename = dev.name().rstrip('0123456789')
+        self.pipetteNumber = dev.name()[len(basename):]
+
+        showLabel = False
+        if basename != dev.name():
+            # If this device looks like "Name00" and another device has the same
+            # prefix, then we will label all targets with their device numbers.
+            for devname in getManager().listDevices():
+                if devname.startswith(basename):
+                    showLabel = True
+                    break
+        if showLabel:
+            self._updateTargetLabel()
+
+        self.depthTarget = Target(movable=False)
+        mod.getDepthView().addItem(self.depthTarget)
+        self.depthTarget.setVisible(False)
+
+        self.depthArrow = pg.ArrowItem(angle=180 - dev.yawAngle())
+        mod.getDepthView().addItem(self.depthArrow)
+
+        # self.ui.setOrientationBtn.toggled.connect(self.setOrientationToggled)
+        self.ui.setOrientationBtn.setEnabled(False)
+        mod.window().getView().scene().sigMouseClicked.connect(self.sceneMouseClicked)
+        dev.sigGlobalTransformChanged.connect(self.transformChanged)
+        dev.scopeDevice().sigGlobalTransformChanged.connect(self.focusChanged)
+        dev.sigTargetChanged.connect(self.targetChanged)
+        self.calibrateAxis.sigRegionChangeFinished.connect(self.calibrateAxisChanged)
+        self.calibrateAxis.sigRegionChanged.connect(self.calibrateAxisChanging)
+        self.ui.homeBtn.clicked.connect(self.homeClicked)
+        self.ui.searchBtn.clicked.connect(self.searchClicked)
+        self.ui.idleBtn.clicked.connect(self.idleClicked)
+        self.ui.setTargetBtn.toggled.connect(self.setTargetToggled)
+        self.ui.targetBtn.clicked.connect(self.targetClicked)
+        self.ui.approachBtn.clicked.connect(self.approachClicked)
+        self.ui.autoCalibrateBtn.clicked.connect(self.autoCalibrateClicked)
+        self.ui.getRefBtn.clicked.connect(self.getRefFramesClicked)
+        self.ui.aboveTargetBtn.clicked.connect(self.aboveTargetClicked)
+        self.target.sigPositionChangeFinished.connect(self.targetDragged)
+
+        self.transformChanged()
+        self.updateCalibrateAxis()
+
+    def setOrientationToggled(self):
+        self.updateCalibrateAxis()
+        self.calibrateAxis.setVisible(self.ui.setOrientationBtn.isChecked())
+
+    def selectedSpeed(self):
+        return 'fast' if self.ui.fastRadio.isChecked() else 'slow'
+
+    def hideMarkers(self, hide):
+        self.centerArrow.setVisible(not hide)
+        self.target.setVisible(not hide and self._haveTarget)
+
+    def sceneMouseClicked(self, ev):
+        if ev.button() != Qt.Qt.LeftButton:
+            return
+
+        if self.ui.setCenterBtn.isChecked():
+            self.ui.setCenterBtn.setChecked(False)
+            pos = self.mod().getView().mapSceneToView(ev.scenePos())
+            self.calibrateAxis.setPos(pos)
+
+        elif self.ui.setTargetBtn.isChecked():
+            pos = self.mod().getView().mapSceneToView(ev.scenePos())
+            z = self.getDevice().scopeDevice().getFocusDepth()
+            self.setTargetPos(pos, z)
+            self.target.setFocusDepth(z)
+
+    def setTargetPos(self, pos, z):
+        self.dev().setTarget((pos.x(), pos.y(), z))
+
+    def targetChanged(self, dev, pos):
+        self.target.setPos(pg.Point(pos[:2]))
+        self.target.setDepth(pos[2])
+        self.depthTarget.setPos(Point(0, pos[2]))
+        self.target.setVisible(True)
+        self._haveTarget = True
+        self.depthTarget.setVisible(True)
+        self.ui.targetBtn.setEnabled(True)
+        self.ui.approachBtn.setEnabled(True)
+        self.ui.setTargetBtn.setChecked(False)
+        self.focusChanged()
+
+    def targetDragged(self):
+        z = self.getDevice().scopeDevice().getFocusDepth()
+        self.setTargetPos(self.target.pos(), z)
+        self.target.setFocusDepth(z)
+
+    def transformChanged(self):
+        # manipulator's global transform has changed; update the center arrow and orientation axis
+        pos, angle = self.analyzeTransform()
+
+        self.centerArrow.setPos(pos[0], pos[1])
+        self.centerArrow.setStyle(angle=180-angle)
+        # self.depthLine.setValue(pos[2])
+        self.depthArrow.setPos(0, pos[2])
+
+        if self.target.label() is not None:
+            self._updateTargetLabel()
+
+    def _updateTargetLabel(self):
+        num = self.pipetteNumber
+        dev = self.getDevice()
+        angle = dev.yawAngle() + 180
+        offset = 16 * np.cos(angle * np.pi / 180), 16 * np.sin(angle * np.pi / 180)
+        self.target.setLabel(num, {'offset': offset, 'anchor': (0.5, 0.5)})
+
+    def analyzeTransform(self):
+        """Return the position and yaw angle of the device transform
+        """
+        dev = self.getDevice()
+        pos = dev.mapToGlobal([0, 0, 0])
+        x = dev.mapToGlobal([1, 0, 0])
+        p1 = pg.Point(x[:2])
+        p2 = pg.Point(pos[:2])
+        p3 = pg.Point(1, 0)
+        angle = (p1 - p2).angle(p3)
+        if angle is None:
+            angle = 0
+
+        return pos, angle
+
+    def updateCalibrateAxis(self):
+        pos, angle = self.analyzeTransform()
+        with pg.SignalBlock(self.calibrateAxis.sigRegionChangeFinished, self.calibrateAxisChanged):
+            self.calibrateAxis.setPos(pos[:2])
+            self.calibrateAxis.setAngle(angle)
+
+    def focusChanged(self):
+        try:
+            tdepth = self.dev().targetPosition()[2]
+        except RuntimeError:
+            return
+        fdepth = self.dev().scopeDevice().getFocusDepth()
+        self.target.setFocusDepth(fdepth)
+
+    def calibrateAxisChanging(self):
+        pos = self.calibrateAxis.pos()
+        angle = self.calibrateAxis.angle()
+
+        self.centerArrow.setPos(pos[0], pos[1])
+        self.centerArrow.setStyle(angle=180-angle)
+
+    def calibrateAxisChanged(self):
+        pos = self.calibrateAxis.pos()
+        angle = self.calibrateAxis.angle()
+        size = self.calibrateAxis.size()
+        dev = self.getDevice()
+        z = dev.scopeDevice().getFocusDepth()
+
+        # first orient the parent stage
+        dev.setCalibratedOrientation(yaw=angle)
+
+        # next set our position offset
+        pos = [pos.x(), pos.y(), z]
+        dev.resetGlobalPosition(pos)
+
+    def controlWidget(self):
+        if self._showUi:
+            return self.ctrl
+        else:
+            return None
+
+    def boundingRect(self):
+        return None
+
+    def quit(self):
+        for item in self.calibrateAxis, self.centerArrow, self.depthArrow:
+            scene = item.scene()
+            if scene is not None:
+                scene.removeItem(item)
+
+    def homeClicked(self):
+        self.getDevice().goHome(self.selectedSpeed())
+
+    def searchClicked(self):
+        self.getDevice().goSearch(self.selectedSpeed())
+
+    def idleClicked(self):
+        self.getDevice().goIdle(self.selectedSpeed())
+
+    def setTargetToggled(self, b):
+        if b:
+            self.ui.setCenterBtn.setChecked(False)
+
+    def setCenterToggled(self, b):
+        if b:
+            self.ui.setTargetBtn.setChecked(False)
+
+    def targetClicked(self):
+        self.getDevice().goTarget(self.selectedSpeed())
+
+    def approachClicked(self):
+        self.getDevice().goApproach(self.selectedSpeed())
+
+    def autoCalibrateClicked(self):
+        pip = self.getDevice()
+        pos = pip.tracker.autoFindTipPosition()
+        success = pip.saveTipPositionIfPossible(pos, window=self.parent())
+        if not success:
+            return self.autoCalibrateClicked()
+
+    def getRefFramesClicked(self):
+        dev = self.getDevice()
+        zrange = dev.config.get('referenceZRange', None)
+        zstep = dev.config.get('referenceZStep', None)
+        dev.tracker.takeReferenceFrames(zRange=zrange, zStep=zstep)
+
+    def aboveTargetClicked(self):
+        self.getDevice().goAboveTarget(self.selectedSpeed())
 
 
 class Axis(pg.ROI):
