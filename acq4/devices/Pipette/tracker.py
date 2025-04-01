@@ -22,7 +22,8 @@ class PipetteTracker:
         This method guarantees that the frame is exposed *after* this method is called.
         """
         imager = self._getImager(imager)
-        return imager.acquireFrames(1, ensureFreshFrames=ensureFreshFrames).getResult()[0]
+        with imager.ensureRunning(ensureFreshFrames=True):
+            return imager.acquireFrames(1).getResult()[0]
 
     def _getImager(self, imager=None):
         if imager is None:
