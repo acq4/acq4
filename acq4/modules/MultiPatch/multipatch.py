@@ -266,8 +266,16 @@ class MultiPatchWindow(Qt.QWidget):
 
     @future_wrap
     def _autoCalibrate(self, _future):
-        for pip in self.selectedPipettes():
-            pip.pipetteDevice.tracker.autoCalibrate()
+        work_to_do = self.selectedPipettes()
+        while work_to_do:
+            patchpip = work_to_do.pop(0)
+            pip = patchpip.pipetteDevice if isinstance(patchpip, PatchPipette) else patchpip
+            pos = pip.tracker.autoFindTipPosition()
+            success = pip.saveTipPositionIfPossible(pos, self)
+            if not success:
+                work_to_do.insert(0, patchpip)
+                continue
+
             _future.checkStop()
 
     def _cellDetect(self):
@@ -398,21 +406,10 @@ class MultiPatchWindow(Qt.QWidget):
         pos = self._cammod.window().getView().mapSceneToView(ev.scenePos())
         spos = pip.scopeDevice().globalPosition()
         pos = [pos.x(), pos.y(), spos.z()]
-        if pip.tipPositionIsReasonable(pos):
-            pip.setTipPosition(pos)
-        else:
-            button_text = self.promptUserForTipOutlierBehavior()
-            if button_text == "Include":
-                pip.setTipPosition(pos)
-            elif button_text == "Re-do":
-                self._calibratePips.insert(0, pip)
-                return
-            elif button_text == "Override":
-                pip.overrideTipPosition(pos)
-            elif button_text == "Temporary":
-                pip.setTemporaryTipPosition(pos)
-            else:
-                raise AssertionError("Unknown button clicked")
+        success = pip.saveTipPositionIfPossible(pos, self)
+        if not success:
+            self._calibratePips.insert(0, pip)
+            return
 
         # if calibration stage positions were requested, then move the stage now
         if len(self._calibrateStagePositions) > 0:
@@ -422,21 +419,6 @@ class MultiPatchWindow(Qt.QWidget):
         if len(self._calibratePips) == 0:
             self.ui.calibrateBtn.setChecked(False)
             self.updateXKeysBacklight()
-
-    def promptUserForTipOutlierBehavior(self):
-        reply = Qt.QMessageBox(self)
-        reply.setWindowTitle("Tip position outlier")
-        reply.setText("Tip position is outside of normal range.")
-        reply.addButton("Include", Qt.QMessageBox.ActionRole)
-        reply.addButton("Re-do", Qt.QMessageBox.RejectRole)
-        reply.addButton("Override", Qt.QMessageBox.AcceptRole)
-        reply.addButton("Temporary", Qt.QMessageBox.YesRole)
-        reply.setInformativeText(
-            "Do you want to include this outlier, re-do the tip selection, override all historic positions, or"
-            " only use this as a temporary position?"
-        )
-        reply.exec_()
-        return reply.clickedButton().text()
 
     def cameraModuleClicked_setTarget(self, ev):
         if ev.button() != Qt.Qt.LeftButton:

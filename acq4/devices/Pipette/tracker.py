@@ -32,8 +32,8 @@ class PipetteTracker:
             imager = man.getDevice("Camera")
         return imager
 
-    def autoCalibrate(self, **kwds):
-        """Automatically calibrate the pipette tip position using template matching on a single camera frame.
+    def autoFindTipPosition(self, **kwds):
+        """Automatically find the pipette tip position using template matching on a single camera frame.
 
         Return the offset in pipette-local coordinates and the normalized cross-correlation value of the template match.
 
@@ -42,7 +42,10 @@ class PipetteTracker:
         if "frame" not in kwds:
             kwds['frame'] = self.takeFrame(ensureFreshFrames=False)
         tipPos, corr = self.measureTipPosition(**kwds)
-        self.pipette.resetGlobalPosition(tipPos)
+        return tipPos
+
+    def measureTipPosition(self, frame, **kwds):
+        raise NotImplementedError()
 
 
 class ResnetPipetteTracker(PipetteTracker):
@@ -66,7 +69,6 @@ class ResnetPipetteTracker(PipetteTracker):
 
         # map pixel offsets back to physical coordinates
         tipPos = frame.mapFromFrameToGlobal(pg.Vector(xyOffset))
-
 
         return (tipPos.x(), tipPos.y(), tipPos.z() + zErr * 1e-6), performance
 
@@ -332,7 +334,7 @@ class CorrelationPipetteTracker(PipetteTracker):
                 "No reference frames found for this pipette / objective / filter combination: %s" % repr(key)
             )
 
-    def autoCalibrate(self, **kwds):
+    def autoFindTipPosition(self, **kwds):
         """Automatically calibrate the pipette tip position using template matching on a single camera frame.
 
         Return the offset in pipette-local coordinates and the normalized cross-correlation value of the template match.
@@ -635,7 +637,7 @@ class DriftMonitor(Qt.QWidget):
             pos = []
             for i, t in enumerate(self.trackers):
                 try:
-                    err, corr = t.autoCalibrate(frame=frame, padding=50e-6)
+                    err = t.autoFindTipPosition(frame=frame, padding=50e-6)
                     # err = np.array(err)
                     # self.cumulative[i] += err
                     # err = (self.cumulative[i]**2).sum()**0.5
