@@ -551,4 +551,4 @@ class CellDetectState(PatchPipetteState):
             self._continuousAdvanceFuture.stop()
         patchrec = self.dev.patchRecord()
         patchrec['cellDetectFinalTarget'] = tuple(self.dev.pipetteDevice.targetPosition())
-        super().cleanup()
+        return super().cleanup()

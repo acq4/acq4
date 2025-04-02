@@ -110,9 +110,6 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
     def stop(self, reason="task stop requested"):
         """Stop the task (nicely).
 
-        This method may return another future if stopping the task is expected to
-        take time.
-
         Subclasses may extend this method and/or use checkStop to determine whether
         stop() has been called.
         """
@@ -210,7 +207,7 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         """Default sleep implementation used by wait(); may be overridden to return early."""
         self.finishedEvent.wait(timeout=duration)
 
-    def checkStop(self, delay=0):
+    def checkStop(self):
         """Raise self.StopRequested if self.stop() has been called.
 
         This may be used by subclasses to periodically check for stop requests.
@@ -218,25 +215,20 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         The optional *delay* argument causes this method to sleep while periodically
         checking for a stop request.
         """
-        if delay == 0 and self._stopRequested:
+        if self._stopRequested:
             raise self.StopRequested()
 
-        stop = ptime.time() + delay
+    def sleep(self, duration, interval=0.2):
+        """Sleep for the specified duration (in seconds) while checking for stop requests."""
+        stop = ptime.time() + duration
+        self.checkStop()
         while True:
             now = ptime.time()
             if now > stop:
                 return
 
-            time.sleep(max(0.0, min(0.1, stop - now)))
-            if self._stopRequested:
-                raise self.StopRequested()
-
-    def sleep(self, duration, interval=0.2):
-        """Sleep for the specified duration (in seconds) while checking for stop requests."""
-        start = time.time()
-        while time.time() < start + duration:
+            time.sleep(max(0.0, min(interval, stop - now)))
             self.checkStop()
-            time.sleep(interval)
 
     def waitFor(self, future: Future[WAITING_RETVAL_TYPE], timeout=20.0) -> Future[WAITING_RETVAL_TYPE]:
         """Wait for another future to complete while also checking for stop requests on self."""
@@ -366,7 +358,7 @@ class MultiFuture(Future):
     def stop(self, reason="task stop requested"):
         for f in self.futures:
             f.stop(reason=reason)
-        return Future.stop(self, reason)
+        return super().stop(reason=reason)
 
     def percentDone(self):
         return min(f.percentDone() for f in self.futures)
