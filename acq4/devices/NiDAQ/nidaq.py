@@ -77,7 +77,7 @@ class NiDAQ(Device):
         return True
 
     def verifyChannelBelongs(self, chan):
-        if not chan.startswith(f"/{self.exclusiveDevice}/"):
+        if self.exclusiveDevice is not None and not chan.startswith(f"/{self.exclusiveDevice}/"):
             raise ValueError(f"Channel {chan} does not belong to device {self.exclusiveDevice}")
 
     def release(self):
