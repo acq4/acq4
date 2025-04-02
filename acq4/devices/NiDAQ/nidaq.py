@@ -222,8 +222,8 @@ class NiDAQ(Device):
         maskpos = mask1[:-radius] * mask2[radius:]  # both need to be true
         maskneg = mask1[radius:] * mask2[:-radius]
         mask = maskpos + maskneg
-        d5 = numpy.where(mask, data[:-r2], data[
-                                           radius:-radius])  # where both are true replace the value with the value from 2 points before
+        # where both are true replace the value with the value from 2 points before
+        d5 = numpy.where(mask, data[:-r2], data[radius:-radius])
         d6 = numpy.empty(data.shape, dtype=data.dtype)  # add points back to the ends
         d6[radius:-radius] = d5
         d6[:radius] = data[:radius]
