@@ -45,6 +45,21 @@ class AutomationDebugWindow(Qt.QWidget):
         self.ui.setTopLeftButton.clicked.connect(self._setTopLeft)
         self.ui.setBottomRightButton.clicked.connect(self._setBottomRight)
 
+        # Add mock checkbox and file selection
+        self.ui.mockCheckBox = Qt.QCheckBox("Use mock z-stack")
+        self.ui.mockFileButton = Qt.QPushButton("Select MetaArray File")
+        self.ui.mockFileButton.clicked.connect(self._selectMockFile)
+        self.ui.mockFilePath = Qt.QLineEdit()
+        self.ui.mockFilePath.setReadOnly(True)
+        mockLayout = Qt.QHBoxLayout()
+        mockLayout.addWidget(self.ui.mockCheckBox)
+        mockLayout.addWidget(self.ui.mockFileButton)
+        mockLayout.addWidget(self.ui.mockFilePath)
+        # Insert the mock controls before the zStackDetectBtn
+        layout = self.ui.zStackDetectBtn.parent().layout()
+        index = layout.indexOf(self.ui.zStackDetectBtn)
+        layout.insertLayout(index, mockLayout)
+
         self.ui.autoTargetBtn.setOpts(future_producer=self._autoTarget, stoppable=True)
         self.ui.autoTargetBtn.sigFinished.connect(self._handleAutoFinish)
 
@@ -236,11 +251,27 @@ class AutomationDebugWindow(Qt.QWidget):
     def _detectNeuronsZStack(self, _future: Future) -> list:
         self.sigWorking.emit(self.ui.zStackDetectBtn)
         from acq4.util.imaging.object_detection import detect_neurons
+        from acq4.filetypes import MetaArray
 
+        # Check if we should use a mock z-stack
+        if hasattr(self.ui, 'mockCheckBox') and self.ui.mockCheckBox.isChecked() and self.ui.mockFilePath.text():
+            # Load the MetaArray file
+            mock_file_path = self.ui.mockFilePath.text()
+            try:
+                # Just load the file - further processing will be done elsewhere
+                z_stack = MetaArray.MetaArray(file=mock_file_path)
+                self.sigLogMessage.emit(f"Loaded mock z-stack from: {mock_file_path}")
+                # Return the loaded MetaArray - actual processing will be implemented later
+                return [(np.array([0, 0, 0]), np.array([100e-6, 100e-6, 100e-6]))]  # Placeholder
+            except Exception as e:
+                self.sigLogMessage.emit(f"Error loading mock z-stack: {str(e)}")
+                # Fall back to real acquisition
+        
+        # Normal acquisition path
         depth = self.cameraDevice.getFocusDepth()
         start = depth - 40 * µm
         stop = depth + 40 * µm
-        # TODO mock this z-stack using some pre-recorded stack when running in mock mode
+        # Acquire real z-stack
         z_stack = _future.waitFor(acquire_z_stack(self.cameraDevice, start, stop, 1 * µm)).getResult()
         self.cameraDevice.setFocusDepth(depth).raiseErrors("error restoring focus")  # no need to wait
         pixel_size = self.cameraDevice.getPixelSize()[0] / µm
