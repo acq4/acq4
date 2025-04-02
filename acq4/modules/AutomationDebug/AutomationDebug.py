@@ -5,6 +5,7 @@ import random
 
 import numpy as np
 
+from MetaArray import MetaArray
 from acq4.devices.Camera import Camera
 from acq4.devices.Microscope import Microscope
 from acq4.devices.Pipette import Pipette
@@ -13,6 +14,7 @@ from acq4.modules.Camera import CameraWindow
 from acq4.modules.Module import Module
 from acq4.util import Qt
 from acq4.util.future import Future, future_wrap
+from acq4.util.imaging import Frame
 from acq4.util.imaging.sequencer import acquire_z_stack
 from acq4.util.target import TargetBox
 from pyqtgraph.units import µm
@@ -45,20 +47,8 @@ class AutomationDebugWindow(Qt.QWidget):
         self.ui.setTopLeftButton.clicked.connect(self._setTopLeft)
         self.ui.setBottomRightButton.clicked.connect(self._setBottomRight)
 
-        # Add mock checkbox and file selection
-        self.ui.mockCheckBox = Qt.QCheckBox("Use mock z-stack")
-        self.ui.mockFileButton = Qt.QPushButton("Select MetaArray File")
-        self.ui.mockFileButton.clicked.connect(self._selectMockFile)
-        self.ui.mockFilePath = Qt.QLineEdit()
         self.ui.mockFilePath.setReadOnly(True)
-        mockLayout = Qt.QHBoxLayout()
-        mockLayout.addWidget(self.ui.mockCheckBox)
-        mockLayout.addWidget(self.ui.mockFileButton)
-        mockLayout.addWidget(self.ui.mockFilePath)
-        # Insert the mock controls before the zStackDetectBtn
-        layout = self.ui.zStackDetectBtn.parent().layout()
-        index = layout.indexOf(self.ui.zStackDetectBtn)
-        layout.insertLayout(index, mockLayout)
+        self.ui.mockFileButton.clicked.connect(self._selectMockFile)
 
         self.ui.autoTargetBtn.setOpts(future_producer=self._autoTarget, stoppable=True)
         self.ui.autoTargetBtn.sigFinished.connect(self._handleAutoFinish)
@@ -102,7 +92,7 @@ class AutomationDebugWindow(Qt.QWidget):
             try:
                 _future.waitFor(calibratePipette(pipette, camera, camera.scopeDev))
                 error = np.linalg.norm(pipette.globalPosition() - true_tip_position)
-                self.sigLogMessage.emit(f"Calibration complete: {error*1e6:.2g}µm error")
+                self.sigLogMessage.emit(f"Calibration complete: {error * 1e6:.2g}µm error")
                 if error > 50e-6:
                     self.failedCalibrations.append(error)
                     i = len(self.failedCalibrations) - 1
@@ -251,34 +241,40 @@ class AutomationDebugWindow(Qt.QWidget):
     def _detectNeuronsZStack(self, _future: Future) -> list:
         self.sigWorking.emit(self.ui.zStackDetectBtn)
         from acq4.util.imaging.object_detection import detect_neurons
-        from acq4.filetypes import MetaArray
 
-        # Check if we should use a mock z-stack
-        if hasattr(self.ui, 'mockCheckBox') and self.ui.mockCheckBox.isChecked() and self.ui.mockFilePath.text():
-            # Load the MetaArray file
-            mock_file_path = self.ui.mockFilePath.text()
-            try:
-                # Just load the file - further processing will be done elsewhere
-                z_stack = MetaArray.MetaArray(file=mock_file_path)
-                self.sigLogMessage.emit(f"Loaded mock z-stack from: {mock_file_path}")
-                # Return the loaded MetaArray - actual processing will be implemented later
-                return [(np.array([0, 0, 0]), np.array([100e-6, 100e-6, 100e-6]))]  # Placeholder
-            except Exception as e:
-                self.sigLogMessage.emit(f"Error loading mock z-stack: {str(e)}")
-                # Fall back to real acquisition
-        
-        # Normal acquisition path
-        depth = self.cameraDevice.getFocusDepth()
-        start = depth - 40 * µm
-        stop = depth + 40 * µm
-        # Acquire real z-stack
-        z_stack = _future.waitFor(acquire_z_stack(self.cameraDevice, start, stop, 1 * µm)).getResult()
-        self.cameraDevice.setFocusDepth(depth).raiseErrors("error restoring focus")  # no need to wait
-        pixel_size = self.cameraDevice.getPixelSize()[0] / µm
-        z_scale = 1e-6
         man = self.module.manager
         autoencoder = man.config.get("misc", {}).get("autoencoderPath", None)
         classifier = man.config.get("misc", {}).get("classifierPath", None)
+        pixel_size = self.cameraDevice.getPixelSize()[0] / µm
+        if self.ui.mockCheckBox.isChecked() and self.ui.mockFilePath.text():
+            # Load the MetaArray file
+            mock_file_path = self.ui.mockFilePath.text()
+            data = MetaArray(file=mock_file_path)
+            base_position = np.array(self.cameraDevice.mapToGlobal((0, 0, 0)))
+            positions = data._info[0]["globalPosition"]
+            z_scale = abs(positions[0][2] - positions[1][2])
+            z_stack = [
+                Frame(
+                    data[i].asarray(),
+                    info={
+                        "transform": {
+                            "pos": base_position + (0, 0, i * z_scale),
+                            "scale": (pixel_size, pixel_size, z_scale),
+                        },
+                    },
+                )
+                for i in range(len(data))
+            ]
+        else:
+            # Normal acquisition path
+            depth = self.cameraDevice.getFocusDepth()
+            start = depth - 40 * µm
+            stop = depth + 40 * µm
+            # Acquire real z-stack
+            z_stack = _future.waitFor(acquire_z_stack(self.cameraDevice, start, stop, 1 * µm)).getResult()
+            self.cameraDevice.setFocusDepth(depth).raiseErrors("error restoring focus")  # no need to wait
+            z_scale = 1e-6
+
         return _future.waitFor(
             detect_neurons(
                 z_stack, autoencoder=autoencoder, classifier=classifier, xy_scale=pixel_size, z_scale=z_scale
