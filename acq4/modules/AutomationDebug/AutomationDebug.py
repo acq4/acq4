@@ -240,6 +240,7 @@ class AutomationDebugWindow(Qt.QWidget):
         depth = self.cameraDevice.getFocusDepth()
         start = depth - 40 * µm
         stop = depth + 40 * µm
+        # TODO mock this z-stack using some pre-recorded stack when running in mock mode
         z_stack = _future.waitFor(acquire_z_stack(self.cameraDevice, start, stop, 1 * µm)).getResult()
         self.cameraDevice.setFocusDepth(depth).raiseErrors("error restoring focus")  # no need to wait
         pixel_size = self.cameraDevice.getPixelSize()[0] / µm
