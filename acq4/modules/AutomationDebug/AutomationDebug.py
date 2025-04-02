@@ -251,8 +251,9 @@ class AutomationDebugWindow(Qt.QWidget):
             mock_file_path = self.ui.mockFilePath.text()
             data = MetaArray(file=mock_file_path)
             base_position = np.array(self.cameraDevice.mapToGlobal((0, 0, 0)))
-            positions = data._info[0]["globalPosition"]
-            z_scale = abs(positions[0][2] - positions[1][2])
+            # positions = data._info[0]["globalPosition"]
+            # z_scale = abs(positions[0][2] - positions[1][2])
+            z_scale = 1e-6  # ugh, some stacks lack position info
             z_stack = [
                 Frame(
                     data[i].asarray(),
