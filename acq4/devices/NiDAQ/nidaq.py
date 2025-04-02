@@ -130,13 +130,14 @@ class NiDAQ(Device):
         if method == 'subsample':
             data = data[::ds].copy()
 
-        # MC: broken code, commented out.
-        # elif method == 'mean':
-        #     # decimate by averaging points together (does not remove HF noise, just folds it down.)
-        #     if res['info']['type'] in ['di', 'do']:
-        #         data = NiDAQ.meanResample(data, ds, binary=True)
-        #     else:
-        #         data = NiDAQ.meanResample(data, ds)
+        elif method == 'mean':
+            # MC: broken code, commented out.
+            raise ValueError("Mean resampling not implemented.")
+            # decimate by averaging points together (does not remove HF noise, just folds it down.)
+            # if res['info']['type'] in ['di', 'do']:
+            #     data = NiDAQ.meanResample(data, ds, binary=True)
+            # else:
+            #     data = NiDAQ.meanResample(data, ds)
 
         elif method == 'fourier':
             # Decimate using fourier resampling -- causes ringing artifacts, very slow to compute (possibly uses butterworth filter?)
