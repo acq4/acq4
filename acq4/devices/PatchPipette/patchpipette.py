@@ -235,8 +235,8 @@ class PatchPipette(Device):
         self.sigPressureChanged.emit(self, source, pressure)
         self.emitNewEvent('pressure_changed', OrderedDict([('source', source), ('pressure', pressure)]))
 
-    def sonicationChanged(self, frequency):
-        self.emitNewEvent('sonication_changed', {'frequency': frequency})
+    def sonicationChanged(self, state: str):
+        self.emitNewEvent('sonication_changed', {'state': state})
 
     def setSelected(self):
         pass
