@@ -245,7 +245,7 @@ class PatchPipetteStateManager(Qt.QObject):
 
     def jobFinished(self, job, allowNextState=True):
         try:
-            job.cleanup()
+            job.cleanup().wait()
         except Exception:
             printExc(f"Error during {job.stateName} cleanup:")
         disconnect(job.sigStateChanged, self.jobStateChanged)

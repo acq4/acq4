@@ -1,12 +1,12 @@
+from __future__ import annotations
+
 from collections import OrderedDict
 
 import numpy as np
-from typing import Optional
 
 from acq4.devices.PatchClamp.patchclamp import PatchClamp
 from acq4.util import Qt
 from acq4.util import ptime
-from acq4.util.Mutex import Mutex
 from neuroanalysis.test_pulse import PatchClampTestPulse
 from .devgui import PatchPipetteDeviceGui
 from .statemanager import PatchPipetteStateManager
@@ -14,6 +14,7 @@ from ..Camera import Camera
 from ..Device import Device
 from ..Pipette import Pipette
 from ..PressureControl import PressureControl
+from ..Sonicator import Sonicator
 
 
 class PatchPipette(Device):
@@ -54,10 +55,9 @@ class PatchPipette(Device):
         self.pipetteDevice: Pipette = deviceManager.getDevice(pipName)
 
         clampName = config.pop('clampDevice', None)
-        if clampName is None:
-            self.clampDevice: Optional[PatchClamp] = None
-        else:
-            self.clampDevice: Optional[PatchClamp] = deviceManager.getDevice(clampName)
+        self.clampDevice: PatchClamp | None = None
+        if clampName is not None:
+            self.clampDevice = deviceManager.getDevice(clampName)
             self.clampDevice.sigStateChanged.connect(self.clampStateChanged)
             self.clampDevice.sigAutoBiasChanged.connect(self._autoBiasChanged)
             self.clampDevice.sigTestPulseFinished.connect(self._testPulseFinished)
@@ -77,11 +77,16 @@ class PatchPipette(Device):
         self._patchRecord = None
         self._pipetteRecord = None
 
-        self.pressureDevice: Optional[PressureControl] = None
+        self.pressureDevice: PressureControl | None = None
         if 'pressureDevice' in config:
             self.pressureDevice = deviceManager.getDevice(config['pressureDevice'])
             self.pressureDevice.sigPressureChanged.connect(self.pressureChanged)
         self.userPressure = False
+
+        self.sonicatorDevice: Sonicator | None = None
+        if 'sonicatorDevice' in config:
+            self.sonicatorDevice = deviceManager.getDevice(config['sonicatorDevice'])
+            self.sonicatorDevice.sigSonicationChanged.connect(self.sonicationChanged)
 
         self._initStateManager()
 
@@ -229,6 +234,9 @@ class PatchPipette(Device):
     def pressureChanged(self, dev, source, pressure):
         self.sigPressureChanged.emit(self, source, pressure)
         self.emitNewEvent('pressure_changed', OrderedDict([('source', source), ('pressure', pressure)]))
+
+    def sonicationChanged(self, state: str):
+        self.emitNewEvent('sonication_changed', {'state': state})
 
     def setSelected(self):
         pass

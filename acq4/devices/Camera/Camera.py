@@ -1044,7 +1044,7 @@ class FrameAcquisitionFuture(Future):
                     lastFrameTime = ptime.time()
                 except queue.Empty:
                     try:
-                        self.checkStop(0.1)  # delay while checking for a stop request
+                        self.sleep(0.1)
                     except self.StopRequested:
                         self._taskDone(interrupted=self._frame_count is not None)
                         break
