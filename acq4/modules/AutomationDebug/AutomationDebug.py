@@ -281,6 +281,14 @@ class AutomationDebugWindow(Qt.QWidget):
         finally:
             self.sigWorking.emit(False)
 
+    def _selectMockFile(self):
+        filePath, _ = Qt.QFileDialog.getOpenFileName(
+            self, "Select MetaArray File", "", "MetaArray Files (*.ma);;All Files (*)"
+        )
+        if filePath:
+            self.ui.mockFilePath.setText(filePath)
+            self.ui.mockCheckBox.setChecked(True)
+
     def _randomLocation(self):
         x = random.uniform(self._xLeftSpin.value(), self._xRightSpin.value())
         y = random.uniform(self._yBottomSpin.value(), self._yTopSpin.value())
