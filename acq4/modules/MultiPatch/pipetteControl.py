@@ -43,8 +43,15 @@ class PipetteControl(Qt.QWidget):
             if self.pip.clampDevice is not None:
                 self.pip.clampDevice.sigTestPulseFinished.connect(self.updatePlots)
                 self.pip.clampDevice.sigAutoBiasChanged.connect(self._updateAutoBiasUi)
-            if self.pip.pressureDevice is not None:
+            if self.pip.pressureDevice is None:
+                self.ui.pressureWidget.hide()
+            else:
                 self.ui.pressureWidget.connectPressureDevice(self.pip.pressureDevice)
+            if self.pip.sonicatorDevice is None:
+                self.ui.sonicatorLabel.hide()
+                self.ui.sonicatorActionControl.hide()
+            else:
+                self.pip.sonicatorDevice.sigSonicationChanged.connect(self.ui.sonicatorActionControl.setText)
             self.pip.sigNewPipetteRequested.connect(self.newPipetteRequested)
             self.pip.sigTipCleanChanged.connect(self.tipCleanChanged)
             self.pip.sigTipBrokenChanged.connect(self.tipBrokenChanged)
