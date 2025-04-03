@@ -571,8 +571,7 @@ class GeometryMotionPlanner:
         
         # Process obstacles in parallel for better performance
         from concurrent.futures import ThreadPoolExecutor
-        import threading
-        
+
         # Local function to process a single obstacle
         def process_obstacle(obst_item):
             obst, to_global_from_obst = obst_item
