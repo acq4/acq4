@@ -41,9 +41,7 @@ class VisualizePathPlan(Qt.QObject):
     def reset(self):
         # todo mutexes?
         for edge in self._bounds:
-            self._window.view.removeItem(edge)
-            edge.deleteLater()
-        self._bounds = []
+            edge.setVisible(False)
         self._startTarget.setVisible(False)
         self._destTarget.setVisible(False)
         self._activePath.setVisible(False)
@@ -53,6 +51,8 @@ class VisualizePathPlan(Qt.QObject):
 
     @future_wrap
     def startPath(self, path, bounds, _future):
+        if len(self._bounds) == 0:
+            self._bounds = self._window.createBounds(bounds, False)
         self._startPath(path, bounds)
 
     @inGuiThread
@@ -60,7 +60,8 @@ class VisualizePathPlan(Qt.QObject):
         self.reset(blocking=True)
         visible = self.shouldShowPath
 
-        self._bounds = self._window.createBounds(bounds, visible)
+        for b in self._bounds:
+            b.setVisible(visible)
         self._startTarget.setData(pos=np.array([path[0]]))
         self._startTarget.setVisible(visible)
         self._destTarget.setData(pos=np.array([path[-1]]))
@@ -209,7 +210,7 @@ class VisualizePathPlan(Qt.QObject):
         self._previousPath.deleteLater()
         for edge in self._bounds:
             self._window.view.removeItem(edge)
-        self._bounds = None
+        self._bounds = []
         for obst in self._obstacles.values():
             self._window.view.removeItem(obst)
         self._obstacles = None
