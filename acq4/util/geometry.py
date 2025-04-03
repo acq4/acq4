@@ -306,7 +306,7 @@ class GeometryMotionPlanner:
         with cls._cache_lock:
             cls._cache = {}
 
-    def __init__(self, geometries: Dict[Geometry, Transform], voxel_size: float = 150 * µm):
+    def __init__(self, geometries: Dict[Geometry, Transform], voxel_size: float = 100 * µm):
         """
         Parameters
         ----------
