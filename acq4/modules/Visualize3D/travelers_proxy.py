@@ -105,14 +105,14 @@ class VisualizePathPlan(Qt.QObject):
             n_updates += 1
             if self._window.testing or n_updates % skip == 0:
                 self._appendPath(path)
-                time.sleep(0.02)
+                time.sleep(0.05)
 
     @inGuiThread
     def _appendPath(self, path):
         if len(self._activePath.pos) > 0:
             prev = self._activePath.pos
         else:
-            prev = []
+            prev = path
         if len(self._previousPath.pos) > 0:
             prev = np.vstack((self._previousPath.pos, prev))
 
