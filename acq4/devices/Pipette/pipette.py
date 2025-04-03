@@ -2,10 +2,8 @@ import contextlib
 import json
 import os
 import weakref
-from datetime import datetime
 from typing import List
 
-import h5py
 import numpy as np
 
 import pyqtgraph as pg
@@ -22,7 +20,7 @@ from .planners import defaultMotionPlanners, PipettePathGenerator
 from .tracker import ResnetPipetteTracker
 from ..Camera import Camera
 from ..RecordingChamber import RecordingChamber
-from ...util.imaging.sequencer import acquire_z_stack
+from ...util.imaging.sequencer import run_image_sequence
 from ...util.json_encoder import ACQ4JSONEncoder
 
 CamModTemplate = Qt.importTemplate('.cameraModTemplate')
@@ -249,33 +247,26 @@ class Pipette(Device, OptomechDevice):
 
     @future_wrap
     def saveManualCalibration(self, _future):
+        path = os.path.join(self.configPath(), "manual-calibrations")
+        path = self.dm.configFileName(path)
+        path = self.dm.dirHandle(path, create=True)
+
         cam: Camera = self.imagingDevice()
         depth = cam.getFocusDepth()
         is_below_surface = depth <= self.scopeDevice().getSurfaceDepth()
         scan_dist = np.random.randint(2, 40 if is_below_surface else 100) * 1e-6
         step = scan_dist / 2
         try:
-            z_stack = _future.waitFor(
-                acquire_z_stack(cam, depth - scan_dist, depth + scan_dist, step)
-            ).getResult()
+            seq_future = run_image_sequence(cam, z_stack=(depth - scan_dist, depth + scan_dist, step), storage_dir=path)
+            _future.waitFor(seq_future)
         finally:
             _future.waitFor(cam.setFocusDepth(depth))
-        path = os.path.join(self.configPath(), "manual-calibrations")
-        path = self.dm.configFileName(path)
-        os.makedirs(path, exist_ok=True)
-        filename = f"calibration-{datetime.now().strftime('%Y%m%dT%H%M%S')}"
-        filename = os.path.join(path, filename)
+        fh = seq_future.imagesSavedIn
         info = {
-            "pipette offset": self.offset.tolist(),
+            **fh.info(),
+            "tip position": self.globalPosition(),
         }
-        with h5py.File(filename, "w") as fd:
-            # info_group = fd.create_group("info")
-            add_nested_metadata(fd, info)
-            for i, frame in enumerate(z_stack):
-                frame_info = {"position": frame.globalPosition.tolist(), **frame.info()}
-                frame_group = fd.create_group(f"z-stack/{i}")
-                add_nested_metadata(frame_group, frame_info)
-                frame_group.create_dataset("image", data=frame.data(), compression="gzip")
+        fh.setInfo(info)
 
     def resetGlobalPosition(self, pos):
         """Set the device transform such that the pipette tip is located at the global position *pos*.
@@ -605,7 +596,7 @@ class Pipette(Device, OptomechDevice):
         """Return an object that records all motion updates from this pipette
         """
         return PipetteRecorder(self)
-    
+
     def findNewPipette(self):
         from acq4.devices.Pipette.calibration import calibratePipette
         future = calibratePipette(self, self.imagingDevice(), self.scopeDevice())
