@@ -29,4 +29,4 @@ class WholeCellState(PatchPipetteState):
     def cleanup(self):
         patchrec = self.dev.patchRecord()
         patchrec['wholeCellStopTime'] = ptime.time()
-        super().cleanup()
+        return super().cleanup()

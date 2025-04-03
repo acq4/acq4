@@ -298,7 +298,7 @@
        <number>2</number>
       </property>
       <item>
-       <widget class="QPushButton" name="newPipetteBtn">
+       <widget class="FutureButton" name="newPipetteBtn">
         <property name="text">
          <string>new pip.</string>
         </property>
@@ -344,15 +344,61 @@
      </property>
     </widget>
    </item>
-   <item row="1" column="6">
-    <widget class="PressureControlWidget" name="pressureWidget" native="true">
-     <property name="maximumSize">
-      <size>
-       <width>65</width>
-       <height>16777215</height>
-      </size>
+   <item row="1" column="6" rowspan="2">
+    <layout class="QVBoxLayout" name="sonicatorAndPressureLayout">
+     <property name="spacing">
+      <number>2</number>
      </property>
-    </widget>
+     <item>
+      <widget class="PressureControlWidget" name="pressureWidget" native="true">
+       <property name="maximumSize">
+        <size>
+         <width>65</width>
+         <height>16777215</height>
+        </size>
+       </property>
+      </widget>
+     </item>
+     <item alignment="Qt::AlignHCenter">
+      <widget class="QLabel" name="sonicatorLabel">
+       <property name="text">
+        <string>Sonicator</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLineEdit" name="sonicatorActionControl">
+       <property name="font">
+        <font>
+         <weight>75</weight>
+         <bold>true</bold>
+        </font>
+       </property>
+       <property name="text">
+        <string>idle</string>
+       </property>
+       <property name="alignment">
+        <set>Qt::AlignCenter</set>
+       </property>
+       <property name="readOnly">
+        <bool>true</bool>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <spacer name="verticalSpacer_4">
+       <property name="orientation">
+        <enum>Qt::Vertical</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>20</width>
+         <height>40</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+    </layout>
    </item>
    <item row="0" column="2">
     <widget class="QLabel" name="label">
@@ -705,6 +751,16 @@
    <class>PressureControlWidget</class>
    <extends>QWidget</extends>
    <header>acq4.devices.PressureControl</header>
+  </customwidget>
+  <customwidget>
+   <class>FeedbackButton</class>
+   <extends>QPushButton</extends>
+   <header>pyqtgraph</header>
+  </customwidget>
+  <customwidget>
+   <class>FutureButton</class>
+   <extends>FeedbackButton</extends>
+   <header>acq4.util.future</header>
   </customwidget>
  </customwidgets>
  <resources/>

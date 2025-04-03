@@ -64,9 +64,9 @@ class ScientificaSerial:
             self.serial.write(msg + b'\r')
             try:
                 result = self.serial.readUntil(b'\r', timeout=timeout)[:-1]
-                self.serial.readAll() # should be nothing left in the buffer at this point
+                self.flush() # should be nothing left in the buffer at this point
             except TimeoutError:
-                self.serial.readAll()
+                self.flush()
                 raise
             if result.startswith(b'E,'):
                 errno = int(result.strip()[2:])
@@ -74,6 +74,9 @@ class ScientificaSerial:
                 exc.errno = errno
                 raise exc
             return result
+
+    def flush(self):
+        return self.serial.readAll()
 
     def setBaudrate(self, baudrate):
         """Set the baud rate of the device.
@@ -91,7 +94,7 @@ class ScientificaSerial:
     def clear(self):
         """Clear and return any pending serial data
         """
-        return self.serial.readAll()
+        return self.flush()
 
     def getDescription(self):
         """Return this device's description string.

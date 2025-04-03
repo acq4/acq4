@@ -359,4 +359,4 @@ class SealState(PatchPipetteState):
 
     def cleanup(self):
         self.dev.pressureDevice.setPressure(source='atmosphere')
-        super().cleanup()
+        return super().cleanup()

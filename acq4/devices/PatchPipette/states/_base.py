@@ -199,10 +199,11 @@ class PatchPipetteState(Future):
                 tps.append(self.testPulseResults.get())
         return tps
 
-    def cleanup(self):
-        """Called after job completes, whether it failed or succeeded.
+    def cleanup(self) -> Future:
+        """Called after job completes, whether it failed or succeeded. Ask `self.wasInterrupted()` to see if the
+        state was stopped early. Return a Future that completes when cleanup is done.
         """
-        pass
+        return Future.immediate()
 
     def _runJob(self):
         """Function invoked in background thread.
@@ -224,11 +225,11 @@ class PatchPipetteState(Future):
             if not self.isDone():
                 self._taskDone(interrupted=interrupted, excInfo=excInfo)
 
-    def checkStop(self, delay=0):
+    def checkStop(self):
         # extend checkStop to also see if the pipette was deactivated.
         if self.dev.active is False:
             raise self.StopRequested("Stop state because device is not 'active'")
-        Future.checkStop(self, delay)
+        Future.checkStop(self)
 
     def __repr__(self):
         return f'<{type(self).__name__} "{self.stateName}">'

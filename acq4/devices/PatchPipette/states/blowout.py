@@ -52,4 +52,4 @@ class BlowoutState(PatchPipetteState):
             dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
         except Exception:
             printExc("Error resetting pressure after blowout")
-        super().cleanup()
+        return super().cleanup()
