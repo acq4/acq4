@@ -318,10 +318,23 @@ def rrt_connect(
                 positions = np.array([node.position for node in other_tree.values()])
                 if len(positions) > 0:
                     kdtree = cKDTree(positions)
-                    distances, indices = kdtree.query(new_position, k=min(3, len(positions)))
                     
+                    # Handle both single and multiple nearest neighbor cases
+                    k_neighbors = min(3, len(positions))
+                    query_result = kdtree.query(new_position, k=k_neighbors)
+                    
+                    # Unpack query results based on k value
+                    if k_neighbors == 1:
+                        distances = [query_result[0]]
+                        indices = [query_result[1]]
+                    else:
+                        distances, indices = query_result
+                        
                     # Try to connect to closest nodes in other tree
-                    for dist, idx in zip(distances, indices):
+                    for i in range(len(indices)):
+                        dist = distances[i] if isinstance(distances, np.ndarray) else distances
+                        idx = indices[i] if isinstance(indices, np.ndarray) else indices
+                        
                         if dist < step_size * 1.5:  # Only try to connect if reasonably close
                             connect_node = list(other_tree.values())[idx]
                             if edge_cost(new_position, connect_node.position) < np.inf:
@@ -351,11 +364,14 @@ def rrt_connect(
                     # Sample a few nodes from each tree to check connections
                     start_samples = list(active_tree.values())
                     if len(start_samples) > 10:
-                        start_samples = np.random.choice(start_samples, 10, replace=False)
+                        # Use a list to avoid numpy random choice issues with custom objects
+                        indices = np.random.choice(len(start_samples), 10, replace=False)
+                        start_samples = [start_samples[i] for i in indices]
                     
                     goal_samples = list(other_tree.values())
                     if len(goal_samples) > 10:
-                        goal_samples = np.random.choice(goal_samples, 10, replace=False)
+                        indices = np.random.choice(len(goal_samples), 10, replace=False)
+                        goal_samples = [goal_samples[i] for i in indices]
                     
                     for s_node in start_samples:
                         for g_node in goal_samples:
