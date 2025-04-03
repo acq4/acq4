@@ -206,17 +206,37 @@ def generate_biased_sphere_points(n_points: int, sphere_radius: float, bias_dire
     return directions * radii[:, np.newaxis]
 
 
-def a_star_ish(
+class RRTNode:
+    """Node in an RRT tree."""
+    def __init__(self, position, parent=None):
+        self.position = position
+        self.parent = parent
+        self.children = []
+    
+    def add_child(self, child):
+        self.children.append(child)
+        
+    def path_to_root(self):
+        """Return the path from this node to the root."""
+        path = [self.position]
+        node = self
+        while node.parent is not None:
+            node = node.parent
+            path.append(node.position)
+        return path[::-1]
+
+
+def rrt_connect(
     start: np.ndarray,
     finish: np.ndarray,
     edge_cost: Callable,
-    heuristic: Callable = None,
-    neighbors: Callable = None,
-    max_cost: int = 4000,
+    max_iterations: int = 2000,
+    step_size: float = None,
+    goal_sample_rate: float = 0.1,
     callback: Callable = None,
 ) -> List[np.ndarray]:
-    """Find a path between *start* and *finish*. Return the path or raise a ValueError.
-
+    """Find a path between *start* and *finish* using bidirectional RRT-Connect.
+    
     Parameters
     ----------
     start
@@ -224,66 +244,143 @@ def a_star_ish(
     finish
         Final position.
     edge_cost
-        Function that takes two points and returns the cost of moving between them. If the cost is np.inf, the edge is
-        treated as impossible.
-    heuristic
-        Function that estimates the cost of moving from a point to the finish. Defaults to the Euclidean distance.
-    neighbors
-        Function that returns the neighbors of a point to try building a path to the finish.
-    max_cost
+        Function that takes two points and returns the cost of moving between them.
+        If the cost is np.inf, the edge is treated as impossible.
+    max_iterations
         Maximum number of iterations before giving up.
+    step_size
+        Maximum distance to extend a branch. If None, calculated based on start-finish distance.
+    goal_sample_rate
+        Probability of sampling the goal position directly.
     callback
         Used for debugging and visualization. Called with the current path at each iteration.
+        
+    Returns
+    -------
+    path : List[np.ndarray]
+        The path from start to finish, or raises ValueError if no path is found.
     """
-    if heuristic is None:
-
-        def heuristic(x, y):
-            return np.linalg.norm(y - x)
-
-    if neighbors is None:
-        radius = np.linalg.norm(finish - start) / 5
-        radius = max(radius, 100e-6)
-        count = 10
-
-        def neighbors(pt):
-            yield (radius * (finish - pt) / np.linalg.norm(finish - pt)) + pt
-            points = generate_biased_sphere_points(count, radius, finish - pt, concentration=0.4)
-            yield from (points + pt)
-            yield finish
-
-    open_set = {tuple(start): start}
-    came_from = {}
-    g_score = {tuple(start): 0}
-    f_score = {tuple(start): heuristic(start, finish)}
-    cost = 0
-
-    while open_set:
-        curr_key = min(open_set, key=lambda x: f_score[x])
-        current = open_set.pop(curr_key)
-        if np.all(current == finish):
-            return reconstruct_path(came_from, curr_key)
-
-        for neighbor in neighbors(current):
-            cost += 1
-            if cost > max_cost:
-                raise ValueError(f"Pathfinding exceeded maximum cost of {max_cost}")
-            neigh_key = tuple(neighbor)
-            this_cost = edge_cost(current, neighbor)
-            tentative_g_score = g_score[curr_key] + this_cost
-            if neigh_key not in g_score or tentative_g_score < g_score[neigh_key] or np.all(neighbor == finish):
-                came_from[neigh_key] = curr_key
-                g_score[neigh_key] = tentative_g_score
-                f_score[neigh_key] = tentative_g_score + 2 * heuristic(neighbor, finish)
-                if f_score[neigh_key] < np.inf and neigh_key not in open_set:
-                    open_set[neigh_key] = neighbor
-            if callback is not None:
-                callback(reconstruct_path(came_from, neigh_key)[::-1])
-
-    raise ValueError("Pathfinding failed; no valid paths found.")
+    # Calculate step size if not provided
+    if step_size is None:
+        step_size = np.linalg.norm(finish - start) / 10
+        step_size = max(step_size, 100e-6)  # Minimum step size
+    
+    # Initialize trees
+    start_tree = {tuple(start): RRTNode(start)}
+    goal_tree = {tuple(finish): RRTNode(finish)}
+    
+    # For alternating between trees
+    trees = [start_tree, goal_tree]
+    goals = [finish, start]
+    
+    # KD-trees for efficient nearest neighbor search
+    from scipy.spatial import cKDTree
+    
+    for i in range(max_iterations):
+        # Alternate between trees
+        tree_idx = i % 2
+        active_tree = trees[tree_idx]
+        goal = goals[tree_idx]
+        other_tree = trees[1 - tree_idx]
+        
+        # Sample random point (with bias toward goal)
+        if np.random.random() < goal_sample_rate:
+            random_point = goal
+        else:
+            # Sample with bias toward goal
+            direction = goal - list(active_tree.values())[0].position
+            distance = np.linalg.norm(direction)
+            random_point = generate_biased_sphere_points(
+                1, distance * 1.5, direction, concentration=0.5
+            )[0] + list(active_tree.values())[0].position
+        
+        # Find nearest node in active tree
+        positions = np.array([node.position for node in active_tree.values()])
+        kdtree = cKDTree(positions)
+        _, idx = kdtree.query(random_point)
+        nearest_node = list(active_tree.values())[idx]
+        
+        # Extend tree toward random point
+        direction = random_point - nearest_node.position
+        distance = np.linalg.norm(direction)
+        if distance > 0:
+            direction = direction / distance
+            new_position = nearest_node.position + min(step_size, distance) * direction
+            
+            # Check if the new edge is valid
+            if edge_cost(nearest_node.position, new_position) < np.inf:
+                # Add new node to tree
+                new_node = RRTNode(new_position, nearest_node)
+                nearest_node.add_child(new_node)
+                active_tree[tuple(new_position)] = new_node
+                
+                # Check if we can connect to the other tree
+                positions = np.array([node.position for node in other_tree.values()])
+                if len(positions) > 0:
+                    kdtree = cKDTree(positions)
+                    distances, indices = kdtree.query(new_position, k=min(3, len(positions)))
+                    
+                    # Try to connect to closest nodes in other tree
+                    for dist, idx in zip(distances, indices):
+                        if dist < step_size * 1.5:  # Only try to connect if reasonably close
+                            connect_node = list(other_tree.values())[idx]
+                            if edge_cost(new_position, connect_node.position) < np.inf:
+                                # Found a path!
+                                if tree_idx == 0:
+                                    # Start tree to goal tree
+                                    path = new_node.path_to_root() + connect_node.path_to_root()[::-1]
+                                else:
+                                    # Goal tree to start tree
+                                    path = connect_node.path_to_root() + new_node.path_to_root()[::-1]
+                                
+                                # Simplify the path
+                                path = simplify_path(path, edge_cost)
+                                
+                                if callback is not None:
+                                    callback(path)
+                                
+                                return path
+                
+                # Visualization callback
+                if callback is not None and i % 5 == 0:  # Reduce callback frequency for performance
+                    # Find best connection between trees for visualization
+                    best_start = None
+                    best_goal = None
+                    best_dist = float('inf')
+                    
+                    # Sample a few nodes from each tree to check connections
+                    start_samples = list(active_tree.values())
+                    if len(start_samples) > 10:
+                        start_samples = np.random.choice(start_samples, 10, replace=False)
+                    
+                    goal_samples = list(other_tree.values())
+                    if len(goal_samples) > 10:
+                        goal_samples = np.random.choice(goal_samples, 10, replace=False)
+                    
+                    for s_node in start_samples:
+                        for g_node in goal_samples:
+                            dist = np.linalg.norm(s_node.position - g_node.position)
+                            if dist < best_dist and edge_cost(s_node.position, g_node.position) < np.inf:
+                                best_dist = dist
+                                best_start = s_node
+                                best_goal = g_node
+                    
+                    if best_start is not None:
+                        if tree_idx == 0:
+                            vis_path = best_start.path_to_root() + best_goal.path_to_root()[::-1]
+                        else:
+                            vis_path = best_goal.path_to_root() + best_start.path_to_root()[::-1]
+                        callback(vis_path)
+    
+    raise ValueError("Pathfinding failed; no valid paths found after maximum iterations.")
 
 
 def simplify_path(path, edge_cost: Callable):
     """Simplify the given path by iteratively removing unnecessary waypoints."""
+    if len(path) <= 2:
+        return path
+    
+    # First pass: greedy algorithm to remove points
     path = list(path)
     made_change = True
     while made_change:
@@ -293,7 +390,36 @@ def simplify_path(path, edge_cost: Callable):
             if edge_cost(np.array(path[ptr]), np.array(path[ptr + 2])) < np.inf:
                 path.pop(ptr + 1)
                 made_change = True
-            ptr += 1
+            else:
+                ptr += 1
+    
+    # Second pass: Douglas-Peucker-inspired algorithm for smoother paths
+    if len(path) > 3:
+        # Find points that can be removed while maintaining valid paths
+        result = [path[0]]
+        i = 0
+        while i < len(path) - 1:
+            # Try to extend as far as possible
+            for j in range(len(path) - 1, i, -1):
+                if edge_cost(np.array(path[i]), np.array(path[j])) < np.inf:
+                    if j > i + 1:  # Skip intermediate points
+                        result.append(path[j])
+                        i = j
+                    else:
+                        i += 1
+                    break
+            else:
+                # If no skip was possible, keep the next point
+                i += 1
+                if i < len(path):
+                    result.append(path[i])
+        
+        # Ensure the last point is included
+        if result[-1] != path[-1]:
+            result.append(path[-1])
+        
+        return result
+    
     return path
 
 
@@ -343,7 +469,7 @@ class GeometryMotionPlanner:
              geometry.voxelize (in local coordinate system)
              volume.convolve(geometry_voxels, traveling_kernel)
         3. Do a path-finding algorithm that, at each step, checks for collisions among all convolved volumes
-             A* (ish)
+             RRT-Connect (bidirectional rapidly-exploring random tree)
              volume.check_edge_collision
 
         Parameters
@@ -407,14 +533,32 @@ class GeometryMotionPlanner:
                     return np.inf
             return np.linalg.norm(b - a)
 
-        path = a_star_ish(start.coordinates, stop.coordinates, edge_cost, callback=callback)
-        profile.mark("A*")
-        path = simplify_path(path, edge_cost)
-        profile.mark("simplified path")
+        # Calculate appropriate step size based on voxel size and distance
+        distance = np.linalg.norm(stop.coordinates - start.coordinates)
+        step_size = min(distance / 10, self.voxel_size * 5)
+        step_size = max(step_size, self.voxel_size)
+        
+        # Use RRT-Connect for pathfinding
+        path = rrt_connect(
+            start.coordinates, 
+            stop.coordinates, 
+            edge_cost, 
+            max_iterations=4000,
+            step_size=step_size,
+            goal_sample_rate=0.2,
+            callback=callback
+        )
+        
+        profile.mark("RRT-Connect")
+        
+        # Skip the start point in the returned path
+        result_path = path[1:] if len(path) > 1 else path
+        
         if callback:
-            callback(path, skip=1)
+            callback(result_path, skip=1)
+            
         profile.finish()
-        return path[1:]
+        return result_path
 
     def make_convolved_obstacles(self, traveler, to_global_from_traveler, visualizer=None):
         # if visualizer:
@@ -424,9 +568,17 @@ class GeometryMotionPlanner:
         #         to_global_from_traveler * traveler.transform,
         #     ).raiseErrors("traveler failed to render")
         obstacles = []
-        for obst, to_global_from_obst in self.geometries.items():
+        
+        # Process obstacles in parallel for better performance
+        from concurrent.futures import ThreadPoolExecutor
+        import threading
+        
+        # Local function to process a single obstacle
+        def process_obstacle(obst_item):
+            obst, to_global_from_obst = obst_item
             if obst is traveler:
-                continue
+                return None
+                
             cache_key = (obst.name, traveler.name)
             with self._cache_lock:
                 if cache_key not in self._cache:
@@ -437,12 +589,31 @@ class GeometryMotionPlanner:
                     convolved_obst.transform = obst.transform * convolved_obst.transform
                     self._cache[cache_key] = convolved_obst
                 obst_volume = self._cache[cache_key]
-
-            obstacles.append((obst_volume, to_global_from_obst))
-            if visualizer is not None:
-                visualizer.addObstacle(obst.name, obst_volume, to_global_from_obst).raiseErrors(
-                    "obstacle failed to render"
-                )
+                
+            return (obst_volume, to_global_from_obst, obst.name)
+        
+        # Process obstacles
+        obstacle_items = [(obst, to_global) for obst, to_global in self.geometries.items() if obst is not traveler]
+        
+        # Use ThreadPoolExecutor for parallel processing if we have multiple obstacles
+        if len(obstacle_items) > 1:
+            with ThreadPoolExecutor(max_workers=min(4, len(obstacle_items))) as executor:
+                results = list(executor.map(process_obstacle, obstacle_items))
+        else:
+            results = [process_obstacle(item) for item in obstacle_items]
+            
+        # Filter out None results and add to obstacles list
+        for result in results:
+            if result is not None:
+                obst_volume, to_global_from_obst, name = result
+                obstacles.append((obst_volume, to_global_from_obst))
+                
+                # Add to visualizer if provided
+                if visualizer is not None:
+                    visualizer.addObstacle(name, obst_volume, to_global_from_obst).raiseErrors(
+                        "obstacle failed to render"
+                    )
+                    
         return obstacles
 
 
