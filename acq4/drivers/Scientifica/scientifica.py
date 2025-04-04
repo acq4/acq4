@@ -31,10 +31,15 @@ IVM,230,175,-6.4,-6.4,-6.4,0,1.14
 IVM Mini,230,175,-6.4,-6.4,-6.4,0,1.14
 """
 
+MANIPULATOR_DEVICE_TYPES = [
+    'patchstar', 'microstar', 'ivm_manipulator', 'extended_patchstar',
+    'ivm_mini', 'ivm_3000_rotary', 'ivm_3000',
+]
+
 
 class Scientifica:
     """
-    Provides interface to a Scientifica manipulator.
+    Provides interface to a Scientifica manipulator or stage.
 
     This can be initialized either with the com port name or with the string description
     of the device.
@@ -208,6 +213,9 @@ class Scientifica:
         typ = self.send('type').decode()
         return types.get(typ, typ)
 
+    def isManipulator(self):
+        return self.getType() in MANIPULATOR_DEVICE_TYPES
+
     def setPositionCallback(self, cb):
         self.ctrlThread.set_pos_callback(cb)
 
@@ -221,10 +229,7 @@ class Scientifica:
     def hasSeparateZSpeed(self):
         if self._version < 3:
             return False
-        return self.getType() not in [
-            'patchstar', 'microstar', 'ivm_manipulator', 'extended_patchstar',
-            'ivm_mini', 'ivm_3000_rotary', 'ivm_3000',
-        ]
+        return not self.isManipulator()
 
     def getDescription(self):
         """Return this device's description string.
@@ -249,7 +254,10 @@ class Scientifica:
             else:
                 packet = self.send('P')
             try:
-                return [int(x) / self.ticksPerMicron for x in packet.split(b'\t')]
+                pos = [int(x) / self.ticksPerMicron for x in packet.split(b'\t')]
+                if len(pos) != 3:
+                    raise TypeError(f"Got wrong position length from scientifica controller ({pos})")
+                return pos
             except ValueError:
                 if _tryagain:
                     # packet corruption; clear and try again
@@ -275,6 +283,8 @@ class Scientifica:
         'approachMode': ('APPROACH', 'APPROACH %d', bool),
         'objDisp': ('OBJDISP', 'OBJDISP %d', float),
         'objLift': ('OBJLIFT', 'OBJLIFT %d', float),
+        'objL1': ('OBJL1', 'OBJDISP %d', int),  # used for version 2 devices instead
+        'objL2': ('OBJL2', 'OBJDISP %d', int),  # of objLift and objDisp
     }
 
     @staticmethod
@@ -435,7 +445,7 @@ class Scientifica:
         if self.hasSeparateZSpeed():
             self.setParam('maxZSpeed', speed)
 
-    def moveTo(self, pos, speed=None):
+    def moveTo(self, pos, speed=None, attempts_allowed=3):
         """Set the position of the manipulator.
         
         *pos* must be a list of 3 items, each is either an integer representing the desired position
@@ -451,7 +461,7 @@ class Scientifica:
             currentPos = self.getPos()
             pos = [pos[i] if pos[i] is not None else currentPos[i] for i in (0, 1, 2)]
 
-        return self.ctrlThread.move(tuple(pos), speed)
+        return self.ctrlThread.move(tuple(pos), speed, attempts_allowed=attempts_allowed)
 
     def zeroPosition(self, axis: str | None = None):
         """Reset the stage coordinates to (0, 0, 0) without moving the stage. If *axis* is given,
