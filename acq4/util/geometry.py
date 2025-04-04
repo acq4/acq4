@@ -208,14 +208,15 @@ def generate_biased_sphere_points(n_points: int, sphere_radius: float, bias_dire
 
 class RRTNode:
     """Node in an RRT tree."""
+
     def __init__(self, position, parent=None):
         self.position = position
         self.parent = parent
         self.children = []
-    
+
     def add_child(self, child):
         self.children.append(child)
-        
+
     def path_to_root(self):
         """Return the path from this node to the root."""
         path = [self.position]
@@ -236,7 +237,7 @@ def rrt_connect(
     callback: Callable = None,
 ) -> List[np.ndarray]:
     """Find a path between *start* and *finish* using bidirectional RRT-Connect.
-    
+
     Parameters
     ----------
     start
@@ -254,7 +255,7 @@ def rrt_connect(
         Probability of sampling the goal position directly.
     callback
         Used for debugging and visualization. Called with the current path at each iteration.
-        
+
     Returns
     -------
     path : List[np.ndarray]
@@ -264,25 +265,25 @@ def rrt_connect(
     if step_size is None:
         step_size = np.linalg.norm(finish - start) / 10
         step_size = max(step_size, 100e-6)  # Minimum step size
-    
+
     # Initialize trees
     start_tree = {tuple(start): RRTNode(start)}
     goal_tree = {tuple(finish): RRTNode(finish)}
-    
+
     # For alternating between trees
     trees = [start_tree, goal_tree]
     goals = [finish, start]
-    
+
     # KD-trees for efficient nearest neighbor search
     from scipy.spatial import cKDTree
-    
+
     for i in range(max_iterations):
         # Alternate between trees
         tree_idx = i % 2
         active_tree = trees[tree_idx]
         goal = goals[tree_idx]
         other_tree = trees[1 - tree_idx]
-        
+
         # Sample random point (with bias toward goal)
         if np.random.random() < goal_sample_rate:
             random_point = goal
@@ -290,51 +291,52 @@ def rrt_connect(
             # Sample with bias toward goal
             direction = goal - list(active_tree.values())[0].position
             distance = np.linalg.norm(direction)
-            random_point = generate_biased_sphere_points(
-                1, distance * 1.5, direction, concentration=0.5
-            )[0] + list(active_tree.values())[0].position
-        
+            random_point = (
+                generate_biased_sphere_points(1, distance * 1.5, direction, concentration=0.5)[0]
+                + list(active_tree.values())[0].position
+            )
+
         # Find nearest node in active tree
         positions = np.array([node.position for node in active_tree.values()])
         kdtree = cKDTree(positions)
         _, idx = kdtree.query(random_point)
         nearest_node = list(active_tree.values())[idx]
-        
+
         # Extend tree toward random point
         direction = random_point - nearest_node.position
         distance = np.linalg.norm(direction)
         if distance > 0:
             direction = direction / distance
             new_position = nearest_node.position + min(step_size, distance) * direction
-            
+
             # Check if the new edge is valid
             if edge_cost(nearest_node.position, new_position) < np.inf:
                 # Add new node to tree
                 new_node = RRTNode(new_position, nearest_node)
                 nearest_node.add_child(new_node)
                 active_tree[tuple(new_position)] = new_node
-                
+
                 # Check if we can connect to the other tree
                 positions = np.array([node.position for node in other_tree.values()])
                 if len(positions) > 0:
                     kdtree = cKDTree(positions)
-                    
+
                     # Handle both single and multiple nearest neighbor cases
                     k_neighbors = min(3, len(positions))
                     query_result = kdtree.query(new_position, k=k_neighbors)
-                    
+
                     # Unpack query results based on k value
                     if k_neighbors == 1:
                         distances = [query_result[0]]
                         indices = [query_result[1]]
                     else:
                         distances, indices = query_result
-                        
+
                     # Try to connect to closest nodes in other tree
                     for i in range(len(indices)):
                         dist = distances[i]
                         idx = indices[i]
-                        
+
                         if dist < step_size * 1.5:  # Only try to connect if reasonably close
                             connect_node = list(other_tree.values())[idx]
                             if edge_cost(new_position, connect_node.position) < np.inf:
@@ -345,34 +347,34 @@ def rrt_connect(
                                 else:
                                     # Goal tree to start tree
                                     path = connect_node.path_to_root() + new_node.path_to_root()[::-1]
-                                
+
                                 # Simplify the path
                                 path = simplify_path(path, edge_cost)
-                                
+
                                 if callback is not None:
                                     callback(path)
-                                
+
                                 return path
-                
+
                 # Visualization callback
                 if callback is not None and i % 5 == 0:  # Reduce callback frequency for performance
                     # Find best connection between trees for visualization
                     best_start = None
                     best_goal = None
-                    best_dist = float('inf')
-                    
+                    best_dist = float("inf")
+
                     # Sample a few nodes from each tree to check connections
                     start_samples = list(active_tree.values())
                     if len(start_samples) > 10:
                         # Use a list to avoid numpy random choice issues with custom objects
                         indices = np.random.choice(len(start_samples), 10, replace=False)
                         start_samples = [start_samples[i] for i in indices]
-                    
+
                     goal_samples = list(other_tree.values())
                     if len(goal_samples) > 10:
                         indices = np.random.choice(len(goal_samples), 10, replace=False)
                         goal_samples = [goal_samples[i] for i in indices]
-                    
+
                     for s_node in start_samples:
                         for g_node in goal_samples:
                             dist = np.linalg.norm(s_node.position - g_node.position)
@@ -380,14 +382,14 @@ def rrt_connect(
                                 best_dist = dist
                                 best_start = s_node
                                 best_goal = g_node
-                    
+
                     if best_start is not None:
                         if tree_idx == 0:
                             vis_path = best_start.path_to_root() + best_goal.path_to_root()[::-1]
                         else:
                             vis_path = best_goal.path_to_root() + best_start.path_to_root()[::-1]
                         callback(vis_path)
-    
+
     raise ValueError("Pathfinding failed; no valid paths found after maximum iterations.")
 
 
@@ -395,7 +397,7 @@ def simplify_path(path, edge_cost: Callable):
     """Simplify the given path by iteratively removing unnecessary waypoints."""
     if len(path) <= 2:
         return path
-    
+
     # First pass: greedy algorithm to remove points
     path = list(path)
     made_change = True
@@ -408,7 +410,7 @@ def simplify_path(path, edge_cost: Callable):
                 made_change = True
             else:
                 ptr += 1
-    
+
     # Second pass: Douglas-Peucker-inspired algorithm for smoother paths
     if len(path) > 3:
         # Find points that can be removed while maintaining valid paths
@@ -429,13 +431,13 @@ def simplify_path(path, edge_cost: Callable):
                 i += 1
                 if i < len(path):
                     result.append(path[i])
-        
+
         # Ensure the last point is included
         if result[-1] != path[-1]:
             result.append(path[-1])
-        
+
         return result
-    
+
     return path
 
 
@@ -553,36 +555,30 @@ class GeometryMotionPlanner:
         distance = np.linalg.norm(stop.coordinates - start.coordinates)
         step_size = min(distance / 10, self.voxel_size * 5)
         step_size = max(step_size, self.voxel_size)
-        
+
         # Use RRT-Connect for pathfinding
         path = rrt_connect(
-            start.coordinates, 
-            stop.coordinates, 
-            edge_cost, 
+            start.coordinates,
+            stop.coordinates,
+            edge_cost,
             max_iterations=4000,
             step_size=step_size,
             goal_sample_rate=0.2,
-            callback=callback
+            callback=callback,
         )
-        
+
         profile.mark("RRT-Connect")
-        
+
         # Skip the start point in the returned path
         result_path = path[1:] if len(path) > 1 else path
-        
+
         if callback:
             callback(result_path, skip=1)
-            
+
         profile.finish()
         return result_path
 
     def make_convolved_obstacles(self, traveler, to_global_from_traveler, visualizer=None):
-        # if visualizer:
-        #     visualizer.addObstacle(
-        #         traveler.name,
-        #         traveler.voxel_template(self.voxel_size),
-        #         to_global_from_traveler * traveler.transform,
-        #     ).raiseErrors("traveler failed to render")
         obstacles = []
         
         # Process obstacles in parallel for better performance
