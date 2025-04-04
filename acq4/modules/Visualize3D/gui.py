@@ -137,9 +137,6 @@ class VisualizerWindow(Qt.QMainWindow):
                 limitsItem.setData(0, Qt.Qt.UserRole, "limits")
                 self._itemsByDevice[dev]["checkboxes"]["limits"] = limitsItem
 
-                # Initially hide limits
-                self.toggleDeviceLimitsVisibility(False, dev.name())
-
                 if hasattr(dev, "sigCalibrationChanged"):
                     dev.sigCalibrationChanged.connect(self.handleGeometryChange)
 
@@ -211,10 +208,7 @@ class VisualizerWindow(Qt.QMainWindow):
                 return
 
             if componentType in self._itemsByDevice[dev]:
-                if componentType == "limits":
-                    self.toggleDeviceLimitsVisibility(visible, dev.name())
-                else:
-                    self._itemsByDevice[dev][componentType].setVisible(visible)
+                self._itemsByDevice[dev][componentType].setVisible(visible)
             elif componentType in ["obstacle", "voxels"]:
                 for items in self._itemsByDevice.values():
                     if "path" in items:
@@ -235,17 +229,12 @@ class VisualizerWindow(Qt.QMainWindow):
                     continue
             if not self.testing and np.linalg.norm(a - b) > 0.1:
                 continue  # ignore bounds that are really far away
-            edge = gl.GLLinePlotItem(pos=np.array([a, b]), color=(1, 0, 0, 0.2), width=4)
-            edge.setVisible(visible)
-            self.view.addItem(edge)
-            edges.append(edge)
-        return edges
-
-    def toggleDeviceLimitsVisibility(self, visible: bool, dev_name: str):
-        for key, data in self._itemsByDevice.items():
-            if key.name() == dev_name:
-                for edge in data.get("limits", []):
-                    edge.setVisible(visible)
+            edge = [a, b]
+            edges.extend(edge)
+        plot = gl.GLLinePlotItem(pos=np.array(edges), color=(1, 0, 0, 0.2), width=4, mode="lines")
+        plot.setVisible(visible)
+        self.view.addItem(plot)
+        return plot
 
     def addGeometry(self, geom: Geometry, key=None):
         if key is None:
@@ -266,11 +255,6 @@ class VisualizerWindow(Qt.QMainWindow):
         if not self.testing:  # todo properly mock devices for the tests
             dev.sigGeometryChanged.disconnect(self.handleGeometryChange)
             dev.sigGlobalTransformChanged.disconnect(self.handleTransformUpdate)
-
-        # Remove limits from view
-        for edge in items.pop("limits", []):
-            self.view.removeItem(edge)
-            edge.deleteLater()
 
         # Remove tree item
         tree_item = items.pop("checkbox root")

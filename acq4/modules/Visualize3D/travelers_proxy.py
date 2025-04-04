@@ -20,7 +20,7 @@ class VisualizePathPlan(Qt.QObject):
 
         self._initGui(blocking=True)
 
-        self._bounds = []
+        self._bounds = None
         self._obstacles = {}
         self._voxels = {}
 
@@ -40,8 +40,7 @@ class VisualizePathPlan(Qt.QObject):
     @inGuiThread
     def reset(self):
         # todo mutexes?
-        for edge in self._bounds:
-            edge.setVisible(False)
+        self._bounds.setVisible(False)
         self._startTarget.setVisible(False)
         self._destTarget.setVisible(False)
         self._activePath.setVisible(False)
@@ -51,7 +50,7 @@ class VisualizePathPlan(Qt.QObject):
 
     @future_wrap
     def startPath(self, path, bounds, _future):
-        if len(self._bounds) == 0:
+        if self._bounds is None:
             self._bounds = self._window.createBounds(bounds, False)
         self._startPath(path, bounds)
 
@@ -60,8 +59,7 @@ class VisualizePathPlan(Qt.QObject):
         self.reset(blocking=True)
         visible = self.shouldShowPath
 
-        for b in self._bounds:
-            b.setVisible(visible)
+        self._bounds.setVisible(visible)
         self._startTarget.setData(pos=np.array([path[0]]))
         self._startTarget.setVisible(visible)
         self._destTarget.setData(pos=np.array([path[-1]]))
@@ -82,8 +80,7 @@ class VisualizePathPlan(Qt.QObject):
         self._destTarget.setVisible(visible)
         self._activePath.setVisible(visible)
         self._previousPath.setVisible(visible)
-        for edge in self._bounds:
-            edge.setVisible(visible)
+        self._bounds.setVisible(visible)
         for name, obstacle in self._obstacles.items():
             obst_toggle = self._window.getDeviceCheckboxes(name)["obstacle"]
             dev_obst_visible = obst_toggle.checkState(0) == Qt.Qt.Checked
@@ -208,9 +205,8 @@ class VisualizePathPlan(Qt.QObject):
         self._activePath.deleteLater()
         self._window.view.removeItem(self._previousPath)
         self._previousPath.deleteLater()
-        for edge in self._bounds:
-            self._window.view.removeItem(edge)
-        self._bounds = []
+        self._window.view.removeItem(self._bounds)
+        self._bounds.deleteLater()
         for obst in self._obstacles.values():
             self._window.view.removeItem(obst)
         self._obstacles = None
