@@ -8,6 +8,7 @@ import traceback
 from typing import Callable, Generic, TypeVar, ParamSpec, Optional
 
 from acq4.util import Qt, ptime
+from acq4.util.debug import printExc
 from pyqtgraph import FeedbackButton
 
 FUTURE_RETVAL_TYPE = TypeVar("FUTURE_RETVAL_TYPE")
@@ -47,6 +48,8 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         self.startTime = ptime.time()
 
         self._isDone = False
+        self._callbacks = []
+        self.sigFinished.connect(self._callCallbacks)
         self._onError = onError
         self._completionLock = threading.Lock()
         self._wasInterrupted = False
@@ -159,6 +162,24 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         """Return True if the task has completed successfully or was interrupted."""
         with self._completionLock:
             return self._isDone
+
+    def onFinish(self, callback, *args, **kwargs):
+        with self._completionLock:
+            if self._isDone:
+                callback(self, *args, **kwargs)
+            else:
+                self._callbacks.append((callback, args, kwargs))
+
+    def _callCallbacks(self):
+        """Call all callbacks registered with onDone().
+
+        This is called when the task is completed.
+        """
+        for callback, args, kwargs in self._callbacks:
+            try:
+                callback(self, *args, **kwargs)
+            except Exception as e:
+                printExc(f"Error in Future callback: {callback}")
 
     def errorMessage(self):
         """Return a string description of the reason for a task failure,
@@ -344,7 +365,7 @@ class MultiFuture(Future):
         self.futures = futures
         Future.__init__(self)
         for fut in futures:
-            fut.sigFinished.connect(self._subFutureFinished)
+            fut.onFinish(self._subFutureFinished)
             # TODO what if the future is already finished?
             fut.sigStateChanged.connect(self._subFutureStateChanged)
 
@@ -468,9 +489,7 @@ class FutureButton(FeedbackButton):
             except Exception:
                 self.failure("Error!")
                 raise
-            future.sigFinished.connect(self._futureFinished)
-            if future.isDone():  # futures may immediately complete before we can connect to the signal
-                self._futureFinished(future)
+            future.onFinish(self._futureFinished)
             future.sigStateChanged.connect(self._futureStateChanged)
         else:
             self._userRequestedStop = True
