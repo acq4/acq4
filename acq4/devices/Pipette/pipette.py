@@ -227,6 +227,76 @@ class Pipette(Device, OptomechDevice):
         self._camInterfaces[iface] = None
         return iface
 
+    def tipPositionIsReasonable(self, pos) -> bool:
+        cal = self.readConfigFile('calibration')
+        if 'offset history' in cal and len(cal['offset history']) > 10:
+            avg = np.mean(cal['offset history'], axis=0)
+            sigma = np.std(np.linalg.norm(np.array(cal['offset history']) - avg, axis=1))
+            if np.linalg.norm(np.array(pos) - avg) > 3 * sigma:
+                return False
+        return True
+
+    def saveTipPositionIfPossible(self, pos, window=None) -> bool:
+        """Returns whether the tip position was saved. Otherwise, the user requested a re-do."""
+        if self.tipPositionIsReasonable(pos):
+            self.setTipPosition(pos)
+        else:
+            button_text = self.promptUserForTipOutlierBehavior(window)
+            if button_text == "Include":
+                self.setTipPosition(pos)
+            elif button_text == "Re-do":
+                return False
+            elif button_text == "Override":
+                self.overrideTipPosition(pos)
+            elif button_text == "Temporary":
+                self.setTemporaryTipPosition(pos)
+            else:
+                raise AssertionError("Unknown button clicked")
+        return True
+
+    @staticmethod
+    def promptUserForTipOutlierBehavior(window):
+        if window is None:
+            window = getManager().gui.window()
+        reply = Qt.QMessageBox(window)
+        reply.setWindowTitle("Tip position outlier")
+        reply.setText("Tip position is outside of normal range.")
+        reply.addButton("Include", Qt.QMessageBox.ActionRole)
+        reply.addButton("Re-do", Qt.QMessageBox.RejectRole)
+        reply.addButton("Override", Qt.QMessageBox.AcceptRole)
+        reply.addButton("Temporary", Qt.QMessageBox.YesRole)
+        reply.setInformativeText(
+            "Do you want to include this outlier, re-do the tip selection, override all historic positions, or"
+            " only use this as a temporary position?"
+        )
+        reply.exec_()
+        return reply.clickedButton().text()
+
+    def setTipPosition(self, pos):
+        self.resetGlobalPosition(pos)
+        cal = self.readConfigFile('calibration')
+        cal['offset'] = list(self.offset)
+        cal.setdefault('offset history', []).append(cal['offset'])
+        cal['offset history'] = cal['offset history'][-20:]
+        self.writeConfigFile(cal, 'calibration')
+
+    def overrideTipPosition(self, pos):
+        self.resetGlobalPosition(pos)
+        cal = self.readConfigFile('calibration')
+        cal['offset'] = list(self.offset)
+        cal['offset history'] = [cal['offset']]
+        self.writeConfigFile(cal, 'calibration')
+
+    def setTemporaryTipPosition(self, pos):
+        self.resetGlobalPosition(pos)
+
+    def averageHistoricOffset(self):
+        cal = self.readConfigFile('calibration')
+        if 'offset history' in cal and len(cal['offset history']) > 0:
+            return np.mean(cal['offset history'], axis=0)
+        else:
+            return self.offset
+
     def resetGlobalPosition(self, pos):
         """Set the device transform such that the pipette tip is located at the global position *pos*.
 
@@ -237,9 +307,6 @@ class Pipette(Device, OptomechDevice):
 
     def setOffset(self, offset):
         self.offset = np.array(offset)
-        cal = self.readConfigFile('calibration')
-        cal['offset'] = list(offset)
-        self.writeConfigFile(cal, 'calibration')
         self._updateTransform()
         self.sigCalibrationChanged.emit(self)
 
@@ -836,7 +903,11 @@ class PipetteCamModInterface(CameraModuleInterface):
         self.getDevice().goApproach(self.selectedSpeed())
 
     def autoCalibrateClicked(self):
-        self.getDevice().tracker.autoCalibrate()
+        pip = self.getDevice()
+        pos = pip.tracker.autoFindTipPosition()
+        success = pip.saveTipPositionIfPossible(pos, window=self.parent())
+        if not success:
+            return self.autoCalibrateClicked()
 
     def getRefFramesClicked(self):
         dev = self.getDevice()

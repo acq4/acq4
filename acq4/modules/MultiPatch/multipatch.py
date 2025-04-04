@@ -266,8 +266,16 @@ class MultiPatchWindow(Qt.QWidget):
 
     @future_wrap
     def _autoCalibrate(self, _future):
-        for pip in self.selectedPipettes():
-            pip.pipetteDevice.tracker.autoCalibrate()
+        work_to_do = self.selectedPipettes()
+        while work_to_do:
+            patchpip = work_to_do.pop(0)
+            pip = patchpip.pipetteDevice if isinstance(patchpip, PatchPipette) else patchpip
+            pos = pip.tracker.autoFindTipPosition()
+            success = pip.saveTipPositionIfPossible(pos, self)
+            if not success:
+                work_to_do.insert(0, patchpip)
+                continue
+
             _future.checkStop()
 
     def _cellDetect(self):
@@ -398,7 +406,10 @@ class MultiPatchWindow(Qt.QWidget):
         pos = self._cammod.window().getView().mapSceneToView(ev.scenePos())
         spos = pip.scopeDevice().globalPosition()
         pos = [pos.x(), pos.y(), spos.z()]
-        pip.resetGlobalPosition(pos)
+        success = pip.saveTipPositionIfPossible(pos, self)
+        if not success:
+            self._calibratePips.insert(0, pip)
+            return
 
         # if calibration stage positions were requested, then move the stage now
         if len(self._calibrateStagePositions) > 0:
