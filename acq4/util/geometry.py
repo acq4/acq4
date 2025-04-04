@@ -332,8 +332,8 @@ def rrt_connect(
                         
                     # Try to connect to closest nodes in other tree
                     for i in range(len(indices)):
-                        dist = distances[i] if isinstance(distances, np.ndarray) else distances
-                        idx = indices[i] if isinstance(indices, np.ndarray) else indices
+                        dist = distances[i]
+                        idx = indices[i]
                         
                         if dist < step_size * 1.5:  # Only try to connect if reasonably close
                             connect_node = list(other_tree.values())[idx]
