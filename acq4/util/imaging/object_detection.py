@@ -170,7 +170,8 @@ def do_pipette_tip_detection(data: np.ndarray, angle: float, show=True):
     rotated = image.rotate(-angle, reshape=False)
     scaled = rotated.zoom(400 / rotated.shape[0])
 
-    scaled_pos_rc, z_um1, err1 = detect_pipette_once(model, scaled.image, pos_normalizer)
+    scaled_pos, err1 = detect_pipette_once(model, scaled.image, pos_normalizer)
+    scaled_pos_rc = scaled_pos[0, 1:3]
 
     # position expressed in pixels relative to the rotated/zoomed image
     # this must be mapped back to the original
@@ -180,13 +181,11 @@ def do_pipette_tip_detection(data: np.ndarray, angle: float, show=True):
     row_start = int(np.clip(rotated_pos_rc[0] - 200, 0, image.shape[0] - 400))
     col_start = int(np.clip(rotated_pos_rc[1] - 200, 0, image.shape[1] - 400))
     cropped = rotated[row_start:row_start+400, col_start:col_start+400]
-    # print("detected position:", pos_rc2)
-    # print("image shape:", image.shape)
-    # print("cropping at", row_start, col_start)
-    # print("cropped shape:", cropped.shape)
 
     # detect again
-    cropped_pos_rc, z_um3, err3 = detect_pipette_once(model, cropped.image, pos_normalizer)
+    cropped_pos, err3 = detect_pipette_once(model, cropped.image, pos_normalizer)
+    cropped_pos_rc = cropped_pos[0, 1:3]
+    final_z_um = cropped_pos[0, 0]
     image_pos_rc = cropped.point(cropped_pos_rc).mapped_to(image.cs)
 
     if show:
@@ -214,7 +213,7 @@ def do_pipette_tip_detection(data: np.ndarray, angle: float, show=True):
 
         analysis_window.show()
 
-    return image_pos_rc, z_um3, err3, locals()
+    return image_pos_rc, final_z_um, err3, locals()
 
 
 def detect_pipette_once(model, data, pos_normalizer):
@@ -222,8 +221,13 @@ def detect_pipette_once(model, data, pos_normalizer):
     from acq4.util.pipette_detection.torch_model_08 import make_image_tensor
     from acq4.util.pipette_detection.training_data import normalize_image
 
-    # make into RGB batch (1, rows, cols, 3)
-    img = np.repeat(data[np.newaxis, ..., np.newaxis], 3, axis=-1)
+    # make into RGB batch (frames, rows, cols, 3)
+    if data.ndim == 2:
+        img = np.repeat(data[np.newaxis, ..., np.newaxis], 3, axis=-1)
+    elif data.ndim == 3:
+        img = np.repeat(data[..., np.newaxis], 3, axis=-1)
+    else:
+        raise TypeError("image data must be 2 or 3D")
 
     # normalize image
     normalized = normalize_image(img)
@@ -233,16 +237,14 @@ def detect_pipette_once(model, data, pos_normalizer):
     model.eval()  # set model to inference mode
     with torch.no_grad():
         pred_pos, pred_err = model(image_tensor)
-        pred_pos = pred_pos[0].cpu().numpy()
-        pred_err = pred_err[0].cpu().numpy()
+        pred_pos = pred_pos.cpu().numpy()
+        pred_err = pred_err.cpu().numpy()
 
     denorm_pos = pos_normalizer.denormalize(pred_pos)
     denorm_err_pos = pos_normalizer.denormalize(pred_pos + pred_err)
-    err = np.linalg.norm(denorm_err_pos - denorm_pos)
+    err = np.linalg.norm(denorm_err_pos - denorm_pos, axis=-1)
 
-    z_um, row, col  = denorm_pos
-
-    return (row, col), z_um, err
+    return denorm_pos, err
 
 
 @future_wrap

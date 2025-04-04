@@ -886,6 +886,9 @@ class Task:
         self.startedDevs = []
         self.startTime = None
         self.stopTime = None
+        self.stopped = False
+        self.abortRequested = False
+        self._done = False
 
         # self.reserved = False
         try:
@@ -1086,8 +1089,6 @@ class Task:
                 t = ptime.time()
                 if self.startTime is None or t - self.startTime < self.cfg['duration']:
                     return False
-                # else:
-            # else:
             d = self._tasksDone()
             self._done = d
             return d
