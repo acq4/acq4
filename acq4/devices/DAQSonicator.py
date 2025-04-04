@@ -79,6 +79,7 @@ class DAQSonicator(Sonicator):
             },
         }
         if "disable" in config:
+            config["disable"]["holding"] = 1
             daq_conf["channels"]["disable"] = config["disable"]
         if "overload" in config:
             daq_conf["channels"]["overload"] = config["overload"]
