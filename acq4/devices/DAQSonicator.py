@@ -133,6 +133,7 @@ class DAQSonicator(Sonicator):
             raise
         finally:
             task.stop()
+            self._daq.setChannelValue("disable", 1)
 
     def calcVoltage(self, frequency: float) -> float:
         """
