@@ -57,14 +57,6 @@ class CleanState(PatchPipetteState):
 
         self.setState('cleaning')
 
-        # retract to safe position for visiting cleaning wells
-        startPos = pip.globalPosition()
-        safePos = pip.pathGenerator.safeYZPosition(startPos)
-        path = pip.pathGenerator.safePath(startPos, safePos, 'fast')
-        fut = pip._movePath(path)
-        if fut is not None:
-            self.waitFor(fut, timeout=None)
-
         for stage in ('clean', 'rinse'):
             self.checkStop()
 
@@ -74,30 +66,7 @@ class CleanState(PatchPipetteState):
             if len(sequence) == 0:
                 continue
 
-            wellPos = pip.loadPosition(stage)
-            if wellPos is None:
-                raise ValueError(f"Device {pip.name()} does not have a stored {stage} position.")
-
-            # lift up, then sideways, then down into well
-            waypoint1 = safePos.copy()
-            waypoint1[2] = wellPos[2] + config['approachHeight']
-
-            # move Y first
-            waypoint2 = waypoint1.copy()
-            waypoint2[1] = wellPos[1]
-
-            # now move X
-            waypoint3 = waypoint2.copy()
-            waypoint3[0] = wellPos[0]
-
-            path = [
-                (waypoint1, 'fast', False, f"{stage}ing well approach height ({waypoint1[2]} z)"),
-                (waypoint2, 'fast', True, f"match y for {stage}ing well"),
-                (waypoint3, 'fast', True, f"above the {stage}ing well"),
-                (wellPos, 'fast', False, f"into the {stage}ing well"),
-            ]
-
-            self.currentFuture = pip._movePath(path)
+            self.currentFuture = pip.moveTo(stage, "fast")
 
             # todo: if needed, we can check TP for capacitance changes here
             # and stop moving as soon as the fluid is detected
@@ -113,24 +82,12 @@ class CleanState(PatchPipetteState):
             if self.sonication is not None and not self.sonication.isDone():
                 self.waitFor(self.sonication)
 
-            self.resetPosition()
-
+        pip.moveTo('home', 'fast').raiseErrors("trying to return home")
         dev.pipetteRecord()['cleanCount'] += 1
         dev.setTipClean(True)
-        self.dev.pipetteDevice.moveTo('home', 'fast')
         self.currentFuture = None
         dev.newPatchAttempt()
         return 'out'
-
-    def resetPosition(self, _future=None):
-        if self.currentFuture is not None:
-            # play in reverse
-            fut = self.currentFuture
-            self.currentFuture = None
-            if _future is not None:
-                _future.waitFor(fut.undo(), timeout=None)
-            else:
-                self.waitFor(fut.undo(), timeout=None)
 
     @future_wrap
     def cleanup(self, _future):
@@ -145,4 +102,4 @@ class CleanState(PatchPipetteState):
         except Exception:
             printExc("Error resetting pressure after clean")
 
-        self.resetPosition(_future)
+        _future.waitFor(self.dev.pipetteDevice.moveTo('home', 'fast'))
