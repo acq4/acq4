@@ -73,7 +73,7 @@ class VisualizerWindow(Qt.QMainWindow):
         return target
 
     def path(self, color, visible=False):
-        path = gl.GLLinePlotItem(color=color, width=1)
+        path = gl.GLLinePlotItem(pos=[], color=color, width=1)
         path.setVisible(visible)
         self.view.addItem(path)
         return path
