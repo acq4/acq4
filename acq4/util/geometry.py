@@ -349,15 +349,10 @@ def rrt_connect(
                                     path = connect_node.path_to_root() + new_node.path_to_root()[::-1]
 
                                 # Simplify the path
-                                path = simplify_path(path, edge_cost)
-
-                                if callback is not None:
-                                    callback(path)
-
-                                return path
+                                return simplify_path(path, edge_cost, callback)
 
                 # Visualization callback
-                if callback is not None and i % 5 == 0:  # Reduce callback frequency for performance
+                if callback is not None and i < 10 or i % 10 == 0:  # Reduce callback frequency for performance
                     # Find best connection between trees for visualization
                     best_start = None
                     best_goal = None
@@ -393,7 +388,7 @@ def rrt_connect(
     raise ValueError("Pathfinding failed; no valid paths found after maximum iterations.")
 
 
-def simplify_path(path, edge_cost: Callable):
+def simplify_path(path, edge_cost: Callable, viz_callback: Callable | None):
     """Simplify the given path by iteratively removing unnecessary waypoints."""
     if len(path) <= 2:
         return path
@@ -408,35 +403,35 @@ def simplify_path(path, edge_cost: Callable):
             if edge_cost(np.array(path[ptr]), np.array(path[ptr + 2])) < np.inf:
                 path.pop(ptr + 1)
                 made_change = True
-            else:
-                ptr += 1
+            ptr += 1
+        viz_callback(path) if viz_callback else None
 
     # Second pass: Douglas-Peucker-inspired algorithm for smoother paths
-    if len(path) > 3:
-        # Find points that can be removed while maintaining valid paths
-        result = [path[0]]
-        i = 0
-        while i < len(path) - 1:
-            # Try to extend as far as possible
-            for j in range(len(path) - 1, i, -1):
-                if edge_cost(np.array(path[i]), np.array(path[j])) < np.inf:
-                    if j > i + 1:  # Skip intermediate points
-                        result.append(path[j])
-                        i = j
-                    else:
-                        i += 1
-                    break
-            else:
-                # If no skip was possible, keep the next point
-                i += 1
-                if i < len(path):
-                    result.append(path[i])
-
-        # Ensure the last point is included
-        if np.any(result[-1] != path[-1]):
-            result.append(path[-1])
-
-        return result
+    # if len(path) > 3:
+    #     # Find points that can be removed while maintaining valid paths
+    #     result = [path[0]]
+    #     i = 0
+    #     while i < len(path) - 1:
+    #         # Try to extend as far as possible
+    #         for j in range(len(path) - 1, i, -1):
+    #             if edge_cost(np.array(path[i]), np.array(path[j])) < np.inf:
+    #                 if j > i + 1:  # Skip intermediate points
+    #                     result.append(path[j])
+    #                     i = j
+    #                 else:
+    #                     i += 1
+    #                 break
+    #         else:
+    #             # If no skip was possible, keep the next point
+    #             i += 1
+    #             if i < len(path):
+    #                 result.append(path[i])
+    #
+    #     # Ensure the last point is included
+    #     if np.any(result[-1] != path[-1]):
+    #         result.append(path[-1])
+    #
+    #     return result
 
     return path
 
@@ -569,14 +564,10 @@ class GeometryMotionPlanner:
 
         profile.mark("RRT-Connect")
 
-        # Skip the start point in the returned path
-        result_path = path[1:] if len(path) > 1 else path
-
         if callback:
-            callback(result_path, skip=1)
-
+            callback(path, skip=1)
         profile.finish()
-        return result_path
+        return path[1:] if len(path) > 1 else path
 
     def make_convolved_obstacles(self, traveler, to_global_from_traveler, visualizer=None):
         obstacles = []

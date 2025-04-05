@@ -674,6 +674,6 @@ if __name__ == "__main__":
     # test_bounds_prevent_path(geom, bounds, viz)
     # test_path_with_funner_traveler(geom, viz)
     # test_single_voxel_voxelization(geom, viz)
-    test_find_path(geom, viz)
+    # test_find_path(geom, viz)
     # test_no_path(viz)
-    # test_no_path_because_of_offset_shadow(geom, viz)
+    test_no_path_because_of_offset_shadow(geom, viz)
