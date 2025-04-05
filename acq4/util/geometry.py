@@ -433,7 +433,7 @@ def simplify_path(path, edge_cost: Callable):
                     result.append(path[i])
 
         # Ensure the last point is included
-        if result[-1] != path[-1]:
+        if np.any(result[-1] != path[-1]):
             result.append(path[-1])
 
         return result
@@ -530,14 +530,14 @@ class GeometryMotionPlanner:
         profile.mark("made convolved obstacles")
 
         for i, _o in enumerate(obstacles):
-            obst_volume, to_global_from_obst = _o
-            obst = list(self.geometries.keys())[i]
+            obst_volume, to_global_from_obst, obst_name = _o
+            # obst = list(self.geometries.keys())[i]
             # users will sometimes drive the hardware to where the motion planner would consider things impossible
             # TODO pull pipette out along its axis to start
             # if obst_volume.contains_point(to_global_from_obst.inverse.map(start)):
             #     raise ValueError(f"Start point {start} is inside obstacle {obst.name}")
             if obst_volume.contains_point(to_global_from_obst.inverse.map(stop)):
-                raise ValueError(f"Destination point {stop} is inside obstacle {obst.name}")
+                raise ValueError(f"Destination point {stop} is inside obstacle {obst_name}")
 
         profile.mark("voxelized all obstacles")
 
@@ -546,7 +546,7 @@ class GeometryMotionPlanner:
                 return np.inf
             a = Point(a, start.system)
             b = Point(b, start.system)
-            for vol, to_global in obstacles:
+            for vol, to_global, o_name in obstacles:
                 if vol.intersects_line(to_global.inverse.map(a), to_global.inverse.map(b)):
                     return np.inf
             return np.linalg.norm(b - a)
@@ -580,16 +580,9 @@ class GeometryMotionPlanner:
 
     def make_convolved_obstacles(self, traveler, to_global_from_traveler, visualizer=None):
         obstacles = []
-        
-        # Process obstacles in parallel for better performance
-        from concurrent.futures import ThreadPoolExecutor
-
-        # Local function to process a single obstacle
-        def process_obstacle(obst_item):
-            obst, to_global_from_obst = obst_item
+        for obst, to_global_from_obst in self.geometries.items():
             if obst is traveler:
-                return None
-                
+                continue
             cache_key = (obst.name, traveler.name)
             with self._cache_lock:
                 if cache_key not in self._cache:
@@ -600,31 +593,12 @@ class GeometryMotionPlanner:
                     convolved_obst.transform = obst.transform * convolved_obst.transform
                     self._cache[cache_key] = convolved_obst
                 obst_volume = self._cache[cache_key]
-                
-            return (obst_volume, to_global_from_obst, obst.name)
-        
-        # Process obstacles
-        obstacle_items = [(obst, to_global) for obst, to_global in self.geometries.items() if obst is not traveler]
-        
-        # Use ThreadPoolExecutor for parallel processing if we have multiple obstacles
-        if len(obstacle_items) > 1:
-            with ThreadPoolExecutor(max_workers=min(4, len(obstacle_items))) as executor:
-                results = list(executor.map(process_obstacle, obstacle_items))
-        else:
-            results = [process_obstacle(item) for item in obstacle_items]
-            
-        # Filter out None results and add to obstacles list
-        for result in results:
-            if result is not None:
-                obst_volume, to_global_from_obst, name = result
-                obstacles.append((obst_volume, to_global_from_obst))
-                
-                # Add to visualizer if provided
-                if visualizer is not None:
-                    visualizer.addObstacle(name, obst_volume, to_global_from_obst).raiseErrors(
-                        "obstacle failed to render"
-                    )
-                    
+
+            obstacles.append((obst_volume, to_global_from_obst, obst.name))
+            if visualizer is not None:
+                visualizer.addObstacle(obst.name, obst_volume, to_global_from_obst).raiseErrors(
+                    "obstacle failed to render"
+                )
         return obstacles
 
 

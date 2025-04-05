@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 
 from acq4.modules.Visualize3D import VisualizerWindow
+from acq4.util import Qt
 from acq4.util.geometry import Geometry, Volume, GeometryMotionPlanner, Plane, Line, point_in_bounds
 from coorx import NullTransform, TTransform, Point, SRT3DTransform, Transform
 
@@ -33,10 +34,12 @@ def do_viz(viz, geometries: dict[Geometry, Transform]):
 
     if viz is None:
         return
-    viz.show()
+    viz._window.show()
+    viz.focus()
     for g, to_global in geometries.items():
-        viz.addGeometry(g)
-        viz.setMeshTransform(g.name, (to_global * g.transform).as_pyqtgraph())
+        viz.addObstacle(g.voxel_template(0.1), to_global * g.transform)
+        # viz.addGeometry(g)
+        # viz.setMeshTransform(g.name, (to_global * g.transform).as_pyqtgraph())
     pg.exec()
 
 
@@ -400,9 +403,7 @@ def test_paths_stay_inside_bounds(geometry, viz=None):
     trav_to_global = TTransform(offset=start, from_cs="test", to_cs="global")
     if viz:
         viz.startPath(start, stop, tetrahedron)
-    planner = GeometryMotionPlanner(
-        {transecting_obst: obst_to_global}, voxel_size
-    )
+    planner = GeometryMotionPlanner({transecting_obst: obst_to_global}, voxel_size)
     try:
         for _ in range(1):
             path = planner.find_path(geometry, trav_to_global, start, stop, tetrahedron, visualizer=viz)
@@ -608,6 +609,30 @@ def test_wireframe_rhomboid():
 draw_n = 0
 
 
+class FakeDevice(Qt.QObject):
+    sigGeometryChanged = Qt.pyqtSignal(str, str)
+    sigGlobalTransformChanged = Qt.pyqtSignal(str, str)
+
+    def __init__(self, name, geom, bounds=None):
+        super().__init__()
+        self._name = name
+        self._bounds = bounds
+        self.transform = NullTransform(3, from_cs=name, to_cs="global").as_pyqtgraph()
+        self.geom = geom
+
+    def name(self):
+        return self._name
+
+    def getGeometry(self):
+        return self.geom
+
+    def globalPhysicalTransform(self):
+        return self.transform
+
+    def getBoundaries(self):
+        return self._bounds
+
+
 if __name__ == "__main__":
     import pyqtgraph as pg
     import pyqtgraph.opengl as gl
@@ -641,11 +666,14 @@ if __name__ == "__main__":
         Plane(np.array([0, 0, 1]), np.array([1, 1, 1])),
     ]
 
-    test_paths_stay_inside_bounds(geom, visualizer)
-    # test_grazing_paths((0.6, 0.6, 0.6), visualizer)
-    # test_bounds_prevent_path(geom, bounds, visualizer)
-    # test_path_with_funner_traveler(geom, visualizer)
-    # test_single_voxel_voxelization(geom, visualizer)
-    # test_find_path(geom, visualizer)
-    # test_no_path(visualizer)
-    # test_no_path_because_of_offset_shadow(geom, visualizer)
+    dev = FakeDevice("test", geom)  # , bounds=bounds)
+    visualizer.addDevice(dev)
+    viz = visualizer.pathPlanVisualizer(dev)
+    # test_paths_stay_inside_bounds(geom, viz)
+    # test_grazing_paths((0.6, 0.6, 0.6), viz)
+    # test_bounds_prevent_path(geom, bounds, viz)
+    # test_path_with_funner_traveler(geom, viz)
+    # test_single_voxel_voxelization(geom, viz)
+    test_find_path(geom, viz)
+    # test_no_path(viz)
+    # test_no_path_because_of_offset_shadow(geom, viz)
