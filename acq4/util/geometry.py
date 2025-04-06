@@ -383,7 +383,8 @@ def rrt_connect(
                             vis_path = best_start.path_to_root() + best_goal.path_to_root()[::-1]
                         else:
                             vis_path = best_goal.path_to_root() + best_start.path_to_root()[::-1]
-                        callback(vis_path)
+                        if callback:
+                            callback(vis_path)
 
     raise ValueError("Pathfinding failed; no valid paths found after maximum iterations.")
 
@@ -404,7 +405,8 @@ def simplify_path(path, edge_cost: Callable, viz_callback: Callable | None):
                 path.pop(ptr + 1)
                 made_change = True
             ptr += 1
-        viz_callback(path) if viz_callback else None
+        if viz_callback:
+            viz_callback(path)
 
     # Second pass: Douglas-Peucker-inspired algorithm for smoother paths
     # if len(path) > 3:
