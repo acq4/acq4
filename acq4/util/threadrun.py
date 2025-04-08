@@ -35,14 +35,10 @@ P = ParamSpec("P")
 def inGuiThread(func: Callable[P, T]) -> Callable[P, T]:
     """Decorator to run a function or method in the GUI thread.
 
-    Works with:
-    - Instance methods in an acq4.util.Qt.QObject subclass (as signals/slots)
-    - Non-QObject methods, static methods and pure functions
-
     Args:
         func: The function or method to decorate
 
-    Additional params at runtime:
+    Additional params in decorated function:
         blocking: If True, waits for the function to complete. Default False.
     """
 
@@ -53,66 +49,14 @@ def inGuiThread(func: Callable[P, T]) -> Callable[P, T]:
         if "blocking" in kwargs and kwargs["blocking"] is not None:
             blocking = kwargs.pop("blocking")
 
-        # Determine if this is a method call
-        is_method = args and getattr(getattr(args[0].__class__, func.__name__, None), "_original_func", None) == func
-
-        if is_method:
-            # This is a method call with a self parameter
-            self = args[0]
-            method_args = args[1:]
-
-            # Check if we're running in a decorated class
-            signal_name = f"__{func.__name__}Event"
-            if hasattr(self.__class__, signal_name):
-                # Using signal-based approach with class decorator
-                signal = getattr(self, signal_name)
-                if blocking:
-                    impl_name = f"_{func.__name__}"
-                    if hasattr(self, impl_name):
-                        result = runInGuiThread(getattr(self, impl_name), *method_args, **kwargs)
-                        return cast(T, result)
-                    else:
-                        # Fallback to signal with a barrier
-                        barrier = threading.Event()
-                        result_container = [None]
-
-                        def signal_handler(*sig_args: Any) -> None:
-                            result_container[0] = func(self, *sig_args, **kwargs)
-                            barrier.set()
-
-                        signal.connect(signal_handler)
-                        signal.emit(*method_args)
-                        barrier.wait()
-                        signal.disconnect(signal_handler)
-                        return cast(T, result_container[0])
-                else:
-                    # Non-blocking signal emission
-                    signal.emit(*method_args)
-                    return cast(T, None)
-            else:
-                # No class decoration, use QTimer or runInGuiThread
-                if blocking:
-                    result = runInGuiThread(func, *args, **kwargs)
-                    return cast(T, result)
-                else:
-                    Qt.QTimer.singleShot(0, lambda: func(self, *method_args, **kwargs))
-                    return cast(T, None)
+        if blocking:
+            result = runInGuiThread(func, *args, **kwargs)
+            return cast(T, result)
         else:
-            # This is a pure function or static method
-            if blocking:
-                result = runInGuiThread(func, *args, **kwargs)
-                return cast(T, result)
-            else:
-                Qt.QTimer.singleShot(0, lambda: func(*args, **kwargs))
-                return cast(T, None)
+            Qt.QTimer.singleShot(0, lambda: func(*args, **kwargs))
+            return cast(T, None)
 
-    sig = inspect.signature(func)
-    param_count = len([p for p in sig.parameters.values()
-                       if p.name != 'self' and p.default is p.empty])
-    wrapper._param_count = param_count
     setattr(wrapper, "__annotations__", {**getattr(func, "__annotations__", {}), "blocking": "Optional[bool] = None"})
-    wrapper._original_func = func
-    wrapper._run_in_gui_thread = True
     return cast(Callable[P, T], wrapper)
 
 
