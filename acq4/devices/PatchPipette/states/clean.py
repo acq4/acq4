@@ -66,11 +66,7 @@ class CleanState(PatchPipetteState):
             if len(sequence) == 0:
                 continue
 
-            self.currentFuture = pip.moveTo(stage, "fast")
-
-            # todo: if needed, we can check TP for capacitance changes here
-            # and stop moving as soon as the fluid is detected
-            self.waitFor(self.currentFuture, timeout=None)
+            self.waitFor(pip.moveTo(stage, "fast"))
 
             if dev.sonicatorDevice is not None:
                 self.sonication = dev.sonicatorDevice.doProtocol(config['sonicationProtocol'])
@@ -82,7 +78,7 @@ class CleanState(PatchPipetteState):
             if self.sonication is not None and not self.sonication.isDone():
                 self.waitFor(self.sonication)
 
-        pip.moveTo('home', 'fast').raiseErrors("trying to return home")
+        self.waitFor(pip.moveTo('home', 'fast'))
         dev.pipetteRecord()['cleanCount'] += 1
         dev.setTipClean(True)
         self.currentFuture = None
