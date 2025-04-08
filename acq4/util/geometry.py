@@ -1306,10 +1306,47 @@ def point_in_bounds(point, bounds):
     return True, None
 
 
-@numba.jit(nopython=True)
 def convolve_kernel_onto_volume(volume: np.ndarray, kernel: np.ndarray) -> np.ndarray:
-    # scipy does weird stuff
-    # return scipy.signal.convolve(volume.astype(int), kernel.astype(int), mode="full").astype(bool)
+    # Convert to proper types if needed
+    volume_bool = volume.astype(bool)
+    kernel_bool = kernel.astype(bool)
+
+    # Get coordinates of True values
+    volume_coords = np.array(np.where(volume_bool)).T
+    kernel_coords = np.array(np.where(kernel_bool)).T
+
+    # Output shape
+    v_shape = volume.shape
+    k_shape = kernel.shape
+    out_shape = (v_shape[0] + k_shape[0] - 1, v_shape[1] + k_shape[1] - 1, v_shape[2] + k_shape[2] - 1)
+
+    # Initialize output array
+    result = np.zeros(out_shape, dtype=np.bool_)
+
+    # For each True kernel position, add it to all True volume positions
+    for kx, ky, kz in kernel_coords:
+        # This creates an array of coordinates where the kernel's True position
+        # is added to all True positions in the volume
+        new_coords = volume_coords + np.array([kx, ky, kz])
+
+        # Filter valid coordinates (those within bounds)
+        valid_mask = np.all((new_coords >= 0) & (new_coords < out_shape), axis=1)
+        valid_coords = new_coords[valid_mask]
+
+        # Set those positions to True
+        if len(valid_coords) > 0:
+            result[valid_coords[:, 0], valid_coords[:, 1], valid_coords[:, 2]] = True
+
+    return result
+
+
+def convolve_kernel_onto_volume_scipy(volume: np.ndarray, kernel: np.ndarray) -> np.ndarray:
+    import scipy.signal
+    return scipy.signal.convolve(volume.astype(int), kernel.astype(int), mode="full").astype(bool)
+
+
+@numba.jit(nopython=True)
+def convolve_kernel_onto_volume_numba(volume: np.ndarray, kernel: np.ndarray) -> np.ndarray:
     v_shape = volume.shape
     k_shape = kernel.shape
     shape = (v_shape[0] + k_shape[0] - 1, v_shape[1] + k_shape[1] - 1, v_shape[2] + k_shape[2] - 1)
@@ -1369,7 +1406,7 @@ class Volume(object):
         name
             Name of the kernel
         """
-        dest = convolve_kernel_onto_volume(self.volume, kernel_array)
+        dest = convolve_kernel_onto_volume_scipy(self.volume, kernel_array)
         draw_xform = TTransform(
             offset=-center,
             to_cs=self.transform.systems[0],
