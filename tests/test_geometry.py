@@ -1,10 +1,14 @@
+import time
+
 import numpy as np
 import pytest
 
 from acq4.modules.Visualize3D import VisualizerWindow
 from acq4.util import Qt
-from acq4.util.geometry import Geometry, Volume, GeometryMotionPlanner, Plane, Line, point_in_bounds
-from coorx import NullTransform, TTransform, Point, SRT3DTransform, Transform
+from acq4.util.geometry import Geometry, Volume, Plane, Line, point_in_bounds
+from acq4.util.geometry import GeometryMotionPlanner
+from coorx import NullTransform, TTransform, SRT3DTransform, Transform
+from coorx import Point
 
 
 @pytest.fixture(autouse=True)
@@ -52,12 +56,12 @@ def test_mesh(geometry):
 @pytest.mark.parametrize(
     "to_parent",
     [
-        NullTransform(3),  # passes
-        TTransform(offset=(-3, -3, -3)),  # passes
-        TTransform(offset=(4.5, 4.5, 4.5)),  # fails
-        SRT3DTransform(offset=(8.2, 8.2, -8.2), angle=30, axis=(0, 1, 0)),  # fails
-        SRT3DTransform(offset=(-8.2, 8.2, 8.2), angle=30, axis=(0, 1, 0)),  # fails
-        SRT3DTransform(offset=(-8.2, 8.2, -8.2), scale=(0.1, 0.1, 0.1), angle=30, axis=(0, 1, 0)),  # passes
+        NullTransform(3),
+        TTransform(offset=(-3, -3, -3)),
+        TTransform(offset=(4.5, 4.5, 4.5)),
+        SRT3DTransform(offset=(8.2, 8.2, -8.2), angle=30, axis=(0, 1, 0)),
+        SRT3DTransform(offset=(-8.2, 8.2, 8.2), angle=30, axis=(0, 1, 0)),
+        SRT3DTransform(offset=(-8.2, 8.2, -8.2), scale=(0.1, 0.1, 0.1), angle=30, axis=(0, 1, 0)),
     ],
 )
 def test_line_intersects_voxel(to_parent):
@@ -606,6 +610,77 @@ def test_wireframe_rhomboid():
     assert np.any(np.all(wireframe == np.array([[1, 1, 1], [0, 1, 0]]), axis=1))
 
 
+def test_cylinder_pathfinding_performance():
+    """
+    Performance test for pathfinding in a challenging scenario:
+    - Navigating from under a half-closed cylinder to a position just inside the top lip
+    """
+    voxel_size = 0.1
+    height = 10.0
+    radius = 5.0
+    cylinder = Geometry(
+        {
+            "type": "cylinder",
+            "radius": radius,
+            "height": height,
+            "close_bottom": True,
+            "close_top": False,
+        },
+        "cylinder_mesh",
+        "cylinder"
+    )
+
+    # Create a small traveler
+    traveler = Geometry(
+        {"type": "box", "size": [0.5, 0.5, 0.5]},
+        "traveler_mesh",
+        "traveler"
+    )
+
+    cylinder_to_global = NullTransform(3, from_cs="cylinder", to_cs="global")
+    planner = GeometryMotionPlanner({cylinder: cylinder_to_global}, voxel_size)
+    traveler_to_global = NullTransform(3, from_cs="traveler", to_cs="global")
+
+    # Start inside/under the cylinder
+    start = Point(np.array([0.0, 0, -1.0]), "global")
+
+    # End just inside the top lip - requires navigating around the edge
+    end = Point(np.array([0, 0, height - 0.2]), "global")
+
+    # Timing variables
+    times = []
+    path_lengths = []
+    iterations = 5  # Number of iterations to run
+
+    # First run (warm-up)
+    print("\nRunning initial warm-up iteration...")
+    start_time = time.time()
+    path = planner.find_path(traveler, traveler_to_global, start, end)
+    first_run_time = time.time() - start_time
+    print(f"Initial run: {first_run_time:.4f}s, path length: {len(path)}")
+
+    # Benchmark runs
+    print(f"Running {iterations} benchmark iterations...")
+    for i in range(iterations):
+        start_time = time.time()
+        path = planner.find_path(traveler, traveler_to_global, start, end)
+        elapsed = time.time() - start_time
+        times.append(elapsed)
+        path_lengths.append(len(path))
+        print(f"Iteration {i + 1}: {elapsed:.4f}s, path length: {len(path)}")
+
+    # Report results
+    avg_time = sum(times) / len(times)
+    avg_path_length = sum(path_lengths) / len(path_lengths)
+
+    print("\nResults:")
+    print(f"Average execution time: {avg_time:.4f}s")
+    print(f"Average path length: {avg_path_length:.1f} waypoints")
+    print(f"Time range: {min(times):.4f}s - {max(times):.4f}s")
+
+    return avg_time, avg_path_length, path
+
+
 draw_n = 0
 
 
@@ -634,6 +709,9 @@ class FakeDevice(Qt.QObject):
 
 
 if __name__ == "__main__":
+    avg_time, avg_path_length, path = test_cylinder_pathfinding_performance()
+    print(f"\nTarget performance: 0.2s or less (current: {avg_time:.4f}s)")
+
     import pyqtgraph as pg
     import pyqtgraph.opengl as gl
 

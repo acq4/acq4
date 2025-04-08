@@ -3,7 +3,7 @@ from __future__ import annotations
 import itertools
 from functools import cached_property
 from threading import RLock
-from typing import List, Callable, Optional, Dict, Any, Generator
+from typing import List, Callable, Optional, Dict, Any, Generator, Tuple
 
 import numba
 import numpy as np
@@ -15,6 +15,7 @@ import pyqtgraph.opengl as gl
 from acq4.util.approx import ApproxDict, ApproxSet
 from coorx import SRT3DTransform, Transform, NullTransform, TTransform, Point, AffineTransform
 from pyqtgraph import debug
+from pyqtgraph.debug import Profiler
 from pyqtgraph.units import µm
 
 
@@ -105,7 +106,514 @@ def line_intersects_voxel(start: np.ndarray, end: np.ndarray, vox: np.ndarray):
     return False
 
 
-def find_intersected_voxels(
+def find_intersected_voxels_broadphase(line_start, line_end, voxel_space_max):
+    # Create an axis-aligned bounding box for the line
+    min_point = np.minimum(line_start, line_end)
+    max_point = np.maximum(line_start, line_end)
+
+    # Determine total bounds
+    start_voxel = np.maximum(np.floor(min_point).astype(int), 0)
+    end_voxel = np.minimum(np.ceil(max_point).astype(int), voxel_space_max)
+
+    # Calculate simplified line equation: p = start + t * (end - start)
+    direction = line_end - line_start
+
+    # Use plane-sweeping technique:
+    # For each plane perpendicular to longest axis, find intersecting voxels
+    main_axis = np.argmax(np.abs(direction))
+
+    # If the line is nearly vertical along the axis
+    if abs(direction[main_axis]) < 1e-10:
+        # Just check voxels along the line
+        for x in range(start_voxel[0], end_voxel[0] + 1):
+            for y in range(start_voxel[1], end_voxel[1] + 1):
+                for z in range(start_voxel[2], end_voxel[2] + 1):
+                    if line_intersects_voxel(line_start, line_end, np.array([x, y, z])):
+                        yield (x, y, z)
+        return
+
+    # For each slice along main axis
+    for slice_pos in range(start_voxel[main_axis], end_voxel[main_axis] + 1):
+        # Find where line intersects this slice
+        t = (slice_pos - line_start[main_axis]) / direction[main_axis]
+
+        # Skip if this slice is outside line segment
+        if t < 0 or t > 1:
+            continue
+
+        # Find intersection point with this slice
+        intersection = line_start + t * direction
+
+        # Only check voxels near the intersection point
+        intersection_voxel = np.floor(intersection).astype(int)
+
+        # Check a small neighborhood (3x3) around intersection point
+        for dx in range(-1, 2):
+            for dy in range(-1, 2):
+                for dz in range(-1, 2):
+                    voxel = intersection_voxel + np.array([dx, dy, dz])
+
+                    # Skip out-of-bounds voxels
+                    if np.any(voxel < 0) or np.any(voxel > voxel_space_max):
+                        continue
+
+                    # Use existing intersection test for correctness
+                    if line_intersects_voxel(line_start, line_end, voxel):
+                        yield tuple(voxel)
+
+
+def find_intersected_voxels_3ddda(line_start, line_end, voxel_space_max):
+    # Initialize current voxel at start position
+    current_voxel = np.floor(line_start).astype(int)
+
+    # Direction and delta distances
+    direction = line_end - line_start
+    length = np.linalg.norm(direction)
+
+    # Normalized direction
+    if length > 1e-10:
+        direction = direction / length
+    else:
+        # Just yield the start voxel if line is very short
+        yield tuple(np.clip(current_voxel, 0, voxel_space_max))
+        return
+
+    # Step direction for each axis
+    step = np.sign(direction).astype(int)
+
+    # Calculate t values for next voxel boundaries
+    next_boundary = current_voxel + np.maximum(step, 0)
+    t_max = np.divide(next_boundary - line_start, direction, where=abs(direction) > 1e-10, out=np.full(3, np.inf))
+
+    # Delta t for moving one voxel along each axis
+    delta_t = np.divide(step, direction, where=abs(direction) > 1e-10, out=np.full(3, np.inf))
+
+    # Traverse voxels until we reach end
+    remaining_length = length
+
+    while remaining_length > 0:
+        # Yield current voxel if in bounds
+        if np.all(current_voxel >= 0) and np.all(current_voxel <= voxel_space_max):
+            # Verify intersection with existing function for correctness
+            if line_intersects_voxel(line_start, line_end, current_voxel):
+                yield tuple(current_voxel)
+
+        # Find closest axis boundary
+        axis = np.argmin(t_max)
+
+        # Move to next voxel
+        remaining_length -= abs(delta_t[axis]) * abs(direction[axis])
+        current_voxel[axis] += step[axis]
+        t_max[axis] += abs(delta_t[axis])
+
+
+@numba.jit(nopython=True)
+def _compute_intersected_voxels(
+    line_start: np.ndarray, line_end: np.ndarray, voxel_space_max: np.ndarray
+) -> List[Tuple[int, int, int]]:
+    """
+    Compute all voxels intersected by a line segment with optimized bounds.
+    Internal function optimized with Numba.
+
+    Returns a list of (x, y, z) tuples representing intersected voxels.
+    """
+    # Compute bounding box of the line
+    min_point = np.minimum(line_start, line_end)
+    max_point = np.maximum(line_start, line_end)
+
+    # Determine voxel range
+    start_voxel = np.floor(min_point).astype(np.int64)
+    start_voxel = np.maximum(start_voxel, 0)
+    end_voxel = np.floor(max_point).astype(np.int64)
+    end_voxel = np.minimum(end_voxel, voxel_space_max)
+
+    # Direction and length
+    direction = line_end - line_start
+    line_length = np.sqrt(direction[0] ** 2 + direction[1] ** 2 + direction[2] ** 2)
+
+    result = []
+
+    # If the line is very short, use simplified approach
+    if line_length < 1.0:
+        for x in range(start_voxel[0], end_voxel[0] + 1):
+            for y in range(start_voxel[1], end_voxel[1] + 1):
+                for z in range(start_voxel[2], end_voxel[2] + 1):
+                    if line_intersects_voxel(line_start, line_end, np.array([x, y, z])):
+                        result.append((x, y, z))
+        return result
+
+    # Find dominant axis for optimization (axis with greatest change)
+    abs_dir = np.abs(direction)
+    dominant_axis = 0
+    if abs_dir[1] > abs_dir[0] and abs_dir[1] > abs_dir[2]:
+        dominant_axis = 1
+    elif abs_dir[2] > abs_dir[0] and abs_dir[2] > abs_dir[1]:
+        dominant_axis = 2
+
+    # Other axes
+    second_axis = (dominant_axis + 1) % 3
+    third_axis = (dominant_axis + 2) % 3
+
+    # For each primary position along dominant axis
+    for primary in range(start_voxel[dominant_axis], end_voxel[dominant_axis] + 1):
+        # Calculate where line enters and exits this slice
+        if abs(direction[dominant_axis]) > 1e-10:
+            # Calculate t-values where line enters/exits this slice
+            t_min = (primary - line_start[dominant_axis]) / direction[dominant_axis]
+            t_max = (primary + 1 - line_start[dominant_axis]) / direction[dominant_axis]
+
+            # Ensure t_min <= t_max
+            if t_min > t_max:
+                t_min, t_max = t_max, t_min
+
+            # Clip to line segment bounds
+            t_min = max(0.0, t_min)
+            t_max = min(1.0, t_max)
+
+            # Calculate the points where the line enters and exits this slice
+            point_min = line_start + t_min * direction
+            point_max = line_start + t_max * direction
+
+            # Calculate tighter bounds for secondary and tertiary axes in this slice
+            secondary_min = int(np.floor(min(point_min[second_axis], point_max[second_axis])))
+            secondary_max = int(np.floor(max(point_min[second_axis], point_max[second_axis])))
+            tertiary_min = int(np.floor(min(point_min[third_axis], point_max[third_axis])))
+            tertiary_max = int(np.floor(max(point_min[third_axis], point_max[third_axis])))
+
+            # Apply global bounds constraints
+            secondary_min = max(secondary_min, start_voxel[second_axis])
+            secondary_max = min(secondary_max, end_voxel[second_axis])
+            tertiary_min = max(tertiary_min, start_voxel[third_axis])
+            tertiary_max = min(tertiary_max, end_voxel[third_axis])
+        else:
+            # Line is nearly parallel to the secondary-tertiary plane
+            secondary_min = start_voxel[second_axis]
+            secondary_max = end_voxel[second_axis]
+            tertiary_min = start_voxel[third_axis]
+            tertiary_max = end_voxel[third_axis]
+
+        # Loop through the optimized secondary and tertiary bounds
+        for secondary in range(secondary_min, secondary_max + 1):
+            for tertiary in range(tertiary_min, tertiary_max + 1):
+                # Construct voxel coordinates
+                voxel = np.zeros(3, dtype=np.int64)
+                voxel[dominant_axis] = primary
+                voxel[second_axis] = secondary
+                voxel[third_axis] = tertiary
+
+                # Check if line intersects this voxel
+                if line_intersects_voxel(line_start, line_end, voxel):
+                    result.append((int(voxel[0]), int(voxel[1]), int(voxel[2])))
+
+    return result
+
+
+def find_intersected_voxels_numba(
+    line_start: np.ndarray, line_end: np.ndarray, voxel_space_max: np.ndarray
+) -> Generator[tuple[int, int, int], Any, None]:
+    """
+    Find all voxels intersected by a line segment with optimized search space.
+    Uses Numba for acceleration and pre-computed bounds for secondary axes.
+
+    Parameters:
+    - line_start: Start point of the line segment
+    - line_end: End point of the line segment
+    - voxel_space_max: Maximum voxel coordinates in the space (assumes minimum is 0)
+
+    Returns:
+    - Generator of voxel coordinates intersected by the line
+    """
+    # Ensure inputs are the right type for Numba
+    line_start_array = np.asarray(line_start, dtype=np.float64)
+    line_end_array = np.asarray(line_end, dtype=np.float64)
+    voxel_space_max_array = np.asarray(voxel_space_max, dtype=np.int64)
+
+    # Call the internal Numba-optimized function
+    intersected_voxels = _compute_intersected_voxels(line_start_array, line_end_array, voxel_space_max_array)
+
+    # Yield the results
+    for voxel in intersected_voxels:
+        yield voxel
+
+
+def find_intersected_voxels_supercover(
+    line_start: np.ndarray, line_end: np.ndarray, voxel_space_max: np.ndarray
+) -> Generator[tuple[int, int, int], Any, None]:
+    """
+    Find all voxels intersected by a line segment using the 3D Supercover algorithm.
+
+    Parameters:
+    - line_start: Start point of the line segment
+    - line_end: End point of the line segment
+    - voxel_space_max: Maximum voxel coordinates in the space (assumes minimum is 0)
+
+    Returns:
+    - Generator of voxel coordinates intersected by the line
+    """
+    # Initialize variables
+    start = np.copy(line_start)
+    end = np.copy(line_end)
+
+    # Calculate direction and step
+    direction = end - start
+    step = np.sign(direction).astype(int)
+
+    # Find absolute distances
+    abs_direction = np.abs(direction)
+
+    # Track current position
+    current_voxel = np.floor(start).astype(int)
+
+    # Handle special case: very short lines
+    if np.allclose(start, end, rtol=1e-10, atol=1e-10):
+        if np.all(current_voxel >= 0) and np.all(current_voxel <= voxel_space_max):
+            yield tuple(current_voxel)
+        return
+
+    # Yield the starting voxel if valid
+    if np.all(current_voxel >= 0) and np.all(current_voxel <= voxel_space_max):
+        yield tuple(current_voxel)
+
+    # Compute step sizes for each dimension
+    # For supercover, we need to track both the voxel boundary and diagonal crossings
+    tx = ty = tz = 0
+
+    # Calculate initial tx, ty, tz values (time to next voxel boundary)
+    if step[0] != 0:
+        tx = (np.floor(start[0]) + max(0, step[0]) - start[0]) / direction[0]
+    if step[1] != 0:
+        ty = (np.floor(start[1]) + max(0, step[1]) - start[1]) / direction[1]
+    if step[2] != 0:
+        tz = (np.floor(start[2]) + max(0, step[2]) - start[2]) / direction[2]
+
+    # Delta values (time to cross a whole voxel)
+    delta_tx = abs(1.0 / direction[0]) if direction[0] != 0 else float("inf")
+    delta_ty = abs(1.0 / direction[1]) if direction[1] != 0 else float("inf")
+    delta_tz = abs(1.0 / direction[2]) if direction[2] != 0 else float("inf")
+
+    # Length of the line segment
+    line_length = np.linalg.norm(direction)
+    traveled = 0
+
+    # Main loop
+    while traveled < line_length:
+        # Determine which axis to step along (smallest tx, ty, or tz)
+        if tx <= ty and tx <= tz:
+            # Step along x axis
+            current_voxel[0] += step[0]
+            traveled = tx * line_length
+            tx += delta_tx
+        elif ty <= tx and ty <= tz:
+            # Step along y axis
+            current_voxel[1] += step[1]
+            traveled = ty * line_length
+            ty += delta_ty
+        else:
+            # Step along z axis
+            current_voxel[2] += step[2]
+            traveled = tz * line_length
+            tz += delta_tz
+
+        # If the current voxel is within bounds, yield it
+        if np.all(current_voxel >= 0) and np.all(current_voxel <= voxel_space_max) and traveled <= line_length:
+            # Verify with your existing function for correctness
+            if line_intersects_voxel(line_start, line_end, current_voxel):
+                yield tuple(current_voxel)
+
+        # Supercover modification: Also check diagonal neighbors at boundaries
+        # This ensures we don't miss any voxels the line passes through
+        if np.isclose(tx, ty) or np.isclose(tx, tz) or np.isclose(ty, tz):
+            for dx in [-1, 0, 1]:
+                for dy in [-1, 0, 1]:
+                    for dz in [-1, 0, 1]:
+                        if dx == 0 and dy == 0 and dz == 0:
+                            continue  # Skip the current voxel
+
+                        neighbor = current_voxel + np.array([dx, dy, dz])
+                        if np.all(neighbor >= 0) and np.all(neighbor <= voxel_space_max):
+                            if line_intersects_voxel(line_start, line_end, neighbor):
+                                yield tuple(neighbor)
+
+
+def find_intersected_voxels_axial(
+    line_start: np.ndarray, line_end: np.ndarray, voxel_space_max: np.ndarray
+) -> Generator[tuple[int, int, int], Any, None]:
+    """
+    Find all voxels intersected by a line segment with optimized search space.
+
+    Parameters:
+    - line_start: Start point of the line segment
+    - line_end: End point of the line segment
+    - voxel_space_max: Maximum voxel coordinates in the space (assumes minimum is 0)
+
+    Returns:
+    - Generator of voxel coordinates intersected by the line
+    """
+    # Compute bounding box of the line
+    min_point = np.minimum(line_start, line_end)
+    max_point = np.maximum(line_start, line_end)
+
+    # Determine voxel range
+    start_voxel = np.floor(min_point).astype(int)
+    start_voxel = np.maximum(start_voxel, 0)
+    end_voxel = np.floor(max_point).astype(int)
+    end_voxel = np.minimum(end_voxel, voxel_space_max)
+
+    # Get line direction for optimization
+    direction = line_end - line_start
+    line_length = np.linalg.norm(direction)
+
+    # If the line is very short, just check immediate voxels
+    if line_length < 1.0:
+        for x in range(start_voxel[0], end_voxel[0] + 1):
+            for y in range(start_voxel[1], end_voxel[1] + 1):
+                for z in range(start_voxel[2], end_voxel[2] + 1):
+                    if line_intersects_voxel(line_start, line_end, np.array([x, y, z])):
+                        yield x, y, z
+        return
+
+    # Find dominant axis for optimization
+    dominant_axis = np.argmax(np.abs(direction))
+    second_axis = (dominant_axis + 1) % 3
+    third_axis = (dominant_axis + 2) % 3
+
+    # Sort voxels by distance along dominant axis for early termination possibilities
+    for primary in range(start_voxel[dominant_axis], end_voxel[dominant_axis] + 1):
+        # Calculate bounds for other axes at this primary position
+        # This could be further optimized with more complex math
+        for secondary in range(start_voxel[second_axis], end_voxel[second_axis] + 1):
+            for tertiary in range(start_voxel[third_axis], end_voxel[third_axis] + 1):
+                # Construct voxel coordinates based on axis ordering
+                voxel = np.zeros(3, dtype=int)
+                voxel[dominant_axis] = primary
+                voxel[second_axis] = secondary
+                voxel[third_axis] = tertiary
+
+                # Use existing intersection test that's known to work correctly
+                if line_intersects_voxel(line_start, line_end, voxel):
+                    yield tuple(voxel)
+
+
+@numba.njit
+def _line_intersects_voxel(
+    line_start: np.ndarray, line_end: np.ndarray, voxel: np.ndarray, epsilon: float = 1e-6
+) -> bool:
+    """
+    Tests if a line segment intersects with a voxel using the slab method.
+    """
+    # Voxel min and max bounds
+    voxel_min = voxel.astype(np.float64)
+    voxel_max = voxel_min + 1.0
+
+    # Direction vector of the line
+    direction = line_end - line_start
+
+    # Initialize intersection interval to entire line
+    t_enter = 0.0
+    t_exit = 1.0
+
+    # For each axis
+    for i in range(3):
+        # Check if line is parallel to the axis
+        if np.abs(direction[i]) < epsilon:
+            # Line is parallel to this axis, so check if it's within the voxel bounds
+            if line_start[i] < voxel_min[i] - epsilon or line_start[i] > voxel_max[i] + epsilon:
+                return False
+            continue
+
+        # Calculate intersection times with the two planes perpendicular to this axis
+        t1 = (voxel_min[i] - line_start[i]) / direction[i]
+        t2 = (voxel_max[i] - line_start[i]) / direction[i]
+
+        # Ensure t1 <= t2
+        if t1 > t2:
+            t1, t2 = t2, t1
+
+        # Update the overall intersection interval
+        t_enter = max(t_enter, t1)
+        t_exit = min(t_exit, t2)
+
+        # If intervals don't overlap, no intersection
+        if t_enter > t_exit + epsilon:
+            return False
+
+    # Check if the intersection interval is valid
+    return t_exit >= 0 and t_enter <= 1
+
+
+@numba.njit
+def _find_intersected_voxels_axial_core(
+    line_start: np.ndarray, line_end: np.ndarray, voxel_space_max: np.ndarray
+) -> List[Tuple[int, int, int]]:
+    """
+    Numba-optimized core function that returns a list of tuples.
+    This maintains most of the original algorithm structure.
+    """
+    # Compute bounding box of the line
+    min_point = np.minimum(line_start, line_end)
+    max_point = np.maximum(line_start, line_end)
+
+    # Determine voxel range - keeping your original type handling
+    start_voxel = np.floor(min_point).astype(np.int64)
+    start_voxel = np.maximum(start_voxel, 0)
+    end_voxel = np.floor(max_point).astype(np.int64)
+    end_voxel = np.minimum(end_voxel, voxel_space_max)
+
+    # Pre-allocate a list for Numba
+    result = numba.typed.List()
+
+    # Get line direction for optimization
+    direction = line_end - line_start
+    line_length = np.linalg.norm(direction)
+
+    # If the line is very short, just check immediate voxels
+    if line_length < 1.0:
+        for x in range(start_voxel[0], end_voxel[0] + 1):
+            for y in range(start_voxel[1], end_voxel[1] + 1):
+                for z in range(start_voxel[2], end_voxel[2] + 1):
+                    voxel = np.array([x, y, z], dtype=np.int64)
+                    if line_intersects_voxel(line_start, line_end, voxel):
+                        result.append((x, y, z))
+        return result
+
+    # Find dominant axis for optimization
+    dominant_axis = np.argmax(np.abs(direction))
+    second_axis = (dominant_axis + 1) % 3
+    third_axis = (dominant_axis + 2) % 3
+
+    # Sort voxels by distance along dominant axis - preserving original algorithm
+    for primary in range(start_voxel[dominant_axis], end_voxel[dominant_axis] + 1):
+        for secondary in range(start_voxel[second_axis], end_voxel[second_axis] + 1):
+            for tertiary in range(start_voxel[third_axis], end_voxel[third_axis] + 1):
+                # Construct voxel coordinates based on axis ordering
+                voxel = np.zeros(3, dtype=np.int64)
+                voxel[dominant_axis] = primary
+                voxel[second_axis] = secondary
+                voxel[third_axis] = tertiary
+
+                # Use existing intersection test
+                if line_intersects_voxel(line_start, line_end, voxel):
+                    result.append((int(voxel[0]), int(voxel[1]), int(voxel[2])))
+
+    return result
+
+
+def find_intersected_voxels_axial_numba(
+    line_start: np.ndarray, line_end: np.ndarray, voxel_space_max: np.ndarray
+) -> Generator[tuple[int, int, int], Any, None]:
+    """
+    Find all voxels intersected by a line segment with optimized search space.
+    This maintains your original function interface.
+    """
+    # Call the JIT-optimized core function
+    voxel_list = _find_intersected_voxels_axial_core(line_start, line_end, voxel_space_max)
+
+    # Yield each voxel coordinate
+    for voxel in voxel_list:
+        yield voxel
+
+
+def find_intersected_voxels_exhaustive(
     line_start: np.ndarray, line_end: np.ndarray, voxel_space_max: np.ndarray
 ) -> Generator[tuple[int, int, int], Any, None]:
     """
@@ -204,6 +712,93 @@ def generate_biased_sphere_points(n_points: int, sphere_radius: float, bias_dire
 
     # Combine directions and radii
     return directions * radii[:, np.newaxis]
+
+
+def a_star_ish(
+    start: np.ndarray,
+    finish: np.ndarray,
+    edge_cost: Callable,
+    max_cost: int = 4000,
+    callback: Callable = None,
+) -> List[np.ndarray]:
+    """Find a path between *start* and *finish*. Return the path or raise a ValueError.
+
+    Parameters
+    ----------
+    start
+        Initial position.
+    finish
+        Final position.
+    edge_cost
+        Function that takes two points and returns the cost of moving between them. If the cost is np.inf, the edge is
+        treated as impossible.
+    max_cost
+        Maximum number of iterations before giving up.
+    callback
+        Used for debugging and visualization. Called with the current path at each iteration.
+    """
+
+    def heuristic(x, y):
+        return np.linalg.norm(y - x)
+
+    radius = np.linalg.norm(finish - start) / 5
+    radius = max(radius, 100e-6)
+    concentration_max = np.log(max_cost + 1)
+    count = 10
+
+    def neighbors(pt, cost_so_far):
+        yield (radius * (finish - pt) / np.linalg.norm(finish - pt)) + pt
+        cost_scale = np.log(1 + cost_so_far)
+        concentration = max(0.2, concentration_max - (1.0 * cost_scale))
+        points = generate_biased_sphere_points(count, radius**cost_scale, finish - pt, concentration)
+        yield from (points + pt)
+        yield finish
+
+    open_set = {tuple(start): start}
+    came_from = {}
+    g_score = {tuple(start): 0}
+    f_score = {tuple(start): heuristic(start, finish)}
+    cost = 0
+
+    while open_set:
+        curr_key = min(open_set, key=lambda x: f_score[x])
+        current = open_set.pop(curr_key)
+        if np.all(current == finish):
+            return reconstruct_path(came_from, curr_key)
+
+        for neighbor in neighbors(current, cost):
+            print(f"cost {cost}, neighbor {neighbor}")
+            cost += 1
+            if cost > max_cost:
+                raise ValueError(f"Pathfinding exceeded maximum cost of {max_cost}")
+            neigh_key = tuple(neighbor)
+            this_cost = edge_cost(current, neighbor)
+            tentative_g_score = g_score[curr_key] + this_cost
+            if neigh_key not in g_score or tentative_g_score < g_score[neigh_key] or np.all(neighbor == finish):
+                came_from[neigh_key] = curr_key
+                g_score[neigh_key] = tentative_g_score
+                f_score[neigh_key] = tentative_g_score + 2 * heuristic(neighbor, finish)
+                if f_score[neigh_key] < np.inf and neigh_key not in open_set:
+                    open_set[neigh_key] = neighbor
+            if callback is not None:
+                callback(reconstruct_path(came_from, neigh_key)[::-1])
+
+    raise ValueError("Pathfinding failed; no valid paths found.")
+
+
+def simplify_path(path, edge_cost: Callable, viz_callback: Callable | None):
+    """Simplify the given path by iteratively removing unnecessary waypoints."""
+    path = list(path)
+    made_change = True
+    while made_change:
+        made_change = False
+        ptr = 0
+        while ptr < len(path) - 2:
+            if edge_cost(np.array(path[ptr]), np.array(path[ptr + 2])) < np.inf:
+                path.pop(ptr + 1)
+                made_change = True
+            ptr += 1
+    return path
 
 
 class RRTNode:
@@ -389,53 +984,34 @@ def rrt_connect(
     raise ValueError("Pathfinding failed; no valid paths found after maximum iterations.")
 
 
-def simplify_path(path, edge_cost: Callable, viz_callback: Callable | None):
-    """Simplify the given path by iteratively removing unnecessary waypoints."""
-    if len(path) <= 2:
+def simplify_path_dp(path, edge_cost: Callable, viz_callback: Callable | None):
+    if len(path) <= 3:
         return path
 
-    # First pass: greedy algorithm to remove points
-    path = list(path)
-    made_change = True
-    while made_change:
-        made_change = False
-        ptr = 0
-        while ptr < len(path) - 2:
-            if edge_cost(np.array(path[ptr]), np.array(path[ptr + 2])) < np.inf:
-                path.pop(ptr + 1)
-                made_change = True
-            ptr += 1
-        if viz_callback:
-            viz_callback(path)
+    # Douglas-Peucker-inspired algorithm for smoother paths
+    result = [path[0]]
+    i = 0
+    while i < len(path) - 1:
+        # Try to extend as far as possible
+        for j in range(len(path) - 1, i, -1):
+            if edge_cost(np.array(path[i]), np.array(path[j])) < np.inf:
+                if j > i + 1:  # Skip intermediate points
+                    result.append(path[j])
+                    i = j
+                else:
+                    i += 1
+                break
+        else:
+            # If no skip was possible, keep the next point
+            i += 1
+            if i < len(path):
+                result.append(path[i])
 
-    # Second pass: Douglas-Peucker-inspired algorithm for smoother paths
-    # if len(path) > 3:
-    #     # Find points that can be removed while maintaining valid paths
-    #     result = [path[0]]
-    #     i = 0
-    #     while i < len(path) - 1:
-    #         # Try to extend as far as possible
-    #         for j in range(len(path) - 1, i, -1):
-    #             if edge_cost(np.array(path[i]), np.array(path[j])) < np.inf:
-    #                 if j > i + 1:  # Skip intermediate points
-    #                     result.append(path[j])
-    #                     i = j
-    #                 else:
-    #                     i += 1
-    #                 break
-    #         else:
-    #             # If no skip was possible, keep the next point
-    #             i += 1
-    #             if i < len(path):
-    #                 result.append(path[i])
-    #
-    #     # Ensure the last point is included
-    #     if np.any(result[-1] != path[-1]):
-    #         result.append(path[-1])
-    #
-    #     return result
+    # Ensure the last point is included
+    if np.any(result[-1] != path[-1]):
+        result.append(path[-1])
 
-    return path
+    return result
 
 
 class GeometryMotionPlanner:
@@ -461,7 +1037,116 @@ class GeometryMotionPlanner:
         self.geometries = geometries
         self.voxel_size = voxel_size
 
-    def find_path(
+    def find_path(self, *args, **kwargs):
+        if (mode := kwargs.pop("mode", "RRT Connect")) == "A*":
+            return self.find_path_astar(*args, **kwargs)
+        elif mode == "RRT Connect":
+            return self.find_path_rrt(*args, **kwargs)
+        else:
+            raise ValueError(f"Invalid pathfinding mode: {mode}. Use 'A*' or 'RRT Connect'.")
+
+    def find_path_astar(
+        self,
+        traveler: Geometry,
+        to_global_from_traveler: Transform,
+        start,
+        stop,
+        bounds=None,
+        callback=None,
+        visualizer: "VisualizePathPlan" = None,
+    ):
+        """
+        Return a path from *start* to *stop* in the global coordinate system that *traveling_object* can follow to avoid
+        collisions.
+
+        Method:
+        1. Create voxelized representations of traveling_object in the coordinate systems of all other geometries
+             traveling_object.voxelize (in coordinate system of traveling_object)
+             take mirror image of volume; this becomes the convolution kernel
+             the center of the kernel needs to be mirrored as well
+        2. Create convolutions between all other geometries and traveling_object
+             geometry.voxelize (in local coordinate system)
+             volume.convolve(geometry_voxels, traveling_kernel)
+        3. Do a path-finding algorithm that, at each step, checks for collisions among all convolved volumes
+             A* (ish)
+             volume.check_edge_collision
+
+        Parameters
+        ----------
+        traveler : Geometry
+            Geometry representing the object to be moved from *start* to *stop*
+        to_global_from_traveler : Transform
+            Transform that maps from the traveling_object's local coordinate system to global
+        start
+            Global coordinates of the traveling object's origin when at initial location
+        stop
+            Global coordinates of the final location we want the traveling object's origin to be.
+        callback : callable
+            A function to be called at each step of the path planning process (mostly to aid in visualization and
+            debugging).
+        bounds : list[Plane]
+            Planes that define the bounds of the space in which the path is to be found.
+        visualizer : VisualizePathPlan or None
+            If not None, a VisualizePathPlan to visualize the path planning process.
+
+        Returns
+        -------
+        path : list
+            List of global positions to get from start to stop
+        """
+        profile = debug.Profiler()
+        start = Point(start, "global")
+        stop = Point(stop, "global")
+        bounds = [] if bounds is None else bounds
+        if visualizer is not None:
+            if callback is None:
+                callback = visualizer.updatePath
+            visualizer.startPath([start.coordinates, stop.coordinates], bounds)
+        in_bounds, bound_plane = point_in_bounds(start.coordinates, bounds)
+        if not in_bounds:
+            raise ValueError(f"Starting point {start} is on the wrong side of the {bound_plane} boundary")
+        profile.mark("basic setup")
+
+        obstacles = self.make_convolved_obstacles(traveler, to_global_from_traveler, visualizer)
+        profile.mark("made convolved obstacles")
+
+        for i, _o in enumerate(obstacles):
+            obst_volume, to_global_from_obst = _o
+            obst = list(self.geometries.keys())[i]
+            # users will sometimes drive the hardware to where the motion planner would consider things impossible
+            # TODO pull pipette out along its axis to start
+            # if obst_volume.contains_point(to_global_from_obst.inverse.map(start)):
+            #     raise ValueError(f"Start point {start} is inside obstacle {obst.name}")
+            if obst_volume.contains_point(to_global_from_obst.inverse.map(stop)):
+                raise ValueError(f"Destination point {stop} is inside obstacle {obst.name}")
+
+        profile.mark("voxelized all obstacles")
+
+        def edge_cost(a: np.ndarray, b: np.ndarray):
+            prof = Profiler(disabled=False)
+            if not point_in_bounds(b, bounds)[0]:
+                prof.mark("bounds check")
+                return np.inf
+            prof.mark("bounds check")
+            a = Point(a, start.system)
+            b = Point(b, start.system)
+            for vol, to_global in obstacles:
+                intersects = vol.intersects_line(to_global.inverse.map(a), to_global.inverse.map(b))
+                prof.mark(f"intersection check {to_global.systems[0].name}")
+                if intersects:
+                    return np.inf
+            return np.linalg.norm(b - a)
+
+        path = a_star_ish(start.coordinates, stop.coordinates, edge_cost, callback=callback)
+        profile.mark("A*")
+        path = simplify_path(path, edge_cost)
+        profile.mark("simplified path")
+        if callback:
+            callback(path, skip=1)
+        profile.finish()
+        return path[1:]
+
+    def find_path_rrt(
         self,
         traveler: Geometry,
         to_global_from_traveler: Transform,
@@ -523,7 +1208,7 @@ class GeometryMotionPlanner:
             raise ValueError(f"Starting point {start} is on the wrong side of the {bound_plane} boundary")
         profile.mark("basic setup")
 
-        obstacles = self.make_convolved_obstacles(traveler, to_global_from_traveler, visualizer)
+        obstacles = self.make_convolved_obstacles_with_name(traveler, to_global_from_traveler, visualizer)
         profile.mark("made convolved obstacles")
 
         for i, _o in enumerate(obstacles):
@@ -538,7 +1223,7 @@ class GeometryMotionPlanner:
 
         profile.mark("voxelized all obstacles")
 
-        def edge_cost(a: np.ndarray, b: np.ndarray):
+        def edge_cost_intersection(a: np.ndarray, b: np.ndarray):
             if not point_in_bounds(b, bounds)[0]:
                 return np.inf
             a = Point(a, start.system)
@@ -547,6 +1232,27 @@ class GeometryMotionPlanner:
                 if vol.intersects_line(to_global.inverse.map(a), to_global.inverse.map(b)):
                     return np.inf
             return np.linalg.norm(b - a)
+
+        def edge_cost_walk(a: np.ndarray, b: np.ndarray):
+            if not point_in_bounds(b, bounds)[0]:
+                return np.inf
+            a = Point(a, start.system)
+            b = Point(b, start.system)
+            edge_dist = np.linalg.norm(b - a)
+            if edge_dist < self.voxel_size:
+                step = b - a
+                iterations = 1
+            else:
+                step = self.voxel_size * (b - a) / edge_dist
+                iterations = int(np.ceil(edge_dist / self.voxel_size))
+
+            curr = a
+            for _ in range(iterations):
+                for vol, to_global, o_name in obstacles:
+                    if vol.contains_point(to_global.inverse.map(curr)):
+                        return np.inf
+                curr = Point(curr.coordinates + step, start.system)
+            return edge_dist
 
         # Calculate appropriate step size based on voxel size and distance
         distance = np.linalg.norm(stop.coordinates - start.coordinates)
@@ -557,7 +1263,7 @@ class GeometryMotionPlanner:
         path = rrt_connect(
             start.coordinates,
             stop.coordinates,
-            edge_cost,
+            edge_cost_intersection,
             max_iterations=4000,
             step_size=step_size,
             goal_sample_rate=0.2,
@@ -571,7 +1277,7 @@ class GeometryMotionPlanner:
         profile.finish()
         return path[1:] if len(path) > 1 else path
 
-    def make_convolved_obstacles(self, traveler, to_global_from_traveler, visualizer=None):
+    def make_convolved_obstacles(self, traveler, to_global_from_traveler, visualizer=None, with_name=False):
         obstacles = []
         for obst, to_global_from_obst in self.geometries.items():
             if obst is traveler:
@@ -587,12 +1293,18 @@ class GeometryMotionPlanner:
                     self._cache[cache_key] = convolved_obst
                 obst_volume = self._cache[cache_key]
 
-            obstacles.append((obst_volume, to_global_from_obst, obst.name))
+            if with_name:
+                obstacles.append((obst_volume, to_global_from_obst, obst.name))
+            else:
+                obstacles.append((obst_volume, to_global_from_obst))
             if visualizer is not None:
                 visualizer.addObstacle(obst.name, obst_volume, to_global_from_obst).raiseErrors(
                     "obstacle failed to render"
                 )
         return obstacles
+
+    def make_convolved_obstacles_with_name(self, traveler, to_global_from_traveler, visualizer=None):
+        return self.make_convolved_obstacles(traveler, to_global_from_traveler, visualizer, with_name=True)
 
 
 def point_in_bounds(point, bounds):
@@ -678,7 +1390,7 @@ class Volume(object):
     def intersects_line(self, a, b):
         """Return True if the line segment between *a* and *b* intersects with this volume. Points should be in the
         parent coordinate system of the volume"""
-        line_voxels = find_intersected_voxels(
+        line_voxels = find_intersected_voxels_axial(
             self.transform.inverse.map(a)[::-1],
             self.transform.inverse.map(b)[::-1],
             np.array(self.volume.shape) - 1,
