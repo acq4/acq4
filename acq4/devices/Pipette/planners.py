@@ -248,7 +248,7 @@ class GeometryAwarePathGenerator(PipettePathGenerator):
                 _future.checkStop()
             viz = mod.window().pathPlanVisualizer(self.pip)
             planner, from_pip_to_global = self._getPlanningContext()
-            planner.make_convolved_obstacles_with_name(self.pip.getGeometry(), from_pip_to_global, viz)
+            planner.make_convolved_obstacles(self.pip.getGeometry(), from_pip_to_global, viz)
             print(f"cache primed for {self.pip.name()}")
         except RuntimeError:
             printExc("Blew up while attempting to prime path finding cache")
@@ -287,6 +287,7 @@ class GeometryAwarePathGenerator(PipettePathGenerator):
                 globalStop,
                 boundaries,
                 visualizer=viz,
+                # callback=viz.updatePath,
             )
         except Exception as e:
             viz.focus()

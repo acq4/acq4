@@ -1099,8 +1099,6 @@ class GeometryMotionPlanner:
         stop = Point(stop, "global")
         bounds = [] if bounds is None else bounds
         if visualizer is not None:
-            if callback is None:
-                callback = visualizer.updatePath
             visualizer.startPath([start.coordinates, stop.coordinates], bounds)
         in_bounds, bound_plane = point_in_bounds(start.coordinates, bounds)
         if not in_bounds:
@@ -1111,14 +1109,14 @@ class GeometryMotionPlanner:
         profile.mark("made convolved obstacles")
 
         for i, _o in enumerate(obstacles):
-            obst_volume, to_global_from_obst = _o
-            obst = list(self.geometries.keys())[i]
+            obst_volume, to_global_from_obst, obst_name = _o
+            # obst = list(self.geometries.keys())[i]
             # users will sometimes drive the hardware to where the motion planner would consider things impossible
             # TODO pull pipette out along its axis to start
             # if obst_volume.contains_point(to_global_from_obst.inverse.map(start)):
             #     raise ValueError(f"Start point {start} is inside obstacle {obst.name}")
             if obst_volume.contains_point(to_global_from_obst.inverse.map(stop)):
-                raise ValueError(f"Destination point {stop} is inside obstacle {obst.name}")
+                raise ValueError(f"Destination point {stop} is inside obstacle {obst_name}")
 
         profile.mark("voxelized all obstacles")
 
@@ -1130,7 +1128,7 @@ class GeometryMotionPlanner:
             prof.mark("bounds check")
             a = Point(a, start.system)
             b = Point(b, start.system)
-            for vol, to_global in obstacles:
+            for vol, to_global, _ in obstacles:
                 intersects = vol.intersects_line(to_global.inverse.map(a), to_global.inverse.map(b))
                 prof.mark(f"intersection check {to_global.systems[0].name}")
                 if intersects:
@@ -1200,15 +1198,13 @@ class GeometryMotionPlanner:
         stop = Point(stop, "global")
         bounds = [] if bounds is None else bounds
         if visualizer is not None:
-            if callback is None:
-                callback = visualizer.updatePath
             visualizer.startPath([start.coordinates, stop.coordinates], bounds)
         in_bounds, bound_plane = point_in_bounds(start.coordinates, bounds)
         if not in_bounds:
             raise ValueError(f"Starting point {start} is on the wrong side of the {bound_plane} boundary")
         profile.mark("basic setup")
 
-        obstacles = self.make_convolved_obstacles_with_name(traveler, to_global_from_traveler, visualizer)
+        obstacles = self.make_convolved_obstacles(traveler, to_global_from_traveler, visualizer)
         profile.mark("made convolved obstacles")
 
         for i, _o in enumerate(obstacles):
@@ -1228,7 +1224,7 @@ class GeometryMotionPlanner:
                 return np.inf
             a = Point(a, start.system)
             b = Point(b, start.system)
-            for vol, to_global, o_name in obstacles:
+            for vol, to_global, _ in obstacles:
                 if vol.intersects_line(to_global.inverse.map(a), to_global.inverse.map(b)):
                     return np.inf
             return np.linalg.norm(b - a)
@@ -1248,7 +1244,7 @@ class GeometryMotionPlanner:
 
             curr = a
             for _ in range(iterations):
-                for vol, to_global, o_name in obstacles:
+                for vol, to_global, _ in obstacles:
                     if vol.contains_point(to_global.inverse.map(curr)):
                         return np.inf
                 curr = Point(curr.coordinates + step, start.system)
@@ -1277,7 +1273,7 @@ class GeometryMotionPlanner:
         profile.finish()
         return path[1:] if len(path) > 1 else path
 
-    def make_convolved_obstacles(self, traveler, to_global_from_traveler, visualizer=None, with_name=False):
+    def make_convolved_obstacles(self, traveler, to_global_from_traveler, visualizer=None):
         obstacles = []
         for obst, to_global_from_obst in self.geometries.items():
             if obst is traveler:
@@ -1293,18 +1289,12 @@ class GeometryMotionPlanner:
                     self._cache[cache_key] = convolved_obst
                 obst_volume = self._cache[cache_key]
 
-            if with_name:
-                obstacles.append((obst_volume, to_global_from_obst, obst.name))
-            else:
-                obstacles.append((obst_volume, to_global_from_obst))
+            obstacles.append((obst_volume, to_global_from_obst, obst.name))
             if visualizer is not None:
                 visualizer.addObstacle(obst.name, obst_volume, to_global_from_obst).raiseErrors(
                     "obstacle failed to render"
                 )
         return obstacles
-
-    def make_convolved_obstacles_with_name(self, traveler, to_global_from_traveler, visualizer=None):
-        return self.make_convolved_obstacles(traveler, to_global_from_traveler, visualizer, with_name=True)
 
 
 def point_in_bounds(point, bounds):
