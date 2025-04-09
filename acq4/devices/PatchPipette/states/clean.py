@@ -45,6 +45,7 @@ class CleanState(PatchPipetteState):
 
     def __init__(self, *args, **kwds):
         self.sonication = None
+        self.moveFuture = None
         super().__init__(*args, **kwds)
 
     def run(self):
@@ -98,7 +99,8 @@ class CleanState(PatchPipetteState):
 
             # todo: if needed, we can check TP for capacitance changes here
             # and stop moving as soon as the fluid is detected
-            self.waitFor(pip._movePath(path), timeout=None)
+            self.moveFuture = pip._movePath(path)
+            self.waitFor(self.moveFuture, timeout=None)
 
             if dev.sonicatorDevice is not None:
                 self.sonication = dev.sonicatorDevice.doProtocol(config['sonicationProtocol'])
@@ -118,8 +120,12 @@ class CleanState(PatchPipetteState):
         dev.newPatchAttempt()
         return 'out'
 
-    def resetPosition(self) -> Future:
-        return self.dev.pipetteDevice.moveTo('home', 'fast')
+    @future_wrap
+    def resetPosition(self, _future):
+        if self.moveFuture is not None:
+            fut = self.moveFuture.undo()
+            self.moveFuture = None
+            _future.waitFor(fut, timeout=None)
 
     @future_wrap
     def cleanup(self, _future):
@@ -134,4 +140,9 @@ class CleanState(PatchPipetteState):
         except Exception:
             printExc("Error resetting pressure after clean")
 
-        _future.waitFor(self.resetPosition())
+        try:
+            _future.waitFor(self.resetPosition())
+        except Exception:
+            printExc("Error resetting pipette position after clean")
+
+        _future.waitFor(self.dev.pipetteDevice.moveTo('home', 'fast'))
