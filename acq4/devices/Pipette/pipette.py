@@ -26,21 +26,6 @@ from ...util.json_encoder import ACQ4JSONEncoder
 CamModTemplate = Qt.importTemplate('.cameraModTemplate')
 
 
-def add_nested_metadata(group, metadata):
-    for key, value in metadata.items():
-        if isinstance(value, dict):
-            subgroup = group.create_group(key)
-            add_nested_metadata(subgroup, value)
-        elif isinstance(value, pg.SRTTransform3D):
-            subgroup = group.create_group(key)
-            add_nested_metadata(subgroup, value.saveState())
-        else:
-            try:
-                group.attrs[key] = value
-            except (ValueError, TypeError):
-                group.attrs[key] = json.dumps(value, cls=ACQ4JSONEncoder)
-
-
 class Pipette(Device, OptomechDevice):
     """Represents a pipette or electrode attached to a motorized manipulator.
 
