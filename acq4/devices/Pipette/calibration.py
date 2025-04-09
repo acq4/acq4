@@ -159,7 +159,7 @@ def calibratePipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=
         pos = pipette.tracker.autoFindTipPosition()
         success = _future.waitFor(pipette.setTipPositionIfPossible(pos), timeout=None).getResult()
         if not success:
-            return _future.waitFor(calibratePipette(pipette, imager, scopeDevice, searchSpeed=searchSpeed))
+            _future.waitFor(calibratePipette(pipette, imager, scopeDevice, searchSpeed=searchSpeed))
 
     finally:
         _future.l = locals().copy()
