@@ -62,7 +62,7 @@ class Device(InterfaceMixin, Qt.QObject):  # QObject calls super, which is disas
 
         This path should resolve to `acq4/config/devices/DeviceName_config`.
         """
-        return os.path.join('devices', self.name() + '_config')
+        return os.path.join('devices', f'{self.name()}_config')
 
     def configFileName(self, filename):
         """Return the full path to a config file for this device.

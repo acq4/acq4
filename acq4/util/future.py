@@ -242,9 +242,11 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
             try:
                 future.wait(0.1)
                 break
-            except future.Timeout as e:
+            except Future.Timeout as e:
+                if future.wasInterrupted():  # a _real_ timeout!
+                    future.wait()  # let it sing
                 if timeout is not None and time.time() - start > timeout:
-                    raise future.Timeout(f"Timed out waiting for {future!r}") from e
+                    raise self.Timeout(f"Timed out waiting for {future!r}") from e
         return future
 
     def raiseErrors(self, message, pollInterval=1.0):
