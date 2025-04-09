@@ -20,12 +20,6 @@ def calibratePipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=
         startDepth = surfaceZ + 2e-3
         _future.waitFor(imager.setFocusDepth(startDepth))
 
-        # collect background images, analyze noise
-        with imager.ensureRunning():
-            bgFrames = imager.acquireFrames(10).getResult()
-            bgFrameArray = np.stack([f.data() for f in bgFrames], axis=0)
-            bgFrame = bgFrameArray.mean(axis=0)
-
         # move pipette to search position
         center = imager.globalCenterPosition(mode='roi')
         pipVector = pipette.globalDirection()
@@ -35,6 +29,12 @@ def calibratePipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=
         # using a planner avoids possible collisions with the objective
         planner = PipetteMotionPlanner(pipette, searchPos1, speed='fast')
         _future.waitFor(planner.move())
+
+        # collect background images, analyze noise
+        with imager.ensureRunning():
+            bgFrames = imager.acquireFrames(10).getResult()
+            bgFrameArray = np.stack([f.data() for f in bgFrames], axis=0)
+            bgFrame = bgFrameArray.mean(axis=0)
 
         # record from imager and pipette position while moving pipette across the objecive
         frames, posEvents = watchMovingPipette(pipette, imager, searchPos2, speed=searchSpeed, _future=_future)
