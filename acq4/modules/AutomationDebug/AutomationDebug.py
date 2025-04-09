@@ -269,8 +269,8 @@ class AutomationDebugWindow(Qt.QWidget):
         else:
             # Normal acquisition path
             depth = self.cameraDevice.getFocusDepth()
-            start = depth - 10 * µm
-            stop = depth + 10 * µm
+            start = depth - 20 * µm
+            stop = depth + 20 * µm
             # Acquire real z-stack
             z_stack = _future.waitFor(acquire_z_stack(self.cameraDevice, start, stop, 1 * µm)).getResult()
             self.cameraDevice.setFocusDepth(depth).raiseErrors("error restoring focus")  # no need to wait
