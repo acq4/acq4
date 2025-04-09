@@ -158,10 +158,10 @@ class PatchPipette(Device):
         self.calibrated = False
         self.waitingForSwap = False
         self._pipetteRecord = None
+        self.pipetteDevice.setOffset(self.pipetteDevice.averageHistoricOffset())
         self.emitNewEvent('new_pipette', {})
         self.newPatchAttempt()
         self.setState('bath')
-        self.pipetteDevice.setOffset(self.pipetteDevice.averageHistoricOffset())
         return self.pipetteDevice.findNewPipette()
 
     def requestNewPipette(self):
