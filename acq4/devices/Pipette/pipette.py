@@ -1,5 +1,6 @@
 import contextlib
 import json
+import os
 import weakref
 from typing import List
 
@@ -17,8 +18,10 @@ from acq4.util.target import Target
 from pyqtgraph import Point
 from .planners import defaultMotionPlanners, PipettePathGenerator
 from .tracker import ResnetPipetteTracker
+from ..Camera import Camera
 from ..RecordingChamber import RecordingChamber
 from ...util.PromptUser import prompt
+from ...util.imaging.sequencer import run_image_sequence
 
 CamModTemplate = Qt.importTemplate('.cameraModTemplate')
 
@@ -197,7 +200,7 @@ class Pipette(Device, OptomechDevice):
             self._scopeDev = imdev.scopeDev
         return self._scopeDev
 
-    def imagingDevice(self):
+    def imagingDevice(self) -> Camera:
         if self._imagingDev is None:
             man = getManager()
             name = self.config.get('imagingDevice', None)
@@ -285,6 +288,29 @@ class Pipette(Device, OptomechDevice):
             return np.mean(cal['offset history'], axis=0)
         else:
             return self.offset
+
+    @future_wrap
+    def saveManualCalibration(self, _future):
+        path = os.path.join(self.configPath(), "manual-calibrations")
+        path = self.dm.configFileName(path)
+        path = self.dm.dirHandle(path, create=True)
+
+        cam: Camera = self.imagingDevice()
+        depth = cam.getFocusDepth()
+        is_below_surface = depth <= self.scopeDevice().getSurfaceDepth()
+        scan_dist = np.random.randint(2, 40 if is_below_surface else 100) * 1e-6
+        step = scan_dist / 2
+        try:
+            seq_future = run_image_sequence(cam, z_stack=(depth - scan_dist, depth + scan_dist, step), storage_dir=path)
+            _future.waitFor(seq_future)
+        finally:
+            _future.waitFor(cam.setFocusDepth(depth))
+        fh = seq_future.imagesSavedIn
+        info = {
+            **fh.info(),
+            "tip position": self.globalPosition(),
+        }
+        fh.setInfo(info)
 
     def resetGlobalPosition(self, pos):
         """Set the device transform such that the pipette tip is located at the global position *pos*.

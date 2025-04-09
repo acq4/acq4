@@ -1,4 +1,3 @@
-import contextlib
 import json
 import os
 import re
@@ -163,6 +162,14 @@ class MultiPatchWindow(Qt.QWidget):
 
         self.loadConfig()
 
+    @property
+    def _shouldSaveCalibrationImages(self):
+        return self.ui.saveCalibrationsBtn.isChecked()
+
+    @_shouldSaveCalibrationImages.setter
+    def _shouldSaveCalibrationImages(self, value):
+        self.ui.saveCalibrationsBtn.setChecked(True)
+
     def _turnOffSlowBtn(self, checked):
         self.ui.slowBtn.setChecked(False)
 
@@ -178,6 +185,7 @@ class MultiPatchWindow(Qt.QWidget):
                 (ctrl.pip.name(), plot.mode): plot.plot.saveState()
                 for ctrl in self.pipCtrls for plot in ctrl.plots
             },
+            "should save calibration images": self._shouldSaveCalibrationImages,
         }
         getManager().writeConfigFile(config, self._configFileName())
 
@@ -195,6 +203,7 @@ class MultiPatchWindow(Qt.QWidget):
                     plot = next((plot for plot in ctrl.plots if plot.mode == plotname), None)
                     if plot is not None:
                         plot.plot.restoreState(config["plots"][(pipette, plotname)])
+        self._shouldSaveCalibrationImages = config.get("should save calibration images", True)
 
     def _configFileName(self):
         return os.path.join('modules', f'{self.module.name}.cfg')
@@ -414,6 +423,9 @@ class MultiPatchWindow(Qt.QWidget):
         if not success:
             self._calibratePips.insert(0, pip)
             return
+
+        if self._shouldSaveCalibrationImages:
+            pip.saveManualCalibration().raiseErrors("Failed to save calibration images")
 
         # if calibration stage positions were requested, then move the stage now
         if len(self._calibrateStagePositions) > 0:
