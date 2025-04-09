@@ -18,7 +18,7 @@ class VisualizePathPlan(Qt.QObject):
         self._window = window
         self._traveler = traveler
 
-        self._initGui()
+        self._initGui(blocking=True)
 
         self._bounds = None
         self._obstacles = {}
