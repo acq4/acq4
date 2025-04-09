@@ -142,10 +142,13 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
             self.setState(state or f"interrupted (error: {error})")
         else:
             self.setState(state or "complete")
+        if self._onError is not None and (error or excInfo):
+            try:
+                self._onError(self)
+            except Exception as e:
+                printExc(f"Error in Future.onError callback: {self._onError}")
         self.finishedEvent.set()  # tell wait() that we're done
         self.sigFinished.emit(self)  # tell everyone else that we're done
-        if self._onError is not None and (error or excInfo):
-            self._onError(self)
 
     def wasInterrupted(self):
         """Return True if the task was interrupted before completing (due to an error or a stop request)."""
@@ -164,14 +167,16 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
             return self._isDone
 
     def onFinish(self, callback, *args, **kwargs):
+        """Make sure the callback is called when the future is finished, including if the future is already done."""
         with self._completionLock:
-            if self._isDone:
-                callback(self, *args, **kwargs)
-            else:
+            done = self._isDone
+            if not done:
                 self._callbacks.append((callback, args, kwargs))
+        if done:
+            callback(self, *args, **kwargs)
 
     def _callCallbacks(self):
-        """Call all callbacks registered with onDone().
+        """Call all callbacks registered with onFinish().
 
         This is called when the task is completed.
         """
@@ -364,16 +369,15 @@ class MultiFuture(Future):
     """Future tracking progress of multiple sub-futures."""
 
     def __init__(self, futures):
+        super().__init__()
         self.futures = futures
-        Future.__init__(self)
         for fut in futures:
             fut.onFinish(self._subFutureFinished)
-            # TODO what if the future is already finished?
             fut.sigStateChanged.connect(self._subFutureStateChanged)
 
     def _subFutureFinished(self, future):
-        if all(f.isDone() for f in self.futures):
-            self.sigFinished.emit(self)
+        if self.isDone() and not self._isDone:
+            self._taskDone()
 
     def _subFutureStateChanged(self, future, state):
         self.sigStateChanged.emit(future, state)  # TODO not self?
@@ -402,6 +406,9 @@ class MultiFuture(Future):
 
     def errorMessage(self):
         return "; ".join([str(f.errorMessage()) or "" for f in self.futures])
+
+    def getResult(self):
+        return [f.getResult() for f in self.futures]
 
     def currentState(self):
         return "; ".join([str(f.currentState()) or "" for f in self.futures])
