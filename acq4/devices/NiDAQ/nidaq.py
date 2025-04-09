@@ -77,7 +77,7 @@ class NiDAQ(Device):
         return True
 
     def verifyChannelBelongs(self, chan):
-        if not chan.startswith(f"/{self.exclusiveDevice}/"):
+        if self.exclusiveDevice is not None and not chan.startswith(f"/{self.exclusiveDevice}/"):
             raise ValueError(f"Channel {chan} does not belong to device {self.exclusiveDevice}")
 
     def release(self):
@@ -130,13 +130,14 @@ class NiDAQ(Device):
         if method == 'subsample':
             data = data[::ds].copy()
 
-        # MC: broken code, commented out.
-        # elif method == 'mean':
-        #     # decimate by averaging points together (does not remove HF noise, just folds it down.)
-        #     if res['info']['type'] in ['di', 'do']:
-        #         data = NiDAQ.meanResample(data, ds, binary=True)
-        #     else:
-        #         data = NiDAQ.meanResample(data, ds)
+        elif method == 'mean':
+            # MC: broken code, commented out.
+            raise ValueError("Mean resampling not implemented.")
+            # decimate by averaging points together (does not remove HF noise, just folds it down.)
+            # if res['info']['type'] in ['di', 'do']:
+            #     data = NiDAQ.meanResample(data, ds, binary=True)
+            # else:
+            #     data = NiDAQ.meanResample(data, ds)
 
         elif method == 'fourier':
             # Decimate using fourier resampling -- causes ringing artifacts, very slow to compute (possibly uses butterworth filter?)
@@ -221,8 +222,8 @@ class NiDAQ(Device):
         maskpos = mask1[:-radius] * mask2[radius:]  # both need to be true
         maskneg = mask1[radius:] * mask2[:-radius]
         mask = maskpos + maskneg
-        d5 = numpy.where(mask, data[:-r2], data[
-                                           radius:-radius])  # where both are true replace the value with the value from 2 points before
+        # where both are true replace the value with the value from 2 points before
+        d5 = numpy.where(mask, data[:-r2], data[radius:-radius])
         d6 = numpy.empty(data.shape, dtype=data.dtype)  # add points back to the ends
         d6[radius:-radius] = d5
         d6[:radius] = data[:radius]

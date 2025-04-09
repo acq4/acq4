@@ -1,16 +1,14 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-
 from acq4.devices.LightSource import LightSource
 
 
 class LEDLightSource(LightSource):
     """Light source device controlled using digital outputs."""
+
     def __init__(self, dm, config, name):
         LightSource.__init__(self, dm, config, name)
 
         self._channelsByName = {}  # name: (dev, chan)
-        self._channelNames = {} # (dev, chan): name
+        self._channelNames = {}  # (dev, chan): name
 
         for name, conf in config.get('sources', config.get('leds', {})).items():
             device, chan = conf.pop("channel")
@@ -38,5 +36,4 @@ class LEDLightSource(LightSource):
     def setSourceActive(self, name, active):
         dev, chan = self._channelsByName[name]
         level = float(active) * self.sourceConfigs[name].get('onValue', 1.0)
-        dev.setChanHolding(chan,  level)
-
+        dev.setChanHolding(chan, level)

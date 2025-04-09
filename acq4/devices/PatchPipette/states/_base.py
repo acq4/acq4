@@ -225,11 +225,11 @@ class PatchPipetteState(Future):
             if not self.isDone():
                 self._taskDone(interrupted=interrupted, excInfo=excInfo)
 
-    def checkStop(self, delay=0):
+    def checkStop(self):
         # extend checkStop to also see if the pipette was deactivated.
         if self.dev.active is False:
             raise self.StopRequested("Stop state because device is not 'active'")
-        Future.checkStop(self, delay)
+        Future.checkStop(self)
 
     def __repr__(self):
         return f'<{type(self).__name__} "{self.stateName}">'

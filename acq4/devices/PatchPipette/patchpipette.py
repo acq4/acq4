@@ -1,5 +1,6 @@
+from __future__ import annotations
+
 from collections import OrderedDict
-from typing import Optional
 
 import numpy as np
 
@@ -54,7 +55,7 @@ class PatchPipette(Device):
         self.pipetteDevice: Pipette = deviceManager.getDevice(pipName)
 
         clampName = config.pop('clampDevice', None)
-        self.clampDevice: Optional[PatchClamp] = None
+        self.clampDevice: PatchClamp | None = None
         if clampName is not None:
             self.clampDevice = deviceManager.getDevice(clampName)
             self.clampDevice.sigStateChanged.connect(self.clampStateChanged)
@@ -76,13 +77,13 @@ class PatchPipette(Device):
         self._patchRecord = None
         self._pipetteRecord = None
 
-        self.pressureDevice: Optional[PressureControl] = None
+        self.pressureDevice: PressureControl | None = None
         if 'pressureDevice' in config:
             self.pressureDevice = deviceManager.getDevice(config['pressureDevice'])
             self.pressureDevice.sigPressureChanged.connect(self.pressureChanged)
         self.userPressure = False
 
-        self.sonicatorDevice: Optional[Sonicator] = None
+        self.sonicatorDevice: Sonicator | None = None
         if 'sonicatorDevice' in config:
             self.sonicatorDevice = deviceManager.getDevice(config['sonicatorDevice'])
             self.sonicatorDevice.sigSonicationChanged.connect(self.sonicationChanged)
@@ -234,8 +235,8 @@ class PatchPipette(Device):
         self.sigPressureChanged.emit(self, source, pressure)
         self.emitNewEvent('pressure_changed', OrderedDict([('source', source), ('pressure', pressure)]))
 
-    def sonicationChanged(self, frequency):
-        self.emitNewEvent('sonication_changed', {'frequency': frequency})
+    def sonicationChanged(self, state: str):
+        self.emitNewEvent('sonication_changed', {'state': state})
 
     def setSelected(self):
         pass

@@ -123,11 +123,12 @@ class CleanState(PatchPipetteState):
 
     @future_wrap
     def cleanup(self, _future):
-        if self.sonication is not None and not self.sonication.isDone():
-            if self.wasStopped():
-                self.sonication.stop("parent task stopped")
-            else:
-                _future.waitFor(self.sonication)
+        try:
+            if self.sonication is not None and not self.sonication.isDone():
+                self.sonication.stop("parent task is cleaning up before sonication finished")
+        except Exception:
+            printExc("Error stopping sonication")
+
         try:
             self.dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
         except Exception:
