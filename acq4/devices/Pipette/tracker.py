@@ -638,6 +638,7 @@ class DriftMonitor(Qt.QWidget):
             pos = []
             for i, t in enumerate(self.trackers):
                 try:
+                    # TODO autoFindTipPosition has changed its signature and this object hasn't been tested
                     err = t.autoFindTipPosition(frame=frame, padding=50e-6)
                     # err = np.array(err)
                     # self.cumulative[i] += err
