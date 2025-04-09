@@ -59,7 +59,7 @@ def truncated_cone(
     return vertices, np.array(faces)
 
 
-@numba.jit(nopython=True)
+@numba.jit(nopython=True, nogil=True)
 def line_intersects_voxel(start: np.ndarray, end: np.ndarray, vox: np.ndarray):
     """
     Check if a line segment intersects with a voxel (using Numba optimization)
@@ -207,7 +207,7 @@ def find_intersected_voxels_3ddda(line_start, line_end, voxel_space_max):
         t_max[axis] += abs(delta_t[axis])
 
 
-@numba.jit(nopython=True)
+@numba.jit(nopython=True, nogil=True)
 def _compute_intersected_voxels(
     line_start: np.ndarray, line_end: np.ndarray, voxel_space_max: np.ndarray
 ) -> List[Tuple[int, int, int]]:
@@ -494,7 +494,7 @@ def find_intersected_voxels_axial(
                     yield tuple(voxel)
 
 
-@numba.njit
+@numba.njit(nogil=True)
 def _line_intersects_voxel(
     line_start: np.ndarray, line_end: np.ndarray, voxel: np.ndarray, epsilon: float = 1e-6
 ) -> bool:
@@ -541,7 +541,7 @@ def _line_intersects_voxel(
     return t_exit >= 0 and t_enter <= 1
 
 
-@numba.njit
+@numba.njit(nogil=True)
 def _find_intersected_voxels_axial_core(
     line_start: np.ndarray, line_end: np.ndarray, voxel_space_max: np.ndarray
 ) -> List[Tuple[int, int, int]]:
@@ -1345,7 +1345,7 @@ def convolve_kernel_onto_volume_scipy(volume: np.ndarray, kernel: np.ndarray) ->
     return scipy.signal.convolve(volume.astype(int), kernel.astype(int), mode="full").astype(bool)
 
 
-@numba.jit(nopython=True)
+@numba.jit(nopython=True, nogil=True)
 def convolve_kernel_onto_volume_numba(volume: np.ndarray, kernel: np.ndarray) -> np.ndarray:
     v_shape = volume.shape
     k_shape = kernel.shape
@@ -1406,7 +1406,7 @@ class Volume(object):
         name
             Name of the kernel
         """
-        dest = convolve_kernel_onto_volume_scipy(self.volume, kernel_array)
+        dest = convolve_kernel_onto_volume_numba(self.volume, kernel_array)
         draw_xform = TTransform(
             offset=-center,
             to_cs=self.transform.systems[0],
