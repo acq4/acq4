@@ -112,7 +112,7 @@ class CleanState(PatchPipetteState):
             if self.sonication is not None and not self.sonication.isDone():
                 self.waitFor(self.sonication)
 
-            self.waitFor(self.resetPosition())
+            self.resetPosition(self)
 
         dev.pipetteRecord()['cleanCount'] += 1
         dev.setTipClean(True)
@@ -120,12 +120,11 @@ class CleanState(PatchPipetteState):
         dev.newPatchAttempt()
         return 'out'
 
-    @future_wrap
-    def resetPosition(self, _future):
+    def resetPosition(self, parent_future):
         if self.moveFuture is not None:
             fut = self.moveFuture.undo()
             self.moveFuture = None
-            _future.waitFor(fut, timeout=None)
+            parent_future.waitFor(fut, timeout=None)
 
     @future_wrap
     def cleanup(self, _future):
@@ -141,7 +140,7 @@ class CleanState(PatchPipetteState):
             printExc("Error resetting pressure after clean")
 
         try:
-            _future.waitFor(self.resetPosition())
+            self.resetPosition(_future)
         except Exception:
             printExc("Error resetting pipette position after clean")
 
