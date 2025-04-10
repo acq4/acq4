@@ -30,7 +30,7 @@ class Sonicator(Device):
             protocol = self.protocols[protocol]
         self.sigSonicationChanged.emit(status)
         future = self._doProtocol(protocol)
-        future.sigFinished.connect(self._onProtocolFinished)
+        future.onFinish(self._onProtocolFinished)
         return future
 
     def _doProtocol(self, protocol: object) -> Future:

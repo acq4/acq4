@@ -8,6 +8,7 @@ import traceback
 from typing import Callable, Generic, TypeVar, ParamSpec, Optional
 
 from acq4.util import Qt, ptime
+from acq4.util.debug import printExc
 from pyqtgraph import FeedbackButton
 
 FUTURE_RETVAL_TYPE = TypeVar("FUTURE_RETVAL_TYPE")
@@ -47,6 +48,8 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         self.startTime = ptime.time()
 
         self._isDone = False
+        self._callbacks = []
+        self.sigFinished.connect(self._callCallbacks)
         self._onError = onError
         self._completionLock = threading.Lock()
         self._wasInterrupted = False
@@ -139,10 +142,13 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
             self.setState(state or f"interrupted (error: {error})")
         else:
             self.setState(state or "complete")
+        if self._onError is not None and (error or excInfo):
+            try:
+                self._onError(self)
+            except Exception as e:
+                printExc(f"Error in Future.onError callback: {self._onError}")
         self.finishedEvent.set()  # tell wait() that we're done
         self.sigFinished.emit(self)  # tell everyone else that we're done
-        if self._onError is not None and (error or excInfo):
-            self._onError(self)
 
     def wasInterrupted(self):
         """Return True if the task was interrupted before completing (due to an error or a stop request)."""
@@ -159,6 +165,26 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         """Return True if the task has completed successfully or was interrupted."""
         with self._completionLock:
             return self._isDone
+
+    def onFinish(self, callback, *args, **kwargs):
+        """Make sure the callback is called when the future is finished, including if the future is already done."""
+        with self._completionLock:
+            done = self._isDone
+            if not done:
+                self._callbacks.append((callback, args, kwargs))
+        if done:
+            callback(self, *args, **kwargs)
+
+    def _callCallbacks(self):
+        """Call all callbacks registered with onFinish().
+
+        This is called when the task is completed.
+        """
+        for callback, args, kwargs in self._callbacks:
+            try:
+                callback(self, *args, **kwargs)
+            except Exception as e:
+                printExc(f"Error in Future callback: {callback}")
 
     def errorMessage(self):
         """Return a string description of the reason for a task failure,
@@ -343,16 +369,15 @@ class MultiFuture(Future):
     """Future tracking progress of multiple sub-futures."""
 
     def __init__(self, futures):
+        super().__init__()
         self.futures = futures
-        Future.__init__(self)
         for fut in futures:
-            fut.sigFinished.connect(self._subFutureFinished)
-            # TODO what if the future is already finished?
+            fut.onFinish(self._subFutureFinished)
             fut.sigStateChanged.connect(self._subFutureStateChanged)
 
     def _subFutureFinished(self, future):
-        if all(f.isDone() for f in self.futures):
-            self.sigFinished.emit(self)
+        if self.isDone() and not self._isDone:
+            self._taskDone()
 
     def _subFutureStateChanged(self, future, state):
         self.sigStateChanged.emit(future, state)  # TODO not self?
@@ -381,6 +406,9 @@ class MultiFuture(Future):
 
     def errorMessage(self):
         return "; ".join([str(f.errorMessage()) or "" for f in self.futures])
+
+    def getResult(self):
+        return [f.getResult() for f in self.futures]
 
     def currentState(self):
         return "; ".join([str(f.currentState()) or "" for f in self.futures])
@@ -471,9 +499,7 @@ class FutureButton(FeedbackButton):
             except Exception:
                 self.failure("Error!")
                 raise
-            future.sigFinished.connect(self._futureFinished)
-            if future.isDone():  # futures may immediately complete before we can connect to the signal
-                self._futureFinished(future)
+            future.onFinish(self._futureFinished)
             future.sigStateChanged.connect(self._futureStateChanged)
         else:
             self._userRequestedStop = True
