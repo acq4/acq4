@@ -156,7 +156,7 @@ def findNewPipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=0.
         pipette._moveToGlobal(imager.globalCenterPosition(), 'fast').wait()
 
         # find tip!
-        pos = pipette.tracker.autoFindPipette()
+        pos = pipette.tracker.findTipInFrame()
         success = _future.waitFor(pipette.setNewPipetteTipOffsetIfAcceptable(pos), timeout=None).getResult()
     finally:
         _future.l = locals().copy()

@@ -954,7 +954,7 @@ class PipetteCamModInterface(CameraModuleInterface):
 
     def autoCalibrateClicked(self):
         pip = self.getDevice()
-        pos = pip.tracker.autoFindPipette()
+        pos = pip.tracker.findTipInFrame()
         tip_future = pip.setTipOffsetIfAcceptable(pos)
         tip_future.onFinish(self._handleTipPositionSet)
 
