@@ -485,6 +485,7 @@ class FutureButton(FeedbackButton):
             self.setEnabled(self._stoppable)
             self.setText(message, temporary=True)
             self.setToolTip(tip, temporary=True)
+            self.setStyleSheet("background-color: #AFA; color: #000;", temporary=True)
             if processEvents:
                 Qt.QtWidgets.QApplication.processEvents()
         else:
@@ -492,7 +493,7 @@ class FutureButton(FeedbackButton):
 
     def _controlTheFuture(self):
         if self._future is None:
-            self.processing(self._processing or ("Cancel" if self._stoppable else "Processing..."))
+            self.processing(self._processing or (f"Cancel {self.text()}" if self._stoppable else "Processing..."))
             try:
                 future = self._future = self._future_producer()
             except Exception:
