@@ -5,6 +5,7 @@ import random
 
 import numpy as np
 
+from MetaArray import MetaArray
 from acq4.devices.Camera import Camera
 from acq4.devices.Microscope import Microscope
 from acq4.devices.Pipette import Pipette
@@ -13,11 +14,12 @@ from acq4.modules.Camera import CameraWindow
 from acq4.modules.Module import Module
 from acq4.util import Qt
 from acq4.util.future import Future, future_wrap
+from acq4.util.imaging import Frame
 from acq4.util.imaging.sequencer import acquire_z_stack
-from pyqtgraph import mkPen
+from acq4.util.target import TargetBox
 from pyqtgraph.units import µm
 
-UiTemplate = Qt.importTemplate('.window')
+UiTemplate = Qt.importTemplate(".window")
 
 
 class AutomationDebugWindow(Qt.QWidget):
@@ -39,11 +41,14 @@ class AutomationDebugWindow(Qt.QWidget):
         self.ui.clearBtn.clicked.connect(self.clearBoundingBoxes)
         self.ui.zStackDetectBtn.setOpts(future_producer=self._detectNeuronsZStack, stoppable=True)
         self.ui.zStackDetectBtn.sigFinished.connect(self._handleDetectResults)
-        self.ui.flatDetectBtn.setOpts(future_producer=self._detectNeuronsFlat, stoppable=True)
-        self.ui.flatDetectBtn.sigFinished.connect(self._handleDetectResults)
+        self.ui.testUIBtn.setOpts(future_producer=self._testUI, stoppable=True)
+        self.ui.testUIBtn.sigFinished.connect(self._handleDetectResults)
 
         self.ui.setTopLeftButton.clicked.connect(self._setTopLeft)
         self.ui.setBottomRightButton.clicked.connect(self._setBottomRight)
+
+        self.ui.mockFilePath.setReadOnly(True)
+        self.ui.mockFileButton.clicked.connect(self._selectMockFile)
 
         self.ui.autoTargetBtn.setOpts(future_producer=self._autoTarget, stoppable=True)
         self.ui.autoTargetBtn.sigFinished.connect(self._handleAutoFinish)
@@ -54,15 +59,16 @@ class AutomationDebugWindow(Qt.QWidget):
             elif isinstance(dev, Camera):
                 self.ui.cameraSelector.addItem(name)
 
-        self.ui.trackFeaturesBtn.setOpts(future_producer=self.doFeatureTracking, 
-            processing="Stop tracking", stoppable=True)
+        self.ui.trackFeaturesBtn.setOpts(
+            future_producer=self.doFeatureTracking, processing="Stop tracking", stoppable=True
+        )
         self.ui.trackFeaturesBtn.sigFinished.connect(self._handleFeatureTrackingFinish)
         self._featureTracker = None
 
         self.ui.testPipetteBtn.setOpts(
             future_producer=self.doPipetteCalibrationTest,
             stoppable=True,
-            processing="Interrupt pipette\ncalibration test"
+            processing="Interrupt pipette\ncalibration test",
         )
         self.ui.testPipetteBtn.setToolTip("Start with the pipette calibrated and in the field of view")
         self.ui.testPipetteBtn.sigFinished.connect(self._handleCalibrationFinish)
@@ -86,7 +92,7 @@ class AutomationDebugWindow(Qt.QWidget):
             try:
                 _future.waitFor(findNewPipette(pipette, camera, camera.scopeDev))
                 error = np.linalg.norm(pipette.globalPosition() - true_tip_position)
-                self.sigLogMessage.emit(f"Calibration complete: {error*1e6:.2g}µm error")
+                self.sigLogMessage.emit(f"Calibration complete: {error * 1e6:.2g}µm error")
                 if error > 50e-6:
                     self.failedCalibrations.append(error)
                     i = len(self.failedCalibrations) - 1
@@ -94,7 +100,7 @@ class AutomationDebugWindow(Qt.QWidget):
                         f'....so bad. Why? Check man.getModule("AutomationDebug").failedCalibrations[{i}]'
                     )
             except Future.Stopped:
-                self.sigLogMessage.emit('Calibration interrupted by user request')
+                self.sigLogMessage.emit("Calibration interrupted by user request")
                 break
 
     @future_wrap
@@ -138,7 +144,7 @@ class AutomationDebugWindow(Qt.QWidget):
                 stack_data = stack_data[::-1]
             direction *= -1
             result = tracker.next_frame(ImageStack(stack_data, pix, step * direction))
-            z, y, x = result['updated_object_stack'].obj_center  # frame, row, col
+            z, y, x = result["updated_object_stack"].obj_center  # frame, row, col
             frame = stack[round(z)]
             target = frame.mapFromFrameToGlobal((x, y)) + (frame.depth,)
             pipette.setTarget(target)
@@ -154,7 +160,7 @@ class AutomationDebugWindow(Qt.QWidget):
         if working:
             self.module.manager.getModule("Camera").window()  # make sure camera window is open
         self.ui.zStackDetectBtn.setEnabled(working == self.ui.zStackDetectBtn or not working)
-        self.ui.flatDetectBtn.setEnabled(working == self.ui.flatDetectBtn or not working)
+        self.ui.testUIBtn.setEnabled(working == self.ui.testUIBtn or not working)
         self.ui.autoTargetBtn.setEnabled(working == self.ui.autoTargetBtn or not working)
         self.ui.testPipetteBtn.setEnabled(working == self.ui.testPipetteBtn or not working)
         self.ui.trackFeaturesBtn.setEnabled(working == self.ui.trackFeaturesBtn or not working)
@@ -187,12 +193,13 @@ class AutomationDebugWindow(Qt.QWidget):
 
     def clearBoundingBoxes(self):
         cam_win: CameraWindow = self.module.manager.getModule("Camera").window()
-        for widget in self._previousBoxWidgets:
-            cam_win.removeItem(widget)
+        for box in self._previousBoxWidgets:
+            cam_win.removeItem(box)
+            self.scopeDevice.sigGlobalTransformChanged.disconnect(box.noticeFocusChange)
         self._previousBoxWidgets = []
         self._previousBoxBounds = []
 
-    def _handleDetectResults(self, neurons_fut: Future) -> list:
+    def _handleDetectResults(self, neurons_fut: Future) -> None:
         try:
             if neurons_fut.wasInterrupted():
                 return
@@ -204,10 +211,9 @@ class AutomationDebugWindow(Qt.QWidget):
         cam_win: CameraWindow = self.module.manager.getModule("Camera").window()
         self.clearBoundingBoxes()
         for start, end in bounding_boxes:
-            box = Qt.QGraphicsRectItem(Qt.QRectF(Qt.QPointF(start[0], start[1]), Qt.QPointF(end[0], end[1])))
-            box.setPen(mkPen("r", width=2))
-            box.setBrush(Qt.QBrush(Qt.QColor(0, 0, 0, 0)))
+            box = TargetBox(start, end)
             cam_win.addItem(box)
+            self.scopeDevice.sigGlobalTransformChanged.connect(box.noticeFocusChange)
             self._previousBoxWidgets.append(box)
             self._previousBoxBounds.append((start, end))
             # TODO label boxes
@@ -218,27 +224,60 @@ class AutomationDebugWindow(Qt.QWidget):
             # self._previousBoxWidgets.append(label)
 
     @future_wrap
-    def _detectNeuronsFlat(self, _future: Future):
-        self.sigWorking.emit(self.ui.flatDetectBtn)
-        from acq4.util.imaging.object_detection import detect_neurons
-
+    def _testUI(self, _future):
         with self.cameraDevice.ensureRunning():
             frame = _future.waitFor(self.cameraDevice.acquireFrames(1)).getResult()[0]
-        with self.cameraDevice.ensureRunning():
-            frame = _future.waitFor(self.cameraDevice.acquireFrames(1)).getResult()[0]
-        return _future.waitFor(detect_neurons(frame)).getResult()
+        points = np.random.random((20, 3))
+        points[:, 2] *= 20e-6
+        points[:, 1] *= frame.shape[0]
+        points[:, 0] *= frame.shape[1]
+        boxes = []
+        for pt in points:
+            center = frame.mapFromFrameToGlobal(pt)
+            boxes.append((center - 20e-6, center + 20e-6))
+        return boxes
 
     @future_wrap
     def _detectNeuronsZStack(self, _future: Future) -> list:
         self.sigWorking.emit(self.ui.zStackDetectBtn)
-        from acq4.util.imaging.object_detection import detect_neurons
+        from acq4_automation.object_detection import detect_neurons
 
-        depth = self.cameraDevice.getFocusDepth()
-        start = depth - 10 * µm
-        stop = depth + 10 * µm
-        z_stack = _future.waitFor(acquire_z_stack(self.cameraDevice, start, stop, 1 * µm)).getResult()
-        self.cameraDevice.setFocusDepth(depth)  # no need to wait
-        return _future.waitFor(detect_neurons(z_stack)).getResult()
+        man = self.module.manager
+        autoencoder = man.config.get("misc", {}).get("autoencoderPath", None)
+        classifier = man.config.get("misc", {}).get("classifierPath", None)
+        pixel_size = self.cameraDevice.getPixelSize()[0]
+        z_scale = 1e-6
+        if self.ui.mockCheckBox.isChecked() and self.ui.mockFilePath.text():
+            # Load the MetaArray file
+            mock_file_path = self.ui.mockFilePath.text()
+            data = MetaArray(file=mock_file_path).asarray()
+            base_position = np.array(self.cameraDevice.mapToGlobal((0, 0, 0)))
+            z_stack = [
+                Frame(
+                    data[i],
+                    info={
+                        "transform": {
+                            "pos": base_position + (0, 0, i * z_scale),
+                            "scale": (pixel_size, pixel_size, z_scale),
+                        },
+                    },
+                )
+                for i in range(len(data))
+            ]
+        else:
+            # Normal acquisition path
+            depth = self.cameraDevice.getFocusDepth()
+            start = depth - 20 * µm
+            stop = depth + 20 * µm
+            # Acquire real z-stack
+            z_stack = _future.waitFor(acquire_z_stack(self.cameraDevice, start, stop, 1 * µm)).getResult()
+            self.cameraDevice.setFocusDepth(depth).raiseErrors("error restoring focus")  # no need to wait
+        return _future.waitFor(
+            detect_neurons(
+                z_stack, autoencoder=autoencoder, classifier=classifier, xy_scale=pixel_size, z_scale=z_scale
+            ),
+            timeout=600,
+        ).getResult()
 
     @future_wrap
     def _autoTarget(self, _future):
@@ -265,6 +304,14 @@ class AutomationDebugWindow(Qt.QWidget):
                 self.pipetteDevice.setTarget(center)
         finally:
             self.sigWorking.emit(False)
+
+    def _selectMockFile(self):
+        filePath, _ = Qt.QFileDialog.getOpenFileName(
+            self, "Select MetaArray File", "", "MetaArray Files (*.ma);;All Files (*)"
+        )
+        if filePath:
+            self.ui.mockFilePath.setText(filePath)
+            self.ui.mockCheckBox.setChecked(True)
 
     def _randomLocation(self):
         x = random.uniform(self._xLeftSpin.value(), self._xRightSpin.value())
