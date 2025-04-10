@@ -33,10 +33,10 @@ class PipetteTracker:
             imager = man.getDevice("Camera")
         return imager
 
-    def autoFindTipPosition(self, **kwds):
-        """Automatically find the pipette tip position using template matching on a single camera frame.
+    def autoFindPipette(self, **kwds):
+        """Automatically find the pipette tip position.
 
-        Return the offset in pipette-local coordinates and the normalized cross-correlation value of the template match.
+        Return the offset in pipette-local coordinates.
 
         All keyword arguments are passed to `measureTipPosition()`.
         """
@@ -335,7 +335,7 @@ class CorrelationPipetteTracker(PipetteTracker):
                 "No reference frames found for this pipette / objective / filter combination: %s" % repr(key)
             )
 
-    def autoFindTipPosition(self, **kwds):
+    def autoFindPipette(self, **kwds):
         """Automatically calibrate the pipette tip position using template matching on a single camera frame.
 
         Return the offset in pipette-local coordinates and the normalized cross-correlation value of the template match.
@@ -638,8 +638,8 @@ class DriftMonitor(Qt.QWidget):
             pos = []
             for i, t in enumerate(self.trackers):
                 try:
-                    # TODO autoFindTipPosition has changed its signature and this object hasn't been tested
-                    err = t.autoFindTipPosition(frame=frame, padding=50e-6)
+                    err = t.autoFindPipette(frame=frame, padding=50e-6)
+                    t.pipette.setTipOffset(err)
                     # err = np.array(err)
                     # self.cumulative[i] += err
                     # err = (self.cumulative[i]**2).sum()**0.5

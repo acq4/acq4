@@ -15,7 +15,7 @@ from acq4.modules.Camera import CameraModuleInterface
 from acq4.util import Qt, ptime
 from acq4.util.future import future_wrap
 from acq4.util.target import Target
-from pyqtgraph import Point
+from pyqtgraph import Point, siFormat
 from .planners import defaultMotionPlanners, PipettePathGenerator
 from .tracker import ResnetPipetteTracker
 from ..Camera import Camera
@@ -102,7 +102,8 @@ class Pipette(Device, OptomechDevice):
         }
         parent = self.parentDevice()
         if not isinstance(parent, Stage):
-            raise Exception(f"Pipette device requires some type of translation stage as its parentDevice (got {parent}).")
+            raise Exception(
+                f"Pipette device requires some type of translation stage as its parentDevice (got {parent}).")
 
         # may add items here to implement per-pipette custom motion planning
         self.motionPlanners = {}
@@ -209,7 +210,9 @@ class Pipette(Device, OptomechDevice):
                 if len(cams) == 1:
                     name = cams[0]
                 else:
-                    raise Exception("Pipette requires either a single imaging device available (found %d) or 'imagingDevice' specified in its configuration." % len(cams))
+                    raise Exception(
+                        "Pipette requires either a single imaging device available (found %d) or 'imagingDevice' specified in its configuration." % len(
+                            cams))
             self._imagingDev = man.getDevice(name)
         return self._imagingDev
 
@@ -230,7 +233,11 @@ class Pipette(Device, OptomechDevice):
         self._camInterfaces[iface] = None
         return iface
 
-    def tipPositionIsReasonable(self, pos) -> bool:
+    def tipOffsetIsReasonable(self, pos) -> bool:
+        dist = np.linalg.norm(np.array(self.mapToGlobal((0, 0, 0))) - pos)
+        return dist < 30e-6
+
+    def newPipetteTipOffsetIsReasonable(self, pos) -> bool:
         cal = self.readConfigFile('calibration')
         if 'offset history' in cal and len(cal['offset history']) > 10:
             avg = np.mean(cal['offset history'], axis=0)
@@ -240,31 +247,55 @@ class Pipette(Device, OptomechDevice):
         return True
 
     @future_wrap
-    def setTipPositionIfPossible(self, pos, window=None, _future=None):
-        """Returns whether the tip position was saved. Otherwise, the user requested a re-do."""
-        if self.tipPositionIsReasonable(pos):
-            self.setTipPosition(pos)
+    def setTipOffsetIfAcceptable(self, pos, _future=None):
+        if self.tipOffsetIsReasonable(pos):
+            self.setTipOffset(pos)
         else:
+            dist = np.linalg.norm(np.array(self.mapToGlobal((0, 0, 0))) - pos)
+            dist = siFormat(dist, suffix='m', precision=3)
             button_text = _future.waitFor(prompt(
-                title="Tip position outlier",
-                text=f"Tip position for {self.name()} is outside of its normal range.",
-                extra_text="Do you want to include this outlier, re-do the tip selection, override all historic "
-                           "positions, or only use this as a temporary position?",
-                choices=["Include", "Re-do", "Override", "Temporary"],
+                title="Pipette displacement detected",
+                text=f"The tip offset for {self.name()} is {dist} off from its initial value.",
+                extra_text="Do you want to use or discard this value",
+                choices=["Use", "Discard"],
             ), timeout=None).getResult()
-            if button_text == "Include":
-                self.setTipPosition(pos)
-            elif button_text == "Re-do":
+            if button_text == "Use":
+                self.setTipOffset(pos)
+            elif button_text == "Discard":
                 return False
-            elif button_text == "Override":
-                self.overrideTipPosition(pos)
-            elif button_text == "Temporary":
-                self.setTemporaryTipPosition(pos)
+            elif button_text == "New pipette":
+                success = _future.waitFor(self.setNewPipetteTipOffsetIfAcceptable(pos)).getResult()
+                # TODO this would be cool, but the followup all has to happen on a PatchPipette
             else:
                 raise AssertionError("Unknown button clicked")
         return True
 
-    def setTipPosition(self, pos):
+    @future_wrap
+    def setNewPipetteTipOffsetIfAcceptable(self, pos, _future=None):
+        """Returns whether the tip position was saved. Otherwise, the user requested a re-do."""
+        if self.newPipetteTipOffsetIsReasonable(pos):
+            self.recordTipOffsetInHistory(pos)
+        else:
+            button_text = _future.waitFor(prompt(
+                title="Initial tip offset outlier",
+                text=f"The tip offset for {self.name()} is outside of its normal range.",
+                extra_text="Do you want to include this outlier, discard the value, override all historic "
+                           "offsets, or only use this as a temporary offset?",
+                choices=["Include", "Discard", "Override", "Temporary"],
+            ), timeout=None).getResult()
+            if button_text == "Include":
+                self.recordTipOffsetInHistory(pos)
+            elif button_text == "Discard":
+                return False
+            elif button_text == "Override":
+                self.overrideTipOffsetHistory(pos)
+            elif button_text == "Temporary":
+                self.setTipOffset(pos)
+            else:
+                raise AssertionError("Unknown button clicked")
+        return True
+
+    def recordTipOffsetInHistory(self, pos):
         self.resetGlobalPosition(pos)
         cal = self.readConfigFile('calibration')
         cal['offset'] = list(self.offset)
@@ -272,15 +303,19 @@ class Pipette(Device, OptomechDevice):
         cal['offset history'] = cal['offset history'][-20:]
         self.writeConfigFile(cal, 'calibration')
 
-    def overrideTipPosition(self, pos):
+    def overrideTipOffsetHistory(self, pos):
         self.resetGlobalPosition(pos)
         cal = self.readConfigFile('calibration')
         cal['offset'] = list(self.offset)
         cal['offset history'] = [cal['offset']]
         self.writeConfigFile(cal, 'calibration')
 
-    def setTemporaryTipPosition(self, pos):
+    def setTipOffset(self, pos):
+        """Given a global position, set the offset such that the pipette tip is located at that position."""
         self.resetGlobalPosition(pos)
+        cal = self.readConfigFile('calibration')
+        cal['offset'] = list(self.offset)
+        self.writeConfigFile(cal, 'calibration')
 
     def averageHistoricOffset(self):
         cal = self.readConfigFile('calibration')
@@ -401,7 +436,7 @@ class Pipette(Device, OptomechDevice):
         return self.yawAngle() * np.pi / 180.
 
     def pitchRadians(self):
-        return self.pitchAngle() * np.pi / 180.    
+        return self.pitchAngle() * np.pi / 180.
 
     def goHome(self, speed='fast', **kwds):
         """Extract pipette tip diagonally, then move to home position.
@@ -639,8 +674,8 @@ class Pipette(Device, OptomechDevice):
         return PipetteRecorder(self)
 
     def findNewPipette(self):
-        from acq4.devices.Pipette.calibration import calibratePipette
-        future = calibratePipette(self, self.imagingDevice(), self.scopeDevice())
+        from acq4.devices.Pipette.calibration import findNewPipette
+        future = findNewPipette(self, self.imagingDevice(), self.scopeDevice())
         self._last_calibration_future = future  # keep for easy debugging of calibration algorithm
         return future
 
@@ -650,13 +685,13 @@ class PipetteRecorder:
         self.pip = pip
         self.events = []
 
-        
         self.pip.sigGlobalTransformChanged.connect(self.recordPos, Qt.Qt.DirectConnection)
         self.pip.sigMoveStarted.connect(self.recordMoveStarted, Qt.Qt.DirectConnection)
         self.pip.sigMoveFinished.connect(self.recordMoveFinished, Qt.Qt.DirectConnection)
         self.pip.sigMoveRequested.connect(self.recordMoveRequested, Qt.Qt.DirectConnection)
 
-        self.newEvent('init', {'position': tuple(self.pip.globalPosition()), 'direction': tuple(self.pip.globalDirection())})
+        self.newEvent('init',
+                      {'position': tuple(self.pip.globalPosition()), 'direction': tuple(self.pip.globalDirection())})
 
     def recordPos(self):
         self.newEvent('position_change', {'position': tuple(self.pip.globalPosition())})
@@ -815,7 +850,7 @@ class PipetteCamModInterface(CameraModuleInterface):
         pos, angle = self.analyzeTransform()
 
         self.centerArrow.setPos(pos[0], pos[1])
-        self.centerArrow.setStyle(angle=180-angle)
+        self.centerArrow.setStyle(angle=180 - angle)
         # self.depthLine.setValue(pos[2])
         self.depthArrow.setPos(0, pos[2])
 
@@ -863,7 +898,7 @@ class PipetteCamModInterface(CameraModuleInterface):
         angle = self.calibrateAxis.angle()
 
         self.centerArrow.setPos(pos[0], pos[1])
-        self.centerArrow.setStyle(angle=180-angle)
+        self.centerArrow.setStyle(angle=180 - angle)
 
     def calibrateAxisChanged(self):
         pos = self.calibrateAxis.pos()
@@ -919,8 +954,8 @@ class PipetteCamModInterface(CameraModuleInterface):
 
     def autoCalibrateClicked(self):
         pip = self.getDevice()
-        pos = pip.tracker.autoFindTipPosition()
-        tip_future = pip.setTipPositionIfPossible(pos, window=self.parent())
+        pos = pip.tracker.autoFindPipette()
+        tip_future = pip.setTipOffsetIfAcceptable(pos)
         tip_future.onFinish(self._handleTipPositionSet)
 
     def _handleTipPositionSet(self, future):
@@ -941,6 +976,7 @@ class PipetteCamModInterface(CameraModuleInterface):
 class Axis(pg.ROI):
     """Used for calibrating pipette position and orientation.
     """
+
     def __init__(self, pos, angle, inverty):
         arrow = pg.makeArrowPath(headLen=20, tipAngle=30, tailLen=60, tailWidth=2).translated(-84, 0)
         tr = Qt.QTransform()
@@ -981,7 +1017,7 @@ class Axis(pg.ROI):
         self._pxLen = [w, h]
         self.blockSignals(True)
         try:
-            self.setSize([w*50, h*50])
+            self.setSize([w * 50, h * 50])
         finally:
             self.blockSignals(False)
         self.updateText()
@@ -992,8 +1028,8 @@ class Axis(pg.ROI):
         w, h = self._pxLen
         if w is None:
             return
-        self.x.setPos(w*100, 0)
-        self.y.setPos(0, h*100)
+        self.x.setPos(w * 100, 0)
+        self.y.setPos(0, h * 100)
 
     def boundingRect(self):
         if self._bounds is None:
@@ -1002,7 +1038,7 @@ class Axis(pg.ROI):
                 return Qt.QRectF()
             w = w * 100
             h = abs(h * 100)
-            self._bounds = Qt.QRectF(-w, -h, w*2, h*2)
+            self._bounds = Qt.QRectF(-w, -h, w * 2, h * 2)
         return self._bounds
 
     def setVisible(self, v):

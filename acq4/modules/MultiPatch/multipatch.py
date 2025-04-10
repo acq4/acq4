@@ -279,8 +279,8 @@ class MultiPatchWindow(Qt.QWidget):
         while work_to_do:
             patchpip = work_to_do.pop(0)
             pip = patchpip.pipetteDevice if isinstance(patchpip, PatchPipette) else patchpip
-            pos = pip.tracker.autoFindTipPosition()
-            success = _future.waitFor(pip.setTipPositionIfPossible(pos, self), timeout=None).getResult()
+            pos = pip.tracker.autoFindPipette()
+            success = _future.waitFor(pip.setTipOffsetIfAcceptable(pos), timeout=None).getResult()
             if not success:
                 work_to_do.insert(0, patchpip)
                 continue
@@ -415,7 +415,7 @@ class MultiPatchWindow(Qt.QWidget):
         pos = self._cammod.window().getView().mapSceneToView(ev.scenePos())
         spos = pip.scopeDevice().globalPosition()
         pos = [pos.x(), pos.y(), spos.z()]
-        tip_future = pip.setTipPositionIfPossible(pos, self)
+        tip_future = pip.setTipOffsetIfAcceptable(pos)
         tip_future.onFinish(self._handleManualSetTip, pip)
 
     def _handleManualSetTip(self, future, pip):

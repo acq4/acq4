@@ -33,7 +33,7 @@ def _make_message_box(title, text, choices, extra_text, parent, is_done):
     msg_box.setWindowTitle(title)
     msg_box.setText(text)
     msg_box.setInformativeText(extra_text)
-    for choice in choices:
+    for choice in reversed(choices):
         msg_box.addButton(choice, Qt.QMessageBox.ButtonRole.AcceptRole)
     msg_box.setWindowModality(Qt.Qt.NonModal)
     msg_box.buttonClicked.connect(is_done.set)

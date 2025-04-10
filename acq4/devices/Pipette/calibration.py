@@ -9,7 +9,7 @@ from .planners import PipetteMotionPlanner
 
 
 @future_wrap
-def calibratePipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=0.4e-3, _future=None):
+def findNewPipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=0.4e-3, _future=None):
     """
     Find the tip of a new pipette by moving it across the objective while recording from the imager.
     """
@@ -156,12 +156,8 @@ def calibratePipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=
         pipette._moveToGlobal(imager.globalCenterPosition(), 'fast').wait()
 
         # find tip!
-        pos = pipette.tracker.autoFindTipPosition()
-        success = _future.waitFor(pipette.setTipPositionIfPossible(pos), timeout=None).getResult()
-        if not success:
-            recursion = calibratePipette(pipette, imager, scopeDevice, searchSpeed=searchSpeed)
-            _future.waitFor(recursion)
-
+        pos = pipette.tracker.autoFindPipette()
+        success = _future.waitFor(pipette.setNewPipetteTipOffsetIfAcceptable(pos), timeout=None).getResult()
     finally:
         _future.l = locals().copy()
 
