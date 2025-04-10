@@ -163,19 +163,21 @@ def _save_results(
         is_z_stack: bool = False,
 ):
     """
-        +-----------+--------+---------+------------------------+
-        | timelapse | mosaic | z-stack |    resultant files     |
-        +-----------+--------+---------+------------------------+
-        | true      | true   | true    | folders of z-stack mas |
-        | true      | true   | false   | folders of images      |
-        | true      | false  | true    | multiple z-stack mas   |
-        | true      | false  | false   | single timelapse ma    |
-        | false     | true   | true    | multiple z-stack mas   |
-        | false     | true   | false   | multiple images        |
-        | false     | false  | true    | single z-stack ma      |
-        | false     | false  | false   | single image           |
-        +-----------+--------+---------+------------------------+
+    Returns either the containing dir or the single file handle.
+        +-----------+--------+---------+------------------------+----------------+
+        | timelapse | mosaic | z-stack |    resultant files     |  fh to return  |
+        +-----------+--------+---------+------------------------+----------------+
+        | true      | true   | true    | folders of z-stack mas |  storage_dir   |
+        | true      | true   | false   | folders of images      |  storage_dir   |
+        | true      | false  | true    | multiple z-stack mas   |  storage_dir   |
+        | true      | false  | false   | single timelapse ma    |  timelapse.ma  |
+        | false     | true   | true    | multiple z-stack mas   |  storage_dir   |
+        | false     | true   | false   | multiple images        |  storage_dir   |
+        | false     | false  | true    | single z-stack ma      |  z_stack.ma    |
+        | false     | false  | false   | single image           |  image.tif     |
+        +-----------+--------+---------+------------------------+----------------+
     """
+    ret_fh = storage_dir
     if is_mosaic and is_timelapse:
         storage_dir = storage_dir.getDir(f"mosaic_{idx:03d}", create=True)
 
@@ -187,15 +189,21 @@ def _save_results(
                 stack = frame.saveImage(storage_dir, "z_stack.ma")
             else:
                 stack = frame.appendImage(stack)
+        if not is_timelapse and not is_mosaic:
+            ret_fh = stack
     elif is_timelapse and not is_mosaic:
         if idx == 0:
-            frames.saveImage(storage_dir, "timelapse.ma", autoIncrement=False)
+            ret_fh = frames.saveImage(storage_dir, "timelapse.ma", autoIncrement=False)
         else:
             fh = storage_dir["timelapse.ma"]  # MC: I don't like this
             frames.appendImage(fh)
+            ret_fh = fh
     else:
-        frames.saveImage(storage_dir, "image.tif")
+        fh = frames.saveImage(storage_dir, "image.tif")
+        if not is_mosaic and not is_timelapse:
+            ret_fh = fh
 
+    return ret_fh
 
 @future_wrap
 def run_image_sequence(
@@ -213,8 +221,10 @@ def run_image_sequence(
     man = Manager.getManager()
     result = []
     is_timelapse = count > 1
+    ret_fh = None
 
     def handle_new_frames(f: "Frame | list[Frame]", idx: int):
+        nonlocal ret_fh
         if is_timelapse:
             if idx + 1 > len(result):
                 result.append([])
@@ -229,7 +239,9 @@ def run_image_sequence(
             else:
                 pin(f)
         if storage_dir:
-            _save_results(f, storage_dir, idx, count > 1, bool(mosaic), bool(z_stack))
+            fh = _save_results(f, storage_dir, idx, count > 1, bool(mosaic), bool(z_stack))
+            if ret_fh is None:
+                ret_fh = fh
 
     # record
     with man.reserveDevices(imager.devicesToReserve()):
@@ -252,6 +264,7 @@ def run_image_sequence(
         finally:
             _open_shutter(imager, False)
             _hold_imager_focus(imager, False)
+    _future.imagesSavedIn = ret_fh
     return result
 
 
@@ -466,7 +479,7 @@ class ImageSequencerCtrl(Qt.QWidget):
             prot["storage_dir"] = dh
             self.setRunning(True)
             self._future = run_image_sequence(**prot)
-            self._future.sigFinished.connect(self.threadStopped)
+            self._future.onFinish(self.threadStopped)
             self._future.sigStateChanged.connect(self.threadMessage)
         except Exception:
             self.threadStopped(self._future)

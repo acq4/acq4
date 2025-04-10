@@ -275,6 +275,7 @@ class CellDetectState(PatchPipetteState):
         self._startTime = None
         self.direction = self._calc_direction()
         self._wiggleLock = Lock()
+        self._sidestepDirection = np.pi / 2
 
     def run(self):
         with contextlib.ExitStack() as stack:
@@ -355,8 +356,7 @@ class CellDetectState(PatchPipetteState):
                 raise TimeoutError("Pipette fouled by obstacle")
 
         # pick a sidestep point orthogonal to the pipette direction on the xy plane
-        xy_perpendicular = np.array([-direction[1], direction[0], 0])
-        sidestep = self.config['sidestepLateralDistance'] * xy_perpendicular / np.linalg.norm(xy_perpendicular)
+        sidestep = self.config['sidestepLateralDistance'] * self.sidestepDirection(direction)
         sidestep_pos = retract_pos + sidestep
         self.waitFor(pip._moveToGlobal(sidestep_pos, speed=speed))
 
@@ -372,6 +372,32 @@ class CellDetectState(PatchPipetteState):
         self.waitFor(move)
         pos = np.array(pip.globalPosition())
         self.waitFor(pip._moveToGlobal(pos - sidestep, speed=speed))
+
+    def sidestepDirection(self, vector):
+        """
+        Create a vector orthogonal to the input vector, oriented π/2 radians more widdershins than last invocation.
+
+        Parameters:
+        vector : ndarray
+            the direction vector to sidestep from
+
+        Return : ndarray
+            a unit vector orthogonal to the input vector
+        """
+        self._sidestepDirection += np.pi / 2
+        unit_vector = vector / np.linalg.norm(vector)
+
+        # Create an arbitrary orthogonal vector
+        min_idx = np.argmin(np.abs(unit_vector))
+        basis = np.zeros(3)
+        basis[min_idx] = 1
+        ortho_vec = np.cross(unit_vector, basis)
+        ortho_vec = ortho_vec / np.linalg.norm(ortho_vec)
+
+        ortho_vec2 = np.cross(unit_vector, ortho_vec)
+
+        # Apply the rotation by angle in the plane of ortho_vec and ortho_vec2
+        return ortho_vec * np.cos(self._sidestepDirection) + ortho_vec2 * np.sin(self._sidestepDirection)
 
     def obstacleDetected(self):
         return self.config['obstacleDetection'] and not self.closeEnoughToTargetToDetectCell() and self._analysis.obstacle_detected()

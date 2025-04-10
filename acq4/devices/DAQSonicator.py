@@ -79,6 +79,7 @@ class DAQSonicator(Sonicator):
             },
         }
         if "disable" in config:
+            config["disable"]["holding"] = 1
             daq_conf["channels"]["disable"] = config["disable"]
         if "overload" in config:
             daq_conf["channels"]["overload"] = config["overload"]
@@ -132,6 +133,8 @@ class DAQSonicator(Sonicator):
             raise
         finally:
             task.stop()
+            if "disable" in self.config:
+                self._daq.setChannelValue("disable", 1)
 
     def calcVoltage(self, frequency: float) -> float:
         """

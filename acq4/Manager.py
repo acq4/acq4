@@ -717,7 +717,7 @@ class Manager(Qt.QObject):
             self.sigBaseDirChanged.emit()
             self.setCurrentDir(self.baseDir)
 
-    def dirHandle(self, d, create=False):
+    def dirHandle(self, d, create=False) -> DirHandle:
         """Return a directory handle for the specified directory string."""
         # return self.dataManager.getDirHandle(d, create)
         return DataManager.getDirHandle(d, create=create)

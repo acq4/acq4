@@ -8,7 +8,7 @@ import numpy as np
 from acq4.devices.Camera import Camera
 from acq4.devices.Microscope import Microscope
 from acq4.devices.Pipette import Pipette
-from acq4.devices.Pipette.calibration import calibratePipette
+from acq4.devices.Pipette.calibration import findNewPipette
 from acq4.modules.Camera import CameraWindow
 from acq4.modules.Module import Module
 from acq4.util import Qt
@@ -84,7 +84,7 @@ class AutomationDebugWindow(Qt.QWidget):
         pipette.moveTo("home", "fast")
         while True:
             try:
-                _future.waitFor(calibratePipette(pipette, camera, camera.scopeDev))
+                _future.waitFor(findNewPipette(pipette, camera, camera.scopeDev))
                 error = np.linalg.norm(pipette.globalPosition() - true_tip_position)
                 self.sigLogMessage.emit(f"Calibration complete: {error*1e6:.2g}µm error")
                 if error > 50e-6:
