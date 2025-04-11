@@ -149,6 +149,7 @@ class PatchPipette(Device):
         fut = imdev.moveCenterToGlobal(self.pipetteDevice.targetPosition(), speed=speed)
         if raiseErrors:
             fut.raiseErrors("Error while focusing on pipette target: {error}")
+        return fut
 
     def newPipette(self):
         """A new physical pipette has been attached; reset any per-pipette state.
