@@ -108,6 +108,7 @@ class Pipette(Device, OptomechDevice):
         # may add items here to implement per-pipette custom motion planning
         self.motionPlanners = {}
         self.currentMotionPlanner = None
+        self.keepOnStepping = True
         self.pathGenerator = self.pathGeneratorClass(self)
 
         self._camInterfaces = weakref.WeakKeyDictionary()
@@ -220,6 +221,7 @@ class Pipette(Device, OptomechDevice):
         pass
 
     def stop(self):
+        self.keepOnStepping = False  # thread safety? if a user starts a new stepwise movement simultaneous with stopping, they deserve to have to stop a second or even third time.
         cmp = self.currentMotionPlanner
         if cmp is not None:
             cmp.stop()
@@ -547,7 +549,8 @@ class Pipette(Device, OptomechDevice):
     def stepwiseAdvance(self, depth: float, maxSpeed: float = 10e-6, interval: float = 5, _future=None):
         """Retract/advance in 1µm steps, allowing for manual user movements"""
         initial_direction = None
-        while True:
+        self.keepOnStepping = True
+        while self.keepOnStepping:
             pos = self.globalPosition()
             goal = self.positionAtDepth(depth)
             direction = goal - pos
