@@ -161,13 +161,13 @@ class CellDetectState(PatchPipetteState):
         Time duration (seconds) to wait between steps when advanceContinuous=False(default 0.1)
     advanceStepDistance : float
         Distance (m) per step when advanceContinuous=False (default 1 µm)
-    saveInitialZStack : bool
+    takeACellfie : bool
         Whether to take a z-stack of the cell at the start of this state (default True)
-    initialZStackHeight : float
+    cellfieHeight : float
         Vertical distance (m) of the initial z-stack (default 30 µm)
-    initialZStackStep : float
+    cellfieStep : float
         Vertical distance (m) between z-stack slices (default 1 µm)
-    initialZStackPipetteClearance : float
+    cellfiePipetteClearance : float
         Minimum distance (m) between target and pipette tip in which to allow the z-stack to be taken (default 100 µm)
     obstacleDetection : bool
         If True, sidestep obstacles (default False)
@@ -245,10 +245,10 @@ class CellDetectState(PatchPipetteState):
         'aboveSurfaceSpeed': {'default': 20e-6, 'type': 'float', 'suffix': 'm/s'},
         'belowSurfaceSpeed': {'default': 5e-6, 'type': 'float', 'suffix': 'm/s'},
         'detectionSpeed': {'default': 2e-6, 'type': 'float', 'suffix': 'm/s'},
-        'saveInitialZStack': {'default': True, 'type': 'bool'},
-        'initialZStackHeight': {'default': 30e-6, 'type': 'float', 'suffix': 'm'},
-        'initialZStackStep': {'default': 1e-6, 'type': 'float', 'suffix': 'm'},
-        'initialZStackPipetteClearance': {'default': 100e-6, 'type': 'float', 'suffix': 'm'},
+        'takeACellfie': {'default': True, 'type': 'bool'},
+        'cellfieHeight': {'default': 30e-6, 'type': 'float', 'suffix': 'm'},
+        'cellfieStep': {'default': 1e-6, 'type': 'float', 'suffix': 'm'},
+        'cellfiePipetteClearance': {'default': 100e-6, 'type': 'float', 'suffix': 'm'},
         'preTargetWiggle': {'default': False, 'type': 'bool'},
         'preTargetWiggleRadius': {'default': 8e-6, 'type': 'float', 'suffix': 'm'},
         'preTargetWiggleStep': {'default': 5e-6, 'type': 'float', 'suffix': 'm'},
@@ -304,16 +304,16 @@ class CellDetectState(PatchPipetteState):
 
     def _run(self):
         config = self.config
-        if config['saveInitialZStack'] and self._distanceToTarget() > config['initialZStackPipetteClearance']:
+        if config['takeACellfie'] and self._distanceToTarget() > config['cellfiePipetteClearance']:
             self.setState("cell detect: taking initial z-stack")
             self.waitFor(self.dev.focusOnTarget('fast'))
-            start = self.dev.pipetteDevice.targetPosition()[2] - (config['initialZStackHeight'] / 2)
-            end = start + config['initialZStackHeight']
+            start = self.dev.pipetteDevice.targetPosition()[2] - (config['cellfieHeight'] / 2)
+            end = start + config['cellfieHeight']
             save_in = self.dev.dm.getCurrentDir().getDir("cell detect initial z stack", create=True)
             self.waitFor(
                 run_image_sequence(
                     self.dev.imagingDevice(),
-                    z_stack=(start, end, config['initialZStackStep']),
+                    z_stack=(start, end, config['cellfieStep']),
                     storage_dir=save_in,
                 )
             )
