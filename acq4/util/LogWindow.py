@@ -147,10 +147,10 @@ class LogWindow(Qt.QMainWindow):
             kwargs["currentDir"] = None
 
         now = datetime.now().astimezone().isoformat()
-        saveName = f"LogEntry_{self.entriesSaved}"
         with self.lock:
             self.entriesSaved += 1
             self.entriesVisible += 1
+            saveName = f"LogEntry_{self.entriesSaved}"
             savedId = self.entriesSaved
             entry = {
                 "message": msg,
