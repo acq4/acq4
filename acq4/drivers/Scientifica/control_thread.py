@@ -22,6 +22,7 @@ class ScientificaControlThread:
         self.pos_callback = None
         self.obj_callback = None
         self.default_speed = dev.getSpeed()
+        self.default_min_speed = dev.getMinSpeed()
         self.poll_interval = 0.05
         self.move_complete_threshold = 0.5  # distance in µm from target that is considered complete
 
@@ -148,13 +149,15 @@ class ScientificaControlThread:
         with self.dev.serial.lock:
             for i in range(3):
                 try:
-                    # need to send 3 commands uninterrupted in sequence
+                    # need to send 5 commands uninterrupted in sequence
                     if speed is not None:
                         self.dev.setSpeed(speed)
+                        self.dev.setMinSpeed(speed)
                     ticks = [x * self.dev.ticksPerMicron for x in pos]
                     self.dev.serial.send(b'ABS %d %d %d' % tuple(ticks))
                     if speed is not None:
                         self.dev.setSpeed(self.default_speed)
+                        self.dev.setMinSpeed(self.default_min_speed)
                 except (TimeoutError, RuntimeError):
                     if i >= 2:
                         raise
