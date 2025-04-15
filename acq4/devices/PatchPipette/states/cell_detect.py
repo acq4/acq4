@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from threading import Lock
-
-from typing import Any
-
 import contextlib
+from threading import Lock
+from typing import Any, Iterable
+
 import numpy as np
 
 import pyqtgraph as pg
@@ -12,13 +11,15 @@ from acq4 import getManager
 from acq4.util import ptime
 from acq4.util.functions import plottable_booleans
 from acq4.util.future import future_wrap
+from pyqtgraph.units import µm
 from ._base import PatchPipetteState, SteadyStateAnalysisBase
 
 
 class CellDetectAnalysis(SteadyStateAnalysisBase):
     """Class to analyze test pulses and determine cell detection behavior."""
+
     @classmethod
-    def plots_for_data(cls, data: iter[np.void], *args, **kwargs) -> dict[str, iter[dict[str, Any]]]:
+    def plots_for_data(cls, data: Iterable[np.ndarray], *args, **kwargs) -> dict[str, Iterable[dict[str, Any]]]:
         plots = {'Ω': [], '': []}
         names = False
         for d in data:
@@ -197,7 +198,8 @@ class CellDetectState(PatchPipetteState):
     preTargetWiggleSpeed : float
         Speed (m/s) to move during the wiggle (default 5 µm/s)
     baselineResistanceTau : float
-        Time constant (s) for rolling average of pipette resistance (default 20 s) from which to calculate cell detection
+        Time constant (s) for rolling average of pipette resistance (default 20 s) from which to calculate cell
+        detection
     fastDetectionThreshold : float
         Threshold for fast change in pipette resistance (Ohm) to trigger cell detection (default 1 MOhm)
     slowDetectionThreshold : float
@@ -234,6 +236,10 @@ class CellDetectState(PatchPipetteState):
         'maxAdvanceDepthBelowSurface': {'default': None, 'type': 'float', 'optional': True, 'suffix': 'm'},
         'aboveSurfaceSpeed': {'default': 20e-6, 'type': 'float', 'suffix': 'm/s'},
         'belowSurfaceSpeed': {'default': 5e-6, 'type': 'float', 'suffix': 'm/s'},
+        'aboveSurfacePressure': {'default': 1500, 'type': 'float', 'suffix': 'Pa'},
+        'belowSurfacePressureMin': {'default': 1500, 'type': 'float', 'suffix': 'Pa'},
+        'belowSurfacePressureMax': {'default': 5000, 'type': 'float', 'suffix': 'Pa'},
+        'belowSurfacePressureChange': {'default': 50 / µm, 'type': 'float', 'suffix': 'Pa/m'},
         'detectionSpeed': {'default': 2e-6, 'type': 'float', 'suffix': 'm/s'},
         'preTargetWiggle': {'default': False, 'type': 'bool'},
         'preTargetWiggleRadius': {'default': 8e-6, 'type': 'float', 'suffix': 'm'},
@@ -297,6 +303,7 @@ class CellDetectState(PatchPipetteState):
                 return self._transition_to_seal(speed)
             self.checkStop()
             self.processAtLeastOneTestPulse()
+            self.adjustPressureForDepth()
             if self._analysis.tip_is_broken():
                 self._taskDone(interrupted=True, error="Pipette broken")
                 self.dev.patchRecord()['detectedCell'] = False
@@ -331,6 +338,15 @@ class CellDetectState(PatchPipetteState):
                     self.singleStep()
         self._taskDone(interrupted=True, error="Timed out waiting for cell detect.")
         return config['fallbackState']
+
+    def adjustPressureForDepth(self):
+        depth = self.depthBelowSurface()
+        if depth < 0:  # above surface
+            pressure = self.config["aboveSurfacePressure"]
+        else:
+            pressure = self.config["belowSurfacePressureMin"] + depth * self.config["belowSurfacePressureChange"]
+            pressure = min(pressure, self.config["belowSurfacePressureMax"])
+        self.dev.pressureDevice.setPressure("regulator", pressure)
 
     def avoidObstacle(self, already_retracted=False):
         self.setState("avoiding obstacle" + (" (recursively)" if already_retracted else ""))
@@ -400,7 +416,9 @@ class CellDetectState(PatchPipetteState):
         return ortho_vec * np.cos(self._sidestepDirection) + ortho_vec2 * np.sin(self._sidestepDirection)
 
     def obstacleDetected(self):
-        return self.config['obstacleDetection'] and not self.closeEnoughToTargetToDetectCell() and self._analysis.obstacle_detected()
+        return (self.config['obstacleDetection']
+                and not self.closeEnoughToTargetToDetectCell()
+                and self._analysis.obstacle_detected())
 
     def processAtLeastOneTestPulse(self):
         tps = super().processAtLeastOneTestPulse()
@@ -411,7 +429,8 @@ class CellDetectState(PatchPipetteState):
     def weTookTooLong(self):
         if self._startTime is None:
             self._startTime = ptime.time()
-        return self.config['cellDetectTimeout'] is not None and ptime.time() - self._startTime > self.config['cellDetectTimeout']
+        return (self.config['cellDetectTimeout'] is not None
+                and ptime.time() - self._startTime > self.config['cellDetectTimeout'])
 
     def targetCellFound(self) -> str | bool:
         if self.closeEnoughToTargetToDetectCell() and not self._wiggleLock.locked():
@@ -422,10 +441,13 @@ class CellDetectState(PatchPipetteState):
         return False
 
     def aboveSurface(self, pos=None):
+        return self.depthBelowSurface(pos) < 0
+
+    def depthBelowSurface(self, pos=None):
         if pos is None:
             pos = self.dev.pipetteDevice.globalPosition()
         surface = self.dev.pipetteDevice.scopeDevice().getSurfaceDepth()
-        return pos[2] > surface
+        return surface - pos[2]
 
     def closeEnoughToTargetToDetectCell(self, pos=None):
         pip = self.dev.pipetteDevice
@@ -455,7 +477,8 @@ class CellDetectState(PatchPipetteState):
         elif self.config['advanceMode'] == 'target':
             direction = np.array(pip.targetPosition()) - np.array(pip.globalPosition())
         else:
-            raise ValueError(f"advanceMode must be 'vertical', 'axial', or 'target'  (got {self.config['advanceMode']!r})")
+            raise ValueError(
+                f"advanceMode must be 'vertical', 'axial', or 'target'  (got {self.config['advanceMode']!r})")
         return direction / np.linalg.norm(direction)
 
     def fastTravelEndpoint(self):
@@ -487,14 +510,14 @@ class CellDetectState(PatchPipetteState):
             dz = endDepth - pos[2]
             depthEndpt = pos + self.direction * (dz / self.direction[2])
             # is the surface depth endpoint closer?
-            if endpoint is None or np.linalg.norm(endpoint-pos) > np.linalg.norm(depthEndpt-pos):
+            if endpoint is None or np.linalg.norm(endpoint - pos) > np.linalg.norm(depthEndpt - pos):
                 endpoint = depthEndpt
 
         # max distance past target
         if config['advanceMode'] == 'target' and config['maxAdvanceDistancePastTarget'] is not None:
             targetEndpt = target + self.direction * config['maxAdvanceDistancePastTarget']
             # is the target endpoint closer?
-            if endpoint is None or np.linalg.norm(endpoint-pos) > np.linalg.norm(targetEndpt-pos):
+            if endpoint is None or np.linalg.norm(endpoint - pos) > np.linalg.norm(targetEndpt - pos):
                 endpoint = targetEndpt
 
         if endpoint is None:
@@ -507,42 +530,49 @@ class CellDetectState(PatchPipetteState):
 
     @future_wrap
     def continuousMove(self, _future):
-        """Begin moving pipette continuously along search path.
-        """
+        """Move pipette continuously along search path."""
         self.setState("continuous pipette advance")
+        config = self.config
+        dev = self.dev
         if self.aboveSurface():
-            speed = self.config['aboveSurfaceSpeed']
+            speed = config['aboveSurfaceSpeed']
             surface = self.surfaceIntersectionPosition(self.direction)
-            _future.waitFor(self.dev.pipetteDevice._moveToGlobal(surface, speed=speed), timeout=None)
+            _future.waitFor(dev.pipetteDevice._moveToGlobal(surface, speed=speed), timeout=None)
             self.setState("moved to surface")
         if not self.closeEnoughToTargetToDetectCell():
-            speed = self.config['belowSurfaceSpeed']
+            speed = config['belowSurfaceSpeed']
             midway = self.fastTravelEndpoint()
             _future.waitFor(self.dev.pipetteDevice._moveToGlobal(midway, speed=speed), timeout=None)
             self.setState("moved to detection area")
-        speed = self.config['detectionSpeed']
+        speed = config['detectionSpeed']
         endpoint = self.finalSearchEndpoint()
-        if self.config['preTargetWiggle']:
-            distance = np.linalg.norm(endpoint - np.array(self.dev.pipetteDevice.globalPosition()))
-            count = int(distance / self.config['preTargetWiggleStep'])
-            for _ in range(count):
-                self.setState("pre-target wiggle")
-                retract_pos = self.dev.pipetteDevice.globalPosition() - self.direction * self.config['preTargetWiggleStep']
-                _future.waitFor(self.dev.pipetteDevice._moveToGlobal(retract_pos, speed=speed), timeout=None)
-                with self._wiggleLock:
-                    self.waitFor(
-                        self.dev.pipetteDevice.wiggle(
-                            speed=self.config['preTargetWiggleSpeed'],
-                            radius=self.config['preTargetWiggleRadius'],
-                            repetitions=1,
-                            duration=self.config['preTargetWiggleDuration'],
-                            pipette_direction=self.direction,
-                        ),
-                        timeout=None,
-                    )
-                step_pos = self.dev.pipetteDevice.globalPosition() + self.direction * self.config['preTargetWiggleStep']
-                _future.waitFor(self.dev.pipetteDevice._moveToGlobal(step_pos, speed=speed), timeout=None)
+        if config['preTargetWiggle']:
+            self._wiggle(_future, endpoint)
         _future.waitFor(self.dev.pipetteDevice._moveToGlobal(endpoint, speed=speed), timeout=None)
+
+    def _wiggle(self, future, endpoint):
+        config = self.config
+        dev = self.dev
+        speed = config['detectionSpeed']
+        distance = np.linalg.norm(endpoint - np.array(dev.pipetteDevice.globalPosition()))
+        count = int(distance / config['preTargetWiggleStep'])
+        for _ in range(count):
+            self.setState("pre-target wiggle")
+            retract_pos = dev.pipetteDevice.globalPosition() - self.direction * config['preTargetWiggleStep']
+            future.waitFor(dev.pipetteDevice._moveToGlobal(retract_pos, speed=speed), timeout=None)
+            with self._wiggleLock:
+                self.waitFor(
+                    dev.pipetteDevice.wiggle(
+                        speed=config['preTargetWiggleSpeed'],
+                        radius=config['preTargetWiggleRadius'],
+                        repetitions=1,
+                        duration=config['preTargetWiggleDuration'],
+                        pipette_direction=self.direction,
+                    ),
+                    timeout=None,
+                )
+            step_pos = dev.pipetteDevice.globalPosition() + self.direction * config['preTargetWiggleStep']
+            future.waitFor(dev.pipetteDevice._moveToGlobal(step_pos, speed=speed), timeout=None)
 
     def getAdvanceSteps(self):
         """Return the list of step positions to take along the search path.
