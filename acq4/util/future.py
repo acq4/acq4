@@ -269,7 +269,7 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
                 future.wait(0.1)
                 break
             except Future.Timeout as e:
-                if future.wasInterrupted():  # a _real_ timeout!
+                if future.wasInterrupted():  # a _real_ timeout, as opposed to our 0.1s loopbeat
                     future.wait()  # let it sing
                 if timeout is not None and time.time() - start > timeout:
                     raise self.Timeout(f"Timed out waiting for {future!r}") from e
