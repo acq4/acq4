@@ -248,17 +248,21 @@ class AutomationDebugWindow(Qt.QWidget):
         pixel_size = self.cameraDevice.getPixelSize()[0]
         z_scale = 1e-6
         if self.ui.mockCheckBox.isChecked() and self.ui.mockFilePath.text():
+            with self.cameraDevice.ensureRunning():
+                # Acquire a single frame to get the camera transform
+                real_frame = self.cameraDevice.acquireFrames(1).getResult()[0]
+                base_xform = real_frame.globalTransform()
+                base_position = np.array(real_frame.mapFromFrameToGlobal((0, 0, 0)))
             # Load the MetaArray file
             mock_file_path = self.ui.mockFilePath.text()
             data = MetaArray(file=mock_file_path).asarray()
-            base_position = np.array(self.cameraDevice.mapToGlobal((0, 0, 0)))
             z_stack = [
                 Frame(
                     data[i],
                     info={
                         "transform": {
                             "pos": base_position + (0, 0, i * z_scale),
-                            "scale": (pixel_size, pixel_size, z_scale),
+                            "scale": base_xform.getScale(),
                         },
                     },
                 )
