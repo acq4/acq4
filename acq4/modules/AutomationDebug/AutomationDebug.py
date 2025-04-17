@@ -17,6 +17,7 @@ from acq4.util.future import Future, future_wrap
 from acq4.util.imaging import Frame
 from acq4.util.imaging.sequencer import acquire_z_stack
 from acq4.util.target import TargetBox
+from acq4.util.threadrun import runInGuiThread
 from pyqtgraph.units import µm
 
 UiTemplate = Qt.importTemplate(".window")
@@ -37,6 +38,7 @@ class AutomationDebugWindow(Qt.QWidget):
         self.setWindowTitle("Automation Debug")
         self._previousBoxWidgets = []
         self._previousBoxBounds = []
+        self._previousTargets = []
 
         self.ui.clearBtn.clicked.connect(self.clearBoundingBoxes)
         self.ui.zStackDetectBtn.setOpts(future_producer=self._detectNeuronsZStack, stoppable=True)
@@ -286,28 +288,38 @@ class AutomationDebugWindow(Qt.QWidget):
     @future_wrap
     def _autoTarget(self, _future):
         self.sigWorking.emit(self.ui.autoTargetBtn)
-        x, y = self._randomLocation()
-        _future.waitFor(self.scopeDevice.setGlobalPosition((x, y)))
-        # TODO don't know why this hangs when using waitFor, but it does
-        depth = self.scopeDevice.findSurfaceDepth(
-            self.cameraDevice, searchDistance=50 * µm, searchStep=15 * µm, block=True
-        ).getResult()
-        depth -= 50 * µm
-        self.cameraDevice.setFocusDepth(depth)
-        neurons_fut = _future.waitFor(self._detectNeuronsZStack())
-        self._displayBoundingBoxes(neurons_fut.getResult())
+        possibly_stale = False
+        if self._previousBoxBounds:
+            possibly_stale = True
+            neurons = self._previousBoxBounds
+        else:
+            x, y = self._randomLocation()
+            _future.waitFor(self.scopeDevice.setGlobalPosition((x, y)))
+            # TODO don't know why this hangs when using waitFor, but it does
+            depth = self.scopeDevice.findSurfaceDepth(
+                self.cameraDevice, searchDistance=50 * µm, searchStep=15 * µm, block=True
+            ).getResult()
+            depth -= 50 * µm
+            self.cameraDevice.setFocusDepth(depth)
+            neurons = _future.waitFor(self._detectNeuronsZStack()).getResult()
+            runInGuiThread(self._displayBoundingBoxes, neurons)
+        centers = [(start + end) / 2 for start, end in np.array(neurons)]
+        target = next(
+            c for c in centers
+            if not self._previousTargets or all(np.linalg.norm(c - prev) > 35 * µm for prev in self._previousTargets)
+        )
+        if target is None:
+            if possibly_stale:
+                runInGuiThread(self.clearBoundingBoxes)
+                return self.waitFor(self._autoTarget()).getResult()
+            else:
+                raise RuntimeError("No valid target found")
+        self._previousTargets.append(target)
+        self.pipetteDevice.setTarget(target)
+        print(f"Setting pipette target to {target}")
 
     def _handleAutoFinish(self, fut: Future):
-        try:
-            if self._previousBoxBounds:
-                box = random.choice(self._previousBoxBounds)
-                center = np.array(box[0]) + np.array(box[1]) / 2
-                if center.ndim == 2:
-                    center = (center[0], center[1], self.cameraDevice.getFocusDepth())
-                print(f"Setting pipette target to {center}")
-                self.pipetteDevice.setTarget(center)
-        finally:
-            self.sigWorking.emit(False)
+        self.sigWorking.emit(False)
 
     def _selectMockFile(self):
         filePath, _ = Qt.QFileDialog.getOpenFileName(
@@ -318,9 +330,11 @@ class AutomationDebugWindow(Qt.QWidget):
             self.ui.mockCheckBox.setChecked(True)
 
     def _randomLocation(self):
-        x = random.uniform(self._xLeftSpin.value(), self._xRightSpin.value())
-        y = random.uniform(self._yBottomSpin.value(), self._yTopSpin.value())
-        return x, y
+        return self.cameraDevice.globalCenterPosition()[:2]
+        # TODO get the spinners back
+        # x = random.uniform(self._xLeftSpin.value(), self._xRightSpin.value())
+        # y = random.uniform(self._yBottomSpin.value(), self._yTopSpin.value())
+        # return x, y
 
     def quit(self):
         self.close()
