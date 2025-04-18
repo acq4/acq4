@@ -77,6 +77,8 @@ class AutomationDebugWindow(Qt.QWidget):
         self.sigLogMessage.connect(self.ui.pipetteLog.append)
 
         self.show()
+        planner = self.module.config.get("motion planner", "Geometry-aware")
+        self.ui.motionPlannerSelector.setCurrentText(planner)
 
     @future_wrap
     def doPipetteCalibrationTest(self, _future):
@@ -283,10 +285,12 @@ class AutomationDebugWindow(Qt.QWidget):
             "Objective radius only": PipettePathGenerator,
         }[name]
         Pipette.pathGeneratorClass = planner
-        cache_key = (self.pipetteDevice.name(), planner)
-        if cache_key not in self._motionPlanners:
-            self._motionPlanners[cache_key] = planner(self.pipetteDevice)
-        self.pipetteDevice.pathGenerator = self._motionPlanners[cache_key]
+        for name, dev in self.module.manager.devices.items():
+            if isinstance(dev, Pipette):
+                cache_key = (dev.name(), planner)
+                if cache_key not in self._motionPlanners:
+                    self._motionPlanners[cache_key] = planner(dev)
+                dev.pathGenerator = self._motionPlanners[cache_key]
 
     def quit(self):
         self.close()
