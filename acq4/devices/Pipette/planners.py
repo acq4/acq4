@@ -377,7 +377,7 @@ class CleanMotionPlanner(SavedPositionMotionPlanner):
 
         # lift up, then sideways, then down into well
         waypoint1 = safePos.copy()
-        waypoint1[2] = wellPos[2] + 5e-3  # 5 mm above the well
+        waypoint1[2] = wellPos[2] + 0.5e-3  # 0.5 mm above the well
 
         # move Y first
         waypoint2 = waypoint1.copy()
