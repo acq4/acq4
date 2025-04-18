@@ -357,6 +357,45 @@ class SavedPositionMotionPlanner(PipetteMotionPlanner):
         return self.safePath(startPosGlobal, endPosGlobal, self.speed)
 
 
+class CleanMotionPlanner(SavedPositionMotionPlanner):
+    def path(self):
+        if isinstance(self.pip.pathGenerator, GeometryAwarePathGenerator):
+            return super().path()
+
+        pip = self.pip
+        startPos = pip.globalPosition()
+        safePos = pip.pathGenerator.safeYZPosition(startPos)
+        initial_path = []
+
+        if self.position == "clean":
+            # retract to safe position for visiting cleaning wells
+            initial_path = pip.pathGenerator.safePath(startPos, safePos, 'fast')
+
+        wellPos = pip.loadPosition(self.position)
+        if wellPos is None:
+            raise ValueError(f"Device {pip.name()} does not have a stored {self.position} position.")
+
+        # lift up, then sideways, then down into well
+        waypoint1 = safePos.copy()
+        waypoint1[2] = wellPos[2] + 5e-3  # 5 mm above the well
+
+        # move Y first
+        waypoint2 = waypoint1.copy()
+        waypoint2[1] = wellPos[1]
+
+        # now move X
+        waypoint3 = waypoint2.copy()
+        waypoint3[0] = wellPos[0]
+
+        path = [
+            (waypoint1, 'fast', False, f"{self.position}ing well approach height ({waypoint1[2]} z)"),
+            (waypoint2, 'fast', True, f"match y for {self.position}ing well"),
+            (waypoint3, 'fast', True, f"above the {self.position}ing well"),
+            (wellPos, 'fast', False, f"into the {self.position}ing well"),
+        ]
+        return initial_path + path
+
+
 class HomeMotionPlanner(PipetteMotionPlanner):
     """Extract pipette tip diagonally, then move to home position."""
 
@@ -528,4 +567,6 @@ def defaultMotionPlanners() -> dict[str, type[PipetteMotionPlanner]]:
         "target": TargetMotionPlanner,
         "idle": IdleMotionPlanner,
         "saved": SavedPositionMotionPlanner,
+        "clean": CleanMotionPlanner,
+        "rinse": CleanMotionPlanner,
     }

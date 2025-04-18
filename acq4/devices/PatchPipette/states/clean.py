@@ -19,9 +19,6 @@ class CleanState(PatchPipetteState):
     rinseSequence : list
         List of (pressure (Pa), duration (s)) pairs specifying how to pulse pressure while the pipette tip is in the
         rinse well.
-    approachHeight : float
-        Distance (m) above the clean/rinse wells to approach from. This is needed to ensure the pipette avoids the well
-        walls when approaching.
     sonicationProtocol : str
         Protocol to use for sonication (default "clean"), or if supported, the full protocol definition for a custom
         protocol.
@@ -39,7 +36,6 @@ class CleanState(PatchPipetteState):
     _parameterTreeConfig = {
         'cleanSequence': {'type': 'str', 'default': "[(-35e3, 1.0), (100e3, 1.0)] * 5"},  # TODO
         'rinseSequence': {'type': 'str', 'default': "[(-35e3, 3.0), (100e3, 10.0)]"},  # TODO
-        'approachHeight': {'type': 'float', 'default': 5e-3, 'suffix': 'm'},
         'sonicationProtocol': {'type': 'str', 'default': 'clean'},
     }
 
