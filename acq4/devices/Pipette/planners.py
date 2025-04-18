@@ -446,7 +446,7 @@ class SearchMotionPlanner(PipetteMotionPlanner):
             scopeFocus = scope.getFocusDepth()
             fut = scope.setFocusDepth(scopeFocus + searchDepth - focusDepth)
             # wait for objective to lift before starting pipette motion
-            fut.wait(updates=True)
+            _future.waitFor(fut)
 
         # Here's where we want the pipette tip in global coordinates:
         globalCenter = cam.globalCenterPosition("roi")
