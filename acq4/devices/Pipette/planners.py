@@ -479,7 +479,8 @@ class AboveTargetMotionPlanner(PipetteMotionPlanner):
     """Move the pipette tip to be centered over the target in x/y, and 100 um above
     the sample surface in z.
 
-    This position is used to recalibrate the pipette immediately before going to approach.
+    This position is used to recalibrate the pipette immediately before going to approach or to confirm
+    nucleus extraction.
     """
 
     @future_wrap
@@ -489,17 +490,10 @@ class AboveTargetMotionPlanner(PipetteMotionPlanner):
         scope = pip.scopeDevice()
         waypoint1, waypoint2 = self.aboveTargetPath()
 
-        move_scope = scope.setGlobalPosition(waypoint2)
-        _future.waitFor(move_scope)  # TODO remove this once we can handle motion planning around moving objects
-
-        try:
-            path = self.safePath(pip.globalPosition(), waypoint1, speed, APPROACH_TO_CORRECT_FOR_HYSTERESIS)
-        except Exception:
-            _future.waitFor(move_scope)
-            path = self.safePath(pip.globalPosition(), waypoint1, speed, APPROACH_TO_CORRECT_FOR_HYSTERESIS)
-        path.append((waypoint2, "slow", True, MOVE_TO_DESTINATION))
+        path = self.safePath(pip.globalPosition(), waypoint1, speed, APPROACH_TO_CORRECT_FOR_HYSTERESIS)
         _future.waitFor(pip._movePath(path))
-        _future.waitFor(move_scope)
+        move_scope = scope.setGlobalPosition(waypoint2)
+        _future.waitFor(move_scope)  # TODO act simultaneously once we can handle motion planning around moving objects
 
     def aboveTargetPath(self):
         """Return the path to the "above target" recalibration position.
