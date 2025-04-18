@@ -560,7 +560,9 @@ class Manager(Qt.QObject):
 
     def unloadModule(self, name):
         try:
-            self.getModule(name).quit()
+            mod = self.getModule(name)
+            if mod is not None:
+                mod.quit()
         except:
             print(f"Error while requesting module '{name}' quit.")
             if self.exitOnError:
