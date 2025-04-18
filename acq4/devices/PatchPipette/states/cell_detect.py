@@ -282,6 +282,7 @@ class CellDetectState(PatchPipetteState):
         self.direction = self._calc_direction()
         self._wiggleLock = Lock()
         self._sidestepDirection = np.pi / 2
+        self._pressureAdjustment = None
 
     def run(self):
         with contextlib.ExitStack() as stack:
@@ -340,6 +341,13 @@ class CellDetectState(PatchPipetteState):
         return config['fallbackState']
 
     def adjustPressureForDepth(self):
+        """While not that slow, we still want to keep the innermost loop as fast as we can."""
+        if self._pressureAdjustment is None:
+            self._pressureAdjustment = self._adjustPressureForDepth()
+            self._pressureAdjustment.onFinish(self._finishPressureAdjustment)
+
+    @future_wrap
+    def _adjustPressureForDepth(self, _future):
         depth = self.depthBelowSurface()
         if depth < 0:  # above surface
             pressure = self.config["aboveSurfacePressure"]
@@ -347,6 +355,9 @@ class CellDetectState(PatchPipetteState):
             pressure = self.config["belowSurfacePressureMin"] + depth * self.config["belowSurfacePressureChange"]
             pressure = min(pressure, self.config["belowSurfacePressureMax"])
         self.dev.pressureDevice.setPressure("regulator", pressure)
+
+    def _finishPressureAdjustment(self, future):
+        self._pressureAdjustment = None
 
     def avoidObstacle(self, already_retracted=False):
         self.setState("avoiding obstacle" + (" (recursively)" if already_retracted else ""))
