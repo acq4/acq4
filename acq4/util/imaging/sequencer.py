@@ -502,7 +502,6 @@ class ImageSequencerCtrl(Qt.QWidget):
             self.updateStatus()
             if self._future is not None:
                 fut = self._future
-                self._future.sigFinished.disconnect(self.threadStopped)
                 self._future.sigStateChanged.disconnect(self.threadMessage)
                 self._future = None
                 if not self._manuallyStopped:
