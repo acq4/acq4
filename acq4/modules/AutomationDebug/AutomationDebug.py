@@ -119,8 +119,6 @@ class AutomationDebugWindow(Qt.QWidget):
         pipette = self.pipetteDevice
         pix = self.cameraDevice.getPixelSize()[0]  # assume square pixels
         target = pipette.targetPosition()
-        start = target[2] - 10e-6
-        stop = target[2] + 10e-6
         step = 1e-6
         direction = 1
         if self.ui.featureTrackerSelector.currentText() == "Cellpose":
@@ -134,8 +132,12 @@ class AutomationDebugWindow(Qt.QWidget):
         self._featureTracker = tracker
         _future.waitFor(pipette.focusTarget())
         obj_stack = None
+        sign = 1
 
         while True:
+            sign *= -1
+            start = target[2] - (10e-6 * sign)
+            stop = target[2] + (10e-6 * sign)
             stack = _future.waitFor(acquire_z_stack(self.cameraDevice, start, stop, step), timeout=60).getResult()
             # get the closest frame to the target depth
             depths = [abs(f.depth - target[2]) for f in stack]
@@ -143,7 +145,6 @@ class AutomationDebugWindow(Qt.QWidget):
             target_frame = stack[z]
             relative_target = np.array(tuple(reversed(target_frame.mapFromGlobalToFrame(tuple(target[:2])) + (z,))))
             stack_data = np.array([frame.data().T for frame in stack])
-            start, stop = stop, start
             if obj_stack is None:
                 obj_stack = ObjectStack(
                     img_stack=stack_data,
