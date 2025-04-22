@@ -18,7 +18,7 @@ from acq4.util.imaging.sequencer import acquire_z_stack
 from pyqtgraph import mkPen
 from pyqtgraph.units import µm
 
-UiTemplate = Qt.importTemplate('.window')
+UiTemplate = Qt.importTemplate(".window")
 
 
 class AutomationDebugWindow(Qt.QWidget):
@@ -59,15 +59,16 @@ class AutomationDebugWindow(Qt.QWidget):
             elif isinstance(dev, Camera):
                 self.ui.cameraSelector.addItem(name)
 
-        self.ui.trackFeaturesBtn.setOpts(future_producer=self.doFeatureTracking, 
-            processing="Stop tracking", stoppable=True)
+        self.ui.trackFeaturesBtn.setOpts(
+            future_producer=self.doFeatureTracking, processing="Stop tracking", stoppable=True
+        )
         self.ui.trackFeaturesBtn.sigFinished.connect(self._handleFeatureTrackingFinish)
         self._featureTracker = None
 
         self.ui.testPipetteBtn.setOpts(
             future_producer=self.doPipetteCalibrationTest,
             stoppable=True,
-            processing="Interrupt pipette\ncalibration test"
+            processing="Interrupt pipette\ncalibration test",
         )
         self.ui.testPipetteBtn.setToolTip("Start with the pipette calibrated and in the field of view")
         self.ui.testPipetteBtn.sigFinished.connect(self._handleCalibrationFinish)
@@ -101,12 +102,18 @@ class AutomationDebugWindow(Qt.QWidget):
                         f'....so bad. Why? Check man.getModule("AutomationDebug").failedCalibrations[{i}]'
                     )
             except Future.Stopped:
-                self.sigLogMessage.emit('Calibration interrupted by user request')
+                self.sigLogMessage.emit("Calibration interrupted by user request")
                 break
 
     @future_wrap
     def doFeatureTracking(self, _future: Future):
-        from acq4.util.visual_tracker import PyrLK3DTracker, ObjectStack, ImageStack
+        from acq4_automation.feature_tracking import (
+            PyrLK3DTracker,
+            CellPoseTracker,
+            CV2ImageTracker,
+            ObjectStack,
+            ImageStack,
+        )
 
         self.sigWorking.emit(self.ui.trackFeaturesBtn)
         pipette = self.pipetteDevice
@@ -116,9 +123,17 @@ class AutomationDebugWindow(Qt.QWidget):
         stop = target[2] + 10e-6
         step = 1e-6
         direction = 1
-        tracker = None
-
+        if self.ui.featureTrackerSelector.currentText() == "Cellpose":
+            tracker = CellPoseTracker()
+        elif self.ui.featureTrackerSelector.currentText() == "CV2":
+            tracker = self._featureTracker = CV2ImageTracker()
+        elif self.ui.featureTrackerSelector.currentText() == "PyrLK3D":
+            tracker = self._featureTracker = PyrLK3DTracker()
+        else:
+            raise ValueError(f"unknown tracker '{self.ui.featureTrackerSelector.currentText()}'")
+        self._featureTracker = tracker
         _future.waitFor(pipette.focusTarget())
+        obj_stack = None
 
         while True:
             stack = _future.waitFor(acquire_z_stack(self.cameraDevice, start, stop, step), timeout=60).getResult()
@@ -129,7 +144,7 @@ class AutomationDebugWindow(Qt.QWidget):
             relative_target = np.array(tuple(reversed(target_frame.mapFromGlobalToFrame(tuple(target[:2])) + (z,))))
             stack_data = np.array([frame.data().T for frame in stack])
             start, stop = stop, start
-            if tracker is None:
+            if obj_stack is None:
                 obj_stack = ObjectStack(
                     img_stack=stack_data,
                     px_size=pix,
@@ -138,14 +153,13 @@ class AutomationDebugWindow(Qt.QWidget):
                     tracked_z_vals=(-6e-6, -3e-6, 0, 3e-6, 6e-6),
                     feature_radius=12e-6,
                 )
-                tracker = self._featureTracker = PyrLK3DTracker()
                 tracker.set_tracked_object(obj_stack)
                 continue
             if direction < 0:
                 stack_data = stack_data[::-1]
             direction *= -1
             result = tracker.next_frame(ImageStack(stack_data, pix, step * direction))
-            z, y, x = result['updated_object_stack'].obj_center  # frame, row, col
+            z, y, x = result["updated_object_stack"].obj_center  # frame, row, col
             frame = stack[round(z)]
             target = frame.mapFromFrameToGlobal((x, y)) + (frame.depth,)
             pipette.setTarget(target)
