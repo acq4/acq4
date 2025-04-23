@@ -205,6 +205,7 @@ def _save_results(
 
     return ret_fh
 
+
 @future_wrap
 def run_image_sequence(
         imager,

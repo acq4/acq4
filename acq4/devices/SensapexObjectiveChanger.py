@@ -17,7 +17,7 @@ class SensapexObjectiveChanger(Device):
 
         address = config.pop('address', None)
         group = config.pop('group', None)
-        ump = UMP.get_ump(address=address, group=group)
+        ump = UMP.get_ump(address=address, group=group, handle_atexit=False)
         self.dev = ump.get_device(config.get('deviceId'))
 
         self._lastPos = None

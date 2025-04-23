@@ -174,7 +174,7 @@ class MultiPatchWindow(Qt.QWidget):
         self.ui.slowBtn.setChecked(False)
 
     def _turnOffFastBtn(self, checked):
-        self.ui.FastBtn.setChecked(False)
+        self.ui.fastBtn.setChecked(False)
 
     def saveConfig(self):
         geom = self.geometry()

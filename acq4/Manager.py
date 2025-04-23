@@ -61,6 +61,7 @@ class Manager(Qt.QObject):
         parser.add_argument("--module", "-m", help="Module name to load", action="append")
         parser.add_argument("--base-dir", "-b", help="Base directory to use")
         parser.add_argument("--storage-dir", "-s", help="Storage directory to use")
+        parser.add_argument("--debug-logging", action="store_true", help="Whether to be extra noisy in printing")
         parser.add_argument("--disable", "-d", help="Disable the device specified", action="append")
         parser.add_argument("--disable-all", "-D", help="Disable all devices", action="store_true")
         parser.add_argument("--exit-on-error", "-x", help="Whether to exit immidiately on the first exception during initial Manager setup", action="store_true")
@@ -89,6 +90,7 @@ class Manager(Qt.QObject):
         self.shortcuts = []
         self.disableDevs = []
         self.disableAllDevs = False
+        self._debug = False
         self.alreadyQuit = False
         self.taskLock = Mutex(Qt.QMutex.Recursive)
         self._folderTypes = None
@@ -123,6 +125,7 @@ class Manager(Qt.QObject):
         self.exitOnError = args.exit_on_error
         self.disableDevs = args.disable or []
         self.disableAllDevs = args.disable_all
+        self._debug = args.debug_logging
 
         self.configDir = os.path.dirname(args.config)
         self.readConfig(args.config)
@@ -554,7 +557,9 @@ class Manager(Qt.QObject):
 
     def unloadModule(self, name):
         try:
-            self.getModule(name).quit()
+            mod = self.getModule(name)
+            if mod is not None:
+                mod.quit()
         except:
             print(f"Error while requesting module '{name}' quit.")
             if self.exitOnError:
@@ -770,6 +775,10 @@ class Manager(Qt.QObject):
     def showDocumentation(self, label=None):
         self.documentation.show(label)
 
+    def printIfDebug(self, s):
+        if self._debug:
+            print(s)
+
     def quit(self):
         """Nicely request that all devices and modules shut down"""
         if not self.alreadyQuit:  ## Need this because multiple triggers can call this function during quit
@@ -779,27 +788,27 @@ class Manager(Qt.QObject):
             with pg.ProgressDialog("Shutting down..", 0, lm + ld, cancelText=None, wait=0) as dlg:
                 self.documentation.quit()
 
-                print("Requesting all modules shut down..")
+                self.printIfDebug("Requesting all modules shut down..")
                 logMsg("Shutting Down.", importance=9)
                 while len(self.modules) > 0:  ## Modules may disappear from self.modules as we ask them to quit
                     m = list(self.modules.keys())[0]
-                    print("    %s" % m)
+                    self.printIfDebug(f"    {m}")
 
                     self.unloadModule(m)
                     dlg.setValue(lm - len(self.modules))
 
-                print("Requesting all devices shut down..")
+                self.printIfDebug("Requesting all devices shut down..")
                 devs = Device._deviceCreationOrder[::-1]
                 for d in devs:  # shut down in reverse order
                     d = d()
                     if d is None:
                         # device was already deleted
                         continue
-                    print("    %s" % d)
+                    self.printIfDebug(f"    {d}")
                     try:
                         d.quit()
                     except:
-                        print(f"Error while requesting device '{d.name()}' quit.")
+                        self.printIfDebug(f"Error while requesting device '{d.name()}' quit.")
                         if self.exitOnError:
                             raise
                         else:
@@ -807,10 +816,10 @@ class Manager(Qt.QObject):
 
                     dlg.setValue(lm + ld - len(devs))
 
-                print("Closing windows..")
+                self.printIfDebug("Closing windows..")
                 Qt.QApplication.instance().closeAllWindows()
                 Qt.QApplication.instance().processEvents()
-            print("\n    ciao.")
+            self.printIfDebug("\n    ciao.")
         Qt.QApplication.quit()
 
 
