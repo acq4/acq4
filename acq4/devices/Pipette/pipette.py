@@ -69,6 +69,9 @@ class Pipette(Device, OptomechDevice):
     * idleDistance: the x/y distance from the global origin from which the pipette top should be placed
       in idle mode. Default is 7 mm.
     * recordingChambers: list of names of RecordingChamber devices that this Pipette is meant to work with.
+    * reasonableTipOffsetDistance: when updating the tip offset, this is the maximum distance (in meters)
+        from the original tip offset that is considered reasonable. If the tip offset is outside this distance, 
+        the user will be prompted to confirm the new offset. Default is 30 um.
     """
 
     sigTargetChanged = Qt.Signal(object, object)
@@ -237,7 +240,7 @@ class Pipette(Device, OptomechDevice):
 
     def tipOffsetIsReasonable(self, pos) -> bool:
         dist = np.linalg.norm(np.array(self.mapToGlobal((0, 0, 0))) - pos)
-        return dist < 30e-6
+        return dist < self.config.get("reasonableTipOffsetDistance", 30e-6)
 
     def newPipetteTipOffsetIsReasonable(self, pos) -> bool:
         cal = self.readConfigFile('calibration')
