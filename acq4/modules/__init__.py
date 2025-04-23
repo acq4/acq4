@@ -1,29 +1,27 @@
-from __future__ import print_function
+import os
 from collections import OrderedDict
 from importlib import import_module
-import os
-from ..util.debug import printExc
+
 from . import Module
+from ..util.debug import printExc
 
 
 def getModuleClass(name):
-    """Return a registered module class given its name.
-    """
+    """Return a registered module class given its name."""
     modClasses = getModuleClasses()
-    
+
     try:
         return modClasses[name]
-    except KeyError:
-        if "." in name:
-            pkg, name = name.rsplit(".", 1)
-            module = import_module(pkg)
-            return getattr(module, name)
-        else:
-            raise KeyError('No known module class named "%s"' % name)
+    except KeyError as e:
+        if "." not in name:
+            raise KeyError(f'No known module class named "{name}"') from e
+        pkg, name = name.rsplit(".", 1)
+        module = import_module(pkg)
+        return getattr(module, name)
+
 
 def getModuleClasses():
-    """Return a dict containing name:class pairs for all defined Module subclasses.
-    """
+    """Return a dict containing name:class pairs for all defined Module subclasses."""
     modClasses = OrderedDict()
 
     # recursively find all Module subclasses
@@ -37,9 +35,10 @@ def getModuleClasses():
 
 
 _builtin_imported = False
+
+
 def importBuiltinClasses():
-    """Import all builtin module classes under acq4/modules.
-    """
+    """Import all builtin module classes under acq4/modules."""
     global _builtin_imported
     if _builtin_imported:
         return
@@ -56,6 +55,6 @@ def importBuiltinClasses():
         if f[-3:] == '.py':
             f = f[:-3]
         try:
-            mod = import_module('acq4.modules.' + f)
+            mod = import_module(f"acq4.modules.{f}")
         except Exception:
-            printExc('Error importing builtin module from %s' % ff)
+            printExc(f"Error importing builtin module from {ff}")
