@@ -63,8 +63,8 @@ class SealAnalysis(SteadyStateAnalysisBase):
         ret_array = np.zeros(measurements.shape[0], dtype=[
             ('time', float),
             ('steady_state_resistance', float),
-            ('resistence_avg_for_success', float),
-            ('resistence_avg_for_hold', float),
+            ('resistance_avg_for_success', float),
+            ('resistance_avg_for_hold', float),
             ('resistance_ratio', float),
             ('success', bool),
             ('hold', bool),
@@ -72,21 +72,21 @@ class SealAnalysis(SteadyStateAnalysisBase):
         for i, m in enumerate(measurements):
             t, resistance = m
             if self._last_measurement is None:
-                resistence_avg_for_success = resistence_avg_for_hold = resistance
+                resistance_avg_for_success = resistance_avg_for_hold = resistance
                 ratio = 1
             else:
                 dt = t - self._last_measurement['time']
-                resistence_avg_for_success, ratio = self.exponential_decay_avg(
-                    dt, self._last_measurement['resistence_avg_for_success'], resistance, self._success_tau)
-                resistence_avg_for_hold, ratio = self.exponential_decay_avg(
-                    dt, self._last_measurement['resistence_avg_for_hold'], resistance, self._hold_tau)
-            success = resistence_avg_for_success > self._success_at
-            hold = resistence_avg_for_hold > self._hold_at
+                resistance_avg_for_success, ratio = self.exponential_decay_avg(
+                    dt, self._last_measurement['resistance_avg_for_success'], resistance, self._success_tau)
+                resistance_avg_for_hold, ratio = self.exponential_decay_avg(
+                    dt, self._last_measurement['resistance_avg_for_hold'], resistance, self._hold_tau)
+            success = resistance_avg_for_success > self._success_at
+            hold = resistance_avg_for_hold > self._hold_at
             ret_array[i] = (
                 t,
                 resistance,
-                resistence_avg_for_success,
-                resistence_avg_for_hold,
+                resistance_avg_for_success,
+                resistance_avg_for_hold,
                 ratio,
                 success,
                 hold,
