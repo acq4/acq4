@@ -12,6 +12,7 @@ from acq4.util import ptime
 from acq4.util.functions import plottable_booleans
 from acq4.util.future import future_wrap
 from pyqtgraph.units import µm
+from acq4.util.imaging.sequencer import run_image_sequence
 from ._base import PatchPipetteState, SteadyStateAnalysisBase
 
 
@@ -143,7 +144,7 @@ class CellDetectState(PatchPipetteState):
     - monitor resistance for pipette break
 
     TODO:
-    - Cell tracking
+    - Feature tracking
 
     Parameters
     ----------
@@ -159,7 +160,15 @@ class CellDetectState(PatchPipetteState):
     advanceStepInterval : float
         Time duration (seconds) to wait between steps when advanceContinuous=False(default 0.1)
     advanceStepDistance : float
-        Distance (m) per step when advanceContinuous=False (default 1 um)
+        Distance (m) per step when advanceContinuous=False (default 1 µm)
+    takeACellfie : bool
+        Whether to take a z-stack of the cell at the start of this state (default True)
+    cellfieHeight : float
+        Vertical distance (m) of the initial z-stack (default 30 µm)
+    cellfieStep : float
+        Vertical distance (m) between z-stack slices (default 1 µm)
+    cellfiePipetteClearance : float
+        Minimum distance (m) between target and pipette tip in which to allow the z-stack to be taken (default 100 µm)
     obstacleDetection : bool
         If True, sidestep obstacles (default False)
     obstacleRecoveryTime : float
@@ -241,6 +250,10 @@ class CellDetectState(PatchPipetteState):
         'belowSurfacePressureMax': {'default': 5000, 'type': 'float', 'suffix': 'Pa'},
         'belowSurfacePressureChange': {'default': 50 / µm, 'type': 'float', 'suffix': 'Pa/m'},
         'detectionSpeed': {'default': 2e-6, 'type': 'float', 'suffix': 'm/s'},
+        'takeACellfie': {'default': True, 'type': 'bool'},
+        'cellfieHeight': {'default': 30e-6, 'type': 'float', 'suffix': 'm'},
+        'cellfieStep': {'default': 1e-6, 'type': 'float', 'suffix': 'm'},
+        'cellfiePipetteClearance': {'default': 100e-6, 'type': 'float', 'suffix': 'm'},
         'preTargetWiggle': {'default': False, 'type': 'bool'},
         'preTargetWiggleRadius': {'default': 8e-6, 'type': 'float', 'suffix': 'm'},
         'preTargetWiggleStep': {'default': 5e-6, 'type': 'float', 'suffix': 'm'},
@@ -297,6 +310,19 @@ class CellDetectState(PatchPipetteState):
 
     def _run(self):
         config = self.config
+        if config['takeACellfie'] and self._distanceToTarget() > config['cellfiePipetteClearance']:
+            self.setState("cell detect: taking initial z-stack")
+            self.waitFor(self.dev.focusOnTarget('fast'))
+            start = self.dev.pipetteDevice.targetPosition()[2] - (config['cellfieHeight'] / 2)
+            end = start + config['cellfieHeight']
+            save_in = self.dev.dm.getCurrentDir().getDir("cell detect initial z stack", create=True)
+            self.waitFor(
+                run_image_sequence(
+                    self.dev.imagingDevice(),
+                    z_stack=(start, end, config['cellfieStep']),
+                    storage_dir=save_in,
+                )
+            )
         self.monitorTestPulse()
 
         while not self.weTookTooLong():
@@ -427,9 +453,11 @@ class CellDetectState(PatchPipetteState):
         return ortho_vec * np.cos(self._sidestepDirection) + ortho_vec2 * np.sin(self._sidestepDirection)
 
     def obstacleDetected(self):
-        return (self.config['obstacleDetection']
-                and not self.closeEnoughToTargetToDetectCell()
-                and self._analysis.obstacle_detected())
+        return (
+            self.config['obstacleDetection'] and
+            not self.closeEnoughToTargetToDetectCell() and
+            self._analysis.obstacle_detected()
+        )
 
     def processAtLeastOneTestPulse(self):
         tps = super().processAtLeastOneTestPulse()
@@ -440,8 +468,10 @@ class CellDetectState(PatchPipetteState):
     def weTookTooLong(self):
         if self._startTime is None:
             self._startTime = ptime.time()
-        return (self.config['cellDetectTimeout'] is not None
-                and ptime.time() - self._startTime > self.config['cellDetectTimeout'])
+        return (
+            self.config['cellDetectTimeout'] is not None and
+            ptime.time() - self._startTime > self.config['cellDetectTimeout']
+        )
 
     def targetCellFound(self) -> str | bool:
         if self.closeEnoughToTargetToDetectCell() and not self._wiggleLock.locked():
@@ -461,11 +491,14 @@ class CellDetectState(PatchPipetteState):
         return surface - pos[2]
 
     def closeEnoughToTargetToDetectCell(self, pos=None):
+        return self._distanceToTarget(pos) < self.config['minDetectionDistance']
+
+    def _distanceToTarget(self, pos=None):
         pip = self.dev.pipetteDevice
         target = np.array(pip.targetPosition())
         if pos is None:
             pos = np.array(pip.globalPosition())
-        return np.linalg.norm(target - pos) < self.config['minDetectionDistance']
+        return np.linalg.norm(target - pos)
 
     def _transition_to_fallback(self):
         self._taskDone(interrupted=True, error="No cell found before end of search path")
@@ -567,9 +600,10 @@ class CellDetectState(PatchPipetteState):
         speed = config['detectionSpeed']
         distance = np.linalg.norm(endpoint - np.array(dev.pipetteDevice.globalPosition()))
         count = int(distance / config['preTargetWiggleStep'])
+        wiggle_step = self.direction * config['preTargetWiggleStep']
         for _ in range(count):
             self.setState("pre-target wiggle")
-            retract_pos = dev.pipetteDevice.globalPosition() - self.direction * config['preTargetWiggleStep']
+            retract_pos = dev.pipetteDevice.globalPosition() - wigle_step
             future.waitFor(dev.pipetteDevice._moveToGlobal(retract_pos, speed=speed), timeout=None)
             with self._wiggleLock:
                 self.waitFor(
@@ -582,7 +616,7 @@ class CellDetectState(PatchPipetteState):
                     ),
                     timeout=None,
                 )
-            step_pos = dev.pipetteDevice.globalPosition() + self.direction * config['preTargetWiggleStep']
+            step_pos = dev.pipetteDevice.globalPosition() + wiggle_step
             future.waitFor(dev.pipetteDevice._moveToGlobal(step_pos, speed=speed), timeout=None)
 
     def getAdvanceSteps(self):
