@@ -18,7 +18,7 @@ from acq4.util import Qt, ptime
 from acq4.util.future import future_wrap
 from acq4.util.target import Target
 from pyqtgraph import Point, siFormat
-from .planners import GeometryAwarePathGenerator
+from .planners import PipettePathGenerator
 from .planners import defaultMotionPlanners
 from .tracker import ResnetPipetteTracker
 from ..Camera import Camera
@@ -86,7 +86,7 @@ class Pipette(Device, OptomechDevice):
 
     # May add items here to implement custom motion planning for all pipettes
     defaultMotionPlanners = defaultMotionPlanners()
-    pathGeneratorClass = GeometryAwarePathGenerator
+    pathGeneratorClass = PipettePathGenerator
 
     def __init__(self, deviceManager, config, name):
         Device.__init__(self, deviceManager, config, name)

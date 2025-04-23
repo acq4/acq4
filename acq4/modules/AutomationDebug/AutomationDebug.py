@@ -77,7 +77,7 @@ class AutomationDebugWindow(Qt.QWidget):
         self.sigLogMessage.connect(self.ui.pipetteLog.append)
 
         self.show()
-        planner = self.module.config.get("motion planner", "Geometry-aware")
+        planner = self.module.config.get("motionPlanner", "Geometry-aware")
         self.ui.motionPlannerSelector.setCurrentText(planner)
 
     @future_wrap
