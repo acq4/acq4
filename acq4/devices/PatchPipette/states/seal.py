@@ -52,17 +52,19 @@ class SealAnalysis(SteadyStateAnalysisBase):
             labels = True
         return plots
 
-    def __init__(self, tau, success_at, hold_at):
+    def __init__(self, success_tau, success_at, hold_tau, hold_at):
         super().__init__()
-        self._tau = tau
+        self._success_tau = success_tau
         self._success_at = success_at
+        self._hold_tau = hold_tau
         self._hold_at = hold_at
 
     def process_measurements(self, measurements: np.ndarray) -> np.ndarray:
         ret_array = np.zeros(measurements.shape[0], dtype=[
             ('time', float),
             ('steady_state_resistance', float),
-            ('resistance_avg', float),
+            ('resistance_avg_for_success', float),
+            ('resistance_avg_for_hold', float),
             ('resistance_ratio', float),
             ('success', bool),
             ('hold', bool),
@@ -70,19 +72,21 @@ class SealAnalysis(SteadyStateAnalysisBase):
         for i, m in enumerate(measurements):
             t, resistance = m
             if self._last_measurement is None:
-                resistance_avg = resistance
+                resistance_avg_for_success = resistance_avg_for_hold = resistance
                 ratio = 1
             else:
                 dt = t - self._last_measurement['time']
-                # ratio = resistance / self._last_measurement['resistance_avg']
-                resistance_avg, ratio = self.exponential_decay_avg(
-                    dt, self._last_measurement['resistance_avg'], resistance, self._tau)
-            success = resistance_avg > self._success_at
-            hold = resistance_avg > self._hold_at
+                resistance_avg_for_success, ratio = self.exponential_decay_avg(
+                    dt, self._last_measurement['resistance_avg_for_success'], resistance, self._success_tau)
+                resistance_avg_for_hold, ratio = self.exponential_decay_avg(
+                    dt, self._last_measurement['resistance_avg_for_hold'], resistance, self._hold_tau)
+            success = resistance_avg_for_success > self._success_at
+            hold = resistance_avg_for_hold > self._hold_at
             ret_array[i] = (
                 t,
                 resistance,
-                resistance_avg,
+                resistance_avg_for_success,
+                resistance_avg_for_hold,
                 ratio,
                 success,
                 hold,
@@ -150,8 +154,12 @@ class SealState(PatchPipetteState):
         Capacitance (Farads) above which the pipette is considered to be whole-cell and
         transitions to the 'break in' state (in case of partial break-in, we don't want to transition
         directly to 'whole cell' state).
-    resistanceMonitorTau : float
-        Time constant (seconds) for exponential averaging of resistance measurements. Default 1s.
+    successMonitorTau : float
+        Time constant (seconds) for exponential averaging of resistance measurements when determining whether seal resistance 
+        has crossed *sealThreshold*. Default 1s.
+    holdMonitorTau : float
+        Time constant (seconds) for exponential averaging of resistance measurements when determining whether seal resistance
+        has crossed *holdingThreshold*. Default 0.1s.
     autoSealTimeout : float
         Maximum timeout (seconds) before the seal attempt is aborted,
         transitioning to *fallbackState*.
@@ -191,7 +199,8 @@ class SealState(PatchPipetteState):
         'breakInThreshold': {'type': 'float', 'default': 10e-12, 'suffix': 'F'},
         'autoSealTimeout': {'type': 'float', 'default': 30.0, 'suffix': 's'},
         'pressureLimit': {'type': 'float', 'default': -3e3, 'suffix': 'Pa'},
-        'resistanceMonitorTau': {'type': 'float', 'default': 1, 'suffix': 's'},
+        'successMonitorTau': {'type': 'float', 'default': 1, 'suffix': 's'},
+        'holdMonitorTau': {'type': 'float', 'default': 0.1, 'suffix': 's'},
         'delayBeforePressure': {'type': 'float', 'default': 0.0, 'suffix': 's'},
         'delayAfterSeal': {'type': 'float', 'default': 5.0, 'suffix': 's'},
         'afterSealPressure': {'type': 'float', 'default': -1e3, 'suffix': 'Pa'},
@@ -204,8 +213,9 @@ class SealState(PatchPipetteState):
     def __init__(self, dev, config):
         super().__init__(dev, config)
         self._analysis = SealAnalysis(
-            tau=config['resistanceMonitorTau'],
+            success_tau=config['successMonitorTau'],
             success_at=config['sealThreshold'],
+            hold_tau=config['holdMonitorTau'],
             hold_at=config['holdingThreshold'],
         )
         self._initialized = False
