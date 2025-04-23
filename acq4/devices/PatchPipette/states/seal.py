@@ -155,9 +155,11 @@ class SealState(PatchPipetteState):
         transitions to the 'break in' state (in case of partial break-in, we don't want to transition
         directly to 'whole cell' state).
     successMonitorTau : float
-        Time constant (seconds) for exponential averaging of resistance measurements when determining success. Default 1s.
+        Time constant (seconds) for exponential averaging of resistance measurements when determining whether seal resistance 
+        has crossed *sealThreshold*. Default 1s.
     holdMonitorTau : float
-        Time constant (seconds) for exponential averaging of resistance measurements when determining hold cutoff. Default 0.1s.
+        Time constant (seconds) for exponential averaging of resistance measurements when determining whether seal resistance
+        has crossed *holdingThreshold*. Default 0.1s.
     autoSealTimeout : float
         Maximum timeout (seconds) before the seal attempt is aborted,
         transitioning to *fallbackState*.
