@@ -110,7 +110,7 @@ class AutomationDebugWindow(Qt.QWidget):
         from acq4_automation.feature_tracking import (
             PyrLK3DTracker,
             CellPoseTracker,
-            CV2ImageTracker,
+            CV2MostFlowAgreementTracker,
             ObjectStack,
             ImageStack,
         )
@@ -124,7 +124,7 @@ class AutomationDebugWindow(Qt.QWidget):
         if self.ui.featureTrackerSelector.currentText() == "Cellpose":
             tracker = CellPoseTracker()
         elif self.ui.featureTrackerSelector.currentText() == "CV2":
-            tracker = self._featureTracker = CV2ImageTracker()
+            tracker = self._featureTracker = CV2MostFlowAgreementTracker()
         elif self.ui.featureTrackerSelector.currentText() == "PyrLK3D":
             tracker = self._featureTracker = PyrLK3DTracker()
         else:
