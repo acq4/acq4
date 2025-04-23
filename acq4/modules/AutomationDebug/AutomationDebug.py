@@ -59,7 +59,7 @@ class AutomationDebugWindow(Qt.QWidget):
             elif isinstance(dev, Camera):
                 self.ui.cameraSelector.addItem(name)
 
-        self.ui.trackFeaturesBtn.setOpts(future_producer=self.doFeatureTracking, 
+        self.ui.trackFeaturesBtn.setOpts(future_producer=self.doFeatureTracking,
             processing="Stop tracking", stoppable=True)
         self.ui.trackFeaturesBtn.sigFinished.connect(self._handleFeatureTrackingFinish)
         self._featureTracker = None
