@@ -5,6 +5,7 @@ import random
 
 import numpy as np
 
+from MetaArray import MetaArray
 from acq4.devices.Camera import Camera
 from acq4.devices.Microscope import Microscope
 from acq4.devices.Pipette import Pipette
@@ -14,8 +15,10 @@ from acq4.modules.Camera import CameraWindow
 from acq4.modules.Module import Module
 from acq4.util import Qt
 from acq4.util.future import Future, future_wrap
+from acq4.util.imaging import Frame
 from acq4.util.imaging.sequencer import acquire_z_stack
-from pyqtgraph import mkPen
+from acq4.util.target import TargetBox
+from acq4.util.threadrun import runInGuiThread
 from pyqtgraph.units import µm
 
 UiTemplate = Qt.importTemplate(".window")
@@ -36,17 +39,21 @@ class AutomationDebugWindow(Qt.QWidget):
         self.setWindowTitle("Automation Debug")
         self._previousBoxWidgets = []
         self._previousBoxBounds = []
+        self._previousTargets = []
 
         self.ui.clearBtn.clicked.connect(self.clearBoundingBoxes)
         self.ui.zStackDetectBtn.setOpts(future_producer=self._detectNeuronsZStack, stoppable=True)
         self.ui.zStackDetectBtn.sigFinished.connect(self._handleDetectResults)
-        self.ui.flatDetectBtn.setOpts(future_producer=self._detectNeuronsFlat, stoppable=True)
-        self.ui.flatDetectBtn.sigFinished.connect(self._handleDetectResults)
+        self.ui.testUIBtn.setOpts(future_producer=self._testUI, stoppable=True)
+        self.ui.testUIBtn.sigFinished.connect(self._handleDetectResults)
 
         self.ui.motionPlannerSelector.currentIndexChanged.connect(self._changeMotionPlanner)
 
         self.ui.setTopLeftButton.clicked.connect(self._setTopLeft)
         self.ui.setBottomRightButton.clicked.connect(self._setBottomRight)
+
+        self.ui.mockFilePath.setReadOnly(True)
+        self.ui.mockFileButton.clicked.connect(self._selectMockFile)
 
         self.ui.autoTargetBtn.setOpts(future_producer=self._autoTarget, stoppable=True)
         self.ui.autoTargetBtn.sigFinished.connect(self._handleAutoFinish)
@@ -78,7 +85,7 @@ class AutomationDebugWindow(Qt.QWidget):
         self.sigLogMessage.connect(self.ui.pipetteLog.append)
 
         self.show()
-        planner = self.module.config.get("motion planner", "Geometry-aware")
+        planner = self.module.config.get("motionPlanner", "Geometry-aware")
         self.ui.motionPlannerSelector.setCurrentText(planner)
 
     @future_wrap
@@ -94,7 +101,7 @@ class AutomationDebugWindow(Qt.QWidget):
             try:
                 _future.waitFor(findNewPipette(pipette, camera, camera.scopeDev))
                 error = np.linalg.norm(pipette.globalPosition() - true_tip_position)
-                self.sigLogMessage.emit(f"Calibration complete: {error*1e6:.2g}µm error")
+                self.sigLogMessage.emit(f"Calibration complete: {error * 1e6:.2g}µm error")
                 if error > 50e-6:
                     self.failedCalibrations.append(error)
                     i = len(self.failedCalibrations) - 1
@@ -176,7 +183,7 @@ class AutomationDebugWindow(Qt.QWidget):
         if working:
             self.module.manager.getModule("Camera").window()  # make sure camera window is open
         self.ui.zStackDetectBtn.setEnabled(working == self.ui.zStackDetectBtn or not working)
-        self.ui.flatDetectBtn.setEnabled(working == self.ui.flatDetectBtn or not working)
+        self.ui.testUIBtn.setEnabled(working == self.ui.testUIBtn or not working)
         self.ui.autoTargetBtn.setEnabled(working == self.ui.autoTargetBtn or not working)
         self.ui.testPipetteBtn.setEnabled(working == self.ui.testPipetteBtn or not working)
         self.ui.trackFeaturesBtn.setEnabled(working == self.ui.trackFeaturesBtn or not working)
@@ -209,12 +216,13 @@ class AutomationDebugWindow(Qt.QWidget):
 
     def clearBoundingBoxes(self):
         cam_win: CameraWindow = self.module.manager.getModule("Camera").window()
-        for widget in self._previousBoxWidgets:
-            cam_win.removeItem(widget)
+        for box in self._previousBoxWidgets:
+            cam_win.removeItem(box)
+            self.scopeDevice.sigGlobalTransformChanged.disconnect(box.noticeFocusChange)
         self._previousBoxWidgets = []
         self._previousBoxBounds = []
 
-    def _handleDetectResults(self, neurons_fut: Future) -> list:
+    def _handleDetectResults(self, neurons_fut: Future) -> None:
         try:
             if neurons_fut.wasInterrupted():
                 return
@@ -226,10 +234,9 @@ class AutomationDebugWindow(Qt.QWidget):
         cam_win: CameraWindow = self.module.manager.getModule("Camera").window()
         self.clearBoundingBoxes()
         for start, end in bounding_boxes:
-            box = Qt.QGraphicsRectItem(Qt.QRectF(Qt.QPointF(start[0], start[1]), Qt.QPointF(end[0], end[1])))
-            box.setPen(mkPen("r", width=2))
-            box.setBrush(Qt.QBrush(Qt.QColor(0, 0, 0, 0)))
+            box = TargetBox(start, end)
             cam_win.addItem(box)
+            self.scopeDevice.sigGlobalTransformChanged.connect(box.noticeFocusChange)
             self._previousBoxWidgets.append(box)
             self._previousBoxBounds.append((start, end))
             # TODO label boxes
@@ -240,58 +247,115 @@ class AutomationDebugWindow(Qt.QWidget):
             # self._previousBoxWidgets.append(label)
 
     @future_wrap
-    def _detectNeuronsFlat(self, _future: Future):
-        self.sigWorking.emit(self.ui.flatDetectBtn)
-        from acq4.util.imaging.object_detection import detect_neurons
-
+    def _testUI(self, _future):
         with self.cameraDevice.ensureRunning():
             frame = _future.waitFor(self.cameraDevice.acquireFrames(1)).getResult()[0]
-        with self.cameraDevice.ensureRunning():
-            frame = _future.waitFor(self.cameraDevice.acquireFrames(1)).getResult()[0]
-        return _future.waitFor(detect_neurons(frame)).getResult()
+        points = np.random.random((20, 3))
+        points[:, 2] *= 20e-6
+        points[:, 1] *= frame.shape[0]
+        points[:, 0] *= frame.shape[1]
+        boxes = []
+        for pt in points:
+            center = frame.mapFromFrameToGlobal(pt)
+            boxes.append((center - 20e-6, center + 20e-6))
+        return boxes
 
     @future_wrap
     def _detectNeuronsZStack(self, _future: Future) -> list:
         self.sigWorking.emit(self.ui.zStackDetectBtn)
-        from acq4.util.imaging.object_detection import detect_neurons
+        from acq4_automation.object_detection import detect_neurons
 
-        depth = self.cameraDevice.getFocusDepth()
-        start = depth - 10 * µm
-        stop = depth + 10 * µm
-        z_stack = _future.waitFor(acquire_z_stack(self.cameraDevice, start, stop, 1 * µm)).getResult()
-        self.cameraDevice.setFocusDepth(depth)  # no need to wait
-        return _future.waitFor(detect_neurons(z_stack)).getResult()
+        man = self.module.manager
+        autoencoder = man.config.get("misc", {}).get("autoencoderPath", None)
+        classifier = man.config.get("misc", {}).get("classifierPath", None)
+        pixel_size = self.cameraDevice.getPixelSize()[0]
+        z_scale = 1e-6
+        if self.ui.mockCheckBox.isChecked() and self.ui.mockFilePath.text():
+            with self.cameraDevice.ensureRunning():
+                # Acquire a single frame to get the camera transform
+                real_frame = self.cameraDevice.acquireFrames(1).getResult()[0]
+                base_xform = real_frame.globalTransform()
+                base_position = np.array(real_frame.mapFromFrameToGlobal((0, 0, 0)))
+            # Load the MetaArray file
+            mock_file_path = self.ui.mockFilePath.text()
+            data = MetaArray(file=mock_file_path).asarray()
+            z_stack = [
+                Frame(
+                    data[i],
+                    info={
+                        "transform": {
+                            "pos": base_position + (0, 0, i * z_scale),
+                            "scale": base_xform.getScale(),
+                        },
+                    },
+                )
+                for i in range(len(data))
+            ]
+        else:
+            # Normal acquisition path
+            depth = self.cameraDevice.getFocusDepth()
+            start = depth - 20 * µm
+            stop = depth + 20 * µm
+            # Acquire real z-stack
+            z_stack = _future.waitFor(acquire_z_stack(self.cameraDevice, start, stop, 1 * µm)).getResult()
+            self.cameraDevice.setFocusDepth(depth).raiseErrors("error restoring focus")  # no need to wait
+        return _future.waitFor(
+            detect_neurons(
+                z_stack, autoencoder=autoencoder, classifier=classifier, xy_scale=pixel_size, z_scale=z_scale
+            ),
+            timeout=600,
+        ).getResult()
 
     @future_wrap
     def _autoTarget(self, _future):
         self.sigWorking.emit(self.ui.autoTargetBtn)
-        x, y = self._randomLocation()
-        _future.waitFor(self.scopeDevice.setGlobalPosition((x, y)))
-        # TODO don't know why this hangs when using waitFor, but it does
-        depth = self.scopeDevice.findSurfaceDepth(
-            self.cameraDevice, searchDistance=50 * µm, searchStep=15 * µm, block=True
-        ).getResult()
-        depth -= 50 * µm
-        self.cameraDevice.setFocusDepth(depth)
-        neurons_fut = _future.waitFor(self._detectNeuronsZStack())
-        self._displayBoundingBoxes(neurons_fut.getResult())
+        possibly_stale = False
+        if self._previousBoxBounds:
+            possibly_stale = True
+            neurons = self._previousBoxBounds
+        else:
+            x, y = self._randomLocation()
+            _future.waitFor(self.scopeDevice.setGlobalPosition((x, y)))
+            # TODO don't know why this hangs when using waitFor, but it does
+            depth = self.scopeDevice.findSurfaceDepth(
+                self.cameraDevice, searchDistance=50 * µm, searchStep=15 * µm, block=True
+            ).getResult()
+            depth -= 50 * µm
+            self.cameraDevice.setFocusDepth(depth)
+            neurons = _future.waitFor(self._detectNeuronsZStack()).getResult()
+            runInGuiThread(self._displayBoundingBoxes, neurons)
+        centers = [(start + end) / 2 for start, end in np.array(neurons)]
+        target = next(
+            c for c in centers
+            if not self._previousTargets or all(np.linalg.norm(c - prev) > 35 * µm for prev in self._previousTargets)
+        )
+        if target is None:
+            if possibly_stale:
+                runInGuiThread(self.clearBoundingBoxes)
+                return self.waitFor(self._autoTarget()).getResult()
+            else:
+                raise RuntimeError("No valid target found")
+        self._previousTargets.append(target)
+        self.pipetteDevice.setTarget(target)
+        print(f"Setting pipette target to {target}")
 
     def _handleAutoFinish(self, fut: Future):
-        try:
-            if self._previousBoxBounds:
-                box = random.choice(self._previousBoxBounds)
-                center = np.array(box[0]) + np.array(box[1]) / 2
-                if center.ndim == 2:
-                    center = (center[0], center[1], self.cameraDevice.getFocusDepth())
-                print(f"Setting pipette target to {center}")
-                self.pipetteDevice.setTarget(center)
-        finally:
-            self.sigWorking.emit(False)
+        self.sigWorking.emit(False)
+
+    def _selectMockFile(self):
+        filePath, _ = Qt.QFileDialog.getOpenFileName(
+            self, "Select MetaArray File", "", "MetaArray Files (*.ma);;All Files (*)"
+        )
+        if filePath:
+            self.ui.mockFilePath.setText(filePath)
+            self.ui.mockCheckBox.setChecked(True)
 
     def _randomLocation(self):
-        x = random.uniform(self._xLeftSpin.value(), self._xRightSpin.value())
-        y = random.uniform(self._yBottomSpin.value(), self._yTopSpin.value())
-        return x, y
+        return self.cameraDevice.globalCenterPosition()[:2]
+        # TODO get the spinners back
+        # x = random.uniform(self._xLeftSpin.value(), self._xRightSpin.value())
+        # y = random.uniform(self._yBottomSpin.value(), self._yTopSpin.value())
+        # return x, y
 
     def _changeMotionPlanner(self, idx):
         name = self.ui.motionPlannerSelector.currentText()

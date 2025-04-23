@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from acq4.util.debug import printExc
-from acq4.util.future import future_wrap
+from acq4.util.future import future_wrap, Future
 from pyqtgraph import units
 from ._base import PatchPipetteState
 
@@ -40,8 +40,8 @@ class CleanState(PatchPipetteState):
     }
 
     def __init__(self, *args, **kwds):
-        self.currentFuture = None
         self.sonication = None
+        self.moveFuture = None
         super().__init__(*args, **kwds)
 
     def run(self):
@@ -80,6 +80,13 @@ class CleanState(PatchPipetteState):
         self.currentFuture = None
         dev.newPatchAttempt()
         return 'out'
+
+    def resetPosition(self, parent_future):
+        # todo we need to handle this somehow for both path generators
+        if self.moveFuture is not None:
+            fut = self.moveFuture.undo()
+            self.moveFuture = None
+            parent_future.waitFor(fut, timeout=None)
 
     @future_wrap
     def cleanup(self, _future):
