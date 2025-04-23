@@ -351,3 +351,4 @@ class ResealState(PatchPipetteState):
             self._moveFuture.stop()
         if self._pressureFuture is not None:
             self._pressureFuture.stop()
+        return super().cleanup()

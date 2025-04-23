@@ -16,7 +16,6 @@ class PatchPipetteDeviceGui(Qt.QWidget):
             self.doClean,
             "Clean Pipette",
             stoppable=True,
-            processing="Cleaning...",
             failure="Interrupted!",
             raiseOnError=False,
         )
