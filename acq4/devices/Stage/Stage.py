@@ -613,7 +613,6 @@ class Stage(Device, OptomechDevice):
         locations = self.readConfigFile('stored_locations')
         locations[name] = list(pos)
         self.writeConfigFile(locations, 'stored_locations')
-        self.checkRangeOfMotion(pos)
 
     def clearStoredLocation(self, name):
         locations = self.readConfigFile('stored_locations')
