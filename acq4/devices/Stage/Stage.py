@@ -566,7 +566,7 @@ class Stage(Device, OptomechDevice):
         bad_axes = []
         for axis in (0, 1, 2):
             try:
-                bound = pos[:]
+                bound = pos.copy()
                 bound[axis] -= tolerance
                 self.checkLimits(self.mapGlobalToDevicePosition(bound))
                 bound[axis] += 2 * tolerance
@@ -576,14 +576,14 @@ class Stage(Device, OptomechDevice):
         if bad_axes:
             axis_names = {0: 'x', 1: 'y', 2: 'z'}
             axes = ', '.join(axis_names[axis] for axis in bad_axes)
-            pos = self.mapGlobalToDevicePosition(pos)
+            stage_pos = self.mapGlobalToDevicePosition(pos)
             possible_problem = "pipette pull consistency" if self.isManipulator else "hardware reliability"
             raise HelpfulException(
                 f"The specified position is within ±{siFormat(tolerance, suffix='m')} of the {axes} limit(s) of "
                 f"{self.name()} and may not always be accessible, depending on your {possible_problem}.",
                 reasons=[
                     f"Manipulator limits: {self.getLimits()}",
-                    f"Position: ({pos[0]:f}, {pos[1]:f}, {pos[2]:f})",
+                    f"Position: ({stage_pos[0]:f}, {stage_pos[1]:f}, {stage_pos[2]:f})",
                 ],
             )
 
