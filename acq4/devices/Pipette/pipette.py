@@ -108,6 +108,7 @@ class Pipette(Device, OptomechDevice):
             raise Exception(
                 f"Pipette device requires some type of translation stage as its parentDevice (got {parent}).")
 
+        parent.sigOrientationChanged.connect(self.clearSavedOffsets)
         # may add items here to implement per-pipette custom motion planning
         self.motionPlanners = {}
         self.currentMotionPlanner = None
@@ -314,6 +315,13 @@ class Pipette(Device, OptomechDevice):
         cal['offset'] = list(self.offset)
         cal['offset history'] = [cal['offset']]
         self.writeConfigFile(cal, 'calibration')
+
+    def clearSavedOffsets(self, parent):
+        """Clear the saved offsets if the parent manipulator's axes are re-calibrated."""
+        cal = self.readConfigFile('calibration')
+        if 'offset history' in cal:
+            del cal['offset history']
+            self.writeConfigFile(cal, 'calibration')
 
     def setTipOffset(self, pos):
         """Given a global position, set the offset such that the pipette tip is located at that position."""
