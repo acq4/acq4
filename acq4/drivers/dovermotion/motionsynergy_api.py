@@ -17,6 +17,21 @@ import clr
 from System.Collections import *
 from System.Collections.Generic import List
 from System import String
+import System.Threading.Tasks
+
+
+class MotionSynergyException(Exception):
+    def __init__(self, message, result):
+        self.result = result
+        super().__init__(message + result.Alert.UserDescription + " : " + result.Alert.Description)
+
+
+def check(result, error_msg=""):
+    if isinstance(result, System.Threading.Tasks.Task):
+        result = result.Result
+    if not result.Success:
+        raise MotionSynergyException(error_msg, result)
+    return result
 
 
 def load_motionsynergyapi(dll_file=None):
@@ -76,9 +91,7 @@ def initialize(run_init: bool=True, progress=None):
 
     init_warning_msgbox()
 
-    result = motion_synergy.Initialize(run_init, progress).Result
-    if result.Success is False:
-        raise Exception(f"Initialization failed: {result}")
+    result = check(motion_synergy.Initialize(run_init, progress), error_msg="Error initializing MotionSynergyAPI: ")
     initialized = True    
     return result
 
@@ -100,9 +113,7 @@ def shutdown():
     # This will close all connections to the axis devices and close the log file(s).
     global motion_synergy
     if motion_synergy is not None:
-        result = motion_synergy.Shutdown()
-        if not result.Success:
-            raise Exception(f"MotionSynergy shutdown failed: {result}")
+        check(motion_synergy.Shutdown(), error_msg="Error shutting down MotionSynergyAPI: ")
 
 
 # create a tray icon for the daemon process

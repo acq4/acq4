@@ -43,7 +43,7 @@ class SmartStage:
             return self.control_thread.last_pos
     
     def stop(self):
-        return self.control_thread.stop()
+        return self.control_thread.request('stop')
 
 
 

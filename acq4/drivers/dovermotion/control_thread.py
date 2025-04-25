@@ -5,7 +5,7 @@ import sys
 import threading
 import numpy as np
 
-from .motionsynergy_api import get_motionsynergyapi, initialize
+from .motionsynergy_api import get_motionsynergyapi, initialize, check
 
 
 class SmartStageControlThread:
@@ -43,6 +43,8 @@ class SmartStageControlThread:
         self.thread.start()
 
     def request(self, req, **kwds):
+        if self.thread is None or not self.thread.is_alive():
+            raise RuntimeError('SmartStage control thread is not running')
         fut = SmartStageRequestFuture(self, req, kwds)
         self.request_queue.put(fut)
         return fut
@@ -88,9 +90,7 @@ class SmartStageControlThread:
                     continue
                 result = task.Result
                 if result.Success is False:
-                    desc = result.Alert.UserDescription 
-                    if desc == '':
-                        desc = result.Alert.Description
+                    desc = result.Alert.UserDescription + "; " + result.Alert.Description
                     alerts.append(desc)
                 
             if len(alerts) == 0:
@@ -134,11 +134,14 @@ class SmartStageControlThread:
         self.current_move = fut
 
     def _stop(self, reason):
+        results = []
         for axis in self.axes:
-            axis.Stop()
+            results.append(axis.Stop())
         if self.current_move is not None:
             self.current_move.fail(reason)
             self.current_move = None
+        for result in results:
+            check(result)
 
     def _handle_stop(self):
         self._stop(reason='Stopped by request.')
@@ -153,16 +156,19 @@ class SmartStageControlThread:
         # TODO: cancel any current move
         self._stop(reason='Motors disabled by request.')
         for axis in self.axes:
-            axis.Disable()
+            if axis.GetIsEnabled().Value is not False:
+                check(axis.Disable(), error_msg="Error disabling axis: ")
         fut.set_result(None)
 
     def _handle_enable(self, fut):
         for axis in self.axes:
-            axis.Enable()
+            if axis.GetIsEnabled().Value is not True:
+                check(axis.Enable(), error_msg="Error enabling axis: ")
         fut.set_result(None)
 
     def _get_pos(self):
-        return np.array([float(axis.GetActualPosition().Value) for axis in self.axes])
+        results = [check(axis.GetActualPosition(), error_msg="Error getting axis position: ") for axis in self.axes]
+        return np.array([float(result.Value) for result in results])
 
     def _move(self, pos, speed, acceleration):
         """Directly request a move.
@@ -184,14 +190,15 @@ class SmartStageControlThread:
             if np.abs(diff[i]) < self.move_complete_threshold:
                 pos[i] = None
             if pos[i] is not None:
-                axis.SetVelocity(speed_per_axis[i])
-                axis.SetAcceleration(accel_per_axis[i])
+                check(axis.SetVelocity(speed_per_axis[i]), error_msg="Error setting axis speed: ")
+                check(axis.SetAcceleration(accel_per_axis[i]), error_msg="Error setting axis acceleration: ")
         tasks = []
         for i,axis in enumerate(self.axes):
             if pos[i] is None:
                 tasks.append(None)
             else:
-                tasks.append(axis.MoveAbsolute(pos[i]))
+                result = check(axis.MoveAbsolute(pos[i]), error_msg="Error moving axis: ")
+                tasks.append(result)
         return tasks
 
 

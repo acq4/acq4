@@ -4,7 +4,7 @@ import teleprox
 
 SERVER_PORT = 60738
 SERVER_ADDRESS = f"tcp://localhost:{SERVER_PORT}"
-DLL_PATH = "C:\\Users\\lukec\\Desktop\\Devices\\Dover Stages\\MotionSynergyAPI_SourceCode_3.6.12025\\MotionSynergyAPI.dll"
+
 
 ms_client = None
 ms_process = None  # only exists if it was started this time
@@ -12,7 +12,7 @@ logging.getLogger('motionsynergy_server').setLevel(logging.INFO)
 log_server = teleprox.log.remote.LogServer(logger='motionsynergy_server')
 
 
-def get_client():
+def get_client(dll_path):
     """Return an RPCClient connected to the motionSynergy server.
     """
     global ms_client
@@ -24,11 +24,11 @@ def get_client():
         except ConnectionRefusedError as exc:
             # no server running already
             exc.add_note("No motionsynergy server running; starting one now..")
-            ms_client = start_server(log_addr=log_server.address)
+            ms_client = start_server(dll_path=dll_path, log_addr=log_server.address)
     return ms_client
 
 
-def start_server(log_addr):
+def start_server(dll_path, log_addr):
     global ms_process
     print("Starting motionSynergy server..")
     ms_process = teleprox.start_process(
@@ -40,9 +40,9 @@ def start_server(log_addr):
         log_level='INFO',
     )
 
-    ms_server = ms_process.client._import('acq4.drivers.dovermotion.motionsynergy_server')
+    ms_server = ms_process.client._import('acq4.drivers.dovermotion.motionsynergy_api')
     ms_server.install_tray_icon()
-    motionSynergy, instrumentSettings = ms_server.get_motionsynergyapi(DLL_PATH)
+    motionSynergy, instrumentSettings = ms_server.get_motionsynergyapi(dll_path)
     ms_process.client['motionsynergy_module'] = ms_server
     ms_process.client['motionSynergy'] = motionSynergy
     ms_process.client['instrumentSettings'] = instrumentSettings
