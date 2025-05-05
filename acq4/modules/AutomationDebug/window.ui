@@ -135,6 +135,55 @@
     </widget>
    </item>
    <item>
+    <widget class="QGroupBox" name="multiChannelGroup">
+     <property name="title">
+      <string>Multichannel Acquisition</string>
+     </property>
+     <layout class="QGridLayout" name="gridLayout_5">
+      <item row="0" column="0">
+       <widget class="QCheckBox" name="detectionPresetEnableCheck">
+        <property name="toolTip">
+         <string>Check to use a specific microscope preset for acquiring the detection channel z-stack. If unchecked, the current microscope state is used.</string>
+        </property>
+        <property name="text">
+         <string>Detection Preset:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <widget class="QComboBox" name="detectionPresetCombo">
+        <property name="enabled">
+         <bool>false</bool>
+        </property>
+        <property name="toolTip">
+         <string>Select the microscope preset to use for the detection channel z-stack.</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QCheckBox" name="classificationPresetEnableCheck">
+        <property name="toolTip">
+         <string>Check to use a specific microscope preset for acquiring the classification channel z-stack. If unchecked, the current microscope state is used.</string>
+        </property>
+        <property name="text">
+         <string>Classification Preset:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="QComboBox" name="classificationPresetCombo">
+        <property name="enabled">
+         <bool>false</bool>
+        </property>
+        <property name="toolTip">
+         <string>Select the microscope preset to use for the classification channel z-stack.</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
     <widget class="QGroupBox" name="groupBox_4">
      <property name="title">
       <string>Motion Planner</string>
