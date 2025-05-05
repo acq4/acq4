@@ -47,6 +47,7 @@ class AutomationDebugWindow(Qt.QWidget):
         self.ui.testUIBtn.setOpts(future_producer=self._testUI, stoppable=True)
         self.ui.testUIBtn.sigFinished.connect(self._handleDetectResults)
 
+        self.ui.multiChannelEnableCheck.toggled.connect(self._updateMultiChannelState)
         self.ui.motionPlannerSelector.currentIndexChanged.connect(self._changeMotionPlanner)
 
         self.ui.setTopLeftButton.clicked.connect(self._setTopLeft)
@@ -87,6 +88,18 @@ class AutomationDebugWindow(Qt.QWidget):
         self.show()
         planner = self.module.config.get("motionPlanner", "Geometry-aware")
         self.ui.motionPlannerSelector.setCurrentText(planner)
+        self._populatePresetCombos()
+
+    def _updateMultiChannelState(self, enabled):
+        self.ui.detectionPresetCombo.setEnabled(enabled)
+        self.ui.classificationPresetCombo.setEnabled(enabled)
+
+    def _populatePresetCombos(self):
+        presets = self.scopeDevice.presets.keys()
+        self.ui.detectionPresetCombo.clear()
+        self.ui.classificationPresetCombo.clear()
+        self.ui.detectionPresetCombo.addItems(presets)
+        self.ui.classificationPresetCombo.addItems(presets)
 
     @future_wrap
     def doPipetteCalibrationTest(self, _future):
