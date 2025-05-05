@@ -595,20 +595,6 @@ class AutomationDebugWindow(Qt.QWidget):
             printExc("Error during detect_neurons call:")
             logMsg(f"Neuron detection failed: {e}", msgType='error')
             return [], detection_stack, classification_stack # Return empty results on failure
-                autoencoder=autoencoder,
-                classifier=classifier,
-                xy_scale=pixel_size,
-                z_scale=step_z,  # Use the actual step size
-                multichannel=bool(classification_stack),
-            ),
-            timeout=600,
-        ).getResult()
-        logMsg(f"Neuron detection finished. Found {len(result)} potential neurons.")
-        return result, detection_stack, classification_stack
-    except Exception as e:
-        printExc("Error during detect_neurons call:")
-        logMsg(f"Neuron detection failed: {e}", msgType='error')
-        return [], detection_stack, classification_stack # Return empty results on failure
 
 
     @future_wrap
