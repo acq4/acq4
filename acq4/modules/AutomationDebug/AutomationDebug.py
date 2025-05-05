@@ -738,10 +738,9 @@ class AutomationDebugWindow(Qt.QWidget):
             logMsg(f"Neuron detection failed: {e}", msgType='error')
             return [], detection_stack, classification_stack # Return empty results on failure
 
-    @future_wrap
-    def _rankCells(self, _future: Future):
-        """Presents the next unranked cell to the user for ranking."""
-        self.sigWorking.emit(self.ui.rankCellsBtn)
+
+    def _rankCells(self):
+        """Pops the next unranked cell and opens a RankingWindow for it."""
         save_dir = Path(self.ui.rankingSaveDirEdit.text())
         if not save_dir.is_dir():
             try:
@@ -780,196 +779,34 @@ class AutomationDebugWindow(Qt.QWidget):
              z_step = 1 * µm # Default if only one frame
              logMsg("Only one frame in detection stack, assuming 1µm Z step for ranking.", msgType='warning')
 
-        # --- Show Dialog ---
-        dialog = RankingDialog(
+        # --- Create and show RankingWindow ---
+        ranking_window = RankingWindow(
+            main_window=self, # Pass reference for cleanup
             cell_center=center_global,
             detection_stack=self._current_detection_stack,
             classification_stack=self._current_classification_stack,
             pixel_size=pixel_size,
             z_step=z_step,
-            parent=self,
+            save_dir=save_dir,
         )
-        accepted = dialog.exec()
+        # Keep track of the window and connect its closed signal for cleanup
+        self._open_ranking_windows.append(ranking_window)
+        ranking_window.sigClosed.connect(self._ranking_window_closed)
+        ranking_window.show()
 
-        if accepted:
-            rating, save_format = dialog.getResult()
-            logMsg(f"Cell rated {rating}, saving as {save_format}...")
-            try:
-                volume_data, metadata = self._extract_cell_volume(center_global, size_um=20)
-                self._save_ranked_cell(volume_data, metadata, rating, save_format, save_dir)
-                # TODO: Add to _ranked_cells list/dict
-            except Exception:
-                printExc(f"Failed to extract or save cell data for cell at {center_global}")
-                logMsg(f"Error saving cell data for cell at {center_global}", msgType='error')
-                # Put the cell back? Or just log the error? For now, just log.
-        else:
-            logMsg("Cell skipped.")
+        # Update the display of bounding boxes immediately
+        # (remove the one just popped for ranking)
+        self._displayBoundingBoxes(self._unranked_cells)
 
-        # Update the display of bounding boxes (remove the one just processed)
-        self._displayBoundingBoxes(self._unranked_cells) # Re-display remaining boxes
+    def _ranking_window_closed(self, window):
+        """Callback to remove window reference when it's closed."""
+        try:
+            self._open_ranking_windows.remove(window)
+            logMsg(f"Ranking window closed. {len(self._open_ranking_windows)} remaining open.")
+        except ValueError:
+            # Window might have already been removed or was never added properly
+            logMsg("Attempted to remove a ranking window reference that was not found.", msgType='warning')
 
-    def _handleRankCellsFinish(self, fut: Future):
-        self.sigWorking.emit(False)
-        if fut.didFail():
-            logMsg("Cell ranking process failed.", msgType='error')
-            printExc("Error during cell ranking:")
-        else:
-            logMsg("Cell ranking finished for this cell.")
-            if self._unranked_cells:
-                 logMsg(f"{len(self._unranked_cells)} cells remaining in this batch.")
-            else:
-                 logMsg("All detected cells in this batch have been processed.")
-
-
-    def _extract_cell_volume(self, center_global, size_um=20):
-        """Extracts a 3D numpy array centered on the cell."""
-        if not self._current_detection_stack:
-            raise ValueError("Detection stack is not available.")
-
-        stack_data = np.array([frame.data() for frame in self._current_detection_stack])
-        frame_shape = stack_data.shape[1:] # (rows, cols) or (y, x)
-        n_frames = stack_data.shape[0]
-
-        # Get transform info from the first frame (assuming it's consistent)
-        frame0 = self._current_detection_stack[0]
-        pixel_size = frame0.info().get('pixelSize', [None, None])
-        if pixel_size[0] is None:
-             raise ValueError("Pixel size information missing from frame.")
-        pixel_size_m = pixel_size[0] # Assume square pixels in meters
-
-        # Convert size in µm to pixels/frames
-        size_m = size_um * 1e-6
-        size_px = int(np.ceil(size_m / pixel_size_m))
-        # Ensure odd size for centering
-        if size_px % 2 == 0:
-            size_px += 1
-        half_size_px = size_px // 2
-
-        # Find the Z index closest to the center
-        depths = np.array([frame.depth for frame in self._current_detection_stack])
-        center_z_idx = np.argmin(np.abs(depths - center_global[2]))
-
-        # Estimate Z step if possible, otherwise assume 1um
-        if len(depths) > 1:
-            z_step_m = np.mean(np.diff(depths)) # Use mean difference
-        else:
-            z_step_m = 1e-6
-        size_z_frames = int(np.ceil(size_m / z_step_m))
-        if size_z_frames % 2 == 0:
-             size_z_frames += 1
-        half_size_z = size_z_frames // 2
-
-        # Map global center to the coordinates of the center frame
-        center_frame = self._current_detection_stack[center_z_idx]
-        center_frame_coords = center_frame.mapFromGlobal(center_global) # Returns (x, y) in frame pixels
-        center_x_px, center_y_px = int(round(center_frame_coords[0])), int(round(center_frame_coords[1]))
-
-        # Calculate slice boundaries, clamping to stack dimensions
-        z_start = max(0, center_z_idx - half_size_z)
-        z_end = min(n_frames, center_z_idx + half_size_z + 1)
-        y_start = max(0, center_y_px - half_size_px)
-        y_end = min(frame_shape[0], center_y_px + half_size_px + 1)
-        x_start = max(0, center_x_px - half_size_px)
-        x_end = min(frame_shape[1], center_x_px + half_size_px + 1)
-
-        # Extract volume
-        volume = stack_data[z_start:z_end, y_start:y_end, x_start:x_end]
-
-        # --- Create Metadata ---
-        # Get transform of the center pixel of the extracted volume's center frame
-        volume_center_z_idx_local = center_z_idx - z_start
-        volume_center_y_px_local = center_y_px - y_start
-        volume_center_x_px_local = center_x_px - x_start
-
-        # We need the global position of the corner (0,0,0) of the extracted volume
-        # Find the frame corresponding to z_start
-        origin_frame = self._current_detection_stack[z_start]
-        # Map the local pixel coords (x_start, y_start) in that frame to global
-        corner_global_pos = origin_frame.mapToGlobal((x_start, y_start))
-
-        metadata = {
-            'timestamp': datetime.datetime.now().isoformat(),
-            'center_global': center_global.tolist(),
-            'size_um': size_um,
-            'shape': volume.shape, # (z, y, x)
-            'pixel_size_m': pixel_size_m,
-            'z_step_m': z_step_m,
-            'voxel_origin_global': corner_global_pos.tolist() + [origin_frame.depth], # (x, y, z) of voxel [0,0,0]
-            'source_detection_stack_info': [f.info() for f in self._current_detection_stack[z_start:z_end]], # Basic info
-            # Add classification stack info if available
-            'source_classification_stack_info': None,
-        }
-        if self._current_classification_stack and z_start < len(self._current_classification_stack):
-             # Assume alignment holds for the extracted region
-             metadata['source_classification_stack_info'] = [
-                 f.info() for f in self._current_classification_stack[z_start:z_end]
-             ]
-
-        logMsg(f"Extracted volume shape: {volume.shape} centered near {center_global}")
-        return volume, metadata
-
-    def _save_ranked_cell(self, volume_data, metadata, rating, save_format, save_dir):
-        """Saves the extracted cell volume and metadata."""
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-        cell_id = f"cell_{timestamp}_rating_{rating}"
-        filename_base = save_dir / cell_id
-
-        metadata['rating'] = rating
-        metadata['save_format'] = save_format
-        metadata['cell_id'] = cell_id
-
-        if save_format == 'MetaArray':
-            # Create MetaArray info structure
-            info = [
-                {'name': 'Z', 'units': 'm', 'values': np.arange(volume_data.shape[0]) * metadata['z_step_m'] + metadata['voxel_origin_global'][2]},
-                {'name': 'Y', 'units': 'm', 'values': np.arange(volume_data.shape[1]) * metadata['pixel_size_m'] + metadata['voxel_origin_global'][1]},
-                {'name': 'X', 'units': 'm', 'values': np.arange(volume_data.shape[2]) * metadata['pixel_size_m'] + metadata['voxel_origin_global'][0]},
-                metadata,  # Add the rest of the metadata dict
-            ]
-            ma = MetaArray(volume_data, info=info)
-            filepath = f"{filename_base}.ma"
-            try:
-                ma.write(filepath)
-                logMsg(f"Saved cell data to {filepath}")
-            except Exception:
-                printExc(f"Failed to write MetaArray file: {filepath}")
-                logMsg(f"Error writing MetaArray file: {filepath}", msgType='error')
-
-        elif save_format == 'NWB':
-            # Placeholder for NWB saving logic
-            # Requires pynwb library
-            logMsg("NWB saving not implemented yet.", msgType='warning')
-            filepath = f"{filename_base}.nwb"
-            logMsg(f"Placeholder: Would save cell data to {filepath}")
-            # Example structure (needs pynwb):
-            # from pynwb import NWBHDF5IO, NWBFile
-            # from pynwb.ophys import TwoPhotonSeries, OpticalChannel, ImageSegmentation, PlaneSegmentation
-            # from pynwb.device import Device
-            #
-            # nwbfile = NWBFile(...)
-            # device = Device(name=self.cameraDevice.name()) # Or more specific info
-            # nwbfile.add_device(device)
-            # optical_channel = OpticalChannel(...)
-            # imaging_plane = nwbfile.create_imaging_plane(...)
-            # image_series = TwoPhotonSeries(
-            #      name=cell_id,
-            #      description=f"Ranked cell volume, rating {rating}",
-            #      data=volume_data,
-            #      imaging_plane=imaging_plane,
-            #      rate=1.0, # Fake rate
-            #      unit='raw',
-            #      dimension=list(volume_data.shape), # Check order
-            #      resolution=metadata['pixel_size_m'], # Check if this is right place
-            #      starting_time=0.0,
-            #      # Need to map metadata['voxel_origin_global'] and z_step correctly
-            # )
-            # nwbfile.add_acquisition(image_series)
-            # # Add metadata as needed, potentially in processing modules or general fields
-            # with NWBHDF5IO(filepath, 'w') as io:
-            #      io.write(nwbfile)
-
-        else:
-            logMsg(f"Unknown save format: {save_format}", msgType='error')
 
     @future_wrap
     def _autoTarget(self, _future):
