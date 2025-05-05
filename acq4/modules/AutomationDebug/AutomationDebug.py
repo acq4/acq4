@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-import random
 
 import numpy as np
 
@@ -14,6 +13,7 @@ from acq4.devices.Pipette.planners import PipettePathGenerator, GeometryAwarePat
 from acq4.modules.Camera import CameraWindow
 from acq4.modules.Module import Module
 from acq4.util import Qt
+from acq4.util.debug import logMsg
 from acq4.util.future import Future, future_wrap
 from acq4.util.imaging import Frame
 from acq4.util.imaging.sequencer import acquire_z_stack
@@ -282,8 +282,9 @@ class AutomationDebugWindow(Qt.QWidget):
         autoencoder = man.config.get("misc", {}).get("autoencoderPath", None)
         classifier = man.config.get("misc", {}).get("classifierPath", None)
         pixel_size = self.cameraDevice.getPixelSize()[0]
-        # z_scale = 1e-6  # We'll use the actual step size later
-        # TODO: Handle mock file path later
+        z_scale = step_z = 1 * µm
+        depth = self.cameraDevice.getFocusDepth()
+        classification_stack = []
         if self.ui.mockCheckBox.isChecked() and self.ui.mockFilePath.text():
             with self.cameraDevice.ensureRunning():
                 # Acquire a single frame to get the camera transform
@@ -293,7 +294,7 @@ class AutomationDebugWindow(Qt.QWidget):
             # Load the MetaArray file
             mock_file_path = self.ui.mockFilePath.text()
             data = MetaArray(file=mock_file_path).asarray()
-            z_stack = [
+            detection_stack = [
                 Frame(
                     data[i],
                     info={
@@ -305,20 +306,12 @@ class AutomationDebugWindow(Qt.QWidget):
                 )
                 for i in range(len(data))
             ]
-            # detection_stack = z_stack
-            # classification_stack = [] # Or load a second mock stack if available?
-        # else:
-        # --- Real Acquisition ---
-        depth = self.cameraDevice.getFocusDepth()
-        start_z = depth - 20 * µm
-        stop_z = depth + 20 * µm
-        step_z = 1 * µm
+            # TODO: Handle multichannel mock file path later
+        else:
+            # --- Real Acquisition ---
+            start_z = depth - 20 * µm
+            stop_z = depth + 20 * µm
 
-        original_scope_state = None
-        detection_stack = None
-        classification_stack = [] # Default to empty list for single channel case
-
-        try:
             if self.ui.multiChannelEnableCheck.isChecked():
                 # --- Multichannel Acquisition ---
                 detection_preset = self.ui.detectionPresetCombo.currentText()
@@ -327,20 +320,19 @@ class AutomationDebugWindow(Qt.QWidget):
                 if not detection_preset or not classification_preset:
                     raise ValueError("Detection and Classification presets must be selected for multichannel acquisition.")
 
-                self.module.manager.logMsg(f"Starting multichannel Z-stack acquisition: Detection='{detection_preset}', Classification='{classification_preset}'")
-                original_scope_state = self.scopeDevice.getState()
+                logMsg(f"Starting multichannel Z-stack acquisition: Detection='{detection_preset}', Classification='{classification_preset}'")
                 _future.waitFor(self.scopeDevice.loadPreset(detection_preset))
-                self.module.manager.logMsg(f"Acquiring detection stack ({start_z/µm:.1f} - {stop_z/µm:.1f} µm, step {step_z/µm:.1f} µm)")
+                logMsg(f"Acquiring detection stack ({start_z/µm:.1f} - {stop_z/µm:.1f} µm, step {step_z/µm:.1f} µm)")
                 detection_stack = _future.waitFor(
                     acquire_z_stack(self.cameraDevice, start_z, stop_z, step_z)
                 ).getResult()
 
                 _future.waitFor(self.scopeDevice.loadPreset(classification_preset))
-                self.module.manager.logMsg(f"Acquiring classification stack ({start_z/µm:.1f} - {stop_z/µm:.1f} µm, step {step_z/µm:.1f} µm)")
+                logMsg(f"Acquiring classification stack ({start_z/µm:.1f} - {stop_z/µm:.1f} µm, step {step_z/µm:.1f} µm)")
                 classification_stack = _future.waitFor(
                     acquire_z_stack(self.cameraDevice, start_z, stop_z, step_z)
                 ).getResult()
-                self.module.manager.logMsg("Multichannel acquisition complete.")
+                logMsg("Multichannel acquisition complete.")
 
                 # --- Verify Stack Alignment ---
                 if len(detection_stack) != len(classification_stack):
@@ -356,7 +348,7 @@ class AutomationDebugWindow(Qt.QWidget):
                     f1_depth = getattr(f1, 'depth', None)
                     f2_depth = getattr(f2, 'depth', None)
                     if f1_depth is None or f2_depth is None:
-                        self.module.manager.logMsg(f"Warning: Cannot verify Z alignment at frame {i}, missing 'depth' attribute.", msgType='warning')
+                        logMsg(f"Warning: Cannot verify Z alignment at frame {i}, missing 'depth' attribute.", msgType='warning')
                         continue # Skip check for this frame if depth is missing
 
                     if abs(f1_depth - f2_depth) > z_tolerance:
@@ -369,58 +361,36 @@ class AutomationDebugWindow(Qt.QWidget):
                             f"Classification ({f2_depth/µm:.2f} µm, info: {f2_info}). "
                             f"Tolerance: {z_tolerance/µm:.2f} µm"
                         )
-                self.module.manager.logMsg("Z-stack alignment verified.")
-
+                logMsg("Z-stack alignment verified.")
             else:
                 # --- Single Channel Acquisition ---
-                self.module.manager.logMsg(f"Starting single channel Z-stack acquisition ({start_z/µm:.1f} - {stop_z/µm:.1f} µm, step {step_z/µm:.1f} µm)")
+                logMsg(f"Starting single channel Z-stack acquisition ({start_z/µm:.1f} - {stop_z/µm:.1f} µm, step {step_z/µm:.1f} µm)")
                 detection_stack = _future.waitFor(
                     acquire_z_stack(self.cameraDevice, start_z, stop_z, step_z)
                 ).getResult()
-                self.module.manager.logMsg("Single channel acquisition complete.")
-
-        finally:
-            # Restore original state if it was saved
-            if original_scope_state is not None:
-                self.module.manager.logMsg("Restoring original microscope state...")
-                try:
-                    # Assuming setState might be async
-                    restore_fut = self.scopeDevice.setState(original_scope_state)
-                    if isinstance(restore_fut, Future):
-                         _future.waitFor(restore_fut)
-                    self.module.manager.logMsg("Microscope state restored.")
-                except Exception:
-                    self.module.manager.logExc("Error restoring microscope state after Z-stack acquisition")
-            # Restore focus depth regardless
-            self.module.manager.logMsg(f"Restoring focus depth to {depth/µm:.1f} µm...")
-            try:
-                # Assuming setFocusDepth might be async
-                focus_fut = self.cameraDevice.setFocusDepth(depth)
-                if isinstance(focus_fut, Future):
-                    # Don't wait, but check for errors immediately after call if possible,
-                    # or rely on future's error reporting mechanism. raiseErrors() might wait.
-                    focus_fut.raiseErrors("Error restoring focus depth")
-                self.module.manager.logMsg("Focus depth restored.")
-            except Exception:
-                self.module.manager.logExc("Error restoring focus depth after Z-stack acquisition")
-
+                logMsg("Single channel acquisition complete.")
 
         # --- Call Detection ---
         if detection_stack is None:
-             raise RuntimeError("Detection stack acquisition failed or was skipped.") # Should not happen
+             raise RuntimeError("Detection stack acquisition failed or was skipped.")
 
-        self.module.manager.logMsg("Running neuron detection...")
+        logMsg("Running neuron detection...")
+        if classification_stack:
+            working_stack = (detection_stack, classification_stack)
+        else:
+            working_stack = detection_stack
         result = _future.waitFor(
             detect_neurons(
-                (detection_stack, classification_stack), # Pass as tuple
+                working_stack,
                 autoencoder=autoencoder,
                 classifier=classifier,
                 xy_scale=pixel_size,
-                z_scale=step_z # Use the actual step size
+                z_scale=step_z,  # Use the actual step size
+                multichannel=bool(classification_stack),
             ),
             timeout=600,
         ).getResult()
-        self.module.manager.logMsg(f"Neuron detection finished. Found {len(result)} potential neurons.")
+        logMsg(f"Neuron detection finished. Found {len(result)} potential neurons.")
         return result
 
     @future_wrap
