@@ -140,17 +140,24 @@
       <string>Multichannel Acquisition</string>
      </property>
      <layout class="QGridLayout" name="gridLayout_5">
-      <item row="0" column="0">
-       <widget class="QCheckBox" name="detectionPresetEnableCheck">
+      <item row="0" column="0" colspan="2">
+       <widget class="QCheckBox" name="multiChannelEnableCheck">
         <property name="toolTip">
-         <string>Check to use a specific microscope preset for acquiring the detection channel z-stack. If unchecked, the current microscope state is used.</string>
+         <string>Check to acquire two z-stacks using specific microscope presets for detection and classification. If unchecked, only a single z-stack is acquired using the current microscope state.</string>
         </property>
+        <property name="text">
+         <string>Enable Multichannel Acquisition</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="label_4">
         <property name="text">
          <string>Detection Preset:</string>
         </property>
        </widget>
       </item>
-      <item row="0" column="1">
+      <item row="1" column="1">
        <widget class="QComboBox" name="detectionPresetCombo">
         <property name="enabled">
          <bool>false</bool>
@@ -160,17 +167,14 @@
         </property>
        </widget>
       </item>
-      <item row="1" column="0">
-       <widget class="QCheckBox" name="classificationPresetEnableCheck">
-        <property name="toolTip">
-         <string>Check to use a specific microscope preset for acquiring the classification channel z-stack. If unchecked, the current microscope state is used.</string>
-        </property>
+      <item row="2" column="0">
+       <widget class="QLabel" name="label_5">
         <property name="text">
          <string>Classification Preset:</string>
         </property>
        </widget>
       </item>
-      <item row="1" column="1">
+      <item row="2" column="1">
        <widget class="QComboBox" name="classificationPresetCombo">
         <property name="enabled">
          <bool>false</bool>
