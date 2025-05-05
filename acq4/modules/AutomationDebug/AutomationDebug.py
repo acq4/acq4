@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-import os
 import datetime
+import os
 from pathlib import Path
 
 import numpy as np
-import pyqtgraph as pg
 
 from MetaArray import MetaArray
 from acq4.devices.Camera import Camera
@@ -16,7 +15,6 @@ from acq4.devices.Pipette.planners import PipettePathGenerator, GeometryAwarePat
 from acq4.modules.Camera import CameraWindow
 from acq4.modules.Module import Module
 from acq4.util import Qt
-from acq4.util.DataManager import getDataManager
 from acq4.util.debug import logMsg, printExc
 from acq4.util.future import Future, future_wrap
 from acq4.util.imaging import Frame
@@ -188,7 +186,7 @@ class AutomationDebugWindow(Qt.QWidget):
         planner = self.module.config.get("motionPlanner", "Geometry-aware")
         self.ui.motionPlannerSelector.setCurrentText(planner)
         # Set default ranking dir
-        default_rank_dir = Path(getDataManager().getBaseDir().name()) / "ranked_cells"
+        default_rank_dir = Path(self.module.manager.getBaseDir().name()) / "ranked_cells"
         self.ui.rankingSaveDirEdit.setText(str(default_rank_dir))
         self._populatePresetCombos()
 
@@ -463,23 +461,19 @@ class AutomationDebugWindow(Qt.QWidget):
                  logMsg("Z information not found in mock file info, using default step.", msgType='warning')
                  step_z = 1 * µm
 
-
             # Create Frame objects, mapping Z based on step_z
             detection_stack = []
             current_z = base_position[2] # Start Z from the real frame's depth
             for i in range(len(data)):
+                 frame_to_global = base_xform
+                 # Adjust Z position in the transform
+                 frame_to_global.translate(0, 0, current_z - base_position[2])
                  frame_info = {
                      "pixelSize": [pixel_size, pixel_size],
                      "depth": current_z, # Assign calculated depth
-                     "transform": pg.Transform3D(), # Placeholder, will be set by setDeviceTransform
+                     "transform": frame_to_global.saveState(),
                  }
                  frame = Frame(data[i], info=frame_info)
-                 # Map frame coordinates to global based on the initial real frame's transform
-                 # This assumes the mock stack is aligned with the real frame's XY position
-                 frame_to_global = base_xform.copy()
-                 # Adjust Z position in the transform
-                 frame_to_global.translate(0, 0, current_z - base_position[2])
-                 frame.setDeviceTransform(frame_to_global) # Use setDeviceTransform
                  detection_stack.append(frame)
                  current_z += step_z # Increment Z for the next frame
 
@@ -596,7 +590,6 @@ class AutomationDebugWindow(Qt.QWidget):
             logMsg(f"Neuron detection failed: {e}", msgType='error')
             return [], detection_stack, classification_stack # Return empty results on failure
 
-
     @future_wrap
     def _rankCells(self, _future: Future):
         """Presents the next unranked cell to the user for ranking."""
@@ -619,13 +612,10 @@ class AutomationDebugWindow(Qt.QWidget):
             if detect_future.wasInterrupted():
                  logMsg("Detection interrupted, cannot rank cells.")
                  return
-            if detect_future.didFail():
-                 logMsg("Detection failed, cannot rank cells.")
-                 return
-            # Results should now be populated by _handleDetectWrapperResults via the future's signal
-            if not self._unranked_cells:
-                 logMsg("Detection ran, but no cells were found.")
-                 return
+        # Results should now be populated by _handleDetectWrapperResults via the future's signal
+        if not self._unranked_cells:
+             logMsg("Detection ran, but no cells were found.")
+             return
 
         if not self._current_detection_stack:
              logMsg("Detection stack data is missing, cannot rank.", msgType='error')
@@ -647,7 +637,6 @@ class AutomationDebugWindow(Qt.QWidget):
         else:
              z_step = 1 * µm # Default if only one frame
              logMsg("Only one frame in detection stack, assuming 1µm Z step for ranking.", msgType='warning')
-
 
         # --- Show Dialog ---
         dialog = RankingDialog(
@@ -774,7 +763,6 @@ class AutomationDebugWindow(Qt.QWidget):
                  f.info() for f in self._current_classification_stack[z_start:z_end]
              ]
 
-
         logMsg(f"Extracted volume shape: {volume.shape} centered near {center_global}")
         return volume, metadata
 
@@ -794,7 +782,7 @@ class AutomationDebugWindow(Qt.QWidget):
                 {'name': 'Z', 'units': 'm', 'values': np.arange(volume_data.shape[0]) * metadata['z_step_m'] + metadata['voxel_origin_global'][2]},
                 {'name': 'Y', 'units': 'm', 'values': np.arange(volume_data.shape[1]) * metadata['pixel_size_m'] + metadata['voxel_origin_global'][1]},
                 {'name': 'X', 'units': 'm', 'values': np.arange(volume_data.shape[2]) * metadata['pixel_size_m'] + metadata['voxel_origin_global'][0]},
-                metadata, # Add the rest of the metadata dict
+                metadata,  # Add the rest of the metadata dict
             ]
             ma = MetaArray(volume_data, info=info)
             filepath = f"{filename_base}.ma"
@@ -840,7 +828,6 @@ class AutomationDebugWindow(Qt.QWidget):
 
         else:
             logMsg(f"Unknown save format: {save_format}", msgType='error')
-
 
     @future_wrap
     def _autoTarget(self, _future):
