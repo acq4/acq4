@@ -26,20 +26,24 @@ from pyqtgraph.units import µm, m
 UiTemplate = Qt.importTemplate(".window")
 
 
-class RankingDialog(Qt.QDialog):
-    def __init__(self, cell_center, detection_stack, classification_stack, pixel_size, z_step, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("Rank Cell")
-        self.layout = Qt.QVBoxLayout()
-        self.setLayout(self.layout)
+class RankingWindow(Qt.QWidget):
+    sigClosed = Qt.Signal(object) # emit self when closed
 
+    def __init__(self, main_window: AutomationDebugWindow, cell_center, detection_stack, classification_stack, pixel_size, z_step, save_dir):
+        super().__init__()
+        self.main_window = main_window # Keep reference for cleanup
         self.cell_center = cell_center
         self.detection_stack = detection_stack
         self.classification_stack = classification_stack # May be None
         self.pixel_size = pixel_size
         self.z_step = z_step
+        self.save_dir = save_dir
         self.rating = None
         self.save_format = 'NWB' # Default format
+
+        self.setWindowTitle(f"Rank Cell @ ({cell_center[0]/µm:.0f}, {cell_center[1]/µm:.0f}, {cell_center[2]/µm:.0f}) µm")
+        self.layout = Qt.QVBoxLayout()
+        self.setLayout(self.layout)
 
         # --- Image Display ---
         self.image_views = []
@@ -97,11 +101,12 @@ class RankingDialog(Qt.QDialog):
         self.action_layout.addWidget(self.save_button)
         self.layout.addLayout(self.action_layout)
 
-        self.skip_button.clicked.connect(self.reject) # Closes dialog with QDialog.Rejected
-        self.save_button.clicked.connect(self.accept) # Closes dialog with QDialog.Accepted
+        self.skip_button.clicked.connect(self.close) # Just close the window
+        self.save_button.clicked.connect(self._save_and_close)
 
         # TODO: Implement image loading and display logic
         # TODO: Implement slider logic
+        self._load_cell_data() # Placeholder call
 
     def _set_rating(self, rating_id):
         self.rating = rating_id
@@ -110,8 +115,149 @@ class RankingDialog(Qt.QDialog):
     def _set_format(self, fmt):
         self.save_format = fmt
 
-    def getResult(self):
-        return self.rating, self.save_format
+    def _load_cell_data(self):
+        # Placeholder: This is where you'd load the 5 slices into self.image_views
+        # and configure the self.z_slider based on self.detection_stack depth.
+        logMsg("RankingWindow: _load_cell_data() - Implement me!")
+        pass
+
+    def _save_and_close(self):
+        if self.rating is None:
+            logMsg("No rating selected.", msgType='warning')
+            # Optionally show a message box to the user
+            return
+
+        logMsg(f"Cell rated {self.rating}, saving as {self.save_format}...")
+        try:
+            volume_data, metadata = self._extract_cell_volume(self.cell_center, size_um=20)
+            self._save_ranked_cell(volume_data, metadata, self.rating, self.save_format, self.save_dir)
+        except Exception:
+            printExc(f"Failed to extract or save cell data for cell at {self.cell_center}")
+            logMsg(f"Error saving cell data for cell at {self.cell_center}", msgType='error')
+            # Optionally show error message to user before closing
+        finally:
+            self.close() # Close the window regardless of save success/failure
+
+    def closeEvent(self, event):
+        """Emit signal when closed."""
+        self.sigClosed.emit(self)
+        super().closeEvent(event)
+
+    # --- Data Extraction and Saving Logic (Moved from AutomationDebugWindow) ---
+
+    def _extract_cell_volume(self, center_global, size_um=20):
+        """Extracts a 3D numpy array centered on the cell."""
+        if not self.detection_stack:
+            raise ValueError("Detection stack is not available.")
+
+        # Use the stack data passed during initialization
+        stack_data = np.array([frame.data() for frame in self.detection_stack])
+        frame_shape = stack_data.shape[1:] # (rows, cols) or (y, x)
+        n_frames = stack_data.shape[0]
+
+        # Get transform info from the first frame (assuming it's consistent)
+        frame0 = self.detection_stack[0]
+        # Use pixel_size passed during initialization
+        if self.pixel_size is None:
+             raise ValueError("Pixel size information missing.")
+        pixel_size_m = self.pixel_size # Assume square pixels in meters
+
+        # Convert size in µm to pixels/frames
+        size_m = size_um * 1e-6
+        size_px = int(np.ceil(size_m / pixel_size_m))
+        # Ensure odd size for centering
+        if size_px % 2 == 0:
+            size_px += 1
+        half_size_px = size_px // 2
+
+        # Find the Z index closest to the center
+        depths = np.array([frame.depth for frame in self.detection_stack])
+        center_z_idx = np.argmin(np.abs(depths - center_global[2]))
+
+        # Use z_step passed during initialization
+        z_step_m = self.z_step
+        size_z_frames = int(np.ceil(size_m / z_step_m))
+        if size_z_frames % 2 == 0:
+             size_z_frames += 1
+        half_size_z = size_z_frames // 2
+
+        # Map global center to the coordinates of the center frame
+        center_frame = self.detection_stack[center_z_idx]
+        center_frame_coords = center_frame.mapFromGlobal(center_global) # Returns (x, y) in frame pixels
+        center_x_px, center_y_px = int(round(center_frame_coords[0])), int(round(center_frame_coords[1]))
+
+        # Calculate slice boundaries, clamping to stack dimensions
+        z_start = max(0, center_z_idx - half_size_z)
+        z_end = min(n_frames, center_z_idx + half_size_z + 1)
+        y_start = max(0, center_y_px - half_size_px)
+        y_end = min(frame_shape[0], center_y_px + half_size_px + 1)
+        x_start = max(0, center_x_px - half_size_px)
+        x_end = min(frame_shape[1], center_x_px + half_size_px + 1)
+
+        # Extract volume
+        volume = stack_data[z_start:z_end, y_start:y_end, x_start:x_end]
+
+        # --- Create Metadata ---
+        origin_frame = self.detection_stack[z_start]
+        corner_global_pos = origin_frame.mapToGlobal((x_start, y_start))
+
+        metadata = {
+            'timestamp': datetime.datetime.now().isoformat(),
+            'center_global': center_global.tolist(),
+            'size_um': size_um,
+            'shape': volume.shape, # (z, y, x)
+            'pixel_size_m': pixel_size_m,
+            'z_step_m': z_step_m,
+            'voxel_origin_global': corner_global_pos.tolist() + [origin_frame.depth], # (x, y, z) of voxel [0,0,0]
+            'source_detection_stack_info': [f.info() for f in self.detection_stack[z_start:z_end]], # Basic info
+            'source_classification_stack_info': None,
+        }
+        # Use classification_stack passed during initialization
+        if self.classification_stack and z_start < len(self.classification_stack):
+             metadata['source_classification_stack_info'] = [
+                 f.info() for f in self.classification_stack[z_start:z_end]
+             ]
+
+        logMsg(f"Extracted volume shape: {volume.shape} centered near {center_global}")
+        return volume, metadata
+
+    def _save_ranked_cell(self, volume_data, metadata, rating, save_format, save_dir):
+        """Saves the extracted cell volume and metadata."""
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        cell_id = f"cell_{timestamp}_rating_{rating}"
+        filename_base = save_dir / cell_id
+
+        metadata['rating'] = rating
+        metadata['save_format'] = save_format
+        metadata['cell_id'] = cell_id
+
+        if save_format == 'MetaArray':
+            info = [
+                {'name': 'Z', 'units': 'm', 'values': np.arange(volume_data.shape[0]) * metadata['z_step_m'] + metadata['voxel_origin_global'][2]},
+                {'name': 'Y', 'units': 'm', 'values': np.arange(volume_data.shape[1]) * metadata['pixel_size_m'] + metadata['voxel_origin_global'][1]},
+                {'name': 'X', 'units': 'm', 'values': np.arange(volume_data.shape[2]) * metadata['pixel_size_m'] + metadata['voxel_origin_global'][0]},
+                metadata,
+            ]
+            ma = MetaArray(volume_data, info=info)
+            filepath = f"{filename_base}.ma"
+            try:
+                ma.write(filepath)
+                logMsg(f"Saved cell data to {filepath}")
+            except Exception:
+                printExc(f"Failed to write MetaArray file: {filepath}")
+                logMsg(f"Error writing MetaArray file: {filepath}", msgType='error')
+                # Re-raise or handle more gracefully?
+                raise
+
+        elif save_format == 'NWB':
+            logMsg("NWB saving not implemented yet.", msgType='warning')
+            filepath = f"{filename_base}.nwb"
+            logMsg(f"Placeholder: Would save cell data to {filepath}")
+            # TODO: Implement NWB saving logic here using pynwb
+
+        else:
+            logMsg(f"Unknown save format: {save_format}", msgType='error')
+            raise ValueError(f"Unknown save format: {save_format}")
 
 
 class AutomationDebugWindow(Qt.QWidget):
@@ -133,6 +279,7 @@ class AutomationDebugWindow(Qt.QWidget):
         self._current_detection_stack = None
         self._current_classification_stack = None # May be None
         self._previousTargets = [] # Used by autoTarget
+        self._open_ranking_windows = [] # Keep track of open windows
 
         self.ui.clearBtn.clicked.connect(self.clearBoundingBoxes)
         self.ui.zStackDetectBtn.setOpts(future_producer=self._detectNeuronsZStackWrapper, stoppable=True)
@@ -143,8 +290,8 @@ class AutomationDebugWindow(Qt.QWidget):
         self.ui.multiChannelEnableCheck.toggled.connect(self._updateMultiChannelState)
         self.ui.motionPlannerSelector.currentIndexChanged.connect(self._changeMotionPlanner)
 
-        self.ui.rankCellsBtn.setOpts(future_producer=self._rankCells, stoppable=True)
-        self.ui.rankCellsBtn.sigFinished.connect(self._handleRankCellsFinish)
+        # Connect regular button click
+        self.ui.rankCellsBtn.clicked.connect(self._rankCells)
         self.ui.selectRankDirBtn.clicked.connect(self._selectRankDir)
 
         self.ui.setTopLeftButton.clicked.connect(self._setTopLeft)
@@ -305,7 +452,8 @@ class AutomationDebugWindow(Qt.QWidget):
         self.ui.autoTargetBtn.setEnabled(working == self.ui.autoTargetBtn or not working)
         self.ui.testPipetteBtn.setEnabled(working == self.ui.testPipetteBtn or not working)
         self.ui.trackFeaturesBtn.setEnabled(working == self.ui.trackFeaturesBtn or not working)
-        self.ui.rankCellsBtn.setEnabled(working == self.ui.rankCellsBtn or not working)
+        # Rank button is now a regular button, manage its state based on _unranked_cells?
+        # self.ui.rankCellsBtn.setEnabled(len(self._unranked_cells) > 0) # Example: enable only if cells exist
 
     @property
     def cameraDevice(self) -> Camera:
@@ -601,28 +749,22 @@ class AutomationDebugWindow(Qt.QWidget):
             except Exception:
                 printExc(f"Could not create ranking save directory: {save_dir}")
                 logMsg(f"Error: Could not create save directory {save_dir}. Please select a valid directory.", msgType='error')
+                logMsg(f"Error: Could not create save directory {save_dir}. Please select a valid directory.", msgType='error')
+                # TODO: Show error dialog to user?
                 return # Need a valid directory to save
 
         if not self._unranked_cells:
-            logMsg("No unranked cells found. Running detection first...")
-            # We need to run detection and wait for it.
-            # Directly calling the future producer and waiting is cleaner than simulating button clicks.
-            detect_future = self._detectNeuronsZStackWrapper() # This returns a Future
-            _future.waitFor(detect_future)
-            if detect_future.wasInterrupted():
-                 logMsg("Detection interrupted, cannot rank cells.")
-                 return
-        # Results should now be populated by _handleDetectWrapperResults via the future's signal
-        if not self._unranked_cells:
-             logMsg("Detection ran, but no cells were found.")
-             return
+            logMsg("No unranked cells available. Run detection first.", msgType='warning')
+            # TODO: Show message to user?
+            return
 
         if not self._current_detection_stack:
-             logMsg("Detection stack data is missing, cannot rank.", msgType='error')
+             logMsg("Detection stack data is missing, cannot rank. Run detection first.", msgType='error')
+             # TODO: Show error dialog to user?
              return
 
         # --- Get next cell ---
-        # For now, just pop the first one. Could implement random selection later.
+        # Pop the first one. This modifies the list in place.
         cell_bounds = self._unranked_cells.pop(0)
         start, end = np.array(cell_bounds)
         center_global = (start + end) / 2.0

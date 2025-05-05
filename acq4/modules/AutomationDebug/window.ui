@@ -132,9 +132,9 @@
        </widget>
       </item>
       <item row="4" column="0" colspan="4">
-       <widget class="FutureButton" name="rankCellsBtn">
+       <widget class="QPushButton" name="rankCellsBtn">
         <property name="text">
-         <string>Rank Cells</string>
+         <string>Rank Next Cell</string>
         </property>
        </widget>
       </item>
@@ -325,13 +325,7 @@
    </item>
   </layout>
  </widget>
- <customwidgets>
-  <customwidget>
-   <class>FutureButton</class>
-   <extends>QPushButton</extends>
-   <header>acq4.util.future</header>
-  </customwidget>
- </customwidgets>
+ <customwidgets/>
  <resources/>
  <connections/>
 </ui>
