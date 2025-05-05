@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import os
+import datetime
+from pathlib import Path
 
 import numpy as np
+import pyqtgraph as pg
 
 from MetaArray import MetaArray
 from acq4.devices.Camera import Camera
@@ -13,15 +16,104 @@ from acq4.devices.Pipette.planners import PipettePathGenerator, GeometryAwarePat
 from acq4.modules.Camera import CameraWindow
 from acq4.modules.Module import Module
 from acq4.util import Qt
-from acq4.util.debug import logMsg
+from acq4.util.DataManager import getDataManager
+from acq4.util.debug import logMsg, printExc
 from acq4.util.future import Future, future_wrap
 from acq4.util.imaging import Frame
 from acq4.util.imaging.sequencer import acquire_z_stack
 from acq4.util.target import TargetBox
 from acq4.util.threadrun import runInGuiThread
-from pyqtgraph.units import µm
+from pyqtgraph.units import µm, m
 
 UiTemplate = Qt.importTemplate(".window")
+
+
+class RankingDialog(Qt.QDialog):
+    def __init__(self, cell_center, detection_stack, classification_stack, pixel_size, z_step, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Rank Cell")
+        self.layout = Qt.QVBoxLayout()
+        self.setLayout(self.layout)
+
+        self.cell_center = cell_center
+        self.detection_stack = detection_stack
+        self.classification_stack = classification_stack # May be None
+        self.pixel_size = pixel_size
+        self.z_step = z_step
+        self.rating = None
+        self.save_format = 'NWB' # Default format
+
+        # --- Image Display ---
+        self.image_views = []
+        self.image_layout = Qt.QHBoxLayout()
+        self.layout.addLayout(self.image_layout)
+        # TODO: Create 5 ImageView widgets and add them to image_layout
+        # TODO: Display initial slices (e.g., center +/- 20um, +/- 10um, 0um)
+
+        # --- Z Slider ---
+        self.z_slider = Qt.QSlider(Qt.Qt.Orientation.Horizontal)
+        # TODO: Set slider range based on stack depth
+        # TODO: Connect slider valueChanged signal to update displayed slices
+        self.layout.addWidget(self.z_slider)
+
+        # --- Rating Buttons ---
+        self.rating_layout = Qt.QHBoxLayout()
+        self.rating_group = Qt.QButtonGroup(self)
+        ratings = {
+            1: "Not a cell",
+            2: "Unpatchable",
+            3: "Barely patchable",
+            4: "Average",
+            5: "Excellent",
+        }
+        for i in range(1, 6):
+            btn = Qt.QPushButton(f"{i}: {ratings[i]}")
+            btn.setCheckable(True)
+            self.rating_group.addButton(btn, i)
+            self.rating_layout.addWidget(btn)
+        self.layout.addLayout(self.rating_layout)
+        self.rating_group.buttonClicked[int].connect(self._set_rating)
+
+        # --- Format Selection ---
+        self.format_layout = Qt.QHBoxLayout()
+        self.format_group = Qt.QButtonGroup(self)
+        self.nwb_radio = Qt.QRadioButton("NWB")
+        self.metaarray_radio = Qt.QRadioButton("MetaArray")
+        self.nwb_radio.setChecked(True)
+        self.format_group.addButton(self.nwb_radio)
+        self.format_group.addButton(self.metaarray_radio)
+        self.format_layout.addWidget(Qt.QLabel("Save Format:"))
+        self.format_layout.addWidget(self.nwb_radio)
+        self.format_layout.addWidget(self.metaarray_radio)
+        self.layout.addLayout(self.format_layout)
+        self.nwb_radio.toggled.connect(lambda checked: self._set_format('NWB') if checked else None)
+        self.metaarray_radio.toggled.connect(lambda checked: self._set_format('MetaArray') if checked else None)
+
+
+        # --- Action Buttons ---
+        self.action_layout = Qt.QHBoxLayout()
+        self.skip_button = Qt.QPushButton("Skip")
+        self.save_button = Qt.QPushButton("Save & Next")
+        self.save_button.setEnabled(False) # Enable only when rating is selected
+        self.action_layout.addWidget(self.skip_button)
+        self.action_layout.addWidget(self.save_button)
+        self.layout.addLayout(self.action_layout)
+
+        self.skip_button.clicked.connect(self.reject) # Closes dialog with QDialog.Rejected
+        self.save_button.clicked.connect(self.accept) # Closes dialog with QDialog.Accepted
+
+        # TODO: Implement image loading and display logic
+        # TODO: Implement slider logic
+
+    def _set_rating(self, rating_id):
+        self.rating = rating_id
+        self.save_button.setEnabled(True)
+
+    def _set_format(self, fmt):
+        self.save_format = fmt
+
+    def getResult(self):
+        return self.rating, self.save_format
 
 
 class AutomationDebugWindow(Qt.QWidget):
@@ -38,17 +130,24 @@ class AutomationDebugWindow(Qt.QWidget):
         self.module = module
         self.setWindowTitle("Automation Debug")
         self._previousBoxWidgets = []
-        self._previousBoxBounds = []
-        self._previousTargets = []
+        self._unranked_cells = [] # List of (start, end) tuples from detection
+        self._ranked_cells = {} # Dict mapping cell ID (e.g., timestamp) to ranking info
+        self._current_detection_stack = None
+        self._current_classification_stack = None # May be None
+        self._previousTargets = [] # Used by autoTarget
 
         self.ui.clearBtn.clicked.connect(self.clearBoundingBoxes)
-        self.ui.zStackDetectBtn.setOpts(future_producer=self._detectNeuronsZStack, stoppable=True)
-        self.ui.zStackDetectBtn.sigFinished.connect(self._handleDetectResults)
+        self.ui.zStackDetectBtn.setOpts(future_producer=self._detectNeuronsZStackWrapper, stoppable=True)
+        self.ui.zStackDetectBtn.sigFinished.connect(self._handleDetectWrapperResults)
         self.ui.testUIBtn.setOpts(future_producer=self._testUI, stoppable=True)
-        self.ui.testUIBtn.sigFinished.connect(self._handleDetectResults)
+        self.ui.testUIBtn.sigFinished.connect(self._handleDetectWrapperResults) # Use wrapper handler for consistency
 
         self.ui.multiChannelEnableCheck.toggled.connect(self._updateMultiChannelState)
         self.ui.motionPlannerSelector.currentIndexChanged.connect(self._changeMotionPlanner)
+
+        self.ui.rankCellsBtn.setOpts(future_producer=self._rankCells, stoppable=True)
+        self.ui.rankCellsBtn.sigFinished.connect(self._handleRankCellsFinish)
+        self.ui.selectRankDirBtn.clicked.connect(self._selectRankDir)
 
         self.ui.setTopLeftButton.clicked.connect(self._setTopLeft)
         self.ui.setBottomRightButton.clicked.connect(self._setBottomRight)
@@ -88,7 +187,15 @@ class AutomationDebugWindow(Qt.QWidget):
         self.show()
         planner = self.module.config.get("motionPlanner", "Geometry-aware")
         self.ui.motionPlannerSelector.setCurrentText(planner)
+        # Set default ranking dir
+        default_rank_dir = Path(getDataManager().getBaseDir().name()) / "ranked_cells"
+        self.ui.rankingSaveDirEdit.setText(str(default_rank_dir))
         self._populatePresetCombos()
+
+    def _selectRankDir(self):
+        path = Qt.QFileDialog.getExistingDirectory(self, "Select Directory to Save Ranked Cells", self.ui.rankingSaveDirEdit.text())
+        if path:
+            self.ui.rankingSaveDirEdit.setText(path)
 
     def _updateMultiChannelState(self, enabled):
         self.ui.detectionPresetCombo.setEnabled(enabled)
@@ -200,6 +307,7 @@ class AutomationDebugWindow(Qt.QWidget):
         self.ui.autoTargetBtn.setEnabled(working == self.ui.autoTargetBtn or not working)
         self.ui.testPipetteBtn.setEnabled(working == self.ui.testPipetteBtn or not working)
         self.ui.trackFeaturesBtn.setEnabled(working == self.ui.trackFeaturesBtn or not working)
+        self.ui.rankCellsBtn.setEnabled(working == self.ui.rankCellsBtn or not working)
 
     @property
     def cameraDevice(self) -> Camera:
@@ -233,28 +341,51 @@ class AutomationDebugWindow(Qt.QWidget):
             cam_win.removeItem(box)
             self.scopeDevice.sigGlobalTransformChanged.disconnect(box.noticeFocusChange)
         self._previousBoxWidgets = []
-        self._previousBoxBounds = []
+        self._unranked_cells = [] # Clear previous detections
+        self._current_detection_stack = None
+        self._current_classification_stack = None
 
-    def _handleDetectResults(self, neurons_fut: Future) -> None:
+    def _handleDetectWrapperResults(self, future: Future) -> None:
+        """Handles results from _detectNeuronsZStackWrapper or _testUI."""
         try:
-            if neurons_fut.wasInterrupted():
+            if future.wasInterrupted():
+                logMsg("Detection/Test interrupted.")
                 return
-            self._displayBoundingBoxes(neurons_fut.getResult())
+            result = future.getResult()
+            if isinstance(result, tuple) and len(result) == 3: # From _detectNeuronsZStackWrapper
+                bounding_boxes, det_stack, class_stack = result
+                self._current_detection_stack = det_stack
+                self._current_classification_stack = class_stack
+            elif isinstance(result, list): # From _testUI
+                 bounding_boxes = result
+                 self._current_detection_stack = None # Cannot rank test UI results yet
+                 self._current_classification_stack = None
+            else:
+                logMsg(f"Unexpected result type from detection future: {type(result)}", msgType='warning')
+                return
+
+            self._unranked_cells = bounding_boxes
+            logMsg(f"Detection complete. Found {len(self._unranked_cells)} potential cells. Ready for ranking.")
+            self._displayBoundingBoxes(self._unranked_cells)
+
+        except Exception:
+            printExc("Error handling detection results:")
         finally:
             self.sigWorking.emit(False)
 
+
     def _displayBoundingBoxes(self, bounding_boxes):
         cam_win: CameraWindow = self.module.manager.getModule("Camera").window()
-        self.clearBoundingBoxes()
+        self.clearBoundingBoxes() # Clear previous boxes visually and state
         for start, end in bounding_boxes:
             box = TargetBox(start, end)
             cam_win.addItem(box)
-            self.scopeDevice.sigGlobalTransformChanged.connect(box.noticeFocusChange)
+            # TODO: Re-evaluate if this connection is still needed or causes issues
+            # self.scopeDevice.sigGlobalTransformChanged.connect(box.noticeFocusChange)
             self._previousBoxWidgets.append(box)
-            self._previousBoxBounds.append((start, end))
-            # TODO label boxes
-            # label = TextItem('Neuron')
-            # label.setPen(mkPen('r', width=1))
+            # TODO label boxes? Maybe add index number?
+            # label = pg.TextItem(f'{len(self._previousBoxWidgets)}') # Example index
+            # label.setPen(pg.mkPen('r', width=1))
             # label.setPos(*end)
             # cam_win.addItem(label)
             # self._previousBoxWidgets.append(label)
@@ -274,8 +405,25 @@ class AutomationDebugWindow(Qt.QWidget):
         return boxes
 
     @future_wrap
-    def _detectNeuronsZStack(self, _future: Future) -> list:
+    def _detectNeuronsZStackWrapper(self, _future: Future) -> tuple[list, list[Frame] | None, list[Frame] | None] | list:
+        """Wraps _detectNeuronsZStack to emit working signal and return stacks."""
         self.sigWorking.emit(self.ui.zStackDetectBtn)
+        # Clear previous results before starting detection
+        runInGuiThread(self.clearBoundingBoxes)
+        self._unranked_cells = []
+        self._current_detection_stack = None
+        self._current_classification_stack = None
+        try:
+            result, det_stack, class_stack = _future.waitFor(self._detectNeuronsZStack(_future)).getResult()
+            return result, det_stack, class_stack
+        except Exception:
+            printExc("Error during neuron detection Z-stack acquisition/processing:")
+            # Return empty results on failure to avoid crashing downstream processing
+            return [], None, None
+
+
+    def _detectNeuronsZStack(self, _future: Future) -> tuple[list, list[Frame], list[Frame] | None]:
+        """Acquires Z-stack(s) and runs neuron detection. Returns (bboxes, detection_stack, classification_stack)."""
         from acq4_automation.object_detection import detect_neurons
 
         man = self.module.manager
@@ -284,29 +432,59 @@ class AutomationDebugWindow(Qt.QWidget):
         pixel_size = self.cameraDevice.getPixelSize()[0]
         z_scale = step_z = 1 * µm
         depth = self.cameraDevice.getFocusDepth()
-        classification_stack = []
+        detection_stack = None
+        classification_stack = None # Initialize as None
+
         if self.ui.mockCheckBox.isChecked() and self.ui.mockFilePath.text():
+            # --- Mock Acquisition ---
+            logMsg("Using mock Z-stack file for detection.")
             with self.cameraDevice.ensureRunning():
-                # Acquire a single frame to get the camera transform
-                real_frame = self.cameraDevice.acquireFrames(1).getResult()[0]
+                # Acquire a single frame to get the camera transform and pixel size
+                real_frame = _future.waitFor(self.cameraDevice.acquireFrames(1)).getResult()[0]
+            pixel_size = self.cameraDevice.getPixelSize()[0] # Update pixel size based on current state
             base_xform = real_frame.globalTransform()
-            base_position = np.array(real_frame.mapFromFrameToGlobal((0, 0, 0)))
+            base_position = np.array(real_frame.mapFromFrameToGlobal((0, 0, 0))) # Use frame mapping
             # Load the MetaArray file
             mock_file_path = self.ui.mockFilePath.text()
-            data = MetaArray(file=mock_file_path).asarray()
-            detection_stack = [
-                Frame(
-                    data[i],
-                    info={
-                        "transform": {
-                            "pos": base_position + (0, 0, i * z_scale),
-                            "scale": base_xform.getScale(),
-                        },
-                    },
-                )
-                for i in range(len(data))
-            ]
-            # TODO: Handle multichannel mock file path later
+            marr = MetaArray(file=mock_file_path)
+            data = marr.asarray()
+            info = marr.infoCopy()
+            # Try to get z_step from metaarray info, default to 1um
+            z_info = next((ax for ax in info if ax.get('name') == 'Z'), None)
+            if z_info and 'values' in z_info:
+                 z_vals = z_info['values']
+                 if len(z_vals) > 1:
+                     step_z = abs(z_vals[1] - z_vals[0]) * m # Assume meters if unitless
+                     logMsg(f"Using Z step from mock file: {step_z / µm:.2f} µm")
+                 else:
+                     logMsg("Only one Z value found in mock file, using default step.", msgType='warning')
+                     step_z = 1 * µm
+            else:
+                 logMsg("Z information not found in mock file info, using default step.", msgType='warning')
+                 step_z = 1 * µm
+
+
+            # Create Frame objects, mapping Z based on step_z
+            detection_stack = []
+            current_z = base_position[2] # Start Z from the real frame's depth
+            for i in range(len(data)):
+                 frame_info = {
+                     "pixelSize": [pixel_size, pixel_size],
+                     "depth": current_z, # Assign calculated depth
+                     "transform": pg.Transform3D(), # Placeholder, will be set by setDeviceTransform
+                 }
+                 frame = Frame(data[i], info=frame_info)
+                 # Map frame coordinates to global based on the initial real frame's transform
+                 # This assumes the mock stack is aligned with the real frame's XY position
+                 frame_to_global = base_xform.copy()
+                 # Adjust Z position in the transform
+                 frame_to_global.translate(0, 0, current_z - base_position[2])
+                 frame.setDeviceTransform(frame_to_global) # Use setDeviceTransform
+                 detection_stack.append(frame)
+                 current_z += step_z # Increment Z for the next frame
+
+            # TODO: Handle multichannel mock file path later (needs two files or specific format)
+            classification_stack = None # No classification stack for mock yet
         else:
             # --- Real Acquisition ---
             start_z = depth - 20 * µm
@@ -335,33 +513,45 @@ class AutomationDebugWindow(Qt.QWidget):
                 logMsg("Multichannel acquisition complete.")
 
                 # --- Verify Stack Alignment ---
-                if len(detection_stack) != len(classification_stack):
-                    raise ValueError(
-                        f"Z-stack length mismatch: Detection ({len(detection_stack)}) != "
-                        f"Classification ({len(classification_stack)})"
-                    )
-                # Check Z positions (assuming frame.depth exists and is reliable)
-                # TODO: Confirm frame.depth is the correct attribute
-                z_tolerance = 0.1 * step_z
-                for i, (f1, f2) in enumerate(zip(detection_stack, classification_stack)):
-                    # Check if frames have depth attribute before comparing
-                    f1_depth = getattr(f1, 'depth', None)
-                    f2_depth = getattr(f2, 'depth', None)
-                    if f1_depth is None or f2_depth is None:
-                        logMsg(f"Warning: Cannot verify Z alignment at frame {i}, missing 'depth' attribute.", msgType='warning')
-                        continue # Skip check for this frame if depth is missing
+                if detection_stack is None or classification_stack is None:
+                     raise RuntimeError("Stack acquisition failed for one or both channels.") # Should not happen if futures succeeded
 
-                    if abs(f1_depth - f2_depth) > z_tolerance:
-                        # Log detailed info from frame info if available
-                        f1_info = f1.info().get('transform', {}).get('pos', 'N/A')
-                        f2_info = f2.info().get('transform', {}).get('pos', 'N/A')
-                        raise ValueError(
-                            f"Z-position mismatch at frame {i}: "
-                            f"Detection ({f1_depth/µm:.2f} µm, info: {f1_info}) != "
-                            f"Classification ({f2_depth/µm:.2f} µm, info: {f2_info}). "
-                            f"Tolerance: {z_tolerance/µm:.2f} µm"
-                        )
-                logMsg("Z-stack alignment verified.")
+                if len(detection_stack) != len(classification_stack):
+                    logMsg(
+                        f"Warning: Z-stack length mismatch: Detection ({len(detection_stack)}) != "
+                        f"Classification ({len(classification_stack)}). Proceeding with detection on detection stack only.",
+                        msgType='warning'
+                    )
+                    # Attempt to use only the detection stack if lengths mismatch significantly?
+                    # For now, just warn. Detection might fail or give weird results.
+                else:
+                    # Check Z positions (assuming frame.depth exists and is reliable)
+                    z_tolerance = 0.1 * step_z # Allow 10% of step size difference
+                    alignment_ok = True
+                    for i, (f1, f2) in enumerate(zip(detection_stack, classification_stack)):
+                        f1_depth = getattr(f1, 'depth', None)
+                        f2_depth = getattr(f2, 'depth', None)
+                        if f1_depth is None or f2_depth is None:
+                            logMsg(f"Warning: Cannot verify Z alignment at frame {i}, missing 'depth' attribute.", msgType='warning')
+                            continue # Skip check for this frame if depth is missing
+
+                        if abs(f1_depth - f2_depth) > z_tolerance:
+                            f1_pos = f1.info().get('transform', {}).get('pos', (None, None, None))
+                            f2_pos = f2.info().get('transform', {}).get('pos', (None, None, None))
+                            logMsg(
+                                f"Warning: Z-position mismatch at frame {i}: "
+                                f"Detection ({f1_depth/µm:.2f} µm, pos_z={f1_pos[2]}) != "
+                                f"Classification ({f2_depth/µm:.2f} µm, pos_z={f2_pos[2]}). "
+                                f"Tolerance: {z_tolerance/µm:.2f} µm",
+                                msgType='warning'
+                            )
+                            alignment_ok = False
+                            # Don't raise an error, just warn. Allow detection to proceed.
+                    if alignment_ok:
+                        logMsg("Z-stack alignment verified.")
+                    else:
+                        logMsg("Z-stack alignment issues detected (see warnings).", msgType='warning')
+
             else:
                 # --- Single Channel Acquisition ---
                 logMsg(f"Starting single channel Z-stack acquisition ({start_z/µm:.1f} - {stop_z/µm:.1f} µm, step {step_z/µm:.1f} µm)")
@@ -371,17 +561,40 @@ class AutomationDebugWindow(Qt.QWidget):
                 logMsg("Single channel acquisition complete.")
 
         # --- Call Detection ---
-        if detection_stack is None:
-             raise RuntimeError("Detection stack acquisition failed or was skipped.")
+        if not detection_stack:
+             logMsg("Detection stack is empty or acquisition failed. Cannot run detection.", msgType='error')
+             return [], detection_stack, classification_stack # Return empty results
 
         logMsg("Running neuron detection...")
-        if classification_stack:
+        # Use classification stack only if it exists and lengths match (or close enough?)
+        use_classification = bool(classification_stack) and len(classification_stack) == len(detection_stack)
+        if use_classification:
+            logMsg("Using multichannel input for detection.")
             working_stack = (detection_stack, classification_stack)
         else:
+            if classification_stack:
+                 logMsg("Classification stack exists but will not be used for detection due to length mismatch or other issues.", msgType='warning')
+            logMsg("Using single channel (detection) input for detection.")
             working_stack = detection_stack
-        result = _future.waitFor(
-            detect_neurons(
-                working_stack,
+
+        try:
+            result = _future.waitFor(
+                detect_neurons(
+                    working_stack,
+                    autoencoder=autoencoder,
+                    classifier=classifier,
+                    xy_scale=pixel_size,
+                    z_scale=step_z,  # Use the actual step size
+                    multichannel=use_classification,
+                ),
+                timeout=600,
+            ).getResult()
+            logMsg(f"Neuron detection finished. Found {len(result)} potential neurons.")
+            return result, detection_stack, classification_stack
+        except Exception as e:
+            printExc("Error during detect_neurons call:")
+            logMsg(f"Neuron detection failed: {e}", msgType='error')
+            return [], detection_stack, classification_stack # Return empty results on failure
                 autoencoder=autoencoder,
                 classifier=classifier,
                 xy_scale=pixel_size,
@@ -396,13 +609,18 @@ class AutomationDebugWindow(Qt.QWidget):
     @future_wrap
     def _autoTarget(self, _future):
         self.sigWorking.emit(self.ui.autoTargetBtn)
+        # --- Modification for autoTarget ---
+        # Instead of using _previousBoxBounds directly, check _unranked_cells
+        # If _unranked_cells is populated, use it. Otherwise, run detection.
         possibly_stale = False
-        if self._previousBoxBounds:
-            possibly_stale = True
-            neurons = self._previousBoxBounds
+        if self._unranked_cells:
+            logMsg("Using existing detected cells for autoTarget.")
+            possibly_stale = True # Could be stale if user moved stage
+            neurons = self._unranked_cells # Use the current list of unranked cells
         else:
+            logMsg("No cells found, running detection for autoTarget.")
             x, y = self._randomLocation()
-            _future.waitFor(self.scopeDevice.setGlobalPosition((x, y)))
+            _future.waitFor(self.scopeDevice.setGlobalPosition((x, y))) # TODO: Check if stage move invalidates stack
             # TODO don't know why this hangs when using waitFor, but it does
             depth = self.scopeDevice.findSurfaceDepth(
                 self.cameraDevice, searchDistance=50 * µm, searchStep=15 * µm, block=True

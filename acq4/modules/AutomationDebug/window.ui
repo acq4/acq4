@@ -131,6 +131,49 @@
         </property>
        </widget>
       </item>
+      <item row="4" column="0" colspan="4">
+       <widget class="FutureButton" name="rankCellsBtn">
+        <property name="text">
+         <string>Rank Cells</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="rankingGroup">
+     <property name="title">
+      <string>Cell Ranking</string>
+     </property>
+     <layout class="QHBoxLayout" name="rankingLayout">
+      <item>
+       <widget class="QLabel" name="label_6">
+        <property name="text">
+         <string>Save Directory:</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLineEdit" name="rankingSaveDirEdit">
+        <property name="readOnly">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="selectRankDirBtn">
+        <property name="text">
+         <string>...</string>
+        </property>
+        <property name="maximumSize">
+         <size>
+          <width>30</width>
+          <height>16777215</height>
+         </size>
+        </property>
+       </widget>
+      </item>
      </layout>
     </widget>
    </item>
