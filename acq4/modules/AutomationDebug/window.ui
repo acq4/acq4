@@ -325,7 +325,13 @@
    </item>
   </layout>
  </widget>
- <customwidgets/>
+ <customwidgets>
+  <customwidget>
+   <class>FutureButton</class>
+   <extends>QPushButton</extends>
+   <header>acq4.util.future</header>
+  </customwidget>
+ </customwidgets>
  <resources/>
  <connections/>
 </ui>
