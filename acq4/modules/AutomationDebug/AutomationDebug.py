@@ -102,7 +102,7 @@ class RankingWindow(Qt.QWidget):
         self.format_group = Qt.QButtonGroup(self)
         self.nwb_radio = Qt.QRadioButton("NWB")
         self.metaarray_radio = Qt.QRadioButton("MetaArray")
-        self.nwb_radio.setChecked(True)
+        self.metaarray_radio.setChecked(True)  # Default to MetaArray
         self.format_group.addButton(self.nwb_radio)
         self.format_group.addButton(self.metaarray_radio)
         self.format_layout.addWidget(Qt.QLabel("Save Format:"))
@@ -146,9 +146,9 @@ class RankingWindow(Qt.QWidget):
         self.z_slider.setMaximum(n_frames - 1)
 
         # Find the Z index closest to the cell center
-        depths = np.array([frame.depth for frame in self.detection_stack])
+        self.depths = np.array([frame.depth for frame in self.detection_stack])
         self.center_z_global = self.cell_center[2]
-        self.center_z_idx = np.argmin(np.abs(depths - self.center_z_global))
+        self.center_z_idx = np.argmin(np.abs(self.depths - self.center_z_global))
 
         # Set slider to the center Z index initially
         self.z_slider.setValue(self.center_z_idx) # This will trigger _update_displayed_slices
@@ -159,34 +159,80 @@ class RankingWindow(Qt.QWidget):
             self._update_displayed_slices(self.center_z_idx)
 
 
-    def _update_displayed_slices(self, current_center_z_idx):
-        """Updates the 5 image views based on the current_center_z_idx from the slider."""
-        if not self.detection_stack or len(self.detection_stack) == 0:
+    def _update_displayed_slices(self, current_slider_idx):
+        """Updates the 5 image views based on the current_slider_idx from the Z-slider."""
+        if not self.detection_stack or len(self.detection_stack) == 0 or self.depths is None:
             return
 
         n_frames = len(self.detection_stack)
-        # Define the relative Z indices for the 5 views (0 is the center view)
-        # These are offsets in terms of number of frames/slices
-        # We need to convert µm offsets to frame offsets
-        if self.z_step == 0: # Avoid division by zero if z_step is not set
-            logMsg("Z-step is zero, cannot calculate slice offsets.", msgType="warning")
-            slice_idx_offsets = [0, 0, 0, 0, 0] # Show the same slice
+        if n_frames == 0:
+            return
+
+        # current_slider_idx is the Z-index for the 3rd (middle) image view
+        # Ensure current_slider_idx is valid
+        current_slider_idx = np.clip(current_slider_idx, 0, n_frames - 1)
+        
+        depth_of_image_3_global = self.depths[current_slider_idx]
+        relative_depth_of_image_3 = depth_of_image_3_global - self.center_z_global
+
+        target_z_indices = [0] * 5
+
+        # Image 1 (index 0): -20µm from cell center
+        target_depth_global_img1 = self.center_z_global - 20 * µm
+        target_z_indices[0] = np.argmin(np.abs(self.depths - target_depth_global_img1))
+
+        # Image 5 (index 4): +20µm from cell center
+        target_depth_global_img5 = self.center_z_global + 20 * µm
+        target_z_indices[4] = np.argmin(np.abs(self.depths - target_depth_global_img5))
+
+        # Image 3 (index 2): Directly from slider
+        target_z_indices[2] = current_slider_idx
+
+        # Image 2 (index 1):
+        # Relative to cell_center_z: between -19µm and -10µm.
+        # Moves from -10µm towards image_3 if image_3 is deeper than -10µm.
+        # Stays 1µm shallower than image_3 in that case.
+        if relative_depth_of_image_3 >= -10 * µm:
+            target_depth_relative_img2 = -10 * µm
         else:
-            # Offsets in µm: -20, -10, 0, +10, +20
-            um_offsets = [-20*µm, -10*µm, 0*µm, 10*µm, 20*µm]
-            slice_idx_offsets = [int(round(offset / self.z_step)) for offset in um_offsets]
+            target_depth_relative_img2 = relative_depth_of_image_3 + 1 * µm
+        target_depth_relative_img2 = max(target_depth_relative_img2, -19 * µm) # Clamp lower bound
+        target_depth_relative_img2 = min(target_depth_relative_img2, -1 * µm) # Ensure it's shallower than 0 if possible, and not too close to image 3 if image 3 is near 0
+        target_depth_global_img2 = self.center_z_global + target_depth_relative_img2
+        target_z_indices[1] = np.argmin(np.abs(self.depths - target_depth_global_img2))
+        # Ensure image 2 is not deeper than image 3, and at least one slice apart if possible
+        if target_z_indices[1] >= target_z_indices[2] and target_z_indices[2] > 0 :
+             target_z_indices[1] = target_z_indices[2] -1
+
+
+        # Image 4 (index 3):
+        # Relative to cell_center_z: between +10µm and +19µm.
+        # Moves from +10µm towards image_3 if image_3 is shallower than +10µm.
+        # Stays 1µm deeper than image_3 in that case.
+        if relative_depth_of_image_3 <= 10 * µm:
+            target_depth_relative_img4 = 10 * µm
+        else:
+            target_depth_relative_img4 = relative_depth_of_image_3 - 1 * µm
+        target_depth_relative_img4 = min(target_depth_relative_img4, 19 * µm) # Clamp upper bound
+        target_depth_relative_img4 = max(target_depth_relative_img4, 1 * µm) # Ensure it's deeper than 0 if possible
+        target_depth_global_img4 = self.center_z_global + target_depth_relative_img4
+        target_z_indices[3] = np.argmin(np.abs(self.depths - target_depth_global_img4))
+        # Ensure image 4 is not shallower than image 3, and at least one slice apart if possible
+        if target_z_indices[3] <= target_z_indices[2] and target_z_indices[2] < n_frames -1:
+            target_z_indices[3] = target_z_indices[2] + 1
+
 
         for i, iv in enumerate(self.image_views):
-            target_z_idx = current_center_z_idx + slice_idx_offsets[i]
-            
-            # Clamp the index to be within the stack bounds
-            display_z_idx = np.clip(target_z_idx, 0, n_frames - 1)
+            # Clamp the final index to be within the stack bounds
+            display_z_idx = np.clip(target_z_indices[i], 0, n_frames - 1)
             
             frame_data = self.detection_stack[display_z_idx].data()
-            iv.setImage(frame_data.T) # Transpose for correct orientation in ImageView
-            # TODO: Add label to indicate the Z depth of the slice?
-            # For example, using iv.getView().setTitle(f"Z: {self.detection_stack[display_z_idx].depth / µm:.1f} µm")
-            # but this might be too verbose. Consider a simpler indicator or a shared label.
+            iv.setImage(frame_data.T, autoLevels=True) # Transpose and autoLevels
+            # Optional: Add title to show depth
+            # actual_depth_um = self.depths[display_z_idx] / µm
+            # center_depth_um = self.center_z_global / µm
+            # iv.getView().setTitle(f"Z: {actual_depth_um:.1f} (Rel: {actual_depth_um - center_depth_um:.1f}) µm")
+
 
     def _save_and_close(self):
         if self.rating is None:
