@@ -21,6 +21,7 @@ from acq4.util.imaging import Frame
 from acq4.util.imaging.sequencer import acquire_z_stack
 from acq4.util.target import TargetBox
 from acq4.util.threadrun import runInGuiThread
+import pyqtgraph as pg
 from pyqtgraph.units import µm, m
 
 UiTemplate = Qt.importTemplate(".window")
@@ -60,14 +61,23 @@ class RankingWindow(Qt.QWidget):
         self.image_views = []
         self.image_layout = Qt.QHBoxLayout()
         self.layout.addLayout(self.image_layout)
-        # TODO: Create 5 ImageView widgets and add them to image_layout
-        # TODO: Display initial slices (relative to center Z: ±20µm, ±10µm, 0µm)
+        for _ in range(5):
+            iv = pg.ImageView()
+            # Basic styling, can be expanded
+            iv.ui.histogram.hide()
+            iv.ui.roiBtn.hide()
+            iv.ui.menuBtn.hide()
+            self.image_views.append(iv)
+            self.image_layout.addWidget(iv)
 
         # --- Z Slider ---
         self.z_slider = Qt.QSlider(Qt.Qt.Orientation.Horizontal)
-        # TODO: Set slider range based on stack depth
-        # TODO: Connect slider valueChanged signal to update displayed slices
+        self.z_slider.setMinimum(0)
+        # Max will be set in _load_cell_data
+        self.z_slider.setPageStep(1)
+        self.z_slider.setSingleStep(1)
         self.layout.addWidget(self.z_slider)
+        self.z_slider.valueChanged.connect(self._update_displayed_slices)
 
         # --- Rating Buttons ---
         self.rating_layout = Qt.QHBoxLayout()
@@ -128,9 +138,55 @@ class RankingWindow(Qt.QWidget):
         self.save_format = fmt
 
     def _load_cell_data(self):
-        # TODO Placeholder: This is where you'd load the 5 slices into self.image_views
-        #      and configure the self.z_slider based on self.detection_stack depth.
-        logMsg("RankingWindow: _load_cell_data() - Implement me!")
+        if not self.detection_stack or len(self.detection_stack) == 0:
+            logMsg("RankingWindow: No detection stack data to load.", msgType="error")
+            return
+
+        n_frames = len(self.detection_stack)
+        self.z_slider.setMaximum(n_frames - 1)
+
+        # Find the Z index closest to the cell center
+        depths = np.array([frame.depth for frame in self.detection_stack])
+        self.center_z_global = self.cell_center[2]
+        self.center_z_idx = np.argmin(np.abs(depths - self.center_z_global))
+
+        # Set slider to the center Z index initially
+        self.z_slider.setValue(self.center_z_idx) # This will trigger _update_displayed_slices
+
+        # Initial display will be handled by the slider's valueChanged signal
+        # or we can call it directly if the value doesn't change (e.g. if center_z_idx is 0)
+        if self.z_slider.value() == self.center_z_idx:
+            self._update_displayed_slices(self.center_z_idx)
+
+
+    def _update_displayed_slices(self, current_center_z_idx):
+        """Updates the 5 image views based on the current_center_z_idx from the slider."""
+        if not self.detection_stack or len(self.detection_stack) == 0:
+            return
+
+        n_frames = len(self.detection_stack)
+        # Define the relative Z indices for the 5 views (0 is the center view)
+        # These are offsets in terms of number of frames/slices
+        # We need to convert µm offsets to frame offsets
+        if self.z_step == 0: # Avoid division by zero if z_step is not set
+            logMsg("Z-step is zero, cannot calculate slice offsets.", msgType="warning")
+            slice_idx_offsets = [0, 0, 0, 0, 0] # Show the same slice
+        else:
+            # Offsets in µm: -20, -10, 0, +10, +20
+            um_offsets = [-20*µm, -10*µm, 0*µm, 10*µm, 20*µm]
+            slice_idx_offsets = [int(round(offset / self.z_step)) for offset in um_offsets]
+
+        for i, iv in enumerate(self.image_views):
+            target_z_idx = current_center_z_idx + slice_idx_offsets[i]
+            
+            # Clamp the index to be within the stack bounds
+            display_z_idx = np.clip(target_z_idx, 0, n_frames - 1)
+            
+            frame_data = self.detection_stack[display_z_idx].data()
+            iv.setImage(frame_data.T) # Transpose for correct orientation in ImageView
+            # TODO: Add label to indicate the Z depth of the slice?
+            # For example, using iv.getView().setTitle(f"Z: {self.detection_stack[display_z_idx].depth / µm:.1f} µm")
+            # but this might be too verbose. Consider a simpler indicator or a shared label.
 
     def _save_and_close(self):
         if self.rating is None:
