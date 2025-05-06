@@ -170,15 +170,20 @@ class Microscope(Device, OptomechDevice):
         with self.lock:
             return list(self.selectedObjectives.values())
 
-    def loadPreset(self, name):
+    @future_wrap
+    def loadPreset(self, name, _future):
         conf = self.presets[name]
+        futures = []
         for dev_name, state in conf.items():
             if dev_name == "objective":
                 self.setObjectiveIndex(state)
             elif dev_name != "hotkey":
                 dev = self.dm.getDevice(dev_name)
                 if hasattr(dev, "loadPreset"):
-                    dev.loadPreset(state)
+                    futures.append(dev.loadPreset(state))
+        for fut in futures:
+            if fut is not None:
+                _future.waitFor(fut)
 
     def handlePresetHotkey(self, kb_dev, changes, name):
         key, pressed = changes.get('keys', [])[0]
