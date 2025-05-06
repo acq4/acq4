@@ -122,3 +122,19 @@ When working with this codebase:
 Documentation is generated with Sphinx:
 - Online documentation: https://acq4.readthedocs.io/
 - Source files in `doc/source/`
+
+## Git Commit Standards
+
+When committing changes with Claude Code:
+- Include "(claude)" in the Co-Authored-By line
+- Use the standard commit message format:
+```
+<type>: <description>
+
+<optional detailed explanation>
+
+🤖 Generated with [Claude Code](https://claude.ai/code)
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+```
+- Commit types: feat, fix, docs, style, refactor, perf, test, chore
