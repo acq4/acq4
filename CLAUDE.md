@@ -24,7 +24,7 @@ git clone https://github.com/acq4/acq4.git
 cd acq4
 
 # Create and activate a conda environment
-conda env create --name=acq4 --file=tools/requirements/qt5-generic.yml
+conda env create --name=acq4 --file=tools/requirements/acq4-torch.yml
 conda activate acq4
 
 # Install ACQ4 in development mode
@@ -103,19 +103,20 @@ Data management handles experiment data organization:
 ## Code Conventions
 
 - Style generally follows PEP8 with some exceptions
-- Variable names use camelCase rather than snake_case (for consistency with Qt)
+- Variable names use camelCase rather than snake_case in any class/context that touches Qt, snake_case otherwise.
 - Documentation uses numpy docstring format
-- Pull requests should be made against the "develop" branch
+- Pull requests should be made against the "main" branch
+- All values should be in unscaled SI units. Use the `acq4.util.units` module for more readable scales. 
 
 ## Common Development Tasks
 
 When working with this codebase:
 
 1. Follow existing patterns for adding new devices or modules
-2. Consider implementing new features as extension modules
-3. Use the Interface system for component discovery
-4. For UI work, check existing modules for patterns and conventions
-5. Be careful with device resource locking and release
+2. Use the Interface system for component discovery
+3. For UI work, check existing modules for patterns and conventions
+4. Be careful with device resource locking and release
+5. Be careful with threads and Qt event loops
 
 ## Documentation
 
@@ -124,9 +125,7 @@ Documentation is generated with Sphinx:
 - Source files in `doc/source/`
 
 ## Git Commit Standards
-
-When committing changes with Claude Code:
-- Include "(claude)" in an explicit --author
+- When committing changes that Claude wrote, include "(claude)" in an explicit --author
 - Use the standard commit message format:
 ```
 <type>: <description>
