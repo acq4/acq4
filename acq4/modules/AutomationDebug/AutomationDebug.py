@@ -50,6 +50,8 @@ class RankingWindow(Qt.QWidget):
         self.save_dir = save_dir
         self.rating = None
         self.save_format = "MetaArray"
+        self.volume_data = None
+        self.depths = None
 
         self.setWindowTitle(
             f"Rank Cell @ ({cell_center[0]/µm:.0f}, {cell_center[1]/µm:.0f}, {cell_center[2]/µm:.0f}) µm"
@@ -124,9 +126,7 @@ class RankingWindow(Qt.QWidget):
         self.skip_button.clicked.connect(self.close)  # Just close the window
         self.save_button.clicked.connect(self._save_and_close)
 
-        # TODO: Implement image loading and display logic
-        # TODO: Implement slider logic
-        self._load_cell_data()  # Placeholder call
+        self._load_cell_data()
 
     def _set_rating(self, rating_id):
         self.rating = rating_id
@@ -139,100 +139,55 @@ class RankingWindow(Qt.QWidget):
 
     def _load_cell_data(self):
         if not self.detection_stack or len(self.detection_stack) == 0:
-            logMsg("RankingWindow: No detection stack data to load.", msgType="error")
-            return
-
-        n_frames = len(self.detection_stack)
-        self.z_slider.setMaximum(n_frames - 1)
+            raise ValueError("RankingWindow: No detection stack data to load.")
 
         # Find the Z index closest to the cell center
         self.depths = np.array([frame.depth for frame in self.detection_stack])
         self.center_z_global = self.cell_center[2]
-        self.center_z_idx = np.argmin(np.abs(self.depths - self.center_z_global))
+
+        self.volume_data, _ = self._extract_cell_volume(self.cell_center, cube_size=20 * µm)
+        n_frames = len(self.volume_data)
+        self.center_z_idx = n_frames // 2
 
         # Set slider to the center Z index initially
-        self.z_slider.setValue(self.center_z_idx) # This will trigger _update_displayed_slices
-
-        # Initial display will be handled by the slider's valueChanged signal
-        # or we can call it directly if the value doesn't change (e.g. if center_z_idx is 0)
-        if self.z_slider.value() == self.center_z_idx:
-            self._update_displayed_slices(self.center_z_idx)
-
+        self.z_slider.setMaximum(n_frames - 1)
+        self.z_slider.setValue(self.center_z_idx)  # This should trigger _update_displayed_slices
 
     def _update_displayed_slices(self, current_slider_idx):
         """Updates the 5 image views based on the current_slider_idx from the Z-slider."""
-        if not self.detection_stack or len(self.detection_stack) == 0 or self.depths is None:
+        if self.volume_data is None or len(self.volume_data) == 0 or self.depths is None:
             return
 
-        n_frames = len(self.detection_stack)
+        n_frames = len(self.volume_data)
         if n_frames == 0:
             return
 
         # current_slider_idx is the Z-index for the 3rd (middle) image view
         # Ensure current_slider_idx is valid
-        current_slider_idx = np.clip(current_slider_idx, 0, n_frames - 1)
+        current_slider_idx = np.clip(current_slider_idx, 2, n_frames - 3)
         
-        depth_of_image_3_global = self.depths[current_slider_idx]
-        relative_depth_of_image_3 = depth_of_image_3_global - self.center_z_global
-
         target_z_indices = [0] * 5
 
-        # Image 1 (index 0): -20µm from cell center
-        target_depth_global_img1 = self.center_z_global - 20 * µm
-        target_z_indices[0] = np.argmin(np.abs(self.depths - target_depth_global_img1))
+        # Image 1 (index 0): first frame
+        target_z_indices[0] = 0
 
-        # Image 5 (index 4): +20µm from cell center
-        target_depth_global_img5 = self.center_z_global + 20 * µm
-        target_z_indices[4] = np.argmin(np.abs(self.depths - target_depth_global_img5))
+        # Image 5 (index 4): last frame
+        target_z_indices[4] = n_frames - 1
 
         # Image 3 (index 2): Directly from slider
         target_z_indices[2] = current_slider_idx
 
-        # Image 2 (index 1):
-        # Relative to cell_center_z: between -19µm and -10µm.
-        # Moves from -10µm towards image_3 if image_3 is deeper than -10µm.
-        # Stays 1µm shallower than image_3 in that case.
-        if relative_depth_of_image_3 >= -10 * µm:
-            target_depth_relative_img2 = -10 * µm
-        else:
-            target_depth_relative_img2 = relative_depth_of_image_3 + 1 * µm
-        target_depth_relative_img2 = max(target_depth_relative_img2, -19 * µm) # Clamp lower bound
-        target_depth_relative_img2 = min(target_depth_relative_img2, -1 * µm) # Ensure it's shallower than 0 if possible, and not too close to image 3 if image 3 is near 0
-        target_depth_global_img2 = self.center_z_global + target_depth_relative_img2
-        target_z_indices[1] = np.argmin(np.abs(self.depths - target_depth_global_img2))
-        # Ensure image 2 is not deeper than image 3, and at least one slice apart if possible
-        if target_z_indices[1] >= target_z_indices[2] and target_z_indices[2] > 0 :
-             target_z_indices[1] = target_z_indices[2] -1
+        # Image 2 (index 1): 1/4 of the way
+        target_z_indices[1] = min(n_frames // 4, target_z_indices[2] - 1)
 
-
-        # Image 4 (index 3):
-        # Relative to cell_center_z: between +10µm and +19µm.
-        # Moves from +10µm towards image_3 if image_3 is shallower than +10µm.
-        # Stays 1µm deeper than image_3 in that case.
-        if relative_depth_of_image_3 <= 10 * µm:
-            target_depth_relative_img4 = 10 * µm
-        else:
-            target_depth_relative_img4 = relative_depth_of_image_3 - 1 * µm
-        target_depth_relative_img4 = min(target_depth_relative_img4, 19 * µm) # Clamp upper bound
-        target_depth_relative_img4 = max(target_depth_relative_img4, 1 * µm) # Ensure it's deeper than 0 if possible
-        target_depth_global_img4 = self.center_z_global + target_depth_relative_img4
-        target_z_indices[3] = np.argmin(np.abs(self.depths - target_depth_global_img4))
-        # Ensure image 4 is not shallower than image 3, and at least one slice apart if possible
-        if target_z_indices[3] <= target_z_indices[2] and target_z_indices[2] < n_frames -1:
-            target_z_indices[3] = target_z_indices[2] + 1
-
+        # Image 4 (index 3): 3/4 of the way
+        target_z_indices[3] = max(3 * n_frames // 4, target_z_indices[2] + 1)
 
         for i, iv in enumerate(self.image_views):
             # Clamp the final index to be within the stack bounds
-            display_z_idx = np.clip(target_z_indices[i], 0, n_frames - 1)
-            
-            frame_data = self.detection_stack[display_z_idx].data()
-            iv.setImage(frame_data.T, autoLevels=True) # Transpose and autoLevels
-            # Optional: Add title to show depth
-            # actual_depth_um = self.depths[display_z_idx] / µm
-            # center_depth_um = self.center_z_global / µm
-            # iv.getView().setTitle(f"Z: {actual_depth_um:.1f} (Rel: {actual_depth_um - center_depth_um:.1f}) µm")
-
+            display_z_idx = target_z_indices[i]
+            frame_data = self.volume_data[display_z_idx]
+            iv.setImage(frame_data.T, autoLevels=True)  # IJK to XYZ
 
     def _save_and_close(self):
         if self.rating is None:
@@ -281,8 +236,7 @@ class RankingWindow(Qt.QWidget):
         half_size_px = size_px // 2
 
         # Find the Z index closest to the center
-        depths = np.array([frame.depth for frame in self.detection_stack])
-        center_z_idx = np.argmin(np.abs(depths - center_global[2]))
+        center_z_idx = np.argmin(np.abs(self.depths - center_global[2]))
 
         # Use z_step passed during initialization
         z_step_m = self.z_step
@@ -293,7 +247,7 @@ class RankingWindow(Qt.QWidget):
 
         # Map global center to the coordinates of the center frame
         center_frame = self.detection_stack[center_z_idx]
-        center_frame_coords = center_frame.mapFromGlobal(center_global)  # Returns (x, y) in frame pixels
+        center_frame_coords = center_frame.mapFromGlobalToFrame(center_global)  # Returns (x, y) in frame pixels
         center_x_px, center_y_px = int(round(center_frame_coords[0])), int(round(center_frame_coords[1]))
 
         # Calculate slice boundaries, clamping to stack dimensions
@@ -309,7 +263,7 @@ class RankingWindow(Qt.QWidget):
 
         # --- Create Metadata ---
         origin_frame = self.detection_stack[z_start]
-        corner_global_pos = origin_frame.mapToGlobal((x_start, y_start))
+        corner_global_pos = origin_frame.mapFromFrameToGlobal([x_start, y_start])
 
         metadata = {
             "timestamp": datetime.datetime.now().isoformat(),
@@ -318,7 +272,7 @@ class RankingWindow(Qt.QWidget):
             "shape": volume.shape,  # (z, y, x)
             "pixel_size_m": pixel_size_m,
             "z_step_m": z_step_m,
-            "voxel_origin_global": corner_global_pos.tolist() + [origin_frame.depth],  # (x, y, z) of voxel [0,0,0]
+            "voxel_origin_global": corner_global_pos + [origin_frame.depth],  # (x, y, z) of voxel [0,0,0]
             "source_detection_stack_info": [f.info() for f in self.detection_stack[z_start:z_end]],  # Basic info
             "source_classification_stack_info": None,
         }
@@ -326,7 +280,6 @@ class RankingWindow(Qt.QWidget):
         if self.classification_stack and z_start < len(self.classification_stack):
             metadata["source_classification_stack_info"] = [f.info() for f in self.classification_stack[z_start:z_end]]
 
-        logMsg(f"Extracted volume shape: {volume.shape} centered near {center_global}")
         return volume, metadata
 
     def _save_ranked_cell(self, volume_data, metadata, rating, save_format, save_dir):
@@ -609,7 +562,7 @@ class AutomationDebugWindow(Qt.QWidget):
         cam_win: CameraWindow = self.module.manager.getModule("Camera").window()
         for box in self._previousBoxWidgets:
             cam_win.removeItem(box)
-            self.scopeDevice.sigGlobalTransformChanged.disconnect(box.noticeFocusChange)
+            # self.scopeDevice.sigGlobalTransformChanged.disconnect(box.noticeFocusChange)
         self._previousBoxWidgets = []
 
     def _handleDetectResults(self, future: Future) -> None:
@@ -763,7 +716,7 @@ class AutomationDebugWindow(Qt.QWidget):
         detection_stack = []
         current_z = base_position[2]  # Start Z from the real frame's depth
         for i in range(len(data)):
-            frame_to_global = base_xform
+            frame_to_global = pg.SRTTransform3D(base_xform.saveState())
             # Adjust Z position in the transform
             frame_to_global.translate(0, 0, current_z - base_position[2])
             frame_info = {
