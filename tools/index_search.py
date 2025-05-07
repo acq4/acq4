@@ -25,9 +25,9 @@ class MetadataIndexer:
     """Indexes and searches .index files using Claude API."""
 
     # Constants for Claude API and chunking
-    DEFAULT_MODEL_NAME = "claude-3-5-sonnet-20240620"
-    MAX_INPUT_TOKENS_STAGE1 = 180000  # Max input tokens for Stage 1 (candidate selection)
-    MAX_INPUT_TOKENS_STAGE2 = 180000  # Max input tokens for Stage 2 (deep analysis)
+    DEFAULT_MODEL_NAME = "claude-3-7-sonnet-20250219"
+    MAX_INPUT_TOKENS_STAGE1 = 170000  # Max input tokens for Stage 1 (candidate selection)
+    MAX_INPUT_TOKENS_STAGE2 = 170000  # Max input tokens for Stage 2 (deep analysis)
     MAX_OUTPUT_TOKENS = 4096
     AVG_CHARS_PER_TOKEN = 3  # Conservative estimate for characters per token
     DEFAULT_MAX_CANDIDATES_FROM_STAGE1 = 100 # Max candidates from Stage 1
