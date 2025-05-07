@@ -654,20 +654,18 @@ class AutomationDebugWindow(Qt.QWidget):
         detection_preset = self.ui.detectionPresetCombo.currentText()
         classification_preset = self.ui.classificationPresetCombo.currentText()
         multichannel_processing_intended = self.ui.multiChannelEnableCheck.isChecked() and detection_preset and classification_preset
-        multichannel_for_detection_fn = False # Actual flag for detect_neurons
-        working_stack = None
 
         if self.ui.mockCheckBox.isChecked():
             detection_stack, classification_stack, step_z = self._mockNeuronStacks(_future)
             if detection_stack is None:
                 raise RuntimeError("Failed to load mock detection stack.")
             
-            if classification_stack is not None and self.ui.multiChannelEnableCheck.isChecked(): # Check if mock classification was loaded and multichannel is on
+            if classification_stack is not None and multichannel_processing_intended:
                 working_stack = (detection_stack, classification_stack)
-                multichannel_for_detection_fn = True
+                multichannel = True
             else:
                 working_stack = detection_stack
-                multichannel_for_detection_fn = False
+                multichannel = False
         else:  # --- Real Acquisition ---
             start_z = depth - 20 * µm
             stop_z = depth + 20 * µm
@@ -706,10 +704,10 @@ class AutomationDebugWindow(Qt.QWidget):
             
             if multichannel_processing_intended:
                 working_stack = (detection_stack, classification_stack)
-                multichannel_for_detection_fn = True
+                multichannel = True
             else:
                 working_stack = detection_stack
-                multichannel_for_detection_fn = False
+                multichannel = False
 
         result = _future.waitFor(
             detect_neurons(
@@ -718,7 +716,7 @@ class AutomationDebugWindow(Qt.QWidget):
                 classifier=classifier,
                 xy_scale=pixel_size, # Global pixel_size
                 z_scale=step_z,  # Actual step_z from mock or real (1um for real)
-                multichannel=multichannel_for_detection_fn, # Actual flag for detect_neurons
+                multichannel=multichannel, # Actual flag for detect_neurons
             ),
             timeout=600,
         ).getResult()
@@ -824,9 +822,8 @@ class AutomationDebugWindow(Qt.QWidget):
                 # If detection_stack failed to load (det_step_z is None), but classification loaded, use its step_z.
                 elif class_step_z is not None and detection_stack is None:
                     step_z = class_step_z
-
-            else: # No classification mock path provided, even if multichannel mock is notionally on
-                logMsg("Multichannel mock enabled, but no classification mock file selected.", msgType="info")
+            else:
+                raise ValueError("Multichannel mock enabled, but no classification mock file selected.")
         
         return detection_stack, classification_stack, step_z
 
