@@ -243,14 +243,25 @@ class MetadataIndexer:
                 temperature=0,
                 system="""You are a specialized search system for scientific metadata from 
                 neurophysiology experiments. Your job is to find relevant files based on 
-                natural language queries by analyzing metadata information. 
+                natural language queries by analyzing metadata information.
                 
-                Return your results as a JSON array containing objects with:
-                1. file_path: The path to the matching file
-                2. relevance: A number from 0-10 indicating match quality
-                3. reason: A short explanation of why this file matches
+                For single file queries, return results as:
+                {
+                  "file_path": "/path/to/file.index",
+                  "relevance": 8,
+                  "reason": "This file contains data about..."
+                }
                 
-                Answer ONLY with valid JSON. Do not include any other text or explanations.""",
+                For relationship queries (when the user wants to find related files), you can return:
+                {
+                  "file_paths": ["/path/to/file1.index", "/path/to/file2.index"],
+                  "relevance": 9,
+                  "reason": "These files are related because...",
+                  "relationship_type": "z-stack-pair"
+                }
+                
+                Return your results as a JSON array of these objects. Answer ONLY with valid JSON.
+                Do not include any other text or explanations.""",
                 messages=[
                     {"role": "user", "content": prompt}
                 ]
@@ -284,7 +295,7 @@ class MetadataIndexer:
         
         prompt = f"""
         I need you to search through the following metadata from neurophysiology experiments 
-        and find the {max_results} most relevant files for this query:
+        and find the {max_results} most relevant results for this query:
         
         QUERY: {query}
         
@@ -294,10 +305,17 @@ class MetadataIndexer:
         ```
         
         Analyze the metadata and return the {max_results} most relevant results as a JSON array of objects.
-        Each object should have:
-        - file_path: The full path to the file
-        - relevance: A score from 0-10 indicating how relevant this file is to the query
-        - reason: A brief explanation of why this file matches the query
+        
+        For SINGLE FILE results, each object should have:
+        - file_path: The full path to the file from the metadata
+        - relevance: A score from 0-10 indicating relevance
+        - reason: A brief explanation of why this file matches
+        
+        For RELATIONSHIP QUERIES (when user asks for related files, pairs, etc.), return:
+        - file_paths: An array of related file paths from the metadata
+        - relationship_type: A label describing the relationship (e.g., "z-stack-pair")
+        - relevance: A score from 0-10 indicating relevance
+        - reason: A brief explanation of why these files are related and match the query
         
         Return ONLY the JSON array. Do not include any other text.
         """
@@ -388,7 +406,18 @@ def main():
             print("\nSearch Results:")
             print("=" * 80)
             for i, result in enumerate(results, 1):
-                print(f"{i}. {result['file_path']} (Relevance: {result['relevance']}/10)")
+                # Handle both single and multi-file results
+                if "file_paths" in result:
+                    # Multi-file result
+                    files = result["file_paths"]
+                    rel_type = result.get("relationship_type", "Related Files")
+                    print(f"{i}. {rel_type.upper()} (Relevance: {result['relevance']}/10)")
+                    for j, path in enumerate(files, 1):
+                        print(f"   {j}. {path}")
+                else:
+                    # Single file result (original format)
+                    print(f"{i}. {result['file_path']} (Relevance: {result['relevance']}/10)")
+                
                 print(f"   Reason: {result['reason']}")
                 print("-" * 80)
         else:
