@@ -363,7 +363,6 @@ class AutomationDebugWindow(Qt.QWidget):
         self.ui.testUIBtn.setOpts(future_producer=self._testUI, stoppable=True)
         self.ui.testUIBtn.sigFinished.connect(self._handleDetectResults)
 
-        self.ui.multiChannelEnableCheck.toggled.connect(self._updateMultiChannelState)
         self.ui.motionPlannerSelector.currentIndexChanged.connect(self._changeMotionPlanner)
 
         # Connect regular button click
@@ -375,6 +374,8 @@ class AutomationDebugWindow(Qt.QWidget):
 
         self.ui.mockFilePath.setReadOnly(True)
         self.ui.mockFileButton.clicked.connect(self._selectMockFile)
+        self.ui.mockClassificationFilePath.setReadOnly(True)
+        self.ui.mockClassificationFileButton.clicked.connect(self._selectMockClassificationFile)
 
         self.ui.autoTargetBtn.setOpts(future_producer=self._autoTarget, stoppable=True)
         self.ui.autoTargetBtn.sigFinished.connect(self._handleAutoFinish)
@@ -412,6 +413,10 @@ class AutomationDebugWindow(Qt.QWidget):
         default_rank_dir = Path(self.module.manager.getBaseDir().name()) / "ranked_cells"
         self.ui.rankingSaveDirEdit.setText(str(default_rank_dir))
         self._populatePresetCombos()
+        # Connect checkboxes to state update method
+        self.ui.multiChannelEnableCheck.toggled.connect(self._updateMultiChannelAndMockStates)
+        self.ui.mockCheckBox.toggled.connect(self._updateMultiChannelAndMockStates)
+        self._updateMultiChannelAndMockStates() # Set initial states
 
     def _selectRankDir(self):
         path = Qt.QFileDialog.getExistingDirectory(
@@ -420,9 +425,24 @@ class AutomationDebugWindow(Qt.QWidget):
         if path:
             self.ui.rankingSaveDirEdit.setText(path)
 
-    def _updateMultiChannelState(self, enabled):
-        self.ui.detectionPresetCombo.setEnabled(enabled)
-        self.ui.classificationPresetCombo.setEnabled(enabled)
+    def _selectMockClassificationFile(self):
+        filePath, _ = Qt.QFileDialog.getOpenFileName(
+            self, "Select Mock Classification Z-Stack File", "", "MetaArray Files (*.ma);;All Files (*)"
+        )
+        if filePath:
+            self.ui.mockClassificationFilePath.setText(filePath)
+
+    def _updateMultiChannelAndMockStates(self):
+        multi_channel_enabled = self.ui.multiChannelEnableCheck.isChecked()
+        mock_mode_active = self.ui.mockCheckBox.isChecked()
+
+        self.ui.detectionPresetCombo.setEnabled(multi_channel_enabled)
+        self.ui.classificationPresetCombo.setEnabled(multi_channel_enabled)
+
+        mock_classification_widgets_enabled = multi_channel_enabled and mock_mode_active
+        self.ui.mockClassificationFileLabel.setEnabled(mock_classification_widgets_enabled)
+        self.ui.mockClassificationFileButton.setEnabled(mock_classification_widgets_enabled)
+        self.ui.mockClassificationFilePath.setEnabled(mock_classification_widgets_enabled)
 
     def _populatePresetCombos(self):
         presets = self.scopeDevice.presets.keys()
@@ -620,22 +640,38 @@ class AutomationDebugWindow(Qt.QWidget):
         self._current_detection_stack = None
         self._current_classification_stack = None
 
+        pixel_size = self.cameraDevice.getPixelSize()[0] # Used for both real and mock
         man = self.module.manager
         autoencoder = man.config.get("misc", {}).get("autoencoderPath", None)
         classifier = man.config.get("misc", {}).get("classifierPath", None)
-        pixel_size = self.cameraDevice.getPixelSize()[0]
-        step_z = 1 * µm
+        # pixel_size is now fetched earlier
+        step_z = 1 * µm # Default, will be updated by mock or real acquisition
         depth = self.cameraDevice.getFocusDepth()
+        detection_stack = None # Ensure it's initialized
         classification_stack = None  # Initialize as None
+        
+        # This flag indicates intent for multichannel *real* acquisition or processing type
         detection_preset = self.ui.detectionPresetCombo.currentText()
         classification_preset = self.ui.classificationPresetCombo.currentText()
-        multichannel = self.ui.multiChannelEnableCheck.isChecked() and detection_preset and classification_preset
+        multichannel_processing_intended = self.ui.multiChannelEnableCheck.isChecked() and detection_preset and classification_preset
+        multichannel_for_detection_fn = False # Actual flag for detect_neurons
+        working_stack = None
 
-        if self.ui.mockCheckBox.isChecked() and self.ui.mockFilePath.text():
+        if self.ui.mockCheckBox.isChecked():
             detection_stack, classification_stack, step_z = self._mockNeuronStacks(_future)
+            if detection_stack is None:
+                raise RuntimeError("Failed to load mock detection stack.")
+            
+            if classification_stack is not None and self.ui.multiChannelEnableCheck.isChecked(): # Check if mock classification was loaded and multichannel is on
+                working_stack = (detection_stack, classification_stack)
+                multichannel_for_detection_fn = True
+            else:
+                working_stack = detection_stack
+                multichannel_for_detection_fn = False
         else:  # --- Real Acquisition ---
             start_z = depth - 20 * µm
             stop_z = depth + 20 * µm
+            # Use step_z = 1 * µm for real acquisition as previously defined
 
             if multichannel:
                 logMsg(
@@ -665,18 +701,24 @@ class AutomationDebugWindow(Qt.QWidget):
                     classification_stack = classification_stack[:min_length]
             else:  # --- Single Channel Acquisition ---
                 detection_stack = _future.waitFor(
-                    acquire_z_stack(self.cameraDevice, start_z, stop_z, step_z)
+                    acquire_z_stack(self.cameraDevice, start_z, stop_z, step_z) # step_z is 1um here
                 ).getResult()
+            
+            if multichannel_processing_intended:
+                working_stack = (detection_stack, classification_stack)
+                multichannel_for_detection_fn = True
+            else:
+                working_stack = detection_stack
+                multichannel_for_detection_fn = False
 
-        working_stack = (detection_stack, classification_stack) if multichannel else detection_stack
         result = _future.waitFor(
             detect_neurons(
-                working_stack,
+                working_stack, # Prepared based on mock/real and single/multi
                 autoencoder=autoencoder,
                 classifier=classifier,
-                xy_scale=pixel_size,
-                z_scale=step_z,  # Use the actual step size
-                multichannel=multichannel,
+                xy_scale=pixel_size, # Global pixel_size
+                z_scale=step_z,  # Actual step_z from mock or real (1um for real)
+                multichannel=multichannel_for_detection_fn, # Actual flag for detect_neurons
             ),
             timeout=600,
         ).getResult()
@@ -686,50 +728,106 @@ class AutomationDebugWindow(Qt.QWidget):
         self._unranked_cells = result
         return result
 
-    def _mockNeuronStacks(self, _future):
-        logMsg("Using mock Z-stack file for detection.")
-        with self.cameraDevice.ensureRunning():
-            # Acquire a single frame to get the camera transform and pixel size
-            real_frame = _future.waitFor(self.cameraDevice.acquireFrames(1)).getResult()[0]
-        base_xform = real_frame.globalTransform()
-        base_position = np.array(real_frame.mapFromFrameToGlobal((0, 0, 0)))  # Use frame mapping
-        # Load the MetaArray file
-        mock_file_path = self.ui.mockFilePath.text()
-        marr = MetaArray(file=mock_file_path)
-        data = marr.asarray()
-        info = marr.infoCopy()
-        # Try to get z_step from metaarray info, default to 1um
-        z_info = next((ax for ax in info if ax.get("name") == "Z"), None)
-        if z_info and "values" in z_info:
-            z_vals = z_info["values"]
-            if len(z_vals) > 1:
-                step_z = abs(z_vals[1] - z_vals[0]) * m  # Assume meters if unitless
-                logMsg(f"Using Z step from mock file: {step_z / µm:.2f} µm")
+    def _create_mock_stack_from_file(self, mock_file_path: str, base_frame: Frame, _future: Future) -> tuple[list[Frame] | None, float | None]:
+        """
+        Loads a MetaArray file and converts it into a list of Frame objects.
+        The Z positions and transforms of the mock frames are relative to the provided base_frame.
+        Returns (stack_frames, step_z_microns) or (None, None) on failure.
+        """
+        if not mock_file_path:
+            return None, None
+        try:
+            logMsg(f"Loading mock Z-stack from: {mock_file_path}")
+            marr = MetaArray(file=mock_file_path)
+            data = marr.asarray()
+            info = marr.infoCopy()
+
+            live_frame_global_transform = base_frame.globalTransform()
+            live_frame_origin_global_xyz = np.array(base_frame.mapFromFrameToGlobal([0, 0, 0]))
+
+            step_z = 1 * µm  # Default Z step in meters
+            z_info = next((ax for ax in info if ax.get("name") == "Z"), None)
+            if z_info and "values" in z_info:
+                z_vals = z_info["values"]
+                if len(z_vals) > 1:
+                    step_z = abs(z_vals[1] - z_vals[0]) * m  # Assume meters
+                    logMsg(f"Using Z step from mock file '{os.path.basename(mock_file_path)}': {step_z / µm:.2f} µm")
+                elif len(z_vals) == 1:
+                    logMsg(f"Only one Z value in mock file '{os.path.basename(mock_file_path)}'. Assuming 1µm step.", msgType="warning")
+                    step_z = 1 * µm
+                else:
+                    logMsg(f"No Z values in mock file '{os.path.basename(mock_file_path)}', using default 1µm step.", msgType="warning")
+                    step_z = 1 * µm
             else:
-                logMsg("Only one Z value found in mock file, using default step.", msgType="warning")
+                logMsg(f"Z info not in mock file '{os.path.basename(mock_file_path)}', using default 1µm step.", msgType="warning")
                 step_z = 1 * µm
+
+            pixel_size = self.cameraDevice.getPixelSize()[0]  # Assuming square pixels
+            stack_frames = []
+            current_mock_frame_global_z = live_frame_origin_global_xyz[2]  # Start Z from the live frame's depth
+
+            for i in range(len(data)):
+                mock_frame_transform = pg.SRTTransform3D(live_frame_global_transform.saveState())
+                z_offset = current_mock_frame_global_z - live_frame_origin_global_xyz[2]
+                mock_frame_transform.translate(0, 0, z_offset)
+
+                frame_info = {
+                    "pixelSize": [pixel_size, pixel_size],
+                    "depth": current_mock_frame_global_z,
+                    "transform": mock_frame_transform.saveState(),
+                }
+                if 'device' in base_frame.info():
+                    frame_info['device'] = base_frame.info()['device']
+                
+                frame = Frame(data[i], info=frame_info)
+                stack_frames.append(frame)
+                current_mock_frame_global_z += step_z
+            return stack_frames, step_z
+        except Exception:
+            printExc(f"Failed to load or process mock file: {mock_file_path}")
+            return None, None
+
+    def _mockNeuronStacks(self, _future: Future) -> tuple[list[Frame] | None, list[Frame] | None, float]:
+        logMsg("Using mock Z-stack file(s) for detection.")
+        detection_stack = None
+        classification_stack = None
+        # Default step_z, will be updated by the first successfully loaded mock stack
+        # or remain 1um if primary mock fails but code proceeds.
+        step_z = 1 * µm 
+
+        with self.cameraDevice.ensureRunning():
+            base_frame = _future.waitFor(self.cameraDevice.acquireFrames(1)).getResult()[0]
+
+        # Load detection stack
+        detection_mock_path = self.ui.mockFilePath.text()
+        if detection_mock_path:
+            detection_stack, det_step_z = self._create_mock_stack_from_file(detection_mock_path, base_frame, _future)
+            if det_step_z is not None:
+                step_z = det_step_z
         else:
-            logMsg("Z information not found in mock file info, using default step.", msgType="warning")
-            step_z = 1 * µm
-        # Create Frame objects, mapping Z based on step_z
-        pixel_size = self.cameraDevice.getPixelSize()[0]
-        detection_stack = []
-        current_z = base_position[2]  # Start Z from the real frame's depth
-        for i in range(len(data)):
-            frame_to_global = pg.SRTTransform3D(base_xform.saveState())
-            # Adjust Z position in the transform
-            frame_to_global.translate(0, 0, current_z - base_position[2])
-            frame_info = {
-                "pixelSize": [pixel_size, pixel_size],
-                "depth": current_z,  # Assign calculated depth
-                "transform": frame_to_global.saveState(),
-                # TODO more transforms, I think
-            }
-            frame = Frame(data[i], info=frame_info)
-            detection_stack.append(frame)
-            current_z += step_z  # Increment Z for the next frame
-        # TODO: Handle multichannel mock file path later (needs two files or specific format)
-        classification_stack = None  # No classification stack for mock yet
+            logMsg("Primary mock file path is empty.", msgType="warning")
+            # detection_stack remains None, step_z remains default
+
+        # Load classification stack if multichannel mock is enabled and path is provided
+        if self.ui.multiChannelEnableCheck.isChecked() and self.ui.mockCheckBox.isChecked(): # Redundant mockCheckBox check, but safe
+            classification_mock_path = self.ui.mockClassificationFilePath.text()
+            if classification_mock_path:
+                # The base_frame and _future are passed again.
+                # The step_z from the classification mock file will be returned by _create_mock_stack_from_file.
+                # We prioritize step_z from the detection stack if both are loaded.
+                # Or, one could enforce consistency or average, but for now, just log if different.
+                classification_stack, class_step_z = self._create_mock_stack_from_file(
+                    classification_mock_path, base_frame, _future
+                )
+                if class_step_z is not None and step_z != class_step_z and detection_stack is not None:
+                     logMsg(f"Z-step mismatch: Detection mock ({step_z/µm:.2f} µm) vs Classification mock ({class_step_z/µm:.2f} µm). Using detection Z-step.", msgType="warning")
+                # If detection_stack failed to load (det_step_z is None), but classification loaded, use its step_z.
+                elif class_step_z is not None and detection_stack is None:
+                    step_z = class_step_z
+
+            else: # No classification mock path provided, even if multichannel mock is notionally on
+                logMsg("Multichannel mock enabled, but no classification mock file selected.", msgType="info")
+        
         return detection_stack, classification_stack, step_z
 
     def _rankCells(self):
