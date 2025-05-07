@@ -673,7 +673,7 @@ class AutomationDebugWindow(Qt.QWidget):
             stop_z = depth + 20 * µm
             # Use step_z = 1 * µm for real acquisition as previously defined
 
-            if multichannel:
+            if multichannel_processing_intended:
                 logMsg(
                     f"Starting multichannel Z-stack acquisition: Detection='{detection_preset}', "
                     f"Classification='{classification_preset}'"
