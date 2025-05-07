@@ -403,6 +403,7 @@ Return ONLY the JSON list of file paths. For example: ["/path/to/file1.index", "
                 if self.verbose:
                     print(f"Processing a chunk of {len(current_chunk)} items, estimated tokens: {current_chunk_tokens + prompt_structure_tokens}")
                 prompt = self._build_deep_analysis_prompt(query, current_chunk, max_results) # Ask for up to max_results from this chunk
+                response = None
                 try:
                     response = self.client.messages.create(
                         model=self.DEFAULT_MODEL_NAME,
