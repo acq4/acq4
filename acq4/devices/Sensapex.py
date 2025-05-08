@@ -43,7 +43,7 @@ class Sensapex(Stage):
         address = config.pop("address", None)
         address = None if address is None else address.encode()
         group = config.pop("group", None)
-        ump = UMP.get_ump(address=address, group=group)
+        ump = UMP.get_ump(address=address, group=group, handle_atexit=False)
         # create handle to this manipulator
         if "nAxes" in config and version_info < (1, 22, 4):
             raise RuntimeError("nAxes support requires version >= 1.022.4 of the sensapex-py library")
@@ -182,10 +182,10 @@ class Sensapex(Stage):
 
     def quit(self):
         self._quitRequested = True
+        super().quit()
         Sensapex.devices.pop(self.devid, None)
         if len(Sensapex.devices) == 0:
-            UMP.get_ump().poller.stop()
-        Stage.quit(self)
+            UMP.get_ump().close()
 
     def _move(self, pos, speed, linear, **kwds):
         if self._force_linear_movement:

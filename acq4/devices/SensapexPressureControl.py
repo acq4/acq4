@@ -27,7 +27,7 @@ class SensapexPressureControl(PressureControl):
         address = config.pop('address', None)
         group = config.pop('group', None)
         self._pollInterval = config.get('pollInterval', 1)
-        ump = UMP.get_ump(address=address, group=group)
+        ump = UMP.get_ump(address=address, group=group, handle_atexit=False)
         self.dev = ump.get_device(self.devId)
         config.setdefault("maximum", 7e4)
         config.setdefault("minimum", -7e4)

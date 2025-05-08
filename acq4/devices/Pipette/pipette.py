@@ -69,6 +69,9 @@ class Pipette(Device, OptomechDevice):
     * idleDistance: the x/y distance from the global origin from which the pipette top should be placed
       in idle mode. Default is 7 mm.
     * recordingChambers: list of names of RecordingChamber devices that this Pipette is meant to work with.
+    * reasonableTipOffsetDistance: when updating the tip offset, this is the maximum distance (in meters)
+        from the original tip offset that is considered reasonable. If the tip offset is outside this distance, 
+        the user will be prompted to confirm the new offset. Default is 30 um.
     """
 
     sigTargetChanged = Qt.Signal(object, object)
@@ -108,6 +111,7 @@ class Pipette(Device, OptomechDevice):
         # may add items here to implement per-pipette custom motion planning
         self.motionPlanners = {}
         self.currentMotionPlanner = None
+        self.keepOnStepping = True
         self.pathGenerator = self.pathGeneratorClass(self)
 
         self._camInterfaces = weakref.WeakKeyDictionary()
@@ -220,6 +224,7 @@ class Pipette(Device, OptomechDevice):
         pass
 
     def stop(self):
+        self.keepOnStepping = False  # thread safety? if a user starts a new stepwise movement simultaneous with stopping, they deserve to have to stop a second or even third time.
         cmp = self.currentMotionPlanner
         if cmp is not None:
             cmp.stop()
@@ -235,7 +240,7 @@ class Pipette(Device, OptomechDevice):
 
     def tipOffsetIsReasonable(self, pos) -> bool:
         dist = np.linalg.norm(np.array(self.mapToGlobal((0, 0, 0))) - pos)
-        return dist < 30e-6
+        return dist < self.config.get("reasonableTipOffsetDistance", 30e-6)
 
     def newPipetteTipOffsetIsReasonable(self, pos) -> bool:
         cal = self.readConfigFile('calibration')
@@ -547,7 +552,8 @@ class Pipette(Device, OptomechDevice):
     def stepwiseAdvance(self, depth: float, maxSpeed: float = 10e-6, interval: float = 5, _future=None):
         """Retract/advance in 1µm steps, allowing for manual user movements"""
         initial_direction = None
-        while True:
+        self.keepOnStepping = True
+        while self.keepOnStepping:
             pos = self.globalPosition()
             goal = self.positionAtDepth(depth)
             direction = goal - pos

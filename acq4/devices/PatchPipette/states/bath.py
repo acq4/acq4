@@ -15,18 +15,22 @@ class BathState(PatchPipetteState):
     Parameters
     ----------
     bathThreshold : float
-        Resistance (Ohms) below which the tip is considered to be immersed in the bath.
+        Resistance (Ohms) below which the tip is considered to be immersed in the bath (default: 50 MOhm).
+    bathPressure : float
+        Pressure (Pa) to apply once in the bath solution (default: 1.5kPa).
     breakThreshold : float
-        Threshold for change in resistance (Ohms) for detecting a broken pipette.
+        Threshold for change in resistance (Ohms) for detecting a broken pipette (default: -1 MOhm).
     clogThreshold : float
-        Threshold for change in resistance (Ohms) for detecting a clogged pipette.
+        Threshold for change in resistance (Ohms) for detecting a clogged pipette (default: 1 MOhm).
     """
+
     stateName = 'bath'
+
     def __init__(self, *args, **kwds):
         super().__init__(*args, **kwds)
 
     _parameterDefaultOverrides = {
-        'initialPressure': 3500.,  # 0.5 PSI
+        'initialPressure': 3500.0,  # 0.5 PSI
         'initialPressureSource': 'regulator',
         'initialClampMode': 'VC',
         'initialVCHolding': 0,
@@ -35,6 +39,7 @@ class BathState(PatchPipetteState):
     }
     _parameterTreeConfig = {
         'bathThreshold': {'type': 'float', 'default': 50e6, 'suffix': 'Ω'},
+        'bathPressure': {'type': 'float', 'default': 1500, 'suffix': 'Pa'},
         'breakThreshold': {'type': 'float', 'default': -1e6, 'suffix': 'Ω'},
         'clogThreshold': {'type': 'float', 'default': 1e6, 'suffix': 'Ω'},
     }
@@ -44,6 +49,7 @@ class BathState(PatchPipetteState):
         config = self.config
         dev = self.dev
         initialResistance = None
+        at_initial_pressure = True
         bathResistances = []
 
         while True:
@@ -62,12 +68,16 @@ class BathState(PatchPipetteState):
                 bathResistances = []
                 continue
 
+            if at_initial_pressure:
+                dev.pressureDevice.setPressure('regulator', config['bathPressure'])
+                at_initial_pressure = False
+
             bathResistances.append(ssr)
 
             if initialResistance is None:
                 if len(bathResistances) > 8:
                     initialResistance = np.median(bathResistances)
-                    self.setState('initial resistance measured: %0.2f MOhm' % (initialResistance * 1e-6))
+                    self.setState(f"initial resistance measured: {initialResistance * 1e-6:0.2f} MOhm")
 
                     # record initial resistance
                     patchrec = dev.patchRecord()
