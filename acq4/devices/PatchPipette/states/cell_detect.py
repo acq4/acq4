@@ -296,6 +296,13 @@ class CellDetectState(PatchPipetteState):
         self._wiggleLock = Lock()
         self._sidestepDirection = np.pi / 2
         self._pressureAdjustment = None
+        self.dev.sigTargetChanged.connect(self._noticeNewTarget)
+
+    def _noticeNewTarget(self, pos):
+        self.advanceSteps = None
+        if self._continuousAdvanceFuture is not None:
+            self._continuousAdvanceFuture.stop("Target changed")
+            self._continuousAdvanceFuture = None
 
     def run(self):
         with contextlib.ExitStack() as stack:
@@ -340,7 +347,7 @@ class CellDetectState(PatchPipetteState):
                 else:
                     # advance to next position if stepping
                     if self.advanceSteps is None:
-                        self.setState("cell detection: stepping pipette")
+                        self.setState("cell detection: stepping toward target")
                         self.advanceSteps = self.getAdvanceSteps()
                     if self.stepCount >= len(self.advanceSteps):
                         return self._transition_to_fallback()
