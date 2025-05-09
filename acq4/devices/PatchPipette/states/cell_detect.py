@@ -311,18 +311,7 @@ class CellDetectState(PatchPipetteState):
     def _run(self):
         config = self.config
         if config['takeACellfie'] and self._distanceToTarget() > config['cellfiePipetteClearance']:
-            self.setState("cell detect: taking initial z-stack")
-            self.waitFor(self.dev.focusOnTarget('fast'))
-            start = self.dev.pipetteDevice.targetPosition()[2] - (config['cellfieHeight'] / 2)
-            end = start + config['cellfieHeight']
-            save_in = self.dev.dm.getCurrentDir().getDir("cell detect initial z stack", create=True)
-            self.waitFor(
-                run_image_sequence(
-                    self.dev.imagingDevice(),
-                    z_stack=(start, end, config['cellfieStep']),
-                    storage_dir=save_in,
-                )
-            )
+            self._takeACellfie()
         self.monitorTestPulse()
 
         while not self.weTookTooLong():
@@ -365,6 +354,21 @@ class CellDetectState(PatchPipetteState):
                     self.singleStep()
         self._taskDone(interrupted=True, error="Timed out waiting for cell detect.")
         return config['fallbackState']
+
+    def _takeACellfie(self):
+        config = self.config
+        self.setState("cell detect: taking initial z-stack")
+        self.waitFor(self.dev.focusOnTarget('fast'))
+        start = self.dev.pipetteDevice.targetPosition()[2] - (config['cellfieHeight'] / 2)
+        end = start + config['cellfieHeight']
+        save_in = self.dev.dm.getCurrentDir().getDir("cell detect initial z stack", create=True)
+        self.waitFor(
+            run_image_sequence(
+                self.dev.imagingDevice(),
+                z_stack=(start, end, config['cellfieStep']),
+                storage_dir=save_in,
+            )
+        )
 
     def adjustPressureForDepth(self):
         """While not that slow, we still want to keep the innermost loop as fast as we can."""
