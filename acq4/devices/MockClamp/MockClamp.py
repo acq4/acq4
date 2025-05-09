@@ -57,7 +57,7 @@ class MockClamp(PatchClamp):
             printExc("Error while setting holding value:")
 
         # Start a remote process to run the simulation.
-        self.process = teleprox.ProcessSpawner(conda_env=config.get('condaEnv', None))
+        self.process = teleprox.start_process(conda_env=config.get('condaEnv', None))
         rsys = self.process.client._import('sys')
         rsys.path.append(os.path.abspath(os.path.dirname(__file__)))
         if config['simulator'] == 'builtin':

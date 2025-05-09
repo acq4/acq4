@@ -6,15 +6,15 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>367</width>
-    <height>465</height>
+    <width>420</width>
+    <height>539</height>
    </rect>
   </property>
   <property name="windowTitle">
    <string>Form</string>
   </property>
-  <layout class="QGridLayout" name="gridLayout_4">
-   <item row="0" column="0">
+  <layout class="QVBoxLayout" name="gridLayout_4">
+   <item>
     <widget class="QGroupBox" name="groupBox">
      <property name="title">
       <string>Cell Detection</string>
@@ -134,26 +134,30 @@
      </layout>
     </widget>
    </item>
-   <item row="3" column="0">
-    <widget class="QGroupBox" name="groupBox_3">
+   <item>
+    <widget class="QGroupBox" name="groupBox_4">
      <property name="title">
-      <string>Visual tracking</string>
+      <string>Motion Planner</string>
      </property>
-     <layout class="QGridLayout" name="gridLayout_3">
+     <layout class="QGridLayout" name="groupBox_4_layout">
       <item row="0" column="0">
-       <widget class="FutureButton" name="trackFeaturesBtn">
-        <property name="text">
-         <string>Track target by features</string>
-        </property>
+       <widget class="QComboBox" name="motionPlannerSelector">
+        <item>
+         <property name="text">
+          <string>Geometry-aware</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Objective radius only</string>
+         </property>
+        </item>
        </widget>
-      </item>
-      <item row="0" column="1">
-       <layout class="QHBoxLayout" name="horizontalLayout_2"/>
       </item>
      </layout>
     </widget>
    </item>
-   <item row="1" column="0">
+   <item>
     <widget class="QGroupBox" name="groupBox_2">
      <property name="title">
       <string>Pipette calibration</string>
@@ -184,6 +188,25 @@
       </item>
       <item row="3" column="0" colspan="2">
        <widget class="QTextEdit" name="pipetteLog"/>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="groupBox_3">
+     <property name="title">
+      <string>Visual tracking</string>
+     </property>
+     <layout class="QGridLayout" name="gridLayout_3">
+      <item row="0" column="0">
+       <widget class="FutureButton" name="trackFeaturesBtn">
+        <property name="text">
+         <string>Track target by features</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <layout class="QHBoxLayout" name="horizontalLayout_2"/>
       </item>
      </layout>
     </widget>
