@@ -310,8 +310,7 @@ class CellDetectState(PatchPipetteState):
 
     def _run(self):
         config = self.config
-        if config['takeACellfie'] and self._distanceToTarget() > config['cellfiePipetteClearance']:
-            self._takeACellfie()
+        self._maybeTakeACellfie()
         self.monitorTestPulse()
 
         while not self.weTookTooLong():
@@ -355,8 +354,10 @@ class CellDetectState(PatchPipetteState):
         self._taskDone(interrupted=True, error="Timed out waiting for cell detect.")
         return config['fallbackState']
 
-    def _takeACellfie(self):
+    def _maybeTakeACellfie(self):
         config = self.config
+        if not config['takeACellfie'] or self._distanceToTarget() <= config['cellfiePipetteClearance']:
+            return
         self.setState("cell detect: taking initial z-stack")
         self.waitFor(self.dev.focusOnTarget('fast'))
         start = self.dev.pipetteDevice.targetPosition()[2] - (config['cellfieHeight'] / 2)
