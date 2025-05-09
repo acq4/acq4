@@ -103,6 +103,7 @@ class Pipette(Device, OptomechDevice):
             'searchHeight': config.get('searchHeight', 2e-3),
             'searchTipHeight': config.get('searchTipHeight', 1.5e-3),
             'approachHeight': config.get('approachHeight', 100e-6),
+            'cleanApproachHeight': config.get('cleanApproachHeight', 1500e-6),
             'idleHeight': config.get('idleHeight', 1e-3),
             'idleDistance': config.get('idleDistance', 7e-3),
             'showCameraModuleUI': config.get('showCameraModuleUI', False),
@@ -515,6 +516,10 @@ class Pipette(Device, OptomechDevice):
         if surface is None:
             raise ValueError("Surface depth has not been set.")
         return surface + self._opts['approachHeight']
+
+    @property
+    def cleanApproachHeight(self):
+        return self._opts["cleanApproachHeight"]
 
     def depthBelowSurface(self):
         """Return the current depth of the pipette tip below the sample surface
