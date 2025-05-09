@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from acq4.util.debug import printExc
-from acq4.util.future import future_wrap, Future
+from acq4.util.future import future_wrap
 from pyqtgraph import units
 from ._base import PatchPipetteState
 
