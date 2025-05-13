@@ -518,18 +518,15 @@ class AutomationDebugWindow(Qt.QWidget):
             if obj_stack is None:
                 obj_stack = ObjectStack(
                     img_stack=stack_data,
-                    px_size=pix,
-                    z_step=step,
+                    transform=target_frame.globalTransform(),
                     obj_center=relative_target,
-                    tracked_z_vals=(-6e-6, -3e-6, 0, 3e-6, 6e-6),
-                    feature_radius=12e-6,
                 )
                 tracker.set_tracked_object(obj_stack)
                 continue
             if direction < 0:
                 stack_data = stack_data[::-1]
             direction *= -1
-            result = tracker.next_frame(ImageStack(stack_data, pix, step * direction))
+            result = tracker.next_frame(ImageStack(stack_data, target_frame.globalTransform()))
             z, y, x = result["updated_object_stack"].obj_center  # frame, row, col
             frame = stack[round(z)]
             target = frame.mapFromFrameToGlobal((x, y)) + (frame.depth,)
