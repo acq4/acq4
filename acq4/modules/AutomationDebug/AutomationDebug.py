@@ -22,7 +22,7 @@ from acq4.util.imaging.sequencer import acquire_z_stack
 from acq4.util.target import TargetBox
 from acq4.util.threadrun import runInGuiThread
 import pyqtgraph as pg
-from coorx import SRT3DTransform, TransposeTransform
+from coorx import SRT3DTransform, TransposeTransform, TTransform
 from pyqtgraph.units import µm, m
 
 UiTemplate = Qt.importTemplate(".window")
@@ -487,11 +487,6 @@ class AutomationDebugWindow(Qt.QWidget):
         )
 
         self.sigWorking.emit(self.ui.trackFeaturesBtn)
-        pipette = self.pipetteDevice
-        pix = self.cameraDevice.getPixelSize()[0]  # assume square pixels
-        target = pipette.targetPosition()
-        step = 1e-6
-        direction = 1
         if self.ui.featureTrackerSelector.currentText() == "Cellpose":
             tracker = CellPoseTracker()
         elif self.ui.featureTrackerSelector.currentText() == "CV2":
@@ -501,46 +496,55 @@ class AutomationDebugWindow(Qt.QWidget):
         else:
             raise ValueError(f"unknown tracker '{self.ui.featureTrackerSelector.currentText()}'")
         self._featureTracker = tracker
-        _future.waitFor(pipette.focusTarget())
+        pipette = self.pipetteDevice
+        target: np.ndarray = pipette.targetPosition()
+        step = 1e-6
+        direction = 1
         obj_stack = None
-        sign = 1
         margin = 10e-6
 
         while True:
-            sign *= -1
             start = target - margin
             stop = target + margin
-            if sign < 0:
+            if direction < 0:
                 start, stop = stop, start
             _future.waitFor(self.cameraDevice.moveCenterToGlobal(start, "fast"))
             stack = _future.waitFor(acquire_z_stack(self.cameraDevice, start[2], stop[2], step), timeout=60).getResult()
-            # get the closest frame to the target depth
-            depths = [abs(f.depth - target[2]) for f in stack]
-            z = np.argmin(depths)
-            target_frame = stack[z]
-            relative_target = np.array(tuple(reversed(target_frame.mapFromGlobalToFrame(tuple(target[:2])) + (z,))))
+            if direction < 0:
+                stack = stack[::-1]
             stack_data = np.array([f.data().T for f in stack])
-            xform = SRT3DTransform.from_pyqtgraph(
-                target_frame.globalTransform(),
-                from_cs=f"frame_{target_frame.info()['id']}.xyz",
+            stack_xform = SRT3DTransform.from_pyqtgraph(
+                stack[0].globalTransform(),
+                from_cs=f"frame_{stack[0].info()['id']}.xyz",
                 to_cs="global",
             ) * TransposeTransform(
                 (2, 1, 0),
-                from_cs=f"frame_{target_frame.info()['id']}.ijk",
-                to_cs=f"frame_{target_frame.info()['id']}.xyz",
+                from_cs=f"frame_{stack[0].info()['id']}.ijk",
+                to_cs=f"frame_{stack[0].info()['id']}.xyz",
             )
+            start_ijk = np.round(stack_xform.inverse.map(start)).astype(int)
+            stop_ijk = np.round(stack_xform.inverse.map(stop)).astype(int)
+            if np.all(stop < start):
+                start_ijk, stop_ijk = stop_ijk, start_ijk
+            region = stack_data[
+                start_ijk[0] : stop_ijk[0], start_ijk[1] : stop_ijk[1], start_ijk[2] : stop_ijk[2]
+            ]
+            region_xform = stack_xform * TTransform(
+                offset=start_ijk,
+                from_cs=f"frame_{stack[0].info()['id']}.roi",
+                to_cs=f"frame_{stack[0].info()['id']}.ijk",
+            )
+            region_center = np.round(region_xform.inverse.map(target)).astype(int)
             if obj_stack is None:
                 obj_stack = ObjectStack(
-                    img_stack=stack_data,
-                    transform=xform,
-                    obj_center=relative_target,
+                    img_stack=region,
+                    transform=region_xform,
+                    obj_center=region_center,
                 )
                 tracker.set_tracked_object(obj_stack)
                 continue
-            if direction < 0:
-                stack_data = stack_data[::-1]
             direction *= -1
-            result = tracker.next_frame(ImageStack(stack_data, xform))
+            result = tracker.next_frame(ImageStack(region, region_xform))
             z, y, x = result["updated_object_stack"].obj_center  # frame, row, col
             frame = stack[round(z)]
             target = frame.mapFromFrameToGlobal((x, y)) + (frame.depth,)
