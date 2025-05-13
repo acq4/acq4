@@ -22,6 +22,7 @@ from acq4.util.imaging.sequencer import acquire_z_stack
 from acq4.util.target import TargetBox
 from acq4.util.threadrun import runInGuiThread
 import pyqtgraph as pg
+from coorx import AffineTransform, TransposeTransform
 from pyqtgraph.units import µm, m
 
 UiTemplate = Qt.importTemplate(".window")
@@ -515,10 +516,11 @@ class AutomationDebugWindow(Qt.QWidget):
             target_frame = stack[z]
             relative_target = np.array(tuple(reversed(target_frame.mapFromGlobalToFrame(tuple(target[:2])) + (z,))))
             stack_data = np.array([frame.data().T for frame in stack])
+            xform = AffineTransform.from_pyqtgraph(target_frame.globalTransform()) * TransposeTransform((2, 1, 0))
             if obj_stack is None:
                 obj_stack = ObjectStack(
                     img_stack=stack_data,
-                    transform=target_frame.globalTransform(),
+                    transform=xform,
                     obj_center=relative_target,
                 )
                 tracker.set_tracked_object(obj_stack)
@@ -526,7 +528,7 @@ class AutomationDebugWindow(Qt.QWidget):
             if direction < 0:
                 stack_data = stack_data[::-1]
             direction *= -1
-            result = tracker.next_frame(ImageStack(stack_data, target_frame.globalTransform()))
+            result = tracker.next_frame(ImageStack(stack_data, xform))
             z, y, x = result["updated_object_stack"].obj_center  # frame, row, col
             frame = stack[round(z)]
             target = frame.mapFromFrameToGlobal((x, y)) + (frame.depth,)
