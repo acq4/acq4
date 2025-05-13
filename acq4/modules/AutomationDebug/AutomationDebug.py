@@ -861,10 +861,11 @@ class AutomationDebugWindow(Qt.QWidget):
         if not self._unranked_cells:
             # TODO teach the ranking window to detect cells (since I don't want this to be a future button)
             raise ValueError("No unranked cells available. Run detection first.")
-        if not self._current_detection_stack:
-            raise ValueError("Detection stack data is missing, cannot rank. Run detection first.")
-        if len(self._current_detection_stack) <= 1:
-            raise ValueError("Detection stack has only one frame.")
+        stack = self._current_classification_stack or self._current_detection_stack
+        if not stack:
+            raise ValueError("Stack data is missing, cannot rank. Run detection first.")
+        if len(stack) <= 1:
+            raise ValueError("Stack has only one frame.")
         save_dir = Path(self.ui.rankingSaveDirEdit.text())
         if not save_dir.is_dir():
             try:
@@ -877,13 +878,13 @@ class AutomationDebugWindow(Qt.QWidget):
         start, end = np.array(self._unranked_cells.pop(0))
         center_global = (start + end) / 2.0
         pixel_size = self.cameraDevice.getPixelSize()[0]  # Get current pixel size
-        z_step = abs(self._current_detection_stack[1].depth - self._current_detection_stack[0].depth)
+        z_step = abs(stack[1].depth - stack[0].depth)
 
         # --- Create and show RankingWindow ---
         ranking_window = RankingWindow(
             main_window=self,  # Pass reference for cleanup
             cell_center=center_global,
-            detection_stack=self._current_detection_stack,
+            detection_stack=stack,
             classification_stack=self._current_classification_stack,
             pixel_size=pixel_size,
             z_step=z_step,
