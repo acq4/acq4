@@ -512,7 +512,7 @@ class AutomationDebugWindow(Qt.QWidget):
             stop = target + margin
             if sign < 0:
                 start, stop = stop, start
-            _future.waitFor(self.camearaDevice.moveCenterToGlobal(start))
+            _future.waitFor(self.cameraDevice.moveCenterToGlobal(start))
             stack = _future.waitFor(acquire_z_stack(self.cameraDevice, start[2], stop[2], step), timeout=60).getResult()
             # get the closest frame to the target depth
             depths = [abs(f.depth - target[2]) for f in stack]
