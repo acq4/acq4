@@ -27,18 +27,8 @@ class MIESPatchPipetteStateManager(PatchPipetteStateManager):
     stateHandlers = PatchPipetteStateManager.stateHandlers.copy()
     stateHandlers['seal'] = SealStateMIES
     stateHandlers['bath'] = BathStateMIES
-    # stateHandlers = OrderedDict([
-    #     # ('out', states.PatchPipetteOutState),
-    #     # ('bath', MIESPatchPipetteBathState),
-    #     # ('approach', states.PatchPipetteApproachState),
-    #     # ('cell detect', states.PatchPipetteCellDetectState),
-        # ('seal', MIESPatchPipetteSealState),
-    #     # ('cell attached', states.PatchPipetteCellAttachedState),
-    #     # ('break in', states.PatchPipetteBreakInState),
-    #     # ('whole cell', states.PatchPipetteWholeCellState),
-    #     # ('reseal', states.PatchPipetteResealState),
-    #     # ('blowout', states.PatchPipetteBlowoutState),
-    #     # ('broken', states.PatchPipetteBrokenState),
-    #     # ('fouled', states.PatchPipetteFouledState),
-    #     # ('clean', states.PatchPipetteCleanState),
-    # ])
+
+    def stateChanged(self, oldState, newState):
+        """Called when state has changed (possibly by user)
+        """
+        pass

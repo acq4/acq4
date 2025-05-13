@@ -43,15 +43,8 @@ class PipetteControl(Qt.QWidget):
             if self.pip.clampDevice is not None:
                 self.pip.clampDevice.sigTestPulseFinished.connect(self.updatePlots)
                 self.pip.clampDevice.sigAutoBiasChanged.connect(self._updateAutoBiasUi)
-            if self.pip.pressureDevice is None:
-                self.ui.pressureWidget.hide()
-            else:
+            if self.pip.pressureDevice is not None:
                 self.ui.pressureWidget.connectPressureDevice(self.pip.pressureDevice)
-            if self.pip.sonicatorDevice is None:
-                self.ui.sonicatorLabel.hide()
-                self.ui.sonicatorActionControl.hide()
-            else:
-                self.pip.sonicatorDevice.sigSonicationChanged.connect(self.ui.sonicatorActionControl.setText)
             self.pip.sigNewPipetteRequested.connect(self.newPipetteRequested)
             self.pip.sigTipCleanChanged.connect(self.tipCleanChanged)
             self.pip.sigTipBrokenChanged.connect(self.tipBrokenChanged)
@@ -103,7 +96,7 @@ class PipetteControl(Qt.QWidget):
         self.ui.icHoldingSpin.valueChanged.connect(self.icHoldingSpinChanged)
         self.ui.autoBiasTargetSpin.valueChanged.connect(self.autoBiasSpinChanged)
 
-        self.ui.newPipetteBtn.setOpts(future_producer=self.newPipetteClicked, stoppable=True)
+        self.ui.newPipetteBtn.clicked.connect(self.newPipetteClicked)
         self.ui.fouledCheck.stateChanged.connect(self.fouledCheckChanged)
         self.ui.brokenCheck.stateChanged.connect(self.brokenCheckChanged)
 
@@ -130,7 +123,8 @@ class PipetteControl(Qt.QWidget):
             self.pip.clampDevice.sigStateChanged.connect(self.clampStateChanged)
             self.pip.clampDevice.sigHoldingChanged.connect(self.clampHoldingChanged)
             self.clampStateChanged(self.pip.clampDevice.getState())
-            self.clampHoldingChanged(self.pip.clampDevice, self.pip.clampDevice.getMode())
+            self.clampHoldingChanged(self.pip.clampDevice.getMode(), 
+                                     self.pip.clampDevice.getHolding(self.pip.clampDevice.getMode()))
             self._updateAutoBiasUi()
             self._updateActiveHoldingUi()
 
@@ -224,11 +218,10 @@ class PipetteControl(Qt.QWidget):
 
     def clampStateChanged(self, state):
         mode = self.selectedClampMode()
-        if mode != state['mode']:
+        if mode != state['mode']: 
             btnId = {'VC': 0, 'IC': 1, 'I=0': 2}[state['mode']]
             with pg.SignalBlock(self.modeGroup.idClicked, self.modeBtnClicked):
                 self.modeGroup.button(btnId).setChecked(True)
-
             self._updateActiveHoldingUi()
 
     def _updateActiveHoldingUi(self):
@@ -322,7 +315,7 @@ class PipetteControl(Qt.QWidget):
 
     def newPipetteClicked(self):
         self.ui.newPipetteBtn.setStyleSheet("")
-        return self.pip.newPipette()
+        self.pip.newPipette()
 
     def tipCleanChanged(self, pip, clean):
         with pg.SignalBlock(self.ui.fouledCheck.stateChanged, self.fouledCheckChanged):
@@ -382,11 +375,6 @@ class PlotWidget(Qt.QWidget):
         self.layout.addWidget(self.modeCombo, 0, 0)
         self.modeCombo.currentIndexChanged.connect(self.modeComboChanged)
 
-        # self.closeBtn = Qt.QPushButton('X')
-        # self.closeBtn.setMaximumWidth(15)
-        # self.layout.addWidget(self.closeBtn, 0, 1)
-        # self.closeBtn.clicked.connect(self.closeClicked)
-
         self.plot = pg.PlotWidget()
         self.layout.addWidget(self.plot, 1, 0, 1, 2)
 
@@ -398,7 +386,6 @@ class PlotWidget(Qt.QWidget):
 
     def hideHeader(self):
         self.modeCombo.hide()
-        # self.closeBtn.hide()
 
     def newTestPulse(self, tp: PatchClampTestPulse, history):
         if self._analysisLabel is not None:
