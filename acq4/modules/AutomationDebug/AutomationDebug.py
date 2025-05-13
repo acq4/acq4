@@ -510,7 +510,9 @@ class AutomationDebugWindow(Qt.QWidget):
             if direction < 0:
                 start_glob, stop_glob = stop_glob, start_glob
             _future.waitFor(self.cameraDevice.moveCenterToGlobal(start_glob, "fast"))
-            stack = _future.waitFor(acquire_z_stack(self.cameraDevice, start_glob[2], stop_glob[2], step), timeout=60).getResult()
+            stack = _future.waitFor(
+                acquire_z_stack(self.cameraDevice, start_glob[2], stop_glob[2], step), timeout=60
+            ).getResult()
             if direction < 0:
                 stack = stack[::-1]
                 start_glob, stop_glob = stop_glob, start_glob
@@ -529,8 +531,11 @@ class AutomationDebugWindow(Qt.QWidget):
             )
             start_ijk = np.round(stack_xform.inverse.map(start_glob)).astype(int)
             stop_ijk = np.round(stack_xform.inverse.map(stop_glob)).astype(int)
+            start_ijk, stop_ijk = np.min(start_ijk, stop_ijk), np.max(start_ijk, stop_ijk)
             roi_stack = ijk_stack[
-                start_ijk[0] : stop_ijk[0], start_ijk[1] : stop_ijk[1], start_ijk[2] : stop_ijk[2]
+                start_ijk[0] : stop_ijk[0],
+                start_ijk[1] : stop_ijk[1],
+                start_ijk[2] : stop_ijk[2],
             ]
             region_xform = stack_xform * TTransform(
                 offset=start_ijk,
