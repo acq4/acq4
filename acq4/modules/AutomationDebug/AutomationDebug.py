@@ -504,26 +504,30 @@ class AutomationDebugWindow(Qt.QWidget):
         _future.waitFor(pipette.focusTarget())
         obj_stack = None
         sign = 1
+        margin = 10e-6
 
         while True:
             sign *= -1
-            start = target[2] - (10e-6 * sign)
-            stop = target[2] + (10e-6 * sign)
-            stack = _future.waitFor(acquire_z_stack(self.cameraDevice, start, stop, step), timeout=60).getResult()
+            start = target - margin
+            stop = target + margin
+            if sign < 0:
+                start, stop = stop, start
+            _future.waitFor(self.camearaDevice.moveCenterToGlobal(start))
+            stack = _future.waitFor(acquire_z_stack(self.cameraDevice, start[2], stop[2], step), timeout=60).getResult()
             # get the closest frame to the target depth
             depths = [abs(f.depth - target[2]) for f in stack]
             z = np.argmin(depths)
             target_frame = stack[z]
             relative_target = np.array(tuple(reversed(target_frame.mapFromGlobalToFrame(tuple(target[:2])) + (z,))))
-            stack_data = np.array([frame.data().T for frame in stack])
+            stack_data = np.array([f.data().T for f in stack])
             xform = SRT3DTransform.from_pyqtgraph(
                 target_frame.globalTransform(),
-                from_cs=f"frame_{target_frame.info()['id']}.ijk",
+                from_cs=f"frame_{target_frame.info()['id']}.xyz",
                 to_cs="global",
             ) * TransposeTransform(
                 (2, 1, 0),
-                from_cs=f"frame_{target_frame.info()['id']}.xyz",
-                to_cs=f"frame_{target_frame.info()['id']}.ijk",
+                from_cs=f"frame_{target_frame.info()['id']}.ijk",
+                to_cs=f"frame_{target_frame.info()['id']}.xyz",
             )
             if obj_stack is None:
                 obj_stack = ObjectStack(
