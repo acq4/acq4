@@ -356,6 +356,12 @@ def acquire_z_stack(imager, start: float, stop: float, step: float, _future: Fut
             _future.setState("Failed to enforce linear z stack. Retrying with stepwise movement.")
             frames = _slow_z_stack(imager, start, stop, step).getResult()
             frames = _enforce_linear_z_stack(frames, step)
+    # set each transform's z scale to be the step size
+    for f in frames:
+        transform = f.globalTransform()
+        scale = transform.getScale()
+        # modifies it in place
+        transform.setScale((scale[0], scale[1], step))
     return frames
 
 
