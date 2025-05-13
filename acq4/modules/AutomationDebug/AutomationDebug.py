@@ -22,7 +22,7 @@ from acq4.util.imaging.sequencer import acquire_z_stack
 from acq4.util.target import TargetBox
 from acq4.util.threadrun import runInGuiThread
 import pyqtgraph as pg
-from coorx import AffineTransform, TransposeTransform
+from coorx import SRT3DTransform, TransposeTransform
 from pyqtgraph.units import µm, m
 
 UiTemplate = Qt.importTemplate(".window")
@@ -516,7 +516,7 @@ class AutomationDebugWindow(Qt.QWidget):
             target_frame = stack[z]
             relative_target = np.array(tuple(reversed(target_frame.mapFromGlobalToFrame(tuple(target[:2])) + (z,))))
             stack_data = np.array([frame.data().T for frame in stack])
-            xform = AffineTransform.from_pyqtgraph(target_frame.globalTransform()) * TransposeTransform((2, 1, 0))
+            xform = SRT3DTransform.from_pyqtgraph(target_frame.globalTransform()) * TransposeTransform((2, 1, 0))
             if obj_stack is None:
                 obj_stack = ObjectStack(
                     img_stack=stack_data,
