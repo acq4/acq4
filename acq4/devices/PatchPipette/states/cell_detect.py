@@ -143,9 +143,6 @@ class CellDetectState(PatchPipetteState):
     - monitor resistance for cell proximity and switch to seal mode
     - monitor resistance for pipette break
 
-    TODO:
-    - Feature tracking
-
     Parameters
     ----------
     autoAdvance : bool
@@ -161,6 +158,8 @@ class CellDetectState(PatchPipetteState):
         Time duration (seconds) to wait between steps when advanceContinuous=False(default 0.1)
     advanceStepDistance : float
         Distance (m) per step when advanceContinuous=False (default 1 µm)
+    visualTargetTracking : bool
+        If True, the pipette will visually track the cell position while advancing (default False)
     takeACellfie : bool
         Whether to take a z-stack of the cell at the start of this state (default True)
     cellfieHeight : float
@@ -250,6 +249,7 @@ class CellDetectState(PatchPipetteState):
         'belowSurfacePressureMax': {'default': 5000, 'type': 'float', 'suffix': 'Pa'},
         'belowSurfacePressureChange': {'default': 50 / µm, 'type': 'float', 'suffix': 'Pa/m'},
         'detectionSpeed': {'default': 2e-6, 'type': 'float', 'suffix': 'm/s'},
+        'visualTargetTracking': {'default': False, 'type': 'bool'},
         'takeACellfie': {'default': True, 'type': 'bool'},
         'cellfieHeight': {'default': 30e-6, 'type': 'float', 'suffix': 'm'},
         'cellfieStep': {'default': 1e-6, 'type': 'float', 'suffix': 'm'},
@@ -279,6 +279,7 @@ class CellDetectState(PatchPipetteState):
     def __init__(self, *args, **kwds):
         super().__init__(*args, **kwds)
         self._continuousAdvanceFuture = None
+        self._visualTargetTrackingFuture = None
         self.lastMove = 0.0
         self.stepCount = 0
         self.advanceSteps = None
@@ -326,6 +327,7 @@ class CellDetectState(PatchPipetteState):
             self.checkStop()
             self.processAtLeastOneTestPulse()
             self.adjustPressureForDepth()
+            self.maybeVisuallyTrackTarget()
             if self._analysis.tip_is_broken():
                 self._taskDone(interrupted=True, error="Pipette broken")
                 self.dev.patchRecord()['detectedCell'] = False
@@ -377,6 +379,20 @@ class CellDetectState(PatchPipetteState):
                 storage_dir=save_in,
             )
         )
+
+    def maybeVisuallyTrackTarget(self):
+        if not self.config["maybeVisuallyTrackTarget"]:
+            return
+        if self.closeEnoughToTargetToDetectCell():
+            if self._visualTargetTrackingFuture is not None:
+                self._visualTargetTrackingFuture.stop("Too close to keep tracking")
+            return
+        if self._visualTargetTrackingFuture is None:
+            self._visualTargetTrackingFuture = self._visualTargetTracking()
+
+    @future_wrap
+    def _visualTargetTracking(self, _future):
+        pass
 
     def adjustPressureForDepth(self):
         """While not that slow, we still want to keep the innermost loop as fast as we can."""
