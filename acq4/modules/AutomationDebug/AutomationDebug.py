@@ -504,15 +504,20 @@ class AutomationDebugWindow(Qt.QWidget):
         margin = 10e-6
 
         while True:
-            start = target - margin
-            stop = target + margin
+            # get the stack, in alternating directions
+            start_glob = target - margin
+            stop_glob = target + margin
             if direction < 0:
-                start, stop = stop, start
-            _future.waitFor(self.cameraDevice.moveCenterToGlobal(start, "fast"))
-            stack = _future.waitFor(acquire_z_stack(self.cameraDevice, start[2], stop[2], step), timeout=60).getResult()
+                start_glob, stop_glob = stop_glob, start_glob
+            _future.waitFor(self.cameraDevice.moveCenterToGlobal(start_glob, "fast"))
+            stack = _future.waitFor(acquire_z_stack(self.cameraDevice, start_glob[2], stop_glob[2], step), timeout=60).getResult()
             if direction < 0:
                 stack = stack[::-1]
-            stack_data = np.array([f.data().T for f in stack])
+                start_glob, stop_glob = stop_glob, start_glob
+            direction *= -1
+
+            # get the normalized 20µm³ region for tracking
+            ijk_stack = np.array([f.data().T for f in stack])
             stack_xform = SRT3DTransform.from_pyqtgraph(
                 stack[0].globalTransform(),
                 from_cs=f"frame_{stack[0].info()['id']}.xyz",
@@ -522,11 +527,9 @@ class AutomationDebugWindow(Qt.QWidget):
                 from_cs=f"frame_{stack[0].info()['id']}.ijk",
                 to_cs=f"frame_{stack[0].info()['id']}.xyz",
             )
-            start_ijk = np.round(stack_xform.inverse.map(start)).astype(int)
-            stop_ijk = np.round(stack_xform.inverse.map(stop)).astype(int)
-            if np.all(stop < start):
-                start_ijk, stop_ijk = stop_ijk, start_ijk
-            region = stack_data[
+            start_ijk = np.round(stack_xform.inverse.map(start_glob)).astype(int)
+            stop_ijk = np.round(stack_xform.inverse.map(stop_glob)).astype(int)
+            roi_stack = ijk_stack[
                 start_ijk[0] : stop_ijk[0], start_ijk[1] : stop_ijk[1], start_ijk[2] : stop_ijk[2]
             ]
             region_xform = stack_xform * TTransform(
@@ -537,19 +540,16 @@ class AutomationDebugWindow(Qt.QWidget):
             region_center = np.round(region_xform.inverse.map(target)).astype(int)
             if obj_stack is None:
                 obj_stack = ObjectStack(
-                    img_stack=region,
+                    img_stack=roi_stack,
                     transform=region_xform,
                     obj_center=region_center,
                 )
                 tracker.set_tracked_object(obj_stack)
                 continue
-            direction *= -1
-            result = tracker.next_frame(ImageStack(region, region_xform))
-            z, y, x = result["updated_object_stack"].obj_center  # frame, row, col
-            frame = stack[round(z)]
-            target = frame.mapFromFrameToGlobal((x, y)) + (frame.depth,)
+            result = tracker.next_frame(ImageStack(roi_stack, region_xform))
+            target = result["updated_object_stack"].obj_center.mapped_to("global")
             pipette.setTarget(target)
-            self.sigLogMessage.emit(f"Updated target to ({x}, {y}, {z}): {target}")
+            self.sigLogMessage.emit(f"Updated target to {target}")
 
     def _handleFeatureTrackingFinish(self, fut: Future):
         self.sigWorking.emit(False)
