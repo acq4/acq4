@@ -333,12 +333,12 @@
        <widget class="QComboBox" name="featureTrackerSelector">
         <item>
          <property name="text">
-          <string>PyrLK3D</string>
+          <string>CV2</string>
          </property>
         </item>
         <item>
          <property name="text">
-          <string>CV2</string>
+          <string>PyrLK3D</string>
          </property>
         </item>
         <item>

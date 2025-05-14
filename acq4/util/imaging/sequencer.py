@@ -10,6 +10,7 @@ import acq4.Manager as Manager
 import pyqtgraph as pg
 from acq4.util import Qt, ptime
 from acq4.util.DataManager import DirHandle
+from acq4.util.debug import logMsg
 from acq4.util.future import Future, future_wrap
 from acq4.util.imaging import Frame
 from acq4.util.surface import find_surface
@@ -353,16 +354,19 @@ def acquire_z_stack(imager, start: float, stop: float, step: float, _future: Fut
         try:
             frames = _enforce_linear_z_stack(frames, step)
         except ValueError:
-            _future.setState("Failed to enforce linear z stack. Retrying with stepwise movement.")
-            frames = _slow_z_stack(imager, start, stop, step).getResult()
+            logMsg("Failed to fast-acquire linear z stack. Retrying with stepwise movement.")
+            frames = _future.waitFor(_slow_z_stack(imager, start, stop, step)).getResult()
             frames = _enforce_linear_z_stack(frames, step)
-    # set each transform's z scale to be the step size
-    for f in frames:
-        transform = f.globalTransform()
-        scale = transform.getScale()
-        # modifies it in place
-        transform.setScale((scale[0], scale[1], step))
+    _fix_frame_transforms(frames, step)
     return frames
+
+
+def _fix_frame_transforms(frames, z_step):
+    for f in frames:
+        xform = f.globalTransform()
+        scale = xform.getScale()
+        xform.setScale(scale[0], scale[1], z_step)
+        f.addInfo(transform=xform.saveState())
 
 
 class ImageSequencerCtrl(Qt.QWidget):
