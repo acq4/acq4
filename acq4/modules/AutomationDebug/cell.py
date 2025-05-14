@@ -4,13 +4,13 @@ from acq4.util import Qt, ptime
 from acq4.util.future import future_wrap
 from acq4.util.imaging.sequencer import acquire_z_stack
 from acq4_automation.feature_tracking import CV2MostFlowAgreementTracker, ObjectStack, ImageStack
-from coorx import SRT3DTransform, Image, Point, TransposeTransform, TTransform
+from coorx import SRT3DTransform, TransposeTransform, TTransform
 
 
 class Cell(Qt.QObject):
     sigPositionChanged = Qt.pyqtSignal(object)
 
-    def __init__(self, position, imager):
+    def __init__(self, position, imager, trackerClass=CV2MostFlowAgreementTracker):
         """Initialize the Cell object.
         Parameters
         ----------
@@ -24,7 +24,7 @@ class Cell(Qt.QObject):
         self._positions = {ptime.time(): position}
         self._imager = imager
         self._trackingFuture = None
-        self._tracker = CV2MostFlowAgreementTracker()
+        self._tracker = trackerClass()
         self._initializeTracker()
 
     @property

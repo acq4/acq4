@@ -6,12 +6,14 @@ from pathlib import Path
 
 import numpy as np
 
+import pyqtgraph as pg
 from MetaArray import MetaArray
 from acq4.devices.Camera import Camera
 from acq4.devices.Microscope import Microscope
 from acq4.devices.Pipette import Pipette
 from acq4.devices.Pipette.calibration import findNewPipette
 from acq4.devices.Pipette.planners import PipettePathGenerator, GeometryAwarePathGenerator
+from acq4.modules.AutomationDebug.cell import Cell
 from acq4.modules.Camera import CameraWindow
 from acq4.modules.Module import Module
 from acq4.util import Qt
@@ -21,8 +23,6 @@ from acq4.util.imaging import Frame
 from acq4.util.imaging.sequencer import acquire_z_stack
 from acq4.util.target import TargetBox
 from acq4.util.threadrun import runInGuiThread
-import pyqtgraph as pg
-from coorx import SRT3DTransform, TransposeTransform, TTransform
 from pyqtgraph.units import µm, m
 
 UiTemplate = Qt.importTemplate(".window")
@@ -482,80 +482,33 @@ class AutomationDebugWindow(Qt.QWidget):
             PyrLK3DTracker,
             CellPoseTracker,
             CV2MostFlowAgreementTracker,
-            ObjectStack,
-            ImageStack,
         )
 
         self.sigWorking.emit(self.ui.trackFeaturesBtn)
         if self.ui.featureTrackerSelector.currentText() == "Cellpose":
-            tracker = CellPoseTracker()
+            tracker = CellPoseTracker
         elif self.ui.featureTrackerSelector.currentText() == "CV2":
-            tracker = self._featureTracker = CV2MostFlowAgreementTracker()
+            tracker = self._featureTracker = CV2MostFlowAgreementTracker
         elif self.ui.featureTrackerSelector.currentText() == "PyrLK3D":
-            tracker = self._featureTracker = PyrLK3DTracker()
+            tracker = self._featureTracker = PyrLK3DTracker
         else:
             raise ValueError(f"unknown tracker '{self.ui.featureTrackerSelector.currentText()}'")
-        self._featureTracker = tracker
         pipette = self.pipetteDevice
         target: np.ndarray = pipette.targetPosition()
-        step = 1e-6
-        direction = 1
-        obj_stack = None
-        margin = 10e-6
+        cell = Cell(target, self.cameraDevice, tracker)
+        cell.enableTracking()
+        cell.sigPositionChanged.connect(self._updatePipetteTarget)
+        try:
+            while True:
+                _future.sleep(1)
+        except Exception:
+            cell.enableTracking(False)
+            cell.sigPositionChanged.disconnect(self._updatePipetteTarget)
+            raise
 
-        # TODO most of this logic gets replaced by Cell object
-        while True:
-            # get the stack, in alternating directions
-            start_glob = target - margin
-            stop_glob = target + margin
-            if direction < 0:
-                start_glob, stop_glob = stop_glob, start_glob
-            _future.waitFor(self.cameraDevice.moveCenterToGlobal(start_glob, "fast"))
-            stack = _future.waitFor(
-                acquire_z_stack(self.cameraDevice, start_glob[2], stop_glob[2], step), timeout=60
-            ).getResult()
-            if direction < 0:
-                stack = stack[::-1]
-                start_glob, stop_glob = stop_glob, start_glob
-            direction *= -1
-
-            # get the normalized 20µm³ region for tracking
-            ijk_stack = np.array([f.data().T for f in stack])
-            stack_xform = SRT3DTransform.from_pyqtgraph(
-                stack[0].globalTransform(),
-                from_cs=f"frame_{stack[0].info()['id']}.xyz",
-                to_cs="global",
-            ) * TransposeTransform(
-                (2, 1, 0),
-                from_cs=f"frame_{stack[0].info()['id']}.ijk",
-                to_cs=f"frame_{stack[0].info()['id']}.xyz",
-            )
-            start_ijk = np.round(stack_xform.inverse.map(start_glob)).astype(int)
-            stop_ijk = np.round(stack_xform.inverse.map(stop_glob)).astype(int)
-            start_ijk, stop_ijk = np.min((start_ijk, stop_ijk), axis=0), np.max((start_ijk, stop_ijk), axis=0)
-            roi_stack = ijk_stack[
-                start_ijk[0] : stop_ijk[0],
-                start_ijk[1] : stop_ijk[1],
-                start_ijk[2] : stop_ijk[2],
-            ]
-            region_xform = stack_xform * TTransform(
-                offset=start_ijk,
-                from_cs=f"frame_{stack[0].info()['id']}.roi",
-                to_cs=f"frame_{stack[0].info()['id']}.ijk",
-            )
-            region_center = np.round(region_xform.inverse.map(target)).astype(int)
-            if obj_stack is None:
-                obj_stack = ObjectStack(
-                    img_stack=roi_stack,
-                    transform=region_xform,
-                    obj_center=region_center,
-                )
-                tracker.set_tracked_object(obj_stack)
-                continue
-            result = tracker.next_frame(ImageStack(roi_stack, region_xform))
-            target = result["updated_object_stack"].obj_center.mapped_to("global")
-            pipette.setTarget(target)
-            self.sigLogMessage.emit(f"Updated target to {target}")
+    def _updatePipetteTarget(self, pos):
+        self.pipetteDevice.setTarget(pos)
+        self.sigLogMessage.emit(f"Updated target to {pos}")
 
     def _handleFeatureTrackingFinish(self, fut: Future):
         self.sigWorking.emit(False)
