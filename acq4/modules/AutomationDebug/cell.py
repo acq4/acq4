@@ -4,7 +4,7 @@ from acq4.util import Qt, ptime
 from acq4.util.future import future_wrap
 from acq4.util.imaging.sequencer import acquire_z_stack
 from acq4_automation.feature_tracking import CV2MostFlowAgreementTracker, ObjectStack, ImageStack
-from coorx import SRT3DTransform, Image, Point, TransposeTransform
+from coorx import SRT3DTransform, Image, Point, TransposeTransform, TTransform
 
 
 class Cell(Qt.QObject):
@@ -34,17 +34,7 @@ class Cell(Qt.QObject):
 
     @future_wrap
     def _initializeTracker(self, _future):
-        full_stack = _future.waitFor(self._takeStackshot()).getResult()
-        xforms = [
-            SRT3DTransform.from_pyqtgraph(f.globalTransform(), from_cs=f"frame_{f.info()['id']}.xyz", to_cs="global") *
-            TransposeTransform((2,1,0), from_cs=f"frame_{f.info()['id']}.ijk", to_cs=f"frame_{f.info()['id']}.xyz") for f in full_stack
-            for f in full_stack
-        ]
-        global_center = Point(self.initialPosition, "global")
-        full_center = global_center.mapped_to(xforms[0].systems[0])
-        bounds = ((full_center[1], full_center[1]), (full_center[2], full_center[2]))
-        full_stack = [Image(f.data(), cs_name=f"frame_{f.info()['id']}.ijk") for f in full_stack]
-
+        stack, xform, center = _future.waitFor(self._takeStackshot()).getResult()
         obj_stack = ObjectStack(stack, xform, center)
         self._tracker.set_tracked_object(obj_stack)
 
@@ -79,40 +69,54 @@ class Cell(Qt.QObject):
     def updatePosition(self, _future):
         while self._tracker.current_object_stack is None:
             _future.sleep(0.1)
-        stack = _future.waitFor(self._takeStackshot()).getResult()
-        xform = SRT3DTransform.from_pyqtgraph(stack[0].globalTransform())
+        stack, xform, _ = _future.waitFor(self._takeStackshot()).getResult()
         img_stack = ImageStack(stack, xform)
         result = self._tracker.next_frame(img_stack)
-        global_position = xform.map(result["position"])
+        global_position = result["position"].mapped_to("global")
         self._positions[ptime.time()] = global_position
         self.sigPositionChanged.emit(global_position)
 
     @future_wrap
     def _takeStackshot(self, _future):
         current_focus = self._imager.globalCenterPosition()
-
-        my_x, my_y, my_z = self.position
-        start = my_z - 10e-6
-        end = my_z + 10e-6
-        if current_focus[2] > my_z:
-            start, end = end, start
-
-        cam_left, cam_top, cam_width, cam_height = self._imager.getBoundary()
-        if (
-            (my_x - 50e-6) < cam_left
-            or (my_x + 50e-6) > (cam_left + cam_width)
-            or (my_y + 50e-6) > cam_top
-            or (my_y - 50e-6) < (cam_top + cam_height)
-        ):
-            _future.waitFor(self._imager.moveCenterToGlobal((my_x, my_y, start)))
-
-        stack = _future.waitFor(acquire_z_stack(self._imager, start, end, 1e-6)).getResult()
-        if current_focus[2] > my_z:
+        target = self.position
+        direction = current_focus[2] > target[2]
+        margin = 20e-6
+        start_glob = target - margin
+        stop_glob = target + margin
+        if direction < 0:
+            start_glob, stop_glob = stop_glob, start_glob
+        _future.waitFor(self._imager.moveCenterToGlobal(start_glob, "fast"))
+        stack = _future.waitFor(
+            acquire_z_stack(self._imager, start_glob[2], stop_glob[2], 1e-6), timeout=60
+        ).getResult()
+        if direction < 0:
             stack = stack[::-1]
-        # extract 20µm³ region
-        µm_x = stack[0].globalTransform().getScale()[0] / 1e-6
-        µm_y = stack[0].globalTransform().getScale()[1] / 1e-6
-        stack = [
-            Image(st.data()[int(µm_x / 2) : -int(µm_x / 2), int(µm_y / 2) : -int(µm_y / 2)], st.globalTransform())
-            for st in stack
-        ]
+            start_glob, stop_glob = stop_glob, start_glob
+
+        # get the normalized 20µm³ region for tracking
+        ijk_stack = np.array([f.data().T for f in stack])
+        stack_xform = SRT3DTransform.from_pyqtgraph(
+            stack[0].globalTransform(),
+            from_cs=f"frame_{stack[0].info()['id']}.xyz",
+            to_cs="global",
+        ) * TransposeTransform(
+            (2, 1, 0),
+            from_cs=f"frame_{stack[0].info()['id']}.ijk",
+            to_cs=f"frame_{stack[0].info()['id']}.xyz",
+        )
+        start_ijk = np.round(stack_xform.inverse.map(start_glob)).astype(int)
+        stop_ijk = np.round(stack_xform.inverse.map(stop_glob)).astype(int)
+        start_ijk, stop_ijk = np.min((start_ijk, stop_ijk), axis=0), np.max((start_ijk, stop_ijk), axis=0)
+        roi_stack = ijk_stack[
+                    start_ijk[0]: stop_ijk[0],
+                    start_ijk[1]: stop_ijk[1],
+                    start_ijk[2]: stop_ijk[2],
+                    ]
+        region_xform = stack_xform * TTransform(
+            offset=start_ijk,
+            from_cs=f"frame_{stack[0].info()['id']}.roi",
+            to_cs=f"frame_{stack[0].info()['id']}.ijk",
+        )
+        region_center = np.round(region_xform.inverse.map(target)).astype(int)
+        return roi_stack, region_xform, region_center

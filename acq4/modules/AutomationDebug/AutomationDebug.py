@@ -503,6 +503,7 @@ class AutomationDebugWindow(Qt.QWidget):
         obj_stack = None
         margin = 10e-6
 
+        # TODO most of this logic gets replaced by Cell object
         while True:
             # get the stack, in alternating directions
             start_glob = target - margin
