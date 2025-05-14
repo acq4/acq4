@@ -1,7 +1,7 @@
 import numpy as np
 
 from acq4.util import Qt, ptime
-from acq4.util.future import future_wrap
+from acq4.util.future import future_wrap, Future
 from acq4.util.imaging.sequencer import acquire_z_stack
 from acq4_automation.feature_tracking import CV2MostFlowAgreementTracker, ObjectStack, ImageStack
 from coorx import SRT3DTransform, TransposeTransform, TTransform
@@ -24,6 +24,7 @@ class Cell(Qt.QObject):
         self._positions = {ptime.time(): position}
         self._imager = imager
         self._trackingFuture = None
+        self.isTracking = False
         self._tracker = trackerClass()
         self._initializeTracker()
 
@@ -48,11 +49,12 @@ class Cell(Qt.QObject):
         interval : int
             The interval in milliseconds at which to check the cell position.
         """
+        self.isTracking = enable
         if enable:
             if self._trackingFuture is not None:
                 self._trackingFuture.stop("Tracking restarted")
             self._trackingFuture = self._track(interval)
-            self._trackingFuture.raiseErrors("Error tracking cell")
+            self._trackingFuture.onFinish(self._handleTrackingFinished)
         elif self._trackingFuture is not None:
             self._trackingFuture.stop("Tracking disabled")
             self._trackingFuture = None
@@ -65,6 +67,12 @@ class Cell(Qt.QObject):
             if ptime.time() - last_tracked > interval:
                 _future.waitFor(self.updatePosition())
             _future.sleep(interval)
+
+    def _handleTrackingFinished(self, future: Future):
+        # TODO do we need a mutex
+        self._trackingFuture = None
+        self.isTracking = False
+        future.wait()
 
     @future_wrap
     def updatePosition(self, _future):
