@@ -357,7 +357,16 @@ def acquire_z_stack(imager, start: float, stop: float, step: float, _future: Fut
             logMsg("Failed to fast-acquire linear z stack. Retrying with stepwise movement.")
             frames = _future.waitFor(_slow_z_stack(imager, start, stop, step)).getResult()
             frames = _enforce_linear_z_stack(frames, step)
+    _fix_frame_transforms(frames, step)
     return frames
+
+
+def _fix_frame_transforms(frames, z_step):
+    for f in frames:
+        xform = f.globalTransform()
+        scale = xform.getScale()
+        xform.setScale(scale[0], scale[1], z_step)
+        f.addInfo(transform=xform.saveState())
 
 
 class ImageSequencerCtrl(Qt.QWidget):
