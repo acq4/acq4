@@ -52,6 +52,7 @@ class Cell(Qt.QObject):
             if self._trackingFuture is not None:
                 self._trackingFuture.stop("Tracking restarted")
             self._trackingFuture = self._track(interval)
+            self._trackingFuture.raiseErrors("Error tracking cell")
         elif self._trackingFuture is not None:
             self._trackingFuture.stop("Tracking disabled")
             self._trackingFuture = None
@@ -67,7 +68,7 @@ class Cell(Qt.QObject):
 
     @future_wrap
     def updatePosition(self, _future):
-        while self._tracker.current_object_stack is None:
+        while len(self._tracker.object_stacks) == 0:
             _future.sleep(0.1)
         stack, xform, _ = _future.waitFor(self._takeStackshot()).getResult()
         img_stack = ImageStack(stack, xform)
@@ -79,7 +80,7 @@ class Cell(Qt.QObject):
     @future_wrap
     def _takeStackshot(self, _future):
         current_focus = self._imager.globalCenterPosition()
-        target = self.position
+        target = np.array(self.position)
         direction = current_focus[2] > target[2]
         margin = 20e-6
         start_glob = target - margin

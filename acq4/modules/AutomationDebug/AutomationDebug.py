@@ -501,6 +501,7 @@ class AutomationDebugWindow(Qt.QWidget):
         try:
             while True:
                 _future.sleep(1)
+                # TODO notice if there's an error in the tracking
         except Exception:
             cell.enableTracking(False)
             cell.sigPositionChanged.disconnect(self._updatePipetteTarget)
