@@ -7,8 +7,6 @@ import numpy as np
 
 import json
 
-from pprint import pprint
-
 class MIESPatchClamp(PatchClamp):
     """PatchClamp device implemented over MIES bridge
     """
@@ -27,13 +25,11 @@ class MIESPatchClamp(PatchClamp):
         self.sigHoldingChanged.emit(s['mode'], s['holding'])
 
     def miesHoldingPotentialChanged(self, value):
-        print(f"DEBUG-value:{value}")
         s = {'mode': self.getMode(), 'holding': value}
         self.sigStateChanged.emit(s)
         self.sigHoldingChanged.emit(s['mode'], s['holding'])
 
     def miesBiasCurrentChanged(self, value):
-        print(f"DEBUG-value:{value}")
         s = {'mode': self.getMode(), 'holding': value}
         self.sigStateChanged.emit(s)
         self.sigHoldingChanged.emit(s['mode'], s['holding'])
@@ -43,7 +39,6 @@ class MIESPatchClamp(PatchClamp):
 
     def enableTestPulse(self, enable=True, block=False):
         tpa = self.mies.igor.test_pulse_active
-        print(f"MIESPatchClamp:enableTestPulse:tpa:{tpa}, enable:{enable}")
         if tpa != enable:
             self.mies.toggleTestPulseActive()
 
@@ -79,7 +74,6 @@ class MIESPatchClamp(PatchClamp):
     
     def setAutoBiasTarget(self, v):
         current_value = self.autoBiasTarget()
-        print(f"setAutoBiasTarget:v:{v}, current_value:{current_value}")
         if current_value != v:
             self.mies.setAutoBiasTarget(self._headstage, v)
             enabled = self.autoBiasEnabled()

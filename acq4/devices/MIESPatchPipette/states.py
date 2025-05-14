@@ -1,4 +1,3 @@
-from __future__ import print_function
 from collections import OrderedDict
 from acq4.devices.PatchPipette.states import PatchPipetteState
 import acq4.devices.PatchPipette.states as states

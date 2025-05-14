@@ -9,7 +9,6 @@ import atexit
 import json
 import zmq
 import time
-from pprint import pprint
 
 from acq4.util.json_encoder import ACQ4JSONEncoder
 # sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
@@ -126,15 +125,10 @@ class IgorBridge(Qt.QObject):
                     changed_value = json.loads(pub_response[1].decode("utf-8"))['amplifier action']
                     if "HoldingPotential" in changed_value:
                         self.holding_potential = changed_value["HoldingPotential"]["value"]
-                        print(f"holding value:{self.holding_potential}")
-                        # print(f"holding potential changed with value: {self.holding_potential}")
                         self.sigMiesHoldingPotentialChanged.emit(self.holding_potential)
                     if "BiasCurrent" in changed_value:
                         self.bias_current = changed_value["BiasCurrent"]["value"]
-                        print(f"holding value:{self.bias_current}")
                         self.sigMiesBiasCurrentChanged.emit(self.bias_current)
-                else:
-                    print(f"unknown zmq pub msg received with filter value: [{pub_response[0].decode("utf-8")}]")
                 time.sleep(0.1)
             except zmq.error.Again:
                 pass
@@ -229,9 +223,8 @@ class IgorReqThread(threading.Thread):
                 reply = json.loads(parts[1])
                 try:
                     message_id = int(reply["messageID"])
-                except KeyError:
-                    print(reply)
-                    raise
+                except KeyError as ke:
+                    raise ke
                 future = self.unresolved_futures.pop(message_id)
                 if future is None:
                     raise RuntimeError(f"No future found for messageID {message_id}")

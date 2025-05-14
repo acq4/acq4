@@ -103,7 +103,6 @@ class MIES(Qt.QObject):
         if mode == "VC":
             return self.setCtrl('setvar_DataAcq_Hold_VC', value * 1000)
         elif mode == "IC":
-            print(f"Setting holding, original value: {value}, converted value: {value * 1e12}")
             return self.setCtrl('setvar_DataAcq_Hold_IC', value * 1e12)
     
     def setClampMode(self, hs: int, value: str): # IC | VC | I=0
@@ -228,12 +227,10 @@ class MIES(Qt.QObject):
                 if dev != "":
                     self._windowName = devices[0]
         if self._windowName is None:
-            print("DEBUG - Raising exception for windowName==None")
             raise Exception("No device locked in IGOR")
         return self._windowName
 
     def quit(self):
-        print("inside MIES.quit()")
         self._exiting = True
         self.igor.quit()
 
