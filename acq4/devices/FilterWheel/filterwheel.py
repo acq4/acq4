@@ -176,12 +176,8 @@ class FilterWheel(Device, OptomechDevice):
 
     def loadPreset(self, name):
         """Load a preset filter wheel position by name."""
-        idx = None
-        for i, n in self._slotNames.items():
-            if n == name:
-                idx = i
-                break
-        self.setPosition(idx)
+        idx = next((i for i, n in self._slotNames.items() if n == name), None)
+        return self.setPosition(idx)
 
     def _positionChanged(self, pos):
         filt = self.getFilter(pos)
