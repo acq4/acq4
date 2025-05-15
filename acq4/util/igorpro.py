@@ -8,6 +8,7 @@ import concurrent.futures
 import atexit
 import json
 import zmq
+import time
 
 from acq4.util.json_encoder import ACQ4JSONEncoder
 # sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
@@ -48,9 +49,92 @@ atexit.register(close_context)
 
 
 class IgorBridge(Qt.QObject):
+    sigTestPulseReady = Qt.Signal(object)
+    sigMiesConfigurationFinished = Qt.Signal()
+    sigMiesTestPulseStateChanged = Qt.Signal(bool)
+    sigMiesClampModeChanged = Qt.Signal(str)
+    sigMiesHoldingPotentialChanged = Qt.Signal(float)
+    sigMiesBiasCurrentChanged = Qt.Signal(float)
+
     def __init__(self, req_port=5670, sub_port=5770):
+        super().__init__()
+
+        self.topic_filters = {
+            "now": b"testpulse:results live", 
+            "live": b"testpulse:results live with data",
+            "1s": b"testpulse:results 1s update", 
+            "5s": b"testpulse:results 5s update", 
+            "10s": b"testpulse:results 10s update",
+            "HB": b"heartbeat", #empty bytearray
+            "DA_CHANGE": b"data acquisition:state change",
+            "CONFIG_FIN": b"configuration:finished",
+            "AMP_CHANGE": b"amplifier:set value",
+            "AMP_CLAMP_MODE_CHANGE": b"amplifier:clamp mode"
+            }
+        
+        self.clamp_mode_mapping = {
+            "V_CLAMP_MODE": "VC",
+            "I_CLAMP_MODE": "IC",
+            "I_EQUAL_ZERO_MODE": "I=0"
+        }
+        
+        self.test_pulse_active = False
+        self.clamp_mode = "VC"
+        self.holding_potential = 0.0
+        self.bias_current = 0.0
+        
         self.req_thread = IgorReqThread(address=f"tcp://localhost:{req_port}")
-        self.sub_thread = IgorSubThread(address=f"tcp://localhost:{sub_port}")
+        self.sub_socket_port = 5770
+        self.run_sub_socket = True
+        self.sub_socket_thread = threading.Thread(target=self.sub_socket_run, daemon=True)
+        self.sub_socket_thread.start()
+
+    def sub_socket_run(self):
+        sub_socket = zmq_context.socket(zmq.SUB)
+        sub_socket.setsockopt(zmq.LINGER, 500)
+        sub_socket.setsockopt(zmq.IDENTITY, b"miesmonitor_sub")
+        sub_socket.setsockopt(zmq.RCVTIMEO, 500) # up from zero
+        sub_socket.setsockopt(zmq.SUBSCRIBE, self.topic_filters["live"])
+        sub_socket.setsockopt(zmq.SUBSCRIBE, self.topic_filters["DA_CHANGE"])
+        sub_socket.setsockopt(zmq.SUBSCRIBE, self.topic_filters["CONFIG_FIN"])
+        sub_socket.setsockopt(zmq.SUBSCRIBE, self.topic_filters["AMP_CHANGE"])
+        sub_socket.setsockopt(zmq.SUBSCRIBE, self.topic_filters["AMP_CLAMP_MODE_CHANGE"])
+        sub_socket.connect(f"tcp://localhost:{self.sub_socket_port}")
+
+        while self.run_sub_socket:
+            try:
+                pub_response = sub_socket.recv_multipart()
+                if pub_response[0] == self.topic_filters["DA_CHANGE"]:
+                    msg = json.loads(pub_response[-1].decode("utf-8"))
+                    val = False
+                    if msg["tp"] == "starting":
+                        val = True
+                    self.test_pulse_active = val
+                    self.sigMiesTestPulseStateChanged.emit(val) # in case it's need elsewhere
+                elif pub_response[0] == self.topic_filters["live"]:
+                    self.test_pulse_active = True
+                    self.sigTestPulseReady.emit(pub_response) # trim to proper obj
+                elif pub_response[0] == self.topic_filters["CONFIG_FIN"]:
+                    self.sigMiesConfigurationFinished.emit()
+                elif pub_response[0] == self.topic_filters["AMP_CLAMP_MODE_CHANGE"]:
+                    clamp_mode = json.loads(pub_response[1].decode("utf-8"))['clamp mode']['new']
+                    clamp_mode = self.clamp_mode_mapping[clamp_mode]
+                    self.clamp_mode = clamp_mode
+                    self.sigMiesClampModeChanged.emit(clamp_mode)
+                elif pub_response[0] == self.topic_filters["AMP_CHANGE"]:
+                    changed_value = json.loads(pub_response[1].decode("utf-8"))['amplifier action']
+                    if "HoldingPotential" in changed_value:
+                        self.holding_potential = changed_value["HoldingPotential"]["value"]
+                        self.sigMiesHoldingPotentialChanged.emit(self.holding_potential)
+                    if "BiasCurrent" in changed_value:
+                        self.bias_current = changed_value["BiasCurrent"]["value"]
+                        self.sigMiesBiasCurrentChanged.emit(self.bias_current)
+                time.sleep(0.1)
+            except zmq.error.Again:
+                pass
+            except zmq.error.ZMQError as e:
+                # Operation cannot be accomplished in current state
+                pass
 
     def tryReconnect(func):
         def _tryReconnect(self, *args, **kwds):
@@ -77,6 +161,7 @@ class IgorBridge(Qt.QObject):
         return self.req_thread.send(cmd, *args)
     
     def quit(self):
+        self.run_sub_socket = False
         self.req_thread.stop()
 
 
@@ -105,7 +190,6 @@ class IgorReqThread(threading.Thread):
         self.socket.setsockopt(zmq.SNDTIMEO, 1000)
         self.socket.setsockopt(zmq.RCVTIMEO, 100)
         success = self.socket.connect(self.address)
-        print(f"DEBUG - success: {dir(success.socket)}")
 
 
         while not self.stop_flag:
@@ -139,9 +223,8 @@ class IgorReqThread(threading.Thread):
                 reply = json.loads(parts[1])
                 try:
                     message_id = int(reply["messageID"])
-                except KeyError:
-                    print(reply)
-                    raise
+                except KeyError as ke:
+                    raise ke
                 future = self.unresolved_futures.pop(message_id)
                 if future is None:
                     raise RuntimeError(f"No future found for messageID {message_id}")

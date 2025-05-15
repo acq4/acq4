@@ -1,3 +1,5 @@
+from collections import OrderedDict
+
 from acq4.util.mies import MIES
 from .patch_clamp import MIESPatchClamp
 from .pressure_control import MIESPressureControl
@@ -5,6 +7,7 @@ from .states import MIESPatchPipetteStateManager
 from ..PatchPipette import PatchPipette
 
 from acq4.util import Qt
+from acq4.util import ptime
 
 
 class MIESPatchPipette(PatchPipette):
@@ -31,31 +34,32 @@ class MIESPatchPipette(PatchPipette):
             name=pressureName)
 
         config.update({
-            # 'clampDevice': clampName,  # for now, operate without a clamp device
             'pressureDevice': pressureName,
         })
         PatchPipette.__init__(self, deviceManager, config, name)
+        self.clampDevice = self._mies_clamp
 
-    # def getTPRange(self):
-    #     return self.mies.getTPRange()
-
-    # def setState(self, state):
-    #     if state == 'seal':
-    #         self.mies.selectHeadstage(self._headstage)
-    #         self.mies.setSeal(self._headstage)
-    #     elif state == 'bath':
-    #         self.mies.selectHeadstage(self._headstage)
-    #         self.mies.setApproach(self._headstage)
-    #     self.state = state
-    #     self.sigStateChanged.emit(self)
+        self.clampDevice.sigStateChanged.connect(self.clampStateChanged)
 
     def setActive(self, active):
-        # raise Exception("stack trace")
         self.mies.setHeadstageActive(self._headstage, active)
         PatchPipette.setActive(self, active)
 
     def setSelected(self):
         self.mies.selectHeadstage(self._headstage)
+
+    def clampStateChanged(self, state):
+        self.emitNewEvent('clamp_state_change', state)
+
+    def emitNewEvent(self, eventType, eventData=None):
+        newEv = OrderedDict([
+            ('device', self.name()),
+            ('event_time', ptime.time()),
+            ('event', eventType),
+        ])
+        if eventData is not None:
+            newEv.update(eventData)
+        self.sigNewEvent.emit(self, newEv)
 
     def quit(self):
         self.mies.quit()
