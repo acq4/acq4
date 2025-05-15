@@ -35,12 +35,14 @@ class Cell(Qt.QObject):
         return self._positions[max(self._positions)]
 
     @future_wrap
-    def initializeTracker(self, imager, trackerClass=CV2MostFlowAgreementTracker, _future=None):
+    def initializeTracker(self, imager, stack=None, trackerClass=CV2MostFlowAgreementTracker, _future=None):
         self._imager = imager
         self._tracker = trackerClass()
-        stack, xform, center = _future.waitFor(self._takeStackshot()).getResult()
+        stack, xform, center = _future.waitFor(self._takeStackshot(stack)).getResult()
         obj_stack = ObjectStack(stack, xform, center)
         self._tracker.set_tracked_object(obj_stack)
+        if stack is not None and not self.updatePosition(_future):
+            raise RuntimeError("Cell moved too much to treat as tracked")
 
     def enableTracking(self, enable=True, interval=0):
         """Enable or disable tracking of the cell position.
@@ -93,21 +95,27 @@ class Cell(Qt.QObject):
         global_position = result["position"].mapped_to("global")
         self._positions[ptime.time()] = global_position
         self.sigPositionChanged.emit(global_position)
+        return result["success"]
 
     @future_wrap
-    def _takeStackshot(self, _future):
-        current_focus = self._imager.globalCenterPosition()
+    def _takeStackshot(self, stack=None, _future=None):
         target = np.array(self.position)
-        direction = np.sign(current_focus[2] - target[2])
         margin = 20e-6
         start_glob = target - margin
         stop_glob = target + margin
+        if stack:
+            direction = np.sign(stack[0].globalCenterPosition()[2] - stack[-1].globalCenterPosition()[2])
+        else:
+            current_focus = self._imager.globalCenterPosition()
+            direction = np.sign(current_focus[2] - target[2])
         if direction > 0:
             start_glob, stop_glob = stop_glob, start_glob
-        _future.waitFor(self._imager.moveCenterToGlobal((target[0], target[1], start_glob[2]), "fast"))
-        stack = _future.waitFor(
-            acquire_z_stack(self._imager, start_glob[2], stop_glob[2], 1e-6, hysteresis_correction=False), timeout=60
-        ).getResult()
+        if stack is None:
+            _future.waitFor(self._imager.moveCenterToGlobal((target[0], target[1], start_glob[2]), "fast"))
+            stack = _future.waitFor(
+                acquire_z_stack(self._imager, start_glob[2], stop_glob[2], 1e-6, hysteresis_correction=False),
+                timeout=60,
+            ).getResult()
         fav_frame = stack[0]
         if direction > 0:
             stack = stack[::-1]
@@ -131,10 +139,10 @@ class Cell(Qt.QObject):
             self._roiSize = tuple(stop_ijk - start_ijk)
         stop_ijk = start_ijk + self._roiSize  # always be the same size
         roi_stack = ijk_stack[
-                    start_ijk[0]: stop_ijk[0],
-                    start_ijk[1]: stop_ijk[1],
-                    start_ijk[2]: stop_ijk[2],
-                    ]
+            start_ijk[0] : stop_ijk[0],
+            start_ijk[1] : stop_ijk[1],
+            start_ijk[2] : stop_ijk[2],
+        ]
         assert roi_stack.shape == self._roiSize
         region_xform = stack_xform * TTransform(
             offset=start_ijk,

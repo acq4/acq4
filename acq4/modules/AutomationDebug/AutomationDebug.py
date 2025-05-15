@@ -998,7 +998,17 @@ class AutomationDebugWindow(Qt.QWidget):
         self.pipetteDevice.setTarget(pos)
         cell = self._cell = Cell(pos)
         cell.sigPositionChanged.connect(self._updatePipetteTarget)
-        _future.waitFor(cell.initializeTracker(self.cameraDevice))
+        stack = self._current_classification_stack or self._current_detection_stack
+        try:
+            _future.waitFor(cell.initializeTracker(self.cameraDevice, stack))
+        except _future.StopRequested:
+            raise
+        except RuntimeError as e:
+            if self._mockDemo:
+                logMsg(f"Autopatch: Mocking cell despite {e}")
+                return cell
+            logMsg("Cell moved too much; retrying")
+            return self._autopatchFindCell(_future)
         logMsg(f"Autopatch: Cell found at {pos}")
         return cell
 
