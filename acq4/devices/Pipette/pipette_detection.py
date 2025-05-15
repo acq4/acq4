@@ -1,5 +1,4 @@
-from __future__ import print_function
-import scipy.optimize, scipy.ndimage
+import scipy.ndimage
 import numpy as np
 from acq4.util.image_registration import iterativeImageTemplateMatch
 import pyqtgraph as pg
