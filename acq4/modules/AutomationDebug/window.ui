@@ -347,6 +347,22 @@
      </layout>
     </widget>
    </item>
+   <item>
+    <widget class="QGroupBox" name="groupBox_5">
+     <property name="title">
+      <string>Autopatch Demo</string>
+     </property>
+     <layout class="QVBoxLayout" name="gridLayout_6">
+      <item>
+       <widget class="FutureButton" name="autopatchDemoBtn">
+        <property name="text">
+         <string>Run Autopatch Demo</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
   </layout>
  </widget>
  <customwidgets>

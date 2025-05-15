@@ -302,18 +302,30 @@ class TaskRunner(Module):
 
         self.updateSeqReport()
 
-    def updateSeqReport(self):
+    @property
+    def sequenceInfo(self):
         s = self.protoStateGroup.state()
         period = max(s['duration'] + s['leadTime'], s['cycleTime'])
         items = self.ui.sequenceParamList.listParams()[:]
-        if len(items) == 0:
-            self.ui.paramSpaceLabel.setText('0')
-            self.ui.seqTimeLabel.setText('0')
-            tot = 0
-        else:
+        if items:
             psi = [len(i[2]) for i in items]
             ps = list(map(str, psi))
             tot = reduce(lambda x, y: x * y, psi)
+        else:
+            ps = []
+            tot = 0
+        return {"period": period, "items": items, "totalParams": tot, "paramSpace": ps}
+
+    def updateSeqReport(self):
+        info = self.sequenceInfo
+        items = info["items"]
+        tot = info["totalParams"]
+        period = info["period"]
+        ps = info["paramSpace"]
+        if len(items) == 0:
+            self.ui.paramSpaceLabel.setText('0')
+            self.ui.seqTimeLabel.setText('0')
+        else:
             self.ui.paramSpaceLabel.setText(' x '.join(ps) + ' = %d' % tot)
             self.ui.seqTimeLabel.setText('%0.3f sec' % (period * tot))
 

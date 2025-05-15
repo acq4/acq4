@@ -10,6 +10,7 @@ import pyqtgraph as pg
 from MetaArray import MetaArray
 from acq4.devices.Camera import Camera
 from acq4.devices.Microscope import Microscope
+from acq4.devices.PatchPipette import PatchPipette
 from acq4.devices.Pipette import Pipette
 from acq4.devices.Pipette.calibration import findNewPipette
 from acq4.devices.Pipette.planners import PipettePathGenerator, GeometryAwarePathGenerator
@@ -23,6 +24,7 @@ from acq4.util.imaging import Frame
 from acq4.util.imaging.sequencer import acquire_z_stack
 from acq4.util.target import TargetBox
 from acq4.util.threadrun import runInGuiThread
+from acq4.modules.TaskRunner import TaskRunner
 from pyqtgraph.units import µm, m
 
 UiTemplate = Qt.importTemplate(".window")
@@ -166,7 +168,7 @@ class RankingWindow(Qt.QWidget):
         # current_slider_idx is the Z-index for the 3rd (middle) image view
         # Ensure current_slider_idx is valid
         current_slider_idx = np.clip(current_slider_idx, 2, n_frames - 3)
-        
+
         target_z_indices = [0] * 5
 
         # Image 1 (index 0): first frame
@@ -407,6 +409,9 @@ class AutomationDebugWindow(Qt.QWidget):
         self._testing_pipette = False
         self.ui.pipetteLog.setReadOnly(True)
         self.sigLogMessage.connect(self.ui.pipetteLog.append)
+
+        self.ui.autopatchDemoBtn.setToolTip("Patch a cell! Repeat! REPEAT!")
+        self.ui.autopatchDemoBtn.setOpts(future_producer=self._autopatchDemo, stoppable=True)
 
         self.show()
         planner = self.module.config.get("motionPlanner", "Objective radius only")
@@ -938,6 +943,70 @@ class AutomationDebugWindow(Qt.QWidget):
 
     def quit(self):
         self.close()
+
+    @future_wrap
+    def _autopatchDemo(self, _future):
+        pip: PatchPipette = self.pipetteDevice
+        cam = self.cameraDevice
+        while True:
+            cell = self._autopatchFindCell(_future)
+            pip.setState("above target")
+            self._autopatchFindPipetteTip(_future)
+            pip.setState("approach")
+            cell.enableTracking()
+            pip.setState("cell detect")
+            while True:
+                if (state := pip.getState()) != "cell detect":
+                    cell.enableTracking(False)
+                if state in ("whole cell", "bath", "broken", "fouled"):
+                    break
+                _future.sleep(0.1)
+            if state != "whole cell":
+                logMsg(f"Autopatch: Cell detect finished: {state}. Next!")
+                continue
+            self._autopatchRunTaskRunner(_future)
+            pip.setState("clean")
+
+    def _autopatchFindCell(self, _future):
+        if not self._unranked_cells:
+            _future.waitFor(self._detectNeuronsZStack())
+        pos = self._unranked_cells.pop(0)
+        cell = Cell(pos)
+        _future.waitFor(cell.initializeTracker(self.cameraDevice))
+        logMsg(f"Autopatch: Cell found at {pos}")
+        return cell
+
+    def _autopatchFindPipetteTip(self, _future):
+        pip = self.pipetteDevice
+        pos = pip.tracker.findTipInFrame()
+        success = _future.waitFor(pip.setTipOffsetIfAcceptable(pos), timeout=None).getResult()
+        if not success:
+            pos = pip.tracker.findTipInFrame()
+            success = _future.waitFor(pip.setTipOffsetIfAcceptable(pos), timeout=None).getResult()
+        if not success:
+            raise RuntimeError("Failed to find tip in frame.")
+        logMsg(f"Autopatch: Tip found at {pos}")
+
+    def _autopatchRunTaskRunner(self, _future):
+        man = self.module.manager
+        pip = self.pipetteDevice
+        taskrunner: TaskRunner | None = None
+        for mod in man.listModules():
+            if not mod.startswith("Task Runner"):
+                continue
+            mod = man.getModule(mod)
+            if pip.clampDevice.name() in mod.docks:
+                taskrunner = mod
+                break
+        if taskrunner is None:
+            logMsg(f"No task runner found that uses {self.dev.clampDevice.name()}")
+            return
+
+        expected_duration = taskrunner.sequenceInfo["period"] * taskrunner.sequenceInfo["totalParams"]
+        _future.waitFor(
+            runInGuiThread(taskrunner.runSequence, store=True, storeDirHandle=self.dh), timeout=expected_duration
+        )
+        logMsg("Autopatch: Task runner sequence completed.")
 
 
 class AutomationDebug(Module):
