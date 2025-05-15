@@ -496,7 +496,8 @@ class AutomationDebugWindow(Qt.QWidget):
             raise ValueError(f"unknown tracker '{self.ui.featureTrackerSelector.currentText()}'")
         pipette = self.pipetteDevice
         target: np.ndarray = pipette.targetPosition()
-        cell = self._cell = Cell(target, self.cameraDevice, tracker)
+        cell = self._cell = Cell(target)
+        _future.wait(cell.initializeTracker(self.cameraDevice, tracker))
         cell.enableTracking()
         cell.sigPositionChanged.connect(self._updatePipetteTarget)
         try:

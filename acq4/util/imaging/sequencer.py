@@ -53,10 +53,8 @@ def _enforce_linear_z_stack(frames: list[Frame], step: float) -> list[Frame]:
         #     return np.mean(overflowed_diff * abs_adjust) > threshold
         # else:
         #     return np.mean(np.abs(overflowed_diff)) > threshold
-    depths = [depths[0]] + [
-        f for i, f in enumerate(depths[1:], 1)
-        if difference_is_significant(f, depths[i - 1])
-    ]
+
+    depths = [depths[0]] + [f for i, f in enumerate(depths[1:], 1) if difference_is_significant(f, depths[i - 1])]
     if len(depths) < expected_size:
         raise ValueError("Insufficient frames to have one frame per step (after pruning nigh identical frames).")
 
@@ -85,7 +83,14 @@ def _enforce_linear_z_stack(frames: list[Frame], step: float) -> list[Frame]:
     # return [frames[i][1] for i in new_frame_idxs]
 
 
-def _set_focus_depth(imager, depth: float, direction: float, speed: Union[float, str], future: Optional[Future] = None):
+def _set_focus_depth(
+    imager,
+    depth: float,
+    direction: float,
+    speed: Union[float, str],
+    hysteresis_correction: bool = True,
+    future: Optional[Future] = None,
+):
     if depth is None:
         return
 
@@ -95,10 +100,10 @@ def _set_focus_depth(imager, depth: float, direction: float, speed: Union[float,
     timeout = max(10, 3 * abs(dz) / speed)
 
     # Avoid hysteresis:
-    if direction > 0 and dz > 0:
+    if hysteresis_correction and direction > 0 and dz > 0:
         # stack goes downward
         move = imager.setFocusDepth(depth + 20e-6, speed)
-    elif direction < 0 and dz < 0:
+    elif hysteresis_correction and direction < 0 and dz < 0:
         # stack goes upward
         move = imager.setFocusDepth(depth - 20e-6, speed)
     else:
@@ -122,11 +127,11 @@ def _slow_z_stack(imager, start, end, step, _future=None) -> list[Frame]:
     direction = sign * -1
     step = sign * abs(step)
     frames_fut = imager.acquireFrames()
-    _set_focus_depth(imager, start, direction, speed='fast', future=_future)
+    _set_focus_depth(imager, start, direction, speed="fast", future=_future)
     with imager.ensureRunning(ensureFreshFrames=True):
         for z in np.arange(start, end + step, step):
             _future.waitFor(imager.acquireFrames(1))
-            _set_focus_depth(imager, z, direction, speed='slow', future=_future)
+            _set_focus_depth(imager, z, direction, speed="slow", future=_future)
         _future.waitFor(imager.acquireFrames(1))
     frames_fut.stop()
     _future.waitFor(frames_fut)
@@ -134,8 +139,7 @@ def _slow_z_stack(imager, start, end, step, _future=None) -> list[Frame]:
 
 
 def _hold_imager_focus(idev, hold):
-    """Tell the focus controller to lock or unlock.
-    """
+    """Tell the focus controller to lock or unlock."""
     fdev = idev.getFocusDevice()
     if fdev is None:
         raise Exception(f"Device {idev} is not connected to a focus controller.")
@@ -156,12 +160,12 @@ def _status_message(iteration, maxIter):
 
 
 def _save_results(
-        frames: "Frame | list[Frame]",
-        storage_dir: DirHandle,
-        idx: int,
-        is_timelapse: bool = False,
-        is_mosaic: bool = False,
-        is_z_stack: bool = False,
+    frames: "Frame | list[Frame]",
+    storage_dir: DirHandle,
+    idx: int,
+    is_timelapse: bool = False,
+    is_mosaic: bool = False,
+    is_z_stack: bool = False,
 ):
     """
     Returns either the containing dir or the single file handle.
@@ -209,14 +213,14 @@ def _save_results(
 
 @future_wrap
 def run_image_sequence(
-        imager,
-        count: float = 1,
-        interval: float = 0,
-        pin: "Callable[[Frame]] | None" = None,
-        z_stack: "tuple[float, float, float] | None" = None,
-        mosaic: "tuple[float, float, float, float, float] | None" = None,
-        storage_dir: "DirHandle | None" = None,
-        _future: Future = None
+    imager,
+    count: float = 1,
+    interval: float = 0,
+    pin: "Callable[[Frame]] | None" = None,
+    z_stack: "tuple[float, float, float] | None" = None,
+    mosaic: "tuple[float, float, float, float, float] | None" = None,
+    storage_dir: "DirHandle | None" = None,
+    _future: Future = None,
 ) -> "Frame | list[Frame | list[Frame | list[Frame]]]":
     _hold_imager_focus(imager, True)
     _open_shutter(imager, True)  # don't toggle shutter between stack frames
@@ -304,8 +308,8 @@ def positions_to_cover_region(region, imager_center, imager_region) -> Generator
     pos = region_top_left + move_offset
     x_finished = y_finished = False
     x_tests = (
-            lambda: (pos - coverage_offset)[0] >= region_bottom_right[0],
-            lambda: (pos + coverage_offset)[0] <= region_top_left[0],
+        lambda: (pos - coverage_offset)[0] >= region_bottom_right[0],
+        lambda: (pos + coverage_offset)[0] <= region_top_left[0],
     )
     x_steps = (step[0], -step[0])
     x_direction = 0
@@ -323,7 +327,9 @@ def positions_to_cover_region(region, imager_center, imager_region) -> Generator
 
 
 @future_wrap
-def acquire_z_stack(imager, start: float, stop: float, step: float, _future: Future) -> list[Frame]:
+def acquire_z_stack(
+    imager, start: float, stop: float, step: float, hysteresis_correction=True, _future: Future = None
+) -> list[Frame]:
     """Acquire a Z stack from the given imager.
 
     Args:
@@ -337,7 +343,7 @@ def acquire_z_stack(imager, start: float, stop: float, step: float, _future: Fut
     """
     # TODO think about strobing the lighting for clearer images
     direction = start - stop
-    _set_focus_depth(imager, start, direction, 'fast', _future)
+    _set_focus_depth(imager, start, direction, "fast", hysteresis_correction, _future)
     stage = imager.scopeDev.getFocusDevice()
     z_per_second = stage.positionUpdatesPerSecond
     meters_per_frame = abs(step)
@@ -347,7 +353,7 @@ def acquire_z_stack(imager, start: float, stop: float, step: float, _future: Fut
         frames_fut = imager.acquireFrames()
         with imager.ensureRunning(ensureFreshFrames=True):
             _future.waitFor(imager.acquireFrames(1))  # just to be sure the camera's recording
-            _set_focus_depth(imager, stop, direction, speed, _future)
+            _set_focus_depth(imager, stop, direction, speed, hysteresis_correction, _future)
             _future.waitFor(imager.acquireFrames(1))  # just to be sure the camera caught up
             frames_fut.stop()
             frames = _future.waitFor(frames_fut).getResult(timeout=10)
@@ -370,8 +376,7 @@ def _fix_frame_transforms(frames, z_step):
 
 
 class ImageSequencerCtrl(Qt.QWidget):
-    """GUI for acquiring z-stacks, timelapse, and mosaic.
-    """
+    """GUI for acquiring z-stacks, timelapse, and mosaic."""
 
     def __init__(self, cameraMod):
         self.mod = weakref.ref(cameraMod)
@@ -391,7 +396,9 @@ class ImageSequencerCtrl(Qt.QWidget):
         self.ui.xRightSpin.setOpts(value=0, suffix="m", siPrefix=True, step=10e-6, decimals=6)
         self.ui.yTopSpin.setOpts(value=0, suffix="m", siPrefix=True, step=10e-6, decimals=6)
         self.ui.yBottomSpin.setOpts(value=0, suffix="m", siPrefix=True, step=10e-6, decimals=6)
-        self.ui.mosaicOverlapSpin.setOpts(value=50e-6, suffix="m", siPrefix=True, step=1e-6, decimals=6, bounds=(0, float('inf')))
+        self.ui.mosaicOverlapSpin.setOpts(
+            value=50e-6, suffix="m", siPrefix=True, step=1e-6, decimals=6, bounds=(0, float("inf"))
+        )
 
         self.updateDeviceList()
         self.ui.statusLabel.setText("[ stopped ]")
@@ -433,8 +440,7 @@ class ImageSequencerCtrl(Qt.QWidget):
         self.updateStatus()
 
     def makeProtocol(self):
-        """Build a description of everything that needs to be done during the sequence.
-        """
+        """Build a description of everything that needs to be done during the sequence."""
         prot = {"imager": self.selectedImager()}
         if self.ui.zStackGroup.isChecked():
             start = self.ui.zStartSpin.value()

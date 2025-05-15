@@ -10,7 +10,7 @@ from coorx import SRT3DTransform, TransposeTransform, TTransform
 class Cell(Qt.QObject):
     sigPositionChanged = Qt.pyqtSignal(object)
 
-    def __init__(self, position, imager, trackerClass=CV2MostFlowAgreementTracker):
+    def __init__(self, position):
         """Initialize the Cell object.
         Parameters
         ----------
@@ -22,11 +22,10 @@ class Cell(Qt.QObject):
         super().__init__()
         self.initialPosition = position
         self._positions = {ptime.time(): position}
-        self._imager = imager
+        self._imager = None
         self._trackingFuture = None
         self.isTracking = False
-        self._tracker = trackerClass()
-        self._initializeTracker()
+        self._tracker = None
         self._roiSize = None
 
     @property
@@ -35,7 +34,9 @@ class Cell(Qt.QObject):
         return self._positions[max(self._positions)]
 
     @future_wrap
-    def _initializeTracker(self, _future):
+    def initializeTracker(self, imager, trackerClass=CV2MostFlowAgreementTracker, _future=None):
+        self._imager = imager
+        self._tracker = trackerClass()
         stack, xform, center = _future.waitFor(self._takeStackshot()).getResult()
         obj_stack = ObjectStack(stack, xform, center)
         self._tracker.set_tracked_object(obj_stack)
@@ -99,7 +100,7 @@ class Cell(Qt.QObject):
             start_glob, stop_glob = stop_glob, start_glob
         _future.waitFor(self._imager.moveCenterToGlobal((target[0], target[1], start_glob[2]), "fast"))
         stack = _future.waitFor(
-            acquire_z_stack(self._imager, start_glob[2], stop_glob[2], 1e-6), timeout=60
+            acquire_z_stack(self._imager, start_glob[2], stop_glob[2], 1e-6, hysteresis_correction=False), timeout=60
         ).getResult()
         fav_frame = stack[0]
         if direction > 0:
