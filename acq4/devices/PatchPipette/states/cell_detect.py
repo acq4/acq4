@@ -381,7 +381,7 @@ class CellDetectState(PatchPipetteState):
         )
 
     def maybeVisuallyTrackTarget(self):
-        if not self.config["maybeVisuallyTrackTarget"]:
+        if not self.config["visualTargetTracking"]:
             return
         if self.closeEnoughToTargetToDetectCell():
             if self._visualTargetTrackingFuture is not None:
