@@ -166,23 +166,33 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         with self._completionLock:
             return self._isDone
 
-    def onFinish(self, callback, *args, **kwargs):
+    def onFinish(self, callback, *args, inGui: bool = False, **kwargs):
         """Make sure the callback is called when the future is finished, including if the future is already done."""
+        from acq4.util.threadrun import runInGuiThread
+
         with self._completionLock:
             done = self._isDone
             if not done:
-                self._callbacks.append((callback, args, kwargs))
+                self._callbacks.append((inGui, callback, args, kwargs))
         if done:
-            callback(self, *args, **kwargs)
+            if inGui:
+                runInGuiThread(callback, self, *args, **kwargs)
+            else:
+                callback(self, *args, **kwargs)
 
     def _callCallbacks(self):
         """Call all callbacks registered with onFinish().
 
         This is called when the task is completed.
         """
-        for callback, args, kwargs in self._callbacks:
+        from acq4.util.threadrun import runInGuiThread
+
+        for inGui, callback, args, kwargs in self._callbacks:
             try:
-                callback(self, *args, **kwargs)
+                if inGui:
+                    runInGuiThread(callback, self, *args, **kwargs)
+                else:
+                    callback(self, *args, **kwargs)
             except Exception as e:
                 printExc(f"Error in Future callback: {callback}")
 

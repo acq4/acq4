@@ -398,7 +398,7 @@ class CellDetectState(PatchPipetteState):
         """While not that slow, we still want to keep the innermost loop as fast as we can."""
         if self._pressureAdjustment is None:
             self._pressureAdjustment = self._adjustPressureForDepth()
-            self._pressureAdjustment.onFinish(self._finishPressureAdjustment)
+            self._pressureAdjustment.onFinish(self._finishPressureAdjustment, inGui=True)
 
     @future_wrap
     def _adjustPressureForDepth(self, _future):

@@ -416,7 +416,7 @@ class MultiPatchWindow(Qt.QWidget):
         spos = pip.scopeDevice().globalPosition()
         pos = [pos.x(), pos.y(), spos.z()]
         tip_future = pip.setTipOffsetIfAcceptable(pos)
-        tip_future.onFinish(self._handleManualSetTip, pip)
+        tip_future.onFinish(self._handleManualSetTip, pip, inGui=True)
 
     def _handleManualSetTip(self, future, pip):
         success = future.getResult()

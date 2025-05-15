@@ -496,7 +496,7 @@ class ImageSequencerCtrl(Qt.QWidget):
             prot["storage_dir"] = dh
             self.setRunning(True)
             self._future = run_image_sequence(**prot)
-            self._future.onFinish(self.threadStopped)
+            self._future.onFinish(self.threadStopped, inGui=True)
             self._future.sigStateChanged.connect(self.threadMessage)
         except Exception:
             self.threadStopped(self._future)
