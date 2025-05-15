@@ -503,7 +503,7 @@ class AutomationDebugWindow(Qt.QWidget):
         pipette = self.pipetteDevice
         target: np.ndarray = pipette.targetPosition()
         cell = self._cell = Cell(target)
-        _future.waitFor(cell.initializeTracker(self.cameraDevice, tracker))
+        _future.waitFor(cell.initializeTracker(self.cameraDevice, trackerClass=tracker))
         cell.enableTracking()
         cell.sigPositionChanged.connect(self._updatePipetteTarget)
         try:
