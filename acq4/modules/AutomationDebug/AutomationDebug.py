@@ -409,7 +409,7 @@ class AutomationDebugWindow(Qt.QWidget):
         self.sigLogMessage.connect(self.ui.pipetteLog.append)
 
         self.show()
-        planner = self.module.config.get("motionPlanner", "Geometry-aware")
+        planner = self.module.config.get("motionPlanner", "Objective radius only")
         self.ui.motionPlannerSelector.setCurrentText(planner)
         # Set default ranking dir
         default_rank_dir = Path(self.module.manager.getBaseDir().name()) / "ranked_cells"

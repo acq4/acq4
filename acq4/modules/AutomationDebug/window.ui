@@ -255,13 +255,6 @@
     </widget>
    </item>
    <item>
-    <widget class="QGroupBox" name="multiChannelGroup">
-     <property name="title">
-      <string>Multichannel Acquisition</string>
-     </property>
-    </widget>
-   </item>
-   <item>
     <widget class="QGroupBox" name="groupBox_4">
      <property name="title">
       <string>Motion Planner</string>
