@@ -49,7 +49,6 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
 
         self._isDone = False
         self._callbacks = []
-        self.sigFinished.connect(self._callCallbacks)
         self._onError = onError
         self._completionLock = threading.Lock()
         self._wasInterrupted = False
@@ -149,6 +148,7 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
                 printExc(f"Error in Future.onError callback: {self._onError}")
         self.finishedEvent.set()  # tell wait() that we're done
         self.sigFinished.emit(self)  # tell everyone else that we're done
+        self._callCallbacks()
 
     def wasInterrupted(self):
         """Return True if the task was interrupted before completing (due to an error or a stop request)."""

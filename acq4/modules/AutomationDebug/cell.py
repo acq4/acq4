@@ -27,6 +27,7 @@ class Cell(Qt.QObject):
         self.isTracking = False
         self._tracker = trackerClass()
         self._initializeTracker()
+        self._roiSize = None
 
     @property
     def position(self):
@@ -53,6 +54,7 @@ class Cell(Qt.QObject):
         if enable:
             if self._trackingFuture is not None:
                 self._trackingFuture.stop("Tracking restarted")
+            self._roiSize = None
             self._trackingFuture = self._track(interval)
             self._trackingFuture.onFinish(self._handleTrackingFinished)
         elif self._trackingFuture is not None:
@@ -89,43 +91,48 @@ class Cell(Qt.QObject):
     def _takeStackshot(self, _future):
         current_focus = self._imager.globalCenterPosition()
         target = np.array(self.position)
-        direction = current_focus[2] > target[2]
+        direction = np.sign(current_focus[2] - target[2])
         margin = 20e-6
         start_glob = target - margin
         stop_glob = target + margin
-        if direction < 0:
+        if direction > 0:
             start_glob, stop_glob = stop_glob, start_glob
-        _future.waitFor(self._imager.moveCenterToGlobal(start_glob, "fast"))
+        _future.waitFor(self._imager.moveCenterToGlobal((target[0], target[1], start_glob[2]), "fast"))
         stack = _future.waitFor(
             acquire_z_stack(self._imager, start_glob[2], stop_glob[2], 1e-6), timeout=60
         ).getResult()
-        if direction < 0:
+        fav_frame = stack[0]
+        if direction > 0:
             stack = stack[::-1]
             start_glob, stop_glob = stop_glob, start_glob
 
         # get the normalized 20µm³ region for tracking
         ijk_stack = np.array([f.data().T for f in stack])
         stack_xform = SRT3DTransform.from_pyqtgraph(
-            stack[0].globalTransform(),
-            from_cs=f"frame_{stack[0].info()['id']}.xyz",
+            fav_frame.globalTransform(),
+            from_cs=f"frame_{fav_frame.info()['id']}.xyz",
             to_cs="global",
         ) * TransposeTransform(
             (2, 1, 0),
-            from_cs=f"frame_{stack[0].info()['id']}.ijk",
-            to_cs=f"frame_{stack[0].info()['id']}.xyz",
+            from_cs=f"frame_{fav_frame.info()['id']}.ijk",
+            to_cs=f"frame_{fav_frame.info()['id']}.xyz",
         )
         start_ijk = np.round(stack_xform.inverse.map(start_glob)).astype(int)
         stop_ijk = np.round(stack_xform.inverse.map(stop_glob)).astype(int)
         start_ijk, stop_ijk = np.min((start_ijk, stop_ijk), axis=0), np.max((start_ijk, stop_ijk), axis=0)
+        if self._roiSize is None:
+            self._roiSize = tuple(stop_ijk - start_ijk)
+        stop_ijk = start_ijk + self._roiSize  # always be the same size
         roi_stack = ijk_stack[
                     start_ijk[0]: stop_ijk[0],
                     start_ijk[1]: stop_ijk[1],
                     start_ijk[2]: stop_ijk[2],
                     ]
+        assert roi_stack.shape == self._roiSize
         region_xform = stack_xform * TTransform(
             offset=start_ijk,
-            from_cs=f"frame_{stack[0].info()['id']}.roi",
-            to_cs=f"frame_{stack[0].info()['id']}.ijk",
+            from_cs=f"frame_{fav_frame.info()['id']}.roi",
+            to_cs=f"frame_{fav_frame.info()['id']}.ijk",
         )
         region_center = np.round(region_xform.inverse.map(target)).astype(int)
         return roi_stack, region_xform, region_center

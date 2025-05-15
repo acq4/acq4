@@ -351,6 +351,7 @@ class AutomationDebugWindow(Qt.QWidget):
         self.module = module
         self.setWindowTitle("Automation Debug")
         self._previousBoxWidgets = []
+        self._cell = None
         self._unranked_cells = []  # List of (start, end) tuples from detection
         self._ranked_cells = {}  # Dict mapping cell ID (e.g., timestamp) to ranking info
         self._current_detection_stack = None
@@ -495,7 +496,7 @@ class AutomationDebugWindow(Qt.QWidget):
             raise ValueError(f"unknown tracker '{self.ui.featureTrackerSelector.currentText()}'")
         pipette = self.pipetteDevice
         target: np.ndarray = pipette.targetPosition()
-        cell = Cell(target, self.cameraDevice, tracker)
+        cell = self._cell = Cell(target, self.cameraDevice, tracker)
         cell.enableTracking()
         cell.sigPositionChanged.connect(self._updatePipetteTarget)
         try:
