@@ -95,7 +95,7 @@ class Cell(Qt.QObject):
         global_position = result["position"].mapped_to("global")
         self._positions[ptime.time()] = global_position
         self.sigPositionChanged.emit(global_position)
-        return result["success"]
+        return result["match_success"]
 
     @future_wrap
     def _takeStackshot(self, stack=None, _future=None):
