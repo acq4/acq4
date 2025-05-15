@@ -5,8 +5,9 @@ class OutsideOutState(PatchPipetteState):
     stateName = "outside out"
 
     _parameterDefaultOverrides = {
-        'initialPressureSource': 'atmosphere',
+        'initialPressure': -0.5e3,
+        'initialPressureSource': 'regulator',
         'initialClampMode': 'VC',
-        'initialVCHolding': 0,
-        'initialTestPulseEnable': False,
+        'initialVCHolding': -55e-3,
+        'initialTestPulseEnable': True,
     }
