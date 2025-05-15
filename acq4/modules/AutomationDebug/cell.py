@@ -1,6 +1,7 @@
 import numpy as np
 
 from acq4.util import Qt, ptime
+from acq4.util.debug import printExc
 from acq4.util.future import future_wrap, Future
 from acq4.util.imaging.sequencer import acquire_z_stack
 from acq4_automation.feature_tracking import CV2MostFlowAgreementTracker, ObjectStack, ImageStack
@@ -68,7 +69,12 @@ class Cell(Qt.QObject):
         last_tracked = max(self._positions)
         while True:
             if ptime.time() - last_tracked > interval:
-                _future.waitFor(self.updatePosition())
+                try:
+                    self.updatePosition(_future)
+                except _future.StopRequested:
+                    raise
+                except Exception:
+                    printExc("Error in tracking")
             _future.sleep(interval)
 
     def _handleTrackingFinished(self, future: Future):
@@ -78,7 +84,6 @@ class Cell(Qt.QObject):
         if not future.wasStopped():
             future.wait()
 
-    @future_wrap
     def updatePosition(self, _future):
         while len(self._tracker.object_stacks) == 0:
             _future.sleep(0.1)

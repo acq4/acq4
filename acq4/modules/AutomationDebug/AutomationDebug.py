@@ -353,6 +353,7 @@ class AutomationDebugWindow(Qt.QWidget):
         self.module = module
         self.setWindowTitle("Automation Debug")
         self._previousBoxWidgets = []
+        self._mockDemo = False
         self._cell = None
         self._unranked_cells = []  # List of (start, end) tuples from detection
         self._ranked_cells = {}  # Dict mapping cell ID (e.g., timestamp) to ranking info
@@ -545,6 +546,16 @@ class AutomationDebugWindow(Qt.QWidget):
     def pipetteDevice(self) -> Pipette:
         return self.module.manager.getDevice(self.ui.pipetteSelector.currentText())
 
+    @property
+    def patchPipetteDevice(self) -> PatchPipette | None:
+        pip = self.pipetteDevice
+        man = self.module.manager
+        for pp in man.listDevices():
+            pp = man.getDevice(pp)
+            if isinstance(pp, PatchPipette) and pp.pipetteDevice == pip:
+                return pp
+        return None
+
     def _setTopLeft(self):
         cam = self.cameraDevice
         region = cam.getParam("region")
@@ -572,17 +583,18 @@ class AutomationDebugWindow(Qt.QWidget):
             if future.wasInterrupted():
                 logMsg("Cell detection failed.")
                 return
-            bounding_boxes = future.getResult()
+            neurons = future.getResult()
 
-            logMsg(f"Cell detection complete. Found {len(bounding_boxes)} potential cells")
-            self._displayBoundingBoxes(bounding_boxes)
+            logMsg(f"Cell detection complete. Found {len(neurons)} potential cells")
+            self._displayBoundingBoxes(neurons)
         finally:
             self.sigWorking.emit(False)
 
-    def _displayBoundingBoxes(self, bounding_boxes):
+    def _displayBoundingBoxes(self, neurons):
         cam_win: CameraWindow = self.module.manager.getModule("Camera").window()
         self.clearBoundingBoxes()  # Clear previous boxes visually and state
-        for start, end in bounding_boxes:
+        for neuron in neurons:
+            start, end = np.array(neuron) - 20e-6, np.array(neuron) + 20e-6
             box = TargetBox(start, end)
             cam_win.addItem(box)
             # TODO: Re-evaluate if this connection is still needed or causes issues
@@ -946,37 +958,50 @@ class AutomationDebugWindow(Qt.QWidget):
 
     @future_wrap
     def _autopatchDemo(self, _future):
-        pip: PatchPipette = self.pipetteDevice
-        cam = self.cameraDevice
+        ppip: PatchPipette = self.patchPipetteDevice
         while True:
+            if not ppip.isTipClean():
+                _future.waitFor(ppip.setState("clean"), timeout=600)
             cell = self._autopatchFindCell(_future)
-            pip.setState("above target")
+            ppip.setState('bath')
+            _future.waitFor(ppip.pipetteDevice.goAboveTarget("fast"))
             self._autopatchFindPipetteTip(_future)
-            pip.setState("approach")
+            _future.waitFor(ppip.pipetteDevice.goApproach("fast"))
             cell.enableTracking()
-            pip.setState("cell detect")
-            while True:
-                if (state := pip.getState()) != "cell detect":
-                    cell.enableTracking(False)
-                if state in ("whole cell", "bath", "broken", "fouled"):
-                    break
-                _future.sleep(0.1)
+            state = self._autopatchCellDetect(cell, _future)
             if state != "whole cell":
                 logMsg(f"Autopatch: Cell detect finished: {state}. Next!")
                 continue
             self._autopatchRunTaskRunner(_future)
-            pip.setState("clean")
+            _future.waitFor(ppip.setState("reseal"), timeout=None)
+
+    def _autopatchCellDetect(self, cell, _future):
+        ppip = self.patchPipetteDevice
+        ppip.setState("cell detect")
+        while True:
+            if (state := ppip.getState().stateName) != "cell detect":
+                cell.enableTracking(False)
+                cell.sigPositionChanged.disconnect(self._updatePipetteTarget)
+            if state in ("whole cell", "bath", "broken", "fouled"):
+                break
+            _future.sleep(0.1)
+        return state
 
     def _autopatchFindCell(self, _future):
         if not self._unranked_cells:
-            _future.waitFor(self._detectNeuronsZStack())
+            _future.waitFor(self._detectNeuronsZStack(), timeout=600)
         pos = self._unranked_cells.pop(0)
-        cell = Cell(pos)
+        self.pipetteDevice.setTarget(pos)
+        cell = self._cell = Cell(pos)
+        cell.sigPositionChanged.connect(self._updatePipetteTarget)
         _future.waitFor(cell.initializeTracker(self.cameraDevice))
         logMsg(f"Autopatch: Cell found at {pos}")
         return cell
 
     def _autopatchFindPipetteTip(self, _future):
+        if self._mockDemo:
+            logMsg("Autopatch: Mock pipette tip detection")
+            return
         pip = self.pipetteDevice
         pos = pip.tracker.findTipInFrame()
         success = _future.waitFor(pip.setTipOffsetIfAcceptable(pos), timeout=None).getResult()
