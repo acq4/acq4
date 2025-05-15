@@ -959,10 +959,14 @@ class AutomationDebugWindow(Qt.QWidget):
     @future_wrap
     def _autopatchDemo(self, _future):
         ppip: PatchPipette = self.patchPipetteDevice
+        cleaning = None
         while True:
             if not ppip.isTipClean():
-                _future.waitFor(ppip.setState("clean"), timeout=600)
+                cleaning = ppip.setState("clean")
             cell = self._autopatchFindCell(_future)
+            if cleaning is not None:
+                _future.waitFor(cleaning, timeout=600)
+                cleaning = None
             ppip.setState('bath')
             _future.waitFor(ppip.pipetteDevice.goAboveTarget("fast"))
             self._autopatchFindPipetteTip(_future)
