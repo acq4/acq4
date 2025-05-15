@@ -334,7 +334,7 @@ class ResealState(PatchPipetteState):
         self.waitFor(self._moveFuture, timeout=90)
         dev.pipetteDevice.focusTip()
         dev.pressureDevice.setPressure(source='regulator', pressure=config['initialPressure'])
-        self.sleep(np.inf)
+        return "outside out"
 
     def _retractFromTissue(self):
         # move out of the tissue more quickly
