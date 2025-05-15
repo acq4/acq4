@@ -75,7 +75,8 @@ class Cell(Qt.QObject):
         # TODO do we need a mutex
         self._trackingFuture = None
         self.isTracking = False
-        future.wait()
+        if not future.wasStopped():
+            future.wait()
 
     @future_wrap
     def updatePosition(self, _future):
