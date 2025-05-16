@@ -77,7 +77,7 @@ class ResnetPipetteTracker(PipetteTracker):
 
     def estimateOffset(self, img, pipetteAngle, pxSize):
         from acq4_automation.object_detection import do_pipette_tip_detection
-        self.result = do_pipette_tip_detection(img, pipetteAngle, pxSize, show=True)
+        self.result = do_pipette_tip_detection(img, pipetteAngle, pxSize, show=False)
         return self.result[:3]
 
 
