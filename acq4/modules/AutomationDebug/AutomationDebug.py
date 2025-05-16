@@ -413,6 +413,7 @@ class AutomationDebugWindow(Qt.QWidget):
 
         self.ui.autopatchDemoBtn.setToolTip("Patch a cell! Repeat! REPEAT!")
         self.ui.autopatchDemoBtn.setOpts(future_producer=self._autopatchDemo, stoppable=True)
+        self.ui.autopatchDemoBtn.sigFinished.connect(self._handleAutopatchDemoFinish)
 
         self.show()
         planner = self.module.config.get("motionPlanner", "Objective radius only")
@@ -524,6 +525,9 @@ class AutomationDebugWindow(Qt.QWidget):
     def _handleCalibrationFinish(self, fut: Future):
         self.sigWorking.emit(False)
 
+    def _handleAutopatchDemoFinish(self, fut):
+        self.sigWorking.emit(False)
+
     def _setWorkingState(self, working: bool | Qt.QPushButton):
         if working:
             self.module.manager.getModule("Camera").window()  # make sure camera window is open
@@ -533,6 +537,7 @@ class AutomationDebugWindow(Qt.QWidget):
         self.ui.testPipetteBtn.setEnabled(working == self.ui.testPipetteBtn or not working)
         self.ui.trackFeaturesBtn.setEnabled(working == self.ui.trackFeaturesBtn or not working)
         self.ui.rankCellsBtn.setEnabled(len(self._unranked_cells) > 0)
+        self.ui.autopatchDemoBtn.setEnabled(working == self.ui.autopatchDemoBtn or not working)
 
     @property
     def cameraDevice(self) -> Camera:
@@ -574,7 +579,7 @@ class AutomationDebugWindow(Qt.QWidget):
         cam_win: CameraWindow = self.module.manager.getModule("Camera").window()
         for box in self._previousBoxWidgets:
             cam_win.removeItem(box)
-            # self.scopeDevice.sigGlobalTransformChanged.disconnect(box.noticeFocusChange)
+            self.scopeDevice.sigGlobalTransformChanged.disconnect(box.noticeFocusChange)
         self._previousBoxWidgets = []
 
     def _handleDetectResults(self, future: Future) -> None:
@@ -598,7 +603,7 @@ class AutomationDebugWindow(Qt.QWidget):
             box = TargetBox(start, end)
             cam_win.addItem(box)
             # TODO: Re-evaluate if this connection is still needed or causes issues
-            # self.scopeDevice.sigGlobalTransformChanged.connect(box.noticeFocusChange)
+            self.scopeDevice.sigGlobalTransformChanged.connect(box.noticeFocusChange)
             self._previousBoxWidgets.append(box)
             # TODO label boxes? Maybe add index number?
             # label = pg.TextItem(f'{len(self._previousBoxWidgets)}') # Example index

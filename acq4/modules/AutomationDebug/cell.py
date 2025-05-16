@@ -104,7 +104,7 @@ class Cell(Qt.QObject):
         start_glob = target - margin
         stop_glob = target + margin
         if stack:
-            direction = np.sign(stack[0].globalCenterPosition()[2] - stack[-1].globalCenterPosition()[2])
+            direction = np.sign(stack[-1].globalPosition[2] - stack[0].globalPosition[2])
         else:
             current_focus = self._imager.globalCenterPosition()
             direction = np.sign(current_focus[2] - target[2])
@@ -134,6 +134,8 @@ class Cell(Qt.QObject):
         )
         start_ijk = np.round(stack_xform.inverse.map(start_glob)).astype(int)
         stop_ijk = np.round(stack_xform.inverse.map(stop_glob)).astype(int)
+        if np.any(start_ijk < 0) or np.any(stop_ijk < 0):
+            raise ValueError("target is too close to the edge of this stack")
         start_ijk, stop_ijk = np.min((start_ijk, stop_ijk), axis=0), np.max((start_ijk, stop_ijk), axis=0)
         if self._roiSize is None:
             self._roiSize = tuple(stop_ijk - start_ijk)
@@ -142,7 +144,7 @@ class Cell(Qt.QObject):
             start_ijk[0] : stop_ijk[0],
             start_ijk[1] : stop_ijk[1],
             start_ijk[2] : stop_ijk[2],
-        ]
+        ].copy()  # copy to allow freeing of the full stack memory
         assert roi_stack.shape == self._roiSize
         region_xform = stack_xform * TTransform(
             offset=start_ijk,
