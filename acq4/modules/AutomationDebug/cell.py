@@ -90,7 +90,7 @@ class Cell(Qt.QObject):
     def updatePosition(self, _future):
         while len(self._tracker.object_stacks) == 0:
             _future.sleep(0.1)
-        stack, xform, _ = _future.waitFor(self._takeStackshot()).getResult()
+        stack, xform, _ = self._takeStackshot(block=True, checkStopThrough=_future).getResult()
         img_stack = ImageStack(stack, xform)
         result = self._tracker.next_frame(img_stack)
         global_position = result["position"].mapped_to("global")
