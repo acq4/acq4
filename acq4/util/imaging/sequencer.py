@@ -27,7 +27,7 @@ def _enforce_linear_z_stack(frames: list[Frame], start: float, stop: float, step
         return frames
     if step == 0:
         raise ValueError("Z stack step size must be non-zero.")
-    step = abs(step)
+    step = abs(step) * np.sign(stop - start)
     depths = sorted([(f.depth, f) for f in frames], key=lambda x: x[0])
     if (stop - start) % step != 0:
         expected_depths = np.arange(start, stop, step)
