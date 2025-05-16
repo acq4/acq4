@@ -55,11 +55,16 @@ def _enforce_linear_z_stack(frames: list[Frame], step: float) -> list[Frame]:
         #     return np.mean(np.abs(overflowed_diff)) > threshold
 
     depths = [depths[0]] + [f for i, f in enumerate(depths[1:], 1) if difference_is_significant(f, depths[i - 1])]
-    if len(depths) < expected_size:
+    last_depth: float = depths[0][0]
+    ret_frames = [depths[0][1]]
+    for depth, f in sorted(depths, key=lambda x: x[0]):
+        if abs(depth - last_depth) >= step:
+            ret_frames.append(f)
+            last_depth = depth
+    if len(ret_frames) < expected_size:
         raise ValueError("Insufficient frames to have one frame per step (after pruning nigh identical frames).")
 
-    return [f for _, f in sorted(depths, key=lambda x: x[0])]
-
+    return ret_frames
     # # TODO do we want this?
     # # TODO interpolate first?
     # if frames[0][0] < frames[-1][0]:
