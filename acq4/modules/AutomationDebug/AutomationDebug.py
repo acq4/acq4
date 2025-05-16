@@ -963,25 +963,35 @@ class AutomationDebugWindow(Qt.QWidget):
 
     @future_wrap
     def _autopatchDemo(self, _future):
+        self.sigWorking.emit(self.ui.autopatchDemoBtn)
         ppip: PatchPipette = self.patchPipetteDevice
         cleaning = None
         while True:
             if not ppip.isTipClean():
                 cleaning = ppip.setState("clean")
+            _future.setState("Autopatch: searching for cells")
             cell = self._autopatchFindCell(_future)
+            _future.setState("Autopatch: cell found")
             if cleaning is not None:
+                _future.setState("Autopatch: cleaning pipette")
                 _future.waitFor(cleaning, timeout=600)
                 cleaning = None
             ppip.setState('bath')
+            _future.setState("Autopatch: go above target")
             _future.waitFor(ppip.pipetteDevice.goAboveTarget("fast"))
+            _future.setState("Autopatch: finding pipette tip")
+            ppip.clampDevice.autoPipetteOffset()
             self._autopatchFindPipetteTip(_future)
+            _future.setState("Autopatch: go approach")
             _future.waitFor(ppip.pipetteDevice.goApproach("fast"))
             cell.enableTracking()
             state = self._autopatchCellDetect(cell, _future)
             if state != "whole cell":
                 logMsg(f"Autopatch: Cell detect finished: {state}. Next!")
                 continue
+            _future.setState("Autopatch: running task runner")
             self._autopatchRunTaskRunner(_future)
+            _future.setState("Autopatch: resealing")
             _future.waitFor(ppip.setState("reseal"), timeout=None)
 
     def _autopatchCellDetect(self, cell, _future):
@@ -998,21 +1008,25 @@ class AutomationDebugWindow(Qt.QWidget):
 
     def _autopatchFindCell(self, _future):
         if not self._unranked_cells:
+            surf = _future.waitFor(self.cameraDevice.scopeDev.findSurfaceDepth(self.cameraDevice)).getResult()
+            _future.waitFor(self.cameraDevice.setFocusDepth(surf - 60e-6, "fast"))
             _future.waitFor(self._detectNeuronsZStack(), timeout=600)
         pos = self._unranked_cells.pop(0)
         self.pipetteDevice.setTarget(pos)
         cell = self._cell = Cell(pos)
         cell.sigPositionChanged.connect(self._updatePipetteTarget)
-        stack = self._current_classification_stack or self._current_detection_stack
+        # stack = self._current_classification_stack or self._current_detection_stack
+        # if (pos - margin) not in stack or (pos + margin) not in stack:
+        # stack = None
         try:
-            _future.waitFor(cell.initializeTracker(self.cameraDevice, stack))
+            _future.waitFor(cell.initializeTracker(self.cameraDevice))
         except _future.StopRequested:
             raise
-        except RuntimeError as e:
+        except ValueError as e:
             if self._mockDemo:
                 logMsg(f"Autopatch: Mocking cell despite {e}")
                 return cell
-            logMsg("Cell moved too much; retrying")
+            logMsg(f"Cell moved too much? {e}\nRetrying")
             return self._autopatchFindCell(_future)
         logMsg(f"Autopatch: Cell found at {pos}")
         return cell
@@ -1022,6 +1036,10 @@ class AutomationDebugWindow(Qt.QWidget):
             logMsg("Autopatch: Mock pipette tip detection")
             return
         pip = self.pipetteDevice
+        pos = pip.tracker.findTipInFrame()
+        _future.waitFor(self.cameraDevice.moveCenterToGlobal(pos, "fast"))
+        pos = pip.tracker.findTipInFrame()
+        _future.waitFor(self.cameraDevice.moveCenterToGlobal(pos, "fast"))
         pos = pip.tracker.findTipInFrame()
         success = _future.waitFor(pip.setTipOffsetIfAcceptable(pos), timeout=None).getResult()
         if not success:

@@ -36,13 +36,14 @@ class Cell(Qt.QObject):
 
     @future_wrap
     def initializeTracker(self, imager, stack=None, trackerClass=CV2MostFlowAgreementTracker, _future=None):
+        stale_stack = stack is not None
         self._imager = imager
         self._tracker = trackerClass()
         stack, xform, center = _future.waitFor(self._takeStackshot(stack)).getResult()
         obj_stack = ObjectStack(stack, xform, center)
         self._tracker.set_tracked_object(obj_stack)
-        if stack is not None and not self.updatePosition(_future):
-            raise RuntimeError("Cell moved too much to treat as tracked")
+        if stale_stack and not self.updatePosition(_future):
+            raise ValueError("Cell moved too much to treat as tracked")
 
     def enableTracking(self, enable=True, interval=0):
         """Enable or disable tracking of the cell position.
