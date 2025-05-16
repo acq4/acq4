@@ -976,7 +976,7 @@ class AutomationDebugWindow(Qt.QWidget):
                 _future.setState("Autopatch: cleaning pipette")
                 _future.waitFor(cleaning, timeout=600)
                 cleaning = None
-            ppip.setState('bath')
+            ppip.setState("bath")
             _future.setState("Autopatch: go above target")
             _future.waitFor(ppip.pipetteDevice.goAboveTarget("fast"))
             _future.setState("Autopatch: finding pipette tip")
@@ -1003,8 +1003,11 @@ class AutomationDebugWindow(Qt.QWidget):
                 if (state := ppip.getState().stateName) != "cell detect":
                     _future.setState(f"Autopatch: patch cell: {state}")
                     cell.enableTracking(False)
-                    # cell.sigPositionChanged.disconnect(self._updatePipetteTarget)
-                if not has_stopped and np.linalg.norm(np.array(cell.position) - ppip.pipetteDevice.globalPosition()) < 10e-6:
+                    pg.disconnect(cell.sigPositionChanged, self._updatePipetteTarget)
+                if (
+                    not has_stopped
+                    and np.linalg.norm(np.array(cell.position) - ppip.pipetteDevice.globalPosition()) < 10e-6
+                ):
                     cell.enableTracking(False)
                     _future.waitFor(self.cameraDevice.moveCenterToGlobal(cell.position, "fast"))
                     has_stopped = True

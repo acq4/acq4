@@ -74,10 +74,10 @@ class Cell(Qt.QObject):
             if ptime.time() - last_tracked > interval:
                 try:
                     self.updatePosition(_future)
-                except _future.StopRequested:
+                except (_future.StopRequested, self._tracker.TrackingError):
                     raise
                 except Exception:
-                    printExc("Error in tracking")
+                    printExc("Hopefully harmless error in tracking")
             _future.sleep(interval)
 
     def _handleTrackingFinished(self, future: Future):
