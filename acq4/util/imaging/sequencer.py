@@ -312,7 +312,7 @@ def positions_to_cover_region(region, imager_center, imager_region) -> Generator
 
 @future_wrap
 def acquire_z_stack(
-    imager, start: float, stop: float, step: float, hysteresis_correction=True, _future: Future = None
+    imager, start: float, stop: float, step: float, hysteresis_correction=True, slow_fallback=True, _future: Future = None
 ) -> list[Frame]:
     """Acquire a Z stack from the given imager.
 
@@ -331,7 +331,7 @@ def acquire_z_stack(
     stage = imager.scopeDev.getFocusDevice()
     z_per_second = stage.positionUpdatesPerSecond
     meters_per_frame = abs(step)
-    speed = meters_per_frame * z_per_second * 0.5
+    speed = meters_per_frame * z_per_second * 0.3
     man = Manager.getManager()
     with man.reserveDevices(imager.devicesToReserve()):
         frames_fut = imager.acquireFrames()
@@ -344,9 +344,12 @@ def acquire_z_stack(
         try:
             frames = _enforce_linear_z_stack(frames, start, stop, step)
         except ValueError:
-            logMsg("Failed to fast-acquire linear z stack. Retrying with stepwise movement.")
-            frames = _future.waitFor(_slow_z_stack(imager, start, stop, step)).getResult()
-            frames = _enforce_linear_z_stack(frames, start, stop, step)
+            if slow_fallback:
+                logMsg("Failed to fast-acquire linear z stack. Retrying with stepwise movement.")
+                frames = _future.waitFor(_slow_z_stack(imager, start, stop, step)).getResult()
+                frames = _enforce_linear_z_stack(frames, start, stop, step)
+            else:
+                raise
     _fix_frame_transforms(frames, step)
     return frames
 

@@ -28,6 +28,7 @@ class Cell(Qt.QObject):
         self.isTracking = False
         self._tracker = None
         self._roiSize = None
+        self.all_stacks = []
 
     @property
     def position(self):
@@ -114,9 +115,10 @@ class Cell(Qt.QObject):
         if stack is None:
             _future.waitFor(self._imager.moveCenterToGlobal((target[0], target[1], start_glob[2]), "fast"))
             stack = _future.waitFor(
-                acquire_z_stack(self._imager, start_glob[2], stop_glob[2], 1e-6, hysteresis_correction=False),
+                acquire_z_stack(self._imager, start_glob[2], stop_glob[2], 1e-6, hysteresis_correction=False, slow_fallback=False),
                 timeout=60,
             ).getResult()
+            self.all_stacks.append(stack)
         fav_frame = stack[0]
         if direction > 0:
             stack = stack[::-1]
