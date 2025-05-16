@@ -40,7 +40,7 @@ def test_enforce_linear_z_stack_insufficient_frames_exact_steps():
 def test_enforce_linear_z_stack_insufficient_frames_after_pruning():
     # All frames have same depth, effectively becoming 1 unique frame
     frames = [MockFrame(0.0, data=np.array([1])), MockFrame(0.0, data=np.array([1])), MockFrame(0.0, data=np.array([1]))]
-    with pytest.raises(ValueError, match="Insufficient frames to have one frame per step \(after pruning nigh identical frames\)."):
+    with pytest.raises(ValueError, match=r"Insufficient frames to have one frame per step \(after pruning nigh identical frames\)."):
         _enforce_linear_z_stack(frames, 0.0, 1.0, 0.5) # expects 3 frames (0, 0.5, 1.0)
 
 
