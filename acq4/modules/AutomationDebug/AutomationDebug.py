@@ -1004,10 +1004,10 @@ class AutomationDebugWindow(Qt.QWidget):
                     _future.setState(f"Autopatch: patch cell: {state}")
                     cell.enableTracking(False)
                     pg.disconnect(cell.sigPositionChanged, self._updatePipetteTarget)
-                if (
-                    not has_stopped
-                    and np.linalg.norm(np.array(cell.position) - ppip.pipetteDevice.globalPosition()) < 10e-6
-                ):
+                if np.linalg.norm(np.array(cell.position) - ppip.pipetteDevice.globalPosition()) > 10e-6:
+                    if state == "cell detect" and not has_stopped and not cell.isTracking:
+                        break  # something bad happened
+                elif not has_stopped:
                     cell.enableTracking(False)
                     _future.waitFor(self.cameraDevice.moveCenterToGlobal(cell.position, "fast"))
                     has_stopped = True
