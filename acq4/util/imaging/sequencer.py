@@ -27,7 +27,9 @@ def _enforce_linear_z_stack(frames: list[Frame], start: float, stop: float, step
         return frames
     if step == 0:
         raise ValueError("Z stack step size must be non-zero.")
-    step = abs(step) * np.sign(stop - start)
+    direction = np.sign(stop - start)
+    start, stop = sorted((start, stop))
+    step = abs(step)
     depths = sorted([(f.depth, f) for f in frames], key=lambda x: x[0])
     if (stop - start) % step != 0:
         expected_depths = np.arange(start, stop, step)
@@ -64,7 +66,7 @@ def _enforce_linear_z_stack(frames: list[Frame], start: float, stop: float, step
     # get the closest frame for each expected depth
     actual_depths = [d[0] for d in depths]
     idxes = np.searchsorted(actual_depths, expected_depths, side="right")
-    return [depths[i][1] for i in idxes]
+    return [depths[i][1] for i in idxes[::direction]]  # reverse the order if we were going down
 
 
 def _set_focus_depth(
