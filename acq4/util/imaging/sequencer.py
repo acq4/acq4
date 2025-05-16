@@ -17,7 +17,7 @@ from acq4.util.surface import find_surface
 from acq4.util.threadrun import runInGuiThread
 
 
-def _enforce_linear_z_stack(frames: list[Frame], step: float) -> list[Frame]:
+def _enforce_linear_z_stack(frames: list[Frame], start: float, stop: float, step: float) -> list[Frame]:
     """Ensure that the Z stack frames are linearly spaced. Frames are likely to come back with
     grouped z-values due to the stage's infrequent updates (i.e. 4 frames will arrive
     simultaneously, or just in the time it takes to get a new z value). This assumes the z
@@ -28,9 +28,12 @@ def _enforce_linear_z_stack(frames: list[Frame], step: float) -> list[Frame]:
     if step == 0:
         raise ValueError("Z stack step size must be non-zero.")
     step = abs(step)
-    depths = [(f.depth, f) for f in frames]
-    expected_size = abs(depths[-1][0] - depths[0][0]) / step
-    if len(depths) < expected_size:
+    depths = sorted([(f.depth, f) for f in frames], key=lambda x: x[0])
+    if (stop - start) % step != 0:
+        expected_depths = np.arange(start, stop, step)
+    else:
+        expected_depths = np.arange(start, stop + step, step)
+    if len(depths) < len(expected_depths):
         raise ValueError("Insufficient frames to have one frame per step.")
     # throw away frames that are nearly identical to the previous frame (hopefully this only
     # happens at the endpoints)
@@ -55,37 +58,13 @@ def _enforce_linear_z_stack(frames: list[Frame], step: float) -> list[Frame]:
         #     return np.mean(np.abs(overflowed_diff)) > threshold
 
     depths = [depths[0]] + [f for i, f in enumerate(depths[1:], 1) if difference_is_significant(f, depths[i - 1])]
-    last_depth: float = depths[0][0]
-    ret_frames = [depths[0][1]]
-    for depth, f in sorted(depths, key=lambda x: x[0]):
-        if abs(depth - last_depth) >= step:
-            ret_frames.append(f)
-            last_depth = depth
-    if len(ret_frames) < expected_size:
+    if len(depths) < len(expected_depths):
         raise ValueError("Insufficient frames to have one frame per step (after pruning nigh identical frames).")
 
-    return ret_frames
-    # # TODO do we want this?
-    # # TODO interpolate first?
-    # if frames[0][0] < frames[-1][0]:
-    #     ideal_z_values = np.arange(frames[0][0], frames[-1][0] + step, step)
-    # else:
-    #     ideal_z_values = np.arange(frames[0][0], frames[-1][0] - step, -step)
-    # # [(0, f1), (0, f2), (1, f3)] with ideal z's of [0, 1] should become [(0, f1), (1, f3)]
-    # # [(0, f1), (2, f2), (2, f3), (2, f4)] with ideal z's of [0, 1, 2] should become [(0, f1), (1, f2), (2, f4)]
-    # ideal_idx = 0
-    # actual_idx = 0
-    # actual_z_values = np.array([z for z, _ in frames])
-    # new_frame_idxs = []
-    # while ideal_idx < len(ideal_z_values) and actual_idx < len(frames):
-    #     next_closest = np.argmin(np.abs(actual_z_values - ideal_z_values[ideal_idx]))  # TODO this could be made faster if needed
-    #     next_closest = max(next_closest, actual_idx)  # don't go backwards
-    #     new_frame_idxs.append(next_closest)
-    #     ideal_idx += 1
-    #     actual_idx = next_closest + 1
-    # if len(new_frame_idxs) < expected_size:
-    #     raise ValueError("Insufficient frames to have one frame per step (after walking through).")
-    # return [frames[i][1] for i in new_frame_idxs]
+    # get the closest frame for each expected depth
+    actual_depths = [d[0] for d in depths]
+    idxes = np.searchsorted(actual_depths, expected_depths, side="right")
+    return [depths[i][1] for i in idxes]
 
 
 def _set_focus_depth(
@@ -363,11 +342,11 @@ def acquire_z_stack(
             frames_fut.stop()
             frames = _future.waitFor(frames_fut).getResult(timeout=10)
         try:
-            frames = _enforce_linear_z_stack(frames, step)
+            frames = _enforce_linear_z_stack(frames, start, stop, step)
         except ValueError:
             logMsg("Failed to fast-acquire linear z stack. Retrying with stepwise movement.")
             frames = _future.waitFor(_slow_z_stack(imager, start, stop, step)).getResult()
-            frames = _enforce_linear_z_stack(frames, step)
+            frames = _enforce_linear_z_stack(frames, start, stop, step)
     _fix_frame_transforms(frames, step)
     return frames
 
