@@ -491,7 +491,7 @@ class AboveTargetMotionPlanner(PipetteMotionPlanner):
         waypoint1, waypoint2 = self.aboveTargetPath()
 
         path = self.safePath(pip.globalPosition(), waypoint1, speed, APPROACH_TO_CORRECT_FOR_HYSTERESIS)
-        _future.waitFor(pip._movePath(path))
+        _future.waitFor(pip._movePath(path + [(waypoint2, "fast", True, "Above target")]))
         move_scope = scope.setGlobalPosition(waypoint2)
         _future.waitFor(move_scope)  # TODO act simultaneously once we can handle motion planning around moving objects
 
