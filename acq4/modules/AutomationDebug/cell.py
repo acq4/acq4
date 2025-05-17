@@ -1,5 +1,6 @@
 import numpy as np
 
+from acq4.Manager import getManager
 from acq4.util import Qt, ptime
 from acq4.util.debug import printExc
 from acq4.util.future import future_wrap, Future
@@ -28,23 +29,24 @@ class Cell(Qt.QObject):
         self.isTracking = False
         self._tracker = None
         self._roiSize = None
-        self.all_stacks = []
 
     @property
     def position(self):
         """Get the current position of the cell."""
-        return self._positions[max(self._positions)]
+        return np.array(self._positions[max(self._positions)])
 
     @future_wrap
     def initializeTracker(self, imager, stack=None, trackerClass=CV2MostFlowAgreementTracker, _future=None):
-        stale_stack = stack is not None
-        self._imager = imager
-        self._tracker = trackerClass()
-        stack, xform, center = _future.waitFor(self._takeStackshot(stack)).getResult()
-        obj_stack = ObjectStack(stack, xform, center)
-        self._tracker.set_tracked_object(obj_stack)
-        if stale_stack and not self.updatePosition(_future):
-            raise ValueError("Cell moved too much to treat as tracked")
+        # Initialize tracker if we have none, or just grab another stack and check if it still matches otherwise
+        if self._tracker is None:
+            self._imager = imager
+            self._tracker = trackerClass()
+            stack, xform, center = _future.waitFor(self._takeStackshot(stack)).getResult()
+            obj_stack = ObjectStack(stack, xform, center)
+            self._tracker.set_tracked_object(obj_stack)
+        else:
+            if not self.updatePosition(_future):
+                raise ValueError("Cell moved too much to treat as tracked")
 
     def enableTracking(self, enable=True, interval=0):
         """Enable or disable tracking of the cell position.
@@ -60,7 +62,6 @@ class Cell(Qt.QObject):
         if enable:
             if self._trackingFuture is not None:
                 self._trackingFuture.stop("Tracking restarted")
-            self._roiSize = None
             self._trackingFuture = self._track(interval)
             self._trackingFuture.onFinish(self._handleTrackingFinished)
         elif self._trackingFuture is not None:
@@ -105,24 +106,28 @@ class Cell(Qt.QObject):
         margin = 20e-6
         start_glob = target - margin
         stop_glob = target + margin
-        if stack:
-            direction = np.sign(stack[-1].globalPosition[2] - stack[0].globalPosition[2])
-        else:
-            current_focus = self._imager.globalCenterPosition()
-            direction = np.sign(current_focus[2] - target[2])
+        current_focus = self._imager.globalCenterPosition()
+        direction = np.sign(current_focus[2] - target[2])
+        direction = 1  # for now, only scan in one direction
         if direction > 0:
             start_glob, stop_glob = stop_glob, start_glob
-        if stack is None:
-            _future.waitFor(self._imager.moveCenterToGlobal((target[0], target[1], start_glob[2]), "fast"))
-            stack = _future.waitFor(
-                acquire_z_stack(self._imager, start_glob[2], stop_glob[2], 1e-6, hysteresis_correction=False, slow_fallback=False),
-                timeout=60,
-            ).getResult()
-            self.all_stacks.append(stack)
+
+        # _future.waitFor(self._imager.moveCenterToGlobal((target[0], target[1], start_glob[2]), "fast"))
+        stack = _future.waitFor(
+            acquire_z_stack(
+                self._imager, start_glob[2], stop_glob[2], 1e-6, 
+                hysteresis_correction=False, 
+                slow_fallback=False,  # the slow fallback mode is too slow to be useful here
+                deviceReservationTimeout=30.0,  # possibly competing with pipette calibration, which can take a while
+            ),
+            timeout=60,
+        ).getResult()
+
+        assert stack[0].depth < stack[-1].depth
         fav_frame = stack[0]
-        if direction > 0:
-            stack = stack[::-1]
-            start_glob, stop_glob = stop_glob, start_glob
+        # if direction > 0:
+        #     stack = stack[::-1]
+        #     start_glob, stop_glob = stop_glob, start_glob
 
         # get the normalized 20µm³ region for tracking
         ijk_stack = np.array([f.data().T for f in stack])
@@ -155,4 +160,5 @@ class Cell(Qt.QObject):
             to_cs=f"frame_{fav_frame.info()['id']}.ijk",
         )
         region_center = np.round(region_xform.inverse.map(target)).astype(int)
+        assert roi_stack.shape == self._roiSize, f"stackshot generated wrong size stack ({roi_stack.shape} vs {self._roiSize})"
         return roi_stack, region_xform, region_center
