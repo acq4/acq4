@@ -6,17 +6,17 @@ from pathlib import Path
 import numpy as np
 
 import pyqtgraph as pg
-from pyqtgraph.units import µm, m
 from MetaArray import MetaArray
+from acq4 import getManager
 from acq4.devices.Camera import Camera
 from acq4.devices.Microscope import Microscope
 from acq4.devices.PatchPipette import PatchPipette
 from acq4.devices.Pipette import Pipette
 from acq4.devices.Pipette.calibration import findNewPipette
 from acq4.devices.Pipette.planners import PipettePathGenerator, GeometryAwarePathGenerator
-from acq4.modules.AutomationDebug.cell import Cell
 from acq4.modules.Camera import CameraWindow
 from acq4.modules.Module import Module
+from acq4.modules.TaskRunner import TaskRunner
 from acq4.util import Qt
 from acq4.util.debug import logMsg, printExc
 from acq4.util.future import Future, future_wrap
@@ -24,10 +24,10 @@ from acq4.util.imaging import Frame
 from acq4.util.imaging.sequencer import acquire_z_stack
 from acq4.util.target import TargetBox
 from acq4.util.threadrun import futureInGuiThread, runInGuiThread
-from acq4.modules.TaskRunner import TaskRunner
-from acq4 import getManager
+from coorx import SRT3DTransform, TransposeTransform
+from pyqtgraph.units import µm, m
+from .cell import Cell
 from .ranking_window import RankingWindow
-
 
 UiTemplate = Qt.importTemplate(".window")
 
@@ -453,7 +453,6 @@ class AutomationDebugWindow(Qt.QWidget):
             live_frame_global_transform = base_frame.globalTransform()
             live_frame_origin_global_xyz = np.array(base_frame.mapFromFrameToGlobal([0, 0, 0]))
 
-            step_z = 1 * µm  # Default Z step in meters
             z_info = next((ax for ax in info if ax.get("name") == "Z"), None)
             if z_info and "values" in z_info:
                 z_vals = z_info["values"]

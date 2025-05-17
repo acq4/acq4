@@ -29,7 +29,7 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         """Raised by checkStop if stop() has been invoked."""
 
     class Stopped(Exception):
-        """Raised by exceptions that were politely stopped."""
+        """Raised by futures that were politely stopped."""
 
     class Timeout(Exception):
         """Raised by wait() if the timeout period elapses."""

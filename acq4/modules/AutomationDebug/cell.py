@@ -92,7 +92,7 @@ class Cell(Qt.QObject):
     def updatePosition(self, _future):
         while len(self._tracker.object_stacks) == 0:
             _future.sleep(0.1)
-        stack, xform, _ = self._takeStackshot(block=True, checkStopThrough=_future).getResult()
+        stack, xform, _ = self._takeStackshot(_future)
         img_stack = ImageStack(stack, xform)
         result = self._tracker.next_frame(img_stack)
         global_position = result["position"].mapped_to("global")
@@ -100,8 +100,7 @@ class Cell(Qt.QObject):
         self.sigPositionChanged.emit(global_position)
         return result["match_success"]
 
-    @future_wrap
-    def _takeStackshot(self, stack=None, _future=None):
+    def _takeStackshot(self, _future):
         target = np.array(self.position)
         margin = 20e-6
         start_glob = target - margin
@@ -115,8 +114,8 @@ class Cell(Qt.QObject):
         # _future.waitFor(self._imager.moveCenterToGlobal((target[0], target[1], start_glob[2]), "fast"))
         stack = _future.waitFor(
             acquire_z_stack(
-                self._imager, start_glob[2], stop_glob[2], 1e-6, 
-                hysteresis_correction=False, 
+                self._imager, start_glob[2], stop_glob[2], 1e-6,
+                hysteresis_correction=False,
                 slow_fallback=False,  # the slow fallback mode is too slow to be useful here
                 deviceReservationTimeout=30.0,  # possibly competing with pipette calibration, which can take a while
             ),

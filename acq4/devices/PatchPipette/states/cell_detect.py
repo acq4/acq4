@@ -390,10 +390,8 @@ class CellDetectState(PatchPipetteState):
 
     def waitForStop(self):
         if self._continuousAdvanceFuture is not None:
-            try:
+            with contextlib.suppress(self._continuousAdvanceFuture.Stopped):
                 self._continuousAdvanceFuture.wait()
-            except self._continuousAdvanceFuture.Stopped:
-                pass
             self._continuousAdvanceFuture = None
 
     def _maybeTakeACellfie(self):
