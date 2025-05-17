@@ -773,7 +773,7 @@ class PipetteRecorder:
 
 class PipetteCamModInterface(CameraModuleInterface):
     """**DEPRECATED** use MultiPatch module instead
-
+    This is only used for displaying targets.
     Implements user interface for Pipette.
     """
     canImage = False

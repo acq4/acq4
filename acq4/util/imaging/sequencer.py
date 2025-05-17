@@ -65,7 +65,7 @@ def _enforce_linear_z_stack(frames: list[Frame], start: float, stop: float, step
     # get the closest frame for each expected depth
     actual_depths = [d[0] for d in depths]
     idxes = np.searchsorted(actual_depths, expected_depths, side="right")
-    return [depths[i][1] for i in idxes]
+    return [depths[min(i, len(depths)-1)][1] for i in idxes]
 
 
 def _set_focus_depth(
@@ -313,7 +313,7 @@ def positions_to_cover_region(region, imager_center, imager_region) -> Generator
 
 @future_wrap
 def acquire_z_stack(
-    imager, start: float, stop: float, step: float, hysteresis_correction=True, slow_fallback=True, _future: Future = None
+    imager, start: float, stop: float, step: float, hysteresis_correction=True, slow_fallback=True, deviceReservationTimeout=10.0, _future: Future = None
 ) -> list[Frame]:
     """Acquire a Z stack from the given imager.
 
@@ -332,9 +332,9 @@ def acquire_z_stack(
     stage = imager.scopeDev.getFocusDevice()
     z_per_second = stage.positionUpdatesPerSecond
     meters_per_frame = abs(step)
-    speed = meters_per_frame * z_per_second * 0.3
+    speed = meters_per_frame * z_per_second * 0.5
     man = Manager.getManager()
-    with man.reserveDevices(imager.devicesToReserve()):
+    with man.reserveDevices(imager.devicesToReserve(), timeout=deviceReservationTimeout):
         frames_fut = imager.acquireFrames()
         with imager.ensureRunning(ensureFreshFrames=True):
             _future.waitFor(imager.acquireFrames(1))  # just to be sure the camera's recording

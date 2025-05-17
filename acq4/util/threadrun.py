@@ -1,7 +1,6 @@
 import inspect
 import sys
 import threading
-import types
 from functools import wraps
 from typing import TypeVar, ParamSpec, Callable, Any, cast
 
@@ -25,6 +24,16 @@ def runInGuiThread(func, *args, **kwds):
         return func(*args, **kwds)
     else:
         return ThreadCallFuture(gui_thread, func, *args, **kwds)()
+
+
+def futureInGuiThread(func, *args, **kwds):
+    """Run a function the main GUI thread and return a Future."""
+    gui_thread = Qt.QApplication.instance().thread()
+    curr_thread = Qt.QtCore.QThread.currentThread()
+    if gui_thread == curr_thread:
+        return Future.immediate(result=func(*args, **kwds))
+    else:
+        return ThreadCallFuture(gui_thread, func, *args, **kwds)
 
 
 # Type variables for preserving function signature

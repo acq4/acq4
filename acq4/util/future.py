@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import functools
+import inspect
 import sys
 import threading
 import time
@@ -42,11 +43,15 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         fut._taskDone(returnValue=result, error=error, interrupted=(error or excInfo) is not None, excInfo=excInfo)
         return fut
 
-    def __init__(self, onError=None):
+    def __init__(self, onError=None, name=None):
         Qt.QObject.__init__(self)
 
         self.startTime = ptime.time()
-
+        if name is None:
+            frame = inspect.currentframe().f_back
+            self._name = f"(unnamed from {frame.f_code.co_filename}:{frame.f_lineno})"
+        else:
+            self._name = name
         self._isDone = False
         self._callbacks = []
         self._onError = onError
@@ -61,6 +66,9 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         self._stopsToPropagate = []
         self._returnVal: "T | None" = None
         self.finishedEvent = threading.Event()
+
+    def __repr__(self):
+        return f"<{self.__class__.__name__} {self._name}>"
 
     def executeInThread(self, func, args, kwds):
         """Execute the specified function in a separate thread.
@@ -214,7 +222,7 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         start = ptime.time()
         while True:
             if (timeout is not None) and (ptime.time() > start + timeout):
-                raise self.Timeout("Timeout waiting for task to complete.")
+                raise self.Timeout(f"Timeout waiting for task {self} to complete.")
 
             if self.isDone():
                 break
@@ -350,7 +358,9 @@ def future_wrap(
 
     @functools.wraps(func)
     def wrapper(*args: WRAPPED_FN_PARAMS.args, **kwds: WRAPPED_FN_PARAMS.kwargs) -> Future[WRAPPED_FN_RETVAL_TYPE]:
-        future = Future(onError=kwds.pop("onFutureError", None))
+        frame = inspect.currentframe().f_back
+        name = f"(wrapped {func.__name__} from {frame.f_code.co_filename}:{frame.f_lineno})"
+        future = Future(onError=kwds.pop("onFutureError", None), name=name)
         if kwds.pop("block", False):
             kwds["_future"] = future
             if parent := kwds.pop("checkStopThrough", None):
