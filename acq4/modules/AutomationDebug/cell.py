@@ -111,16 +111,23 @@ class Cell(Qt.QObject):
         if direction > 0:
             start_glob, stop_glob = stop_glob, start_glob
 
-        # _future.waitFor(self._imager.moveCenterToGlobal((target[0], target[1], start_glob[2]), "fast"))
-        stack = _future.waitFor(
-            acquire_z_stack(
-                self._imager, start_glob[2], stop_glob[2], 1e-6,
+        with getManager().reserveDevices(
+            [self._imager, self._imager.scopeDev.positionDevice(), self._imager.scopeDev.focusDevice()], timeout=30.0
+        ):
+            self._imager.moveCenterToGlobal(
+                (target[0], target[1], start_glob[2]), "fast", block=True, checkStopThrough=_future
+            )
+            stack = acquire_z_stack(
+                self._imager,
+                start_glob[2],
+                stop_glob[2],
+                1e-6,
                 hysteresis_correction=False,
                 slow_fallback=False,  # the slow fallback mode is too slow to be useful here
                 deviceReservationTimeout=30.0,  # possibly competing with pipette calibration, which can take a while
-            ),
-            timeout=60,
-        ).getResult()
+                block=True,
+                checkStopThrough=_future,
+            )
 
         assert stack[0].depth < stack[-1].depth
         fav_frame = stack[0]
@@ -159,5 +166,7 @@ class Cell(Qt.QObject):
             to_cs=f"frame_{fav_frame.info()['id']}.ijk",
         )
         region_center = np.round(region_xform.inverse.map(target)).astype(int)
-        assert roi_stack.shape == self._roiSize, f"stackshot generated wrong size stack ({roi_stack.shape} vs {self._roiSize})"
+        assert (
+            roi_stack.shape == self._roiSize
+        ), f"stackshot generated wrong size stack ({roi_stack.shape} vs {self._roiSize})"
         return roi_stack, region_xform, region_center
