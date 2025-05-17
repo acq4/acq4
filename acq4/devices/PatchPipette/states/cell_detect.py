@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import contextlib
 from threading import Lock
+import time
 from typing import Any, Iterable
 
 import numpy as np
 
 import pyqtgraph as pg
+from pyqtgraph.debug import printExc
 from acq4 import getManager
 from acq4.util import ptime
 from acq4.util.functions import plottable_booleans
@@ -224,6 +226,10 @@ class CellDetectState(PatchPipetteState):
         Maximum time (s) to wait for cell detection before switching to fallback state (default 30 s)
     DAQReservationTimeout : float
         Maximum time (s) to wait for DAQ reservation if reserveDAQ=True (defualt 30 s)
+    pipetteRecalibrateDistance : float
+        Distance between pipette and target at which to pause and recalibrate the pipette offset
+    pokeDistance : float
+        Distance to push pipette towards target after detecting cell surface
 
     """
     stateName = 'cell detect'
@@ -274,6 +280,8 @@ class CellDetectState(PatchPipetteState):
         'sidestepBackupDistance': {'default': 10e-6, 'type': 'float', 'suffix': 'm'},
         'sidestepPassDistance': {'default': 20e-6, 'type': 'float', 'suffix': 'm'},
         'minDetectionDistance': {'default': 15e-6, 'type': 'float', 'suffix': 'm'},
+        'pipetteRecalibrateDistance': {'default': 75e-6, 'type': 'float', 'suffix': 'm'},
+        'pokeDistance': {'default': 3e-6, 'type': 'float', 'suffix': 'm'},
     }
 
     def __init__(self, *args, **kwds):
@@ -292,18 +300,21 @@ class CellDetectState(PatchPipetteState):
             self.config['breakThreshold'],
         )
         self._lastTestPulse = None
+        self._reachedEndpoint = False
         self._startTime = None
         self.direction = self._calc_direction()
         self._wiggleLock = Lock()
         self._sidestepDirection = np.pi / 2
         self._pressureAdjustment = None
-        self.dev.sigTargetChanged.connect(self._noticeNewTarget)
+        self._pipetteRecalibrated = False
 
-    def _noticeNewTarget(self, pos):
+        self.dev.sigTargetChanged.connect(self._onTargetChanged)
+
+    def _onTargetChanged(self, pos):
+        # print("Target changed!")
         self.advanceSteps = None
         if self._continuousAdvanceFuture is not None:
             self._continuousAdvanceFuture.stop("Target changed")
-            self._continuousAdvanceFuture = None
 
     def run(self):
         with contextlib.ExitStack() as stack:
@@ -322,12 +333,18 @@ class CellDetectState(PatchPipetteState):
         self.monitorTestPulse()
 
         while not self.weTookTooLong():
-            if speed := self.targetCellFound():
-                return self._transition_to_seal(speed)
+            if detectedThresholdSpeed := self.targetCellFound():
+                if self._continuousAdvanceFuture is not None:
+                    self._continuousAdvanceFuture.stop("cell detected")
+                    self.waitForStop()
+                self.pokeCell()
+                print("RETURN: seal")
+                return self._transition_to_seal(detectedThresholdSpeed)
             self.checkStop()
             self.processAtLeastOneTestPulse()
             self.adjustPressureForDepth()
             self.maybeVisuallyTrackTarget()
+            self.maybeRecalibratePipette()
             if self._analysis.tip_is_broken():
                 self._taskDone(interrupted=True, error="Pipette broken")
                 self.dev.patchRecord()['detectedCell'] = False
@@ -337,15 +354,23 @@ class CellDetectState(PatchPipetteState):
                     self.avoidObstacle()
                 except TimeoutError:
                     self._taskDone(interrupted=True, error="Fouled by obstacle")
+                    print("RETURN: fouled")
                     return 'fouled'
             if config['autoAdvance']:
                 if config['advanceContinuous']:
                     # Start continuous move if needed
+                    # print("Advance continuous..")
                     if self._continuousAdvanceFuture is None:
+                        # print("Start new continuous advance future")
                         self._continuousAdvanceFuture = self.continuousMove()
                     if self._continuousAdvanceFuture.isDone():
-                        self._continuousAdvanceFuture.wait()  # check for move errors
-                        return self._transition_to_fallback()
+                        # print("Wait for continuous advance future")
+                        self.waitForStop()
+                        # print("Finished continuous advance future")
+                        if self._reachedEndpoint:
+                            print("RETURN: fallback")
+                            return self._transition_to_fallback()
+                    # print("..Advance continuous done")
                 else:
                     # advance to next position if stepping
                     if self.advanceSteps is None:
@@ -362,6 +387,14 @@ class CellDetectState(PatchPipetteState):
                     self.singleStep()
         self._taskDone(interrupted=True, error="Timed out waiting for cell detect.")
         return config['fallbackState']
+
+    def waitForStop(self):
+        if self._continuousAdvanceFuture is not None:
+            try:
+                self._continuousAdvanceFuture.wait()
+            except self._continuousAdvanceFuture.Stopped:
+                pass
+            self._continuousAdvanceFuture = None
 
     def _maybeTakeACellfie(self):
         config = self.config
@@ -390,6 +423,37 @@ class CellDetectState(PatchPipetteState):
         if self._visualTargetTrackingFuture is None:
             self._visualTargetTrackingFuture = self._visualTargetTracking()
 
+    def maybeRecalibratePipette(self):
+        if self._pipetteRecalibrated:
+            return
+        if self._distanceToTarget() < self.config['pipetteRecalibrateDistance']:
+            if self._continuousAdvanceFuture is not None:
+                # should restart on next main loop
+                self._continuousAdvanceFuture.stop()
+                self.waitForStop()
+
+            pip = self.dev.pipetteDevice
+            imgr = self.dev.imagingDevice()
+            manager = getManager()
+            with manager.reserveDevices([pip, imgr, imgr.scopeDev.positionDevice(), imgr.scopeDev.focusDevice()], timeout=30.0):
+                print(f"Waiting a bit for pipette position to settle")
+                time.sleep(2.0)
+                pos = pip.globalPosition()
+                self.waitFor(self.dev.imagingDevice().moveCenterToGlobal(pos, "fast"))
+                print(f"First recalibrate position (starting at {pos})")
+                time.sleep(4.0)
+                pos = pip.tracker.findTipInFrame()
+                pip.resetGlobalPosition(pos)
+                self.waitFor(self.dev.imagingDevice().moveCenterToGlobal(pos, "fast"))
+                print(f"Second recalibrate position (found tip at {pos})")
+                time.sleep(4.0)
+                pos = pip.tracker.findTipInFrame()
+                pip.resetGlobalPosition(pos)
+                print(f"Recalibrate finished (found tip again at {pos})")
+                time.sleep(4.0)
+
+            self._pipetteRecalibrated = True
+
     @future_wrap
     def _visualTargetTracking(self, _future):
         pass
@@ -413,11 +477,25 @@ class CellDetectState(PatchPipetteState):
     def _finishPressureAdjustment(self, future):
         self._pressureAdjustment = None
 
+    def pokeCell(self):
+        """Move pipette slightly deeper towards center of cell"""
+        poke = self.config['pokeDistance']
+        if poke == 0:
+            return
+        pip = self.dev.pipetteDevice
+        target = pip.targetPosition()
+        pos = pip.globalPosition()
+        dif = target - pos
+        dist = np.linalg.norm(dif)
+        if dist > poke:
+            goto = pos + dif * (poke / dist)
+            self.waitFor(pip._moveToGlobal(goto, self.config['detectionSpeed']))
+
     def avoidObstacle(self, already_retracted=False):
         self.setState("avoiding obstacle" + (" (recursively)" if already_retracted else ""))
         if self._continuousAdvanceFuture is not None:
             self._continuousAdvanceFuture.stop("Obstacle detected")
-            self._continuousAdvanceFuture = None
+            self.waitForStop()
 
         pip = self.dev.pipetteDevice
         speed = self.config['belowSurfaceSpeed']
@@ -515,6 +593,7 @@ class CellDetectState(PatchPipetteState):
     def depthBelowSurface(self, pos=None):
         if pos is None:
             pos = self.dev.pipetteDevice.globalPosition()
+        # print(f"measuring {pos[2]} relative to the surface")
         surface = self.dev.pipetteDevice.scopeDevice().getSurfaceDepth()
         return surface - pos[2]
 
@@ -609,18 +688,23 @@ class CellDetectState(PatchPipetteState):
         if self.aboveSurface():
             speed = config['aboveSurfaceSpeed']
             surface = self.surfaceIntersectionPosition(self.direction)
+            print(f"  continuous move: above surface to {surface}")
             _future.waitFor(dev.pipetteDevice._moveToGlobal(surface, speed=speed), timeout=None)
             self.setState("moved to surface")
         if not self.closeEnoughToTargetToDetectCell():
             speed = config['belowSurfaceSpeed']
             midway = self.fastTravelEndpoint()
+            print(f"  continuous move: below surface to midway: {midway}")
             _future.waitFor(self.dev.pipetteDevice._moveToGlobal(midway, speed=speed), timeout=None)
             self.setState("moved to detection area")
         speed = config['detectionSpeed']
         endpoint = self.finalSearchEndpoint()
         if config['preTargetWiggle']:
             self._wiggle(_future, endpoint)
+        print("  continuous move: to endpoint")
         _future.waitFor(self.dev.pipetteDevice._moveToGlobal(endpoint, speed=speed), timeout=None)
+        self._reachedEndpoint = True
+        print("  continuous move: done")
 
     def _wiggle(self, future, endpoint):
         config = self.config
