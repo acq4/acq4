@@ -125,7 +125,7 @@ class Cell(Qt.QObject):
                 deviceReservationTimeout=30.0,  # possibly competing with pipette calibration, which can take a while
                 block=True,
                 checkStopThrough=_future,
-            )
+            ).getResult()
 
         assert stack[0].depth < stack[-1].depth
         fav_frame = stack[0]
