@@ -239,7 +239,7 @@ class PatchPipetteState(Future):
         pip = self.dev.pipetteDevice
         pos = np.array(pip.globalPosition())
         surface = pip.scopeDevice().getSurfaceDepth()
-        return pos - direction * (surface - pos[2])
+        return pos + direction * ((surface - pos[2]) / direction[2])
 
 
 class SteadyStateAnalysisBase(object):
