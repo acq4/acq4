@@ -41,7 +41,7 @@ class Cell(Qt.QObject):
         if self._tracker is None:
             self._imager = imager
             self._tracker = trackerClass()
-            stack, xform, center = _future.waitFor(self._takeStackshot(stack)).getResult()
+            stack, xform, center = self._takeStackshot(_future)
             obj_stack = ObjectStack(stack, xform, center)
             self._tracker.set_tracked_object(obj_stack)
         else:
@@ -114,9 +114,7 @@ class Cell(Qt.QObject):
         with getManager().reserveDevices(
             [self._imager, self._imager.scopeDev.positionDevice(), self._imager.scopeDev.focusDevice()], timeout=30.0
         ):
-            self._imager.moveCenterToGlobal(
-                (target[0], target[1], start_glob[2]), "fast", block=True, checkStopThrough=_future
-            )
+            _future.waitFor(self._imager.moveCenterToGlobal((target[0], target[1], start_glob[2]), "fast"))
             stack = acquire_z_stack(
                 self._imager,
                 start_glob[2],
