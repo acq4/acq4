@@ -998,8 +998,15 @@ class AutomationDebugWindow(Qt.QWidget):
         try:
             ppip = self.patchPipetteDevice
             ppip.setState("cell detect")
+            recheck = False
             while True:
-                if (state := ppip.getState().stateName) != "cell detect":
+                if (state := ppip.getState().stateName) == "cell detect":
+                    dist = np.linalg.norm(cell.position - ppip.pipetteDevice.targetPosition())
+                    if dist < 20e-6 and not recheck:
+                        pos = ppip.pipetteDevice.tracker.findTipInFrame()
+                        _future.waitFor(ppip.pipetteDevice.setTipOffsetIfAcceptable(pos), timeout=None).getResult()
+                        recheck = True
+                else:
                     _future.setState(f"Autopatch: patch cell: {state}")
                     cell.enableTracking(False)
                     _future.waitFor(self.cameraDevice.moveCenterToGlobal(cell.position, "fast"))
