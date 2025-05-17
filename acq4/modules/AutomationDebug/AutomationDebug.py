@@ -1002,7 +1002,6 @@ class AutomationDebugWindow(Qt.QWidget):
                 if (state := ppip.getState().stateName) != "cell detect":
                     _future.setState(f"Autopatch: patch cell: {state}")
                     cell.enableTracking(False)
-                    pg.disconnect(cell.sigPositionChanged, self._updatePipetteTarget)
                     _future.waitFor(self.cameraDevice.moveCenterToGlobal(cell.position, "fast"))
                 if state == "cell detect" and not cell.isTracking:
                     break  # something bad happened
@@ -1012,6 +1011,7 @@ class AutomationDebugWindow(Qt.QWidget):
             return state
         finally:
             cell.enableTracking(False)
+            pg.disconnect(cell.sigPositionChanged, self._updatePipetteTarget)
 
     def _autopatchFindCell(self, _future):
         if not self._unranked_cells:
