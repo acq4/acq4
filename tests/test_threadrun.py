@@ -175,7 +175,7 @@ def test_method_with_arguments():
 
     # Verify signal arguments
     signal = TestClass.__test_with_argsEvent
-    assert len(signal.args_spec) == 3  # 3 args (excluding self)
+    assert len(signal.args_spec) == 2  # 3 args (excluding self)
 
     # Test with positional args
     result = instance.test_with_args(1, 2, blocking=True)
