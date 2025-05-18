@@ -36,16 +36,15 @@ def _enforce_linear_z_stack(frames: list[Frame], start: float, stop: float, step
     if len(depths) < len(expected_depths):
         raise ValueError("Insufficient frames to have one frame per step.")
 
-    # throw away frames that are nearly identical to the previous frame (hopefully this only
-    # happens at the endpoints)
     first = depths.pop(0)
     last = depths.pop(-1)
 
-    def difference_is_significant(frame1: tuple[float, int], frame2: tuple[float, int]):
-        # for now, only throw out frames with depth equal to the first or last
-        return not (np.isclose(frame1[0], first[0], atol=step / 10) or np.isclose(frame1[0], last[0], atol=step / 10))
+    def is_significant(frame1: tuple[float, int]):
+        # throw out frames with depth equal to the first or last
+        tol = np.clip(step / 10, 1e-12, 1e-7)
+        return not (np.isclose(frame1[0], first[0], atol=tol) or np.isclose(frame1[0], last[0], atol=tol))
 
-    depths = [first] + [d for i, d in enumerate(depths[1:], 1) if difference_is_significant(d, depths[i - 1])] + [last]
+    depths = [first] + [d for d in depths if is_significant(d)] + [last]
     if len(depths) < len(expected_depths):
         raise ValueError("Insufficient frames to have one frame per step (after pruning nigh identical frames).")
 
