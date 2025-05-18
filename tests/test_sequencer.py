@@ -64,7 +64,9 @@ def test_enforce_linear_z_stack_ascending_excess_frames():
     f0, f0_5, f1, f1_5, f2 = MockFrame(0.0), MockFrame(0.5), MockFrame(1.0), MockFrame(1.5), MockFrame(2.0)
     frames = [f0, f0_5, f1, f1_5, f2]
     result = _enforce_linear_z_stack(frames, 0.0, 2.0, 1.0) # expects 0, 1, 2
-    # searchsorted with side='right' will pick f0 for 0, f1 for 1.0, f2 for 2.0
+    # The function assigns frames to expected depths using the Hungarian algorithm.
+    # The algorithm minimizes the total cost, which is the sum of absolute differences
+    # between expected depths and interpolated depths.
     assert result == [f0, f1, f2]
 
 
@@ -72,10 +74,10 @@ def test_enforce_linear_z_stack_descending_excess_frames():
     f0, f0_5, f1, f1_5, f2 = MockFrame(0.0), MockFrame(0.5), MockFrame(1.0), MockFrame(1.5), MockFrame(2.0)
     frames = [f2, f1_5, f1, f0_5, f0] # Sorted by depth: f0, f0_5, f1, f1_5, f2
     result = _enforce_linear_z_stack(frames, 2.0, 0.0, -1.0) # expects 2, 1, 0
-    # expected_depths will be [0, 1, 2] because start, stop are sorted internally
-    # actual_depths will be [0, 0.5, 1, 1.5, 2]
-    # searchsorted([0,0.5,1,1.5,2], [0,1,2], side='right') -> indices [0, 2, 4]
-    # result should be [f0, f1, f2]
+    # expected_depths will be [0, 1, 2] because start, stop are sorted internally.
+    # The function assigns frames to expected depths using the Hungarian algorithm.
+    # The algorithm minimizes the total cost, which is the sum of absolute differences
+    # between expected depths and interpolated depths.
     assert result == [f0, f1, f2]
 
 
@@ -87,8 +89,8 @@ def test_enforce_linear_z_stack_ascending_grouped_depths():
     frames = [f0a, f0b, f1a, f1b, f2a, f2b]
     result = _enforce_linear_z_stack(frames, 0.0, 2.0, 1.0)
     # After pruning identical depths (if data was same), it would pick one.
-    # Here, depths are same but data is different, so difference_is_significant keeps them.
-    # The searchsorted logic will pick the *last* frame for each target depth.
+    # difference_is_significant checks if the depth is NOT close to the first or last depth.
+    # The Hungarian algorithm assigns frames to expected depths to minimize the total cost.
     assert result == [f0b, f1b, f2b]
 
 
@@ -124,13 +126,14 @@ def test_enforce_linear_z_stack_non_exact_step_multiple():
     frames = [f0, f0_7, f0_9, f1_5, f1_7, f2_0]
     result = _enforce_linear_z_stack(frames, 0.0, 2.0, 0.8)
     # expected_depths = [0, 0.8, 1.6]
-    # actual_depths = [0, 0.7, 0.9, 1.5, 1.7, 2.0]
-    # searchsorted(actual_depths, [0, 0.8, 1.6], side='right') -> indices for [f0, f0_9, f1_7]
+    # The function assigns frames to expected depths using the Hungarian algorithm.
+    # The algorithm minimizes the total cost, which is the sum of absolute differences
+    # between expected depths and interpolated depths.
     assert result == [f0, f0_9, f1_7]
 
 
 def test_enforce_linear_z_stack_pruning_identical_frames():
-    # difference_is_significant is currently just z1 != z2
+    # difference_is_significant checks if the depth is NOT close to the first or last depth
     # This test assumes the default behavior of difference_is_significant
     f0a = MockFrame(0.0, data=np.array([1]))
     f0b = MockFrame(0.0, data=np.array([1])) # Identical depth
@@ -156,11 +159,10 @@ def test_enforce_linear_z_stack_frames_not_perfectly_on_expected_depths():
     result = _enforce_linear_z_stack(frames, 0.0, 2.0, 1.0) # expects 0, 1, 2
     # expected_depths = [0, 1, 2]
     # actual_depths = [-0.1, 0.9, 2.1]
-    # searchsorted(actual_depths, [0, 1, 2], side='right') -> indices for [f_0_9, f_2_1, f_2_1]
-    # This is because searchsorted finds insertion points.
-    # For 0, index of 0.9. For 1, index of 2.1. For 2, index of 2.1.
-    assert result == [f_0_9, f_2_1, f_2_1] # This might seem odd, but it's how searchsorted works.
-                                        # The function aims to find *a* frame for each step.
+    # The function assigns frames to expected depths using the Hungarian algorithm.
+    # The algorithm minimizes the total cost, which is the sum of absolute differences
+    # between expected depths and interpolated depths.
+    assert result == [f_0_9, f_2_1, f_2_1]
 
 def test_enforce_linear_z_stack_descending_frames_not_perfectly_on_expected_depths():
     f_neg_0_1 = MockFrame(-0.1)
@@ -168,9 +170,10 @@ def test_enforce_linear_z_stack_descending_frames_not_perfectly_on_expected_dept
     f_2_1 = MockFrame(2.1)
     frames = [f_2_1, f_0_9, f_neg_0_1] # depths sorted: -0.1, 0.9, 2.1
     result = _enforce_linear_z_stack(frames, 2.0, 0.0, -1.0) # expects 2, 1, 0
-    # expected_depths (sorted for np.arange then searchsorted): [0, 1, 2]
-    # actual_depths = [-0.1, 0.9, 2.1]
-    # searchsorted(actual_depths, [0, 1, 2], side='right') -> indices for [f_0_9, f_2_1, f_2_1]
+    # expected_depths will be [0, 1, 2] because start, stop are sorted internally.
+    # The function assigns frames to expected depths using the Hungarian algorithm.
+    # The algorithm minimizes the total cost, which is the sum of absolute differences
+    # between expected depths and interpolated depths.
     assert result == [f_0_9, f_2_1, f_2_1]
 
 def test_enforce_linear_z_stack_stop_start_step_consistency():
@@ -271,17 +274,19 @@ def test_enforce_linear_z_stack_more_frames_than_steps_issue_scenario():
     frames = [fi_0, fi_1, fi_2, fi_3, fi_4]
     result = _enforce_linear_z_stack(frames, 0.0, 2.0, 1.0)
     # expected_depths = [0,1,2]
-    # actual_depths = [0,1,2,3,4]
-    # searchsorted(actual_depths, expected_depths, side='right') -> indices for [fi_0, fi_1, fi_2]
+    # The function assigns frames to expected depths using the Hungarian algorithm.
+    # The algorithm minimizes the total cost, which is the sum of absolute differences
+    # between expected depths and interpolated depths.
     assert result == [fi_0, fi_1, fi_2]
 
 def test_enforce_linear_z_stack_more_frames_than_steps_issue_scenario_desc():
     # Scenario from a bug: start=2, stop=0, step=-1. Frames at 0,1,2,3,4. Expect 2,1,0
     frames = [fi_4, fi_3, fi_2, fi_1, fi_0] # sorted by depth: fi_0, fi_1, fi_2, fi_3, fi_4
     result = _enforce_linear_z_stack(frames, 2.0, 0.0, -1.0)
-    # expected_depths (sorted for search): [0,1,2]
-    # actual_depths = [0,1,2,3,4]
-    # searchsorted(actual_depths, expected_depths, side='right') -> indices for [fi_0, fi_1, fi_2]
+    # expected_depths will be [0, 1, 2] because start, stop are sorted internally.
+    # The function assigns frames to expected depths using the Hungarian algorithm.
+    # The algorithm minimizes the total cost, which is the sum of absolute differences
+    # between expected depths and interpolated depths.
     assert result == [fi_0, fi_1, fi_2]
 
 def test_enforce_linear_z_stack_start_stop_step_float_precision():
