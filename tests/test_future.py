@@ -208,7 +208,7 @@ class TestFuture(unittest.TestCase):
 
     def test_future_waitFor_timeout_on_inner(self):
         outer_future = Future()
-        inner_future = Future()
+        inner_future = Future(name="inner")
 
         def inner_task_slow(_future):
             time.sleep(0.5) # longer than timeout
@@ -302,7 +302,7 @@ class TestFuture(unittest.TestCase):
 
         with self.assertRaises(Future.Stopped) as cm:
             fut.getResult()
-        self.assertIn("Task .* did not complete: user requested stop", str(cm.exception))
+        self.assertIn(r"did not complete: user requested stop", str(cm.exception))
 
     def test_future_double_taskDone_call(self):
         fut = Future()
