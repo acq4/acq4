@@ -119,7 +119,7 @@ def test_enforce_linear_z_stack_non_exact_step_multiple():
     f0, f1, f2, f2_4 = MockFrame(0.0), MockFrame(1.0), MockFrame(2.0), MockFrame(2.4)
     frames = [f0, f1, f2, f2_4]
     result = _enforce_linear_z_stack(frames, 0.0, 2.5, 1.0)
-    assert result == [f0, f1, f2_4] # searchsorted picks f2_4 for 2.0 as it's the closest >= without going over for side='right'
+    assert result == [f0, f1, f2_4] # The function assigns frames to expected depths using the Hungarian algorithm.
 
     # start=0, stop=2.0, step=0.8 => expected depths [0.0, 0.8, 1.6]
     f0, f0_7, f0_9, f1_5, f1_7, f2_0 = MockFrame(0.0), MockFrame(0.7), MockFrame(0.9), MockFrame(1.5), MockFrame(1.7), MockFrame(2.0)
