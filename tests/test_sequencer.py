@@ -17,12 +17,13 @@ class MockFrame:
 
 
 def test_enforce_linear_z_stack_empty_frames():
-    assert _enforce_linear_z_stack([], 0.0, 10.0, 1.0) == []
+    with pytest.raises(ValueError, match="Insufficient frames to have one frame per step."):
+        _enforce_linear_z_stack([], 0.0, 10.0, 1.0)
 
 
 def test_enforce_linear_z_stack_single_frame():
     frames = [MockFrame(5.0)]
-    assert _enforce_linear_z_stack(frames, 0.0, 10.0, 1.0) == frames
+    assert _enforce_linear_z_stack(frames, 0.0, 0.8, 1.0) == frames
 
 
 def test_enforce_linear_z_stack_zero_step():

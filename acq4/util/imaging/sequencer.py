@@ -24,8 +24,6 @@ def _enforce_linear_z_stack(frames: list[Frame], start: float, stop: float, step
     simultaneously, or just in the time it takes to get a new z value). This assumes the z
     values of the first and last frames are correct, but not necessarily any of the other
     frames."""
-    if len(frames) < 2:
-        return frames
     if step == 0:
         raise ValueError("Z stack step size must be non-zero.")
     start, stop = sorted((start, stop))
