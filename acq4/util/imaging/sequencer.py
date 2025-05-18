@@ -5,6 +5,7 @@ import weakref
 from typing import Union, Optional, Generator
 
 import numpy as np
+from scipy.optimize import linear_sum_assignment
 
 import acq4.Manager as Manager
 import pyqtgraph as pg
@@ -29,43 +30,36 @@ def _enforce_linear_z_stack(frames: list[Frame], start: float, stop: float, step
         raise ValueError("Z stack step size must be non-zero.")
     start, stop = sorted((start, stop))
     step = abs(step)
-    depths = sorted([(f.depth, f) for f in frames], key=lambda x: x[0])
+    depths = sorted([(f.depth, i) for i, f in enumerate(frames)])
     if (stop - start) % step != 0:
         expected_depths = np.arange(start, stop, step)
     else:
         expected_depths = np.arange(start, stop + step, step)
     if len(depths) < len(expected_depths):
         raise ValueError("Insufficient frames to have one frame per step.")
+
     # throw away frames that are nearly identical to the previous frame (hopefully this only
     # happens at the endpoints)
+    first = depths.pop(0)
+    last = depths.pop(-1)
 
-    def difference_is_significant(frame1: tuple[float, Frame], frame2: tuple[float, Frame]):
-        """Returns whether the absolute difference between the two frames is significant. Frames are
-        tuples of (z, frame)."""
-        z1, frame1 = frame1
-        z2, frame2 = frame2
-        return z1 != z2  # for now
-        # if z1 != z2:
-        #     return True
-        # img1 = frame1.data()
-        # img2 = frame2.data()
-        # dmax = np.iinfo(img1.dtype).max
-        # threshold = (dmax / 512)  # arbitrary
-        # overflowed_diff = img1 - img2  # e.g. uint16: 4 - 1 = 3, 1 - 4 = 65532
-        # if np.issubdtype(img1.dtype, np.unsignedinteger):
-        #     abs_adjust = (img1 < img2).astype(img1.dtype) * dmax + 1  # e.g. uint16: "-1" (65535) if img1 < img2, 1 otherwise
-        #     return np.mean(overflowed_diff * abs_adjust) > threshold
-        # else:
-        #     return np.mean(np.abs(overflowed_diff)) > threshold
+    def difference_is_significant(frame1: tuple[float, int], frame2: tuple[float, int]):
+        # for now, only throw out frames with depth equal to the first or last
+        return not (np.isclose(frame1[0], first[0], atol=step / 10) or np.isclose(frame1[0], last[0], atol=step / 10))
 
-    depths = [depths[0]] + [f for i, f in enumerate(depths[1:], 1) if difference_is_significant(f, depths[i - 1])]
+    depths = [first] + [d for i, d in enumerate(depths[1:], 1) if difference_is_significant(d, depths[i - 1])] + [last]
     if len(depths) < len(expected_depths):
         raise ValueError("Insufficient frames to have one frame per step (after pruning nigh identical frames).")
 
-    # get the closest frame for each expected depth
-    actual_depths = [d[0] for d in depths]
-    idxes = np.searchsorted(actual_depths, expected_depths, side="right")
-    return [depths[min(i, len(depths)-1)][1] for i in idxes]
+    # get the closest frame for each expected depth using the Hungarian algorithm
+    interpolated_depths = np.linspace(start, stop, len(depths))
+    cost_matrix = np.abs(expected_depths[:, None] - interpolated_depths[None, :])
+    row_ind, col_ind = linear_sum_assignment(cost_matrix)
+    idxes = np.full(len(expected_depths), -1, dtype=int)
+    for i, j in zip(row_ind, col_ind):
+        idxes[i] = j
+    assert np.all(idxes >= 0), "Not all expected depths have a corresponding index."
+    return [frames[depths[i][1]] for i in idxes]
 
 
 def _set_focus_depth(
@@ -313,7 +307,14 @@ def positions_to_cover_region(region, imager_center, imager_region) -> Generator
 
 @future_wrap
 def acquire_z_stack(
-    imager, start: float, stop: float, step: float, hysteresis_correction=True, slow_fallback=True, deviceReservationTimeout=10.0, _future: Future = None
+    imager,
+    start: float,
+    stop: float,
+    step: float,
+    hysteresis_correction=True,
+    slow_fallback=True,
+    deviceReservationTimeout=10.0,
+    _future: Future = None,
 ) -> list[Frame]:
     """Acquire a Z stack from the given imager.
 
