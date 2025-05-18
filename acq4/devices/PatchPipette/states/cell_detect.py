@@ -439,16 +439,16 @@ class CellDetectState(PatchPipetteState):
                 pos = pip.globalPosition()
                 self.waitFor(self.dev.imagingDevice().moveCenterToGlobal(pos, "fast"))
                 print(f"First recalibrate position (starting at {pos})")
-                time.sleep(4.0)
+                time.sleep(2.0)
                 pos = pip.tracker.findTipInFrame()
                 pip.resetGlobalPosition(pos)
                 self.waitFor(self.dev.imagingDevice().moveCenterToGlobal(pos, "fast"))
                 print(f"Second recalibrate position (found tip at {pos})")
-                time.sleep(4.0)
+                time.sleep(2.0)
                 pos = pip.tracker.findTipInFrame()
                 pip.resetGlobalPosition(pos)
                 print(f"Recalibrate finished (found tip again at {pos})")
-                time.sleep(4.0)
+                time.sleep(2.0)
 
             self._pipetteRecalibrated = True
 

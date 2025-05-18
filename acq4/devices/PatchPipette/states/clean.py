@@ -62,7 +62,7 @@ class CleanState(PatchPipetteState):
             if len(sequence) == 0:
                 continue
 
-            self.waitFor(pip.moveTo(stage, "fast"))
+            self.waitFor(pip.moveTo(stage, "fast"), timeout=30)
 
             if dev.sonicatorDevice is not None:
                 self.sonication = dev.sonicatorDevice.doProtocol(config['sonicationProtocol'])

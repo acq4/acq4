@@ -673,34 +673,47 @@ class AutomationDebugWindow(Qt.QWidget):
         self.sigWorking.emit(self.ui.autopatchDemoBtn)
         ppip: PatchPipette = self.patchPipetteDevice
         cleaning = None
-        while True:
-            if not ppip.isTipClean():
-                cleaning = ppip.setState("clean")
-            cell = self._autopatchFindCell(_future)
-            _future.setState("Autopatch: cell found")
-            if cleaning is not None:
-                _future.setState("Autopatch: cleaning pipette")
-                _future.waitFor(cleaning, timeout=600)
-                cleaning = None
-            ppip.setState("bath")
-            ppip.clampDevice.resetTestPulseHistory()
-            _future.setState("Autopatch: go above target")
-            _future.waitFor(ppip.pipetteDevice.goAboveTarget("fast"))
-            _future.setState("Autopatch: finding pipette tip")
-            ppip.clampDevice.autoPipetteOffset()
-            self._autopatchFindPipetteTip(_future)
-            _future.setState("Autopatch: go approach")
-            _future.waitFor(ppip.pipetteDevice.goApproach("fast"))
-            cell.enableTracking()
-            state = self._autopatchCellDetect(cell, _future)
-            if state != "whole cell":
-                logMsg(f"Autopatch: Cell detect finished: {state}. Next!")
+        while self._unranked_cells:
+            try:
+                if not ppip.isTipClean():
+                    cleaning = ppip.setState("clean")
+                cell = self._autopatchFindCell(_future)
+                _future.setState("Autopatch: cell found")
+                if cleaning is not None:
+                    _future.setState("Autopatch: cleaning pipette")
+                    _future.waitFor(cleaning, timeout=600)
+                    cleaning = None
+                ppip.setState("bath")
+                ppip.clampDevice.resetTestPulseHistory()
+                _future.setState("Autopatch: go above target")
+                _future.waitFor(ppip.pipetteDevice.goAboveTarget("fast"))
+                _future.setState("Autopatch: finding pipette tip")
+                ppip.clampDevice.autoPipetteOffset()
+                self._autopatchFindPipetteTip(_future)
+                _future.setState("Autopatch: go approach")
+                _future.waitFor(ppip.pipetteDevice.goApproach("fast"))
+                cell.enableTracking()
+                state = self._autopatchCellDetect(cell, _future)
+                if state != "whole cell":
+                    logMsg(f"Autopatch: Cell detect finished: {state}. Next!")
+                    continue
+                logMsg(f"Autopatch: got whole cell, start task runner")
+                _future.setState("Autopatch: running task runner")
+                self._autopatchRunTaskRunner(_future)
+
+                self.scopeDevice.loadPreset('GFP')
+                _future.sleep(5)
+                self.scopeDevice.loadPreset('tdTomato')
+                _future.sleep(5)
+                self.scopeDevice.loadPreset('brightfield')
+
+                _future.setState("Autopatch: resealing")
+                _future.waitFor(ppip.setState("reseal"), timeout=None)
+            except _future.StopRequested:
+                raise
+            except Exception as exc:
+                printExc("Error during protocol:")
                 continue
-            logMsg(f"Autopatch: got whole cell, start task runner")
-            _future.setState("Autopatch: running task runner")
-            self._autopatchRunTaskRunner(_future)
-            _future.setState("Autopatch: resealing")
-            _future.waitFor(ppip.setState("reseal"), timeout=None)
 
     def _autopatchCellDetect(self, cell, _future):
         try:
@@ -711,8 +724,8 @@ class AutomationDebugWindow(Qt.QWidget):
                     _future.setState(f"Autopatch: patch cell: {state}")
                     cell.enableTracking(False)
                     _future.waitFor(self.cameraDevice.moveCenterToGlobal(cell.position, "fast"))
-                if state == "cell detect" and not cell.isTracking:
-                    break  # something bad happened
+                # if state == "cell detect" and not cell.isTracking:
+                #     break  # something bad happened
                 if state in ("whole cell", "bath", "broken", "fouled"):
                     break
                 _future.sleep(0.1)
@@ -766,22 +779,23 @@ class AutomationDebugWindow(Qt.QWidget):
     def _autopatchRunTaskRunner(self, _future):
         man = self.module.manager
         ppip = self.patchPipetteDevice
+        clampName = ppip.clampDevice.name()
         taskrunner: TaskRunner | None = None
         for mod in man.listModules():
             if not mod.startswith("Task Runner"):
                 continue
             mod = man.getModule(mod)
-            if ppip.clampDevice.name() in mod.docks:
+            if clampName in mod.docks:
                 taskrunner = mod
                 break
         if taskrunner is None:
-            logMsg(f"No task runner found that uses {self.dev.clampDevice.name()}")
+            logMsg(f"No task runner found that uses {clampName}")
             return
 
         expected_duration = taskrunner.sequenceInfo["period"] * taskrunner.sequenceInfo["totalParams"]
         _future.waitFor(
             # runInGuiThread(taskrunner.runSequence, store=True, storeDirHandle=self.dh), timeout=expected_duration
-            runInGuiThread(taskrunner.runSequence, store=False), timeout=expected_duration
+            runInGuiThread(taskrunner.runSequence, store=False), timeout=expected_duration*2
         )
         logMsg("Autopatch: Task runner sequence completed.")
 

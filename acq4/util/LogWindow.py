@@ -229,7 +229,12 @@ class LogWindow(Qt.QMainWindow):
             for k in exc.kwargs:
                 excDict[k] = exc.kwargs[k]
         if hasattr(exc, "oldExc"):
-            excDict["oldExc"] = self.exceptionToDict(*exc.oldExc, thread=None, topTraceback=[])
+            if isinstance(exc.oldExc, tuple):
+                oldExcInfo = exc.oldExc
+            else:
+                oldExcInfo = (type(exc.oldExc), exc.oldExc, exc.oldExc.traceback)
+
+            excDict["oldExc"] = self.exceptionToDict(*oldExcInfo, thread=None, topTraceback=[])
         return excDict
 
     def flashButtons(self):
