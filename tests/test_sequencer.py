@@ -239,22 +239,11 @@ def test_enforce_linear_z_stack_duplicate_depths_different_data_selection():
     f1 = MockFrame(1.0, data=np.array([3]))
     frames = [f0_a, f0_b, f1]
     result = _enforce_linear_z_stack(frames, 0.0, 1.0, 1.0) # expects 0.0, 1.0
-    # Sorted unique (by z) frames: [f0_a, f1] (f0_b is pruned because its z is same as f0_a's)
-    # Expected: [f0_a, f1]
-    # However, if difference_is_significant was more sophisticated:
-    # Sorted frames by depth: [f0_a, f0_b, f1]
-    # Pruning (if data matters): no pruning if data is different.
-    # actual_depths = [0.0, 0.0, 1.0]
-    # expected_depths = [0.0, 1.0]
-    # searchsorted([0,0,1], [0,1], side='right') -> indices for [f0_b, f1]
-    # This depends on the stability of the sort within _enforce_linear_z_stack and how searchsorted handles duplicates.
-    # Python's sort is stable. np.searchsorted picks the rightmost valid index.
-    # The current `difference_is_significant` will prune `f0_b`.
-    # So, `depths` becomes `[(0.0, f0_a), (1.0, f1)]`.
-    # `actual_depths` becomes `[0.0, 1.0]`.
-    # `expected_depths` is `[0.0, 1.0]`.
-    # `idxes` from `searchsorted` will be `[0, 1]`.
-    # Result: `[f0_a, f1]`.
+    # The current implementation of difference_is_significant will prune frames with the same depth,
+    # keeping only the first one. The Hungarian algorithm is then used to assign frames to expected depths
+    # to minimize the total cost (sum of absolute differences between depths).
+    # This pruning happens before the Hungarian assignment, so even though f0_a and f0_b have different data,
+    # only f0_a is considered since they have the same depth.
     assert result == [f0_a, f1]
 
     frames_rev = [f1, f0_b, f0_a] # Test different input order
