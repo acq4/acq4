@@ -18,7 +18,7 @@ class VisualizePathPlan(Qt.QObject):
         self._window = window
         self._traveler = traveler
 
-        self._initGui(blocking=True)
+        self._initGui()
 
         self._bounds = None
         self._obstacles = {}
@@ -56,7 +56,7 @@ class VisualizePathPlan(Qt.QObject):
 
     @inGuiThread
     def _startPath(self, path, bounds):
-        self.reset(blocking=True)
+        self.reset()
         visible = self.shouldShowPath
 
         self._bounds.setVisible(visible)
@@ -119,7 +119,7 @@ class VisualizePathPlan(Qt.QObject):
     @future_wrap
     def addObstacle(self, name, obstacle, to_global, _future):
         if name not in self._obstacles:
-            self._buildObstacleMesh(name, *obstacle.surface_mesh, blocking=True)
+            self._buildObstacleMesh(name, *obstacle.surface_mesh)
         cs_name = obstacle.transform.systems[0].name
         recenter_voxels = TTransform(
             offset=(0.5, 0.5, 0.5),
@@ -135,7 +135,7 @@ class VisualizePathPlan(Qt.QObject):
             vol_data = np.zeros(obstacle.volume.T.shape + (4,), dtype=np.ubyte)
             vol_data[..., :3] = (30, 10, 10)
             vol_data[..., 3] = obstacle.volume.T * 5
-            self._buildVoxelVolume(name, vol_data, blocking=True)
+            self._buildVoxelVolume(name, vol_data)
         vol_xform = (to_global * obstacle.transform).as_pyqtgraph()
         runInGuiThread(self._voxels[name].setTransform, vol_xform)
 

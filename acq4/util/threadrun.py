@@ -41,39 +41,10 @@ T = TypeVar("T")
 P = ParamSpec("P")
 
 
-# TODO: why doesn't this work, relative to the one below?
 def inGuiThread(func):
     def run_func_in_gui_thread(*args, **kwds):
         return runInGuiThread(func, *args, **kwds)
     return run_func_in_gui_thread
-
-
-def inGuiThread(func: Callable[P, T]) -> Callable[P, T]:
-    """Decorator to run a function or method in the GUI thread.
-
-    Args:
-        func: The function or method to decorate
-
-    Additional params in decorated function:
-        blocking: If True, waits for the function to complete. Default False.
-    """
-
-    @wraps(func)
-    def wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
-        # Extract blocking parameter if present, default to False
-        blocking = False
-        if "blocking" in kwargs and kwargs["blocking"] is not None:
-            blocking = kwargs.pop("blocking")
-
-        if blocking:
-            result = runInGuiThread(func, *args, **kwargs)
-            return cast(T, result)
-        else:
-            Qt.QTimer.singleShot(0, lambda: func(*args, **kwargs))
-            return cast(T, None)
-
-    setattr(wrapper, "__annotations__", {**getattr(func, "__annotations__", {}), "blocking": "Optional[bool] = None"})
-    return cast(Callable[P, T], wrapper)
 
 
 class ThreadCallFuture(Future):
