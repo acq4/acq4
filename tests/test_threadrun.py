@@ -63,14 +63,8 @@ def test_decorated_class_nonblocking():
 
     instance = TestClass()
 
-    # Verify signal was created
-    assert hasattr(TestClass, "__test_methodEvent")
-
     # Call the method non-blocking
     result = instance.test_method()
-
-    # Verify the signal was emitted and the implementation was called
-    assert TestClass.__test_methodEvent.emit_called
 
     assert call_tracker == ["method_called"]
 
@@ -166,16 +160,15 @@ def test_pure_function_blocking():
 
 # Test case 7: Methods with arguments
 def test_method_with_arguments():
+    last_args = None
     class TestClass(Qt.QObject):
         @inGuiThread
         def test_with_args(self, a, b, c=None):
+            nonlocal last_args
+            last_args = (a, b, c)
             return f"a={a}, b={b}, c={c}"
 
     instance = TestClass()
-
-    # Verify signal arguments
-    signal = TestClass.__test_with_argsEvent
-    assert len(signal.args_spec) == 2  # 3 args (excluding self)
 
     # Test with positional args
     result = instance.test_with_args(1, 2, blocking=True)
@@ -187,7 +180,7 @@ def test_method_with_arguments():
 
     # Test non-blocking with args
     instance.test_with_args(4, 5, c=6)
-    assert TestClass.__test_with_argsEvent.last_args == (4, 5)  # args passed to signal
+    assert last_args == (4, 5, 6)
 
 
 # Test case 8: Return value handling
@@ -248,8 +241,8 @@ def test_threading_behavior():
             return threading.get_ident()
 
     # For this test, we need to mock runInGuiThread to run in a separate thread
-    def mock_run_in_thread(func):
-        thread = threading.Thread(target=func)
+    def mock_run_in_thread(func, *args, **kwargs):
+        thread = threading.Thread(target=func, args=args, kwargs=kwargs)
         thread.start()
         thread.join()
         return thread.ident
@@ -307,11 +300,6 @@ def test_multiple_decorated_methods():
             self.calls.append("normal")
 
     instance = TestClass()
-
-    # Verify both signals were created
-    assert hasattr(TestClass, "__method1Event")
-    assert hasattr(TestClass, "__method2Event")
-    assert not hasattr(TestClass, "__normal_methodEvent")
 
     # Call all methods
     instance.method1()
