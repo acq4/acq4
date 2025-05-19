@@ -302,7 +302,7 @@ class CellDetectState(PatchPipetteState):
         self._lastTestPulse = None
         self._reachedEndpoint = False
         self._startTime = None
-        self.direction = self._calc_direction()
+        self.direction_unit = self._calc_direction()
         self._wiggleLock = Lock()
         self._sidestepDirection = np.pi / 2
         self._pressureAdjustment = None
@@ -433,8 +433,10 @@ class CellDetectState(PatchPipetteState):
             pip = self.dev.pipetteDevice
             imgr = self.dev.imagingDevice()
             manager = getManager()
-            with manager.reserveDevices([pip, imgr, imgr.scopeDev.positionDevice(), imgr.scopeDev.focusDevice()], timeout=30.0):
-                print(f"Waiting a bit for pipette position to settle")
+            with manager.reserveDevices(
+                [pip, imgr, imgr.scopeDev.positionDevice(), imgr.scopeDev.focusDevice()], timeout=30.0
+            ):
+                print("Waiting a bit for pipette position to settle")
                 time.sleep(2.0)
                 pos = pip.globalPosition()
                 self.waitFor(self.dev.imagingDevice().moveCenterToGlobal(pos, "fast"))
@@ -499,7 +501,7 @@ class CellDetectState(PatchPipetteState):
         speed = self.config['belowSurfaceSpeed']
 
         init_pos = np.array(pip.globalPosition())
-        direction = self.direction
+        direction = self.direction_unit
         if already_retracted:
             retract_pos = init_pos
         else:
@@ -634,7 +636,7 @@ class CellDetectState(PatchPipetteState):
         """Return the last position along the pipette search path to be traveled at full speed."""
         pip = self.dev.pipetteDevice
         target = np.array(pip.targetPosition())
-        return target - (self.direction * self.config['minDetectionDistance'])
+        return target - (self.direction_unit * self.config['minDetectionDistance'])
 
     def finalSearchEndpoint(self):
         """Return the final position along the pipette search path, taking into account
@@ -651,20 +653,20 @@ class CellDetectState(PatchPipetteState):
 
         # max search distance
         if config['maxAdvanceDistance'] is not None:
-            endpoint = pos + self.direction * config['maxAdvanceDistance']
+            endpoint = pos + self.direction_unit * config['maxAdvanceDistance']
 
         # max surface depth
-        if config['maxAdvanceDepthBelowSurface'] is not None and self.direction[2] < 0:
+        if config['maxAdvanceDepthBelowSurface'] is not None and self.direction_unit[2] < 0:
             endDepth = surface - config['maxAdvanceDepthBelowSurface']
             dz = endDepth - pos[2]
-            depthEndpt = pos + self.direction * (dz / self.direction[2])
+            depthEndpt = pos + self.direction_unit * (dz / self.direction_unit[2])
             # is the surface depth endpoint closer?
             if endpoint is None or np.linalg.norm(endpoint - pos) > np.linalg.norm(depthEndpt - pos):
                 endpoint = depthEndpt
 
         # max distance past target
         if config['advanceMode'] == 'target' and config['maxAdvanceDistancePastTarget'] is not None:
-            targetEndpt = target + self.direction * config['maxAdvanceDistancePastTarget']
+            targetEndpt = target + self.direction_unit * config['maxAdvanceDistancePastTarget']
             # is the target endpoint closer?
             if endpoint is None or np.linalg.norm(endpoint - pos) > np.linalg.norm(targetEndpt - pos):
                 endpoint = targetEndpt
@@ -685,7 +687,7 @@ class CellDetectState(PatchPipetteState):
         dev = self.dev
         if self.aboveSurface():
             speed = config['aboveSurfaceSpeed']
-            surface = self.surfaceIntersectionPosition(self.direction)
+            surface = self.surfaceIntersectionPosition(self.direction_unit)
             print(f"  continuous move: above surface to {surface}")
             _future.waitFor(dev.pipetteDevice._moveToGlobal(surface, speed=speed), timeout=None)
             self.setState("moved to surface")
@@ -710,7 +712,7 @@ class CellDetectState(PatchPipetteState):
         speed = config['detectionSpeed']
         distance = np.linalg.norm(endpoint - np.array(dev.pipetteDevice.globalPosition()))
         count = int(distance / config['preTargetWiggleStep'])
-        wiggle_step = self.direction * config['preTargetWiggleStep']
+        wiggle_step = self.direction_unit * config['preTargetWiggleStep']
         for _ in range(count):
             self.setState("pre-target wiggle")
             retract_pos = dev.pipetteDevice.globalPosition() - wiggle_step
@@ -722,7 +724,7 @@ class CellDetectState(PatchPipetteState):
                         radius=config['preTargetWiggleRadius'],
                         repetitions=1,
                         duration=config['preTargetWiggleDuration'],
-                        pipette_direction=self.direction,
+                        pipette_direction=self.direction_unit,
                     ),
                     timeout=None,
                 )
