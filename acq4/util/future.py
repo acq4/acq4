@@ -383,8 +383,8 @@ class MultiException(Exception):
 class MultiFuture(Future):
     """Future tracking progress of multiple sub-futures."""
 
-    def __init__(self, futures):
-        super().__init__()
+    def __init__(self, futures, name=None):
+        super().__init__(name=name)
         self.futures = futures
         for fut in futures:
             fut.onFinish(self._subFutureFinished)

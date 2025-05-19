@@ -327,7 +327,7 @@ class Microscope(Device, OptomechDevice):
         if zFuture is None:
             return xyFuture
         else:
-            return MultiFuture([zFuture, xyFuture])
+            return MultiFuture([zFuture, xyFuture], name=f'{self.name()} {name} XY+Z')
 
     def writeCalibration(self):
         cal = {'surfaceDepth': self.getSurfaceDepth()}

@@ -159,7 +159,7 @@ class MockMoveFuture(MoveFuture):
     """Provides access to a move-in-progress on a mock manipulator.
     """
     def __init__(self, dev, pos, speed):
-        MoveFuture.__init__(self, dev, pos, speed)
+        MoveFuture.__init__(self, dev, pos, speed, name=f'{dev.name()}_move')
         self.targetPos = pos
 
         self.dev.stageThread.setTarget(self, pos, speed)

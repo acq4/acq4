@@ -1183,7 +1183,7 @@ class TaskFuture(Future):
         self._taskCount = 0
         self._collectResults = collectResults
         self.results = []
-        Future.__init__(self)
+        Future.__init__(self, name='TaskRunnerFuture')
 
     def percentDone(self):
         return self._taskCount / self._nTasks

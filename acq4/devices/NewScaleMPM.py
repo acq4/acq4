@@ -86,7 +86,7 @@ class NewScaleMPM(Stage):
 
 class NewScaleMoveFuture(MoveFuture):
     def __init__(self, dev, pos, speed, linear):
-        MoveFuture.__init__(self, dev, pos, speed)
+        MoveFuture.__init__(self, dev, pos, speed, name=f"{dev.name} move")
 
         self._linear = linear
         self._interrupted = False

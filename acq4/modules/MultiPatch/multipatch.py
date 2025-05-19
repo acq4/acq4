@@ -240,7 +240,7 @@ class MultiPatchWindow(Qt.QWidget):
             pip.setState(state)
             for pip in self.selectedPipettes()
             if isinstance(pip, PatchPipette)
-        ])
+        ], name=f"Set pipettes state to {state}")
 
     def _moveHome(self):
         futures = []
@@ -250,7 +250,7 @@ class MultiPatchWindow(Qt.QWidget):
                 pip.setState('out')
                 pip = pip.pipetteDevice
             futures.append(pip.goHome(speed))
-        return MultiFuture(futures)
+        return MultiFuture(futures, name="Move pipettes home")
 
     def _nucleusHome(self):
         return self._setAllSelectedPipettesToState('home with nucleus')
@@ -271,7 +271,7 @@ class MultiPatchWindow(Qt.QWidget):
         for pip in self.selectedPipettes():
             pip.setState('bath')
             futures.append(pip.pipetteDevice.goAboveTarget(speed))
-        return MultiFuture(futures)
+        return MultiFuture(futures, name="Move pipettes above target")
 
     @future_wrap
     def _autoCalibrate(self, _future):
@@ -300,7 +300,7 @@ class MultiPatchWindow(Qt.QWidget):
                 pip.pipetteDevice if isinstance(pip, PatchPipette) else pip
             ).goTarget(speed)
             for pip in self.selectedPipettes()
-        ])
+        ], name="Move pipettes to target")
 
     def _seal(self):
         return self._setAllSelectedPipettesToState('seal')
@@ -319,7 +319,7 @@ class MultiPatchWindow(Qt.QWidget):
                     pip.clampDevice.autoPipetteOffset()
             else:
                 futures.append(pip.goApproach(speed))
-        return MultiFuture(futures)
+        return MultiFuture(futures, name="Move pipettes to approach")
 
     def _clean(self):
         return self._setAllSelectedPipettesToState('clean')
@@ -358,7 +358,7 @@ class MultiPatchWindow(Qt.QWidget):
                 pip.setState('bath')
                 pip = pip.pipetteDevice
             futures.append(pip.goSearch(speed, distance=distance))
-        return MultiFuture(futures)
+        return MultiFuture(futures, name="Move pipettes to search")
 
     # def calibrateWithStage(self, pipettes, positions):
     #     """Begin calibration of selected pipettes and move the stage to a selected position for each pipette.
