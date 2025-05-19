@@ -747,7 +747,9 @@ class AutomationDebugWindow(Qt.QWidget):
             _future.setState("Autopatch: searching for cells")
             surf = _future.waitFor(self.cameraDevice.scopeDev.findSurfaceDepth(self.cameraDevice)).getResult()
             _future.waitFor(self.cameraDevice.setFocusDepth(surf - 60e-6, "fast"))
-            _future.waitFor(self._detectNeuronsZStack(), timeout=600)
+            z_stack = self._detectNeuronsZStack()
+            z_stack.sigFinished.connect(self._handleDetectResults)
+            _future.waitFor(z_stack, timeout=600)
 
         _future.setState("Autopatch: checking selected cell")
         cell = self._unranked_cells.pop(0)
