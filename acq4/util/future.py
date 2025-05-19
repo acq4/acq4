@@ -1,16 +1,10 @@
 from __future__ import annotations
 
-import functools
 import inspect
-import sys
 import threading
-import time
-import traceback
-from typing import Callable, Generic, TypeVar, ParamSpec, Optional
+from typing import Generic, TypeVar
 
 from acq4.util import Qt, ptime
-from acq4.util.debug import printExc
-from pyqtgraph import FeedbackButton
 
 FUTURE_RETVAL_TYPE = TypeVar("FUTURE_RETVAL_TYPE")
 WAITING_RETVAL_TYPE = TypeVar("WAITING_RETVAL_TYPE")
@@ -75,7 +69,8 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
 
         The function should call _taskDone() when finished (or raise an exception).
         """
-        self._executingThread = threading.Thread(target=self.executeAndSetReturn, args=(func, args, kwds), daemon=True)
+        self._executingThread = threading.Thread(target=self.executeAndSetReturn, args=(func, args, kwds), daemon=True
+                                                 name=f"execute thread for {repr(self)}
         self._executingThread.start()
 
     def executeAndSetReturn(self, func, args, kwds):
@@ -290,7 +285,7 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
                 if future.wasInterrupted():  # a _real_ timeout, as opposed to our 0.1s loopbeat
                     future.wait()  # let it sing
                 if timeout is not None and time.time() - start > timeout:
-                    raise self.Timeout(f"Timed out waiting for {future!r}") from e
+                    raise self.Timeout(f"Timed out waiting {timeout}s for {future!r}") from e
         return future
 
     def raiseErrors(self, message, pollInterval=1.0):
@@ -314,7 +309,7 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         monitorFn = functools.partial(
             self._monitorErrors, message=message, pollInterval=pollInterval, originalFrame=originalFrame
         )
-        self._errorMonitorThread = threading.Thread(target=monitorFn, daemon=True)
+        self._errorMonitorThread = threading.Thread(target=monitorFn, daemon=True, name=f"error monitor for {self}")
         self._errorMonitorThread.start()
 
     def _monitorErrors(self, message, pollInterval, originalFrame):
@@ -359,7 +354,7 @@ def future_wrap(
     @functools.wraps(func)
     def wrapper(*args: WRAPPED_FN_PARAMS.args, **kwds: WRAPPED_FN_PARAMS.kwargs) -> Future[WRAPPED_FN_RETVAL_TYPE]:
         frame = inspect.currentframe().f_back
-        name = f"(wrapped {func.__name__} from {frame.f_code.co_filename}:{frame.f_lineno})"
+        name = f"(wrapped {func.__qualname__} from {frame.f_code.co_filename}:{frame.f_lineno})"
         future = Future(onError=kwds.pop("onFutureError", None), name=name)
         if kwds.pop("block", False):
             kwds["_future"] = future

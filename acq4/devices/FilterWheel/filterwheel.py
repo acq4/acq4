@@ -449,7 +449,7 @@ class FilterWheelDevGui(Qt.QWidget):
 
 class FilterWheelPollThread(Thread):
     def __init__(self, dev, interval=0.1):
-        Thread.__init__(self)
+        Thread.__init__(self, name=f"FilterWheelPollThread_{dev.name()}")
         self.dev = dev
         self.interval = interval
         

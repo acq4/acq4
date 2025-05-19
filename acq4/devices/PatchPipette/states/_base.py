@@ -121,7 +121,7 @@ class PatchPipetteState(Future):
                 # no work; just mark the task complete
                 self._taskDone(interrupted=False, error=None)
             elif self.dev.active:
-                self._thread = threading.Thread(target=self._runJob)
+                self._thread = threading.Thread(target=self._runJob, name=f'{self.dev.name()} {self.stateName} thread')
                 self._thread.start()
             else:
                 self._taskDone(interrupted=True, error=f"Not starting state thread; {self.dev.name()} is not active.")

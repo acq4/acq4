@@ -964,7 +964,7 @@ class TaskThread(Thread):
     sigTaskStarted = Qt.Signal(object)
 
     def __init__(self, ui):
-        Thread.__init__(self)
+        Thread.__init__(self, name="TaskRunner_Thread")
         self.ui = ui
         self.dm = self.ui.manager
         self.lock = Mutex(Qt.QMutex.Recursive)

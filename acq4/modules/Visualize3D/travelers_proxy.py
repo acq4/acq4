@@ -26,7 +26,7 @@ class VisualizePathPlan(Qt.QObject):
 
         self._stopThread = False
         self._pathUpdates = queue.Queue()
-        self._pathWatcherThread = Thread(target=self._watchForPathUpdates, daemon=True)
+        self._pathWatcherThread = Thread(target=self._watchForPathUpdates, daemon=True, name="PathWatcherThread")
         self._pathWatcherThread.start()
 
     @inGuiThread

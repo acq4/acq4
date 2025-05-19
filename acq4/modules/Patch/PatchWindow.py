@@ -398,7 +398,7 @@ class PatchThread(Thread):
         self.ui = ui
         self.manager = ui.manager
         self.clampName = ui.clampName
-        Thread.__init__(self)
+        Thread.__init__(self, name=f'{self.clampName}_PatchThread')
         self.lock = Mutex(Qt.QMutex.Recursive)
         self.stopThread = True
         self.paramsUpdated = True

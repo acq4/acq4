@@ -66,7 +66,7 @@ class MockSonicator(Sonicator):
                 self.stream.close()
                 self.stream = None
 
-        self.audio_thread = threading.Thread(target=stop_sound)
+        self.audio_thread = threading.Thread(target=stop_sound, name="MockSonicatorAudioStopThread")
         self.audio_thread.start()
 
     @future_wrap

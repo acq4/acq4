@@ -233,7 +233,7 @@ class Microscope(Device, OptomechDevice):
         """
         return self.mapToGlobal(Qt.QVector3D(0, 0, 0)).z()
 
-    def setFocusDepth(self, z, speed='fast'):
+    def setFocusDepth(self, z, speed='fast', name=None):
         """Set the z-position of the focal plane.
 
         This method requires motorized focus control.
@@ -247,7 +247,7 @@ class Microscope(Device, OptomechDevice):
 
         # and this is where it needs to go
         fdpos[2] += dif
-        return fd.moveToGlobal(fdpos, speed)
+        return fd.moveToGlobal(fdpos, speed, name=name)
 
     def getDefaultImager(self):
         name = self.config.get('defaultImager', None)
@@ -296,7 +296,7 @@ class Microscope(Device, OptomechDevice):
         """
         return self.mapToGlobal(pg.Vector(0, 0, 0))
 
-    def setGlobalPosition(self, pos, speed='fast'):
+    def setGlobalPosition(self, pos, speed='fast', name=None):
         """Move the microscope such that its center axis is at a specified global position.
 
         If *pos* is a 3-element vector, then this method will also attempt to set the focus depth
@@ -310,7 +310,7 @@ class Microscope(Device, OptomechDevice):
 
         if len(pos) == 3 and focusDevice is not positionDevice:
             z = pos[2]
-            zFuture = self.setFocusDepth(z)
+            zFuture = self.setFocusDepth(z, name=f'{name} Z')
             pos = pos[:2]
         else:
             zFuture = None
@@ -323,7 +323,7 @@ class Microscope(Device, OptomechDevice):
         sgpos = positionDevice.globalPosition()
         sgpos2 = pg.Vector(sgpos) + (pg.Vector(pos) - gpos)
         sgpos2 = [sgpos2.x(), sgpos2.y(), sgpos2.z()]
-        xyFuture = positionDevice.moveToGlobal(sgpos2, speed)
+        xyFuture = positionDevice.moveToGlobal(sgpos2, speed, name=f'{name} XY')
         if zFuture is None:
             return xyFuture
         else:

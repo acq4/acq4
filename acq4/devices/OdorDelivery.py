@@ -435,7 +435,7 @@ class OdorFuture(Future):
         self._schedule = schedule
         self._duration = max(ev.startTime + ev.duration for ev in schedule)
         self._time_elapsed = 0
-        self._thread = threading.Thread(target=self._executeSchedule)
+        self._thread = threading.Thread(target=self._executeSchedule, name=f"{dev.name()}_odor_schedule")
         self._thread.start()
 
     def percentDone(self):

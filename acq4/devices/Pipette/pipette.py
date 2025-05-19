@@ -496,7 +496,7 @@ class Pipette(Device, OptomechDevice):
     def goAboveTarget(self, speed, **kwds):
         return self.moveTo('aboveTarget', speed=speed, **kwds)
 
-    def _movePath(self, path) -> MovePathFuture:
+    def _movePath(self, path, name=None) -> MovePathFuture:
         """
         move along a path defined in global coordinates.
         Format is [(pos, speed, linear, explanation), ...]
@@ -511,7 +511,7 @@ class Pipette(Device, OptomechDevice):
             stagePath.append({'globalPos': stagePos, 'speed': speed, 'linear': linear, 'explanation': explanation})
 
         stage = self.parentDevice()
-        return stage.movePath(stagePath)
+        return stage.movePath(stagePath, name=name)
 
     def approachDepth(self):
         """Return the global depth where the electrode should move to when starting approach mode.

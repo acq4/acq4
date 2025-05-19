@@ -190,7 +190,7 @@ class MockStageThread(Thread):
         self.interval = 30e-3
         self.lastUpdate = None
         self.currentMove = None
-        Thread.__init__(self)
+        Thread.__init__(self, name='MockStageThread')
         
     def start(self):
         self._quit = False

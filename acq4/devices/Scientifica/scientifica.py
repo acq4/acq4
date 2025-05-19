@@ -168,13 +168,13 @@ class Scientifica(Stage):
         self.driver.close()
         Stage.quit(self)
 
-    def _move(self, pos, speed, linear, **kwds):
+    def _move(self, pos, speed, linear, name=None, **kwds):
         with self.lock:
             if self._lastMove is not None and not self._lastMove.isDone():
                 self.stop()
             speed = self._interpretSpeed(speed)
 
-            self._lastMove = ScientificaMoveFuture(self, pos, speed, **kwds)
+            self._lastMove = ScientificaMoveFuture(self, pos, speed, name=name, **kwds)
             return self._lastMove
 
     def deviceInterface(self, win):
@@ -202,10 +202,10 @@ class Scientifica(Stage):
 class ScientificaMoveFuture(MoveFuture):
     """Provides access to a move-in-progress on a Scientifica manipulator.
     """
-    def __init__(self, dev: Scientifica, pos, speed: float, **kwds):
-        self._moveReq = dev.driver.moveTo(np.array(pos), speed / 1e-6, **kwds)
+    def __init__(self, dev: Scientifica, pos, speed: float, name=None, **kwds):
+        self._moveReq = dev.driver.moveTo(np.array(pos), speed / 1e-6, name=name, **kwds)
         targetPos = self._moveReq.target_pos  # will have None values filled in with current position
-        super().__init__(dev, targetPos, speed)
+        super().__init__(dev, targetPos, speed, name=name)
         self._moveReq.set_callback(self._requestFinished)
 
     def _requestFinished(self, moveReq):

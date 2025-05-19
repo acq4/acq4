@@ -449,7 +449,7 @@ class Stage(Device, OptomechDevice):
             raise ValueError(f"Position {position} should have length {len(self.axes())}")
         self.checkLimits(position)
 
-    def _move(self, pos, speed, linear, **kwds) -> MoveFuture:
+    def _move(self, pos, speed, linear, name=None, **kwds) -> MoveFuture:
         """Must be reimplemented by subclasses and return a MoveFuture instance.
         """
         raise NotImplementedError()
@@ -458,18 +458,18 @@ class Stage(Device, OptomechDevice):
         localPos = self.mapFromGlobal(pos)
         return self._solveStageTransform(localPos)
 
-    def moveToGlobal(self, pos, speed, progress=False, linear=False):
+    def moveToGlobal(self, pos, speed, progress=False, linear=False, name=None):
         """Move the stage to a position expressed in the global coordinate frame.
         """
-        return self.move(position=self.mapGlobalToDevicePosition(pos), speed=speed, progress=progress, linear=linear)
+        return self.move(position=self.mapGlobalToDevicePosition(pos), speed=speed, progress=progress, linear=linear, name=name)
 
-    def movePath(self, path):
+    def movePath(self, path, name=None):
         """Move the stage along a path with multiple waypoints.
 
         The format of *path* is a list of dicts, where each dict specifies keyword arguments
         to self.move(). Optionally, each dict may specify `globalPos` instead of `position`.
         """
-        return MovePathFuture(self, path)
+        return MovePathFuture(self, path, name=name)
 
     def _toAbsolutePosition(self, abs):
         """Helper function to convert absolute position (possibly
@@ -698,8 +698,8 @@ class MoveFuture(Future):
     """Used to track the progress of a requested move operation.
     """
 
-    def __init__(self, dev: Stage, pos, speed):
-        super().__init__()
+    def __init__(self, dev: Stage, pos, speed, name=None):
+        super().__init__(name=name)
         self.startTime = ptime.time()
         self.dev = dev
         self.speed = speed
@@ -735,8 +735,8 @@ class MoveFuture(Future):
 
 
 class MovePathFuture(MoveFuture):
-    def __init__(self, dev: Stage, path):
-        super().__init__(dev, None, None)
+    def __init__(self, dev: Stage, path, name=None):
+        super().__init__(dev, None, None, name=name)
 
         self.path = path
         self.currentStep = 0
@@ -751,7 +751,7 @@ class MovePathFuture(MoveFuture):
             except Exception as exc:
                 raise Exception(f"Cannot move {dev.name()} to path step {i}/{len(self.path)}: {step}") from exc
 
-        self._moveThread = threading.Thread(target=self._movePath)
+        self._moveThread = threading.Thread(target=self._movePath, name=f'{self.dev.name()} : {name}')
         self._moveThread.start()
 
     def percentDone(self):

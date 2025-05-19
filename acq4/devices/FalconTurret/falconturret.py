@@ -19,7 +19,7 @@ class FalconTurret(FilterWheel):
             self._initialFuture = self.home()
 
         if self._initialSlot is not None:
-            initThread = threading.Thread(target=self._setInitialPos)
+            initThread = threading.Thread(target=self._setInitialPos, name='FalconTurretInitThread')
             initThread.start()
 
     def _setInitialPos(self):

@@ -87,7 +87,7 @@ class IgorReqThread(threading.Thread):
         self.send_queue = queue.Queue()
         self.unresolved_futures = {}
         self.next_result_id = 0
-        super().__init__(target=self._req_loop, daemon=True)
+        super().__init__(target=self._req_loop, daemon=True, name="IgorReqThread")
         self.start()
         atexit.register(self.stop)
 

@@ -212,7 +212,7 @@ class MonitorThread(Thread):
         self.interval = 0.3
         self.minInterval = 100e-3
 
-        Thread.__init__(self)
+        Thread.__init__(self, name=f'{dev.name()}_MonitorThread')
 
     def start(self):
         self.stopped = False
