@@ -106,7 +106,7 @@ class Cell(Qt.QObject):
         start_glob = target - margin
         stop_glob = target + margin
         current_focus = self._imager.globalCenterPosition()
-        direction = np.sign(current_focus[2] - target[2])
+        direction = np.sign(target[2] - current_focus[2])
         if direction < 0:
             start_glob, stop_glob = stop_glob, start_glob
 
