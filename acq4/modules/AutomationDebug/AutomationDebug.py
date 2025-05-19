@@ -302,14 +302,14 @@ class AutomationDebugWindow(Qt.QWidget):
 
             logMsg(f"Cell detection complete. Found {len(neurons)} potential cells")
             self._displayBoundingBoxes(neurons)
-            from acq4_automation.object_detection import NeuronBoxViewer
-            if self._current_classification_stack is not None:
-                data = np.array(([[s.data().T for s in self._current_detection_stack]], [[s.data().T for s in self._current_classification_stack]]))
-            else:
-                data = np.array([s.data().T for s in self._current_detection_stack])
-            xform = SRT3DTransform.from_pyqtgraph(self._current_detection_stack[0].globalTransform()) * TransposeTransform((1, 0, 2))
-            self._viewer = NeuronBoxViewer(data, neurons, xform)
-            self._viewer.show()
+            # from acq4_automation.object_detection import NeuronBoxViewer
+            # if self._current_classification_stack is not None:
+            #     data = np.array(([[s.data().T for s in self._current_detection_stack]], [[s.data().T for s in self._current_classification_stack]]))
+            # else:
+            #     data = np.array([s.data().T for s in self._current_detection_stack])
+            # xform = SRT3DTransform.from_pyqtgraph(self._current_detection_stack[0].globalTransform()) * TransposeTransform((1, 0, 2))
+            # self._viewer = NeuronBoxViewer(data, neurons, xform)
+            # self._viewer.show()
         finally:
             self.sigWorking.emit(False)
 
