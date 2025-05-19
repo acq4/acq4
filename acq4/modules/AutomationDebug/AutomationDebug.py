@@ -438,7 +438,7 @@ class AutomationDebugWindow(Qt.QWidget):
             timeout=600,
         ).getResult()
         logMsg(f"Neuron detection finished. Found {len(result)} potential neurons.")
-        result = [(r[1], r[0], r[2]) for r in result]  # col-major getting in the way?
+        # result = [(r[1], r[0], r[2]) for r in result]  # col-major getting in the way?
         self._current_detection_stack = detection_stack
         self._current_classification_stack = classification_stack
         self._unranked_cells = [Cell(r) for r in result]
@@ -684,7 +684,7 @@ class AutomationDebugWindow(Qt.QWidget):
         self.sigWorking.emit(self.ui.autopatchDemoBtn)
         ppip: PatchPipette = self.patchPipetteDevice
         cleaning = None
-        while self._unranked_cells:
+        while True:
             try:
                 if not ppip.isTipClean():
                     cleaning = ppip.setState("clean")
@@ -744,11 +744,10 @@ class AutomationDebugWindow(Qt.QWidget):
 
     def _autopatchFindCell(self, _future):
         if not self._unranked_cells:
-            raise Exception("No cells left to patch")
-            # _future.setState("Autopatch: searching for cells")
-            # surf = _future.waitFor(self.cameraDevice.scopeDev.findSurfaceDepth(self.cameraDevice)).getResult()
-            # _future.waitFor(self.cameraDevice.setFocusDepth(surf - 60e-6, "fast"))
-            # _future.waitFor(self._detectNeuronsZStack(), timeout=600)
+            _future.setState("Autopatch: searching for cells")
+            surf = _future.waitFor(self.cameraDevice.scopeDev.findSurfaceDepth(self.cameraDevice)).getResult()
+            _future.waitFor(self.cameraDevice.setFocusDepth(surf - 60e-6, "fast"))
+            _future.waitFor(self._detectNeuronsZStack(), timeout=600)
 
         _future.setState("Autopatch: checking selected cell")
         cell = self._unranked_cells.pop(0)
