@@ -759,9 +759,9 @@ class CellDetectState(PatchPipetteState):
             speed = config['belowSurfaceSpeed']
         self.waitFor(dev.pipetteDevice._moveToGlobal(stepPos, speed=speed))
 
-    def cleanup(self):
+    def _cleanup(self):
         if self._continuousAdvanceFuture is not None:
             self._continuousAdvanceFuture.stop()
         patchrec = self.dev.patchRecord()
         patchrec['cellDetectFinalTarget'] = tuple(self.dev.pipetteDevice.targetPosition())
-        return super().cleanup()
+        return super()._cleanup()

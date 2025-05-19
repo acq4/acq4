@@ -42,7 +42,6 @@ class CleanState(PatchPipetteState):
     def __init__(self, *args, **kwds):
         self.sonication = None
         self.moveFuture = None
-        self._wentBackHome = False
         super().__init__(*args, **kwds)
 
     def run(self):
@@ -76,7 +75,6 @@ class CleanState(PatchPipetteState):
                 self.waitFor(self.sonication)
 
         self.waitFor(pip.moveTo('home', 'fast'))
-        self._wentBackHome = True
         dev.pipetteRecord()['cleanCount'] += 1
         dev.setTipClean(True)
         self.currentFuture = None
@@ -91,7 +89,7 @@ class CleanState(PatchPipetteState):
             parent_future.waitFor(fut, timeout=None)
 
     @future_wrap
-    def cleanup(self, _future):
+    def _cleanup(self, _future):
         try:
             if self.sonication is not None and not self.sonication.isDone():
                 self.sonication.stop("parent task is cleaning up before sonication finished")
@@ -103,6 +101,4 @@ class CleanState(PatchPipetteState):
         except Exception:
             printExc("Error resetting pressure after clean")
 
-        if not self._wentBackHome:
-            _future.waitFor(self.dev.pipetteDevice.moveTo('home', 'fast'))
-            self._wentBackHome = True
+        _future.waitFor(self.dev.pipetteDevice.moveTo('home', 'fast'))

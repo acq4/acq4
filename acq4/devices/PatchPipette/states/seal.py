@@ -367,6 +367,6 @@ class SealState(PatchPipetteState):
         self._resistances = [resistances.time_values, resistances.data]
         return pressures, resistances
 
-    def cleanup(self):
+    def _cleanup(self):
         self.dev.pressureDevice.setPressure(source='atmosphere')
-        return super().cleanup()
+        return super()._cleanup()

@@ -95,7 +95,8 @@ class PatchPipetteState(Future):
         self.config = self.defaultConfig()
         if config is not None:
             self.config.update(config)
-
+        self._cleanupMutex = threading.Lock()
+        self._cleanupFuture = None
         # indicates state that should be transitioned to next, if any.
         # This is usually set by the return value of run(), and must be invoked by the state manager.
         self.nextState = self.config.get('fallbackState', None)
@@ -200,6 +201,12 @@ class PatchPipetteState(Future):
         return tps
 
     def cleanup(self) -> Future:
+        with self._cleanupMutex:
+            if self._cleanupFuture is None:
+                self._cleanupFuture = self._cleanup()
+            return self._cleanupFuture
+
+    def _cleanup(self) -> Future:
         """Called after job completes, whether it failed or succeeded. Ask `self.wasInterrupted()` to see if the
         state was stopped early. Return a Future that completes when cleanup is done.
         """

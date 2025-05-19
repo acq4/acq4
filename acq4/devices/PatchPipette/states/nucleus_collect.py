@@ -79,7 +79,7 @@ class NucleusCollectState(PatchPipetteState):
             _future.waitFor(pip._moveToGlobal(self.startPos, speed='fast'), timeout=None)
 
     @future_wrap
-    def cleanup(self, _future):
+    def _cleanup(self, _future):
         try:
             if self.sonication is not None and not self.sonication.isDone():
                 self.sonication.stop("parent task is cleaning up before sonication finished")
