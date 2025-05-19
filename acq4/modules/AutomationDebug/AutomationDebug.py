@@ -46,7 +46,7 @@ class AutomationDebugWindow(Qt.QWidget):
         self.module = module
         self.setWindowTitle("Automation Debug")
         self._previousBoxWidgets = []
-        self._mockDemo = False
+        self._mockDemo = True
         self._cell = None
         self._unranked_cells = []  # List of global positions of cells
         self._ranked_cells = {}  # Dict mapping cell ID (e.g., timestamp) to ranking info
@@ -189,6 +189,7 @@ class AutomationDebugWindow(Qt.QWidget):
         )
 
         self.sigWorking.emit(self.ui.trackFeaturesBtn)
+        # TODO no bad! no gui access!
         if self.ui.featureTrackerSelector.currentText() == "Cellpose":
             tracker = CellPoseTracker
         elif self.ui.featureTrackerSelector.currentText() == "CV2":
@@ -301,6 +302,14 @@ class AutomationDebugWindow(Qt.QWidget):
 
             logMsg(f"Cell detection complete. Found {len(neurons)} potential cells")
             self._displayBoundingBoxes(neurons)
+            from acq4_automation.object_detection import NeuronBoxViewer
+            if self._current_classification_stack is not None:
+                data = np.array(([[s.data().T for s in self._current_detection_stack]], [[s.data().T for s in self._current_classification_stack]]))
+            else:
+                data = np.array([s.data().T for s in self._current_detection_stack])
+            xform = SRT3DTransform.from_pyqtgraph(self._current_detection_stack[0].globalTransform()) * TransposeTransform((1, 0, 2))
+            self._viewer = NeuronBoxViewer(data, neurons, xform)
+            self._viewer.show()
         finally:
             self.sigWorking.emit(False)
 
@@ -429,6 +438,7 @@ class AutomationDebugWindow(Qt.QWidget):
             timeout=600,
         ).getResult()
         logMsg(f"Neuron detection finished. Found {len(result)} potential neurons.")
+        result = [(r[1], r[0], r[2]) for r in result]  # col-major getting in the way?
         self._current_detection_stack = detection_stack
         self._current_classification_stack = classification_stack
         self._unranked_cells = [Cell(r) for r in result]
@@ -693,6 +703,7 @@ class AutomationDebugWindow(Qt.QWidget):
                 _future.setState("Autopatch: go approach")
                 _future.waitFor(ppip.pipetteDevice.goApproach("fast"))
                 cell.enableTracking()
+                # TODO how do I propagate tracking exceptions into here?
                 state = self._autopatchCellDetect(cell, _future)
                 if state != "whole cell":
                     logMsg(f"Autopatch: Cell detect finished: {state}. Next!")
@@ -723,8 +734,6 @@ class AutomationDebugWindow(Qt.QWidget):
                     _future.setState(f"Autopatch: patch cell: {state}")
                     cell.enableTracking(False)
                     _future.waitFor(self.cameraDevice.moveCenterToGlobal(cell.position, "fast"))
-                # if state == "cell detect" and not cell.isTracking:
-                #     break  # something bad happened
                 if state in ("whole cell", "bath", "broken", "fouled"):
                     break
                 _future.sleep(0.1)
