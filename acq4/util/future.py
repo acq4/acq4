@@ -1,10 +1,17 @@
 from __future__ import annotations
 
+import functools
 import inspect
+import sys
 import threading
+import time
+import traceback
+from typing import Callable, Generic, TypeVar, ParamSpec, Optional
 from typing import Generic, TypeVar
-
+ 
 from acq4.util import Qt, ptime
+from acq4.util.debug import printExc, logMsg
+from pyqtgraph import FeedbackButton
 
 FUTURE_RETVAL_TYPE = TypeVar("FUTURE_RETVAL_TYPE")
 WAITING_RETVAL_TYPE = TypeVar("WAITING_RETVAL_TYPE")
@@ -60,6 +67,7 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         self._stopsToPropagate = []
         self._returnVal: "T | None" = None
         self.finishedEvent = threading.Event()
+        logMsg(f"Future {self._name} created", level="info")
 
     def __repr__(self):
         return f"<{self.__class__.__name__} {self._name}>"
@@ -69,8 +77,8 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
 
         The function should call _taskDone() when finished (or raise an exception).
         """
-        self._executingThread = threading.Thread(target=self.executeAndSetReturn, args=(func, args, kwds), daemon=True
-                                                 name=f"execute thread for {repr(self)}
+        self._executingThread = threading.Thread(target=self.executeAndSetReturn, args=(func, args, kwds), daemon=True,
+                                                 name=f"execute thread for {repr(self)}")
         self._executingThread.start()
 
     def executeAndSetReturn(self, func, args, kwds):
@@ -102,6 +110,7 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         """
         if state == self._state:
             return
+        logMsg(f"Future {self._name} state changed: {state}", level="info")
         self._state = state
         self.sigStateChanged.emit(self, state)
 
@@ -112,7 +121,7 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         """
         raise NotImplementedError("method must be reimplmented in subclass")
 
-    def stop(self, reason="task stop requested"):
+    def stop(self, reason: str|None="task stop requested"):
         """Stop the task (nicely).
 
         Subclasses may extend this method and/or use checkStop to determine whether
@@ -123,6 +132,7 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
 
         if reason is not None:
             self._errorMessage = reason
+        logMsg(f"Asking Future {self._name} to stop: {reason}", level="info")
         self._stopRequested = True
         for f in self._stopsToPropagate:
             f.stop(reason=reason)
