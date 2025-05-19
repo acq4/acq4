@@ -224,7 +224,6 @@ class TestFuture(unittest.TestCase):
         with contextlib.suppress(Future.Stopped): # wait for it to actually stop
             inner_future.wait(timeout=1)
 
-
     def test_future_propagateStopsInto(self):
         parent_future = Future()
         child_future = Future()

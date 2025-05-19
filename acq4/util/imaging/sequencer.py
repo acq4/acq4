@@ -6,6 +6,7 @@ from typing import Union, Optional, Generator
 
 import numpy as np
 from scipy.optimize import linear_sum_assignment
+from skimage.metrics import structural_similarity as ssim
 
 import acq4.Manager as Manager
 import pyqtgraph as pg
@@ -18,7 +19,7 @@ from acq4.util.surface import find_surface
 from acq4.util.threadrun import runInGuiThread
 
 
-def _enforce_linear_z_stack(frames: list[Frame], start: float, stop: float, step: float) -> list[Frame]:
+def enforce_linear_z_stack(frames: list[Frame], start: float, stop: float, step: float) -> list[Frame]:
     """Ensure that the Z stack frames are linearly spaced. Frames are likely to come back with
     grouped z-values due to the stage's infrequent updates (i.e. 4 frames will arrive
     simultaneously, or just in the time it takes to get a new z value). This assumes the z
@@ -55,8 +56,43 @@ def _enforce_linear_z_stack(frames: list[Frame], start: float, stop: float, step
     idxes = np.full(len(expected_depths), -1, dtype=int)
     for i, j in zip(row_ind, col_ind):
         idxes[i] = j
-    assert np.all(idxes >= 0), "Not all expected depths have a corresponding index."
-    return [frames[depths[i][1]] for i in idxes]
+    assert np.all(idxes >= 0), "I did the Hungarian wrong"
+    # frames = [frames[depths[i][1]]
+    ret_frames = []
+    for i in idxes:
+        depth, j = depths[i]
+        frame = frames[j]
+        xform = frame.globalTransform()
+        xform.setTranslate(xform.getTranslation()[0], xform.getTranslation()[1], depth)
+        frame.addInfo(transform=xform.saveState())
+        ret_frames.append(frame)
+    return ret_frames
+
+
+def calculate_hysteresis(frames: list[Frame], center: Frame, min_likeness=0.95) -> float:
+    if not frames:
+        raise ValueError("Stack is empty")
+
+    # Check if center frame is potentially in the stack
+    center_data = center.data()
+    if all(not np.array_equal(center_data.shape, f.data().shape) for f in frames):
+        raise ValueError("Center frame is not in the stack")
+
+    similarities = []
+    for f in frames:
+        f_data = f.data()
+        try:
+            similarity = ssim(f_data, center_data)
+            similarities.append(similarity)
+        except ValueError:
+            # Handle frames with different shapes or other issues
+            similarities.append(-float('inf'))
+
+    if all(sim < min_likeness for sim in similarities):
+        raise ValueError("Center frame does not match any frame in the stack")
+
+    closest_match = np.argmax(similarities)
+    return frames[closest_match].depth - frames[len(frames) // 2].depth
 
 
 def _set_focus_depth(
@@ -341,12 +377,12 @@ def acquire_z_stack(
             frames_fut.stop()
             frames = _future.waitFor(frames_fut).getResult(timeout=10)
         try:
-            frames = _enforce_linear_z_stack(frames, start, stop, step)
+            frames = enforce_linear_z_stack(frames, start, stop, step)
         except ValueError:
             if slow_fallback:
                 logMsg("Failed to fast-acquire linear z stack. Retrying with stepwise movement.")
                 frames = _future.waitFor(_slow_z_stack(imager, start, stop, step)).getResult()
-                frames = _enforce_linear_z_stack(frames, start, stop, step)
+                frames = enforce_linear_z_stack(frames, start, stop, step)
             else:
                 raise
     _fix_frame_transforms(frames, step)
