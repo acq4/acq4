@@ -729,11 +729,14 @@ class AutomationDebugWindow(Qt.QWidget):
         try:
             ppip = self.patchPipetteDevice
             ppip.setState("cell detect")
+            detect_finished = False
             while True:
                 if (state := ppip.getState().stateName) != "cell detect":
-                    _future.setState(f"Autopatch: patch cell: {state}")
-                    cell.enableTracking(False)
-                    _future.waitFor(self.cameraDevice.moveCenterToGlobal(cell.position, "fast"))
+                    if not detect_finished:
+                        _future.setState(f"Autopatch: patch cell: {state}")
+                        cell.enableTracking(False)
+                        _future.waitFor(self.cameraDevice.moveCenterToGlobal(cell.position, "fast"))
+                        detect_finished = True
                 if state in ("whole cell", "bath", "broken", "fouled"):
                     break
                 _future.sleep(0.1)
