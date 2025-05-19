@@ -42,6 +42,7 @@ class CleanState(PatchPipetteState):
     def __init__(self, *args, **kwds):
         self.sonication = None
         self.moveFuture = None
+        self._wentBackHome = False
         super().__init__(*args, **kwds)
 
     def run(self):
@@ -75,6 +76,7 @@ class CleanState(PatchPipetteState):
                 self.waitFor(self.sonication)
 
         self.waitFor(pip.moveTo('home', 'fast'))
+        self._wentBackHome = True
         dev.pipetteRecord()['cleanCount'] += 1
         dev.setTipClean(True)
         self.currentFuture = None
@@ -101,4 +103,6 @@ class CleanState(PatchPipetteState):
         except Exception:
             printExc("Error resetting pressure after clean")
 
-        _future.waitFor(self.dev.pipetteDevice.moveTo('home', 'fast'))
+        if not self._wentBackHome:
+            _future.waitFor(self.dev.pipetteDevice.moveTo('home', 'fast'))
+            self._wentBackHome = True

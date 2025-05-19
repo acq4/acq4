@@ -71,8 +71,8 @@ class Cell(Qt.QObject):
     @future_wrap
     def _track(self, interval: float, _future):
         """Track the cell position at the specified interval."""
-        last_tracked = max(self._positions)
         while True:
+            last_tracked = max(self._positions)
             if ptime.time() - last_tracked > interval:
                 try:
                     self.updatePosition(_future)
@@ -156,14 +156,13 @@ class Cell(Qt.QObject):
             start_ijk[1] : stop_ijk[1],
             start_ijk[2] : stop_ijk[2],
         ].copy()  # copy to allow freeing of the full stack memory
-        assert roi_stack.shape == self._roiSize
+        assert (
+            roi_stack.shape == self._roiSize
+        ), f"stackshot generated wrong size stack ({roi_stack.shape} vs {self._roiSize})"
         region_xform = stack_xform * TTransform(
             offset=start_ijk,
             from_cs=f"frame_{fav_frame.info()['id']}.roi",
             to_cs=f"frame_{fav_frame.info()['id']}.ijk",
         )
         region_center = np.round(region_xform.inverse.map(target)).astype(int)
-        assert (
-            roi_stack.shape == self._roiSize
-        ), f"stackshot generated wrong size stack ({roi_stack.shape} vs {self._roiSize})"
         return roi_stack, region_xform, region_center

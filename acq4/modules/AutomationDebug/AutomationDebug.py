@@ -703,7 +703,6 @@ class AutomationDebugWindow(Qt.QWidget):
                 _future.setState("Autopatch: go approach")
                 _future.waitFor(ppip.pipetteDevice.goApproach("fast"))
                 cell.enableTracking()
-                # TODO how do I propagate tracking exceptions into here?
                 state = self._autopatchCellDetect(cell, _future)
                 if state != "whole cell":
                     logMsg(f"Autopatch: Cell detect finished: {state}. Next!")
