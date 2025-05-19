@@ -1,7 +1,9 @@
 import json
+import logging
 import os
 import re
 import sys
+import threading
 import traceback
 import weakref
 from datetime import datetime
@@ -59,6 +61,15 @@ pageTemplate = f"""
 </html>
 """
 
+logEntryDtype = [
+    ("index", "int32"),
+    ("importance", "int32"),
+    ("msgType", "U10"),
+    ("directory", "U100"),
+    ("entryId", "int32"),
+]
+
+
 
 WIN: Optional["LogWindow"] = None
 
@@ -112,6 +123,11 @@ class LogWindow(Qt.QMainWindow):
         self.wid.ui.input.returnPressed.connect(self.textEntered)
         self.sigLogMessage.connect(self.queuedLogMsg, Qt.Qt.QueuedConnection)
 
+        # also receive python logging messages
+        logger = logging.getLogger(None)
+        logger.setLevel(logging.DEBUG)
+        self.logHandler = LogHandler(self, logger=logger)        
+
     def queuedLogMsg(self, args):  # called indirectly when logMsg is called from a non-gui thread
         self.logMsg(*args[0], **args[1])
 
@@ -130,6 +146,8 @@ class LogWindow(Qt.QMainWindow):
            Feel free to add your own keyword arguments. These will be saved in the log.txt file, but will not affect the
            content or way that messages are displayed.
         """
+        if 'thread' not in kwargs:
+            kwargs['thread'] = threading.current_thread().name
 
         # for thread-safetyness:
         isGuiThread = Qt.QThread.currentThread() == Qt.QCoreApplication.instance().thread()
@@ -146,7 +164,7 @@ class LogWindow(Qt.QMainWindow):
         else:
             kwargs["currentDir"] = None
 
-        now = datetime.now().astimezone().isoformat()
+        now = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S.%f")
         with self.lock:
             self.entriesSaved += 1
             self.entriesVisible += 1
@@ -364,18 +382,12 @@ class LogWidget(Qt.QWidget):
         self.entries = []  # stores all log entries in memory
         self.cache = {}  # for storing html strings of entries that have already been processed
         self.displayedEntries = []
-        self.typeFilters = []
+        self.typeFilters = None
         self.importanceFilter = 0
         self.dirFilter = False
         self.entryArrayBuffer = np.zeros(
             1000,
-            dtype=[  # a record array for quick filtering of entries
-                ("index", "int32"),
-                ("importance", "int32"),
-                ("msgType", "|S10"),
-                ("directory", "|S100"),
-                ("entryId", "int32"),
-            ],
+            dtype=logEntryDtype,
         )
         self.entryArray = self.entryArrayBuffer[:0]
 
@@ -395,13 +407,7 @@ class LogWidget(Qt.QWidget):
         self.entries = []
         self.entryArrayBuffer = np.zeros(
             len(logConf),
-            dtype=[
-                ("index", "int32"),
-                ("importance", "int32"),
-                ("msgType", "|S10"),
-                ("directory", "|S100"),
-                ("entryId", "int32"),
-            ],
+            dtype=logEntryDtype,
         )
         self.entryArray = self.entryArrayBuffer[:]
 
@@ -418,13 +424,7 @@ class LogWidget(Qt.QWidget):
                         v.get("entryId", v["id"]),
                     )
                 ],
-                dtype=[
-                    ("index", "int32"),
-                    ("importance", "int32"),
-                    ("msgType", "|S10"),
-                    ("directory", "|S100"),
-                    ("entryId", "int32"),
-                ],
+                dtype=logEntryDtype,
             )
         self.filterEntries()  # puts all entries through current filters and displays the ones that pass
 
@@ -446,13 +446,7 @@ class LogWidget(Qt.QWidget):
 
         arr = np.array(
             [(i, entry["importance"], entry["msgType"], entryDir, entry["id"])],
-            dtype=[
-                ("index", "int32"),
-                ("importance", "int32"),
-                ("msgType", "|S10"),
-                ("directory", "|S100"),
-                ("entryId", "int32"),
-            ],
+            dtype=logEntryDtype,
         )
 
         # make more room if needed
@@ -478,12 +472,16 @@ class LogWidget(Qt.QWidget):
         # Update self.typeFilters, self.importanceFilter, and self.dirFilter to reflect changes.
         tree = self.ui.filterTree
 
-        self.typeFilters = []
-        for i in range(tree.topLevelItem(1).childCount()):
-            child = tree.topLevelItem(1).child(i)
-            if tree.topLevelItem(1).checkState(0) or child.checkState(0):
-                text = child.text(0)
-                self.typeFilters.append(str(text))
+        filterTreeItem = tree.topLevelItem(1)
+        if filterTreeItem.checkState(0):
+            self.typeFilters = None
+        else:
+            self.typeFilters = []
+            for i in range(filterTreeItem.childCount()):
+                child = filterTreeItem.child(i)
+                if filterTreeItem.checkState(0) or child.checkState(0):
+                    text = child.text(0)
+                    self.typeFilters.append(str(text))
 
         self.importanceFilter = self.ui.importanceSlider.value()
 
@@ -504,17 +502,20 @@ class LogWidget(Qt.QWidget):
         """Runs each entry in self.entries through the filters and displays if it makes it through."""
         # make self.entries a record array, then filtering will be much faster (to OR true/false arrays, + them)
         # TODO FutureWarning: elementwise comparison failed; returning scalar instead, but in the future will perform elementwise comparison
-        typeMask = self.entryArray["msgType"] == ""
-        for t in self.typeFilters:
-            typeMask += self.entryArray["msgType"] == t
-        mask = (self.entryArray["importance"] > self.importanceFilter) * typeMask
+        if self.typeFilters is None:
+            typeMask = np.ones(len(self.entryArray), dtype=bool)
+        else:
+            typeMask = self.entryArray["msgType"] == ""
+            for t in self.typeFilters:
+                typeMask |= self.entryArray["msgType"] == t
+        mask = (self.entryArray["importance"] > self.importanceFilter) & typeMask
         if self.dirFilter is not False:
             _d = np.ascontiguousarray(self.entryArray["directory"])
             j = len(self.dirFilter)
             i = len(_d)
             _d = _d.view(np.byte).reshape(i, 100)[:, :j]
             _d = _d.reshape(i * j).view("|S%d" % j)
-            mask *= _d == self.dirFilter
+            mask &= _d == self.dirFilter
 
         self.ui.output.clear()
         global Stylesheet
@@ -524,7 +525,7 @@ class LogWidget(Qt.QWidget):
 
     def checkDisplay(self, entry):
         # checks whether entry passes the current filters and displays it if it does.
-        if entry["msgType"] not in self.typeFilters:
+        if self.typeFilters is not None and entry["msgType"] not in self.typeFilters:
             return
         elif entry["importance"] < self.importanceFilter:
             return
@@ -593,6 +594,7 @@ class LogWidget(Qt.QWidget):
         <a name="{entry["id"]}"/><table class='entry'><tr><td>
             <table class='{entry["msgType"]}'><tr><td>
                 <span class='timestamp'>{entry["timestamp"]}</span>
+                <span class='thread'>{entry["thread"]}</span>
                 <span class='message'>{msg}</span>
                 {extra}
             </td></tr></table>
@@ -910,6 +912,33 @@ class ErrorDialog(Qt.QDialog):
 
     def disable(self, disable):
         self.disableCheck.setChecked(disable)
+
+
+class LogHandler(logging.Handler):
+    def __init__(self, logWindow: LogWindow, logger):
+        logging.Handler.__init__(self)
+        self.logWindow = logWindow
+        self.setFormatter(logging.Formatter("%(message)s"))
+        self.setLevel(logging.DEBUG)
+        logger.addHandler(self)
+
+    def emit(self, record):
+        msg = self.format(record)
+        # convert log level to importance and msgType
+        importance = int(record.levelno / 5)
+
+        if record.levelno <= logging.DEBUG:
+            msgType = "debug"
+        elif record.levelno <= logging.INFO:
+            msgType = "status"
+        elif record.levelno <= logging.WARNING:
+            msgType = "warning"
+        elif record.levelno <= logging.CRITICAL:
+            msgType = "error"
+        else:
+            msgType = "error"
+
+        self.logWindow.logMsg(msg, importance=importance, msgType=msgType)
 
 
 if __name__ == "__main__":

@@ -41,6 +41,13 @@ T = TypeVar("T")
 P = ParamSpec("P")
 
 
+# TODO: why doesn't this work, relative to the one below?
+def inGuiThread(func):
+    def run_func_in_gui_thread(*args, **kwds):
+        return runInGuiThread(func, *args, **kwds)
+    return run_func_in_gui_thread
+
+
 def inGuiThread(func: Callable[P, T]) -> Callable[P, T]:
     """Decorator to run a function or method in the GUI thread.
 

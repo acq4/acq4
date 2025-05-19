@@ -708,7 +708,6 @@ class AutomationDebugWindow(Qt.QWidget):
                 if state != "whole cell":
                     logMsg(f"Autopatch: Cell detect finished: {state}. Next!")
                     continue
-                logMsg("Autopatch: got whole cell, start task runner")
                 _future.setState("Autopatch: running task runner")
                 self._autopatchRunTaskRunner(_future)
 
