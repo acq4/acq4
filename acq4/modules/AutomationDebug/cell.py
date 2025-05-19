@@ -107,8 +107,7 @@ class Cell(Qt.QObject):
         stop_glob = target + margin
         current_focus = self._imager.globalCenterPosition()
         direction = np.sign(current_focus[2] - target[2])
-        direction = 1  # for now, only scan in one direction
-        if direction > 0:
+        if direction < 0:
             start_glob, stop_glob = stop_glob, start_glob
 
         with getManager().reserveDevices(
@@ -129,9 +128,9 @@ class Cell(Qt.QObject):
 
         assert stack[0].depth < stack[-1].depth
         fav_frame = stack[0]
-        # if direction > 0:
-        #     stack = stack[::-1]
-        #     start_glob, stop_glob = stop_glob, start_glob
+        if direction < 0:
+            # stack = stack[::-1]  # TODO stacks always come back in the ascending depth order, but they shouldn't
+            start_glob, stop_glob = stop_glob, start_glob
 
         # get the normalized 20µm³ region for tracking
         ijk_stack = np.array([f.data().T for f in stack])

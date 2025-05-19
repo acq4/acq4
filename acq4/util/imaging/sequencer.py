@@ -360,6 +360,7 @@ def acquire_z_stack(
     Returns:
         Future: Future object that will contain the frames once the acquisition is complete.
     """
+    # TODO optional conditional slow-z-stack fallback
     # TODO think about strobing the lighting for clearer images
     direction = start - stop
     _set_focus_depth(imager, start, direction, "fast", hysteresis_correction, _future)
