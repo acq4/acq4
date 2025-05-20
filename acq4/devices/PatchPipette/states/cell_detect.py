@@ -729,7 +729,7 @@ class CellDetectState(PatchPipetteState):
                 self._targetHasChanged = False
                 move_fut.stop("Target changed")
                 move_fut = None
-                break
+                continue
             if move_fut.isDone():
                 break
             future.sleep(0.1)
