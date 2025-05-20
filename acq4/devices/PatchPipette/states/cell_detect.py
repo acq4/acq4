@@ -312,6 +312,7 @@ class CellDetectState(PatchPipetteState):
         self._lastTestPulse = None
         self._reachedEndpoint = False
         self._startTime = None
+        self._targetHasChanged = False
         self.direction_unit = self._calc_direction()
         self._wiggleLock = Lock()
         self._sidestepDirection = np.pi / 2
@@ -322,10 +323,8 @@ class CellDetectState(PatchPipetteState):
         self.dev.sigTargetChanged.connect(self._onTargetChanged)
 
     def _onTargetChanged(self, pos):
-        # print("Target changed!")
         self.advanceSteps = None
-        if self._continuousAdvanceFuture is not None:
-            self._continuousAdvanceFuture.stop("Target changed")
+        self._targetHasChanged = True
 
     def run(self):
         with contextlib.ExitStack() as stack:
@@ -700,25 +699,39 @@ class CellDetectState(PatchPipetteState):
             speed = config['aboveSurfaceSpeed']
             surface = self.surfaceIntersectionPosition(self.direction_unit)
             print(f"  continuous move: above surface to {surface}")
-            _future.waitFor(dev.pipetteDevice._moveToGlobal(surface, speed=speed), timeout=None)
+            self._waitForMoveWhileTargetChanges(surface, speed, _future)
             self.setState("moved to surface")
         if not self.closeEnoughToTargetToDetectCell():
             speed = config['belowSurfaceSpeed']
             midway = self.fastTravelEndpoint()
             print(f"  continuous move: below surface to midway: {midway}")
-            _future.waitFor(self.dev.pipetteDevice._moveToGlobal(midway, speed=speed), timeout=None)
+            self._waitForMoveWhileTargetChanges(midway, speed, _future)
             self.setState("moved to detection area")
         speed = config['detectionSpeed']
         endpoint = self.finalSearchEndpoint()
         if config['preTargetWiggle']:
+            # TODO make sure this happens for both automated movements
             self._wiggle(_future, endpoint)
         print("  continuous move: to endpoint")
-        _future.waitFor(self.dev.pipetteDevice._moveToGlobal(endpoint, speed=speed), timeout=None)
+        self._waitForMoveWhileTargetChanges(endpoint, speed, _future)
         if config['searchAroundAtTarget']:
             self._searchAround(_future)
 
         self._reachedEndpoint = True
         print("  continuous move: done")
+
+    def _waitForMoveWhileTargetChanges(self, pos, speed, future):
+        move_fut = None
+        while True:
+            if move_fut is None:
+                move_fut = self.dev.pipetteDevice._moveToGlobal(pos, speed=speed)
+            if self._targetHasChanged:
+                self._targetHasChanged = False
+                move_fut.stop("Target changed")
+                move_fut = None
+            if move_fut.isDone():
+                break
+            future.sleep(0.1)
 
     def _wiggle(self, future, endpoint):
         config = self.config
@@ -748,18 +761,19 @@ class CellDetectState(PatchPipetteState):
     def _searchAround(self, future):
         """Slowly describe a circle on a vertical plane perpendicular to the yaw of the pipette."""
         radius = self.config['searchAroundAtTargetRadius']
-        initial_pos = self.dev.pipetteDevice.globalPosition()
         vertical = np.array((0, 0, 1))
         direction = self.dev.pipetteDevice.globalDirection()
         cross = np.cross(direction, vertical)
         # down first, then back up all the way
         start = -np.pi / 2
         radian_steps = np.arange(start, start + 2 * np.pi, np.pi / 8)
-        steps = (np.cos(radian_steps) * cross + np.sin(radian_steps) * vertical) * radius
-        steps += initial_pos
+        steps = (
+            np.cos(radian_steps)[:, np.newaxis] * cross[np.newaxis, :] +
+            np.sin(radian_steps)[:, np.newaxis] * vertical[np.newaxis, :]
+        ) * radius
         for pos in steps:
-            future.waitFor(self.dev.pipetteDevice._moveToGlobal(pos, speed=self.config['detectionSpeed']), timeout=None)
-            future.sleep(1)
+            self._waitForMoveWhileTargetChanges(
+                pos + self.dev.pipetteDevice.targetPosition(), self.config['detectionSpeed'], future)
 
     def getAdvanceSteps(self):
         """Return the list of step positions to take along the search path.
