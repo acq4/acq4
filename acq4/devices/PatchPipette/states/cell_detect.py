@@ -1,20 +1,21 @@
 from __future__ import annotations
 
 import contextlib
-from threading import Lock
+import itertools
 import time
+from threading import Lock
 from typing import Any, Iterable
 
 import numpy as np
 
 import pyqtgraph as pg
-from pyqtgraph.debug import printExc
 from acq4 import getManager
 from acq4.util import ptime
 from acq4.util.functions import plottable_booleans
 from acq4.util.future import future_wrap
-from pyqtgraph.units import µm
+from acq4.util.geometry import Plane
 from acq4.util.imaging.sequencer import run_image_sequence
+from pyqtgraph.units import µm
 from ._base import PatchPipetteState, SteadyStateAnalysisBase
 
 
@@ -207,6 +208,10 @@ class CellDetectState(PatchPipetteState):
         Time (s) to spend wiggling at each step (default 6 s)
     preTargetWiggleSpeed : float
         Speed (m/s) to move during the wiggle (default 5 µm/s)
+    searchAroundAtTarget : bool
+        If True, search around the target position for a cell (default True)
+    searchAroundAtTargetRadius : float
+        Radius (m) to search around the target position (default 1.5 µm)
     baselineResistanceTau : float
         Time constant (s) for rolling average of pipette resistance (default 20 s) from which to calculate cell
         detection
@@ -267,6 +272,8 @@ class CellDetectState(PatchPipetteState):
         'preTargetWiggleStep': {'default': 5e-6, 'type': 'float', 'suffix': 'm'},
         'preTargetWiggleDuration': {'default': 6, 'type': 'float', 'suffix': 's'},
         'preTargetWiggleSpeed': {'default': 5e-6, 'type': 'float', 'suffix': 'm/s'},
+        'searchAroundAtTarget': {'default': True, 'type': 'bool'},
+        'searchAroundAtTargetRadius': {'default': 1.5e-6, 'type': 'float', 'suffix': 'm'},
         'baselineResistanceTau': {'default': 20, 'type': 'float', 'suffix': 's'},
         'fastDetectionThreshold': {'default': 1e6, 'type': 'float', 'suffix': 'Ω'},
         'slowDetectionThreshold': {'default': 0.2e6, 'type': 'float', 'suffix': 'Ω'},
@@ -707,6 +714,9 @@ class CellDetectState(PatchPipetteState):
             self._wiggle(_future, endpoint)
         print("  continuous move: to endpoint")
         _future.waitFor(self.dev.pipetteDevice._moveToGlobal(endpoint, speed=speed), timeout=None)
+        if config['searchAroundAtTarget']:
+            self._searchAround(_future)
+
         self._reachedEndpoint = True
         print("  continuous move: done")
 
@@ -734,6 +744,22 @@ class CellDetectState(PatchPipetteState):
                 )
             step_pos = dev.pipetteDevice.globalPosition() + wiggle_step
             future.waitFor(dev.pipetteDevice._moveToGlobal(step_pos, speed=speed), timeout=None)
+
+    def _searchAround(self, future):
+        """Slowly describe a circle on a vertical plane perpendicular to the yaw of the pipette."""
+        radius = self.config['searchAroundAtTargetRadius']
+        initial_pos = self.dev.pipetteDevice.globalPosition()
+        vertical = np.array((0, 0, 1))
+        direction = self.dev.pipetteDevice.globalDirection()
+        cross = np.cross(direction, vertical)
+        # down first, then back up all the way
+        start = -np.pi / 2
+        radian_steps = np.arange(start, start + 2 * np.pi, np.pi / 8)
+        steps = (np.cos(radian_steps) * cross + np.sin(radian_steps) * vertical) * radius
+        steps += initial_pos
+        for pos in steps:
+            future.waitFor(self.dev.pipetteDevice._moveToGlobal(pos, speed=self.config['detectionSpeed']), timeout=None)
+            future.sleep(1)
 
     def getAdvanceSteps(self):
         """Return the list of step positions to take along the search path.
