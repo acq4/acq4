@@ -237,7 +237,9 @@ class CellDetectState(PatchPipetteState):
         Maximum distance allowed for an automatic pipette tip position update
     pokeDistance : float
         Distance to push pipette towards target after detecting cell surface
-
+    reachedEndpointState : str
+        State to transition to after the search endpoint has been reached, but no cell was detected.
+        Default is 'seal'.
     """
     stateName = 'cell detect'
     _parameterDefaultOverrides = {
@@ -292,6 +294,7 @@ class CellDetectState(PatchPipetteState):
         'pipetteRecalibrateDistance': {'default': 75e-6, 'type': 'float', 'suffix': 'm'},
         'pipetteRecalibrationMaxChange': {'default': 15e-6, 'type': 'float', 'suffix': 'm'},
         'pokeDistance': {'default': 3e-6, 'type': 'float', 'suffix': 'm'},
+        'reachedEndpointState': {'default': 'seal', 'type': 'str'},
     }
 
     def __init__(self, *args, **kwds):
@@ -348,7 +351,6 @@ class CellDetectState(PatchPipetteState):
                     self._continuousAdvanceFuture.stop("cell detected")
                     self.waitForStop()
                 self.pokeCell()
-                print("RETURN: seal")
                 return self._transition_to_seal(detectedThresholdSpeed)
             self.checkStop()
             self.processAtLeastOneTestPulse()
@@ -621,7 +623,7 @@ class CellDetectState(PatchPipetteState):
     def _transition_to_fallback(self):
         self._taskDone(interrupted=True, error="No cell found before end of search path")
         self.dev.patchRecord()['detectedCell'] = False
-        return self.config['fallbackState']
+        return self.config['reachedEndpointState']
 
     def _transition_to_seal(self, speed):
         self.setState(f"cell detected ({speed} criteria)")
