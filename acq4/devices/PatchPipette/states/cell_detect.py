@@ -380,7 +380,6 @@ class CellDetectState(PatchPipetteState):
                         if self._reachedEndpoint:
                             print("RETURN: fallback")
                             return self._transition_to_fallback()
-                    # print("..Advance continuous done")
                 else:
                     # advance to next position if stepping
                     if self.advanceSteps is None:
