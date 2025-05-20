@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+import traceback
 
 import numpy as np
 
@@ -49,7 +50,7 @@ class AutomationDebugWindow(Qt.QWidget):
         self._mockDemo = False
         self._cell = None
         self._unranked_cells = []  # List of global positions of cells
-        self._ranked_cells = {}  # Dict mapping cell ID (e.g., timestamp) to ranking info
+        self._ranked_cells = []
         self._current_detection_stack = None
         self._current_classification_stack = None  # May be None
         self._previousTargets = []  # Used by autoTarget
@@ -715,7 +716,8 @@ class AutomationDebugWindow(Qt.QWidget):
                     logMsg(f"Autopatch: Start cell patching", msgType='warning')
                     state = self._autopatchCellPatch(cell, _future)
                 except Exception as exc:
-                    logMsg(f"Autopatch: Exception during cell patching: {exc}", msgType='error')
+                    excStr = traceback.format_exception_only(''.join(exc).strip())
+                    logMsg(f"Autopatch: Exception during cell patching: {excStr}", msgType='error')
                     raise
 
                 logMsg(f"Autopatch: Cell patching finished: {state}", msgType='warning')
@@ -735,6 +737,15 @@ class AutomationDebugWindow(Qt.QWidget):
                 _future.setState("Autopatch: resealing")
                 _future.waitFor(ppip.setState("reseal"), timeout=None)
                 _future.sleep(5)  # pose with nucleus
+
+                # check on the resealed cell
+                homeFut = ppip.pipette.goHome()
+                self.scopeDevice.loadPreset('GFP')
+                _future.waitFor(self.cameraDevice.moveCenterToGlobal(cell.position, "fast"))
+                _future.sleep(5)  # pose with nucleus
+                _future.waitFor(homeFut)
+
+
             except (_future.StopRequested, _future.Stopped):
                 raise
             except Exception as exc:

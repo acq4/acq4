@@ -67,7 +67,7 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         self._stopsToPropagate = []
         self._returnVal: "T | None" = None
         self.finishedEvent = threading.Event()
-        logMsg(f"Future {self._name} created", level="info")
+        # logMsg(f"Future {self._name} created", level="info")
 
     def __repr__(self):
         return f"<{self.__class__.__name__} {self._name}>"
@@ -110,7 +110,7 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         """
         if state == self._state:
             return
-        logMsg(f"Future {self._name} state changed: {state}", level="info")
+        # logMsg(f"Future {self._name} state changed: {state}", level="info")
         self._state = state
         self.sigStateChanged.emit(self, state)
 
@@ -132,7 +132,7 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
 
         if reason is not None:
             self._errorMessage = reason
-        logMsg(f"Asking Future {self._name} to stop: {reason}", level="info")
+        # logMsg(f"Asking Future {self._name} to stop: {reason}", level="info")
         self._stopRequested = True
         for f in self._stopsToPropagate:
             f.stop(reason=reason)
@@ -150,10 +150,10 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
             self._wasInterrupted = interrupted
             if returnValue is not None:
                 self._returnVal = returnValue
-        if interrupted:
-            self.setState(state or f"interrupted (error: {error})")
-        else:
-            self.setState(state or "complete")
+        # if interrupted:
+        #     self.setState(state or f"interrupted (error: {error})")
+        # else:
+        #     self.setState(state or "complete")
         if self._onError is not None and (error or excInfo):
             try:
                 self._onError(self)
