@@ -370,13 +370,15 @@ def acquire_z_stack(
     speed = meters_per_frame * z_per_second * 0.5
     man = Manager.getManager()
     with man.reserveDevices(imager.devicesToReserve(), timeout=deviceReservationTimeout):
-        frames_fut = imager.acquireFrames()
         with imager.ensureRunning(ensureFreshFrames=True):
-            _future.waitFor(imager.acquireFrames(1))  # just to be sure the camera's recording
-            _set_focus_depth(imager, stop, direction, speed, hysteresis_correction, _future)
-            _future.waitFor(imager.acquireFrames(1))  # just to be sure the camera caught up
-            frames_fut.stop()
-            frames = _future.waitFor(frames_fut).getResult(timeout=10)
+            frames_fut = imager.acquireFrames()
+            try:
+                _future.waitFor(imager.acquireFrames(1))  # just to be sure the camera's recording
+                _set_focus_depth(imager, stop, direction, speed, hysteresis_correction, _future)
+                _future.waitFor(imager.acquireFrames(1))  # just to be sure the camera caught up
+            finally:
+                frames_fut.stop()
+        frames = _future.waitFor(frames_fut).getResult(timeout=10)
         try:
             frames = enforce_linear_z_stack(frames, start, stop, step)
         except ValueError:
