@@ -38,7 +38,8 @@ class FalconTurret(FilterWheel):
         if pos == 'home':
             self.dev.home(block=False)
         else:
-            self.dev.move_to_slide(pos, block=False)
+            if pos != self.getPosition():
+                self.dev.move_to_slide(pos, block=False)
         return FalconTurretFuture(self, pos)
 
     def home(self):
