@@ -716,7 +716,7 @@ class AutomationDebugWindow(Qt.QWidget):
                     logMsg(f"Autopatch: Start cell patching", msgType='warning')
                     state = self._autopatchCellPatch(cell, _future)
                 except Exception as exc:
-                    excStr = traceback.format_exception_only(exc)
+                    excStr = traceback.format_exception_only(''.join(exc).strip())
                     logMsg(f"Autopatch: Exception during cell patching: {excStr}", msgType='error')
                     raise
 
