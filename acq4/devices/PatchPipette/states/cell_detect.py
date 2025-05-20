@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import contextlib
-import itertools
-import time
 from threading import Lock
 from typing import Any, Iterable
 
@@ -13,7 +11,6 @@ from acq4 import getManager
 from acq4.util import ptime
 from acq4.util.functions import plottable_booleans
 from acq4.util.future import future_wrap
-from acq4.util.geometry import Plane
 from acq4.util.imaging.sequencer import run_image_sequence
 from pyqtgraph.units import µm
 from ._base import PatchPipetteState, SteadyStateAnalysisBase
@@ -445,15 +442,15 @@ class CellDetectState(PatchPipetteState):
             with manager.reserveDevices(
                 [pip, imgr, imgr.scopeDev.positionDevice(), imgr.scopeDev.focusDevice()], timeout=30.0
             ):
-                time.sleep(1.0)
+                self.sleep(1.0)
                 initial_pos = pos = np.array(pip.globalPosition())
                 self.waitFor(self.dev.imagingDevice().moveCenterToGlobal(pos, "fast"))
                 self.setState(f"First recalibrate position (starting at {pos})")
-                time.sleep(1.0)
+                self.sleep(1.0)
                 pos = pip.tracker.findTipInFrame()
                 self.waitFor(self.dev.imagingDevice().moveCenterToGlobal(pos, "fast"))
                 self.setState(f"Second recalibrate position (found tip at {pos})")
-                time.sleep(1.0)
+                self.sleep(1.0)
                 pos = pip.tracker.findTipInFrame()
                 dist = np.linalg.norm(initial_pos - pos)
                 if dist < self.config["pipetteRecalibrationMaxChange"]:
@@ -693,36 +690,28 @@ class CellDetectState(PatchPipetteState):
         """Move pipette continuously along search path."""
         self.setState("continuous pipette advance")
         config = self.config
-        dev = self.dev
         if self.aboveSurface():
             speed = config['aboveSurfaceSpeed']
-            surface = self.surfaceIntersectionPosition(self.direction_unit)
-            print(f"  continuous move: above surface to {surface}")
-            self._waitForMoveWhileTargetChanges(surface, speed, _future)
+            self._waitForMoveWhileTargetChanges(self.surfaceIntersectionPosition, speed, _future)
             self.setState("moved to surface")
         if not self.closeEnoughToTargetToDetectCell():
             speed = config['belowSurfaceSpeed']
-            midway = self.fastTravelEndpoint()
-            print(f"  continuous move: below surface to midway: {midway}")
-            self._waitForMoveWhileTargetChanges(midway, speed, _future)
+            self._waitForMoveWhileTargetChanges(self.fastTravelEndpoint, speed, _future)
             self.setState("moved to detection area")
         speed = config['detectionSpeed']
-        endpoint = self.finalSearchEndpoint()
         if config['preTargetWiggle']:
-            # TODO make sure this happens for both automated movements
-            self._wiggle(_future, endpoint)
-        print("  continuous move: to endpoint")
-        self._waitForMoveWhileTargetChanges(endpoint, speed, _future)
+            self._wiggle(_future, self.finalSearchEndpoint())
+        self._waitForMoveWhileTargetChanges(self.finalSearchEndpoint, speed, _future)
         if config['searchAroundAtTarget']:
             self._searchAround(_future)
 
         self._reachedEndpoint = True
-        print("  continuous move: done")
 
-    def _waitForMoveWhileTargetChanges(self, pos, speed, future):
+    def _waitForMoveWhileTargetChanges(self, position_fn, speed, future):
         move_fut = None
         while True:
             if move_fut is None:
+                pos = position_fn()
                 move_fut = self.dev.pipetteDevice._moveToGlobal(pos, speed=speed)
             if self._targetHasChanged:
                 self._targetHasChanged = False
@@ -761,6 +750,7 @@ class CellDetectState(PatchPipetteState):
     def _searchAround(self, future):
         """Slowly describe a circle on a vertical plane perpendicular to the yaw of the pipette."""
         radius = self.config['searchAroundAtTargetRadius']
+        speed = self.config['detectionSpeed']
         vertical = np.array((0, 0, 1))
         direction = self.dev.pipetteDevice.globalDirection()
         cross = np.cross(direction, vertical)
@@ -771,9 +761,10 @@ class CellDetectState(PatchPipetteState):
             np.cos(radian_steps)[:, np.newaxis] * cross[np.newaxis, :] +
             np.sin(radian_steps)[:, np.newaxis] * vertical[np.newaxis, :]
         ) * radius
-        for pos in steps:
-            self._waitForMoveWhileTargetChanges(
-                pos + self.dev.pipetteDevice.targetPosition(), self.config['detectionSpeed'], future)
+        for rel_pos in steps:
+            pos = rel_pos + self.dev.pipetteDevice.targetPosition()
+            future.waitFor(self.dev.pipetteDevice._moveToGlobal(pos, speed))
+            future.sleep(1)
 
     def getAdvanceSteps(self):
         """Return the list of step positions to take along the search path.
