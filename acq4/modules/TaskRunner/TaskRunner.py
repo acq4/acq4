@@ -155,6 +155,8 @@ class TaskRunner(Module):
         self.ui.sequenceParamList.itemChanged.connect(self.updateSeqReport)
         self.ui.analysisList.itemClicked.connect(self.analysisItemClicked)
 
+        manager.declareInterface(name, ['taskRunnerModule'], self)
+
     def protoGroupChanged(self, param, value):
         self.sigTaskChanged.emit(param, value)
         if param == 'repetitions':

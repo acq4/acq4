@@ -46,7 +46,7 @@ class AutomationDebugWindow(Qt.QWidget):
         self.module = module
         self.setWindowTitle("Automation Debug")
         self._previousBoxWidgets = []
-        self._mockDemo = True
+        self._mockDemo = False
         self._cell = None
         self._unranked_cells = []  # List of global positions of cells
         self._ranked_cells = {}  # Dict mapping cell ID (e.g., timestamp) to ranking info
@@ -243,7 +243,7 @@ class AutomationDebugWindow(Qt.QWidget):
         self.ui.testPipetteBtn.setEnabled(working == self.ui.testPipetteBtn or not working)
         self.ui.trackFeaturesBtn.setEnabled(working == self.ui.trackFeaturesBtn or not working)
         self.ui.rankCellsBtn.setEnabled(len(self._unranked_cells) > 0)
-        self.ui.autopatchDemoBtn.setEnabled(working == self.ui.autopatchDemoBtn or not working)
+        # self.ui.autopatchDemoBtn.setEnabled(working == self.ui.autopatchDemoBtn or not working)
 
     @property
     def cameraDevice(self) -> Camera:
@@ -283,6 +283,7 @@ class AutomationDebugWindow(Qt.QWidget):
 
     def clearCells(self):
         self._unranked_cells = []
+        self._ranked_cells = []
         self.clearBoundingBoxes()
 
     def clearBoundingBoxes(self):
@@ -438,11 +439,16 @@ class AutomationDebugWindow(Qt.QWidget):
             timeout=600,
         ).getResult()
         logMsg(f"Neuron detection finished. Found {len(result)} potential neurons.")
-        # result = [(r[1], r[0], r[2]) for r in result]  # col-major getting in the way?
+
+        # results are returned [z_frame, img_row, img_row]
+        # map back to global (x, y, z)
+        transform = working_stack[0][0].globalTransform() if isinstance(working_stack, tuple) else working_stack[0].globalTransform()
+        globalPos = [transform.map([row, col, zframe]) for (zframe, row, col) in result]
+
         self._current_detection_stack = detection_stack
         self._current_classification_stack = classification_stack
-        self._unranked_cells = [Cell(r) for r in result]
-        return result
+        self._unranked_cells = [Cell(r) for r in globalPos]
+        return globalPos
 
     def _create_mock_stack_from_file(
         self, mock_file_path: str, base_frame: Frame, _future: Future
@@ -704,13 +710,22 @@ class AutomationDebugWindow(Qt.QWidget):
                 _future.setState("Autopatch: go approach")
                 _future.waitFor(ppip.pipetteDevice.goApproach("fast"))
                 cell.enableTracking()
-                state = self._autopatchCellDetect(cell, _future)
+                try:
+                    _future.setState("Autopatch: patch cell")
+                    logMsg(f"Autopatch: Start cell patching", msgType='warning')
+                    state = self._autopatchCellPatch(cell, _future)
+                except Exception as exc:
+                    logMsg(f"Autopatch: Exception during cell patching: {exc}", msgType='error')
+                    raise
+
+                logMsg(f"Autopatch: Cell patching finished: {state}", msgType='warning')
                 if state != "whole cell":
-                    logMsg(f"Autopatch: Cell detect finished: {state}. Next!")
+                    logMsg(f"Autopatch: Next cell!", msgType='warning')
                     continue
-                _future.setState("Autopatch: running task runner")
+                _future.setState("Autopatch: Whole cell; running task")
                 self._autopatchRunTaskRunner(_future)
 
+                _future.setState("Autopatch: Taking cell images")
                 self.scopeDevice.loadPreset('GFP')
                 _future.sleep(5)
                 self.scopeDevice.loadPreset('tdTomato')
@@ -719,13 +734,14 @@ class AutomationDebugWindow(Qt.QWidget):
 
                 _future.setState("Autopatch: resealing")
                 _future.waitFor(ppip.setState("reseal"), timeout=None)
-            except _future.StopRequested:
+                _future.sleep(5)  # pose with nucleus
+            except (_future.StopRequested, _future.Stopped):
                 raise
             except Exception as exc:
                 printExc("Error during protocol:")
                 continue
 
-    def _autopatchCellDetect(self, cell, _future):
+    def _autopatchCellPatch(self, cell, _future):
         try:
             ppip = self.patchPipetteDevice
             ppip.setState("cell detect")
@@ -733,11 +749,11 @@ class AutomationDebugWindow(Qt.QWidget):
             while True:
                 if (state := ppip.getState().stateName) != "cell detect":
                     if not detect_finished:
-                        _future.setState(f"Autopatch: patch cell: {state}")
                         cell.enableTracking(False)
-                        _future.waitFor(self.cameraDevice.moveCenterToGlobal(cell.position, "fast"))
+                        self.cameraDevice.moveCenterToGlobal(cell.position, "fast")
                         detect_finished = True
                 if state in ("whole cell", "bath", "broken", "fouled"):
+                    _future.setState(f"Exiting patch loop - ended in state {state}")
                     break
                 _future.sleep(0.1)
             return state
@@ -756,6 +772,7 @@ class AutomationDebugWindow(Qt.QWidget):
 
         _future.setState("Autopatch: checking selected cell")
         cell = self._unranked_cells.pop(0)
+        self._ranked_cells.append(cell)
         self.pipetteDevice.setTarget(cell.position)
         self._cell = cell
         cell.sigPositionChanged.connect(self._updatePipetteTarget)
@@ -793,23 +810,21 @@ class AutomationDebugWindow(Qt.QWidget):
         ppip = self.patchPipetteDevice
         clampName = ppip.clampDevice.name()
         taskrunner: TaskRunner | None = None
-        for mod in man.listModules():
-            if not mod.startswith("Task Runner"):
-                continue
+        for mod in man.listInterfaces('taskRunnerModule'):
             mod = man.getModule(mod)
             if clampName in mod.docks:
                 taskrunner = mod
                 break
         if taskrunner is None:
-            logMsg(f"No task runner found that uses {clampName}")
+            logMsg(f"No task runner found that uses {clampName}", msgType='warning')
             return
 
         expected_duration = taskrunner.sequenceInfo["period"] * taskrunner.sequenceInfo["totalParams"]
         _future.waitFor(
             # runInGuiThread(taskrunner.runSequence, store=True, storeDirHandle=self.dh), timeout=expected_duration
-            runInGuiThread(taskrunner.runSequence, store=False), timeout=expected_duration*2
+            runInGuiThread(taskrunner.runSequence, store=False), timeout=max(30, expected_duration*20)
         )
-        logMsg("Autopatch: Task runner sequence completed.")
+        logMsg("Autopatch: Task runner sequence completed.", msgType='warning')
 
     def saveConfig(self):
         geom = self.geometry()

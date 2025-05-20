@@ -2,7 +2,7 @@ import numpy as np
 
 from acq4.Manager import getManager
 from acq4.util import Qt, ptime
-from acq4.util.debug import printExc
+from acq4.util.debug import logMsg, printExc
 from acq4.util.future import future_wrap, Future
 from acq4.util.imaging.sequencer import acquire_z_stack
 from acq4_automation.feature_tracking import CV2MostFlowAgreementTracker, ObjectStack, ImageStack
@@ -78,6 +78,9 @@ class Cell(Qt.QObject):
                     self.updatePosition(_future)
                 except _future.StopRequested:
                     raise
+                except _future.Stopped as exc:
+                    logMsg(f"Cell tracker exiting: {exc}")
+                    return
                 except Exception:
                     printExc("Hopefully harmless error in tracking")
             _future.sleep(interval)

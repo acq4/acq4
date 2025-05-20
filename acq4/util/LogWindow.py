@@ -125,7 +125,7 @@ class LogWindow(Qt.QMainWindow):
 
         # also receive python logging messages
         logger = logging.getLogger(None)
-        logger.setLevel(logging.DEBUG)
+        logger.setLevel(logging.INFO)
         self.logHandler = LogHandler(self, logger=logger)        
 
     def queuedLogMsg(self, args):  # called indirectly when logMsg is called from a non-gui thread
