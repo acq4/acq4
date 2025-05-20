@@ -307,6 +307,7 @@ class CellDetectState(PatchPipetteState):
         self._sidestepDirection = np.pi / 2
         self._pressureAdjustment = None
         self._pipetteRecalibrated = False
+        self._initialPos = self.dev.pipetteDevice.globalPosition()
 
         self.dev.sigTargetChanged.connect(self._onTargetChanged)
 
@@ -653,20 +654,19 @@ class CellDetectState(PatchPipetteState):
 
         # max search distance
         if config['maxAdvanceDistance'] is not None:
-            endpoint = pos + self.direction_unit * config['maxAdvanceDistance']
+            endpoint = self._initialPos + pip.globalDirection() * config['maxAdvanceDistance']
 
         # max surface depth
-        if config['maxAdvanceDepthBelowSurface'] is not None and self.direction_unit[2] < 0:
+        if config['maxAdvanceDepthBelowSurface'] is not None and pip.globalDirection()[2] < 0:
             endDepth = surface - config['maxAdvanceDepthBelowSurface']
-            dz = endDepth - pos[2]
-            depthEndpt = pos + self.direction_unit * (dz / self.direction_unit[2])
+            depthEndpt = pip.positionAtDepth(endDepth)
             # is the surface depth endpoint closer?
             if endpoint is None or np.linalg.norm(endpoint - pos) > np.linalg.norm(depthEndpt - pos):
                 endpoint = depthEndpt
 
         # max distance past target
         if config['advanceMode'] == 'target' and config['maxAdvanceDistancePastTarget'] is not None:
-            targetEndpt = target + self.direction_unit * config['maxAdvanceDistancePastTarget']
+            targetEndpt = target + pip.globalDirection() * config['maxAdvanceDistancePastTarget']
             # is the target endpoint closer?
             if endpoint is None or np.linalg.norm(endpoint - pos) > np.linalg.norm(targetEndpt - pos):
                 endpoint = targetEndpt
