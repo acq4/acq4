@@ -335,7 +335,7 @@ class PipetteMotionPlanner:
         if self.future is not None:
             self.future.stop()
 
-    def _move(self, _future):
+    def _move(self):
         return self.pip._movePath(self.path())
 
     def path(self):
