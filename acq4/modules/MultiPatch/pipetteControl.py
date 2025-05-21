@@ -130,7 +130,8 @@ class PipetteControl(Qt.QWidget):
             self.pip.clampDevice.sigStateChanged.connect(self.clampStateChanged)
             self.pip.clampDevice.sigHoldingChanged.connect(self.clampHoldingChanged)
             self.clampStateChanged(self.pip.clampDevice.getState())
-            self.clampHoldingChanged(self.pip.clampDevice, self.pip.clampDevice.getMode())
+            self.clampHoldingChanged(self.pip.clampDevice.getMode(), 
+                                     self.pip.clampDevice.getHolding(self.pip.clampDevice.getMode()))
             self._updateAutoBiasUi()
             self._updateActiveHoldingUi()
 
