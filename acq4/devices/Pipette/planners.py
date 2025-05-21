@@ -335,9 +335,8 @@ class PipetteMotionPlanner:
         if self.future is not None:
             self.future.stop()
 
-    @future_wrap
     def _move(self, _future):
-        _future.waitFor(self.pip._movePath(self.path()))
+        return self.pip._movePath(self.path())
 
     def path(self):
         startPosGlobal = self.pip.globalPosition()
