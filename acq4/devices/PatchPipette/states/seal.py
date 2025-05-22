@@ -30,6 +30,7 @@ class SealAnalysis(SteadyStateAnalysisBase):
         for d in data:
             analyzer = cls(*args, **kwargs)
             analysis = analyzer.process_measurements(d)
+            # TODO this plot looks to have already been broken
             plots['Ω'].append(dict(
                 x=analysis["time"],
                 y=analysis["resistance_avg"],
@@ -38,26 +39,39 @@ class SealAnalysis(SteadyStateAnalysisBase):
             ))
             plots[''].append(dict(
                 x=analysis["time"],
-                y=analysis["resistance_ratio"],
-                pen=pg.mkPen('r'),
-                name=None if labels else 'Resistance Ratio',
-            ))
-            plots[''].append(dict(
-                x=analysis["time"],
                 y=plottable_booleans(analysis["success"]),
                 symbol='o',
                 pen=pg.mkPen('g'),
                 name=None if labels else 'Seal Success',
             ))
+            plots[''].append(dict(
+                x=analysis["time"],
+                y=plottable_booleans(analysis["failure"]),
+                symbol='o',
+                pen=pg.mkPen('g'),
+                name=None if labels else 'Seal Failure',
+            ))
             labels = True
         return plots
 
-    def __init__(self, success_tau, success_at, hold_tau, hold_at):
+    def __init__(
+        self,
+        success_tau,
+        success_at,
+        hold_tau,
+        hold_at,
+        failure_tau,
+        failure_resistance_threshold,
+        failure_dRdt_threshold,
+    ):
         super().__init__()
         self._success_tau = success_tau
         self._success_at = success_at
         self._hold_tau = hold_tau
         self._hold_at = hold_at
+        self._failure_tau = failure_tau
+        self._failure_resistance_threshold = failure_resistance_threshold
+        self._failure_dRdt_threshold = failure_dRdt_threshold
 
     def process_measurements(self, measurements: np.ndarray) -> np.ndarray:
         ret_array = np.zeros(measurements.shape[0], dtype=[
@@ -65,30 +79,44 @@ class SealAnalysis(SteadyStateAnalysisBase):
             ('steady_state_resistance', float),
             ('resistance_avg_for_success', float),
             ('resistance_avg_for_hold', float),
-            ('resistance_ratio', float),
+            ('resistance_avg_for_failure', float),
+            ('dRdt_for_failure', float),
             ('success', bool),
+            ('failure', bool),
             ('hold', bool),
         ])
         for i, m in enumerate(measurements):
             t, resistance = m
             if self._last_measurement is None:
-                resistance_avg_for_success = resistance_avg_for_hold = resistance
-                ratio = 1
+                resistance_avg_for_success = resistance
+                resistance_avg_for_hold = resistance
+                resistance_avg_for_failure = resistance
+                # give it a while to settle
+                dRdt_for_failure = self._failure_dRdt_threshold * 10 * self._failure_tau
             else:
                 dt = t - self._last_measurement['time']
-                resistance_avg_for_success, ratio = self.exponential_decay_avg(
+                resistance_avg_for_success, _ = self.exponential_decay_avg(
                     dt, self._last_measurement['resistance_avg_for_success'], resistance, self._success_tau)
-                resistance_avg_for_hold, ratio = self.exponential_decay_avg(
+                resistance_avg_for_hold, _ = self.exponential_decay_avg(
                     dt, self._last_measurement['resistance_avg_for_hold'], resistance, self._hold_tau)
+                resistance_avg_for_failure, _ = self.exponential_decay_avg(
+                    dt, self._last_measurement['resistance_avg_for_failure'], resistance, self._failure_tau)
+                dRdt_for_failure = (resistance - self._last_measurement['steady_state_resistance']) / dt
             success = resistance_avg_for_success > self._success_at
             hold = resistance_avg_for_hold > self._hold_at
+            failure = (
+                resistance_avg_for_failure < self._failure_resistance_threshold
+                and dRdt_for_failure < self._failure_dRdt_threshold
+            )
             ret_array[i] = (
                 t,
                 resistance,
                 resistance_avg_for_success,
                 resistance_avg_for_hold,
-                ratio,
+                resistance_avg_for_failure,
+                dRdt_for_failure,
                 success,
+                failure,
                 hold,
             )
             self._last_measurement = ret_array[i]
@@ -98,11 +126,11 @@ class SealAnalysis(SteadyStateAnalysisBase):
     def success(self):
         return self._last_measurement and self._last_measurement['success']
 
+    def failure(self):
+        return self._last_measurement and self._last_measurement['failure']
+
     def hold(self):
         return self._last_measurement and self._last_measurement['hold']
-
-    def resistance_ratio(self):
-        return self._last_measurement['resistance_ratio'] if self._last_measurement else float('nan')
 
 
 def find_optimal_pressure(pressures, resistances) -> float:
@@ -154,12 +182,19 @@ class SealState(PatchPipetteState):
         Capacitance (Farads) above which the pipette is considered to be whole-cell and
         transitions to the 'break in' state (in case of partial break-in, we don't want to transition
         directly to 'whole cell' state).
+    failureResistanceThreshold : float
+        If the resistance hangs out for too long (*failureTau*) below this value (Ohms) without growing faster than
+        *failureDRDTThreshold*, the seal is considered a failure. Default 100MOhm.
+    failureDRDTThreshold : float
+        See *failureResistanceThreshold*. dR/dt. Default 1MOhm/s
     successMonitorTau : float
-        Time constant (seconds) for exponential averaging of resistance measurements when determining whether seal resistance 
-        has crossed *sealThreshold*. Default 1s.
+        Time constant (seconds) for exponential averaging of resistance measurements when determining whether seal
+        resistance has crossed *sealThreshold*. Default 1s.
     holdMonitorTau : float
-        Time constant (seconds) for exponential averaging of resistance measurements when determining whether seal resistance
-        has crossed *holdingThreshold*. Default 0.1s.
+        Time constant (seconds) for exponential averaging of resistance measurements when determining whether seal
+        resistance has crossed *holdingThreshold*. Default 0.1s.
+    failureTau : float
+        See *failureResistanceThreshold*. Default 10s.
     autoSealTimeout : float
         Maximum timeout (seconds) before the seal attempt is aborted,
         transitioning to *fallbackState*.
@@ -197,10 +232,13 @@ class SealState(PatchPipetteState):
         'holdingPotential': {'type': 'float', 'default': -70e-3},
         'sealThreshold': {'type': 'float', 'default': 1e9},
         'breakInThreshold': {'type': 'float', 'default': 10e-12, 'suffix': 'F'},
+        'failureResistanceThreshold': {'type': 'float', 'default': 100e6},
+        'failureDRDTThreshold': {'type': 'float', 'default': 1e6, 'suffix': 'Ohm/s'},
         'autoSealTimeout': {'type': 'float', 'default': 30.0, 'suffix': 's'},
         'pressureLimit': {'type': 'float', 'default': -3e3, 'suffix': 'Pa'},
         'successMonitorTau': {'type': 'float', 'default': 1, 'suffix': 's'},
         'holdMonitorTau': {'type': 'float', 'default': 0.1, 'suffix': 's'},
+        'failureTau': {'type': 'float', 'default': 10, 'suffix': 's'},
         'delayBeforePressure': {'type': 'float', 'default': 0.0, 'suffix': 's'},
         'delayAfterSeal': {'type': 'float', 'default': 5.0, 'suffix': 's'},
         'afterSealPressure': {'type': 'float', 'default': -1e3, 'suffix': 'Pa'},
@@ -217,6 +255,9 @@ class SealState(PatchPipetteState):
             success_at=config['sealThreshold'],
             hold_tau=config['holdMonitorTau'],
             hold_at=config['holdingThreshold'],
+            failure_tau=config['failureTau'],
+            failure_resistance_threshold=config['failureResistanceThreshold'],
+            failure_dRdt_threshold=config['failureDRDTThreshold'],
         )
         self._initialized = False
         self._patchrec = dev.patchRecord()
@@ -283,7 +324,7 @@ class SealState(PatchPipetteState):
                     # delay at atmospheric pressure before starting suction
                     continue
 
-                if dt > config['autoSealTimeout']:
+                if self._analysis.failure() or dt > config['autoSealTimeout']:
                     self._patchrec['sealSuccessful'] = False
                     self._taskDone(interrupted=True, error=f"Seal failed after {dt:f} seconds")
                     return config['fallbackState']
