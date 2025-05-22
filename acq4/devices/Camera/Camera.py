@@ -228,6 +228,7 @@ class Camera(DAQGeneric, OptomechDevice):
             raise ValueError(f"No camera preset named {preset!r}")
         params = presets[preset]["params"]
         self.setParams(params)
+        return Future.immediate()
 
     def presetHotkeyPressed(self, dev, changes, presetName):
         self.loadPreset(presetName)
@@ -828,7 +829,7 @@ class FrameProcessingThread(Thread):
     sigFrameFullyProcessed = Qt.Signal(object)  # Frame
 
     def __init__(self):
-        super().__init__()
+        super().__init__(name="FrameProcessingThread")
         self._stop = False
         self._processors = []
         self._final_processor = None
@@ -878,7 +879,7 @@ class AcquireThread(Thread):
     sigShowMessage = Qt.Signal(object)
 
     def __init__(self, dev: Camera):
-        Thread.__init__(self)
+        Thread.__init__(self, name=f"{dev.name()}_acquireThread")
         self.dev = dev
         self.camLock = self.dev.camLock
         self.stopThread = False
@@ -1018,7 +1019,7 @@ class FrameAcquisitionFuture(Future):
             ensureFreshFrames: bool = False,
     ):
         """Acquire a frames asynchronously, either a fixed number or continuously until stopped."""
-        super().__init__()
+        super().__init__(name=f"{camera.name()}_frameAcquisitionFuture")
         self._camera = camera
         self._frame_count = frameCount
         self._ensure_fresh_frames = ensureFreshFrames
@@ -1026,7 +1027,7 @@ class FrameAcquisitionFuture(Future):
         self._frames = []
         self._timeout = timeout
         self._queue = queue.Queue()
-        self._thread = threading.Thread(target=self._monitorAcquisition, daemon=True)
+        self._thread = threading.Thread(target=self._monitorAcquisition, daemon=True, name=f"{camera.name()}_frameAquisitionMonitor")
         self._thread.start()
 
     def _monitorAcquisition(self):

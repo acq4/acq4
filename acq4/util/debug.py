@@ -33,7 +33,7 @@ def createLogWindow(manager):
 def printExc(msg="", indent=4, prefix="|", msgType="error"):
     """Alert the user to an exception that has occurred, but without letting that exception propagate further.
     (This function is intended to be called within except: blocks)"""
-    pgdebug.printExc(msg, indent, prefix)
+    pgdebug.printExc(f"\n\n{msg}", indent, prefix)
     try:
         import acq4.Manager
 

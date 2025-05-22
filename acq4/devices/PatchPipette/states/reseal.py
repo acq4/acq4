@@ -323,7 +323,7 @@ class ResealState(PatchPipetteState):
             self.sleep(0.2)
 
         self.setState("reseal deemed successful")
-        self.cleanup()
+        self._cleanup()
         self._moveFuture = self._retractFromTissue()
         self.waitFor(self._moveFuture)
 
@@ -334,7 +334,7 @@ class ResealState(PatchPipetteState):
         self.waitFor(self._moveFuture, timeout=90)
         dev.pipetteDevice.focusTip()
         dev.pressureDevice.setPressure(source='regulator', pressure=config['initialPressure'])
-        self.sleep(np.inf)
+        return "outside out"
 
     def _retractFromTissue(self):
         # move out of the tissue more quickly
@@ -346,9 +346,9 @@ class ResealState(PatchPipetteState):
     def retractionDistance(self):
         return np.linalg.norm(np.array(self.dev.pipetteDevice.globalPosition()) - self._startPosition)
 
-    def cleanup(self):
+    def _cleanup(self):
         if self._moveFuture is not None:
             self._moveFuture.stop()
         if self._pressureFuture is not None:
             self._pressureFuture.stop()
-        return super().cleanup()
+        return super()._cleanup()

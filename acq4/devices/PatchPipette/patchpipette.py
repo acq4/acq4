@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import OrderedDict
+from typing import Optional
 
 import numpy as np
 
@@ -67,7 +68,7 @@ class PatchPipette(Device):
         # current state variables
         self.active = False
         self.broken = False
-        self.clean = False
+        self.clean = True  # TODO: make False; this is just for faster debugging
         self.calibrated = False
         self.waitingForSwap = False
         self._lastPos = None

@@ -124,7 +124,7 @@ class CoherentThread(Thread):
     sigError = Qt.Signal(object)
 
     def __init__(self, dev, driver, lock):
-        Thread.__init__(self)
+        Thread.__init__(self, name=f'CoherentThread_{dev.name()}')
         self.lock = Mutex(Qt.QMutex.Recursive)
         self.dev = dev
         self.driver = driver

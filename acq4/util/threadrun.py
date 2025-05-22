@@ -1,5 +1,8 @@
+import inspect
 import sys
-import traceback
+import threading
+from functools import wraps
+from typing import TypeVar, ParamSpec, Callable, Any, cast
 
 from . import Qt
 from .future import Future
@@ -15,14 +18,40 @@ def runInThread(thread, func, *args, **kwds):
 
 def runInGuiThread(func, *args, **kwds):
     """Run a function the main GUI thread and return the result."""
-    return ThreadCallFuture(None, func, *args, **kwds)()
+    gui_thread = Qt.QApplication.instance().thread()
+    curr_thread = Qt.QtCore.QThread.currentThread()
+    if gui_thread == curr_thread:
+        return func(*args, **kwds)
+    else:
+        return ThreadCallFuture(gui_thread, func, *args, **kwds)()
+
+
+def futureInGuiThread(func, *args, **kwds):
+    """Run a function the main GUI thread and return a Future."""
+    gui_thread = Qt.QApplication.instance().thread()
+    curr_thread = Qt.QtCore.QThread.currentThread()
+    if gui_thread == curr_thread:
+        return Future.immediate(result=func(*args, **kwds))
+    else:
+        return ThreadCallFuture(gui_thread, func, *args, **kwds)
+
+
+# Type variables for preserving function signature
+T = TypeVar("T")
+P = ParamSpec("P")
+
+
+def inGuiThread(func):
+    def run_func_in_gui_thread(*args, **kwds):
+        return runInGuiThread(func, *args, **kwds)
+    return run_func_in_gui_thread
 
 
 class ThreadCallFuture(Future):
     sigRequestCall = Qt.Signal()
 
     def __init__(self, thread, func, *args, **kwds):
-        Future.__init__(self)
+        Future.__init__(self, name="ThreadCallFuture")
         self.func = func
         self.args = args
         self.kwds = kwds

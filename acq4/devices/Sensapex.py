@@ -187,14 +187,14 @@ class Sensapex(Stage):
         if len(Sensapex.devices) == 0:
             UMP.get_ump().close()
 
-    def _move(self, pos, speed, linear, **kwds):
+    def _move(self, pos, speed, linear, name=None, **kwds):
         if self._force_linear_movement:
             linear = True
         if self._force_nonlinear_movement:
             linear = False
         with self.lock:
             speed = self._interpretSpeed(speed)
-            self._lastMove = SensapexMoveFuture(self, pos, speed, linear)
+            self._lastMove = SensapexMoveFuture(self, pos, speed, linear, name=name, **kwds)
             return self._lastMove
 
     def deviceInterface(self, win):
@@ -228,8 +228,8 @@ class Sensapex(Stage):
 class SensapexMoveFuture(MoveFuture):
     """Provides access to a move-in-progress on a Sensapex manipulator.
     """
-    def __init__(self, dev, pos, speed, linear):
-        MoveFuture.__init__(self, dev, pos, speed)
+    def __init__(self, dev, pos, speed, linear, name=None):
+        MoveFuture.__init__(self, dev, pos, speed, name=name)
 
         # limit the speed so that no move is expected to take less than 200 ms
         # (otherwise we get big move errors with uMp)
@@ -250,11 +250,11 @@ class SensapexMoveFuture(MoveFuture):
 
         if self.speed >= 1e-6:
             self._moveReq = self.dev.dev.goto_pos(pos, self.speed * 1e6, simultaneous=linear, linear=linear)
-            self._monitorThread = threading.Thread(target=self._watchForFinish, daemon=True)
+            self._monitorThread = threading.Thread(target=self._watchForFinish, daemon=True, name=f"{name} sensapex monitor")
         else:
             # uMp has trouble with very slow speeds, so we do this manually by looping over small steps
             self._moveReq = None
-            self._monitorThread = threading.Thread(target=self._stepwiseMove, daemon=True)
+            self._monitorThread = threading.Thread(target=self._stepwiseMove, daemon=True, name=f"{name} sensapex stepwise move")
         self._monitorThread.start()
 
     def _watchForFinish(self):

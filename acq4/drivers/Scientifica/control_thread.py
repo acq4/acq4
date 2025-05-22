@@ -31,7 +31,7 @@ class ScientificaControlThread:
         self.current_move: ScientificaRequestFuture | None = None
         self.request_queue = queue.Queue()
 
-        self.thread = threading.Thread(target=self.run, daemon=True)
+        self.thread = threading.Thread(target=self.run, daemon=True, name='ScientificaControlThread')
         self.thread.start()
 
     def set_pos_callback(self, func):
@@ -56,9 +56,9 @@ class ScientificaControlThread:
         """Stop the device immediately"""
         return self._request('stop')
 
-    def move(self, pos, speed, attempts_allowed=3):
+    def move(self, pos, speed, attempts_allowed=3, name=None):
         """Move the device to *pos* (in µm) with *speed* (in µm/s)"""
-        return self._request('move', pos=pos, speed=speed, attempts_allowed=attempts_allowed)
+        return self._request('move', pos=pos, speed=speed, attempts_allowed=attempts_allowed, name=name)
 
     def quit(self):
         """Quit the control thread"""
@@ -292,10 +292,10 @@ class ScientificaRequestFuture:
         If the request fails, then raise an exception with more information.
         """
         if self._done.wait(timeout=timeout) is False:
-            raise TimeoutError(f'Timeout waiting for {self.request} to complete')
+            raise TimeoutError(f'Timeout waiting for {str(self)} to complete')
         elif self.exc_info is not None:
             raise self.FutureError(
-                f"An error occurred during the request to {self.request}"
+                f"An error occurred during the request to {str(self)}"
             ) from self.exc_info[1]
         elif self.error is not None:
             raise self.FutureError(self.error)
@@ -325,3 +325,6 @@ class ScientificaRequestFuture:
     def target_pos(self):
         assert self.request == 'move'
         return self.kwds['pos']
+
+    def __str__(self):
+        return f"{self.request} {self.kwds.get('name', '')}"

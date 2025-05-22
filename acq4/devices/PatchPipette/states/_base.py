@@ -95,7 +95,8 @@ class PatchPipetteState(Future):
         self.config = self.defaultConfig()
         if config is not None:
             self.config.update(config)
-
+        self._cleanupMutex = threading.Lock()
+        self._cleanupFuture = None
         # indicates state that should be transitioned to next, if any.
         # This is usually set by the return value of run(), and must be invoked by the state manager.
         self.nextState = self.config.get('fallbackState', None)
@@ -121,7 +122,7 @@ class PatchPipetteState(Future):
                 # no work; just mark the task complete
                 self._taskDone(interrupted=False, error=None)
             elif self.dev.active:
-                self._thread = threading.Thread(target=self._runJob)
+                self._thread = threading.Thread(target=self._runJob, name=f'{self.dev.name()} {self.stateName} thread')
                 self._thread.start()
             else:
                 self._taskDone(interrupted=True, error=f"Not starting state thread; {self.dev.name()} is not active.")
@@ -200,6 +201,12 @@ class PatchPipetteState(Future):
         return tps
 
     def cleanup(self) -> Future:
+        with self._cleanupMutex:
+            if self._cleanupFuture is None:
+                self._cleanupFuture = self._cleanup()
+            return self._cleanupFuture
+
+    def _cleanup(self) -> Future:
         """Called after job completes, whether it failed or succeeded. Ask `self.wasInterrupted()` to see if the
         state was stopped early. Return a Future that completes when cleanup is done.
         """
@@ -234,12 +241,14 @@ class PatchPipetteState(Future):
     def __repr__(self):
         return f'<{type(self).__name__} "{self.stateName}">'
 
-    def surfaceIntersectionPosition(self, direction):
+    def surfaceIntersectionPosition(self, direction=None):
         """Return the intersection of the direction unit vector with the surface."""
+        if direction is None:
+            direction = self.direction_unit
         pip = self.dev.pipetteDevice
         pos = np.array(pip.globalPosition())
         surface = pip.scopeDevice().getSurfaceDepth()
-        return pos - direction * (surface - pos[2])
+        return pos + direction * ((surface - pos[2]) / direction[2])
 
 
 class SteadyStateAnalysisBase(object):

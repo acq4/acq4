@@ -11,7 +11,7 @@ from acq4.drivers.SerialDevice import SerialDevice
 from .control_thread import ScientificaControlThread
 from .serial import ScientificaSerial
 from acq4.util.debug import printExc
-from ...util.typing import Number
+from ...util.acq4_typing import Number
 
 # Data provided by Scientifica
 _device_types = """
@@ -445,7 +445,7 @@ class Scientifica:
         if self.hasSeparateZSpeed():
             self.setParam('maxZSpeed', speed)
 
-    def moveTo(self, pos, speed=None, attempts_allowed=3):
+    def moveTo(self, pos, speed=None, name=None, attempts_allowed=3):
         """Set the position of the manipulator.
         
         *pos* must be a list of 3 items, each is either an integer representing the desired position
@@ -461,7 +461,7 @@ class Scientifica:
             currentPos = self.getPos()
             pos = [pos[i] if pos[i] is not None else currentPos[i] for i in (0, 1, 2)]
 
-        return self.ctrlThread.move(tuple(pos), speed, attempts_allowed=attempts_allowed)
+        return self.ctrlThread.move(tuple(pos), speed, attempts_allowed=attempts_allowed, name=name)
 
     def zeroPosition(self, axis: str | None = None):
         """Reset the stage coordinates to (0, 0, 0) without moving the stage. If *axis* is given,
@@ -502,10 +502,10 @@ class Scientifica:
 
     def getBaudrate(self):
         return self.serial.getBaudrate()
-    
+
     def setBaudrate(self, rate):
         return self.serial.setBaudrate(rate)
-    
+
     def getObjective(self):
         """Return the currently active objective slot (int; only for MOC devices)"""
         return int(self.serial.send("obj"))

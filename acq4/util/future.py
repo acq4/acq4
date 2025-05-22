@@ -1,14 +1,16 @@
 from __future__ import annotations
 
 import functools
+import inspect
 import sys
 import threading
 import time
 import traceback
 from typing import Callable, Generic, TypeVar, ParamSpec, Optional
-
+from typing import Generic, TypeVar
+ 
 from acq4.util import Qt, ptime
-from acq4.util.debug import printExc
+from acq4.util.debug import printExc, logMsg
 from pyqtgraph import FeedbackButton
 
 FUTURE_RETVAL_TYPE = TypeVar("FUTURE_RETVAL_TYPE")
@@ -28,7 +30,7 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         """Raised by checkStop if stop() has been invoked."""
 
     class Stopped(Exception):
-        """Raised by exceptions that were politely stopped."""
+        """Raised by futures that were politely stopped."""
 
     class Timeout(Exception):
         """Raised by wait() if the timeout period elapses."""
@@ -42,14 +44,17 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         fut._taskDone(returnValue=result, error=error, interrupted=(error or excInfo) is not None, excInfo=excInfo)
         return fut
 
-    def __init__(self, onError=None):
+    def __init__(self, onError=None, name=None):
         Qt.QObject.__init__(self)
 
         self.startTime = ptime.time()
-
+        if name is None:
+            frame = inspect.currentframe().f_back
+            self._name = f"(unnamed from {frame.f_code.co_filename}:{frame.f_lineno})"
+        else:
+            self._name = name
         self._isDone = False
         self._callbacks = []
-        self.sigFinished.connect(self._callCallbacks)
         self._onError = onError
         self._completionLock = threading.Lock()
         self._wasInterrupted = False
@@ -62,13 +67,18 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         self._stopsToPropagate = []
         self._returnVal: "T | None" = None
         self.finishedEvent = threading.Event()
+        # logMsg(f"Future {self._name} created", level="info")
+
+    def __repr__(self):
+        return f"<{self.__class__.__name__} {self._name}>"
 
     def executeInThread(self, func, args, kwds):
         """Execute the specified function in a separate thread.
 
         The function should call _taskDone() when finished (or raise an exception).
         """
-        self._executingThread = threading.Thread(target=self.executeAndSetReturn, args=(func, args, kwds), daemon=True)
+        self._executingThread = threading.Thread(target=self.executeAndSetReturn, args=(func, args, kwds), daemon=True,
+                                                 name=f"execute thread for {repr(self)}")
         self._executingThread.start()
 
     def executeAndSetReturn(self, func, args, kwds):
@@ -100,6 +110,7 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         """
         if state == self._state:
             return
+        # logMsg(f"Future {self._name} state changed: {state}", level="info")
         self._state = state
         self.sigStateChanged.emit(self, state)
 
@@ -110,7 +121,7 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         """
         raise NotImplementedError("method must be reimplmented in subclass")
 
-    def stop(self, reason="task stop requested"):
+    def stop(self, reason: str|None="task stop requested"):
         """Stop the task (nicely).
 
         Subclasses may extend this method and/or use checkStop to determine whether
@@ -121,6 +132,7 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
 
         if reason is not None:
             self._errorMessage = reason
+        # logMsg(f"Asking Future {self._name} to stop: {reason}", level="info")
         self._stopRequested = True
         for f in self._stopsToPropagate:
             f.stop(reason=reason)
@@ -138,10 +150,10 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
             self._wasInterrupted = interrupted
             if returnValue is not None:
                 self._returnVal = returnValue
-        if interrupted:
-            self.setState(state or f"interrupted (error: {error})")
-        else:
-            self.setState(state or "complete")
+        # if interrupted:
+        #     self.setState(state or f"interrupted (error: {error})")
+        # else:
+        #     self.setState(state or "complete")
         if self._onError is not None and (error or excInfo):
             try:
                 self._onError(self)
@@ -149,6 +161,7 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
                 printExc(f"Error in Future.onError callback: {self._onError}")
         self.finishedEvent.set()  # tell wait() that we're done
         self.sigFinished.emit(self)  # tell everyone else that we're done
+        self._callCallbacks()
 
     def wasInterrupted(self):
         """Return True if the task was interrupted before completing (due to an error or a stop request)."""
@@ -166,23 +179,33 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         with self._completionLock:
             return self._isDone
 
-    def onFinish(self, callback, *args, **kwargs):
+    def onFinish(self, callback, *args, inGui: bool = False, **kwargs):
         """Make sure the callback is called when the future is finished, including if the future is already done."""
+        from acq4.util.threadrun import runInGuiThread
+
         with self._completionLock:
             done = self._isDone
             if not done:
-                self._callbacks.append((callback, args, kwargs))
+                self._callbacks.append((inGui, callback, args, kwargs))
         if done:
-            callback(self, *args, **kwargs)
+            if inGui:
+                runInGuiThread(callback, self, *args, **kwargs)
+            else:
+                callback(self, *args, **kwargs)
 
     def _callCallbacks(self):
         """Call all callbacks registered with onFinish().
 
         This is called when the task is completed.
         """
-        for callback, args, kwargs in self._callbacks:
+        from acq4.util.threadrun import runInGuiThread
+
+        for inGui, callback, args, kwargs in self._callbacks:
             try:
-                callback(self, *args, **kwargs)
+                if inGui:
+                    runInGuiThread(callback, self, *args, **kwargs)
+                else:
+                    callback(self, *args, **kwargs)
             except Exception as e:
                 printExc(f"Error in Future callback: {callback}")
 
@@ -204,7 +227,7 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         start = ptime.time()
         while True:
             if (timeout is not None) and (ptime.time() > start + timeout):
-                raise self.Timeout("Timeout waiting for task to complete.")
+                raise self.Timeout(f"Timeout waiting for task {self} to complete.")
 
             if self.isDone():
                 break
@@ -272,7 +295,7 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
                 if future.wasInterrupted():  # a _real_ timeout, as opposed to our 0.1s loopbeat
                     future.wait()  # let it sing
                 if timeout is not None and time.time() - start > timeout:
-                    raise self.Timeout(f"Timed out waiting for {future!r}") from e
+                    raise self.Timeout(f"Timed out waiting {timeout}s for {future!r}") from e
         return future
 
     def raiseErrors(self, message, pollInterval=1.0):
@@ -296,7 +319,7 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         monitorFn = functools.partial(
             self._monitorErrors, message=message, pollInterval=pollInterval, originalFrame=originalFrame
         )
-        self._errorMonitorThread = threading.Thread(target=monitorFn, daemon=True)
+        self._errorMonitorThread = threading.Thread(target=monitorFn, daemon=True, name=f"error monitor for {self}")
         self._errorMonitorThread.start()
 
     def _monitorErrors(self, message, pollInterval, originalFrame):
@@ -340,7 +363,9 @@ def future_wrap(
 
     @functools.wraps(func)
     def wrapper(*args: WRAPPED_FN_PARAMS.args, **kwds: WRAPPED_FN_PARAMS.kwargs) -> Future[WRAPPED_FN_RETVAL_TYPE]:
-        future = Future(onError=kwds.pop("onFutureError", None))
+        frame = inspect.currentframe().f_back
+        name = f"(wrapped {func.__qualname__} from {frame.f_code.co_filename}:{frame.f_lineno})"
+        future = Future(onError=kwds.pop("onFutureError", None), name=name)
         if kwds.pop("block", False):
             kwds["_future"] = future
             if parent := kwds.pop("checkStopThrough", None):
@@ -368,8 +393,8 @@ class MultiException(Exception):
 class MultiFuture(Future):
     """Future tracking progress of multiple sub-futures."""
 
-    def __init__(self, futures):
-        super().__init__()
+    def __init__(self, futures, name=None):
+        super().__init__(name=name)
         self.futures = futures
         for fut in futures:
             fut.onFinish(self._subFutureFinished)
