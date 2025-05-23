@@ -5,6 +5,7 @@ from collections import OrderedDict
 import acq4.util.Mutex as Mutex
 from acq4.devices.Device import Device, TaskGui
 from acq4.util import Qt
+from acq4.util.future import Future
 from pyqtgraph import SignalBlock
 
 
@@ -95,6 +96,7 @@ class LightSource(Device):
             self.setSourceActive(c, c == chan)
         if 'brightness' in conf:
             self.setSourceBrightness(chan, conf['brightness'])
+        return Future.immediate()
 
     def sourceActive(self, name):
         """Return True if the named light source is currently active.

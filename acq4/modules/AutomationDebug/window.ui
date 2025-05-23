@@ -6,15 +6,15 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>367</width>
-    <height>465</height>
+    <width>420</width>
+    <height>539</height>
    </rect>
   </property>
   <property name="windowTitle">
    <string>Form</string>
   </property>
-  <layout class="QGridLayout" name="gridLayout_4">
-   <item row="0" column="0">
+  <layout class="QVBoxLayout" name="gridLayout_4">
+   <item>
     <widget class="QGroupBox" name="groupBox">
      <property name="title">
       <string>Cell Detection</string>
@@ -131,29 +131,157 @@
         </property>
        </widget>
       </item>
-     </layout>
-    </widget>
-   </item>
-   <item row="3" column="0">
-    <widget class="QGroupBox" name="groupBox_3">
-     <property name="title">
-      <string>Visual tracking</string>
-     </property>
-     <layout class="QGridLayout" name="gridLayout_3">
-      <item row="0" column="0">
-       <widget class="FutureButton" name="trackFeaturesBtn">
+      <item row="4" column="0" colspan="4">
+       <widget class="QPushButton" name="rankCellsBtn">
         <property name="text">
-         <string>Track target by features</string>
+         <string>Rank Next Cell</string>
         </property>
        </widget>
       </item>
-      <item row="0" column="1">
-       <layout class="QHBoxLayout" name="horizontalLayout_2"/>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="rankingGroup">
+     <property name="title">
+      <string>Cell Ranking</string>
+     </property>
+     <layout class="QHBoxLayout" name="rankingLayout">
+      <item>
+       <widget class="QLabel" name="label_6">
+        <property name="text">
+         <string>Save Directory:</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLineEdit" name="rankingSaveDirEdit">
+        <property name="readOnly">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="selectRankDirBtn">
+        <property name="text">
+         <string>...</string>
+        </property>
+        <property name="maximumSize">
+         <size>
+          <width>30</width>
+          <height>16777215</height>
+         </size>
+        </property>
+       </widget>
       </item>
      </layout>
     </widget>
    </item>
-   <item row="1" column="0">
+   <item>
+    <widget class="QGroupBox" name="multiChannelGroup">
+     <property name="title">
+      <string>Multichannel Acquisition</string>
+     </property>
+     <layout class="QGridLayout" name="gridLayout_5">
+      <item row="0" column="0" colspan="2">
+       <widget class="QCheckBox" name="multiChannelEnableCheck">
+        <property name="toolTip">
+         <string>Check to acquire two z-stacks using specific microscope presets for detection and classification. If unchecked, only a single z-stack is acquired using the current microscope state.</string>
+        </property>
+        <property name="text">
+         <string>Enable Multichannel Acquisition</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="label_4">
+        <property name="text">
+         <string>Detection Preset:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="QComboBox" name="detectionPresetCombo">
+        <property name="enabled">
+         <bool>false</bool>
+        </property>
+        <property name="toolTip">
+         <string>Select the microscope preset to use for the detection channel z-stack.</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="0">
+       <widget class="QLabel" name="label_5">
+        <property name="text">
+         <string>Classification Preset:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="1">
+       <widget class="QComboBox" name="classificationPresetCombo">
+        <property name="enabled">
+         <bool>false</bool>
+        </property>
+        <property name="toolTip">
+         <string>Select the microscope preset to use for the classification channel z-stack.</string>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="0">
+       <widget class="QLabel" name="mockClassificationFileLabel">
+        <property name="text">
+         <string>Mock Classif. File:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="1">
+       <layout class="QHBoxLayout" name="mockClassificationLayout">
+        <item>
+         <widget class="QPushButton" name="mockClassificationFileButton">
+          <property name="text">
+           <string>Select File</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLineEdit" name="mockClassificationFilePath">
+          <property name="text">
+           <string/>
+          </property>
+          <property name="readOnly">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="groupBox_4">
+     <property name="title">
+      <string>Motion Planner</string>
+     </property>
+     <layout class="QGridLayout" name="groupBox_4_layout">
+      <item row="0" column="0">
+       <widget class="QComboBox" name="motionPlannerSelector">
+        <item>
+         <property name="text">
+          <string>Geometry-aware</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Objective radius only</string>
+         </property>
+        </item>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
     <widget class="QGroupBox" name="groupBox_2">
      <property name="title">
       <string>Pipette calibration</string>
@@ -184,6 +312,41 @@
       </item>
       <item row="3" column="0" colspan="2">
        <widget class="QTextEdit" name="pipetteLog"/>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="groupBox_3">
+     <property name="title">
+      <string>Visual tracking</string>
+     </property>
+     <layout class="QGridLayout" name="gridLayout_3">
+      <item row="0" column="0">
+       <widget class="FutureButton" name="trackFeaturesBtn">
+        <property name="text">
+         <string>Track target by features</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <widget class="QComboBox" name="featureTrackerSelector">
+        <item>
+         <property name="text">
+          <string>CV2</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>PyrLK3D</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Cellpose</string>
+         </property>
+        </item>
+       </widget>
       </item>
      </layout>
     </widget>

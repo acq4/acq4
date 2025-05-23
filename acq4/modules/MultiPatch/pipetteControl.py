@@ -407,7 +407,8 @@ class PlotWidget(Qt.QWidget):
             self._analysisLabel = None
         if self.mode == 'test pulse':
             self.plot.clear()
-            self._plotTestPulse(tp)
+            if tp is not None:
+                self._plotTestPulse(tp)
         elif self.mode == 'tp analysis':
             self.plot.clear()
             tp.plot(self.plot, label=False)
