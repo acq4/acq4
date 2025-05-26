@@ -95,45 +95,55 @@ class Cell(Qt.QObject):
     def updatePosition(self, _future):
         while len(self._tracker.object_stacks) == 0:
             _future.sleep(0.1)
-        stack, xform, _ = self._takeStackshot(_future)
-        img_stack = ImageStack(stack, xform)
-        result = self._tracker.next_frame(img_stack)
+        frame, xform, _ = self._takeStackshot(_future, single=True)
+        result = self._tracker.next_frame(frame[0], xform)
+        if not result["match_success"]:
+            stack, xform, _ = self._takeStackshot(_future)
+            img_stack = ImageStack(stack, xform)
+            result = self._tracker.next_frame(img_stack)
         global_position = result["position"].mapped_to("global")
         self._positions[ptime.time()] = global_position
         self.sigPositionChanged.emit(global_position)
         return result["match_success"]
 
-    def _takeStackshot(self, _future):
+    def _takeStackshot(self, _future, single=False):
         target = np.array(self.position)
-        margin = 20e-6
-        start_glob = target - margin
-        stop_glob = target + margin
         current_focus = self._imager.globalCenterPosition()
         direction = np.sign(target[2] - current_focus[2])
-        if direction < 0:
-            start_glob, stop_glob = stop_glob, start_glob
+        margin = 20e-6
 
         with getManager().reserveDevices(
             [self._imager, self._imager.scopeDev.positionDevice(), self._imager.scopeDev.focusDevice()], timeout=30.0
         ):
-            _future.waitFor(self._imager.moveCenterToGlobal((target[0], target[1], start_glob[2]), "fast"))
-            stack = acquire_z_stack(
-                self._imager,
-                start_glob[2],
-                stop_glob[2],
-                1e-6,
-                hysteresis_correction=False,
-                slow_fallback=False,  # the slow fallback mode is too slow to be useful here
-                deviceReservationTimeout=30.0,  # possibly competing with pipette calibration, which can take a while
-                block=True,
-                checkStopThrough=_future,
-            ).getResult()
+            if single:
+                start_glob = target - np.array([margin, margin, 0])
+                stop_glob = target + np.array([margin, margin, 0])
+                _future.waitFor(self._imager.moveCenterToGlobal(target, "fast"))
+                with self._imager.ensureRunning():
+                    stack = _future.waitFor(self._imager.acquireFrames(1, ensureFreshFrames=True)).getResult()
+            else:
+                start_glob = target - margin
+                stop_glob = target + margin
+                if direction < 0:
+                    start_glob, stop_glob = stop_glob, start_glob
+                _future.waitFor(self._imager.moveCenterToGlobal((target[0], target[1], start_glob[2]), "fast"))
+                stack = acquire_z_stack(
+                    self._imager,
+                    start_glob[2],
+                    stop_glob[2],
+                    1e-6,
+                    hysteresis_correction=False,
+                    slow_fallback=False,  # the slow fallback mode is too slow to be useful here
+                    deviceReservationTimeout=30.0,  # possibly competing with pipette calibration, which can take a while
+                    block=True,
+                    checkStopThrough=_future,
+                ).getResult()
+                assert stack[0].depth < stack[-1].depth
+                if direction < 0:
+                    # stack = stack[::-1]  # TODO stacks always come back in the ascending depth order, but they shouldn't
+                    start_glob, stop_glob = stop_glob, start_glob
 
-        assert stack[0].depth < stack[-1].depth
         fav_frame = stack[0]
-        if direction < 0:
-            # stack = stack[::-1]  # TODO stacks always come back in the ascending depth order, but they shouldn't
-            start_glob, stop_glob = stop_glob, start_glob
 
         # get the normalized 20µm³ region for tracking
         ijk_stack = np.array([f.data().T for f in stack])
@@ -151,17 +161,19 @@ class Cell(Qt.QObject):
         if np.any(start_ijk < 0) or np.any(stop_ijk < 0):
             raise ValueError("target is too close to the edge of this stack")
         start_ijk, stop_ijk = np.min((start_ijk, stop_ijk), axis=0), np.max((start_ijk, stop_ijk), axis=0)
-        if self._roiSize is None:
-            self._roiSize = tuple(stop_ijk - start_ijk)
-        stop_ijk = start_ijk + self._roiSize  # always be the same size
+        if not single:
+            if self._roiSize is None:
+                self._roiSize = tuple(stop_ijk - start_ijk)
+            stop_ijk = start_ijk + self._roiSize  # always be the same size
         roi_stack = ijk_stack[
             start_ijk[0] : stop_ijk[0],
             start_ijk[1] : stop_ijk[1],
             start_ijk[2] : stop_ijk[2],
         ].copy()  # copy to allow freeing of the full stack memory
-        assert (
-            roi_stack.shape == self._roiSize
-        ), f"stackshot generated wrong size stack ({roi_stack.shape} vs {self._roiSize})"
+        if not single:
+            assert (
+                roi_stack.shape == self._roiSize
+            ), f"stackshot generated wrong size stack ({roi_stack.shape} vs {self._roiSize})"
         region_xform = stack_xform * TTransform(
             offset=start_ijk,
             from_cs=f"frame_{fav_frame.info()['id']}.roi",
