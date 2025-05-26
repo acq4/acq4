@@ -163,8 +163,8 @@ class ResealState(PatchPipetteState):
         repairTau (default is 0.5)
     retractionSuccessDistance : float
         Distance (meters) to retract before checking for successful reseal (default is 200 µm)
-    resealSuccessResistance : float
-        Resistance (Ω) above which the reseal is considered successful (default is 500MΩ)
+    resealSuccessResistanceMultiplier : float
+        The reseal is considered successful when resistance exceeds initial resistance times this value (default is 4)
     resealSuccessDuration : float
         Duration (seconds) to wait after successful reseal before transitioning to the slurp (default is 5s)
     postSuccessRetractionSpeed : float
@@ -203,7 +203,7 @@ class ResealState(PatchPipetteState):
         'maxRetractionSpeed': {'type': 'float', 'default': 10e-6, 'suffix': 'm/s'},
         'retractionStepInterval': {'type': 'float', 'default': 5, 'suffix': 's'},
         'retractionSuccessDistance': {'type': 'float', 'default': 200e-6, 'suffix': 'm'},
-        'resealSuccessResistance': {'type': 'float', 'default': 500e6, 'suffix': 'Ω'},
+        'resealSuccessResistanceMultiplier': {'type': 'float', 'default': 4.0},
         'resealSuccessDuration': {'type': 'float', 'default': 5, 'suffix': 's'},
         'postSuccessRetractionSpeed': {'type': 'float', 'default': 6e-6, 'suffix': 'm/s'},
         'detectionTau': {'type': 'float', 'default': 1, 'suffix': 's'},
@@ -271,9 +271,20 @@ class ResealState(PatchPipetteState):
         """Return True if the resistance is way too low."""
         return self._analysis and self._analysis.is_torn()
 
+    def successResistanceThreshold(self):
+        """Return the resistance threshold for a successful reseal."""
+        if self._lastResistance is None:
+            return np.inf
+        return self.config["resealSuccessResistanceMultiplier"] * self.preAnalysisResistance()
+
+    def preAnalysisResistance(self):
+        if len(self._preAnalysisTpss) < 10:
+            return np.inf
+        return np.mean([tp.analysis['steady_state_resistance'] for tp in self._preAnalysisTpss])
+
     def isRetractionSuccessful(self):
         if self.retractionDistance() > self.config['retractionSuccessDistance'] or (
-                self._lastResistance is not None and self._lastResistance > self.config['resealSuccessResistance']
+                self._lastResistance is not None and self._lastResistance > self.successResistanceThreshold()
         ):
             if self._firstSuccessTime is None:
                 self._firstSuccessTime = ptime.time()
@@ -288,12 +299,11 @@ class ResealState(PatchPipetteState):
         tps = super().processAtLeastOneTestPulse()
         if self._analysis is None:
             self._preAnalysisTpss += tps
-            if len(self._preAnalysisTpss) > 10:
-                avg_r = np.mean([tp.analysis['steady_state_resistance'] for tp in self._preAnalysisTpss])
+            if len(self._preAnalysisTpss) >= 10:
                 self._analysis = ResealAnalysis(
                     stretch_threshold=self.config['stretchDetectionThreshold'],
                     tearing_threshold=self.config['tearDetectionThreshold'],
-                    torn_threshold=avg_r * self.config['tornDetectionThreshold'],
+                    torn_threshold=self.preAnalysisResistance() * self.config['tornDetectionThreshold'],
                     detection_tau=self.config['detectionTau'],
                     repair_tau=self.config['repairTau'],
                 )
