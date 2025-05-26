@@ -267,6 +267,17 @@ class ResealState(PatchPipetteState):
         """Return True if the resistance is decreasing."""
         return self._analysis.is_tearing()
 
+    def successResistanceThreshold(self):
+        """Return the resistance threshold for a successful reseal."""
+        if self._lastResistance is None:
+            return np.inf
+        return self.config["resealSuccessResistanceMultiplier"] * self.preAnalysisResistance()
+
+    def preAnalysisResistance(self):
+        if len(self._preAnalysisTpss) < 10:
+            return np.inf
+        return np.mean([tp.analysis['steady_state_resistance'] for tp in self._preAnalysisTpss])
+
     def isRetractionSuccessful(self):
         distance = self.retractionDistance()
         if distance > self.config['retractionSuccessDistance']:
