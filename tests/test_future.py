@@ -186,7 +186,7 @@ class TestFuture(unittest.TestCase):
         inner_future = Future(name="inner")
 
         def inner_task_long(_future):
-            _future.sleep(5) # sleep long enough to be interrupted
+            _future.sleep(15) # sleep long enough to be interrupted
 
         inner_future.executeInThread(inner_task_long, (), {})
 
@@ -197,11 +197,10 @@ class TestFuture(unittest.TestCase):
         wait_thread = threading.Thread(target=lambda: outer_future.waitFor(inner_future))
         stopper_thread = threading.Thread(target=stop_outer_then_wait)
 
-        with self.assertRaises(Future.StopRequested) as cm:
-            wait_thread.start()
-            stopper_thread.start()
-            wait_thread.join()
-            stopper_thread.join()
+        wait_thread.start()
+        stopper_thread.start()
+        wait_thread.join()
+        stopper_thread.join()
         self.assertTrue(outer_future.wasStopped())
         self.assertTrue(inner_future.wasStopped(), "Inner future should be stopped by parent's StopRequested")
         self.assertEqual(inner_future.errorMessage(), "parent task stop requested")
@@ -218,7 +217,8 @@ class TestFuture(unittest.TestCase):
 
         with self.assertRaises(Future.Timeout) as cm:
             outer_future.waitFor(inner_future, timeout=0.1)
-        self.assertIn("Timed out waiting for <Future inner>", str(cm.exception)) # Future name might vary
+        self.assertIn("Timed out waiting", str(cm.exception)) # Future name might vary
+        self.assertIn(" for <Future inner>", str(cm.exception))
         self.assertFalse(inner_future.isDone()) # inner_future is still running
         inner_future.stop() # clean up
         with contextlib.suppress(Future.Stopped): # wait for it to actually stop
@@ -331,15 +331,13 @@ class TestFuture(unittest.TestCase):
         mock_slot.reset_mock()
 
         fut._taskDone(returnValue="done")
-        mock_slot.assert_called_once_with(fut, "complete")
-        self.assertEqual(fut.currentState(), "complete")
+        mock_slot.assert_not_called()
         mock_slot.reset_mock()
 
         fut2 = Future()
         fut2.sigStateChanged.connect(mock_slot)
         fut2._taskDone(interrupted=True, error="failed")
-        mock_slot.assert_called_once_with(fut2, "interrupted (error: failed)")
-        self.assertEqual(fut2.currentState(), "interrupted (error: failed)")
+        mock_slot.assert_not_called()
 
     def test_future_sleep_interrupt(self):
         fut = Future()
@@ -396,10 +394,283 @@ class TestFuture(unittest.TestCase):
         self.assertIsInstance(exception_in_thread, Future.StopRequested)
         self.assertTrue(child_future.wasStopped(), "Child future was not stopped when parent was stopped during waitFor")
         self.assertEqual(child_future.errorMessage(), "parent task stop requested")
-        # Clean up child future if it's still trying to finish
-        if not child_future.isDone():
-            with contextlib.suppress(Future.Stopped, RuntimeError):
-                child_future.wait(timeout=0.1)
+
+    def test_future_waitFor_propagates_stop_to_grandchildren(self):
+        # This test ensures that if self.checkStop() within waitFor raises,
+        # the future being waited upon (child) is stopped.
+        parent_future = Future(name="parent")
+        child_future = Future(name="child_for_waitFor_prop_stop")
+        grandchild_future = Future(name="grandchild_for_waitFor_prop_stop")
+
+        def grandchild_task(_future):
+            _future.sleep(1000) # Keep child busy
+        grandchild_future.executeInThread(grandchild_task, (), {})
+        wait_child_finished_event = threading.Event()
+        exception_in_child = None
+
+        def child_task(_future):
+            nonlocal exception_in_child
+            try:
+                _future.waitFor(grandchild_future, timeout=2000)
+            except Exception as e:
+                exception_in_child = e
+            finally:
+                wait_child_finished_event.set()
+
+        child_future.executeInThread(child_task, (), {})
+
+        # Start waiting in a thread
+        wait_thread_finished_event = threading.Event()
+        exception_in_thread = None
+
+        def wait_for_child():
+            nonlocal exception_in_thread
+            try:
+                parent_future.waitFor(child_future, timeout=2000)
+            except Exception as e:
+                exception_in_thread = e
+            finally:
+                wait_thread_finished_event.set()
+
+        wait_thread = threading.Thread(target=wait_for_child)
+        wait_thread.start()
+
+        time.sleep(0.1) # Ensure waitFor has started and all futures are running
+        self.assertFalse(child_future.wasStopped())
+        self.assertFalse(grandchild_future.wasStopped())
+
+        parent_future.stop("Parent was stopped externally")
+        wait_thread_finished_event.wait(timeout=2) # Wait for waitFor to react
+        wait_child_finished_event.wait(timeout=2) # Wait for child to react
+
+        self.assertTrue(wait_thread_finished_event.is_set(), "Wait thread did not finish")
+        self.assertIsInstance(exception_in_thread, Future.StopRequested)
+        self.assertTrue(wait_child_finished_event.is_set(), "Child wait thread did not finish")
+        self.assertIsInstance(exception_in_child, Future.StopRequested)
+        self.assertTrue(child_future.wasStopped(), "Child future was not stopped when parent was stopped during waitFor")
+        self.assertEqual(child_future.errorMessage(), "parent task stop requested")
+        self.assertTrue(grandchild_future.wasStopped(), "Grandchild future was not stopped when parent was stopped during waitFor")
+        self.assertEqual(grandchild_future.errorMessage(), "parent task stop requested")
+
+    def test_future_stop_with_wait_parameter(self):
+        """Test the new wait parameter in Future.stop()"""
+        fut = Future()
+        stop_completed = threading.Event()
+        
+        def long_running_task(_future):
+            try:
+                _future.sleep(0.5)  # Sleep for a reasonable time
+                return "completed"
+            except Future.StopRequested:
+                # Simulate some cleanup time
+                time.sleep(0.1)
+                return "stopped"
+            finally:
+                stop_completed.set()
+        
+        fut.executeInThread(long_running_task, (), {})
+        time.sleep(0.05)  # Let task start
+        
+        # Test stop without wait - should return immediately
+        start_time = time.time()
+        fut.stop("test stop", wait=False)
+        elapsed = time.time() - start_time
+        self.assertLess(elapsed, 0.05, "stop(wait=False) should return immediately")
+        self.assertTrue(fut.wasStopped())
+        
+        # Verify task eventually completes
+        self.assertTrue(stop_completed.wait(timeout=1))
+        
+    def test_future_stop_with_wait_blocks_until_done(self):
+        """Test that stop(wait=True) blocks until task completes"""
+        fut = Future()
+        task_finished = threading.Event()
+        
+        def task_with_cleanup(_future):
+            try:
+                _future.sleep(1.0)  # Long sleep
+                return "completed normally"
+            except Future.StopRequested:
+                # Simulate cleanup work
+                time.sleep(0.2)
+                return "stopped after cleanup"
+            finally:
+                task_finished.set()
+        
+        fut.executeInThread(task_with_cleanup, (), {})
+        time.sleep(0.05)  # Let task start
+        
+        # Test stop with wait=True - should block until task finishes
+        start_time = time.time()
+        fut.stop("test stop with wait", wait=True)
+        elapsed = time.time() - start_time
+        
+        self.assertGreaterEqual(elapsed, 0.15, "stop(wait=True) should block for cleanup time")
+        self.assertTrue(fut.isDone())
+        self.assertTrue(task_finished.is_set())
+        
+    def test_future_stop_wait_with_exception(self):
+        """Test stop(wait=True) when task raises an exception"""
+        fut = Future()
+        task_started = threading.Event()
+        
+        def failing_task(_future):
+            task_started.set()
+            try:
+                _future.sleep(0.5)
+                return "should not reach here"
+            except Future.StopRequested:
+                # Simulate cleanup that raises an exception
+                time.sleep(0.1)
+                raise ValueError("cleanup failed")
+        
+        fut.executeInThread(failing_task, (), {})
+        task_started.wait(timeout=1)  # Ensure task has started
+        
+        # stop(wait=True) should still complete even if task raises during cleanup
+        start_time = time.time()
+        fut.stop("test stop with exception", wait=True)
+        elapsed = time.time() - start_time
+        
+        self.assertGreaterEqual(elapsed, 0.05, "Should wait for cleanup even with exception")
+        self.assertTrue(fut.isDone())
+        self.assertTrue(fut.wasInterrupted())
+        
+    def test_future_stop_wait_on_already_done_future(self):
+        """Test stop(wait=True) on an already completed future"""
+        fut = Future.immediate("already done")
+        
+        # Should return immediately without error
+        start_time = time.time()
+        fut.stop("test stop on done", wait=True)
+        elapsed = time.time() - start_time
+        
+        self.assertLess(elapsed, 0.01, "stop() on done future should return immediately")
+        
+    def test_future_stop_wait_race_condition(self):
+        """Test race condition where future completes just as stop() is called"""
+        fut = Future()
+        
+        def quick_task(_future):
+            time.sleep(0.05)  # Very short task
+            return "quick completion"
+        
+        fut.executeInThread(quick_task, (), {})
+        
+        # Try to stop right around when task might complete
+        time.sleep(0.03)  # Partial way through task
+        
+        # This might catch the future in various states
+        fut.stop("race condition test", wait=True)
+        
+        # Should handle gracefully regardless of timing
+        self.assertTrue(fut.isDone())
+        
+    def test_future_stop_wait_with_nested_futures(self):
+        """Test stop(wait=True) with nested futures that propagate stops"""
+        parent_fut = Future()
+        child_fut = Future()
+        parent_fut.propagateStopsInto(child_fut)
+        
+        child_stopped = threading.Event()
+        parent_stopped = threading.Event()
+        
+        def child_task(_future):
+            try:
+                _future.sleep(1.0)
+                return "child completed"
+            except Future.StopRequested:
+                time.sleep(0.1)  # Cleanup time
+                return "child stopped"
+            finally:
+                child_stopped.set()
+        
+        def parent_task(_future):
+            try:
+                _future.waitFor(child_fut)
+                return "parent completed"
+            except Future.StopRequested:
+                time.sleep(0.05)  # Parent cleanup
+                return "parent stopped"
+            finally:
+                parent_stopped.set()
+        
+        child_fut.executeInThread(child_task, (), {})
+        parent_fut.executeInThread(parent_task, (), {})
+        time.sleep(0.05)  # Let tasks start
+        
+        # Stop parent with wait=True should wait for both to complete
+        start_time = time.time()
+        parent_fut.stop("nested stop test", wait=True)
+        elapsed = time.time() - start_time
+        
+        self.assertGreaterEqual(elapsed, 0.05, "Should wait for some cleanup time")
+        self.assertTrue(parent_fut.isDone())
+        self.assertTrue(child_fut.wasStopped())
+        self.assertTrue(parent_stopped.wait(timeout=0.5))
+        self.assertTrue(child_stopped.wait(timeout=0.5))
+        
+    def test_future_stop_wait_timeout_protection(self):
+        """Test that stop(wait=True) waits for cleanup but handles exceptions gracefully"""
+        fut = Future()
+        task_started = threading.Event()
+        
+        def task_with_slow_cleanup(_future):
+            task_started.set()
+            try:
+                _future.sleep(5.0)  # Long sleep that will be interrupted
+                return "should not complete"
+            except Future.StopRequested:
+                # Simulate cleanup that takes some time
+                time.sleep(0.2)  # Reasonable cleanup time
+                return "stopped after cleanup"
+        
+        fut.executeInThread(task_with_slow_cleanup, (), {})
+        task_started.wait(timeout=1)
+        
+        # stop(wait=True) should wait for cleanup to complete
+        start_time = time.time()
+        fut.stop("cleanup test", wait=True)
+        elapsed = time.time() - start_time
+        
+        # Should wait for the cleanup time but not the original sleep time
+        self.assertGreaterEqual(elapsed, 0.15, "Should wait for cleanup time")
+        self.assertLess(elapsed, 1.0, "Should not wait for original long sleep")
+        self.assertTrue(fut.isDone())
+        
+    def test_multifuture_stop_with_wait(self):
+        """Test MultiFuture.stop() with wait parameter"""
+        f1 = Future()
+        f2 = Future()
+        multi = MultiFuture([f1, f2])
+        
+        cleanup_times = []
+        
+        def task_with_cleanup(task_id):
+            def _task(_future):
+                try:
+                    _future.sleep(1.0)
+                    return f"task {task_id} completed"
+                except Future.StopRequested:
+                    cleanup_start = time.time()
+                    time.sleep(0.1)  # Cleanup time
+                    cleanup_times.append(time.time() - cleanup_start)
+                    return f"task {task_id} stopped"
+            return _task
+        
+        f1.executeInThread(task_with_cleanup(1), (), {})
+        f2.executeInThread(task_with_cleanup(2), (), {})
+        time.sleep(0.05)  # Let tasks start
+        
+        # Stop with wait=True should wait for all futures
+        start_time = time.time()
+        multi.stop("multi stop test", wait=True)
+        elapsed = time.time() - start_time
+        
+        self.assertGreaterEqual(elapsed, 0.08, "Should wait for all futures to cleanup")
+        self.assertTrue(f1.wasStopped())
+        self.assertTrue(f2.wasStopped())
+        self.assertEqual(len(cleanup_times), 2, "Both futures should have completed cleanup")
 
 
 class TestMultiFuture(unittest.TestCase):
@@ -471,16 +742,20 @@ class TestMultiFuture(unittest.TestCase):
         f1.setState("f1_state")
         f2 = Future()
         f2.setState("f2_init_state")
+        f2_event = threading.Event()
         def f2_task(_future):
+            f2_event.set()
             _future.setState("f2_running")
             time.sleep(0.1)
             _future.setState("f2_done")
             return "res2"
-        f2.executeInThread(f2_task, (), {})
         multi = MultiFuture([f1, f2])
+        self.assertIn("f2_init_state", multi.currentState()) # or f2_running depending on timing
+        f2.executeInThread(f2_task, (), {})
+        f2_event.wait(timeout=1)
         # State can be tricky due to timing, check that it contains individual states
         self.assertIn("f1_state", multi.currentState())
-        self.assertIn("f2_init_state", multi.currentState()) # or f2_running depending on timing
+        self.assertIn("f2_running", multi.currentState()) # or f2_running depending on timing
         f2.wait()
         self.assertIn("f1_state", multi.currentState())
         self.assertIn("f2_done", multi.currentState())

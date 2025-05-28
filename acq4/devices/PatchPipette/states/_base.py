@@ -8,12 +8,13 @@ from copy import deepcopy
 from typing import Any, Optional, Iterable
 
 import numpy as np
-
-from acq4.util import Qt
-from acq4.util.debug import printExc, logExc
-from acq4.util.future import Future
 from neuroanalysis.test_pulse import PatchClampTestPulse
 from pyqtgraph import disconnect
+from pyqtgraph.units import µm
+
+from acq4 import getManager
+from acq4.util import Qt
+from acq4.util.future import Future, future_wrap
 
 
 class PatchPipetteState(Future):
@@ -29,6 +30,15 @@ class PatchPipetteState(Future):
      - starting thread (if run() method is implemented)
      - handling various job failure / finish modes
      - communicating next state transition to the state manager
+
+    Parameters
+    ----------
+    reserveDAQ : bool
+        If True, reserve the DAQ during the entire cell detection state. This is used in case multiple
+        channels are present an cannot be accessed simultaneously to ensure that cell detection is not interrupted.
+        (default False)
+    DAQReservationTimeout : float
+        Maximum time (s) to wait for DAQ reservation if reserveDAQ=True (defualt 30 s)
     """
 
     # state subclasses must set a string name
@@ -52,6 +62,12 @@ class PatchPipetteState(Future):
         'fallbackState': {'type': 'str', 'default': None, 'optional': True},
         'finishPatchRecord': {'type': 'bool', 'default': False},
         'newPipette': {'type': 'bool', 'default': False},
+        'reserveDAQ': {'default': False, 'type': 'bool'},
+        'DAQReservationTimeout': {'default': 30, 'type': 'float', 'suffix': 's'},
+        'aboveSurfacePressure': {'default': 1500, 'type': 'float', 'suffix': 'Pa'},
+        'belowSurfacePressureMin': {'default': 1500, 'type': 'float', 'suffix': 'Pa'},
+        'belowSurfacePressureMax': {'default': 5000, 'type': 'float', 'suffix': 'Pa'},
+        'belowSurfacePressureChange': {'default': 50 / µm, 'type': 'float', 'suffix': 'Pa/m'},
     }
 
     @classmethod
@@ -85,6 +101,7 @@ class PatchPipetteState(Future):
         return {c['name']: c.get('default', None) for c in cls.parameterTreeConfig()}
 
     def __init__(self, dev, config=None):
+        self._targetHasChanged = False
         from acq4.devices.PatchPipette import PatchPipette
 
         Future.__init__(self)
@@ -97,9 +114,11 @@ class PatchPipetteState(Future):
             self.config.update(config)
         self._cleanupMutex = threading.Lock()
         self._cleanupFuture = None
+        self._pressureAdjustment = None
         # indicates state that should be transitioned to next, if any.
         # This is usually set by the return value of run(), and must be invoked by the state manager.
         self.nextState = self.config.get('fallbackState', None)
+        self.dev.sigTargetChanged.connect(self._onTargetChanged)
 
     def initialize(self):
         """Initialize pressure, clamp, etc. and start background thread when entering this state.
@@ -200,6 +219,25 @@ class PatchPipetteState(Future):
                 tps.append(self.testPulseResults.get())
         return tps
 
+    def adjustPressureForDepth(self):
+        """While not that slow, we still want to keep the innermost loop as fast as we can."""
+        if self._pressureAdjustment is None:
+            self._pressureAdjustment = self._adjustPressureForDepth()
+            self._pressureAdjustment.onFinish(self._finishPressureAdjustment, inGui=True)
+
+    @future_wrap
+    def _adjustPressureForDepth(self, _future):
+        depth = self.depthBelowSurface()
+        if depth < 0:  # above surface
+            pressure = self.config["aboveSurfacePressure"]
+        else:
+            pressure = self.config["belowSurfacePressureMin"] + depth * self.config["belowSurfacePressureChange"]
+            pressure = min(pressure, self.config["belowSurfacePressureMax"])
+        self.dev.pressureDevice.setPressure("regulator", pressure)
+
+    def _finishPressureAdjustment(self, future):
+        self._pressureAdjustment = None
+
     def cleanup(self) -> Future:
         with self._cleanupMutex:
             if self._cleanupFuture is None:
@@ -210,6 +248,7 @@ class PatchPipetteState(Future):
         """Called after job completes, whether it failed or succeeded. Ask `self.wasInterrupted()` to see if the
         state was stopped early. Return a Future that completes when cleanup is done.
         """
+        disconnect(self.dev.pipetteDevice.sigTargetChanged, self._onTargetChanged)
         return Future.immediate()
 
     def _runJob(self):
@@ -221,7 +260,14 @@ class PatchPipetteState(Future):
         excInfo = None
         interrupted = True
         try:
-            self.nextState = self.run()
+            with contextlib.ExitStack() as stack:
+                if self.config["reserveDAQ"]:
+                    daq_name = self.dev.clampDevice.getDAQName("primary")
+                    self.setState(f"{self.stateName}: waiting for {daq_name} lock")
+                    stack.enter_context(
+                        getManager().reserveDevices([daq_name], timeout=self.config["DAQReservationTimeout"]))
+                    self.setState(f"{self.stateName}: {daq_name} lock acquired")
+                self.nextState = self.run()
             interrupted = self.wasInterrupted()
         except Exception as e:
             # state aborted due to an error
@@ -249,6 +295,39 @@ class PatchPipetteState(Future):
         pos = np.array(pip.globalPosition())
         surface = pip.scopeDevice().getSurfaceDepth()
         return pos + direction * ((surface - pos[2]) / direction[2])
+
+    def depthBelowSurface(self, pos=None):
+        if pos is None:
+            pos = self.dev.pipetteDevice.globalPosition()
+        # print(f"measuring {pos[2]} relative to the surface")
+        surface = self.dev.pipetteDevice.scopeDevice().getSurfaceDepth()
+        return surface - pos[2]
+
+    def aboveSurface(self, pos=None):
+        return self.depthBelowSurface(pos) < 0
+
+    def _waitForMoveWhileTargetChanges(self, position_fn, speed, continuous, future, interval=None, step=None):
+        move_fut = None
+        while move_fut is None or not move_fut.isDone():
+            if move_fut is None:
+                pos = position_fn()
+                if continuous:
+                    move_fut = self.dev.pipetteDevice._moveToGlobal(pos, speed=speed)
+                else:
+                    move_fut = self.dev.pipetteDevice.stepwiseAdvance(
+                        target=pos,
+                        speed=speed,
+                        interval=interval,
+                        step=step,
+                    )
+            if self._targetHasChanged:
+                self._targetHasChanged = False
+                move_fut.stop("Target changed", wait=True)
+                move_fut = None
+            future.sleep(0.1)
+
+    def _onTargetChanged(self, pos):
+        self._targetHasChanged = True
 
 
 class SteadyStateAnalysisBase(object):

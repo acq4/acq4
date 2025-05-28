@@ -341,9 +341,10 @@ class ResealState(PatchPipetteState):
                     self.setState("handling tear")
                     retraction_future.stop()
                     self._moveFuture = recovery_future = dev.pipetteDevice.stepwiseAdvance(
-                        self._startPosition[2],
-                        maxSpeed=self.config['maxRetractionSpeed'],
+                        depth=self._startPosition[2],
+                        speed=self.config['maxRetractionSpeed'],
                         interval=config['retractionStepInterval'],
+                        step=1e-6,
                     )
             elif self.isTorn():
                 if retraction_future and not retraction_future.isDone():
@@ -356,9 +357,10 @@ class ResealState(PatchPipetteState):
                     recovery_future.stop()
                 self.setState("retracting")
                 self._moveFuture = retraction_future = dev.pipetteDevice.stepwiseAdvance(
-                    dev.pipetteDevice.approachDepth(),
-                    maxSpeed=config['maxRetractionSpeed'],
+                    depth=dev.pipetteDevice.approachDepth(),
+                    speed=config['maxRetractionSpeed'],
                     interval=config['retractionStepInterval'],
+                    step=1e-6,
                 )
 
             self.sleep(0.2)

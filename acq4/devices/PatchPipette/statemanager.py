@@ -39,6 +39,7 @@ class PatchPipetteStateManager(Qt.QObject):
                 states.BreakInState,
                 states.WholeCellState,
                 states.ResealState,
+                states.OutsideOutState,
                 states.BlowoutState,
                 states.BrokenState,
                 states.FouledState,
