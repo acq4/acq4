@@ -1190,9 +1190,9 @@ class TaskFuture(Future):
     def percentDone(self):
         return self._taskCount / self._nTasks
 
-    def stop(self):
+    def stop(self, *args, **kwds):
         self._taskThread.stop(task=self._task)
-        return Future.stop(self)
+        return Future.stop(self, *args, **kwds)
 
     def newFrame(self, frame):
         if self._collectResults:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import functools
 import inspect
 import sys
@@ -121,11 +122,12 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         """
         raise NotImplementedError("method must be reimplmented in subclass")
 
-    def stop(self, reason: str|None="task stop requested"):
+    def stop(self, reason: str|None="task stop requested", wait=False):
         """Stop the task (nicely).
 
         Subclasses may extend this method and/or use checkStop to determine whether
-        stop() has been called.
+        stop() has been called. Returns immediately unless *wait* is True, in which case
+        this method will block until the task has stopped.
         """
         if self.isDone():
             return
@@ -136,6 +138,9 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         self._stopRequested = True
         for f in self._stopsToPropagate:
             f.stop(reason=reason)
+        if wait:
+            with contextlib.suppress(self.Stopped):
+                self.wait()
 
     def _taskDone(self, interrupted=False, error=None, state=None, excInfo=None, returnValue=None):
         """Called by subclasses when the task is done (regardless of the reason)"""
@@ -407,10 +412,10 @@ class MultiFuture(Future):
     def _subFutureStateChanged(self, future, state):
         self.sigStateChanged.emit(future, state)  # TODO not self?
 
-    def stop(self, reason="task stop requested"):
+    def stop(self, reason="task stop requested", wait=False):
         for f in self.futures:
-            f.stop(reason=reason)
-        return super().stop(reason=reason)
+            f.stop(reason=reason, wait=wait)
+        return super().stop(reason=reason, wait=wait)
 
     def percentDone(self):
         return min(f.percentDone() for f in self.futures)

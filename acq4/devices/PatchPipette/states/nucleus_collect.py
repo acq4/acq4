@@ -91,4 +91,9 @@ class NucleusCollectState(PatchPipetteState):
         except Exception:
             printExc("Error resetting pressure after collection")
 
-        self.resetPosition(_future)
+        try:
+            self.resetPosition(_future)
+        except Exception:
+            printExc("Error resetting pipette position after collection")
+
+        _future.waitFor(super()._cleanup(), timeout=None)
