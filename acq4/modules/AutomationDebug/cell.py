@@ -5,7 +5,7 @@ from acq4.util import Qt, ptime
 from acq4.util.debug import logMsg, printExc
 from acq4.util.future import future_wrap, Future
 from acq4.util.imaging.sequencer import acquire_z_stack
-from acq4_automation.feature_tracking import CV2MostFlowAgreementTracker, ObjectStack, ImageStack
+from acq4_automation.feature_tracking import SingleFrameTracker, ObjectStack, ImageStack
 from coorx import SRT3DTransform, TransposeTransform, TTransform
 
 
@@ -36,7 +36,7 @@ class Cell(Qt.QObject):
         return np.array(self._positions[max(self._positions)])
 
     @future_wrap
-    def initializeTracker(self, imager, stack=None, trackerClass=CV2MostFlowAgreementTracker, _future=None):
+    def initializeTracker(self, imager, stack=None, trackerClass=SingleFrameTracker, _future=None):
         # Initialize tracker if we have none, or just grab another stack and check if it still matches otherwise
         if self._tracker is None:
             self._imager = imager
