@@ -7,7 +7,7 @@ import time
 
 import numpy as np
 
-from acq4.util.debug import printExc
+from acq4.util.debug import printExc, logExc
 
 
 class ScientificaControlThread:
@@ -172,9 +172,12 @@ class ScientificaControlThread:
         recheck : bool
             If True, then check the position again after a short delay to ensure that the device has stopped moving.
         """
-        # check position and invoke change callback 
+        # check position and invoke change callback
         try:
             pos = self.dev.getPos()
+        except TimeoutError:
+            logExc("Timeout while getting position from Scientifica device")
+            return
         except Exception:
             self.dev.serial.flush()
             printExc("Ignored error while getting position from Scientifica device:")
@@ -224,6 +227,9 @@ class ScientificaControlThread:
     def check_objective(self):
         try:
             obj = self.dev.getObjective()
+        except TimeoutError:
+            logExc("Timeout while getting objective from Scientifica device")
+            return
         except Exception:
             self.dev.serial.flush()
             printExc("Ignored error while getting objective from Scientifica device:")
