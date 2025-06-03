@@ -178,7 +178,8 @@ class TestFuture(unittest.TestCase):
 
         with self.assertRaises(ValueError) as cm:
             outer_future.waitFor(inner_future)
-        self.assertEqual(str(cm.exception), "inner task failed")
+        # The enhanced exception should contain the original error message
+        self.assertIn("inner task failed", str(cm.exception))
         self.assertFalse(outer_future.isDone()) # waitFor raises, outer_future itself is not "done"
 
     def test_future_waitFor_outer_stop_requested(self):
@@ -285,7 +286,10 @@ class TestFuture(unittest.TestCase):
 
         with self.assertRaises(TypeError) as cm:
             fut.getResult()
-        self.assertIs(cm.exception, test_exception)
+        # The enhanced exception should contain the original error message
+        self.assertIn("Specific error", str(cm.exception))
+        # The enhanced exception should have the original as its cause
+        self.assertIs(cm.exception.__cause__, test_exception)
 
     def test_future_getResult_raises_runtime_error_if_interrupted_no_excInfo(self):
         fut = Future()
@@ -678,8 +682,13 @@ class TestMultiFuture(unittest.TestCase):
         f1 = Future.immediate("success")
         f2 = Future.immediate(excInfo=[ValueError, ValueError("boom"), None])
         multi = MultiFuture([f1, f2])
-        with self.assertRaises(ValueError):
+        with self.assertRaises(RuntimeError) as cm:
             multi.wait()
+        # The original ValueError should be in the cause chain
+        self.assertIsInstance(cm.exception.__cause__, ValueError)
+        # The error message should appear in the enhanced traceback
+        enhanced_exception_str = str(cm.exception.__cause__)
+        self.assertIn("boom", enhanced_exception_str)
 
     def test_raises_on_multiple_errors(self):
         f1 = Future.immediate("success")
@@ -759,6 +768,216 @@ class TestMultiFuture(unittest.TestCase):
         f2.wait()
         self.assertIn("f1_state", multi.currentState())
         self.assertIn("f2_done", multi.currentState())
+
+
+class TestFutureCreationStackTraces(unittest.TestCase):
+    def test_basic_stack_capture(self):
+        """Test that Future captures the creation stack."""
+        def create_nested_future():
+            def level2():
+                def level3():
+                    return Future(name="nested_creation")
+                return level3()
+            return level2()
+        
+        fut = create_nested_future()
+        self.assertIsNotNone(fut._creationStack)
+        self.assertGreater(len(fut._creationStack), 3)  # Should have multiple stack frames
+        
+        # Check that relevant function names are in the stack
+        stack_filenames = [frame.filename for frame in fut._creationStack]
+        stack_names = [frame.name for frame in fut._creationStack]
+        
+        self.assertIn("create_nested_future", stack_names)
+        self.assertIn("level2", stack_names)
+        self.assertIn("level3", stack_names)
+
+    def test_exception_with_creation_context(self):
+        """Test that exceptions include both creation and execution contexts."""
+        def create_failing_future():
+            def nested_creator():
+                fut = Future(name="failing_task")
+                
+                def failing_task(_future):
+                    raise ValueError("Task failed deliberately")
+                
+                fut.executeInThread(failing_task, (), {})
+                return fut
+            return nested_creator()
+        
+        fut = create_failing_future()
+        
+        with self.assertRaises(ValueError) as cm:
+            fut.wait()
+        
+        exception_str = str(cm.exception)
+        
+        # Should include the creation stack
+        self.assertIn("create_failing_future", exception_str)
+        self.assertIn("nested_creator", exception_str)
+        
+        # Should include the execution context
+        self.assertIn("failing_task", exception_str)
+        self.assertIn("Task failed deliberately", exception_str)
+
+    def test_threaded_future_with_thread_boundary(self):
+        """Test that threaded futures show the thread transition."""
+        def create_threaded_future():
+            fut = Future(name="threaded_task")
+            
+            def task_in_thread(_future):
+                raise RuntimeError("Error in thread")
+            
+            fut.executeInThread(task_in_thread, (), {})
+            return fut
+        
+        fut = create_threaded_future()
+        
+        with self.assertRaises(RuntimeError) as cm:
+            fut.wait()
+        
+        exception_str = str(cm.exception)
+        
+        # Should show thread boundary
+        self.assertIn("Thread boundary", exception_str)
+        self.assertIn("execute thread for", exception_str)
+        
+        # Should include both sides of the boundary
+        self.assertIn("create_threaded_future", exception_str)
+        self.assertIn("task_in_thread", exception_str)
+
+    def test_future_wrap_creation_context(self):
+        """Test that future_wrap shows the correct creation point."""
+        @future_wrap
+        def wrapped_failing_function(arg1, _future=None):
+            raise TypeError(f"Wrapped function failed with {arg1}")
+        
+        def call_wrapped_function():
+            return wrapped_failing_function("test_arg")
+        
+        fut = call_wrapped_function()
+        
+        with self.assertRaises(TypeError) as cm:
+            fut.wait()
+        
+        exception_str = str(cm.exception)
+        
+        # Should include the call site
+        self.assertIn("call_wrapped_function", exception_str)
+        
+        # Should include the wrapped function
+        self.assertIn("wrapped_failing_function", exception_str)
+        self.assertIn("Wrapped function failed with test_arg", exception_str)
+
+    def test_immediate_future_preserves_excInfo(self):
+        """Test that immediate futures with excInfo preserve the traceback."""
+        def create_immediate_with_exc():
+            try:
+                raise ValueError("Original error")
+            except ValueError:
+                exc_info = sys.exc_info()
+                return Future.immediate(excInfo=exc_info)
+        
+        fut = create_immediate_with_exc()
+        
+        with self.assertRaises(ValueError) as cm:
+            fut.wait()
+        
+        exception_str = str(cm.exception)
+        
+        # Should include creation context
+        self.assertIn("create_immediate_with_exc", exception_str)
+        
+        # Should include original error
+        self.assertIn("Original error", exception_str)
+
+    def test_multifuture_exception_handling(self):
+        """Test that MultiFuture preserves individual future creation stacks."""
+        def create_multi_with_failures():
+            def create_failing_subfuture(name, error_msg):
+                fut = Future(name=name)
+                
+                def failing_task(_future):
+                    raise ValueError(error_msg)
+                
+                fut.executeInThread(failing_task, (), {})
+                return fut
+            
+            f1 = create_failing_subfuture("subfuture1", "Error in first future")
+            f2 = Future.immediate("success")
+            return MultiFuture([f1, f2])
+        
+        multi_fut = create_multi_with_failures()
+        
+        with self.assertRaises(RuntimeError) as cm:
+            multi_fut.wait()
+        
+        # The enhanced exception should be in the __cause__ chain
+        enhanced_exc = cm.exception.__cause__
+        self.assertIsNotNone(enhanced_exc)
+        exception_str = str(enhanced_exc)
+        
+        # Should include the creation context for the MultiFuture
+        self.assertIn("create_multi_with_failures", exception_str)
+        # Should include the original error
+        self.assertIn("Error in first future", exception_str)
+        # Should include the creation path to MultiFuture
+        self.assertIn("MultiFuture", exception_str)
+
+    def test_nested_futures_preserve_stacks(self):
+        """Test that nested futures maintain their individual creation stacks."""
+        def outer_function():
+            def middle_function():
+                def inner_function():
+                    inner_fut = Future(name="inner")
+                    
+                    def inner_task(_future):
+                        raise KeyError("Inner task error")
+                    
+                    inner_fut.executeInThread(inner_task, (), {})
+                    return inner_fut
+                
+                return inner_function()
+            
+            outer_fut = Future(name="outer")
+            
+            def outer_task(_future):
+                inner_fut = middle_function()
+                try:
+                    inner_fut.wait()
+                except Exception as e:
+                    raise RuntimeError("Outer task failed") from e
+            
+            outer_fut.executeInThread(outer_task, (), {})
+            return outer_fut
+        
+        fut = outer_function()
+        
+        with self.assertRaises(RuntimeError) as cm:
+            fut.wait()
+        
+        exception_str = str(cm.exception)
+        
+        # Should show the outer future's creation stack
+        self.assertIn("outer_function", exception_str)
+        
+        # Should include the outer task failure
+        self.assertIn("Outer task failed", exception_str)
+
+    def test_creation_stack_excludes_future_init(self):
+        """Test that the creation stack doesn't include Future.__init__ itself."""
+        def create_future_and_check():
+            fut = Future(name="test_exclusion")
+            return fut
+        
+        fut = create_future_and_check()
+        
+        # Should not include __init__ in the creation stack
+        stack_names = [frame.name for frame in fut._creationStack]
+        self.assertNotIn("__init__", stack_names)
+        
+        # Should include the calling function
+        self.assertIn("create_future_and_check", stack_names)
 
 
 if __name__ == "__main__":
