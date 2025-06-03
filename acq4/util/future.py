@@ -489,7 +489,19 @@ class MultiFuture(Future):
         return all(f.isDone() for f in self.futures)
 
     def errorMessage(self):
-        return "; ".join([str(f.errorMessage()) or "" for f in self.futures])
+        error_messages = []
+        for f in self.futures:
+            # Try to get a meaningful error message from the future
+            error_msg = f.errorMessage()
+            if error_msg is None and f.wasInterrupted():
+                # If no error message but future was interrupted, try to extract from exception
+                exc = f.exceptionRaised()
+                if exc is not None:
+                    error_msg = str(exc)
+            if error_msg:
+                error_messages.append(str(error_msg))
+
+        return "; ".join(error_messages) if error_messages else None
 
     def getResult(self):
         return [f.getResult() for f in self.futures]
