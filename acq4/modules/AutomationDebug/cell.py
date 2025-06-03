@@ -102,7 +102,7 @@ class Cell(Qt.QObject):
             img_stack = ImageStack(stack, xform)
             result = self._tracker.next_frame(img_stack)
         global_position = result["position"].mapped_to("global")
-        movement = np.linalg.norm(global_position - self.position)
+        movement = np.linalg.norm(np.array(global_position) - np.array(self.position))
         if movement > 20e-6:
             raise ValueError(
                 f"Cell moved too much to treat as tracked: {movement * 1e6:.2f} µm"
