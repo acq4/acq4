@@ -69,37 +69,38 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         self._stopsToPropagate = []
         self._returnVal: "T | None" = None
         self.finishedEvent = threading.Event()
-        
+
         # Capture creation stack for enhanced exception tracebacks
         self._creationStack = traceback.extract_stack()[:-1]  # Exclude current frame
-        
+
         # logMsg(f"Future {self._name} created", level="info")
 
     def __repr__(self):
         return f"<{self.__class__.__name__} {self._name}>"
-    
+
     def _createEnhancedException(self, originalException):
         """Create an exception with enhanced traceback that includes the creation stack."""
         if originalException is None:
             return None
-            
+
         # Format the creation stack
         creation_tb_lines = traceback.format_list(self._creationStack)
-        
+
         # Check if we have thread boundary information
         thread_boundary_marker = ""
         if self._executingThread is not None and self._executingThread != threading.current_thread():
             thread_boundary_marker = f"  --- Thread boundary: execution continues in {self._executingThread.name} ---\n"
-        
+
         # Get the original exception's traceback
         if hasattr(originalException, '__traceback__') and originalException.__traceback__:
-            original_tb_lines = traceback.format_exception(type(originalException), originalException, originalException.__traceback__)
+            original_tb_lines = traceback.format_exception(
+                type(originalException), originalException, originalException.__traceback__)
             # Skip the "Traceback" line from original since we add our own
             exception_part = original_tb_lines[1:]
         else:
             # No traceback available, just show the exception
             exception_part = [f"{type(originalException).__name__}: {originalException}\n"]
-        
+
         # Combine the tracebacks
         enhanced_tb_lines = (
             ["Traceback (most recent call last):\n"] +
@@ -107,9 +108,9 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
             ([thread_boundary_marker] if thread_boundary_marker else []) +
             exception_part
         )
-        
+
         enhanced_message = "".join(enhanced_tb_lines).rstrip()
-        
+
         # Create a new exception with the enhanced message
         if isinstance(originalException, MultiException):
             # MultiException has a special constructor
@@ -168,7 +169,7 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         """
         raise NotImplementedError("method must be reimplmented in subclass")
 
-    def stop(self, reason: str|None="task stop requested", wait=False):
+    def stop(self, reason: str | None = "task stop requested", wait=False):
         """Stop the task (nicely).
 
         Subclasses may extend this method and/or use checkStop to determine whether
@@ -291,7 +292,7 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         if self.wasInterrupted():
             err = self.errorMessage()
             original_exc = self.exceptionRaised()
-            
+
             if err is None:
                 if not self._stopRequested and original_exc is not None:
                     enhanced_exc = self._createEnhancedException(original_exc)
@@ -504,15 +505,15 @@ class FutureButton(FeedbackButton):
     sigStateChanged = Qt.Signal(object, object)  # future, state
 
     def __init__(
-        self,
-        future_producer: Optional[Callable[ParamSpec, Future]] = None,
-        *args,
-        stoppable: bool = False,
-        success=None,
-        failure=None,
-        raiseOnError: bool = True,
-        processing=None,
-        showStatus: bool = True,
+            self,
+            future_producer: Optional[Callable[ParamSpec, Future]] = None,
+            *args,
+            stoppable: bool = False,
+            success=None,
+            failure=None,
+            raiseOnError: bool = True,
+            processing=None,
+            showStatus: bool = True,
     ):
         """Create a new FutureButton.
 
