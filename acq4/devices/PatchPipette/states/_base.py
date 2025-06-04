@@ -34,8 +34,8 @@ class PatchPipetteState(Future):
     Parameters
     ----------
     reserveDAQ : bool
-        If True, reserve the DAQ during the entire cell detection state. This is used in case multiple
-        channels are present an cannot be accessed simultaneously to ensure that cell detection is not interrupted.
+        If True, reserve the DAQ during the entire state. This is used to ensure that the state
+        has real time access to test pulses (for cell detection, obstacle detection, etc)
         (default False)
     DAQReservationTimeout : float
         Maximum time (s) to wait for DAQ reservation if reserveDAQ=True (defualt 30 s)
