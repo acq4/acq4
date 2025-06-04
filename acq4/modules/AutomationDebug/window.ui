@@ -340,12 +340,7 @@
         </item>
         <item>
          <property name="text">
-          <string>PyrLK3D</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Cellpose</string>
+          <string>Single-Frame</string>
          </property>
         </item>
        </widget>

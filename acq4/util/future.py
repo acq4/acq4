@@ -6,12 +6,13 @@ import sys
 import threading
 import time
 import traceback
-from typing import Callable, Generic, TypeVar, ParamSpec, Optional
+from typing import Callable, ParamSpec, Optional
 from typing import Generic, TypeVar
- 
-from acq4.util import Qt, ptime
-from acq4.util.debug import printExc, logMsg
+
 from pyqtgraph import FeedbackButton
+
+from acq4.util import Qt, ptime
+from acq4.util.debug import printExc
 
 FUTURE_RETVAL_TYPE = TypeVar("FUTURE_RETVAL_TYPE")
 WAITING_RETVAL_TYPE = TypeVar("WAITING_RETVAL_TYPE")
