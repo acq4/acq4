@@ -113,6 +113,7 @@ class Pipette(Device, OptomechDevice):
             raise Exception(
                 f"Pipette device requires some type of translation stage as its parentDevice (got {parent}).")
 
+        parent.sigOrientationChanged.connect(self.clearSavedOffsets)
         # may add items here to implement per-pipette custom motion planning
         self.motionPlanners = {}
         self.currentMotionPlanner = None
@@ -277,23 +278,22 @@ class Pipette(Device, OptomechDevice):
     @future_wrap
     def setTipOffsetIfAcceptable(self, pos, _future=None):
         if self.tipOffsetIsReasonable(pos):
-            self.setTipOffset(pos)
+            self.resetGlobalPosition(pos)
         else:
             dist = np.linalg.norm(np.array(self.mapToGlobal((0, 0, 0))) - pos)
             dist = siFormat(dist, suffix='m', precision=3)
             button_text = _future.waitFor(prompt(
                 title="Pipette displacement detected",
                 text=f"The tip offset for {self.name()} is {dist} off from its initial value.",
-                extra_text="Do you want to use or discard this value",
-                choices=["Use", "Discard"],
+                extra_text="Do you want to use it, discard it or override all historic offsets?",
+                choices=["Use", "Discard", "Override"],
             ), timeout=None).getResult()
             if button_text == "Use":
-                self.setTipOffset(pos)
+                self.resetGlobalPosition(pos)
             elif button_text == "Discard":
                 return False
-            elif button_text == "New pipette":
-                success = _future.waitFor(self.setNewPipetteTipOffsetIfAcceptable(pos)).getResult()
-                # TODO this would be cool, but the followup all has to happen on a PatchPipette
+            elif button_text == "Override":
+                self.overrideTipOffsetHistory(pos)
             else:
                 raise AssertionError("Unknown button clicked")
         return True
@@ -337,6 +337,13 @@ class Pipette(Device, OptomechDevice):
         cal['offset'] = list(self.offset)
         cal['offset history'] = [cal['offset']]
         self.writeConfigFile(cal, 'calibration')
+
+    def clearSavedOffsets(self, parent):
+        """Clear the saved offsets if the parent manipulator's axes are re-calibrated."""
+        cal = self.readConfigFile('calibration')
+        if 'offset history' in cal:
+            del cal['offset history']
+            self.writeConfigFile(cal, 'calibration')
 
     def setTipOffset(self, pos):
         """Given a global position, set the offset such that the pipette tip is located at that position."""
