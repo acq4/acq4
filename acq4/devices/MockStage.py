@@ -128,7 +128,7 @@ class MockStage(Stage):
 
     @property
     def positionUpdatesPerSecond(self):
-        return 1.0 / (2 * self.stageThread.interval)
+        return 1.0 / self.stageThread.interval
 
     def _getPosition(self):
         return self.stageThread.getPosition()
@@ -230,6 +230,7 @@ class MockStageThread(Thread):
     def run(self):
         lastUpdate = ptime.time()
         while True:
+            now = ptime.time()
             with self.lock:
                 if self._quit:
                     break
@@ -238,7 +239,6 @@ class MockStageThread(Thread):
                 velocity = self.velocity
                 pos = self.pos
 
-            now = ptime.time()
             dt = now - lastUpdate
             lastUpdate = now
             
@@ -258,7 +258,7 @@ class MockStageThread(Thread):
             elif self.velocity is not None and not np.all(velocity == 0):
                 self._setPosition(pos + velocity * dt)
                 
-            time.sleep(self.interval)
+            time.sleep(max(0, self.interval - (ptime.time() - now)))
     
     def _setPosition(self, pos):
         self.pos = np.array(pos)
