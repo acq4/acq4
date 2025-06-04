@@ -329,6 +329,16 @@ class PatchPipetteState(Future):
     def _onTargetChanged(self, pos):
         self._targetHasChanged = True
 
+    def _distanceToTarget(self, pos=None):
+        pip = self.dev.pipetteDevice
+        target = np.array(pip.targetPosition())
+        if pos is None:
+            pos = np.array(pip.globalPosition())
+        return np.linalg.norm(target - pos)
+
+    def closeEnoughToTargetToDetectCell(self, pos=None):
+        return self._distanceToTarget(pos) < self.config['minDetectionDistance']
+
 
 class SteadyStateAnalysisBase(object):
     @classmethod

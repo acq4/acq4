@@ -337,16 +337,6 @@ class CellDetectState(PatchPipetteState):
                 return 'slow'
         return False
 
-    def closeEnoughToTargetToDetectCell(self, pos=None):
-        return self._distanceToTarget(pos) < self.config['minDetectionDistance']
-
-    def _distanceToTarget(self, pos=None):
-        pip = self.dev.pipetteDevice
-        target = np.array(pip.targetPosition())
-        if pos is None:
-            pos = np.array(pip.globalPosition())
-        return np.linalg.norm(target - pos)
-
     def _transition_to_fallback(self, msg):
         self._taskDone(interrupted=True, error=msg)
         self.dev.patchRecord()['detectedCell'] = False
