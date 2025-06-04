@@ -309,16 +309,12 @@ class MultiPatchWindow(Qt.QWidget):
         return self._setAllSelectedPipettesToState('reseal')
 
     def _approach(self):
-        speed = self.selectedSpeed(default='fast')
         futures = []
         for pip in self.selectedPipettes():
             if isinstance(pip, PatchPipette):
-                pip.setState('bath')
-                futures.append(pip.pipetteDevice.goApproach(speed))
-                if pip.clampDevice is not None:
-                    pip.clampDevice.autoPipetteOffset()
+                futures.append(pip.setState('approach'))
             else:
-                futures.append(pip.goApproach(speed))
+                futures.append(pip.goApproach(self.selectedSpeed(default='fast')))
         return MultiFuture(futures, name="Move pipettes to approach")
 
     def _clean(self):

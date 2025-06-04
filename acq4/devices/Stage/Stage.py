@@ -725,13 +725,13 @@ class MoveFuture(Future):
             return 100
         return 100 * d1 / d2
 
-    def stop(self, reason="stop requested"):
+    def stop(self, reason="stop requested", wait=False):
         """Stop the move in progress.
         """
         with self._isStopCallable as can_call_stop:
             if can_call_stop and not self.isDone():
                 self.dev.stop()
-                super().stop(reason=reason)
+                super().stop(reason=reason, wait=wait)
 
 
 class MovePathFuture(MoveFuture):
@@ -760,12 +760,12 @@ class MovePathFuture(MoveFuture):
             return 0.0
         return (100 * fut._pathStep + fut.percentDone()) / len(self.path)
 
-    def stop(self, reason=None):
+    def stop(self, reason=None, wait=False):
         fut = self._currentFuture
         if fut is not None:
             fut.stop(reason=reason)
         # skip MoveFuture.stop to avoid the mess with dev.stop()
-        Future.stop(self, reason=reason)
+        Future.stop(self, reason=reason, wait=wait)
 
     def _movePath(self):
         try:
