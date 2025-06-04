@@ -13,7 +13,6 @@ class MIESPressureControl(PressureControl):
         PressureControl.__init__(self, manager, config, name)
 
     def _setPressure(self, pressure):
-        # print("STUB: set pressure", source, pressure)
         self.mies.selectHeadstage(self._headstage)
         self.mies.setManualPressure(pressure / PSI_PASCAL)
 
