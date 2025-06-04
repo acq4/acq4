@@ -180,6 +180,7 @@ class FilterWheel(Device, OptomechDevice):
 class Filter(OptomechDevice):
     
     def __init__(self, config, fw, key):
+        self._config = config
         self._fw = fw
         self._key = key
         #print config, key
