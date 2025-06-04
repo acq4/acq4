@@ -308,7 +308,7 @@ class AutomationDebugWindow(Qt.QWidget):
             ).getResult()
             depth -= 50 * µm
             self.cameraDevice.setFocusDepth(depth)
-            neurons = _future.waitFor(self._detectNeuronsZStack()).getResult()
+            neurons = _future.waitFor(self._detectNeuronsZStack(), timeout=600).getResult()
             runInGuiThread(self._displayBoundingBoxes, neurons)
         centers = [(start + end) / 2 for start, end in np.array(neurons)]
         target = next(
@@ -318,7 +318,7 @@ class AutomationDebugWindow(Qt.QWidget):
         if target is None:
             if possibly_stale:
                 runInGuiThread(self.clearBoundingBoxes)
-                return self.waitFor(self._autoTarget()).getResult()
+                return self.waitFor(self._autoTarget(), timeout=None).getResult()
             else:
                 raise RuntimeError("No valid target found")
         self._previousTargets.append(target)
