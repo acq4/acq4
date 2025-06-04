@@ -69,6 +69,11 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         self._stopsToPropagate = []
         self._returnVal: "T | None" = None
         self.finishedEvent = threading.Event()
+
+        # Capture creation stack for enhanced exception tracebacks
+        self._creationStack = traceback.extract_stack()[:-1]  # Exclude current frame
+        self._creationThread = threading.current_thread()
+
         # logMsg(f"Future {self._name} created", level="info")
 
     def __repr__(self):
@@ -123,7 +128,7 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         """
         raise NotImplementedError("method must be reimplmented in subclass")
 
-    def stop(self, reason: str|None="task stop requested", wait=False):
+    def stop(self, reason: str | None = "task stop requested", wait=False):
         """Stop the task (nicely).
 
         Subclasses may extend this method and/or use checkStop to determine whether
@@ -245,18 +250,25 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
 
         if self.wasInterrupted():
             err = self.errorMessage()
+            original_exc = self.exceptionRaised()
+
             if err is None:
-                if not self._stopRequested and self.exceptionRaised() is not None:
-                    raise self.exceptionRaised()
+                if not self._stopRequested and original_exc is not None:
+                    raise self.enhanceException(original_exc)
                 msg = f"Task {self} did not complete (no extra message)."
             else:
                 msg = f"Task {self} did not complete: {err}"
 
             if self._stopRequested:
                 raise self.Stopped(msg)
-            elif self.exceptionRaised() is not None:
-                raise RuntimeError(msg) from self.exceptionRaised()
+            elif original_exc is not None:
+                raise RuntimeError(msg) from self.enhanceException(original_exc)
             raise RuntimeError(msg)
+
+    def enhanceException(self, exc):
+        exc.future_creation_stack = self._creationStack
+        exc.future_creation_thread = self._creationThread
+        return exc
 
     def _wait(self, duration):
         """Default sleep implementation used by wait(); may be overridden to return early."""
@@ -427,7 +439,7 @@ class MultiFuture(Future):
     def exceptionRaised(self):
         exceptions = [f.exceptionRaised() for f in self.futures if f.exceptionRaised() is not None]
         if len(exceptions) == 1:
-            raise exceptions[0]
+            return exceptions[0]
         elif exceptions:
             return MultiException("Multiple futures errored", exceptions)
         return None
@@ -436,7 +448,19 @@ class MultiFuture(Future):
         return all(f.isDone() for f in self.futures)
 
     def errorMessage(self):
-        return "; ".join([str(f.errorMessage()) or "" for f in self.futures])
+        error_messages = []
+        for f in self.futures:
+            # Try to get a meaningful error message from the future
+            error_msg = f.errorMessage()
+            if error_msg is None and f.wasInterrupted():
+                # If no error message but future was interrupted, try to extract from exception
+                exc = f.exceptionRaised()
+                if exc is not None:
+                    error_msg = str(exc)
+            if error_msg:
+                error_messages.append(str(error_msg))
+
+        return "; ".join(error_messages) if error_messages else None
 
     def getResult(self):
         return [f.getResult() for f in self.futures]
@@ -452,15 +476,15 @@ class FutureButton(FeedbackButton):
     sigStateChanged = Qt.Signal(object, object)  # future, state
 
     def __init__(
-        self,
-        future_producer: Optional[Callable[ParamSpec, Future]] = None,
-        *args,
-        stoppable: bool = False,
-        success=None,
-        failure=None,
-        raiseOnError: bool = True,
-        processing=None,
-        showStatus: bool = True,
+            self,
+            future_producer: Optional[Callable[ParamSpec, Future]] = None,
+            *args,
+            stoppable: bool = False,
+            success=None,
+            failure=None,
+            raiseOnError: bool = True,
+            processing=None,
+            showStatus: bool = True,
     ):
         """Create a new FutureButton.
 
