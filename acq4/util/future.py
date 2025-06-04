@@ -295,8 +295,7 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
 
             if err is None:
                 if not self._stopRequested and original_exc is not None:
-                    enhanced_exc = self._createEnhancedException(original_exc)
-                    raise enhanced_exc if enhanced_exc else original_exc
+                    raise self._createEnhancedException(original_exc) or original_exc
                 msg = f"Task {self} did not complete (no extra message)."
             else:
                 msg = f"Task {self} did not complete: {err}"
@@ -304,11 +303,7 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
             if self._stopRequested:
                 raise self.Stopped(msg)
             elif original_exc is not None:
-                enhanced_exc = self._createEnhancedException(original_exc)
-                if enhanced_exc:
-                    raise RuntimeError(msg) from enhanced_exc
-                else:
-                    raise RuntimeError(msg) from original_exc
+                raise RuntimeError(msg) from self._createEnhancedException(original_exc) or original_exc
             raise RuntimeError(msg)
 
     def _wait(self, duration):
