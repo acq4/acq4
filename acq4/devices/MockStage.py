@@ -128,7 +128,7 @@ class MockStage(Stage):
 
     @property
     def positionUpdatesPerSecond(self):
-        return 1.0 / self.stageThread.interval
+        return 1.0 / (2 * self.stageThread.interval)
 
     def _getPosition(self):
         return self.stageThread.getPosition()
@@ -248,8 +248,9 @@ class MockStageThread(Thread):
                 stepDist = speed * dt
                 if stepDist >= dist:
                     self._setPosition(target)
-                    self.currentMove.mockFinish()
                     self.stop()
+                    # race condition here if we finish the move before stopping
+                    self.currentMove.mockFinish()
                 else:
                     unit = dif / dist
                     step = unit * stepDist
