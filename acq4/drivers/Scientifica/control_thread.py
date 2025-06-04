@@ -175,12 +175,13 @@ class ScientificaControlThread:
         # check position and invoke change callback
         try:
             pos = self.dev.getPos()
-        except TimeoutError:
-            logExc("Timeout while getting position from Scientifica device")
-            return
-        except Exception:
+        except Exception as e:
             self.dev.serial.flush()
-            printExc("Ignored error while getting position from Scientifica device:")
+            msg = "Ignored error while getting position from Scientifica device:"
+            if isinstance(e, TimeoutError):
+                logExc(msg)
+            else:
+                printExc(msg)
             return
 
         if self.pos_callback is not None and pos != self.last_pos:
@@ -227,12 +228,13 @@ class ScientificaControlThread:
     def check_objective(self):
         try:
             obj = self.dev.getObjective()
-        except TimeoutError:
-            logExc("Timeout while getting objective from Scientifica device")
-            return
-        except Exception:
+        except Exception as e:
             self.dev.serial.flush()
-            printExc("Ignored error while getting objective from Scientifica device:")
+            msg = "Ignored error while getting objective from Scientifica device:"
+            if isinstance(e, TimeoutError):
+                logExc(msg)
+            else:
+                printExc(msg)
             return
 
         if self.obj_callback is not None and obj != self.last_obj:
