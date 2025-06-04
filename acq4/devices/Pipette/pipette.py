@@ -289,7 +289,7 @@ class Pipette(Device, OptomechDevice):
                 choices=["Use", "Discard", "Override"],
             ), timeout=None).getResult()
             if button_text == "Use":
-                self.resetGlobalPosition(pos)
+                self.recordTipOffsetInHistory(pos)
             elif button_text == "Discard":
                 return False
             elif button_text == "Override":
