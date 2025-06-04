@@ -7,6 +7,7 @@ import pyqtgraph as pg
 from acq4.util import ptime
 from acq4.util.functions import plottable_booleans
 from acq4.util.future import Future, future_wrap
+from acq4.util.debug import printExc
 from ._base import PatchPipetteState, SteadyStateAnalysisBase
 
 
@@ -391,7 +392,14 @@ class ResealState(PatchPipetteState):
 
     def _cleanup(self):
         if self._moveFuture is not None:
-            self._moveFuture.stop()
+            # TODO individually try-wrap these so all steps are attempted
+            try:
+                self._moveFuture.stop()
+            except Exception:
+                printExc("Failed to stop move future")
         if self._pressureFuture is not None:
-            self._pressureFuture.stop()
+            try:
+                self._pressureFuture.stop()
+            except Exception:
+                printExc("Failed to stop pressure future")
         return super()._cleanup()
