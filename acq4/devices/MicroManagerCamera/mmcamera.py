@@ -52,7 +52,6 @@ class MicroManagerCamera(Camera):
         self._triggerProp = None  # the name of the property for setting trigger mode
         self._triggerModes = ({}, {})  # forward and reverse mappings for the names of trigger modes
         self._binningMode = None  # 'x' or 'xy' for binning strings like '1' and '1x1', respectively
-        self._config = config
         Camera.__init__(self, manager, config, name)  ## superclass will call setupCamera when it is ready.
         self.acqBuffer = None
         self.frameId = 0
@@ -60,11 +59,11 @@ class MicroManagerCamera(Camera):
 
     def setupCamera(self):
         # sanity check for MM adapter and device name
-        adapterName = self._config['mmAdapterName']
+        adapterName = self.camConfig['mmAdapterName']
         allAdapters = self.mmc.getDeviceAdapterNames()
         if adapterName not in allAdapters:
-            raise ValueError("Adapter name '%s' is not valid. Options are: %s" % (adapterName, allAdapters))
-        deviceName = self._config['mmDeviceName']
+            raise ValueError(f"Adapter name '{adapterName}' is not valid. Options are: {allAdapters}")
+        deviceName = self.camConfig['mmDeviceName']
         try:
             allDevices = self.mmc.getAvailableDevices(adapterName)
         except Exception as e:
@@ -75,10 +74,10 @@ class MicroManagerCamera(Camera):
         if deviceName == 'CellCam':
             self.camName = 'CellCam' # load.Device() for CellCam needs to have 'CellCam' as device name
         self.mmc.loadDevice(self.camName, adapterName, deviceName)
-        
+
         # the 'Camera ID' property is not prefilled after loadDevice(). Need to assign it:
         if self.camName == 'CellCam':
-            self.mmc.setProperty(self.camName, 'Camera ID', ''.join(self.mmc.getAllowedPropertyValues('CellCam', 'Camera ID'))) 
+            self.mmc.setProperty(self.camName, 'Camera ID', ''.join(self.mmc.getAllowedPropertyValues('CellCam', 'Camera ID')))
         self.mmc.initializeDevice(self.camName)
 
         self._readAllParams()
@@ -385,7 +384,7 @@ class MicroManagerCamera(Camera):
             setParams.append((self._triggerProp, self._triggerModes[1][value]))
 
             # Hamamatsu cameras require setting a trigger source as well
-            if self._config['mmAdapterName'] == 'HamamatsuHam':
+            if self.camConfig['mmAdapterName'] == 'HamamatsuHam':
                 if value == 'Normal':
                     source = 'INTERNAL'
                 elif value == 'TriggerStart':

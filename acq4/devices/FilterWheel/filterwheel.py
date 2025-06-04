@@ -47,7 +47,6 @@ class FilterWheel(Device, OptomechDevice):
         
         self.lock = Mutex(Qt.QMutex.Recursive)
         
-        self._config = config
         self._filters = OrderedDict()
         self._slotNames = OrderedDict()
         self._slotIndicators = OrderedDict()

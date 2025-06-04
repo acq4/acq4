@@ -603,7 +603,7 @@ class CellDetectState(PatchPipetteState):
         wiggle_step = self.direction * config['preTargetWiggleStep']
         for _ in range(count):
             self.setState("pre-target wiggle")
-            retract_pos = dev.pipetteDevice.globalPosition() - wigle_step
+            retract_pos = dev.pipetteDevice.globalPosition() - wiggle_step
             future.waitFor(dev.pipetteDevice._moveToGlobal(retract_pos, speed=speed), timeout=None)
             with self._wiggleLock:
                 self.waitFor(
