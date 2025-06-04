@@ -102,6 +102,11 @@ class Cell(Qt.QObject):
             img_stack = ImageStack(stack, xform)
             result = self._tracker.next_frame(img_stack)
         global_position = result["position"].mapped_to("global")
+        movement = np.linalg.norm(np.array(global_position) - np.array(self.position))
+        if movement > 20e-6:
+            raise ValueError(
+                f"Cell moved too much to treat as tracked: {movement * 1e6:.2f} µm"
+            )
         self._positions[ptime.time()] = global_position
         self.sigPositionChanged.emit(global_position)
         return result["match_success"]
@@ -147,11 +152,14 @@ class Cell(Qt.QObject):
 
         # get the normalized 20µm³ region for tracking
         ijk_stack = np.array([f.data().T for f in stack])
-        stack_xform = SRT3DTransform.from_pyqtgraph(
+        frame_xform = SRT3DTransform.from_pyqtgraph(
             fav_frame.globalTransform(),
             from_cs=f"frame_{fav_frame.info()['id']}.xyz",
             to_cs="global",
-        ) * TransposeTransform(
+        )
+        if single:
+            frame_xform.set_scale(frame_xform.get_scale().tolist()[:2] + [1e-6])
+        stack_xform = frame_xform * TransposeTransform(
             (2, 1, 0),
             from_cs=f"frame_{fav_frame.info()['id']}.ijk",
             to_cs=f"frame_{fav_frame.info()['id']}.xyz",
@@ -166,7 +174,7 @@ class Cell(Qt.QObject):
                 self._roiSize = tuple(stop_ijk - start_ijk)
             stop_ijk = start_ijk + self._roiSize  # always be the same size
         roi_stack = ijk_stack[
-            start_ijk[0] : stop_ijk[0],
+            start_ijk[0] : max(start_ijk[0] + 1, stop_ijk[0]),  # ensure at least one slice
             start_ijk[1] : stop_ijk[1],
             start_ijk[2] : stop_ijk[2],
         ].copy()  # copy to allow freeing of the full stack memory
