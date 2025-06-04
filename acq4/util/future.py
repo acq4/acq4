@@ -72,53 +72,12 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
 
         # Capture creation stack for enhanced exception tracebacks
         self._creationStack = traceback.extract_stack()[:-1]  # Exclude current frame
+        self._creationThread = threading.current_thread()
 
         # logMsg(f"Future {self._name} created", level="info")
 
     def __repr__(self):
         return f"<{self.__class__.__name__} {self._name}>"
-
-    def _createEnhancedException(self, originalException):
-        """Create an exception with enhanced traceback that includes the creation stack."""
-        if originalException is None:
-            return None
-
-        # Format the creation stack
-        creation_tb_lines = traceback.format_list(self._creationStack)
-
-        # Check if we have thread boundary information
-        thread_boundary_marker = ""
-        if self._executingThread is not None and self._executingThread != threading.current_thread():
-            thread_boundary_marker = f"  --- Thread boundary: execution continues in {self._executingThread.name} ---\n"
-
-        # Get the original exception's traceback
-        if hasattr(originalException, '__traceback__') and originalException.__traceback__:
-            original_tb_lines = traceback.format_exception(
-                type(originalException), originalException, originalException.__traceback__)
-            # Skip the "Traceback" line from original since we add our own
-            exception_part = original_tb_lines[1:]
-        else:
-            # No traceback available, just show the exception
-            exception_part = [f"{type(originalException).__name__}: {originalException}\n"]
-
-        # Combine the tracebacks
-        enhanced_tb_lines = (
-            ["Traceback (most recent call last):\n"] +
-            creation_tb_lines +
-            ([thread_boundary_marker] if thread_boundary_marker else []) +
-            exception_part
-        )
-
-        enhanced_message = "".join(enhanced_tb_lines).rstrip()
-
-        # Create a new exception with the enhanced message
-        if isinstance(originalException, MultiException):
-            # MultiException has a special constructor
-            enhanced_exc = MultiException(enhanced_message, originalException._exceptions)
-        else:
-            enhanced_exc = type(originalException)(enhanced_message)
-        enhanced_exc.__cause__ = originalException
-        return enhanced_exc
 
     def executeInThread(self, func, args, kwds):
         """Execute the specified function in a separate thread.
@@ -295,7 +254,7 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
 
             if err is None:
                 if not self._stopRequested and original_exc is not None:
-                    raise self._createEnhancedException(original_exc) or original_exc
+                    raise self.enhanceException(original_exc)
                 msg = f"Task {self} did not complete (no extra message)."
             else:
                 msg = f"Task {self} did not complete: {err}"
@@ -303,8 +262,13 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
             if self._stopRequested:
                 raise self.Stopped(msg)
             elif original_exc is not None:
-                raise RuntimeError(msg) from self._createEnhancedException(original_exc) or original_exc
+                raise RuntimeError(msg) from self.enhanceException(original_exc)
             raise RuntimeError(msg)
+
+    def enhanceException(self, exc):
+        exc.future_creation_stack = self._creationStack
+        exc.future_creation_thread = self._creationThread
+        return exc
 
     def _wait(self, duration):
         """Default sleep implementation used by wait(); may be overridden to return early."""
