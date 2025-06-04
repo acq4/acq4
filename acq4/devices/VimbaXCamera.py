@@ -23,7 +23,6 @@ class VimbaXCamera(Camera):
     def __init__(self, dm, config, name):
         self._dev: VmbCamera | None = None
         self._lock = RLock()
-        self._config = config
         self._paramProperties = {}
         self._paramValuesOnDev = {}
         self._region = ()
