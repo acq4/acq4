@@ -192,10 +192,10 @@ class OptomechDevice(InterfaceMixin):
         dm.declareInterface(name, ["OptomechDevice"], self)
 
     def getGeometry(self, name=None) -> Geometry | None:
-        if "geometry" in self._config:
+        if "geometry" in self.__config:
             name = self.geometryCacheKey if name is None else name
             return Geometry(
-                config=self._config["geometry"],
+                config=self.__config["geometry"],
                 name=f"[primary geometry of {name}]",
                 parent_name=name,
             )
