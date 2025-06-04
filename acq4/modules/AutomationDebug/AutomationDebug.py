@@ -183,20 +183,14 @@ class AutomationDebugWindow(Qt.QWidget):
 
     @future_wrap
     def doFeatureTracking(self, _future: Future):
-        from acq4_automation.feature_tracking import (
-            PyrLK3DTracker,
-            CellPoseTracker,
-            CV2MostFlowAgreementTracker,
-        )
+        from acq4_automation.feature_tracking import CV2MostFlowAgreementTracker, SingleFrameTracker
 
         self.sigWorking.emit(self.ui.trackFeaturesBtn)
         # TODO no bad! no gui access!
-        if self.ui.featureTrackerSelector.currentText() == "Cellpose":
-            tracker = CellPoseTracker
-        elif self.ui.featureTrackerSelector.currentText() == "CV2":
+        if self.ui.featureTrackerSelector.currentText() == "CV2":
             tracker = self._featureTracker = CV2MostFlowAgreementTracker
-        elif self.ui.featureTrackerSelector.currentText() == "PyrLK3D":
-            tracker = self._featureTracker = PyrLK3DTracker
+        elif self.ui.featureTrackerSelector.currentText() == "Single-Frame":
+            tracker = self._featureTracker = SingleFrameTracker
         else:
             raise ValueError(f"unknown tracker '{self.ui.featureTrackerSelector.currentText()}'")
         pipette = self.pipetteDevice
