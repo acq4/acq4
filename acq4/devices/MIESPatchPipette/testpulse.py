@@ -20,8 +20,6 @@ class MIESTestPulseThread(TestPulseThread):
     def newTestPulse(self, data):
         """Got the signal from MIES that data is available, update"""
         tp = TestPulse(self.dev, data[:, self._headstage])
-
-        # print(f"bms-debug: {tp}")
         self.sigTestPulseFinished.emit(self.dev, tp)
 
     def parseTPData(self, data):
@@ -79,8 +77,6 @@ class TestPulse(object):
         return self.taskParams['clampMode']
 
     def analysis(self):
-
-        # print(f"bms-debug: inside TestPulse (MIES)")
         return self.analysis_l.copy()
 
     def getFitData(self):

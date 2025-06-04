@@ -396,6 +396,8 @@ def _fix_frame_transforms(frames, z_step):
     for f in frames:
         xform = f.globalTransform()
         scale = xform.getScale()
+        # Set z scale such that the transform oni the first frame can be used for the entire stack
+        # (which should be approximately true if the frames are about evenly spaced)
         xform.setScale(scale[0], scale[1], z_step)
         f.addInfo(transform=xform.saveState())
 
