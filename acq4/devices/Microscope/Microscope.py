@@ -357,7 +357,6 @@ class Microscope(Device, OptomechDevice):
 class Objective(Device, OptomechDevice):
 
     def __init__(self, config, scope, key):
-        self._config = config
         self._scope: Microscope = scope
         self._key = key
         name = config['name']
