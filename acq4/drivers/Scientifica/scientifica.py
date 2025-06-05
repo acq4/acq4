@@ -421,10 +421,21 @@ class Scientifica:
         # read and record axis scale factors
         self._axis_scale = tuple(self.getAxisScale(i) for i in (0, 1, 2))
 
+    def getMinSpeed(self):
+        """Return the minimum speed of the stage along the X axis in um/sec.
+
+        Note: If other axes have different scale factors, then their min speeds will be different as
+        well.
+        """
+        if self._version < 3:
+            return self.getParam('minSpeed') / abs(2. * self._axis_scale[0])
+        else:
+            return self.getParam('minSpeed')
+
     def getSpeed(self):
         """Return the maximum speed of the stage along the X axis in um/sec.
 
-        Note: If other axes have different scale factors, then their max speds will be different as
+        Note: If other axes have different scale factors, then their max speeds will be different as
         well.
         """
         if self._version < 3:
@@ -444,6 +455,19 @@ class Scientifica:
         self.setParam('maxSpeed', speed)
         if self.hasSeparateZSpeed():
             self.setParam('maxZSpeed', speed)
+
+    def setMinSpeed(self, speed):
+        """Set the minimum speed of the stage in um/sec.
+
+        Note: this method uses the axis scaling of the X axis to determine the
+        speed value. If other axes have different scale factors, then their minimum
+        speed will also be different.
+        """
+        if self._version < 3:
+            speed = speed * 2 * abs(self._axis_scale[0])
+        self.setParam('minSpeed', speed)
+        if self.hasSeparateZSpeed():
+            self.setParam('minZSpeed', speed)
 
     def moveTo(self, pos, speed=None, attempts_allowed=3):
         """Set the position of the manipulator.
