@@ -335,12 +335,12 @@
        <widget class="QComboBox" name="featureTrackerSelector">
         <item>
          <property name="text">
-          <string>CV2</string>
+          <string>Single-Frame</string>
          </property>
         </item>
         <item>
          <property name="text">
-          <string>Single-Frame</string>
+          <string>CV2</string>
          </property>
         </item>
        </widget>
