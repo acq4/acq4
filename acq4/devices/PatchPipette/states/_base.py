@@ -104,7 +104,7 @@ class PatchPipetteState(Future):
         self._targetHasChanged = False
         from acq4.devices.PatchPipette import PatchPipette
 
-        Future.__init__(self)
+        Future.__init__(self, name=f"State {self.stateName} for {dev}")
 
         self.dev: PatchPipette = dev
 
@@ -225,7 +225,7 @@ class PatchPipetteState(Future):
             self._pressureAdjustment = self._adjustPressureForDepth()
             self._pressureAdjustment.onFinish(self._finishPressureAdjustment, inGui=True)
 
-    @future_wrap
+    @future_wrap(logLevel='debug')
     def _adjustPressureForDepth(self, _future):
         depth = self.depthBelowSurface()
         if depth < 0:  # above surface
