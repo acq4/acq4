@@ -13,7 +13,7 @@ from typing import Generic, TypeVar
 from pyqtgraph import FeedbackButton
 
 from acq4.util import Qt, ptime
-from acq4.util.debug import printExc
+from acq4.util.debug import printExc, logMsg
 
 FUTURE_RETVAL_TYPE = TypeVar("FUTURE_RETVAL_TYPE")
 WAITING_RETVAL_TYPE = TypeVar("WAITING_RETVAL_TYPE")
@@ -46,7 +46,7 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         fut._taskDone(returnValue=result, error=error, interrupted=(error or excInfo) is not None, excInfo=excInfo)
         return fut
 
-    def __init__(self, onError=None, name=None):
+    def __init__(self, onError=None, name=None, logLevel='debug'):
         Qt.QObject.__init__(self)
 
         self.startTime = ptime.time()
@@ -55,6 +55,7 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
             self._name = f"(unnamed from {frame.f_code.co_filename}:{frame.f_lineno})"
         else:
             self._name = name
+        self.logLevel = logLevel
         self._isDone = False
         self._callbacks = []
         self._onError = onError
@@ -74,7 +75,7 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         self._creationStack = traceback.extract_stack()[:-1]  # Exclude current frame
         self._creationThread = threading.current_thread()
 
-        # logMsg(f"Future {self._name} created", level="info")
+        logMsg(f"Future {self._name} created", level=self.logLevel)
 
     def __repr__(self):
         return f"<{self.__class__.__name__} {self._name}>"
@@ -117,7 +118,7 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         """
         if state == self._state:
             return
-        # logMsg(f"Future {self._name} state changed: {state}", level="info")
+        logMsg(f"Future {self._name} state changed: {state}", level=self.logLevel)
         self._state = state
         self.sigStateChanged.emit(self, state)
 
@@ -140,7 +141,7 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
 
         if reason is not None:
             self._errorMessage = reason
-        # logMsg(f"Asking Future {self._name} to stop: {reason}", level="info")
+        logMsg(f"Asking Future {self._name} to stop: {reason}", level=self.logLevel)
         self._stopRequested = True
         for f in self._stopsToPropagate:
             f.stop(reason=reason)
@@ -161,6 +162,12 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
             self._wasInterrupted = interrupted
             if returnValue is not None:
                 self._returnVal = returnValue
+            msg = f"Future {self._name} finished."
+            if interrupted:
+                msg = msg + " [interrupted]"
+            if error is not None:
+                msg = msg + f" [{error}]"
+            logMsg(msg, level=self.logLevel)
         # if interrupted:
         #     self.setState(state or f"interrupted (error: {error})")
         # else:
@@ -361,40 +368,51 @@ WRAPPED_FN_RETVAL_TYPE = TypeVar("WRAPPED_FN_RETVAL_TYPE")
 
 
 # MC this doesn't handle typing correctly as Future.wrap, but I don't know why...
-def future_wrap(
-    func: Callable[WRAPPED_FN_PARAMS, WRAPPED_FN_RETVAL_TYPE]
-) -> Callable[WRAPPED_FN_PARAMS, Future[WRAPPED_FN_RETVAL_TYPE]]:
-    """Decorator to execute a function in a Thread wrapped in a future. The function must take a Future
-    named "_future" as a keyword argument. This Future can be variously used to checkStop() the
-    function, wait for other futures, and will be returned by the decorated function call. The function
-    can still be called with `block=True` to prevent threaded execution, if device locking is a concern.
-    Usage:
-        @future_wrap
-        def myFunc(arg1, arg2, _future=None):
-            ...
-            _future.checkStop()
-            _future.waitFor(someOtherFuture)
-            ...
-        result = myFunc(arg1, arg2).getResult()
-        threadless_result = myFunc(arg1, arg2, block=True).getResult()
-    """
+class FutureWrapper:
+    def __init__(self, logLevel='debug'):
+        self.logLevel = logLevel
 
-    @functools.wraps(func)
-    def wrapper(*args: WRAPPED_FN_PARAMS.args, **kwds: WRAPPED_FN_PARAMS.kwargs) -> Future[WRAPPED_FN_RETVAL_TYPE]:
-        frame = inspect.currentframe().f_back
-        name = f"(wrapped {func.__qualname__} from {frame.f_code.co_filename}:{frame.f_lineno})"
-        future = Future(onError=kwds.pop("onFutureError", None), name=name)
-        if kwds.pop("block", False):
-            kwds["_future"] = future
-            if parent := kwds.pop("checkStopThrough", None):
-                parent.propagateStopsInto(future)
-            future.executeAndSetReturn(func, args, kwds)
-            future.wait()
-        else:
-            future.executeInThread(func, args, kwds)
-        return future
+    def __call__(
+        self,
+        func: Callable[WRAPPED_FN_PARAMS, WRAPPED_FN_RETVAL_TYPE]|None=None,
+        logLevel=None,
+    ) -> Callable[WRAPPED_FN_PARAMS, Future[WRAPPED_FN_RETVAL_TYPE]]:
+        """Decorator to execute a function in a Thread wrapped in a future. The function must take a Future
+        named "_future" as a keyword argument. This Future can be variously used to checkStop() the
+        function, wait for other futures, and will be returned by the decorated function call. The function
+        can still be called with `block=True` to prevent threaded execution, if device locking is a concern.
+        Usage:
+            @future_wrap
+            def myFunc(arg1, arg2, _future=None):
+                ...
+                _future.checkStop()
+                _future.waitFor(someOtherFuture)
+                ...
+            result = myFunc(arg1, arg2).getResult()
+            threadless_result = myFunc(arg1, arg2, block=True).getResult()
+        """
+        if logLevel is not None:
+            assert func is None, f"Cannot have func {func} and logLevel {logLevel}"
+            return FutureWrapper(logLevel)
+        
+        @functools.wraps(func)
+        def wrapper(*args: WRAPPED_FN_PARAMS.args, **kwds: WRAPPED_FN_PARAMS.kwargs) -> Future[WRAPPED_FN_RETVAL_TYPE]:
+            frame = inspect.currentframe().f_back
+            name = f"(wrapped {func.__qualname__} from {frame.f_code.co_filename}:{frame.f_lineno})"
+            future = Future(onError=kwds.pop("onFutureError", None), name=name, logLevel=self.logLevel)
+            if kwds.pop("block", False):
+                kwds["_future"] = future
+                if parent := kwds.pop("checkStopThrough", None):
+                    parent.propagateStopsInto(future)
+                future.executeAndSetReturn(func, args, kwds)
+                future.wait()
+            else:
+                future.executeInThread(func, args, kwds)
+            return future
 
-    return wrapper
+        return wrapper
+
+future_wrap = FutureWrapper()
 
 
 class MultiException(Exception):

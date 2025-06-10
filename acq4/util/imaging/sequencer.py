@@ -223,7 +223,7 @@ def _save_results(
     return ret_fh
 
 
-@future_wrap
+@future_wrap(logLevel='debug')
 def run_image_sequence(
     imager,
     count: float = 1,
@@ -338,7 +338,7 @@ def positions_to_cover_region(region, imager_center, imager_region) -> Generator
         x_finished = False
 
 
-@future_wrap
+@future_wrap(logLevel='debug')
 def acquire_z_stack(
     imager,
     start: float,
