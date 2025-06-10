@@ -55,14 +55,6 @@ pytest acq4/devices/tests/test_OdorDelivery.py
 pytest -v
 ```
 
-### Python Environment
-
-When running Python commands for testing or development, use the conda environment python:
-
-```bash
-/home/martin/.miniforge3/envs/acq4-torch/bin/python
-```
-
 ## Architecture Overview
 
 ACQ4 follows a modular architecture with these key components:

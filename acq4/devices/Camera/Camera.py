@@ -1019,7 +1019,7 @@ class FrameAcquisitionFuture(Future):
             ensureFreshFrames: bool = False,
     ):
         """Acquire a frames asynchronously, either a fixed number or continuously until stopped."""
-        super().__init__(name=f"{camera.name()}_frameAcquisitionFuture")
+        super().__init__(name=f"{camera.name()}_frameAcquisitionFuture", logLevel='debug')
         self._camera = camera
         self._frame_count = frameCount
         self._ensure_fresh_frames = ensureFreshFrames

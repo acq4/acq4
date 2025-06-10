@@ -131,7 +131,7 @@ class ApproachState(PatchPipetteState):
         self._maybeTakeACellfie()
         if self.config["autoAdvance"]:
             self.monitorTestPulse()
-            while self._moveFuture is None or not self._moveFuture.isDone():
+            while True:
                 self.checkStop()
                 self.processAtLeastOneTestPulse()
                 self.adjustPressureForDepth()
@@ -149,6 +149,10 @@ class ApproachState(PatchPipetteState):
                         return "fouled"
                 if self._moveFuture is None:
                     self._moveFuture = self._move()
+                if self._moveFuture.isDone():
+                    self._moveFuture.wait()  # check for errors
+                    self.setState('Move finished; next state')
+                    break
 
         return self.config["nextState"]
 
@@ -204,17 +208,17 @@ class ApproachState(PatchPipetteState):
 
     @future_wrap
     def _move(self, _future):
-        self.setState("pipette advance")
         config = self.config
         if self.aboveSurface():
+            self.setState("move to surface")
             self._waitForMoveWhileTargetChanges(
                 self.surfaceIntersectionPosition, config['aboveSurfaceSpeed'], True, _future)
-            self.setState("moved to surface")
+        self.setState(f'move to endpoint: {self.endpoint()}')
         self._waitForMoveWhileTargetChanges(
-            self.endpoint,
-            config['detectionSpeed'],
-            config["continuousAdvance"],
-            _future,
+            position_fn=self.endpoint,
+            speed=config['belowSurfaceSpeed'],
+            continuous=config["advanceContinuous"],
+            future=_future,
             interval=config['advanceStepInterval'],
             step=config['advanceStepDistance'],
         )
