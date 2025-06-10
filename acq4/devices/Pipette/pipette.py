@@ -108,8 +108,14 @@ class Pipette(Device, OptomechDevice):
             'idleDistance': config.get('idleDistance', 7e-3),
             'showCameraModuleUI': config.get('showCameraModuleUI', False),
         }
-        parent = self.parentDevice()
-        if not isinstance(parent, Stage):
+
+        parent = self
+        while True:
+            parent = parent.parentDevice()
+            if isinstance(parent, Stage):
+                break
+        self.parentStage: Stage = parent
+        if not isinstance(self.parentStage, Stage):
             raise Exception(
                 f"Pipette device requires some type of translation stage as its parentDevice (got {parent}).")
 
@@ -162,7 +168,7 @@ class Pipette(Device, OptomechDevice):
     def getBoundaries(self) -> List[Plane]:
         if self._boundaries is None:
             self._boundaries = []
-            for plane in self.parentDevice().getBoundaries():
+            for plane in self.parentStage.getBoundaries():
                 mapped_pt = self._solveMyGlobalPosition(plane.point)
                 mapped_vec = self._solveMyGlobalPosition(plane.point + plane.normal) - mapped_pt
                 new_name = self.name() + " " + plane.name.partition(" ")[2]
@@ -204,7 +210,7 @@ class Pipette(Device, OptomechDevice):
         if pos is None:
             pos = self.globalPosition()
         manip_pos = self._solveGlobalStagePosition(pos)
-        manip: Stage = self.parentDevice()
+        manip: Stage = self.parentStage
         manip.checkLimits(manip.mapGlobalToDevicePosition(manip_pos))
 
         cache = self.readConfigFile('stored_positions')
@@ -220,7 +226,7 @@ class Pipette(Device, OptomechDevice):
 
     def checkRangeOfMotion(self, pos, tolerance=500e-6):
         """Warn user if the position (in global coordinates) is within 500µm of the manipulator's range of motion."""
-        manipulator: Stage = self.parentDevice()
+        manipulator: Stage = self.parentStage
         manipulator.checkRangeOfMotion(self._solveGlobalStagePosition(pos), tolerance)
 
     def scopeDevice(self):
@@ -465,7 +471,7 @@ class Pipette(Device, OptomechDevice):
 
     def _manipulatorOrientation(self) -> dict:
         axis = self.config.get('parentAutoAxis', '+x')
-        return self.parentDevice().calculatedAxisOrientation(axis)
+        return self.parentStage.calculatedAxisOrientation(axis)
 
     def yawRadians(self):
         return self.yawAngle() * np.pi / 180.
@@ -510,7 +516,7 @@ class Pipette(Device, OptomechDevice):
             stagePos = self._solveGlobalStagePosition(pos)
             stagePath.append({'globalPos': stagePos, 'speed': speed, 'linear': linear, 'explanation': explanation})
 
-        stage = self.parentDevice()
+        stage = self.parentStage
         return stage.movePath(stagePath, name=name)
 
     def approachDepth(self):
@@ -666,25 +672,25 @@ class Pipette(Device, OptomechDevice):
         """
         self.sigMoveRequested.emit(self, pos, speed, kwds)
         stagePos = self._solveGlobalStagePosition(pos)
-        stage = self.parentDevice()
+        stage:Stage = self.parentStage
         try:
             return stage.moveToGlobal(stagePos, speed, **kwds)
-        except Exception:
-            print(f"Error moving {self} to global position {pos!r}:")
-            raise
+        except Exception as exc:
+            exc.add_note(f"Moving {self} to global position {pos!r} (name={kwds.get('name', None)})")
+            raise exc
 
     def _solveGlobalStagePosition(self, pos):
         """Return global stage position required in order to move pipette to a global position.
         """
         dif = np.asarray(pos) - np.asarray(self.globalPosition())
-        stage = self.parentDevice()
+        stage = self.parentStage
         spos = np.asarray(stage.globalPosition())
         return spos + dif
 
     def _solveMyGlobalPosition(self, pos):
         """Return the global position of the pipette tip when the stage is at the given global position.
         """
-        dif = np.asarray(pos) - np.asarray(self.parentDevice().globalPosition())
+        dif = np.asarray(pos) - np.asarray(self.parentStage.globalPosition())
         return np.asarray(self.globalPosition()) + dif
 
     def _moveToLocal(self, pos, speed, linear=False):
