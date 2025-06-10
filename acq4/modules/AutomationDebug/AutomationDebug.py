@@ -616,7 +616,7 @@ class AutomationDebugWindow(Qt.QWidget):
         if not self._unranked_cells:
             logMsg("Need new potential cells; running detection")
             x, y = self._randomLocation()
-            _future.waitFor(self.scopeDevice.setGlobalPosition((x, y)))
+            _future.waitFor(self.scopeDevice.setGlobalPosition((x, y), name="random move to find cells"))
             # TODO don't know why this hangs when using waitFor, but it does
             depth_fut = self.scopeDevice.findSurfaceDepth(
                 self.cameraDevice, searchDistance=50 * µm, searchStep=15 * µm  # , block=True, checkStopThrough=_future

@@ -112,17 +112,17 @@ class Scientifica(Stage):
                 "limits": (False, False, False),
             }
 
-    def stop(self):
+    def stop(self, reason=None):
         """Stop the manipulator immediately."""
         with self.lock:
-            self.abort()
+            self.abort(reason=reason)
 
-    def abort(self):
+    def abort(self, reason=None):
         """Stop the manipulator immediately."""
-        self.driver.stop()
-        if self._lastMove is not None:
-            self._lastMove.interrupt()
-            self._lastMove = None
+        self.driver.stop(reason=reason)
+        # if self._lastMove is not None:
+        #     self._lastMove.interrupt()
+        #     self._lastMove = None
 
     def setUserSpeed(self, v):
         """Set the maximum speed of the stage (m/sec) when under manual control.
