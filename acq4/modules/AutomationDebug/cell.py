@@ -116,13 +116,13 @@ class Cell(Qt.QObject):
         current_focus = self._imager.globalCenterPosition()
         direction = np.sign(target[2] - current_focus[2])
         margin = 20e-6
+        z_step = 1e-6
 
         with getManager().reserveDevices(
             [self._imager, self._imager.scopeDev.positionDevice(), self._imager.scopeDev.focusDevice()], timeout=30.0
         ):
             if single:
                 start_glob = target - np.array([margin, margin, 0])
-                stop_glob = target + np.array([margin, margin, 0])
                 _future.waitFor(self._imager.moveCenterToGlobal(target, "fast"))
                 with self._imager.ensureRunning():
                     stack = _future.waitFor(self._imager.acquireFrames(1, ensureFreshFrames=True)).getResult()
@@ -136,7 +136,7 @@ class Cell(Qt.QObject):
                     self._imager,
                     start_glob[2],
                     stop_glob[2],
-                    1e-6,
+                    z_step,
                     hysteresis_correction=False,
                     slow_fallback=False,  # the slow fallback mode is too slow to be useful here
                     deviceReservationTimeout=30.0,  # possibly competing with pipette calibration, which can take a while
