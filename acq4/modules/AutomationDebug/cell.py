@@ -157,31 +157,29 @@ class Cell(Qt.QObject):
             from_cs=f"frame_{fav_frame.info()['id']}.xyz",
             to_cs="global",
         )
-        if single:
-            frame_xform.set_scale(frame_xform.get_scale().tolist()[:2] + [1e-6])
+        # the z-scale on single-frame versions of this transform will be 1m/px, which is arbitrary and wildly
+        # inappropriate. the z-stacks already have a useful z-scale, but this doesn't hurt them.
+        frame_xform.set_scale(frame_xform.get_scale().tolist()[:2] + [z_step])
         stack_xform = frame_xform * TransposeTransform(
             (2, 1, 0),
             from_cs=f"frame_{fav_frame.info()['id']}.ijk",
             to_cs=f"frame_{fav_frame.info()['id']}.xyz",
         )
+
         start_ijk = np.round(stack_xform.inverse.map(start_glob)).astype(int)
-        stop_ijk = np.round(stack_xform.inverse.map(stop_glob)).astype(int)
+        px_size = stack_xform.map([1, 1, 1]) - stack_xform.map([0, 0, 0])
+        shape_ijk = (margin * 2 / px_size).astype(int)[::-1]
+        if single:
+            shape_ijk[0] = 1  # just one frame
+        stop_ijk = start_ijk + shape_ijk
         if np.any(start_ijk < 0) or np.any(stop_ijk < 0):
             raise ValueError("target is too close to the edge of this stack")
         start_ijk, stop_ijk = np.min((start_ijk, stop_ijk), axis=0), np.max((start_ijk, stop_ijk), axis=0)
-        if not single:
-            if self._roiSize is None:
-                self._roiSize = tuple(stop_ijk - start_ijk)
-            stop_ijk = start_ijk + self._roiSize  # always be the same size
         roi_stack = ijk_stack[
-            start_ijk[0] : max(start_ijk[0] + 1, stop_ijk[0]),  # ensure at least one slice
+            start_ijk[0] : stop_ijk[0],
             start_ijk[1] : stop_ijk[1],
             start_ijk[2] : stop_ijk[2],
         ].copy()  # copy to allow freeing of the full stack memory
-        if not single:
-            assert (
-                roi_stack.shape == self._roiSize
-            ), f"stackshot generated wrong size stack ({roi_stack.shape} vs {self._roiSize})"
         region_xform = stack_xform * TTransform(
             offset=start_ijk,
             from_cs=f"frame_{fav_frame.info()['id']}.roi",
