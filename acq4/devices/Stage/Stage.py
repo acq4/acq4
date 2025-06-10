@@ -795,6 +795,9 @@ class MovePathFuture(MoveFuture):
                             excInfo=fut._excInfo,
                         )
                         return
+                except Future.Stopped:
+                    # If this future or a step future was stopped, just raise that error again.
+                    raise
                 except Exception as exc:
                     self._taskDone(
                         interrupted=True,

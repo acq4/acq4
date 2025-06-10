@@ -165,7 +165,6 @@ class Cell(Qt.QObject):
             from_cs=f"frame_{fav_frame.info()['id']}.ijk",
             to_cs=f"frame_{fav_frame.info()['id']}.xyz",
         )
-
         start_ijk = np.round(stack_xform.inverse.map(start_glob)).astype(int)
         px_size = stack_xform.map([1, 1, 1]) - stack_xform.map([0, 0, 0])
         shape_ijk = (margin * 2 / px_size).astype(int)[::-1]
