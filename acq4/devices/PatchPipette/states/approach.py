@@ -215,10 +215,10 @@ class ApproachState(PatchPipetteState):
                 self.surfaceIntersectionPosition, config['aboveSurfaceSpeed'], True, _future)
         self.setState(f'move to endpoint: {self.endpoint()}')
         self._waitForMoveWhileTargetChanges(
-            self.endpoint,
-            config['detectionSpeed'],
-            config["continuousAdvance"],
-            _future,
+            position_fn=self.endpoint,
+            speed=config['belowSurfaceSpeed'],
+            continuous=config["advanceContinuous"],
+            future=_future,
             interval=config['advanceStepInterval'],
             step=config['advanceStepDistance'],
         )

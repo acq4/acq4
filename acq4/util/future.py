@@ -38,23 +38,29 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         """Raised by wait() if the timeout period elapses."""
 
     @classmethod
-    def immediate(cls, result=None, error=None, excInfo=None, stopped=False) -> Future:
+    def immediate(cls, result=None, error=None, excInfo=None, stopped=False, name=None) -> Future:
         """Create a future that is already resolved with the optional result."""
-        fut = cls()
+        if name is None:
+            name = cls.nameFromStack()
+        fut = cls(name=name, logLevel=None)
         if stopped:
             fut.stop(reason=error)
         fut._taskDone(returnValue=result, error=error, interrupted=(error or excInfo) is not None, excInfo=excInfo)
         return fut
 
+    @staticmethod
+    def nameFromStack(depth=1):
+        """Generate a useful name for a Future based on the code line that created it"""
+        frame = inspect.currentframe().f_back  # start in parent's frame
+        for _ in range(depth):
+            frame = frame.f_back  # walk up the stack 
+        return f"(unnamed from {frame.f_code.co_filename}:{frame.f_lineno})"
+
     def __init__(self, onError=None, name=None, logLevel='debug'):
         Qt.QObject.__init__(self)
 
         self.startTime = ptime.time()
-        if name is None:
-            frame = inspect.currentframe().f_back
-            self._name = f"(unnamed from {frame.f_code.co_filename}:{frame.f_lineno})"
-        else:
-            self._name = name
+        self._name = self.nameFromStack() if name is None else name
         self.logLevel = logLevel
         self._isDone = False
         self._callbacks = []
@@ -75,7 +81,15 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         self._creationStack = traceback.extract_stack()[:-1]  # Exclude current frame
         self._creationThread = threading.current_thread()
 
-        logMsg(f"Future {self._name} created", level=self.logLevel)
+        self.logMsg(f"Future [{self._name}] created")
+
+    def logMsg(self, message):
+        if self.logLevel is not None:
+            logMsg(message, level=self.logLevel)
+
+    @property
+    def name(self):
+        return self._name
 
     def __repr__(self):
         return f"<{self.__class__.__name__} {self._name}>"
@@ -118,7 +132,7 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         """
         if state == self._state:
             return
-        logMsg(f"Future {self._name} state changed: {state}", level=self.logLevel)
+        self.logMsg(f"Future [{self._name}] state changed: {state}")
         self._state = state
         self.sigStateChanged.emit(self, state)
 
@@ -141,7 +155,7 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
 
         if reason is not None:
             self._errorMessage = reason
-        logMsg(f"Asking Future {self._name} to stop: {reason}", level=self.logLevel)
+        self.logMsg(f"Asking Future [{self._name}] to stop: {reason}")
         self._stopRequested = True
         for f in self._stopsToPropagate:
             f.stop(reason=reason)
@@ -162,12 +176,12 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
             self._wasInterrupted = interrupted
             if returnValue is not None:
                 self._returnVal = returnValue
-            msg = f"Future {self._name} finished."
+            msg = f"Future [{self._name}] finished."
             if interrupted:
                 msg = msg + " [interrupted]"
             if error is not None:
                 msg = msg + f" [{error}]"
-            logMsg(msg, level=self.logLevel)
+            self.logMsg(msg)
         # if interrupted:
         #     self.setState(state or f"interrupted (error: {error})")
         # else:

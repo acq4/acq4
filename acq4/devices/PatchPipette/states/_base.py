@@ -292,9 +292,9 @@ class PatchPipetteState(Future):
         if direction is None:
             direction = self.direction_unit
         pip = self.dev.pipetteDevice
-        pos = np.array(pip.globalPosition())
         surface = pip.scopeDevice().getSurfaceDepth()
-        return pos + direction * ((surface - pos[2]) / direction[2])
+        target = pip.targetPosition()
+        return target + direction * ((surface - target[2]) / direction[2])
 
     def depthBelowSurface(self, pos=None):
         if pos is None:
