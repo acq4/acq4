@@ -573,12 +573,14 @@ class Pipette(Device, OptomechDevice):
         dist = dz / axis[2]
         return start + dist * axis
 
-    def advance(self, depth, speed):
+    def advance(self, depth, speed, name=None):
         """Move the electrode along its axis until it reaches the specified
         (global) depth.
         """
+        if name is None:
+            name = f"advance to depth {depth:0.2g}"
         pos = self.positionAtDepth(depth)
-        return self._moveToGlobal(pos, speed)
+        return self._moveToGlobal(pos, speed, name=name)
 
     def retractFromSurface(self, speed='slow'):
         """Retract the pipette along its axis until it is above the slice surface.
@@ -715,14 +717,14 @@ class Pipette(Device, OptomechDevice):
 
     def focusTip(self, speed='fast', raiseErrors=False):
         pos = self.globalPosition()
-        future = self.scopeDevice().setGlobalPosition(pos, speed=speed)
+        future = self.scopeDevice().setGlobalPosition(pos, speed=speed, name=f"focus on {self.name()}")
         if raiseErrors:
             future.raiseErrors("Focus on pipette tip failed ({error}); requested from:\n{stack})")
         return future
 
     def focusTarget(self, speed='fast', raiseErrors=False):
         pos = self.targetPosition()
-        future = self.scopeDevice().setGlobalPosition(pos, speed=speed)
+        future = self.scopeDevice().setGlobalPosition(pos, speed=speed, name=f"focus on target for {self.name()}")
         if raiseErrors:
             future.raiseErrors("Focus on pipette target failed ({error}); requested from:\n{stack})")
         return future
