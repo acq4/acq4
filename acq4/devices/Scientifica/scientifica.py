@@ -15,18 +15,53 @@ from pyqtgraph import SpinBox, siFormat
 
 class Scientifica(Stage):
     """
-    A Scientifica motorized device.
-
-    This class supports PatchStar, MicroStar, SliceScope, objective changers, etc.
-    The device may be identified either by its serial port or by its description
-    string:
-
-        port: <serial port>  # eg. 'COM1' or '/dev/ttyACM0'
-        name: <string>  # eg. 'SliceScope' or 'MicroStar 2'
-        baudrate: <int>  #  may be 9600 or 38400
-
-    The optional 'baudrate' parameter is used to set the baudrate of the device.
-    Both valid rates will be attempted when initially connecting.
+    A Scientifica motorized device driver for manipulators and stages.
+    
+    Supports PatchStar, MicroStar, SliceScope, objective changers, and other Scientifica devices.
+    
+    Configuration options:
+    
+    * **port** (str, optional): Serial port (e.g., 'COM1' or '/dev/ttyACM0')
+      Either port or name must be specified.
+    
+    * **name** (str, optional): Device name as assigned in LinLab software
+      (e.g., 'SliceScope' or 'MicroStar 2'). Either port or name must be specified.
+    
+    * **baudrate** (int, optional): Serial baud rate (9600 or 38400)
+      Both rates will be attempted if not specified.
+    
+    * **version** (int, optional): Controller version (default: 2)
+      Some devices require version=1 for compatibility.
+    
+    * **scale** (tuple, optional): (x, y, z) scale factors in m/step 
+      (default: (1e-6, 1e-6, 1e-6))
+    
+    * **params** (dict, optional): Low-level device parameters
+        - currents: Motor current limits (be careful to follow manufacturer specs!)
+        - axisScale: Axis scaling factors for coordinate transforms  
+        - joyDirectionX/Y/Z: Joystick direction settings (bool)
+        - minSpeed, maxSpeed: Speed limits in device units
+        - accel: Acceleration setting
+        - joySlowScale, joyFastScale: Joystick speed scaling
+        - joyAccel: Joystick acceleration
+    
+    Example configuration::
+    
+        SliceScope:
+            driver: 'Scientifica'
+            name: 'SliceScope'
+            scale: [-1e-6, -1e-6, 1e-6]
+            params:
+                axisScale: [5.12, -5.12, -6.4]
+                joyDirectionX: True
+                joyDirectionY: True
+                joyDirectionZ: False
+                minSpeed: 1000
+                maxSpeed: 30000
+                accel: 500
+                joySlowScale: 4
+                joyFastScale: 80
+                joyAccel: 500
     """
 
     def __init__(self, man, config, name):
