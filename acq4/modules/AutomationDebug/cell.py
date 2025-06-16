@@ -95,8 +95,9 @@ class Cell(Qt.QObject):
     def updatePosition(self, _future):
         while len(self._tracker.object_stacks) == 0:
             _future.sleep(0.1)
-        frame, xform, _ = self._takeStackshot(_future, single=True)
-        result = self._tracker.next_frame(frame[0], xform)
+        stack, xform, _ = self._takeStackshot(_future, single=True)
+        img_stack = ImageStack(stack, xform)
+        result = self._tracker.next_frame(img_stack)
         if not result["match_success"]:
             stack, xform, _ = self._takeStackshot(_future)
             img_stack = ImageStack(stack, xform)
