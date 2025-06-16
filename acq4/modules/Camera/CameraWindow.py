@@ -156,8 +156,6 @@ class CameraWindow(Qt.QMainWindow):
         self.interfaces[name].quit()
 
     def _removeInterface(self, iface):
-        print("======== remove", iface)
-        print(self.interfaces)
         name = None
         if isinstance(iface, CameraModuleInterface):
             for k, v in self.interfaces.items():

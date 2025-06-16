@@ -490,7 +490,7 @@ class Stage(Device, OptomechDevice):
         # pick a far-away distance within limits
         print(vel)
 
-    def stop(self):
+    def stop(self, reason=None):
         """Stop moving the device immediately. When you call MoveFuture.stop() from here, look closely at infinite
         recursions.
         """
@@ -699,7 +699,7 @@ class MoveFuture(Future):
     """
 
     def __init__(self, dev: Stage, pos, speed, name=None):
-        super().__init__(name=name)
+        Future.__init__(self, name=name)
         self.startTime = ptime.time()
         self.dev = dev
         self.speed = speed
@@ -773,7 +773,7 @@ class MovePathFuture(MoveFuture):
                 step = step.copy()
                 explanation = step.pop('explanation', 'unnamed')
                 try:
-                    fut: Future = self.dev.move(**step)
+                    fut: Future = self.dev.move(**step, name=f'{self.name} step {i+1}/{len(self.path)}: {explanation}')
                     fut._pathStep = i
                     self._currentFuture = fut
                     while not fut.isDone():
@@ -795,6 +795,9 @@ class MovePathFuture(MoveFuture):
                             excInfo=fut._excInfo,
                         )
                         return
+                except Future.Stopped:
+                    # If this future or a step future was stopped, just raise that error again.
+                    raise
                 except Exception as exc:
                     self._taskDone(
                         interrupted=True,

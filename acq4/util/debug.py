@@ -45,7 +45,7 @@ def printExc(msg="", indent=4, prefix="|", msgType="error"):
 
 def logMsg(msg, **kwargs):
     """msg: the text of the log message
-       msgTypes: user, status, error, warning (status is default)
+       msgType: user, status, error, warning (status is default)
        importance: 0-9 (0 is low importance, 9 is high, 5 is default)
        other supported keywords:
           exception: a tuple (type, exception, traceback) as returned by sys.exc_info()
@@ -66,7 +66,7 @@ def logMsg(msg, **kwargs):
             sys.excepthook(*sys.exc_info())
     else:
         print("Can't log message; no log created yet.")
-        print(kwargs)
+        print(msg, kwargs)
 
 
 def logExc(msg, *args, **kwargs):
@@ -86,8 +86,9 @@ def logExc(msg, *args, **kwargs):
             sys.excepthook(*sys.exc_info())
     else:
         print("Can't log error message; no log created yet.")
-        print(args)
-        print(kwargs)
+        print(msg, args, kwargs)
+        print(sys.exc_info())
+        print(traceback.format_stack()[:-1])
 
 
 blockLogging = False
