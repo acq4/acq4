@@ -98,11 +98,11 @@ class Cell(Qt.QObject):
         stack, xform, _ = self._takeStackshot(_future, single=True)
         img_stack = ImageStack(stack, xform)
         result = self._tracker.next_frame(img_stack)
-        if not result["match_success"]:
+        if not result.success:
             stack, xform, _ = self._takeStackshot(_future)
             img_stack = ImageStack(stack, xform)
             result = self._tracker.next_frame(img_stack)
-        global_position = result["position"].mapped_to("global")
+        global_position = result.position.mapped_to("global")
         movement = np.linalg.norm(np.array(global_position) - np.array(self.position))
         if movement > 20e-6:
             raise ValueError(
@@ -110,7 +110,7 @@ class Cell(Qt.QObject):
             )
         self._positions[ptime.time()] = global_position
         self.sigPositionChanged.emit(global_position)
-        return result["match_success"]
+        return result.success
 
     def _takeStackshot(self, _future, single=False):
         target = np.array(self.position)
