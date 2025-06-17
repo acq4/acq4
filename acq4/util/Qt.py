@@ -182,3 +182,46 @@ class FlowLayout(pg.QtWidgets.QLayout):
             line_height = max(line_height, item.sizeHint().height())
 
         return y + line_height - rect.y()
+
+
+orig_QObject = QObject
+
+
+class QObject(orig_QObject):
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        """Class decorator to add GUI thread support."""
+        # Find all methods marked with @inGuiThread
+        wrapped_methods = {}
+        for name, method in list(cls.__dict__.items()):
+            if hasattr(method, "_run_in_gui_thread"):
+                param_count = getattr(method, '_param_count', 0)
+
+                # Create a signal for this method
+                signal_args = tuple(object for _ in range(param_count))
+                signal_name = f"__{name}Event"
+                setattr(cls, signal_name, pyqtSignal(*signal_args))
+
+                # Store the original method as the implementation
+                impl_name = f"_{name}"
+                setattr(cls, impl_name, pyqtSlot(*signal_args)(method.__wrapped__))
+                wrapped_methods[name] = method.__wrapped__
+
+        # Connect signals in __init__
+        orig_init = cls.__init__
+
+        def new_init(self, *args, **kwargs):
+            orig_init(self, *args, **kwargs)
+            # Connect all signals to their implementations
+            for method_name, orig_method in wrapped_methods.items():
+                impl_name = f"_{method_name}"
+                impl_method = getattr(self, impl_name)
+                # bound_method = types.MethodType(orig_method, self)
+                # setattr(self, impl_name, bound_method)
+                signal_name = f"__{method_name}Event"
+                signal = getattr(self, signal_name)
+                signal.connect(impl_method)
+
+        cls.__init__ = new_init
+
+        return cls

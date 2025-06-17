@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import contextlib
 import json
 import os
@@ -16,11 +18,13 @@ from acq4.util import Qt, ptime
 from acq4.util.future import future_wrap
 from acq4.util.target import Target
 from pyqtgraph import Point, siFormat
-from .planners import defaultMotionPlanners, PipettePathGenerator
+from .planners import PipettePathGenerator
+from .planners import defaultMotionPlanners
 from .tracker import ResnetPipetteTracker
 from ..Camera import Camera
 from ..RecordingChamber import RecordingChamber
 from ...util.PromptUser import prompt
+from ...util.geometry import Plane
 from ...util.imaging.sequencer import run_image_sequence
 
 CamModTemplate = Qt.importTemplate('.cameraModTemplate')
@@ -113,7 +117,6 @@ class Pipette(Device, OptomechDevice):
     # May add items here to implement custom motion planning for all pipettes
     defaultMotionPlanners = defaultMotionPlanners()
     pathGeneratorClass = PipettePathGenerator
-    defaultGeometryArgs = {'color': (0, 1, 0.2, 1)}
 
     def __init__(self, deviceManager, config, name):
         Device.__init__(self, deviceManager, config, name)
@@ -122,10 +125,12 @@ class Pipette(Device, OptomechDevice):
         self.moving = False
         self._scopeDev = None
         self._imagingDev = None
+        self._boundaries = None
         self._opts = {
             'searchHeight': config.get('searchHeight', 2e-3),
             'searchTipHeight': config.get('searchTipHeight', 1.5e-3),
             'approachHeight': config.get('approachHeight', 100e-6),
+            'cleanApproachHeight': config.get('cleanApproachHeight', 1500e-6),
             'idleHeight': config.get('idleHeight', 1e-3),
             'idleDistance': config.get('idleDistance', 7e-3),
             'showCameraModuleUI': config.get('showCameraModuleUI', False),
@@ -135,6 +140,7 @@ class Pipette(Device, OptomechDevice):
             raise Exception(
                 f"Pipette device requires some type of translation stage as its parentDevice (got {parent}).")
 
+        parent.sigOrientationChanged.connect(self.clearSavedOffsets)
         # may add items here to implement per-pipette custom motion planning
         self.motionPlanners = {}
         self.currentMotionPlanner = None
@@ -172,6 +178,24 @@ class Pipette(Device, OptomechDevice):
             self.setTarget(target)
 
         deviceManager.sigAbortAll.connect(self.stop)
+
+    def getGeometry(self):
+        if isinstance(self.config.get("geometry"), dict):
+            defaults = {'color': (0, 1, 0.2, 1)}
+            defaults.update(self.config["geometry"])
+            self.config["geometry"] = defaults
+        return super().getGeometry()
+
+    def getBoundaries(self) -> List[Plane]:
+        if self._boundaries is None:
+            self._boundaries = []
+            for plane in self.parentDevice().getBoundaries():
+                mapped_pt = self._solveMyGlobalPosition(plane.point)
+                mapped_vec = self._solveMyGlobalPosition(plane.point + plane.normal) - mapped_pt
+                new_name = self.name() + " " + plane.name.partition(" ")[2]
+                self._boundaries.append(Plane(mapped_vec, mapped_pt, new_name))
+
+        return self._boundaries
 
     def moveTo(self, position: str, speed, raiseErrors=False, **kwds):
         """Move the pipette tip to a named position, with safe motion planning.
@@ -281,23 +305,22 @@ class Pipette(Device, OptomechDevice):
     @future_wrap
     def setTipOffsetIfAcceptable(self, pos, _future=None):
         if self.tipOffsetIsReasonable(pos):
-            self.setTipOffset(pos)
+            self.resetGlobalPosition(pos)
         else:
             dist = np.linalg.norm(np.array(self.mapToGlobal((0, 0, 0))) - pos)
             dist = siFormat(dist, suffix='m', precision=3)
             button_text = _future.waitFor(prompt(
                 title="Pipette displacement detected",
                 text=f"The tip offset for {self.name()} is {dist} off from its initial value.",
-                extra_text="Do you want to use or discard this value",
-                choices=["Use", "Discard"],
+                extra_text="Do you want to use it, discard it or override all historic offsets?",
+                choices=["Use", "Discard", "Override"],
             ), timeout=None).getResult()
             if button_text == "Use":
-                self.setTipOffset(pos)
+                self.resetGlobalPosition(pos)
             elif button_text == "Discard":
                 return False
-            elif button_text == "New pipette":
-                success = _future.waitFor(self.setNewPipetteTipOffsetIfAcceptable(pos)).getResult()
-                # TODO this would be cool, but the followup all has to happen on a PatchPipette
+            elif button_text == "Override":
+                self.overrideTipOffsetHistory(pos)
             else:
                 raise AssertionError("Unknown button clicked")
         return True
@@ -341,6 +364,13 @@ class Pipette(Device, OptomechDevice):
         cal['offset'] = list(self.offset)
         cal['offset history'] = [cal['offset']]
         self.writeConfigFile(cal, 'calibration')
+
+    def clearSavedOffsets(self, parent):
+        """Clear the saved offsets if the parent manipulator's axes are re-calibrated."""
+        cal = self.readConfigFile('calibration')
+        if 'offset history' in cal:
+            del cal['offset history']
+            self.writeConfigFile(cal, 'calibration')
 
     def setTipOffset(self, pos):
         """Given a global position, set the offset such that the pipette tip is located at that position."""
@@ -521,6 +551,10 @@ class Pipette(Device, OptomechDevice):
             raise ValueError("Surface depth has not been set.")
         return surface + self._opts['approachHeight']
 
+    @property
+    def cleanApproachHeight(self):
+        return self._opts["cleanApproachHeight"]
+
     def depthBelowSurface(self):
         """Return the current depth of the pipette tip below the sample surface
         (positive values are below the surface).
@@ -648,6 +682,12 @@ class Pipette(Device, OptomechDevice):
         stage = self.parentDevice()
         spos = np.asarray(stage.globalPosition())
         return spos + dif
+
+    def _solveMyGlobalPosition(self, pos):
+        """Return the global position of the pipette tip when the stage is at the given global position.
+        """
+        dif = np.asarray(pos) - np.asarray(self.parentDevice().globalPosition())
+        return np.asarray(self.globalPosition()) + dif
 
     def _moveToLocal(self, pos, speed, linear=False):
         """Move the electrode tip directly to the given position in local coordinates.
@@ -830,6 +870,7 @@ class PipetteCamModInterface(CameraModuleInterface):
         self.target.sigPositionChangeFinished.connect(self.targetDragged)
 
         self.transformChanged()
+        self.targetChanged(dev, dev.targetPosition())
         self.updateCalibrateAxis()
 
     def setOrientationToggled(self):

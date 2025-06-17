@@ -228,6 +228,7 @@ class Camera(DAQGeneric, OptomechDevice):
             raise ValueError(f"No camera preset named {preset!r}")
         params = presets[preset]["params"]
         self.setParams(params)
+        return Future.immediate()
 
     def presetHotkeyPressed(self, dev, changes, presetName):
         self.loadPreset(presetName)
