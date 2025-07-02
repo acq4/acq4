@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
 import traceback
+from pathlib import Path
 
 import numpy as np
 
@@ -14,7 +14,10 @@ from acq4.devices.Microscope import Microscope
 from acq4.devices.PatchPipette import PatchPipette
 from acq4.devices.Pipette import Pipette
 from acq4.devices.Pipette.calibration import findNewPipette
-from acq4.devices.Pipette.planners import PipettePathGenerator, GeometryAwarePathGenerator
+from acq4.devices.Pipette.planners import (
+    PipettePathGenerator,
+    GeometryAwarePathGenerator,
+)
 from acq4.modules.Camera import CameraWindow
 from acq4.modules.Module import Module
 from acq4.modules.TaskRunner import TaskRunner
@@ -25,16 +28,16 @@ from acq4.util.imaging import Frame
 from acq4.util.imaging.sequencer import acquire_z_stack
 from acq4.util.target import TargetBox
 from acq4.util.threadrun import futureInGuiThread, runInGuiThread
-from coorx import SRT3DTransform, TransposeTransform
 from pyqtgraph.units import µm, m
-from .cell import Cell
 from .ranking_window import RankingWindow
 
 UiTemplate = Qt.importTemplate(".window")
 
 
 class AutomationDebugWindow(Qt.QWidget):
-    sigWorking = Qt.Signal(object)  # a btn that is busy or False to signify no longer working
+    sigWorking = Qt.Signal(
+        object
+    )  # a btn that is busy or False to signify no longer working
     sigLogMessage = Qt.Signal(str)
 
     def __init__(self, module: "AutomationDebug"):
@@ -57,13 +60,19 @@ class AutomationDebugWindow(Qt.QWidget):
         self._open_ranking_windows = []  # Keep track of open windows
 
         self.ui.clearBtn.clicked.connect(self.clearCells)
-        self.ui.zStackDetectBtn.setOpts(future_producer=self._detectNeuronsZStack, stoppable=True)
+        self.ui.zStackDetectBtn.setOpts(
+            future_producer=self._detectNeuronsZStack, stoppable=True
+        )
         self.ui.zStackDetectBtn.sigFinished.connect(self._handleDetectResults)
         self.ui.testUIBtn.setOpts(future_producer=self._testUI, stoppable=True)
         self.ui.testUIBtn.sigFinished.connect(self._handleDetectResults)
-        self.ui.addCellFromTargetBtn.setOpts(future_producer=self._addCellFromTarget, stoppable=True)
+        self.ui.addCellFromTargetBtn.setOpts(
+            future_producer=self._addCellFromTarget, stoppable=True
+        )
 
-        self.ui.motionPlannerSelector.currentIndexChanged.connect(self._changeMotionPlanner)
+        self.ui.motionPlannerSelector.currentIndexChanged.connect(
+            self._changeMotionPlanner
+        )
 
         # Connect regular button click
         self.ui.rankCellsBtn.clicked.connect(self._rankCells)
@@ -75,7 +84,9 @@ class AutomationDebugWindow(Qt.QWidget):
         self.ui.mockFilePath.setReadOnly(True)
         self.ui.mockFileButton.clicked.connect(self._selectMockFile)
         self.ui.mockClassificationFilePath.setReadOnly(True)
-        self.ui.mockClassificationFileButton.clicked.connect(self._selectMockClassificationFile)
+        self.ui.mockClassificationFileButton.clicked.connect(
+            self._selectMockClassificationFile
+        )
 
         self.ui.autoTargetBtn.setOpts(future_producer=self._autoTarget, stoppable=True)
         self.ui.autoTargetBtn.sigFinished.connect(self._handleAutoFinish)
@@ -89,7 +100,9 @@ class AutomationDebugWindow(Qt.QWidget):
                 self.ui.cameraSelector.addItem(name)
 
         self.ui.trackFeaturesBtn.setOpts(
-            future_producer=self.doFeatureTracking, processing="Stop tracking", stoppable=True
+            future_producer=self.doFeatureTracking,
+            processing="Stop tracking",
+            stoppable=True,
         )
         self.ui.trackFeaturesBtn.sigFinished.connect(self._handleFeatureTrackingFinish)
         self._featureTracker = None
@@ -99,7 +112,9 @@ class AutomationDebugWindow(Qt.QWidget):
             stoppable=True,
             processing="Interrupt pipette\ncalibration test",
         )
-        self.ui.testPipetteBtn.setToolTip("Start with the pipette calibrated and in the field of view")
+        self.ui.testPipetteBtn.setToolTip(
+            "Start with the pipette calibrated and in the field of view"
+        )
         self.ui.testPipetteBtn.sigFinished.connect(self._handleCalibrationFinish)
 
         self._testing_pipette = False
@@ -107,18 +122,24 @@ class AutomationDebugWindow(Qt.QWidget):
         self.sigLogMessage.connect(self.ui.pipetteLog.append)
 
         self.ui.autopatchDemoBtn.setToolTip("Patch a cell! Repeat! REPEAT!")
-        self.ui.autopatchDemoBtn.setOpts(future_producer=self._autopatchDemo, stoppable=True)
+        self.ui.autopatchDemoBtn.setOpts(
+            future_producer=self._autopatchDemo, stoppable=True
+        )
         self.ui.autopatchDemoBtn.sigFinished.connect(self._handleAutopatchDemoFinish)
 
         self.show()
         planner = self.module.config.get("motionPlanner", "Objective radius only")
         self.ui.motionPlannerSelector.setCurrentText(planner)
         # Set default ranking dir
-        default_rank_dir = Path(self.module.manager.getBaseDir().name()) / "ranked_cells"
+        default_rank_dir = (
+            Path(self.module.manager.getBaseDir().name()) / "ranked_cells"
+        )
         self.ui.rankingSaveDirEdit.setText(str(default_rank_dir))
         self._populatePresetCombos()
         # Connect checkboxes to state update method
-        self.ui.multiChannelEnableCheck.toggled.connect(self._updateMultiChannelAndMockStates)
+        self.ui.multiChannelEnableCheck.toggled.connect(
+            self._updateMultiChannelAndMockStates
+        )
         self.ui.mockCheckBox.toggled.connect(self._updateMultiChannelAndMockStates)
         self._updateMultiChannelAndMockStates()  # Set initial states
 
@@ -126,14 +147,19 @@ class AutomationDebugWindow(Qt.QWidget):
 
     def _selectRankDir(self):
         path = Qt.QFileDialog.getExistingDirectory(
-            self, "Select Directory to Save Ranked Cells", self.ui.rankingSaveDirEdit.text()
+            self,
+            "Select Directory to Save Ranked Cells",
+            self.ui.rankingSaveDirEdit.text(),
         )
         if path:
             self.ui.rankingSaveDirEdit.setText(path)
 
     def _selectMockClassificationFile(self):
         filePath, _ = Qt.QFileDialog.getOpenFileName(
-            self, "Select Mock Classification Z-Stack File", "", "MetaArray Files (*.ma);;All Files (*)"
+            self,
+            "Select Mock Classification Z-Stack File",
+            "",
+            "MetaArray Files (*.ma);;All Files (*)",
         )
         if filePath:
             self.ui.mockClassificationFilePath.setText(filePath)
@@ -146,9 +172,15 @@ class AutomationDebugWindow(Qt.QWidget):
         self.ui.classificationPresetCombo.setEnabled(multi_channel_enabled)
 
         mock_classification_widgets_enabled = multi_channel_enabled and mock_mode_active
-        self.ui.mockClassificationFileLabel.setEnabled(mock_classification_widgets_enabled)
-        self.ui.mockClassificationFileButton.setEnabled(mock_classification_widgets_enabled)
-        self.ui.mockClassificationFilePath.setEnabled(mock_classification_widgets_enabled)
+        self.ui.mockClassificationFileLabel.setEnabled(
+            mock_classification_widgets_enabled
+        )
+        self.ui.mockClassificationFileButton.setEnabled(
+            mock_classification_widgets_enabled
+        )
+        self.ui.mockClassificationFilePath.setEnabled(
+            mock_classification_widgets_enabled
+        )
 
     def _populatePresetCombos(self):
         presets = self.scopeDevice.presets.keys()
@@ -170,7 +202,9 @@ class AutomationDebugWindow(Qt.QWidget):
             try:
                 _future.waitFor(findNewPipette(pipette, camera, camera.scopeDev))
                 error = np.linalg.norm(pipette.globalPosition() - true_tip_position)
-                self.sigLogMessage.emit(f"Calibration complete: {error * 1e6:.2g}µm error")
+                self.sigLogMessage.emit(
+                    f"Calibration complete: {error * 1e6:.2g}µm error"
+                )
                 if error > 50e-6:
                     self.failedCalibrations.append(error)
                     i = len(self.failedCalibrations) - 1
@@ -183,7 +217,10 @@ class AutomationDebugWindow(Qt.QWidget):
 
     @future_wrap
     def doFeatureTracking(self, _future: Future):
-        from acq4_automation.feature_tracking import CV2MostFlowAgreementTracker, SingleFrameTracker
+        from acq4_automation.feature_tracking import (
+            CV2MostFlowAgreementTracker,
+            SingleFrameTracker,
+        )
 
         self.sigWorking.emit(self.ui.trackFeaturesBtn)
         # TODO no bad! no gui access!
@@ -192,7 +229,9 @@ class AutomationDebugWindow(Qt.QWidget):
         elif self.ui.featureTrackerSelector.currentText() == "Single-Frame":
             tracker = self._featureTracker = SingleFrameTracker
         else:
-            raise ValueError(f"unknown tracker '{self.ui.featureTrackerSelector.currentText()}'")
+            raise ValueError(
+                f"unknown tracker '{self.ui.featureTrackerSelector.currentText()}'"
+            )
         pipette = self.pipetteDevice
         target: np.ndarray = pipette.targetPosition()
         cell = self._cell = Cell(target)
@@ -231,12 +270,22 @@ class AutomationDebugWindow(Qt.QWidget):
 
     def _setWorkingState(self, working: bool | Qt.QPushButton):
         if working:
-            self.module.manager.getModule("Camera").window()  # make sure camera window is open
-        self.ui.zStackDetectBtn.setEnabled(working == self.ui.zStackDetectBtn or not working)
+            self.module.manager.getModule(
+                "Camera"
+            ).window()  # make sure camera window is open
+        self.ui.zStackDetectBtn.setEnabled(
+            working == self.ui.zStackDetectBtn or not working
+        )
         self.ui.testUIBtn.setEnabled(working == self.ui.testUIBtn or not working)
-        self.ui.autoTargetBtn.setEnabled(working == self.ui.autoTargetBtn or not working)
-        self.ui.testPipetteBtn.setEnabled(working == self.ui.testPipetteBtn or not working)
-        self.ui.trackFeaturesBtn.setEnabled(working == self.ui.trackFeaturesBtn or not working)
+        self.ui.autoTargetBtn.setEnabled(
+            working == self.ui.autoTargetBtn or not working
+        )
+        self.ui.testPipetteBtn.setEnabled(
+            working == self.ui.testPipetteBtn or not working
+        )
+        self.ui.trackFeaturesBtn.setEnabled(
+            working == self.ui.trackFeaturesBtn or not working
+        )
         self.ui.rankCellsBtn.setEnabled(len(self._unranked_cells) > 0)
         # self.ui.autopatchDemoBtn.setEnabled(working == self.ui.autopatchDemoBtn or not working)
 
@@ -272,7 +321,9 @@ class AutomationDebugWindow(Qt.QWidget):
     def _setBottomRight(self):
         cam = self.cameraDevice
         region = cam.getParam("region")
-        bound = cam.globalTransform().map(Qt.QPointF(region[0] + region[2], region[1] + region[3]))
+        bound = cam.globalTransform().map(
+            Qt.QPointF(region[0] + region[2], region[1] + region[3])
+        )
         self._xRightSpin.setValue(bound.x())
         self._yBottomSpin.setValue(bound.y())
 
@@ -341,7 +392,9 @@ class AutomationDebugWindow(Qt.QWidget):
         return boxes
 
     @future_wrap
-    def _detectNeuronsZStack(self, _future: Future) -> tuple[list, list[Frame] | None, list[Frame] | None] | list:
+    def _detectNeuronsZStack(
+        self, _future: Future
+    ) -> tuple[list, list[Frame] | None, list[Frame] | None] | list:
         """Acquires Z-stack(s) and runs neuron detection. Returns (bboxes, detection_stack, classification_stack)."""
         from acq4_automation.object_detection import detect_neurons
 
@@ -365,11 +418,15 @@ class AutomationDebugWindow(Qt.QWidget):
         detection_preset = self.ui.detectionPresetCombo.currentText()
         classification_preset = self.ui.classificationPresetCombo.currentText()
         multichannel_processing_intended = (
-            self.ui.multiChannelEnableCheck.isChecked() and detection_preset and classification_preset
+            self.ui.multiChannelEnableCheck.isChecked()
+            and detection_preset
+            and classification_preset
         )
 
         if self.ui.mockCheckBox.isChecked():
-            detection_stack, classification_stack, step_z = self._mockNeuronStacks(_future)
+            detection_stack, classification_stack, step_z = self._mockNeuronStacks(
+                _future
+            )
             if detection_stack is None:
                 raise RuntimeError("Failed to load mock detection stack.")
 
@@ -391,13 +448,17 @@ class AutomationDebugWindow(Qt.QWidget):
                 )
                 _future.waitFor(self.scopeDevice.loadPreset(detection_preset))
                 detection_stack = _future.waitFor(
-                    acquire_z_stack(self.cameraDevice, start_z, stop_z, step_z, slow_fallback=False),
+                    acquire_z_stack(
+                        self.cameraDevice, start_z, stop_z, step_z, slow_fallback=False
+                    ),
                     timeout=100,
                 ).getResult()
 
                 _future.waitFor(self.scopeDevice.loadPreset(classification_preset))
                 classification_stack = _future.waitFor(
-                    acquire_z_stack(self.cameraDevice, start_z, stop_z, step_z, slow_fallback=False),
+                    acquire_z_stack(
+                        self.cameraDevice, start_z, stop_z, step_z, slow_fallback=False
+                    ),
                     timeout=100,
                 ).getResult()
 
@@ -412,7 +473,9 @@ class AutomationDebugWindow(Qt.QWidget):
                     classification_stack = classification_stack[:min_length]
             else:  # --- Single Channel Acquisition ---
                 detection_stack = _future.waitFor(
-                    acquire_z_stack(self.cameraDevice, start_z, stop_z, step_z)  # step_z is 1um here
+                    acquire_z_stack(
+                        self.cameraDevice, start_z, stop_z, step_z
+                    )  # step_z is 1um here
                 ).getResult()
 
             if multichannel_processing_intended:
@@ -437,7 +500,11 @@ class AutomationDebugWindow(Qt.QWidget):
 
         # results are returned [z_frame, img_row, img_row]
         # map back to global (x, y, z)
-        transform = working_stack[0][0].globalTransform() if isinstance(working_stack, tuple) else working_stack[0].globalTransform()
+        transform = (
+            working_stack[0][0].globalTransform()
+            if isinstance(working_stack, tuple)
+            else working_stack[0].globalTransform()
+        )
         globalPos = [transform.map([row, col, zframe]) for (zframe, row, col) in result]
 
         self._current_detection_stack = detection_stack
@@ -462,14 +529,18 @@ class AutomationDebugWindow(Qt.QWidget):
             info = marr.infoCopy()
 
             live_frame_global_transform = base_frame.globalTransform()
-            live_frame_origin_global_xyz = np.array(base_frame.mapFromFrameToGlobal([0, 0, 0]))
+            live_frame_origin_global_xyz = np.array(
+                base_frame.mapFromFrameToGlobal([0, 0, 0])
+            )
 
             z_info = next((ax for ax in info if ax.get("name") == "Z"), None)
             if z_info and "values" in z_info:
                 z_vals = z_info["values"]
                 if len(z_vals) > 1:
                     step_z = abs(z_vals[1] - z_vals[0]) * m  # Assume meters
-                    logMsg(f"Using Z step from mock file '{os.path.basename(mock_file_path)}': {step_z / µm:.2f} µm")
+                    logMsg(
+                        f"Using Z step from mock file '{os.path.basename(mock_file_path)}': {step_z / µm:.2f} µm"
+                    )
                 elif len(z_vals) == 1:
                     logMsg(
                         f"Only one Z value in mock file '{os.path.basename(mock_file_path)}'. Assuming 1µm step.",
@@ -491,10 +562,14 @@ class AutomationDebugWindow(Qt.QWidget):
 
             pixel_size = self.cameraDevice.getPixelSize()[0]  # Assuming square pixels
             stack_frames = []
-            current_mock_frame_global_z = live_frame_origin_global_xyz[2]  # Start Z from the live frame's depth
+            current_mock_frame_global_z = live_frame_origin_global_xyz[
+                2
+            ]  # Start Z from the live frame's depth
 
             for i in range(len(data)):
-                mock_frame_transform = pg.SRTTransform3D(live_frame_global_transform.saveState())
+                mock_frame_transform = pg.SRTTransform3D(
+                    live_frame_global_transform.saveState()
+                )
                 mock_frame_transform.setScale(pixel_size, pixel_size, step_z)
                 z_offset = current_mock_frame_global_z - live_frame_origin_global_xyz[2]
                 mock_frame_transform.translate(0, 0, z_offset)
@@ -515,7 +590,9 @@ class AutomationDebugWindow(Qt.QWidget):
             printExc(f"Failed to load or process mock file: {mock_file_path}")
             return None, None
 
-    def _mockNeuronStacks(self, _future: Future) -> tuple[list[Frame] | None, list[Frame] | None, float]:
+    def _mockNeuronStacks(
+        self, _future: Future
+    ) -> tuple[list[Frame] | None, list[Frame] | None, float]:
         logMsg("Using mock Z-stack file(s) for detection.")
         detection_stack = None
         classification_stack = None
@@ -524,12 +601,16 @@ class AutomationDebugWindow(Qt.QWidget):
         step_z = 1 * µm
 
         with self.cameraDevice.ensureRunning():
-            base_frame = _future.waitFor(self.cameraDevice.acquireFrames(1)).getResult()[0]
+            base_frame = _future.waitFor(
+                self.cameraDevice.acquireFrames(1)
+            ).getResult()[0]
 
         # Load detection stack
         detection_mock_path = self.ui.mockFilePath.text()
         if detection_mock_path:
-            detection_stack, det_step_z = self._create_mock_stack_from_file(detection_mock_path, base_frame, _future)
+            detection_stack, det_step_z = self._create_mock_stack_from_file(
+                detection_mock_path, base_frame, _future
+            )
             if det_step_z is not None:
                 step_z = det_step_z
         else:
@@ -538,7 +619,8 @@ class AutomationDebugWindow(Qt.QWidget):
 
         # Load classification stack if multichannel mock is enabled and path is provided
         if (
-            self.ui.multiChannelEnableCheck.isChecked() and self.ui.mockCheckBox.isChecked()
+            self.ui.multiChannelEnableCheck.isChecked()
+            and self.ui.mockCheckBox.isChecked()
         ):  # Redundant mockCheckBox check, but safe
             classification_mock_path = self.ui.mockClassificationFilePath.text()
             if classification_mock_path:
@@ -549,7 +631,11 @@ class AutomationDebugWindow(Qt.QWidget):
                 classification_stack, class_step_z = self._create_mock_stack_from_file(
                     classification_mock_path, base_frame, _future
                 )
-                if class_step_z is not None and step_z != class_step_z and detection_stack is not None:
+                if (
+                    class_step_z is not None
+                    and step_z != class_step_z
+                    and detection_stack is not None
+                ):
                     logMsg(
                         f"Z-step mismatch: Detection mock ({step_z/µm:.2f} µm) vs Classification mock ({class_step_z/µm:.2f} µm). Using detection Z-step.",
                         msgType="warning",
@@ -558,7 +644,9 @@ class AutomationDebugWindow(Qt.QWidget):
                 elif class_step_z is not None and detection_stack is None:
                     step_z = class_step_z
             else:
-                raise ValueError("Multichannel mock enabled, but no classification mock file selected.")
+                raise ValueError(
+                    "Multichannel mock enabled, but no classification mock file selected."
+                )
 
         return detection_stack, classification_stack, step_z
 
@@ -577,7 +665,9 @@ class AutomationDebugWindow(Qt.QWidget):
             try:
                 save_dir.mkdir(parents=True, exist_ok=True)
             except Exception as e:
-                raise ValueError(f"Could not create ranking save directory: {save_dir}") from e
+                raise ValueError(
+                    f"Could not create ranking save directory: {save_dir}"
+                ) from e
 
         # --- Get next cell ---
         # TODO separate ranking cells from targeting cells
@@ -607,7 +697,9 @@ class AutomationDebugWindow(Qt.QWidget):
             self._open_ranking_windows.remove(window)
         except ValueError:
             # Window might have already been removed or was never added properly
-            printExc("Attempted to remove a ranking window reference that was not found.")
+            printExc(
+                "Attempted to remove a ranking window reference that was not found."
+            )
 
     @future_wrap
     def _autoTarget(self, _future):
@@ -616,18 +708,28 @@ class AutomationDebugWindow(Qt.QWidget):
         if not self._unranked_cells:
             logMsg("Need new potential cells; running detection")
             x, y = self._randomLocation()
-            _future.waitFor(self.scopeDevice.setGlobalPosition((x, y), name="random move to find cells"))
+            _future.waitFor(
+                self.scopeDevice.setGlobalPosition(
+                    (x, y), name="random move to find cells"
+                )
+            )
             # TODO don't know why this hangs when using waitFor, but it does
             depth_fut = self.scopeDevice.findSurfaceDepth(
-                self.cameraDevice, searchDistance=50 * µm, searchStep=15 * µm  # , block=True, checkStopThrough=_future
+                self.cameraDevice,
+                searchDistance=50 * µm,
+                searchStep=15 * µm,  # , block=True, checkStopThrough=_future
             )
             depth = depth_fut.getResult() - 50 * µm  # Target below surface
             _future.checkStop()
             self.cameraDevice.setFocusDepth(depth)  # Set focus depth
 
-            _future.waitFor(self._detectNeuronsZStack(), timeout=600)  # Side-effect: populates _unranked_cells
+            _future.waitFor(
+                self._detectNeuronsZStack(), timeout=600
+            )  # Side-effect: populates _unranked_cells
         if not self._unranked_cells:
-            raise RuntimeError("Neuron detection ran, but no cells found for autoTarget.")
+            raise RuntimeError(
+                "Neuron detection ran, but no cells found for autoTarget."
+            )
 
         neurons = self._unranked_cells
 
@@ -635,7 +737,13 @@ class AutomationDebugWindow(Qt.QWidget):
         centers = [(start + end) / 2 for start, end in np.array(neurons)]
         # TODO is this important to check? does the detection algorithm already guarantee this?
         target = next(
-            (c for c in centers if all(np.linalg.norm(c - prev) > 35 * µm for prev in self._previousTargets)),
+            (
+                c
+                for c in centers
+                if all(
+                    np.linalg.norm(c - prev) > 35 * µm for prev in self._previousTargets
+                )
+            ),
             None,
         )
 
@@ -711,7 +819,10 @@ class AutomationDebugWindow(Qt.QWidget):
                     state = self._autopatchCellPatch(cell, _future)
                 except Exception as exc:
                     excStr = ''.join(traceback.format_exception_only(exc)).strip()
-                    logMsg(f"Autopatch: Exception during cell patching: {excStr}", msgType='error')
+                    logMsg(
+                        f"Autopatch: Exception during cell patching: {excStr}",
+                        msgType='error',
+                    )
                     raise
 
                 logMsg(f"Autopatch: Cell patching finished: {state}", msgType='warning')
@@ -735,10 +846,11 @@ class AutomationDebugWindow(Qt.QWidget):
                 # check on the resealed cell
                 homeFut = ppip.pipette.goHome()
                 self.scopeDevice.loadPreset('GFP')
-                _future.waitFor(self.cameraDevice.moveCenterToGlobal(cell.position, "fast"))
+                _future.waitFor(
+                    self.cameraDevice.moveCenterToGlobal(cell.position, "fast")
+                )
                 _future.sleep(5)  # pose with nucleus
                 _future.waitFor(homeFut)
-
 
             except (_future.StopRequested, _future.Stopped):
                 raise
@@ -769,7 +881,9 @@ class AutomationDebugWindow(Qt.QWidget):
     def _autopatchFindCell(self, _future):
         if not self._unranked_cells:
             _future.setState("Autopatch: searching for cells")
-            surf = _future.waitFor(self.cameraDevice.scopeDev.findSurfaceDepth(self.cameraDevice)).getResult()
+            surf = _future.waitFor(
+                self.cameraDevice.scopeDev.findSurfaceDepth(self.cameraDevice)
+            ).getResult()
             _future.waitFor(self.cameraDevice.setFocusDepth(surf - 60e-6, "fast"))
             z_stack = self._detectNeuronsZStack()
             z_stack.sigFinished.connect(self._handleDetectResults)
@@ -824,10 +938,13 @@ class AutomationDebugWindow(Qt.QWidget):
             logMsg(f"No task runner found that uses {clampName}", msgType='warning')
             return
 
-        expected_duration = taskrunner.sequenceInfo["period"] * taskrunner.sequenceInfo["totalParams"]
+        expected_duration = (
+            taskrunner.sequenceInfo["period"] * taskrunner.sequenceInfo["totalParams"]
+        )
         _future.waitFor(
             # runInGuiThread(taskrunner.runSequence, store=True, storeDirHandle=self.dh), timeout=expected_duration
-            runInGuiThread(taskrunner.runSequence, store=False), timeout=max(30, expected_duration*20)
+            runInGuiThread(taskrunner.runSequence, store=False),
+            timeout=max(30, expected_duration * 20),
         )
         logMsg("Autopatch: Task runner sequence completed.", msgType='warning')
 
