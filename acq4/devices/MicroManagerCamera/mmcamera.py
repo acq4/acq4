@@ -26,22 +26,56 @@ triggerModes = {
 
 
 class MicroManagerCamera(Camera):
-    """Camera device that uses MicroManager to provide imaging.
+    """
+    Camera device that uses MicroManager to provide imaging support.
 
-    Requires pymmcore to be installed along with MicroManager with the same API version.
-    To configure a new camera:
-    1. First make sure your pymmcore API version matches the MicroManager API version.
-        - MicroManager API version can be found in the MicroManager GUI under Help -> About.
-        - pymmcore API version can be found by running `import pymmcore; print(pymmcore.__version__.split('.')[3])`
-        - If versions are not matched, then download a different version of MicroManager that matches the pymmcore version.
-    2. Next make sure you can load and operate the camera via the MicroManager GUI. 
-        - When selecting your camera in the hardware wizard, take note of the adapter name and device name
-    3. Configure the camera in the ACQ4 configuration file::
-
+    Requires pymmcore to be installed along with MicroManager with matching API versions.
+    
+    MicroManager-specific configuration options:
+    
+    * **mmAdapterName** (str, required): MicroManager adapter name (e.g., 'HamamatsuHam')
+      Find this in MicroManager hardware wizard when setting up the camera
+    
+    * **mmDeviceName** (str, required): MicroManager device name (e.g., 'HamamatsuHam_DCAM') 
+      Find this in MicroManager hardware wizard when setting up the camera
+    
+    * **path** (str, optional): Path to MicroManager installation directory
+      Uses default MicroManager installation if not specified
+    
+    Standard Camera configuration options (see Camera base class):
+    
+    * **parentDevice** (str, optional): Name of parent optical device (microscope, etc.)
+    
+    * **transform** (dict, optional): Spatial transform relative to parent device
+        - pos: Position offset [x, y]
+        - scale: Scale factors [x, y] in m/pixel
+        - angle: Rotation angle in radians
+    
+    * **params** (dict, optional): Camera parameters to set at startup
+        - exposure: Default exposure time
+        - binning: Pixel binning [x, y]
+    
+    Setup instructions:
+    1. Ensure pymmcore API version matches MicroManager API version
+       - MicroManager API: Help -> About in MicroManager GUI
+       - pymmcore API: `import pymmcore; print(pymmcore.__version__.split('.')[3])`
+    2. Test camera operation in MicroManager GUI first
+    3. Note adapter and device names from hardware wizard
+    
+    Example configuration::
+    
         Camera:
             driver: 'MicroManagerCamera'
             mmAdapterName: 'HamamatsuHam'
             mmDeviceName: 'HamamatsuHam_DCAM'
+            parentDevice: 'Microscope'
+            transform:
+                pos: [0, 0]
+                scale: [4.088e-6, -4.088e-6]
+                angle: 0
+            params:
+                exposure: 10e-3
+                binning: [4, 4]
     """
 
     def __init__(self, manager, config, name):

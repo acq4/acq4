@@ -10,12 +10,50 @@ from acq4.util.debug import printExc
 
 class NiDAQ(Device):
     """
-    Config options:
-        mock: bool. If True, use a mock device instead of the real one.
-        device: str | None. If set, force operations to a single device.
-        defaultAIMode: 'mode'  # mode to use for ai channels by default ('rse', 'nrse', or 'diff')
-        defaultAIRange: [-10, 10]  # default voltage range to use for AI ports
-        defaultAORange: [-10, 10]  # default voltage range to use for AO ports
+    National Instruments DAQ device for multi-channel analog/digital I/O operations.
+    
+    Provides buffered and unbuffered analog/digital input/output with hardware timing,
+    triggering, and synchronized multi-channel data acquisition.
+    
+    Configuration options:
+    
+    * **mock** (bool, optional): If True, use mock DAQ instead of real hardware. Default: False
+    
+    * **device** (str, optional): Specific DAQ device name to use (e.g., 'Dev1'). If not specified,
+      uses any available device
+    
+    * **defaultAIMode** (str, optional): Default input mode for analog input channels
+        - 'rse': Referenced single-ended (default)
+        - 'nrse': Non-referenced single-ended  
+        - 'diff': Differential
+    
+    * **defaultAIRange** (list, optional): Default voltage range for analog inputs as [min, max].
+      Default: [-10, 10]
+    
+    * **defaultAORange** (list, optional): Default voltage range for analog outputs as [min, max].
+      Default: [-10, 10]
+    
+    Example configuration::
+    
+        DAQ:
+            driver: 'NiDAQ'
+            device: 'Dev1'
+            defaultAIMode: 'NRSE'
+            defaultAIRange: [-10, 10]
+            defaultAORange: [-10, 10]
+    
+        # Other devices reference DAQ channels using standard syntax:
+        SomeDevice:
+            driver: 'DAQGeneric'
+            channels:
+                inputChan:
+                    device: 'DAQ'
+                    channel: '/Dev1/ai0'
+                    type: 'ai'
+                outputChan:
+                    device: 'DAQ'
+                    channel: '/Dev1/ao0'
+                    type: 'ao'
     """
 
     def __init__(self, dm, config, name):

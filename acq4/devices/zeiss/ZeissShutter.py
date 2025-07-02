@@ -5,15 +5,35 @@ from acq4.util import Qt
 
 class ZeissShutter(Device):
     """
-    Config Options
-    --------------
-    transOrReflect : str
-        "Transmissive" | "Reflective" Which of the two standard shutters to represent.
-        (Defaults to "Transmissive")
-    ZeissMtbComponentID : str
-        If pointing to a different Zeiss component, this overrides `transOrReflect`.
-    apiDllLocation : str
-        The path for the MTBApi.dll file, if non-standard.
+    Driver for Zeiss microscope shutters via MTB (Microscopy Technology Base) API.
+    
+    Controls transmitted light and reflected light shutters on Zeiss microscopes.
+    
+    Configuration options:
+    
+    * **transOrReflect** (str, optional): Shutter type ('Transmissive' or 'Reflective')
+      Default: 'Transmissive'
+    
+    * **ZeissMtbComponentID** (str, optional): Specific Zeiss component ID
+      Overrides transOrReflect if specified
+    
+    * **apiDllLocation** (str, optional): Path to MTBApi.dll file
+      Uses standard location if not specified
+    
+    Emits sigShutterStateChanged(isOpen) when shutter state changes.
+    
+    Example configuration::
+    
+        ZeissShutter:
+            driver: 'ZeissShutter'
+            transOrReflect: 'Transmissive'
+    
+    or with custom component::
+    
+        ZeissRLShutter:
+            driver: 'ZeissShutter'
+            ZeissMtbComponentID: 'MTB_RL_SHUTTER_ID'
+            apiDllLocation: 'C:/CustomPath/MTBApi.dll'
     """
     TRANSMISSIVE = "Transmissive"
     REFLECTIVE = "Reflective"
