@@ -6,11 +6,29 @@ from acq4.util import Qt
 
 class Screen(Device):
     """
-    Device used for screen output. 
+    Device used for screen output and blanking during sensitive imaging operations.
+    
+    Provides screen blanking functionality to prevent extraneous light contamination
+    during acquisitions. Can blank all detected screens simultaneously.
+    
+    Configuration options:
+    
+    This device typically requires no configuration options beyond the standard Device parameters.
+    
+    Example configuration::
+    
+        Screen:
+            driver: 'Screen'
+    
+    Usage in acquisition tasks:
+    
+    The Screen device can be used in acquisition protocols to automatically blank
+    screens during imaging. The device will create black fullscreen widgets on all
+    detected displays and remove them when blanking is disabled.
     
     Currently, this is only used to blank the screen temporarily to avoid 
     contaminating sensitive imaging operations. In the future, this device may
-    be extended to provide visual stimulation (perhaps via psychopy)    
+    be extended to provide visual stimulation (perhaps via psychopy).
     """
     sigBlankScreen = Qt.Signal(object, object)  # bool blank/unblank, QWaitCondition
     def __init__(self, dm, config, name):

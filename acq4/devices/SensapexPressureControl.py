@@ -10,15 +10,43 @@ from ..util.debug import logExc
 
 
 class SensapexPressureControl(PressureControl):
-    """Pressure control device driven by Sensapex analog/digital channels. User and
-    Atmosphere are the same port for this device.
-    Additional config options::
-
-        deviceId : int
-        address : str
-        group : int
-        pressureChannel : int
-        pollInterval : float
+    """
+    Pressure control device using Sensapex system analog/digital channels.
+    
+    Note: 'user' and 'atmosphere' sources use the same port on this device.
+    
+    Sensapex-specific configuration options:
+    
+    * **deviceId** (int, required): Sensapex device ID for pressure control unit
+    
+    * **address** (str, optional): Network address for TCP connection
+      (uses global 'drivers/sensapex' config section if not specified)
+    
+    * **group** (int, optional): Device group number for shared connection  
+      (uses global 'drivers/sensapex' config section if not specified)
+    
+    * **pressureChannel** (int, required): Analog channel number for pressure measurement
+    
+    * **pollInterval** (float, optional): Pressure measurement polling interval in seconds
+      (default: 1.0)
+    
+    Standard PressureControl configuration options (see PressureControl base class):
+    
+    * **maximum** (float, optional): Maximum pressure limit in Pa (default: 70000)
+    
+    * **minimum** (float, optional): Minimum pressure limit in Pa (default: -70000)
+    
+    * **regulatorSettlingTime** (float, optional): Time for pressure to settle (default: 0.3)
+    
+    Example configuration::
+    
+        SensapexPressure:
+            driver: 'SensapexPressureControl'
+            deviceId: 30
+            pressureChannel: 1
+            pollInterval: 0.5
+            maximum: 50000
+            minimum: -50000
     """
     sigMeasuredPressureChanged = Qt.Signal(object, object)  # self, pressure
 
