@@ -487,10 +487,10 @@ class Scientifica:
         """
         self.send('CURRENT %d %d' % (int(run), int(standby)))
 
-    def stop(self):
+    def stop(self, reason):
         """Stop moving the manipulator.
         """
-        return self.ctrlThread.stop()
+        return self.ctrlThread.stop(reason=reason)
 
     def isMoving(self):
         """Return True if the manipulator is moving.
