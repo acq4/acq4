@@ -11,6 +11,40 @@ from acq4.util.Mutex import Mutex
 
 
 class QCam(Camera):
+    """
+    Camera driver for QImaging cameras using the QCam library.
+    
+    QCam-specific configuration options:
+    
+    * **serial** (str, optional): Camera serial number string
+      If not specified, the first available camera will be used.
+      Use incorrect serial to see available options in error message.
+    
+    Standard Camera configuration options (see Camera base class):
+    
+    * **parentDevice** (str, optional): Name of parent optical device (microscope, etc.)
+    
+    * **transform** (dict, optional): Spatial transform relative to parent device
+        - pos: Position offset [x, y]
+        - scale: Scale factors [x, y] in m/pixel
+        - angle: Rotation angle in radians
+    
+    * **exposeChannel** (dict, optional): DAQ channel for exposure signal recording
+    
+    * **triggerInChannel** (dict, optional): DAQ channel for triggering camera
+    
+    * **params** (dict, optional): Camera parameters to set at startup
+    
+    Example configuration::
+    
+        Camera:
+            driver: 'QCam'
+            parentDevice: 'Microscope'
+            transform:
+                pos: [0, 0]
+                scale: [1, 1]
+                angle: 0
+    """
     def setupCamera(self):
         self.qcd = QCamDriverClass()
         cams = self.qcd.listCameras()

@@ -11,16 +11,36 @@ from acq4.util.Mutex import Mutex
 
 class CoolLEDLightSource(LightSource):
     """
-    The Cool LED family of light sources should conform to the protocol used here.
-
-    Config options
-    --------------
-
-    port | string
-        The name of the serial port to connect to ( e.g. COM1, /dev/ttyS2 ). If the port is
-        set to "probe", this will scan through all the available ports in search of a device
-        that responds like a Cool LED device. This may produce unexpected behavior in other
-        devices.
+    Driver for CoolLED family of LED light sources.
+    
+    Supports multi-channel LED sources with serial communication and brightness control.
+    
+    CoolLED-specific configuration options:
+    
+    * **port** (str, required): Serial port for communication (e.g., 'COM1', '/dev/ttyS2')
+      Use 'probe' to auto-detect port (may affect other serial devices)
+    
+    The device automatically creates three light sources: 'A', 'B', and 'C' corresponding
+    to the LED channels with adjustable brightness control.
+    
+    Standard LightSource configuration options (see LightSource base class):
+    
+    * **parentDevice** (str, optional): Name of parent optical device
+    
+    * **transform** (dict, optional): Spatial transform relative to parent device
+    
+    Example configuration::
+    
+        CoolLED:
+            driver: 'CoolLEDLightSource'
+            port: 'COM3'
+            parentDevice: 'Microscope'
+    
+    or with auto-detection::
+    
+        CoolLED:
+            driver: 'CoolLEDLightSource'
+            port: 'probe'
     """
     def __init__(self, dm, config, name):
         super(CoolLEDLightSource, self).__init__(dm, config, name)

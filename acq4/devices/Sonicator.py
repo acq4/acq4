@@ -8,12 +8,21 @@ from acq4.util.future import Future, FutureButton
 
 
 class Sonicator(Device):
-    """Base class for any sonicator device.
-    Config
-    ------
-    protocols : dict
-        Dictionary of predefined sonication protocols. Subclasses define the format of these protocols.
-
+    """
+    Base class for ultrasonic sonicator devices.
+    
+    Provides common functionality for controlling ultrasonic cleaners and sonicators
+    used for pipette cleaning and laboratory equipment maintenance.
+    
+    Configuration options:
+    
+    * **protocols** (dict): Dictionary of predefined sonication protocols
+        - Key: Protocol name (str)
+        - Value: Protocol definition (format depends on subclass implementation)
+    
+    Subclasses define the specific format and implementation of protocols.
+    
+    Emits sigSonicationChanged(status) when sonication state changes.
     """
 
     sigSonicationChanged = Qt.pyqtSignal(str)

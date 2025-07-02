@@ -13,7 +13,37 @@ class ChangeNotifier(Qt.QObject):
 
 
 class ThorlabsMFC1(Stage):
-    """Thorlabs motorized focus controller (MFC1)
+    """
+    Driver for Thorlabs MFC1 motorized focus controller.
+    
+    Provides Z-axis control for microscope focusing with optional ROE integration.
+    
+    Configuration options:
+    
+    * **port** (str, required): Serial port (e.g., 'COM9')
+    
+    * **scale** (tuple, optional): (x, y, z) scale factors for position
+      (default: (1, 1, 1)). Only Z-axis is used.
+    
+    * **motorParams** (dict, optional): Low-level motor parameters to pass to driver
+    
+    * **roe** (str, optional): Name of ROE device to integrate Z-axis control
+      When specified, ROE Z-axis movements control the MFC1 focus
+    
+    * **limits** (list, optional): [min, max] Z-axis position limits
+    
+    * **parentDevice** (str, optional): Name of parent device (typically a stage)
+    
+    * **transform** (dict, optional): Spatial transform relative to parent device
+    
+    Example configuration::
+    
+        FocusMotor:
+            driver: 'ThorlabsMFC1'
+            port: 'COM9'
+            parentDevice: 'SutterStage'
+            scale: [1.0, 1.0, 1e-6 * 85e-6 / 10e-3]
+            limits: [-5e-3, 5e-3]
     """
 
     def __init__(self, man, config, name):

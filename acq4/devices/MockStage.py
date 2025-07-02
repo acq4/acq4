@@ -9,6 +9,39 @@ from acq4.util.Thread import Thread
 
 
 class MockStage(Stage):
+    """
+    Simulated motorized stage for testing and demonstration.
+    
+    Provides realistic stage behavior without hardware, including movement timing,
+    position reporting, and optional keyboard control for manual positioning.
+    
+    Configuration options:
+    
+    * **fastSpeed** (float, optional): Fast movement speed in m/s (default from Stage)
+    
+    * **slowSpeed** (float, optional): Slow movement speed in m/s (default from Stage)
+    
+    * **keys** (bool, optional): Enable keyboard control when True
+      Arrow keys move X/Y, Page Up/Down move Z
+      Ctrl: 4x speed, Alt: 0.25x speed, Shift: 0.1x speed
+    
+    * **capabilities** (dict, optional): Override device capabilities
+        - getPos: (x, y, z) tuple of booleans for position reading capability
+        - setPos: (x, y, z) tuple of booleans for position setting capability
+        - limits: (x, y, z) tuple of booleans for limit support
+    
+    * **parentDevice** (str, optional): Name of parent device for coordinate transforms
+    
+    * **transform** (dict, optional): Spatial transform relative to parent device
+    
+    Example configuration::
+    
+        MockStage:
+            driver: 'MockStage'
+            fastSpeed: 3e-3
+            slowSpeed: 100e-6
+            keys: True
+    """
 
     def __init__(self, dm, config, name):
         Stage.__init__(self, dm, config, name)
