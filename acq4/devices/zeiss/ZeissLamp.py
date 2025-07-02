@@ -6,15 +6,41 @@ from acq4.drivers.zeiss import ZeissMtbSdk
 
 class ZeissLamp(LightSource):
     """
-    Config Options
-    --------------
-    transOrReflect : str
-        "Transmissive" | "Reflective" Which of the two standard light sources to represent
-        (Defaults to "Transmissive")
-    ZeissMtbComponentID : str
-        If pointing to a different Zeiss component, this overrides `transOrReflect`.
-    apiDllLocation : str
-        The path for the MTBApi.dll file, if non-standard.
+    Driver for Zeiss microscope lamps via MTB (Microscopy Technology Base) API.
+    
+    Controls transmitted light and reflected light lamps on Zeiss microscopes
+    with brightness adjustment.
+    
+    Zeiss-specific configuration options:
+    
+    * **transOrReflect** (str, optional): Lamp type ('Transmissive' or 'Reflective')
+      Default: 'Transmissive'
+    
+    * **ZeissMtbComponentID** (str, optional): Specific Zeiss component ID
+      Overrides transOrReflect if specified
+    
+    * **apiDllLocation** (str, optional): Path to MTBApi.dll file
+      Uses standard location if not specified
+    
+    Standard LightSource configuration options (see LightSource base class):
+    
+    * **parentDevice** (str, optional): Name of parent optical device
+    
+    * **transform** (dict, optional): Spatial transform relative to parent device
+    
+    Example configuration::
+    
+        ZeissLamp:
+            driver: 'ZeissLamp'
+            transOrReflect: 'Transmissive'
+            parentDevice: 'Microscope'
+    
+    or with custom component::
+    
+        ZeissReflectorLamp:
+            driver: 'ZeissLamp'
+            ZeissMtbComponentID: 'MTB_RL_LAMP_ID'
+            apiDllLocation: 'C:/CustomPath/MTBApi.dll'
     """
     TRANSMISSIVE = "Transmissive"
     REFLECTIVE = "Reflective"

@@ -7,7 +7,36 @@ import acq4.util.Mutex as Mutex
 
 
 class DIOSwitch(Device):
-    """Simple device which polls DIO ports on a DAQ and reports when their state changes."""
+    """
+    A device that polls digital I/O ports on a DAQ and reports when their state changes.
+    
+    Useful for monitoring hardware switches, objective position detectors, PMT apertures, etc.
+    
+    Configuration options:
+    
+    * **channels** (dict): Digital input channels to monitor
+        - Key: Switch name (e.g., 'objective', 'PMT')
+        - Value: Dict with 'device' and 'channel' keys
+            - device: Name of DAQ device
+            - channel: DIO channel path (e.g., '/Dev1/line12')
+    
+    * **interval** (float): Polling interval in seconds (e.g., 0.3 for 300ms)
+    
+    Emits sigSwitchChanged(device, changes) when any monitored switch changes state.
+    
+    Example configuration::
+    
+        Switch:    
+            driver: 'DIOSwitch'
+            channels: 
+                objective:
+                    device: 'DAQ'
+                    channel: '/Dev1/line12'
+                PMT:
+                    device: 'DAQ'
+                    channel: '/Dev1/line6'
+            interval: 0.3
+    """
     
     sigSwitchChanged = Qt.Signal(object, object)
     

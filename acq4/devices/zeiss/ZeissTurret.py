@@ -8,6 +8,47 @@ from acq4.util import Qt, ptime
 
 
 class ZeissTurret(FilterWheel):
+    """
+    Driver for Zeiss microscope turrets (reflector changer, objective changer) via MTB API.
+    
+    Provides motorized filter wheel functionality for Zeiss microscope components.
+    
+    Zeiss-specific configuration options:
+    
+    * **componentId** (str, optional): Zeiss component type
+      'MTBReflectorChanger' for reflector turret (default)
+      'MTBObjectiveChanger' for objective changer
+    
+    * **apiDllLocation** (str, optional): Path to MTBApi.dll file
+      Uses standard location if not specified
+    
+    Standard FilterWheel configuration options (see FilterWheel base class):
+    
+    * **filters** (dict): Filter/component definitions for each position
+        - Key: Position number (int, 0-based)
+        - Value: Filter configuration dict with 'name' and optional 'description'
+    
+    * **parentDevice** (str, optional): Name of parent optical device
+    
+    * **transform** (dict, optional): Spatial transform relative to parent device
+    
+    Example configuration::
+    
+        ZeissReflectorTurret:
+            driver: 'ZeissTurret'
+            componentId: 'MTBReflectorChanger'
+            parentDevice: 'Microscope'
+            filters:
+                0:
+                    name: 'FITC'
+                    description: 'Green fluorescence cube'
+                1:
+                    name: 'Texas Red'
+                    description: 'Red fluorescence cube'
+                2:
+                    name: 'DAPI'
+                    description: 'Blue fluorescence cube'
+    """
     def __init__(self, dm, config, name):
         zeiss = ZeissMtbSdk.getSingleton(config.get("apiDllLocation", None))
         if config.get("componentId", "MTBReflectorChanger") == "MTBReflectorChanger":
