@@ -63,6 +63,77 @@ class AP200DataMapping(DataMapping):
     
     
 class AxoPatch200(DAQGeneric):
+    """
+    Driver for Molecular Devices/Axon AxoPatch 200 patch clamp amplifiers.
+    
+    Supports AxoPatch 200, 200A, and 200B models. Automatically reads amplifier state
+    from telegraph signals and provides scaling for command and signal channels.
+    
+    Configuration options:
+    
+    * **version** (str, required): Amplifier model ('200', '200A', or '200B')
+    
+    * **ModeChannel** (dict): DAQ channel for reading mode telegraph signal
+        - device: Name of DAQ device
+        - channel: DAQ channel (e.g., '/Dev1/ai13')
+        - type: 'ai'
+    
+    * **GainChannel** (dict): DAQ channel for reading gain telegraph signal  
+        - device: Name of DAQ device
+        - channel: DAQ channel (e.g., '/Dev1/ai14')
+        - type: 'ai'
+    
+    * **LPFChannel** (dict): DAQ channel for reading low-pass filter telegraph signal
+        - device: Name of DAQ device
+        - channel: DAQ channel (e.g., '/Dev1/ai15')
+        - type: 'ai'
+    
+    * **Command** (dict): DAQ channel for command output
+        - device: Name of DAQ device
+        - channel: DAQ channel (e.g., '/Dev1/ao0')
+        - type: 'ao'
+    
+    * **ScaledSignal** (dict): DAQ channel for primary signal input
+        - device: Name of DAQ device
+        - channel: DAQ channel (e.g., '/Dev1/ai5')
+        - type: 'ai'
+    
+    * **SecondaryVCSignal** (dict, optional): Secondary voltage clamp signal channel
+    
+    * **SecondaryICSignal** (dict, optional): Secondary current clamp signal channel
+    
+    * **icHolding** (float, optional): Default current clamp holding current (A, default: 0.0)
+    
+    * **vcHolding** (float, optional): Default voltage clamp holding potential (V, default: -65e-3)
+    
+    Example configuration::
+    
+        AxoPatch200:
+            driver: 'AxoPatch200'
+            version: '200B'
+            ModeChannel: 
+                device: 'DAQ' 
+                channel: '/Dev1/ai13'
+                type: 'ai'
+            GainChannel: 
+                device: 'DAQ' 
+                channel: '/Dev1/ai14'
+                type: 'ai'
+            LPFChannel: 
+                device: 'DAQ' 
+                channel: '/Dev1/ai15'
+                type: 'ai'
+            Command: 
+                device: 'DAQ' 
+                channel: '/Dev1/ao0'
+                type: 'ao'
+            ScaledSignal: 
+                device: 'DAQ' 
+                channel: '/Dev1/ai5'
+                type: 'ai'
+            icHolding: 0.0
+            vcHolding: -65e-3
+    """
     
     sigShowModeDialog = Qt.Signal(object)
     sigHideModeDialog = Qt.Signal()

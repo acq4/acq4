@@ -46,36 +46,63 @@ class Pipette(Device, OptomechDevice):
 
     Configuration options:
 
-    * pitch: The angle of the pipette (in degrees) relative to the horizontal plane.
+    * **pitch** (float or 'auto', required): The angle of the pipette (in degrees) relative to the horizontal plane.
       Positive values point downward. This option must be specified in the configuration.
       If the value 'auto' is given, then the pitch is derived from the parent manipulator's X axis
       (or other specified by parentAutoAxis) pitch.
-    * yaw: The angle of the pipette (in degrees) relative to the global +X axis (points to the operator's right
+      
+    * **yaw** (float or 'auto', required): The angle of the pipette (in degrees) relative to the global +X axis (points to the operator's right
       when facing the microscope).
       Positive values are clockwise from global +X. This option must be specified in the configuration.
       If the value 'auto' is given, then the yaw is derived from the parent manipulator's X axis
       (or other specified by parentAutoAxis) yaw.
-    * parentAutoAxis: One of '+x' (default), '-x', '+y', '-y', '+z', or '-z' indicating the axis and direction in the
+      
+    * **parentAutoAxis** (str, optional): One of '+x' (default), '-x', '+y', '-y', '+z', or '-z' indicating the axis and direction in the
       parent manipulator's coordinate system that points along the pipette and toward the tip. This axis
       is used by the *pitch* and *yaw* options when they are set to 'auto'. If the pipette is not parallel
       to one of these axes, then a numerical value must be provided for the pitch and/or yaw.
-    * searchHeight: the distance to focus above the sample surface when searching for pipette tips. This
+      
+    * **searchHeight** (float, optional): The distance to focus above the sample surface when searching for pipette tips. This
       should be about 1-2mm, enough to avoid collisions between the pipette tip and the sample during search.
-      Default is 2 mm.
-    * searchTipHeight: the distance above the sample surface to bring the (putative) pipette tip position
+      Default is 2 * mm.
+      
+    * **searchTipHeight** (float, optional): The distance above the sample surface to bring the (putative) pipette tip position
       when searching for new pipette tips. For low working-distance objectives, this should be about 0.5 mm less
       than *searchHeight* to avoid collisions between the tip and the objective during search.
-      Default is 1.5 mm.
-    * approachHeight: the distance to bring the pipette tip above the sample surface when beginning
-      a diagonal approach. Default is 100 um.
-    * idleHeight: the distance to bring the pipette tip above the sample surface when in idle position
-      Default is 1 mm.
-    * idleDistance: the x/y distance from the global origin from which the pipette top should be placed
-      in idle mode. Default is 7 mm.
-    * recordingChambers: list of names of RecordingChamber devices that this Pipette is meant to work with.
-    * reasonableTipOffsetDistance: when updating the tip offset, this is the maximum distance (in meters)
+      Default is 1.5 * mm.
+      
+    * **approachHeight** (float, optional): The distance to bring the pipette tip above the sample surface when beginning
+      a diagonal approach. Default is 100 * um.
+      
+    * **idleHeight** (float, optional): The distance to bring the pipette tip above the sample surface when in idle position.
+      Default is 1 * mm.
+      
+    * **idleDistance** (float, optional): The x/y distance from the global origin from which the pipette top should be placed
+      in idle mode. Default is 7 * mm.
+      
+    * **recordingChambers** (list, optional): List of names of RecordingChamber devices that this Pipette is meant to work with.
+    
+    * **reasonableTipOffsetDistance** (float, optional): When updating the tip offset, this is the maximum distance (in meters)
         from the original tip offset that is considered reasonable. If the tip offset is outside this distance, 
-        the user will be prompted to confirm the new offset. Default is 30 um.
+        the user will be prompted to confirm the new offset. Default is 30 * um.
+
+    Standard OptomechDevice configuration options (see OptomechDevice base class):
+
+    * **parentDevice** (str, required): Name of parent Stage device (manipulator)
+
+    * **transform** (dict, optional): Spatial transform relative to parent device
+
+    Example configuration::
+
+        PatchPipette1:
+            driver: 'Pipette'
+            parentDevice: 'Manipulator1'
+            pitch: 15.0
+            yaw: 45.0
+            searchHeight: 2 * mm
+            approachHeight: 100 * um
+            idleHeight: 1 * mm
+            recordingChambers: ['Chamber1']
     """
 
     sigTargetChanged = Qt.Signal(object, object)
