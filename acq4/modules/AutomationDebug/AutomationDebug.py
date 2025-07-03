@@ -227,6 +227,7 @@ class AutomationDebugWindow(Qt.QWidget):
         _future.waitFor(cell.initializeTracker(self.cameraDevice))
         cell.enableTracking()
         cell.sigPositionChanged.connect(self._updatePipetteTarget)
+        self.sigWorking.emit(self.ui.trackFeaturesBtn)
         try:
             while cell.isTracking:
                 _future.sleep(1)
