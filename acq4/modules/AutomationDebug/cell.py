@@ -99,7 +99,7 @@ class Cell(Qt.QObject):
             future.wait()
 
     def updatePosition(self, _future):
-        while len(self._tracker.object_stacks) == 0:
+        while self._tracker.position is None:
             _future.sleep(0.1)
 
         result = self._tracker.track_next_frame()
