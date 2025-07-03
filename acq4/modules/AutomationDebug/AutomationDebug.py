@@ -29,6 +29,7 @@ from acq4.util.imaging.sequencer import acquire_z_stack
 from acq4.util.target import TargetBox
 from acq4.util.threadrun import futureInGuiThread, runInGuiThread
 from pyqtgraph.units import µm, m
+from .cell import Cell
 from .ranking_window import RankingWindow
 
 UiTemplate = Qt.importTemplate(".window")
@@ -217,25 +218,11 @@ class AutomationDebugWindow(Qt.QWidget):
 
     @future_wrap
     def doFeatureTracking(self, _future: Future):
-        from acq4_automation.feature_tracking import (
-            CV2MostFlowAgreementTracker,
-            SingleFrameTracker,
-        )
-
         self.sigWorking.emit(self.ui.trackFeaturesBtn)
-        # TODO no bad! no gui access!
-        if self.ui.featureTrackerSelector.currentText() == "CV2":
-            tracker = self._featureTracker = CV2MostFlowAgreementTracker
-        elif self.ui.featureTrackerSelector.currentText() == "Single-Frame":
-            tracker = self._featureTracker = SingleFrameTracker
-        else:
-            raise ValueError(
-                f"unknown tracker '{self.ui.featureTrackerSelector.currentText()}'"
-            )
         pipette = self.pipetteDevice
         target: np.ndarray = pipette.targetPosition()
         cell = self._cell = Cell(target)
-        _future.waitFor(cell.initializeTracker(self.cameraDevice, trackerClass=tracker))
+        _future.waitFor(cell.initializeTracker(self.cameraDevice))
         cell.enableTracking()
         cell.sigPositionChanged.connect(self._updatePipetteTarget)
         try:
@@ -671,6 +658,8 @@ class AutomationDebugWindow(Qt.QWidget):
 
         # --- Get next cell ---
         # TODO separate ranking cells from targeting cells
+        raise NotImplementedError("This method is not fully implemented.")
+        # TODO this is broken code; it assumes _unranked_cells is a list of (start, end) bounding boxes
         start, end = np.array(self._unranked_cells.pop(0))
         center_global = (start + end) / 2.0
         pixel_size = self.cameraDevice.getPixelSize()[0]  # Get current pixel size
@@ -734,6 +723,8 @@ class AutomationDebugWindow(Qt.QWidget):
         neurons = self._unranked_cells
 
         # --- Calculate target ---
+        raise NotImplementedError("This method is not fully implemented.")
+        # TODO this is broken code; it assumes _unranked_cells is a list of (start, end) bounding boxes
         centers = [(start + end) / 2 for start, end in np.array(neurons)]
         # TODO is this important to check? does the detection algorithm already guarantee this?
         target = next(
