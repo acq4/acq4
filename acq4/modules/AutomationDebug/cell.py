@@ -83,7 +83,7 @@ class Cell(Qt.QObject):
             if ptime.time() - last_tracked > interval:
                 try:
                     self.updatePosition(_future)
-                except _future.StopRequested:
+                except (_future.StopRequested, self._tracker._motion_estimator.TrackingError):
                     raise
                 except _future.Stopped as exc:
                     logMsg(f"Cell tracker exiting: {exc}")

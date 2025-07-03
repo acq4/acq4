@@ -53,6 +53,7 @@ class AutomationDebugWindow(Qt.QWidget):
         self._previousBoxWidgets = []
         self._mockDemo = False
         self._cell = None
+        self._visualizers = []
         self._unranked_cells = []  # List of global positions of cells
         self._ranked_cells = []
         self._current_detection_stack = None
@@ -106,7 +107,8 @@ class AutomationDebugWindow(Qt.QWidget):
             stoppable=True,
         )
         self.ui.trackFeaturesBtn.sigFinished.connect(self._handleFeatureTrackingFinish)
-        self._featureTracker = None
+        self.ui.visualizeTrackingBtn.clicked.connect(self._visualizeTracking)
+        self.ui.visualizeTrackingBtn.setEnabled(False)
 
         self.ui.testPipetteBtn.setOpts(
             future_producer=self.doPipetteCalibrationTest,
@@ -242,6 +244,15 @@ class AutomationDebugWindow(Qt.QWidget):
         boxPositions = [c.position for c in self._unranked_cells]
         _future.waitFor(futureInGuiThread(self._displayBoundingBoxes, boxPositions))
 
+    def _visualizeTracking(self):
+        if self._cell is None or self._cell._tracker is None:
+            logMsg("No cell tracking available to visualize.")
+            return
+        from acq4_automation.feature_tracking.visualization import LiveTrackerVisualizer
+        visualizer = LiveTrackerVisualizer(self._cell._tracker)
+        self._visualizers.append(visualizer)
+        visualizer.show()
+
     def _updatePipetteTarget(self, pos):
         self.pipetteDevice.setTarget(pos)
         self.sigLogMessage.emit(f"Updated target to {pos}")
@@ -275,6 +286,7 @@ class AutomationDebugWindow(Qt.QWidget):
         )
         self.ui.rankCellsBtn.setEnabled(len(self._unranked_cells) > 0)
         # self.ui.autopatchDemoBtn.setEnabled(working == self.ui.autopatchDemoBtn or not working)
+        self.ui.visualizeTrackingBtn.setEnabled(self._cell is not None and self._cell._tracker is not None)
 
     @property
     def cameraDevice(self) -> Camera:
