@@ -75,9 +75,10 @@ When ACQ4 first starts, it searches a few default locations for a file named 'de
     
 ::
 
-    storageDir: "storage/dir" 
     imports: [...]
     execFiles: [...]
+    conditionalConfig:
+        ...
     modules:
         ...
     devices:
@@ -86,12 +87,15 @@ When ACQ4 first starts, it searches a few default locations for a file named 'de
         ...
     configurations:
         ...
+    storageDir: "storage/dir" 
 
 In this format:
 
 * **storageDir** specifies the *default* location where data should be stored when no other location is specified.
 * **imports** and **execFiles** specify lists of either module names to execute, or python file names to exec(), respectively. 
   These allow custom extension code to be loaded at startup.
+  Note that these are processed before the rest of the configuration is loaded, which makes it possible
+  for these files to modify the configuration before it is processed.
 
 All other sections are discussed below:
     
@@ -207,7 +211,7 @@ Configurations Configuration
 
 Commonly, acquisition systems will be accessed by mutiple users requiring different configuration settings. One way to achieve this is to create a completely different set of configuration files for each user and specify which to use when starting the program. A simpler way is to define just the *differences* between these configurations and select them after the program has been started. 
 
-The *configurations* section allows us to define a set of named modifications to the default configuration. For example: all users on a system want to use the same device and module configuration, but define their own data storage directory:
+The *configurations* section allows us to define a set of named modifications to the default configuration. These names appear in the Manager module window and can be selected at runtime. For example: all users on a system want to use the same device and module configuration, but define their own data storage directory:
     
 ::
     
@@ -220,6 +224,38 @@ The *configurations* section allows us to define a set of named modifications to
             storageDir: 'C:\\data\\maude'
         
 In the example above, the three names would appear in the Manager module as loadable configurations. This allows each user to quickly select their storage settings. The settings for each user can be anything that would appear at the top-level configuration. Thus, users can specify their own folder types, preconfigured modules, etc (however devices may not be defined here). 
+
+
+Conditional Configuration
+''''''''''''''''''''''''''''''
+
+When managing multiple rigs or multiple configurations on a rig, it is often useful to have a single configuration that can be deployed across all rigs, but that will automatically select the appropriate settings based on the hostname, username, or other environment variables. The *conditionalConfig* section allows us to specify a set of conditions that will be evaluated at startup, and the configuration options that should be applied if those conditions are met.
+
+For example::
+
+    conditionalConfig:
+        rig1:
+            condition: 'hostname == "rig1"'
+            storageDir: '/data/rig1'
+            devices:
+                Camera:
+                    serial: '11349-231'
+        rig2:
+            condition: 'hostname == "rig2"'
+            storageDir: '/data/rig2'
+            devices:
+                Camera:
+                    serial: '11349-247'
+
+In the example above, we define two conditional configurations, one for each rig. When acq4 starts up, each condition is checked in order, and if a match is found then the *storageDir* value is set, and the serial number for the *Camera* device is updated (we expect here that the top-level *devices* section already contains a *Camera* device that is otherwise fully configured). 
+
+Conditions are specified as a string that can be evaluated as a python expression. The following variables are available for use in these expressions:
+
+* *hostname* - The name of the computer on which ACQ4 is running (as returned by ``socket.gethostname()``).
+* *username* - The name of the user running ACQ4 (as returned by ``getpass.getuser()``).
+* *environ* - A dictionary containing the current environment variables (as returned by ``os.environ``).
+
+Compound conditions may be specified like ``hostname == "rig1" or hostname == "rig2"``, and _all_ matching conditions will have their configuration applied.
 
 
 Miscellaneous Options

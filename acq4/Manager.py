@@ -256,14 +256,22 @@ class Manager(Qt.QObject):
                 else:
                     printExc("Error in ACQ4 configuration:")
 
+        # Handle custom exec prior to loading devices
+        if 'execFiles' in cfg:
+            val = cfg['execFiles']
+            if isinstance(val, str):
+                val = [val]
+            for pyfile in val:
+                self.exec_(pyfile)
+
+        # Handle conditional configuration 
+        self.applyConditionalConfig(cfg)
+
         for key, val in cfg.items():
             try:
-                # Hand custom exec
-                if key == 'execFiles':
-                    if isinstance(val, str):
-                        val = [val]
-                    for pyfile in val:
-                        self.exec_(pyfile)
+                if key in ('imports', 'execFiles', 'conditionalConfig'):
+                    # already handled above
+                    pass
 
                 ## configure new devices
                 elif key == 'devices':
@@ -369,6 +377,69 @@ class Manager(Qt.QObject):
         except KeyError:
             raise KeyError(f"Could not find configuration named '{name}'")
         self.configure(cfg)
+
+    def applyConditionalConfig(self, cfg):
+        """Return a modified config based on conditional configuration options.
+
+        This allows a single configuration file to be used across many systems, where
+        some options (e.g. hardware serial numbers, calibration parameters, etc.) 
+        must be set depending on the system used.
+
+        Conditionals are strings evaluated as python code, and may depend on the 
+        hostname, username, or environmental variables::
+
+            "hostname == 'rig1'"   
+        
+        
+        The top-level config structure may contain a 'conditionalConfig' key, which looks like::
+
+            conditionalConfig:
+                rig1:                                 # arbitrary name for this conditional
+                    condition: "hostname == 'rig1'"   # condition to evaluate
+                    devices:                          # all other keys are applied to update the top-level config
+                        Camera:
+                            config:
+                                serial: 123456
+                test:
+                    condition: "environ['my_test_env']" == 1"
+                    devices:
+                        Camera:
+                            driver: 'MockCamera'
+                user1:
+                    condition: "username == 'myuser'"
+                    storageDir: '/home/myuser/data'
+
+        """
+        if 'conditionalConfig' not in cfg:
+            return cfg
+        
+        import socket, getpass
+        cond_ns = {
+            'hostname': socket.gethostname(),
+            'username': getpass.getuser(),
+            'environ': os.environ,
+        }
+        for name, val in cfg['conditionalConfig'].items():
+            condition = eval(val['condition'], cond_ns)
+            if condition:
+                logMsg(f"Applying conditional configuration '{name}'")
+                val = val.copy()
+                del val['condition']
+                self._updateConfig(cfg, val)
+        return cfg
+
+    def _updateConfig(self, cfg, updates):
+        for key, val in updates.items():
+            if isinstance(val, dict):
+                if key not in cfg:
+                    cfg[key] = val
+                else:
+                    if isinstance(cfg[key], dict):
+                        self._updateConfig(cfg[key], val)
+                    else:
+                        raise TypeError(f"Cannot update config key '{key}': existing value is not a dictionary.")
+            else:
+                cfg[key] = val
 
     def readConfigFile(self, fileName, missingOk=True):
         fileName = self.configFileName(fileName)
