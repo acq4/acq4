@@ -13,7 +13,7 @@ from coorx import Point
 class Cell(Qt.QObject):
     sigPositionChanged = Qt.pyqtSignal(object)
 
-    def __init__(self, position: coorx.Point):
+    def __init__(self, position: Point):
         """Initialize the Cell object.
         Parameters
         ----------
