@@ -5,6 +5,7 @@ import traceback
 from pathlib import Path
 
 import numpy as np
+from coorx import Point
 
 import pyqtgraph as pg
 from MetaArray import MetaArray
@@ -222,7 +223,7 @@ class AutomationDebugWindow(Qt.QWidget):
     def doFeatureTracking(self, _future: Future):
         self.sigWorking.emit(self.ui.trackFeaturesBtn)
         pipette = self.pipetteDevice
-        target: np.ndarray = pipette.targetPosition()
+        target = Point(pipette.targetPosition(), "global")
         cell = self._cell = Cell(target)
         _future.waitFor(cell.initializeTracker(self.cameraDevice))
         cell.enableTracking()
@@ -238,7 +239,7 @@ class AutomationDebugWindow(Qt.QWidget):
 
     @future_wrap
     def _addCellFromTarget(self, _future):
-        target = self.pipetteDevice.targetPosition()
+        target = Point(self.pipetteDevice.targetPosition(), "global")
         cell = Cell(target)
         _future.waitFor(cell.initializeTracker(self.cameraDevice))
         self._unranked_cells.append(cell)
@@ -505,7 +506,7 @@ class AutomationDebugWindow(Qt.QWidget):
             if isinstance(working_stack, tuple)
             else working_stack[0].globalTransform()
         )
-        globalPos = [transform.map([row, col, zframe]) for (zframe, row, col) in result]
+        globalPos = [Point(transform.map([row, col, zframe]), "global") for (zframe, row, col) in result]
 
         self._current_detection_stack = detection_stack
         self._current_classification_stack = classification_stack

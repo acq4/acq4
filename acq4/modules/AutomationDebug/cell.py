@@ -1,23 +1,19 @@
 import numpy as np
 
-from acq4.Manager import getManager
 from acq4.util import Qt, ptime
 from acq4.util.debug import logMsg, printExc
 from acq4.util.future import future_wrap, Future
-from acq4.util.imaging.sequencer import acquire_z_stack
 from acq4_automation.feature_tracking import (
     CameraCellTracker,
     SingleFrameMotionEstimator,
-    ObjectStack,
-    ImageStack,
 )
-from coorx import SRT3DTransform, TransposeTransform, TTransform, Point
+from coorx import Point
 
 
 class Cell(Qt.QObject):
     sigPositionChanged = Qt.pyqtSignal(object)
 
-    def __init__(self, position):
+    def __init__(self, position: coorx.Point):
         """Initialize the Cell object.
         Parameters
         ----------
