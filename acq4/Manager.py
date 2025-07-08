@@ -15,6 +15,8 @@ import sys
 import time
 import argparse
 import weakref
+import socket
+import getpass
 from collections import OrderedDict
 
 import pyqtgraph as pg
@@ -195,7 +197,12 @@ class Manager(Qt.QObject):
         """Read configuration file, create device objects, add devices to list"""
         print("============= Starting Manager configuration from %s =================" % configFile)
         logMsg("Starting Manager configuration from %s" % configFile)
-        cfg = configfile.readConfigFile(configFile)
+        ns = {
+            'hostname': socket.gethostname(),
+            'username': getpass.getuser(),
+            'environ': os.environ,
+        }
+        cfg = configfile.readConfigFile(configFile, **ns)
         self.config.update(cfg)
 
         ## read modules, devices, and stylesheet out of config
