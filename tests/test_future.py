@@ -3,12 +3,12 @@ import time
 import unittest
 from unittest.mock import MagicMock
 
-from PyQt5.QtWidgets import QApplication
+import pyqtgrph as pg
 
 from acq4.util.future import Future, FutureButton, MultiFuture, MultiException
 from acq4.util.future import future_wrap
 
-app = QApplication([])
+app = pg.mkQApp()
 
 
 class TestFutureButton(unittest.TestCase):
