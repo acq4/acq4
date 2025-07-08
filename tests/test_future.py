@@ -3,7 +3,7 @@ import time
 import unittest
 from unittest.mock import MagicMock
 
-import pyqtgrph as pg
+import pyqtgraph as pg
 
 from acq4.util.future import Future, FutureButton, MultiFuture, MultiException
 from acq4.util.future import future_wrap
@@ -25,14 +25,14 @@ class TestFutureButton(unittest.TestCase):
 
     def test_button_click_starts_future(self):
         self.button.click()
-        QApplication.processEvents()
+        app.processEvents()
         self.assertTrue(self.future_producer.called)
         self.assertTrue(self._future.isDone())
         self.assertEqual("success", self._future.getResult())
 
     def test_button_success_message(self):
         self.button.click()
-        QApplication.processEvents()
+        app.processEvents()
         self.assertEqual("Completed", self.button.text())
 
     def test_erroring_future(self):
@@ -41,7 +41,7 @@ class TestFutureButton(unittest.TestCase):
             raise ValueError("error")
         self.future_producer.return_value = task()
         self.button.click()
-        QApplication.processEvents()
+        app.processEvents()
         self.assertEqual("Failed", self.button.text())
 
     def test_stopped_futures_just_reset(self):
@@ -52,21 +52,21 @@ class TestFutureButton(unittest.TestCase):
         f = so_sleepy()
         self.future_producer.return_value = f
         self.button.click()
-        QApplication.processEvents()
+        app.processEvents()
         f.stop("stop")
         time.sleep(0.01)
         self.assertTrue(f.isDone())
-        QApplication.processEvents()
+        app.processEvents()
         self.assertEqual("Test Button", self.button.text())
 
     def test_button_stop(self):
         f = Future()
         self.future_producer.return_value = f
         self.button.click()
-        QApplication.processEvents()
+        app.processEvents()
         self.assertFalse(f._stopRequested)
         self.button.click()  # second click to stop
-        QApplication.processEvents()
+        app.processEvents()
         self.assertTrue(f._stopRequested)
 
 
