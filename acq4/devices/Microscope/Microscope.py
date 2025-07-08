@@ -5,7 +5,7 @@ import numpy as np
 import pyqtgraph as pg
 from acq4.Manager import getManager
 from acq4.devices.Device import Device
-from acq4.devices.OptomechDevice import OptomechDevice, Geometry
+from acq4.devices.OptomechDevice import OptomechDevice
 from acq4.devices.Stage import Stage
 from acq4.modules.Camera import CameraModuleInterface
 from acq4.util import Qt
@@ -14,7 +14,7 @@ from acq4.util.debug import printExc
 from acq4.util.future import Future, MultiFuture, future_wrap, FutureButton
 from acq4.util.imaging import Frame
 from acq4.util.surface import find_surface
-from acq4.util.typing import Number
+from acq4.util.acq4_typing import Number
 from pyqtgraph.units import µm
 
 Ui_Form = Qt.importTemplate('.deviceTemplate')
@@ -147,9 +147,14 @@ class Microscope(Device, OptomechDevice):
                 return
 
         self.setCurrentSubdevice(self.currentObjective)
-        self.geometry = self.currentObjective.hiddenGeometry
-        self.sigGeometryChanged.emit(self)
         self.sigObjectiveChanged.emit((self.currentObjective, lastObj))
+        self.sigGeometryChanged.emit(self)
+
+    def getGeometry(self):
+        objective = self.getObjective()
+        if objective is None:
+            return None
+        return objective.getGeometryForMicroscope(name=self.geometryCacheKey)
 
     def getObjective(self) -> "Objective | None":
         """Return the currently active Objective."""
@@ -165,15 +170,20 @@ class Microscope(Device, OptomechDevice):
         with self.lock:
             return list(self.selectedObjectives.values())
 
-    def loadPreset(self, name):
+    @future_wrap
+    def loadPreset(self, name, _future):
         conf = self.presets[name]
+        futures = []
         for dev_name, state in conf.items():
             if dev_name == "objective":
                 self.setObjectiveIndex(state)
             elif dev_name != "hotkey":
                 dev = self.dm.getDevice(dev_name)
                 if hasattr(dev, "loadPreset"):
-                    dev.loadPreset(state)
+                    futures.append(dev.loadPreset(state))
+        for fut in futures:
+            if fut is not None:
+                _future.waitFor(fut)
 
     def handlePresetHotkey(self, kb_dev, changes, name):
         key, pressed = changes.get('keys', [])[0]
@@ -186,7 +196,12 @@ class Microscope(Device, OptomechDevice):
         return iface
 
     def physicalTransform(self, subdev=None):
-        return self.parentDevice().deviceTransform(subdev)
+        tr = pg.SRTTransform3D({"pos": pg.SRTTransform3D(self.deviceTransform()).getTranslation()})
+        dev = self.getSubdevice(subdev)
+        if dev is None:
+            return tr
+        else:
+            return tr * dev.physicalTransform()
 
     def selectObjective(self, obj):
         ##Set the currently-active objective for a particular switch position
@@ -256,7 +271,7 @@ class Microscope(Device, OptomechDevice):
     def findSurfaceDepth(self, imager: "Device", searchDistance=200*µm, searchStep=5*µm, _future: Future = None) -> float:
         """Set the surface of the sample based on how focused the images are."""
         z_range = (self.getSurfaceDepth() + searchDistance, self.getSurfaceDepth() - searchDistance, searchStep)
-        z_stack: list[Frame] = _future.waitFor(self.getZStack(imager, z_range, block=True)).getResult()
+        z_stack: list[Frame] = _future.waitFor(self.getZStack(imager, z_range)).getResult()
         threshold = self.config.get('surfaceDetectionPercentileThreshold', 96)
         if (idx := find_surface(z_stack, threshold)) is not None:
             depth = z_stack[idx].mapFromFrameToGlobal([0, 0, 0])[2]
@@ -346,26 +361,35 @@ class Microscope(Device, OptomechDevice):
 
 class Objective(Device, OptomechDevice):
 
-    defaultGeometryArgs = {'color': (0, 0.7, 0.9, 0.4)}
-
     def __init__(self, config, scope, key):
-        self._config = config
-        self._scope = scope
+        self._scope: Microscope = scope
         self._key = key
         name = config['name']
 
         Device.__init__(self, scope.dm, config, name)
         OptomechDevice.__init__(self, scope.dm, config, name)
-        self.hiddenGeometry = self.geometry  # microscopes are in charge of setting the geometry
-        self.geometry = Geometry({}, {})
 
         if 'offset' in config:
             self.setOffset(config['offset'])
         if 'scale' in config:
             self.setScale(config['scale'])
 
+    def getGeometry(self):
+        return None
+
+    def getGeometryForMicroscope(self, name):
+        return super().getGeometry(name)
+
     def deviceTransform(self, subdev=None):
         return pg.SRTTransform3D(super().deviceTransform(subdev))
+
+    def physicalTransform(self, subdev=None):
+        tr = pg.SRTTransform3D(dict(pos=self.offset()))
+        dev = self.getSubdevice(subdev)
+        if dev is None:
+            return tr
+        else:
+            return tr * dev.physicalTransform()
 
     def setOffset(self, pos):
         tr = self.deviceTransform()

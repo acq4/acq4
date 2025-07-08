@@ -3,6 +3,18 @@ from acq4.devices.Device import Device
 
 
 class Keyboard(Device):
+    """
+    Base class for keyboard input devices with programmable backlighting.
+    
+    This is an abstract base class for specialized keyboards like the XKeys devices.
+    Provides callback registration for key presses and backlight control interface.
+    
+    Configuration is typically device-specific for subclasses.
+    
+    Signals:
+    - sigStateChanged(self, changes): Emitted when key states change
+    - sigCallbacksChanged(self): Emitted when key callbacks are modified
+    """
     sigStateChanged = Qt.Signal(object, object)  # self, changes
     sigCallbacksChanged = Qt.Signal(object)  # self
 

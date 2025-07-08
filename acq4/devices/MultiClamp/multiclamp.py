@@ -12,6 +12,85 @@ from ...util.debug import printExc
 
 
 class MultiClamp(PatchClamp):
+    """
+    Driver for Molecular Devices MultiClamp 700A/700B patch clamp amplifiers.
+    
+    Configuration options:
+    
+    * **channelID** (str, required): MultiClamp channel identifier string. 
+      Format: 'model:MC700A,com:3,dev:0,chan:1'
+      Use incorrect string to see available device strings in error message.
+    
+    * **commandChannel** (dict): DAQ channel for command output
+        - device: Name of DAQ device  
+        - channel: DAQ channel (e.g., '/Dev1/ao0')
+        - type: 'ao'
+    
+    * **primaryChannel** (dict): DAQ channel for primary signal input
+        - device: Name of DAQ device
+        - channel: DAQ channel (e.g., '/Dev1/ai10') 
+        - type: 'ai'
+        - mode: Input mode ('NRSE', 'RSE', 'DIFF')
+    
+    * **secondaryChannel** (dict): DAQ channel for secondary signal input
+        - device: Name of DAQ device
+        - channel: DAQ channel (e.g., '/Dev1/ai9')
+        - type: 'ai' 
+        - mode: Input mode ('NRSE', 'RSE', 'DIFF')
+    
+    * **vcHolding** (float, optional): Default voltage clamp holding potential (V, default: -65e-3)
+    
+    * **icHolding** (float, optional): Default current clamp holding current (A, default: 0.0)
+    
+    * **dllPath** (str, optional): Path to AxMultiClampMsg.dll (usually auto-detected)
+    
+    * **pythonExecutable** (str, optional): Path to 32-bit python executable for 64-bit systems
+    
+    * **enableParameterCache** (bool, optional): Enable parameter caching for performance (default: False)
+    
+    * **defaults** (dict, optional): Default amplifier settings for each mode
+        - IC: Dict of current clamp parameters
+        - VC: Dict of voltage clamp parameters
+        
+    Example configuration::
+    
+        Clamp1:
+            driver: 'MultiClamp'
+            channelID: 'model:MC700A,com:3,dev:0,chan:1'
+            commandChannel:
+                device: 'DAQ'
+                channel: '/Dev1/ao0'
+                type: 'ao'
+            primaryChannel:
+                device: 'DAQ'
+                channel: '/Dev1/ai10'
+                mode: 'NRSE'
+                type: 'ai'
+            secondaryChannel:
+                device: 'DAQ'
+                channel: '/Dev1/ai9'
+                mode: 'NRSE'
+                type: 'ai'
+            vcHolding: -65e-3
+            icHolding: 0.0
+            defaults:
+                IC:
+                    HoldingEnable: False
+                    Holding: 0.0
+                    NeutralizationEnable: True
+                    PrimarySignalGain: 2
+                    PrimarySignalLPF: 20e3
+                    BridgeBalEnable: True
+                    BridgeBalResist: 15e6
+                VC:
+                    HoldingEnable: False
+                    Holding: 0.0
+                    WholeCellCompEnable: False
+                    RsCompEnable: False
+                    PrimarySignalGain: 2
+                    PrimarySignalLPF: 20e3
+                    LeakSubEnable: False
+    """
 
     # inherited signals: sigStateChanged, sigHoldingChanged
 

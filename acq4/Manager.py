@@ -1,12 +1,3 @@
-"""
-Manager.py -  Defines main Manager class for ACQ4
-
-This class must be invoked once to initialize the ACQ4 core system.
-The class is responsible for:
-    - Configuring devices
-    - Invoking/managing modules
-    - Creating and executing acquisition tasks. 
-"""
 import atexit
 import gc
 import getopt
@@ -17,6 +8,7 @@ import argparse
 import weakref
 import socket
 import getpass
+import threading
 from collections import OrderedDict
 
 import pyqtgraph as pg
@@ -88,6 +80,7 @@ class Manager(Qt.QObject):
     def __init__(self, configFile=None):
         self.moduleLock = Mutex(recursive=True)  ## used for keeping some basic methods thread-safe
         # self.devices = OrderedDict()  # all currently loaded devices
+        self.isReady = threading.Event()
         self.modules = OrderedDict()  # all currently running modules
         self.devices = OrderedDict()  # all devices loaded via Manager
         self.definedModules = OrderedDict()  # all custom-defined module configurations
@@ -168,6 +161,7 @@ class Manager(Qt.QObject):
             else:
                 printExc("\nError while acting on command line options: (but continuing on anyway..)")
         finally:
+            self.isReady.set()
             if len(self.modules) == 0:
                 self.quit()
                 raise Exception("No modules loaded during startup, exiting now.")

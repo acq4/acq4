@@ -122,8 +122,6 @@ timer.timeout.connect(donothing)
 timer.start(1000)
 
 ## Start Qt event loop unless running in interactive mode.
-import pyqtgraph as pg
-
 interactive = (sys.flags.interactive == 1) and not pg.Qt.USE_PYSIDE
 if interactive:
     print("Interactive mode; not starting event loop.")
@@ -174,5 +172,5 @@ else:
             app.exec_()
     else:
         app.exec_()
-        # pg.exit()  # pg.exit() causes python to exit before Qt has a chance to clean up. 
+        # pg.exit()  # pg.exit() causes python to exit before Qt has a chance to clean up.
         # this avoids otherwise irritating exit crashes.
