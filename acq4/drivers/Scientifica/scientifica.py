@@ -332,6 +332,7 @@ class Scientifica:
               prevent user confusion, setting this value programmatically is discouraged).
             * objLift: Distance to lift the objectives before switching (int; 1 = 10 nm)
             * objDisp: Distance between focal planes of objectives (int; 1 = 10 nm)
+            * objL1, objL2: Legacy objective switching parameters for version 2 devices.
 
         Notes
         -----
