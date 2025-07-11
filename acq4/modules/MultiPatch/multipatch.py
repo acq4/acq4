@@ -1,20 +1,22 @@
-# coding: utf8
-from __future__ import print_function
-import os, re
-import numpy as np
 import json
+import os
+import re
 from collections import OrderedDict
-from acq4.util import Qt
+from typing import List
 
-from acq4.modules.Module import Module
+import h5py
+
+import pyqtgraph as pg
 from acq4 import getManager
 from acq4.devices.PatchPipette import PatchPipette
-import pyqtgraph as pg
-from .pipetteControl import PipetteControl
+from acq4.modules.Module import Module
+from acq4.util import Qt, ptime
+from neuroanalysis.test_pulse_stack import H5BackedTestPulseStack
 from .mockPatch import MockPatch
-from six.moves import zip
-
+from .pipetteControl import PipetteControl
 from ...devices.PatchPipette.statemanager import PatchPipetteStateManager
+from ...util.future import MultiFuture, future_wrap
+from ...util.json_encoder import ACQ4JSONEncoder
 
 Ui_MultiPatch = Qt.importTemplate('.multipatchTemplate')
 
@@ -27,19 +29,13 @@ class MultiPatch(Module):
     enableMockPatch : bool
         Whether or not to allow mock patching.
 
-    patchProfiles : dict
-        Use this config block to override automated patching. Keyed by
-        state name, see acq4/devices/PatchPipette/states.py for the
-        list of states and their possible options E.g.::
-            cell detect:
-                advanceStepInterval: 0.06
     """
     moduleDisplayName = "MultiPatch"
     moduleCategory = "Acquisition"
 
     def __init__(self, manager, name, config):
-        Module.__init__(self, manager, name, config) 
-        
+        Module.__init__(self, manager, name, config)
+
         self.win = MultiPatchWindow(self)
         self.win.show()
 
@@ -50,11 +46,13 @@ class MultiPatch(Module):
 
 class MultiPatchWindow(Qt.QWidget):
     def __init__(self, module):
-        self.storageFile = None
+        self._eventStorageFile = None
+        self._testPulseStacks = {}
 
         self._calibratePips = []
         self._calibrateStagePositions = []
         self._setTargetPips = []
+        self._profileEditor = None
 
         Qt.QWidget.__init__(self)
         self.module = module
@@ -86,7 +84,8 @@ class MultiPatchWindow(Qt.QWidget):
             pip.sigMoveFinished.connect(self.pipetteMoveFinished)
             if isinstance(pip, PatchPipette):
                 pip.sigNewEvent.connect(self.pipetteEvent)
-                pip.sigTestPulseEnabled.connect(self.pipetteTestPulseEnabled)
+                if pip.clampDevice is not None:
+                    pip.clampDevice.sigTestPulseEnabled.connect(self.pipetteTestPulseEnabled)
             ctrl = PipetteControl(pip, self)
             if i > 0:
                 ctrl.hideHeader()
@@ -104,7 +103,6 @@ class MultiPatchWindow(Qt.QWidget):
 
             self.pipCtrls.append(ctrl)
 
-
         # load profile configurations from old location
         for name, profile in module.config.get('patchProfiles', {}).items():
             PatchPipetteStateManager.addProfile(name, profile, overwrite=True)
@@ -116,30 +114,32 @@ class MultiPatchWindow(Qt.QWidget):
         for profile in profiles:
             self.ui.profileCombo.addItem(profile)
 
+        common_opts = dict(stoppable=True, failure="FAILED!", showStatus=False)
+
+        self.ui.homeBtn.setOpts(future_producer=self._moveHome, **common_opts)
+        self.ui.nucleusHomeBtn.setOpts(future_producer=self._nucleusHome, raiseOnError=False, **common_opts)
+        self.ui.coarseSearchBtn.setOpts(future_producer=self._coarseSearch, **common_opts)
+        self.ui.fineSearchBtn.setOpts(future_producer=self._fineSearch, **common_opts)
+        self.ui.aboveTargetBtn.setOpts(future_producer=self._aboveTarget, **common_opts)
+        self.ui.autoCalibrateBtn.setOpts(future_producer=self._autoCalibrate, **common_opts)
+        self.ui.cellDetectBtn.setOpts(future_producer=self._cellDetect, raiseOnError=False, **common_opts)
+        self.ui.breakInBtn.setOpts(future_producer=self._breakIn, raiseOnError=False, **common_opts)
+        self.ui.toTargetBtn.setOpts(future_producer=self._toTarget, **common_opts)
+        self.ui.sealBtn.setOpts(future_producer=self._seal, raiseOnError=False, **common_opts)
+        self.ui.reSealBtn.setOpts(future_producer=self._reSeal, raiseOnError=False, **common_opts)
+        self.ui.approachBtn.setOpts(future_producer=self._approach, **common_opts)
+        self.ui.cleanBtn.setOpts(future_producer=self._clean, raiseOnError=False, **common_opts)
+        self.ui.collectBtn.setOpts(future_producer=self._collect, raiseOnError=False, **common_opts)
+
         self.ui.profileCombo.currentIndexChanged.connect(self.profileComboChanged)
-        # self.ui.stepSizeSpin.setOpts(value=10e-6, suffix='m', siPrefix=True, bounds=[5e-6, None], step=5e-6)
+        self.ui.editProfileBtn.clicked.connect(self.openProfileEditor)
         self.ui.calibrateBtn.toggled.connect(self.calibrateToggled)
         self.ui.setTargetBtn.toggled.connect(self.setTargetToggled)
 
-        # self.ui.moveInBtn.clicked.connect(self.moveIn)
-        # self.ui.stepInBtn.clicked.connect(self.stepIn)
-        # self.ui.stepOutBtn.clicked.connect(self.stepOut)
-        self.ui.aboveTargetBtn.clicked.connect(self.moveAboveTarget)
-        self.ui.approachBtn.clicked.connect(self.moveApproach)
-        self.ui.toTargetBtn.clicked.connect(self.moveToTarget)
-        self.ui.homeBtn.clicked.connect(self.moveHome)
-        # self.ui.idleBtn.clicked.connect(self.moveIdle)
-        self.ui.coarseSearchBtn.clicked.connect(self.coarseSearch)
-        self.ui.fineSearchBtn.clicked.connect(self.fineSearch)
         self.ui.hideMarkersBtn.toggled.connect(self.hideBtnToggled)
-        self.ui.cellDetectBtn.clicked.connect(self.cellDetectClicked)
-        self.ui.sealBtn.clicked.connect(self.sealClicked)
-        self.ui.breakInBtn.clicked.connect(self.breakInClicked)
-        self.ui.reSealBtn.clicked.connect(self.reSealClicked)
-        self.ui.cleanBtn.clicked.connect(self.cleanClicked)
+        self.ui.recordTestPulsesBtn.toggled.connect(self.recordTestPulsesToggled)
         self.ui.recordBtn.toggled.connect(self.recordToggled)
         self.ui.resetBtn.clicked.connect(self.resetHistory)
-        # self.ui.testPulseBtn.clicked.connect(self.testPulseClicked)
 
         self.ui.fastBtn.clicked.connect(self._turnOffSlowBtn)
         self.ui.slowBtn.clicked.connect(self._turnOffFastBtn)
@@ -148,10 +148,11 @@ class MultiPatchWindow(Qt.QWidget):
         if xkdevname is not None:
             self.xkdev = getManager().getDevice(xkdevname)
             self.xkdev.sigStateChanged.connect(self.xkeysStateChanged)
-            self.xkdev.dev.setIntensity(255, 255)
+            self.xkdev.setIntensity(255, 255)
         else:
             self.xkdev = None
 
+        self.eventHistory = []
         self.resetHistory()
 
         if self.microscope:
@@ -161,98 +162,182 @@ class MultiPatchWindow(Qt.QWidget):
 
         self.loadConfig()
 
+    @property
+    def _shouldSaveCalibrationImages(self):
+        return self.ui.saveCalibrationsBtn.isChecked()
+
+    @_shouldSaveCalibrationImages.setter
+    def _shouldSaveCalibrationImages(self, value):
+        self.ui.saveCalibrationsBtn.setChecked(True)
+
     def _turnOffSlowBtn(self, checked):
         self.ui.slowBtn.setChecked(False)
 
     def _turnOffFastBtn(self, checked):
-        self.ui.FastBtn.setChecked(False)
+        self.ui.fastBtn.setChecked(False)
 
     def saveConfig(self):
         geom = self.geometry()
         config = {
             'geometry': [geom.x(), geom.y(), geom.width(), geom.height()],
             'plotModes': self.pipCtrls[0].getPlotModes(),
+            "plots": {
+                (ctrl.pip.name(), plot.mode): plot.plot.saveState()
+                for ctrl in self.pipCtrls for plot in ctrl.plots
+            },
+            "should save calibration images": self._shouldSaveCalibrationImages,
         }
-        configfile = os.path.join('modules', self.module.name + '.cfg')
-        man = getManager()
-        man.writeConfigFile(config, configfile)
+        getManager().writeConfigFile(config, self._configFileName())
 
     def loadConfig(self):
-        configfile = os.path.join('modules', self.module.name + '.cfg')
-        man = getManager()
-        config = man.readConfigFile(configfile)
+        config = getManager().readConfigFile(self._configFileName())
         if 'geometry' in config:
             geom = Qt.QRect(*config['geometry'])
             self.setGeometry(geom)
         if 'plotModes' in config:
             self.setPlotModes(config['plotModes'])
+        if "plots" in config:
+            for pipette, plotname in config["plots"]:
+                ctrl = next((ctrl for ctrl in self.pipCtrls if ctrl.pip.name() == pipette), None)
+                if ctrl is not None:
+                    plot = next((plot for plot in ctrl.plots if plot.mode == plotname), None)
+                    if plot is not None:
+                        plot.plot.restoreState(config["plots"][(pipette, plotname)])
+        self._shouldSaveCalibrationImages = config.get("should save calibration images", True)
+
+    def _configFileName(self):
+        return os.path.join('modules', f'{self.module.name}.cfg')
 
     def profileComboChanged(self):
         profile = self.ui.profileCombo.currentText()
         for pip in self.pips:
             pip.stateManager().setProfile(profile)
 
+    def openProfileEditor(self):
+        if self._profileEditor is None or not self._profileEditor.isVisible():
+            from .patchProfileEditor import ProfileEditor
+            self._profileEditor = ProfileEditor()
+            self._profileEditor.sigProfileChanged.connect(self.patchProfilesChanged)
+            self._profileEditor.show()
+        else:
+            self._profileEditor.setTopLevelWindow()
+
+    def patchProfilesChanged(self, profiles):
+        self.recordEvent({
+            "event_time": ptime.time(),
+            "device": None,
+            "event": "global patch profiles changed",
+            "profile": json.dumps(profiles, cls=ACQ4JSONEncoder),
+        })
+
     def setPlotModes(self, modes):
         for ctrl in self.pipCtrls:
             ctrl.setPlotModes(modes)
         self.saveConfig()
 
-    # def moveIn(self):
-    #     for pip in self.selectedPipettes():
-    #         pip.startAdvancing(10e-6)
+    def _setAllSelectedPipettesToState(self, state):
+        return MultiFuture([
+            pip.setState(state)
+            for pip in self.selectedPipettes()
+            if isinstance(pip, PatchPipette)
+        ])
 
-    # def stepIn(self):
-    #     speed = self.selectedSpeed(default='slow')
-    #     for pip in self.selectedPipettes():
-    #         pip.advanceTowardTarget(self.ui.stepSizeSpin.value(), speed)
-
-    # def stepOut(self):
-    #     speed = self.selectedSpeed(default='slow')
-    #     for pip in self.selectedPipettes():
-    #         pip.retract(self.ui.stepSizeSpin.value(), speed)
-
-    def moveAboveTarget(self):
-        speed = self.selectedSpeed(default='fast')
-        pips = self.selectedPipettes()
-        if len(pips) == 1:
-            pips[0].pipetteDevice.goAboveTarget(speed=speed)
-            return
-
-        fut = []
-        wp = []
-        for pip in pips:
-            w1, w2 = pip.pipetteDevice.aboveTargetPath()
-            wp.append(w2)
-            fut.append(pip.pipetteDevice._moveToGlobal(w1, speed))
-        for f in fut:
-            f.wait(updates=True)
-        for pip, waypoint in zip(pips, wp):
-            pip.pipetteDevice._moveToGlobal(waypoint, 'slow')
-
-        self.calibrateWithStage(pips, wp)
-
-    def moveApproach(self):
-        speed = self.selectedSpeed(default='slow')
+    def _moveHome(self):
+        futures = []
         for pip in self.selectedPipettes():
-            pip.pipetteDevice.goApproach(speed)
+            speed = self.selectedSpeed(default='fast')
+            if isinstance(pip, PatchPipette):
+                pip.setState('out')
+                pip = pip.pipetteDevice
+            futures.append(pip.goHome(speed))
+        return MultiFuture(futures)
+
+    def _nucleusHome(self):
+        return self._setAllSelectedPipettesToState('home with nucleus')
+
+    def _coarseSearch(self):
+        return self.moveSearch(self.module.config.get('coarseSearchDistance', 400e-6))
+
+    def _fineSearch(self):
+        if len(self.selectedPipettes()) == 1:
+            distance = 0
+        else:
+            distance = self.module.config.get('fineSearchDistance', 50e-6)
+        return self.moveSearch(distance)
+
+    def _aboveTarget(self):
+        futures = []
+        speed = self.selectedSpeed(default='fast')
+        for pip in self.selectedPipettes():
+            pip.setState('bath')
+            futures.append(pip.pipetteDevice.goAboveTarget(speed))
+        return MultiFuture(futures)
+
+    @future_wrap
+    def _autoCalibrate(self, _future):
+        work_to_do = self.selectedPipettes()
+        while work_to_do:
+            patchpip = work_to_do.pop(0)
+            pip = patchpip.pipetteDevice if isinstance(patchpip, PatchPipette) else patchpip
+            pos = pip.tracker.findTipInFrame()
+            success = _future.waitFor(pip.setTipOffsetIfAcceptable(pos), timeout=None).getResult()
+            if not success:
+                work_to_do.insert(0, patchpip)
+                continue
+
+            _future.checkStop()
+
+    def _cellDetect(self):
+        return self._setAllSelectedPipettesToState('cell detect')
+
+    def _breakIn(self):
+        return self._setAllSelectedPipettesToState('break in')
+
+    def _toTarget(self):
+        speed = self.selectedSpeed(default='fast')
+        return MultiFuture([
+            (
+                pip.pipetteDevice if isinstance(pip, PatchPipette) else pip
+            ).goTarget(speed)
+            for pip in self.selectedPipettes()
+        ])
+
+    def _seal(self):
+        return self._setAllSelectedPipettesToState('seal')
+
+    def _reSeal(self):
+        return self._setAllSelectedPipettesToState('reseal')
+
+    def _approach(self):
+        speed = self.selectedSpeed(default='fast')
+        futures = []
+        for pip in self.selectedPipettes():
             if isinstance(pip, PatchPipette):
                 pip.setState('bath')
-                pip.clampDevice.autoPipetteOffset()
+                futures.append(pip.pipetteDevice.goApproach(speed))
+                if pip.clampDevice is not None:
+                    pip.clampDevice.autoPipetteOffset()
+            else:
+                futures.append(pip.goApproach(speed))
+        return MultiFuture(futures)
 
-    def moveToTarget(self):
-        speed = self.selectedSpeed(default='slow')
-        for pip in self.selectedPipettes():
-            pip.pipetteDevice.goTarget(speed)
+    def _clean(self):
+        return self._setAllSelectedPipettesToState('clean')
 
-    def moveHome(self):
-        speed = self.selectedSpeed(default='fast')
-        for pip in self.selectedPipettes():
-            pip.goHome(speed)
+    def _collect(self):
+        return self._setAllSelectedPipettesToState('collect')
 
-    def moveIdle(self):
-        speed = self.selectedSpeed(default='fast')
-        for pip in self.selectedPipettes():
-            pip.pipetteDevice.goIdle(speed)
+    def _setTarget(self):
+        pass
+
+    def _handle_setTarget_finish(self, results):
+        pass
+
+    def _calibrate(self):
+        pass
+
+    def _handle_calibrate_finish(self, results):
+        pass
 
     def selectedSpeed(self, default):
         if self.ui.fastBtn.isChecked():
@@ -265,33 +350,24 @@ class MultiPatchWindow(Qt.QWidget):
             return 'slow'
         return default
 
-    def coarseSearch(self):
-        self.moveSearch(self.module.config.get('coarseSearchDistance', 400e-6))
-
-    def fineSearch(self):
-        pips = self.selectedPipettes()
-        if len(pips) == 1:
-            distance = 0
-        else:
-            distance = self.module.config.get('fineSearchDistance', 50e-6)
-        self.moveSearch(distance)
-
     def moveSearch(self, distance):
         speed = self.selectedSpeed(default='fast')
-        pips = self.selectedPipettes()
-        for pip in pips:
+        futures = []
+        for pip in self.selectedPipettes():
             if isinstance(pip, PatchPipette):
                 pip.setState('bath')
-            pip.pipetteDevice.goSearch(speed, distance=distance)
+                pip = pip.pipetteDevice
+            futures.append(pip.goSearch(speed, distance=distance))
+        return MultiFuture(futures)
 
-    def calibrateWithStage(self, pipettes, positions):
-        """Begin calibration of selected pipettes and move the stage to a selected position for each pipette.
-        """
-        self.ui.calibrateBtn.setChecked(False)
-        self.ui.calibrateBtn.setChecked(True)
-        pipettes[0].scopeDevice().setGlobalPosition(positions.pop(0))
-        self._calibratePips = pipettes
-        self._calibrateStagePositions = positions
+    # def calibrateWithStage(self, pipettes, positions):
+    #     """Begin calibration of selected pipettes and move the stage to a selected position for each pipette.
+    #     """
+    #     self.ui.calibrateBtn.setChecked(False)
+    #     self.ui.calibrateBtn.setChecked(True)
+    #     pipettes[0].scopeDevice().setGlobalPosition(positions.pop(0))
+    #     self._calibratePips = pipettes
+    #     self._calibrateStagePositions = positions
 
     def calibrateToggled(self, b):
         cammod = getManager().getModule('Camera')
@@ -334,10 +410,22 @@ class MultiPatchWindow(Qt.QWidget):
 
         # Set next pipette position from mouse click
         pip = self._calibratePips.pop(0)
+        if isinstance(pip, PatchPipette):
+            pip = pip.pipetteDevice
         pos = self._cammod.window().getView().mapSceneToView(ev.scenePos())
         spos = pip.scopeDevice().globalPosition()
         pos = [pos.x(), pos.y(), spos.z()]
-        pip.pipetteDevice.resetGlobalPosition(pos)
+        tip_future = pip.setTipOffsetIfAcceptable(pos)
+        tip_future.onFinish(self._handleManualSetTip, pip)
+
+    def _handleManualSetTip(self, future, pip):
+        success = future.getResult()
+        if not success:
+            self._calibratePips.insert(0, pip)
+            return
+
+        if self._shouldSaveCalibrationImages:
+            pip.saveManualCalibration().raiseErrors("Failed to save calibration images")
 
         # if calibration stage positions were requested, then move the stage now
         if len(self._calibrateStagePositions) > 0:
@@ -354,10 +442,12 @@ class MultiPatchWindow(Qt.QWidget):
 
         # Set next pipette position from mouse click
         pip = self._setTargetPips.pop(0)
+        if isinstance(pip, PatchPipette):
+            pip = pip.pipetteDevice
         pos = self._cammod.window().getView().mapSceneToView(ev.scenePos())
         spos = pip.scopeDevice().globalPosition()
         pos = [pos.x(), pos.y(), spos.z()]
-        pip.pipetteDevice.setTarget(pos)
+        pip.setTarget(pos)
 
         if len(self._setTargetPips) == 0:
             self.ui.setTargetBtn.setChecked(False)
@@ -365,14 +455,16 @@ class MultiPatchWindow(Qt.QWidget):
 
     def hideBtnToggled(self, hide):
         for pip in self.pips:
-            pip.pipetteDevice.hideMarkers(hide)
+            if isinstance(pip, PatchPipette):
+                pip = pip.pipetteDevice
+            pip.hideMarkers(hide)
 
-    def pipetteTestPulseEnabled(self, pip, enabled):
+    def pipetteTestPulseEnabled(self, clamp, enabled):
         self.updateSelectedPipControls()
 
     # def testPulseClicked(self):
     #     for pip in self.selectedPipettes():
-    #         pip.enableTestPulse(self.ui.testPulseBtn.isChecked())
+    #         pip.clampDevice.enableTestPulse(self.ui.testPulseBtn.isChecked())
 
     def pipetteActiveChanged(self, active):
         self.selectionChanged()
@@ -402,12 +494,12 @@ class MultiPatchWindow(Qt.QWidget):
             self.ui.selectedGroupBox.setEnabled(False)
         else:
             if solo:
-                self.ui.selectedGroupBox.setTitle("Selected: %s" % (pips[0].name()))
+                self.ui.selectedGroupBox.setTitle(f"Selected: {pips[0].name()}")
             elif len(pips) > 1:
                 self.ui.selectedGroupBox.setTitle("Selected: multiple")
             self.ui.selectedGroupBox.setEnabled(True)
             self.updateSelectedPipControls()
-        
+
         self.updateXKeysBacklight()
 
     def updateSelectedPipControls(self):
@@ -415,7 +507,7 @@ class MultiPatchWindow(Qt.QWidget):
         # tp = any([pip.testPulseEnabled() for pip in pips])
         # self.ui.testPulseBtn.setChecked(tp)
 
-    def selectedPipettes(self):
+    def selectedPipettes(self) -> List[PatchPipette]:
         sel = []
         for ctrl in self.pipCtrls:
             if ctrl.selected():
@@ -435,12 +527,12 @@ class MultiPatchWindow(Qt.QWidget):
         bl = self.xkdev.getBacklights()
         for i, ctrl in enumerate(self.pipCtrls):
             pip = ctrl.pip
-            bl[0, i+4, 0] = 1 if ctrl.active() else 0
-            bl[0, i+4, 1] = 2 if ctrl.pip.pipetteDevice.moving else 0
-            bl[1, i+4, 1] = 1 if pip in sel else 0
-            bl[1, i+4, 0] = 1 if ctrl.locked() else 0
-            bl[2, i+4, 1] = 1 if pip in sel else 0
-            bl[2, i+4, 0] = 1 if ctrl.selected() else 0
+            bl[0, i + 4, 0] = 1 if ctrl.active() else 0
+            bl[0, i + 4, 1] = 2 if ctrl.pip.pipetteDevice.moving else 0
+            bl[1, i + 4, 1] = 1 if pip in sel else 0
+            bl[1, i + 4, 0] = 1 if ctrl.locked() else 0
+            bl[2, i + 4, 1] = 1 if pip in sel else 0
+            bl[2, i + 4, 0] = 1 if ctrl.selected() else 0
 
         bl[1, 2] = 1 if self.ui.hideMarkersBtn.isChecked() else 0
         bl[0, 2] = 1 if self.ui.setTargetBtn.isChecked() else 0
@@ -448,20 +540,20 @@ class MultiPatchWindow(Qt.QWidget):
         bl[4, 1] = 1 if self.ui.slowBtn.isChecked() else 0
         bl[4, 2] = 1 if self.ui.fastBtn.isChecked() else 0
         bl[7, 2] = 1 if self.ui.recordBtn.isChecked() else 0
-        
+
         self.xkdev.setBacklights(bl, axis=1)
 
     def xkeysStateChanged(self, dev, changes):
-        for k,v in changes.items():
+        actions = {0: 'activeBtn', 1: 'lockBtn', 2: 'selectBtn', 3: 'tipBtn', 4: 'targetBtn'}
+        for k, v in changes.items():
             if k == 'keys':
                 for key, state in v:
-                    if state is True:
+                    if state:
                         if key[1] > 3:
-                            row = key[0]
                             col = key[1] - 4
                             if col >= len(self.pips):
                                 continue
-                            actions = {0:'activeBtn', 1:'lockBtn', 2:'selectBtn', 3:'tipBtn', 4:'targetBtn'}
+                            row = key[0]
                             if row in actions:
                                 btnName = actions[row]
                                 btn = getattr(self.pipCtrls[col].ui, btnName)
@@ -472,6 +564,7 @@ class MultiPatchWindow(Qt.QWidget):
     def xkeysAction(self, key):
         actions = {
             (0, 0): self.ui.sealBtn,
+            (1, 0): self.ui.cellDetectBtn,
             (1, 2): self.ui.hideMarkersBtn,
             (0, 2): self.ui.setTargetBtn,
             (2, 0): self.ui.coarseSearchBtn,
@@ -481,6 +574,7 @@ class MultiPatchWindow(Qt.QWidget):
             (3, 2): self.ui.approachBtn,
             (4, 1): self.ui.slowBtn,
             (4, 2): self.ui.fastBtn,
+            (5, 2): self.ui.cleanBtn,
             (6, 2): self.ui.homeBtn,
             (5, 0): self.ui.reSealBtn,
             (7, 2): self.ui.recordBtn,
@@ -491,36 +585,6 @@ class MultiPatchWindow(Qt.QWidget):
         action.click()
         self.updateXKeysBacklight()
 
-    def sealClicked(self):
-        pips = self.selectedPipettes()
-        for pip in pips:
-            if isinstance(pip, PatchPipette):
-                pip.setState('seal')
-
-    def breakInClicked(self):
-        pips = self.selectedPipettes()
-        for pip in pips:
-            if isinstance(pip, PatchPipette):
-                pip.setState('break in')
-
-    def cellDetectClicked(self):
-        pips = self.selectedPipettes()
-        for pip in pips:
-            if isinstance(pip, PatchPipette):
-                pip.setState('cell detect')
-
-    def reSealClicked(self):
-        pips = self.selectedPipettes()
-        for pip in pips:
-            if isinstance(pip, PatchPipette):
-                pip.setState('reseal')
-        
-    def cleanClicked(self):
-        pips = self.selectedPipettes()
-        for pip in pips:
-            if isinstance(pip, PatchPipette):
-                pip.setState('clean')
-        
     def pipetteMoveStarted(self, pip):
         self.updateXKeysBacklight()
 
@@ -533,35 +597,72 @@ class MultiPatchWindow(Qt.QWidget):
     def surfaceDepthChanged(self, depth):
         event = OrderedDict([
             ("device", str(self.microscope.name())),
-            ("event_time", pg.ptime.time()),
+            ("event_time", ptime.time()),
             ("event", "surface_depth_changed"),
             ("surface_depth", depth),
         ])
         self.recordEvent(event)
 
     def recordToggled(self, rec):
-        if self.storageFile is not None:
-            self.storageFile.close()
-            self.storageFile = None
+        if self._eventStorageFile is not None:
+            self._eventStorageFile.close()
+            self._eventStorageFile = None
             self.resetHistory()
         if rec is True:
             man = getManager()
             sdir = man.getCurrentDir()
-            self.storageFile = open(sdir.createFile('MultiPatch.log', autoIncrement=True).name(), 'ab')
+            self._eventStorageFile = open(sdir.createFile('MultiPatch.log', autoIncrement=True).name(), 'ab')
             self.writeRecords(self.eventHistory)
+            profile_data = PatchPipetteStateManager.buildPatchProfilesParameters().getValues()
+            self.patchProfilesChanged(profile_data)
+
+    def recordTestPulsesToggled(self, rec):
+        files = set()
+        for stack in self._testPulseStacks.values():
+            files.update(stack.files)
+        self._testPulseStacks = {}
+        for f in files:
+            f.close()
+        if rec is True:
+            man = getManager()
+            sdir = man.getCurrentDir()
+            name = sdir.createFile('TestPulses.hdf5', autoIncrement=True).name()
+            container = h5py.File(name, 'a')
+            group = container.create_group('test_pulses')
+            for dev in self.pips:
+                dev_gr = group.create_group(dev.name())
+                dev_gr.attrs['device'] = dev.name()
+                self._testPulseStacks[dev.name()] = H5BackedTestPulseStack(dev_gr)
+        for pip in self.selectedPipettes():
+            pip.emitFullTestPulseData(rec)
 
     def recordEvent(self, event):
-        self.eventHistory.append(event)
+        if not self.eventHistory:
+            self.resetHistory()
         self.writeRecords([event])
+        event = {k: v for k, v in event.items() if k != 'full_test_pulse'}
+        self.eventHistory.append(event)
 
     def resetHistory(self):
         self.eventHistory = []
         for pip in self.selectedPipettes():
-            pip.resetTestPulseHistory()
+            if pip.clampDevice is not None:
+                pip.clampDevice.resetTestPulseHistory()
 
     def writeRecords(self, recs):
-        if self.storageFile is None:
-            return
         for rec in recs:
-            self.storageFile.write(json.dumps(rec).encode("utf8") + b",\n")
-        self.storageFile.flush()
+            if 'full_test_pulse' in rec:
+                if self._testPulseStacks.get(rec['device'], None) is not None:
+                    filename, path = self._testPulseStacks[rec['device']].append(rec['full_test_pulse'])
+                    if self._eventStorageFile:
+                        filename = os.path.relpath(filename, os.path.dirname(self._eventStorageFile.name))
+                    rec = {k: v for k, v in rec.items() if k != 'full_test_pulse'}
+                    rec['full_test_pulse'] = f"{filename}:{path}"
+                else:
+                    rec = {k: v for k, v in rec.items() if k != 'full_test_pulse'}
+            if self._eventStorageFile:
+                self._eventStorageFile.write(json.dumps(rec, cls=ACQ4JSONEncoder).encode("utf8") + b",\n")
+        if self._eventStorageFile:
+            self._eventStorageFile.flush()
+        for stack in self._testPulseStacks.values():
+            stack.flush()

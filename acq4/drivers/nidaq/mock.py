@@ -1,11 +1,5 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-
-import time
-
 import numpy as np
-import six
-from six.moves import range
+import time
 
 from . import SuperTask
 
@@ -97,7 +91,7 @@ class MockNIDAQ:
             'chanperline': self.Val_ChanPerLine,
             'chanforalllines': self.Val_ChanForAllLines
         }
-        if isinstance(mode, six.string_types):
+        if isinstance(mode, str):
             mode = mode.lower()
             mode = modes.get(mode, None)
         return mode

@@ -1,11 +1,6 @@
-from __future__ import print_function
+from acq4.Manager import getManager
 from acq4.util import Qt
-from acq4.Manager import getManager, logExc, logMsg
-import numpy as np
-from scipy import stats
 from pyqtgraph.functions import siFormat
-import six
-import time
 
 Ui_Form = Qt.importTemplate('.devTemplate')
 
@@ -153,7 +148,7 @@ class LaserDevGui(Qt.QWidget):
     def wavelengthComboChanged(self):
         if self.ui.wavelengthCombo.currentIndex() == 0: # "Set wavelength for..."
             return # not selected
-        text = six.text_type(self.ui.wavelengthCombo.currentText())
+        text = str(self.ui.wavelengthCombo.currentText())
         wl = self.dev.config.get('namedWavelengths', {}).get(text, None)
         if wl is not None:
             if len(wl) == 1:
@@ -219,7 +214,7 @@ class LaserDevGui(Qt.QWidget):
             try:
                 self.ui.calibrateBtn.setEnabled(False)
                 self.ui.calibrateBtn.setText('Calibrating...')
-                powerMeter = six.text_type(self.ui.meterCombo.currentText())
+                powerMeter = str(self.ui.meterCombo.currentText())
                 mTime = self.ui.measurementSpin.value()
                 sTime = self.ui.settlingSpin.value()
                 self.dev.calibrate(powerMeter, mTime, sTime)

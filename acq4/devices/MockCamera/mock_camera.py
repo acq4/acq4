@@ -1,18 +1,13 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-from __future__ import with_statement
-
 from collections import OrderedDict
+from typing import Union
 
 import numpy as np
-import pyqtgraph as pg
 import scipy
-import six
-from six.moves import range
-from six.moves import zip
+import time
 
 import acq4.util.functions as fn
 import acq4.util.ptime as ptime
+import pyqtgraph as pg
 from acq4.devices.Camera import Camera, CameraTask
 from acq4.util import Qt
 from acq4.util.Mutex import Mutex
@@ -23,7 +18,6 @@ HEIGHT = 512
 
 class MockCamera(Camera):
     def __init__(self, manager, config, name):
-        self.camLock = Mutex(Mutex.Recursive)  # Lock to protect access to camera
         self.ringSize = 100
         self.frameId = 0
         self.noise = np.random.normal(size=10000000, loc=100, scale=10)  # pre-generate noise for use in images
@@ -130,7 +124,7 @@ class MockCamera(Camera):
         self.lastFrameTime = ptime.time()
 
     def stopCamera(self):
-        pass
+        self.lastFrameTime = None
 
     def getNoise(self, shape):
         n = shape[0] * shape[1]
@@ -224,9 +218,29 @@ class MockCamera(Camera):
 
         return x, y
 
+    def _acquireFrames(self, n: int):
+        self.startCamera()
+        try:
+            frames = []
+            while True:
+                frames.extend([f["data"][np.newaxis, ...] for f in self.newFrames()])
+                if len(frames) >= n or not self._cameraRunning():
+                    break
+                time.sleep(0.1)
+        finally:
+            self.stopCamera()
+
+        return np.concatenate(frames[:n])
+
+    def _cameraRunning(self):
+        return self.lastFrameTime is not None
+
     def newFrames(self):
         """Return a list of all frames acquired since the last call to newFrames."""
         prof = pg.debug.Profiler(disabled=True)
+
+        if self.lastFrameTime is None:
+            return []
 
         now = ptime.time()
         dt = now - self.lastFrameTime
@@ -287,29 +301,25 @@ class MockCamera(Camera):
         prof()
 
         self.frameId += 1
-        frames = []
-        for i in range(nf):
-            frames.append({"data": data, "time": now + (i / fps), "id": self.frameId})
+        frames = [{"data": data, "time": now + (i / fps), "id": self.frameId} for i in range(nf)]
         prof()
         return frames
 
     def quit(self):
         pass
 
-    def listParams(self, params=None):
-        """List properties of specified parameters, or of all parameters if None"""
+    def listParams(self, params: Union[list, str, None] = None):
+        """List properties of specified parameter(s), or of all parameters if None"""
         if params is None:
             return self.paramRanges
-        else:
-            if isinstance(params, six.string_types):
-                return self.paramRanges[params]
+        if isinstance(params, str):
+            return self.paramRanges[params]
 
-            out = OrderedDict()
-            for k in params:
-                out[k] = self.paramRanges[k]
-            return out
+        return {k: self.paramRanges[k] for k in params}
 
     def setParams(self, params, autoRestart=True, autoCorrect=True):
+        if isinstance(params, list):
+            params = dict(params)
         dp = []
         ap = {}
         for k in params:
@@ -339,12 +349,6 @@ class MockCamera(Camera):
                 vals[k] = self.params[k]
         return vals
 
-    def setParam(self, param, value, autoRestart=True, autoCorrect=True):
-        return self.setParams({param: value}, autoRestart=autoRestart, autoCorrect=autoCorrect)
-
-    def getParam(self, param):
-        return self.getParams([param])[param]
-
     def createTask(self, cmd, parentTask):
         with self.lock:
             return MockCameraTask(self, cmd, parentTask)
@@ -366,14 +370,23 @@ class MockCameraTask(CameraTask):
         cmd = self.parentTask().tasks[daq].cmd
         start = self.parentTask().startTime
         sampleRate = cmd["rate"]
-
-        data = np.zeros(cmd["numPts"], dtype=np.uint8)
-        for f in self.frames:
-            t = f.info()["time"]
-            exp = f.info()["exposure"]
-            i0 = int((t - start) * sampleRate)
-            i1 = i0 + int((exp - 0.1e-3) * sampleRate)
-            data[i0:i1] = 1
+        numPts = cmd["numPts"]
+        data = np.zeros(numPts, dtype=np.uint8)
+        if self.fixedFrameCount is None:
+            frames = self._future.peekAtResult()  # not exact, but close enough for a mock
+            for f in frames:
+                t = f.info()["time"]
+                exp = f.info()["exposure"]
+                i0 = int((t - start) * sampleRate)
+                i1 = i0 + int((exp - 0.1e-3) * sampleRate)
+                data[i0:i1] = 1
+        else:
+            n = self.fixedFrameCount
+            exp = int((self.dev.getParam("exposure") - 0.1e-3) * sampleRate)
+            minLength = max(numPts - exp, exp * n)
+            for i0 in np.linspace(1, minLength - 2, n, dtype=int):
+                i1 = i0 + exp
+                data[i0:i1] = 1
 
         return data
 

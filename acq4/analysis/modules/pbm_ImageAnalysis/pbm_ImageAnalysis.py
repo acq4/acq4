@@ -25,8 +25,8 @@ This module provides:
 from __future__ import print_function
 
 import matplotlib.pyplot as PL
-from six.moves import map
-from six.moves import zip
+
+
 
 from acq4.util import Qt
 from acq4.analysis.AnalysisModule import AnalysisModule
@@ -40,7 +40,7 @@ import pyqtgraph as pg
 import pyqtgraph.debug as debug
 import acq4.util.DatabaseGui as DatabaseGui
 import PIL as Image
-from pyqtgraph.metaarray import MetaArray
+from MetaArray import MetaArray
 import numpy as np
 import scipy
 from acq4.analysis.tools import Utility
@@ -49,7 +49,7 @@ from acq4.analysis.tools import PlotHelpers as PH  # matlab plotting helpers
 from acq4.util import functions as FN
 from acq4.util.HelpfulException import HelpfulException
 from acq4.devices.Scanner.scan_program import rect
-from six.moves import range
+
 
 try:
     import cv2

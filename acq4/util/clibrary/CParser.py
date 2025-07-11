@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 CParser.py - C parsing library 
 Copyright 2010  Luke Campagnola
@@ -7,15 +6,11 @@ Distributed under MIT/X11 license. See license.txt for more infomation.
 Used for extracting data such as macro definitions, variables, typedefs, and function
 signatures from C files (preferrably header files).
 """
-from __future__ import print_function
-
 import json
 import os
 import re
-import sys
 
-import six
-from six.moves import range
+import sys
 
 __all__ = ['winDefs', 'CParser']
 
@@ -332,7 +327,7 @@ class CParser:
             self.files[file] = None
             return False
 
-        fd = open(file, 'rU')  ## U causes all newline types to be converted to \n
+        fd = open(file, 'r')
         self.files[file] = fd.read()
         fd.close()
 
@@ -1067,7 +1062,7 @@ class CParser:
         ## declarations, but that should not be too difficult to implement..
         #print "Eval:", toks
         try:
-            if isinstance(toks, six.string_types):
+            if isinstance(toks, str):
                 #print "  as string"
                 val = self.eval(toks, None, self.defs['values'])
             elif toks.arrayValues != '':
@@ -1164,7 +1159,7 @@ class CParser:
             for t in fd:
                 typ = fd[t]
                 for k in typ:
-                    if isinstance(name, six.string_types):
+                    if isinstance(name, str):
                         if k == name:
                             res.append((f, t))
                     else:

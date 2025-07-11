@@ -1,14 +1,17 @@
 # -*- coding: utf-8 -*-
-from __future__ import print_function
+from __future__ import annotations
 
 import os
 import traceback
-import weakref
+from contextlib import contextmanager
+from typing import Optional
 
+import acq4
 from acq4.Interfaces import InterfaceMixin
 from acq4.util import Qt
 from acq4.util.Mutex import Mutex
 from acq4.util.debug import printExc
+from acq4.util.optional_weakref import Weakref
 
 
 class Device(InterfaceMixin, Qt.QObject):  # QObject calls super, which is disastrous if not last in the MRO
@@ -17,7 +20,7 @@ class Device(InterfaceMixin, Qt.QObject):  # QObject calls super, which is disas
     # used to ensure devices are shut down in the correct order
     _deviceCreationOrder = []
 
-    def __init__(self, deviceManager, config, name):
+    def __init__(self, deviceManager: acq4.Manager.Manager, config: dict, name: str):
         Qt.QObject.__init__(self)
 
         # task reservation lock -- this is a recursive lock to allow a task to run its own subtasks
@@ -29,17 +32,19 @@ class Device(InterfaceMixin, Qt.QObject):  # QObject calls super, which is disas
         self._lock_tb_ = None
         self.dm = deviceManager
         self.dm.declareInterface(name, ['device'], self)
-        Device._deviceCreationOrder.append(weakref.ref(self))
+        self._config = config
+        Device._deviceCreationOrder.append(Weakref(self))
         self._name = name
-            
+
     def name(self):
         """Return the string name of this device.
         """
         return self._name
     
-    def createTask(self, cmd, task):
-        ### Read configuration, configure tasks
-        ### Return a handle unique to this task
+    def createTask(self, cmd: dict, task: acq4.Manager.Task):
+        # Read configuration, configure tasks
+        # Return a handle unique to this task
+        # See TaskGUI.listSequences and TaskGUI.generateTask for more info on usage.
         pass
     
     def quit(self):
@@ -52,13 +57,13 @@ class Device(InterfaceMixin, Qt.QObject):  # QObject calls super, which is disas
     def taskInterface(self, task):
         """Return a widget with a UI to put in the task rack"""
         return TaskGui(self, task)
-        
+
     def configPath(self):
         """Return the path used for storing configuration data for this device.
 
         This path should resolve to `acq4/config/devices/DeviceName_config`.
         """
-        return os.path.join('devices', self.name() + '_config')
+        return os.path.join('devices', f'{self.name()}_config')
 
     def configFileName(self, filename):
         """Return the full path to a config file for this device.
@@ -84,6 +89,14 @@ class Device(InterfaceMixin, Qt.QObject):  # QObject calls super, which is disas
         fileName = os.path.join(self.configPath(), filename)
         return self.dm.appendConfigFile(data, fileName)
 
+    @contextmanager
+    def reserved(self):
+        self.reserve()
+        try:
+            yield
+        finally:
+            self.release()
+
     def reserve(self, block=True, timeout=20):
         """Reserve this device globally.
 
@@ -95,10 +108,11 @@ class Device(InterfaceMixin, Qt.QObject):  # QObject calls super, which is disas
         if block:
             l = self._lock_.tryLock(int(timeout*1000))
             if not l:
-                print("Timeout waiting for device lock for %s" % self.name())
+                print(f"Timeout waiting for device lock for {self.name()}")
                 print("  Device is currently locked from:")
                 print(self._lock_tb_)
-                raise Exception("Timed out waiting for device lock for %s\n  Locking traceback:\n%s" % (self.name(), self._lock_tb_))
+                raise TimeoutError(
+                    f"Timed out waiting for device lock for {self.name()}\n  Locking traceback:\n{self._lock_tb_}")
         else:
             l = self._lock_.tryLock()
             if not l:
@@ -119,13 +133,25 @@ class Device(InterfaceMixin, Qt.QObject):  # QObject calls super, which is disas
         except:
             printExc("WARNING: Failed to release device lock for %s" % self.name())
 
-    def getTriggerChannel(self, daq):
-        """Return the name of the channel on daq that this device raises when it starts.
-        Allows the DAQ to trigger off of this device."""
-        return None
+    def getTriggerChannels(self, daq: str) -> dict:
+        """Return the name of the channel(s) on *daq* can be used to synchronize between this device and a DAQ.
+
+        Parameters
+        ----------
+        daq : str
+            The name of the DAQ device to be synchronized with.
+
+        Returns
+        -------
+        channels : dict
+            Dictionary containing keys "input" (the name of a digital input on the DAQ that we can use to trigger the
+            DAQ) and "output" (the name of a digital output that can be used to trigger this device). Either value may
+            be None.
+        """
+        return {'input': None, 'output': None}
     
     def __repr__(self):
-        return '<%s "%s">' % (self.__class__.__name__, self.name())
+        return f'<{self.__class__.__name__} "{self.name()}">'
     
 
 class DeviceTask(object):
@@ -146,7 +172,7 @@ class DeviceTask(object):
         operating synchronously.
         """
         self.dev = dev
-        self.__parentTask = weakref.ref(parentTask)
+        self.__parentTask = Weakref(parentTask)
         
     def parentTask(self):
         return self.__parentTask()
@@ -213,7 +239,6 @@ class DeviceTask(object):
         """
         return [], []
 
-    
     def start(self):
         """
         This method instructs the device to begin execution of the task.
@@ -326,13 +351,35 @@ class TaskGui(Qt.QWidget):
         return self.saveState()  ## lazy; implement something nicer for your devices!
         
     def listSequence(self):
-        """Return an OrderedDict of sequence parameter names and lengths {name: length}"""
+        """
+        Return an OrderedDict of sequence parameter names and values {name: list_of_values}. See generateTask for more
+        details on usage.
+        """
         return {}
         
-    def generateTask(self, params=None):
+    def generateTask(self, params: Optional[dict] = None) -> dict:
+        """
+        This method should convert params' index-values back into task-values, along with any default work non-sequenced
+        tasks need. WARNING! Long sequences will not automatically lock the UI or preserve the state of your parameter
+        sequences. The example code below will break if a user messes with anything while the task sequence is running.
+
+        :param params:
+            This dictionary will have the same top-level shape as the return value of listSequence, but instead of a
+            list, its values will be the indexes of the values currently being run. E.g.::
+
+                listSequence() -> {'a': [10, 100, 1000], 'b': [20, 40]}
+                generateTask({'a': 0, 'b': 0})
+                generateTask({'a': 1, 'b': 0})
+                ...
+
+        :return:
+            Valid command structure for your devices' task.
+        """
         if params is None:
             params = {}
-        return {}
+        paramSpace = self.listSequence()  # WARNING! This is not reliable!
+        params = {k: paramSpace[k][v] for k, v in params.items()}
+        return params
         
     def handleResult(self, result, params):
         """Display (or otherwise handle) the results of the task generated by this device.

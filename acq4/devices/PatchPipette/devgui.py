@@ -1,5 +1,6 @@
-from __future__ import print_function
 from acq4.util import Qt
+import pyqtgraph as pg
+from acq4.util.future import FutureButton
 
 
 class PatchPipetteDeviceGui(Qt.QWidget):
@@ -11,37 +12,32 @@ class PatchPipetteDeviceGui(Qt.QWidget):
         self.layout = Qt.QGridLayout()
         self.setLayout(self.layout)
 
-        self.cleanBtn = Qt.QPushButton('Clean Pipette')
-        self.setCleanBtn = Qt.QPushButton('Set Clean Pos')
-        self.setRinseBtn = Qt.QPushButton('Set Rinse Pos')
-        self.cleanBtnLayout = Qt.QHBoxLayout()
-        self.cleanBtnLayout.addWidget(self.cleanBtn)
-        self.cleanBtn.setCheckable(True)
-        self.cleanBtnLayout.addWidget(self.setCleanBtn)
-        self.cleanBtnLayout.addWidget(self.setRinseBtn)
+        self.cleanBtn = FutureButton(
+            self.doClean,
+            "Clean Pipette",
+            stoppable=True,
+            failure="Interrupted!",
+            raiseOnError=False,
+        )
+        self.positionBtnLayout = Qt.QHBoxLayout()
+        self.positionBtnLayout.addWidget(self.cleanBtn)
+
+        positions = ["clean", "rinse", "extract", "collect"]
+        self.positionBtns = {}
+        for pos in positions:
+            btn = pg.FeedbackButton(f"Set {pos.capitalize()} Pos")
+            btn.positionName = pos
+            self.positionBtns[pos] = btn
+            btn.clicked.connect(self.setPositionClicked)
+            self.positionBtnLayout.addWidget(btn)
+
         row = self.layout.rowCount()
-        self.layout.addLayout(self.cleanBtnLayout, row, 0)
+        self.layout.addLayout(self.positionBtnLayout, row, 0)
 
-        self.cleanBtn.clicked.connect(self.cleanClicked)
-        self.setCleanBtn.clicked.connect(self.setCleanClicked)
-        self.setRinseBtn.clicked.connect(self.setRinseClicked)
+    def doClean(self):
+        return self.dev.setState("clean")
 
-    def cleanClicked(self):
-        if self.cleanBtn.isChecked():
-            self.cleanBtn.setText("Cleaning..")
-            self.cleanFuture = self.dev.setState('clean')
-            self.cleanFuture.sigFinished.connect(self.cleaningFinished)
-        else:
-            if self.cleanFuture is not None and not self.cleanFuture.isDone():
-                self.cleanFuture.stop()
-            self.cleanBtn.setText("Clean Pipette")
-
-    def cleaningFinished(self):
-        self.cleanBtn.setText("Clean Pipette")
-        self.cleanBtn.setChecked(False)
-
-    def setCleanClicked(self):
-        self.dev.pipetteDevice.savePosition('clean')
-
-    def setRinseClicked(self):
-        self.dev.pipetteDevice.savePosition('rinse')
+    def setPositionClicked(self):
+        btn = self.sender()
+        self.dev.pipetteDevice.savePosition(btn.positionName)
+        btn.success()

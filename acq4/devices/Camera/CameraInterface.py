@@ -1,14 +1,14 @@
-from __future__ import print_function
+import contextlib
 
 import acq4.Manager as Manager
 import pyqtgraph as pg
 import pyqtgraph.dockarea as dockarea
 from acq4.devices.OptomechDevice import DeviceTreeItemGroup
 from acq4.modules.Camera import CameraModuleInterface
-from pyqtgraph import SignalProxy, Point
 from acq4.util import Qt
 from acq4.util.debug import printExc
 from acq4.util.imaging import ImagingCtrl
+from pyqtgraph import SignalProxy, Point
 
 CameraInterfaceTemplate = Qt.importTemplate('.CameraInterfaceTemplate')
 
@@ -22,18 +22,18 @@ class CameraInterface(CameraModuleInterface):
     The interface provides a control GUI via the controlWidget() method and 
     directly manages its own GraphicsItems within the camera module's view box.
     """
-    
     sigNewFrame = Qt.Signal(object, object)  # self, frame
-    
+
     def __init__(self, camera, module):
         CameraModuleInterface.__init__(self, camera, module)
 
+        camera.sigNewFrame.connect(self.handleNewFrame)
         self.module = module
         self.view = module.getView()
         self.hasQuit = False
         self.boundaryItems = {}
 
-        ## setup UI
+        # setup UI
         self.ui = CameraInterfaceTemplate()
         self.widget = dockarea.DockArea()
         w = Qt.QWidget()
@@ -44,7 +44,7 @@ class CameraInterface(CameraModuleInterface):
         self.imagingCtrl = ImagingCtrl()
         self.frameDisplay = self.imagingCtrl.frameDisplay
 
-        ## Move control panels into docks
+        # Move control panels into docks
         recDock = dockarea.Dock(name="Recording", widget=self.imagingCtrl, size=(100, 10), autoOrientation=False)
         devDock = dockarea.Dock(name="Device Control", widget=self.ui.devCtrlWidget, size=(100, 10), autoOrientation=False)
         dispDock = dockarea.Dock(name="Display Control", widget=self.frameDisplay.contrastWidget(), size=(100, 600), autoOrientation=False)
@@ -54,14 +54,14 @@ class CameraInterface(CameraModuleInterface):
         self.widget.addDock(dispDock, 'bottom', devDock)
         self.widget.addDock(bgDock, 'bottom', dispDock)
         
-        ## Camera state variables
+        # Camera state variables
         self.cam = camera
         self.roi = None
         self.exposure = 0.001
         self.binning = 1
         self.region = None
 
-        ## set up item groups
+        # set up item groups
         self.cameraItemGroup = pg.ItemGroup()  ## translated with scope, scaled with camera objective
         self.imageItemGroup = pg.ItemGroup()   ## translated and scaled as each frame arrives
         self.view.addItem(self.imageItemGroup)
@@ -69,28 +69,28 @@ class CameraInterface(CameraModuleInterface):
         self.cameraItemGroup.setZValue(0)
         self.imageItemGroup.setZValue(-2)
 
-        ## video image item
+        # video image item
         self.imageItem = self.frameDisplay.imageItem()
         self.view.addItem(self.imageItem)
         self.imageItem.setParentItem(self.imageItemGroup)
         self.imageItem.setZValue(-10)
 
-        ## open camera, determine bit depth and sensor area
-        self.openCamera()
+        # open camera, determine bit depth and sensor area
+        self.camSize, self.scope = self.openCamera()
 
-        ## Initialize values
+        # Initialize values
         self.lastCameraPosition = Point(self.camSize[0]*0.5, self.camSize[1]*0.5)
         self.lastCameraScale = Point(1.0, 1.0)
         self.scopeCenter = [self.camSize[0]*0.5, self.camSize[1]*0.5]
         self.cameraScale = [1, 1]
 
-        ## Camera region-of-interest control
+        # Camera region-of-interest control
         self.roi = CamROI(self.camSize, parent=self.cameraItemGroup)
         self.roi.sigRegionChangeFinished.connect(self.regionWidgetChanged)
         self.roi.setZValue(-1)
         self.setRegion()
 
-        ## Set up microscope objective borders
+        # Set up microscope objective borders
         self.borders = CameraItemGroup(self.cam)
         self.module.addItem(self.borders)
         self.borders.setZValue(-1)
@@ -102,18 +102,22 @@ class CameraInterface(CameraModuleInterface):
         # initially set binning and exposure from camera state
         self.exposure = self.cam.getParam('exposure')
         self.binning = self.cam.getParam('binning')[0]
-        ## Initialize values/connections in Camera Dock
+        # Initialize values/connections in Camera Dock
         self.setUiBinning(self.binning)
         self.ui.spinExposure.setValue(self.exposure)
         self.ui.spinExposure.setOpts(dec=True, step=1, minStep=100e-6, siPrefix=True, suffix='s', bounds=[0, 10])
 
-        #Signals from self.ui.btnSnap and self.ui.recordStackBtn are caught by the RecordThread
+        # Signals from self.ui.btnSnap and self.ui.recordStackBtn are caught by the RecordThread
         self.ui.btnFullFrame.clicked.connect(self._setRegionToNone)
         self.binningComboProxy = SignalProxy(self.ui.binningCombo.currentIndexChanged, slot=self.binningComboChanged)
-        self.ui.spinExposure.valueChanged.connect(self.setExposure)  ## note that this signal (from acq4.util.SpinBox) is delayed.
+        self.ui.spinExposure.valueChanged.connect(self.setExposure)  # note that this signal (from acq4.util.SpinBox) is delayed.
 
-        ## Signals from Camera device
-        self.cam.sigNewFrame.connect(self.newFrame)
+        # We get new frames by adding a processing step to the camera.
+        # This allows us to attach metadata (background+contrast info) to the frames before
+        # they are consumed by anyone else
+        self.cam.addFrameProcessor(self.newFrame, final=True)
+
+        # Signals from Camera device
         self.cam.sigCameraStopped.connect(self.cameraStopped)
         self.cam.sigCameraStarted.connect(self.cameraStarted)
         self.cam.sigShowMessage.connect(self.showMessage)
@@ -128,12 +132,14 @@ class CameraInterface(CameraModuleInterface):
         for action, key in self.cam.camConfig.get('hotkeys', {}).items():
             if action not in ['snap', 'start']:
                 raise ValueError("Unknown hotkey action %r" % action)
-            
+
             dev = Manager.getManager().getDevice(key['device'])
             dev.addKeyCallback(key['key'], self.hotkeyPressed, (action,))
-    
+
     def newFrame(self, frame):
         self.imagingCtrl.newFrame(frame)
+
+    def handleNewFrame(self, frame):
         self.sigNewFrame.emit(self, frame)
 
     def controlWidget(self):
@@ -141,23 +147,22 @@ class CameraInterface(CameraModuleInterface):
         
     def openCamera(self, ind=0):
         try:
-            self.camSize = self.cam.getParam('sensorSize')
-            self.showMessage("Opened camera %s" % self.cam, 5000)
-            self.scope = self.cam.getScopeDevice()
+            camSize = self.cam.getParam('sensorSize')
+            self.showMessage(f"Opened camera {self.cam}", 5000)
+            scope = self.cam.getScopeDevice()
 
             try:
-                bins = self.cam.listParams('binning')[0][0]
-            except:
-                bins = self.cam.listParams('binningX')[0]
-            bins.sort()
-            bins.reverse()
-            for b in bins:
+                bins = self.cam.listParams(['binning'])['binning'][0][0]
+            except Exception:
+                bins = self.cam.listParams(['binningX'])['binningX'][0]
+            for b in reversed(sorted(bins)):
                 self.ui.binningCombo.addItem(str(b))
 
-        except:
+        except Exception:
             self.showMessage("Error opening camera")
             raise
-    
+        return camSize, scope
+
     def globalTransformChanged(self, emitter=None, changedDev=None, transform=None):
         ## scope has moved; update viewport and camera outlines.
         ## This is only used when the camera is not running--
@@ -168,17 +173,17 @@ class CameraInterface(CameraModuleInterface):
             self.updateTransform(tr)
 
     def imageUpdated(self, frame):
-        ## New image is displayed; update image transform
+        # New image is displayed; update image transform
         self.imageItem.setTransform(frame.frameTransform().as2D())
         
-        ## Update viewport to correct for scope movement/scaling
+        # Update viewport to correct for scope movement/scaling
         tr = pg.SRTTransform(frame.deviceTransform())
         self.updateTransform(tr)
 
         self.imageItemGroup.setTransform(tr)
             
     def updateTransform(self, tr):
-        ## update view for new transform such that sensor bounds remain stationary on screen.
+        # update view for new transform such that sensor bounds remain stationary on screen.
         pos = tr.getTranslation()
         
         scale = tr.getScale()
@@ -213,14 +218,11 @@ class CameraInterface(CameraModuleInterface):
         if self.hasQuit:
             return
 
-        try:
-            self.cam.sigNewFrame.disconnect(self.newFrame)
+        with contextlib.suppress(TypeError):
+            self.cam.removeFrameProcessor(self.newFrame)
             self.cam.sigCameraStopped.disconnect(self.cameraStopped)
             self.cam.sigCameraStarted.disconnect(self.cameraStarted)
             self.cam.sigShowMessage.disconnect(self.showMessage)
-        except TypeError:
-            pass
-
         self.hasQuit = True
         if self.cam.isRunning():
             self.cam.stop()
@@ -256,7 +258,7 @@ class CameraInterface(CameraModuleInterface):
     def setUiBinning(self, b, updateCamera=True):
         ind = self.ui.binningCombo.findText(str(b))
         if ind == -1:
-            raise Exception("Binning mode %s not in list." % str(b))
+            raise ValueError(f"Binning mode {str(b)} not in list.")
 
         if updateCamera:
             self.ui.binningCombo.setCurrentIndex(ind)
@@ -343,13 +345,9 @@ class CameraInterface(CameraModuleInterface):
         """
         Return bounding rect of this imaging device in global coordinates
         """
-        return self.cam.getBoundary().boundingRect()
+        return Qt.QRectF(*self.cam.getBoundary())
 
-    def takeImage(self, closeShutter=None):
-        # closeShutter is used for laser scanning devices; we can ignore it here.
-        return self.getDevice().acquireFrames(1, stack=False)
 
-            
 class CameraItemGroup(DeviceTreeItemGroup):
     def __init__(self, camera, includeSubdevices=True):
         DeviceTreeItemGroup.__init__(self, device=camera, includeSubdevices=includeSubdevices)
@@ -357,7 +355,9 @@ class CameraItemGroup(DeviceTreeItemGroup):
     def makeGroup(self, dev, subdev):
         grp = DeviceTreeItemGroup.makeGroup(self, dev, subdev)
         if dev is self.device:
-            bound = Qt.QGraphicsPathItem(self.device.getBoundary(globalCoords=False))
+            bound = Qt.QPainterPath()
+            bound.addRect(Qt.QRectF(*self.device.getBoundary(globalCoords=False)))
+            bound = Qt.QGraphicsPathItem(bound)
             bound.setParentItem(grp)
             bound.setPen(pg.mkPen(40, 150, 150))
         return grp

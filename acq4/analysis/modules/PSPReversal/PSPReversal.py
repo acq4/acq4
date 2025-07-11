@@ -1,7 +1,7 @@
 #  -*- coding: utf-8 -*-
 from __future__ import print_function
-from six.moves import map
-from six.moves import range
+
+
 """
 PSPReversal: Analysis module that analyzes the current-voltage relationships
 relationships of PSPs from voltage clamp data.
@@ -27,7 +27,7 @@ import scipy
 from acq4.analysis.AnalysisModule import AnalysisModule
 import pyqtgraph as pg
 from pyqtgraph import configfile
-from pyqtgraph.metaarray import MetaArray
+from MetaArray import MetaArray
 
 standard_font = 'Arial'
 

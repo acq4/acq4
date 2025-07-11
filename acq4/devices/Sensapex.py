@@ -1,18 +1,67 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
+import threading
+import time
+from typing import Optional
 
 import numpy as np
-import pyqtgraph as pg
-from pyqtgraph import ptime, Transform3D, solve3DTransform
 
+import pyqtgraph as pg
+from acq4.drivers.sensapex import UMP, version_info
 from acq4.util import Qt
-from acq4.drivers.sensapex import UMP
+from acq4.util import ptime
+from pyqtgraph import Transform3D, solve3DTransform
 from .Stage import Stage, MoveFuture, ManipulatorAxesCalibrationWindow, StageAxesCalibrationWindow
 
 
 class Sensapex(Stage):
     """
-    A Sensapex manipulator.
+    A Sensapex micromanipulator or stage device.
+
+    Configuration options:
+    
+    * **deviceId** (int, required): Sensapex device ID number (< 20 for manipulators, >= 20 for stages)
+    
+    * **scale** (tuple, optional): (x, y, z) scale factors in m/step (default: (1e-6, 1e-6, 1e-6))
+    
+    * **xPitch** (float, optional): Angle of X-axis in degrees relative to horizontal 
+      (0=parallel to xy plane, 90=pointing downward, default: 0)
+    
+    * **maxError** (float, optional): Maximum movement error tolerance in meters (default: 1e-6)
+    
+    * **linearMovementRule** (str, optional): Force movement type ("linear", "nonlinear", or None)
+      Overrides ACQ4's automatic movement type selection
+    
+    * **forceLinearMovement** (bool, optional): Deprecated, use linearMovementRule instead
+    
+    * **address** (str, optional): Network address for TCP connection 
+      (uses global 'drivers/sensapex' config section if not specified)
+    
+    * **group** (int, optional): Device group number for shared connection
+      (uses global 'drivers/sensapex' config section if not specified)
+    
+    * **nAxes** (int, optional): Number of axes (requires sensapex-py >= 1.22.4)
+    
+    * **isManipulator** (bool, optional): Whether device is manipulator vs stage 
+      (auto-detected from deviceId if not specified)
+    
+    * **maxAcceleration** (float, optional): Maximum acceleration limit
+    
+    * **slowSpeed** (float, optional): Slow movement speed in m/s
+    
+    * **fastSpeed** (float, optional): Fast movement speed in m/s
+    
+    Note: Connection parameters (address, group, debug settings, etc.) use global 
+    defaults from the 'drivers/sensapex' configuration section when not specified per-device.
+    
+    Example configuration::
+    
+        Sensapex1:
+            driver: 'Sensapex'
+            deviceId: 2
+            xPitch: 30
+            scale: [1e-9, 1e-9, -1e-9]
+            slowSpeed: 200e-6
+            linearMovementRule: 'linear'
+            maxAcceleration: 1000
     """
 
     _sigRestartUpdateTimer = Qt.Signal(object)  # timeout duration
@@ -25,14 +74,22 @@ class Sensapex(Stage):
         self.scale = config.pop("scale", (1e-6, 1e-6, 1e-6))
         self.xPitch = config.pop("xPitch", 0)  # angle of x-axis. 0=parallel to xy plane, 90=pointing downward
         self.maxMoveError = config.pop("maxError", 1e-6)
-        self._force_linear_movement = config.get("forceLinearMovement", False)
+        if "linearMovementRule" in config:
+            self._force_linear_movement = config["linearMovementRule"] == "linear"
+            self._force_nonlinear_movement = config["linearMovementRule"] == "nonlinear"
+        else:
+            self._force_linear_movement = config.get("forceLinearMovement", False)  # deprecated; use linearMovementRule
+            self._force_nonlinear_movement = False
 
         address = config.pop("address", None)
         address = None if address is None else address.encode()
         group = config.pop("group", None)
-        ump = UMP.get_ump(address=address, group=group)
+        ump = UMP.get_ump(address=address, group=group, handle_atexit=False)
         # create handle to this manipulator
-        self.dev = ump.get_device(self.devid)
+        if "nAxes" in config and version_info < (1, 22, 4):
+            raise RuntimeError("nAxes support requires version >= 1.022.4 of the sensapex-py library")
+        self.dev = ump.get_device(self.devid, n_axes=config.get("nAxes", None), is_stage=not config["isManipulator"])
+        self._quitRequested = False
 
         Stage.__init__(self, man, config, name)
         # Read position updates on a timer to rate-limit
@@ -42,9 +99,6 @@ class Sensapex(Stage):
 
         self._sigRestartUpdateTimer.connect(self._restartUpdateTimer)
 
-        # note: n_axes is used in cases where the device is not capable of answering this on its own
-        if "nAxes" in config:
-            self.dev.set_n_axes(config["nAxes"])
         if "maxAcceleration" in config:
             self.dev.set_max_acceleration(config["maxAcceleration"])
 
@@ -54,7 +108,7 @@ class Sensapex(Stage):
         # This should also verify that we have a valid device ID
         self.dev.get_pos()
 
-        self._lastMove = None
+        self._lastMove: Optional[SensapexMoveFuture] = None
         man.sigAbortAll.connect(self.stop)
 
         # clear cached position for this device and re-read to generate an initial position update
@@ -106,14 +160,30 @@ class Sensapex(Stage):
         """
         with self.lock:
             self.dev.stop()
-            self._lastMove = None
+            # also stop the last move since it might be stepwise and just keep requesting more steps
+            lastMove = self._lastMove
+            self._lastMove = None  # prevent recursion, since lastMove.stop() will call this method again
+            if lastMove is not None:
+                lastMove.stop()
+
+    @property
+    def positionUpdatesPerSecond(self):
+        return 1.0 / self.dev.ump.poller.interval
 
     def _getPosition(self):
         # Called by superclass when user requests position refresh
         with self.lock:
             # using timeout=0 forces read from cache (the monitor thread ensures
             # these values are up to date)
-            pos = self.dev.get_pos(timeout=0)[:3]
+            try:
+                pos = self.dev.get_pos(timeout=0)[:3]
+            except TypeError:
+                # some events requesting position may still be floating around at quit time;
+                # we can ignore these errors here
+                if self._quitRequested:
+                    pos = self._lastPos
+                else:
+                    raise
             self._lastUpdate = ptime.time()
             if self._lastPos is not None:
                 dif = np.linalg.norm(np.array(pos, dtype=float) - np.array(self._lastPos, dtype=float))
@@ -152,107 +222,146 @@ class Sensapex(Stage):
                 return self._lastMove.targetPos
 
     def quit(self):
+        self._quitRequested = True
+        super().quit()
         Sensapex.devices.pop(self.devid, None)
         if len(Sensapex.devices) == 0:
-            UMP.get_ump().poller.stop()
-        Stage.quit(self)
+            UMP.get_ump().close()
 
-    def _move(self, pos, speed, linear):
+    def _move(self, pos, speed, linear, **kwds):
+        if self._force_linear_movement:
+            linear = True
+        if self._force_nonlinear_movement:
+            linear = False
         with self.lock:
             speed = self._interpretSpeed(speed)
-            self._lastMove = SensapexMoveFuture(self, pos, speed, self._force_linear_movement or linear)
+            self._lastMove = SensapexMoveFuture(self, pos, speed, linear)
             return self._lastMove
 
     def deviceInterface(self, win):
         return SensapexInterface(self, win)
 
+    def checkLimits(self, pos):
+        """Raise an exception if *pos* (in local coordinates) is outside the configured limits.
+        Suggest zero calibration for significantly out-of-bounds requests."""
+        likely_miscalibration_tolerance = 200  # device coordinates in µm
+        suggestion = "Does this device need to have its zero calibration run?"
+        for axis, limit in enumerate(self._limits):
+            ax_name = 'xyz'[axis]
+            x = pos[axis]
+            if x is None:
+                continue
+            if limit[0] is not None:
+                msg = f"Position requested for device {self.name()} too small: {pos} {ax_name} axis < {limit[0]}"
+                if x + likely_miscalibration_tolerance < limit[0]:
+                    raise ValueError(f"{msg}\n{suggestion}")
+                if x < limit[0]:
+                    raise ValueError(msg)
+
+            if limit[1] is not None:
+                msg = f"Position requested for device {self.name()} too large: {pos} {ax_name} axis > {limit[1]}"
+                if x - likely_miscalibration_tolerance > limit[1]:
+                    raise ValueError(f"{msg}\n{suggestion}")
+                elif x > limit[1]:
+                    raise ValueError(msg)
+
 
 class SensapexMoveFuture(MoveFuture):
     """Provides access to a move-in-progress on a Sensapex manipulator.
     """
-
     def __init__(self, dev, pos, speed, linear):
         MoveFuture.__init__(self, dev, pos, speed)
+
+        # limit the speed so that no move is expected to take less than 200 ms
+        # (otherwise we get big move errors with uMp)
+        minimumMoveTime = 0.2
+        distance = np.linalg.norm(self.startPos - self.targetPos)
+        if speed > 10e-6:
+            self.speed = min(speed, distance / minimumMoveTime)
+
         self._linear = linear
         self._interrupted = False
         self._errorMsg = None
-        self._finished = False
-        self._moveReq = self.dev.dev.goto_pos(pos, speed * 1e6, simultaneous=linear, linear=linear)
         self._checked = False
 
-    def wasInterrupted(self):
-        """Return True if the move was interrupted before completing.
-        """
-        return self._moveReq.interrupted
-
-    def isDone(self):
-        """Return True if the move is complete.
-        """
-        return self._moveReq.finished
-
-    def _checkError(self):
-        if self._checked or not self.isDone():
+        # no move requested; just bail early
+        if distance == 0:
+            self._taskDone(interrupted=False)
             return
 
+        if self.speed >= 1e-6:
+            self._moveReq = self.dev.dev.goto_pos(pos, self.speed * 1e6, simultaneous=linear, linear=linear)
+            self._monitorThread = threading.Thread(target=self._watchForFinish, daemon=True)
+        else:
+            # uMp has trouble with very slow speeds, so we do this manually by looping over small steps
+            self._moveReq = None
+            self._monitorThread = threading.Thread(target=self._stepwiseMove, daemon=True)
+        self._monitorThread.start()
+
+    def _watchForFinish(self):
+        moveReq = self._moveReq
+        moveReq.finished_event.wait()
+        self._taskDone(
+            interrupted=moveReq.interrupted,
+            error=self._generateErrorMessage(),
+            state=None,
+            excInfo=None,
+        )
+
+    def _stepwiseMove(self):
+        speed = self.speed * 1e6
+        delta = (self.targetPos - self.startPos)
+        distance = np.linalg.norm(delta)
+        duration = distance / speed
+        lastTarget = self.startPos
+        print(f"stepwise speed: {speed}  delta: {delta}  distance: {distance}  duration: {duration}")
+        while True:
+            # where should we be at this point?
+            elapsedTime = ptime.time() - self.startTime
+            fractionComplete = min(1.0, elapsedTime / duration)
+            currentTarget = self.startPos + delta * fractionComplete
+
+            # rate-limit move requests
+            minStepUm = 0.5
+            distanceToMove = np.linalg.norm(currentTarget - lastTarget)
+            if fractionComplete < 1 and distanceToMove < minStepUm:
+                time.sleep((minStepUm - distanceToMove) / speed)
+                continue
+
+            # request the next step and wait
+            lastTarget = currentTarget
+            self._moveReq = self.dev.dev.goto_pos(currentTarget, speed=1.0, simultaneous=True, linear=True)
+            while not self._moveReq.finished_event.wait(0.2):
+                if self._stopRequested:
+                    self._moveReq.interrupt(reason=self._errorMessage)
+                if self._moveReq.interrupted:
+                    break
+
+            if fractionComplete == 1.0 or self._moveReq.interrupted:
+                break
+
+        self._taskDone(
+            interrupted=self._moveReq.interrupted or self._stopRequested,
+            error=self._generateErrorMessage(),
+            state=None,
+            excInfo=None,
+        )
+
+    def _generateErrorMessage(self):
         # interrupted?
         if self._moveReq.interrupted:
-            self._errorMsg = self._moveReq.interrupt_reason
+            return self._moveReq.interrupt_reason
         else:
             # did we reach target?
             pos = self._moveReq.last_pos
             dif = np.linalg.norm(np.array(pos) - np.array(self.targetPos))
-            if dif > self.dev.maxMoveError * 1e9:  # require 1um accuracy
+            if dif > self.dev.maxMoveError * 1e6:  # require 1um accuracy
                 # missed
-                self._errorMsg = "{} stopped before reaching target (start={}, target={}, position={}, dif={}, speed={}).".format(
+                return "{} stopped before reaching target (start={}, target={}, position={}, dif={}, speed={}).".format(
                     self.dev.name(), self.startPos, self.targetPos, pos, dif, self.speed
                 )
 
-        self._checked = True
-
-    def wait(self, timeout=None, updates=False):
-        """Block until the move has completed, has been interrupted, or the
-        specified timeout has elapsed.
-
-        If *updates* is True, process Qt events while waiting.
-
-        If the move did not complete, raise an exception.
-        """
-        if updates is False:
-            # if we don't need gui updates, then block on the finished_event for better performance
-            if not self._moveReq.finished_event.wait(timeout=timeout):
-                raise self.Timeout("Timed out waiting for %s move to complete." % self.dev.name())
-            self._raiseError()
-        else:
-            return MoveFuture.wait(self, timeout=timeout, updates=updates)
-
-    def errorMessage(self):
-        self._checkError()
-        return self._errorMsg
-
-
-# class SensapexGUI(StageInterface):
-#     def __init__(self, dev, win):
-#         StageInterface.__init__(self, dev, win)
-#
-#         # Insert Sensapex-specific controls into GUI
-#         self.zeroBtn = Qt.QPushButton('Zero position')
-#         self.layout.addWidget(self.zeroBtn, self.nextRow, 0, 1, 2)
-#         self.nextRow += 1
-#
-#         self.psGroup = Qt.QGroupBox('Rotary Controller')
-#         self.layout.addWidget(self.psGroup, self.nextRow, 0, 1, 2)
-#         self.nextRow += 1
-#
-#         self.psLayout = Qt.QGridLayout()
-#         self.psGroup.setLayout(self.psLayout)
-#         self.speedLabel = Qt.QLabel('Speed')
-#         self.speedSpin = SpinBox(value=self.dev.userSpeed, suffix='m/turn', siPrefix=True, dec=True, limits=[1e-6, 10e-3])
-#         self.psLayout.addWidget(self.speedLabel, 0, 0)
-#         self.psLayout.addWidget(self.speedSpin, 0, 1)
-#
-#         self.zeroBtn.clicked.connect(self.dev.dev.zeroPosition)
-#         # UNSAFE lambdas with self prevent GC
-#         # self.speedSpin.valueChanged.connect(lambda v: self.dev.setDefaultSpeed(v))
+        return None
 
 
 class SensapexInterface(Qt.QWidget):

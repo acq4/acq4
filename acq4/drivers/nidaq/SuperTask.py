@@ -1,19 +1,14 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-
-import time
 from collections import OrderedDict
 
 import numpy as np
-import six
+import time
+
+from acq4.util import ptime
 
 try:
     from PyDAQmx import DAQException
 except (NotImplementedError, ImportError):
     DAQException = Exception
-from six.moves import map
-
-import acq4.util.ptime as ptime  # platform-independent precision timing
 
 
 class SuperTask:
@@ -72,7 +67,7 @@ class SuperTask:
                 mode = self.daq.Val_RSE
             elif typ in ["di", "do"]:
                 mode = self.daq.Val_ChanPerLine
-        elif isinstance(mode, six.string_types):
+        elif isinstance(mode, str):
             # decide which modes are allowed for this channel
             if typ == "ai":
                 allowed = ["RSE", "NRSE", "Diff", "PseudoDiff"]
@@ -215,7 +210,8 @@ class SuperTask:
                     # Task does not support GetSampClkMaxRate
                     pass
             else:
-                if rate > maxrate:
+                # sometimes NI reports maximum rate is 0; not sure why..
+                if maxrate != 0 and rate > maxrate:
                     raise ValueError(
                         "Requested sample rate %d exceeds maximum (%d) for this device." % (int(rate), int(maxrate))
                     )

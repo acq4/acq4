@@ -1,56 +1,101 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-import time
+from __future__ import annotations
+
+from typing import Optional
+
 import numpy as np
-from acq4.util import Qt
-from ..Stage import Stage, MoveFuture, StageInterface
+
+from acq4.devices.Stage import Stage, MoveFuture, StageInterface
 from acq4.drivers.Scientifica import Scientifica as ScientificaDriver
-from acq4.util.Mutex import Mutex
-from acq4.util.Thread import Thread
-from pyqtgraph import debug, ptime, SpinBox
+from acq4.util import Qt
+from acq4.util.debug import logMsg
+from acq4.util.future import future_wrap, Future, FutureButton
+from acq4.util.threadrun import runInGuiThread
+from pyqtgraph import SpinBox, siFormat
 
 
 class Scientifica(Stage):
     """
-    A Scientifica motorized device.
-
-    This class supports PatchStar, MicroStar, SliceScope, objective changers, etc.
-    The device may be identified either by its serial port or by its description 
-    string:
-
-        port: <serial port>  # eg. 'COM1' or '/dev/ttyACM0'
-        name: <string>  # eg. 'SliceScope' or 'MicroStar 2'
-        baudrate: <int>  #  may be 9600 or 38400
-
-    The optional 'baudrate' parameter is used to set the baudrate of the device.
-    Both valid rates will be attempted when initially connecting.
+    A Scientifica motorized device driver for manipulators and stages.
+    
+    Supports PatchStar, MicroStar, SliceScope, objective changers, and other Scientifica devices.
+    
+    Configuration options:
+    
+    * **port** (str, optional): Serial port (e.g., 'COM1' or '/dev/ttyACM0')
+      Either port or name must be specified.
+    
+    * **name** (str, optional): Device name as assigned in LinLab software
+      (e.g., 'SliceScope' or 'MicroStar 2'). Either port or name must be specified.
+    
+    * **baudrate** (int, optional): Serial baud rate (9600 or 38400)
+      Both rates will be attempted if not specified.
+    
+    * **version** (int, optional): Controller version (default: 2)
+      Some devices require version=1 for compatibility.
+    
+    * **scale** (tuple, optional): (x, y, z) scale factors in m/step 
+      (default: (1e-6, 1e-6, 1e-6))
+    
+    * **params** (dict, optional): Low-level device parameters
+        - currents: Motor current limits (be careful to follow manufacturer specs!)
+        - axisScale: Axis scaling factors for coordinate transforms  
+        - joyDirectionX/Y/Z: Joystick direction settings (bool)
+        - minSpeed, maxSpeed: Speed limits in device units
+        - accel: Acceleration setting
+        - joySlowScale, joyFastScale: Joystick speed scaling
+        - joyAccel: Joystick acceleration
+    
+    Example configuration::
+    
+        SliceScope:
+            driver: 'Scientifica'
+            name: 'SliceScope'
+            scale: [-1e-6, -1e-6, 1e-6]
+            params:
+                axisScale: [5.12, -5.12, -6.4]
+                joyDirectionX: True
+                joyDirectionY: True
+                joyDirectionZ: False
+                minSpeed: 1000
+                maxSpeed: 30000
+                accel: 500
+                joySlowScale: 4
+                joyFastScale: 80
+                joyAccel: 500
     """
+
     def __init__(self, man, config, name):
-        # can specify 
-        port = config.pop('port', None)
-        name = config.pop('name', None)
+        # can specify
+        port = config.pop("port", None)
+        name = config.pop("name", name)
 
         # if user has not provided scale values, we can make a guess
-        config.setdefault('scale', (1e-6, 1e-6, 1e-6))
+        config.setdefault("scale", (1e-6, 1e-6, 1e-6))
 
-        baudrate = config.pop('baudrate', None)
-        ctrl_version = config.pop('version', 2)
+        baudrate = config.pop("baudrate", None)
+        ctrl_version = config.pop("version", 2)
         try:
-            self.dev = ScientificaDriver(port=port, name=name, baudrate=baudrate, ctrl_version=ctrl_version)
+            self.driver = ScientificaDriver(port=port, name=name, baudrate=baudrate, ctrl_version=ctrl_version)
         except RuntimeError as err:
-            if hasattr(err, 'dev_version'):
-                raise RuntimeError(err.message + " You must add `version=%d` to the configuration for this device and double-check any speed/acceleration parameters." % int(err.dev_version))
+            if hasattr(err, "dev_version"):
+                raise RuntimeError(
+                    f"You must add `version={int(err.dev_version)}` to the configuration for this "
+                    f"device and double-check any speed/acceleration parameters."
+                ) from err
             else:
                 raise
 
-        # Controllers reset their baud to 9600 after power cycle
-        if baudrate is not None and self.dev.getBaudrate() != baudrate:
-            self.dev.setBaudrate(baudrate)
+        if 'isManipulator' not in config:
+            config['isManipulator'] = self.driver.isManipulator()
 
-        self._lastMove = None
+        # Controllers reset their baud to 9600 after power cycle
+        if baudrate is not None and self.driver.getBaudrate() != baudrate:
+            self.driver.setBaudrate(baudrate)
+
+        self._lastMove: Optional[ScientificaMoveFuture] = None
         man.sigAbortAll.connect(self.abort)
 
-        Stage.__init__(self, man, config, name)
+        super().__init__(man, config, name)
 
         # clear cached position for this device and re-read to generate an initial position update
         self._lastPos = None
@@ -63,60 +108,55 @@ class Scientifica(Stage):
         # self.dev.send('APPROACH %s' % approach)  # reset approach bit; setting angle enables it
 
         # set any extra parameters specified in the config
-        params = config.get('params', {})
+        params = config.get("params", {})
         for param, val in params.items():
-            if param == 'currents':
+            if param == "currents":
                 assert len(val) == 2
-                self.dev.setCurrents(*val)
-            elif param == 'axisScale':
+                self.driver.setCurrents(*val)
+            elif param == "axisScale":
                 assert len(val) == 3
                 for i, x in enumerate(val):
-                    self.dev.setAxisScale(i, x)
+                    self.driver.setAxisScale(i, x)
             else:
-                self.dev.setParam(param, val)
+                self.driver.setParam(param, val)
 
-        self.setUserSpeed(config.get('userSpeed', self.dev.getSpeed() * 1e-6))
-        
+        self.userSpeed = None
+        self.setUserSpeed(config.get("userSpeed", self._interpretSpeed('fast')))
+
+        self.autoZeroDirection = config.get('autoZeroDirection', (-1, -1, -1))
+
+        self.driver.setPositionCallback(self._stageReportedPositionChange)
+
         # whether to monitor for changes to a MOC
-        self.monitorObj = config.get('monitorObjective', False)
-        if self.monitorObj is True:
-            self.objectiveState = None
-            self._checkObjective()
-
-        # thread for polling position changes
-
-        self.monitor = MonitorThread(self, self.monitorObj)
-        self.monitor.start()
+        self.monitorObj = config.get("monitorObjective", False)
+        if self.monitorObj is True:            
+            self.objectiveState = self.driver.getObjective()
+            self.driver.setObjectiveCallback(self._stageReportedObjectiveChange)
 
     def axes(self):
-        return ('x', 'y', 'z')
+        return "x", "y", "z"
 
     def capabilities(self):
         """Return a structure describing the capabilities of this device"""
-        if 'capabilities' in self.config:
-            return self.config['capabilities']
+        if "capabilities" in self.config:
+            return self.config["capabilities"]
         else:
             return {
-                'getPos': (True, True, True),
-                'setPos': (True, True, True),
-                'limits': (False, False, False),
+                "getPos": (True, True, True),
+                "setPos": (True, True, True),
+                "limits": (False, False, False),
             }
 
     def stop(self):
-        """Stop the manipulator immediately.
-        """
+        """Stop the manipulator immediately."""
         with self.lock:
-            self.dev.stop()
-            if self._lastMove is not None:
-                self._lastMove._stopped()
-            self._lastMove = None
+            self.abort()
 
     def abort(self):
-        """Stop the manipulator immediately.
-        """
-        self.dev.stop()
+        """Stop the manipulator immediately."""
+        self.driver.stop()
         if self._lastMove is not None:
-            self._lastMove._stopped()
+            self._lastMove.interrupt()
             self._lastMove = None
 
     def setUserSpeed(self, v):
@@ -126,23 +166,31 @@ class Scientifica(Stage):
         programmed control.
         """
         self.userSpeed = v
-        self.dev.setSpeed(v * 1e6)  # requires um/s
+        self.driver.setDefaultSpeed(v * 1e6)  # requires um/s
+
+    @property
+    def positionUpdatesPerSecond(self):
+        return 1.0 / self.driver.ctrlThread.poll_interval
 
     def _getPosition(self):
         # Called by superclass when user requests position refresh
         with self.lock:
-            pos = self.dev.getPos()
-            if pos != self._lastPos:
-                self._lastPos = pos
-                emit = True
-            else:
-                emit = False
+            pos = self.driver.getPos()
+            changed = pos != self._lastPos
 
-        if emit:
-            # don't emit signal while locked
-            self.posChanged(pos)
+        if changed:
+            self._positionChanged(pos)
 
         return pos
+    
+    def _positionChanged(self, newPos):
+        # can happen as a result of calling _getPosition, or if device poller
+        # notices a position change
+        self._lastPos = newPos
+        self.posChanged(newPos)
+
+    def _stageReportedPositionChange(self, nextPos):
+        self._positionChanged(nextPos)
 
     def targetPosition(self):
         with self.lock:
@@ -152,189 +200,260 @@ class Scientifica(Stage):
                 return self._lastMove.targetPos
 
     def quit(self):
-        self.monitor.stop()
+        self.driver.close()
         Stage.quit(self)
 
-    def _move(self, pos, speed, linear):
+    def _move(self, pos, speed, linear, **kwds):
         with self.lock:
             if self._lastMove is not None and not self._lastMove.isDone():
                 self.stop()
             speed = self._interpretSpeed(speed)
 
-            self._lastMove = ScientificaMoveFuture(self, pos, speed, self.userSpeed)
+            self._lastMove = ScientificaMoveFuture(self, pos, speed, **kwds)
             return self._lastMove
 
     def deviceInterface(self, win):
         return ScientificaGUI(self, win)
 
     def startMoving(self, vel):
-        """Begin moving the stage at a continuous velocity.
-        """
-        s = [int(1e8 * v) for i,v in enumerate(vel)]
-        self.dev.send('VJ -%d %d %d' % tuple(s))
+        """Begin moving the stage at a continuous velocity."""
+        s = [int(1e8 * v) for v in vel]
+        self.driver.send("VJ -%d %d %d" % tuple(s))
 
-    def _checkObjective(self):
-        with self.lock:
-            obj = int(self.dev.send('obj'))
-            if obj != self.objectiveState:
-                self.objectiveState = obj
-                self.sigSwitchChanged.emit(self, {'objective': obj})
+    def _objectiveChanged(self, obj):
+        self.objectiveState = obj
+        self.sigSwitchChanged.emit(self, {"objective": obj})
+
+    def _stageReportedObjectiveChange(self, obj):
+        self._objectiveChanged(obj)
 
     def getSwitch(self, name):
-        if name == 'objective' and self.monitorObj:
+        if name == "objective" and self.monitorObj:
             return self.objectiveState
         else:
             return Stage.getSwitch(self, name)
 
 
-class MonitorThread(Thread):
-    """Thread to poll for manipulator position changes.
-    """
-    def __init__(self, dev, monitorObj):
-        self.dev = dev
-        self.lock = Mutex(recursive=True)
-        self.monitorObj = monitorObj
-        self.stopped = False
-        self.interval = 0.3
-        
-        Thread.__init__(self)
-
-    def start(self):
-        self.stopped = False
-        Thread.start(self)
-
-    def stop(self):
-        with self.lock:
-            self.stopped = True
-
-    def setInterval(self, i):
-        with self.lock:
-            self.interval = i
-    
-    def run(self):
-        minInterval = 100e-3
-        interval = minInterval
-        lastPos = None
-        while True:
-            try:
-                with self.lock:
-                    if self.stopped:
-                        break
-                    maxInterval = self.interval
-
-                pos = self.dev._getPosition()  # this causes sigPositionChanged to be emitted
-                if pos != lastPos:
-                    # if there was a change, then loop more rapidly for a short time.
-                    interval = minInterval
-                    lastPos = pos
-                else:
-                    interval = min(maxInterval, interval*2)
-
-                if self.monitorObj is True:
-                    self.dev._checkObjective()
-
-                time.sleep(interval)
-            except:
-                debug.printExc('Error in Scientifica monitor thread:')
-                time.sleep(maxInterval)
-                
-
 class ScientificaMoveFuture(MoveFuture):
     """Provides access to a move-in-progress on a Scientifica manipulator.
     """
-    def __init__(self, dev, pos, speed, userSpeed):
-        MoveFuture.__init__(self, dev, pos, speed)
-        self._interrupted = False
-        self._errorMsg = None
-        self._finished = False
-        pos = np.array(pos)
-        with self.dev.dev.lock:
-            self.dev.dev.moveTo(pos, speed / 1e-6)
-            # reset to user speed immediately after starting move
-            # (the move itself will run with the previous speed)
-            self.dev.dev.setSpeed(userSpeed / 1e-6)
-        
-    def wasInterrupted(self):
-        """Return True if the move was interrupted before completing.
-        """
-        return self._interrupted
+    def __init__(self, dev: Scientifica, pos, speed: float, **kwds):
+        self._moveReq = dev.driver.moveTo(np.array(pos), speed / 1e-6, **kwds)
+        targetPos = self._moveReq.target_pos  # will have None values filled in with current position
+        super().__init__(dev, targetPos, speed)
+        self._moveReq.set_callback(self._requestFinished)
 
-    def isDone(self):
-        """Return True if the move is complete.
-        """
-        return self._getStatus() != 0
+    def _requestFinished(self, moveReq):
+        try:
+            moveReq.wait(timeout=None)
+            self._taskDone()
+        except Exception as exc:
+            self._taskDone(
+                interrupted=True,
+                error=moveReq.error,
+                excInfo=moveReq.exc_info,
+            )
 
-    def _getStatus(self):
-        # check status of move unless we already know it is complete.
-        # 0: still moving; 1: finished successfully; -1: finished unsuccessfully
-        if self._finished:
-            if self._interrupted:
-                return -1
-            else:
-                return 1
-        if self.dev.dev.isMoving():
-            # Still moving
-            return 0
-        # did we reach target?
-        pos = self.dev._getPosition()
-        dif = ((np.array(pos) - np.array(self.targetPos))**2).sum()**0.5
-        if dif < 1.0:
-            # reached target
-            self._finished = True
-            return 1
-        else:
-            # missed
-            self._finished = True
-            self._interrupted = True
-            self._errorMsg = "Move did not complete (target=%s, position=%s, dif=%s)." % (self.targetPos, pos, dif)
-            return -1
-
-    def _stopped(self):
-        # Called when the manipulator is stopped, possibly interrupting this move.
-        startTime = ptime.time()
-        while True:
-            status = self._getStatus()
-            if status == 1:
-                # finished; ignore stop
-                return
-            elif status == -1:
-                self._errorMsg = "Move was interrupted before completion."
-                return
-            elif status == 0 and ptime.time() < startTime + 0.15:
-                # allow 150ms to stop
-                continue
-            elif status == 0:
-                # not actually stopped! This should not happen.
-                raise RuntimeError("Interrupted move but manipulator is still running!")
-            else:
-                raise Exception("Unknown status: %s" % status)
-
-    def errorMessage(self):
-        return self._errorMsg
-
+    def interrupt(self):
+        self._moveReq.cancel()
 
 
 class ScientificaGUI(StageInterface):
+    sigBusyMoving = Qt.Signal(object)  # button in use or False
+
     def __init__(self, dev, win):
-        StageInterface.__init__(self, dev, win)
+        super().__init__(dev, win)
+        self.sigBusyMoving.connect(self._setBusy)
+        nextRow = self.layout.rowCount()
 
         # Insert Scientifica-specific controls into GUI
-        self.zeroBtn = Qt.QPushButton('Zero position')
-        nextRow = self.layout.rowCount()
-        self.layout.addWidget(self.zeroBtn, nextRow, 0, 1, 2)
-        nextRow += 1
+        self.zeroBtn = Qt.QPushButton("Zero position")
+        self.zeroBtn.setToolTip("Set the current position as the new zero position on all axes.")
+        self.zeroBtn.clicked.connect(self.zeroAll)
+        self.layout.addWidget(self.zeroBtn, nextRow, 0)
 
-        self.psGroup = Qt.QGroupBox('Rotary Controller')
+        self.autoZeroBtn = FutureButton(self.autoZero, "Auto-set zero position", stoppable=True)
+        self.autoZeroBtn.setToolTip(
+            "Drive to the mechanical limit in each axis and set that as the zero position. Please ensure that the "
+            "device is not obstructed before using this feature."
+        )
+        self.layout.addWidget(self.autoZeroBtn, nextRow, 1)
+        nextRow += 1
+        self.autoXZeroBtn = self.autoYZeroBtn = self.autoZZeroBtn = None
+
+        if dev.capabilities()["getPos"][0] and dev.autoZeroDirection[0] is not None:
+            self.xZeroBtn = Qt.QPushButton("Zero X")
+            self.xZeroBtn.clicked.connect(self.zeroX)
+            self.layout.addWidget(self.xZeroBtn, nextRow, 0)
+            self.autoXZeroBtn = FutureButton(self.autoXZero, "Auto-set X zero", stoppable=True)
+            self.layout.addWidget(self.autoXZeroBtn, nextRow, 1)
+            nextRow += 1
+
+        if dev.capabilities()["getPos"][1] and dev.autoZeroDirection[1] is not None:
+            self.yZeroBtn = Qt.QPushButton("Zero Y")
+            self.yZeroBtn.clicked.connect(self.zeroY)
+            self.layout.addWidget(self.yZeroBtn, nextRow, 0)
+            self.autoYZeroBtn = FutureButton(self.autoYZero, "Auto-set Y zero", stoppable=True)
+            self.layout.addWidget(self.autoYZeroBtn, nextRow, 1)
+            nextRow += 1
+
+        if dev.capabilities()["getPos"][2] and dev.autoZeroDirection[2] is not None:
+            self.zZeroBtn = Qt.QPushButton("Zero Z")
+            self.zZeroBtn.clicked.connect(self.zeroZ)
+            self.layout.addWidget(self.zZeroBtn, nextRow, 0)
+            self.autoZZeroBtn = FutureButton(self.autoZZero, "Auto-set Z zero", stoppable=True)
+            self.layout.addWidget(self.autoZZeroBtn, nextRow, 1)
+            nextRow += 1
+
+        self.psGroup = Qt.QGroupBox("Rotary Controller")
         self.layout.addWidget(self.psGroup, nextRow, 0, 1, 2)
         nextRow += 1
 
         self.psLayout = Qt.QGridLayout()
         self.psGroup.setLayout(self.psLayout)
-        self.speedLabel = Qt.QLabel('Speed')
-        self.speedSpin = SpinBox(value=self.dev.userSpeed, suffix='m/turn', siPrefix=True, dec=True, bounds=[1e-6, 10e-3])
+        self.speedLabel = Qt.QLabel("Speed")
+        self.speedSpin = SpinBox(
+            value=self.dev.userSpeed, suffix="m/turn", siPrefix=True, dec=True, bounds=[1e-6, 10e-3]
+        )
+        self.speedSpin.valueChanged.connect(self.dev.setDefaultSpeed)
         self.psLayout.addWidget(self.speedLabel, 0, 0)
         self.psLayout.addWidget(self.speedSpin, 0, 1)
 
-        self.zeroBtn.clicked.connect(self.dev.dev.zeroPosition)
-        self.speedSpin.valueChanged.connect(self.dev.setDefaultSpeed)
+    def _setBusy(self, busy_btn: bool | Qt.QPushButton):
+        self.autoZeroBtn.setEnabled(busy_btn == self.autoZeroBtn or not busy_btn)
+        if self.autoXZeroBtn:
+            self.autoXZeroBtn.setEnabled(busy_btn == self.autoXZeroBtn or not busy_btn)
+        if self.autoYZeroBtn:
+            self.autoYZeroBtn.setEnabled(busy_btn == self.autoYZeroBtn or not busy_btn)
+        if self.autoZZeroBtn:
+            self.autoZZeroBtn.setEnabled(busy_btn == self.autoZZeroBtn or not busy_btn)
 
+    def zeroAll(self):
+        self.dev.driver.zeroPosition()
+
+    def zeroX(self):
+        self.dev.driver.zeroPosition('X')
+
+    def zeroY(self):
+        self.dev.driver.zeroPosition('Y')
+
+    def zeroZ(self):
+        self.dev.driver.zeroPosition('Z')
+
+    def autoZero(self):
+        self.sigBusyMoving.emit(self.autoZeroBtn)
+        return self._autoZero()
+
+    def autoXZero(self):
+        self.sigBusyMoving.emit(self.autoXZeroBtn)
+        return self._autoZero(axis=0)
+
+    def autoYZero(self):
+        self.sigBusyMoving.emit(self.autoYZeroBtn)
+        return self._autoZero(axis=1)
+
+    def autoZZero(self):
+        self.sigBusyMoving.emit(self.autoZZeroBtn)
+        return self._autoZero(axis=2)
+
+    def _autoZero(self, axis: int | None = None):
+        # confirm with user that movement is safe
+        response = Qt.QMessageBox.question(
+            self,
+            "Caution: check for obstructions",
+            f"This will move {self.dev.name()} to its limit. Please ensure such a movement is safe. Ready?",
+            Qt.QMessageBox.Ok | Qt.QMessageBox.Cancel,
+        )
+        if response != Qt.QMessageBox.Ok:
+            self.sigBusyMoving.emit(False)
+            return Future.immediate(error="User requested stop", stopped=True)
+
+        return self._doAutoZero(axis)
+
+    @future_wrap
+    def _doAutoZero(self, axis: int = None, _future: Future = None) -> None:
+        self._savedLimits = self.dev.getLimits()
+        try:
+            diff = np.zeros(3)  # keep track of offset changes
+            self.dev.setLimits(None, None, None)
+            globalStartPos = self.dev.globalPosition()
+
+            # move to an excessively far position until we hit a limit switch
+            far_away = [None if x is None else 1e6 * x for x in self.dev.autoZeroDirection]
+            if axis is not None and far_away[axis] is None:
+                raise Exception(f"Requested auto zero for axis {'XYZ'[axis]}, but autoZeroDirection is disabled for this axis in the configuration.")
+
+            self._moveAndWait(far_away, axis, _future)
+            diff += self._zeroAxis(axis)
+
+            # This part is a pain: if the approach switch is enabled on the control cube, then it's possible for the
+            # X limit switch to stop the Z axis and vice-versa. To work around this, we need to calibrate
+            # these axes independently while ensuring that the other is moved away from its limit switch.
+            if self.dev.isManipulator and axis != 1:
+                for axis in (0, 2):
+                    otherAxis = 2 - axis
+                    # Move z (or x) 300 um in either direction, then try moving x (or z) far away.
+                    # If z (or x) is already at its limit, then at least one of these should get x (or z)
+                    # to its limit.
+                    # We need to try both directions because we don't know which limit switch is activated.
+                    for dir in (1, -1):
+                        currentPos = self.dev.getPosition()
+                        currentPos[otherAxis] += 300 * dir
+                        # small step to move z (x) away from its limit switch
+                        self._moveAndWait(currentPos, otherAxis, _future)
+                        # far step to get x (z) to its limit switch
+                        self._moveAndWait(far_away, axis, _future)
+                        diff += self._zeroAxis(axis)
+
+            logMsg(f"Auto-zeroed {self.dev.name()} by {diff}")
+            move_future = self.dev.moveToGlobal(globalStartPos + diff, "fast")
+            slippedAxes = np.abs(diff) > 50e-6
+            if np.any(slippedAxes):
+                msg = f"Detected axis slip on {self.dev.name()}:"
+                for ax, slip in enumerate(slippedAxes):
+                    if slip:
+                        axis = 'XYZ'[ax]
+                        msg = f"{msg} {axis}={siFormat(diff[ax], suffix='m')}"
+                runInGuiThread(Qt.QMessageBox.warning, self, "Large slippage detected", msg, Qt.QMessageBox.Ok)
+            _future.waitFor(move_future)
+        finally:
+            self.sigBusyMoving.emit(False)
+            self.dev.stop()
+            self.dev.setLimits(*self._savedLimits)
+
+    def _moveAndWait(self, pos, axis, _future):
+        """Move to pos and wait for the move to complete. 
+        If axis is None, move all three axes to the specified position.
+        If axis is 0,1,2, move only the specified axis to pos[axis].
+
+        If the future does not reach its target, this is silently ignored.
+
+        Return True if the manipulator reached its target.
+        """
+        if axis is None:
+            dest = pos
+        else:
+            dest = [None, None, None]
+            dest[axis] = pos[axis]
+        f = self.dev._move(dest, "fast", False, attempts_allowed=1)
+        while not f.isDone():
+            _future.sleep(0.1)
+
+        # raise errors not related to missing the target
+        missed = f.wasInterrupted() and 'Stopped moving before reaching target' in f.errorMessage()
+        if f.wasInterrupted() and not missed:
+            f.wait()
+
+        return not missed
+
+    def _zeroAxis(self, axis):
+        """Zero an axis (or all three) and return the vector change in global position."""
+        before = self.dev.globalPosition()
+        if axis is None:
+            self.dev.driver.zeroPosition()
+        else:
+            self.dev.driver.zeroPosition('XYZ'[axis])
+        self.dev.getPosition(refresh=True)
+        after = self.dev.globalPosition()
+        diff = np.array(after) - np.array(before)
+        return diff

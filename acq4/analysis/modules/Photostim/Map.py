@@ -4,7 +4,7 @@ from acq4.util import Qt
 from collections import OrderedDict
 import pyqtgraph as pg
 import numpy as np
-from six.moves import range
+
 #import pyqtgraph.ProgressDialog as ProgressDialog
 
 class Map:

@@ -1,5 +1,5 @@
-from __future__ import print_function
-import os, sys
+import os
+import sys
 
 __version__ = '0.9.3'
 

@@ -1,27 +1,53 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-
 import time
 
 import numpy as np
 
 from acq4.devices.Stage import Stage, MoveFuture
-from pyqtgraph import ptime
-from acq4.util import Qt
+from acq4.util import Qt, ptime
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
 
 
 class MockStage(Stage):
+    """
+    Simulated motorized stage for testing and demonstration.
+    
+    Provides realistic stage behavior without hardware, including movement timing,
+    position reporting, and optional keyboard control for manual positioning.
+    
+    Configuration options:
+    
+    * **fastSpeed** (float, optional): Fast movement speed in m/s (default from Stage)
+    
+    * **slowSpeed** (float, optional): Slow movement speed in m/s (default from Stage)
+    
+    * **keys** (bool, optional): Enable keyboard control when True
+      Arrow keys move X/Y, Page Up/Down move Z
+      Ctrl: 4x speed, Alt: 0.25x speed, Shift: 0.1x speed
+    
+    * **capabilities** (dict, optional): Override device capabilities
+        - getPos: (x, y, z) tuple of booleans for position reading capability
+        - setPos: (x, y, z) tuple of booleans for position setting capability
+        - limits: (x, y, z) tuple of booleans for limit support
+    
+    * **parentDevice** (str, optional): Name of parent device for coordinate transforms
+    
+    * **transform** (dict, optional): Spatial transform relative to parent device
+    
+    Example configuration::
+    
+        MockStage:
+            driver: 'MockStage'
+            fastSpeed: 3e-3
+            slowSpeed: 100e-6
+            keys: True
+    """
 
     def __init__(self, dm, config, name):
         Stage.__init__(self, dm, config, name)
         
         self._lastMove = None
-        self.stageThread = MockStageThread()
-        self.stageThread.positionChanged.connect(self.posChanged)
-        self.stageThread.start()
-        
+
         dm.declareInterface(name, ['stage'], self)
         
         # Global key press handling
@@ -44,6 +70,10 @@ class MockStage(Stage):
             Qt.QCoreApplication.instance().installEventFilter(self)
         self._quit = False
         dm.sigAbortAll.connect(self.abort)
+        self.stageThread = MockStageThread()
+        self.stageThread.positionChanged.connect(self.posChanged)
+        self.stageThread.start()
+        self._move(self.getPosition(), 10000, False)
 
     def capabilities(self):
         """Return a structure describing the capabilities of this device"""
@@ -57,11 +87,11 @@ class MockStage(Stage):
             }
 
     def axes(self):
-        return ('x', 'y', 'z')
+        return 'x', 'y', 'z'
 
     def _move(self, pos, speed, linear, **kwds):
         """Called by base stage class when the user requests to move to an
-        posolute or relative position.
+        absolute or relative position.
         """
         with self.lock:
             self._interruptMove()
@@ -69,6 +99,10 @@ class MockStage(Stage):
             speed = self._interpretSpeed(speed)
             self._lastMove = MockMoveFuture(self, pos, speed)
             return self._lastMove
+
+    def _interpretSpeed(self, speed):
+        speed = super()._interpretSpeed(speed)
+        return speed / np.linalg.norm(self.config.get('scale', [1]))
 
     def eventFilter(self, obj, ev):
         """Catch key press/release events used for driving the stage.
@@ -120,10 +154,14 @@ class MockStage(Stage):
         
     def _interruptMove(self):
         if self._lastMove is not None and not self._lastMove.isDone():
-            self._lastMove._interrupted = True
+            self._lastMove.mockInterrupt()
 
     def setUserSpeed(self, v):
         pass
+
+    @property
+    def positionUpdatesPerSecond(self):
+        return 1.0 / (2 * self.stageThread.interval)
 
     def _getPosition(self):
         return self.stageThread.getPosition()
@@ -156,24 +194,14 @@ class MockMoveFuture(MoveFuture):
     def __init__(self, dev, pos, speed):
         MoveFuture.__init__(self, dev, pos, speed)
         self.targetPos = pos
-        self._finished = False
-        self._interrupted = False
-        self._errorMsg = None
-        
+
         self.dev.stageThread.setTarget(self, pos, speed)
-        
-    def wasInterrupted(self):
-        """Return True if the move was interrupted before completing.
-        """
-        return self._interrupted
 
-    def isDone(self):
-        """Return True if the move is complete or was interrupted.
-        """
-        return self._finished or self._interrupted
+    def mockFinish(self):
+        self._taskDone()
 
-    def errorMessage(self):
-        return self._errorMsg
+    def mockInterrupt(self):
+        self._taskDone(interrupted=True, error='Move interrupted')
 
 
 class MockStageThread(Thread):
@@ -241,9 +269,8 @@ class MockStageThread(Thread):
                 target = self.target
                 speed = self.speed
                 velocity = self.velocity
-                currentMove = self.currentMove
                 pos = self.pos
-                
+
             now = ptime.time()
             dt = now - lastUpdate
             lastUpdate = now
@@ -254,8 +281,9 @@ class MockStageThread(Thread):
                 stepDist = speed * dt
                 if stepDist >= dist:
                     self._setPosition(target)
-                    self.currentMove._finished = True
                     self.stop()
+                    # race condition here if we finish the move before stopping
+                    self.currentMove.mockFinish()
                 else:
                     unit = dif / dist
                     step = unit * stepDist
@@ -268,27 +296,3 @@ class MockStageThread(Thread):
     def _setPosition(self, pos):
         self.pos = np.array(pos)
         self.positionChanged.emit(self.pos)
-
-
-#class MockStageInterface(Qt.QWidget):
-    #def __init__(self, dev, win, keys=None):
-        #self.win = win
-        #self.dev = dev
-        #Qt.QWidget.__init__(self)
-        #self.layout = Qt.QGridLayout()
-        #self.setLayout(self.layout)
-        #self.btn = pg.JoystickButton()
-        #self.layout.addWidget(self.btn, 0, 0)
-        #self.label = Qt.QLabel()
-        #self.layout.addWidget(self.label)
-        #self.dev.sigPositionChanged.connect(self.update)
-        #self.btn.sigStateChanged.connect(self.btnChanged)
-        #self.label.setFixedWidth(300)
-        
-    #def btnChanged(self, btn, state):
-        #self.dev.setSpeed((state[0] * 0.0001, state[1] * 0.0001))
-        
-    #def update(self):
-        #pos = self.dev.getPosition()
-        #text = [pg.siFormat(x, suffix='m', precision=5) for x in pos]
-        #self.label.setText(", ".join(text))

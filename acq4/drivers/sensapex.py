@@ -9,6 +9,13 @@ except ImportError as err:
     err.args = err.args + (msg,)
     raise
 
+try:
+    from sensapex import __version__
+    version_info = tuple(map(int, __version__.split(".")))
+except ImportError:
+    __version__ = None
+    version_info = (0,)
+
 
 def handle_config(conf):
     for key, val in conf.items():

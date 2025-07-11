@@ -7,7 +7,7 @@ import pyqtgraph.opengl as gl
 import numpy as np
 import acq4.util.functions as fn
 import re
-from six.moves import range
+
 man = acq4.Manager.getManager() 
 
 ## update DB field to reflect dir meta info

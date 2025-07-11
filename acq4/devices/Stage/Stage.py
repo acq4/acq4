@@ -1,22 +1,25 @@
-# -*- coding: utf-8 -*-
-from __future__ import division, print_function
+from __future__ import annotations
 
-import math
+import contextlib
+import functools
+import itertools
 import threading
-from typing import Tuple
+from typing import Tuple, List
 
-import time
-
-from acq4.util import Qt, ptime
 import numpy as np
-from acq4.util.Mutex import Mutex
+
 import pyqtgraph as pg
+from acq4.util import Qt, ptime
+from acq4.util.Mutex import Mutex
+from pyqtgraph import siFormat
+from coorx import AffineTransform
 from .calibration import ManipulatorAxesCalibrationWindow, StageAxesCalibrationWindow
 from ..Device import Device
 from ..OptomechDevice import OptomechDevice
-from six.moves import range
-
 from ... import getManager
+from ...util.HelpfulException import HelpfulException
+from ...util.future import Future, FutureButton
+from ...util.geometry import Plane
 
 
 class Stage(Device, OptomechDevice):
@@ -35,9 +38,14 @@ class Stage(Device, OptomechDevice):
         isManipulator : bool
             Default False. Whether this mechanical device is to be used as an e.g. pipette manipulator, rather than
             as a stage.
+        fastSpeed : float
+            Speed (m/s) to use when a movement is requested with speed='fast'
+        slowSpeed : float
+            Speed (m/s) to use when a movement is requested with speed='slow'
     """
 
     sigPositionChanged = Qt.Signal(object, object, object)  # self, new position, old position
+    sigOrientationChanged = Qt.Signal(object)  # self
     sigLimitsChanged = Qt.Signal(object)
     sigSwitchChanged = Qt.Signal(object, object)  # self, {switch_name: value, ...}
 
@@ -50,8 +58,14 @@ class Stage(Device, OptomechDevice):
         self._baseTransform = self.deviceTransform() * 1  # *1 makes a copy
         self._inverseBaseTransform = None
 
+        m = pg.SRTTransform3D(self._baseTransform)
+        angle, axis = m.getRotation()
+        scale = m.getScale()
+        if tuple(scale) != (1, 1, 1) or angle != 0:
+            raise ValueError("Stage transform must be only translation.")
+
         self._stageTransform = Qt.QMatrix4x4()
-        self._invStageTransform = Qt.QMatrix4x4()
+        self._inverseStageTransform = Qt.QMatrix4x4()
         self.isManipulator = config.get("isManipulator", False)
 
         self.config = config
@@ -64,6 +78,7 @@ class Stage(Device, OptomechDevice):
         # convert from device position to translation vector
         self._axisTransform = None
         self._inverseAxisTransform = None
+        self._calculatedXAxisOrientation = None
 
         self._defaultSpeed = 'fast'
         self.setFastSpeed(config.get('fastSpeed', 1e-3))
@@ -92,7 +107,7 @@ class Stage(Device, OptomechDevice):
                 try:
                     js = dm.getDevice(jsname)
                 except Exception:
-                    print('Joystick device "%s" not found; disabling control from this device.' % jsname)
+                    print(f'Joystick device "{jsname}" not found; disabling control from this device.')
                     continue
                 jsdevs.add(js)
                 self._jsAxes.add((js, jsaxis))
@@ -202,10 +217,17 @@ class Stage(Device, OptomechDevice):
         devices with more complex kinematics need to reimplement this method.
         """ 
         tr = self.stageTransform().getTranslation() + pg.Vector(posChange)
-        pos = pg.Vector(self.inverseAxisTransform().map(tr))
-        return pos
+        return pg.Vector(self.inverseAxisTransform().map(tr))
 
-    def axisTransform(self):
+    def axisTransform(self) -> pg.Transform3D:
+        """Transformation matrix with columns that point in the direction that each manipulator axis moves.
+
+        This transform gives the relationship between the coordinates reported by the device and real world coordinates.
+        It assumes a 3-axis, linear stage, where the axes are not necessarily orthogonal to each other.
+
+        This matrix is usually derived from calibration points. Before calibration, it provides only scale
+        factors.
+        """
         if self._axisTransform is None:
             self._axisTransform = pg.Transform3D()
             self._inverseAxisTransform = pg.Transform3D()
@@ -213,15 +235,40 @@ class Stage(Device, OptomechDevice):
             if scale is not None:
                 self._axisTransform.scale(*scale)
                 self._inverseAxisTransform.scale(*[1.0 / x for x in scale])
-        return pg.QtGui.QMatrix4x4(self._axisTransform)
+        return pg.Transform3D(self._axisTransform)
 
-    def calculatedPitchRadians(self) -> float:
-        # from https://stackoverflow.com/questions/11514063/extract-yaw-pitch-and-roll-from-a-rotationmatrix
-        a = self.axisTransform()
-        return math.atan2(-a[2, 0], math.sqrt(a[2, 1] ** 2 + a[2, 2] ** 2))
+    def setAxisTransform(self, tr):
+        self._axisTransform = tr
+        self._inverseAxisTransform = None
+        self._calculatedXAxisOrientation = None
+        self._updateTransform()
+        self.sigOrientationChanged.emit(self)
 
-    def calculatedPitchDegrees(self) -> float:
-        return self.calculatedPitchRadians() / math.pi * 180
+    @functools.lru_cache
+    def calculatedAxisOrientation(self, axis: str):
+        """Return the pitch and yaw of a stage axis.
+
+        The pitch is returned in degrees relative to global horizontal (positive values point downward), 
+        whereas the yaw is returned in degrees around the global Z axis relative to the global +X direction.
+
+        The *axis* argument specifies which axis to return, one of '+x', '-x', '+y', '-y', '+z', or '-z'.
+        """
+        assert axis in {'+x', '-x', '+y', '-y', '+z', '-z'}
+        m = self.axisTransform().matrix()
+        axis_index = {'x': 0, 'y': 1, 'z': 2}[axis[1]]
+        axis_sign = 1 if axis[0] == '+' else -1
+        selected_axis = pg.Vector(axis_sign * m[:3, axis_index])
+        globalz = pg.Vector([0, 0, 1])
+        pitch = selected_axis.angle(globalz) - 90
+        yaw = np.arctan2(selected_axis[1], selected_axis[0]) * 180 / np.pi
+        return {'pitch': pitch, 'yaw': yaw}
+
+    # def calculatedYaw(self) -> float:
+    #     """Return the X-axis pitch (angle relative to horizontal) in degrees
+    #     """
+    #     # from https://stackoverflow.com/questions/11514063/extract-yaw-pitch-and-roll-from-a-rotationmatrix
+    #     a = self.axisTransform()
+    #     return math.atan2(-a[2, 0], math.sqrt(a[2, 1] ** 2 + a[2, 2] ** 2)) * 180 / math.pi
 
     def inverseAxisTransform(self):
         if self._inverseAxisTransform is None:
@@ -234,18 +281,9 @@ class Stage(Device, OptomechDevice):
     def _solveAxisTransform(self, stagePos, parentPos, localPos):
         """Return an axis transform matrix that maps localPos to parentPos, given
         stagePos.
-
-
         """
         offset = pg.transformCoordinates(self.inverseBaseTransform(), parentPos, transpose=True) - localPos
-        m = pg.solve3DTransform(stagePos[:4], offset[:4])[:3]
-        return m
-
-    # def mapToStage(self, obj):
-    #     return self._mapTransform(obj, self._stageTransform)
-
-    # def mapFromStage(self, obj):
-    #     return self._mapTransform(obj, self._invStageTransform)
+        return pg.solve3DTransform(stagePos[:4], offset[:4])[:3]
 
     def posChanged(self, pos):
         """Handle device position changes by updating the device transform and
@@ -290,6 +328,12 @@ class Stage(Device, OptomechDevice):
         ## this informs rigidly-connected devices that they have moved
         self.setDeviceTransform(self._baseTransform * self._stageTransform)
 
+    @property
+    def positionUpdatesPerSecond(self):
+        """Return the rate at which the device reports position updates.
+        """
+        raise NotImplementedError()
+
     def getPosition(self, refresh=False):
         """Return the position of the stage as reported by the controller.
 
@@ -297,9 +341,7 @@ class Stage(Device, OptomechDevice):
         current position is requested from the controller. If refresh is True,
         then the position request may block if the device is currently busy.
         """
-        if self._lastPos is None:
-            refresh = True
-        if refresh:
+        if self._lastPos is None or refresh:
             return self._getPosition()
         with self.lock:
             return self._lastPos[:]
@@ -361,7 +403,7 @@ class Stage(Device, OptomechDevice):
         """
         raise NotImplementedError()        
 
-    def move(self, position, speed=None, progress=False, linear=False, **kwds):
+    def move(self, position, speed=None, progress=False, linear=False, **kwds) -> MoveFuture:
         """Move the device to a new position.
         
         *position* specifies the absolute position in the stage coordinate system (as defined by the device)
@@ -387,7 +429,7 @@ class Stage(Device, OptomechDevice):
         mfut = self._move(position, speed=speed, linear=linear, **kwds)
 
         if progress:
-            self._progressDialog = Qt.QProgressDialog("%s moving..." % self.name(), None, 0, 100)
+            self._progressDialog = Qt.QProgressDialog(f"{self.name()} moving...", None, 0, 100)
             self._progressDialog.mf = mfut
             self._progressTimer.start(100)
 
@@ -407,7 +449,7 @@ class Stage(Device, OptomechDevice):
             raise ValueError(f"Position {position} should have length {len(self.axes())}")
         self.checkLimits(position)
 
-    def _move(self, pos, speed, linear, **kwds):
+    def _move(self, pos, speed, linear, **kwds) -> MoveFuture:
         """Must be reimplemented by subclasses and return a MoveFuture instance.
         """
         raise NotImplementedError()
@@ -425,7 +467,7 @@ class Stage(Device, OptomechDevice):
         """Move the stage along a path with multiple waypoints.
 
         The format of *path* is a list of dicts, where each dict specifies keyword arguments
-        to self.move().
+        to self.move(). Optionally, each dict may specify `globalPos` instead of `position`.
         """
         return MovePathFuture(self, path)
 
@@ -433,7 +475,7 @@ class Stage(Device, OptomechDevice):
         """Helper function to convert absolute position (possibly
         containing Nones) to an absolute position.
         """
-        if any([x is None for x in abs]):
+        if any(x is None for x in abs):
             pos = self.getPosition()
             for i,x in enumerate(abs):
                 if x is not None:
@@ -449,7 +491,8 @@ class Stage(Device, OptomechDevice):
         print(vel)
 
     def stop(self):
-        """Stop moving the device immediately.
+        """Stop moving the device immediately. When you call MoveFuture.stop() from here, look closely at infinite
+        recursions.
         """
         raise NotImplementedError()
 
@@ -495,45 +538,120 @@ class Stage(Device, OptomechDevice):
         if len(changed) > 0:
             self.sigLimitsChanged.emit(changed)
 
-    def getLimits(self):
-        """Return a list the (min, max) position limits for each axis.
+    def getLimits(self) -> List[tuple[float | None, float | None]]:
+        """Return a list of the (min, max) position limits for each axis.
         """
         return self._limits[:]
+
+    def getBoundaries(self) -> List[Plane]:
+        """Return the boundaries of the stage in global coordinates."""
+        if len(self.axes()) != 3:
+            raise NotImplementedError("Boundaries are only implemented for 3-axis stages.")
+        limits = self.getLimits()  # min, max
+        if None in [m for ax in limits for m in ax]:
+            return []
+        # TODO do we need to use _baseTransform, too?
+        xform = np.array(self.axisTransform().copyDataTo()).reshape(4, 4)
+        xform = AffineTransform(matrix=xform[:3, :3], offset=xform[:3, 3])
+        corners = {
+            "min": xform.map(np.array([ax[0] for ax in limits])),
+            "max": xform.map(np.array([ax[1] for ax in limits])),
+        }
+        axes = [xform.map(np.eye(3)[i]) - xform.map(np.zeros(3)) for i in range(3)]
+        normals = {
+            "z": np.cross(axes[0], axes[1]),
+            "y": np.cross(axes[2], axes[0]),
+            "x": np.cross(axes[1], axes[2]),
+        }
+        # flip normals to point inward
+        diagonal = corners["max"] - corners["min"]
+        normals["x"] = normals["x"] * np.sign(np.dot(normals["x"], diagonal))
+        normals["y"] = normals["y"] * np.sign(np.dot(normals["y"], diagonal))
+        normals["z"] = normals["z"] * np.sign(np.dot(normals["z"], diagonal))
+        return (
+            [Plane(normals[n], corners["min"], f"{self.name()}'s min {n}") for n in normals] +
+            [Plane(-normals[n], corners["max"], f"{self.name()}'s max {n}") for n in normals]
+        )
 
     def _setHardwareLimits(self, axis:int, limit:tuple):
         raise NotImplementedError("Must be implemented in subclass.")
 
-    def checkLimits(self, pos):
-        """Raise an exception if *pos* is outside the configured limits"""
+    def checkGlobalLimits(self, globalPos):
+        """Raise an exception if *globalPos* (in global coordinates) is outside the configured limits"""
+        stagePos = self.mapGlobalToDevicePosition(globalPos)
+        self.checkLimits(stagePos)
+
+    def checkLimits(self, stagePos):
+        """Raise an exception if *stagePos* (in stage coordinates) is outside the configured limits"""
         for axis, limit in enumerate(self._limits):
             ax_name = 'xyz'[axis]
-            x = pos[axis]
+            x = stagePos[axis]
             if x is None:
                 continue
             if limit[0] is not None and x < limit[0]:
-                raise ValueError(f"Position requested for device {self.name()} exceeds limits: {pos} {ax_name} axis < {limit[0]}")
+                raise ValueError(f"Position requested for device {self.name()} exceeds limits: {stagePos} {ax_name} axis < {limit[0]}")
             if limit[1] is not None and x > limit[1]:
-                raise ValueError(f"Position requested for device {self.name()} exceeds limits: {pos} {ax_name} axis > {limit[1]}")
+                raise ValueError(f"Position requested for device {self.name()} exceeds limits: {stagePos} {ax_name} axis > {limit[1]}")
+
+    def checkRangeOfMotion(self, pos, tolerance=500e-6):
+        """Raise an exception if the specified global position is within *tolerance* of the limits of the device."""
+        pos = np.array(pos)
+        bad_axes = []
+        for axis in (0, 1, 2):
+            try:
+                bound = pos.copy()
+                bound[axis] -= tolerance
+                self.checkLimits(self.mapGlobalToDevicePosition(bound))
+                bound[axis] += 2 * tolerance
+                self.checkLimits(self.mapGlobalToDevicePosition(bound))
+            except ValueError:
+                bad_axes.append(axis)
+        if bad_axes:
+            axis_names = {0: 'x', 1: 'y', 2: 'z'}
+            axes = ', '.join(axis_names[axis] for axis in bad_axes)
+            stage_pos = self.mapGlobalToDevicePosition(pos)
+            possible_problem = "pipette pull consistency" if self.isManipulator else "hardware reliability"
+            raise HelpfulException(
+                f"The specified position is within ±{siFormat(tolerance, suffix='m')} of the {axes} limit(s) of "
+                f"{self.name()} and may not always be accessible, depending on your {possible_problem}.",
+                reasons=[
+                    f"Manipulator limits: {self.getLimits()}",
+                    f"Position: ({stage_pos[0]:f}, {stage_pos[1]:f}, {stage_pos[2]:f})",
+                ],
+            )
 
     def homePosition(self):
         """Return the stored home position of this stage in global coordinates.
         """
-        return self.readConfigFile('stored_locations').get('home', None)
+        return self.getStoredLocation('home')
 
     def goHome(self, speed='fast'):
         homePos = self.homePosition()
         if homePos is None:
-            raise Exception("No home position set for %s" % self.name())
+            raise RuntimeError(f"No home position set for {self.name()}")
         return self.moveToGlobal(homePos, speed=speed)
 
     def setHomePosition(self, pos=None):
         """Set the home position in global coordinates.
         """
+        self.setStoredLocation('home', pos)
+
+    def getStoredLocation(self, name):
+        return self.readConfigFile('stored_locations').get(name, None)
+
+    def setStoredLocation(self, name: str, pos=None):
         if pos is None:
             pos = self.globalPosition()
+        self.checkLimits(self.mapGlobalToDevicePosition(pos))
         locations = self.readConfigFile('stored_locations')
-        locations['home'] = list(pos)
+        locations[name] = list(pos)
         self.writeConfigFile(locations, 'stored_locations')
+
+    def clearStoredLocation(self, name):
+        locations = self.readConfigFile('stored_locations')
+        if name in locations:
+            del locations[name]
+            self.writeConfigFile(locations, 'stored_locations')
 
     def joystickChanged(self, js, event):
         if 'axis' in event:
@@ -561,20 +679,33 @@ class Stage(Device, OptomechDevice):
         self.setVelocity(vel)
 
 
-class MoveFuture(object):
+class CallOnce:
+    """Used to prevent a callable from being called more than once in a stack. Note that this is not a mutex."""
+    def __init__(self):
+        self.called = False
+
+    def __enter__(self):
+        if self.called:
+            return False
+        self.called = True
+        return True
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.called = False
+
+
+class MoveFuture(Future):
     """Used to track the progress of a requested move operation.
     """
-    class Timeout(Exception):
-        """Raised by wait() if the timeout period elapses.
-        """
 
-    def __init__(self, dev, pos, speed):
-        self.startTime = pg.ptime.time()
+    def __init__(self, dev: Stage, pos, speed):
+        super().__init__()
+        self.startTime = ptime.time()
         self.dev = dev
         self.speed = speed
-        self.targetPos = pos
-        self.startPos = dev.getPosition()
-        self._wasStopped = False
+        self.targetPos = np.asarray(pos)
+        self.startPos = np.asarray(dev.getPosition())
+        self._isStopCallable = CallOnce()
 
     def percentDone(self):
         """Return the percent of the move that has completed.
@@ -594,76 +725,31 @@ class MoveFuture(object):
             return 100
         return 100 * d1 / d2
 
-    def stop(self):
+    def stop(self, reason="stop requested"):
         """Stop the move in progress.
         """
-        if not self.isDone():
-            self.dev.stop()
-            self._wasStopped = True
-
-    def wasInterrupted(self):
-        """Return True if the move was interrupted before completing.
-        """
-        raise NotImplementedError()
-
-    def isDone(self):
-        """Return True if the move has completed or was interrupted.
-        """
-        return self.percentDone() == 100 or self.wasInterrupted()
-
-    def errorMessage(self):
-        """Return a string description of the reason for a move failure,
-        or None if there was no failure (or if the reason is unknown).
-        """
-        return None
-        
-    def wait(self, timeout=None, updates=False):
-        """Block until the move has completed, has been interrupted, or the
-        specified timeout has elapsed.
-
-        If *updates* is True, process Qt events while waiting.
-
-        If the move did not complete, raise an exception.
-        """
-        start = ptime.time()
-        while True:
-            if self.isDone():
-                break
-            if updates is True:
-                Qt.QTest.qWait(100)
-            else:
-                time.sleep(0.1)
-            if (timeout is not None) and (ptime.time() > start + timeout):
-                raise self.Timeout("Timed out waiting for move to complete.")
-
-        self._raiseError()
-    
-    def _raiseError(self):
-        """Raise an exception if the move did not complete, otherwise just return.
-        """
-        err = self.errorMessage()
-        if err is not None:
-            raise RuntimeError("Move did not complete: %s" % err)
-        elif self.wasInterrupted():
-            raise RuntimeError("Move did not complete.")
+        with self._isStopCallable as can_call_stop:
+            if can_call_stop and not self.isDone():
+                self.dev.stop()
+                super().stop(reason=reason)
 
 
 class MovePathFuture(MoveFuture):
     def __init__(self, dev: Stage, path):
-        MoveFuture.__init__(self, dev, None, None)
+        super().__init__(dev, None, None)
 
         self.path = path
+        self.currentStep = 0
         self._currentFuture = None
-        self._done = False
-        self._wasInterrupted = False
-        self._errorMessage = None
-        self._stopped = False
 
         for step in self.path:
             if step.get("globalPos") is not None:
                 step["position"] = dev.mapGlobalToDevicePosition(step.pop("globalPos"))
-        for step in self.path:
-            self.dev.checkMove(**step)
+        for i, step in enumerate(self.path):
+            try:
+                self.dev.checkMove(**step)
+            except Exception as exc:
+                raise Exception(f"Cannot move {dev.name()} to path step {i}/{len(self.path)}: {step}") from exc
 
         self._moveThread = threading.Thread(target=self._movePath)
         self._moveThread.start()
@@ -672,54 +758,65 @@ class MovePathFuture(MoveFuture):
         fut = self._currentFuture
         if fut is None:
             return 0.0
-        pd = (100 * fut._pathStep + fut.percentDone()) / len(self.path)
-        return pd
+        return (100 * fut._pathStep + fut.percentDone()) / len(self.path)
 
-    def isDone(self):
-        return self._done
-
-    def wasInterrupted(self):
-        return self._wasInterrupted
-
-    def errorMessage(self):
-        return self._errorMessage
-
-    def stop(self):
+    def stop(self, reason=None):
         fut = self._currentFuture
         if fut is not None:
-            fut.stop()
-        self._stopped = True
+            fut.stop(reason=reason)
+        # skip MoveFuture.stop to avoid the mess with dev.stop()
+        Future.stop(self, reason=reason)
 
     def _movePath(self):
         try:
             for i, step in enumerate(self.path):
-                print("Move path step %d    %r" % (i, step))
-                fut = self.dev.move(**step)
-                fut._pathStep = i
-                self._currentFuture = fut
-                while not fut.isDone():
-                    try:
-                        fut.wait(timeout=0.1)
-                    except fut.Timeout:
-                        pass
-                    if self._stopped:
-                        fut.stop()
-                        break
-                
-                if self._stopped:
-                    self._errorMessage = "Move was cancelled"
-                    self._wasInterrupted = True
-                    break
+                step = step.copy()
+                explanation = step.pop('explanation', 'unnamed')
+                try:
+                    fut: Future = self.dev.move(**step)
+                    fut._pathStep = i
+                    self._currentFuture = fut
+                    while not fut.isDone():
+                        with contextlib.suppress(fut.Timeout):
+                            fut.wait(timeout=0.1)  # raises Timeout
+                            self.currentStep = i + 1
+                        if self._stopRequested:
+                            fut.stop()
+                            break
 
-                if fut.wasInterrupted():
-                    self._errorMessage = "Path step %d/%d: %s" % (i+1, len(self.path), fut.errorMessage())
-                    self._wasInterrupted = True
-                    break
-        except Exception as exc:
-            self._errorMessage = "Error in path move thread: %s" % exc
-            self._wasInterrupted = True
+                    if self._stopRequested:
+                        self._taskDone(interrupted=True, error="Move was cancelled by external request")
+                        return
+
+                    if fut.wasInterrupted():
+                        self._taskDone(
+                            interrupted=True,
+                            error=f"Path step {i + 1:d}/{len(self.path):d}: {fut.errorMessage()}",
+                            excInfo=fut._excInfo,
+                        )
+                        return
+                except Exception as exc:
+                    self._taskDone(
+                        interrupted=True,
+                        error=f"Error moving to path step {i} ({explanation})",
+                        excInfo=(type(exc), exc, exc.__traceback__),
+                    )
+                    return
         finally:
-            self._done = True
+            if not self.isDone():
+                self._taskDone()  # success!
+
+    def undo(self):
+        """Reverse the moves generated in this future and return a new future.
+        """
+        fwdPath = [{'position': self.startPos}] + self.path[:]
+        revPath = []
+        for i in range(min(self.currentStep, len(self.path)-1), -1, -1):
+            step = fwdPath[i+1].copy()
+            step['position'] = fwdPath[i]['position']
+            step['explanation'] = f"undo {step.get('explanation')}"
+            revPath.append(step)
+        return self.dev.movePath(revPath)
 
 
 class StageInterface(Qt.QWidget):
@@ -778,9 +875,8 @@ class StageInterface(Qt.QWidget):
         self.layout.addWidget(self.btnContainer, self.layout.rowCount(), 0)
         self.btnLayout.setContentsMargins(0, 0, 0, 0)
 
-        self.goHomeBtn = Qt.QPushButton('Home')
+        self.goHomeBtn = FutureButton(self.goHomeClicked, 'Home', stoppable=True, processing='Going home...')
         self.btnLayout.addWidget(self.goHomeBtn, 0, 0)
-        self.goHomeBtn.clicked.connect(self.goHomeClicked)
 
         self.setHomeBtn = Qt.QPushButton('Set Home')
         self.btnLayout.addWidget(self.setHomeBtn, 0, 1)
@@ -832,7 +928,7 @@ class StageInterface(Qt.QWidget):
         self.dev.setLimits(**{self.dev.axes()[axis]: tuple(limit)})
 
     def goHomeClicked(self):
-        self.dev.goHome()
+        return self.dev.goHome()
 
     def setHomeClicked(self):
         self.dev.setHomePosition()

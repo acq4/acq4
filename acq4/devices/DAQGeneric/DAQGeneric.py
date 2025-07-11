@@ -1,19 +1,16 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-
 from collections import OrderedDict
+from typing import Optional
 
 import numpy as np
-import six
 
+from MetaArray import MetaArray, axis
 from acq4.devices.DAQGeneric.taskGUI import DAQGenericTaskGui
 from acq4.devices.Device import Device, DeviceTask
-from pyqtgraph import siFormat
-from pyqtgraph.debug import Profiler
 from acq4.util import Qt
 from acq4.util.Mutex import Mutex
 from acq4.util.debug import printExc
-from pyqtgraph.metaarray import MetaArray, axis
+from pyqtgraph import siFormat
+from pyqtgraph.debug import Profiler
 
 Ui_Form = Qt.importTemplate('.DeviceTemplate')
 
@@ -36,7 +33,7 @@ class DataMapping:
         self.offset = {}
         if chans is None:
             chans = device.listChannels()
-        if isinstance(chans, six.string_types):
+        if isinstance(chans, str):
             chans = [chans]
         for ch in chans:
             self.scale[ch] = device.getChanScale(ch)
@@ -96,7 +93,7 @@ class DAQGeneric(Device):
         self._DGHolding = {}
         for ch in config:
             if config[ch]['type'][0] != 'a' and ('scale' in config[ch] or 'offset' in config[ch]):
-                raise Exception("Scale/offset only allowed for analog channels. (%s.%s)" % (name, ch))
+                raise ValueError(f"Scale/offset only allowed for analog channels. ({name}.{ch})")
 
             if 'scale' not in config[ch]:
                 config[ch]['scale'] = 1  ## must be int to prevent accidental type conversion on digital data
@@ -104,27 +101,28 @@ class DAQGeneric(Device):
                 config[ch]['offset'] = 0
             if config[ch].get('invert', False):
                 if config[ch]['type'][0] != 'd':
-                    raise Exception("Inversion only allowed for digital channels. (%s.%s)" % (name, ch))
+                    raise ValueError(f"Inversion only allowed for digital channels. ({name}.{ch})")
                 config[ch]['scale'] = -1
                 config[ch]['offset'] = -1
 
-            # print "chan %s scale %f" % (ch, config[ch]['scale'])
             if 'holding' not in config[ch]:
                 config[ch]['holding'] = 0.0
 
             ## It is possible to create virtual channels with no real hardware connection
-            if 'device' not in config[ch]:
-                # print "Assuming channel %s is virtual:" % ch, config[ch]
+            if 'device' in config[ch]:
+                daq = self.dm.getDevice(config[ch]['device'])
+                daq.verifyChannelBelongs(config[ch]['channel'])
+            else:
                 config[ch]['virtual'] = True
 
             ## set holding value for all output channels now
             if config[ch]['type'][1] == 'o':
                 self.setChanHolding(ch, config[ch]['holding'])
-            # self._DGHolding[ch] = config[ch]['holding']
+                # self._DGHolding[ch] = config[ch]['holding']
 
         dm.declareInterface(name, ['daqChannelGroup'], self)
         for ch in config:
-            dm.declareInterface(name + "." + ch, ['daqChannel'], ChannelHandle(self, ch))
+            dm.declareInterface(f"{name}.{ch}", ['daqChannel'], ChannelHandle(self, ch))
 
     def mapToDAQ(self, channel, data):
         mapping = self.getMapping(chans=[channel])
@@ -154,12 +152,11 @@ class DAQGeneric(Device):
         prof = Profiler(disabled=True)
         with self._DGLock:
             prof('lock')
-            # print "set holding", channel, level
             ### Set correct holding level here...
             if level is None:
                 level = self._DGHolding[channel]
                 if level is None:
-                    raise Exception("No remembered holding level for channel %s" % channel)
+                    raise ValueError(f"No remembered holding level for channel {channel}")
             else:
                 self._DGHolding[channel] = level
 
@@ -167,7 +164,6 @@ class DAQGeneric(Device):
                 mapping = self.getMapping(channel)
             val = mapping.mapToDaq(channel, self._DGHolding[channel])
             prof('map')
-            # print "Set holding for channel %s: %f => %f" % (channel, self._DGHolding[channel], val)
 
             chConf = self._DGConfig[channel]
             isVirtual = chConf.get('virtual', False)
@@ -205,6 +201,14 @@ class DAQGeneric(Device):
             return self.mapFromDAQ(channel, val)
         else:
             return val
+
+    def setChannelValue(self, channel, value, block=True):
+        with self._DGLock:
+            daq = self._DGConfig[channel]['device']
+            chan = self._DGConfig[channel]['channel']
+        daqDev = self.dm.getDevice(daq)
+        value = self.mapToDAQ(channel, value)
+        daqDev.setChannelValue(chan, value, block=block)
 
     def reconfigureChannel(self, chan, config):
         """Allows reconfiguration of channel properties (including the actual DAQ channel name)"""
@@ -297,32 +301,31 @@ class DAQGenericTask(DeviceTask):
         for ch in self._DAQCmd:
             # dev = self.dev.dm.getDevice(self.dev._DGConfig[ch]['channel'][0])
             dev = self.dev.dm.getDevice(self.dev.getDAQName(ch))
-            prof.mark(ch + ' get dev')
+            prof.mark(f'{ch} get dev')
             if 'preset' in self._DAQCmd[ch]:
                 with self.dev._DGLock:
                     daqChan = self.dev._DGConfig[ch]['channel']
                 # dev.setChannelValue(self.dev._DGConfig[ch]['channel'][1], self._DAQCmd[ch]['preset'])
                 preVal = self.mapping.mapToDaq(ch, self._DAQCmd[ch]['preset'])
                 dev.setChannelValue(daqChan, preVal)
-                prof.mark(ch + ' preset')
+                prof.mark(f'{ch} preset')
             elif 'holding' in self._DAQCmd[ch]:
                 self.dev.setChanHolding(ch, self._DAQCmd[ch]['holding'])
-                prof.mark(ch + ' set holding')
+                prof.mark(f'{ch} set holding')
             if 'recordInit' in self._DAQCmd[ch] and self._DAQCmd[ch]['recordInit']:
                 self.initialState[ch] = self.dev.getChannelValue(ch)
-                prof.mark(ch + ' record init')
+                prof.mark(f'{ch} record init')
         for ch in self.dev._DGConfig:
             ## record current holding value for all output channels (even those that were not buffered for this task)
             with self.dev._DGLock:
                 chanType = self.dev._DGConfig[ch]['type']
             if chanType in ['ao', 'do']:
                 self.holdingVals[ch] = self.dev.getChanHolding(ch)
-                prof.mark(ch + ' record holding')
+                prof.mark(f'{ch} record holding')
         prof.finish()
 
     def createChannels(self, daqTask):
         self.daqTasks = {}
-        # print "createChannels"
 
         ## Is this the correct DAQ device for any of my channels?
         ## create needed channels + info
@@ -330,26 +333,21 @@ class DAQGenericTask(DeviceTask):
 
         chans = self.dev.listChannels()
         for ch in chans:
-            # print "  creating channel %s.." % ch
             if ch not in self._DAQCmd:
-                # print "    ignoring channel", ch, "not in command"
                 continue
             chConf = chans[ch]
             if chConf['device'] != daqTask.devName():
-                # print "    ignoring channel", ch, "wrong device"
                 continue
 
             ## Input channels are only used if the command has record: True
             if chConf['type'] in ['ai', 'di']:
                 # if ('record' not in self._DAQCmd[ch]) or (not self._DAQCmd[ch]['record']):
                 if not self._DAQCmd[ch].get('record', False):
-                    # print "    ignoring channel", ch, "recording disabled"
                     continue
 
             ## Output channels are only added if they have a command waveform specified
             elif chConf['type'] in ['ao', 'do']:
                 if 'command' not in self._DAQCmd[ch]:
-                    # print "    ignoring channel", ch, "no command"
                     continue
 
             self.bufferedChannels.append(ch)
@@ -358,30 +356,24 @@ class DAQGenericTask(DeviceTask):
                 # scale = self.getChanScale(ch)
                 cmdData = self._DAQCmd[ch]['command']
                 if cmdData is None:
-                    # print "No command for channel %s, skipping." % ch
                     continue
                 # cmdData = cmdData * scale
 
                 ## apply scale, offset or inversion for output lines
                 cmdData = self.mapping.mapToDaq(ch, cmdData)
-                # print "channel", chConf['channel'][1], cmdData
 
                 if chConf['type'] == 'do':
                     cmdData = cmdData.astype(np.uint32)
                     cmdData[cmdData <= 0] = 0
                     cmdData[cmdData > 0] = 0xFFFFFFFF
 
-                # print "channel", self._DAQCmd[ch]
-                # print "LOW LEVEL:", self._DAQCmd[ch].get('lowLevelConf', {})
                 daqTask.addChannel(chConf['channel'], chConf['type'], **self._DAQCmd[ch].get('lowLevelConf', {}))
                 self.daqTasks[ch] = daqTask  ## remember task so we can stop it later on
                 daqTask.setWaveform(chConf['channel'], cmdData)
-                # print "DO task %s has type" % ch, cmdData.dtype
             elif chConf['type'] == 'ai':
                 mode = chConf.get('mode', None)
                 # if len(chConf['channel']) > 2:
                 # mode = chConf['channel'][2]
-                # print "Adding channel %s to DAQ task" % chConf['channel'][1]
                 daqTask.addChannel(chConf['channel'], chConf['type'], mode=mode,
                                    **self._DAQCmd[ch].get('lowLevelConf', {}))
                 self.daqTasks[ch] = daqTask  ## remember task so we can stop it later on
@@ -406,24 +398,22 @@ class DAQGenericTask(DeviceTask):
     def stop(self, abort=False):
         # with self.dev._DGLock:  ##not necessary
         ## Stop DAQ tasks before setting holding level.
-        # print "STOP"
         prof = Profiler(disabled=True)
         for ch in self.daqTasks:
-            # print "Stop task", self.daqTasks[ch]
             try:
                 self.daqTasks[ch].stop(abort=abort)
-            except:
+            except Exception:
                 printExc("Error while stopping DAQ task:")
-            prof('stop %s' % ch)
+            prof(f'stop {ch} (abort={abort})')
         for ch in self._DAQCmd:
             if 'holding' in self._DAQCmd[ch]:
                 self.dev.setChanHolding(ch, self._DAQCmd[ch]['holding'])
-                prof('set holding %s' % ch)
+                prof(f'set holding {ch}')
             elif self.dev.isOutput(ch):  ## return all output channels to holding value
                 self.dev.setChanHolding(ch)
-                prof('reset to holding %s' % ch)
+                prof(f'reset to holding {ch}')
 
-    def getResult(self):
+    def getResult(self) -> Optional[MetaArray]:
         ## Access data recorded from DAQ task
         ## create MetaArray and fill with MC state info
 
@@ -434,49 +424,45 @@ class DAQGenericTask(DeviceTask):
             result[ch]['data'] = self.mapping.mapFromDaq(ch, result[ch]['data'])  ## scale/offset/invert
             result[ch]['units'] = self.getChanUnits(ch)
 
-        if len(result) > 0:
-            meta = result[list(result.keys())[0]]['info']
-            rate = meta['rate']
-            nPts = meta['numPts']
-            ## Create an array of time values
-            timeVals = np.linspace(0, float(nPts - 1) / float(rate), nPts)
-
-            ## Concatenate all channels together into a single array, generate MetaArray info
-            chanList = [np.atleast_2d(result[x]['data']) for x in result]
-            cols = [(x, result[x]['units']) for x in result]
-            # print cols
-            try:
-                arr = np.concatenate(chanList)
-            except:
-                print(chanList)
-                print([a.shape for a in chanList])
-                raise
-
-            daqState = OrderedDict()
-            for ch in self.dev._DGConfig:
-                if ch in result:
-                    daqState[ch] = result[ch]['info']
-                else:
-                    daqState[ch] = {}
-
-                ## record current holding value for all output channels (even those that were not buffered for this task)    
-                if self.dev._DGConfig[ch]['type'] in ['ao', 'do']:
-                    daqState[ch]['holding'] = self.holdingVals[ch]
-
-            info = [axis(name='Channel', cols=cols), axis(name='Time', units='s', values=timeVals)] + [
-                {'DAQ': daqState}]
-
-            protInfo = self._DAQCmd.copy()  ## copy everything but the command arrays and low-level configuration info
-            for ch in protInfo:
-                protInfo[ch].pop('command', None)
-                protInfo[ch].pop('lowLevelConf', None)
-            info[-1]['Protocol'] = protInfo
-
-            marr = MetaArray(arr, info=info)
-            return marr
-
-        else:
+        if len(result) <= 0:
             return None
+        meta = result[list(result.keys())[0]]['info']
+        rate = meta['rate']
+        nPts = meta['numPts']
+        ## Create an array of time values
+        timeVals = np.linspace(0, float(nPts - 1) / float(rate), nPts)
+
+        ## Concatenate all channels together into a single array, generate MetaArray info
+        chanList = [np.atleast_2d(result[x]['data']) for x in result]
+        cols = [(x, result[x]['units']) for x in result]
+        try:
+            arr = np.concatenate(chanList)
+        except Exception:
+            print(chanList)
+            print([a.shape for a in chanList])
+            raise
+
+        daqState = OrderedDict()
+        for ch in self.dev._DGConfig:
+            if ch in result:
+                daqState[ch] = result[ch]['info']
+            else:
+                daqState[ch] = {}
+
+            ## record current holding value for all output channels (even those that were not buffered for this task)    
+            if self.dev._DGConfig[ch]['type'] in ['ao', 'do']:
+                daqState[ch]['holding'] = self.holdingVals[ch]
+
+        info = [axis(name='Channel', cols=cols), axis(name='Time', units='s', values=timeVals)] + [
+            {'DAQ': daqState}]
+
+        protInfo = self._DAQCmd.copy()  ## copy everything but the command arrays and low-level configuration info
+        for ch in protInfo:
+            protInfo[ch].pop('command', None)
+            protInfo[ch].pop('lowLevelConf', None)
+        info[-1]['Protocol'] = protInfo
+
+        return MetaArray(arr, info=info)
 
     def storeResult(self, dirHandle):
         DeviceTask.storeResult(self, dirHandle)

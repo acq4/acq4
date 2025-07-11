@@ -1,27 +1,21 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-from __future__ import with_statement
-
+import numpy as np
 import os
+import scipy.optimize
+import six
 import sys
 import time
 
-import numpy as np
-import scipy.optimize
-import six
-
 import acq4.Manager as Manager
-import acq4.util.ptime as ptime
-from pyqtgraph import PlotWidget, mkPen
-from pyqtgraph import WidgetGroup, MetaArray
-from pyqtgraph import siFormat
-from pyqtgraph.debug import Profiler
-from acq4.util import Qt
+from MetaArray import MetaArray
+from acq4.util import Qt, ptime
 from acq4.util.Mutex import Mutex
 from acq4.util.StatusBar import StatusBar
 from acq4.util.Thread import Thread
 from acq4.util.debug import printExc
-from six.moves import range
+from pyqtgraph import PlotWidget, mkPen
+from pyqtgraph import WidgetGroup
+from pyqtgraph import siFormat
+from pyqtgraph.debug import Profiler
 
 Ui_Form = Qt.importTemplate('.PatchTemplate')
 
@@ -250,12 +244,7 @@ class PatchWindow(Qt.QMainWindow):
                 
     def storageDir(self):
         return self.manager.getCurrentDir().getDir('Patch', create=True)
-                
-    #def storageFile(self):
-        #sd = self.storageDir()
-        #return sd.getFile(self.clampName, create=True)
-            
-        
+
     def resetClicked(self):
         self.ui.recordBtn.setChecked(False)
         self.recordClicked()

@@ -6,19 +6,14 @@ import pyqtgraph as pg
 
 
 class PipetteDetector(object):
-    def __init__(self, reference):
-        self.reference = reference
-        self._filtered_ref = None
+    def __init__(self, tracker, pipette):
+        self.pipette = pipette
+        self.tracker = tracker
         
-    @property
-    def filtered_ref(self):
-        """The reference image data passed through the preprocessing filter.
-        """
-        if self._filtered_ref is None:
-            self._filtered_ref = [self.filterImage(f) for f in self.reference['frames']]
-        return self._filtered_ref
+    def getReference(self):
+        return self.tracker.getReference()
 
-    def findPipette(self, frame, minImgPos, maxImgPos, expectedPos, bg_frame=None):
+    def findPipette(self, frame, bg_frame=None, minImgPos=None, maxImgPos=None, expectedPos=None):
         """Detect the pipette tip in *frame* and return the physical location.
 
         The *frame* is an instance of util.imaging.Frame that carries a transform mapping
@@ -45,7 +40,11 @@ class PipetteDetector(object):
         # crop out a small region around the pipette tip
         if img.ndim == 3:
             img = img[0]
-        img = img[minImgPos[0]:maxImgPos[0], minImgPos[1]:maxImgPos[1]]
+
+        if minImgPos is not None:
+            img = img[minImgPos[0]:maxImgPos[0], minImgPos[1]:maxImgPos[1]]
+        else:
+            minImgPos = (0, 0)
 
         # filter the image
         img = self.filterImage(img)
@@ -82,18 +81,27 @@ class PipetteDetector(object):
         """
         raise NotImplementedError()
 
-    def filterImage(self, img):
-        """Preprocess *img* and return the result.
+    def suggestTipLength(self):
+        """Suggest a length of pipette tip to image that will be adequate for identifying its position
         """
-        raise NotImplementedError()
+        return self.getReference()["tipLength"]
 
 
 class TemplateMatchPipetteDetector(PipetteDetector):
-    def __init__(self, reference):
-        PipetteDetector.__init__(self, reference)
+    def __init__(self, *args, **kwds):
+        PipetteDetector.__init__(self, *args, **kwds)
+        self._filtered_ref = None
+        
+    @property
+    def filtered_ref(self):
+        """The reference image data passed through the preprocessing filter.
+        """
+        if self._filtered_ref is None:
+            self._filtered_ref = [self.filterImage(f) for f in self.reference['frames']]
+        return self._filtered_ref
 
     def estimateOffset(self, img, show=False):
-        reference = self.reference
+        reference = self.getReference()
 
         # run template match against all template frames
         match = [iterativeImageTemplateMatch(img, t) for t in self.filtered_ref]
@@ -121,3 +129,4 @@ class TemplateMatchPipetteDetector(PipetteDetector):
         # return skimage.filter.sobel(img)
         img = scipy.ndimage.morphological_gradient(img, size=(3, 3))
         return img
+

@@ -13,7 +13,7 @@ from acq4.util import Qt
 from acq4.util.HelpfulException import HelpfulException
 from acq4.util.functions import blur
 from acq4.util.imageAnalysis import fitGaussian2D
-from six.moves import range
+
 
 Ui_Form = Qt.importTemplate('.DeviceTemplate')
 
@@ -163,17 +163,31 @@ class ScannerDeviceGui(Qt.QWidget):
         laser = str(self.ui.laserCombo.currentText())
         blurRadius = 5
         
-        ## Do fast scan of entire allowed command range
-        (background, cameraResult, positions) = self.scan()
+        cam = acq4.Manager.getManager().getDevice(camera)
+        expChan = cam.getExposureChannel()
+        if expChan is None:
+            # no exposure signal available; do slow scan
+            (background, cameraResult, positions) = self.sample()
+        else:
+            trigChans = cam.getTriggerChannels(expChan['device'])
+            if trigChans['input'] is None and trigChans['output'] is None:
+                # no trigger lines available; do slow scan
+                (background, cameraResult, positions) = self.sample()
+            else:
+                ## Do fast scan of entire allowed command range
+                (background, cameraResult, positions) = self.scan()
 
         with pg.ProgressDialog("Calibrating scanner: Computing spot positions...", 0, 100) as dlg:
             dlg.show()
             dlg.raise_()  # Not sure why this is needed here..
 
-            ## Forget first 2 frames since some cameras can't seem to get these right.
-            frames = cameraResult.asArray()
-            frames = frames[2:]
-            positions = positions[2:]
+            if isinstance(cameraResult, list):
+                frames = np.concatenate([f.data() for f in cameraResult], axis=0)
+            else:
+                frames = cameraResult.asArray()
+                ## Forget first 2 frames since some cameras can't seem to get these right.
+                frames = frames[2:]
+                positions = positions[2:]
             
             ## Do background subtraction
             ## take out half the data until it can do the calculation without having a MemoryError.
@@ -190,8 +204,8 @@ class ScannerDeviceGui(Qt.QWidget):
                     finished = False
                 
             ## Find a frame with a spot close to the center (within center 1/3)
-            cx = frames.shape[1] / 3
-            cy = frames.shape[2] / 3
+            cx = frames.shape[1] // 3
+            cy = frames.shape[2] // 3
             centerSlice = blur(frames[:, cx:cx*2, cy:cy*2], (0, 5, 5)).max(axis=1).max(axis=1)
             maxIndex = np.argmax(centerSlice)
             maxFrame = frames[maxIndex]
@@ -204,7 +218,10 @@ class ScannerDeviceGui(Qt.QWidget):
             fit = fitGaussian2D(maxFrame, [amp, x, y, maxFrame.shape[0] / 10, 0.])[0]  ## gaussian fit to locate spot exactly
             # convert sigma to full width at 1/e
             fit[3] = abs(2 * (2 ** 0.5) * fit[3]) ## sometimes the fit for width comes out negative. *shrug*
-            someFrame = cameraResult.frames()[0]
+            if isinstance(cameraResult, list):
+                someFrame = cameraResult[0]
+            else:
+                someFrame = cameraResult.frames()[0]
             frameTransform = pg.SRTTransform(someFrame.globalTransform())
             pixelSize = someFrame.info()['pixelSize'][0]
             spotAmplitude = fit[0]
@@ -337,6 +354,38 @@ class ScannerDeviceGui(Qt.QWidget):
         assert(not np.isnan(ss))
         return ss
 
+    def sample(self):
+        """Sample a grid of x/y values and take a camera image at each location.
+        This is a slower alternative to the scan() method that does not require the use of a TTL exposure signal from the camera.        
+        """
+        man = acq4.Manager.getManager()
+        camera = man.getDevice(str(self.ui.cameraCombo.currentText()))
+        laser = man.getDevice(str(self.ui.laserCombo.currentText()))
+
+        xRange = (self.ui.xMinSpin.value(), self.ui.xMaxSpin.value())
+        yRange = (self.ui.yMinSpin.value(), self.ui.yMaxSpin.value())
+
+        background = camera.acquireFrames(1, ensureFreshFrames=True).getResult()[0]
+
+        laser.setAlignmentMode()
+        try:
+            positions = []
+            images = []
+            n = 5
+            dx = (xRange[1]-xRange[0]) / (n-1)
+            dy = (yRange[1]-yRange[0]) / (n-1)
+
+            for i in range(n):
+                for j in range(n):
+                    x = xRange[0] + dx * i
+                    y = yRange[0] + dy * j
+                    positions.append([x, y])
+                    self.dev.setCommand([x, y])
+                    images.append(camera.acquireFrames(1, ensureFreshFrames=True).getResult()[0])
+        finally:
+            laser.closeShutter()
+        return background.data(), images, positions
+
     def scan(self):
         """Scan over x and y ranges in a nPts x nPts grid, return the image recorded at each location."""
         camera = str(self.ui.cameraCombo.currentText())
@@ -367,32 +416,56 @@ class ScannerDeviceGui(Qt.QWidget):
         daqName = self.dev.config['XAxis']['device']
 
         ## Record 10 camera frames with the shutter closed 
-        #print "parameters:", camParams
         cmd = {
             'protocol': {'duration': 0.0, 'timeout': 5.0},
             camera: {'record': True, 'minFrames': 10, 'params': camParams, 'pushState': 'scanProt'}, 
             #laser: {'Shutter': {'preset': 0, 'holding': 0}}
         }
-        #print "\n\n====> Record background\n"
-        task = acq4.Manager.getManager().createTask(cmd)
+
+        manager = acq4.Manager.getManager()
+        task = manager.createTask(cmd)
         task.execute()
         result = task.getResult()
         ## pull result, convert to ndarray float, take average over all frames
         background = result[camera].asArray().astype(float).mean(axis=0)
-        #print "Background shape:", result[camera]['frames'].shape
-        
-        ## Record full scan.
-        cmd = {
-            'protocol': {'duration': duration, 'timeout': duration+5.0},
-            camera: {'record': True, 'triggerProtocol': True, 'params': camParams, 'channels': {
-                'exposure': {'record': True}, 
+
+        camDevice = manager.getDevice(camera)
+        expChan = camDevice.getExposureChannel()
+        trigChans = camDevice.getTriggerChannels(expChan['device'])
+        if trigChans['input'] is not None:
+            # Camera triggers DAQ
+            cmd = {
+                'protocol': {'duration': duration, 'timeout': duration+5.0},
+                camera: {
+                    'record': True, 'triggerProtocol': True, 'params': camParams, 'channels': {
+                        'exposure': {'record': True},
+                    },
+                    'popState': 'scanProt'
                 },
-                'popState': 'scanProt'},
-            laser: {'alignMode': True},
-            self.dev.name(): {'xCommand': xCommand, 'yCommand': yCommand},
-            daqName: {'numPts': nPts, 'rate': rate, 'triggerDevice': camera}
-        }
-        #print "\n\n====> Scan\n"
+                laser: {'alignMode': True},
+                self.dev.name(): {'xCommand': xCommand, 'yCommand': yCommand},
+                daqName: {'numPts': nPts, 'rate': rate, 'triggerDevice': camera}
+            }
+        elif trigChans['output'] is not None:
+            # DAQ triggers camera
+            trigData = np.zeros(nPts, dtype='ubyte')
+            trigData[int(0.01 * rate):int(0.02 * rate)] = 1
+            camParams = camParams.copy()
+            camParams['triggerMode'] = 'TriggerStart'
+            cmd = {
+                'protocol': {'duration': duration, 'timeout': duration+5.0},
+                camera: {
+                    'record': True, 'triggerProtocol': False, 'params': camParams, 'channels': {
+                        'exposure': {'record': True},
+                        'trigger': {'command': trigData},
+                    },
+                    'popState': 'scanProt'
+                },
+                laser: {'alignMode': True},
+                self.dev.name(): {'xCommand': xCommand, 'yCommand': yCommand},
+                daqName: {'numPts': nPts, 'rate': rate}
+            }
+
         task = acq4.Manager.getManager().createTask(cmd)
         task.execute(block=False)
         with pg.ProgressDialog("Calibrating scanner: Running scan protocol..", 0, 100) as dlg:
@@ -409,9 +482,7 @@ class ScannerDeviceGui(Qt.QWidget):
         if frames._info[-1]['preciseTiming'] is not True:
             raise HelpfulException("Calibration could not accurately measure camera frame timing.",
                                    reasons=["The exposure signal from the camera was not recorded by the DAQ."])
-        #print "scan shape:", frames.shape
-        #print "parameters:", camParams
-        
+
         ## Generate a list of the scanner command values for each frame
         positions = []
         for i in range(frames.shape[0]):

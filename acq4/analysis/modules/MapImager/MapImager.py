@@ -1,23 +1,22 @@
 from __future__ import print_function
-from acq4.util import Qt
-import os
-from acq4.analysis.AnalysisModule import AnalysisModule
+
 from collections import OrderedDict
-import pyqtgraph as pg
-from pyqtgraph.metaarray import MetaArray
+
 import numpy as np
-import scipy
-import acq4.util.functions as fn
+import os
+
+import acq4.util.debug as debug
+from MetaArray import MetaArray
+from acq4.analysis.AnalysisModule import AnalysisModule
+from acq4.util import Qt
+from acq4.util.Canvas.items.ImageCanvasItem import ImageCanvasItem
+from acq4.util.ColorMapper import ColorMapper
+from acq4.util.ContourPlotter.ContourPlotter import ContourPlotter
+from acq4.util.DatabaseGui.DatabaseQueryWidget import DatabaseQueryWidget
 from acq4.util.HelpfulException import HelpfulException
 from pyqtgraph.widgets.FileDialog import FileDialog
-import sys
-from acq4.util.DatabaseGui.DatabaseQueryWidget import DatabaseQueryWidget
-from .SpatialCorrelator import SpatialCorrelator
 from .MapConvolver import MapConvolver
-from acq4.util.ColorMapper import ColorMapper
-from acq4.util.Canvas.items.ImageCanvasItem import ImageCanvasItem
-from acq4.util.ContourPlotter.ContourPlotter import ContourPlotter
-import acq4.util.debug as debug
+from .SpatialCorrelator import SpatialCorrelator
 
 
 class MapImager(AnalysisModule):    

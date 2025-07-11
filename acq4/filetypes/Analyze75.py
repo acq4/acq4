@@ -2,11 +2,8 @@ import os
 import struct
 
 import numpy as np
-import six
-from six.moves import range
-from six.moves import reduce
 
-from pyqtgraph.metaarray import MetaArray
+from MetaArray import MetaArray
 from .FileType import FileType
 
 
@@ -24,7 +21,7 @@ class Analyze75(FileType):
         
     @classmethod
     def read(cls, fileHandle):
-        if isinstance(fileHandle, six.string_types):
+        if isinstance(fileHandle, str):
             fn = fileHandle
         else:
             fn = fileHandle.name()
@@ -40,9 +37,9 @@ dataTypes = {
     1: 'BINARY',
     2: np.ubyte,
     4: np.short,
-    8: np.int,
+    8: int,
     16: np.float32,
-    32: np.complex,   ## two floats: (re, im)
+    32: complex,   ## two floats: (re, im)
     64: np.float64,
     128: [('R', np.ubyte), ('G', np.ubyte), ('B', np.ubyte)],
     256: 'ALL'
@@ -206,7 +203,7 @@ def parseNii(headerFH, imgFile):
     shape = m.dim[1:m.dim[0]+1]
     size = (m.bitpix / 8) * reduce(lambda a,b: a*b, shape)
     dtype = niiDataTypes[m.datatype]
-    if isinstance(dtype, six.string_types):
+    if isinstance(dtype, str):
         raise Exception("Data type not supported: %s"% dtype)
     #print "Dimensions:", dim[0]
     #print "Data shape:", shape

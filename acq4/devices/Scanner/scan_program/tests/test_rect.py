@@ -5,8 +5,8 @@ import numpy as np
 from acq4.devices.Scanner.scan_program.rect import RectScan, RectScanParameter
 from pyqtgraph.parametertree import ParameterTree
 import pyqtgraph as pg
-from six.moves import map
-from six.moves import range
+
+
 
 def assertState(rs, state):
     #print "=== assert state:"

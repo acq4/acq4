@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function
 
-from pyqtgraph.metaarray import MetaArray as MA
+from MetaArray import MetaArray as MA
 from numpy import ndarray, loadtxt
 from .FileType import FileType
-from six.moves import range
+
 
 #class MetaArray(FileType):
     #@staticmethod

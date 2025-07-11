@@ -1,6 +1,3 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-
 import glob
 import os
 import sys
@@ -9,12 +6,25 @@ import sys
 _mmc = None
 
 # default location to search for micromanager
-microManagerPaths = glob.glob("C:\\Program Files\Micro-Manager*")
+microManagerPaths = glob.glob("C:\\Program Files\\Micro-Manager-2*")
+
+
+def versionWarning():
+    """Used to warn the user of possible mismatch between MicroManager and pymmcore API versions"""
+    import pymmcore
+
+    return f"""
+        Check that the MicroManager API version number (help->about in the MicroManager GUI)
+        matches the pymmcore API version number ({pymmcore.__version__.split('.')[3]})
+    """
+
+
+class MicroManagerError(Exception):
+    pass
 
 
 class MMCWrapper:
-    """Wraps MMCorePy to raise more helpful exceptions
-    """
+    """Wraps MMCorePy to raise more helpful exceptions"""
 
     def __init__(self, mmc):
         self.__mmc = mmc
@@ -32,11 +42,11 @@ class MMCWrapper:
             try:
                 return attr(*args, **kwds)
             except RuntimeError as exc:
-                if exc.args and hasattr(exc.args[0], 'getFullMsg'):
+                if exc.args and hasattr(exc.args[0], "getFullMsg"):
                     msg = exc.args[0].getFullMsg()
                 else:
                     msg = exc
-                raise RuntimeError(f"{msg} (calling mmc.{name})")
+                raise MicroManagerError(f"{msg} (calling mmc.{name} with args {args} {kwds})") from exc
 
         fn.__name__ = name + "_wrapped"
         self.__wrapper_cache[name] = fn
@@ -44,8 +54,7 @@ class MMCWrapper:
 
 
 def getMMCorePy(path=None):
-    """Return a singleton MMCorePy instance that is shared by all devices for accessing micromanager.
-    """
+    """Return a singleton MMCorePy instance that is shared by all devices for accessing micromanager."""
     global _mmc
     if _mmc is None:
         if path is None:
@@ -59,9 +68,8 @@ def getMMCorePy(path=None):
             _mmc = MMCWrapper(pymmcore.CMMCore())
             _mmc.setDeviceAdapterSearchPaths(paths)
             sys.path.extend(paths)
-            os.environ["PATH"] = os.environ["PATH"] + ";" + ';'.join(paths)
+            os.environ["PATH"] = os.environ["PATH"] + ";" + ";".join(paths)
         except ImportError:
-
             try:
                 import MMCorePy
             except ImportError:

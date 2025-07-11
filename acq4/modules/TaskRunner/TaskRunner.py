@@ -1,25 +1,19 @@
-# -*- coding: utf-8 -*-
-from __future__ import division, print_function
-
-import gc
-import os
-import sys
-import time
+import contextlib
 from collections import OrderedDict
 from functools import reduce
 
+import gc
 import numpy as np
-import pyqtgraph as pg
-import pyqtgraph.configfile as configfile
+import os
 import six
-from six.moves import map
-from six.moves import range
-from six.moves import reduce
+import sys
+import time
 
 import acq4.util.DirTreeWidget as DirTreeWidget
-import acq4.util.ptime as ptime
+import pyqtgraph as pg
+import pyqtgraph.configfile as configfile
 from acq4.Manager import getManager
-from acq4.util import Qt
+from acq4.util import Qt, ptime
 from acq4.util.HelpfulException import HelpfulException
 from acq4.util.SequenceRunner import runSequence
 from acq4.util.StatusBar import StatusBar
@@ -478,7 +472,7 @@ class TaskRunner(Module):
             # print "Docks cleared."
 
             ## Update task parameters
-            self.protoStateGroup.setState(prot.conf['conf'])
+            self.protoStateGroup.setState({k: int(v) if k == "repetitions" else v for k, v in prot.conf['conf'].items()})
             prof.mark('set state')
 
             ## update dev list
@@ -584,12 +578,10 @@ class TaskRunner(Module):
             # print "runSingle: Starting taskThread.."
             future = self.taskThread.startTask(prot)
             # print "runSingle: taskThreadStarted"
-        except:
-            exc = sys.exc_info()
+        except Exception as exc:
             self.setStartBtnsEnable(True)
             self.loopEnabled = False
-            # print "Error starting task. "
-            raise HelpfulException("Error occurred while starting task", exc=exc)
+            raise HelpfulException("Error occurred while starting task", exc=exc) from exc
 
         return future
 
@@ -1018,7 +1010,7 @@ class TaskThread(Thread):
             self.task = None  ## free up this memory
             self.paramSpace = None
             printExc("Error in task thread, exiting.")
-            self._currentFuture._taskDone(interrupted=True, error=str(exc))
+            self._currentFuture._taskDone(interrupted=True, excInfo=sys.exc_info())
             self._currentFuture = None
             self.sigExitFromError.emit()
         else:
@@ -1031,7 +1023,6 @@ class TaskThread(Thread):
             gc.collect()
 
         prof = Profiler("TaskRunner.TaskThread.runOnce", disabled=True, delayed=False)
-        startTime = ptime.time()
         if params is None:
             params = {}
 
@@ -1089,16 +1080,13 @@ class TaskThread(Thread):
             endTime = time.time() + cmd['protocol']['duration']
             self.sigTaskStarted.emit(params)
             prof.mark('execute')
-        except:
+        except Exception as exc:
             with self.lock:
                 self._currentTask = None
-            try:
+            with contextlib.suppress(Exception):
                 task.stop(abort=True)
-            except:
-                pass
             printExc("\nError starting task:")
-            exc = sys.exc_info()
-            raise HelpfulException("\nError starting task:", exc)
+            raise HelpfulException("\nError starting task:", exc) from exc
 
         prof.mark('start task')
         ### Do not put code outside of these try: blocks; may cause device lockup

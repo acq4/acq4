@@ -1,13 +1,12 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
 import time
-from acq4.util import Qt
-from ..Stage import Stage, MoveFuture
+
 from acq4.drivers.SutterMPC200 import SutterMPC200 as MPC200_Driver
+from acq4.util import Qt, ptime
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
-from pyqtgraph import debug, ptime
-from six.moves import range
+from pyqtgraph import debug
+
+from ..Stage import Stage, MoveFuture
 
 
 def __reload__(old):
@@ -24,11 +23,31 @@ class ChangeNotifier(Qt.QObject):
 
 class SutterMPC200(Stage):
     """
-    This Device class represents a single drive of a Sutter MPC-200 stage/manipulator driver.
-    Config options are: 
-
-        port: <serial port>  # eg. 'COM1' or '/dev/ttyACM0'
-        drive: <drive>       # int 1-4
+    Driver for Sutter Instrument MPC-200 multi-channel stage/manipulator controller.
+    
+    Each device instance represents a single drive (axis group) on the MPC-200 controller.
+    For multiple drives, create separate device instances with different drive numbers.
+    
+    Configuration options:
+    
+    * **port** (str, required): Serial port (e.g., 'COM10' or '/dev/ttyACM0')
+    
+    * **drive** (int, required): Drive number (1-4) on the MPC-200 controller
+    
+    * **scale** (tuple, optional): (x, y, z) scale factors for position reporting
+      (default: (1.0, 1.0, 1.0)). Used if MPC-200 doesn't report scale correctly.
+    
+    * **parentDevice** (str, optional): Name of parent device for coordinate transforms
+    
+    * **transform** (dict, optional): Spatial transform relative to parent device
+    
+    Example configuration::
+    
+        SutterStage:
+            driver: 'SutterMPC200'
+            port: 'COM10'
+            drive: 1
+            scale: [1.0, 1.0, 1.0]
     """
 
     _pos_cache = [None] * 4
@@ -128,7 +147,11 @@ class SutterMPC200(Stage):
         # self._monitor.stop()  # this was never set to anything but None
         Stage.quit(self)
 
-    def _move(self, pos, speed, linear):
+    @property
+    def positionUpdatesPerSecond(self):
+        return 1.0 / SutterMPC200._monitor.minInterval
+
+    def _move(self, pos, speed, linear, **kwds):
         # convert speed to values accepted by MPC200
         if speed == 'slow':
             speed = self.slowSpeed
@@ -165,7 +188,8 @@ class MonitorThread(Thread):
         self.lock = Mutex(recursive=True)
         self.stopped = False
         self.interval = 0.3
-        
+        self.minInterval = 100e-3
+
         self.nextMoveId = 0
         self.moveRequest = None
         self._moveStatus = {}
@@ -217,8 +241,7 @@ class MonitorThread(Thread):
             return start, stat
 
     def run(self):
-        minInterval = 100e-3
-        interval = minInterval
+        interval = self.minInterval
         
         while True:
             try:
@@ -232,7 +255,7 @@ class MonitorThread(Thread):
                 if moveRequest is None:
                     # just check for position update
                     if self.dev._checkPositionChange() is not False:
-                        interval = minInterval
+                        interval = self.minInterval
                     else:
                         interval = min(maxInterval, interval*2)
                 else:
@@ -316,4 +339,3 @@ class MPC200MoveFuture(MoveFuture):
         if self._moveStatus[1] in (None, False):
             self._moveStatus = SutterMPC200._monitor.moveStatus(self._id)
         return self._moveStatus
-        

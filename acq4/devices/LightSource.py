@@ -1,33 +1,51 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
+from __future__ import annotations
 
 from collections import OrderedDict
-
-from pyqtgraph import SignalBlock
 
 import acq4.util.Mutex as Mutex
 from acq4.devices.Device import Device, TaskGui
 from acq4.util import Qt
+from acq4.util.future import Future
+from pyqtgraph import SignalBlock
 
 
 class LightSource(Device):
-    """Device tracking the state and properties of a single light-emitting device with one or more internal
-    illumination sub-sources.
-
-    Config Options
-    --------------
-    mock | bool
-        Whether to only pretend to be a light source
-
-    All other config options will be treated as the named light source channels (e.g. "blue"). For each of
-    these sub-sources, the following options are supported:
-
-    active | bool
-        Whether the source should be turned on at the start.
-    adjustableBrightness | bool
-        Whether or not the device supports setting brightness.
-    xkey | tuple
-        Configuration for hotkey light source toggle
+    """
+    Abstract base class for light-emitting devices with one or more illumination sub-sources.
+    
+    Tracks the state and properties of light sources, providing unified control interface
+    for devices with multiple channels (e.g., multi-wavelength LEDs).
+    
+    Configuration options:
+    
+    * **mock** (bool, optional): Whether to only pretend to be a light source. Default: False
+    
+    * **sources** (dict, optional): Named light source channels configuration
+        - Key: Source name (e.g., 'Blue', 'Green')
+        - Value: Source configuration dict containing:
+            - **active** (bool, optional): Whether the source should be turned on at start. Default: False
+            - **adjustableBrightness** (bool, optional): Whether device supports brightness control. Default: False
+            - **wavelength** (float, optional): Wavelength in meters (use units like 470*nm)
+            - **model** (str, optional): Hardware model identifier
+            - **xkey** (tuple, optional): Hotkey configuration as (device_name, row, col)
+    
+    Example configuration::
+    
+        LEDLights:
+            driver: 'CoolLEDLightSource'  # Note: LightSource is abstract; use a concrete subclass
+            sources:
+                Blue:
+                    active: False
+                    adjustableBrightness: True
+                    model: 'Thorlabs M470L3'
+                    wavelength: 470 * nm
+                    xkey: ('XKeyDevice', 7, 8)
+                Green:
+                    active: False
+                    adjustableBrightness: True
+                    model: 'Thorlabs M505L3'
+                    wavelength: 505 * nm
+                    xkey: ('XKeyDevice', 7, 9)
     """
 
     # emitted when the on/off/brightness status of a light changes
@@ -37,11 +55,6 @@ class LightSource(Device):
         Device.__init__(self, dm, config, name)
         self.sourceConfigs = OrderedDict()  # [name: {'active': bool, 'wavelength': float, 'power': float, ...}, ...]
         self._lock = Mutex.Mutex()
-        if config.get("mock", False):
-            for key in config:
-                if key.lower() in ("driver", "mock"):
-                    continue
-                self.addSource(key, config[key])
 
     def deviceInterface(self, win):
         return LightSourceDevGui(self)
@@ -72,6 +85,18 @@ class LightSource(Device):
         """Return the names of all active light sources.
         """
         return [s['name'] for s in self.sourceConfigs if s['active']]
+
+    def loadPreset(self, conf: str | dict):
+        if conf == 'off':
+            for c in self.sourceConfigs:
+                self.setSourceActive(c, False)
+            return
+        chan = conf['channel']
+        for c in self.sourceConfigs:
+            self.setSourceActive(c, c == chan)
+        if 'brightness' in conf:
+            self.setSourceBrightness(chan, conf['brightness'])
+        return Future.immediate()
 
     def sourceActive(self, name):
         """Return True if the named light source is currently active.
@@ -143,6 +168,8 @@ class LightSourceDevGui(Qt.QWidget):
             conf = self.dev.sourceConfigs[name]
             if conf.get("adjustableBrightness", False):
                 slider = Qt.QSlider()
+                slider.setMaximum(100)
+                slider.setMinimum(0)
                 slider.setObjectName(name)
                 slider_cont = Qt.QGridLayout()
                 self.sourceBrightnessSliders[name] = slider
@@ -160,7 +187,7 @@ class LightSourceDevGui(Qt.QWidget):
 
     def _sliderChanged(self, value):
         slider = self.sender()
-        self.dev.setSourceBrightness(slider.objectName(), value)
+        self.dev.setSourceBrightness(slider.objectName(), value / slider.maximum())
 
     def _updateValuesToMatchDev(self):
         for name in self.dev.sourceConfigs:
@@ -170,7 +197,7 @@ class LightSourceDevGui(Qt.QWidget):
             if name in self.sourceBrightnessSliders:
                 slider = self.sourceBrightnessSliders[name]
                 with SignalBlock(slider.valueChanged, self._sliderChanged):
-                    slider.setValue(int(self.dev.getSourceBrightness(name) * 99))
+                    slider.setValue(int(self.dev.getSourceBrightness(name) * slider.maximum()))
 
 
 class LightSourceTaskGui(TaskGui):

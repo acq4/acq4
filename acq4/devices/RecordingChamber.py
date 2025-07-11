@@ -1,28 +1,45 @@
 import numpy as np
+
 import pyqtgraph as pg
-from .OptomechDevice import OptomechDevice
-from .Device import Device
 from acq4.modules.Camera import CameraModuleInterface
 from acq4.util import Qt
+from .Device import Device
+from .OptomechDevice import OptomechDevice
 
 
 class RecordingChamber(Device, OptomechDevice):
-    """Describes the location and dimensions of a recording chamber.
+    """Describes the location and dimensions of a circular recording chamber.
+
+    Configuration options:
+
+    * radius: The radius of the recording chamber (m)
+    * height: The height of the recording chamber (m)
+    * transform: Transformation setting the position/orientation of the chamber
+        pos: x,y,z position of recording chamber
     """
+
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
+        self.config = config
+        self.radius = config["radius"]
         OptomechDevice.__init__(self, dm, config, name)
 
-        self.config = config
-        self.radius = config['radius']
+    def getGeometry(self):
+        if isinstance(self.config.get("geometry"), dict):
+            defaults = {"color": (0.3, 0.3, 0.3, 0.7)}
+            defaults.update(self.config["geometry"])
+            self.config["geometry"] = defaults
+        return super().getGeometry()
 
     def cameraModuleInterface(self, mod):
-        """Return an object to interact with camera module.
-        """
+        """Return an object to interact with camera module."""
         return RecordingChamberCameraInterface(self, mod)
 
     def globalCenter(self):
-        return np.array(self.mapToGlobal([0, 0, 0]))
+        return np.array(self.globalPosition())
+
+    def globalPosition(self):
+        return self.mapToGlobal([0, 0, 0])
 
     def containsPoint(self, pt):
         """Return True if the x,y coordinates in *pt* lie within
@@ -43,6 +60,9 @@ class RecordingChamberCameraInterface(CameraModuleInterface):
         self.boundingEllipse.setScale(radius)
         mod.window().addItem(self.boundingEllipse, ignoreBounds=True)
         self.boundingEllipse.setPos(x, y)
+        self._name = pg.TextItem(text=dev.name(), color=pg.mkColor((255, 255, 0, 128)))
+        mod.window().addItem(self._name, ignoreBounds=True)
+        self._name.setPos(x + radius, y)
 
     def boundingRect(self):
         return None
@@ -50,4 +70,4 @@ class RecordingChamberCameraInterface(CameraModuleInterface):
         # return self.boundingEllipse.boundingRect()
 
     def graphicsItems(self):
-        return [self.boundingEllipse]
+        return [self.boundingEllipse, self._name]

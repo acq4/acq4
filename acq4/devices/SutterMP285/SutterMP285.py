@@ -1,28 +1,57 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-from __future__ import with_statement
-
 import os
-import time
 from copy import deepcopy
 
 import numpy as np
-import six
+import time
 
-import pyqtgraph as pg
+
 import acq4.util.debug as debug
+import pyqtgraph as pg
 from acq4.devices.Device import Device
 from acq4.devices.OptomechDevice import OptomechDevice
 from acq4.drivers.SutterMP285 import SutterMP285 as SutterMP285Driver  ## name collision with device class
 from acq4.util import Qt
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
-from six.moves import range
 
 Ui_Form = Qt.importTemplate('.devTemplate')
 
 
 class SutterMP285(Device, OptomechDevice):
+    """
+    Driver for Sutter Instrument MP-285 micromanipulator.
+    
+    WARNING: The MP-285 has a design flaw where turning an attached ROE (rotary optical encoder)
+    while the computer is communicating with the controller will cause the controller to crash.
+    This can be circumvented with custom interfacing hardware (see drivers/SutterMP285/mp285_hack).
+    
+    Configuration options:
+    
+    * **port** (str, required): Serial port (e.g., 'COM10' or '/dev/ttyUSB0')
+      Windows COM ports: 'COM1' is interpreted as port 0 for pyserial
+    
+    * **baud** (int, optional): Baud rate (default: 9600)
+    
+    * **scale** (tuple, optional): (x, y, z) scale factors for position reporting 
+      (default: (1.0, 1.0, 1.0)). MP-285 should report its own scale correctly.
+    
+    * **useArduino** (bool, optional): Whether Arduino interface hardware is present
+      to protect from ROE/serial collisions (default: False). When False, position 
+      monitoring is disabled for safety.
+    
+    * **parentDevice** (str, optional): Name of parent device for coordinate transforms
+    
+    * **transform** (dict, optional): Spatial transform relative to parent device
+    
+    Example configuration::
+    
+        SutterStage:
+            driver: 'SutterMP285'
+            port: 'COM10'
+            baud: 19200
+            scale: [1.0, 1.0, 1.0]
+            useArduino: False
+    """
 
     sigPositionChanged = Qt.Signal(object)
     sigLimitsChanged = Qt.Signal(object)
@@ -42,7 +71,7 @@ class SutterMP285(Device, OptomechDevice):
 
         self.scale = config.pop('scale', (1, 1, 1))
         # Interpret "COM1" as port 0
-        if isinstance(self.port, six.string_types) and self.port.lower()[:3] == 'com':
+        if isinstance(self.port, str) and self.port.lower()[:3] == 'com':
             self.port = int(self.port[3:]) - 1
         
         self.baud = config.get('baud', 9600)   ## 9600 is probably factory default

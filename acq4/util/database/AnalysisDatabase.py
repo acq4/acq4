@@ -1,19 +1,71 @@
-from __future__ import print_function
-
 import os
 from collections import OrderedDict
 
 import numpy as np
-import six
-from six.moves import range
 
+import acq4.util.DataManager
 import acq4.util.debug as debug
 from acq4 import Manager
-from pyqtgraph.pgcollections import CaselessDict
-from pyqtgraph.widgets.ProgressDialog import ProgressDialog
 from acq4.util import DataManager, functions
 from acq4.util.database.database import SqliteDatabase, parseColumnDefs, TableData
-from six.moves import map
+from pyqtgraph.widgets.ProgressDialog import ProgressDialog
+
+
+class CaselessDict(OrderedDict):
+    """Case-insensitive dict. Values can be set and retrieved using keys of any case.
+    Note that when iterating, the original case is returned for each key."""
+
+    def __init__(self, *args):
+        OrderedDict.__init__(self, {})  ## requirement for the empty {} here seems to be a python bug?
+        self.keyMap = OrderedDict([(k.lower(), k) for k in OrderedDict.keys(self)])
+        if len(args) == 0:
+            return
+        elif len(args) == 1 and isinstance(args[0], dict):
+            for k in args[0]:
+                self[k] = args[0][k]
+        else:
+            raise Exception("CaselessDict may only be instantiated with a single dict.")
+
+    # def keys(self):
+    # return self.keyMap.values()
+
+    def __setitem__(self, key, val):
+        kl = key.lower()
+        if kl in self.keyMap:
+            OrderedDict.__setitem__(self, self.keyMap[kl], val)
+        else:
+            OrderedDict.__setitem__(self, key, val)
+            self.keyMap[kl] = key
+
+    def __getitem__(self, key):
+        kl = key.lower()
+        if kl not in self.keyMap:
+            raise KeyError(key)
+        return OrderedDict.__getitem__(self, self.keyMap[kl])
+
+    def __contains__(self, key):
+        return key.lower() in self.keyMap
+
+    def update(self, d):
+        for k, v in d.items():
+            self[k] = v
+
+    def copy(self):
+        return CaselessDict(OrderedDict.copy(self))
+
+    def __delitem__(self, key):
+        kl = key.lower()
+        if kl not in self.keyMap:
+            raise KeyError(key)
+        OrderedDict.__delitem__(self, self.keyMap[kl])
+        del self.keyMap[kl]
+
+    def __deepcopy__(self, memo):
+        raise Exception("deepcopy not implemented")
+
+    def clear(self):
+        OrderedDict.clear(self)
+        self.keyMap.clear()
 
 
 class AnalysisDatabase(SqliteDatabase):
@@ -522,7 +574,7 @@ class AnalysisDatabase(SqliteDatabase):
         If no relationships are found, return None.
         """
         def strlower(x):  # convert strings to lower, everything else stays the same
-            if isinstance(x, six.string_types):
+            if isinstance(x, str):
                 return x.lower()
             return x
             
@@ -617,9 +669,9 @@ class AnalysisDatabase(SqliteDatabase):
         """Return the name of the directory table that should hold dh.
         dh may be either a directory handle OR the string result of self.dataModel().dirType(dh)
         """
-        if isinstance(dh, DataManager.DirHandle):
+        if isinstance(dh, acq4.util.DataManager.DirHandle):
             typeName = self.dataModel().dirType(dh)
-        elif isinstance(dh, six.string_types):
+        elif isinstance(dh, str):
             typeName = dh
         else:
             raise TypeError(type(dh))
@@ -682,9 +734,9 @@ class AnalysisDatabase(SqliteDatabase):
                         allHandle = 0
                         for i in range(len(data)):
                             val = data[i][name]
-                            if val is None or isinstance(val, six.string_types):
+                            if val is None or isinstance(val, str):
                                 allStr += 1
-                            elif val is None or isinstance(val, DataManager.FileHandle):
+                            elif val is None or isinstance(val, acq4.util.DataManager.FileHandle):
                                 allHandle += 1
                         if allStr == len(data):
                             typ = 'text'
@@ -699,9 +751,9 @@ class AnalysisDatabase(SqliteDatabase):
                     typ = 'real'
                 elif functions.isInt(v):
                     typ = 'int'
-                elif isinstance(v, six.string_types):
+                elif isinstance(v, str):
                     typ = 'text'
-                elif isinstance(v, DataManager.FileHandle):
+                elif isinstance(v, acq4.util.DataManager.FileHandle):
                     typ = 'file'
                 else:
                     typ = 'blob'

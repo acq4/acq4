@@ -1,26 +1,22 @@
-from __future__ import print_function
-
 import numpy as np
 import scipy.optimize
 import scipy.stats
-from six.moves import range
-from six.moves import zip
 
 import pyqtgraph as pg
 from acq4.Manager import getManager
 from acq4.devices.Stage import Stage
-from acq4.util import Qt
+from acq4.util import Qt, ptime
 from acq4.util.HelpfulException import HelpfulException
 from acq4.util.target import Target
 
 
 class StageAxesCalibrationWindow(Qt.QWidget):
     def __init__(self, device: Stage):
-        super(StageAxesCalibrationWindow, self).__init__()
+        super().__init__()
         self._dev = device
         self._camera = device.getPreferredImagingDevice()
         self._automation = AutomatedStageCalibration(device)
-        self.setWindowTitle("Calibrate Axes for %s" % device.name())
+        self.setWindowTitle(f"Calibrate Axes for {device.name()}")
         self._layout = Qt.QGridLayout()
         self.setLayout(self._layout)
         self.resize(600, 300)
@@ -280,9 +276,7 @@ class ManipulatorAxesCalibrationWindow(Qt.QWidget):
             item.setText(2, "%0.2f um  (%0.3g, %0.3g, %0.3g)" % (1e6 * dist, error[i][0], error[i][1], error[i][2]))
 
         # send new transform to device
-        self.dev._axisTransform = self.transform
-        self.dev._inverseAxisTransform = None
-        self.dev._updateTransform()
+        self.dev.setAxisTransform(self.transform)
 
     def _unzippedCalibrationPoints(self):
         npts = len(self.calibration["points"])
@@ -412,7 +406,7 @@ class AutomatedStageCalibration(object):
             if self._frame_delay is None:
                 # stage has stopped; ignore 2 more frames to be sure
                 # we get the right image.
-                self._frame_delay = pg.ptime.time() + 1.0 / frame.info()["fps"]
+                self._frame_delay = ptime.time() + 1.0 / frame.info()["fps"]
             elif self._frame_delay < frame.info()["time"]:
                 # now we are ready to keep this frame.
                 self._frame_delay = None

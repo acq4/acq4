@@ -11,3 +11,8 @@ acq4.egg-info
 config/*
 !config/example/
 crash.log
+.vscode/
+__pycache__
+acq4/devices/MockClamp/models/
+.aider*
+.claude

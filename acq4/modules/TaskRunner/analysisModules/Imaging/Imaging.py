@@ -1,17 +1,13 @@
-# -*- coding: utf-8 -*-
-from __future__ import division
-from __future__ import print_function
-
 import numpy as np
 
 import pyqtgraph as pg
-import pyqtgraph.metaarray as metaarray
+from MetaArray import MetaArray
 from acq4.Manager import getManager
 from acq4.devices.Microscope import Microscope
 from acq4.devices.Scanner.scan_program.rect import RectScan
 from acq4.modules.TaskRunner.analysisModules.AnalysisModule import AnalysisModule
-from pyqtgraph.parametertree import ParameterTree, Parameter
 from acq4.util import Qt
+from pyqtgraph.parametertree import ParameterTree, Parameter
 
 Ui_Form = Qt.importTemplate('.imagingTemplate')
 
@@ -28,7 +24,7 @@ class ImagingModule(AnalysisModule):
         self.imageView = pg.ImageView()
         self.splitter.addWidget(self.imageView)
         
-        self.params = Parameter(name='imager', children=[
+        self.params = Parameter.create(name='imager', type='group', children=[
             dict(name='scanner', type='interface', interfaceTypes=['scanner']),
             dict(name='detectors', type='group', addText="Add detector.."),
             dict(name='decomb', type='float', readonly=False, value=20e-6, suffix='s', siPrefix=True, bounds=[0, 1e-3], step=1e-6, decimals=5, children=[
@@ -140,7 +136,7 @@ class ImagingModule(AnalysisModule):
                         'transform': result['transform'],
                         'imageProcessing': result['params'],
                     }]
-            ma = metaarray.MetaArray(result['image'], info=info)
+            ma = MetaArray(result['image'], info=info)
             fh = dirhandle.writeFile(ma, 'Imaging.ma')
             fh.setInfo(transform=result['transform'])
 

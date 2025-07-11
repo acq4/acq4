@@ -11,6 +11,49 @@ import time
 
 
 class CoherentLaser(Laser):
+    """
+    Driver for Coherent laser systems (e.g., Chameleon Vision II).
+    
+    This device extends the base Laser class with Coherent-specific control
+    capabilities including tunable wavelength and power monitoring.
+    
+    Configuration options:
+    
+    * **port** (int, required): Serial COM port number (e.g., 9 for COM9)
+    
+    * **baud** (int, optional): Serial baud rate (default: 19200)
+    
+    * All options from base Laser class are supported:
+        - scope: Parent optical device name
+        - pulseRate: Laser pulse rate (Hz)
+        - pCell: Pockels cell DAQ channel configuration
+        - shutter: Shutter DAQ channel configuration  
+        - defaultPowerMeter: Power meter device name
+        - calibrationWarning: Warning message for calibration
+        - alignmentMode: Settings for alignment mode
+    
+    Example configuration::
+    
+        Laser-2P:
+            driver: 'CoherentLaser'
+            port: 9
+            baud: 19200
+            scope: 'Microscope'
+            pulseRate: 90*MHz
+            pCell:
+                device: 'DAQ'
+                channel: '/Dev1/ao1'
+                type: 'ao'
+            shutter:
+                device: 'DAQ'
+                channel: '/Dev1/line31'
+                type: 'do'
+                delay: 30*ms
+            defaultPowerMeter: 'NewportMeter'
+            calibrationWarning: 'Filter in?'
+            alignmentMode:
+                pCell: 100*mV
+    """
 
     def __init__(self, dm, config, name):
         self.port = config['port']-1  ## windows com ports start at COM1, pyserial ports start at 0

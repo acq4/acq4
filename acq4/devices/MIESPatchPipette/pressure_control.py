@@ -1,26 +1,27 @@
-from __future__ import print_function
-
 from acq4.util.mies import MIES
 from ..PressureControl import PressureControl
 
+PSI_PASCAL = 6894.76
+
 
 class MIESPressureControl(PressureControl):
-    """PressureControl device implemented over MIES bridge
-    """
+    """PressureControl device implemented over MIES bridge"""
 
     def __init__(self, manager, config, name):
-        self._headstage = config.pop('headstage')
-        self.mies = MIES.getBridge(True)
+        self._headstage = config.pop("headstage")
+        self.mies = MIES.getBridge()
         PressureControl.__init__(self, manager, config, name)
 
-    def _setPressure(self, source=None, pressure=None):
-        print("STUB: set pressure", source, pressure)
+    def _setPressure(self, pressure):
+        self.mies.selectHeadstage(self._headstage)
+        self.mies.setManualPressure(pressure / PSI_PASCAL)
 
     def getPressure(self):
-        pass
+        return self.pressure
 
     def getSource(self):
-        pass
+        return self.source
 
     def _setSource(self, source):
-        pass
+        self.mies.selectHeadstage(self._headstage)
+        self.mies.setPressureSource(self._headstage, source, (self.getPressure() or 0) / PSI_PASCAL)

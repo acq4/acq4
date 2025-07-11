@@ -1,3 +1,4 @@
+import json
 import os
 import re
 import sys
@@ -8,24 +9,23 @@ from threading import RLock
 from typing import Union, Optional
 
 import numpy as np
-import six
-from six.moves import map
-from six.moves import range
+
+import pyqtgraph.configfile as configfile
+from pyqtgraph import FeedbackButton
+from pyqtgraph import FileDialog
+from pyqtgraph.debug import threadName
 
 if __name__ == "__main__":
     libdir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     sys.path = [os.path.join(libdir, "lib", "util")] + sys.path + [libdir]
 
-import pyqtgraph.configfile as configfile
 from acq4.util import Qt
 from acq4.util.DataManager import DirHandle
 from acq4.util.HelpfulException import HelpfulException
-from acq4.util.debug import printExc
-from pyqtgraph import FeedbackButton
-from pyqtgraph import FileDialog
+from acq4.util.codeEditor import invokeCodeEditor
+from acq4.util.json_encoder import ACQ4JSONEncoder
 
 LogWidgetTemplate = Qt.loadUiType(os.path.join(os.path.dirname(__file__), "LogWidgetTemplate.ui"))[0]
-
 
 Stylesheet = """
     body {color: #000; font-family: sans;}
@@ -122,6 +122,7 @@ class LogWindow(Qt.QMainWindow):
         importance: 0-9 (0 is low importance, 9 is high, 5 is default)
         other keywords:
           exception: a tuple (type, exception, traceback) as returned by sys.exc_info()
+          excInfo: an object with attributes exc_type, exc_value, exc_traceback, and thread
           docs: a list of strings where documentation related to the message can be found
           reasons: a list of reasons (as strings) for the message
           traceback: a list of formatted callstack/trackback objects (formatting a traceback/callstack returns a
@@ -146,10 +147,10 @@ class LogWindow(Qt.QMainWindow):
             kwargs["currentDir"] = None
 
         now = datetime.now().astimezone().isoformat()
-        saveName = f"LogEntry_{self.entriesSaved}"
         with self.lock:
             self.entriesSaved += 1
             self.entriesVisible += 1
+            saveName = f"LogEntry_{self.entriesSaved}"
             savedId = self.entriesSaved
             entry = {
                 "message": msg,
@@ -167,7 +168,7 @@ class LogWindow(Qt.QMainWindow):
         if entry.get("exception", None) is not None and "msgType" in entry["exception"]:
             entry["msgType"] = entry["exception"]["msgType"]
 
-        self.saveEntries({saveName: entry | {"id": savedId}})
+        self.saveEntries({saveName: {**entry, "id": savedId}})
         self.wid.addEntry(entry)  # takes care of displaying the entry if it passes the current filters on the logWidget
 
         if entry["msgType"] == "error" and self.errorDialog.show(entry) is False:
@@ -187,13 +188,22 @@ class LogWindow(Qt.QMainWindow):
 
         # convert exc_info to serializable dictionary
         if entry.get("exception", None) is not None:
-            exc_info = entry.pop("exception")
-            entry["exception"] = self.exceptionToDict(*exc_info, topTraceback=entry.get("traceback", []))
+            excInfo = entry.pop("exception")
+            entry["exception"] = self.exceptionToDict(*excInfo, thread=None, topTraceback=entry.get("traceback", []))
+        elif entry.get("excInfo", None) is not None:
+            excInfo = entry.pop("excInfo")
+            entry["exception"] = self.exceptionToDict(
+                excInfo.exc_type,
+                excInfo.exc_value,
+                excInfo.exc_traceback,
+                excInfo.thread,
+                topTraceback=entry.get("traceback", [])
+            )
         else:
             entry["exception"] = None
 
     def textEntered(self):
-        msg = six.text_type(self.wid.ui.input.text())
+        msg = str(self.wid.ui.input.text())
         if msg == "!!":
             self.makeError1()
         elif msg == "##":
@@ -205,10 +215,11 @@ class LogWindow(Qt.QMainWindow):
         self.logMsg(msg, importance=8, msgType="user", currentDir=currentDir)
         self.wid.ui.input.clear()
 
-    def exceptionToDict(self, exType, exc, tb, topTraceback):
+    def exceptionToDict(self, exType, exc, tb, thread, topTraceback):
         excDict = {
             "message": traceback.format_exception(exType, exc, tb)[-1][:-1],
             "traceback": topTraceback + traceback.format_exception(exType, exc, tb)[:-1],
+            # "thread": thread,
         }
         if hasattr(exc, "docs") and len(exc.docs) > 0:
             excDict["docs"] = exc.docs
@@ -218,7 +229,7 @@ class LogWindow(Qt.QMainWindow):
             for k in exc.kwargs:
                 excDict[k] = exc.kwargs[k]
         if hasattr(exc, "oldExc"):
-            excDict["oldExc"] = self.exceptionToDict(*exc.oldExc, topTraceback=[])
+            excDict["oldExc"] = self.exceptionToDict(*exc.oldExc, thread=None, topTraceback=[])
         return excDict
 
     def flashButtons(self):
@@ -234,7 +245,6 @@ class LogWindow(Qt.QMainWindow):
     def makeError1(self):
         try:
             self.makeError2()
-            # print x
         except:
             t, exc, tb = sys.exc_info()
             raise HelpfulException(
@@ -252,14 +262,14 @@ class LogWindow(Qt.QMainWindow):
     def makeError2(self):
         try:
             raise NameError("name 'y' is not defined")
-        except:
+        except NameErorr as e:
             t, exc, tb = sys.exc_info()
             raise HelpfulException(
                 message="msg from makeError",
                 exc=(t, exc, tb),
                 reasons=["reason one", "reason 2"],
                 docs=["what, you expect documentation?"],
-            )
+            ) from e
 
     def show(self):
         Qt.QMainWindow.show(self)
@@ -299,7 +309,7 @@ class LogWindow(Qt.QMainWindow):
             if dh.exists("log.txt"):
                 self.logFile = dh["log.txt"]
                 try:
-                    tempCount = max(e["id"] for e in configfile.readConfigFile(self.logFile.name()).values())
+                    tempCount = max(e["id"] for e in configfile.readConfigFile(self.logFile.name()).values()) + 1
                 except IndexError:
                     tempCount = 0
                 newTemp = {}
@@ -315,6 +325,7 @@ class LogWindow(Qt.QMainWindow):
                 self.saveEntries(temp)
 
         self.logMsg(f"Moved log storage from {oldfName} to {self.fileName()}.")
+        self.logMsg(f"Current configuration: {json.dumps(self.manager.config, cls=ACQ4JSONEncoder)}")
         self.wid.ui.dirLabel.setText("Current Storage Directory: " + self.fileName())
         self.manager.sigLogDirChanged.emit(dh)
 
@@ -467,7 +478,7 @@ class LogWidget(Qt.QWidget):
             child = tree.topLevelItem(1).child(i)
             if tree.topLevelItem(1).checkState(0) or child.checkState(0):
                 text = child.text(0)
-                self.typeFilters.append(six.text_type(text))
+                self.typeFilters.append(str(text))
 
         self.importanceFilter = self.ui.importanceSlider.value()
 
@@ -487,6 +498,7 @@ class LogWidget(Qt.QWidget):
     def filterEntries(self):
         """Runs each entry in self.entries through the filters and displays if it makes it through."""
         # make self.entries a record array, then filtering will be much faster (to OR true/false arrays, + them)
+        # TODO FutureWarning: elementwise comparison failed; returning scalar instead, but in the future will perform elementwise comparison
         typeMask = self.entryArray["msgType"] == ""
         for t in self.typeFilters:
             typeMask += self.entryArray["msgType"] == t
@@ -558,33 +570,29 @@ class LogWidget(Qt.QWidget):
         reasons = ""
         docs = ""
         exc = ""
+        threads = ""
         if "reasons" in entry:
             reasons = self.formatReasonStrForHTML(entry["reasons"])
         if "docs" in entry:
             docs = self.formatDocsStrForHTML(entry["docs"])
         if entry.get("exception", None) is not None:
             exc = self.formatExceptionForHTML(entry, entryId=entry["id"])
+        if "threads" in entry:
+            threads = self.formatThreadsForHTML(entry)
 
-        extra = reasons + docs + exc
+        extra = reasons + docs + exc + threads
         if extra != "":
-            # extra = "<div class='logExtra'>" + extra + "</div>"
-            extra = "<table class='logExtra'><tr><td>" + extra + "</td></tr></table>"
+            extra = f"<table class='logExtra'><tr><td>{extra}</td></tr></table>"
 
-        return """
-        <a name="%s"/><table class='entry'><tr><td>
-            <table class='%s'><tr><td>
-                <span class='timestamp'>%s</span>
-                <span class='message'>%s</span>
-                %s
+        return f"""
+        <a name="{entry["id"]}"/><table class='entry'><tr><td>
+            <table class='{entry["msgType"]}'><tr><td>
+                <span class='timestamp'>{entry["timestamp"]}</span>
+                <span class='message'>{msg}</span>
+                {extra}
             </td></tr></table>
         </td></tr></table>
-        """ % (
-            str(entry["id"]),
-            entry["msgType"],
-            entry["timestamp"],
-            msg,
-            extra,
-        )
+        """
 
     @staticmethod
     def cleanText(text):
@@ -592,6 +600,13 @@ class LogWidget(Qt.QWidget):
         text = re.sub(r">", "&gt;", text)
         text = re.sub(r"<", "&lt;", text)
         text = re.sub(r"\n", "<br/>\n", text)
+
+        # replace indenting spaces with &nbsp
+        lines = text.split('\n')
+        indents = ['&nbsp;' * (len(line) - len(line.lstrip())) for line in lines]
+        lines = [indent + line.lstrip() for indent, line in zip(indents, lines)]
+        text = ''.join(lines)
+
         return text
 
     def formatExceptionForHTML(self, entry, exception=None, count=1, entryId=None):
@@ -622,10 +637,10 @@ class LogWidget(Qt.QWidget):
 
         if count != 1:
             return text, stackText, messages
-        exc = '<div class="exception"><ol>' + "\n".join(["<li>%s</li>" % ex for ex in text]) + "</ol></div>"
+        exc = '<div class="exception"><ol>' + "\n".join([f"<li>{ex}</li>" for ex in text]) + "</ol></div>"
         tbStr = "\n".join(
             [
-                "<li><b>%s</b><br/><span class='traceback'>%s</span></li>" % (messages[i], tb)
+                f"<li><b>{messages[i]}</b><br/><span class='traceback'>{tb}</span></li>"
                 for i, tb in enumerate(stackText)
             ]
         )
@@ -636,10 +651,32 @@ class LogWidget(Qt.QWidget):
     def formatTracebackForHTML(self, tb):
         try:
             tb = [line for line in tb if not line.startswith("Traceback (most recent call last)")]
-        except:
-            print("\n" + str(tb) + "\n")
+        except Exception:
+            print(f"\n{tb}\n")
             raise
-        return re.sub(" ", "&nbsp;", "".join(map(self.cleanText, tb)))[:-1]
+
+        cleanLines = []
+        for i, line in enumerate(tb):
+            line = self.cleanText(line)
+            m = re.match(r"(.*)File \"(.*)\", line (\d+)", line)
+            if m is not None:
+                # insert hyperlink for opening file in editor
+                indent, codeFile, lineNum = m.groups()
+                extra = line[m.end():]
+                line = f'{indent}File <a href="code:{lineNum}:{codeFile}">{codeFile}</a>, line {lineNum}{extra}'
+            cleanLines.append(line)
+        return ''.join(cleanLines)
+
+    def formatThreadsForHTML(self, entry):
+        threads = entry["threads"]
+        hidden = "\n".join(
+            f"<li>Thread <b>{threadName(id)}</b> ({id}):<br/>"
+            f"<span class='traceback'>{self.formatTracebackForHTML(frames)}</span></li>"
+            for id, frames in threads.items()
+        )
+        entry["threadsHtml"] = f"<ul>{hidden}</ul>"
+        entryId = entry["id"]
+        return f'<br/><a href="threads:{entryId}">Show thread states {entryId}</a>'
 
     def formatReasonsStrForHTML(self, reasons):
         # indent = 6
@@ -680,6 +717,12 @@ class LogWidget(Qt.QWidget):
                     e["tracebackHtml"],
                     doc,
                 )
+            if "threadsHtml" in e:
+                doc = re.sub(
+                    f'<a href="threads:{e["id"]}">(<[^>]+>)*Show thread states {e["id"]}(<[^>]+>)*</a>',
+                    e["threadsHtml"],
+                    doc,
+                )
 
         with open(fileName, "wb") as f:
             f.write(doc.encode("utf-8"))
@@ -705,7 +748,8 @@ class LogWidget(Qt.QWidget):
             )
 
     def linkClicked(self, url):
-        action, target = url.toString().split(":")
+        action = url.scheme()
+        target = url.path()
         if action == "doc":
             self.manager.showDocumentation(target)
         elif action == "exc":
@@ -717,9 +761,24 @@ class LogWidget(Qt.QWidget):
                     matchingEntry = self.entryArray[(self.entryArray["entryId"] == (int(target)))]
                     tb = self.entries[int(matchingEntry["index"])]["tracebackHtml"]
                 except IndexError:
-                    print("requested index %d, but only %d entries exist." % (int(target) - 1, len(self.entries)))
+                    print(f"requested index {int(target) - 1}, but only {len(self.entries)} entries exist.")
                     raise
             cursor.insertHtml(tb)
+        elif action == "threads":
+            cursor = self.ui.output.document().find(f"Show thread states {target}")
+            try:
+                insertion = self.entries[int(target) - 1]["threadsHtml"]
+            except IndexError:
+                try:
+                    matchingEntry = self.entryArray[(self.entryArray["entryId"] == (int(target)))]
+                    insertion = self.entries[int(matchingEntry["index"])]["threadsHtml"]
+                except IndexError:
+                    print(f"requested index {int(target) - 1}, but only {len(self.entries)} entries exist.")
+                    raise
+            cursor.insertHtml(insertion)
+        elif action == 'code':
+            lineNum, _, codeFile = target.partition(':')
+            invokeCodeEditor(fileName=codeFile, lineNum=lineNum)
 
     def clear(self):
         self.ui.output.clear()
@@ -813,7 +872,7 @@ class ErrorDialog(Qt.QDialog):
             self.open()
             if w is not None:
                 cp = w.geometry().center()
-                self.setGeometry(cp.x() - self.width() / 2.0, cp.y() - self.height() / 2.0, self.width(), self.height())
+                self.setGeometry(int(cp.x() - self.width() / 2.0), int(cp.y() - self.height() / 2.0), self.width(), self.height())
         self.raise_()
 
     @staticmethod

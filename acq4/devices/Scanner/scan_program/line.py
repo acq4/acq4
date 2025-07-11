@@ -1,5 +1,5 @@
 from __future__ import print_function
-from six.moves import range
+
 import weakref
 import numpy as np
 import pyqtgraph as pg
@@ -7,7 +7,7 @@ from acq4.util import Qt
 import pyqtgraph.parametertree.parameterTypes as pTypes
 from pyqtgraph.parametertree import Parameter, ParameterTree, ParameterItem, registerParameterType
 from .component import ScanProgramComponent
-from six.moves import map
+
 
 
 class LineScanComponent(ScanProgramComponent):

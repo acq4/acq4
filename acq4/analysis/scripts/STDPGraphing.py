@@ -1,7 +1,7 @@
 from __future__ import print_function
 import pyqtgraph as pg
 import numpy as np
-from six.moves import range
+
 
 view = pg.GraphicsView()
 l = pg.GraphicsLayout(border=(100,100,100))

@@ -1,7 +1,6 @@
 import traceback
 from functools import lru_cache
 
-from acq4 import getManager
 import pyqtgraph as pg
 
 try:
@@ -22,6 +21,8 @@ except Exception as exc:
 
 @lru_cache()
 def shouldUseCuda():
+    from acq4 import getManager  # circular import with MultiPatchLog filetype
+
     config = getManager().config.copy()
     config.update(config.get('misc', {}))  # cudaImageProcessing could appear in top-level or under 'misc' depending on config version
     if "cudaImageProcessing" not in config:
@@ -41,4 +42,4 @@ def shouldUseCuda():
         return False
 
     pg.setConfigOption("useCupy", True)
-    True
+    return True

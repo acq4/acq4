@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
 """
 FileType.py -  Base class for all file types
 Copyright 2010  Luke Campagnola
@@ -10,7 +8,6 @@ more file types. The classes are not meant to be instantiated, but instead are j
 to encapsulate a set of static methods.
 """
 
-import os
 
 class FileType:
     
@@ -29,32 +26,31 @@ class FileType:
         """Write data to fileName.
         Return the file name written (this allows the function to modify the requested file name)
         """
-        raise Exception("Function must be implemented in subclass")
+        raise NotImplementedError()
         
     @classmethod
     def read(cls, fileHandle):
         """Read a file, return a data object"""
-        raise Exception("Function must be implemented in subclass")
+        raise NotImplementedError()
         
     @classmethod
     def acceptsFile(cls, fileHandle):
         """Return priority value if the file can be read by this class.
-        Otherwise return False.
+        Otherwise, return False.
         The default implementation just checks for the correct name extensions."""
         name = fileHandle.name()
         for ext in cls.extensions:
             if name[-len(ext):].lower() == ext.lower():
                 return cls.priority
         return False
-        
+
     @classmethod
     def acceptsData(cls, data, fileName):
         """Return priority value if the data can be written by this class.
         Otherwise return False."""
-        for typ in cls.dataTypes:
-            if isinstance(data, typ):
-                return cls.priority
-        return False
+        return next(
+            (cls.priority for typ in cls.dataTypes if isinstance(data, typ)), False
+        )
         
     @classmethod
     def addExtension(cls, fileName):

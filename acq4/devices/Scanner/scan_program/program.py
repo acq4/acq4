@@ -1,16 +1,11 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-import numpy as np
-from collections import OrderedDict
 import importlib
-import six
+from collections import OrderedDict
+
+import numpy as np
 
 import pyqtgraph as pg
-from acq4.util.HelpfulException import HelpfulException
 import pyqtgraph.parametertree.parameterTypes as pTypes
-from pyqtgraph.parametertree import Parameter, ParameterTree, ParameterItem, registerParameterType
-from acq4.util import Qt
-
+from acq4.util import Qt, ptime
 
 # Keep track of all available scan program components
 COMPONENTS = OrderedDict()
@@ -73,7 +68,7 @@ class ScanProgram:
         may also be used to install new component types at runtime.
         """
         ## called when "Add Control.." combo is changed
-        if isinstance(component, six.string_types):
+        if isinstance(component, str):
             component = COMPONENTS[component](self)
         
         self.ctrlGroup.addChild(component.ctrlParameter(), autoIncrementName=True)
@@ -294,7 +289,7 @@ class ScanProgramPreview(object):
 
         self.data = self.program.generatePositionArray()
         self.laserMask = self.program.generateLaserMask()
-        self.lastTime = pg.ptime.time()
+        self.lastTime = ptime.time()
         self.index = 0
         self.sampleRate = self.program.sampleRate
 
@@ -317,7 +312,7 @@ class ScanProgramPreview(object):
     def step(self):
         # decide how much to advance preview
         data = self.data
-        now = pg.ptime.time()
+        now = ptime.time()
         dt = (now - self.lastTime) * self.rate
         index = self.index + dt * self.sampleRate
         npts = data.shape[0]

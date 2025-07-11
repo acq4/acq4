@@ -1,13 +1,7 @@
-# -*- coding: utf-8 -*-
-"""
-debug.py - Functions to aid in debugging 
-Copyright 2010  Luke Campagnola
-Distributed under MIT/X11 license. See license.txt for more information.
-"""
-from __future__ import print_function
+import sys
 
-from pyqtgraph.debug import *
 import pyqtgraph.debug as pgdebug
+from pyqtgraph.debug import *
 from pyqtgraph.exceptionHandling import original_excepthook
 
 LOG_UI = None
@@ -37,7 +31,7 @@ def createLogWindow(manager):
 
 
 def printExc(msg="", indent=4, prefix="|", msgType="error"):
-    """Print an error message followed by an indented exception backtrace
+    """Alert the user to an exception that has occurred, but without letting that exception propagate further.
     (This function is intended to be called within except: blocks)"""
     pgdebug.printExc(msg, indent, prefix)
     try:
@@ -46,7 +40,7 @@ def printExc(msg="", indent=4, prefix="|", msgType="error"):
         if hasattr(acq4, "Manager"):
             acq4.Manager.logExc(msg=msg, msgType=msgType)
     except Exception:
-        pgdebug.printExc("[failed to log this error to manager]")
+        pgdebug.printExc(f"[failed to log this error to manager] {msgType}: {msg}")
 
 
 def logMsg(msg, **kwargs):
@@ -58,6 +52,7 @@ def logMsg(msg, **kwargs):
           docs: a list of strings where documentation related to the message can be found
           reasons: a list of reasons (as strings) for the message
           traceback: a list of formatted callstack/traceback objects (formatting a traceback/callstack returns a list of strings), usually looks like [['line 1', 'line 2', 'line3'], ['line1', 'line2']]
+          threads: a dictionary of thread IDs to tracebacks
        Feel free to add your own keyword arguments. These will be saved in the log.txt file, but will not affect the content or way that messages are displayed.
         """
     global LOG_UI
@@ -67,16 +62,19 @@ def logMsg(msg, **kwargs):
         except:
             print("Error logging message:")
             print("    " + "\n    ".join(msg.split("\n")))
-            print("    " + str(kwargs))
+            print(f"    {kwargs}")
             sys.excepthook(*sys.exc_info())
     else:
         print("Can't log message; no log created yet.")
-        # print args
         print(kwargs)
 
 
 def logExc(msg, *args, **kwargs):
-    """Calls logMsg, but adds in the current exception and callstack. Must be called within an except block, and should only be called if the exception is not re-raised. Unhandled exceptions, or exceptions that reach the top of the callstack are automatically logged, so logging an exception that will be re-raised can cause the exception to be logged twice. Takes the same arguments as logMsg."""
+    """Calls logMsg, but adds in the current exception and callstack. Must be called within an
+    except block, and should only be called if the exception is not re-raised. Unhandled
+    exceptions, or exceptions that reach the top of the callstack are automatically logged, so
+    logging an exception that will be re-raised can cause the exception to be logged twice.
+    Takes the same arguments as logMsg."""
     global LOG_UI
     if LOG_UI is not None:
         try:
@@ -105,9 +103,16 @@ def exceptionCallback(*args):
         # if an error occurs *while* trying to log another exception, disable any further logging to prevent recursion.
         try:
             blockLogging = True
-            logMsg("Unexpected error: ", exception=args, msgType="error")
+            kwargs = {'exception': args, 'msgType': "error"}
+            if args:  # and 'Timeout' in str(args[0]):
+                kwargs['threads'] = {
+                    id: traceback.format_stack(frames)
+                    for id, frames in sys._current_frames().items()
+                    if id != threading.current_thread().ident
+                }
+            logMsg("Unexpected error: ", **kwargs)
         except:
-            print("Error: Exception could no be logged.")
+            print("Error: Exception could not be logged.")
             original_excepthook(*sys.exc_info())
         finally:
             blockLogging = False

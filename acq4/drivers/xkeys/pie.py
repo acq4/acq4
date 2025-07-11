@@ -1,8 +1,12 @@
-# sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
-# import acq4.util.clibrary as clib
-from __future__ import print_function
+import ctypes
+import ctypes.wintypes
+import os
+import platform
+import struct
+import sys
+import threading
+import time
 
-import os, sys, struct, ctypes, ctypes.wintypes, time, threading, platform
 import numpy as np
 
 if platform.architecture()[0] != '64bit':
@@ -11,6 +15,7 @@ if platform.architecture()[0] != '64bit':
 # Delay loading PIEHid--this is only supported in 32-bit, and it helps multiprocessing to have this module
 # be importable on 64-bit (so we have access to PIEException)
 _pielib = None
+
 
 def pielib():
     global _pielib

@@ -5,7 +5,44 @@ from acq4.drivers.zeiss import ZeissMtbSdk
 
 
 class ZeissMicroscope(Microscope):
-    """Microscope subclass implementing control of a Zeiss objective changer
+    """
+    Microscope device with Zeiss objective changer control via MTB API.
+    
+    Extends the base Microscope class with automatic objective switching
+    and focus depth correction for Zeiss microscope systems.
+    
+    Zeiss-specific configuration options:
+    
+    * **safeFocusDepth** (float, required): Safe Z position for objective changes
+      Stage moves to this depth before switching objectives to prevent collisions
+    
+    * **apiDllLocation** (str, optional): Path to MTBApi.dll file
+      Uses standard location if not specified
+    
+    Standard Microscope configuration options (see Microscope base class):
+    
+    * **objectives** (dict): Objective lens definitions
+    
+    * **parentDevice** (str, optional): Name of parent stage device
+    
+    * **transform** (dict, optional): Spatial transform relative to parent device
+    
+    Example configuration::
+    
+        ZeissMicroscope:
+            driver: 'ZeissMicroscope'
+            parentDevice: 'Stage'
+            safeFocusDepth: 5e-3
+            objectives:
+                0:
+                    5x:
+                        name: '5x 0.25na'
+                        scale: 2.581e-6
+                1:
+                    63x:
+                        name: '63x 0.9na'
+                        scale: 0.205e-6
+                        offset: [70e-6, 65e-6]
     """
 
     def __init__(self, dm, config, name):

@@ -6,11 +6,11 @@ Distributed under MIT/X11 license. See license.txt for more infomation.
 """
 from __future__ import print_function
 
-from collections import Iterable
+from typing import Iterable
 
 import numpy as np
-from pyqtgraph import MetaArray
-from six.moves import range
+from MetaArray import MetaArray
+
 
 
 def runSequence(func, params, order, dtype=None, passArgs=False, linkedParams=None):

@@ -1,9 +1,7 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
 """
 fileio.py -  FileType helper functions
 Copyright 2010  Luke Campagnola
-Distributed under MIT/X11 license. See license.txt for more infomation.
+Distributed under MIT/X11 license. See license.txt for more information.
 
 Functions for accessing available fileTypes. Generally these are used by DataManager
 and should not be accessed directly.
@@ -12,7 +10,8 @@ import os
 import acq4.util.debug as debug
 
 KNOWN_FILE_TYPES = None
-    
+
+
 def suggestReadType(fileHandle):
     """Guess which fileType class should be used to read fileName.
     Return the name of the class."""
@@ -21,16 +20,16 @@ def suggestReadType(fileHandle):
     for typ in listFileTypes():
         try:
             cls = getFileType(typ)
-        except:
+        except Exception:
             continue
         priority = cls.acceptsFile(fileHandle)
         if priority is False:
             continue
-        else:
-            if maxVal is None or priority > maxVal:
-                maxVal = priority
-                maxType = typ
+        if maxVal is None or priority > maxVal:
+            maxVal = priority
+            maxType = typ
     return maxType
+
 
 def suggestWriteType(data, fileName=None):
     """Guess which fileType class should be used to write data.
@@ -38,22 +37,18 @@ def suggestWriteType(data, fileName=None):
     Return the name of the class."""
     maxVal = None
     maxType = None
-    #print "Suggest for type %s, name %s" % (type(data), str(fileName))
     for typ in listFileTypes():
         try:
             cls = getFileType(typ)
-        except:
-            debug.printExc("ignoring filetype %s" % typ)
+        except Exception:
+            debug.printExc(f"ignoring filetype {typ}")
             continue
         priority = cls.acceptsData(data, fileName)
-        #print "filetype %s has priority %d" %(typ, int(priority))
         if priority is False:
             continue
-        else:
-            if maxVal is None or priority > maxVal:
-                maxVal = priority
-                maxType = typ
-    #print "Suggesting", maxType
+        if maxVal is None or priority > maxVal:
+            maxVal = priority
+            maxType = typ
     return maxType
 
 
@@ -88,10 +83,10 @@ def getFileType(typName):
     (this is generally only for internal use)"""
     global KNOWN_FILE_TYPES
     if typName not in KNOWN_FILE_TYPES:
-        mod = __import__('acq4.filetypes.' + typName, fromlist=['*'])
+        mod = __import__(f'acq4.filetypes.{typName}', fromlist=['*'])
         cls = getattr(mod, typName)
         registerFileType(typName, cls)
-        
+
     return KNOWN_FILE_TYPES[typName]
     
     
@@ -108,9 +103,10 @@ def listFileTypes():
         for typ in typs:
             try:
                 getFileType(typ)
-            except:
-                debug.printExc("Error loading file type library '%s':" % typ)
+            except Exception:
+                debug.printExc(f"Error loading file type library '{typ}':")
     return list(KNOWN_FILE_TYPES.keys())
 
-## initialize:
+
+# initialize:
 listFileTypes()
