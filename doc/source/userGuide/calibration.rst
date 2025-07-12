@@ -302,4 +302,38 @@ ACQ4 needs to know the orientation of your patch pipette in order to do motion p
 
 Although some of this information may be related to your manipulator orientation, this is not always a reliable assumption so it is necessary to tell ACQ4 about your pipette orientation.
 
-1. Set the 
+1. **Configure pitch and yaw in the device configuration**
+
+   Add the **pitch** and **yaw** parameters to your Pipette device configuration:
+
+   * **pitch** (float or 'auto', required): The angle of the pipette (in degrees) relative to the horizontal plane. Positive values point downward.
+   * **yaw** (float or 'auto', required): The angle of the pipette (in degrees) relative to the global +X axis (points to the operator's right when facing the microscope). Positive values are clockwise from global +X.
+
+   Example configuration::
+
+       PatchPipette1:
+           driver: 'Pipette'
+           parentDevice: 'Manipulator1'
+           pitch: 15.0     # pipette points 15° below horizontal
+           yaw: 45.0       # pipette points 45° clockwise from global +X axis
+
+2. **Alternative: Use automatic configuration**
+
+   If your pipette is aligned with one of your manipulator's axes, you can use ``'auto'`` for pitch and/or yaw::
+
+       PatchPipette1:
+           driver: 'Pipette'
+           parentDevice: 'Manipulator1'
+           pitch: 'auto'
+           yaw: 'auto'
+           parentAutoAxis: '+x'  # pipette aligned with +X axis of manipulator
+
+   Valid values for **parentAutoAxis** are: ``'+x'``, ``'-x'``, ``'+y'``, ``'-y'``, ``'+z'``, ``'-z'``.
+
+3. **Test the configuration**
+
+    a. Focus to about 300 μm above the glass coverslip (if stage/objective configuration was done correctly, the yellow focus line in the camera module's depth chart should be at +300 μm) and click "set surface" in the camera module. This tells ACQ4 where the surface of the (imaginary) sample is located, which will be used later to determine how to correctly move the pipette.
+    b. Focus 50 μm below the surface line and click "set target" in the multipatch module, then click in the camera view. This sets the target position for the pipette, and a yellow target symbol should appear at the clicked position.
+    c. Click "approach" in the multipatch module. The pipette should move to a position that is above the surface line, aligned with the target position. (Depending on your configuration, the pipette may also begin advancing towards the target position. If so, press `esc` to stop the pipette.) 
+    d. Manually drive the pipette along its approach axis until it reaches the target position. Scientifica and Sensapex manipulators both provide "approach" or "diagonal" modes of operation that drive the pipette along its axis.
+    e. Verify that the pipette reaches the target (in x, y, and z) using only axial motion. If all parts of the system are calibrated correctly, the pipette should reach its target within several micrometers (the actual amount of error depends on the conbined quality of the calibration and manipulator hardware). 
