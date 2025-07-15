@@ -17,5 +17,5 @@ sphinx:
 python:
   install:
     - requirements: doc/requirements.txt
-    - path: .
-      pip_args: -e
+    - method: pip
+      path: .
