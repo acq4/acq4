@@ -11,3 +11,17 @@ six
 Sphinx>=4.1.2
 sphinx-rtd-theme>=0.5.2
 vispy
+MetaArray
+coorx
+teleprox
+sqlite
+pyserial
+pyyaml
+neuroanalysis
+trimesh
+sensapex
+pymmcore
+click
+PyDAQmx
+pytest
+tifffile
