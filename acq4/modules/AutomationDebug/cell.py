@@ -103,7 +103,10 @@ class Cell(Qt.QObject):
             _future.sleep(0.1)
 
         result = self._tracker.track_next_frame()
-        global_position = result.position.mapped_to("global")
-        self._positions[ptime.time()] = global_position
-        self.sigPositionChanged.emit(global_position)
+        if result.success:
+            global_position = result.position.mapped_to("global")
+            self._positions[ptime.time()] = global_position
+            self.sigPositionChanged.emit(global_position)
+        else:
+            logMsg(f"Cell tracking failed: {result.reason_for_failure}")
         return result.success
