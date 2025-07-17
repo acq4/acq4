@@ -301,7 +301,7 @@ class Camera(DAQGeneric, OptomechDevice):
         self.acqThread.stop(block=block)
 
     @contextmanager
-    def ensureRunning(self, ensureFreshFrames=False):
+    def ensureRunning(self, ensureFreshFrames=False, withKnownLatency=None):
         """Context manager for starting and stopping camera acquisition thread. If used
         with non-blocking frame acquisition, this will still exit the context before
         the frames are necessarily acquired.
@@ -312,9 +312,12 @@ class Camera(DAQGeneric, OptomechDevice):
         """
         running = self.isRunning()
         if ensureFreshFrames:
-            if running:
+            if withKnownLatency is not None:
+                # if we know the latency of the camera, we can just wait for that time
+                time.sleep(withKnownLatency)
+            elif running:
                 self.stop()
-                # todo sleep until all frames are cleared somehow?
+                # todo oof; do we have to? what if we just know the latency of the camera (in the current settings)?
                 self.start()
         if not running:
             self.start()
@@ -1023,6 +1026,7 @@ class FrameAcquisitionFuture(Future):
         self._camera = camera
         self._frame_count = frameCount
         self._ensure_fresh_frames = ensureFreshFrames
+        self._known_latency = camera.camConfig.get("freshFrameLatency", None)
         self._stop_when = None
         self._frames = []
         self._timeout = timeout
@@ -1035,7 +1039,7 @@ class FrameAcquisitionFuture(Future):
         with ExitStack() as stack:
             stack.callback(self._camera.sigNewFrame.disconnect, self._queue.put)
             if self._ensure_fresh_frames:
-                stack.enter_context(self._camera.ensureRunning(ensureFreshFrames=True))
+                stack.enter_context(self._camera.ensureRunning(ensureFreshFrames=True, withKnownLatency=self._known_latency))
             lastFrameTime = ptime.time()
             while True:
                 if self.isDone():
