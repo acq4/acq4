@@ -66,6 +66,11 @@ class LightSource(Device):
         conf.setdefault("active", False)
         conf.setdefault("adjustableBrightness", False)
         self.sourceConfigs[name] = conf
+        
+        # Declare interface for this light source
+        interface_name = f"{self.name}:{name}"
+        self.dm.declareInterface(interface_name, ['lightSource'], self)
+        
         if 'xkey' in conf:
             devname, row, col = self.sourceConfigs[name]['xkey']
             dev = self.dm.getDevice(devname)
