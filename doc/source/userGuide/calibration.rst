@@ -99,7 +99,8 @@ First we should ensure that the camera image is correctly rotated / mirrored suc
 The next step is to ensure that acq4 understands how the stage's x,y,z axes are oriented and scaled relative to the global coordinate system.
 
 0. Configure your stage. All stages have different limitations and idiosyncracies that require different handling to use with ACQ4.
-    - Scientifica SliceScope:  This can be configured using LinLab (provided by manufacturer), but we recommend configuring via the acq4 config
+    - Sensapex uMs stage: see :ref:`SensapexDevice`.
+    - Scientifica SliceScope:  This can be configured using LinLab (provided by manufacturer), but we recommend configuring via the acq4 config (see :ref:`ScientificaDevice`).
       so that you know the parameters are being maintained correctly over time. The main factors to work out are:
         - What are the axis scale values 
             - Provided by manufacturer, they determine the relationship between motor steps and distance traveled.
@@ -107,6 +108,7 @@ The next step is to ensure that acq4 understands how the stage's x,y,z axes are 
             - Can be retrieved from the device if you are not sure what values to use: e.g. man.getDevice('SliceScope').dev.getAxisScale('X')
         - Which axis scale values should be negative
             - Determines which direction on the stage points toward more positive position values
+        - What direction to move
             - More importantly, determines which end of the range is zero. This is where auto calibration will take place, so it needs to be
             a "safe" location. For a SliceScope z axis (with an inverted microscope), we want Z to be zero at the top of its range because it's safer 
             to make automatic moves in that direction. For a non-inverted microscope, Z=0 should be at the bottom of its range. Likewise, condenser
@@ -126,41 +128,6 @@ The next step is to ensure that acq4 understands how the stage's x,y,z axes are 
                 - Slow: Movements over shorter distances, made where vibration is a concern (because of patched cells)
                 - User: Speed to set for rotary controllers
 
-            SliceScope:
-                driver: 'Scientifica'
-                name: 'SliceScope'
-                baudrate: 38400
-                scale: (1e-06, 1e-06, -1e-06)
-                version: 2
-                slowSpeed: 100*um/s
-                fastSpeed: 5*mm/s
-                params:
-                    axisScale: (-4.03, 4.03, 6.4)  # set such that +X points right, +Y points away, +Z points _down_ (so that auto zero is safe)
-                    joyDirectionX: True  # CW = right
-                    joyDirectionY: True  # CW = away
-                    joyDirectionZ: True  # CW = down
-                transform:
-                    pos: -23.4*mm, -20.6*mm, 21.6 * mm
-            Condenser:
-                driver: 'Scientifica'
-                name: 'Condenser'
-                baudrate: 38400
-                scale: (-1e-06, -1e-06, 1e-06)
-                version: 2
-                monitorObjective: True
-                slowSpeed: 100*um/s
-                fastSpeed: 5*mm/s
-                params:
-                    axisScale: (-5.12, -5.12, -6.4)  # set such that +Z points _up_
-                    joyDirectionX: True
-                    joyDirectionY: True
-                    joyDirectionZ: True  # CW = down
-
-        - When you are convinced that these parameters are configured correctly, verify that you can auto-set the zero points for each axis
-
-    - Sensapex uMs stage:
-        - run zero-offset calibration
-
 
 1. Check z-axis scale and orientation. We assume that your stage's Z axis is vertical.
     a. The configuration for your stage device should have a ``scale:`` section that contains x,y,z scale factors to convert from hardware-reported
@@ -172,8 +139,8 @@ The next step is to ensure that acq4 understands how the stage's x,y,z axes are 
                 device: 20
                 scale: 1.0e-6, 1.0e-6, -1.0e-6  # x, y, z
 
-    a. Note that the *scale* parameter is at the top level of the Stage config, not inside the transform section. The transform section is used to set the stage's position in the global coordinate system, whereas the scale section is used to convert from hardware-reported position to global coordinates.
-    b. Load the Camera module, find the "Depth" plot, and look for the yellow line indicating the Z position of the focal plane.
+    a. Note that the *scale* parameter is at the top level of the Stage config, not inside the transform section. The transform section is used to set the stage's position in the global coordinate system, whereas the scale section is used to convert from hardware-reported position units to global coordinate units.
+    b. Load the Camera module, find the "Depth" plot, and look for the yellow line indicating the Z position of the focal plane (you may need to zoom out using the mouse wheel).
     c. Verify that when focusing the objective lens physically upward, the yellow line also moves upward on-screen.
     d. If not, the ``scale`` section of the stage’s config should get a sign change on the 3rd numeric value; restart acq4 and verify the Z orientation is correct.
 
@@ -218,12 +185,18 @@ In this step we'll physically rotate the camera by a small angle until it is wel
 6. Set the global coordinate origin
 -----------------------------------
 
-In this step we configure position offsets such that the global coordinate origin lies at the center of the recording chamber, on the glass. This is not strictly required, but often makes our job easier when we need to make sense of those coordinate values.
+In this step we configure the stage position offsets such that the global coordinate origin lies at the center of the recording chamber, on the glass. This is not strictly required, but often makes our job easier when we need to make sense of those coordinate values.
 
-1. Under the high-power objective, center the camera view over the center of the recording chamber and focus on the top surface of the glass coverslip (for *in vivo* rigs with no coversliip, pick any suitable focal plane to be the Z origin). If this is a water immersion objective, it is important to be dipped in water (ideally saline) at this point.
-2. In the manager window, under the Microscope dock, make sure the x,y,z values for the high power objective are all set to 0.
-3. In the camera window, point your mouse cursor close to the center of the view and note the x,y coordinates displayed in the bottom right corner of the camera module window. We would like these to read (0, 0) so that the origin of the global coordinate system is at the center of the recording chamber. The z position is displayed in the Depth dock on the right-hand side of the camera window, and we would like the 0 here to mean “on the glass”. Note: If you have a multi-well setup, you might choose to place the origin in the center of a specific well, or in the center of all wells, etc.
-4. To move the origin, we will subtract the currently displayed x,y,z position values from the ``transform -> pos`` setting in the stage's device configuration. (if no setting exists here yet, the values are assumed to be 0)::
+Aside: there is some complexity behind the calibration described below. We are going to arbitrarily choose the center of the recording chamber, at the top surface of the glass coverslip, to be the origin of the global coordinate system. If we wanted to be able to move the stage+focus such that the center of our camera view is at this origin, then it's necessary to know: what position does the stage hardware report when the camera view is centered over the origin? Ideally, if we know this value, then we can simply subtract it from the stage's position in order to move the origin to the center of the recording chamber. Below, we implement this offset using the Stage device's ``transform``. In practice, however, stage and manipulator devices are not perfectly trustworthy -- the positions they report may drift over time. To correct for this, each stage device will have a model-specific mechanism to "re-home" the stage, which ensures that position values are kept stable over time. Depending on the reliability of the stage, this procedure may only need to be performed on occasion when a discrepancy is detected, or perhaps more frequently if the stage is known to drift.
+
+1. Re-home the stage device. This is a model-specific procedure that resets the coordinates reported by the device to ensure they are accurate.
+    - For Scientifica SliceScope, this is done by clicking the "Auto set zero offset" button in the device's dock in the Manager window. Note that this will move the stage to a far extent of its range in order to determine its exact position along each axis. The direction that it travels is determined by the autoZeroDirection parameter in the device's config (see :ref:`Scientifica`). 
+    - For Sensapex uMs, this is done by clicking "Run Zero Calibration" from the device's dock in the manager window, or (equivalently) running the zero offset calibration command from the touchscreen.
+    - For other devices, consult the manufacturer's documentation for how to re-home the stage.
+2. Under the high-power objective, center the camera view over the center of the recording chamber and focus on the top surface of the glass coverslip (for *in vivo* rigs with no coversliip, pick any suitable focal plane to be the Z origin). If this is a water immersion objective, it is important to be dipped in water (ideally saline) at this point.
+3. In the manager window, under the Microscope dock, make sure the x,y,z values for the high power objective are all set to 0.
+4. In the camera window, point your mouse cursor close to the center of the view and note the x,y coordinates displayed in the bottom right corner of the camera module window. We would like these to read (0, 0) so that the origin of the global coordinate system is at the center of the recording chamber. The z position is displayed in the Depth dock on the right-hand side of the camera window, and we would like the 0 here to mean “on the glass”. Note: If you have a multi-well setup, you might choose to place the origin in the center of a specific well, or in the center of all wells, etc.
+5. To move the origin, we will subtract the currently displayed x,y,z position values from the ``transform -> pos`` setting in the stage's device configuration. (if no setting exists here yet, the values are assumed to be 0)::
 
         Stage:
             driver: 'Sensapex'
@@ -232,7 +205,7 @@ In this step we configure position offsets such that the global coordinate origi
             transform:
                 pos: -3.45*mm, -12.27*mm, 8.552*mm
 
-5. After correcting these values, restart acq4 and confirm that the global origin is roughly where you expect it to be.
+6. After correcting these values, restart acq4 and confirm that the global origin is roughly where you expect it to be.
 
 
 7. Objective offset calibration
@@ -277,7 +250,7 @@ This procedure should be performed any time a manipulator is physically reconfig
 * Collisions with nearby manipulators are not possible
 
 
-If your manipulator position meets these requirements, ..
+If your manipulator position meets these requirements,
 
 1. Run calibrations recommended by the hardware manufacturer, if needed.
     - For Sensapex uMp: 
@@ -286,7 +259,7 @@ If your manipulator position meets these requirements, ..
           that no collisions are possible during this calibration.
         - Run the position calibration from the sensapex touchpad (tap the manipulator icon [4th from left along the screen bottom], then expand the "Setup" group, then "Calibrate positions").
 
-2. Calibrate manipulator axis orientation. This step tells acq4 about the _direction_ that each manipulator axis points relative to the
+2. Calibrate manipulator axis orientation. This step tells acq4 about the *direction* that each manipulator axis points relative to the
    global coordinate system:
     a. Put a new pipette and the high-power objective in solution in the recording chamber. Watch via the camera for a few minutes to verify that the pipette is not drifting. 
        In case of drift, reduce any sources of temperature change -- especially block all air flow around the rig and microscope.
@@ -324,3 +297,43 @@ If your manipulator position meets these requirements, ..
 
 10. Configure pipette approach angle
 ------------------------------------
+
+ACQ4 needs to know the orientation of your patch pipette in order to do motion planning for automated actions. For example, when driving the pipette in and out of tissue we usually want it to move only along its axis; never laterally through the tissue. 
+
+Although some of this information may be related to your manipulator orientation, this is not always a reliable assumption so it is necessary to tell ACQ4 about your pipette orientation.
+
+1. **Configure pitch and yaw in the device configuration**
+
+   Add the **pitch** and **yaw** parameters to your Pipette device configuration:
+
+   * **pitch** (float or 'auto', required): The angle of the pipette (in degrees) relative to the horizontal plane. Positive values point downward.
+   * **yaw** (float or 'auto', required): The angle of the pipette (in degrees) relative to the global +X axis (points to the operator's right when facing the microscope). Positive values are clockwise from global +X.
+
+   Example configuration::
+
+       PatchPipette1:
+           driver: 'Pipette'
+           parentDevice: 'Manipulator1'
+           pitch: 15.0     # pipette points 15° below horizontal
+           yaw: 45.0       # pipette points 45° clockwise from global +X axis
+
+2. **Alternative: Use automatic configuration**
+
+   If your pipette is aligned with one of your manipulator's axes, you can use ``'auto'`` for pitch and/or yaw::
+
+       PatchPipette1:
+           driver: 'Pipette'
+           parentDevice: 'Manipulator1'
+           pitch: 'auto'
+           yaw: 'auto'
+           parentAutoAxis: '+x'  # pipette aligned with +X axis of manipulator
+
+   Valid values for **parentAutoAxis** are: ``'+x'``, ``'-x'``, ``'+y'``, ``'-y'``, ``'+z'``, ``'-z'``.
+
+3. **Test the configuration**
+
+    a. Focus to about 300 μm above the glass coverslip (if stage/objective configuration was done correctly, the yellow focus line in the camera module's depth chart should be at +300 μm) and click "set surface" in the camera module. This tells ACQ4 where the surface of the (imaginary) sample is located, which will be used later to determine how to correctly move the pipette.
+    b. Focus 50 μm below the surface line and click "set target" in the multipatch module, then click in the camera view. This sets the target position for the pipette, and a yellow target symbol should appear at the clicked position.
+    c. Click "approach" in the multipatch module. The pipette should move to a position that is above the surface line, aligned with the target position. (Depending on your configuration, the pipette may also begin advancing towards the target position. If so, press `esc` to stop the pipette.) 
+    d. Manually drive the pipette along its approach axis until it reaches the target position. Scientifica and Sensapex manipulators both provide "approach" or "diagonal" modes of operation that drive the pipette along its axis.
+    e. Verify that the pipette reaches the target (in x, y, and z) using only axial motion. If all parts of the system are calibrated correctly, the pipette should reach its target within several micrometers (the actual amount of error depends on the conbined quality of the calibration and manipulator hardware). 
