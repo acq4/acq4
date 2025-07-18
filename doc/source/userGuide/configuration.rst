@@ -56,13 +56,13 @@ Since this configuration tree can become quite large and complex, it is often us
         
 This example would read the entire contents of 'folderTypes.cfg' and insert that as the value for 'folderTypes'.
 
-Since the values in the config are evaluated as Python expressions, we can do some more complex things like conditionally setting configuration values based on the machine name (``hostname``), user (``username``), and environment variables (``environ``). For example:
+Since the values in the config are evaluated as Python expressions, we can do some more complex things like conditionally setting configuration values based on the machine name (``hostname``), user (``username``), and environment variables (``environ``). For example::
 
-::
     # automatically set the storage directory based on the user and hostname
     storageDir: os.path.join(environ['HOME'], 'data', hostname)
 
 ::
+
     # automatically configure a hardware serial number based on the machine name
     devices:
         Camera:
