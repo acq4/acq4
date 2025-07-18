@@ -68,7 +68,7 @@ class LightSource(Device):
         self.sourceConfigs[name] = conf
         
         # Declare interface for this light source
-        interface_name = f"{self.name}:{name}"
+        interface_name = f"{self.name()}:{name}"
         self.dm.declareInterface(interface_name, ['lightSource'], self)
         
         if 'xkey' in conf:
