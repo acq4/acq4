@@ -107,29 +107,24 @@ class CameraCalibrator(Module):
         """Run the calibration sequence in a thread."""
         
         try:
-            # Start camera acquisition
-            camera.start()
-            
-            # Start frame acquisition (no specific number - will run until stopped)
-            frameAcquisition = camera.acquireFrames()
-            
-            # Wait 1 second, then note timestamp and turn on light
-            time.sleep(1.0)
-            activationTime = time.time()
-            lightSource.setSourceActive(sourceName, True)
-            
-            # Wait another second, then turn off light and stop acquisition
-            time.sleep(1.0)
-            lightSource.setSourceActive(sourceName, False)
-            
-            # Stop frame acquisition
-            frameAcquisition.stop()
-            
-            # Get the acquired frames
-            frames = frameAcquisition.getResult()
-            
-            # Stop camera
-            camera.stop()
+            with camera.ensureRunning():
+                # Start frame acquisition (no specific number - will run until stopped)
+                frameAcquisition = camera.acquireFrames()
+                
+                # Wait 1 second, then note timestamp and turn on light
+                time.sleep(1.0)
+                activationTime = time.time()
+                lightSource.setSourceActive(sourceName, True)
+                
+                # Wait another second, then turn off light and stop acquisition
+                time.sleep(1.0)
+                lightSource.setSourceActive(sourceName, False)
+                
+                # Stop frame acquisition
+                frameAcquisition.stop()
+                
+                # Get the acquired frames
+                frames = frameAcquisition.getResult()
             
             return {'frames': frames, 'activationTime': activationTime}
             
@@ -137,7 +132,6 @@ class CameraCalibrator(Module):
             # Make sure to clean up on error
             try:
                 lightSource.setSourceActive(sourceName, False)
-                camera.stop()
             except:
                 pass
             raise e
