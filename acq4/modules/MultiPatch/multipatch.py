@@ -11,6 +11,7 @@ from acq4 import getManager
 from acq4.devices.PatchPipette import PatchPipette
 from acq4.modules.Module import Module
 from acq4.util import Qt, ptime
+from coorx import Point
 from neuroanalysis.test_pulse_stack import H5BackedTestPulseStack
 from .mockPatch import MockPatch
 from .pipetteControl import PipetteControl
@@ -446,7 +447,7 @@ class MultiPatchWindow(Qt.QWidget):
         spos = pip.scopeDevice().globalPosition()
         pos = [pos.x(), pos.y(), spos.z()]
         if self.ui.targetsAreCellsBtn.isChecked():
-            cell = Cell(pos)
+            cell = Cell(Point(pos, "global"))
             cell.initializeTracker(pip.imagingDevice())  # threaded
             pip.setCellTarget(cell)
         else:

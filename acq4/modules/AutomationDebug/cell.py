@@ -7,11 +7,14 @@ from acq4_automation.feature_tracking import (
     CameraCellTracker,
     SingleFrameMotionEstimator,
 )
+from acq4_automation.feature_tracking.cell_tracker import ImagingStrategy
 from coorx import Point
 
 
 class Cell(Qt.QObject):
     sigPositionChanged = Qt.pyqtSignal(object)
+    sigReferenceStackInitiated = Qt.pyqtSignal(object)
+    sigReferenceStackAcquired = Qt.pyqtSignal(object)
 
     def __init__(self, position: Point):
         """Initialize the Cell object.
@@ -102,7 +105,12 @@ class Cell(Qt.QObject):
         while self._tracker.position is None:
             _future.sleep(0.1)
 
+        re_up_reference = self._tracker.next_strategy.strategy == ImagingStrategy.REFRESH_REFERENCE
+        if re_up_reference:
+            self.sigReferenceStackInitiated.emit(self)
         result = self._tracker.track_next_frame()
+        if re_up_reference:
+            self.sigReferenceStackAcquired.emit(self)
         if result.success:
             global_position = result.position.mapped_to("global")
             self._positions[ptime.time()] = global_position
