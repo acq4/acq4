@@ -755,7 +755,7 @@ class AutomationDebugWindow(Qt.QWidget):
         if target is None:
             raise RuntimeError("No suitable new target found among detected cells.")
         self._previousTargets.append(target)
-        self.pipetteDevice.setTarget(target)
+        self.pipetteDevice.setTarget(target)  # TODO setCellTarget?
         logMsg(f"Setting pipette target to {target}")
 
     def _handleAutoFinish(self, fut: Future):
@@ -897,7 +897,7 @@ class AutomationDebugWindow(Qt.QWidget):
         _future.setState("Autopatch: checking selected cell")
         cell = self._unranked_cells.pop(0)
         self._ranked_cells.append(cell)
-        self.pipetteDevice.setTarget(cell.position)
+        self.pipetteDevice.setCellTarget(cell)
         self._cell = cell
         cell.sigPositionChanged.connect(self._updatePipetteTarget)
         # stack = self._current_classification_stack or self._current_detection_stack
