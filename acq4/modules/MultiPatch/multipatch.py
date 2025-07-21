@@ -447,7 +447,7 @@ class MultiPatchWindow(Qt.QWidget):
         pos = [pos.x(), pos.y(), spos.z()]
         if self.ui.targetsAreCellsBtn.isChecked():
             cell = Cell(pos)
-            cell.initializeTracker(pip.imagingDevice())
+            cell.initializeTracker(pip.imagingDevice())  # threaded
             pip.setCellTarget(cell)
         else:
             pip.setTarget(pos)

@@ -240,8 +240,10 @@ class AutomationDebugWindow(Qt.QWidget):
     @future_wrap
     def _addCellFromTarget(self, _future):
         target = Point(self.pipetteDevice.targetPosition(), "global")
-        cell = Cell(target)
-        _future.waitFor(cell.initializeTracker(self.cameraDevice))
+        cell = self.pipetteDevice.cell
+        if cell is None or cell.position != target:
+            cell = Cell(target)
+            _future.waitFor(cell.initializeTracker(self.cameraDevice))
         self._unranked_cells.append(cell)
         boxPositions = [c.position for c in self._unranked_cells]
         _future.waitFor(futureInGuiThread(self._displayBoundingBoxes, boxPositions))
