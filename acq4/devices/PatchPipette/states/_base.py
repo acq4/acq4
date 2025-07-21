@@ -320,8 +320,6 @@ class PatchPipetteState(Future):
                 self._visualTargetTrackingFuture = None
             return
         if self._visualTargetTrackingFuture is None:
-            if self.dev.pipetteDevice.cell is None:
-                raise ValueError("Cannot visually track target without a cell")
             self._visualTargetTrackingFuture = self._visualTargetTracking()
 
     def _visualTargetTracking(self):
