@@ -64,27 +64,23 @@
       <string>Selected: </string>
      </property>
      <layout class="QGridLayout" name="gridLayout_2">
-      <item row="10" column="0">
-       <widget class="QPushButton" name="pushButton">
-        <property name="enabled">
+      <item row="0" column="0">
+       <widget class="QPushButton" name="targetsAreCellsBtn">
+        <property name="text">
+         <string>Targets are Cells</string>
+        </property>
+        <property name="checkable">
          <bool>true</bool>
         </property>
-        <property name="text">
-         <string>Pip. Offset</string>
-        </property>
        </widget>
       </item>
-      <item row="3" column="1">
-       <widget class="FutureButton" name="homeBtn">
+      <item row="1" column="0">
+       <widget class="QPushButton" name="setTargetBtn">
         <property name="text">
-         <string>Home</string>
+         <string>Set target</string>
         </property>
-       </widget>
-      </item>
-      <item row="4" column="1">
-       <widget class="FutureButton" name="nucleusHomeBtn">
-        <property name="text">
-         <string>Home with Nucleus</string>
+        <property name="checkable">
+         <bool>true</bool>
         </property>
        </widget>
       </item>
@@ -95,6 +91,16 @@
         </property>
        </widget>
       </item>
+      <item row="1" column="2">
+       <widget class="QPushButton" name="calibrateBtn">
+        <property name="text">
+         <string>Calibrate</string>
+        </property>
+        <property name="checkable">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
       <item row="2" column="0">
        <widget class="FutureButton" name="aboveTargetBtn">
         <property name="text">
@@ -102,18 +108,40 @@
         </property>
        </widget>
       </item>
-      <item row="8" column="0">
-       <spacer name="verticalSpacer">
-        <property name="orientation">
-         <enum>Qt::Vertical</enum>
+      <item row="2" column="1">
+       <widget class="FutureButton" name="fineSearchBtn">
+        <property name="text">
+         <string>Fine Search</string>
         </property>
-        <property name="sizeHint" stdset="0">
-         <size>
-          <width>20</width>
-          <height>40</height>
-         </size>
+       </widget>
+      </item>
+      <item row="2" column="2">
+       <widget class="FutureButton" name="autoCalibrateBtn">
+        <property name="text">
+         <string>Auto cal.</string>
         </property>
-       </spacer>
+       </widget>
+      </item>
+      <item row="3" column="0">
+       <widget class="FutureButton" name="approachBtn">
+        <property name="text">
+         <string>Approach</string>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="1">
+       <widget class="FutureButton" name="homeBtn">
+        <property name="text">
+         <string>Home</string>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="2">
+       <widget class="FutureButton" name="toTargetBtn">
+        <property name="text">
+         <string>To target</string>
+        </property>
+       </widget>
       </item>
       <item row="4" column="0">
        <widget class="QPushButton" name="slowBtn">
@@ -125,6 +153,13 @@
         </property>
        </widget>
       </item>
+      <item row="4" column="1">
+       <widget class="FutureButton" name="nucleusHomeBtn">
+        <property name="text">
+         <string>Home with Nucleus</string>
+        </property>
+       </widget>
+      </item>
       <item row="4" column="2">
        <widget class="QPushButton" name="fastBtn">
         <property name="text">
@@ -132,34 +167,6 @@
         </property>
         <property name="checkable">
          <bool>true</bool>
-        </property>
-       </widget>
-      </item>
-      <item row="2" column="2">
-       <widget class="FutureButton" name="autoCalibrateBtn">
-        <property name="text">
-         <string>Auto cal.</string>
-        </property>
-       </widget>
-      </item>
-      <item row="6" column="2">
-       <widget class="FutureButton" name="cellDetectBtn">
-        <property name="text">
-         <string>Cell Detect</string>
-        </property>
-       </widget>
-      </item>
-      <item row="6" column="1">
-       <widget class="FutureButton" name="breakInBtn">
-        <property name="text">
-         <string>Break In</string>
-        </property>
-       </widget>
-      </item>
-      <item row="3" column="2">
-       <widget class="FutureButton" name="toTargetBtn">
-        <property name="text">
-         <string>To target</string>
         </property>
        </widget>
       </item>
@@ -176,37 +183,24 @@
         </property>
        </spacer>
       </item>
-      <item row="1" column="0">
-       <widget class="QPushButton" name="setTargetBtn">
-        <property name="text">
-         <string>Set target</string>
-        </property>
-        <property name="checkable">
-         <bool>true</bool>
-        </property>
-       </widget>
-      </item>
-      <item row="2" column="1">
-       <widget class="FutureButton" name="fineSearchBtn">
-        <property name="text">
-         <string>Fine Search</string>
-        </property>
-       </widget>
-      </item>
-      <item row="1" column="2">
-       <widget class="QPushButton" name="calibrateBtn">
-        <property name="text">
-         <string>Calibrate</string>
-        </property>
-        <property name="checkable">
-         <bool>true</bool>
-        </property>
-       </widget>
-      </item>
       <item row="6" column="0">
        <widget class="FutureButton" name="sealBtn">
         <property name="text">
          <string>Seal</string>
+        </property>
+       </widget>
+      </item>
+      <item row="6" column="1">
+       <widget class="FutureButton" name="breakInBtn">
+        <property name="text">
+         <string>Break In</string>
+        </property>
+       </widget>
+      </item>
+      <item row="6" column="2">
+       <widget class="FutureButton" name="cellDetectBtn">
+        <property name="text">
+         <string>Cell Detect</string>
         </property>
        </widget>
       </item>
@@ -217,20 +211,40 @@
         </property>
        </widget>
       </item>
-      <item row="3" column="0">
-       <widget class="FutureButton" name="approachBtn">
+      <item row="7" column="1">
+       <widget class="FutureButton" name="collectBtn">
         <property name="text">
-         <string>Approach</string>
+         <string>Collect</string>
         </property>
        </widget>
       </item>
-      <item row="10" column="2">
-       <widget class="QPushButton" name="pushButton_2">
+      <item row="7" column="2">
+       <widget class="FutureButton" name="cleanBtn">
+        <property name="text">
+         <string>Clean</string>
+        </property>
+       </widget>
+      </item>
+      <item row="8" column="0">
+       <spacer name="verticalSpacer">
+        <property name="orientation">
+         <enum>Qt::Vertical</enum>
+        </property>
+        <property name="sizeHint" stdset="0">
+         <size>
+          <width>20</width>
+          <height>40</height>
+         </size>
+        </property>
+       </spacer>
+      </item>
+      <item row="10" column="0">
+       <widget class="QPushButton" name="pushButton">
         <property name="enabled">
          <bool>true</bool>
         </property>
         <property name="text">
-         <string>Bridge Balance</string>
+         <string>Pip. Offset</string>
         </property>
        </widget>
       </item>
@@ -244,17 +258,13 @@
         </property>
        </widget>
       </item>
-      <item row="7" column="2">
-       <widget class="FutureButton" name="cleanBtn">
-        <property name="text">
-         <string>Clean</string>
+      <item row="10" column="2">
+       <widget class="QPushButton" name="pushButton_2">
+        <property name="enabled">
+         <bool>true</bool>
         </property>
-       </widget>
-      </item>
-      <item row="7" column="1">
-       <widget class="FutureButton" name="collectBtn">
         <property name="text">
-         <string>Collect</string>
+         <string>Bridge Balance</string>
         </property>
        </widget>
       </item>

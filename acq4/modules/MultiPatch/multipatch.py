@@ -14,6 +14,7 @@ from acq4.util import Qt, ptime
 from neuroanalysis.test_pulse_stack import H5BackedTestPulseStack
 from .mockPatch import MockPatch
 from .pipetteControl import PipetteControl
+from ..AutomationDebug.cell import Cell
 from ...devices.PatchPipette.statemanager import PatchPipetteStateManager
 from ...util.future import MultiFuture, future_wrap
 from ...util.json_encoder import ACQ4JSONEncoder
@@ -164,6 +165,7 @@ class MultiPatchWindow(Qt.QWidget):
 
     @property
     def _shouldSaveCalibrationImages(self):
+        # TODO this isn't safe outside of the UI thread
         return self.ui.saveCalibrationsBtn.isChecked()
 
     @_shouldSaveCalibrationImages.setter
@@ -443,7 +445,12 @@ class MultiPatchWindow(Qt.QWidget):
         pos = self._cammod.window().getView().mapSceneToView(ev.scenePos())
         spos = pip.scopeDevice().globalPosition()
         pos = [pos.x(), pos.y(), spos.z()]
-        pip.setTarget(pos)
+        if self.ui.targetsAreCellsBtn.isChecked():
+            cell = Cell(pos)
+            cell.initializeTracker(pip.imagingDevice())  # threaded
+            pip.setCellTarget(cell)
+        else:
+            pip.setTarget(pos)
 
         if len(self._setTargetPips) == 0:
             self.ui.setTargetBtn.setChecked(False)

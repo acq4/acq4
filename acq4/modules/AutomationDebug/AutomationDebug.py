@@ -240,18 +240,21 @@ class AutomationDebugWindow(Qt.QWidget):
     @future_wrap
     def _addCellFromTarget(self, _future):
         target = Point(self.pipetteDevice.targetPosition(), "global")
-        cell = Cell(target)
-        _future.waitFor(cell.initializeTracker(self.cameraDevice))
+        cell = self.pipetteDevice.cell
+        if cell is None or cell.position != target:
+            cell = Cell(target)
+            _future.waitFor(cell.initializeTracker(self.cameraDevice))
         self._unranked_cells.append(cell)
         boxPositions = [c.position for c in self._unranked_cells]
         _future.waitFor(futureInGuiThread(self._displayBoundingBoxes, boxPositions))
 
     def _visualizeTracking(self):
-        if self._cell is None or self._cell._tracker is None:
+        cell = self.pipetteDevice.cell or self._cell
+        if cell is None or cell._tracker is None:
             logMsg("No cell tracking available to visualize.")
             return
         from acq4_automation.feature_tracking.visualization import LiveTrackerVisualizer
-        visualizer = LiveTrackerVisualizer(self._cell._tracker)
+        visualizer = LiveTrackerVisualizer(cell._tracker)
         self._visualizers.append(visualizer)
         visualizer.show()
 
@@ -288,7 +291,8 @@ class AutomationDebugWindow(Qt.QWidget):
         )
         self.ui.rankCellsBtn.setEnabled(len(self._unranked_cells) > 0)
         # self.ui.autopatchDemoBtn.setEnabled(working == self.ui.autopatchDemoBtn or not working)
-        self.ui.visualizeTrackingBtn.setEnabled(self._cell is not None and self._cell._tracker is not None)
+        cell = self.pipetteDevice.cell or self._cell
+        self.ui.visualizeTrackingBtn.setEnabled(cell is not None and cell._tracker is not None)
 
     @property
     def cameraDevice(self) -> Camera:
@@ -755,7 +759,7 @@ class AutomationDebugWindow(Qt.QWidget):
         if target is None:
             raise RuntimeError("No suitable new target found among detected cells.")
         self._previousTargets.append(target)
-        self.pipetteDevice.setTarget(target)
+        self.pipetteDevice.setTarget(target)  # TODO setCellTarget?
         logMsg(f"Setting pipette target to {target}")
 
     def _handleAutoFinish(self, fut: Future):
@@ -897,7 +901,7 @@ class AutomationDebugWindow(Qt.QWidget):
         _future.setState("Autopatch: checking selected cell")
         cell = self._unranked_cells.pop(0)
         self._ranked_cells.append(cell)
-        self.pipetteDevice.setTarget(cell.position)
+        self.pipetteDevice.setCellTarget(cell)
         self._cell = cell
         cell.sigPositionChanged.connect(self._updatePipetteTarget)
         # stack = self._current_classification_stack or self._current_detection_stack

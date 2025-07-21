@@ -308,14 +308,18 @@ class ApproachState(PatchPipetteState):
             return
         if self.closeEnoughToTargetToDetectCell():
             if self._visualTargetTrackingFuture is not None:
-                self._visualTargetTrackingFuture.stop("Too close to keep tracking")
+                self.pipetteDevice.cell.enableTracking(False)
+                self._visualTargetTrackingFuture = None
             return
         if self._visualTargetTrackingFuture is None:
+            if self.dev.pipetteDevice.cell is None:
+                raise ValueError("Cannot visually track target without a cell")
             self._visualTargetTrackingFuture = self._visualTargetTracking()
 
-    @future_wrap
-    def _visualTargetTracking(self, _future):
-        pass
+    def _visualTargetTracking(self):
+        cell = self.pipetteDevice.cell
+        cell.enableTracking(True)
+        return cell._trackingFuture
 
     def _cleanup(self):
         if self._moveFuture is not None and not self._moveFuture.isDone():
