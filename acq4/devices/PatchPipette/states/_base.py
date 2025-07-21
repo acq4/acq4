@@ -316,17 +316,18 @@ class PatchPipetteState(Future):
             return
         if self.closeEnoughToTargetToDetectCell():
             if self._visualTargetTrackingFuture is not None:
-                self.pipetteDevice.cell.enableTracking(False)
+                self.dev.pipetteDevice.cell.enableTracking(False)
                 self._visualTargetTrackingFuture = None
             return
         if self._visualTargetTrackingFuture is None:
             self._visualTargetTrackingFuture = self._visualTargetTracking()
 
     def _visualTargetTracking(self):
-        cell = self.pipetteDevice.cell
+        cell = self.dev.pipetteDevice.cell
         if cell is None:
-            cell = Cell(Point(self.pipetteDevice.targetPosition(), "global"))
-            self.pipetteDevice.cell = cell
+            cell = Cell(Point(self.dev.pipetteDevice.targetPosition(), "global"))
+            cell.initializeTracker(self.dev.pipetteDevice.imagingDevice()).wait()
+            self.dev.pipetteDevice.cell = cell
 
         cell.enableTracking(True)
         cell.sigReferenceStackInitiated.connect(self._pausePipetteForReferenceStack)
