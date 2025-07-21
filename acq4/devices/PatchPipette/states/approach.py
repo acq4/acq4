@@ -99,7 +99,6 @@ class ApproachState(PatchPipetteState):
     def __init__(self, *args, **kwds):
         super().__init__(*args, **kwds)
         self._moveFuture = None
-        self._visualTargetTrackingFuture = None
         self._analysis = CellDetectAnalysis(
             self.config["baselineResistanceTau"],
             np.inf,  # not trying to find cells here
@@ -302,24 +301,6 @@ class ApproachState(PatchPipetteState):
         self.waitFor(move)
         pos = np.array(pip.globalPosition())
         self.waitFor(pip._moveToGlobal(pos - sidestep, speed=speed))
-
-    def maybeVisuallyTrackTarget(self):
-        if not self.config["visualTargetTracking"]:
-            return
-        if self.closeEnoughToTargetToDetectCell():
-            if self._visualTargetTrackingFuture is not None:
-                self.pipetteDevice.cell.enableTracking(False)
-                self._visualTargetTrackingFuture = None
-            return
-        if self._visualTargetTrackingFuture is None:
-            if self.dev.pipetteDevice.cell is None:
-                raise ValueError("Cannot visually track target without a cell")
-            self._visualTargetTrackingFuture = self._visualTargetTracking()
-
-    def _visualTargetTracking(self):
-        cell = self.pipetteDevice.cell
-        cell.enableTracking(True)
-        return cell._trackingFuture
 
     def _cleanup(self):
         if self._moveFuture is not None and not self._moveFuture.isDone():

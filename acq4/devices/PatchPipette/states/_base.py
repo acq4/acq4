@@ -8,13 +8,16 @@ from copy import deepcopy
 from typing import Any, Optional, Iterable
 
 import numpy as np
+
+from acq4 import getManager
+from acq4.modules.AutomationDebug.cell import Cell
+from acq4.util import Qt
+from acq4.util.future import Future, future_wrap
+
+from coorx import Point
 from neuroanalysis.test_pulse import PatchClampTestPulse
 from pyqtgraph import disconnect
 from pyqtgraph.units import µm
-
-from acq4 import getManager
-from acq4.util import Qt
-from acq4.util.future import Future, future_wrap
 
 
 class PatchPipetteState(Future):
@@ -115,6 +118,8 @@ class PatchPipetteState(Future):
         self._cleanupMutex = threading.Lock()
         self._cleanupFuture = None
         self._pressureAdjustment = None
+        self._visualTargetTrackingFuture = None
+        self._pauseMovement = False
         # indicates state that should be transitioned to next, if any.
         # This is usually set by the return value of run(), and must be invoked by the state manager.
         self.nextState = self.config.get('fallbackState', None)
@@ -306,9 +311,47 @@ class PatchPipetteState(Future):
     def aboveSurface(self, pos=None):
         return self.depthBelowSurface(pos) < 0
 
+    def maybeVisuallyTrackTarget(self):
+        if not self.config["visualTargetTracking"]:
+            return
+        if self.closeEnoughToTargetToDetectCell():
+            if self._visualTargetTrackingFuture is not None:
+                self.pipetteDevice.cell.enableTracking(False)
+                self._visualTargetTrackingFuture = None
+            return
+        if self._visualTargetTrackingFuture is None:
+            if self.dev.pipetteDevice.cell is None:
+                raise ValueError("Cannot visually track target without a cell")
+            self._visualTargetTrackingFuture = self._visualTargetTracking()
+
+    def _visualTargetTracking(self):
+        cell = self.pipetteDevice.cell
+        if cell is None:
+            cell = Cell(Point(self.pipetteDevice.targetPosition(), "global"))
+            self.pipetteDevice.cell = cell
+
+        cell.enableTracking(True)
+        cell.sigReferenceStackInitiated.connect(self._pausePipetteForReferenceStack)
+        return cell._trackingFuture
+
+    def _pausePipetteForReferenceStack(self, cell):
+        self._pauseMovement = True
+        cell.sigReferenceStackAcquired.connect(self._resumePipetteAfterReferenceStack)
+        cell.sigReferenceStackInitiated.disconnect(self._pausePipetteForReferenceStack)
+
+    def _resumePipetteAfterReferenceStack(self, cell):
+        self._pauseMovement = False
+        cell.sigReferenceStackAcquired.disconnect(self._resumePipetteAfterReferenceStack)
+
     def _waitForMoveWhileTargetChanges(self, position_fn, speed, continuous, future, interval=None, step=None):
         move_fut = None
         while move_fut is None or not move_fut.isDone():
+            if self._pauseMovement:
+                if move_fut is not None:
+                    move_fut.stop("Paused", wait=True)
+                    move_fut = None
+                future.sleep(0.1)
+                continue
             if move_fut is None:
                 pos = position_fn()
                 if continuous:
