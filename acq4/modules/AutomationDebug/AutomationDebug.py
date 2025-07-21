@@ -249,11 +249,12 @@ class AutomationDebugWindow(Qt.QWidget):
         _future.waitFor(futureInGuiThread(self._displayBoundingBoxes, boxPositions))
 
     def _visualizeTracking(self):
-        if self._cell is None or self._cell._tracker is None:
+        cell = self.pipetteDevice.cell or self._cell
+        if cell is None or cell._tracker is None:
             logMsg("No cell tracking available to visualize.")
             return
         from acq4_automation.feature_tracking.visualization import LiveTrackerVisualizer
-        visualizer = LiveTrackerVisualizer(self._cell._tracker)
+        visualizer = LiveTrackerVisualizer(cell._tracker)
         self._visualizers.append(visualizer)
         visualizer.show()
 
