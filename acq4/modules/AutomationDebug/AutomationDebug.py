@@ -291,7 +291,8 @@ class AutomationDebugWindow(Qt.QWidget):
         )
         self.ui.rankCellsBtn.setEnabled(len(self._unranked_cells) > 0)
         # self.ui.autopatchDemoBtn.setEnabled(working == self.ui.autopatchDemoBtn or not working)
-        self.ui.visualizeTrackingBtn.setEnabled(self._cell is not None and self._cell._tracker is not None)
+        cell = self.pipetteDevice.cell or self._cell
+        self.ui.visualizeTrackingBtn.setEnabled(cell is not None and cell._tracker is not None)
 
     @property
     def cameraDevice(self) -> Camera:
