@@ -67,7 +67,7 @@
       <item row="0" column="0">
        <widget class="QPushButton" name="targetsAreCellsBtn">
         <property name="text">
-         <string>Targets are Cells</string>
+         <string>Visually track tar.</string>
         </property>
         <property name="checkable">
          <bool>true</bool>
