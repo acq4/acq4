@@ -245,7 +245,6 @@ class CellDetectState(PatchPipetteState):
     def __init__(self, *args, **kwds):
         super().__init__(*args, **kwds)
         self._moveFuture = None
-        self._visualTargetTrackingFuture = None
         self._analysis = CellDetectAnalysis(
             self.config['baselineResistanceTau'],
             self.config['fastDetectionThreshold'],
@@ -287,20 +286,6 @@ class CellDetectState(PatchPipetteState):
                     return self._transition_to_fallback("No cell found before end of search path")
 
         return self._transition_to_fallback("Timed out waiting for cell detect.")
-
-    def maybeVisuallyTrackTarget(self):
-        if not self.config["visualTargetTracking"]:
-            return
-        if self.closeEnoughToTargetToDetectCell():
-            if self._visualTargetTrackingFuture is not None:
-                self._visualTargetTrackingFuture.stop("Too close to keep tracking")
-            return
-        if self._visualTargetTrackingFuture is None:
-            self._visualTargetTrackingFuture = self._visualTargetTracking()
-
-    @future_wrap
-    def _visualTargetTracking(self, _future):
-        pass
 
     def pokeCell(self):
         """Move pipette slightly deeper towards center of cell"""

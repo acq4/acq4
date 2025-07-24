@@ -387,9 +387,9 @@ class FutureWrapper:
         self.logLevel = logLevel
 
     def __call__(
-        self,
-        func: Callable[WRAPPED_FN_PARAMS, WRAPPED_FN_RETVAL_TYPE]|None=None,
-        logLevel=None,
+            self,
+            func: Callable[WRAPPED_FN_PARAMS, WRAPPED_FN_RETVAL_TYPE] | None = None,
+            logLevel=None,
     ) -> Callable[WRAPPED_FN_PARAMS, Future[WRAPPED_FN_RETVAL_TYPE]]:
         """Decorator to execute a function in a Thread wrapped in a future. The function must take a Future
         named "_future" as a keyword argument. This Future can be variously used to checkStop() the
@@ -408,7 +408,7 @@ class FutureWrapper:
         if logLevel is not None:
             assert func is None, f"Cannot have func {func} and logLevel {logLevel}"
             return FutureWrapper(logLevel)
-        
+
         @functools.wraps(func)
         def wrapper(*args: WRAPPED_FN_PARAMS.args, **kwds: WRAPPED_FN_PARAMS.kwargs) -> Future[WRAPPED_FN_RETVAL_TYPE]:
             frame = inspect.currentframe().f_back
@@ -425,6 +425,7 @@ class FutureWrapper:
             return future
 
         return wrapper
+
 
 future_wrap = FutureWrapper()
 
