@@ -447,6 +447,21 @@ class Camera(DAQGeneric, OptomechDevice):
         else:
             return bounds
 
+    def pointIsVisible(self, point, mode="sensor") -> bool:
+        """Check if a point is within the camera's boundaries.
+
+        Parameters
+        ----------
+        point : np.ndarray
+            The point to check, in global coordinates.
+        mode : "sensor" | "roi"
+            See getBoundary() for details on the mode.
+        """
+        x, y, w, h = self.getBoundary(globalCoords=True, mode=mode)
+        min_x, max_x = sorted((x, x + w))
+        min_y, max_y = sorted((y, y + h))
+        return min_x <= point[0] <= max_x and min_y <= point[1] <= max_y
+
     def getScopeState(self):
         """Return meta information to be included with each frame. This function must be FAST."""
         with self.lock:
