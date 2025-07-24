@@ -703,7 +703,7 @@ class Pipette(Device, OptomechDevice):
         """
         self.sigMoveRequested.emit(self, pos, speed, kwds)
         stagePos = self._solveGlobalStagePosition(pos)
-        stage:Stage = self.parentStage
+        stage: Stage = self.parentStage
         try:
             return stage.moveToGlobal(stagePos, speed, **kwds)
         except Exception as exc:
