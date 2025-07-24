@@ -12,6 +12,7 @@ import numpy as np
 from acq4 import getManager
 from acq4.modules.AutomationDebug.cell import Cell
 from acq4.util import Qt
+from acq4.util.debug import printExc
 from acq4.util.future import Future, future_wrap
 
 from coorx import Point
@@ -253,6 +254,13 @@ class PatchPipetteState(Future):
         """Called after job completes, whether it failed or succeeded. Ask `self.wasInterrupted()` to see if the
         state was stopped early. Return a Future that completes when cleanup is done.
         """
+        try:
+            if self._visualTargetTrackingFuture is not None:
+                self.dev.pipetteDevice.cell.enableTracking(False)
+                self._visualTargetTrackingFuture.stop("State cleanup")
+                self._visualTargetTrackingFuture = None
+        except Exception:
+            printExc("Error stopping visual target tracking")
         disconnect(self.dev.pipetteDevice.sigTargetChanged, self._onTargetChanged)
         return Future.immediate()
 
