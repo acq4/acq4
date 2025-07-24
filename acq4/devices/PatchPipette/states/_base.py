@@ -352,29 +352,34 @@ class PatchPipetteState(Future):
 
     def _waitForMoveWhileTargetChanges(self, position_fn, speed, continuous, future, interval=None, step=None):
         move_fut = None
-        while move_fut is None or not move_fut.isDone():
-            if self._pauseMovement:
-                if move_fut is not None:
-                    move_fut.stop("Paused", wait=True)
+        try:
+            while move_fut is None or not move_fut.isDone():
+                if self._pauseMovement:
+                    if move_fut is not None:
+                        move_fut.stop("Paused", wait=True)
+                        move_fut = None
+                    future.sleep(0.1)
+                    continue
+                if move_fut is None:
+                    pos = position_fn()
+                    if continuous:
+                        move_fut = self.dev.pipetteDevice._moveToGlobal(pos, speed=speed)
+                    else:
+                        move_fut = self.dev.pipetteDevice.stepwiseAdvance(
+                            target=pos,
+                            speed=speed,
+                            interval=interval,
+                            step=step,
+                        )
+                if self._targetHasChanged:
+                    self._targetHasChanged = False
+                    move_fut.stop("Target changed", wait=True)
                     move_fut = None
                 future.sleep(0.1)
-                continue
-            if move_fut is None:
-                pos = position_fn()
-                if continuous:
-                    move_fut = self.dev.pipetteDevice._moveToGlobal(pos, speed=speed)
-                else:
-                    move_fut = self.dev.pipetteDevice.stepwiseAdvance(
-                        target=pos,
-                        speed=speed,
-                        interval=interval,
-                        step=step,
-                    )
-            if self._targetHasChanged:
-                self._targetHasChanged = False
-                move_fut.stop("Target changed", wait=True)
-                move_fut = None
-            future.sleep(0.1)
+        except Exception:
+            if move_fut is not None and not move_fut.isDone():
+                move_fut.stop("Error while moving", wait=True)
+            raise
 
     def _onTargetChanged(self, pos):
         self._targetHasChanged = True
