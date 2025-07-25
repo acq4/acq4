@@ -314,10 +314,11 @@ class Camera(DAQGeneric, OptomechDevice):
         if ensureFreshFrames:
             if withKnownLatency is not None:
                 # if we know the latency of the camera, we can just wait for that time
+                if not isinstance(withKnownLatency, (int, float)) or withKnownLatency <= 0:
+                    raise ValueError("withKnownLatency must be a positive number.")
                 time.sleep(withKnownLatency)
             elif running:
                 self.stop()
-                # todo oof; do we have to? what if we just know the latency of the camera (in the current settings)?
                 self.start()
         if not running:
             self.start()
