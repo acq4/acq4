@@ -91,7 +91,7 @@ class Camera(DAQGeneric, OptomechDevice):
             p = p.parentDevice()
             if isinstance(p, Microscope):
                 self.scopeDev = p
-                self.scopeDev.sigObjectiveChanged.connect(self.objectiveChanged, type=Qt.Qt.DirectConnection))
+                self.scopeDev.sigObjectiveChanged.connect(self.objectiveChanged, type=Qt.Qt.DirectConnection)
                 self.scopeDev.sigLightChanged.connect(self._lightChanged, type=Qt.Qt.DirectConnection)
                 break
 
