@@ -58,6 +58,7 @@ class MosaicEditorModule(Module):
 class MosaicEditorWindow(Qt.QWidget):
     def __init__(self, mod, name):
         Qt.QWidget.__init__(self)
+        self.setWindowTitle(name)
         self.layout = Qt.QGridLayout()
         self.setLayout(self.layout)
         self.layout.setContentsMargins(0, 0, 0, 0)
@@ -81,7 +82,6 @@ class MosaicEditorWindow(Qt.QWidget):
             self.dockarea.addDock(d, *pos)
         self.elements = elems
         
-        self.setWindowTitle(name)
         
 
 class MosaicEditor(AnalysisModule):

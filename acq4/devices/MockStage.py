@@ -71,7 +71,7 @@ class MockStage(Stage):
         self._quit = False
         dm.sigAbortAll.connect(self.abort)
         self.stageThread = MockStageThread()
-        self.stageThread.positionChanged.connect(self.posChanged)
+        self.stageThread.positionChanged.connect(self.posChanged, type=Qt.Qt.DirectConnection)
         self.stageThread.start()
         self._move(self.getPosition(), 10000, False)
 

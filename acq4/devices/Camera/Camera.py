@@ -91,8 +91,8 @@ class Camera(DAQGeneric, OptomechDevice):
             p = p.parentDevice()
             if isinstance(p, Microscope):
                 self.scopeDev = p
-                self.scopeDev.sigObjectiveChanged.connect(self.objectiveChanged)
-                self.scopeDev.sigLightChanged.connect(self._lightChanged)
+                self.scopeDev.sigObjectiveChanged.connect(self.objectiveChanged, type=Qt.Qt.DirectConnection)
+                self.scopeDev.sigLightChanged.connect(self._lightChanged, type=Qt.Qt.DirectConnection)
                 break
 
         self.transformChanged()
@@ -108,16 +108,16 @@ class Camera(DAQGeneric, OptomechDevice):
         self._frameInfoUpdater = None
 
         self.acqThread = AcquireThread(self)
-        self.acqThread.finished.connect(self.acqThreadFinished)
-        self.acqThread.started.connect(self.acqThreadStarted)
-        self.acqThread.sigShowMessage.connect(self.showMessage)
+        self.acqThread.finished.connect(self.acqThreadFinished, type=Qt.Qt.DirectConnection)
+        self.acqThread.started.connect(self.acqThreadStarted, type=Qt.Qt.DirectConnection)
+        self.acqThread.sigShowMessage.connect(self.showMessage, type=Qt.Qt.DirectConnection)
 
         self._processingThread = FrameProcessingThread()
         self._processingThread.sigFrameFullyProcessed.connect(self.sigNewFrame, type=Qt.Qt.DirectConnection)
         self._processingThread.start()
         self._processingThread.addFrameProcessor(self.addFrameInfo)
 
-        self.sigGlobalTransformChanged.connect(self.transformChanged)
+        self.sigGlobalTransformChanged.connect(self.transformChanged, type=Qt.Qt.DirectConnection)
 
         if config != None:
             # look for 'defaults', then 'params' to preserve backward compatibility.
