@@ -50,9 +50,6 @@ class SmartStage:
         else:
             return self.control_thread.last_pos
 
-    def stop(self):
-        return self.control_thread.request('stop')
-
 
 if __name__ == "__main__":
     import argparse

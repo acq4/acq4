@@ -1,10 +1,9 @@
 import logging
-import teleprox
 
+import teleprox
 
 SERVER_PORT = 60738
 SERVER_ADDRESS = f"tcp://localhost:{SERVER_PORT}"
-
 
 ms_client = None
 ms_process = None  # only exists if it was started this time
@@ -32,9 +31,9 @@ def start_server(dll_path, log_addr):
     global ms_process
     print("Starting motionSynergy server..")
     ms_process = teleprox.start_process(
-        'motionsynergy_server', 
-        qt=True, 
-        address=SERVER_ADDRESS, 
+        'motionsynergy_server',
+        qt=True,
+        address=SERVER_ADDRESS,
         daemon=True,
         log_addr=log_addr,
         log_level='INFO',
@@ -52,5 +51,7 @@ def start_server(dll_path, log_addr):
 
     return ms_process.client
 
+
 import logging
+
 logging.addLevelName
