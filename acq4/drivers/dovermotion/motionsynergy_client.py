@@ -2,13 +2,24 @@ import logging
 
 import teleprox
 
+# This is a custom level for MotionSynergy messages, so they can be filtered separately.
+logging.addLevelName(
+    logging.INFO,
+    "MOTIONSYNERGY",
+)
+
 SERVER_PORT = 60738
 SERVER_ADDRESS = f"tcp://localhost:{SERVER_PORT}"
 
 ms_client = None
 ms_process = None  # only exists if it was started this time
-logging.getLogger('motionsynergy_server').setLevel(logging.INFO)
-log_server = teleprox.log.remote.LogServer(logger='motionsynergy_server')
+logger = logging.getLogger('motionsynergy_server')
+logger.setLevel(logging.INFO)
+log_server = teleprox.log.remote.LogServer(logger=logger)
+if not logger.handlers:
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(logging.Formatter('%(name)s: %(levelname)s: %(message)s'))
+    logger.addHandler(console_handler)
 
 
 def get_client(dll_path):
@@ -50,8 +61,3 @@ def start_server(dll_path, log_addr):
     ms_process.client['smartstage'] = ss
 
     return ms_process.client
-
-
-import logging
-
-logging.addLevelName
