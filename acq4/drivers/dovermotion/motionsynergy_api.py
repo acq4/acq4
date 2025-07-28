@@ -3,14 +3,17 @@ Loads motionsynergy API with minimal UI for initialization and shutdown.
 This is meant to be run from a server process that can stay alive to avoid the need to reinitialize the stage.
 Clients can connect to the server process to interact with the stage. (see motionsynergy_client.py)
 """
-import os, sys, atexit
+
+import atexit
+import os
+import sys
+
 import teleprox.qt as qt
 
-
-isLinux = sys.platform.startswith("linux")
-if isLinux:
+if is_linux := sys.platform.startswith("linux"):
     # Use Microsoft's dotnet, rather than Mono
     from pythonnet import load
+
     load("coreclr")
 
 import clr
@@ -59,7 +62,7 @@ def load_motionsynergyapi(dll_file=None):
     instrumentSettings.SupportFolder = path + "\\SupportFolder"
     instrumentSettings.ProgramDataFolder = path + "\\ProgramDataFolder"
     instrumentSettings.ConfigurationFilename = "Instrument.cfg"
-        
+
     return motionSynergy, instrumentSettings
 
 
@@ -67,17 +70,21 @@ def configure(motionSynergy, instrumentSettings):
     # First check the MotionSynergyGUI has been run to select the product and communications settings.
     config_path = os.path.join(instrumentSettings.SupportFolder, instrumentSettings.ConfigurationFilename)
     if not os.path.isfile(config_path):
-        sys.exit(f"The MotionSynergyGUI application must be run to select your product and communications settings (checked {config_path}).")
+        sys.exit(
+            "The MotionSynergyGUI application must be run to select your product and communications settings "
+            f"(checked {config_path}).")
 
     # Configure the system using the above settings.
     result = motionSynergy.Configure(instrumentSettings).Result
     if result.Success is False:
-        raise Exception(f"Configuration failed: {result}")
+        raise ValueError(f"Configuration failed: {result}")
     return result
 
 
 initialized = False
-def initialize(run_init: bool=True, progress=None):
+
+
+def initialize(run_init: bool = True, progress=None):
     """Commutate motors and home axes. Must be run once when starting up before interacting with the stage.
 
     **This will move the stage quickly and over long distances**
@@ -92,12 +99,13 @@ def initialize(run_init: bool=True, progress=None):
     init_warning_msgbox()
 
     result = check(motion_synergy.Initialize(run_init, progress), error_msg="Error initializing MotionSynergyAPI: ")
-    initialized = True    
+    initialized = True
     return result
 
 
 motion_synergy = None
 instrument_settings = None
+
 
 def get_motionsynergyapi(dll_file=None):
     global motion_synergy, instrument_settings
@@ -117,7 +125,7 @@ def shutdown():
 
 
 # create a tray icon for the daemon process
-def quit():
+def _quit():
     qt.QApplication.quit()
 
 
@@ -132,17 +140,19 @@ def init_warning_msgbox():
     msgbox.setIcon(qt.QMessageBox.Warning)
     # set window icon
     msgbox.setWindowIcon(get_smartstage_icon())
-    msgbox.setText("Beginning stage initialization.\nThis will move the stage quickly and over long distances.\nOk to continue?")
+    msgbox.setText(
+        "Beginning stage initialization.\nThis will move the stage quickly and over long distances.\nOk to continue?")
     msgbox.setStandardButtons(qt.QMessageBox.Ok | qt.QMessageBox.Cancel)
     msgbox.setDefaultButton(qt.QMessageBox.Cancel)
     response = msgbox.exec_()
     if response != qt.QMessageBox.Ok:
-        raise Exception("MotionSynergy initialization cancelled by user.")
+        raise RuntimeError("MotionSynergy initialization cancelled by user.")
 
 
 class SmartStageTrayIcon:
     """Minimal user interface for the SmartStage background process.
     """
+
     def __init__(self):
         self.tray_icon = qt.QSystemTrayIcon(get_smartstage_icon())
 
@@ -157,7 +167,7 @@ class SmartStageTrayIcon:
         self.menu.addAction(self.initialize_action)
 
         self.quit_action = qt.QAction("Quit", self.menu)
-        self.quit_action.triggered.connect(quit)
+        self.quit_action.triggered.connect(_quit)
         self.menu.addAction(self.quit_action)
 
         self.tray_icon.setContextMenu(self.menu)
@@ -165,6 +175,8 @@ class SmartStageTrayIcon:
 
 
 tray_icon = None
+
+
 def install_tray_icon():
     global tray_icon
     tray_icon = SmartStageTrayIcon()

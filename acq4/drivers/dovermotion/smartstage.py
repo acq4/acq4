@@ -2,9 +2,17 @@ from .control_thread import SmartStageControlThread
 
 
 class SmartStage:
-    def __init__(self, callback=None, poll_interval=0.05, callback_threshold=0.01, move_complete_threshold=0.01, default_acceleration=10.0):
+    def __init__(
+            self,
+            callback=None,
+            poll_interval=0.05,
+            callback_threshold=0.01,
+            move_complete_threshold=0.01,
+            default_acceleration=10.0,
+    ):
         self.default_acceleration = default_acceleration
-        self.control_thread = SmartStageControlThread(callback, poll_interval, callback_threshold, move_complete_threshold)
+        self.control_thread = SmartStageControlThread(
+            callback, poll_interval, callback_threshold, move_complete_threshold)
 
     def stop(self):
         """Stop the device immediately"""
@@ -32,7 +40,7 @@ class SmartStage:
 
     def enable(self):
         return self.control_thread.request('enable')
-    
+
     def disable(self):
         return self.control_thread.request('disable')
 
@@ -41,16 +49,16 @@ class SmartStage:
             return self.control_thread.request('position').result()
         else:
             return self.control_thread.last_pos
-    
+
     def stop(self):
         return self.control_thread.request('stop')
-
-
 
 
 if __name__ == "__main__":
     import argparse
     import pyqtgraph as pg
+    import acq4.drivers.dovermotion.motionsynergy_api as ms_server
+
     app = pg.mkQApp()
     print("app!")
 
@@ -58,13 +66,14 @@ if __name__ == "__main__":
     parser.add_argument("--dll", type=str, help="Path to the MotionSynergyAPI.dll file")
     args = parser.parse_args()
 
-    import acq4.drivers.dovermotion.motionsynergy_api as ms_server
     ms_server.install_tray_icon()
     motionSynergy, instrumentSettings = ms_server.get_motionsynergyapi(args.dll)
 
+
     def pos_cb(pos):
         print("Position change:", pos)
-    
+
+
     ss = SmartStage(callback=pos_cb)
 
 #     parser.add_argument("--port", type=int, default=60738, help="Port to listen on")
@@ -83,12 +92,7 @@ if __name__ == "__main__":
 #     server.run_forever()
 
 
-
-
-
-
 # print("Current position:", pos())
-
 
 
 # Perform a series of moves, appropriate for the selected product.
@@ -135,4 +139,3 @@ if __name__ == "__main__":
 # axis.GetMotorCurrent
 # axis.Disable()  # de-energize motor
 # axis.Enable()   # energize motor
-
