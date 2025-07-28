@@ -1,6 +1,7 @@
+import sys
+
 import acq4.drivers.dovermotion.motionsynergy_client as ms
 import teleprox.log
-import sys
 
 if len(sys.argv) < 2:
     print("Usage: python -m acq4.drivers.dovermotion <path to MotionSynergyAPI.dll>")

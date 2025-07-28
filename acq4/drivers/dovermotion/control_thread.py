@@ -3,6 +3,7 @@ from __future__ import annotations
 import queue
 import sys
 import threading
+
 import numpy as np
 
 from .motionsynergy_api import get_motionsynergyapi, initialize, check
@@ -85,14 +86,14 @@ class SmartStageControlThread:
             return
         if all(task.IsCompleted for task in self.current_move.tasks if task is not None):
             alerts = []
-            for ax,task in enumerate(self.current_move.tasks):
+            for task in self.current_move.tasks:
                 if task is None:
                     continue
                 result = task.Result
                 if result.Success is False:
-                    desc = result.Alert.UserDescription + "; " + result.Alert.Description
+                    desc = f"{result.Alert.UserDescription}; {result.Alert.Description}"
                     alerts.append(desc)
-                
+
             if len(alerts) == 0:
                 self.current_move.set_result(None)
             else:
@@ -127,16 +128,14 @@ class SmartStageControlThread:
         if self.current_move is not None:
             self._stop(reason='Interrupted by another move request.')
         fut.tasks = self._move(
-            pos=fut.kwds['pos'], 
-            speed=fut.kwds['speed'], 
+            pos=fut.kwds['pos'],
+            speed=fut.kwds['speed'],
             acceleration=fut.kwds['acceleration'],
         )
         self.current_move = fut
 
     def _stop(self, reason):
-        results = []
-        for axis in self.axes:
-            results.append(axis.Stop())
+        results = [axis.Stop() for axis in self.axes]
         if self.current_move is not None:
             self.current_move.fail(reason)
             self.current_move = None
@@ -173,27 +172,28 @@ class SmartStageControlThread:
     def _move(self, pos, speed, acceleration):
         """Directly request a move.
         
-        To ensure a mostly linear travel, speed/acceleration are distributed to the axes based on the relative distance to the target.
+        To ensure a mostly linear travel, speed/acceleration are distributed to the axes based on the relative distance
+        to the target.
         
         Returns a list of tasks that can be waited on.
         """
         assert len(pos) == len(self.axes), f"Expected {len(self.axes)} coordinates, got {len(pos)}"
         current_pos = self._get_pos()
-        target_pos = np.array([current_pos[i] if x is None else x for i,x in enumerate(pos)])
+        target_pos = np.array([current_pos[i] if x is None else x for i, x in enumerate(pos)])
         diff = target_pos - current_pos
         dist = np.linalg.norm(diff)
         scale_per_axis = np.abs(diff) / dist
         speed_per_axis = speed * scale_per_axis
         accel_per_axis = acceleration * scale_per_axis
 
-        for i,axis in enumerate(self.axes):
+        for i, axis in enumerate(self.axes):
             if np.abs(diff[i]) < self.move_complete_threshold:
                 pos[i] = None
             if pos[i] is not None:
                 check(axis.SetVelocity(speed_per_axis[i]), error_msg="Error setting axis speed: ")
                 check(axis.SetAcceleration(accel_per_axis[i]), error_msg="Error setting axis acceleration: ")
         tasks = []
-        for i,axis in enumerate(self.axes):
+        for i, axis in enumerate(self.axes):
             if pos[i] is None:
                 tasks.append(None)
             else:
@@ -219,6 +219,7 @@ class SmartStageRequestFuture:
         self.result = None
         self.exc_info = None
         self.error = None
+        self.tasks = []
 
     def done(self):
         """Return True if the request has finished."""
@@ -244,7 +245,7 @@ class SmartStageRequestFuture:
         """
         if self.request != 'move':
             raise TypeError('Can only cancel move requests')
-        return self.thread.cancel_move(self)
+        return self.thread.request("cancel", move_req=self)
 
     def wait(self, timeout=5.0):
         """Wait for the request to complete, or for the timeout to elapse.
@@ -253,7 +254,7 @@ class SmartStageRequestFuture:
         If the timeout expires, then raise TimeoutError.
         If the request fails, then raise an exception with more information.
         """
-        if self._done.wait(timeout=timeout) is False:
+        if not self._done.wait(timeout=timeout):
             raise TimeoutError(f'Timeout waiting for {self.request} to complete')
         elif self.exc_info is not None:
             raise self.FutureError(
