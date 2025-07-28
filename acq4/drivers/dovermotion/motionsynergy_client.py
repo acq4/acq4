@@ -48,6 +48,7 @@ def start_server(dll_path, log_addr):
         daemon=True,
         log_addr=log_addr,
         log_level='INFO',
+        start_local_server=True,
     )
 
     ms_server = ms_process.client._import('acq4.drivers.dovermotion.motionsynergy_api')
