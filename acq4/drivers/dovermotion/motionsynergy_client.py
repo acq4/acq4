@@ -32,7 +32,7 @@ def get_client(dll_path):
             exc.add_note("No motionsynergy server running; starting one now..")
             ms_client = start_server(dll_path=dll_path, log_addr=log_server.address)
         local_server = teleprox.RPCServer()
-        teleprox.RPCServer.register_server(local_server)
+        local_server.run_lazy()
     return ms_client
 
 
