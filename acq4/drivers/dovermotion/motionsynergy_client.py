@@ -17,10 +17,6 @@ local_server = None  # local RPC server for callback proxying
 logger = logging.getLogger('motionsynergy_server')
 logger.setLevel(logging.INFO)
 log_server = teleprox.log.remote.LogServer(logger=logger)
-if not logger.handlers:
-    console_handler = logging.StreamHandler()
-    console_handler.setFormatter(logging.Formatter('%(name)s: %(levelname)s: %(message)s'))
-    logger.addHandler(console_handler)
 
 
 def get_client(dll_path):
