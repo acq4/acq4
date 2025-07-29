@@ -84,15 +84,12 @@ class SmartStageControlThread:
     def _check_move_status(self):
         if self.current_move is None:
             return
-        if all(task.IsCompleted for task in self.current_move.tasks if task is not None):
-            alerts = []
-            for task in self.current_move.tasks:
-                if task is None:
-                    continue
-                result = task.Result
-                if result.Success is False:
-                    desc = f"{result.Alert.UserDescription}; {result.Alert.Description}"
-                    alerts.append(desc)
+        if all(task.IsCompleted for task in self.current_move.tasks):
+            alerts = [
+                f"{task.Result.Alert.UserDescription}; {task.Result.Alert.Description}"
+                for task in self.current_move.tasks
+                if not task.Result.Success
+            ]
 
             if len(alerts) == 0:
                 self.current_move.set_result(None)
@@ -192,14 +189,11 @@ class SmartStageControlThread:
             if pos[i] is not None:
                 check(axis.SetVelocity(speed_per_axis[i]), error_msg="Error setting axis speed: ")
                 check(axis.SetAcceleration(accel_per_axis[i]), error_msg="Error setting axis acceleration: ")
-        tasks = []
-        for i, axis in enumerate(self.axes):
-            if pos[i] is None:
-                tasks.append(None)
-            else:
-                result = check(axis.MoveAbsolute(pos[i]), error_msg="Error moving axis: ")
-                tasks.append(result)
-        return tasks
+        return [
+            axis.MoveAbsolute(pos[i])
+            for i, axis in enumerate(self.axes)
+            if pos[i] is not None
+        ]
 
 
 class SmartStageRequestFuture:
