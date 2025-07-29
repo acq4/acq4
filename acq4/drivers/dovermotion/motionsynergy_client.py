@@ -32,7 +32,9 @@ def get_client(dll_path):
             exc.add_note("No motionsynergy server running; starting one now..")
             ms_client = start_server(dll_path=dll_path, log_addr=log_server.address)
         local_server = teleprox.RPCServer()
-        local_server.run_lazy()
+        local_server.run_in_thread()
+    if not ms_client["smartstage"].control_thread.is_running():
+        ms_client["smartstage"].control_thread.start_thread()
     return ms_client
 
 

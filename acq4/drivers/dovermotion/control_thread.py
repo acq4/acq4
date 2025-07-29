@@ -38,10 +38,13 @@ class SmartStageControlThread:
         self.start_thread()
 
     def start_thread(self):
-        if self.thread is not None and self.thread.is_alive():
+        if self.is_running():
             raise RuntimeError('Thread is already running')
         self.thread = threading.Thread(target=self._run, daemon=True)
         self.thread.start()
+
+    def is_running(self):
+        return self.thread is not None and self.thread.is_alive()
 
     def request(self, req, **kwds):
         if self.thread is None or not self.thread.is_alive():
