@@ -13,6 +13,7 @@ SERVER_ADDRESS = f"tcp://localhost:{SERVER_PORT}"
 
 ms_client = None
 ms_process = None  # only exists if it was started this time
+local_server = None  # local RPC server for callback proxying
 logger = logging.getLogger('motionsynergy_server')
 logger.setLevel(logging.INFO)
 log_server = teleprox.log.remote.LogServer(logger=logger)
@@ -25,16 +26,17 @@ if not logger.handlers:
 def get_client(dll_path):
     """Return an RPCClient connected to the motionSynergy server.
     """
-    global ms_client
+    global ms_client, local_server
     if ms_client is None:
         try:
             ms_client = teleprox.RPCClient.get_client(address=SERVER_ADDRESS)
             ms_client._import('teleprox.log').set_logger_address(log_server.address)
-            print("Connected to motionSynergy server.")
+            logger.info("Connected to motionSynergy server.")
         except ConnectionRefusedError as exc:
-            # no server running already
             exc.add_note("No motionsynergy server running; starting one now..")
             ms_client = start_server(dll_path=dll_path, log_addr=log_server.address)
+        local_server = teleprox.RPCServer()
+        teleprox.RPCServer.register_server(local_server)
     return ms_client
 
 
