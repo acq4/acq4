@@ -28,13 +28,11 @@ def get_client(dll_path):
             ms_client = teleprox.RPCClient.get_client(address=SERVER_ADDRESS)
             ms_client._import('teleprox.log').set_logger_address(log_server.address)
             logger.info("Connected to motionSynergy server.")
-            # the following does the same as start_local_server
-            local_server = teleprox.RPCServer()
-            local_server.run_lazy()
         except ConnectionRefusedError as exc:
             exc.add_note("No motionsynergy server running; starting one now..")
             ms_client = start_server(dll_path=dll_path, log_addr=log_server.address)
-            local_server = teleprox.RPCServer.get_server()
+        local_server = teleprox.RPCServer()
+        local_server.run_lazy()
     if not ms_client["smartstage"].control_thread.is_running():
         ms_client["smartstage"].control_thread.start_thread()
     return ms_client
@@ -50,7 +48,6 @@ def start_server(dll_path, log_addr):
         daemon=True,
         log_addr=log_addr,
         log_level='INFO',
-        start_local_server=True,
     )
 
     ms_server = ms_process.client._import('acq4.drivers.dovermotion.motionsynergy_api')
