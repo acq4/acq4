@@ -601,8 +601,10 @@ class ScopeCameraModInterface(CameraModuleInterface):
         fd = self.getDevice().focusDevice()
         if fd is None:
             return
-        tpos = fd.globalTargetPosition()
         fpos = fd.globalPosition()
+        tpos = fd.globalTargetPosition()
+        if tpos is None:
+            tpos = fpos
         dif = tpos[2] - fpos[2]
         with pg.SignalBlock(self.movableFocusLine.sigPositionChangeFinished, self.focusDragged):
             self.movableFocusLine.setValue(focus + dif)
