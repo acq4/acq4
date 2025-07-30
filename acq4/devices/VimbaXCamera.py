@@ -53,7 +53,10 @@ class VimbaXCamera(Camera):
         for f in self._dev.get_all_features():
             if hasattr(f, "get"):
                 name = f.get_name()
-                self._paramValuesOnDev[name] = f.get()
+                try:
+                    self._paramValuesOnDev[name] = f.get()
+                except VmbFeatureError:
+                    continue  # some features are not readable after all
                 f.register_change_handler(self._updateParamCache)
                 rng = None
                 if name in ('BinningX', 'BinningY'):
