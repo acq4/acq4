@@ -178,6 +178,7 @@ class SmartStageControlThread:
         Returns a list of tasks that can be waited on.
         """
         assert len(pos) == len(self.axes), f"Expected {len(self.axes)} coordinates, got {len(pos)}"
+        pos = list(pos)
         current_pos = self._get_pos()
         target_pos = np.array([current_pos[i] if x is None else x for i, x in enumerate(pos)])
         diff = target_pos - current_pos
