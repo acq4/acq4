@@ -178,7 +178,7 @@ class ApproachState(PatchPipetteState):
         if self._distanceToTarget() < self.config["pipetteRecalibrateDistance"]:
             if self._moveFuture is not None:
                 # should restart on next main loop
-                self._moveFuture.stop(wait=True)
+                self._moveFuture.stop("Make sure the pipette is where we expect it to be", wait=True)
 
             pip = self.dev.pipetteDevice
             imgr = self.dev.imagingDevice()
@@ -201,7 +201,7 @@ class ApproachState(PatchPipetteState):
                     pip.resetGlobalPosition(pos)
                     self.setState(f"Recalibrate finished (found tip again at {pos})")
                 else:
-                    self.setState(f"cancel pipette position update; prediction is too far away ({dist*1e6}um)")
+                    self.setState(f"cancel pipette position update; prediction is too far away ({dist*1e6}µm)")
 
             self._pipetteRecalibrated = True
 
@@ -264,8 +264,7 @@ class ApproachState(PatchPipetteState):
     def avoidObstacle(self, already_retracted=False):
         self.setState("avoiding obstacle" + (" (recursively)" if already_retracted else ""))
         if self._moveFuture is not None:
-            self._moveFuture.stop("Obstacle detected")
-            self.waitForStop()
+            self._moveFuture.stop("Obstacle detected", wait=True)
 
         pip = self.dev.pipetteDevice
         speed = self.config["belowSurfaceSpeed"]
