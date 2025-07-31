@@ -179,6 +179,7 @@ class ApproachState(PatchPipetteState):
             if self._moveFuture is not None:
                 # should restart on next main loop
                 self._moveFuture.stop("Make sure the pipette is where we expect it to be", wait=True)
+                self._moveFuture = None
 
             pip = self.dev.pipetteDevice
             imgr = self.dev.imagingDevice()
@@ -265,6 +266,7 @@ class ApproachState(PatchPipetteState):
         self.setState("avoiding obstacle" + (" (recursively)" if already_retracted else ""))
         if self._moveFuture is not None:
             self._moveFuture.stop("Obstacle detected", wait=True)
+            self._moveFuture = None
 
         pip = self.dev.pipetteDevice
         speed = self.config["belowSurfaceSpeed"]
