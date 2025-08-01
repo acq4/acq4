@@ -69,10 +69,10 @@ class Cell(Qt.QObject):
             self._trackingFuture = self._track(interval)
             self._trackingFuture.onFinish(self._handleTrackingFinished)
         else:
-            self._tracker.stop_tracking()
             if self._trackingFuture is not None:
                 self._trackingFuture.stop("Tracking disabled")
                 self._trackingFuture = None
+            self._tracker.stop_tracking()
 
     @future_wrap
     def _track(self, interval: float, _future):
@@ -108,6 +108,8 @@ class Cell(Qt.QObject):
         re_up_reference = self._tracker.next_strategy().strategy == ImagingStrategy.REFRESH_REFERENCE
         if re_up_reference:
             self.sigReferenceStackInitiated.emit(self)
+        _future.checkStop()
+        # TODO use the future inside the tracker
         result = self._tracker.track_next_frame()
         if re_up_reference:
             self.sigReferenceStackAcquired.emit(self)

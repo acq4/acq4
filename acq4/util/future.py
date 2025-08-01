@@ -91,6 +91,11 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
     def name(self):
         return self._name
 
+    @name.setter
+    def name(self, value):
+        self.logMsg(f"Future name changed from [{self._name}] to [{value}]")
+        self._name = value
+
     def __repr__(self):
         return f"<{self.__class__.__name__} {self._name}>"
 

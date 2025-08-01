@@ -71,7 +71,6 @@ class ApproachState(PatchPipetteState):
         "advanceContinuous": {"default": True, "type": "bool"},
         "advanceStepInterval": {"default": 0.1, "type": "float", "suffix": "s"},
         "advanceStepDistance": {"default": 1e-6, "type": "float", "suffix": "m"},
-        "maxAdvanceDistancePastTarget": {"default": 10e-6, "type": "float", "suffix": "m"},
         "minDetectionDistance": {"default": 15e-6, "type": "float", "suffix": "m"},
         "aboveSurfaceSpeed": {"default": 20e-6, "type": "float", "suffix": "m/s"},
         "belowSurfaceSpeed": {"default": 5e-6, "type": "float", "suffix": "m/s"},
