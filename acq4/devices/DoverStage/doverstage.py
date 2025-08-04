@@ -1,6 +1,5 @@
-import threading
-from ..Stage import Stage, MoveFuture
 from acq4.drivers.dovermotion.motionsynergy_client import get_client
+from ..Stage import Stage, MoveFuture
 
 
 class DoverStage(Stage):
@@ -16,7 +15,7 @@ class DoverStage(Stage):
         Stage.__init__(self, man, config, name)
 
     def axes(self):
-        return ("x", "y", "z")
+        return "x", "y", "z"
 
     def capabilities(self):
         """Return a structure describing the capabilities of this device"""
@@ -30,8 +29,7 @@ class DoverStage(Stage):
             }
 
     def stop(self):
-        """Stop the stage immediately.
-        """
+        """Stop the stage immediately."""
         return self.dev.stop()
 
     def _getPosition(self):
@@ -43,12 +41,11 @@ class DoverStage(Stage):
 
     def _move(self, pos, speed, linear, **kwds):
         speed = self._interpretSpeed(speed)
-        self._lastMove = DoverMoveFuture(self, pos, speed, linear)
+        self._lastMove = DoverMoveFuture(self, pos, speed)
         return self._lastMove
 
     def targetPosition(self):
-        """Return the target position of the last move command.
-        """
+        """Return the target position of the last move command."""
         if self._lastMove is not None:
             return self._lastMove.target
         else:
@@ -59,9 +56,9 @@ class DoverStage(Stage):
 
 
 class DoverMoveFuture(MoveFuture):
-    """Provides access to a move-in-progress on a Dover stage.
-    """
-    def __init__(self, dev, pos, speed, linear):
+    """Provides access to a move-in-progress on a Dover stage."""
+
+    def __init__(self, dev, pos, speed):
         MoveFuture.__init__(self, dev, pos, speed)
         self.dev = dev
         self.target = pos
