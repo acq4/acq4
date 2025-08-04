@@ -25,7 +25,7 @@ def cb(mfut):
 
 
 mov = ss.move((21, -26, -16), 10)
-mov.set_callback(ms.local_server.get_proxy(cb))
+mov.set_callback(cb)
 while not mov.done():
     time.sleep(1)
 assert cb_called
