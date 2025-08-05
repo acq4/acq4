@@ -65,9 +65,9 @@ class DoverMoveFuture(MoveFuture):
         self._future = self.dev.dev.move(list(pos), self.speed * 1e6)
         self._future.set_callback(self._future_finished)
 
-    def _future_finished(self):
+    def _future_finished(self, req_fut):
         self._taskDone(
-            interrupted=self._future.error is not None,
-            error=self._future.error,
-            excInfo=self._future.exc_info,
+            interrupted=req_fut.error is not None,
+            error=req_fut.error,
+            excInfo=req_fut.exc_info,
         )
