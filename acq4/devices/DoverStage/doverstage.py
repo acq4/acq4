@@ -62,7 +62,7 @@ class DoverMoveFuture(MoveFuture):
         MoveFuture.__init__(self, dev, pos, speed)
         self.dev = dev
         self.target = pos
-        self._future = self.dev.dev.move(pos, self.speed * 1e6)
+        self._future = self.dev.dev.move(list(pos), self.speed * 1e6)
         self._future.set_callback(self._future_finished)
 
     def _future_finished(self):
