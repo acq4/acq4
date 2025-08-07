@@ -435,6 +435,41 @@ class Stage(Device, OptomechDevice):
 
         return mfut
 
+    def step(self, deltas: Tuple[float, ...], speed: str | float) -> MoveFuture:
+        """Step method to move device by specified deltas along device axes.
+
+        Args:
+            deltas: Tuple of deltas for each device axis in global scale (SI units).
+                   These represent movements along the device's internal axes,
+                   accounting for axis orientations and scales.
+            speed: Movement speed (string like 'fast'/'slow' or float in m/s)
+
+        Returns:
+            MoveFuture for tracking the movement
+
+        Note:
+            This method handles non-orthogonal axis orientations by mapping deltas
+            through the axis transform to get the equivalent change in ortholinear
+            device coordinates, which are then added to the current position.
+        """
+        # Get current ortholinear device position
+        pos = np.array(self.getPosition())
+
+        # Map deltas through axis transform to get ortholinear coordinate changes
+        ortho = np.array(self.axisTransform().map(deltas))
+
+        # Divide away the scale; we only wanted the orientation
+        ortho /= np.array(self.axisTransform().getScale())
+
+        # Add changes to current position
+        target = pos + ortho
+
+        # Map it to a global position
+        target_global = self.inverseBaseTransform().map(target)
+
+        # Perform the move
+        return self.move(target_global, speed=speed)
+
     def checkMove(self, position, speed=None, progress=None, linear=None, **kwds):
         """Raise an exception if arguments are invalid for move()
         """
