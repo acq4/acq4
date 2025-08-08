@@ -13,8 +13,8 @@ from coorx import Point
 
 class Cell(Qt.QObject):
     sigPositionChanged = Qt.pyqtSignal(object)
-    sigReferenceStackInitiated = Qt.pyqtSignal(object)
-    sigReferenceStackAcquired = Qt.pyqtSignal(object)
+    sigTrackingMultipleFramesStart = Qt.pyqtSignal(object)
+    sigTrackingMultipleFramesFinish = Qt.pyqtSignal(object)
 
     def __init__(self, position: Point):
         """Initialize the Cell object.
@@ -110,12 +110,12 @@ class Cell(Qt.QObject):
             ImagingStrategy.COMPARE_FRAMES,
         )
         if re_up_reference:
-            self.sigReferenceStackInitiated.emit(self)
+            self.sigTrackingMultipleFramesStart.emit(self)
         _future.checkStop()
         # TODO use the future inside the tracker
         result = self._tracker.track_next_frame()
         if re_up_reference:
-            self.sigReferenceStackAcquired.emit(self)
+            self.sigTrackingMultipleFramesFinish.emit(self)
         if result.success:
             global_position = result.position.mapped_to("global")
             self._positions[ptime.time()] = global_position
