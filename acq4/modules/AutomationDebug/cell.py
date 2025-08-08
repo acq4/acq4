@@ -105,16 +105,16 @@ class Cell(Qt.QObject):
         while self._tracker.position is None:
             _future.sleep(0.1)
 
-        re_up_reference = self._tracker.next_strategy().strategy in (
+        multiframe_acq = self._tracker.next_strategy().strategy in (
             ImagingStrategy.REFRESH_REFERENCE,
             ImagingStrategy.COMPARE_FRAMES,
         )
-        if re_up_reference:
+        if multiframe_acq:
             self.sigTrackingMultipleFramesStart.emit(self)
         _future.checkStop()
         # TODO use the future inside the tracker
         result = self._tracker.track_next_frame()
-        if re_up_reference:
+        if multiframe_acq:
             self.sigTrackingMultipleFramesFinish.emit(self)
         if result.success:
             global_position = result.position.mapped_to("global")
