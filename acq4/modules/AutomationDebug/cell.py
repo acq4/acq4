@@ -105,7 +105,10 @@ class Cell(Qt.QObject):
         while self._tracker.position is None:
             _future.sleep(0.1)
 
-        re_up_reference = self._tracker.next_strategy().strategy == ImagingStrategy.REFRESH_REFERENCE
+        re_up_reference = self._tracker.next_strategy().strategy in (
+            ImagingStrategy.REFRESH_REFERENCE,
+            ImagingStrategy.COMPARE_FRAMES,
+        )
         if re_up_reference:
             self.sigReferenceStackInitiated.emit(self)
         _future.checkStop()
