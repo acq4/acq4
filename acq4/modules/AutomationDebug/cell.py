@@ -3,18 +3,15 @@ import numpy as np
 from acq4.util import Qt, ptime
 from acq4.util.debug import logMsg, printExc
 from acq4.util.future import future_wrap, Future
-from acq4_automation.feature_tracking import (
-    CameraCellTracker,
-    SingleFrameMotionEstimator,
-)
-from acq4_automation.feature_tracking.cell_tracker import ImagingStrategy
+from acq4_automation.feature_tracking import CameraCellTracker
+from acq4_automation.feature_tracking.cell_tracker import TrackingAction
 from coorx import Point
 
 
 class Cell(Qt.QObject):
     sigPositionChanged = Qt.pyqtSignal(object)
-    sigReferenceStackInitiated = Qt.pyqtSignal(object)
-    sigReferenceStackAcquired = Qt.pyqtSignal(object)
+    sigTrackingMultipleFramesStart = Qt.pyqtSignal(object)
+    sigTrackingMultipleFramesFinish = Qt.pyqtSignal(object)
 
     def __init__(self, position: Point):
         """Initialize the Cell object.
@@ -47,7 +44,7 @@ class Cell(Qt.QObject):
         # Initialize tracker if we have none, or just grab another stack and check if it still matches otherwise
         if self._tracker is None:
             self._imager = imager
-            self._tracker = CameraCellTracker(SingleFrameMotionEstimator(), imager)
+            self._tracker = CameraCellTracker(imager)
             self._tracker.initialize_at_position(self.position)
         elif not self.updatePosition(_future):
             raise ValueError("Cell moved too much to treat as tracked")
@@ -105,17 +102,17 @@ class Cell(Qt.QObject):
         while self._tracker.position is None:
             _future.sleep(0.1)
 
-        re_up_reference = self._tracker.next_strategy().strategy in (
-            ImagingStrategy.REFRESH_REFERENCE,
-            ImagingStrategy.COMPARE_FRAMES,
+        multiframe_acq = self._tracker.next_action().action in (
+            TrackingAction.REFRESH_REFERENCE,
+            TrackingAction.COMPARE_FRAMES,
         )
-        if re_up_reference:
-            self.sigReferenceStackInitiated.emit(self)
+        if multiframe_acq:
+            self.sigTrackingMultipleFramesStart.emit(self)
         _future.checkStop()
         # TODO use the future inside the tracker
         result = self._tracker.track_next_frame()
-        if re_up_reference:
-            self.sigReferenceStackAcquired.emit(self)
+        if multiframe_acq:
+            self.sigTrackingMultipleFramesFinish.emit(self)
         if result.success:
             global_position = result.position.mapped_to("global")
             self._positions[ptime.time()] = global_position

@@ -343,17 +343,17 @@ class PatchPipetteState(Future):
             self.dev.pipetteDevice.cell = cell
 
         cell.enableTracking(True)
-        cell.sigReferenceStackInitiated.connect(self._pausePipetteForReferenceStack)
+        cell.sigTrackingMultipleFramesStart.connect(self._pausePipetteForExtendedTracking)
         return cell._trackingFuture
 
-    def _pausePipetteForReferenceStack(self, cell):
+    def _pausePipetteForExtendedTracking(self, cell):
         self._pauseMovement = True
-        cell.sigReferenceStackAcquired.connect(self._resumePipetteAfterReferenceStack)
-        cell.sigReferenceStackInitiated.disconnect(self._pausePipetteForReferenceStack)
+        cell.sigTrackingMultipleFramesFinish.connect(self._resumePipetteAfterExtendedTracking)
+        cell.sigTrackingMultipleFramesStart.disconnect(self._pausePipetteForExtendedTracking)
 
-    def _resumePipetteAfterReferenceStack(self, cell):
+    def _resumePipetteAfterExtendedTracking(self, cell):
         self._pauseMovement = False
-        cell.sigReferenceStackAcquired.disconnect(self._resumePipetteAfterReferenceStack)
+        cell.sigTrackingMultipleFramesFinish.disconnect(self._resumePipetteAfterExtendedTracking)
 
     def _waitForMoveWhileTargetChanges(self, position_fn, speed, continuous, future, interval=None, step=None):
         move_fut = None
