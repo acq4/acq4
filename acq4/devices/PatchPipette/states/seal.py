@@ -101,7 +101,9 @@ class SealAnalysis(SteadyStateAnalysisBase):
                     dt, self._last_measurement['resistance_avg_for_hold'], resistance, self._hold_tau)
                 resistance_avg_for_failure, _ = self.exponential_decay_avg(
                     dt, self._last_measurement['resistance_avg_for_failure'], resistance, self._failure_tau)
-                dRdt_for_failure = (resistance - self._last_measurement['steady_state_resistance']) / dt
+                dRdt = (resistance - self._last_measurement['steady_state_resistance']) / dt
+                dRdt_for_failure, _ = self.exponential_decay_avg(
+                    dt, self._last_measurement['dRdt_for_failure'], dRdt, self._failure_tau)
             success = resistance_avg_for_success > self._success_at
             hold = resistance_avg_for_hold > self._hold_at
             failure = (
