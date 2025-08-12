@@ -79,7 +79,7 @@ class ResealAnalysis(SteadyStateAnalysisBase):
             start_time, resistance = measurement
             if i == 0:
                 if self._last_measurement is None:
-                    ret_array[i] = (start_time, resistance, 1, 1, 0, 0, False, False)
+                    ret_array[i] = (start_time, resistance, 1, 1, 0, 0, False, False, False)
                     self._last_measurement = ret_array[i]
                     continue
                 else:
