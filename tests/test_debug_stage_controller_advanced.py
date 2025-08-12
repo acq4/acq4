@@ -1,5 +1,5 @@
-# ABOUTME: Advanced tests for DebugStageController including non-orthogonal axes and complex scenarios
-# ABOUTME: Tests multi-key combinations, edge cases, and specialized stage configurations
+# Advanced tests for DebugStageController including non-orthogonal axes and complex scenarios
+# Tests multi-key combinations, edge cases, and specialized stage configurations
 
 import pytest
 from unittest.mock import Mock, patch

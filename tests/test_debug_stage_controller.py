@@ -1,5 +1,5 @@
-# ABOUTME: Unit tests for DebugStageController core functionality
-# ABOUTME: Tests step method, timing behavior, and movement calculations without UI dependencies
+# Unit tests for DebugStageController core functionality
+# Tests step method, timing behavior, and movement calculations without UI dependencies
 
 import time
 import pytest
