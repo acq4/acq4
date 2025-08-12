@@ -325,13 +325,13 @@ class CellDetectState(PatchPipetteState):
     def _transition_to_fallback(self, msg):
         self._taskDone(interrupted=True, error=msg)
         self.dev.patchRecord()['detectedCell'] = False
-        return self.config['reachedEndpointState']
+        return self.config['fallbackState']
 
     def _transition_to_seal(self, speed):
         self.setState(f"cell detected ({speed} criteria)")
         self._taskDone()
         self.dev.patchRecord()['detectedCell'] = True
-        return "seal"
+        return self.config['reachedEndpointState']
 
     def _calc_direction(self):
         # what direction are we moving?
