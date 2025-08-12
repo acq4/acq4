@@ -30,7 +30,7 @@ from acq4.util.imaging.sequencer import acquire_z_stack
 from acq4.util.target import TargetBox
 from acq4.util.threadrun import futureInGuiThread, runInGuiThread
 from pyqtgraph.units import µm, m
-from .cell import Cell
+from acq4_automation.feature_tracking.cell import Cell
 from .ranking_window import RankingWindow
 
 UiTemplate = Qt.importTemplate(".window")

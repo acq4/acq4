@@ -10,7 +10,7 @@ from typing import Any, Optional, Iterable
 import numpy as np
 
 from acq4 import getManager
-from acq4.modules.AutomationDebug.cell import Cell
+from acq4_automation.feature_tracking.cell import Cell
 from acq4.util import Qt
 from acq4.util.debug import printExc
 from acq4.util.future import Future, future_wrap

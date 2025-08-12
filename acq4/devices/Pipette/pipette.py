@@ -17,7 +17,7 @@ from acq4.modules.Camera import CameraModuleInterface
 from acq4.util import Qt, ptime
 from acq4.util.future import future_wrap
 from acq4.util.target import Target
-from acq4.modules.AutomationDebug.cell import Cell
+from acq4_automation.feature_tracking.cell import Cell
 from pyqtgraph import Point, siFormat
 from .planners import PipettePathGenerator
 from .planners import defaultMotionPlanners
