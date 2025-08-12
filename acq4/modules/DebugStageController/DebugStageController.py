@@ -1,5 +1,5 @@
-# ABOUTME: Debug stage controller module for precise microscope control during debugging
-# ABOUTME: Provides keyboard-based control of stage/manipulator devices with timing-based step/continuous modes
+# Debug stage controller module for precise microscope control during debugging
+# Provides keyboard-based control of stage/manipulator devices with timing-based step/continuous modes
 
 from __future__ import annotations
 
