@@ -157,11 +157,11 @@ class OptomechDevice(InterfaceMixin):
 
         self.__lock = Mutex(recursive=True, debug=False)
 
-        self.sigTransformChanged.connect(self.__emitGlobalTransformChanged)
-        self.sigSubdeviceTransformChanged.connect(self.__emitGlobalSubdeviceTransformChanged)
-        self.sigOpticsChanged.connect(self.__emitGlobalOpticsChanged)
-        self.sigSubdeviceChanged.connect(self.__emitGlobalSubdeviceChanged)
-        self.sigSubdeviceListChanged.connect(self.__emitGlobalSubdeviceListChanged)
+        self.sigTransformChanged.connect(self.__emitGlobalTransformChanged, type=Qt.Qt.DirectConnection)
+        self.sigSubdeviceTransformChanged.connect(self.__emitGlobalSubdeviceTransformChanged, type=Qt.Qt.DirectConnection)
+        self.sigOpticsChanged.connect(self.__emitGlobalOpticsChanged, type=Qt.Qt.DirectConnection)
+        self.sigSubdeviceChanged.connect(self.__emitGlobalSubdeviceChanged, type=Qt.Qt.DirectConnection)
+        self.sigSubdeviceListChanged.connect(self.__emitGlobalSubdeviceListChanged, type=Qt.Qt.DirectConnection)
 
         if config is not None:
             if "parentDevice" in config:
@@ -260,11 +260,11 @@ class OptomechDevice(InterfaceMixin):
                     "Cannot connect to port %r on device %r; available ports are: %r" % (port, parent, parent.ports())
                 )
 
-            parent.sigGlobalTransformChanged.connect(self.__parentDeviceTransformChanged)
-            parent.sigGlobalSubdeviceTransformChanged.connect(self.__parentSubdeviceTransformChanged)
-            parent.sigGlobalOpticsChanged.connect(self.__parentOpticsChanged)
-            parent.sigGlobalSubdeviceChanged.connect(self.__parentSubdeviceChanged)
-            parent.sigGlobalSubdeviceListChanged.connect(self.__parentSubdeviceListChanged)
+            parent.sigGlobalTransformChanged.connect(self.__parentDeviceTransformChanged, type=Qt.Qt.DirectConnection)
+            parent.sigGlobalSubdeviceTransformChanged.connect(self.__parentSubdeviceTransformChanged, type=Qt.Qt.DirectConnection)
+            parent.sigGlobalOpticsChanged.connect(self.__parentOpticsChanged, type=Qt.Qt.DirectConnection)
+            parent.sigGlobalSubdeviceChanged.connect(self.__parentSubdeviceChanged, type=Qt.Qt.DirectConnection)
+            parent.sigGlobalSubdeviceListChanged.connect(self.__parentSubdeviceListChanged, type=Qt.Qt.DirectConnection)
             parent.__children.append(self)
             self.__parent = parent
             self.__parentPort = port
@@ -659,8 +659,8 @@ class OptomechDevice(InterfaceMixin):
     def addSubdevice(self, subdev):
         subdev.setParentDevice(self)
         self.invalidateCachedTransforms()
-        subdev.sigTransformChanged.connect(self.__subdeviceTransformChanged)
-        subdev.sigOpticsChanged.connect(self.__subdeviceOpticsChanged)
+        subdev.sigTransformChanged.connect(self.__subdeviceTransformChanged, type=Qt.Qt.DirectConnection)
+        subdev.sigOpticsChanged.connect(self.__subdeviceOpticsChanged, type=Qt.Qt.DirectConnection)
         with self.__lock:
             self.__subdevices[subdev.name()] = subdev
             if self.__subdevice is None:
@@ -670,8 +670,8 @@ class OptomechDevice(InterfaceMixin):
     def removeSubdevice(self, subdev):
         self.invalidateCachedTransforms()
         subdev = self.getSubdevice(subdev)
-        subdev.sigTransformChanged.disconnect(self.__subdeviceTransformChanged)
-        subdev.sigOpticsChanged.disconnect(self.__subdeviceOpticsChanged)
+        subdev.sigTransformChanged.disconnect(self.__subdeviceTransformChanged, type=Qt.Qt.DirectConnection)
+        subdev.sigOpticsChanged.disconnect(self.__subdeviceOpticsChanged, type=Qt.Qt.DirectConnection)
         with self.__lock:
             del self.__subdevices[subdev.name()]
             if len(self.__subdevices) == 0:
