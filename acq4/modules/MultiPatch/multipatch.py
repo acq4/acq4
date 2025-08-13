@@ -446,12 +446,7 @@ class MultiPatchWindow(Qt.QWidget):
         pos = self._cammod.window().getView().mapSceneToView(ev.scenePos())
         spos = pip.scopeDevice().globalPosition()
         pos = [pos.x(), pos.y(), spos.z()]
-        if self.ui.targetsAreCellsBtn.isChecked():
-            cell = Cell(Point(pos, "global"))
-            cell.initializeTracker(pip.imagingDevice())  # threaded
-            pip.setCellTarget(cell)
-        else:
-            pip.setTarget(pos)
+        pip.setTarget(pos)
 
         if len(self._setTargetPips) == 0:
             self.ui.setTargetBtn.setChecked(False)
