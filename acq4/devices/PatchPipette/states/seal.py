@@ -56,8 +56,8 @@ class SealAnalysis(SteadyStateAnalysisBase):
             plots[''].append(dict(
                 x=analysis["time"],
                 y=plottable_booleans(analysis["failure"]),
-                symbol='o',
-                pen=pg.mkPen('g'),
+                symbol='x',
+                pen=pg.mkPen('r'),
                 name=None if labels else 'Seal Failure',
             ))
             labels = True
