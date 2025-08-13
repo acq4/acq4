@@ -14,7 +14,16 @@ from ._base import PatchPipetteState, SteadyStateAnalysisBase
 
 class SealAnalysis(SteadyStateAnalysisBase):
     @classmethod
-    def plot_items(cls, tau, success_at, hold_at):
+    def plot_items(
+        cls,
+        success_tau,
+        success_at,
+        hold_tau,
+        hold_at,
+        failure_tau,
+        failure_resistance_threshold,
+        failure_dRdt_threshold,
+    ):
         return {'Ω': [
             pg.InfiniteLine(movable=False, pos=success_at, angle=0, pen=pg.mkPen('g')),
             pg.InfiniteLine(movable=False, pos=hold_at, angle=0, pen=pg.mkPen('w')),
