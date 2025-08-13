@@ -300,19 +300,16 @@ class PatchPipetteState(Future):
     def __repr__(self):
         return f'<{type(self).__name__} "{self.stateName}">'
 
-    def surfaceIntersectionPosition(self, direction=None):
+    def surfaceIntersectionPosition(self):
         """Return the intersection of the direction unit vector with the surface."""
         pip = self.dev.pipetteDevice
         surface = pip.scopeDevice().getSurfaceDepth()
-
-        if direction is None:
-            return pip.positionAtDepth(surface, start=pip.targetPosition())
+        direction = pip.globalDirection()
 
         target = pip.targetPosition()
         dz = surface - target[2]
         dist = dz / direction[2]
         return target + dist * direction
-        # return target + direction * ((surface - target[2]) / direction[2])
 
     def depthBelowSurface(self, pos=None):
         if pos is None:
