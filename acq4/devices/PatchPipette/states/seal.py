@@ -42,9 +42,9 @@ class SealAnalysis(SteadyStateAnalysisBase):
             # TODO this plot looks to have already been broken
             plots['Ω'].append(dict(
                 x=analysis["time"],
-                y=analysis["resistance_avg"],
+                y=analysis["resistance_avg_for_success"],
                 pen=pg.mkPen('b'),
-                name=None if labels else 'Resistance Avg',
+                name=None if labels else 'Resistance Avg for Seal',
             ))
             plots[''].append(dict(
                 x=analysis["time"],
