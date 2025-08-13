@@ -249,17 +249,8 @@ class CellDetectState(PatchPipetteState):
         'advanceContinuous': {'default': True, 'type': 'bool'},
         'advanceStepInterval': {'default': 0.1, 'type': 'float', 'suffix': 's'},
         'advanceStepDistance': {'default': 1e-6, 'type': 'float', 'suffix': 'm'},
-        'maxAdvanceDistance': {
-            'default': None,
-            'type': 'float',
-            'optional': True,
-            'suffix': 'm',
-        },
-        'maxAdvanceDistancePastTarget': {
-            'default': 10e-6,
-            'type': 'float',
-            'suffix': 'm',
-        },
+        'maxAdvanceDistance': {'default': None, 'type': 'float', 'optional': True, 'suffix': 'm'},
+        'maxAdvanceDistancePastTarget': {'default': 10e-6, 'type': 'float', 'suffix': 'm'},
         'maxAdvanceDepthBelowSurface': {
             'default': None,
             'type': 'float',
@@ -276,11 +267,7 @@ class CellDetectState(PatchPipetteState):
         'preTargetWiggleDuration': {'default': 6, 'type': 'float', 'suffix': 's'},
         'preTargetWiggleSpeed': {'default': 5e-6, 'type': 'float', 'suffix': 'm/s'},
         'searchAroundAtTarget': {'default': True, 'type': 'bool'},
-        'searchAroundAtTargetRadius': {
-            'default': 1.5e-6,
-            'type': 'float',
-            'suffix': 'm',
-        },
+        'searchAroundAtTargetRadius': {'default': 1.5e-6, 'type': 'float', 'suffix': 'm'},
         'baselineResistanceTau': {'default': 20, 'type': 'float', 'suffix': 's'},
         'fastDetectionThreshold': {'default': 1e6, 'type': 'float', 'suffix': 'Ω'},
         'slowDetectionThreshold': {'default': 0.2e6, 'type': 'float', 'suffix': 'Ω'},
@@ -296,12 +283,12 @@ class CellDetectState(PatchPipetteState):
         super().__init__(*args, **kwds)
         self._moveFuture = None
         self._analysis = CellDetectAnalysis(
-            self.config['baselineResistanceTau'],
-            self.config['fastDetectionThreshold'],
-            self.config['slowDetectionThreshold'],
-            self.config['slowDetectionSteps'],
-            np.inf,  # obstacles are just cells to patch in a cell detect state
-            self.config['breakThreshold'],
+            baseline_tau=self.config['baselineResistanceTau'],
+            cell_threshold_fast=self.config['fastDetectionThreshold'],
+            cell_threshold_slow=self.config['slowDetectionThreshold'],
+            slow_detection_steps=self.config['slowDetectionSteps'],
+            obstacle_threshold=np.inf,  # obstacles are just cells to patch in a cell detect state
+            break_threshold=self.config['breakThreshold'],
         )
         self._reachedEndpoint = False
         self._startTime = None
@@ -333,9 +320,7 @@ class CellDetectState(PatchPipetteState):
                 if self._moveFuture is None:
                     self._moveFuture = self._move()
                 if self._moveFuture.isDone() and self._reachedEndpoint:
-                    return self._transition_to_fallback(
-                        "No cell found before end of search path"
-                    )
+                    return self._transition_to_fallback("No cell found before end of search path")
 
         return self._transition_to_fallback("Timed out waiting for cell detect.")
 
@@ -421,15 +406,10 @@ class CellDetectState(PatchPipetteState):
 
         # max search distance
         if config['maxAdvanceDistance'] is not None:
-            endpoint = (
-                self._initialPos + pip.globalDirection() * config['maxAdvanceDistance']
-            )
+            endpoint = self._initialPos + pip.globalDirection() * config['maxAdvanceDistance']
 
         # max surface depth
-        if (
-            config['maxAdvanceDepthBelowSurface'] is not None
-            and pip.globalDirection()[2] < 0
-        ):
+        if config['maxAdvanceDepthBelowSurface'] is not None and pip.globalDirection()[2] < 0:
             endDepth = surface - config['maxAdvanceDepthBelowSurface']
             depthEndpt = pip.positionAtDepth(endDepth)
             # is the surface depth endpoint closer?
@@ -439,13 +419,8 @@ class CellDetectState(PatchPipetteState):
                 endpoint = depthEndpt
 
         # max distance past target
-        if (
-            config['advanceMode'] == 'target'
-            and config['maxAdvanceDistancePastTarget'] is not None
-        ):
-            targetEndpt = (
-                target + pip.globalDirection() * config['maxAdvanceDistancePastTarget']
-            )
+        if config['advanceMode'] == 'target' and config['maxAdvanceDistancePastTarget'] is not None:
+            targetEndpt = target + pip.globalDirection() * config['maxAdvanceDistancePastTarget']
             # is the target endpoint closer?
             if endpoint is None or np.linalg.norm(endpoint - pos) > np.linalg.norm(
                 targetEndpt - pos
@@ -499,17 +474,13 @@ class CellDetectState(PatchPipetteState):
         config = self.config
         dev = self.dev
         speed = config['detectionSpeed']
-        distance = np.linalg.norm(
-            endpoint - np.array(dev.pipetteDevice.globalPosition())
-        )
+        distance = np.linalg.norm(endpoint - np.array(dev.pipetteDevice.globalPosition()))
         count = int(distance / config['preTargetWiggleStep'])
         wiggle_step = self.direction_unit * config['preTargetWiggleStep']
         for _ in range(count):
             self.setState("pre-target wiggle")
             retract_pos = dev.pipetteDevice.globalPosition() - wiggle_step
-            future.waitFor(
-                dev.pipetteDevice._moveToGlobal(retract_pos, speed=speed), timeout=None
-            )
+            future.waitFor(dev.pipetteDevice._moveToGlobal(retract_pos, speed=speed), timeout=None)
             with self._wiggleLock:  # used to prevent cell detect
                 self.waitFor(
                     dev.pipetteDevice.wiggle(
@@ -522,9 +493,7 @@ class CellDetectState(PatchPipetteState):
                     timeout=None,
                 )
             step_pos = dev.pipetteDevice.globalPosition() + wiggle_step
-            future.waitFor(
-                dev.pipetteDevice._moveToGlobal(step_pos, speed=speed), timeout=None
-            )
+            future.waitFor(dev.pipetteDevice._moveToGlobal(step_pos, speed=speed), timeout=None)
         self._hasWiggled = True
 
     def _searchAround(self, future):
@@ -550,7 +519,5 @@ class CellDetectState(PatchPipetteState):
         if self._moveFuture is not None and not self._moveFuture.isDone():
             self._moveFuture.stop()
         patchrec = self.dev.patchRecord()
-        patchrec['cellDetectFinalTarget'] = tuple(
-            self.dev.pipetteDevice.targetPosition()
-        )
+        patchrec['cellDetectFinalTarget'] = tuple(self.dev.pipetteDevice.targetPosition())
         return super()._cleanup()
