@@ -92,7 +92,7 @@ class ApproachState(PatchPipetteState):
         "sidestepPassDistance": {"default": 20e-6, "type": "float", "suffix": "m"},
         "pipetteRecalibrateDistance": {"default": 75e-6, "type": "float", "suffix": "m"},
         "pipetteRecalibrationMaxChange": {"default": 15e-6, "type": "float", "suffix": "m"},
-        "nextState": {"type": "str", "default": "bath"},
+        "nextState": {"type": "str", "default": "cell detect"},
     }
 
     def __init__(self, *args, **kwds):
@@ -159,7 +159,7 @@ class ApproachState(PatchPipetteState):
         config = self.config
         if not config["takeACellfie"] or self._distanceToTarget() <= config["cellfiePipetteClearance"]:
             return
-        self.setState("cell detect: taking initial z-stack")
+        self.setState("approach: taking initial z-stack")
         self.waitFor(self.dev.focusOnTarget("fast"))
         start = self.dev.pipetteDevice.targetPosition()[2] - (config["cellfieHeight"] / 2)
         end = start + config["cellfieHeight"]
