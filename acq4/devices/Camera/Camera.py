@@ -457,6 +457,10 @@ class Camera(DAQGeneric, OptomechDevice):
         mode : "sensor" | "roi"
             See getBoundary() for details on the mode.
         """
+        if not isinstance(point, (list, tuple, np.ndarray)):
+            raise TypeError("point must be a list, tuple, or numpy array")
+        if len(point) != 2:
+            raise ValueError("point must be a 2D point (x, y)")
         x, y, w, h = self.getBoundary(globalCoords=True, mode=mode)
         min_x, max_x = sorted((x, x + w))
         min_y, max_y = sorted((y, y + h))

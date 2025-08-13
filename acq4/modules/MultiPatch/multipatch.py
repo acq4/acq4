@@ -11,11 +11,9 @@ from acq4 import getManager
 from acq4.devices.PatchPipette import PatchPipette
 from acq4.modules.Module import Module
 from acq4.util import Qt, ptime
-from coorx import Point
 from neuroanalysis.test_pulse_stack import H5BackedTestPulseStack
 from .mockPatch import MockPatch
 from .pipetteControl import PipetteControl
-from acq4_automation.feature_tracking.cell import Cell
 from ...devices.PatchPipette.statemanager import PatchPipetteStateManager
 from ...util.future import MultiFuture, future_wrap
 from ...util.json_encoder import ACQ4JSONEncoder
@@ -446,12 +444,7 @@ class MultiPatchWindow(Qt.QWidget):
         pos = self._cammod.window().getView().mapSceneToView(ev.scenePos())
         spos = pip.scopeDevice().globalPosition()
         pos = [pos.x(), pos.y(), spos.z()]
-        if self.ui.targetsAreCellsBtn.isChecked():
-            cell = Cell(Point(pos, "global"))
-            cell.initializeTracker(pip.imagingDevice())  # threaded
-            pip.setCellTarget(cell)
-        else:
-            pip.setTarget(pos)
+        pip.setTarget(pos)
 
         if len(self._setTargetPips) == 0:
             self.ui.setTargetBtn.setChecked(False)

@@ -17,7 +17,6 @@ from acq4.modules.Camera import CameraModuleInterface
 from acq4.util import Qt, ptime
 from acq4.util.future import future_wrap
 from acq4.util.target import Target
-from acq4_automation.feature_tracking.cell import Cell
 from pyqtgraph import Point, siFormat
 from .planners import PipettePathGenerator
 from .planners import defaultMotionPlanners
@@ -157,7 +156,6 @@ class Pipette(Device, OptomechDevice):
         self._camInterfaces = weakref.WeakKeyDictionary()
 
         self.target = None
-        self.cell = None
 
         cal = self.readConfigFile('calibration')
         self.offset = np.array(cal.get('offset', [0, 0, 0]))
@@ -734,10 +732,6 @@ class Pipette(Device, OptomechDevice):
         self.target = np.array(target)
         self.writeConfigFile({'targetGlobalPosition': list(self.target)}, 'target')
         self.sigTargetChanged.emit(self, self.target)
-
-    def setCellTarget(self, target: Cell):
-        self.cell = target
-        self.setTarget(target.position.mapped_to("global").coordinates)
 
     def targetPosition(self):
         if self.target is None:
