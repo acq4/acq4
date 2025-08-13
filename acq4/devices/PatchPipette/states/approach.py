@@ -67,7 +67,7 @@ class ApproachState(PatchPipetteState):
         "fallbackState": "bath",
     }
     _parameterTreeConfig = {
-        "autoAdvance": {"default": False, "type": "bool"},
+        "autoAdvance": {"default": True, "type": "bool"},
         "advanceContinuous": {"default": True, "type": "bool"},
         "advanceStepInterval": {"default": 0.1, "type": "float", "suffix": "s"},
         "advanceStepDistance": {"default": 1e-6, "type": "float", "suffix": "m"},

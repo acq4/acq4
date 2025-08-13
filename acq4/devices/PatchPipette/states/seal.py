@@ -14,7 +14,16 @@ from ._base import PatchPipetteState, SteadyStateAnalysisBase
 
 class SealAnalysis(SteadyStateAnalysisBase):
     @classmethod
-    def plot_items(cls, tau, success_at, hold_at):
+    def plot_items(
+        cls,
+        success_tau,
+        success_at,
+        hold_tau,
+        hold_at,
+        failure_tau,
+        failure_resistance_threshold,
+        failure_dRdt_threshold,
+    ):
         return {'Ω': [
             pg.InfiniteLine(movable=False, pos=success_at, angle=0, pen=pg.mkPen('g')),
             pg.InfiniteLine(movable=False, pos=hold_at, angle=0, pen=pg.mkPen('w')),
@@ -33,9 +42,9 @@ class SealAnalysis(SteadyStateAnalysisBase):
             # TODO this plot looks to have already been broken
             plots['Ω'].append(dict(
                 x=analysis["time"],
-                y=analysis["resistance_avg"],
+                y=analysis["resistance_avg_for_success"],
                 pen=pg.mkPen('b'),
-                name=None if labels else 'Resistance Avg',
+                name=None if labels else 'Resistance Avg for Seal',
             ))
             plots[''].append(dict(
                 x=analysis["time"],
@@ -47,8 +56,8 @@ class SealAnalysis(SteadyStateAnalysisBase):
             plots[''].append(dict(
                 x=analysis["time"],
                 y=plottable_booleans(analysis["failure"]),
-                symbol='o',
-                pen=pg.mkPen('g'),
+                symbol='x',
+                pen=pg.mkPen('r'),
                 name=None if labels else 'Seal Failure',
             ))
             labels = True
@@ -101,7 +110,9 @@ class SealAnalysis(SteadyStateAnalysisBase):
                     dt, self._last_measurement['resistance_avg_for_hold'], resistance, self._hold_tau)
                 resistance_avg_for_failure, _ = self.exponential_decay_avg(
                     dt, self._last_measurement['resistance_avg_for_failure'], resistance, self._failure_tau)
-                dRdt_for_failure = (resistance - self._last_measurement['steady_state_resistance']) / dt
+                dRdt = (resistance - self._last_measurement['steady_state_resistance']) / dt
+                dRdt_for_failure, _ = self.exponential_decay_avg(
+                    dt, self._last_measurement['dRdt_for_failure'], dRdt, self._failure_tau)
             success = resistance_avg_for_success > self._success_at
             hold = resistance_avg_for_hold > self._hold_at
             failure = (
