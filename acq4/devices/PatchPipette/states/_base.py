@@ -337,7 +337,7 @@ class PatchPipetteState(Future):
         if cell is None:
             cell = Cell(Point(self.dev.pipetteDevice.targetPosition(), "global"))
             cell.initializeTracker(self.dev.pipetteDevice.imagingDevice()).wait()
-            self.dev.pipetteDevice.setCellTarget(cell)
+            self.dev.pipetteDevice.setCell(cell)
 
         cell.enableTracking(True)
         cell.sigTrackingMultipleFramesStart.connect(self._pausePipetteForExtendedTracking)

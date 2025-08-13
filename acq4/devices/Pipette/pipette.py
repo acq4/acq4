@@ -735,9 +735,10 @@ class Pipette(Device, OptomechDevice):
         self.writeConfigFile({'targetGlobalPosition': list(self.target)}, 'target')
         self.sigTargetChanged.emit(self, self.target)
 
-    def setCellTarget(self, target: Cell):
-        self.cell = target
-        self.setTarget(target.position.mapped_to("global").coordinates)
+    def setCell(self, cell: Cell, target=True):
+        self.cell = cell
+        if target:
+            self.setTarget(cell.position.mapped_to("global").coordinates)
 
     def targetPosition(self):
         if self.target is None:

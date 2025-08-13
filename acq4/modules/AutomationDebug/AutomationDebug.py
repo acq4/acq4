@@ -901,7 +901,7 @@ class AutomationDebugWindow(Qt.QWidget):
         _future.setState("Autopatch: checking selected cell")
         cell = self._unranked_cells.pop(0)
         self._ranked_cells.append(cell)
-        self.pipetteDevice.setCellTarget(cell)
+        self.pipetteDevice.setCell(cell)
         self._cell = cell
         cell.sigPositionChanged.connect(self._updatePipetteTarget)
         # stack = self._current_classification_stack or self._current_detection_stack
