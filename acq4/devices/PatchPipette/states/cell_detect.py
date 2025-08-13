@@ -9,6 +9,8 @@ import pyqtgraph as pg
 from acq4.util import ptime
 from acq4.util.functions import plottable_booleans
 from acq4.util.future import future_wrap
+from acq4_automation.feature_tracking.cell import Cell
+from coorx import Point
 from ._base import PatchPipetteState, SteadyStateAnalysisBase
 
 
@@ -298,6 +300,7 @@ class CellDetectState(PatchPipetteState):
         self._initialPos = self.dev.pipetteDevice.globalPosition()
 
     def run(self):
+        self.dev.ensureCell()
         config = self.config
         self.monitorTestPulse()
 

@@ -122,6 +122,7 @@ class ApproachState(PatchPipetteState):
         self.direction_unit = self._calc_direction()
 
     def run(self):
+        self.dev.ensureCell()
         # move to approach position + auto pipette offset
         self.waitFor(self.dev.pipetteDevice.goApproach("fast"))
         self.dev.clampDevice.autoPipetteOffset()
