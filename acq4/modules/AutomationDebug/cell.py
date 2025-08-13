@@ -1,18 +1,19 @@
 import numpy as np
 
-from acq4.Manager import getManager
 from acq4.util import Qt, ptime
 from acq4.util.debug import logMsg, printExc
 from acq4.util.future import future_wrap, Future
-from acq4.util.imaging.sequencer import acquire_z_stack
-from acq4_automation.feature_tracking import SingleFrameTracker, ObjectStack, ImageStack
-from coorx import SRT3DTransform, TransposeTransform, TTransform
+from acq4_automation.feature_tracking import CameraCellTracker
+from acq4_automation.feature_tracking.cell_tracker import TrackingAction
+from coorx import Point
 
 
 class Cell(Qt.QObject):
     sigPositionChanged = Qt.pyqtSignal(object)
+    sigTrackingMultipleFramesStart = Qt.pyqtSignal(object)
+    sigTrackingMultipleFramesFinish = Qt.pyqtSignal(object)
 
-    def __init__(self, position):
+    def __init__(self, position: Point):
         """Initialize the Cell object.
         Parameters
         ----------
@@ -26,27 +27,32 @@ class Cell(Qt.QObject):
         self._positions = {ptime.time(): position}
         self._imager = None
         self._trackingFuture = None
-        self.isTracking = False
         self._tracker = None
-        self._roiSize = None
 
     @property
-    def position(self):
-        """Get the current position of the cell."""
-        return np.array(self._positions[max(self._positions)])
+    def isTracking(self):
+        """Check if the cell is currently being tracked."""
+        return self._tracker is not None and self._tracker.is_tracking
+
+    @property
+    def position(self) -> Point:
+        """Get the current global position of the cell."""
+        return Point(np.array(self._positions[max(self._positions)]), "global")
+
+    @property
+    def isInitialized(self):
+        """Check if the cell has been initialized with a position."""
+        return self._tracker is not None
 
     @future_wrap
-    def initializeTracker(self, imager, stack=None, trackerClass=SingleFrameTracker, _future=None):
+    def initializeTracker(self, imager, _future=None):
         # Initialize tracker if we have none, or just grab another stack and check if it still matches otherwise
         if self._tracker is None:
             self._imager = imager
-            self._tracker = trackerClass()
-            stack, xform, center = self._takeStackshot(_future)
-            obj_stack = ObjectStack(stack, xform, center)
-            self._tracker.set_tracked_object(obj_stack)
-        else:
-            if not self.updatePosition(_future):
-                raise ValueError("Cell moved too much to treat as tracked")
+            self._tracker = CameraCellTracker(imager)
+            self._tracker.initialize_at_position(self.position)
+        elif not self.updatePosition(_future):
+            raise ValueError("Cell moved too much to treat as tracked")
 
     def enableTracking(self, enable=True, interval=0):
         """Enable or disable tracking of the cell position.
@@ -58,15 +64,17 @@ class Cell(Qt.QObject):
         interval : int
             The interval in milliseconds at which to check the cell position.
         """
-        self.isTracking = enable
         if enable:
+            self._tracker.start_tracking()
             if self._trackingFuture is not None:
                 self._trackingFuture.stop("Tracking restarted")
             self._trackingFuture = self._track(interval)
             self._trackingFuture.onFinish(self._handleTrackingFinished)
-        elif self._trackingFuture is not None:
-            self._trackingFuture.stop("Tracking disabled")
-            self._trackingFuture = None
+        else:
+            if self._trackingFuture is not None:
+                self._trackingFuture.stop("Tracking disabled")
+                self._trackingFuture = None
+            self._tracker.stop_tracking()
 
     @future_wrap
     def _track(self, interval: float, _future):
@@ -75,7 +83,11 @@ class Cell(Qt.QObject):
             last_tracked = max(self._positions)
             if ptime.time() - last_tracked > interval:
                 try:
-                    self.updatePosition(_future)
+                    success = self.updatePosition(_future)
+                    if not success:
+                        logMsg("Cell tracking failed, stopping tracking")
+                        self.enableTracking(False)
+                        return
                 except _future.StopRequested:
                     raise
                 except _future.Stopped as exc:
@@ -88,102 +100,28 @@ class Cell(Qt.QObject):
     def _handleTrackingFinished(self, future: Future):
         # TODO do we need a mutex
         self._trackingFuture = None
-        self.isTracking = False
         if not future.wasStopped():
             future.wait()
 
     def updatePosition(self, _future):
-        while len(self._tracker.object_stacks) == 0:
+        while self._tracker.position is None:
             _future.sleep(0.1)
-        stack, xform, _ = self._takeStackshot(_future, single=True)
-        img_stack = ImageStack(stack, xform)
-        result = self._tracker.next_frame(img_stack)
-        if not result.success:
-            stack, xform, _ = self._takeStackshot(_future)
-            img_stack = ImageStack(stack, xform)
-            result = self._tracker.next_frame(img_stack)
-        global_position = result.position.mapped_to("global")
-        movement = np.linalg.norm(np.array(global_position) - np.array(self.position))
-        if movement > 20e-6:
-            raise ValueError(
-                f"Cell moved too much to treat as tracked: {movement * 1e6:.2f} µm"
-            )
-        self._positions[ptime.time()] = global_position
-        self.sigPositionChanged.emit(global_position)
+
+        multiframe_acq = self._tracker.next_action().action in (
+            TrackingAction.REFRESH_REFERENCE,
+            TrackingAction.COMPARE_FRAMES,
+        )
+        if multiframe_acq:
+            self.sigTrackingMultipleFramesStart.emit(self)
+        _future.checkStop()
+        # TODO use the future inside the tracker
+        result = self._tracker.track_next_frame()
+        if multiframe_acq:
+            self.sigTrackingMultipleFramesFinish.emit(self)
+        if result.success:
+            global_position = result.position.mapped_to("global")
+            self._positions[ptime.time()] = global_position
+            self.sigPositionChanged.emit(global_position)
+        else:
+            logMsg(f"Cell tracking failed: {result.reason_for_failure}")
         return result.success
-
-    def _takeStackshot(self, _future, single=False):
-        target = np.array(self.position)
-        current_focus = self._imager.globalCenterPosition()
-        direction = np.sign(target[2] - current_focus[2])
-        margin = 20e-6
-        z_step = 1e-6
-
-        with getManager().reserveDevices(
-            [self._imager, self._imager.scopeDev.positionDevice(), self._imager.scopeDev.focusDevice()], timeout=30.0
-        ):
-            if single:
-                start_glob = target - np.array([margin, margin, 0])
-                _future.waitFor(self._imager.moveCenterToGlobal(target, "fast"))
-                with self._imager.ensureRunning():
-                    stack = _future.waitFor(self._imager.acquireFrames(1, ensureFreshFrames=True)).getResult()
-            else:
-                start_glob = target - margin
-                stop_glob = target + margin
-                if direction < 0:
-                    start_glob, stop_glob = stop_glob, start_glob
-                _future.waitFor(self._imager.moveCenterToGlobal((target[0], target[1], start_glob[2]), "fast"))
-                stack = acquire_z_stack(
-                    self._imager,
-                    start_glob[2],
-                    stop_glob[2],
-                    z_step,
-                    hysteresis_correction=False,
-                    slow_fallback=False,  # the slow fallback mode is too slow to be useful here
-                    deviceReservationTimeout=30.0,  # possibly competing with pipette calibration, which can take a while
-                    block=True,
-                    checkStopThrough=_future,
-                ).getResult()
-                assert stack[0].depth < stack[-1].depth
-                if direction < 0:
-                    # stack = stack[::-1]  # TODO stacks always come back in the ascending depth order, but they shouldn't
-                    start_glob, stop_glob = stop_glob, start_glob
-
-        fav_frame = stack[0]
-
-        # get the normalized 20µm³ region for tracking
-        ijk_stack = np.array([f.data().T for f in stack])
-        frame_xform = SRT3DTransform.from_pyqtgraph(
-            fav_frame.globalTransform(),
-            from_cs=f"frame_{fav_frame.info()['id']}.xyz",
-            to_cs="global",
-        )
-        # the z-scale on single-frame versions of this transform will be 1m/px, which is arbitrary and wildly
-        # inappropriate. the z-stacks already have a useful z-scale, but this doesn't hurt them.
-        frame_xform.set_scale(frame_xform.get_scale().tolist()[:2] + [z_step])
-        stack_xform = frame_xform * TransposeTransform(
-            (2, 1, 0),
-            from_cs=f"frame_{fav_frame.info()['id']}.ijk",
-            to_cs=f"frame_{fav_frame.info()['id']}.xyz",
-        )
-        start_ijk = np.round(stack_xform.inverse.map(start_glob)).astype(int)
-        px_size = stack_xform.map([1, 1, 1]) - stack_xform.map([0, 0, 0])
-        shape_ijk = (margin * 2 / px_size).astype(int)[::-1]
-        if single:
-            shape_ijk[0] = 1  # just one frame
-        stop_ijk = start_ijk + shape_ijk
-        if np.any(start_ijk < 0) or np.any(stop_ijk < 0):
-            raise ValueError("target is too close to the edge of this stack")
-        start_ijk, stop_ijk = np.min((start_ijk, stop_ijk), axis=0), np.max((start_ijk, stop_ijk), axis=0)
-        roi_stack = ijk_stack[
-            start_ijk[0] : stop_ijk[0],
-            start_ijk[1] : stop_ijk[1],
-            start_ijk[2] : stop_ijk[2],
-        ].copy()  # copy to allow freeing of the full stack memory
-        region_xform = stack_xform * TTransform(
-            offset=start_ijk,
-            from_cs=f"frame_{fav_frame.info()['id']}.roi",
-            to_cs=f"frame_{fav_frame.info()['id']}.ijk",
-        )
-        region_center = np.round(region_xform.inverse.map(target)).astype(int)
-        return roi_stack, region_xform, region_center

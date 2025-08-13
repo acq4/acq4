@@ -71,7 +71,6 @@ class ApproachState(PatchPipetteState):
         "advanceContinuous": {"default": True, "type": "bool"},
         "advanceStepInterval": {"default": 0.1, "type": "float", "suffix": "s"},
         "advanceStepDistance": {"default": 1e-6, "type": "float", "suffix": "m"},
-        "maxAdvanceDistancePastTarget": {"default": 10e-6, "type": "float", "suffix": "m"},
         "minDetectionDistance": {"default": 15e-6, "type": "float", "suffix": "m"},
         "aboveSurfaceSpeed": {"default": 20e-6, "type": "float", "suffix": "m/s"},
         "belowSurfaceSpeed": {"default": 5e-6, "type": "float", "suffix": "m/s"},
@@ -99,7 +98,6 @@ class ApproachState(PatchPipetteState):
     def __init__(self, *args, **kwds):
         super().__init__(*args, **kwds)
         self._moveFuture = None
-        self._visualTargetTrackingFuture = None
         self._analysis = CellDetectAnalysis(
             self.config["baselineResistanceTau"],
             np.inf,  # not trying to find cells here
@@ -124,6 +122,7 @@ class ApproachState(PatchPipetteState):
         self.direction_unit = self._calc_direction()
 
     def run(self):
+        self.dev.ensureCell()
         # move to approach position + auto pipette offset
         self.waitFor(self.dev.pipetteDevice.goApproach("fast"))
         self.dev.clampDevice.autoPipetteOffset()
@@ -179,7 +178,8 @@ class ApproachState(PatchPipetteState):
         if self._distanceToTarget() < self.config["pipetteRecalibrateDistance"]:
             if self._moveFuture is not None:
                 # should restart on next main loop
-                self._moveFuture.stop(wait=True)
+                self._moveFuture.stop("Make sure the pipette is where we expect it to be", wait=True)
+                self._moveFuture = None
 
             pip = self.dev.pipetteDevice
             imgr = self.dev.imagingDevice()
@@ -202,7 +202,7 @@ class ApproachState(PatchPipetteState):
                     pip.resetGlobalPosition(pos)
                     self.setState(f"Recalibrate finished (found tip again at {pos})")
                 else:
-                    self.setState(f"cancel pipette position update; prediction is too far away ({dist*1e6}um)")
+                    self.setState(f"cancel pipette position update; prediction is too far away ({dist*1e6}µm)")
 
             self._pipetteRecalibrated = True
 
@@ -265,8 +265,8 @@ class ApproachState(PatchPipetteState):
     def avoidObstacle(self, already_retracted=False):
         self.setState("avoiding obstacle" + (" (recursively)" if already_retracted else ""))
         if self._moveFuture is not None:
-            self._moveFuture.stop("Obstacle detected")
-            self.waitForStop()
+            self._moveFuture.stop("Obstacle detected", wait=True)
+            self._moveFuture = None
 
         pip = self.dev.pipetteDevice
         speed = self.config["belowSurfaceSpeed"]
@@ -302,20 +302,6 @@ class ApproachState(PatchPipetteState):
         self.waitFor(move)
         pos = np.array(pip.globalPosition())
         self.waitFor(pip._moveToGlobal(pos - sidestep, speed=speed))
-
-    def maybeVisuallyTrackTarget(self):
-        if not self.config["visualTargetTracking"]:
-            return
-        if self.closeEnoughToTargetToDetectCell():
-            if self._visualTargetTrackingFuture is not None:
-                self._visualTargetTrackingFuture.stop("Too close to keep tracking")
-            return
-        if self._visualTargetTrackingFuture is None:
-            self._visualTargetTrackingFuture = self._visualTargetTracking()
-
-    @future_wrap
-    def _visualTargetTracking(self, _future):
-        pass
 
     def _cleanup(self):
         if self._moveFuture is not None and not self._moveFuture.isDone():

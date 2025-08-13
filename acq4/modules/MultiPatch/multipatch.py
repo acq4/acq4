@@ -164,6 +164,7 @@ class MultiPatchWindow(Qt.QWidget):
 
     @property
     def _shouldSaveCalibrationImages(self):
+        # TODO this isn't safe outside of the UI thread
         return self.ui.saveCalibrationsBtn.isChecked()
 
     @_shouldSaveCalibrationImages.setter

@@ -8,13 +8,15 @@ from copy import deepcopy
 from typing import Any, Optional, Iterable
 
 import numpy as np
-from neuroanalysis.test_pulse import PatchClampTestPulse
-from pyqtgraph import disconnect
-from pyqtgraph.units import µm
 
 from acq4 import getManager
 from acq4.util import Qt
+from acq4.util.debug import printExc
 from acq4.util.future import Future, future_wrap
+
+from neuroanalysis.test_pulse import PatchClampTestPulse
+from pyqtgraph import disconnect
+from pyqtgraph.units import µm
 
 
 class PatchPipetteState(Future):
@@ -115,6 +117,8 @@ class PatchPipetteState(Future):
         self._cleanupMutex = threading.Lock()
         self._cleanupFuture = None
         self._pressureAdjustment = None
+        self._visualTargetTrackingFuture = None
+        self._pauseMovement = False
         # indicates state that should be transitioned to next, if any.
         # This is usually set by the return value of run(), and must be invoked by the state manager.
         self.nextState = self.config.get('fallbackState', None)
@@ -248,6 +252,13 @@ class PatchPipetteState(Future):
         """Called after job completes, whether it failed or succeeded. Ask `self.wasInterrupted()` to see if the
         state was stopped early. Return a Future that completes when cleanup is done.
         """
+        try:
+            if self._visualTargetTrackingFuture is not None:
+                self.dev.cell.enableTracking(False)
+                self._visualTargetTrackingFuture.stop("State cleanup")
+                self._visualTargetTrackingFuture = None
+        except Exception:
+            printExc("Error stopping visual target tracking")
         disconnect(self.dev.pipetteDevice.sigTargetChanged, self._onTargetChanged)
         return Future.immediate()
 
@@ -287,14 +298,16 @@ class PatchPipetteState(Future):
     def __repr__(self):
         return f'<{type(self).__name__} "{self.stateName}">'
 
-    def surfaceIntersectionPosition(self, direction=None):
+    def surfaceIntersectionPosition(self):
         """Return the intersection of the direction unit vector with the surface."""
-        if direction is None:
-            direction = self.direction_unit
         pip = self.dev.pipetteDevice
         surface = pip.scopeDevice().getSurfaceDepth()
+        direction = pip.globalDirection()
+
         target = pip.targetPosition()
-        return target + direction * ((surface - target[2]) / direction[2])
+        dz = surface - target[2]
+        dist = dz / direction[2]
+        return target + dist * direction
 
     def depthBelowSurface(self, pos=None):
         if pos is None:
@@ -306,25 +319,67 @@ class PatchPipetteState(Future):
     def aboveSurface(self, pos=None):
         return self.depthBelowSurface(pos) < 0
 
+    def maybeVisuallyTrackTarget(self):
+        if not self.config["visualTargetTracking"]:
+            return
+        if self.closeEnoughToTargetToDetectCell():
+            if self._visualTargetTrackingFuture is not None:
+                self.dev.cell.enableTracking(False)
+                self._visualTargetTrackingFuture = None
+            return
+        if self._visualTargetTrackingFuture is None:
+            self._visualTargetTrackingFuture = self._visualTargetTracking()
+
+    def _visualTargetTracking(self):
+        cell = self.dev.cell
+        if cell is None:
+            raise RuntimeError("Cannot visually track target; no cell is assigned to this pipette device.")
+        if not cell.isInitialized:
+            cell.initializeTracker(self.dev.pipetteDevice.imagingDevice()).wait()
+
+        cell.enableTracking(True)
+        cell.sigTrackingMultipleFramesStart.connect(self._pausePipetteForExtendedTracking)
+        return cell._trackingFuture
+
+    def _pausePipetteForExtendedTracking(self, cell):
+        self._pauseMovement = True
+        cell.sigTrackingMultipleFramesFinish.connect(self._resumePipetteAfterExtendedTracking)
+        cell.sigTrackingMultipleFramesStart.disconnect(self._pausePipetteForExtendedTracking)
+
+    def _resumePipetteAfterExtendedTracking(self, cell):
+        self._pauseMovement = False
+        cell.sigTrackingMultipleFramesFinish.disconnect(self._resumePipetteAfterExtendedTracking)
+
     def _waitForMoveWhileTargetChanges(self, position_fn, speed, continuous, future, interval=None, step=None):
         move_fut = None
-        while move_fut is None or not move_fut.isDone():
-            if move_fut is None:
-                pos = position_fn()
-                if continuous:
-                    move_fut = self.dev.pipetteDevice._moveToGlobal(pos, speed=speed)
-                else:
-                    move_fut = self.dev.pipetteDevice.stepwiseAdvance(
-                        target=pos,
-                        speed=speed,
-                        interval=interval,
-                        step=step,
-                    )
-            if self._targetHasChanged:
-                self._targetHasChanged = False
-                move_fut.stop("Target changed", wait=True)
-                move_fut = None
-            future.sleep(0.1)
+        try:
+            while move_fut is None or not move_fut.isDone():
+                if self._pauseMovement:
+                    if move_fut is not None:
+                        move_fut.stop("Paused", wait=True)
+                        move_fut = None
+                    future.sleep(0.1)
+                    continue
+                if move_fut is None:
+                    pos = position_fn()
+                    if continuous:
+                        move_fut = self.dev.pipetteDevice._moveToGlobal(pos, speed=speed)
+                    else:
+                        move_fut = self.dev.pipetteDevice.stepwiseAdvance(
+                            target=pos,
+                            speed=speed,
+                            interval=interval,
+                            step=step,
+                        )
+                if self._targetHasChanged:
+                    self._targetHasChanged = False
+                    move_fut.stop("Target changed", wait=True)
+                    move_fut = None
+                future.sleep(0.1)
+        except Exception:
+            if move_fut is not None and not move_fut.isDone():
+                move_fut.stop("Error while moving", wait=True)
+            raise
 
     def _onTargetChanged(self, pos):
         self._targetHasChanged = True
