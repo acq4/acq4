@@ -240,7 +240,7 @@ class AutomationDebugWindow(Qt.QWidget):
     @future_wrap
     def _addCellFromTarget(self, _future):
         target = Point(self.pipetteDevice.targetPosition(), "global")
-        cell = self.pipetteDevice.cell
+        cell = self.patchPipetteDevice.cell
         if cell is None or cell.position != target:
             cell = Cell(target)
             _future.waitFor(cell.initializeTracker(self.cameraDevice))
@@ -249,7 +249,7 @@ class AutomationDebugWindow(Qt.QWidget):
         _future.waitFor(futureInGuiThread(self._displayBoundingBoxes, boxPositions))
 
     def _visualizeTracking(self):
-        cell = self.pipetteDevice.cell or self._cell
+        cell = self.patchPipetteDevice.cell or self._cell
         if cell is None or cell._tracker is None:
             logMsg("No cell tracking available to visualize.")
             return
@@ -291,7 +291,7 @@ class AutomationDebugWindow(Qt.QWidget):
         )
         self.ui.rankCellsBtn.setEnabled(len(self._unranked_cells) > 0)
         # self.ui.autopatchDemoBtn.setEnabled(working == self.ui.autopatchDemoBtn or not working)
-        cell = self.pipetteDevice.cell or self._cell
+        cell = self.patchPipetteDevice.cell or self._cell
         self.ui.visualizeTrackingBtn.setEnabled(cell is not None and cell._tracker is not None)
 
     @property
@@ -901,7 +901,7 @@ class AutomationDebugWindow(Qt.QWidget):
         _future.setState("Autopatch: checking selected cell")
         cell = self._unranked_cells.pop(0)
         self._ranked_cells.append(cell)
-        self.pipetteDevice.setCellTarget(cell)
+        self.patchPipetteDevice.setCell(cell)
         self._cell = cell
         cell.sigPositionChanged.connect(self._updatePipetteTarget)
         # stack = self._current_classification_stack or self._current_detection_stack
