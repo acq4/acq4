@@ -17,7 +17,7 @@ ACQ4 depends on several free software packages to work properly. In most cases, 
 
 4. Install acq4 into your new conda environment::
 
-    python setup.py develop
+    pip install -e .
 
 
 Improving performance with GPU

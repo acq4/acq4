@@ -3,7 +3,7 @@
 Sutter MPC200 motorized stage controller
 ========================================
 
-This :ref:`Stage device <userDevicesStage>` provides support for Sutter MPC200 stage and manipulator controllers. 
+This :ref:`Stage device <userDevicesStage>` provides legacy support for Sutter MPC200 stage and manipulator controllers. It is currently not mintained.
 
 
 Configuration Options

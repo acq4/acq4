@@ -332,6 +332,7 @@ class Scientifica:
               prevent user confusion, setting this value programmatically is discouraged).
             * objLift: Distance to lift the objectives before switching (int; 1 = 10 nm)
             * objDisp: Distance between focal planes of objectives (int; 1 = 10 nm)
+            * objL1, objL2: Legacy objective switching parameters for version 2 devices.
 
         Notes
         -----
@@ -487,10 +488,10 @@ class Scientifica:
         """
         self.send('CURRENT %d %d' % (int(run), int(standby)))
 
-    def stop(self):
+    def stop(self, reason):
         """Stop moving the manipulator.
         """
-        return self.ctrlThread.stop()
+        return self.ctrlThread.stop(reason=reason)
 
     def isMoving(self):
         """Return True if the manipulator is moving.

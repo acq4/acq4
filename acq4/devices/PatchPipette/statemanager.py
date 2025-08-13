@@ -292,6 +292,8 @@ class StateParameter(Parameter):
             if param_config['name'] in defaults:
                 param_config['default'] = defaults[param_config['name']]
             param_config['pinValueToDefault'] = True
+            if param_config['type'] == 'float':
+                param_config.setdefault('siPrefix', True)
             param = Parameter.create(**param_config)
             if config.get(param.name()) is not None:
                 param.setValue(config[param.name()])

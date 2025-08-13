@@ -79,7 +79,7 @@ class ResealAnalysis(SteadyStateAnalysisBase):
             start_time, resistance = measurement
             if i == 0:
                 if self._last_measurement is None:
-                    ret_array[i] = (start_time, resistance, 1, 1, 0, 0, False, False)
+                    ret_array[i] = (start_time, resistance, 1, 1, 0, 0, False, False, False)
                     self._last_measurement = ret_array[i]
                     continue
                 else:
@@ -383,9 +383,8 @@ class ResealState(PatchPipetteState):
     def _retractFromTissue(self):
         # move out of the tissue more quickly
         dev = self.dev
-        direction = dev.pipetteDevice.globalDirection()
         return dev.pipetteDevice._moveToGlobal(
-            self.surfaceIntersectionPosition(direction), speed=self.config['postSuccessRetractionSpeed'])
+            self.surfaceIntersectionPosition(), speed=self.config['postSuccessRetractionSpeed'])
 
     def retractionDistance(self):
         return np.linalg.norm(np.array(self.dev.pipetteDevice.globalPosition()) - self._startPosition)

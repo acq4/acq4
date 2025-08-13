@@ -127,7 +127,7 @@ class MultiPatchWindow(Qt.QWidget):
         self.ui.toTargetBtn.setOpts(future_producer=self._toTarget, **common_opts)
         self.ui.sealBtn.setOpts(future_producer=self._seal, raiseOnError=False, **common_opts)
         self.ui.reSealBtn.setOpts(future_producer=self._reSeal, raiseOnError=False, **common_opts)
-        self.ui.approachBtn.setOpts(future_producer=self._approach, **common_opts)
+        self.ui.approachBtn.setOpts(future_producer=self._approach, raiseOnError=False, **common_opts)
         self.ui.cleanBtn.setOpts(future_producer=self._clean, raiseOnError=False, **common_opts)
         self.ui.collectBtn.setOpts(future_producer=self._collect, raiseOnError=False, **common_opts)
 
@@ -164,6 +164,7 @@ class MultiPatchWindow(Qt.QWidget):
 
     @property
     def _shouldSaveCalibrationImages(self):
+        # TODO this isn't safe outside of the UI thread
         return self.ui.saveCalibrationsBtn.isChecked()
 
     @_shouldSaveCalibrationImages.setter

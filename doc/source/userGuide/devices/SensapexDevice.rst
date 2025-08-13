@@ -92,17 +92,5 @@ The device includes calibration capabilities for:
 Dependencies
 ------------
 
-* **sensapex-py**: Python driver for Sensapex devices
-* **Sensapex SDK**: Required by sensapex-py driver
-* **Compatible Hardware**: Sensapex uMp series manipulators or motorized stages
-
-Installation
-------------
-
-Install the sensapex-py driver::
-
-    pip install sensapex
-
-Download and install the Sensapex SDK from Sensapex website.
-
-**Note**: This device is actively maintained and supports the latest Sensapex hardware and firmware versions.
+* **sensapex-py**: Python driver for Sensapex devices (install via `pip install sensapex`)
+* **Compatible Hardware**: Sensapex uMp series manipulators or uMs motorized stages

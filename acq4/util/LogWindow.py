@@ -39,6 +39,7 @@ Stylesheet = """
     .logExtra {margin-left: 40px;}
     .traceback {color: #555; height: 0px;}
     .timestamp {color: #000;}
+    .thread {color: #666;}
 """
 
 pageTemplate = f"""
@@ -134,7 +135,7 @@ class LogWindow(Qt.QMainWindow):
     def logMsg(self, msg, importance=5, msgType="status", **kwargs):
         """
         msg: the text of the log message
-        msgTypes: user, status, error, warning (status is default)
+        msgType: user, status, error, warning (status is default)
         importance: 0-9 (0 is low importance, 9 is high, 5 is default)
         other keywords:
           exception: a tuple (type, exception, traceback) as returned by sys.exc_info()
@@ -146,6 +147,9 @@ class LogWindow(Qt.QMainWindow):
            Feel free to add your own keyword arguments. These will be saved in the log.txt file, but will not affect the
            content or way that messages are displayed.
         """
+        if 'level' in kwargs:
+            msgType = logLevelToMsgType(kwargs.pop('level'))
+        
         if 'thread' not in kwargs:
             kwargs['thread'] = threading.current_thread().name
 
@@ -572,7 +576,8 @@ class LogWidget(Qt.QWidget):
 
     def generateEntryHtml(self, entry):
         msg = self.cleanText(entry["message"])
-
+        thread = self.cleanText(entry["thread"])
+        
         reasons = ""
         docs = ""
         exc = ""
@@ -594,7 +599,7 @@ class LogWidget(Qt.QWidget):
         <a name="{entry["id"]}"/><table class='entry'><tr><td>
             <table class='{entry["msgType"]}'><tr><td>
                 <span class='timestamp'>{entry["timestamp"]}</span>
-                <span class='thread'>{entry["thread"]}</span>
+                <span class='thread'>[{thread}]</span>
                 <span class='message'>{msg}</span>
                 {extra}
             </td></tr></table>
@@ -839,7 +844,7 @@ class ErrorDialog(Qt.QDialog):
 
         msgLines = []
         if entry["message"] is not None:
-            msgLines.append(entry["message"])
+            msgLines.append(self.cleanText(entry["message"]))
 
         # extract list of exceptions
         key = "exception"
@@ -926,19 +931,25 @@ class LogHandler(logging.Handler):
         msg = self.format(record)
         # convert log level to importance and msgType
         importance = int(record.levelno / 5)
-
-        if record.levelno <= logging.DEBUG:
-            msgType = "debug"
-        elif record.levelno <= logging.INFO:
-            msgType = "status"
-        elif record.levelno <= logging.WARNING:
-            msgType = "warning"
-        elif record.levelno <= logging.CRITICAL:
-            msgType = "error"
-        else:
-            msgType = "error"
+        msgType = logLevelToMsgType(record.levelno)
 
         self.logWindow.logMsg(msg, importance=importance, msgType=msgType)
+
+
+def logLevelToMsgType(level):
+    if isinstance(level, str):
+        level = getattr(logging, level.upper())
+    if level <= logging.DEBUG:
+        msgType = "debug"
+    elif level <= logging.INFO:
+        msgType = "status"
+    elif level <= logging.WARNING:
+        msgType = "warning"
+    elif level <= logging.CRITICAL:
+        msgType = "error"
+    else:
+        msgType = "error"
+    return msgType
 
 
 if __name__ == "__main__":
