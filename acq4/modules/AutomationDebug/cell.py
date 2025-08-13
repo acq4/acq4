@@ -39,6 +39,11 @@ class Cell(Qt.QObject):
         """Get the current global position of the cell."""
         return Point(np.array(self._positions[max(self._positions)]), "global")
 
+    @property
+    def isInitialized(self):
+        """Check if the cell has been initialized with a position."""
+        return self._tracker is not None
+
     @future_wrap
     def initializeTracker(self, imager, _future=None):
         # Initialize tracker if we have none, or just grab another stack and check if it still matches otherwise

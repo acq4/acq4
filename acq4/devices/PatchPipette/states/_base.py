@@ -10,12 +10,10 @@ from typing import Any, Optional, Iterable
 import numpy as np
 
 from acq4 import getManager
-from acq4.modules.AutomationDebug.cell import Cell
 from acq4.util import Qt
 from acq4.util.debug import printExc
 from acq4.util.future import Future, future_wrap
 
-from coorx import Point
 from neuroanalysis.test_pulse import PatchClampTestPulse
 from pyqtgraph import disconnect
 from pyqtgraph.units import µm
@@ -256,7 +254,7 @@ class PatchPipetteState(Future):
         """
         try:
             if self._visualTargetTrackingFuture is not None:
-                self.dev.pipetteDevice.cell.enableTracking(False)
+                self.dev.cell.enableTracking(False)
                 self._visualTargetTrackingFuture.stop("State cleanup")
                 self._visualTargetTrackingFuture = None
         except Exception:
@@ -326,18 +324,18 @@ class PatchPipetteState(Future):
             return
         if self.closeEnoughToTargetToDetectCell():
             if self._visualTargetTrackingFuture is not None:
-                self.dev.pipetteDevice.cell.enableTracking(False)
+                self.dev.cell.enableTracking(False)
                 self._visualTargetTrackingFuture = None
             return
         if self._visualTargetTrackingFuture is None:
             self._visualTargetTrackingFuture = self._visualTargetTracking()
 
     def _visualTargetTracking(self):
-        cell = self.dev.pipetteDevice.cell
+        cell = self.dev.cell
         if cell is None:
-            cell = Cell(Point(self.dev.pipetteDevice.targetPosition(), "global"))
+            raise RuntimeError("Cannot visually track target; no cell is assigned to this pipette device.")
+        if not cell.isInitialized:
             cell.initializeTracker(self.dev.pipetteDevice.imagingDevice()).wait()
-            self.dev.pipetteDevice.setCell(cell)
 
         cell.enableTracking(True)
         cell.sigTrackingMultipleFramesStart.connect(self._pausePipetteForExtendedTracking)

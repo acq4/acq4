@@ -11,11 +11,9 @@ from acq4 import getManager
 from acq4.devices.PatchPipette import PatchPipette
 from acq4.modules.Module import Module
 from acq4.util import Qt, ptime
-from coorx import Point
 from neuroanalysis.test_pulse_stack import H5BackedTestPulseStack
 from .mockPatch import MockPatch
 from .pipetteControl import PipetteControl
-from ..AutomationDebug.cell import Cell
 from ...devices.PatchPipette.statemanager import PatchPipetteStateManager
 from ...util.future import MultiFuture, future_wrap
 from ...util.json_encoder import ACQ4JSONEncoder
