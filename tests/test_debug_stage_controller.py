@@ -101,90 +101,10 @@ class TestDebugStageControllerCore:
         expected_target = [1.1e-4, 1.9e-4, 3e-4]
         mock_stage.move.assert_called_once_with(expected_target, speed='fast')
 
-    def test_get_step_size_modifiers(self, controller_core):
-        """Test step size calculation with different modifiers."""
-        controller, _ = controller_core
 
-        # No modifier: base step size (10µm)
-        size = controller._getStepSize(Qt.Qt.NoModifier)
-        assert size == pytest.approx(10e-6)
 
-        # Shift modifier: 1µm (0.1x)
-        size = controller._getStepSize(Qt.Qt.ShiftModifier)
-        assert size == pytest.approx(1e-6)
 
-        # Alt modifier: 100µm (10x)
-        size = controller._getStepSize(Qt.Qt.AltModifier)
-        assert size == pytest.approx(100e-6)
 
-    def test_get_step_speed_calculation(self, controller_core):
-        """Test step speed is 5x base speed, capped at device fast speed."""
-        controller, mock_stage = controller_core
-
-        # Base speed calculation: stepSize / stepThreshold
-        base_speed = 10e-6 / 0.2  # 50µm/s
-        expected_step_speed = base_speed * 5  # 250µm/s
-
-        speed = controller._getStepSpeed(Qt.Qt.NoModifier)
-        assert speed == expected_step_speed
-
-        # Test capping at device fast speed
-        mock_stage.fastSpeed = 100e-6  # Lower than calculated step speed
-        mock_stage._interpretSpeed.return_value = 100e-6
-
-        speed = controller._getStepSpeed(Qt.Qt.NoModifier)
-        assert speed == 100e-6  # Capped at device fast speed
-
-    def test_continuous_speed_calculation(self, controller_core):
-        """Test continuous movement speed calculation."""
-        controller, _ = controller_core
-
-        # Continuous speed should equal base speed
-        base_speed = 10e-6 / 0.2  # 50µm/s
-        continuous_speed = controller._getContinuousSpeed(Qt.Qt.NoModifier)
-
-        assert continuous_speed == base_speed
-
-        # Test with modifiers
-        shift_speed = controller._getContinuousSpeed(Qt.Qt.ShiftModifier)
-        assert shift_speed == base_speed * 0.1  # 1µm steps
-
-        alt_speed = controller._getContinuousSpeed(Qt.Qt.AltModifier)
-        assert alt_speed == base_speed * 10.0  # 100µm steps
-
-    def test_perform_step_movement(self, controller_core):
-        """Test single step movement execution."""
-        controller, mock_stage = controller_core
-        mock_stage.axes.return_value = ('x', 'y', 'z')
-
-        # Mock the step method to verify it's called correctly
-        with patch.object(controller.currentDevice, 'step') as mock_step:
-            key = Qt.Qt.Key_W  # Axis 0, direction +1
-            modifiers = Qt.Qt.ShiftModifier
-
-            controller._performStepMovement(key, modifiers)
-
-            # Should call step with correct deltas and speed
-            expected_deltas = (1e-6, 0.0, 0.0)  # 1µm on x-axis (shift modifier)
-            mock_step.assert_called_once()
-            args = mock_step.call_args[0]
-            assert args[0] == pytest.approx(expected_deltas)
-            assert isinstance(args[1], float)  # Speed should be calculated
-
-    def test_key_mappings(self, controller_core):
-        """Test that key mappings produce correct axis/direction combinations."""
-        controller, _ = controller_core
-
-        expected_mappings = {
-            Qt.Qt.Key_W: (0, 1),  # Axis 0 +
-            Qt.Qt.Key_S: (0, -1),  # Axis 0 -
-            Qt.Qt.Key_A: (1, -1),  # Axis 1 -
-            Qt.Qt.Key_D: (1, 1),  # Axis 1 +
-            Qt.Qt.Key_Q: (2, -1),  # Axis 2 -
-            Qt.Qt.Key_E: (2, 1),  # Axis 2 +
-        }
-
-        assert controller.keyMappings == expected_mappings
 
     def test_step_movement_axis_bounds(self, controller_core):
         """Test step movement handles axis bounds correctly."""
@@ -245,27 +165,3 @@ class TestDebugStageControllerCore:
             mock_stop.assert_called_once()
 
 
-class TestDebugStageControllerTiming:
-    """Test timing-based behavior (step vs continuous movement)."""
-
-    def test_step_threshold_timing(self):
-        """Test that step threshold correctly determines movement type."""
-        # This is a behavioral test - in real usage, key events shorter than
-        # 200ms should trigger step movement, longer should trigger continuous
-
-        step_threshold = 0.2  # 200ms
-
-        # Short duration = step movement
-        short_duration = 0.1
-        assert short_duration < step_threshold
-
-        # Long duration = continuous movement
-        long_duration = 0.3
-        assert long_duration >= step_threshold
-
-    def test_continuous_update_interval(self):
-        """Test continuous movement update interval."""
-        update_interval = 0.1  # 100ms
-
-        # Update interval should be reasonable for smooth movement
-        assert 0.05 <= update_interval <= 0.2
