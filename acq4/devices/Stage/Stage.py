@@ -451,14 +451,18 @@ class Stage(Device, OptomechDevice):
             through the axis transform to get the equivalent change in ortholinear
             device coordinates, which are then added to the current position.
         """
-        # Get current ortholinear device position
         pos = np.array(self.getPosition())
 
+        axis_xform = np.array(self.axisTransform().copyDataTo()).reshape((4, 4))
+        axis_xform = AffineTransform(matrix=axis_xform[:3, :3], offset=axis_xform[:3, 3])
+
         # Map deltas through axis transform to get ortholinear coordinate changes
-        ortho = np.array(self.axisTransform().map(deltas))
+        ortho = np.array(axis_xform.map(deltas)) - np.array(axis_xform.map(np.zeros(len(deltas))))
 
         # Divide away the scale; we only wanted the orientation
-        ortho /= np.array(pg.SRTTransform3D(self.axisTransform()).getScale())
+        scale = self.config.get('scale', None)
+        if scale is not None:
+            ortho /= np.array(scale)
 
         # Add changes to current position
         target = pos + ortho
