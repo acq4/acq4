@@ -3,15 +3,13 @@
 
 from __future__ import annotations
 
-import time
-from typing import Dict, Optional
+from typing import Optional
 
-import numpy as np
-from acq4.devices.Stage import Stage, MoveFuture
+from acq4 import getManager
+from acq4.devices.Stage import Stage
 from acq4.modules.Module import Module
 from acq4.util import Qt, ptime
 from acq4.util.Mutex import Mutex
-from acq4 import getManager
 
 
 class DebugStageController(Module):
@@ -68,6 +66,11 @@ class DebugStageController(Module):
         # Continuous movement timer
         self.continuousTimer = Qt.QTimer()
         self.continuousTimer.timeout.connect(self._updateContinuousMovement)
+
+        # Timer to check if keys have been held long enough for continuous movement
+        self.keyCheckTimer = Qt.QTimer()
+        self.keyCheckTimer.timeout.connect(self._updateContinuousMovementState)
+        self.keyCheckTimer.start(50)  # Check every 50ms
 
         self._setupUI()
         self._refreshDeviceList()
@@ -210,6 +213,9 @@ class DebugStageController(Module):
         # Start auto-disable timer
         self.autoDisableTimer.start(int(self.autoDisableTimeout * 1000))
 
+        # Start key check timer
+        self.keyCheckTimer.start(50)
+
         self.enabled = True
         self.lastActivityTime = ptime.time()
         self.enableButton.setText("Disable Control")
@@ -226,6 +232,7 @@ class DebugStageController(Module):
         # Stop timers
         self.autoDisableTimer.stop()
         self.continuousTimer.stop()
+        self.keyCheckTimer.stop()
 
         # Release device reservation
         if self.deviceReservation is not None:
@@ -384,11 +391,8 @@ class DebugStageController(Module):
 
         # Perform movement if any deltas are non-zero
         if any(d != 0 for d in deltas):
-            try:
-                speed = self._getContinuousSpeed(activeModifiers)
-                self.currentDevice.step(tuple(deltas), speed)
-            except Exception as e:
-                print(f"Continuous movement failed: {e}")
+            speed = self._getContinuousSpeed(activeModifiers)
+            self.currentDevice.step(tuple(deltas), speed)
 
     def _getStepSize(self, modifiers) -> float:
         """Get step size based on modifiers."""
@@ -401,7 +405,7 @@ class DebugStageController(Module):
 
         return stepSize
 
-    def _getStepSpeed(self, modifiers) -> str:
+    def _getStepSpeed(self, modifiers):
         """Get step speed (5x base speed, capped at device fast speed)."""
         baseSpeed = self._getBaseSpeed(modifiers)
         stepSpeed = baseSpeed * 5
@@ -431,6 +435,7 @@ class DebugStageController(Module):
     def quit(self):
         """Clean up when module is closed."""
         self._stopControl()
+        self.keyCheckTimer.stop()
         Module.quit(self)
 
 
