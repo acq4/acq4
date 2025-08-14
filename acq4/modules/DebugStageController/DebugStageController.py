@@ -30,6 +30,7 @@ class DebugStageController(Module):
         self.enabled = False
         self.deviceReservation = None
         self.lastActivityTime = ptime.time()
+        self.currentMoveFuture = None
 
         # Key press tracking
         self.keyPressTime = {}
@@ -56,7 +57,7 @@ class DebugStageController(Module):
 
         # Movement timing thresholds
         self.stepThreshold = 0.2  # 200ms
-        self.continuousUpdateInterval = 0.1  # 100ms
+        self.continuousUpdateInterval = 0.05  # 50ms for faster continuous movement
 
         # Auto-disable timer (5 minutes)
         self.autoDisableTimeout = 300.0
@@ -70,7 +71,7 @@ class DebugStageController(Module):
         # Timer to check if keys have been held long enough for continuous movement
         self.keyCheckTimer = Qt.QTimer()
         self.keyCheckTimer.timeout.connect(self._updateContinuousMovementState)
-        self.keyCheckTimer.start(50)  # Check every 50ms
+        self.keyCheckTimer.start(25)  # Check every 25ms for responsive transitions
 
         self._setupUI()
         self._refreshDeviceList()
@@ -214,7 +215,7 @@ class DebugStageController(Module):
         self.autoDisableTimer.start(int(self.autoDisableTimeout * 1000))
 
         # Start key check timer
-        self.keyCheckTimer.start(50)
+        self.keyCheckTimer.start(25)
 
         self.enabled = True
         self.lastActivityTime = ptime.time()
@@ -247,6 +248,7 @@ class DebugStageController(Module):
         self.activeKeys.clear()
         self.keyPressTime.clear()
         self.keyModifiers.clear()
+        self.currentMoveFuture = None
 
         self.enableButton.setChecked(False)
         self.enableButton.setText("Enable Control")
@@ -338,6 +340,10 @@ class DebugStageController(Module):
         if self.currentDevice is None:
             return
 
+        # Check if previous movement is still in progress
+        if self.currentMoveFuture is not None and not self.currentMoveFuture.isDone():
+            return  # Don't start new movement while one is in progress
+
         axis, direction = self.keyMappings[key]
         stepSize = self._getStepSize(modifiers)
         speed = self._getStepSpeed(modifiers)
@@ -350,12 +356,16 @@ class DebugStageController(Module):
         deltas = [0.0] * len(axes)
         deltas[axis] = direction * stepSize
 
-        self.currentDevice.step(tuple(deltas), speed)
+        self.currentMoveFuture = self.currentDevice.step(tuple(deltas), speed)
 
     def _updateContinuousMovement(self):
         """Update continuous movement based on currently active keys."""
         if not self.activeKeys or self.currentDevice is None:
             return
+
+        # Check if previous movement is still in progress
+        if self.currentMoveFuture is not None and not self.currentMoveFuture.isDone():
+            return  # Don't start new movement while one is in progress
 
         currentTime = ptime.time()
         axes = self.currentDevice.axes()
@@ -392,7 +402,7 @@ class DebugStageController(Module):
         # Perform movement if any deltas are non-zero
         if any(d != 0 for d in deltas):
             speed = self._getContinuousSpeed(activeModifiers)
-            self.currentDevice.step(tuple(deltas), speed)
+            self.currentMoveFuture = self.currentDevice.step(tuple(deltas), speed)
 
     def _getStepSize(self, modifiers) -> float:
         """Get step size based on modifiers."""
