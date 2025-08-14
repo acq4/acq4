@@ -459,7 +459,7 @@ class Stage(Device, OptomechDevice):
         ortho = np.array(self.axisTransform().map(deltas))
 
         # Divide away the scale; we only wanted the orientation
-        ortho /= np.array(self.axisTransform().getScale())
+        ortho /= np.array(pg.SRTTransform3D(self.axisTransform()).getScale())
 
         # Add changes to current position
         target = pos + ortho

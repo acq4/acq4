@@ -335,11 +335,8 @@ class DebugStageController(Module):
         deltas = [0.0] * len(axes)
         deltas[axis] = direction * stepSize
         
-        try:
-            self.currentDevice.step(tuple(deltas), speed)
-        except Exception as e:
-            print(f"Step movement failed: {e}")
-            
+        self.currentDevice.step(tuple(deltas), speed)
+
     def _updateContinuousMovement(self):
         """Update continuous movement based on currently active keys."""
         if not self.activeKeys or self.currentDevice is None:
