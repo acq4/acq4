@@ -20,7 +20,7 @@ class DebugStageController(Module):
     """
 
     moduleDisplayName = "Debug Stage Controller"
-    moduleCategory = "Debug"
+    moduleCategory = "Utilities"
 
     def __init__(self, manager, name, config):
         Module.__init__(self, manager, name, config)
