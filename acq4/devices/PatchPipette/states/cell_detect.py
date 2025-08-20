@@ -405,22 +405,22 @@ class CellDetectState(PatchPipetteState):
 
         endpoint = None
 
-        # max search distance
-        if config['maxAdvanceDistance'] is not None:
-            endpoint = self._initialPos + pip.globalDirection() * config['maxAdvanceDistance']
+        if config['advanceMode'] != 'target':
+            if config['maxAdvanceDistance']:
+                # max search distance
+                endpoint = self._initialPos + pip.globalDirection() * config['maxAdvanceDistance']
 
-        # max surface depth
-        if config['maxAdvanceDepthBelowSurface'] is not None and pip.globalDirection()[2] < 0:
-            endDepth = surface - config['maxAdvanceDepthBelowSurface']
-            depthEndpt = pip.positionAtDepth(endDepth)
-            # is the surface depth endpoint closer?
-            if endpoint is None or np.linalg.norm(endpoint - pos) > np.linalg.norm(
-                depthEndpt - pos
-            ):
-                endpoint = depthEndpt
-
-        # max distance past target
-        if config['advanceMode'] == 'target' and config['maxAdvanceDistancePastTarget'] is not None:
+            elif config['maxAdvanceDepthBelowSurface'] is not None and pip.globalDirection()[2] < 0:
+                # max surface depth
+                endDepth = surface - config['maxAdvanceDepthBelowSurface']
+                depthEndpt = pip.positionAtDepth(endDepth)
+                # is the surface depth endpoint closer?
+                if endpoint is None or np.linalg.norm(endpoint - pos) > np.linalg.norm(
+                    depthEndpt - pos
+                ):
+                    endpoint = depthEndpt
+        elif config['maxAdvanceDistancePastTarget'] is not None:
+            # target mode
             targetEndpt = target + pip.globalDirection() * config['maxAdvanceDistancePastTarget']
             # is the target endpoint closer?
             if endpoint is None or np.linalg.norm(endpoint - pos) > np.linalg.norm(
@@ -456,6 +456,7 @@ class CellDetectState(PatchPipetteState):
             self.setState("moved to detection area")
         if config['preTargetWiggle']:
             self._wiggle(_future, self.finalSearchEndpoint())
+        self.setState("moving to final search endpoint")
         self._waitForMoveWhileTargetChanges(
             self.finalSearchEndpoint,
             config['detectionSpeed'],
@@ -499,6 +500,7 @@ class CellDetectState(PatchPipetteState):
 
     def _searchAround(self, future):
         """Slowly describe a circle on a vertical plane perpendicular to the yaw of the pipette."""
+        self.setState("searching around target")
         radius = self.config['searchAroundAtTargetRadius']
         speed = self.config['detectionSpeed']
         vertical = np.array((0, 0, 1))
