@@ -1,12 +1,14 @@
-import numpy as np
+import logging
 import os
-import scipy.optimize
-import six
 import sys
 import time
 
-import acq4.Manager as Manager
+import numpy as np
+import scipy.optimize
+import six
 from MetaArray import MetaArray
+
+import acq4.Manager as Manager
 from acq4.util import Qt, ptime
 from acq4.util.Mutex import Mutex
 from acq4.util.StatusBar import StatusBar
@@ -17,6 +19,7 @@ from pyqtgraph import WidgetGroup
 from pyqtgraph import siFormat
 from pyqtgraph.debug import Profiler
 
+logger = logging.getLogger(__name__)
 Ui_Form = Qt.importTemplate('.PatchTemplate')
 
 
@@ -377,12 +380,12 @@ class PatchWindow(Qt.QMainWindow):
         if self.ui.startBtn.isChecked():
             if not self.thread.isRunning():
                 self.thread.start()
-                Manager.logMsg("Patch module started.")
+                logger.info("Patch module started.")
             self.ui.startBtn.setText('Stop')
         else:
             self.ui.startBtn.setEnabled(False)
             self.thread.stop()
-            Manager.logMsg("Patch module stopped.")
+            logger.info("Patch module stopped.")
             
     def threadStopped(self):
         self.ui.startBtn.setText('Start')

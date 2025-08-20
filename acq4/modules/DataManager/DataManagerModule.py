@@ -1,8 +1,8 @@
 import contextlib
+import logging
 import os
 import time
 
-from acq4.Manager import logMsg
 from acq4.modules.Module import Module
 from acq4.util import Qt
 from acq4.util.DataManager import getDataManager, getHandle, DirHandle
@@ -10,9 +10,9 @@ from acq4.util.StatusBar import StatusBar
 from acq4.util.debug import printExc
 from pyqtgraph import FileDialog
 from . import FileAnalysisView
-from . import FileLogView
 from ...util.HelpfulException import HelpfulException
 
+logger = logging.getLogger(__name__)
 Ui_MainWindow = Qt.importTemplate('.DataManagerTemplate')
 
 
@@ -41,7 +41,7 @@ class DataManager(Module):
         self.ui.setupUi(self.win)
         self.ui.analysisWidget = FileAnalysisView.FileAnalysisView(self.ui.analysisTab, self)
         self.ui.analysisTab.layout().addWidget(self.ui.analysisWidget)
-        self.ui.logWidget = FileLogView.FileLogView(self.ui.logTab, self)
+        # self.ui.logWidget = FileLogView.FileLogView(self.ui.logTab, self)
         self.ui.logTab.layout().addWidget(self.ui.logWidget)
 
         self.win.show()
@@ -232,7 +232,7 @@ class DataManager(Module):
                 parent)  ## fileTreeWidget waits a while before updating; force it to refresh immediately.
             self.ui.fileTreeWidget.select(nd)
 
-        logMsg("Created new folder: %s" % nd.name(relativeTo=self.baseDir), msgType='status', importance=7)
+        logger.info(f"Created new folder: {nd.name(relativeTo=self.baseDir)}")
         self.manager.setCurrentDir(nd)
 
     def fileSelectionChanged(self):

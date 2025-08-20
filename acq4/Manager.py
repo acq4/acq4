@@ -1,14 +1,14 @@
+import argparse
 import atexit
 import gc
-import getopt
-import os
-import sys
-import time
-import argparse
-import weakref
-import socket
 import getpass
+import logging
+import os
+import socket
+import sys
 import threading
+import time
+import weakref
 from collections import OrderedDict
 
 import pyqtgraph as pg
@@ -23,9 +23,9 @@ from .devices.Device import Device, DeviceTask
 from .util import DataManager, ptime, Qt
 from .util.DataManager import DirHandle
 from .util.HelpfulException import HelpfulException
-from .util.debug import logExc, logMsg, createLogWindow
+from .util.LogWindow import get_log_window, format_docs_str_for_html
 
-_ = logExc  # prevent cleanup of logExc; needed by debug
+logger = logging.getLogger(__name__)
 
 
 def __reload__(old):
@@ -103,7 +103,7 @@ class Manager(Qt.QObject):
 
             Manager.CREATED = True
             Manager.single = self
-            self.logWindow = createLogWindow(self)
+            self.logWindow = get_log_window()
             self.documentation = Documentation()
 
             Qt.QObject.__init__(self)
@@ -113,7 +113,7 @@ class Manager(Qt.QObject):
             # Import all built-in module classes
             modules.importBuiltinClasses()
 
-            logMsg('ACQ4 version %s started.' % __version__, importance=9)
+            logger.info(f'ACQ4 version {__version__} started.')
 
         except:
             Manager.CREATED = False
@@ -189,8 +189,7 @@ class Manager(Qt.QObject):
 
     def readConfig(self, configFile):
         """Read configuration file, create device objects, add devices to list"""
-        print("============= Starting Manager configuration from %s =================" % configFile)
-        logMsg("Starting Manager configuration from %s" % configFile)
+        logger.info(f"============= Starting Manager configuration from {configFile} =================")
         ns = {
             'hostname': socket.gethostname(),
             'username': getpass.getuser(),
@@ -203,8 +202,7 @@ class Manager(Qt.QObject):
         self.configure(self.config)
 
         self.configFile = configFile
-        print("\n============= Manager configuration complete =================\n")
-        logMsg('Manager configuration complete.')
+        logger.info("\n============= Manager configuration complete =================\n")
 
     def exec_(self, pyfile):
         """Execute a Python file.
@@ -270,11 +268,9 @@ class Manager(Qt.QObject):
                 elif key == 'devices':
                     for k in cfg['devices']:
                         if self.disableAllDevs or k in self.disableDevs:
-                            print(f"    --> Ignoring device '{k}' -- disabled by request")
-                            logMsg(f"    --> Ignoring device '{k}' -- disabled by request")
+                            logger.info(f"    --> Ignoring device '{k}' -- disabled by request")
                             continue
-                        print(f"  === Configuring device '{k}' ===")
-                        logMsg(f"  === Configuring device '{k}' ===")
+                        logger.info(f"  === Configuring device '{k}' ===")
                         try:
                             conf = cfg['devices'][k]
                             try:
@@ -285,13 +281,12 @@ class Manager(Qt.QObject):
                                 conf = conf['config']
                             self.loadDevice(driverName, conf, k)
                         except:
-                            print(f"Error configuring device {k}:")
+                            logger.error(f"Error configuring device {k}:")
                             if self.exitOnError:
                                 raise
                             else:
                                 printExc()
-                    print("=== Device configuration complete ===")
-                    logMsg("=== Device configuration complete ===")
+                    logger.info("=== Device configuration complete ===")
 
                 ## Copy in new module definitions
                 elif key == 'modules':
@@ -300,8 +295,7 @@ class Manager(Qt.QObject):
 
                 ## set new storage directory
                 elif key == 'storageDir':
-                    print(f"=== Setting base directory: {cfg['storageDir']} ===")
-                    logMsg(f"=== Setting base directory: {cfg['storageDir']} ===")
+                    logger.info(f"=== Setting base directory: {cfg['storageDir']} ===")
                     self.setBaseDir(cfg['storageDir'])
 
                 elif key == 'defaultCompression':
@@ -511,7 +505,7 @@ class Manager(Qt.QObject):
                 f = f.parent()
         except Exception:
             f = False
-            logMsg("Can't find currently selected directory, Data Manager has not been loaded.", msgType='warning')
+            logger.warning("Can't find currently selected directory, Data Manager has not been loaded.")
             if self.exitOnError:
                 raise
         return f
@@ -584,10 +578,9 @@ class Manager(Qt.QObject):
         # path = os.path.split(os.path.abspath(__file__))[0]
         # path = os.path.abspath(os.path.join(path, '..'))
         path = 'acq4'
-        print("\n---- Reloading all libraries under %s ----" % path)
+        logger.info(f"\n---- Reloading all libraries under {path} ----")
         reload.reloadAll(debug=True)
-        print("Done reloading.\n")
-        logMsg("Reloaded all libraries under %s." % path, msgType='status')
+        logger.info(f"Reloaded all libraries under {path}.")
 
     def createWindowShortcut(self, keys, win):
         ## Note: this is probably not safe to call from other threads.
@@ -690,8 +683,8 @@ class Manager(Qt.QObject):
             self.setLogDir(p)
         else:
             if logDir is None:
-                logMsg("No log directory set. Log messages will not be stored.", msgType='warning', importance=8,
-                       docs=["userGuide/dataManagement.html#notes-and-logs"])
+                docs = format_docs_str_for_html(["userGuide/dataManagement.html#notes-and-logs"])
+                logger.warning(f"No log directory set. Log messages will not be stored. See {docs}")
 
         self.currentDir.sigChanged.connect(self.currentDirChanged)
         self.sigCurrentDirChanged.emit(None, None, None)
@@ -738,9 +731,6 @@ class Manager(Qt.QObject):
         """Return a file or directory handle for d"""
         # return self.dataManager.getHandle(d)
         return DataManager.getFileHandle(d)
-
-    def showLogWindow(self):
-        self.logWindow.show()
 
     ## These functions just wrap the functionality of an InterfaceDirectory
     def declareInterface(self, *args, **kargs):  ## args should be name, [types..], object  
@@ -796,7 +786,7 @@ class Manager(Qt.QObject):
                 self.documentation.quit()
 
                 self.printIfDebug("Requesting all modules shut down..")
-                logMsg("Shutting Down.", importance=9)
+                logger.info("Shutting Down.")
                 while len(self.modules) > 0:  ## Modules may disappear from self.modules as we ask them to quit
                     m = list(self.modules.keys())[0]
                     self.printIfDebug(f"    {m}")

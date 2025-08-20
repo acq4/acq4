@@ -1,10 +1,4 @@
-from __future__ import print_function
-
-
-from acq4.util import Qt
 import acq4.Manager
-from acq4.util.LogWindow import LogWidget
-import pyqtgraph.configfile as cf
 import acq4.util.debug as debug
 
 

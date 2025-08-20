@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+import logging
 import os
 import traceback
 from contextlib import contextmanager
@@ -22,6 +23,8 @@ class Device(InterfaceMixin, Qt.QObject):  # QObject calls super, which is disas
 
     def __init__(self, deviceManager: acq4.Manager.Manager, config: dict, name: str):
         Qt.QObject.__init__(self)
+
+        self.logger = logging.getLogger(f'acq4.device.{type(self).__module__}.{name}')
 
         # task reservation lock -- this is a recursive lock to allow a task to run its own subtasks
         # (for example, setting a holding value before exiting a task).

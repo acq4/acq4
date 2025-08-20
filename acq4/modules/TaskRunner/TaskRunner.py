@@ -1,13 +1,14 @@
 import contextlib
+import gc
+import logging
+import os
+import sys
+import time
 from collections import OrderedDict
 from functools import reduce
 
-import gc
 import numpy as np
-import os
 import six
-import sys
-import time
 
 import acq4.util.DirTreeWidget as DirTreeWidget
 import pyqtgraph as pg
@@ -18,11 +19,12 @@ from acq4.util.HelpfulException import HelpfulException
 from acq4.util.SequenceRunner import runSequence
 from acq4.util.StatusBar import StatusBar
 from acq4.util.Thread import Thread
-from acq4.util.debug import printExc, Profiler, logMsg, Mutex
+from acq4.util.debug import printExc, Profiler, Mutex
 from acq4.util.future import Future
 from . import analysisModules
 from ..Module import Module
 
+logger = logging.getLogger(__name__)
 Ui_MainWindow = Qt.importTemplate('.TaskRunnerTemplate')
 
 
@@ -647,7 +649,7 @@ class TaskRunner(Module):
                 dh.flushSignals()  ## do this now rather than later when task is running
 
             self.sigTaskSequenceStarted.emit({})
-            logMsg('Started %s task sequence of length %i' % (self.currentTask.name(), pLen), importance=6)
+            logger.info(f'Started {self.currentTask.name()} task sequence of length {pLen:d}')
             # print 'PR task positions:
             future = self.taskThread.startTask(prot, paramInds)
 
@@ -979,7 +981,7 @@ class TaskThread(Thread):
             self.paramSpace = paramSpace
             self.lastRunTime = None
             self.start()  ### causes self.run() to be called from new thread
-            logMsg("Task started.", importance=1)
+            logger.debug("Task started.")
 
             return self._currentFuture
 
