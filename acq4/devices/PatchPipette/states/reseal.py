@@ -445,7 +445,6 @@ class ResealState(PatchPipetteState):
             self.sleep(0.2)
 
         self.setState("reseal deemed successful")
-        self._cleanup()
         self._moveFuture = self._retractFromTissue()
         self.waitFor(self._moveFuture)
 
