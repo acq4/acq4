@@ -634,8 +634,8 @@ class Pipette(Device, OptomechDevice):
         depth : float | None
             The target depth (in global coordinates) to advance to.
         target : np.ndarray | None
-            If specified, the pipette will advance toward this target position instead of the specified depth.
-            The target should be in global coordinates.
+            If specified, the pipette will advance toward this target position instead of the
+            specified depth. The target should be in global coordinates.
         speed : float
             The speed (in m/s) to use for the movement.
         interval : float
@@ -657,8 +657,8 @@ class Pipette(Device, OptomechDevice):
             if np.sign(direction[2]) != initial_direction:
                 break  # overshot
             distance = np.linalg.norm(direction)
-            step = pos + step * direction / distance
-            _future.waitFor(self._moveToGlobal(step, speed=speed, linear=True))
+            next_pos = pos + step * direction / distance
+            _future.waitFor(self._moveToGlobal(next_pos, speed=speed, linear=True))
             if distance <= step:
                 break
             _future.sleep(interval)
