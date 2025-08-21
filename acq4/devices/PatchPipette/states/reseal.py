@@ -459,10 +459,7 @@ class ResealState(PatchPipetteState):
 
     def _retractFromTissue(self):
         # move out of the tissue more quickly
-        dev = self.dev
-        return dev.pipetteDevice._moveToGlobal(
-            self.surfaceIntersectionPosition(), speed=self.config['postSuccessRetractionSpeed']
-        )
+        return self.dev.pipetteDevice.goApproach(speed=self.config['postSuccessRetractionSpeed'])
 
     def retractionDistance(self):
         return np.linalg.norm(
