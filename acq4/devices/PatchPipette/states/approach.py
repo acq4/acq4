@@ -27,7 +27,7 @@ class ApproachState(PatchPipetteState):
     advanceStepDistance : float
         Distance (m) per step when advanceContinuous=False (default 1 µm)
     minDetectionDistance : float
-        Minimum distance (m) from target before cell detection can be considered (default 15 µm)
+        Minimum distance (m) from target before cell detection can be considered (default 7 µm)
     aboveSurfaceSpeed : float
         Speed (m/s) to advance the pipette when above the surface (default 20 um/s)
     belowSurfaceSpeed : float
@@ -35,9 +35,11 @@ class ApproachState(PatchPipetteState):
     obstacleDetection : bool
         If True, sidestep obstacles (default False)
     obstacleRecoveryTime : float
-        Time (s) allowed after retreating from an obstacle to let resistance to return to normal (default 1 s)
+        Time (s) allowed after retreating from an obstacle to let resistance to return to
+        normal (default 1 s)
     obstacleResistanceThreshold : float
-        Resistance (Ohm) threshold above the initial resistance measurement for detecting an obstacle (default 1 MOhm)
+        Resistance (Ohm) threshold above the initial resistance measurement for detecting an
+        obstacle (default 1 MOhm)
     sidestepLateralDistance : float
         Distance (m) to sidestep an obstacle (default 10 µm)
     sidestepBackupDistance : float
@@ -51,11 +53,13 @@ class ApproachState(PatchPipetteState):
     cellfieStep : float
         Vertical distance (m) between z-stack slices (default 1 µm)
     cellfiePipetteClearance : float
-        Minimum distance (m) between target and pipette tip in which to allow the z-stack to be taken (default 100 µm)
+        Minimum distance (m) between target and pipette tip in which to allow the z-stack to be
+        taken (default 100 µm)
     pipetteRecalibrateDistance : float
         Distance between pipette and target at which to pause and recalibrate the pipette offset
+        (default 75 µm)
     pipetteRecalibrationMaxChange : float
-        Maximum distance allowed for an automatic pipette tip position update
+        Maximum distance allowed for an automatic pipette tip position update (default 15 µm)
     """
 
     stateName = "approach"
@@ -71,7 +75,7 @@ class ApproachState(PatchPipetteState):
         "advanceContinuous": {"default": True, "type": "bool"},
         "advanceStepInterval": {"default": 0.1, "type": "float", "suffix": "s"},
         "advanceStepDistance": {"default": 1e-6, "type": "float", "suffix": "m"},
-        "minDetectionDistance": {"default": 15e-6, "type": "float", "suffix": "m"},
+        "minDetectionDistance": {"default": 7e-6, "type": "float", "suffix": "m"},
         "aboveSurfaceSpeed": {"default": 20e-6, "type": "float", "suffix": "m/s"},
         "belowSurfaceSpeed": {"default": 5e-6, "type": "float", "suffix": "m/s"},
         "visualTargetTracking": {"default": False, "type": "bool"},
@@ -114,7 +118,7 @@ class ApproachState(PatchPipetteState):
     def _calc_direction(self):
         # what direction are we moving?
         pip = self.dev.pipetteDevice
-        direction = np.array(pip.targetPosition()) - np.array(pip.globalPosition())
+        direction = np.array(self.endpoint()) - np.array(pip.globalPosition())
         return direction / np.linalg.norm(direction)
 
     def _onTargetChanged(self, pos):
@@ -157,7 +161,10 @@ class ApproachState(PatchPipetteState):
 
     def _maybeTakeACellfie(self):
         config = self.config
-        if not config["takeACellfie"] or self._distanceToTarget() <= config["cellfiePipetteClearance"]:
+        if (
+            not config["takeACellfie"]
+            or self._distanceToTarget() <= config["cellfiePipetteClearance"]
+        ):
             return
         self.setState("approach: taking initial z-stack")
         self.waitFor(self.dev.focusOnTarget("fast"))
@@ -178,14 +185,17 @@ class ApproachState(PatchPipetteState):
         if self._distanceToTarget() < self.config["pipetteRecalibrateDistance"]:
             if self._moveFuture is not None:
                 # should restart on next main loop
-                self._moveFuture.stop("Make sure the pipette is where we expect it to be", wait=True)
+                self._moveFuture.stop(
+                    "Make sure the pipette is where we expect it to be", wait=True
+                )
                 self._moveFuture = None
 
             pip = self.dev.pipetteDevice
             imgr = self.dev.imagingDevice()
             manager = getManager()
             with manager.reserveDevices(
-                [pip, imgr, imgr.scopeDev.positionDevice(), imgr.scopeDev.focusDevice()], timeout=30.0
+                [pip, imgr, imgr.scopeDev.positionDevice(), imgr.scopeDev.focusDevice()],
+                timeout=30.0,
             ):
                 self.sleep(1.0)
                 initial_pos = pos = np.array(pip.globalPosition())
@@ -202,7 +212,9 @@ class ApproachState(PatchPipetteState):
                     pip.resetGlobalPosition(pos)
                     self.setState(f"Recalibrate finished (found tip again at {pos})")
                 else:
-                    self.setState(f"cancel pipette position update; prediction is too far away ({dist*1e6}µm)")
+                    self.setState(
+                        f"cancel pipette position update; prediction is too far away ({dist*1e6}µm)"
+                    )
 
             self._pipetteRecalibrated = True
 
@@ -212,7 +224,8 @@ class ApproachState(PatchPipetteState):
         if self.aboveSurface():
             self.setState("move to surface")
             self._waitForMoveWhileTargetChanges(
-                self.surfaceIntersectionPosition, config['aboveSurfaceSpeed'], True, _future)
+                self.surfaceIntersectionPosition, config['aboveSurfaceSpeed'], True, _future
+            )
         self.setState(f'move to endpoint: {self.endpoint()}')
         self._waitForMoveWhileTargetChanges(
             position_fn=self.endpoint,
@@ -224,7 +237,7 @@ class ApproachState(PatchPipetteState):
         )
 
     def endpoint(self):
-        """Return the last position along the pipette search path to be traveled at full speed."""
+        """Return the last position along the pipette search path to be traveled to at full speed."""
         pip = self.dev.pipetteDevice
         target = np.array(pip.targetPosition())
         return target - (self.direction_unit * self.config["minDetectionDistance"])
@@ -238,7 +251,8 @@ class ApproachState(PatchPipetteState):
 
     def sidestepDirection(self, vector):
         """
-        Create a vector orthogonal to the input vector, oriented π/2 radians more widdershins than last invocation.
+        Create a vector orthogonal to the input vector, oriented π/2 radians more widdershins than
+        last invocation.
 
         Parameters:
         vector : ndarray
@@ -260,7 +274,9 @@ class ApproachState(PatchPipetteState):
         ortho_vec2 = np.cross(unit_vector, ortho_vec)
 
         # Apply the rotation by angle in the plane of ortho_vec and ortho_vec2
-        return ortho_vec * np.cos(self._sidestepDirection) + ortho_vec2 * np.sin(self._sidestepDirection)
+        return ortho_vec * np.cos(self._sidestepDirection) + ortho_vec2 * np.sin(
+            self._sidestepDirection
+        )
 
     def avoidObstacle(self, already_retracted=False):
         self.setState("avoiding obstacle" + (" (recursively)" if already_retracted else ""))
