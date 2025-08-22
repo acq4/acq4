@@ -20,12 +20,14 @@ from . import __version__
 from . import devices, modules
 from .Interfaces import InterfaceDirectory
 from .devices.Device import Device, DeviceTask
+from .logging_config import get_logger, setup_logging
 from .util import DataManager, ptime, Qt
 from .util.DataManager import DirHandle
 from .util.HelpfulException import HelpfulException
 from .util.LogWindow import get_log_window, format_docs_str_for_html
 
-logger = logging.getLogger(__name__)
+setup_logging("temp_log.json", log_window=False, console_level=logging.INFO)
+logger = get_logger("acq4")
 
 
 def __reload__(old):
@@ -96,6 +98,7 @@ class Manager(Qt.QObject):
         self.alreadyQuit = False
         self.taskLock = Mutex(Qt.QMutex.Recursive)
         self._folderTypes = None
+        self._logFile = None
 
         try:
             if Manager.CREATED:
@@ -202,7 +205,7 @@ class Manager(Qt.QObject):
         self.configure(self.config)
 
         self.configFile = configFile
-        logger.info("\n============= Manager configuration complete =================\n")
+        logger.info("============= Manager configuration complete =================")
 
     def exec_(self, pyfile):
         """Execute a Python file.
@@ -323,14 +326,15 @@ class Manager(Qt.QObject):
                     css = open(os.path.join(self.configDir, cfg['stylesheet'])).read()
                     Qt.QApplication.instance().setStyleSheet(css)
 
-                elif key == 'disableErrorPopups':
-                    if cfg[key] is True:
-                        self.logWindow.disablePopups(True)
-                    elif cfg[key] is False:
-                        self.logWindow.disablePopups(False)
-                    else:
-                        print(
-                            "Warning: ignored config option 'disableErrorPopups'; value must be either True or False.")
+                # TODO how will this work in the new logging scheme?
+                # elif key == 'disableErrorPopups':
+                #     if cfg[key] is True:
+                #         self.logWindow.disablePopups(True)
+                #     elif cfg[key] is False:
+                #         self.logWindow.disablePopups(False)
+                #     else:
+                #         print(
+                #             "Warning: ignored config option 'disableErrorPopups'; value must be either True or False.")
 
                 elif key == 'defaultMouseMode':
                     mode = cfg[key].lower()
@@ -578,7 +582,7 @@ class Manager(Qt.QObject):
         # path = os.path.split(os.path.abspath(__file__))[0]
         # path = os.path.abspath(os.path.join(path, '..'))
         path = 'acq4'
-        logger.info(f"\n---- Reloading all libraries under {path} ----")
+        logger.info(f"---- Reloading all libraries under {path} ----")
         reload.reloadAll(debug=True)
         logger.info(f"Reloaded all libraries under {path}.")
 
@@ -650,11 +654,12 @@ class Manager(Qt.QObject):
                                     docs=["userGuide/modules/DataManager.html#acquired-data-storage"])
         return self.currentDir
 
-    def setLogDir(self, d):
+    def setLogDir(self, d: DirHandle):
         """
         Set the directory to which log messages are stored.
         """
-        self.logWindow.setLogDir(d)
+        self._logFile = d["log.json"]
+        setup_logging(self._logFile.name())
 
     def setCurrentDir(self, d):
         """
@@ -675,11 +680,11 @@ class Manager(Qt.QObject):
 
         p = self.currentDir
 
-        ## Storage directory is about to change; 
-        logDir = self.logWindow.getLogDir()
+        # Storage directory is about to change;
+        logDir = self._logFile.parent() if self._logFile is not None else None
         while not p.info().get('expUnit', False) and p != self.baseDir and p != logDir:
             p = p.parent()
-        if p != self.baseDir and p != logDir:
+        if p not in [self.baseDir, logDir]:
             self.setLogDir(p)
         else:
             if logDir is None:
