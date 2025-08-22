@@ -185,7 +185,7 @@ class CellDetectState(PatchPipetteState):
     visualTargetTracking : bool
         If True, the pipette will visually track the cell position while advancing (default False)
     minDetectionDistance : float
-        Minimum distance (m) from target before cell detection can be considered (default 15 µm)
+        Minimum distance (m) from target before cell detection can be considered (default 7 µm)
     maxAdvanceDistance : float | None
         Maximum distance (m) to advance past starting point (default None)
     maxAdvanceDistancePastTarget : float | None
@@ -275,7 +275,7 @@ class CellDetectState(PatchPipetteState):
         'slowDetectionSteps': {'default': 3, 'type': 'int'},
         'breakThreshold': {'default': -1e6, 'type': 'float', 'suffix': 'Ω'},
         'cellDetectTimeout': {'default': 30, 'type': 'float', 'suffix': 's'},
-        'minDetectionDistance': {'default': 15e-6, 'type': 'float', 'suffix': 'm'},
+        'minDetectionDistance': {'default': 7e-6, 'type': 'float', 'suffix': 'm'},
         'pokeDistance': {'default': 3e-6, 'type': 'float', 'suffix': 'm'},
         'reachedEndpointState': {'default': 'seal', 'type': 'str'},
     }

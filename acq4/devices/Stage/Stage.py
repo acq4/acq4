@@ -237,6 +237,14 @@ class Stage(Device, OptomechDevice):
                 self._inverseAxisTransform.scale(*[1.0 / x for x in scale])
         return pg.Transform3D(self._axisTransform)
 
+    def mapVectorToGlobal(self, v):
+        """Map a vector in global scale but along internal device axes to global."""
+        xform = self.axisTransform()  # has scale baked in
+        xform = np.array(xform.copyDataTo()).reshape(4, 4)
+        xform = AffineTransform(matrix=xform[:3, :3], offset=xform[:3, 3])
+        scale = self.config.get('scale', [1, 1, 1])
+        return (xform.map(v) - xform.map([0, 0, 0])) / scale
+
     def setAxisTransform(self, tr):
         self._axisTransform = tr
         self._inverseAxisTransform = None

@@ -27,7 +27,7 @@ class ApproachState(PatchPipetteState):
     advanceStepDistance : float
         Distance (m) per step when advanceContinuous=False (default 1 µm)
     minDetectionDistance : float
-        Minimum distance (m) from target before cell detection can be considered (default 15 µm)
+        Minimum distance (m) from target before cell detection can be considered (default 7 µm)
     aboveSurfaceSpeed : float
         Speed (m/s) to advance the pipette when above the surface (default 20 um/s)
     belowSurfaceSpeed : float
@@ -71,7 +71,7 @@ class ApproachState(PatchPipetteState):
         "advanceContinuous": {"default": True, "type": "bool"},
         "advanceStepInterval": {"default": 0.1, "type": "float", "suffix": "s"},
         "advanceStepDistance": {"default": 1e-6, "type": "float", "suffix": "m"},
-        "minDetectionDistance": {"default": 15e-6, "type": "float", "suffix": "m"},
+        "minDetectionDistance": {"default": 7e-6, "type": "float", "suffix": "m"},
         "aboveSurfaceSpeed": {"default": 20e-6, "type": "float", "suffix": "m/s"},
         "belowSurfaceSpeed": {"default": 5e-6, "type": "float", "suffix": "m/s"},
         "visualTargetTracking": {"default": False, "type": "bool"},
@@ -114,7 +114,7 @@ class ApproachState(PatchPipetteState):
     def _calc_direction(self):
         # what direction are we moving?
         pip = self.dev.pipetteDevice
-        direction = np.array(pip.targetPosition()) - np.array(pip.globalPosition())
+        direction = np.array(self.endpoint()) - np.array(pip.globalPosition())
         return direction / np.linalg.norm(direction)
 
     def _onTargetChanged(self, pos):
@@ -224,7 +224,7 @@ class ApproachState(PatchPipetteState):
         )
 
     def endpoint(self):
-        """Return the last position along the pipette search path to be traveled at full speed."""
+        """Return the last position along the pipette search path to be traveled to at full speed."""
         pip = self.dev.pipetteDevice
         target = np.array(pip.targetPosition())
         return target - (self.direction_unit * self.config["minDetectionDistance"])
