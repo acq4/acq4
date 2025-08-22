@@ -7,10 +7,9 @@ import numpy as np
 import pyqtgraph as pg
 
 from acq4.util import ptime
+from acq4.util.debug import except_and_print
 from acq4.util.functions import plottable_booleans
 from acq4.util.future import future_wrap
-from acq4_automation.feature_tracking.cell import Cell
-from coorx import Point
 from ._base import PatchPipetteState, SteadyStateAnalysisBase
 
 
@@ -186,7 +185,7 @@ class CellDetectState(PatchPipetteState):
     visualTargetTracking : bool
         If True, the pipette will visually track the cell position while advancing (default False)
     minDetectionDistance : float
-        Minimum distance (m) from target before cell detection can be considered (default 15 µm)
+        Minimum distance (m) from target before cell detection can be considered (default 7 µm)
     maxAdvanceDistance : float | None
         Maximum distance (m) to advance past starting point (default None)
     maxAdvanceDistancePastTarget : float | None
@@ -200,6 +199,8 @@ class CellDetectState(PatchPipetteState):
     detectionSpeed : float
         Speed (m/s) to advance the pipette if advanceContinuous=True and when close to the target/area-of-search
         (default 2 um/s)
+    preTargetReposition : bool
+        If True, move to a position just above the target before reaching the target (default False)
     preTargetWiggle : bool
         If True, wiggle the pipette before reaching the target (default False)
     preTargetWiggleRadius : float
@@ -263,12 +264,13 @@ class CellDetectState(PatchPipetteState):
         'belowSurfaceSpeed': {'default': 5e-6, 'type': 'float', 'suffix': 'm/s'},
         'detectionSpeed': {'default': 2e-6, 'type': 'float', 'suffix': 'm/s'},
         'visualTargetTracking': {'default': False, 'type': 'bool'},
+        'preTargetReposition': {'default': False, 'type': 'bool'},
         'preTargetWiggle': {'default': False, 'type': 'bool'},
         'preTargetWiggleRadius': {'default': 8e-6, 'type': 'float', 'suffix': 'm'},
         'preTargetWiggleStep': {'default': 5e-6, 'type': 'float', 'suffix': 'm'},
         'preTargetWiggleDuration': {'default': 6, 'type': 'float', 'suffix': 's'},
         'preTargetWiggleSpeed': {'default': 5e-6, 'type': 'float', 'suffix': 'm/s'},
-        'searchAroundAtTarget': {'default': True, 'type': 'bool'},
+        'searchAroundAtTarget': {'default': False, 'type': 'bool'},
         'searchAroundAtTargetRadius': {'default': 1.5e-6, 'type': 'float', 'suffix': 'm'},
         'baselineResistanceTau': {'default': 20, 'type': 'float', 'suffix': 's'},
         'fastDetectionThreshold': {'default': 1e6, 'type': 'float', 'suffix': 'Ω'},
@@ -276,7 +278,7 @@ class CellDetectState(PatchPipetteState):
         'slowDetectionSteps': {'default': 3, 'type': 'int'},
         'breakThreshold': {'default': -1e6, 'type': 'float', 'suffix': 'Ω'},
         'cellDetectTimeout': {'default': 30, 'type': 'float', 'suffix': 's'},
-        'minDetectionDistance': {'default': 15e-6, 'type': 'float', 'suffix': 'm'},
+        'minDetectionDistance': {'default': 7e-6, 'type': 'float', 'suffix': 'm'},
         'pokeDistance': {'default': 3e-6, 'type': 'float', 'suffix': 'm'},
         'reachedEndpointState': {'default': 'seal', 'type': 'str'},
     }
@@ -309,7 +311,6 @@ class CellDetectState(PatchPipetteState):
                 if self._moveFuture is not None:
                     self._moveFuture.stop("cell detected", wait=True)
                     self._moveFuture = None
-                self.pokeCell()
                 return self._transition_to_seal(detectedThresholdSpeed)
             self.checkStop()
             self.processAtLeastOneTestPulse()
@@ -322,12 +323,17 @@ class CellDetectState(PatchPipetteState):
             if config['autoAdvance']:
                 if self._moveFuture is None:
                     self._moveFuture = self._move()
-                if self._moveFuture.isDone() and self._reachedEndpoint:
-                    return self._transition_to_fallback("No cell found before end of search path")
+                if self._moveFuture.isDone():
+                    self._moveFuture.printInterestingExceptions("Error during move")
+                    self._moveFuture = None
+                    if self._reachedEndpoint:
+                        return self._transition_to_fallback(
+                            "No cell found before end of search path"
+                        )
 
         return self._transition_to_fallback("Timed out waiting for cell detect.")
 
-    def pokeCell(self):
+    def pokeCell(self, _future):
         """Move pipette slightly deeper towards center of cell"""
         poke = self.config['pokeDistance']
         if poke == 0:
@@ -339,7 +345,7 @@ class CellDetectState(PatchPipetteState):
         dist = np.linalg.norm(dif)
         if dist > poke:
             goto = pos + dif * (poke / dist)
-            self.waitFor(pip._moveToGlobal(goto, self.config['detectionSpeed']))
+            _future.waitFor(pip._moveToGlobal(goto, self.config['detectionSpeed']))
 
     def processAtLeastOneTestPulse(self):
         tps = super().processAtLeastOneTestPulse()
@@ -394,6 +400,12 @@ class CellDetectState(PatchPipetteState):
         target = np.array(pip.targetPosition())
         return target - (self.direction_unit * self.config['minDetectionDistance'])
 
+    def preTargetPosition(self):
+        """Return the position just above the target position, offset by minDetectionDistance."""
+        pip = self.dev.pipetteDevice
+        target = np.array(pip.targetPosition())
+        return target + (0, 0, self.config['minDetectionDistance'])
+
     def finalSearchEndpoint(self):
         """Return the final position along the pipette search path, taking into account
         maxAdvanceDistance, maxAdvanceDepthBelowSurface, and maxAdvanceDistancePastTarget.
@@ -407,22 +419,22 @@ class CellDetectState(PatchPipetteState):
 
         endpoint = None
 
-        # max search distance
-        if config['maxAdvanceDistance'] is not None:
-            endpoint = self._initialPos + pip.globalDirection() * config['maxAdvanceDistance']
+        if config['advanceMode'] != 'target':
+            if config['maxAdvanceDistance']:
+                # max search distance
+                endpoint = self._initialPos + pip.globalDirection() * config['maxAdvanceDistance']
 
-        # max surface depth
-        if config['maxAdvanceDepthBelowSurface'] is not None and pip.globalDirection()[2] < 0:
-            endDepth = surface - config['maxAdvanceDepthBelowSurface']
-            depthEndpt = pip.positionAtDepth(endDepth)
-            # is the surface depth endpoint closer?
-            if endpoint is None or np.linalg.norm(endpoint - pos) > np.linalg.norm(
-                depthEndpt - pos
-            ):
-                endpoint = depthEndpt
-
-        # max distance past target
-        if config['advanceMode'] == 'target' and config['maxAdvanceDistancePastTarget'] is not None:
+            elif config['maxAdvanceDepthBelowSurface'] is not None and pip.globalDirection()[2] < 0:
+                # max surface depth
+                endDepth = surface - config['maxAdvanceDepthBelowSurface']
+                depthEndpt = pip.positionAtDepth(endDepth)
+                # is the surface depth endpoint closer?
+                if endpoint is None or np.linalg.norm(endpoint - pos) > np.linalg.norm(
+                    depthEndpt - pos
+                ):
+                    endpoint = depthEndpt
+        elif config['maxAdvanceDistancePastTarget'] is not None:
+            # target mode
             targetEndpt = target + pip.globalDirection() * config['maxAdvanceDistancePastTarget']
             # is the target endpoint closer?
             if endpoint is None or np.linalg.norm(endpoint - pos) > np.linalg.norm(
@@ -458,6 +470,13 @@ class CellDetectState(PatchPipetteState):
             self.setState("moved to detection area")
         if config['preTargetWiggle']:
             self._wiggle(_future, self.finalSearchEndpoint())
+        if config['preTargetReposition']:
+            _future.waitFor(
+                self.dev.pipetteDevice._moveToGlobal(
+                    self.preTargetPosition(), speed=config['detectionSpeed']
+                )
+            )
+        self.setState("moving to final search endpoint")
         self._waitForMoveWhileTargetChanges(
             self.finalSearchEndpoint,
             config['detectionSpeed'],
@@ -469,6 +488,7 @@ class CellDetectState(PatchPipetteState):
         if config['searchAroundAtTarget']:
             self._searchAround(_future)
 
+        self.pokeCell(_future)
         self._reachedEndpoint = True
 
     def _wiggle(self, future, endpoint):
@@ -501,6 +521,7 @@ class CellDetectState(PatchPipetteState):
 
     def _searchAround(self, future):
         """Slowly describe a circle on a vertical plane perpendicular to the yaw of the pipette."""
+        self.setState("searching around target")
         radius = self.config['searchAroundAtTargetRadius']
         speed = self.config['detectionSpeed']
         vertical = np.array((0, 0, 1))
@@ -520,7 +541,9 @@ class CellDetectState(PatchPipetteState):
 
     def _cleanup(self):
         if self._moveFuture is not None and not self._moveFuture.isDone():
-            self._moveFuture.stop()
-        patchrec = self.dev.patchRecord()
-        patchrec['cellDetectFinalTarget'] = tuple(self.dev.pipetteDevice.targetPosition())
+            with except_and_print(Exception, "Error stopping move during cleanup"):
+                self._moveFuture.stop()
+        with except_and_print(Exception, "Error storing target position"):
+            patchrec = self.dev.patchRecord()
+            patchrec['cellDetectFinalTarget'] = tuple(self.dev.pipetteDevice.targetPosition())
         return super()._cleanup()

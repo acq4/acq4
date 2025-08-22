@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import contextlib
+
 import numpy as np
 
 import pyqtgraph as pg
 from acq4.util import ptime
+from acq4.util.debug import except_and_print
 from acq4.util.functions import plottable_booleans
 from acq4.util.future import Future, future_wrap
-from acq4.util.debug import printExc
 from ._base import PatchPipetteState, SteadyStateAnalysisBase
 
 
@@ -19,8 +20,12 @@ class ResealAnalysis(SteadyStateAnalysisBase):
         representative = cls(*args, **kwargs)
         return {
             '': [
-                pg.InfiniteLine(movable=False, pos=representative._stretch_threshold, angle=0, pen=pg.mkPen('w')),
-                pg.InfiniteLine(movable=False, pos=representative._tearing_threshold, angle=0, pen=pg.mkPen('w'))
+                pg.InfiniteLine(
+                    movable=False, pos=representative._stretch_threshold, angle=0, pen=pg.mkPen('w')
+                ),
+                pg.InfiniteLine(
+                    movable=False, pos=representative._tearing_threshold, angle=0, pen=pg.mkPen('w')
+                ),
             ]
         }
 
@@ -31,17 +36,76 @@ class ResealAnalysis(SteadyStateAnalysisBase):
         for d in data:
             analyzer = ResealAnalysis(*args, **kwargs)
             analysis = analyzer.process_measurements(d)
-            plots['Ω'].append(dict(x=analysis["time"], y=analysis["detect_avg"], pen=pg.mkPen('b'), name=None if names else 'Detect Avg'))
-            plots['Ω'].append(dict(x=analysis["time"], y=analysis["repair_avg"], pen=pg.mkPen(90, 140, 255), name=None if names else 'Repair Avg'))
-            plots[''].append(dict(x=analysis["time"], y=analysis["detect_ratio"], pen=pg.mkPen('b'), name=None if names else 'Detect Ratio'))
-            plots[''].append(dict(x=analysis["time"], y=analysis["repair_ratio"], pen=pg.mkPen(90, 140, 255), name=None if names else 'Repair Ratio'))
-            plots[''].append(dict(x=analysis["time"], y=plottable_booleans(analysis["stretching"]), pen=pg.mkPen('y'), symbol='x', name=None if names else 'Stretching'))
-            plots[''].append(dict(x=analysis["time"], y=plottable_booleans(analysis["tearing"]), pen=pg.mkPen('r'), symbol='o', name=None if names else 'Tearing'))
-            plots[''].append(dict(x=analysis["time"], y=plottable_booleans(analysis["torn"]), pen=pg.mkPen('r'), symbol='x', name=None if names else 'Torn'))
+            plots['Ω'].append(
+                dict(
+                    x=analysis["time"],
+                    y=analysis["detect_avg"],
+                    pen=pg.mkPen('b'),
+                    name=None if names else 'Detect Avg',
+                )
+            )
+            plots['Ω'].append(
+                dict(
+                    x=analysis["time"],
+                    y=analysis["repair_avg"],
+                    pen=pg.mkPen(90, 140, 255),
+                    name=None if names else 'Repair Avg',
+                )
+            )
+            plots[''].append(
+                dict(
+                    x=analysis["time"],
+                    y=analysis["detect_ratio"],
+                    pen=pg.mkPen('b'),
+                    name=None if names else 'Detect Ratio',
+                )
+            )
+            plots[''].append(
+                dict(
+                    x=analysis["time"],
+                    y=analysis["repair_ratio"],
+                    pen=pg.mkPen(90, 140, 255),
+                    name=None if names else 'Repair Ratio',
+                )
+            )
+            plots[''].append(
+                dict(
+                    x=analysis["time"],
+                    y=plottable_booleans(analysis["stretching"]),
+                    pen=pg.mkPen('y'),
+                    symbol='x',
+                    name=None if names else 'Stretching',
+                )
+            )
+            plots[''].append(
+                dict(
+                    x=analysis["time"],
+                    y=plottable_booleans(analysis["tearing"]),
+                    pen=pg.mkPen('r'),
+                    symbol='o',
+                    name=None if names else 'Tearing',
+                )
+            )
+            plots[''].append(
+                dict(
+                    x=analysis["time"],
+                    y=plottable_booleans(analysis["torn"]),
+                    pen=pg.mkPen('r'),
+                    symbol='x',
+                    name=None if names else 'Torn',
+                )
+            )
             names = True
         return plots
 
-    def __init__(self, stretch_threshold: float, tearing_threshold: float, torn_threshold: float, detection_tau: float, repair_tau: float):
+    def __init__(
+        self,
+        stretch_threshold: float,
+        tearing_threshold: float,
+        torn_threshold: float,
+        detection_tau: float,
+        repair_tau: float,
+    ):
         super().__init__()
         self._stretch_threshold = stretch_threshold
         self._tearing_threshold = tearing_threshold
@@ -74,7 +138,8 @@ class ResealAnalysis(SteadyStateAnalysisBase):
                 ('stretching', bool),
                 ('tearing', bool),
                 ('torn', bool),
-            ])
+            ],
+        )
         for i, measurement in enumerate(measurements):
             start_time, resistance = measurement
             if i == 0:
@@ -90,12 +155,18 @@ class ResealAnalysis(SteadyStateAnalysisBase):
             dt = start_time - last_measurement['time']
 
             detect_avg, detection_ratio = self.exponential_decay_avg(
-                dt, last_measurement['detect_avg'], resistance, self._detection_tau)
+                dt, last_measurement['detect_avg'], resistance, self._detection_tau
+            )
             repair_avg, repair_ratio = self.exponential_decay_avg(
-                dt, last_measurement['repair_avg'], resistance, self._repair_tau)
+                dt, last_measurement['repair_avg'], resistance, self._repair_tau
+            )
 
-            is_stretching = detection_ratio > self._stretch_threshold or repair_ratio > self._stretch_threshold
-            is_tearing = detection_ratio < self._tearing_threshold or repair_ratio < self._tearing_threshold
+            is_stretching = (
+                detection_ratio > self._stretch_threshold or repair_ratio > self._stretch_threshold
+            )
+            is_tearing = (
+                detection_ratio < self._tearing_threshold or repair_ratio < self._tearing_threshold
+            )
             is_torn = repair_avg < self._torn_threshold
             ret_array[i] = (
                 start_time,
@@ -209,9 +280,9 @@ class ResealState(PatchPipetteState):
         'postSuccessRetractionSpeed': {'type': 'float', 'default': 6e-6, 'suffix': 'm/s'},
         'detectionTau': {'type': 'float', 'default': 1, 'suffix': 's'},
         'repairTau': {'type': 'float', 'default': 10, 'suffix': 's'},
-        'stretchDetectionThreshold': {'type': 'float', 'default': 0.005},
-        'tearDetectionThreshold': {'type': 'float', 'default': -0.00128},
-        'tornDetectionThreshold': {'type': 'float', 'default': 0.5},
+        'stretchDetectionThreshold': {'type': 'float', 'default': 0.005, 'suffix': '%'},
+        'tearDetectionThreshold': {'type': 'float', 'default': -0.00128, 'suffix': '%'},
+        'tornDetectionThreshold': {'type': 'float', 'default': 0.5, 'suffix': '%'},
         'slurpPressure': {'type': 'float', 'default': -10e3, 'suffix': 'Pa'},
         'slurpRetractionSpeed': {'type': 'float', 'default': 10e-6, 'suffix': 'm/s'},
         'slurpDuration': {'type': 'float', 'default': 10, 'suffix': 's'},
@@ -234,9 +305,12 @@ class ResealState(PatchPipetteState):
 
         @contextlib.contextmanager
         def pressure_ramp():
-            self.dev.pressureDevice.setPressure(source='regulator', pressure=self.config['nuzzleInitialPressure'])
+            self.dev.pressureDevice.setPressure(
+                source='regulator', pressure=self.config['nuzzleInitialPressure']
+            )
             self._pressureFuture = self.dev.pressureDevice.rampPressure(
-                target=self.config['nuzzlePressureLimit'], duration=self.config['nuzzleDuration'])
+                target=self.config['nuzzlePressureLimit'], duration=self.config['nuzzleDuration']
+            )
             yield
             self.waitFor(self._pressureFuture)
 
@@ -285,7 +359,8 @@ class ResealState(PatchPipetteState):
 
     def isRetractionSuccessful(self):
         if self.retractionDistance() > self.config['retractionSuccessDistance'] or (
-                self._lastResistance is not None and self._lastResistance > self.successResistanceThreshold()
+            self._lastResistance is not None
+            and self._lastResistance > self.successResistanceThreshold()
         ):
             if self._firstSuccessTime is None:
                 self._firstSuccessTime = ptime.time()
@@ -301,10 +376,11 @@ class ResealState(PatchPipetteState):
         if self._analysis is None:
             self._preAnalysisTpss += tps
             if len(self._preAnalysisTpss) >= 10:
+                torn_if = self.preAnalysisResistance() * self.config['tornDetectionThreshold']
                 self._analysis = ResealAnalysis(
                     stretch_threshold=self.config['stretchDetectionThreshold'],
                     tearing_threshold=self.config['tearDetectionThreshold'],
-                    torn_threshold=self.preAnalysisResistance() * self.config['tornDetectionThreshold'],
+                    torn_threshold=torn_if,
                     detection_tau=self.config['detectionTau'],
                     repair_tau=self.config['repairTau'],
                 )
@@ -327,7 +403,10 @@ class ResealState(PatchPipetteState):
         recovery_future = None
         retraction_future = None
         while not self.isRetractionSuccessful():
-            if config['resealTimeout'] is not None and ptime.time() - start_time > config['resealTimeout']:
+            if (
+                config['resealTimeout'] is not None
+                and ptime.time() - start_time > config['resealTimeout']
+            ):
                 self._taskDone(interrupted=True, error="Timed out attempting to reseal.")
                 return config['fallbackState']
 
@@ -354,8 +433,11 @@ class ResealState(PatchPipetteState):
                 self._taskDone(interrupted=True, error="Tissue is torn beyond repair.")
                 return config['fallbackState']
             elif retraction_future is None or retraction_future.wasInterrupted():
-                if recovery_future is not None and not recovery_future.isDone():
-                    recovery_future.stop()
+                if retraction_future is not None:
+                    retraction_future.printInterestingExceptions("Reseal retraction error")
+                if recovery_future is not None:
+                    recovery_future.stop(wait=True)
+                    recovery_future.printInterestingExceptions("Reseal recovery error")
                 self.setState("retracting")
                 self._moveFuture = retraction_future = dev.pipetteDevice.stepwiseAdvance(
                     depth=dev.pipetteDevice.approachDepth(),
@@ -367,7 +449,6 @@ class ResealState(PatchPipetteState):
             self.sleep(0.2)
 
         self.setState("reseal deemed successful")
-        self._cleanup()
         self._moveFuture = self._retractFromTissue()
         self.waitFor(self._moveFuture)
 
@@ -382,23 +463,21 @@ class ResealState(PatchPipetteState):
 
     def _retractFromTissue(self):
         # move out of the tissue more quickly
-        dev = self.dev
-        return dev.pipetteDevice._moveToGlobal(
-            self.surfaceIntersectionPosition(), speed=self.config['postSuccessRetractionSpeed'])
+        pip = self.dev.pipetteDevice
+        surface = pip.scopeDevice().surfaceDepth()
+        return pip._moveToGlobal(
+            self.positionAtDepth(surface), speed=self.config['postSuccessRetractionSpeed'])
 
     def retractionDistance(self):
-        return np.linalg.norm(np.array(self.dev.pipetteDevice.globalPosition()) - self._startPosition)
+        return np.linalg.norm(
+            np.array(self.dev.pipetteDevice.globalPosition()) - self._startPosition
+        )
 
     def _cleanup(self):
         if self._moveFuture is not None:
-            # TODO individually try-wrap these so all steps are attempted
-            try:
+            with except_and_print(Exception, "Failed to stop move future"):
                 self._moveFuture.stop()
-            except Exception:
-                printExc("Failed to stop move future")
         if self._pressureFuture is not None:
-            try:
+            with except_and_print(Exception, "Failed to stop pressure future"):
                 self._pressureFuture.stop()
-            except Exception:
-                printExc("Failed to stop pressure future")
         return super()._cleanup()
