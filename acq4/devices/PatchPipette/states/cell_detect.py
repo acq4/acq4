@@ -199,6 +199,8 @@ class CellDetectState(PatchPipetteState):
     detectionSpeed : float
         Speed (m/s) to advance the pipette if advanceContinuous=True and when close to the target/area-of-search
         (default 2 um/s)
+    preTargetReposition : bool
+        If True, move to a position just above the target before reaching the target (default False)
     preTargetWiggle : bool
         If True, wiggle the pipette before reaching the target (default False)
     preTargetWiggleRadius : float
@@ -262,12 +264,13 @@ class CellDetectState(PatchPipetteState):
         'belowSurfaceSpeed': {'default': 5e-6, 'type': 'float', 'suffix': 'm/s'},
         'detectionSpeed': {'default': 2e-6, 'type': 'float', 'suffix': 'm/s'},
         'visualTargetTracking': {'default': False, 'type': 'bool'},
+        'preTargetReposition': {'default': False, 'type': 'bool'},
         'preTargetWiggle': {'default': False, 'type': 'bool'},
         'preTargetWiggleRadius': {'default': 8e-6, 'type': 'float', 'suffix': 'm'},
         'preTargetWiggleStep': {'default': 5e-6, 'type': 'float', 'suffix': 'm'},
         'preTargetWiggleDuration': {'default': 6, 'type': 'float', 'suffix': 's'},
         'preTargetWiggleSpeed': {'default': 5e-6, 'type': 'float', 'suffix': 'm/s'},
-        'searchAroundAtTarget': {'default': True, 'type': 'bool'},
+        'searchAroundAtTarget': {'default': False, 'type': 'bool'},
         'searchAroundAtTargetRadius': {'default': 1.5e-6, 'type': 'float', 'suffix': 'm'},
         'baselineResistanceTau': {'default': 20, 'type': 'float', 'suffix': 's'},
         'fastDetectionThreshold': {'default': 1e6, 'type': 'float', 'suffix': 'Ω'},
@@ -324,7 +327,9 @@ class CellDetectState(PatchPipetteState):
                     self._moveFuture.printInterestingExceptions("Error during move")
                     self._moveFuture = None
                     if self._reachedEndpoint:
-                        return self._transition_to_fallback("No cell found before end of search path")
+                        return self._transition_to_fallback(
+                            "No cell found before end of search path"
+                        )
 
         return self._transition_to_fallback("Timed out waiting for cell detect.")
 
@@ -395,6 +400,12 @@ class CellDetectState(PatchPipetteState):
         target = np.array(pip.targetPosition())
         return target - (self.direction_unit * self.config['minDetectionDistance'])
 
+    def preTargetPosition(self):
+        """Return the position just above the target position, offset by minDetectionDistance."""
+        pip = self.dev.pipetteDevice
+        target = np.array(pip.targetPosition())
+        return target + (0, 0, self.config['minDetectionDistance'])
+
     def finalSearchEndpoint(self):
         """Return the final position along the pipette search path, taking into account
         maxAdvanceDistance, maxAdvanceDepthBelowSurface, and maxAdvanceDistancePastTarget.
@@ -459,6 +470,12 @@ class CellDetectState(PatchPipetteState):
             self.setState("moved to detection area")
         if config['preTargetWiggle']:
             self._wiggle(_future, self.finalSearchEndpoint())
+        if config['preTargetReposition']:
+            _future.waitFor(
+                self.dev.pipetteDevice._moveToGlobal(
+                    self.preTargetPosition(), speed=config['detectionSpeed']
+                )
+            )
         self.setState("moving to final search endpoint")
         self._waitForMoveWhileTargetChanges(
             self.finalSearchEndpoint,
