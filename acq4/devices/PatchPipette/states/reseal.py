@@ -432,8 +432,15 @@ class ResealState(PatchPipetteState):
                 self._taskDone(interrupted=True, error="Tissue is torn beyond repair.")
                 return config['fallbackState']
             elif retraction_future is None or retraction_future.wasInterrupted():
-                if recovery_future is not None and not recovery_future.isDone():
-                    recovery_future.stop()
+                try:
+                    if retraction_future is not None and not retraction_future.wasStopped():
+                        retraction_future.wait()
+                    if recovery_future is not None:
+                        recovery_future.stop()
+                        if not recovery_future.wasStopped():
+                            recovery_future.wait()
+                except RuntimeError:
+                    printExc("Reseal move error")
                 self.setState("retracting")
                 self._moveFuture = retraction_future = dev.pipetteDevice.stepwiseAdvance(
                     depth=dev.pipetteDevice.approachDepth(),
