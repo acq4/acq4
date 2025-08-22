@@ -7,6 +7,7 @@ import numpy as np
 import pyqtgraph as pg
 
 from acq4.util import ptime
+from acq4.util.debug import except_and_print
 from acq4.util.functions import plottable_booleans
 from acq4.util.future import future_wrap
 from ._base import PatchPipetteState, SteadyStateAnalysisBase
@@ -307,7 +308,6 @@ class CellDetectState(PatchPipetteState):
                 if self._moveFuture is not None:
                     self._moveFuture.stop("cell detected", wait=True)
                     self._moveFuture = None
-                self.pokeCell()
                 return self._transition_to_seal(detectedThresholdSpeed)
             self.checkStop()
             self.processAtLeastOneTestPulse()
@@ -320,12 +320,15 @@ class CellDetectState(PatchPipetteState):
             if config['autoAdvance']:
                 if self._moveFuture is None:
                     self._moveFuture = self._move()
-                if self._moveFuture.isDone() and self._reachedEndpoint:
-                    return self._transition_to_fallback("No cell found before end of search path")
+                if self._moveFuture.isDone():
+                    self._moveFuture.printInterestingExceptions("Error during move")
+                    self._moveFuture = None
+                    if self._reachedEndpoint:
+                        return self._transition_to_fallback("No cell found before end of search path")
 
         return self._transition_to_fallback("Timed out waiting for cell detect.")
 
-    def pokeCell(self):
+    def pokeCell(self, _future):
         """Move pipette slightly deeper towards center of cell"""
         poke = self.config['pokeDistance']
         if poke == 0:
@@ -337,7 +340,7 @@ class CellDetectState(PatchPipetteState):
         dist = np.linalg.norm(dif)
         if dist > poke:
             goto = pos + dif * (poke / dist)
-            self.waitFor(pip._moveToGlobal(goto, self.config['detectionSpeed']))
+            _future.waitFor(pip._moveToGlobal(goto, self.config['detectionSpeed']))
 
     def processAtLeastOneTestPulse(self):
         tps = super().processAtLeastOneTestPulse()
@@ -468,6 +471,7 @@ class CellDetectState(PatchPipetteState):
         if config['searchAroundAtTarget']:
             self._searchAround(_future)
 
+        self.pokeCell(_future)
         self._reachedEndpoint = True
 
     def _wiggle(self, future, endpoint):
@@ -520,7 +524,9 @@ class CellDetectState(PatchPipetteState):
 
     def _cleanup(self):
         if self._moveFuture is not None and not self._moveFuture.isDone():
-            self._moveFuture.stop()
-        patchrec = self.dev.patchRecord()
-        patchrec['cellDetectFinalTarget'] = tuple(self.dev.pipetteDevice.targetPosition())
+            with except_and_print(Exception, "Error stopping move during cleanup"):
+                self._moveFuture.stop()
+        with except_and_print(Exception, "Error storing target position"):
+            patchrec = self.dev.patchRecord()
+            patchrec['cellDetectFinalTarget'] = tuple(self.dev.pipetteDevice.targetPosition())
         return super()._cleanup()

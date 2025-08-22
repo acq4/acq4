@@ -208,6 +208,13 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         """Return True if the task was stopped."""
         return self._stopRequested
 
+    def printInterestingExceptions(self, message=""):
+        if self.wasInterrupted() and not self.wasStopped():
+            try:
+                self.wait()
+            except Exception:
+                printExc(message)
+
     def exceptionRaised(self):
         return self._excInfo[1] if self._excInfo is not None else None
 

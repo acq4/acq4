@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import contextlib
+
 import numpy as np
 
 import pyqtgraph as pg
 from acq4.util import ptime
+from acq4.util.debug import except_and_print
 from acq4.util.functions import plottable_booleans
 from acq4.util.future import Future, future_wrap
-from acq4.util.debug import printExc
 from ._base import PatchPipetteState, SteadyStateAnalysisBase
 
 
@@ -432,15 +433,11 @@ class ResealState(PatchPipetteState):
                 self._taskDone(interrupted=True, error="Tissue is torn beyond repair.")
                 return config['fallbackState']
             elif retraction_future is None or retraction_future.wasInterrupted():
-                try:
-                    if retraction_future is not None and not retraction_future.wasStopped():
-                        retraction_future.wait()
-                    if recovery_future is not None:
-                        recovery_future.stop()
-                        if not recovery_future.wasStopped():
-                            recovery_future.wait()
-                except RuntimeError:
-                    printExc("Reseal move error")
+                if retraction_future is not None:
+                    retraction_future.printInterestingExceptions("Reseal retraction error")
+                if recovery_future is not None:
+                    recovery_future.stop(wait=True)
+                    recovery_future.printInterestingExceptions("Reseal recovery error")
                 self.setState("retracting")
                 self._moveFuture = retraction_future = dev.pipetteDevice.stepwiseAdvance(
                     depth=dev.pipetteDevice.approachDepth(),
@@ -478,14 +475,9 @@ class ResealState(PatchPipetteState):
 
     def _cleanup(self):
         if self._moveFuture is not None:
-            # TODO individually try-wrap these so all steps are attempted
-            try:
+            with except_and_print(Exception, "Failed to stop move future"):
                 self._moveFuture.stop()
-            except Exception:
-                printExc("Failed to stop move future")
         if self._pressureFuture is not None:
-            try:
+            with except_and_print(Exception, "Failed to stop pressure future"):
                 self._pressureFuture.stop()
-            except Exception:
-                printExc("Failed to stop pressure future")
         return super()._cleanup()
