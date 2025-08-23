@@ -50,12 +50,12 @@ def setup_logging(
         root_logger.addHandler(log_window.handler)
 
 
-def get_logger(name: str) -> logging.Logger:
+def get_logger(name: str = "acq4") -> logging.Logger:
     """
     Get a logger by name. Use __name__ for module-level loggers. Ensures the name starts with
     'acq4.'.
     """
-    if name != "acq4" or not name.startswith("acq4."):
+    if name != "acq4" and not name.startswith("acq4."):
         name = f"acq4.{name}"
     return logging.getLogger(name)
 

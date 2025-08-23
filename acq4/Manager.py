@@ -27,7 +27,7 @@ from .util.HelpfulException import HelpfulException
 from .util.LogWindow import get_log_window, format_docs_str_for_html
 
 setup_logging("temp_log.json", log_window=False, console_level=logging.INFO)
-logger = get_logger("acq4")
+logger = get_logger()
 
 
 def __reload__(old):
