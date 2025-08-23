@@ -1,15 +1,15 @@
 import json
-import logging
 import os
 from copy import deepcopy
 
 import acq4.util.Qt as qt
 import pyqtgraph as pg
 from acq4.devices.PatchPipette.statemanager import PatchPipetteStateManager
+from acq4.logging_config import get_logger
 from acq4.util.json_encoder import ACQ4JSONEncoder
 from pyqtgraph.parametertree import Parameter
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 class ProfileEditor(qt.QWidget):
     sigProfileChanged = qt.pyqtSignal(object)

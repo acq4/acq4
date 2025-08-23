@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import datetime
-import logging
 import os
 from pathlib import Path
 
@@ -14,6 +13,7 @@ from acq4.devices.Microscope import Microscope
 from acq4.devices.Pipette import Pipette
 from acq4.devices.Pipette.calibration import findNewPipette
 from acq4.devices.Pipette.planners import PipettePathGenerator, GeometryAwarePathGenerator
+from acq4.logging_config import get_logger
 from acq4.modules.Camera import CameraWindow
 from acq4.modules.Module import Module
 from acq4.util import Qt
@@ -26,7 +26,7 @@ from acq4.util.threadrun import runInGuiThread
 from coorx import SRT3DTransform, TransposeTransform, TTransform
 from pyqtgraph.units import µm, m
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 UiTemplate = Qt.importTemplate(".window")
 
 

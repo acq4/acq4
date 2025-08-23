@@ -1,6 +1,5 @@
 import contextlib
 import gc
-import logging
 import os
 import sys
 import time
@@ -23,8 +22,9 @@ from acq4.util.debug import printExc, Profiler, Mutex
 from acq4.util.future import Future
 from . import analysisModules
 from ..Module import Module
+from ...logging_config import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 Ui_MainWindow = Qt.importTemplate('.TaskRunnerTemplate')
 
 

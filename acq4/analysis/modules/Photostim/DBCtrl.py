@@ -1,13 +1,13 @@
-import logging
 import os
 from collections import OrderedDict
 
 import acq4.util.DatabaseGui as DatabaseGui
 import pyqtgraph as pg
+from acq4.logging_config import get_logger
 from acq4.util import Qt
 from .Map import Map
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 Ui_Form = Qt.importTemplate('.MapCtrlTemplate')
 
 

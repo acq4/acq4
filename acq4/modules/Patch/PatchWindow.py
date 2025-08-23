@@ -1,4 +1,3 @@
-import logging
 import os
 import sys
 import time
@@ -9,6 +8,7 @@ import six
 from MetaArray import MetaArray
 
 import acq4.Manager as Manager
+from acq4.logging_config import get_logger
 from acq4.util import Qt, ptime
 from acq4.util.Mutex import Mutex
 from acq4.util.StatusBar import StatusBar
@@ -19,7 +19,7 @@ from pyqtgraph import WidgetGroup
 from pyqtgraph import siFormat
 from pyqtgraph.debug import Profiler
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 Ui_Form = Qt.importTemplate('.PatchTemplate')
 
 

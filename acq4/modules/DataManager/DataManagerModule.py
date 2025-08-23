@@ -1,5 +1,4 @@
 import contextlib
-import logging
 import os
 import time
 
@@ -10,9 +9,10 @@ from acq4.util.StatusBar import StatusBar
 from acq4.util.debug import printExc
 from pyqtgraph import FileDialog
 from . import FileAnalysisView
+from ...logging_config import get_logger
 from ...util.HelpfulException import HelpfulException
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 Ui_MainWindow = Qt.importTemplate('.DataManagerTemplate')
 
 
