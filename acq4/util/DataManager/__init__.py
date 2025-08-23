@@ -348,6 +348,14 @@ class FileHandle(Qt.QObject):
 
             return data
 
+    def readlines(self):
+        if self.fileType() is not None:
+            raise TypeError("readlines() can only be used on text files.")
+        self.checkExists()
+        with self.lock:
+            with open(self.name(), 'r') as fd:
+                yield from fd
+
     def fileType(self):
         with self.lock:
             info = self.info()

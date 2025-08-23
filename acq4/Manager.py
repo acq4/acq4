@@ -681,7 +681,7 @@ class Manager(Qt.QObject):
         p = self.currentDir
 
         # Storage directory is about to change;
-        logDir = self._logFile.parent() if self._logFile is not None else None
+        logDir = self._logFile.parent() if self._logFile else None
         while not p.info().get('expUnit', False) and p != self.baseDir and p != logDir:
             p = p.parent()
         if p not in [self.baseDir, logDir]:

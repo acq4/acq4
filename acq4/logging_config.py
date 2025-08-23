@@ -37,6 +37,7 @@ def setup_logging(
     file_handler.setLevel(logging.DEBUG)
     json_formatter = JsonFormatter(
         reserved_attrs=[],  # Include all the fields
+        rename_fields={"levelno": "level"},
         json_ensure_ascii=False,
         exc_info_as_array=True,
     )
