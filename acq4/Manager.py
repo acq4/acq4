@@ -66,7 +66,7 @@ class Manager(Qt.QObject):
         parser.add_argument("--module", "-m", help="Module name to load", action="append")
         parser.add_argument("--base-dir", "-b", help="Base directory to use")
         parser.add_argument("--storage-dir", "-s", help="Storage directory to use")
-        parser.add_argument("--debug-logging", action="store_true", help="Whether to be extra noisy in printing")
+        parser.add_argument("--log-level", action="store", help="Set the console log level", default="WARNING")
         parser.add_argument("--disable", "-d", help="Disable the device specified", action="append")
         parser.add_argument("--disable-all", "-D", help="Disable all devices", action="store_true")
         parser.add_argument("--exit-on-error", "-x", help="Whether to exit immidiately on the first exception during initial Manager setup", action="store_true")
@@ -74,9 +74,9 @@ class Manager(Qt.QObject):
         return parser
 
     @classmethod
-    def runFromCommandLine(self, args):
+    def runFromCommandLine(cls, args):
         """Run the Manager from the command line."""
-        m = Manager()
+        m = cls()
         m.initFromCommandLine(args)
         return m
 
@@ -95,11 +95,11 @@ class Manager(Qt.QObject):
         self.shortcuts = []
         self.disableDevs = []
         self.disableAllDevs = False
-        self._debug = False
         self.alreadyQuit = False
         self.taskLock = Mutex(Qt.QMutex.Recursive)
         self._folderTypes = None
         self._logFile = None
+        self._consoleLogLevel = logging.WARNING
 
         try:
             if Manager.CREATED:
@@ -131,7 +131,7 @@ class Manager(Qt.QObject):
         self.exitOnError = args.exit_on_error
         self.disableDevs = args.disable or []
         self.disableAllDevs = args.disable_all
-        self._debug = args.debug_logging
+        self._consoleLogLevel = getattr(logging, args.log_level.upper(), logging.WARNING)
 
         self.configDir = os.path.dirname(args.config)
         self.readConfig(args.config)
@@ -159,7 +159,7 @@ class Manager(Qt.QObject):
                         # we have to show it now, otherwise we'll have no windows
                         self.showGUI()
                     raise
-            setup_logging("temp_log.json")
+            setup_logging("temp_log.json", console_level=self._consoleLogLevel)
 
         except Exception:
             if self.exitOnError:
@@ -660,7 +660,7 @@ class Manager(Qt.QObject):
         Set the directory to which log messages are stored.
         """
         self._logFile = d["log.json"]
-        setup_logging(self._logFile.name())
+        setup_logging(self._logFile.name(), console_level=self._consoleLogLevel)
 
     def setCurrentDir(self, d):
         """
@@ -774,10 +774,6 @@ class Manager(Qt.QObject):
     def showDocumentation(self, label=None):
         self.documentation.show(label)
 
-    def printIfDebug(self, s):
-        if self._debug:
-            print(s)
-
     def quit(self):
         """Nicely request that all devices and modules shut down"""
         if not self.alreadyQuit:  ## Need this because multiple triggers can call this function during quit
@@ -787,23 +783,23 @@ class Manager(Qt.QObject):
             with pg.ProgressDialog("Shutting down..", 0, lm + ld, cancelText=None, wait=0) as dlg:
                 self.documentation.quit()
 
-                self.printIfDebug("Requesting all modules shut down..")
+                logger.debug("Requesting all modules shut down..")
                 logger.info("Shutting Down.")
                 while len(self.modules) > 0:  ## Modules may disappear from self.modules as we ask them to quit
                     m = list(self.modules.keys())[0]
-                    self.printIfDebug(f"    {m}")
+                    logger.debug(f"    {m}")
 
                     self.unloadModule(m)
                     dlg.setValue(lm - len(self.modules))
 
-                self.printIfDebug("Requesting all devices shut down..")
+                logger.debug("Requesting all devices shut down..")
                 devs = Device._deviceCreationOrder[::-1]
                 for d in devs:  # shut down in reverse order
                     d = d()
                     if d is None:
                         # device was already deleted
                         continue
-                    self.printIfDebug(f"    {d}")
+                    logger.debug(f"    {d}")
                     try:
                         d.quit()
                     except:
@@ -814,10 +810,10 @@ class Manager(Qt.QObject):
 
                     dlg.setValue(lm + ld - len(devs))
 
-                self.printIfDebug("Closing windows..")
+                logger.debug("Closing windows..")
                 Qt.QApplication.instance().closeAllWindows()
                 Qt.QApplication.instance().processEvents()
-            self.printIfDebug("\n    ciao.")
+            logger.debug("\n    ciao.")
         Qt.QApplication.quit()
 
 

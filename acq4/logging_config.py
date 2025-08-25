@@ -9,15 +9,18 @@ from acq4.util.LogWindow import get_log_window, get_error_dialog
 def setup_logging(
     log_file_path: str = "app.log",
     log_window: bool = True,
-    root_level: int = logging.INFO,
+    root_level: int = logging.DEBUG,
     console_level: int = logging.WARNING
 ) -> None:
     """
     Set up the complete logging configuration.
 
-    Args:
-        log_file_path: Path to the log file
-        root_level: Root logger level
+    Parameters
+    ----------
+    log_file_path: Path to the log file
+    log_window: Whether to connect to GUI log window and error dialog
+    root_level: Root logger level
+    console_level: Console handler level
     """
     root_logger = logging.getLogger("acq4")
     root_logger.setLevel(root_level)
