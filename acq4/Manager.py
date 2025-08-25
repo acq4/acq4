@@ -287,11 +287,11 @@ class Manager(Qt.QObject):
                                 conf = conf['config']
                             self.loadDevice(driverName, conf, k)
                         except:
-                            logger.error(f"Error configuring device {k}:")
                             if self.exitOnError:
                                 raise
                             else:
-                                logger.exception()
+                                logger.exception(f"Error configuring device {k}:")
+
                     logger.info("=== Device configuration complete ===")
 
                 ## Copy in new module definitions
@@ -569,11 +569,10 @@ class Manager(Qt.QObject):
             if mod is not None:
                 mod.quit()
         except:
-            print(f"Error while requesting module '{name}' quit.")
             if self.exitOnError:
                 raise
             else:
-                logger.exception()
+                logger.exception(f"Error while requesting module '{name}' quit.")
 
         ## Module should have called moduleHasQuit already, but just in case:
         mod = self.modules.pop(name, None)
@@ -596,11 +595,10 @@ class Manager(Qt.QObject):
             sh.setContext(Qt.Qt.ApplicationShortcut)
             sh.activated.connect(lambda *args: win.raise_())
         except:
-            print(f"Error creating shortcut '{keys}':")
             if self.exitOnError:
                 raise
             else:
-                logger.exception()
+                logger.exception(f"Error creating shortcut '{keys}':")
 
         self.shortcuts.append((sh, keys, weakref.ref(win)))
 
@@ -809,11 +807,10 @@ class Manager(Qt.QObject):
                     try:
                         d.quit()
                     except:
-                        self.printIfDebug(f"Error while requesting device '{d.name()}' quit.")
                         if self.exitOnError:
                             raise
                         else:
-                            logger.exception()
+                            logger.exception(f"Error while requesting device '{d.name()}' quit.")
 
                     dlg.setValue(lm + ld - len(devs))
 
