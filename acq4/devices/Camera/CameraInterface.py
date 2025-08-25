@@ -6,7 +6,6 @@ import pyqtgraph.dockarea as dockarea
 from acq4.devices.OptomechDevice import DeviceTreeItemGroup
 from acq4.modules.Camera import CameraModuleInterface
 from acq4.util import Qt
-from acq4.util.debug import printExc
 from acq4.util.imaging import ImagingCtrl
 from pyqtgraph import SignalProxy, Point
 
@@ -227,7 +226,7 @@ class CameraInterface(CameraModuleInterface):
         if self.cam.isRunning():
             self.cam.stop()
             if not self.cam.wait(10000):
-                printExc("Timed out while waiting for acq thread exit!")
+                self.cam.logger.exception("Timed out while waiting for acq thread exit!")
 
     def hotkeyPressed(self, device, keys, action):
         callback = {
@@ -329,7 +328,7 @@ class CameraInterface(CameraModuleInterface):
             self.cam.logger.debug("Camera started aquisition.")
         except:
             self.imagingCtrl.acquisitionStopped()
-            printExc("Error starting camera:")
+            self.cam.logger.exception("Error starting camera:")
 
     def stopAcquireClicked(self):
         self.cam.stop()

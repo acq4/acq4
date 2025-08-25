@@ -17,12 +17,13 @@ from collections import OrderedDict
 from typing import Callable
 
 from acq4 import filetypes
+from acq4.logging_config import get_logger
 from acq4.util import Qt, advancedTypes as advancedTypes
 from acq4.util.Mutex import Mutex
-from acq4.util.debug import printExc
 from pyqtgraph import SignalProxy, BusyCursor
 from pyqtgraph.configfile import readConfigFile, writeConfigFile, appendConfigFile
 
+logger = get_logger(__name__)
 if not hasattr(Qt.QtCore, 'Signal'):
     Qt.Signal = Qt.pyqtSignal
     Qt.Slot = Qt.pyqtSlot
@@ -549,7 +550,7 @@ class DirHandle(FileHandle):
         try:
             files = os.listdir(self.name())
         except Exception:
-            printExc(f"Error while listing files in {self.name()}:")
+            logger.exception(f"Error while listing files in {self.name()}:")
             files = []
         for i in ['.index']:
             if i in files:

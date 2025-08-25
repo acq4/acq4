@@ -3,7 +3,7 @@ import logging.handlers
 import sys
 
 from pythonjsonlogger.json import JsonFormatter
-from acq4.util.LogWindow import get_log_window
+from acq4.util.LogWindow import get_log_window, get_error_dialog
 
 
 def setup_logging(
@@ -49,6 +49,11 @@ def setup_logging(
         log_window = get_log_window()
         log_window.handler.setLevel(logging.DEBUG)
         root_logger.addHandler(log_window.handler)
+
+        # 4. GUI error dialog handler (ERROR and above)
+        error_dialog = get_error_dialog()
+        error_dialog.handler.setLevel(logging.ERROR)
+        root_logger.addHandler(error_dialog.handler)
 
 
 def get_logger(name: str = "acq4") -> logging.Logger:

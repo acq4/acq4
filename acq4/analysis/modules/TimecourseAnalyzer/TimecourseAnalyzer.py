@@ -1,18 +1,17 @@
-from __future__ import print_function
-
 import os
 from collections import OrderedDict
 
 import numpy as np
 
 import pyqtgraph as pg
-import acq4.util.debug as debug
 from acq4.analysis.AnalysisModule import AnalysisModule
-from pyqtgraph.flowchart import Flowchart
+from acq4.logging_config import get_logger
 from acq4.util import Qt
 from acq4.util.DatabaseGui.DatabaseGui import DatabaseGui
 from acq4.util.HelpfulException import HelpfulException
+from pyqtgraph.flowchart import Flowchart
 
+logger = get_logger(__name__)
 
 class TimecourseAnalyzer(AnalysisModule):
 
@@ -34,7 +33,7 @@ class TimecourseAnalyzer(AnalysisModule):
             ## load default chart
             self.flowchart.loadFile(os.path.join(flowchartDir, 'default.fc'))
         except:
-            debug.printExc('Error loading default flowchart:')
+            logger.exception('Error loading default flowchart:')
 
         tables = OrderedDict([(self.dbIdentity+'.traces', 'TimecourseAnalyzer_traces')])
         self.dbGui = DatabaseGui(dm=host.dataManager(), tables=tables)

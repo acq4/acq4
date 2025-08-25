@@ -11,7 +11,6 @@ from acq4.Interfaces import InterfaceMixin
 from acq4.logging_config import get_logger
 from acq4.util import Qt
 from acq4.util.Mutex import Mutex
-from acq4.util.debug import printExc
 from acq4.util.optional_weakref import Weakref
 
 
@@ -134,7 +133,8 @@ class Device(InterfaceMixin, Qt.QObject):  # QObject calls super, which is disas
             # print("Device %s unlocked" % self.name())
             self._lock_tb_ = None
         except:
-            printExc("WARNING: Failed to release device lock for %s" % self.name())
+            msg = "WARNING: Failed to release device lock for %s" % self.name()
+            logger.exception(msg)
 
     def getTriggerChannels(self, daq: str) -> dict:
         """Return the name of the channel(s) on *daq* can be used to synchronize between this device and a DAQ.

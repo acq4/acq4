@@ -17,7 +17,6 @@ from acq4.logging_config import get_logger
 from acq4.modules.Camera import CameraWindow
 from acq4.modules.Module import Module
 from acq4.util import Qt
-from acq4.util.debug import printExc
 from acq4.util.future import Future, future_wrap
 from acq4.util.imaging import Frame
 from acq4.util.imaging.sequencer import acquire_z_stack
@@ -203,7 +202,7 @@ class RankingWindow(Qt.QWidget):
             volume_data, metadata = self._extract_cell_volume(self.cell_center, cube_size=20 * µm)
             self._save_ranked_cell(volume_data, metadata, self.rating, self.save_format, self.save_dir)
         except Exception:
-            printExc(f"Failed to extract or save cell data for cell at {self.cell_center}")
+            logger.exception(f"Failed to extract or save cell data for cell at {self.cell_center}")
         finally:
             self.close()  # Close the window regardless of save success/failure
 
@@ -323,7 +322,7 @@ class RankingWindow(Qt.QWidget):
                 ma.write(filepath)
                 logger.info(f"Saved cell data to {filepath}")
             except Exception:
-                printExc(f"Failed to write MetaArray file: {filepath}")
+                logger.exception(f"Failed to write MetaArray file: {filepath}")
                 # Re-raise or handle more gracefully?
                 raise
 
@@ -812,7 +811,7 @@ class AutomationDebugWindow(Qt.QWidget):
                 current_mock_frame_global_z += step_z
             return stack_frames, step_z
         except Exception:
-            printExc(f"Failed to load or process mock file: {mock_file_path}")
+            logger.exception(f"Failed to load or process mock file: {mock_file_path}")
             return None, None
 
     def _mockNeuronStacks(self, _future: Future) -> tuple[list[Frame] | None, list[Frame] | None, float]:
@@ -906,7 +905,7 @@ class AutomationDebugWindow(Qt.QWidget):
             self._open_ranking_windows.remove(window)
         except ValueError:
             # Window might have already been removed or was never added properly
-            printExc("Attempted to remove a ranking window reference that was not found.")
+            logger.exception("Attempted to remove a ranking window reference that was not found.")
 
     @future_wrap
     def _autoTarget(self, _future):

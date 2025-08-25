@@ -1,13 +1,10 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
+import time
 
 from acq4.devices.Laser import Laser, LaserTask
 from acq4.drivers.Coherent import Coherent
 from acq4.util import Qt
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
-import acq4.util.debug as debug
-import time
 
 
 class CoherentLaser(Laser):
@@ -196,8 +193,8 @@ class CoherentThread(Thread):
                 self.sigWavelengthChanged.emit(wl)
                 time.sleep(0.5)
             except:
-                debug.printExc("Error in Coherent laser communication thread:")
-                
+                self.dev.logger.exception("Error in Coherent laser communication thread:")
+
             self.lock.lock()
             if self.stopThread:
                 self.lock.unlock()

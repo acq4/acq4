@@ -15,7 +15,7 @@ from collections import OrderedDict
 import pyqtgraph as pg
 import pyqtgraph.reload as reload
 from pyqtgraph import configfile
-from pyqtgraph.debug import printExc, Profiler
+from pyqtgraph.debug import Profiler
 from pyqtgraph.util.mutex import Mutex
 from . import __version__
 from . import devices, modules
@@ -25,9 +25,9 @@ from .logging_config import get_logger, setup_logging
 from .util import DataManager, ptime, Qt
 from .util.DataManager import DirHandle
 from .util.HelpfulException import HelpfulException
-from .util.LogWindow import get_log_window, format_docs_str_for_html
+from .util.LogWindow import get_log_window
 
-setup_logging("temp_log.json", log_window=False, console_level=logging.INFO)
+setup_logging("temp_log.json", log_window=False, console_level=logging.DEBUG)
 logger = get_logger()
 
 
@@ -125,7 +125,7 @@ class Manager(Qt.QObject):
             if self.exitOnError:
                 raise
             else:
-                printExc("Error while configuring Manager:")
+                logger.exception("Error while configuring Manager:")
 
     def initFromCommandLine(self, args: argparse.Namespace):
         self.exitOnError = args.exit_on_error
@@ -154,21 +154,23 @@ class Manager(Qt.QObject):
                         self.loadDefinedModule(m)
                     else:
                         self.loadModule(m)
-                except:
-                    if not not args.no_manager:
+                except Exception:
+                    if args.no_manager:
+                        # we have to show it now, otherwise we'll have no windows
                         self.showGUI()
                     raise
+            setup_logging("temp_log.json")
 
-        except:
+        except Exception:
             if self.exitOnError:
                 raise
             else:
-                printExc("\nError while acting on command line options: (but continuing on anyway..)")
+                logger.exception("Error while acting on command line options: (but continuing on anyway..)")
         finally:
             self.isReady.set()
             if len(self.modules) == 0:
                 self.quit()
-                raise Exception("No modules loaded during startup, exiting now.")
+                raise RuntimeError("No modules loaded during startup, exiting now.")
 
     @staticmethod
     def _getConfigFile():
@@ -257,7 +259,7 @@ class Manager(Qt.QObject):
                 if self.exitOnError:
                     raise
                 else:
-                    printExc("Error in ACQ4 configuration:")
+                    logger.exception("Error in ACQ4 configuration:")
 
         for key, val in cfg.items():
             try:
@@ -289,7 +291,7 @@ class Manager(Qt.QObject):
                             if self.exitOnError:
                                 raise
                             else:
-                                printExc()
+                                logger.exception()
                     logger.info("=== Device configuration complete ===")
 
                 ## Copy in new module definitions
@@ -357,7 +359,7 @@ class Manager(Qt.QObject):
                 if self.exitOnError:
                     raise
                 else:
-                    printExc("Error in ACQ4 configuration:")
+                    logger.exception("Error in ACQ4 configuration:")
 
     def listConfigurations(self):
         """Return a list of the named configurations available"""
@@ -571,7 +573,7 @@ class Manager(Qt.QObject):
             if self.exitOnError:
                 raise
             else:
-                printExc()
+                logger.exception()
 
         ## Module should have called moduleHasQuit already, but just in case:
         mod = self.modules.pop(name, None)
@@ -598,7 +600,7 @@ class Manager(Qt.QObject):
             if self.exitOnError:
                 raise
             else:
-                printExc()
+                logger.exception()
 
         self.shortcuts.append((sh, keys, weakref.ref(win)))
 
@@ -670,24 +672,23 @@ class Manager(Qt.QObject):
             with contextlib.suppress(TypeError):
                 self.currentDir.sigChanged.disconnect(self.currentDirChanged)
         if isinstance(d, str):
-            self.currentDir = self.baseDir.getDir(d, create=True)
-        elif isinstance(d, DirHandle):
-            self.currentDir = d
-        else:
-            raise Exception("Invalid argument type: ", type(d), d)
-
-        p = self.currentDir
+            d = self.baseDir.getDir(d, create=True)
+        if not isinstance(d, DirHandle):
+            raise TypeError(f"Argument must be a string or DirHandle. Got {type(d)}")
+        self.currentDir = d
 
         # Storage directory is about to change;
         logDir = self._logFile.parent() if self._logFile else None
-        while not p.info().get('expUnit', False) and p != self.baseDir and p != logDir:
-            p = p.parent()
-        if p not in [self.baseDir, logDir]:
-            self.setLogDir(p)
+        while not d.info().get('expUnit', False) and d != self.baseDir and d != logDir:
+            d = d.parent()
+        if d not in [self.baseDir, logDir]:
+            self.setLogDir(d)
         else:
             if logDir is None:
-                docs = format_docs_str_for_html(["userGuide/dataManagement.html#notes-and-logs"])
-                logger.warning(f"No log directory set. Log messages will not be stored. See {docs}")
+                docs = "userGuide/dataManagement.html#notes-and-logs"
+                logger.warning(
+                    "No log directory set. Log messages will not be stored.", extra={"docs": docs}
+                )
 
         self.currentDir.sigChanged.connect(self.currentDirChanged)
         self.sigCurrentDirChanged.emit(None, None, None)
@@ -812,7 +813,7 @@ class Manager(Qt.QObject):
                         if self.exitOnError:
                             raise
                         else:
-                            printExc()
+                            logger.exception()
 
                     dlg.setValue(lm + ld - len(devs))
 
@@ -915,7 +916,7 @@ class Task:
         for devName in self.devNames:
             task = self.devs[devName].createTask(self.command[devName], self)
             if task is None:
-                printExc("Device '%s' does not have a task interface; ignoring." % devName)
+                logger.exception(f"Device '{devName}' does not have a task interface; ignoring.")
                 continue
             self.tasks[devName] = task
 
@@ -1051,7 +1052,7 @@ class Task:
 
                 self.stop()
             except:
-                printExc("==========  Error in task execution:  ==============")
+                logger.exception("==========  Error in task execution:  ==============")
                 self.abort()
                 self.releaseDevices()
                 raise
@@ -1134,7 +1135,7 @@ class Task:
                         try:
                             self.tasks[t].stop(abort=abort)
                         except:
-                            printExc("Error while stopping task %s:" % t)
+                            logger.exception(f"Error while stopping task {t}:")
                         prof.mark("   ..task " + t + " stopped")
                     self.stopped = True
 
@@ -1148,7 +1149,7 @@ class Task:
                         try:
                             result[devName] = self.tasks[devName].getResult()
                         except:
-                            printExc(f"Error getting result for task {devName} (will set result=None for this task):")
+                            logger.exception(f"Error getting result for task {devName} (will set result=None for this task):")
                             result[devName] = None
                         prof.mark("get result: " + devName)
                     self.result = result

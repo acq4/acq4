@@ -7,8 +7,6 @@ import time
 
 import numpy as np
 
-from acq4.util.debug import printExc
-
 
 class ScientificaControlThread:
     """Monitor position, initiate and track move status
@@ -178,10 +176,7 @@ class ScientificaControlThread:
         except Exception as e:
             self.dev.serial.flush()
             msg = "Ignored error while getting position from Scientifica device:"
-            if isinstance(e, TimeoutError):
-                self.dev.logger.exception(msg)
-            else:
-                printExc(msg)
+            self.dev.logger.exception(msg)
             return
 
         if self.pos_callback is not None and pos != self.last_pos:
@@ -230,11 +225,9 @@ class ScientificaControlThread:
             obj = self.dev.getObjective()
         except Exception as e:
             self.dev.serial.flush()
-            msg = "Ignored error while getting objective from Scientifica device:"
-            if isinstance(e, TimeoutError):
-                self.dev.logger.exception(msg)
-            else:
-                printExc(msg)
+            self.dev.logger.exception(
+                "Ignored error while getting objective from Scientifica device:"
+            )
             return
 
         if self.obj_callback is not None and obj != self.last_obj:

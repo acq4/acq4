@@ -8,7 +8,6 @@ from acq4.modules.Module import Module
 from acq4.util import Qt
 from acq4.util.DataManager import getDataManager, getHandle, DirHandle, FileHandle
 from acq4.util.StatusBar import StatusBar
-from acq4.util.debug import printExc
 from pyqtgraph import FileDialog
 from teleprox.log.logviewer import LogViewer
 from . import FileAnalysisView
@@ -56,11 +55,11 @@ class DataManager(Module):
         try:
             self.baseDirChanged()
         except Exception:
-            printExc("Could not set base directory:")
+            logger.exception("Could not set base directory:")
         try:
             self.currentDirChanged()
         except Exception:
-            printExc("Could not set current directory:")
+            logger.exception("Could not set current directory:")
 
         self.selFile = None
         self.updateNewFolderList()
@@ -220,7 +219,7 @@ class DataManager(Module):
                     # print "dir no match:", spec, inf
                     checkDir = checkDir.parent()
             except:
-                printExc("Error while deciding where to put new folder (using currentDir by default)")
+                logger.exception("Error while deciding where to put new folder (using currentDir by default)")
 
             ## make
             nd = parent.mkdir(name, autoIncrement=True)
@@ -267,7 +266,9 @@ class DataManager(Module):
         if n == 0:
             self.ui.fileInfo.setCurrentFile(fh)
         elif n == 1:
-            self.ui.logWidget.set_records(*[LogRecord(**json.loads(line)) for line in fh.readlines()])
+            self.ui.logWidget.set_records(
+                *[LogRecord(**json.loads(line)) for line in fh.readlines()]
+            )
         elif n == 2:
             self.ui.dataViewWidget.setCurrentFile(fh)
 

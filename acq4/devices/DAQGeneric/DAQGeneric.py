@@ -8,7 +8,6 @@ from acq4.devices.DAQGeneric.taskGUI import DAQGenericTaskGui
 from acq4.devices.Device import Device, DeviceTask
 from acq4.util import Qt
 from acq4.util.Mutex import Mutex
-from acq4.util.debug import printExc
 from pyqtgraph import siFormat
 from pyqtgraph.debug import Profiler
 
@@ -403,7 +402,7 @@ class DAQGenericTask(DeviceTask):
             try:
                 self.daqTasks[ch].stop(abort=abort)
             except Exception:
-                printExc("Error while stopping DAQ task:")
+                self.dev.logger.exception("Error while stopping DAQ task:")
             prof(f'stop {ch} (abort={abort})')
         for ch in self._DAQCmd:
             if 'holding' in self._DAQCmd[ch]:

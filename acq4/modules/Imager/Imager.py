@@ -21,12 +21,11 @@
 # UNC Chapel Hill
 # Distributed under MIT/X11 license. See license.txt for more infomation.
 #
+import copy
+import time
 from collections import OrderedDict
 
-import copy
 import numpy as np
-import time
-
 
 import acq4.Manager
 import pyqtgraph as pg
@@ -39,7 +38,6 @@ from acq4.util import Qt, ptime
 from acq4.util import imaging
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
-from acq4.util.debug import printExc
 from pyqtgraph import parametertree as PT
 
 Ui_Form = Qt.importTemplate(".imagerTemplate")
@@ -1206,7 +1204,7 @@ class ImagingThread(Thread):
                     raise Exception("Imaging acquisition aborted")
         except Exception:
             self.sigAborted.emit()
-            printExc("Error in imaging acquisition thread.")
+            self.laserDev.logger.exception("Error in imaging acquisition thread.")
         finally:
             if videoRequested:
                 self.sigVideoStopped.emit()

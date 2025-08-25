@@ -8,7 +8,6 @@ from pyqtgraph import multiprocess
 from .taskGUI import MultiClampTaskGui
 from ..Device import DeviceTask
 from ...util.Mutex import Mutex
-from ...util.debug import printExc
 
 
 class MultiClamp(PatchClamp):
@@ -471,7 +470,7 @@ class MultiClampTask(DeviceTask):
                 ## this is likely to fail..
                 self.dev.mc.setParam('SecondarySignalGain', self.cmd['secondaryGain'])
             except:
-                printExc("Warning -- set secondary signal gain failed.")
+                self.dev.logger.exception("Warning -- set secondary signal gain failed.")
 
         #prof.mark('    Multiclamp: set gains')
 

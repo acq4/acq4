@@ -6,8 +6,6 @@ import pyqtgraph as pg
 from acq4.util.future import future_wrap
 from coorx import SRT3DTransform
 from ... import getManager
-from ...util.HelpfulException import HelpfulException
-from ...util.debug import printExc
 from ...util.geometry import GeometryMotionPlanner, Plane
 
 if TYPE_CHECKING:
@@ -251,7 +249,7 @@ class GeometryAwarePathGenerator(PipettePathGenerator):
             planner.make_convolved_obstacles(self.pip.getGeometry(), from_pip_to_global, viz)
             print(f"cache primed for {self.pip.name()}")
         except RuntimeError:
-            printExc("Blew up while attempting to prime path finding cache")
+            self.pip.logger.exception("Blew up while attempting to prime path finding cache")
 
     def _planAroundSurface(self, pos):
         surface = self.pip.approachDepth()

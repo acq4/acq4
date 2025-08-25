@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from acq4.util.debug import printExc
 from acq4.util.future import future_wrap
 from pyqtgraph import units
 from ._base import PatchPipetteState
@@ -90,15 +89,16 @@ class CleanState(PatchPipetteState):
 
     @future_wrap
     def cleanup(self, _future):
+        dev = self.dev
         try:
             if self.sonication is not None and not self.sonication.isDone():
                 self.sonication.stop("parent task is cleaning up before sonication finished")
         except Exception:
-            printExc("Error stopping sonication")
+            dev.logger.exception("Error stopping sonication")
 
         try:
-            self.dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
+            dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
         except Exception:
-            printExc("Error resetting pressure after clean")
+            dev.logger.exception("Error resetting pressure after clean")
 
-        _future.waitFor(self.dev.pipetteDevice.moveTo('home', 'fast'))
+        _future.waitFor(dev.pipetteDevice.moveTo('home', 'fast'))
