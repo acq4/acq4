@@ -10,12 +10,43 @@ from teleprox.log import LogServer
 log_server: LogServer | None = None
 
 
+class StringAwareJsonFormatter(JsonFormatter):
+    """
+    Custom JSON formatter that handles both real exc_info tuples and pre-formatted strings.
+    """
+
+    def formatException(self, ei):
+        """
+        Format exception info, but pass through if it's already a string.
+        """
+        # If it's already a string or nested strings, return as is
+        if isinstance(ei, str) or (
+            isinstance(ei, (list, tuple)) and all(isinstance(i, str) for i in ei)
+        ):
+            return ei
+
+        # Otherwise, format normally
+        return super().formatException(ei)
+
+    def add_fields(self, log_record, record, message_dict):
+        super().add_fields(log_record, record, message_dict)
+
+        # Handle exception info - could be real exc_info or pre-formatted string
+        if record.exc_info:
+            log_record['exc_info'] = self.formatException(record.exc_info)
+        elif hasattr(record, 'exc_text') and record.exc_text:
+            # Handle case where only the exception text is known
+            log_record['exc_info'] = record.exc_text
+        else:
+            log_record['exc_info'] = None
+
+
 def setup_logging(
     log_file_path: str = "app.log",
     log_window: bool = True,
     root_level: int = logging.DEBUG,
-    console_level: int = logging.WARNING
-) -> None:
+    console_level: int = logging.WARNING,
+) -> logging.FileHandler:
     """
     Set up the complete logging configuration.
 
@@ -25,6 +56,10 @@ def setup_logging(
     log_window: Whether to connect to GUI log window and error dialog
     root_level: Root logger level
     console_level: Console handler level
+
+    Returns
+    -------
+    The file handler (in case you want to fill the file in with old log records)
     """
     global log_server
 
@@ -48,7 +83,7 @@ def setup_logging(
     # 2. File handler (all messages, JSON format)
     file_handler = logging.FileHandler(log_file_path)
     file_handler.setLevel(logging.DEBUG)
-    json_formatter = JsonFormatter(
+    json_formatter = StringAwareJsonFormatter(
         reserved_attrs=[],  # Include all the fields
         rename_fields={"levelno": "level"},
         json_ensure_ascii=False,
@@ -71,6 +106,8 @@ def setup_logging(
         error_dialog = get_error_dialog()
         error_dialog.handler.setLevel(logging.ERROR)
         acq4_logger.addHandler(error_dialog.handler)
+
+    return file_handler
 
 
 def get_logger(name: str = "acq4") -> logging.Logger:

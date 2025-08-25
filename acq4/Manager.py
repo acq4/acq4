@@ -3,6 +3,7 @@ import atexit
 import contextlib
 import gc
 import getpass
+import json
 import logging
 import os
 import socket
@@ -27,7 +28,8 @@ from .util.DataManager import DirHandle
 from .util.HelpfulException import HelpfulException
 from .util.LogWindow import get_log_window
 
-setup_logging("temp_log.json", log_window=False, console_level=logging.DEBUG)
+TEMP_LOG = "temp_log.json"
+setup_logging(TEMP_LOG, log_window=False, console_level=logging.DEBUG)
 logger = get_logger()
 
 
@@ -159,7 +161,7 @@ class Manager(Qt.QObject):
                         # we have to show it now, otherwise we'll have no windows
                         self.showGUI()
                     raise
-            setup_logging("temp_log.json", console_level=self._consoleLogLevel)
+            setup_logging(TEMP_LOG, console_level=self._consoleLogLevel)
 
         except Exception:
             if self.exitOnError:
@@ -659,9 +661,24 @@ class Manager(Qt.QObject):
         """
         Set the directory to which log messages are stored.
         """
+        was_temp = self._logFile is None
         self._logFile = d["log.json"]
-        setup_logging(self._logFile.name(), console_level=self._consoleLogLevel)
+        file_handler = setup_logging(self._logFile.name(), console_level=self._consoleLogLevel)
         self.sigLogDirChanged.emit(d)
+        if was_temp:
+            try:
+                with open(TEMP_LOG, 'r') as f:
+                    for line in f:
+                        record = logging.LogRecord(**json.loads(line))
+                        file_handler.emit(record)
+            finally:
+                os.remove(TEMP_LOG)
+            log_win = get_log_window()
+            with open(self._logFile.name(), 'r') as f:
+                for line in f:
+                    record = logging.LogRecord(**json.loads(line))
+                    log_win.new_record(record)
+                    Qt.QApplication.processEvents()
 
     def setCurrentDir(self, d):
         """
