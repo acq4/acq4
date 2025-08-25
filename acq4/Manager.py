@@ -1,5 +1,6 @@
 import argparse
 import atexit
+import contextlib
 import gc
 import getpass
 import logging
@@ -666,11 +667,8 @@ class Manager(Qt.QObject):
         Set the currently-selected directory for data storage.
         """
         if self.currentDir is not None:
-            try:
+            with contextlib.suppress(TypeError):
                 self.currentDir.sigChanged.disconnect(self.currentDirChanged)
-            except TypeError:
-                pass
-
         if isinstance(d, str):
             self.currentDir = self.baseDir.getDir(d, create=True)
         elif isinstance(d, DirHandle):
