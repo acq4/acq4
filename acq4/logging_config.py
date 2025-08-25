@@ -3,7 +3,11 @@ import logging.handlers
 import sys
 
 from pythonjsonlogger.json import JsonFormatter
+
 from acq4.util.LogWindow import get_log_window, get_error_dialog
+from teleprox.log import LogServer
+
+log_server: LogServer | None = None
 
 
 def setup_logging(
@@ -22,6 +26,8 @@ def setup_logging(
     root_level: Root logger level
     console_level: Console handler level
     """
+    global log_server
+
     root_logger = logging.getLogger("acq4")
     root_logger.setLevel(root_level)
 
@@ -47,13 +53,17 @@ def setup_logging(
     file_handler.setFormatter(json_formatter)
     root_logger.addHandler(file_handler)
 
-    # 3. GUI Log Window handler (all messages)
+    # 3. Teleprox
+    if log_server is None:
+        log_server = LogServer(root_logger)
+
+    # 4. GUI Log Window handler (all messages)
     if log_window:
         log_window = get_log_window()
         log_window.handler.setLevel(logging.DEBUG)
         root_logger.addHandler(log_window.handler)
 
-        # 4. GUI error dialog handler (ERROR and above)
+        # 5. GUI error dialog handler (ERROR and above)
         error_dialog = get_error_dialog()
         error_dialog.handler.setLevel(logging.ERROR)
         root_logger.addHandler(error_dialog.handler)
