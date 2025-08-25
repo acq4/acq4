@@ -28,18 +28,22 @@ def setup_logging(
     """
     global log_server
 
-    root_logger = logging.getLogger("acq4")
-    root_logger.setLevel(root_level)
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.WARNING)
+    root_logger.handlers.clear()
+
+    acq4_logger = logging.getLogger("acq4")
+    acq4_logger.setLevel(root_level)
 
     # Clear any existing handlers
-    root_logger.handlers.clear()
+    acq4_logger.handlers.clear()
 
     # 1. Console handler (stderr, WARNING and above)
     console_handler = logging.StreamHandler(sys.stderr)
     console_handler.setLevel(console_level)
     console_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     console_handler.setFormatter(console_formatter)
-    root_logger.addHandler(console_handler)
+    acq4_logger.addHandler(console_handler)
 
     # 2. File handler (all messages, JSON format)
     file_handler = logging.FileHandler(log_file_path)
@@ -51,22 +55,22 @@ def setup_logging(
         exc_info_as_array=True,
     )
     file_handler.setFormatter(json_formatter)
-    root_logger.addHandler(file_handler)
+    acq4_logger.addHandler(file_handler)
 
     # 3. Teleprox
     if log_server is None:
-        log_server = LogServer(root_logger)
+        log_server = LogServer(acq4_logger)
 
     # 4. GUI Log Window handler (all messages)
     if log_window:
         log_window = get_log_window()
         log_window.handler.setLevel(logging.DEBUG)
-        root_logger.addHandler(log_window.handler)
+        acq4_logger.addHandler(log_window.handler)
 
         # 5. GUI error dialog handler (ERROR and above)
         error_dialog = get_error_dialog()
         error_dialog.handler.setLevel(logging.ERROR)
-        root_logger.addHandler(error_dialog.handler)
+        acq4_logger.addHandler(error_dialog.handler)
 
 
 def get_logger(name: str = "acq4") -> logging.Logger:
