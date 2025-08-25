@@ -661,6 +661,7 @@ class Manager(Qt.QObject):
         """
         self._logFile = d["log.json"]
         setup_logging(self._logFile.name(), console_level=self._consoleLogLevel)
+        self.sigLogDirChanged.emit(d)
 
     def setCurrentDir(self, d):
         """
