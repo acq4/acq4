@@ -7,7 +7,7 @@ import sys
 import threading
 import time
 import traceback
-from typing import Callable, ParamSpec, Optional
+from typing import Callable, ParamSpec, Optional, overload
 from typing import Generic, TypeVar
 
 from acq4.logging_config import get_logger
@@ -393,16 +393,30 @@ WRAPPED_FN_PARAMS = ParamSpec("WRAPPED_FN_PARAMS")
 WRAPPED_FN_RETVAL_TYPE = TypeVar("WRAPPED_FN_RETVAL_TYPE")
 
 
-# MC this doesn't handle typing correctly as Future.wrap, but I don't know why...
 class FutureWrapper:
     def __init__(self, logLevel='debug'):
         self.logLevel = logLevel
 
+    @overload
+    def __call__(
+        self,
+        func: Callable[WRAPPED_FN_PARAMS, WRAPPED_FN_RETVAL_TYPE],
+    ) -> Callable[WRAPPED_FN_PARAMS, Future[WRAPPED_FN_RETVAL_TYPE]]:
+        ...
+
+    @overload
+    def __call__(
+        self,
+        logLevel: str,
+    ) -> FutureWrapper:
+        ...
+
     def __call__(
             self,
             func: Callable[WRAPPED_FN_PARAMS, WRAPPED_FN_RETVAL_TYPE] | None = None,
-            logLevel=None,
-    ) -> Callable[WRAPPED_FN_PARAMS, Future[WRAPPED_FN_RETVAL_TYPE]]:
+            *,
+            logLevel: str | None = None,
+    ) -> Callable[WRAPPED_FN_PARAMS, Future[WRAPPED_FN_RETVAL_TYPE]] | FutureWrapper:
         """Decorator to execute a function in a Thread wrapped in a future. The function must take a Future
         named "_future" as a keyword argument. This Future can be variously used to checkStop() the
         function, wait for other futures, and will be returned by the decorated function call. The function
@@ -418,7 +432,8 @@ class FutureWrapper:
             threadless_result = myFunc(arg1, arg2, block=True).getResult()
         """
         if logLevel is not None:
-            assert func is None, f"Cannot have func {func} and logLevel {logLevel}"
+            if func is not None:
+                raise ValueError(f"Cannot have func {func} and logLevel {logLevel}")
             return FutureWrapper(logLevel)
 
         @functools.wraps(func)
