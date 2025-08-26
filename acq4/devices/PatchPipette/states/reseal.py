@@ -464,7 +464,7 @@ class ResealState(PatchPipetteState):
     def _retractFromTissue(self):
         # move out of the tissue more quickly
         pip = self.dev.pipetteDevice
-        surface = pip.scopeDevice().surfaceDepth()
+        surface = pip.scopeDevice().getSurfaceDepth()
         return pip._moveToGlobal(
             self.positionAtDepth(surface), speed=self.config['postSuccessRetractionSpeed'])
 
