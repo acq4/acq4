@@ -435,12 +435,7 @@ class CellDetectState(PatchPipetteState):
                     endpoint = depthEndpt
         elif config['maxAdvanceDistancePastTarget'] is not None:
             # target mode
-            targetEndpt = target + pip.globalDirection() * config['maxAdvanceDistancePastTarget']
-            # is the target endpoint closer?
-            if endpoint is None or np.linalg.norm(endpoint - pos) > np.linalg.norm(
-                targetEndpt - pos
-            ):
-                endpoint = targetEndpt
+            endpoint = target + pip.globalDirection() * config['maxAdvanceDistancePastTarget']
 
         if endpoint is None:
             raise ValueError(
