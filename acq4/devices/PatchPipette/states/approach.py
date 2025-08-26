@@ -117,7 +117,7 @@ class ApproachState(PatchPipetteState):
     def _calc_direction(self):
         # what direction are we moving?
         pip = self.dev.pipetteDevice
-        direction = np.array(self.endpoint()) - np.array(pip.globalPosition())
+        direction = np.array(pip.targetPosition()) - np.array(pip.globalPosition())
         return direction / np.linalg.norm(direction)
 
     def _onTargetChanged(self, pos):
