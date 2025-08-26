@@ -420,7 +420,7 @@ class CellDetectState(PatchPipetteState):
         endpoint = None
 
         if config['advanceMode'] != 'target':
-            if config['maxAdvanceDistance']:
+            if config['maxAdvanceDistance'] is not None:
                 # max search distance
                 endpoint = self._initialPos + pip.globalDirection() * config['maxAdvanceDistance']
 
