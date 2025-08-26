@@ -21,7 +21,10 @@ def __reload__(old):
 def get_log_window():
     global LOG_UI
     if LOG_UI is None:
+        from acq4.util.codeEditor import invokeCodeEditor
+
         LOG_UI = LogViewer()
+        LOG_UI.code_line_clicked.connect(invokeCodeEditor)
     return LOG_UI
 
 
