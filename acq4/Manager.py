@@ -675,10 +675,11 @@ class Manager(Qt.QObject):
                 os.remove(TEMP_LOG)
             log_win = get_log_window()
             with open(self._logFile.name(), 'r') as f:
-                for line in f:
+                for i, line in enumerate(f):
                     record = logging.LogRecord(**json.loads(line))
                     log_win.new_record(record)
-                    Qt.QApplication.processEvents()
+                    if i % 20 == 0:
+                        Qt.QApplication.processEvents()
 
     def setCurrentDir(self, d):
         """
