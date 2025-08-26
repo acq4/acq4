@@ -1,10 +1,14 @@
 import datetime
-from MetaArray import MetaArray
+
 import numpy as np
-from pyqtgraph.debug import printExc
-from pyqtgraph.units import µm, m
+from MetaArray import MetaArray
+
+import pyqtgraph as pg
+from acq4.logging_config import get_logger
 from acq4.util import Qt
-from acq4.util.debug import logMsg
+from pyqtgraph.units import µm, m
+
+logger = get_logger(__name__)
 
 
 class RankingWindow(Qt.QWidget):
@@ -171,16 +175,16 @@ class RankingWindow(Qt.QWidget):
 
     def _save_and_close(self):
         if self.rating is None:
-            logMsg("No rating selected.", msgType="warning")
+            logger.warning("No rating selected.")
             # Optionally show a message box to the user
             return
 
-        logMsg(f"Cell rated {self.rating}, saving as {self.save_format}...")
+        logger.info(f"Cell rated {self.rating}, saving as {self.save_format}...")
         try:
             volume_data, metadata = self._extract_cell_volume(self.cell_center, cube_size=20 * µm)
             self._save_ranked_cell(volume_data, metadata, self.rating, self.save_format, self.save_dir)
         except Exception:
-            printExc(f"Failed to extract or save cell data for cell at {self.cell_center}")
+            logger.exception(f"Failed to extract or save cell data for cell at {self.cell_center}")
         finally:
             self.close()  # Close the window regardless of save success/failure
 
@@ -298,19 +302,19 @@ class RankingWindow(Qt.QWidget):
             filepath = f"{filename_base}.ma"
             try:
                 ma.write(filepath)
-                logMsg(f"Saved cell data to {filepath}")
+                logger.info(f"Saved cell data to {filepath}")
             except Exception:
-                printExc(f"Failed to write MetaArray file: {filepath}")
-                logMsg(f"Error writing MetaArray file: {filepath}", msgType="error")
+                logger.exception(f"Failed to write MetaArray file: {filepath}")
+
                 # Re-raise or handle more gracefully?
                 raise
 
         elif save_format == "NWB":
-            logMsg("NWB saving not implemented yet.", msgType="warning")
+            logger.warning("NWB saving not implemented yet.")
             filepath = f"{filename_base}.nwb"
-            logMsg(f"Placeholder: Would save cell data to {filepath}")
+            logger.info(f"Placeholder: Would save cell data to {filepath}")
             # TODO: Implement NWB saving logic here using pynwb
 
         else:
-            logMsg(f"Unknown save format: {save_format}", msgType="error")
+            logger.error(f"Unknown save format: {save_format}")
             raise ValueError(f"Unknown save format: {save_format}")

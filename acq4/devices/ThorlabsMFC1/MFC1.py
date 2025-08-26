@@ -188,7 +188,7 @@ class MonitorThread(Thread):
 
                 time.sleep(interval)
             except:
-                debug.printExc('Error in MFC1 monitor thread:')
+                self.dev.logger.exception('Error in MFC1 monitor thread:')
                 time.sleep(maxInterval)
 
 

@@ -10,6 +10,8 @@ from coorx import Point
 import pyqtgraph as pg
 from MetaArray import MetaArray
 from acq4 import getManager
+
+import pyqtgraph as pg
 from acq4.devices.Camera import Camera
 from acq4.devices.Microscope import Microscope
 from acq4.devices.PatchPipette import PatchPipette
@@ -19,21 +21,333 @@ from acq4.devices.Pipette.planners import (
     PipettePathGenerator,
     GeometryAwarePathGenerator,
 )
+from acq4.devices.Pipette.planners import PipettePathGenerator, GeometryAwarePathGenerator
+from acq4.logging_config import get_logger
 from acq4.modules.Camera import CameraWindow
 from acq4.modules.Module import Module
 from acq4.modules.TaskRunner import TaskRunner
 from acq4.util import Qt
-from acq4.util.debug import logMsg, printExc
 from acq4.util.future import Future, future_wrap
 from acq4.util.imaging import Frame
 from acq4.util.imaging.sequencer import acquire_z_stack
 from acq4.util.target import TargetBox
 from acq4.util.threadrun import futureInGuiThread, runInGuiThread
+from acq4.util.threadrun import runInGuiThread
+from coorx import SRT3DTransform, TransposeTransform, TTransform
 from pyqtgraph.units import µm, m
 from acq4_automation.feature_tracking.cell import Cell
 from .ranking_window import RankingWindow
 
+logger = get_logger(__name__)
 UiTemplate = Qt.importTemplate(".window")
+
+
+class RankingWindow(Qt.QWidget):
+    sigClosed = Qt.Signal(object)  # emit self when closed
+
+    def __init__(
+        self,
+        main_window: AutomationDebugWindow,
+        cell_center,
+        detection_stack,
+        classification_stack,
+        pixel_size,
+        z_step,
+        save_dir,
+    ):
+        super().__init__()
+        self.main_window = main_window  # Keep reference for cleanup
+        self.cell_center = cell_center
+        self.detection_stack = detection_stack
+        self.classification_stack = classification_stack  # May be None
+        self.pixel_size = pixel_size
+        self.z_step = z_step
+        self.save_dir = save_dir
+        self.rating = None
+        self.save_format = "MetaArray"
+        self.volume_data = None
+        self.depths = None
+
+        self.setWindowTitle(
+            f"Rank Cell @ ({cell_center[0]/µm:.0f}, {cell_center[1]/µm:.0f}, {cell_center[2]/µm:.0f}) µm"
+        )
+        self.layout = Qt.QVBoxLayout()
+        self.setLayout(self.layout)
+
+        # --- Image Display ---
+        self.image_views = []
+        self.image_layout = Qt.QHBoxLayout()
+        self.layout.addLayout(self.image_layout)
+        for _ in range(5):
+            iv = pg.ImageView()
+            # Basic styling, can be expanded
+            iv.ui.histogram.hide()
+            iv.ui.roiBtn.hide()
+            iv.ui.menuBtn.hide()
+            self.image_views.append(iv)
+            self.image_layout.addWidget(iv)
+
+        # --- Z Slider ---
+        self.z_slider = Qt.QSlider(Qt.Qt.Orientation.Horizontal)
+        self.z_slider.setMinimum(0)
+        # Max will be set in _load_cell_data
+        self.z_slider.setPageStep(1)
+        self.z_slider.setSingleStep(1)
+        self.layout.addWidget(self.z_slider)
+        self.z_slider.valueChanged.connect(self._update_displayed_slices)
+
+        # --- Rating Buttons ---
+        self.rating_layout = Qt.QHBoxLayout()
+        self.rating_group = Qt.QButtonGroup(self)
+        ratings = {
+            1: "Not a cell",
+            2: "Unpatchable",
+            3: "Barely patchable",
+            4: "Average",
+            5: "Excellent",
+        }
+        for i in range(1, 6):
+            btn = Qt.QPushButton(f"{i}: {ratings[i]}")
+            btn.setCheckable(True)
+            self.rating_group.addButton(btn, i)
+            self.rating_layout.addWidget(btn)
+        self.layout.addLayout(self.rating_layout)
+        self.rating_group.buttonClicked[int].connect(self._set_rating)
+
+        # --- Format Selection ---
+        self.format_layout = Qt.QHBoxLayout()
+        self.format_group = Qt.QButtonGroup(self)
+        self.nwb_radio = Qt.QRadioButton("NWB")
+        self.metaarray_radio = Qt.QRadioButton("MetaArray")
+        self.metaarray_radio.setChecked(True)  # Default to MetaArray
+        self.format_group.addButton(self.nwb_radio)
+        self.format_group.addButton(self.metaarray_radio)
+        self.format_layout.addWidget(Qt.QLabel("Save Format:"))
+        self.format_layout.addWidget(self.nwb_radio)
+        self.format_layout.addWidget(self.metaarray_radio)
+        self.layout.addLayout(self.format_layout)
+        self.nwb_radio.toggled.connect(self._set_format)
+        self.metaarray_radio.toggled.connect(self._set_format)
+
+        # --- Action Buttons ---
+        self.action_layout = Qt.QHBoxLayout()
+        self.skip_button = Qt.QPushButton("Skip")
+        self.save_button = Qt.QPushButton("Save")
+        self.save_button.setEnabled(False)  # Enable only when rating is selected
+        self.action_layout.addWidget(self.skip_button)
+        self.action_layout.addWidget(self.save_button)
+        self.layout.addLayout(self.action_layout)
+
+        self.skip_button.clicked.connect(self.close)  # Just close the window
+        self.save_button.clicked.connect(self._save_and_close)
+
+        self._load_cell_data()
+
+    def _set_rating(self, rating_id):
+        self.rating = rating_id
+        self.save_button.setEnabled(True)
+
+    def _set_format(self):
+        btn = self.sender()
+        fmt = "NWB" if btn == self.nwb_radio else "MetaArray"
+        self.save_format = fmt
+
+    def _load_cell_data(self):
+        if not self.detection_stack or len(self.detection_stack) == 0:
+            raise ValueError("RankingWindow: No detection stack data to load.")
+
+        # Find the Z index closest to the cell center
+        self.depths = np.array([frame.depth for frame in self.detection_stack])
+        self.center_z_global = self.cell_center[2]
+
+        self.volume_data, _ = self._extract_cell_volume(self.cell_center, cube_size=20 * µm)
+        n_frames = len(self.volume_data)
+        self.center_z_idx = n_frames // 2
+
+        # Set slider to the center Z index initially
+        self.z_slider.setMaximum(n_frames - 1)
+        self.z_slider.setValue(self.center_z_idx)  # This should trigger _update_displayed_slices
+
+    def _update_displayed_slices(self, current_slider_idx):
+        """Updates the 5 image views based on the current_slider_idx from the Z-slider."""
+        if self.volume_data is None or len(self.volume_data) == 0 or self.depths is None:
+            return
+
+        n_frames = len(self.volume_data)
+        if n_frames == 0:
+            return
+
+        # current_slider_idx is the Z-index for the 3rd (middle) image view
+        # Ensure current_slider_idx is valid
+        current_slider_idx = np.clip(current_slider_idx, 2, n_frames - 3)
+        
+        target_z_indices = [0] * 5
+
+        # Image 1 (index 0): first frame
+        target_z_indices[0] = 0
+
+        # Image 5 (index 4): last frame
+        target_z_indices[4] = n_frames - 1
+
+        # Image 3 (index 2): Directly from slider
+        target_z_indices[2] = current_slider_idx
+
+        # Image 2 (index 1): 1/4 of the way
+        target_z_indices[1] = min(n_frames // 4, target_z_indices[2] - 1)
+
+        # Image 4 (index 3): 3/4 of the way
+        target_z_indices[3] = max(3 * n_frames // 4, target_z_indices[2] + 1)
+
+        for i, iv in enumerate(self.image_views):
+            # Clamp the final index to be within the stack bounds
+            display_z_idx = target_z_indices[i]
+            frame_data = self.volume_data[display_z_idx]
+            iv.setImage(frame_data.T, autoLevels=True)  # IJK to XYZ
+
+    def _save_and_close(self):
+        if self.rating is None:
+            logger.warning("No rating selected.")
+            # Optionally show a message box to the user
+            return
+
+        logger.info(f"Cell rated {self.rating}, saving as {self.save_format}...")
+        try:
+            volume_data, metadata = self._extract_cell_volume(self.cell_center, cube_size=20 * µm)
+            self._save_ranked_cell(volume_data, metadata, self.rating, self.save_format, self.save_dir)
+        except Exception:
+            logger.exception(f"Failed to extract or save cell data for cell at {self.cell_center}")
+        finally:
+            self.close()  # Close the window regardless of save success/failure
+
+    def closeEvent(self, event):
+        """Emit signal when closed."""
+        self.sigClosed.emit(self)
+        super().closeEvent(event)
+
+    # --- Data Extraction and Saving Logic (Moved from AutomationDebugWindow) ---
+
+    def _extract_cell_volume(self, center_global, cube_size=20 * µm):
+        """Extracts a 3D numpy array centered on the cell."""
+        if not self.detection_stack:
+            raise ValueError("Detection stack is not available.")
+
+        # Use the stack data passed during initialization
+        stack_data = np.array([frame.data() for frame in self.detection_stack])
+        frame_shape = stack_data.shape[1:]  # (rows, cols) or (y, x)
+        n_frames = stack_data.shape[0]
+
+        # Get transform info from the first frame (assuming it's consistent)
+        frame0 = self.detection_stack[0]
+        # Use pixel_size passed during initialization
+        if self.pixel_size is None:
+            raise ValueError("Pixel size information missing.")
+        pixel_size_m = self.pixel_size  # Assume square pixels in meters
+
+        # Convert size in µm to pixels/frames
+        size_px = int(np.ceil(cube_size / pixel_size_m))
+        # Ensure odd size for centering
+        if size_px % 2 == 0:
+            size_px += 1
+        half_size_px = size_px // 2
+
+        # Find the Z index closest to the center
+        center_z_idx = np.argmin(np.abs(self.depths - center_global[2]))
+
+        # Use z_step passed during initialization
+        z_step_m = self.z_step
+        size_z_frames = int(np.ceil(cube_size / z_step_m))
+        if size_z_frames % 2 == 0:
+            size_z_frames += 1
+        half_size_z = size_z_frames // 2
+
+        # Map global center to the coordinates of the center frame
+        center_frame = self.detection_stack[center_z_idx]
+        center_frame_coords = center_frame.mapFromGlobalToFrame(center_global)  # Returns (x, y) in frame pixels
+        center_x_px, center_y_px = int(round(center_frame_coords[0])), int(round(center_frame_coords[1]))
+
+        # Calculate slice boundaries, clamping to stack dimensions
+        z_start = max(0, center_z_idx - half_size_z)
+        z_end = min(n_frames, center_z_idx + half_size_z + 1)
+        y_start = max(0, center_y_px - half_size_px)
+        y_end = min(frame_shape[0], center_y_px + half_size_px + 1)
+        x_start = max(0, center_x_px - half_size_px)
+        x_end = min(frame_shape[1], center_x_px + half_size_px + 1)
+
+        # Extract volume
+        volume = stack_data[z_start:z_end, y_start:y_end, x_start:x_end]
+
+        # --- Create Metadata ---
+        origin_frame = self.detection_stack[z_start]
+        corner_global_pos = origin_frame.mapFromFrameToGlobal([x_start, y_start])
+
+        metadata = {
+            "timestamp": datetime.datetime.now().isoformat(),
+            "center_global": center_global.tolist(),
+            "size": cube_size,
+            "shape": volume.shape,  # (z, y, x)
+            "pixel_size_m": pixel_size_m,
+            "z_step_m": z_step_m,
+            "voxel_origin_global": corner_global_pos + [origin_frame.depth],  # (x, y, z) of voxel [0,0,0]
+            "source_detection_stack_info": [f.info() for f in self.detection_stack[z_start:z_end]],  # Basic info
+            "source_classification_stack_info": None,
+        }
+        # Use classification_stack passed during initialization
+        if self.classification_stack and z_start < len(self.classification_stack):
+            metadata["source_classification_stack_info"] = [f.info() for f in self.classification_stack[z_start:z_end]]
+
+        return volume, metadata
+
+    def _save_ranked_cell(self, volume_data, metadata, rating, save_format, save_dir):
+        """Saves the extracted cell volume and metadata."""
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        cell_id = f"cell_{timestamp}_rating_{rating}"
+        filename_base = save_dir / cell_id
+
+        metadata["rating"] = rating
+        metadata["save_format"] = save_format
+        metadata["cell_id"] = cell_id
+
+        if save_format == "MetaArray":
+            info = [
+                {
+                    "name": "Z",
+                    "units": "m",
+                    "values": np.arange(volume_data.shape[0]) * metadata["z_step_m"]
+                    + metadata["voxel_origin_global"][2],
+                },
+                {
+                    "name": "Y",
+                    "units": "m",
+                    "values": np.arange(volume_data.shape[1]) * metadata["pixel_size_m"]
+                    + metadata["voxel_origin_global"][1],
+                },
+                {
+                    "name": "X",
+                    "units": "m",
+                    "values": np.arange(volume_data.shape[2]) * metadata["pixel_size_m"]
+                    + metadata["voxel_origin_global"][0],
+                },
+                metadata,
+            ]
+            ma = MetaArray(volume_data, info=info)
+            filepath = f"{filename_base}.ma"
+            try:
+                ma.write(filepath)
+                logger.info(f"Saved cell data to {filepath}")
+            except Exception:
+                logger.exception(f"Failed to write MetaArray file: {filepath}")
+                # Re-raise or handle more gracefully?
+                raise
+
+        elif save_format == "NWB":
+            logger.warning("NWB saving not implemented yet.")
+            filepath = f"{filename_base}.nwb"
+            logger.info(f"Placeholder: Would save cell data to {filepath}")
+            # TODO: Implement NWB saving logic here using pynwb
+
+        else:
+            logger.error(f"Unknown save format: {save_format}")
+            raise ValueError(f"Unknown save format: {save_format}")
 
 
 class AutomationDebugWindow(Qt.QWidget):
@@ -251,7 +565,7 @@ class AutomationDebugWindow(Qt.QWidget):
     def _visualizeTracking(self):
         cell = self.patchPipetteDevice.cell or self._cell
         if cell is None or cell._tracker is None:
-            logMsg("No cell tracking available to visualize.")
+            logger.info("No cell tracking available to visualize.")
             return
         from acq4_automation.feature_tracking.visualization import LiveTrackerVisualizer
         visualizer = LiveTrackerVisualizer(cell._tracker)
@@ -348,11 +662,11 @@ class AutomationDebugWindow(Qt.QWidget):
         """Handles results from _detectNeuronsZStack or _testUI."""
         try:
             if future.wasInterrupted():
-                logMsg("Cell detection failed.")
+                logger.info("Cell detection failed.")
                 return
             neurons = future.getResult()
 
-            logMsg(f"Cell detection complete. Found {len(neurons)} potential cells")
+            logger.info(f"Cell detection complete. Found {len(neurons)} potential cells")
             self._displayBoundingBoxes(neurons)
             # from acq4_automation.object_detection import NeuronBoxViewer
             # if self._current_classification_stack is not None:
@@ -447,7 +761,7 @@ class AutomationDebugWindow(Qt.QWidget):
             # Use step_z = 1 * µm for real acquisition as previously defined
 
             if multichannel_processing_intended:
-                logMsg(
+                logger.info(
                     f"Starting multichannel Z-stack acquisition: Detection='{detection_preset}', "
                     f"Classification='{classification_preset}'"
                 )
@@ -468,10 +782,9 @@ class AutomationDebugWindow(Qt.QWidget):
                 ).getResult()
 
                 if len(detection_stack) != len(classification_stack):
-                    logMsg(
+                    logger.warning(
                         f"Warning: Z-stack length mismatch: Detection ({len(detection_stack)}) != Classification"
                         f" ({len(classification_stack)}). Trimming to match.",
-                        msgType="warning",
                     )
                     min_length = min(len(detection_stack), len(classification_stack))
                     detection_stack = detection_stack[:min_length]
@@ -501,7 +814,7 @@ class AutomationDebugWindow(Qt.QWidget):
             ),
             timeout=600,
         ).getResult()
-        logMsg(f"Neuron detection finished. Found {len(result)} potential neurons.")
+        logger.info(f"Neuron detection finished. Found {len(result)} potential neurons.")
 
         # results are returned [z_frame, img_row, img_row]
         # map back to global (x, y, z)
@@ -528,7 +841,7 @@ class AutomationDebugWindow(Qt.QWidget):
         if not mock_file_path:
             return None, None
         try:
-            logMsg(f"Loading mock Z-stack from: {mock_file_path}")
+            logger.info(f"Loading mock Z-stack from: {mock_file_path}")
             marr = MetaArray(file=mock_file_path)
             data = marr.asarray()
             info = marr.infoCopy()
@@ -543,25 +856,20 @@ class AutomationDebugWindow(Qt.QWidget):
                 z_vals = z_info["values"]
                 if len(z_vals) > 1:
                     step_z = abs(z_vals[1] - z_vals[0]) * m  # Assume meters
-                    logMsg(
-                        f"Using Z step from mock file '{os.path.basename(mock_file_path)}': {step_z / µm:.2f} µm"
-                    )
+                    logger.info(f"Using Z step from mock file '{os.path.basename(mock_file_path)}': {step_z / µm:.2f} µm")
                 elif len(z_vals) == 1:
-                    logMsg(
+                    logger.warning(
                         f"Only one Z value in mock file '{os.path.basename(mock_file_path)}'. Assuming 1µm step.",
-                        msgType="warning",
                     )
                     step_z = 1 * µm
                 else:
-                    logMsg(
+                    logger.warning(
                         f"No Z values in mock file '{os.path.basename(mock_file_path)}', using default 1µm step.",
-                        msgType="warning",
                     )
                     step_z = 1 * µm
             else:
-                logMsg(
+                logger.warning(
                     f"Z info not in mock file '{os.path.basename(mock_file_path)}', using default 1µm step.",
-                    msgType="warning",
                 )
                 step_z = 1 * µm
 
@@ -592,13 +900,13 @@ class AutomationDebugWindow(Qt.QWidget):
                 current_mock_frame_global_z += step_z
             return stack_frames, step_z
         except Exception:
-            printExc(f"Failed to load or process mock file: {mock_file_path}")
+            logger.exception(f"Failed to load or process mock file: {mock_file_path}")
             return None, None
 
     def _mockNeuronStacks(
         self, _future: Future
     ) -> tuple[list[Frame] | None, list[Frame] | None, float]:
-        logMsg("Using mock Z-stack file(s) for detection.")
+        logger.info("Using mock Z-stack file(s) for detection.")
         detection_stack = None
         classification_stack = None
         # Default step_z, will be updated by the first successfully loaded mock stack
@@ -619,7 +927,7 @@ class AutomationDebugWindow(Qt.QWidget):
             if det_step_z is not None:
                 step_z = det_step_z
         else:
-            logMsg("Primary mock file path is empty.", msgType="warning")
+            logger.warning("Primary mock file path is empty.")
             # detection_stack remains None, step_z remains default
 
         # Load classification stack if multichannel mock is enabled and path is provided
@@ -641,9 +949,8 @@ class AutomationDebugWindow(Qt.QWidget):
                     and step_z != class_step_z
                     and detection_stack is not None
                 ):
-                    logMsg(
+                    logger.warning(
                         f"Z-step mismatch: Detection mock ({step_z/µm:.2f} µm) vs Classification mock ({class_step_z/µm:.2f} µm). Using detection Z-step.",
-                        msgType="warning",
                     )
                 # If detection_stack failed to load (det_step_z is None), but classification loaded, use its step_z.
                 elif class_step_z is not None and detection_stack is None:
@@ -704,16 +1011,14 @@ class AutomationDebugWindow(Qt.QWidget):
             self._open_ranking_windows.remove(window)
         except ValueError:
             # Window might have already been removed or was never added properly
-            printExc(
-                "Attempted to remove a ranking window reference that was not found."
-            )
+            logger.exception("Attempted to remove a ranking window reference that was not found.")
 
     @future_wrap
     def _autoTarget(self, _future):
         self.sigWorking.emit(self.ui.autoTargetBtn)
         # If _unranked_cells is populated, use it. Otherwise, run detection.
         if not self._unranked_cells:
-            logMsg("Need new potential cells; running detection")
+            logger.info("Need new potential cells; running detection")
             x, y = self._randomLocation()
             _future.waitFor(
                 self.scopeDevice.setGlobalPosition(
@@ -759,8 +1064,8 @@ class AutomationDebugWindow(Qt.QWidget):
         if target is None:
             raise RuntimeError("No suitable new target found among detected cells.")
         self._previousTargets.append(target)
-        self.pipetteDevice.setTarget(target)  # TODO setCellTarget?
-        logMsg(f"Setting pipette target to {target}")
+        self.pipetteDevice.setTarget(target)
+        logger.info(f"Setting pipette target to {target}")
 
     def _handleAutoFinish(self, fut: Future):
         self.sigWorking.emit(False)
@@ -824,19 +1129,15 @@ class AutomationDebugWindow(Qt.QWidget):
                 cell.enableTracking()
                 try:
                     _future.setState("Autopatch: patch cell")
-                    logMsg(f"Autopatch: Start cell patching", msgType='warning')
+                    logger.warning("Autopatch: Start cell patching")
                     state = self._autopatchCellPatch(cell, _future)
                 except Exception as exc:
-                    excStr = ''.join(traceback.format_exception_only(exc)).strip()
-                    logMsg(
-                        f"Autopatch: Exception during cell patching: {excStr}",
-                        msgType='error',
-                    )
+                    logger.exception("Autopatch: Exception during cell patching")
                     raise
 
-                logMsg(f"Autopatch: Cell patching finished: {state}", msgType='warning')
+                logger.warning(f"Autopatch: Cell patching finished: {state}")
                 if state != "whole cell":
-                    logMsg(f"Autopatch: Next cell!", msgType='warning')
+                    logger.warning("Autopatch: Next cell!")
                     continue
                 _future.setState("Autopatch: Whole cell; running task")
                 self._autopatchRunTaskRunner(_future)
@@ -863,8 +1164,8 @@ class AutomationDebugWindow(Qt.QWidget):
 
             except (_future.StopRequested, _future.Stopped):
                 raise
-            except Exception as exc:
-                printExc("Error during protocol:")
+            except Exception:
+                logger.exception("Error during protocol:")
                 continue
 
     def _autopatchCellPatch(self, cell, _future):
@@ -913,16 +1214,16 @@ class AutomationDebugWindow(Qt.QWidget):
             raise
         except ValueError as e:
             if self._mockDemo:
-                logMsg(f"Autopatch: Mocking cell despite {e}")
+                logger.info(f"Autopatch: Mocking cell despite {e}")
                 return cell
-            logMsg(f"Cell moved too much? {e}\nRetrying")
+            logger.info(f"Cell moved too much? {e}\nRetrying")
             return self._autopatchFindCell(_future)
-        logMsg(f"Autopatch: Cell found at {cell.position}")
+        logger.info(f"Autopatch: Cell found at {cell.position}")
         return cell
 
     def _autopatchFindPipetteTip(self, _future):
         if self._mockDemo:
-            logMsg("Autopatch: Mock pipette tip detection")
+            logger.info("Autopatch: Mock pipette tip detection")
             return
         pip = self.pipetteDevice
         pos = pip.tracker.findTipInFrame()
@@ -931,7 +1232,7 @@ class AutomationDebugWindow(Qt.QWidget):
         _future.waitFor(self.cameraDevice.moveCenterToGlobal(pos, "fast"))
         pos = pip.tracker.findTipInFrame()
         pip.resetGlobalPosition(pos)
-        logMsg(f"Autopatch: Tip found at {pos}")
+        logger.info(f"Autopatch: Tip found at {pos}")
 
     def _autopatchRunTaskRunner(self, _future):
         man = self.module.manager
@@ -944,7 +1245,7 @@ class AutomationDebugWindow(Qt.QWidget):
                 taskrunner = mod
                 break
         if taskrunner is None:
-            logMsg(f"No task runner found that uses {clampName}", msgType='warning')
+            logger.warning(f"No task runner found that uses {clampName}")
             return
 
         expected_duration = (
@@ -955,7 +1256,7 @@ class AutomationDebugWindow(Qt.QWidget):
             runInGuiThread(taskrunner.runSequence, store=False),
             timeout=max(30, expected_duration * 20),
         )
-        logMsg("Autopatch: Task runner sequence completed.", msgType='warning')
+        logger.warning("Autopatch: Task runner sequence completed.")
 
     def saveConfig(self):
         geom = self.geometry()

@@ -11,7 +11,6 @@ import numpy as np
 
 from acq4 import getManager
 from acq4.util import Qt
-from acq4.util.debug import printExc
 from acq4.util.future import Future, future_wrap
 
 from neuroanalysis.test_pulse import PatchClampTestPulse
@@ -258,7 +257,7 @@ class PatchPipetteState(Future):
                 self._visualTargetTrackingFuture.stop("State cleanup")
                 self._visualTargetTrackingFuture = None
         except Exception:
-            printExc("Error stopping visual target tracking")
+            self.logger.exception("Error stopping visual target tracking")
         disconnect(self.dev.pipetteDevice.sigTargetChanged, self._onTargetChanged)
         return Future.immediate()
 

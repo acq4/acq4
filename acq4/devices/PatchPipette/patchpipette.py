@@ -1,15 +1,13 @@
 from __future__ import annotations
 
 from collections import OrderedDict
-from typing import Optional
 
 import numpy as np
+from neuroanalysis.test_pulse import PatchClampTestPulse
 
 from acq4.devices.PatchClamp.patchclamp import PatchClamp
 from acq4.util import Qt
 from acq4.util import ptime
-from neuroanalysis.test_pulse import PatchClampTestPulse
-
 from coorx import Point
 from .devgui import PatchPipetteDeviceGui
 from .statemanager import PatchPipetteStateManager
@@ -18,7 +16,6 @@ from ..Device import Device
 from ..Pipette import Pipette
 from ..PressureControl import PressureControl
 from ..Sonicator import Sonicator
-from ...util.debug import logMsg
 
 
 class PatchPipette(Device):
@@ -246,9 +243,8 @@ class PatchPipette(Device):
 
                 self.cell = Cell(Point(self.pipetteDevice.targetPosition(), 'global'))
             except ImportError:
-                logMsg(
+                self.logger.exception(
                     "Cell-based features are unavailable without the acq4_automation package",
-                    msgType='error',
                 )
 
     def finishPatchRecord(self):

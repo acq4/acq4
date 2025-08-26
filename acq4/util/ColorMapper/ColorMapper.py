@@ -1,18 +1,20 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
+from acq4.logging_config import get_logger
 
 if __name__ == '__main__':
     import sys
     sys.path.append('..')
 
-from acq4.util import Qt
-import pyqtgraph as pg
-from pyqtgraph import SpinBox
-from pyqtgraph import GradientWidget
-import numpy as np
 import os
-import pyqtgraph.configfile as configfile
 
+import numpy as np
+
+import pyqtgraph as pg
+import pyqtgraph.configfile as configfile
+from acq4.util import Qt
+from pyqtgraph import GradientWidget
+from pyqtgraph import SpinBox
+
+logger = get_logger(__name__)
 Ui_Form = Qt.importTemplate('.CMTemplate')
 
 
@@ -173,7 +175,7 @@ class ColorMapper(Qt.QWidget):
                 self.loadedFile = None
                 self.refreshFileList()
             except:
-                printExc('Error while deleting color scheme:')
+                logger.exception('Error while deleting color scheme:')
                 return
             finally:
                 self.deleteState = 0

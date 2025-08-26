@@ -1,14 +1,13 @@
-import numpy as np
 import time
+
+import numpy as np
 from MetaArray import MetaArray, axis
 
-from acq4.Manager import logMsg
 from acq4.devices.PatchClamp import PatchClamp
 from pyqtgraph import multiprocess
 from .taskGUI import MultiClampTaskGui
 from ..Device import DeviceTask
 from ...util.Mutex import Mutex
-from ...util.debug import printExc
 
 
 class MultiClamp(PatchClamp):
@@ -230,7 +229,7 @@ class MultiClamp(PatchClamp):
                 if self.lastMode is not None and state['mode'] != self._switchingToMode and state['mode'] != 'I=0':
                     # User changed the mode manually; we need to update the holding value immediately.
                     self.setHolding(state['mode'])
-                    logMsg("Warning: MultiClamp mode should be changed from ACQ4, not from the MultiClamp Commander window.", msgType='error')
+                    self.logger.error("Warning: MultiClamp mode should be changed from ACQ4, not from the MultiClamp Commander window.")
 
                 self.lastMode = state['mode']
                 self._switchingToMode = None
@@ -471,7 +470,7 @@ class MultiClampTask(DeviceTask):
                 ## this is likely to fail..
                 self.dev.mc.setParam('SecondarySignalGain', self.cmd['secondaryGain'])
             except:
-                printExc("Warning -- set secondary signal gain failed.")
+                self.dev.logger.exception("Warning -- set secondary signal gain failed.")
 
         #prof.mark('    Multiclamp: set gains')
 

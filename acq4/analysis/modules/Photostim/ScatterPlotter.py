@@ -99,8 +99,7 @@ class ScatterPlotter(Qt.QSplitter):
             self.scans[scan][2] = True  ## plot is valid
         except:
             pass
-            #debug.printExc("Error updating scatter plot:")
-        
+
     def plotClicked(self, plot, points):
         self.sigClicked.emit(self, points)
 

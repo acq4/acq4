@@ -1,18 +1,20 @@
 import contextlib
+import json
 import os
 import time
+from logging import LogRecord
 
-from acq4.Manager import logMsg
 from acq4.modules.Module import Module
 from acq4.util import Qt
-from acq4.util.DataManager import getDataManager, getHandle, DirHandle
+from acq4.util.DataManager import getDataManager, getHandle, DirHandle, FileHandle
 from acq4.util.StatusBar import StatusBar
-from acq4.util.debug import printExc
 from pyqtgraph import FileDialog
+from teleprox.log.logviewer import LogViewer
 from . import FileAnalysisView
-from . import FileLogView
+from ...logging_config import get_logger
 from ...util.HelpfulException import HelpfulException
 
+logger = get_logger(__name__)
 Ui_MainWindow = Qt.importTemplate('.DataManagerTemplate')
 
 
@@ -41,7 +43,7 @@ class DataManager(Module):
         self.ui.setupUi(self.win)
         self.ui.analysisWidget = FileAnalysisView.FileAnalysisView(self.ui.analysisTab, self)
         self.ui.analysisTab.layout().addWidget(self.ui.analysisWidget)
-        self.ui.logWidget = FileLogView.FileLogView(self.ui.logTab, self)
+        self.ui.logWidget = LogViewer()
         self.ui.logTab.layout().addWidget(self.ui.logWidget)
 
         self.win.show()
@@ -53,11 +55,11 @@ class DataManager(Module):
         try:
             self.baseDirChanged()
         except Exception:
-            printExc("Could not set base directory:")
+            logger.exception("Could not set base directory:")
         try:
             self.currentDirChanged()
         except Exception:
-            printExc("Could not set current directory:")
+            logger.exception("Could not set current directory:")
 
         self.selFile = None
         self.updateNewFolderList()
@@ -175,7 +177,7 @@ class DataManager(Module):
         else:
             raise ValueError("Storage directory is invalid")
 
-    def selectedFile(self):
+    def selectedFile(self) -> FileHandle | None:
         """Return the currently selected file"""
         items = self.ui.fileTreeWidget.selectedItems()
         if len(items) > 0:
@@ -217,7 +219,7 @@ class DataManager(Module):
                     # print "dir no match:", spec, inf
                     checkDir = checkDir.parent()
             except:
-                printExc("Error while deciding where to put new folder (using currentDir by default)")
+                logger.exception("Error while deciding where to put new folder (using currentDir by default)")
 
             ## make
             nd = parent.mkdir(name, autoIncrement=True)
@@ -232,7 +234,7 @@ class DataManager(Module):
                 parent)  ## fileTreeWidget waits a while before updating; force it to refresh immediately.
             self.ui.fileTreeWidget.select(nd)
 
-        logMsg("Created new folder: %s" % nd.name(relativeTo=self.baseDir), msgType='status', importance=7)
+        logger.info(f"Created new folder: {nd.name(relativeTo=self.baseDir)}")
         self.manager.setCurrentDir(nd)
 
     def fileSelectionChanged(self):
@@ -251,7 +253,7 @@ class DataManager(Module):
         if fh is None:
             self.ui.fileInfo.setCurrentFile(None)
             self.ui.dataViewWidget.setCurrentFile(None)
-            self.ui.logWidget.selectedFileChanged(None)
+            self.ui.logWidget.set_records()
             self.ui.fileNameLabel.setText('')
         else:
             self.ui.fileNameLabel.setText(fh.name(relativeTo=self.baseDir))
@@ -264,7 +266,9 @@ class DataManager(Module):
         if n == 0:
             self.ui.fileInfo.setCurrentFile(fh)
         elif n == 1:
-            self.ui.logWidget.selectedFileChanged(fh)
+            self.ui.logWidget.set_records(
+                *[LogRecord(**json.loads(line)) for line in fh.readlines()]
+            )
         elif n == 2:
             self.ui.dataViewWidget.setCurrentFile(fh)
 

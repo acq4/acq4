@@ -6,7 +6,6 @@ import numpy as np
 
 from acq4 import getManager
 from acq4.util import ptime
-from acq4.util.debug import printExc
 from acq4.util.future import future_wrap
 from acq4.util.imaging.sequencer import run_image_sequence
 from ._base import PatchPipetteState
@@ -324,6 +323,6 @@ class ApproachState(PatchPipetteState):
             try:
                 self._moveFuture.stop("State finished", wait=True)
             except Exception:
-                printExc("Error stopping pipette advance during cleanup")
+                self.dev.logger.exception("Error stopping pipette advance during cleanup")
 
         return super()._cleanup()
