@@ -4,6 +4,7 @@ from typing import Literal
 import teleprox
 from acq4.devices.DAQGeneric import DAQGeneric, DAQGenericTask, DAQGenericTaskGui
 from acq4.devices.PatchClamp import PatchClamp
+from acq4.logging_config import log_server
 from acq4.util import Qt
 from acq4.util.Mutex import Mutex
 from pyqtgraph.WidgetGroup import WidgetGroup
@@ -57,7 +58,11 @@ class MockClamp(PatchClamp):
             self.logger.exception("Error while setting holding value:")
 
         # Start a remote process to run the simulation.
-        self.process = teleprox.start_process(conda_env=config.get('condaEnv', None))
+        self.process = teleprox.start_process(
+            conda_env=config.get('condaEnv', None),
+            local_server="threaded",
+            log_addr=log_server.address if log_server else None,
+        )
         rsys = self.process.client._import('sys')
         rsys.path.append(os.path.abspath(os.path.dirname(__file__)))
         if config['simulator'] == 'builtin':

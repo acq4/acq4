@@ -423,16 +423,10 @@ class CellDetectState(PatchPipetteState):
             if config['maxAdvanceDistance'] is not None:
                 # max search distance
                 endpoint = self._initialPos + pip.globalDirection() * config['maxAdvanceDistance']
-
             elif config['maxAdvanceDepthBelowSurface'] is not None and pip.globalDirection()[2] < 0:
                 # max surface depth
                 endDepth = surface - config['maxAdvanceDepthBelowSurface']
-                depthEndpt = pip.positionAtDepth(endDepth)
-                # is the surface depth endpoint closer?
-                if endpoint is None or np.linalg.norm(endpoint - pos) > np.linalg.norm(
-                    depthEndpt - pos
-                ):
-                    endpoint = depthEndpt
+                endpoint = pip.positionAtDepth(endDepth)
         elif config['maxAdvanceDistancePastTarget'] is not None:
             # target mode
             endpoint = target + pip.globalDirection() * config['maxAdvanceDistancePastTarget']
@@ -473,10 +467,10 @@ class CellDetectState(PatchPipetteState):
             )
         self.setState("moving to final search endpoint")
         self._waitForMoveWhileTargetChanges(
-            self.finalSearchEndpoint,
-            config['detectionSpeed'],
-            config["continuousAdvance"],
-            _future,
+            position_fn=self.finalSearchEndpoint,
+            speed=config['detectionSpeed'],
+            continuous=True,
+            future=_future,
             interval=config['advanceStepInterval'],
             step=config['advanceStepDistance'],
         )
