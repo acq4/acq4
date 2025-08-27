@@ -234,9 +234,16 @@ class ResealState(PatchPipetteState):
         Ratio of resistance divided by initial resistance below which the membrane is considered to be torn, using the
         repairTau (default is 0.5)
     retractionSuccessDistance : float
-        Distance (meters) to retract before checking for successful reseal (default is 200 µm)
+        Distance (meters) to deem reseal successful regardless of resistance (default is 200 µm)
+    minimumSuccessDistance : float
+        Minimum distance (meters) to retract before checking for successful reseal, regardless of
+        resistance (default is 20µm)
     resealSuccessResistanceMultiplier : float
-        The reseal is considered successful when resistance exceeds initial resistance times this value (default is 4)
+        The reseal is considered successful when resistance exceeds initial resistance times this
+        value (default is 4)
+    minimumSuccessResistance : float
+        Minimum resistance (Ohms) to consider the reseal successful, regardless of initial
+        resistance (default is 500 MOhm)
     resealSuccessDuration : float
         Duration (seconds) to wait after successful reseal before transitioning to the slurp (default is 5s)
     postSuccessRetractionSpeed : float
@@ -275,7 +282,9 @@ class ResealState(PatchPipetteState):
         'maxRetractionSpeed': {'type': 'float', 'default': 10e-6, 'suffix': 'm/s'},
         'retractionStepInterval': {'type': 'float', 'default': 5, 'suffix': 's'},
         'retractionSuccessDistance': {'type': 'float', 'default': 200e-6, 'suffix': 'm'},
+        'minimumSuccessDistance': {'type': 'float', 'default': 20e-6, 'suffix': 'm'},
         'resealSuccessResistanceMultiplier': {'type': 'float', 'default': 4.0},
+        'minimumSuccessResistance': {'type': 'float', 'default': 500e6, 'suffix': 'Ω'},
         'resealSuccessDuration': {'type': 'float', 'default': 5, 'suffix': 's'},
         'postSuccessRetractionSpeed': {'type': 'float', 'default': 6e-6, 'suffix': 'm/s'},
         'detectionTau': {'type': 'float', 'default': 1, 'suffix': 's'},
@@ -358,17 +367,27 @@ class ResealState(PatchPipetteState):
         return np.mean([tp.analysis['steady_state_resistance'] for tp in self._preAnalysisTpss])
 
     def isRetractionSuccessful(self):
-        if self.retractionDistance() > self.config['retractionSuccessDistance'] or (
-            self._lastResistance is not None
+        distance = self.retractionDistance()
+        if distance > self.config['retractionSuccessDistance']:
+            self.setState("retraction distance sufficient for success")
+            return True
+
+        success = (
+            distance > self.config['minimumSuccessDistance']
+            and self._lastResistance is not None
             and self._lastResistance > self.successResistanceThreshold()
-        ):
-            if self._firstSuccessTime is None:
-                self._firstSuccessTime = ptime.time()
-            elif ptime.time() - self._firstSuccessTime > self.config['resealSuccessDuration']:
-                return True
-        else:
+        )
+
+        if not success:
             self._firstSuccessTime = None
-        return False
+        elif self._firstSuccessTime is None:
+            success = False
+            self._firstSuccessTime = ptime.time()
+        elif ptime.time() - (self._firstSuccessTime or 0) < self.config['resealSuccessDuration']:
+            success = False
+        else:  # sustained success!
+            self.setState("resistance sufficient for success")
+        return success
 
     def processAtLeastOneTestPulse(self):
         """Wait for at least one test pulse to be processed."""
@@ -448,7 +467,6 @@ class ResealState(PatchPipetteState):
 
             self.sleep(0.2)
 
-        self.setState("reseal deemed successful")
         self._moveFuture = self._retractFromTissue()
         self.waitFor(self._moveFuture)
 
