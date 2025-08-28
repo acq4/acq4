@@ -44,6 +44,7 @@ class DataManager(Module):
         self.ui.analysisWidget = FileAnalysisView.FileAnalysisView(self.ui.analysisTab, self)
         self.ui.analysisTab.layout().addWidget(self.ui.analysisWidget)
         self.ui.logWidget = LogViewer()
+        self._logFile = None
         self.ui.logTab.layout().addWidget(self.ui.logWidget)
 
         self.win.show()
@@ -267,6 +268,9 @@ class DataManager(Module):
             self.ui.fileInfo.setCurrentFile(fh)
         elif n == 1:
             log_file = fh.nearestLogFile()
+            if self._logFile == log_file:
+                return
+            self._logFile = log_file
             if log_file is None:
                 self.ui.logWidget.set_records()
             elif log_file.shortName().lower() != 'log.json':

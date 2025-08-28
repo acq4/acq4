@@ -418,7 +418,7 @@ class FileHandle(Qt.QObject):
 
     def checkExists(self):
         if not self.exists():
-            raise Exception("File '%s' does not exist." % self.path)
+            raise FileNotFoundError(f"File '{self.path}' does not exist.")
 
     def checkDeleted(self):
         if self.path is None:
