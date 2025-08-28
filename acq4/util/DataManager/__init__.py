@@ -357,6 +357,22 @@ class FileHandle(Qt.QObject):
             with open(self.name(), 'r') as fd:
                 yield from fd
 
+    def nearestLogFile(self):
+        """Return the nearest log file to this file, or None if no log file is found."""
+        self.checkExists()
+        with self.lock:
+            fh = self
+            while fh is not None:
+                if fh.shortName() in ['log.txt', 'log.json']:
+                    return fh
+                elif fh.isDir():
+                    if fh.exists('log.json'):
+                        return fh['log.json']
+                    if fh.exists('log.txt'):
+                        return fh['log.txt']
+                fh = fh.parent()
+            return None
+
     def fileType(self):
         with self.lock:
             info = self.info()

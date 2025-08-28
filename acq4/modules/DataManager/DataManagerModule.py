@@ -266,9 +266,15 @@ class DataManager(Module):
         if n == 0:
             self.ui.fileInfo.setCurrentFile(fh)
         elif n == 1:
-            self.ui.logWidget.set_records(
-                *[LogRecord(**json.loads(line)) for line in fh.readlines()]
-            )
+            log_file = fh.nearestLogFile()
+            if log_file is None:
+                self.ui.logWidget.set_records()
+            elif log_file.shortName().lower() != 'log.json':
+                self.ui.logWidget.set_records()
+            else:
+                self.ui.logWidget.set_records(
+                    *[LogRecord(**json.loads(line)) for line in log_file.readlines()]
+                )
         elif n == 2:
             self.ui.dataViewWidget.setCurrentFile(fh)
 
