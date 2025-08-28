@@ -373,6 +373,14 @@ class FileHandle(Qt.QObject):
                 fh = fh.parent()
             return None
 
+    def __eq__(self, other):
+        if not isinstance(other, FileHandle):
+            return False
+        return abspath(self.name()) == abspath(other.name())
+
+    def __hash__(self):
+        return hash(abspath(self.name()))
+
     def fileType(self):
         with self.lock:
             info = self.info()
