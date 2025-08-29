@@ -17,7 +17,9 @@ def get_client(dll_path):
     global ms_client
     if ms_client is None:
         try:
-            ms_client = teleprox.RPCClient.get_client(address=SERVER_ADDRESS)
+            ms_client = teleprox.RPCClient.get_client(
+                address=SERVER_ADDRESS, local_server="threaded"
+            )
             ms_client._import('teleprox.log').set_logger_address(log_server.address)
             logger.info("Connected to motionSynergy server.")
         except ConnectionRefusedError as exc:
@@ -51,9 +53,7 @@ def start_server(dll_path, log_addr):
     ms_process.client['motionSynergy'] = motionSynergy
     ms_process.client['instrumentSettings'] = instrumentSettings
 
-    ss = ms_process.client._import('acq4.drivers.dovermotion.smartstage').SmartStage(
-        _timeout=90
-    )
+    ss = ms_process.client._import('acq4.drivers.dovermotion.smartstage').SmartStage(_timeout=90)
     ms_process.client['smartstage'] = ss
 
     return ms_process.client

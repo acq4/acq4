@@ -28,4 +28,5 @@ mov = ss.move((21, -26, -16), 10)
 mov.set_callback(cb)
 while not mov.done():
     time.sleep(1)
+time.sleep(0.1)
 assert cb_called
