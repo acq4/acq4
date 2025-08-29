@@ -507,7 +507,7 @@ class Pipette(Device, OptomechDevice):
 
     def setTarget(self, target):
         self.target = np.array(target)
-        self.writeConfigFile({'targetGlobalPosition': list(self.target)}, 'target')
+        self.writeConfigFile({'targetGlobalPosition': list(map(float, self.target))}, 'target')
         self.sigTargetChanged.emit(self, self.target)
 
     def targetPosition(self):
