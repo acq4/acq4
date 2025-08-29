@@ -9,13 +9,15 @@ ms_client = None
 ms_process = None  # only exists if it was started this time
 logger = logging.getLogger('motionsynergy_server')
 logger.setLevel(logging.INFO)
-log_server = teleprox.log.remote.LogServer(logger=logger)
 
 
 def get_client(dll_path):
     """Return an RPCClient connected to the motionSynergy server."""
     global ms_client
+
     if ms_client is None:
+        from acq4.logging_config import log_server
+
         try:
             ms_client = teleprox.RPCClient.get_client(
                 address=SERVER_ADDRESS, local_server="threaded"
