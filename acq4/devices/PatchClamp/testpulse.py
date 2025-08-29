@@ -6,7 +6,6 @@ from MetaArray import MetaArray
 
 from acq4.util import Qt, ptime
 from acq4.util.Thread import Thread
-from acq4.util.debug import printExc
 from neuroanalysis.data import TSeries, PatchClampRecording
 from neuroanalysis.test_pulse import PatchClampTestPulse
 from acq4.Manager import getManager, Task
