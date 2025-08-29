@@ -7,7 +7,6 @@ import numpy as np
 from acq4.devices.Stage import Stage, MoveFuture, StageInterface
 from acq4.drivers.Scientifica import Scientifica as ScientificaDriver
 from acq4.util import Qt
-from acq4.util.debug import logMsg
 from acq4.util.future import future_wrap, Future, FutureButton
 from acq4.util.threadrun import runInGuiThread
 from pyqtgraph import SpinBox, siFormat
@@ -15,18 +14,88 @@ from pyqtgraph import SpinBox, siFormat
 
 class Scientifica(Stage):
     """
-    A Scientifica motorized device.
-
-    This class supports PatchStar, MicroStar, SliceScope, objective changers, etc.
-    The device may be identified either by its serial port or by its description
-    string:
-
-        port: <serial port>  # eg. 'COM1' or '/dev/ttyACM0'
-        name: <string>  # eg. 'SliceScope' or 'MicroStar 2'
-        baudrate: <int>  #  may be 9600 or 38400
-
-    The optional 'baudrate' parameter is used to set the baudrate of the device.
-    Both valid rates will be attempted when initially connecting.
+    A Scientifica motorized device driver for manipulators and stages.
+    
+    * Supports PatchStar, MicroStar, SliceScope, objective changers, and other Scientifica devices.
+    * Requires the ``pyserial`` package for serial communication.
+    * Recommends Scientifica's LinLab software for initial configuration and testing, but note that
+      ACQ4 will not be able to access the serial port while LinLab is running. 
+    
+    Configuration options:
+    
+    * **port** (str, optional): Serial port (e.g., 'COM1' or '/dev/ttyACM0')
+      Either port or name must be specified.
+    
+    * **name** (str, optional): Device name as assigned in LinLab software
+      (e.g., 'SliceScope' or 'MicroStar 2'). Either port or name must be specified.
+    
+    * **baudrate** (int, optional): Serial baud rate (9600 or 38400)
+      Both rates will be attempted if not specified.
+    
+    * **version** (int, optional): Controller version (default: 2)
+      Some devices require version=1 for compatibility.
+    
+    * **scale** (tuple, optional): (x, y, z) scale factors in m/step 
+      (default: (1e-6, 1e-6, 1e-6))
+    
+    * **userSpeed** (float, optional): Default speed for manual control (m/sec).
+      Sets the maximum speed when device is under manual control.
+    
+    * **autoZeroDirection** (tuple, optional): Auto-zero direction for each axis.
+      This affects the direction traveled when "auto-set zero position" is clicked from the manager dock.
+      (default: (-1, -1, -1)). Set to None to disable auto-zero for an axis.
+    
+    * **monitorObjective** (bool, optional): Monitor objective changer state
+      (default: False). Set to True to track objective position changes.
+    
+    * **capabilities** (dict, optional): Override device capabilities
+      Format: {"getPos": (x, y, z), "setPos": (x, y, z), "limits": (x, y, z)}
+      where each tuple contains booleans for each axis.
+    
+    * **isManipulator** (bool, optional): Override manipulator detection
+      If not specified, detection is automatic based on device type.
+    
+    * **params** (dict, optional): Low-level device parameters that are set on the device at ACQ4 startup time. 
+      These may also be configured using LinLab, but we recommend setting them here in order to enforce
+      consistent settings.
+        - axisScale: (x, y, z) axis scaling factors affect the size and direction of steps reported by the device.
+          The absolute value of these is determined by the manufacturer and should not be changed.
+          The sign may be changed to flip the direction of the axis.
+        - joyDirectionX/Y/Z: (bool) Used to switch the direction of the patch pad / patch cube rotary control for each axis.
+          Note that the rotary control direction is also affected by the sign of the axisScale values.
+        - minSpeed, maxSpeed: Speed limits in device units
+        - maxZSpeed, minZSpeed: Z-axis specific speed limits (for devices with separate Z control)
+        - accel: Acceleration setting
+        - joySlowScale, joyFastScale: Joystick speed scaling
+        - joyAccel: Joystick acceleration
+        - approachAngle: Approach mode angle (degrees)
+        - approachMode: Approach mode enabled (bool)
+          Note: the approach mode is also set using a physical switch on the device; setting this parameter
+          here may cause the device to behave contrary to the physical switch state until it is toggled.
+        - objLift: Distance to lift objectives before switching (int; 1 = 10 nm)
+          Note: the sign of this distance depends on the sign of the Z axisScale parameter.
+        - objDisp: Distance between focal planes of objectives (int; 1 = 10 nm)
+          Note: the sign of this distance depends on the sign of the Z axisScale parameter.
+        - objL1, objL2: Legacy objective switching parameters for version 2 devices (int)
+        - currents: Motor current limits (not recommended to change these; be careful to follow manufacturer specs!)
+    
+    Example configuration::
+    
+        SliceScope:
+            driver: 'Scientifica'
+            name: 'SliceScope'
+            scale: [-1e-6, -1e-6, 1e-6]
+            params:
+                axisScale: [5.12, -5.12, -6.4]
+                joyDirectionX: True
+                joyDirectionY: True
+                joyDirectionZ: False
+                minSpeed: 1000
+                maxSpeed: 30000
+                accel: 500
+                joySlowScale: 4
+                joyFastScale: 80
+                joyAccel: 500
     """
 
     def __init__(self, man, config, name):
@@ -49,6 +118,9 @@ class Scientifica(Stage):
                 ) from err
             else:
                 raise
+
+        if 'isManipulator' not in config:
+            config['isManipulator'] = self.driver.isManipulator()
 
         # Controllers reset their baud to 9600 after power cycle
         if baudrate is not None and self.driver.getBaudrate() != baudrate:
@@ -171,7 +243,7 @@ class Scientifica(Stage):
                 self.stop()
             speed = self._interpretSpeed(speed)
 
-            self._lastMove = ScientificaMoveFuture(self, pos, speed)
+            self._lastMove = ScientificaMoveFuture(self, pos, speed, **kwds)
             return self._lastMove
 
     def deviceInterface(self, win):
@@ -199,10 +271,10 @@ class Scientifica(Stage):
 class ScientificaMoveFuture(MoveFuture):
     """Provides access to a move-in-progress on a Scientifica manipulator.
     """
-    def __init__(self, dev: Scientifica, pos, speed: float):
-        super().__init__(dev, pos, speed)
-        pos = np.array(pos)
-        self._moveReq = self.dev.driver.moveTo(pos, speed / 1e-6)
+    def __init__(self, dev: Scientifica, pos, speed: float, **kwds):
+        self._moveReq = dev.driver.moveTo(np.array(pos), speed / 1e-6, **kwds)
+        targetPos = self._moveReq.target_pos  # will have None values filled in with current position
+        super().__init__(dev, targetPos, speed)
         self._moveReq.set_callback(self._requestFinished)
 
     def _requestFinished(self, moveReq):
@@ -323,7 +395,7 @@ class ScientificaGUI(StageInterface):
         response = Qt.QMessageBox.question(
             self,
             "Caution: check for obstructions",
-            "This will move the stage to its limit. Please ensure such a movement is safe. Ready?",
+            f"This will move {self.dev.name()} to its limit. Please ensure such a movement is safe. Ready?",
             Qt.QMessageBox.Ok | Qt.QMessageBox.Cancel,
         )
         if response != Qt.QMessageBox.Ok:
@@ -336,30 +408,38 @@ class ScientificaGUI(StageInterface):
     def _doAutoZero(self, axis: int = None, _future: Future = None) -> None:
         self._savedLimits = self.dev.getLimits()
         try:
+            diff = np.zeros(3)  # keep track of offset changes
             self.dev.setLimits(None, None, None)
-            pos = self.dev.getPosition()
             globalStartPos = self.dev.globalPosition()
-            dest = pos[:]
 
+            # move to an excessively far position until we hit a limit switch
             far_away = [None if x is None else 1e6 * x for x in self.dev.autoZeroDirection]
-            if axis is None:
-                dest = far_away
-            else:
-                dest[axis] = far_away[axis]
-            self.dev._move(dest, "fast", False)  # this should definitely fail
-            _future.sleep(1)
-            while self.dev.driver.isMoving():
-                _future.sleep(0.1)
-            self.dev.stop()
-            before = self.dev.globalPosition()
-            if axis is None:
-                self.dev.driver.zeroPosition()
-            else:
-                self.dev.driver.zeroPosition('XYZ'[axis])
-            self.dev.getPosition(refresh=True)
-            after = self.dev.globalPosition()
-            diff = np.array(after) - np.array(before)
-            logMsg(f"Auto-zeroed {self.dev.name()} by {diff}")
+            if axis is not None and far_away[axis] is None:
+                raise Exception(f"Requested auto zero for axis {'XYZ'[axis]}, but autoZeroDirection is disabled for this axis in the configuration.")
+
+            self._moveAndWait(far_away, axis, _future)
+            diff += self._zeroAxis(axis)
+
+            # This part is a pain: if the approach switch is enabled on the control cube, then it's possible for the
+            # X limit switch to stop the Z axis and vice-versa. To work around this, we need to calibrate
+            # these axes independently while ensuring that the other is moved away from its limit switch.
+            if self.dev.isManipulator and axis != 1:
+                for axis in (0, 2):
+                    otherAxis = 2 - axis
+                    # Move z (or x) 300 um in either direction, then try moving x (or z) far away.
+                    # If z (or x) is already at its limit, then at least one of these should get x (or z)
+                    # to its limit.
+                    # We need to try both directions because we don't know which limit switch is activated.
+                    for dir in (1, -1):
+                        currentPos = self.dev.getPosition()
+                        currentPos[otherAxis] += 300 * dir
+                        # small step to move z (x) away from its limit switch
+                        self._moveAndWait(currentPos, otherAxis, _future)
+                        # far step to get x (z) to its limit switch
+                        self._moveAndWait(far_away, axis, _future)
+                        diff += self._zeroAxis(axis)
+
+            self.dev.logger.info(f"Auto-zeroed {self.dev.name()} by {diff}")
             move_future = self.dev.moveToGlobal(globalStartPos + diff, "fast")
             slippedAxes = np.abs(diff) > 50e-6
             if np.any(slippedAxes):
@@ -374,3 +454,40 @@ class ScientificaGUI(StageInterface):
             self.sigBusyMoving.emit(False)
             self.dev.stop()
             self.dev.setLimits(*self._savedLimits)
+
+    def _moveAndWait(self, pos, axis, _future):
+        """Move to pos and wait for the move to complete. 
+        If axis is None, move all three axes to the specified position.
+        If axis is 0,1,2, move only the specified axis to pos[axis].
+
+        If the future does not reach its target, this is silently ignored.
+
+        Return True if the manipulator reached its target.
+        """
+        if axis is None:
+            dest = pos
+        else:
+            dest = [None, None, None]
+            dest[axis] = pos[axis]
+        f = self.dev._move(dest, "fast", False, attempts_allowed=1)
+        while not f.isDone():
+            _future.sleep(0.1)
+
+        # raise errors not related to missing the target
+        missed = f.wasInterrupted() and 'Stopped moving before reaching target' in f.errorMessage()
+        if f.wasInterrupted() and not missed:
+            f.wait()
+
+        return not missed
+
+    def _zeroAxis(self, axis):
+        """Zero an axis (or all three) and return the vector change in global position."""
+        before = self.dev.globalPosition()
+        if axis is None:
+            self.dev.driver.zeroPosition()
+        else:
+            self.dev.driver.zeroPosition('XYZ'[axis])
+        self.dev.getPosition(refresh=True)
+        after = self.dev.globalPosition()
+        diff = np.array(after) - np.array(before)
+        return diff

@@ -1,4 +1,3 @@
-import contextlib
 import json
 import os
 import re
@@ -163,11 +162,19 @@ class MultiPatchWindow(Qt.QWidget):
 
         self.loadConfig()
 
+    @property
+    def _shouldSaveCalibrationImages(self):
+        return self.ui.saveCalibrationsBtn.isChecked()
+
+    @_shouldSaveCalibrationImages.setter
+    def _shouldSaveCalibrationImages(self, value):
+        self.ui.saveCalibrationsBtn.setChecked(True)
+
     def _turnOffSlowBtn(self, checked):
         self.ui.slowBtn.setChecked(False)
 
     def _turnOffFastBtn(self, checked):
-        self.ui.FastBtn.setChecked(False)
+        self.ui.fastBtn.setChecked(False)
 
     def saveConfig(self):
         geom = self.geometry()
@@ -178,6 +185,7 @@ class MultiPatchWindow(Qt.QWidget):
                 (ctrl.pip.name(), plot.mode): plot.plot.saveState()
                 for ctrl in self.pipCtrls for plot in ctrl.plots
             },
+            "should save calibration images": self._shouldSaveCalibrationImages,
         }
         getManager().writeConfigFile(config, self._configFileName())
 
@@ -195,6 +203,7 @@ class MultiPatchWindow(Qt.QWidget):
                     plot = next((plot for plot in ctrl.plots if plot.mode == plotname), None)
                     if plot is not None:
                         plot.plot.restoreState(config["plots"][(pipette, plotname)])
+        self._shouldSaveCalibrationImages = config.get("should save calibration images", True)
 
     def _configFileName(self):
         return os.path.join('modules', f'{self.module.name}.cfg')
@@ -266,8 +275,16 @@ class MultiPatchWindow(Qt.QWidget):
 
     @future_wrap
     def _autoCalibrate(self, _future):
-        for pip in self.selectedPipettes():
-            pip.pipetteDevice.tracker.autoCalibrate()
+        work_to_do = self.selectedPipettes()
+        while work_to_do:
+            patchpip = work_to_do.pop(0)
+            pip = patchpip.pipetteDevice if isinstance(patchpip, PatchPipette) else patchpip
+            pos = pip.tracker.findTipInFrame()
+            success = _future.waitFor(pip.setTipOffsetIfAcceptable(pos), timeout=None).getResult()
+            if not success:
+                work_to_do.insert(0, patchpip)
+                continue
+
             _future.checkStop()
 
     def _cellDetect(self):
@@ -398,7 +415,17 @@ class MultiPatchWindow(Qt.QWidget):
         pos = self._cammod.window().getView().mapSceneToView(ev.scenePos())
         spos = pip.scopeDevice().globalPosition()
         pos = [pos.x(), pos.y(), spos.z()]
-        pip.resetGlobalPosition(pos)
+        tip_future = pip.setTipOffsetIfAcceptable(pos)
+        tip_future.onFinish(self._handleManualSetTip, pip)
+
+    def _handleManualSetTip(self, future, pip):
+        success = future.getResult()
+        if not success:
+            self._calibratePips.insert(0, pip)
+            return
+
+        if self._shouldSaveCalibrationImages:
+            pip.saveManualCalibration().raiseErrors("Failed to save calibration images")
 
         # if calibration stage positions were requested, then move the stage now
         if len(self._calibrateStagePositions) > 0:

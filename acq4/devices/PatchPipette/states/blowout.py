@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from acq4.util import ptime
-from acq4.util.debug import printExc
 from ._base import PatchPipetteState
 
 
@@ -51,5 +50,5 @@ class BlowoutState(PatchPipetteState):
         try:
             dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
         except Exception:
-            printExc("Error resetting pressure after blowout")
-        super().cleanup()
+            dev.logger.exception("Error resetting pressure after blowout")
+        return super().cleanup()

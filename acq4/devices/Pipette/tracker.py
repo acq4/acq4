@@ -22,7 +22,8 @@ class PipetteTracker:
         This method guarantees that the frame is exposed *after* this method is called.
         """
         imager = self._getImager(imager)
-        return imager.acquireFrames(1, ensureFreshFrames=ensureFreshFrames).getResult()[0]
+        with imager.ensureRunning(ensureFreshFrames=True):
+            return imager.acquireFrames(1).getResult()[0]
 
     def _getImager(self, imager=None):
         if imager is None:
@@ -32,17 +33,20 @@ class PipetteTracker:
             imager = man.getDevice("Camera")
         return imager
 
-    def autoCalibrate(self, **kwds):
-        """Automatically calibrate the pipette tip position using template matching on a single camera frame.
+    def findTipInFrame(self, **kwds):
+        """Automatically find the pipette tip position.
 
-        Return the offset in pipette-local coordinates and the normalized cross-correlation value of the template match.
+        Return the offset in pipette-local coordinates.
 
         All keyword arguments are passed to `measureTipPosition()`.
         """
         if "frame" not in kwds:
             kwds['frame'] = self.takeFrame(ensureFreshFrames=False)
         tipPos, corr = self.measureTipPosition(**kwds)
-        self.pipette.resetGlobalPosition(tipPos)
+        return tipPos
+
+    def measureTipPosition(self, frame, **kwds):
+        raise NotImplementedError()
 
 
 class ResnetPipetteTracker(PipetteTracker):
@@ -67,11 +71,10 @@ class ResnetPipetteTracker(PipetteTracker):
         # map pixel offsets back to physical coordinates
         tipPos = frame.mapFromFrameToGlobal(pg.Vector(xyOffset))
 
-
         return (tipPos.x(), tipPos.y(), tipPos.z() + zErr * 1e-6), performance
 
     def estimateOffset(self, img, pipetteAngle):
-        from acq4.util.imaging.object_detection import do_pipette_tip_detection
+        from acq4_automation.object_detection import do_pipette_tip_detection
         self.result = do_pipette_tip_detection(img, pipetteAngle, show=False)
         return self.result[:3]
 
@@ -332,7 +335,7 @@ class CorrelationPipetteTracker(PipetteTracker):
                 "No reference frames found for this pipette / objective / filter combination: %s" % repr(key)
             )
 
-    def autoCalibrate(self, **kwds):
+    def findTipInFrame(self, **kwds):
         """Automatically calibrate the pipette tip position using template matching on a single camera frame.
 
         Return the offset in pipette-local coordinates and the normalized cross-correlation value of the template match.
@@ -635,7 +638,8 @@ class DriftMonitor(Qt.QWidget):
             pos = []
             for i, t in enumerate(self.trackers):
                 try:
-                    err, corr = t.autoCalibrate(frame=frame, padding=50e-6)
+                    err = t.findTipInFrame(frame=frame, padding=50e-6)
+                    t.pipette.setTipOffset(err)
                     # err = np.array(err)
                     # self.cumulative[i] += err
                     # err = (self.cumulative[i]**2).sum()**0.5

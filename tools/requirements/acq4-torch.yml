@@ -117,6 +117,7 @@ dependencies:
       - pyrasite
       - pytest
       - python-dateutil
+      - python-json-logger
       - pytz
       - pyyaml
       - pyzmq

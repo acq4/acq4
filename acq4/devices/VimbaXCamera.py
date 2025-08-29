@@ -12,8 +12,58 @@ from vmbpy import VmbSystem, Camera as VmbCamera, VmbCameraError, VmbFeatureErro
 
 
 class VimbaXCamera(Camera):
-    """Camera class for VimbaX cameras. See https://github.com/alliedvision/VmbPy for driver install instructions.
-    This isn't necessarily production-ready code, and has only been written for use on a test rig."""
+    """
+    Camera driver for Allied Vision VimbaX cameras using VmbPy.
+    
+    This driver uses the VmbPy interface to control Allied Vision cameras.
+    See https://github.com/alliedvision/VmbPy for driver installation instructions.
+    
+    Note: This implementation is not necessarily production-ready and has been
+    developed primarily for test rig usage.
+    
+    VimbaX-specific configuration options:
+    
+    * **id** (str, required): Camera ID string as reported by Vimba driver
+      Use VimbaXCamera.listCameras() to see available camera IDs
+    
+    Standard Camera configuration options (see Camera base class):
+    
+    * **parentDevice** (str, optional): Name of parent optical device (microscope, etc.)
+    
+    * **transform** (dict, optional): Spatial transform relative to parent device
+        - pos: Position offset [x, y]
+        - scale: Scale factors [x, y] in m/pixel
+        - angle: Rotation angle in radians
+    
+    * **exposeChannel** (dict, optional): DAQ channel for exposure signal recording
+        - device: Name of DAQ device
+        - channel: DAQ channel path
+        - type: 'di'
+    
+    * **triggerInChannel** (dict, optional): DAQ channel for triggering camera
+        - device: Name of DAQ device
+        - channel: DAQ channel path
+        - type: 'do'
+    
+    * **params** (dict, optional): Camera parameters to set at startup
+    
+    Example configuration::
+    
+        VimbaCamera:
+            driver: 'VimbaXCamera'
+            id: 'DEV_1AB22C123456'
+            parentDevice: 'Microscope'
+            transform:
+                pos: [0, 0]
+                scale: [5.2e-6, -5.2e-6]
+                angle: 0
+            exposeChannel:
+                device: 'DAQ'
+                channel: '/Dev1/PFI0'
+                type: 'di'
+            params:
+                ExposureTime: 50000
+    """
 
     @classmethod
     def listCameras(cls):
@@ -23,7 +73,6 @@ class VimbaXCamera(Camera):
     def __init__(self, dm, config, name):
         self._dev: VmbCamera | None = None
         self._lock = RLock()
-        self._config = config
         self._paramProperties = {}
         self._paramValuesOnDev = {}
         self._region = ()

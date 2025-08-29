@@ -119,8 +119,10 @@ class TestPulseThread(Thread):
                     self.checkStop()
             except self.StopRequested:
                 break
-            except Exception:
-                printExc("Error in test pulse thread (will try again):", msgType='warning')
+            except Exception as e:
+                self._clampDev.logger.warning(
+                    "Error in test pulse thread (will try again)", exc_info=e
+                )
                 time.sleep(2.0)
 
     def runOnce(self, checkStop=False):

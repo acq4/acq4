@@ -14,13 +14,54 @@ from .Stage import Stage, MoveFuture, ManipulatorAxesCalibrationWindow, StageAxe
 
 class Sensapex(Stage):
     """
-    A Sensapex manipulator.
+    A Sensapex micromanipulator or stage device.
 
-    Extra configuration parameters this  device accepts:
-
-        linearMovementRule : "linear"|"nonlinear"|None
-            This causes the movement commands to always be either nonlinear or linear, regardless of what ACQ4 would
-            normally request.
+    Configuration options:
+    
+    * **deviceId** (int, required): Sensapex device ID number (< 20 for manipulators, >= 20 for stages)
+    
+    * **scale** (tuple, optional): (x, y, z) scale factors in m/step (default: (1e-6, 1e-6, 1e-6))
+    
+    * **xPitch** (float, optional): Angle of X-axis in degrees relative to horizontal 
+      (0=parallel to xy plane, 90=pointing downward, default: 0)
+    
+    * **maxError** (float, optional): Maximum movement error tolerance in meters (default: 1e-6)
+    
+    * **linearMovementRule** (str, optional): Force movement type ("linear", "nonlinear", or None)
+      Overrides ACQ4's automatic movement type selection
+    
+    * **forceLinearMovement** (bool, optional): Deprecated, use linearMovementRule instead
+    
+    * **address** (str, optional): Network address for TCP connection 
+      (uses global 'drivers/sensapex' config section if not specified)
+    
+    * **group** (int, optional): Device group number for shared connection
+      (uses global 'drivers/sensapex' config section if not specified)
+    
+    * **nAxes** (int, optional): Number of axes (requires sensapex-py >= 1.22.4)
+    
+    * **isManipulator** (bool, optional): Whether device is manipulator vs stage 
+      (auto-detected from deviceId if not specified)
+    
+    * **maxAcceleration** (float, optional): Maximum acceleration limit
+    
+    * **slowSpeed** (float, optional): Slow movement speed in m/s
+    
+    * **fastSpeed** (float, optional): Fast movement speed in m/s
+    
+    Note: Connection parameters (address, group, debug settings, etc.) use global 
+    defaults from the 'drivers/sensapex' configuration section when not specified per-device.
+    
+    Example configuration::
+    
+        Sensapex1:
+            driver: 'Sensapex'
+            deviceId: 2
+            xPitch: 30
+            scale: [1e-9, 1e-9, -1e-9]
+            slowSpeed: 200e-6
+            linearMovementRule: 'linear'
+            maxAcceleration: 1000
     """
 
     _sigRestartUpdateTimer = Qt.Signal(object)  # timeout duration
@@ -43,7 +84,7 @@ class Sensapex(Stage):
         address = config.pop("address", None)
         address = None if address is None else address.encode()
         group = config.pop("group", None)
-        ump = UMP.get_ump(address=address, group=group)
+        ump = UMP.get_ump(address=address, group=group, handle_atexit=False)
         # create handle to this manipulator
         if "nAxes" in config and version_info < (1, 22, 4):
             raise RuntimeError("nAxes support requires version >= 1.022.4 of the sensapex-py library")
@@ -182,10 +223,10 @@ class Sensapex(Stage):
 
     def quit(self):
         self._quitRequested = True
+        super().quit()
         Sensapex.devices.pop(self.devid, None)
         if len(Sensapex.devices) == 0:
-            UMP.get_ump().poller.stop()
-        Stage.quit(self)
+            UMP.get_ump().close()
 
     def _move(self, pos, speed, linear, **kwds):
         if self._force_linear_movement:

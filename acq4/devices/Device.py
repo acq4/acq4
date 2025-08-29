@@ -8,9 +8,9 @@ from typing import Optional
 
 import acq4
 from acq4.Interfaces import InterfaceMixin
+from acq4.logging_config import get_logger
 from acq4.util import Qt
 from acq4.util.Mutex import Mutex
-from acq4.util.debug import printExc
 from acq4.util.optional_weakref import Weakref
 
 
@@ -23,6 +23,8 @@ class Device(InterfaceMixin, Qt.QObject):  # QObject calls super, which is disas
     def __init__(self, deviceManager: acq4.Manager.Manager, config: dict, name: str):
         Qt.QObject.__init__(self)
 
+        self.logger = get_logger(f'acq4.device.{type(self).__module__}.{name}')
+
         # task reservation lock -- this is a recursive lock to allow a task to run its own subtasks
         # (for example, setting a holding value before exiting a task).
         # However, under some circumstances we might try to run two concurrent tasks from the same 
@@ -32,6 +34,7 @@ class Device(InterfaceMixin, Qt.QObject):  # QObject calls super, which is disas
         self._lock_tb_ = None
         self.dm = deviceManager
         self.dm.declareInterface(name, ['device'], self)
+        self._config = config
         Device._deviceCreationOrder.append(Weakref(self))
         self._name = name
 
@@ -62,7 +65,7 @@ class Device(InterfaceMixin, Qt.QObject):  # QObject calls super, which is disas
 
         This path should resolve to `acq4/config/devices/DeviceName_config`.
         """
-        return os.path.join('devices', self.name() + '_config')
+        return os.path.join('devices', f'{self.name()}_config')
 
     def configFileName(self, filename):
         """Return the full path to a config file for this device.
@@ -107,10 +110,11 @@ class Device(InterfaceMixin, Qt.QObject):  # QObject calls super, which is disas
         if block:
             l = self._lock_.tryLock(int(timeout*1000))
             if not l:
-                print("Timeout waiting for device lock for %s" % self.name())
+                print(f"Timeout waiting for device lock for {self.name()}")
                 print("  Device is currently locked from:")
                 print(self._lock_tb_)
-                raise Exception("Timed out waiting for device lock for %s\n  Locking traceback:\n%s" % (self.name(), self._lock_tb_))
+                raise TimeoutError(
+                    f"Timed out waiting for device lock for {self.name()}\n  Locking traceback:\n{self._lock_tb_}")
         else:
             l = self._lock_.tryLock()
             if not l:
@@ -129,7 +133,8 @@ class Device(InterfaceMixin, Qt.QObject):  # QObject calls super, which is disas
             # print("Device %s unlocked" % self.name())
             self._lock_tb_ = None
         except:
-            printExc("WARNING: Failed to release device lock for %s" % self.name())
+            msg = "WARNING: Failed to release device lock for %s" % self.name()
+            logger.exception(msg)
 
     def getTriggerChannels(self, daq: str) -> dict:
         """Return the name of the channel(s) on *daq* can be used to synchronize between this device and a DAQ.

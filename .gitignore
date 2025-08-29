@@ -14,3 +14,6 @@ crash.log
 .vscode/
 __pycache__
 acq4/devices/MockClamp/models/
+.aider*
+.claude
+temp_log.json

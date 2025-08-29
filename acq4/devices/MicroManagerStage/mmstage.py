@@ -1,6 +1,3 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-
 import time
 
 import numpy as np
@@ -10,13 +7,54 @@ from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
 from acq4.util.micromanager import getMMCorePy
 from ..Stage import Stage, MoveFuture, StageInterface
-from ...util.debug import printExc
 
 
 class MicroManagerStage(Stage):
     """
-    Class to wrap the micromanager xy stage
-
+    Stage device that uses MicroManager to control motorized stages.
+    
+    Supports separate XY and Z stage devices through MicroManager adapters.
+    
+    Configuration options:
+    
+    * **scale** (tuple, optional): (x, y, z) scale factors in m/step 
+      (default: (1e-6, 1e-6, 1e-6))
+    
+    * **xyStage** (dict, optional): XY stage configuration
+        - mmAdapterName: MicroManager adapter name (e.g., 'Scientifica')
+        - mmDeviceName: MicroManager device name (e.g., 'XYStage')
+        - serial: Serial port configuration dict
+            - port: Serial port (e.g., 'COM22')
+            - baud: Baud rate (e.g., 9600)
+    
+    * **zStage** (dict, optional): Z stage configuration  
+        - mmAdapterName: MicroManager adapter name (e.g., 'Scientifica')
+        - mmDeviceName: MicroManager device name (e.g., 'ZStage')
+        - serial: Serial port configuration dict
+            - port: 'shared' to use same serial as XY stage, or specific port
+    
+    At least one of xyStage or zStage must be specified.
+    
+    * **parentDevice** (str, optional): Name of parent device for coordinate transforms
+    
+    * **transform** (dict, optional): Spatial transform relative to parent device
+    
+    Example configuration::
+    
+        SliceScope:
+            driver: 'MicroManagerStage'
+            scale: [-1e-6, -1e-6, 1e-6]
+            xyStage:
+                mmAdapterName: 'Scientifica'
+                mmDeviceName: 'XYStage'
+                serial:
+                    port: 'COM22'
+                    baud: 9600
+            zStage:
+                mmAdapterName: 'Scientifica'
+                mmDeviceName: 'ZStage'
+                serial:
+                    port: 'shared'
     """
 
     def __init__(self, man, config, name):
@@ -130,7 +168,7 @@ class MicroManagerStage(Stage):
                     self._lastMove._stopped()
                     self._lastMove = None
             except:
-                printExc("Error stopping axis %s:" % ax)
+                self.logger.exception(f"Error stopping axis {ax}:")
 
     @property
     def positionUpdatesPerSecond(self):

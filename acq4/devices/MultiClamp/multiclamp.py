@@ -1,17 +1,95 @@
-import numpy as np
 import time
+
+import numpy as np
 from MetaArray import MetaArray, axis
 
-from acq4.Manager import logMsg
 from acq4.devices.PatchClamp import PatchClamp
 from pyqtgraph import multiprocess
 from .taskGUI import MultiClampTaskGui
 from ..Device import DeviceTask
 from ...util.Mutex import Mutex
-from ...util.debug import printExc
 
 
 class MultiClamp(PatchClamp):
+    """
+    Driver for Molecular Devices MultiClamp 700A/700B patch clamp amplifiers.
+    
+    Configuration options:
+    
+    * **channelID** (str, required): MultiClamp channel identifier string. 
+      Format: 'model:MC700A,com:3,dev:0,chan:1'
+      Use incorrect string to see available device strings in error message.
+    
+    * **commandChannel** (dict): DAQ channel for command output
+        - device: Name of DAQ device  
+        - channel: DAQ channel (e.g., '/Dev1/ao0')
+        - type: 'ao'
+    
+    * **primaryChannel** (dict): DAQ channel for primary signal input
+        - device: Name of DAQ device
+        - channel: DAQ channel (e.g., '/Dev1/ai10') 
+        - type: 'ai'
+        - mode: Input mode ('NRSE', 'RSE', 'DIFF')
+    
+    * **secondaryChannel** (dict): DAQ channel for secondary signal input
+        - device: Name of DAQ device
+        - channel: DAQ channel (e.g., '/Dev1/ai9')
+        - type: 'ai' 
+        - mode: Input mode ('NRSE', 'RSE', 'DIFF')
+    
+    * **vcHolding** (float, optional): Default voltage clamp holding potential (V, default: -65e-3)
+    
+    * **icHolding** (float, optional): Default current clamp holding current (A, default: 0.0)
+    
+    * **dllPath** (str, optional): Path to AxMultiClampMsg.dll (usually auto-detected)
+    
+    * **pythonExecutable** (str, optional): Path to 32-bit python executable for 64-bit systems
+    
+    * **enableParameterCache** (bool, optional): Enable parameter caching for performance (default: False)
+    
+    * **defaults** (dict, optional): Default amplifier settings for each mode
+        - IC: Dict of current clamp parameters
+        - VC: Dict of voltage clamp parameters
+        
+    Example configuration::
+    
+        Clamp1:
+            driver: 'MultiClamp'
+            channelID: 'model:MC700A,com:3,dev:0,chan:1'
+            commandChannel:
+                device: 'DAQ'
+                channel: '/Dev1/ao0'
+                type: 'ao'
+            primaryChannel:
+                device: 'DAQ'
+                channel: '/Dev1/ai10'
+                mode: 'NRSE'
+                type: 'ai'
+            secondaryChannel:
+                device: 'DAQ'
+                channel: '/Dev1/ai9'
+                mode: 'NRSE'
+                type: 'ai'
+            vcHolding: -65e-3
+            icHolding: 0.0
+            defaults:
+                IC:
+                    HoldingEnable: False
+                    Holding: 0.0
+                    NeutralizationEnable: True
+                    PrimarySignalGain: 2
+                    PrimarySignalLPF: 20e3
+                    BridgeBalEnable: True
+                    BridgeBalResist: 15e6
+                VC:
+                    HoldingEnable: False
+                    Holding: 0.0
+                    WholeCellCompEnable: False
+                    RsCompEnable: False
+                    PrimarySignalGain: 2
+                    PrimarySignalLPF: 20e3
+                    LeakSubEnable: False
+    """
 
     # inherited signals: sigStateChanged, sigHoldingChanged
 
@@ -151,7 +229,7 @@ class MultiClamp(PatchClamp):
                 if self.lastMode is not None and state['mode'] != self._switchingToMode and state['mode'] != 'I=0':
                     # User changed the mode manually; we need to update the holding value immediately.
                     self.setHolding(state['mode'])
-                    logMsg("Warning: MultiClamp mode should be changed from ACQ4, not from the MultiClamp Commander window.", msgType='error')
+                    self.logger.error("Warning: MultiClamp mode should be changed from ACQ4, not from the MultiClamp Commander window.")
 
                 self.lastMode = state['mode']
                 self._switchingToMode = None
@@ -392,7 +470,7 @@ class MultiClampTask(DeviceTask):
                 ## this is likely to fail..
                 self.dev.mc.setParam('SecondarySignalGain', self.cmd['secondaryGain'])
             except:
-                printExc("Warning -- set secondary signal gain failed.")
+                self.dev.logger.exception("Warning -- set secondary signal gain failed.")
 
         #prof.mark('    Multiclamp: set gains')
 

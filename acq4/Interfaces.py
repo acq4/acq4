@@ -130,6 +130,3 @@ class InterfaceDirectory(Qt.QObject):
         """
         with self.lock:
             return self.typeList[type][name]
-
-
-

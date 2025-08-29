@@ -13,6 +13,8 @@ dataTypeConversions = {
     '|u1': 'U8',
 }
 
+NIDAQ = None
+
 
 def init():
     global NIDAQ
@@ -41,13 +43,12 @@ class _NIDAQ:
         return self.GetSysDevNames().split(", ")
 
     def __getattr__(self, attr):
-        if hasattr(PyDAQmx, attr):
-            if callable(getattr(PyDAQmx, attr)):
-                return lambda *args: self.call(attr, *args)
-            else:
-                return getattr(PyDAQmx, attr)
+        if not hasattr(PyDAQmx, attr):
+            raise NameError(f"{attr} not found among DAQmx constants or functions")
+        if callable(getattr(PyDAQmx, attr)):
+            return lambda *args: self.call(attr, *args)
         else:
-            raise NameError("{} not found among DAQmx constants or functions".format(attr))
+            return getattr(PyDAQmx, attr)
 
     def call(self, func, *args):
         fn = getattr(PyDAQmx, func)
@@ -77,7 +78,6 @@ class _NIDAQ:
             return ret.value
         else:
             return fn(*args)
-
 
         # if func[:3] == "Get":  # byref arguments will be handled automatically.
         #     # functions that return char* can be called with a null pointer to get the size of the buffer needed.

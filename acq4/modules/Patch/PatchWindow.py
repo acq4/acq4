@@ -1,22 +1,24 @@
-import numpy as np
 import os
-import scipy.optimize
-import six
 import sys
 import time
 
-import acq4.Manager as Manager
+import numpy as np
+import scipy.optimize
+import six
 from MetaArray import MetaArray
+
+import acq4.Manager as Manager
+from acq4.logging_config import get_logger
 from acq4.util import Qt, ptime
 from acq4.util.Mutex import Mutex
 from acq4.util.StatusBar import StatusBar
 from acq4.util.Thread import Thread
-from acq4.util.debug import printExc
 from pyqtgraph import PlotWidget, mkPen
 from pyqtgraph import WidgetGroup
 from pyqtgraph import siFormat
 from pyqtgraph.debug import Profiler
 
+logger = get_logger(__name__)
 Ui_Form = Qt.importTemplate('.PatchTemplate')
 
 
@@ -377,12 +379,12 @@ class PatchWindow(Qt.QMainWindow):
         if self.ui.startBtn.isChecked():
             if not self.thread.isRunning():
                 self.thread.start()
-                Manager.logMsg("Patch module started.")
+                logger.info("Patch module started.")
             self.ui.startBtn.setText('Stop')
         else:
             self.ui.startBtn.setEnabled(False)
             self.thread.stop()
-            Manager.logMsg("Patch module stopped.")
+            logger.info("Patch module stopped.")
             
     def threadStopped(self):
         self.ui.startBtn.setText('Start')
@@ -432,8 +434,8 @@ class PatchThread(Thread):
                 try:
                     self.runOnce(params, clamp, daqName, clampName)
                 except:
-                    printExc("Error running/analyzing patch protocol")
-                
+                    logger.exception("Error running/analyzing patch protocol")
+
                 lastTime = ptime.time()-params['recordTime'] ## This is not a proper 'cycle time', but instead enforces a minimum interval between cycles (but this can be very important for performance)
                 
                 ## sleep until it is time for the next run
@@ -455,7 +457,7 @@ class PatchThread(Thread):
                 if stop:
                     break
         except:
-            printExc("Error in patch acquisition thread, exiting.")
+            logger.exception("Error in patch acquisition thread, exiting.")
         #self.emit(Qt.SIGNAL('threadStopped'))
         
     def runOnce(self, params, clamp, daqName, clampName):
@@ -544,7 +546,7 @@ class PatchThread(Thread):
             #self.emit(Qt.SIGNAL('newFrame'), frame)
             self.sigNewFrame.emit(frame)
         except:
-            printExc('Error in patch analysis:')
+            logger.exception('Error in patch analysis:')
         finally:
             prof.finish()
             

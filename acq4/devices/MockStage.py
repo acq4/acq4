@@ -9,15 +9,45 @@ from acq4.util.Thread import Thread
 
 
 class MockStage(Stage):
+    """
+    Simulated motorized stage for testing and demonstration.
+    
+    Provides realistic stage behavior without hardware, including movement timing,
+    position reporting, and optional keyboard control for manual positioning.
+    
+    Configuration options:
+    
+    * **fastSpeed** (float, optional): Fast movement speed in m/s (default from Stage)
+    
+    * **slowSpeed** (float, optional): Slow movement speed in m/s (default from Stage)
+    
+    * **keys** (bool, optional): Enable keyboard control when True
+      Arrow keys move X/Y, Page Up/Down move Z
+      Ctrl: 4x speed, Alt: 0.25x speed, Shift: 0.1x speed
+    
+    * **capabilities** (dict, optional): Override device capabilities
+        - getPos: (x, y, z) tuple of booleans for position reading capability
+        - setPos: (x, y, z) tuple of booleans for position setting capability
+        - limits: (x, y, z) tuple of booleans for limit support
+    
+    * **parentDevice** (str, optional): Name of parent device for coordinate transforms
+    
+    * **transform** (dict, optional): Spatial transform relative to parent device
+    
+    Example configuration::
+    
+        MockStage:
+            driver: 'MockStage'
+            fastSpeed: 3e-3
+            slowSpeed: 100e-6
+            keys: True
+    """
 
     def __init__(self, dm, config, name):
         Stage.__init__(self, dm, config, name)
         
         self._lastMove = None
-        self.stageThread = MockStageThread()
-        self.stageThread.positionChanged.connect(self.posChanged)
-        self.stageThread.start()
-        
+
         dm.declareInterface(name, ['stage'], self)
         
         # Global key press handling
@@ -40,6 +70,10 @@ class MockStage(Stage):
             Qt.QCoreApplication.instance().installEventFilter(self)
         self._quit = False
         dm.sigAbortAll.connect(self.abort)
+        self.stageThread = MockStageThread()
+        self.stageThread.positionChanged.connect(self.posChanged, type=Qt.Qt.DirectConnection)
+        self.stageThread.start()
+        self._move(self.getPosition(), 10000, False)
 
     def capabilities(self):
         """Return a structure describing the capabilities of this device"""
@@ -53,11 +87,11 @@ class MockStage(Stage):
             }
 
     def axes(self):
-        return ('x', 'y', 'z')
+        return 'x', 'y', 'z'
 
     def _move(self, pos, speed, linear, **kwds):
         """Called by base stage class when the user requests to move to an
-        posolute or relative position.
+        absolute or relative position.
         """
         with self.lock:
             self._interruptMove()
@@ -65,6 +99,10 @@ class MockStage(Stage):
             speed = self._interpretSpeed(speed)
             self._lastMove = MockMoveFuture(self, pos, speed)
             return self._lastMove
+
+    def _interpretSpeed(self, speed):
+        speed = super()._interpretSpeed(speed)
+        return speed / np.linalg.norm(self.config.get('scale', [1]))
 
     def eventFilter(self, obj, ev):
         """Catch key press/release events used for driving the stage.
@@ -123,7 +161,7 @@ class MockStage(Stage):
 
     @property
     def positionUpdatesPerSecond(self):
-        return 1.0 / self.stageThread.interval
+        return 1.0 / (2 * self.stageThread.interval)
 
     def _getPosition(self):
         return self.stageThread.getPosition()
@@ -243,8 +281,9 @@ class MockStageThread(Thread):
                 stepDist = speed * dt
                 if stepDist >= dist:
                     self._setPosition(target)
-                    self.currentMove.mockFinish()
                     self.stop()
+                    # race condition here if we finish the move before stopping
+                    self.currentMove.mockFinish()
                 else:
                     unit = dif / dist
                     step = unit * stepDist

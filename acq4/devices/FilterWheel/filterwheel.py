@@ -1,11 +1,7 @@
-# -*- coding: utf-8 -*-
 import time
 from collections import OrderedDict
 
 import pyqtgraph as pg
-
-
-import acq4.util.debug as debug
 from acq4.devices.Device import TaskGui, Device, DeviceTask
 from acq4.devices.OptomechDevice import OptomechDevice
 from acq4.util import Qt
@@ -47,7 +43,6 @@ class FilterWheel(Device, OptomechDevice):
         
         self.lock = Mutex(Qt.QMutex.Recursive)
         
-        self._config = config
         self._filters = OrderedDict()
         self._slotNames = OrderedDict()
         self._slotIndicators = OrderedDict()
@@ -176,12 +171,8 @@ class FilterWheel(Device, OptomechDevice):
 
     def loadPreset(self, name):
         """Load a preset filter wheel position by name."""
-        idx = None
-        for i, n in self._slotNames.items():
-            if n == name:
-                idx = i
-                break
-        self.setPosition(idx)
+        idx = next((i for i, n in self._slotNames.items() if n == name), None)
+        return self.setPosition(idx)
 
     def _positionChanged(self, pos):
         filt = self.getFilter(pos)
@@ -464,7 +455,7 @@ class FilterWheelPollThread(Thread):
                 pos = self.dev.getPosition()
                 time.sleep(self.interval)
             except:
-                debug.printExc("Error in Filter Wheel poll thread:")
+                self.dev.logger.exception("Error in Filter Wheel poll thread:")
                 time.sleep(1.0)
     
     def stop(self):

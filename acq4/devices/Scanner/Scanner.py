@@ -1,8 +1,8 @@
-import numpy as np
 import time
 
+import numpy as np
+
 import acq4.util.ptime as ptime
-from acq4.Manager import logMsg
 from acq4.devices.OptomechDevice import OptomechDevice
 from acq4.util import Qt
 from acq4.util.HelpfulException import HelpfulException
@@ -14,6 +14,54 @@ from ..Device import Device, DeviceTask
 
 
 class Scanner(Device, OptomechDevice):
+    """
+    A galvanometric scanner device for controlling XY scan mirrors.
+    
+    Configuration options:
+    
+    * **XAxis** (dict): DAQ channel configuration for X scan mirror
+        - device: Name of DAQ device
+        - channel: DAQ channel (e.g., '/Dev1/ao2')
+        - type: 'ao'
+    
+    * **YAxis** (dict): DAQ channel configuration for Y scan mirror  
+        - device: Name of DAQ device
+        - channel: DAQ channel (e.g., '/Dev1/ao3')
+        - type: 'ao'
+    
+    * **commandLimits** (list): [min, max] voltage limits for mirror commands (default: [-1.5, 1.5])
+    
+    * **offVoltage** (list, optional): [x, y] voltages for virtual shutter "off" position.
+      When specified, enables virtual shuttering by steering beam off-axis.
+    
+    * **defaultCamera** (str, optional): Name of default camera device for calibration
+    
+    * **defaultLaser** (str, optional): Name of default laser device for calibration
+    
+    * **shutterLasers** (list, optional): List of laser names for which virtual shuttering 
+      should be enabled by default
+    
+    * **calibrationDir** (str, optional): Directory path for storing calibration data
+    
+    Example configuration::
+    
+        Scanner:
+            driver: 'Scanner'
+            parentDevice: 'Microscope'
+            XAxis:
+                device: 'DAQ'
+                channel: '/Dev1/ao2'
+                type: 'ao'
+            YAxis:
+                device: 'DAQ'
+                channel: '/Dev1/ao3'
+                type: 'ao'
+            commandLimits: [-3, 3]
+            offVoltage: [0, -4]
+            defaultCamera: 'Camera'
+            defaultLaser: 'Laser-UV'
+            shutterLasers: ['Laser-UV']
+    """
     
     sigShutterChanged = Qt.Signal()
     
@@ -50,7 +98,7 @@ class Scanner(Device, OptomechDevice):
             if self.getShutterOpen():
                 self._setVoltage(vals)
             else:
-                logMsg("Virtual shutter closed, not setting mirror position.", msgType='warning')
+                self.logger.warning("Virtual shutter closed, not setting mirror position.")
 
     def setPosition(self, pos, laser):
         """Set the position of the xy mirrors to a point in the image
@@ -192,13 +240,13 @@ class Scanner(Device, OptomechDevice):
         if laser in index:
             index1 = index[laser]
         else:
-            logMsg("Warning: No calibration found for laser %s" % laser, msgType='warning')
+            self.logger.warning(f"Warning: No calibration found for laser {laser}")
             return None
             
         if opticState in index1:
             index2 = index1[opticState]
         else:
-            logMsg("Warning: No calibration found for state: %s" % opticState, msgType='warning')
+            self.logger.warning(f"Warning: No calibration found for state: {opticState}")
             return None
         
         return index2.copy()
