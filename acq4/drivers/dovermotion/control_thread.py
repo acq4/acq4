@@ -37,6 +37,9 @@ class SmartStageControlThread:
         self.thread = None
         self.start_thread()
 
+    def set_callback(self, cb):
+        self.pos_callback = cb
+
     def start_thread(self):
         if self.is_running():
             raise RuntimeError('Thread is already running')

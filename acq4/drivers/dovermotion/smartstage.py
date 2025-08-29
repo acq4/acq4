@@ -14,6 +14,9 @@ class SmartStage:
         self.control_thread = SmartStageControlThread(
             callback, poll_interval, callback_threshold, move_complete_threshold)
 
+    def set_callback(self, cb):
+        self.control_thread.set_callback(cb)
+
     def stop(self):
         """Stop the device immediately"""
         return self.control_thread.request('stop')

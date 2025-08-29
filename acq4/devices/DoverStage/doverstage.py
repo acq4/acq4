@@ -11,6 +11,7 @@ class DoverStage(Stage):
         self.msapi = get_client(dll_path=config["dllPath"])
         self.dev = self.msapi['smartstage']
         self.dev.enable()
+        self.dev.set_callback(self.posChanged)
         self._lastMove = None
         Stage.__init__(self, man, config, name)
 
