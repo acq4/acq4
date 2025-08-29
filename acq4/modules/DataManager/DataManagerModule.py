@@ -89,7 +89,7 @@ class DataManager(Module):
         self.ui.setupUi(self.win)
         self.ui.analysisWidget = FileAnalysisView.FileAnalysisView(self.ui.analysisTab, self)
         self.ui.analysisTab.layout().addWidget(self.ui.analysisWidget)
-        self.ui.logWidget = LogViewer()
+        self.ui.logWidget = LogViewer(logger=None)
         self._logFile = None
         self.ui.logTab.layout().addWidget(self.ui.logWidget)
 
