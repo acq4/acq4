@@ -152,8 +152,25 @@ class VimbaXCamera(Camera):
                     newvals['region'] = v
                 elif p == 'binning':
                     with self._noParamUpdates():
+                        roi_x, roi_y, roi_w, roi_h = self.getParam('region')
+                        old_x, old_y = self.getParam('binning')
+                        mult_x = v[0] / old_x
+                        mult_y = v[1] / old_y
+                        roi_x = roi_x // mult_x
+                        roi_y = roi_y // mult_y
+                        roi_w = min(roi_w // mult_x, self.getParam('sensorWidth'))
+                        roi_h = min(roi_h // mult_y, self.getParam('sensorHeight'))
                         newvals, _r = self.setParams(
-                            [('binningX', v[0]), ('binningY', v[1])], autoRestart=autoRestart, autoCorrect=autoCorrect
+                            [
+                                ('binningX', v[0]),
+                                ('binningY', v[1]),
+                                ('regionX', roi_x),
+                                ('regionY', roi_y),
+                                ('regionW', roi_w),
+                                ('regionH', roi_h),
+                            ],
+                            autoRestart=autoRestart,
+                            autoCorrect=autoCorrect,
                         )
                         x = newvals['binningX']
                         y = newvals['binningY']
