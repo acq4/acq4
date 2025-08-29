@@ -158,8 +158,8 @@ class VimbaXCamera(Camera):
                         mult_y = v[1] / old_y
                         roi_x = roi_x // mult_x
                         roi_y = roi_y // mult_y
-                        roi_w = min(roi_w // mult_x, self.getParam('sensorWidth'))
-                        roi_h = min(roi_h // mult_y, self.getParam('sensorHeight'))
+                        roi_w = min(roi_w // mult_x, self.getParam('sensorWidth') // v[0] - 1)
+                        roi_h = min(roi_h // mult_y, self.getParam('sensorHeight') // v[1] - 1)
                         newvals, _r = self.setParams(
                             [
                                 ('binningX', v[0]),
@@ -175,6 +175,7 @@ class VimbaXCamera(Camera):
                         x = newvals['binningX']
                         y = newvals['binningY']
                         newvals['binning'] = (x, y)
+                        newvals['region'] = (roi_x, roi_y, roi_w, roi_h)
                 elif p == 'triggerMode':
                     self._dev.TriggerMode.set(v in ('On', 1, True))
                     newvals = {p: v}

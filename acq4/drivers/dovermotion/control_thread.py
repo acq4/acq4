@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import logging
 import queue
 import sys
 import threading
 
 import numpy as np
 
-from .motionsynergy_api import get_motionsynergyapi, initialize, check
+from .motionsynergy_api import get_motionsynergyapi, initialize, check, MotionSynergyException
+
+logger = logging.getLogger(__name__)
 
 
 class SmartStageControlThread:
@@ -59,8 +62,14 @@ class SmartStageControlThread:
     def _run(self):
         while self.quit_request is None:
             # check on position and move in progress
-            self._check_position()
-            self._check_move_status()
+            try:
+                self._check_position()
+            except MotionSynergyException:
+                logger.exception("Error checking position")
+            try:
+                self._check_move_status()
+            except MotionSynergyException:
+                logger.exception("Error checking move status")
 
             try:
                 req = self.request_queue.get(timeout=self.poll_interval)
@@ -68,7 +77,10 @@ class SmartStageControlThread:
                 req = None
 
             if req is not None:
-                self._handle_request(req)
+                try:
+                    self._handle_request(req)
+                except MotionSynergyException:
+                    logger.exception(f"Error handling request {req.request}({req.kwds})")
 
         self.quit_request.set_result(None)
 
