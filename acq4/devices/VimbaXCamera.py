@@ -72,6 +72,7 @@ class VimbaXCamera(Camera):
 
     def __init__(self, dm, config, name):
         self._dev: VmbCamera | None = None
+        self._id = config['id']
         self._lock = RLock()
         self._paramProperties = {}
         self._paramValuesOnDev = {}
@@ -82,7 +83,7 @@ class VimbaXCamera(Camera):
 
     def setupCamera(self):
         with VmbSystem.get_instance() as vmb:
-            _id = self._config['id']
+            _id = self._id
             try:
                 self._dev = vmb.get_camera_by_id(_id)
             except VmbCameraError as e:
