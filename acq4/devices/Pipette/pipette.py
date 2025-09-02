@@ -387,27 +387,40 @@ class Pipette(Device, OptomechDevice):
             return self.offset
 
     @future_wrap
-    def saveManualCalibration(self, _future):
+    def saveManualCalibration(self, stack=True, _future=None):
         path = os.path.join(self.configPath(), "manual-calibrations")
         path = self.dm.configFileName(path)
         path = self.dm.dirHandle(path, create=True)
 
         cam: Camera = self.imagingDevice()
-        depth = cam.getFocusDepth()
-        is_below_surface = depth <= self.scopeDevice().getSurfaceDepth()
-        scan_dist = np.random.randint(2, 40 if is_below_surface else 100) * 1e-6
-        step = scan_dist / 2
-        try:
-            seq_future = run_image_sequence(cam, z_stack=(depth - scan_dist, depth + scan_dist, step), storage_dir=path)
-            _future.waitFor(seq_future)
-        finally:
-            _future.waitFor(cam.setFocusDepth(depth))
-        fh = seq_future.imagesSavedIn
-        info = {
-            **fh.info(),
-            "tip position": self.globalPosition(),
-        }
-        fh.setInfo(info)
+        if stack:
+            depth = cam.getFocusDepth()
+            is_below_surface = depth <= self.scopeDevice().getSurfaceDepth()
+            scan_dist = np.random.randint(2, 40 if is_below_surface else 100) * 1e-6
+            step = scan_dist / 2
+            try:
+                seq_future = run_image_sequence(
+                    cam, z_stack=(depth - scan_dist, depth + scan_dist, step), storage_dir=path
+                )
+                _future.waitFor(seq_future)
+            finally:
+                _future.waitFor(cam.setFocusDepth(depth))
+            fh = seq_future.imagesSavedIn
+            info = {
+                **fh.info(),
+                "tip position": self.globalPosition(),
+            }
+            fh.setInfo(info)
+        else:
+            with cam.ensureRunning():
+                img = _future.waitFor(cam.acquireFrames(n=1, ensureFreshFrames=True)).getResult()[0]
+            img.addInfo({"tip position": self.globalPosition()})
+            path.writeFile(
+                img.data(),
+                "manual-calibration.ma",
+                info=img.info(),
+                autoIncrement=True,
+            )
 
     def resetGlobalPosition(self, pos):
         """Set the device transform such that the pipette tip is located at the global position *pos*.
