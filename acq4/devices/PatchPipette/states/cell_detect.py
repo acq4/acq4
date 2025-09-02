@@ -413,7 +413,6 @@ class CellDetectState(PatchPipetteState):
         config = self.config
         dev = self.dev
         pip = dev.pipetteDevice
-        pos = np.array(pip.globalPosition())
         surface = pip.scopeDevice().getSurfaceDepth()
         target = np.array(pip.targetPosition())
 
