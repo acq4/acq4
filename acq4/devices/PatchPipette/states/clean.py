@@ -102,7 +102,7 @@ class CleanState(PatchPipetteState):
             dev.logger.exception("Error resetting pressure after clean")
 
         try:
-            _future.waitFor(self.dev.pipetteDevice.moveTo('home', 'fast'))
+            _future.waitFor(dev.pipetteDevice.moveTo('home', 'fast'))
         except Exception:
             dev.logger.exception("Error resetting pipette position after clean")
 

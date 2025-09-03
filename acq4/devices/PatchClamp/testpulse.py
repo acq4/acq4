@@ -3,6 +3,9 @@ from typing import Literal
 
 import numpy as np
 from MetaArray import MetaArray
+
+from acq4.util import Qt, ptime
+from acq4.util.Thread import Thread
 from neuroanalysis.data import TSeries, PatchClampRecording
 from neuroanalysis.stimuli import SquarePulse
 from neuroanalysis.test_pulse import PatchClampTestPulse

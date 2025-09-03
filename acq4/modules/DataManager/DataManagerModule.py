@@ -2,6 +2,7 @@ import contextlib
 import json
 import os
 import time
+from datetime import datetime
 from logging import LogRecord
 
 from acq4.modules.Module import Module
@@ -26,6 +27,51 @@ class Window(Qt.QMainWindow):
         self.sigClosed.emit()
 
 
+def load_log_records_legacy(log_file):
+    records = []
+    msgType_to_level = {
+        'status': 20,
+        'error': 40,
+        'warning': 30,
+    }
+    try:
+        entries = log_file.read()
+    except Exception:
+        logger.exception(f"Error reading log from {log_file.name()}")
+        return records
+    for name, entry in entries.items():
+        try:
+            exc_info = (
+                entry['exception']['message'] + ''.join(entry['exception']['traceback'])
+                if entry.get('exception', None) is not None
+                else None
+            )
+            r = LogRecord(
+                name="acq4",
+                msg=entry['message'],
+                level=msgType_to_level.get(entry['msgType'], 20),
+                pathname='',
+                lineno=0,
+                args=None,
+                exc_info=exc_info,
+            )
+            r.created = datetime.fromisoformat(entry['timestamp']).timestamp()
+            records.append(r)
+        except Exception:
+            logger.exception(f"Error making log record from {log_file.name()}:{name}")
+    return records
+
+
+def load_log_records(log_file):
+    records = []
+    for line in log_file.readlines():
+        data = json.loads(line)
+        r = LogRecord(**data)
+        r.created = data['created']
+        records.append(r)
+    return records
+
+
 class DataManager(Module):
     moduleDisplayName = "Data Manager"
     moduleCategory = "Acquisition"
@@ -43,7 +89,8 @@ class DataManager(Module):
         self.ui.setupUi(self.win)
         self.ui.analysisWidget = FileAnalysisView.FileAnalysisView(self.ui.analysisTab, self)
         self.ui.analysisTab.layout().addWidget(self.ui.analysisWidget)
-        self.ui.logWidget = LogViewer()
+        self.ui.logWidget = LogViewer(logger=None)
+        self._logFile = None
         self.ui.logTab.layout().addWidget(self.ui.logWidget)
 
         self.win.show()
@@ -266,9 +313,19 @@ class DataManager(Module):
         if n == 0:
             self.ui.fileInfo.setCurrentFile(fh)
         elif n == 1:
-            self.ui.logWidget.set_records(
-                *[LogRecord(**json.loads(line)) for line in fh.readlines()]
-            )
+            log_file = fh.nearestLogFile()
+            if self._logFile == log_file:
+                return
+            self._logFile = log_file
+            if log_file is None:
+                self.ui.logWidget.set_records()
+            elif log_file.shortName().lower() == 'log.json':
+                self.ui.logWidget.set_records(*load_log_records(log_file))
+            elif log_file.shortName().lower() == 'log.txt':
+                self.ui.logWidget.set_records(*load_log_records_legacy(log_file))
+            else:
+                self.ui.logWidget.set_records()
+
         elif n == 2:
             self.ui.dataViewWidget.setCurrentFile(fh)
 

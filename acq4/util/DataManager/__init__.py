@@ -357,6 +357,30 @@ class FileHandle(Qt.QObject):
             with open(self.name(), 'r') as fd:
                 yield from fd
 
+    def nearestLogFile(self):
+        """Return the nearest log file to this file, or None if no log file is found."""
+        self.checkExists()
+        with self.lock:
+            fh = self
+            while fh is not None:
+                if fh.shortName() in ['log.txt', 'log.json']:
+                    return fh
+                elif fh.isDir():
+                    if fh.exists('log.json'):
+                        return fh['log.json']
+                    if fh.exists('log.txt'):
+                        return fh['log.txt']
+                fh = fh.parent()
+            return None
+
+    def __eq__(self, other):
+        if not isinstance(other, FileHandle):
+            return False
+        return abspath(self.name()) == abspath(other.name())
+
+    def __hash__(self):
+        return hash(abspath(self.name()))
+
     def fileType(self):
         with self.lock:
             info = self.info()
@@ -402,7 +426,7 @@ class FileHandle(Qt.QObject):
 
     def checkExists(self):
         if not self.exists():
-            raise Exception("File '%s' does not exist." % self.path)
+            raise FileNotFoundError(f"File '{self.path}' does not exist.")
 
     def checkDeleted(self):
         if self.path is None:

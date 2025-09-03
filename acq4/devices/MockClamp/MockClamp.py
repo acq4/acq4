@@ -20,7 +20,7 @@ class MockClamp(PatchClamp):
 
     Configuration examples::
 
-        # Simuator imported from neuroanalysis
+        # Simulator imported from neuroanalysis
         simulator: 'neuroanalysis'
 
         # simulator using neuron with cell model downloaded from AllenSDK
