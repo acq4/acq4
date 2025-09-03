@@ -537,7 +537,7 @@ class FutureButton(FeedbackButton):
 
     def __init__(
             self,
-            future_producer: Optional[Callable[ParamSpec, Future]] = None,
+            future_producer: Optional[Callable[[ParamSpec], Future]] = None,
             *args,
             stoppable: bool = False,
             success=None,
