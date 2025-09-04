@@ -103,12 +103,12 @@ class ApproachState(PatchPipetteState):
         super().__init__(*args, **kwds)
         self._moveFuture = None
         self._analysis = CellDetectAnalysis(
-            self.config["baselineResistanceTau"],
-            np.inf,  # not trying to find cells here
-            np.inf,  # not trying to find cells here
-            999999,  # not trying to find cells here
-            self.config["obstacleResistanceThreshold"],
-            self.config["breakThreshold"],
+            baseline_tau=self.config["baselineResistanceTau"],
+            cell_threshold_fast=np.inf,  # not trying to find cells here
+            cell_threshold_slow=np.inf,  # not trying to find cells here
+            slow_detection_steps=999999,  # not trying to find cells here
+            obstacle_threshold=self.config["obstacleResistanceThreshold"],
+            break_threshold=self.config["breakThreshold"],
         )
         self.direction_unit = self._calc_direction()
         self._wiggleLock = Lock()

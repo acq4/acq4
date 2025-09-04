@@ -467,6 +467,8 @@ class ResealState(PatchPipetteState):
 
             self.sleep(0.2)
 
+        if self._moveFuture is not None:
+            self._moveFuture.stop(wait=True)
         self._moveFuture = self._retractFromTissue()
         self.waitFor(self._moveFuture)
 
