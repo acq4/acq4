@@ -242,7 +242,7 @@ class TestPulseThread(Thread):
         cmdData = np.tile(
             square.eval(n_pts=numPts, t0=0, sample_rate=params['sampleRate']).data,
             params['average'],
-        )
+        ) + self._clampDev.getHolding(mode)
 
         cmd = {
             'protocol': {'duration': duration * params['average']},
