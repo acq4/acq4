@@ -58,10 +58,12 @@ class MockClamp(PatchClamp):
             printExc("Error while setting holding value:")
 
         # Start a remote process to run the simulation.
+        if log_server is None:
+            raise RuntimeError("Logging server not started; cannot start MockClamp simulator process.")
         self.process = teleprox.start_process(
             conda_env=config.get('condaEnv', None),
             local_server="threaded",
-            log_addr=log_server.address if log_server else None,
+            log_addr=log_server.address,
         )
         rsys = self.process.client._import('sys')
         rsys.path.append(os.path.abspath(os.path.dirname(__file__)))
