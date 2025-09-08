@@ -683,9 +683,10 @@ class Manager(Qt.QObject):
             with open(self._logFile.name(), 'r') as f:
                 for i, line in enumerate(f):
                     record = logging.LogRecord(**json.loads(line))
-                    log_win.new_record(record)
+                    log_win.new_record(record, sort=False)
                     if i % 20 == 0:
                         Qt.QApplication.processEvents()
+            log_win.ensure_chronological_sorting()
 
     def setCurrentDir(self, d):
         """
