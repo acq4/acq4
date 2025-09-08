@@ -145,12 +145,15 @@ class SealAnalysis(SteadyStateAnalysisBase):
 
 
 def find_optimal_pressure(pressures, resistances) -> float:
-    win = 3
-    dRss = np.diff(np.log(np.convolve(resistances.data, np.ones(win) / win, mode='valid')))
-    closest_indices = find_closest(pressures.time_values, resistances.time_values)
-    p_like_r = pressures.data[closest_indices][1:]
-    p_like_r = np.convolve(p_like_r, np.ones(win) / win, mode='valid')
-    return float(p_like_r[np.argmax(dRss)])
+    try:
+        win = 3
+        dRss = np.diff(np.log(np.convolve(resistances.data, np.ones(win) / win, mode='valid')))
+        closest_indices = find_closest(pressures.time_values, resistances.time_values)
+        p_like_r = pressures.data[closest_indices][1:]
+        p_like_r = np.convolve(p_like_r, np.ones(win) / win, mode='valid')
+        return float(p_like_r[np.argmax(dRss)])
+    except ValueError as exc:
+        raise ValueError("Cannot calculate optimal pressure without resistance data") from exc
 
 
 def find_closest(data, values):
