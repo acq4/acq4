@@ -11,7 +11,7 @@ def installExceptionHandler():
     import pyqtgraph.exceptionHandling as exceptionHandling
 
     exceptionHandling.setTracebackClearing(True)
-    exceptionHandling.register(exceptionCallback)
+    exceptionHandling.register(exception_callback)
 
 
 @contextlib.contextmanager
@@ -22,30 +22,26 @@ def except_and_print(exc_types, *a, **kw):
         logger.exception(*a, **kw)
 
 
-blockLogging = False
+thread_locals = threading.local()
 
 
-def exceptionCallback(*args):
-    # Called whenever there is an unhandled exception.
+def exception_callback(*args):
+    # nothing fancy if an error occurs in this thread *while* trying to log another exception
+    if getattr(thread_locals, 'block_logging', False):
+        original_excepthook(*args)
 
-    # unhandled exceptions generate an error message by default, but this
-    # can be overridden by raising HelpfulException(msgType='...')
-    global blockLogging
-    if not blockLogging:
-        # if an error occurs *while* trying to log another exception, disable any further logging to prevent recursion.
-        try:
-            blockLogging = True
-            kwargs = {'exception': args, 'msgType': "error"}
-            # TODO is this needed still?
-            # if args:  # and 'Timeout' in str(args[0]):
-            #     kwargs['threads'] = {
-            #         id: traceback.format_stack(frames)
-            #         for id, frames in sys._current_frames().items()
-            #         if id != threading.current_thread().ident
-            #     }
-            logger.exception("Unexpected error", exc_info=args)
-        except:
-            print("Error: Exception could not be logged.")
-            original_excepthook(*sys.exc_info())
-        finally:
-            blockLogging = False
+    try:
+        thread_locals.block_logging = True
+        log_fn = logger.exception
+        # can be overridden by raising HelpfulException(msgType='...')
+        msg_type = getattr(args[1], 'kwargs', {}).get('msgType', '')
+        if msg_type == 'status':
+            log_fn = logger.info
+        elif msg_type == 'warning':
+            log_fn = logger.warning
+        log_fn("Unexpected error", exc_info=args)
+    except Exception:
+        print("Error: Exception could not be logged.")
+        original_excepthook(*sys.exc_info())
+    finally:
+        thread_locals.block_logging = False
