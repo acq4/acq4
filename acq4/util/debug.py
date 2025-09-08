@@ -1,14 +1,14 @@
 import logging
+import sys
+import threading
 
-from pyqtgraph.debug import *
-from pyqtgraph.exceptionHandling import original_excepthook
+from pyqtgraph import exceptionHandling
 
 logger = logging.getLogger("acq4")
 
 
 def installExceptionHandler():
     # install global exception handler for others to hook into.
-    import pyqtgraph.exceptionHandling as exceptionHandling
 
     exceptionHandling.setTracebackClearing(True)
     exceptionHandling.register(exception_callback)
@@ -20,7 +20,7 @@ thread_locals = threading.local()
 def exception_callback(*args):
     # nothing fancy if an error occurs in this thread *while* trying to log another exception
     if getattr(thread_locals, 'block_logging', False):
-        original_excepthook(*args)
+        exceptionHandling.original_excepthook(*args)
 
     try:
         thread_locals.block_logging = True
@@ -34,6 +34,6 @@ def exception_callback(*args):
         log_fn("Unexpected error", exc_info=args)
     except Exception:
         print("Error: Exception could not be logged.")
-        original_excepthook(*sys.exc_info())
+        exceptionHandling.original_excepthook(*sys.exc_info())
     finally:
         thread_locals.block_logging = False

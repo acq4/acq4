@@ -18,7 +18,8 @@ from acq4.util.HelpfulException import HelpfulException
 from acq4.util.SequenceRunner import runSequence
 from acq4.util.StatusBar import StatusBar
 from acq4.util.Thread import Thread
-from acq4.util.debug import Profiler, Mutex
+from pyqtgraph.debug import Profiler
+from pyqtgraph.util.mutex import Mutex
 from acq4.util.future import Future
 from . import analysisModules
 from ..Module import Module
