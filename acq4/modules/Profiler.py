@@ -1,7 +1,5 @@
-"""
-Profiling module for monitoring acq4 performance and identifying bottlenecks
-Uses yappi profiler to collect thread-aware performance statistics with UI for control and display
-"""
+# ABOUTME: Profiling module for monitoring acq4 performance and identifying bottlenecks
+# ABOUTME: Provides function profiling via yappi and Qt event loop profiling via ProfiledQApplication
 import yappi
 import time
 import re
@@ -12,27 +10,9 @@ from acq4.util.codeEditor import invokeCodeEditor
 from pyqtgraph import TableWidget
 
 
-class ProfileResult:
-    """Container for a single profiling session result"""
+class FunctionProfiler:
+    """Handles function-level profiling using yappi and provides UI for control and display"""
     
-    def __init__(self, name, start_time, func_stats, thread_stats):
-        self.name = name
-        self.start_time = start_time
-        self.end_time = datetime.now()
-        self.func_stats = func_stats
-        self.thread_stats = thread_stats
-        self.duration = (self.end_time - self.start_time).total_seconds()
-
-
-class Profiler(Module):
-    """Performance profiling module for acq4
-    
-    Provides UI controls for starting/stopping profiling sessions and displaying
-    results in both flat and hierarchical views organized by thread.
-    """
-    moduleDisplayName = "Profiler"
-    moduleCategory = "Utilities"
-
     # Column definitions: (header, attribute, format_func)
     COLUMNS = [
         ('Function/Thread', 'name', str),
@@ -42,41 +22,24 @@ class Profiler(Module):
         ('Avg Time', 'tavg', lambda x: f"{x:.6f}"),
         ('Location', 'full_name', str),
     ]
-
-    def __init__(self, manager, name, config):
-        Module.__init__(self, manager, name, config)
-        self.manager = manager
+    
+    def __init__(self, parent_widget):
+        self.parent = parent_widget
         self.is_profiling = False
         self.current_session_start = None
         self.profile_results = []
         
-        self._setupUI()
-
-    def _setItemColumns(self, item, data_obj=None, **custom_values):
-        """Set item column values using COLUMNS definition"""
-        for i, (header, attr, format_func) in enumerate(self.COLUMNS):
-            if header in custom_values:
-                value = custom_values[header]
-            elif data_obj and hasattr(data_obj, attr):
-                value = format_func(getattr(data_obj, attr))
-            else:
-                value = ""
-            item.setText(i, value)
-
-    def _setupUI(self):
-        """Initialize the user interface"""
-        self.win = Qt.QMainWindow()
-        self.win.setWindowTitle('Profiler')
-        self.win.resize(1000, 800)
+        # Create UI
+        self.widget = self._createUI()
+    
+    def _createUI(self):
+        """Create the function profiling UI"""
+        widget = Qt.QWidget()
+        layout = Qt.QVBoxLayout(widget)
         
-        # Central widget with splitter
-        central_widget = Qt.QWidget()
-        self.win.setCentralWidget(central_widget)
-        layout = Qt.QVBoxLayout(central_widget)
-        
-        # Control panel - fixed size, don't expand
+        # Control panel
         control_panel = self._createControlPanel()
-        layout.addWidget(control_panel, 0)  # 0 stretch factor
+        layout.addWidget(control_panel, 0)
         
         # Main splitter for results list and profile display
         splitter = Qt.QSplitter(Qt.Qt.Horizontal)
@@ -91,19 +54,19 @@ class Profiler(Module):
         self.profile_display = Qt.QTreeWidget()
         self.profile_display.setHeaderLabels([col[0] for col in self.COLUMNS])
         self.profile_display.setSortingEnabled(True)
-        self.profile_display.sortByColumn(2, Qt.Qt.DescendingOrder)  # Sort by total time by default
-        self.profile_display.setExpandsOnDoubleClick(False)  # Disable expand/collapse on double-click
+        self.profile_display.sortByColumn(2, Qt.Qt.DescendingOrder)
+        self.profile_display.setExpandsOnDoubleClick(False)
         self.profile_display.itemDoubleClicked.connect(self._onItemDoubleClicked)
         splitter.addWidget(self.profile_display)
         
         # Set splitter proportions
         splitter.setSizes([200, 600])
         
-        self.win.show()
-
+        return widget
+    
     def _createControlPanel(self):
         """Create the control panel with start/stop and view controls"""
-        panel = Qt.QGroupBox("Profile Controls")
+        panel = Qt.QGroupBox("Function Profile Controls")
         panel.setSizePolicy(Qt.QSizePolicy.Preferred, Qt.QSizePolicy.Fixed)
         layout = Qt.QHBoxLayout(panel)
         
@@ -134,7 +97,7 @@ class Profiler(Module):
         layout.addStretch()
         
         return panel
-
+    
     def _toggleProfiling(self):
         """Start or stop profiling session"""
         if self.is_profiling:
@@ -191,6 +154,9 @@ class Profiler(Module):
         item = Qt.QListWidgetItem(item_text)
         item.setData(Qt.Qt.UserRole, result)
         self.results_list.addItem(item)
+        
+        # Auto-select the new item
+        self.results_list.setCurrentItem(item)
 
     def _onResultSelected(self):
         """Handle selection change in results list"""
@@ -198,8 +164,8 @@ class Profiler(Module):
         if current_item is None:
             return
             
-        self.current_result = current_item.data(Qt.Qt.UserRole)
-        self._displayProfileResult(self.current_result)
+        result = current_item.data(Qt.Qt.UserRole)
+        self._displayProfileResult(result)
 
     def _displayProfileResult(self, result):
         """Display profile result in the tree widget"""
@@ -222,6 +188,17 @@ class Profiler(Module):
         if current_item is not None:
             result = current_item.data(Qt.Qt.UserRole)
             self._displayProfileResult(result)
+
+    def _setItemColumns(self, item, data_obj=None, **custom_values):
+        """Set item column values using COLUMNS definition"""
+        for i, (header, attr, format_func) in enumerate(self.COLUMNS):
+            if header in custom_values:
+                value = custom_values[header]
+            elif data_obj and hasattr(data_obj, attr):
+                value = format_func(getattr(data_obj, attr))
+            else:
+                value = ""
+            item.setText(i, value)
 
     def _displayGroupedByThread(self, result):
         """Display profile data grouped by thread with per-thread function breakdown"""
@@ -341,3 +318,269 @@ class Profiler(Module):
             invokeCodeEditor(file_path, line_num)
         except Exception as e:
             print(f"Failed to open editor for {file_path}:{line_num}: {e}")
+
+
+class QtEventProfiler:
+    """Handles Qt event loop profiling using ProfiledQApplication and provides UI for control and display"""
+    
+    def __init__(self, parent_widget):
+        self.parent = parent_widget
+        self.is_profiling = False
+        self.current_profile = None
+        self.profile_results = []
+        
+        # Create UI
+        self.widget = self._createUI()
+    
+    def _createUI(self):
+        """Create the Qt event profiling UI"""
+        widget = Qt.QWidget()
+        layout = Qt.QVBoxLayout(widget)
+        
+        # Control panel
+        control_panel = self._createControlPanel()
+        layout.addWidget(control_panel, 0)
+        
+        # Main splitter
+        splitter = Qt.QSplitter(Qt.Qt.Horizontal)
+        layout.addWidget(splitter)
+        
+        # Left side: Profile sessions list
+        self.results_list = Qt.QListWidget()
+        self.results_list.itemSelectionChanged.connect(self._onResultSelected)
+        splitter.addWidget(self.results_list)
+        
+        # Right side: Vertical splitter with two panes
+        right_splitter = Qt.QSplitter(Qt.Qt.Vertical)
+        
+        # Top pane: Event breakdown by type
+        self.profile_display = Qt.QTreeWidget()
+        headers = ['Event Type', 'Count', 'Total Time (s)', 'Avg Time (ms)', 'Percentage']
+        self.profile_display.setHeaderLabels(headers)
+        self.profile_display.setSortingEnabled(True)
+        self.profile_display.sortByColumn(2, Qt.Qt.DescendingOrder)
+        right_splitter.addWidget(self.profile_display)
+        
+        # Bottom pane: Most expensive individual events
+        self.slow_events_display = Qt.QTreeWidget()
+        slow_headers = ['Event Type', 'Duration (ms)', 'Receiver', 'Info']
+        self.slow_events_display.setHeaderLabels(slow_headers)
+        self.slow_events_display.setSortingEnabled(True)
+        self.slow_events_display.sortByColumn(1, Qt.Qt.DescendingOrder)
+        right_splitter.addWidget(self.slow_events_display)
+        
+        # Set right splitter proportions (60% top, 40% bottom)
+        right_splitter.setSizes([360, 240])
+        
+        splitter.addWidget(right_splitter)
+        
+        # Set main splitter proportions
+        splitter.setSizes([200, 600])
+        
+        return widget
+    
+    def _createControlPanel(self):
+        """Create control panel for Qt event profiling"""
+        panel = Qt.QGroupBox("Qt Event Profile Controls")
+        panel.setSizePolicy(Qt.QSizePolicy.Preferred, Qt.QSizePolicy.Fixed)
+        layout = Qt.QHBoxLayout(panel)
+        
+        # Start/Stop button
+        self.start_stop_btn = Qt.QPushButton("Start Qt Profiling")
+        self.start_stop_btn.clicked.connect(self._toggleProfiling)
+        layout.addWidget(self.start_stop_btn)
+        
+        # Session name input
+        layout.addWidget(Qt.QLabel("Session Name:"))
+        self.session_name_edit = Qt.QLineEdit()
+        self.session_name_edit.setText(f"Qt_Profile_{len(self.profile_results) + 1}")
+        layout.addWidget(self.session_name_edit)
+        
+        # Slow threshold input
+        layout.addWidget(Qt.QLabel("Slow Threshold (ms):"))
+        self.slow_threshold_spin = Qt.QDoubleSpinBox()
+        self.slow_threshold_spin.setRange(0.1, 1000.0)
+        self.slow_threshold_spin.setValue(5.0)
+        self.slow_threshold_spin.setSuffix(" ms")
+        layout.addWidget(self.slow_threshold_spin)
+        
+        layout.addStretch()
+        
+        return panel
+    
+    def _toggleProfiling(self):
+        """Start or stop Qt profiling session"""
+        if self.is_profiling:
+            self._stopProfiling()
+        else:
+            self._startProfiling()
+    
+    def _startProfiling(self):
+        """Start a new Qt event profiling session"""
+        # Get the QApplication instance
+        app = Qt.QApplication.instance()
+        if app is None:
+            Qt.QMessageBox.warning(self.parent, "Warning", "No QApplication instance found")
+            return
+        
+        # Check if it's a ProfiledQApplication
+        if not hasattr(app, 'start_profile'):
+            Qt.QMessageBox.warning(self.parent, "Warning", 
+                                 "QApplication is not a ProfiledQApplication. Start acq4 with --qt-profile flag.")
+            return
+        
+        # Start profiling session
+        session_name = self.session_name_edit.text() or f"Qt_Profile_{len(self.profile_results) + 1}"
+        slow_threshold = self.slow_threshold_spin.value()
+        
+        self.current_profile = app.start_profile(session_name, slow_threshold)
+        
+        # Update UI
+        self.is_profiling = True
+        self.start_stop_btn.setText("Stop Qt Profiling")
+        self.start_stop_btn.setStyleSheet("background-color: #ff4444;")
+        
+    def _stopProfiling(self):
+        """Stop the current Qt profiling session"""
+        if self.current_profile is None:
+            return
+        
+        # Stop the profile
+        self.current_profile.stop()
+        
+        # Add to results list
+        self._addResultToList(self.current_profile)
+        self.profile_results.append(self.current_profile)
+        
+        # Reset UI
+        self.is_profiling = False
+        self.start_stop_btn.setText("Start Qt Profiling")
+        self.start_stop_btn.setStyleSheet("")
+        
+        # Update session name for next run
+        self.session_name_edit.setText(f"Qt_Profile_{len(self.profile_results) + 1}")
+        
+        self.current_profile = None
+    
+    def _addResultToList(self, profile):
+        """Add a Qt profile result to the results list"""
+        stats = profile.get_statistics()
+        item_text = f"{stats['name']} ({stats['total_events']:,} events, {stats['wall_time']:.1f}s)"
+        item = Qt.QListWidgetItem(item_text)
+        item.setData(Qt.Qt.UserRole, profile)
+        self.results_list.addItem(item)
+        
+        # Auto-select the new item
+        self.results_list.setCurrentItem(item)
+    
+    def _onResultSelected(self):
+        """Handle selection change in Qt results list"""
+        current_item = self.results_list.currentItem()
+        if current_item is None:
+            return
+        
+        profile = current_item.data(Qt.Qt.UserRole)
+        self._displayProfileResult(profile)
+    
+    def _displayProfileResult(self, profile):
+        """Display Qt profile result in both tree widgets"""
+        self.profile_display.clear()
+        self.slow_events_display.clear()
+        
+        stats = profile.get_statistics()
+        
+        # Top pane: Event breakdown by type
+        # Create summary item
+        summary_item = Qt.QTreeWidgetItem(self.profile_display)
+        summary_item.setText(0, f"Session: {stats['name']}")
+        summary_item.setText(1, f"{stats['total_events']:,}")
+        summary_item.setText(2, f"{stats['active_time']:.3f}")
+        summary_item.setText(3, f"{stats['active_fraction']:.1%}")
+        summary_item.setText(4, f"Wall: {stats['wall_time']:.1f}s")
+        
+        # Add event breakdown
+        breakdown = profile.get_event_breakdown_by_type()
+        for event_name, total_time, count, avg_time, percentage in breakdown:
+            if count > 0:  # Only show events that actually occurred
+                item = Qt.QTreeWidgetItem(self.profile_display)
+                item.setText(0, event_name)
+                item.setText(1, f"{count:,}")
+                item.setText(2, f"{total_time:.6f}")
+                item.setText(3, f"{avg_time*1000:.2f}")
+                item.setText(4, f"{percentage:.1f}%")
+        
+        # Bottom pane: Most expensive individual events
+        slow_events = sorted(stats['slow_events'], key=lambda x: x[0], reverse=True)[:50]
+        for event_data in slow_events:
+            if len(event_data) == 3:
+                # Old format (duration, event_name, receiver)
+                duration, event_name, receiver = event_data
+                info = ""
+            else:
+                # New format (duration, event_name, receiver, info)
+                duration, event_name, receiver, info = event_data
+            
+            item = Qt.QTreeWidgetItem(self.slow_events_display)
+            item.setText(0, event_name)
+            item.setText(1, f"{duration*1000:.2f}")
+            item.setText(2, receiver)
+            item.setText(3, info)
+        
+        # Auto-resize columns for both displays
+        for i in range(self.profile_display.columnCount()):
+            self.profile_display.resizeColumnToContents(i)
+        for i in range(self.slow_events_display.columnCount()):
+            self.slow_events_display.resizeColumnToContents(i)
+
+
+class ProfileResult:
+    """Container for a single function profiling session result"""
+    
+    def __init__(self, name, start_time, func_stats, thread_stats):
+        self.name = name
+        self.start_time = start_time
+        self.end_time = datetime.now()
+        self.func_stats = func_stats
+        self.thread_stats = thread_stats
+        self.duration = (self.end_time - self.start_time).total_seconds()
+
+
+class Profiler(Module):
+    """Performance profiling module for acq4
+    
+    Provides separate function profiling (yappi) and Qt event profiling (ProfiledQApplication)
+    with clean separation of concerns and parallel UI implementations.
+    """
+    moduleDisplayName = "Profiler"
+    moduleCategory = "Utilities"
+
+    def __init__(self, manager, name, config):
+        Module.__init__(self, manager, name, config)
+        self.manager = manager
+        
+        self._setupUI()
+
+    def _setupUI(self):
+        """Initialize the user interface with tabbed profilers"""
+        self.win = Qt.QMainWindow()
+        self.win.setWindowTitle('Profiler')
+        self.win.resize(1000, 800)
+        
+        # Central widget with tabs
+        central_widget = Qt.QWidget()
+        self.win.setCentralWidget(central_widget)
+        layout = Qt.QVBoxLayout(central_widget)
+        
+        # Tab widget for different profiling views
+        self.tab_widget = Qt.QTabWidget()
+        layout.addWidget(self.tab_widget)
+        
+        # Create profiler instances
+        self.function_profiler = FunctionProfiler(self.win)
+        self.qt_profiler = QtEventProfiler(self.win)
+        
+        # Add tabs
+        self.tab_widget.addTab(self.function_profiler.widget, "Function Profile")
+        self.tab_widget.addTab(self.qt_profiler.widget, "Qt Event Profile")
+        
+        self.win.show()

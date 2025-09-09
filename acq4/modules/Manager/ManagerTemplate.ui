@@ -134,6 +134,29 @@
        </spacer>
       </item>
       <item>
+       <widget class="QLabel" name="qtProfileLabel">
+        <property name="text">
+         <string>Qt Activity: ---%</string>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignCenter</set>
+        </property>
+        <property name="styleSheet">
+         <string notr="true">QLabel { 
+  font-weight: bold; 
+  color: #666666;
+  background-color: #f0f0f0;
+  border: 1px solid #cccccc;
+  border-radius: 3px;
+  padding: 2px;
+}</string>
+        </property>
+        <property name="visible">
+         <bool>false</bool>
+        </property>
+       </widget>
+      </item>
+      <item>
        <widget class="QPushButton" name="reloadModuleBtn">
         <property name="text">
          <string>Reload Libraries</string>

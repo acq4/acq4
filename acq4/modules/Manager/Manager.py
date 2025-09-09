@@ -38,6 +38,9 @@ class Manager(Module):
         self.ui.configList.itemDoubleClicked.connect(self.loadConfig)
         self.ui.moduleList.itemDoubleClicked.connect(self.loadSelectedModule)
         self.ui.quitBtn.clicked.connect(self.requestQuit)
+        
+        # Setup Qt profiling display if --qt-profile was used
+        self._setupQtProfileDisplay()
 
         state = self.manager.readConfigFile(self.stateFile)
         # restore window position
@@ -226,7 +229,58 @@ class Manager(Module):
         self.updateModList()
         self.showMessage("Loaded configuration '%s'." % cfg, 10000)
 
+    def _setupQtProfileDisplay(self):
+        """Setup Qt profiling percentage display if ProfiledQApplication is active."""
+        # Check if we have a ProfiledQApplication
+        app = Qt.QApplication.instance()
+        if hasattr(app, 'activity_fraction'):
+            # Show the Qt profile label
+            self.ui.qtProfileLabel.setVisible(True)
+            
+            # Setup timer to update the percentage display
+            self.qt_profile_timer = Qt.QTimer()
+            self.qt_profile_timer.timeout.connect(self._updateQtProfileDisplay)
+            self.qt_profile_timer.start(1000)  # Update every second
+        else:
+            # Hide the label if not using ProfiledQApplication
+            self.ui.qtProfileLabel.setVisible(False)
+    
+    def _updateQtProfileDisplay(self):
+        """Update the Qt profiling percentage display."""
+        app = Qt.QApplication.instance()
+        if hasattr(app, 'activity_fraction'):
+            try:
+                fraction = app.activity_fraction
+                percentage = fraction * 100
+                
+                # Color code based on activity level
+                if percentage < 10:
+                    color = "#4CAF50"  # Green - low activity
+                elif percentage < 30:
+                    color = "#FFC107"  # Yellow - moderate activity
+                else:
+                    color = "#F44336"  # Red - high activity
+                
+                self.ui.qtProfileLabel.setText(f"Qt Activity: {percentage:.1f}%")
+                self.ui.qtProfileLabel.setStyleSheet(f"""
+                    QLabel {{ 
+                        font-weight: bold; 
+                        color: {color};
+                        background-color: #f0f0f0;
+                        border: 1px solid #cccccc;
+                        border-radius: 3px;
+                        padding: 2px;
+                    }}
+                """)
+            except Exception:
+                # In case of any error, just show dashes
+                self.ui.qtProfileLabel.setText("Qt Activity: ---%")
+
     def quit(self):
+        # Cleanup Qt profiling timer if it exists
+        if hasattr(self, 'qt_profile_timer'):
+            self.qt_profile_timer.stop()
+        
         # save ui configuration
         geom = self.win.geometry()
         state = {

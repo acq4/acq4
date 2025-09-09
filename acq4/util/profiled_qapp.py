@@ -1,7 +1,5 @@
-# ABOUTME: Profiled QApplication subclass for collecting Qt event loop performance statistics
-# ABOUTME: Provides low-overhead event timing data collection without slowing the event loop
+import math
 import time
-import weakref
 from collections import defaultdict, deque
 from ..util.Qt import QApplication, QEvent, QTimer, QObject
 
@@ -35,6 +33,21 @@ def event_name(event):
     return EVENT_NAMES.get(t, f"Type({t})")
 
 
+def extract_metacall_info(event):
+    """Extract information from MetaCall events.
+    
+    Note: PyQt5 MetaCall events don't expose internal signal/slot details
+    without private Qt headers, so we can only provide basic info.
+    """
+    event_type_int = int(event.type())
+    if event_type_int != 43:  # MetaCall is type 43
+        return None
+    
+    # MetaCall events in PyQt5 appear as generic QEvent objects
+    # and don't expose sender/signal information publicly
+    return "Signal/slot call (details not available in PyQt5)"
+
+
 class QApplicationProfile(QObject):
     """Handles statistics collection for a specific profiling session.
     
@@ -51,44 +64,27 @@ class QApplicationProfile(QObject):
         
         # Timing state
         self._start_time = time.perf_counter()
-        self._total_active_time = 0.0  # seconds spent inside notify()
+        self._end_time = None  # Set when profiling stops
         
-        # Event statistics - using simple data structures for speed
-        self._event_stats = defaultdict(lambda: [0.0, 0])  # [total_time, count] by event type
-        
-        # Slow event tracking
-        self._slow_samples = deque(maxlen=max_slow_samples)
+        # Raw event data - analysis deferred
+        self._events = []  # Store raw (duration, event_type, receiver, event) tuples
         
         # Safety counters
-        self._total_events = 0
         self._exceptions = 0
         self._active = True
     
-    def record_event(self, duration, event_type, receiver_name=None):
-        """Record statistics for a single event. Called by ProfiledQApplication."""
+    def record_event(self, duration, event_type, receiver, event):
+        """Record raw event data for later analysis. Called by ProfiledQApplication."""
         if not self._active:
             return
             
-        self._total_active_time += duration
-        self._total_events += 1
-        
-        # Update event type statistics
-        stats = self._event_stats[event_type]
-        stats[0] += duration  # total time
-        stats[1] += 1         # count
-        
-        # Track slow events
-        if duration >= self._slow_threshold:
-            self._slow_samples.append((duration, event_type, receiver_name or "<unknown>"))
-    
-    def record_exception(self):
-        """Record an exception during event processing."""
-        if self._active:
-            self._exceptions += 1
+        # Store raw event data - analysis happens later
+        self._events.append((duration, event_type, receiver, event))    
     
     def stop(self):
         """Stop collecting statistics for this profile."""
         self._active = False
+        self._end_time = time.perf_counter()
     
     def is_active(self):
         """Check if this profile is still collecting data."""
@@ -106,38 +102,71 @@ class QApplicationProfile(QObject):
         - total_events: total number of events processed
         - exceptions: number of exceptions during event processing
         - event_stats: dict mapping event_type_int -> {'time': float, 'count': int, 'name': str}
-        - slow_events: list of (duration, event_type_name, receiver_class) tuples
+        - slow_events: list of (duration, event_type_name, receiver_class, info) tuples
         """
-        current_time = time.perf_counter()
-        wall_time = current_time - self._start_time
-        active_time = self._total_active_time
-        idle_time = wall_time - active_time
-        active_fraction = active_time / wall_time if wall_time > 0 else 0.0
+        # Use end time if profiling has stopped, otherwise current time for active profiles
+        end_time = self._end_time if self._end_time is not None else time.perf_counter()
+        wall_time = end_time - self._start_time
         
-        # Convert event stats to more usable format
-        event_stats = {}
-        for event_type, (total_time, count) in self._event_stats.items():
-            event_stats[event_type] = {
-                'time': total_time,
-                'count': count,
-                'name': EVENT_NAMES.get(event_type, f"Type({event_type})")
-            }
-        
-        # Convert slow events to include event names
+        # Analyze raw event data and calculate totals
+        event_stats = defaultdict(lambda: {'time': 0.0, 'count': 0, 'name': ''})
         slow_events = []
-        for duration, event_type, receiver_name in self._slow_samples:
-            event_type_name = EVENT_NAMES.get(event_type, f"Type({event_type})")
-            slow_events.append((duration, event_type_name, receiver_name))
+        total_active_time = 0.0
+        total_events = 0
+        
+        for duration, event_type, receiver, event in self._events:
+            total_active_time += duration
+            total_events += 1
+            # Update event type statistics
+            stats = event_stats[event_type]
+            stats['time'] += duration
+            stats['count'] += 1
+            stats['name'] = EVENT_NAMES.get(event_type, f"Type({event_type})")
+            
+            # Track slow events
+            if duration >= self._slow_threshold:
+                # Get receiver name
+                try:
+                    class_name = type(receiver).__name__
+                    object_name = getattr(receiver, 'objectName', lambda: '')()
+                    if object_name:
+                        receiver_name = f"{class_name}({object_name})"
+                    else:
+                        receiver_name = class_name
+                except Exception:
+                    receiver_name = "<unknown>"
+                
+                # Get event info
+                event_info = ""
+                try:
+                    event_type_name = EVENT_NAMES.get(event_type, f"Type({event_type})")
+                    if event_type_name == 'MetaCall':
+                        event_info = extract_metacall_info(event)
+                    elif duration >= 0.005:  # For slow events, show the event type
+                        event_info = f"Event: {event_type_name}"
+                except Exception as e:
+                    event_info = f"Error: {str(e)}"
+                
+                slow_events.append((duration, event_type_name, receiver_name, event_info))
+        
+        # Calculate derived statistics
+        idle_time = wall_time - total_active_time
+        active_fraction = total_active_time / wall_time if wall_time > 0 else 0.0
+        
+        # Sort slow events by duration descending
+        slow_events.sort(reverse=True)
+        if len(slow_events) > self._max_slow_samples:
+            slow_events = slow_events[:self._max_slow_samples]
         
         return {
             'name': self.name,
             'wall_time': wall_time,
-            'active_time': active_time,
+            'active_time': total_active_time,
             'idle_time': idle_time,
             'active_fraction': active_fraction,
-            'total_events': self._total_events,
+            'total_events': total_events,
             'exceptions': self._exceptions,
-            'event_stats': event_stats,
+            'event_stats': dict(event_stats),
             'slow_events': slow_events
         }
     
@@ -212,11 +241,16 @@ class ProfiledQApplication(QApplication):
     def __init__(self, *args):
         super().__init__(*args)
         
-        # Active profiles - using WeakSet to avoid holding references
-        self._active_profiles = weakref.WeakSet()
+        # Active profiles
+        self._active_profiles = []
         
         # Guard against re-entrancy (should be rare but possible)
         self._in_notify = False
+        
+        # Exponential averaging for real-time activity fraction
+        self.exp_avg_time_constant = 0.3  # seconds
+        self._exp_avg_active_fraction = None  # Current exponentially averaged active fraction
+        self._last_event_end = time.perf_counter()  # Time when previous event completed
         
     def start_profile(self, name="profile", slow_threshold_ms=5.0, max_slow_samples=1000):
         """Start a new profiling session.
@@ -225,7 +259,7 @@ class ProfiledQApplication(QApplication):
             QApplicationProfile: Profile instance that will collect statistics
         """
         profile = QApplicationProfile(name, slow_threshold_ms, max_slow_samples)
-        self._active_profiles.add(profile)
+        self._active_profiles.append(profile)
         return profile
     
     def notify(self, receiver, event):
@@ -234,41 +268,31 @@ class ProfiledQApplication(QApplication):
             # Rare re-entrancy case - just pass through
             return super().notify(receiver, event)
         
-        # Quick exit if no active profiles to avoid any overhead
-        if not self._active_profiles:
-            return super().notify(receiver, event)
-        
         self._in_notify = True
         start_time = time.perf_counter()
         exception_occurred = False
         
         try:
-            result = super().notify(receiver, event)
-            return result
+            return super().notify(receiver, event)
         except Exception:
             exception_occurred = True
             raise
         finally:
+            self._in_notify = False
+
             # Timing collection - keep this as fast as possible
             duration = time.perf_counter() - start_time
             event_type = int(event.type())
             
-            # Get receiver name once for all profiles
-            receiver_name = None
-            if self._active_profiles:
-                try:
-                    receiver_name = type(receiver).__name__
-                except Exception:
-                    receiver_name = "<unknown>"
+            # Update exponential averaging for activity fraction
+            self._update_activity_average(duration)
             
-            # Dispatch to all active profiles
-            for profile in list(self._active_profiles):  # Copy to avoid modification during iteration
+            # Dispatch raw data to all active profiles (minimal work)
+            for profile in self._active_profiles:
                 if profile.is_active():
-                    profile.record_event(duration, event_type, receiver_name)
+                    profile.record_event(duration, event_type, receiver, event)
                     if exception_occurred:
-                        profile.record_exception()
-            
-            self._in_notify = False
+                        profile._exceptions += 1
     
     def get_active_profiles(self):
         """Get list of currently active profile instances."""
@@ -280,6 +304,39 @@ class ProfiledQApplication(QApplication):
     
     def stop_all_profiles(self):
         """Stop all currently active profiles."""
-        for profile in list(self._active_profiles):
+        for profile in self._active_profiles:
             if profile.is_active():
                 profile.stop()
+    
+    def _update_activity_average(self, event_duration):
+        """Update the exponentially averaged activity fraction."""
+        current_time = time.perf_counter()
+        total_interval = current_time - self._last_event_end
+        
+        if total_interval > 0:
+            # Calculate activity fraction for this interval
+            activity_fraction = event_duration / total_interval
+            
+            # For exponential averaging with time-based weighting:
+            alpha = 1.0 - math.exp(-total_interval / self.exp_avg_time_constant)
+            
+            if self._exp_avg_active_fraction is None:
+                # First measurement
+                self._exp_avg_active_fraction = activity_fraction
+            else:
+                # Exponential smoothing with proper time weighting
+                self._exp_avg_active_fraction = (
+                    alpha * activity_fraction + 
+                    (1.0 - alpha) * self._exp_avg_active_fraction
+                )
+        
+        self._last_event_end = current_time
+    
+    @property
+    def activity_fraction(self):
+        """Get the current exponentially averaged activity fraction.
+        
+        Returns:
+            float: Fraction of real time spent processing events (0.0 to 1.0)
+        """
+        return self._exp_avg_active_fraction
