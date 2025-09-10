@@ -316,14 +316,4 @@ class DocumentedLogViewer(LogViewer):
 
     def _open_documentation_link(self, url):
         """Open documentation link in default browser."""
-        if url.startswith("http://") or url.startswith("https://"):
-            webbrowser.open(url)
-            return
-        url = f"{Path(os.getcwd()).absolute().as_uri()}/doc/build/html/{url}"
-        print(f"Opening documentation file: {url}")
-        if sys.platform.startswith('darwin'):
-            subprocess.run(['open', url])
-        elif sys.platform.startswith('win'):
-            subprocess.run(['start', url], shell=True)
-        else:
-            subprocess.run(['xdg-open', url])
+        webbrowser.open(f"https://acq4.readthedocs.io/en/latest/{url}")
