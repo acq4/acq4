@@ -1,4 +1,7 @@
+import os
 import re
+import subprocess
+import sys
 import webbrowser
 from logging import LogRecord
 
@@ -191,7 +194,6 @@ class DocumentedLogModel(LogModel):
         for i, doc_link in enumerate(doc_links):
             doc_url = str(doc_link).strip()
             if doc_url:
-                doc_url = f"doc/build/html/{doc_url}"
                 # Create clickable documentation link item
                 doc_row = self._create_child_row(
                     "",
@@ -313,7 +315,14 @@ class DocumentedLogViewer(LogViewer):
 
     def _open_documentation_link(self, url):
         """Open documentation link in default browser."""
-        try:
+        if url.startswith("http://") or url.startswith("https://"):
             webbrowser.open(url)
-        except Exception as e:
-            print(f"Failed to open documentation link {url}: {e}")
+            return
+        url = f"file://{os.getcwd()}/doc/build/html/{url}"
+        print(f"Opening documentation file: {url}")
+        if sys.platform.startswith('darwin'):
+            subprocess.run(['open', url])
+        elif sys.platform.startswith('win'):
+            subprocess.run(['start', url], shell=True)
+        else:
+            subprocess.run(['xdg-open', url])
