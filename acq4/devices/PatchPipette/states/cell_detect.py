@@ -44,15 +44,6 @@ class CellDetectAnalysis(SteadyStateAnalysisBase):
             plots[''].append(
                 dict(
                     x=analysis["time"],
-                    y=plottable_booleans(analysis["obstacle_detected"]),
-                    pen=pg.mkPen('r'),
-                    symbol='x',
-                    name=None if names else 'Obstacle Detected',
-                )
-            )
-            plots[''].append(
-                dict(
-                    x=analysis["time"],
                     y=plottable_booleans(
                         analysis["cell_detected_fast"] | analysis["cell_detected_slow"]
                     ),
@@ -70,7 +61,6 @@ class CellDetectAnalysis(SteadyStateAnalysisBase):
         cell_threshold_fast: float,
         cell_threshold_slow: float,
         slow_detection_steps: int,
-        obstacle_threshold: float,
         break_threshold: float,
     ):
         super().__init__()
@@ -78,7 +68,6 @@ class CellDetectAnalysis(SteadyStateAnalysisBase):
         self._cell_threshold_fast = cell_threshold_fast
         self._cell_threshold_slow = cell_threshold_slow
         self._slow_detection_steps = slow_detection_steps
-        self._obstacle_threshold = obstacle_threshold
         self._break_threshold = break_threshold
         self._measurment_count = 0
 
@@ -92,7 +81,6 @@ class CellDetectAnalysis(SteadyStateAnalysisBase):
                 ('slow_avg', float),
                 ('cell_detected_fast', bool),
                 ('cell_detected_slow', bool),
-                ('obstacle_detected', bool),
                 ('tip_is_broken', bool),
             ],
         )
@@ -108,7 +96,6 @@ class CellDetectAnalysis(SteadyStateAnalysisBase):
                         resistance,  # slow_avg
                         False,  # cell_detected_fast
                         False,  # cell_detected_slow
-                        False,  # obstacle_detected
                         False,  # tip_is_broken
                     )
                     self._last_measurement = ret_array[i]
@@ -132,7 +119,6 @@ class CellDetectAnalysis(SteadyStateAnalysisBase):
                 self._measurment_count >= self._slow_detection_steps
                 and slow_avg > self._cell_threshold_slow + baseline_avg
             )
-            obstacle_detected = resistance > self._obstacle_threshold + baseline_avg
             tip_is_broken = resistance < baseline_avg + self._break_threshold
 
             ret_array[i] = (
@@ -142,7 +128,6 @@ class CellDetectAnalysis(SteadyStateAnalysisBase):
                 slow_avg,
                 cell_detected_fast,
                 cell_detected_slow,
-                obstacle_detected,
                 tip_is_broken,
             )
         self._last_measurement = ret_array[-1]
@@ -153,9 +138,6 @@ class CellDetectAnalysis(SteadyStateAnalysisBase):
 
     def cell_detected_slow(self):
         return self._last_measurement and self._last_measurement['cell_detected_slow']
-
-    def obstacle_detected(self):
-        return self._last_measurement and self._last_measurement['obstacle_detected']
 
     def tip_is_broken(self):
         return self._last_measurement and self._last_measurement['tip_is_broken']
@@ -291,7 +273,6 @@ class CellDetectState(PatchPipetteState):
             cell_threshold_fast=self.config['fastDetectionThreshold'],
             cell_threshold_slow=self.config['slowDetectionThreshold'],
             slow_detection_steps=self.config['slowDetectionSteps'],
-            obstacle_threshold=np.inf,  # obstacles are just cells to patch in a cell detect state
             break_threshold=self.config['breakThreshold'],
         )
         self._reachedEndpoint = False

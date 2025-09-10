@@ -1,16 +1,115 @@
 from __future__ import annotations
 
 from threading import Lock
+from typing import Iterable, Any
 
 import numpy as np
 
+import pyqtgraph as pg
 from acq4 import getManager
 from acq4.util import ptime
 from acq4.util.debug import printExc
+from acq4.util.functions import plottable_booleans
 from acq4.util.future import future_wrap
 from acq4.util.imaging.sequencer import run_image_sequence
-from ._base import PatchPipetteState
-from .cell_detect import CellDetectAnalysis
+from ._base import PatchPipetteState, SteadyStateAnalysisBase
+
+
+class ApproachAnalysis(SteadyStateAnalysisBase):
+    """Class to analyze test pulses and determine approach behavior."""
+
+    @classmethod
+    def plots_for_data(
+        cls, data: Iterable[np.ndarray], *args, **kwargs
+    ) -> dict[str, Iterable[dict[str, Any]]]:
+        plots = {'Ω': [], '': []}
+        names = False
+        for d in data:
+            analyzer = cls(*args, **kwargs)
+            analysis = analyzer.process_measurements(d)
+            plots['Ω'].append(
+                dict(
+                    x=analysis["time"],
+                    y=analysis["baseline_avg"],
+                    pen=pg.mkPen('#88F'),
+                    name=None if names else 'Baseline Detect Avg',
+                )
+            )
+            plots[''].append(
+                dict(
+                    x=analysis["time"],
+                    y=plottable_booleans(analysis["obstacle_detected"]),
+                    pen=pg.mkPen('r'),
+                    symbol='x',
+                    name=None if names else 'Obstacle Detected',
+                )
+            )
+            names = True
+        return plots
+
+    def __init__(
+        self,
+        baseline_tau: float,
+        obstacle_threshold: float,
+        break_threshold: float,
+    ):
+        super().__init__()
+        self._baseline_tau = baseline_tau
+        self._obstacle_threshold = obstacle_threshold
+        self._break_threshold = break_threshold
+        self._measurment_count = 0
+
+    def process_measurements(self, measurements: np.ndarray) -> np.ndarray:
+        ret_array = np.zeros(
+            len(measurements),
+            dtype=[
+                ('time', float),
+                ('resistance', float),
+                ('baseline_avg', float),
+                ('obstacle_detected', bool),
+                ('tip_is_broken', bool),
+            ],
+        )
+        for i, measurement in enumerate(measurements):
+            start_time, resistance = measurement
+            self._measurment_count += 1
+            if i == 0:
+                if self._last_measurement is None:
+                    ret_array[i] = (
+                        start_time,  # time
+                        resistance,  # resistance
+                        resistance,  # baseline_avg
+                        False,  # obstacle_detected
+                        False,  # tip_is_broken
+                    )
+                    self._last_measurement = ret_array[i]
+                    continue
+                last_measurement = self._last_measurement
+            else:
+                last_measurement = ret_array[i - 1]
+
+            dt = start_time - last_measurement['time']
+            baseline_avg, _ = self.exponential_decay_avg(
+                dt, last_measurement['baseline_avg'], resistance, self._baseline_tau
+            )
+            obstacle_detected = resistance > self._obstacle_threshold + baseline_avg
+            tip_is_broken = resistance < baseline_avg + self._break_threshold
+
+            ret_array[i] = (
+                start_time,
+                resistance,
+                baseline_avg,
+                obstacle_detected,
+                tip_is_broken,
+            )
+        self._last_measurement = ret_array[-1]
+        return ret_array
+
+    def obstacle_detected(self):
+        return self._last_measurement and self._last_measurement['obstacle_detected']
+
+    def tip_is_broken(self):
+        return self._last_measurement and self._last_measurement['tip_is_broken']
 
 
 class ApproachState(PatchPipetteState):
@@ -84,9 +183,6 @@ class ApproachState(PatchPipetteState):
         "cellfieStep": {"default": 1e-6, "type": "float", "suffix": "m"},
         "cellfiePipetteClearance": {"default": 100e-6, "type": "float", "suffix": "m"},
         "baselineResistanceTau": {"default": 20, "type": "float", "suffix": "s"},
-        "fastDetectionThreshold": {"default": 1e6, "type": "float", "suffix": "Ω"},
-        "slowDetectionThreshold": {"default": 0.2e6, "type": "float", "suffix": "Ω"},
-        "slowDetectionSteps": {"default": 3, "type": "int"},
         "breakThreshold": {"default": -1e6, "type": "float", "suffix": "Ω"},
         "obstacleDetection": {"default": False, "type": "bool"},
         "obstacleRecoveryTime": {"default": 1, "type": "float", "suffix": "s"},
@@ -102,11 +198,8 @@ class ApproachState(PatchPipetteState):
     def __init__(self, *args, **kwds):
         super().__init__(*args, **kwds)
         self._moveFuture = None
-        self._analysis = CellDetectAnalysis(
+        self._analysis = ApproachAnalysis(
             baseline_tau=self.config["baselineResistanceTau"],
-            cell_threshold_fast=np.inf,  # not trying to find cells here
-            cell_threshold_slow=np.inf,  # not trying to find cells here
-            slow_detection_steps=999999,  # not trying to find cells here
             obstacle_threshold=self.config["obstacleResistanceThreshold"],
             break_threshold=self.config["breakThreshold"],
         )
