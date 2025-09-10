@@ -4,6 +4,7 @@ import subprocess
 import sys
 import webbrowser
 from logging import LogRecord
+from pathlib import Path
 
 from acq4.util import Qt
 from pyqtgraph import FeedbackButton
@@ -318,7 +319,7 @@ class DocumentedLogViewer(LogViewer):
         if url.startswith("http://") or url.startswith("https://"):
             webbrowser.open(url)
             return
-        url = f"file://{os.getcwd()}/doc/build/html/{url}"
+        url = f"{Path(os.getcwd()).absolute().as_uri()}/doc/build/html/{url}"
         print(f"Opening documentation file: {url}")
         if sys.platform.startswith('darwin'):
             subprocess.run(['open', url])
