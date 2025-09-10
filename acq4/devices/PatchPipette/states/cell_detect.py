@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import deque
 from threading import Lock
 from typing import Any, Iterable
 
@@ -33,14 +34,6 @@ class CellDetectAnalysis(SteadyStateAnalysisBase):
                     name=None if names else 'Baseline Detect Avg',
                 )
             )
-            plots['Ω'].append(
-                dict(
-                    x=analysis["time"],
-                    y=analysis["slow_avg"],
-                    pen=pg.mkPen('b'),
-                    name=None if names else 'Slow Detection Avg',
-                )
-            )
             plots[''].append(
                 dict(
                     x=analysis["time"],
@@ -67,9 +60,8 @@ class CellDetectAnalysis(SteadyStateAnalysisBase):
         self._baseline_tau = baseline_tau
         self._cell_threshold_fast = cell_threshold_fast
         self._cell_threshold_slow = cell_threshold_slow
-        self._slow_detection_steps = slow_detection_steps
         self._break_threshold = break_threshold
-        self._measurment_count = 0
+        self._last_n_slow_detections = deque(maxlen=slow_detection_steps)
 
     def process_measurements(self, measurements: np.ndarray) -> np.ndarray:
         ret_array = np.zeros(
@@ -78,7 +70,6 @@ class CellDetectAnalysis(SteadyStateAnalysisBase):
                 ('time', float),
                 ('resistance', float),
                 ('baseline_avg', float),
-                ('slow_avg', float),
                 ('cell_detected_fast', bool),
                 ('cell_detected_slow', bool),
                 ('tip_is_broken', bool),
@@ -86,14 +77,12 @@ class CellDetectAnalysis(SteadyStateAnalysisBase):
         )
         for i, measurement in enumerate(measurements):
             start_time, resistance = measurement
-            self._measurment_count += 1
             if i == 0:
                 if self._last_measurement is None:
                     ret_array[i] = (
                         start_time,  # time
                         resistance,  # resistance
                         resistance,  # baseline_avg
-                        resistance,  # slow_avg
                         False,  # cell_detected_fast
                         False,  # cell_detected_slow
                         False,  # tip_is_broken
@@ -109,23 +98,14 @@ class CellDetectAnalysis(SteadyStateAnalysisBase):
                 dt, last_measurement['baseline_avg'], resistance, self._baseline_tau
             )
             cell_detected_fast = resistance > self._cell_threshold_fast + baseline_avg
-            slow_avg, _ = self.exponential_decay_avg(
-                dt,
-                last_measurement['slow_avg'],
-                resistance,
-                dt * self._slow_detection_steps,
-            )
-            cell_detected_slow = (
-                self._measurment_count >= self._slow_detection_steps
-                and slow_avg > self._cell_threshold_slow + baseline_avg
-            )
+            cell_detected_slow = resistance > self._cell_threshold_slow + baseline_avg
+            self._last_n_slow_detections.append(cell_detected_slow)
             tip_is_broken = resistance < baseline_avg + self._break_threshold
 
             ret_array[i] = (
                 start_time,
                 resistance,
                 baseline_avg,
-                slow_avg,
                 cell_detected_fast,
                 cell_detected_slow,
                 tip_is_broken,
@@ -137,7 +117,9 @@ class CellDetectAnalysis(SteadyStateAnalysisBase):
         return self._last_measurement and self._last_measurement['cell_detected_fast']
 
     def cell_detected_slow(self):
-        return self._last_measurement and self._last_measurement['cell_detected_slow']
+        return len(self._last_n_slow_detections) == self._last_n_slow_detections.maxlen and all(
+            self._last_n_slow_detections
+        )
 
     def tip_is_broken(self):
         return self._last_measurement and self._last_measurement['tip_is_broken']
