@@ -1,10 +1,15 @@
 import re
+import webbrowser
 from logging import LogRecord
 
 from acq4.util import Qt
 from pyqtgraph import FeedbackButton
-from pyqtgraph.debug import threadName
 from teleprox.log.logviewer import LogViewer
+from teleprox.log.logviewer.constants import ItemDataRole
+from teleprox.log.logviewer.constants import LogColumns
+from teleprox.log.logviewer.filtering import LogFilterProxyModel
+from teleprox.log.logviewer.filtering import USE_CHAINED_FILTERING
+from teleprox.log.logviewer.log_model import LogModel
 from teleprox.log.logviewer.viewer import QtLogHandler
 
 LOG_UI = None
@@ -23,7 +28,7 @@ def get_log_window():
     if LOG_UI is None:
         from acq4.util.codeEditor import invokeCodeEditor
 
-        LOG_UI = LogViewer()
+        LOG_UI = DocumentedLogViewer()
         LOG_UI.code_line_clicked.connect(invokeCodeEditor)
     return LOG_UI
 
@@ -146,3 +151,169 @@ class ErrorDialog(Qt.QDialog):
 
     def disable(self, disable):
         self.disableCheck.setChecked(disable)
+
+
+class DocumentedLogModel(LogModel):
+    """Custom LogModel that handles 'docs' attribute as clickable documentation links."""
+
+    def _get_attribute_handler(self, attr_name):
+        """Override to add custom handler for 'docs' attribute."""
+        # Check for docs attribute
+        if attr_name == 'docs' or attr_name.endswith('_docs'):
+            return self._create_docs_children
+
+        # Fall back to parent implementation for all other attributes
+        return super()._get_attribute_handler(attr_name)
+
+    def _create_docs_children(self, record, attr_name, attr_value):
+        """Create child items for documentation links."""
+        children = []
+
+        # Skip if docs is None or empty
+        if not attr_value:
+            return children
+
+        # Create "Documentation" category
+        docs_category_item = self._create_category_item(f"Documentation ({attr_name})", record)
+
+        # Handle different docs formats
+        if isinstance(attr_value, str):
+            # Single doc link as string
+            doc_links = [attr_value]
+        elif isinstance(attr_value, (list, tuple)):
+            # Multiple doc links
+            doc_links = attr_value
+        else:
+            # Unknown format, convert to string
+            doc_links = [str(attr_value)]
+
+        # Create child items for each documentation link
+        for i, doc_link in enumerate(doc_links):
+            doc_url = str(doc_link).strip()
+            if doc_url:
+                doc_url = f"doc/build/html/{doc_url}"
+                # Create clickable documentation link item
+                doc_row = self._create_child_row(
+                    "",
+                    f"📖 {doc_url}",  # Using book emoji to indicate it's a doc link
+                    {
+                        'type': 'documentation_link',
+                        'text': doc_url,
+                        'url': doc_url,
+                        'link_index': i,
+                        'parent_record': record,
+                    },
+                    record,
+                )
+                docs_category_item.appendRow(doc_row)
+
+        # Create sibling items for the docs category
+        sibling_items = self._create_sibling_items_with_filter_data(record)
+        children.append([docs_category_item] + sibling_items)
+
+        return children
+
+    def _create_child_row(self, label, message, data_dict, parent_record):
+        """Override to make documentation links clickable."""
+        child_row = super()._create_child_row(label, message, data_dict, parent_record)
+
+        # Make documentation links clickable
+        if data_dict.get('type') == 'documentation_link':
+            item = child_row[0]
+            item.setFlags(Qt.Qt.ItemIsEnabled | Qt.Qt.ItemIsSelectable)  # Allow clicking
+
+            # Style documentation links differently
+            item.setForeground(Qt.QColor("#0066CC"))  # Blue for links
+            font = item.font()
+            font.setUnderline(True)  # Underline to indicate it's clickable
+            item.setFont(font)
+
+        return child_row
+
+    def _create_remote_exception_children(self, exc_value, record):
+        """Override to add docs support for exceptions that have getattr(exc, 'docs', [])."""
+        # Get the standard remote exception children first
+        children = super()._create_remote_exception_children(exc_value, record)
+
+        # Check if this exception has docs attribute
+        if hasattr(exc_value, 'docs'):
+            docs_attr = getattr(exc_value, 'docs', None)
+            if docs_attr:
+                # Use our docs handler to create documentation children
+                docs_children = self._create_docs_children(record, 'exception_docs', docs_attr)
+                children.extend(docs_children)
+
+        return children
+
+
+class DocumentedLogViewer(LogViewer):
+    """Custom LogViewer that handles documentation link clicks."""
+
+    # Signal emitted when user clicks on a documentation link
+    documentation_link_clicked = Qt.Signal(str)  # (url)
+
+    def __init__(self, logger='', initial_filters=('level: info',), parent=None):
+        # Call parent __init__ first
+        super().__init__(logger, initial_filters, parent)
+
+        # Replace the standard model with our custom one
+        self._replace_model_with_custom()
+
+        # Connect our custom signal to open URLs in browser
+        self.documentation_link_clicked.connect(self._open_documentation_link)
+
+    def _replace_model_with_custom(self):
+        """Replace the standard LogModel with our CustomLogModel."""
+        # Create our custom model
+        custom_model = DocumentedLogModel()
+        custom_model.setHorizontalHeaderLabels(LogColumns.TITLES)
+
+        # Replace the model in the proxy
+        if USE_CHAINED_FILTERING:
+            # For chained filtering, we need to update the source model
+            if hasattr(self.proxy_model, 'set_source_model'):
+                self.proxy_model.set_source_model(custom_model)
+            elif hasattr(self.proxy_model, '_source_model'):
+                self.proxy_model._source_model = custom_model
+            else:
+                # Fallback: recreate proxy with new model
+                self.proxy_model = LogFilterProxyModel(custom_model)
+                self.tree.setModel(self.proxy_model.final_model)
+        else:
+            # For simple proxy model, just set source model
+            self.proxy_model.setSourceModel(custom_model)
+
+        # Update our reference to the model
+        self.model = custom_model
+
+    def _on_item_clicked(self, index):
+        """Override to handle documentation link clicks."""
+        if not index.isValid():
+            return
+
+        # Map to source model if using proxy
+        source_index = self.map_index_to_model(index)
+
+        # Get the actual item from our LogModel
+        item = self.model.itemFromIndex(source_index)
+        if not item:
+            return
+
+        # Check if this is a documentation link
+        data = item.data(ItemDataRole.PYTHON_DATA)
+        if data and isinstance(data, dict) and data.get('type') == 'documentation_link':
+            url = data.get('url')
+            if url:
+                # Emit our custom signal for documentation links
+                self.documentation_link_clicked.emit(url)
+                return
+
+        # Fall back to parent implementation for other click types (code lines, etc.)
+        super()._on_item_clicked(index)
+
+    def _open_documentation_link(self, url):
+        """Open documentation link in default browser."""
+        try:
+            webbrowser.open(url)
+        except Exception as e:
+            print(f"Failed to open documentation link {url}: {e}")
