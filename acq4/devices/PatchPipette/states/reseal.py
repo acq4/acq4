@@ -244,6 +244,8 @@ class ResealState(PatchPipetteState):
     minimumSuccessResistance : float
         Minimum resistance (Ohms) to consider the reseal successful, regardless of initial
         resistance (default is 500 MOhm)
+    obviousResealSuccessResistance : float
+        Resistance (Ohms) above which the reseal is considered successful regardless of other factors (default is 1 GOhm)
     resealSuccessDuration : float
         Duration (seconds) to wait after successful reseal before transitioning to the slurp (default is 5s)
     postSuccessRetractionSpeed : float
@@ -285,6 +287,7 @@ class ResealState(PatchPipetteState):
         'minimumSuccessDistance': {'type': 'float', 'default': 20e-6, 'suffix': 'm'},
         'resealSuccessResistanceMultiplier': {'type': 'float', 'default': 4.0},
         'minimumSuccessResistance': {'type': 'float', 'default': 500e6, 'suffix': 'Ω'},
+        'obviousResealSuccessResistance': {'type': 'float', 'default': 1e9, 'suffix': 'Ω'},
         'resealSuccessDuration': {'type': 'float', 'default': 5, 'suffix': 's'},
         'postSuccessRetractionSpeed': {'type': 'float', 'default': 6e-6, 'suffix': 'm/s'},
         'detectionTau': {'type': 'float', 'default': 1, 'suffix': 's'},
@@ -359,7 +362,13 @@ class ResealState(PatchPipetteState):
         """Return the resistance threshold for a successful reseal."""
         if self._lastResistance is None:
             return np.inf
-        return self.config["resealSuccessResistanceMultiplier"] * self.preAnalysisResistance()
+        return min(
+            max(
+                self.config["resealSuccessResistanceMultiplier"] * self.preAnalysisResistance(),
+                self.config["minimumSuccessResistance"],
+            ),
+            self.config["obviousResealSuccessResistance"],
+        )
 
     def preAnalysisResistance(self):
         if len(self._preAnalysisTpss) < 10:
