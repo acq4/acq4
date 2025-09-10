@@ -660,7 +660,7 @@ class Manager(Qt.QObject):
         """
         if self.currentDir is None:
             raise HelpfulException("Storage directory has not been set.",
-                                    docs=["userGuide/modules/DataManager.html"])  # TODO #acquired-data-storage
+                                    docs=["userGuide/modules/DataManager.html#acquired-data-storage"])
         return self.currentDir
 
     def setLogDir(self, d: DirHandle):
@@ -709,7 +709,7 @@ class Manager(Qt.QObject):
             self.setLogDir(d)
         else:
             if logDir is None:
-                docs = "userGuide/dataManagement.html"  # TODO #notes-and-logs
+                docs = "userGuide/dataManagement.html#notes-and-logs"
                 logger.warning(
                     "No log directory set. Log messages will not be stored.", extra={"docs": docs}
                 )
