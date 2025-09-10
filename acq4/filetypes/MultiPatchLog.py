@@ -780,7 +780,6 @@ class MultiPatchLogWidget(Qt.QWidget):
             cell_threshold_fast=config['fastDetectionThreshold'],
             cell_threshold_slow=config['slowDetectionThreshold'],
             slow_detection_steps=config['slowDetectionSteps'],
-            obstacle_threshold=np.inf,  # obstacles are just cells to patch in a cell detect state
             break_threshold=config['breakThreshold'],
         )
 
