@@ -1,5 +1,6 @@
 import math
 import time
+import weakref
 from collections import defaultdict, deque
 from ..util.Qt import QApplication, QEvent, QTimer, QObject
 
@@ -63,8 +64,8 @@ class QApplicationProfile(QObject):
         self._max_slow_samples = max_slow_samples
         
         # Timing state
-        self._start_time = time.perf_counter()
-        self._end_time = None  # Set when profiling stops
+        self.start_time = time.perf_counter()
+        self.end_time = None  # Set when profiling stops
         
         # Raw event data - analysis deferred
         self._events = []  # Store raw (duration, event_type, receiver, event) tuples
@@ -78,156 +79,117 @@ class QApplicationProfile(QObject):
         if not self._active:
             return
             
-        # Store raw event data - analysis happens later
-        self._events.append((duration, event_type, receiver, event))    
+        # Store raw event data with weak reference to receiver to prevent memory leaks
+        receiver_ref = weakref.ref(receiver)
+        self._events.append((duration, event_type, receiver_ref, event))    
     
     def stop(self):
         """Stop collecting statistics for this profile."""
         self._active = False
-        self._end_time = time.perf_counter()
+        self.end_time = time.perf_counter()
     
     def is_active(self):
         """Check if this profile is still collecting data."""
         return self._active
     
-    def get_statistics(self):
-        """Get current profiling statistics.
+    def get_statistics(self, group_by='type'):
+        """Get profiling statistics as uniform row data for UI display.
         
-        Returns dict with keys:
-        - name: profile name
-        - wall_time: total elapsed time since start
-        - active_time: time spent processing events  
-        - idle_time: time spent waiting for events
-        - active_fraction: fraction of time spent processing events
-        - total_events: total number of events processed
-        - exceptions: number of exceptions during event processing
-        - event_stats: dict mapping event_type_int -> {'time': float, 'count': int, 'name': str}
-        - slow_events: list of (duration, event_type_name, receiver_class, info) tuples
+        Args:
+            group_by: 'type' to group by event type, 'type_receiver' to group by (type, receiver)
+        
+        Returns list of dicts with uniform statistics for each row (global + grouped):
+        [{'description': 'All Events', 'count': 1000, 'total_time': 2.5, 'avg_time': 0.0025, 'percentage': 100.0}, ...]
         """
-        # Use end time if profiling has stopped, otherwise current time for active profiles
-        end_time = self._end_time if self._end_time is not None else time.perf_counter()
-        wall_time = end_time - self._start_time
+        # Sort events into lists: first list contains all events, subsequent lists contain grouped events
+        event_lists = []
         
-        # Analyze raw event data and calculate totals
-        event_stats = defaultdict(lambda: {'time': 0.0, 'count': 0, 'name': ''})
-        slow_events = []
-        total_active_time = 0.0
-        total_events = 0
+        # Global list - all events
+        event_lists.append(("All Events", self._events))
         
-        for duration, event_type, receiver, event in self._events:
-            total_active_time += duration
-            total_events += 1
-            # Update event type statistics
-            stats = event_stats[event_type]
-            stats['time'] += duration
-            stats['count'] += 1
-            stats['name'] = EVENT_NAMES.get(event_type, f"Type({event_type})")
+        # Group events based on group_by parameter
+        events_by_group = defaultdict(list)
+        
+        for event_data in self._events:
+            duration, event_type, receiver_ref, event = event_data
             
-            # Track slow events
-            if duration >= self._slow_threshold:
-                # Get receiver name
+            if group_by == 'type':
+                group_key = event_type
+            elif group_by == 'type_receiver':
+                receiver = receiver_ref()
+                if receiver is None:
+                    # Use a placeholder for dead receivers
+                    group_key = (event_type, "<garbage collected>")
+                else:
+                    group_key = (event_type, receiver)
+            else:
+                raise ValueError(f"Invalid group_by value: {group_by}")
+            
+            events_by_group[group_key].append(event_data)
+        
+        # Add grouped lists, sorted by total time descending
+        group_totals = []
+        for group_key, events in events_by_group.items():
+            total_time = sum(duration for duration, _, _, _ in events)
+            
+            if group_by == 'type':
+                event_type = group_key
+                description = EVENT_NAMES.get(event_type, f"Type({event_type})")
+            elif group_by == 'type_receiver':
+                event_type, receiver = group_key
+                # Create receiver description
                 try:
                     class_name = type(receiver).__name__
                     object_name = getattr(receiver, 'objectName', lambda: '')()
                     if object_name:
-                        receiver_name = f"{class_name}({object_name})"
+                        receiver_desc = f"{class_name}({object_name})"
                     else:
-                        receiver_name = class_name
+                        receiver_desc = class_name
                 except Exception:
-                    receiver_name = "<unknown>"
-                
-                # Get event info
-                event_info = ""
-                try:
-                    event_type_name = EVENT_NAMES.get(event_type, f"Type({event_type})")
-                    if event_type_name == 'MetaCall':
-                        event_info = extract_metacall_info(event)
-                    elif duration >= 0.005:  # For slow events, show the event type
-                        event_info = f"Event: {event_type_name}"
-                except Exception as e:
-                    event_info = f"Error: {str(e)}"
-                
-                slow_events.append((duration, event_type_name, receiver_name, event_info))
-        
-        # Calculate derived statistics
-        idle_time = wall_time - total_active_time
-        active_fraction = total_active_time / wall_time if wall_time > 0 else 0.0
-        
-        # Sort slow events by duration descending
-        slow_events.sort(reverse=True)
-        if len(slow_events) > self._max_slow_samples:
-            slow_events = slow_events[:self._max_slow_samples]
-        
-        return {
-            'name': self.name,
-            'wall_time': wall_time,
-            'active_time': total_active_time,
-            'idle_time': idle_time,
-            'active_fraction': active_fraction,
-            'total_events': total_events,
-            'exceptions': self._exceptions,
-            'event_stats': dict(event_stats),
-            'slow_events': slow_events
-        }
-    
-    def print_summary_report(self, top_events=10, slow_events=10):
-        """Print a human-readable summary of profiling statistics."""
-        stats = self.get_statistics()
-        
-        print(f"\n=== Qt Event Loop Profile Report: {stats['name']} ===")
-        print(f"Wall time: {stats['wall_time']:.3f}s")
-        print(f"Active time: {stats['active_time']:.3f}s ({stats['active_fraction']:.1%})")
-        print(f"Idle time: {stats['idle_time']:.3f}s")
-        print(f"Total events: {stats['total_events']:,}")
-        
-        if stats['exceptions'] > 0:
-            print(f"Exceptions: {stats['exceptions']}")
-        
-        # Top events by total time
-        if stats['event_stats']:
-            print(f"\nTop {top_events} event types by total time:")
-            sorted_events = sorted(
-                stats['event_stats'].items(),
-                key=lambda x: x[1]['time'],
-                reverse=True
-            )[:top_events]
+                    receiver_desc = "<unknown>"
+                event_type_name = EVENT_NAMES.get(event_type, f"Type({event_type})")
+                description = f"{event_type_name} → {receiver_desc}"
             
-            for event_type, data in sorted_events:
-                avg_ms = (data['time'] / data['count'] * 1000) if data['count'] else 0
-                print(f"  {data['name']:<20} {data['time']:7.3f}s ({data['count']:>6,} events, {avg_ms:5.2f}ms avg)")
+            group_totals.append((total_time, description, events))
         
-        # Slowest individual events
-        if stats['slow_events']:
-            print(f"\nSlowest {slow_events} individual events (≥{self._slow_threshold*1000:.1f}ms):")
-            sorted_slow = sorted(stats['slow_events'], reverse=True)[:slow_events]
-            for duration, event_name, receiver in sorted_slow:
-                print(f"  {event_name:<20} {duration*1000:7.2f}ms (receiver: {receiver})")
+        group_totals.sort(reverse=True)
+        for total_time, description, events in group_totals:
+            event_lists.append((description, events))
+        
+        # Calculate statistics uniformly for each row/list
+        row_stats = []
+        wall_time = self.end_time - self.start_time
+        
+        for description, events in event_lists:
+            count = len(events)
+            total_time = sum(duration for duration, _, _, _ in events)
+            avg_time = total_time / count if count > 0 else 0
+            percentage = (total_time / wall_time * 100) if wall_time > 0 else 0
+            
+            row_data = {
+                'description': description,
+                'count': count,
+                'total_time': total_time,
+                'avg_time': avg_time,
+                'percentage': percentage
+            }
+            
+            # For type_receiver grouping, also store the receiver object
+            if group_by == 'type_receiver' and description != "All Events":
+                # Extract receiver from the group key
+                for group_key, group_events in events_by_group.items():
+                    if group_events == events:
+                        if isinstance(group_key, tuple) and len(group_key) == 2:
+                            receiver = group_key[1]
+                            # Only store if it's not a placeholder string
+                            if receiver != "<garbage collected>":
+                                row_data['receiver'] = receiver
+                        break
+            
+            row_stats.append(row_data)
+        
+        return row_stats
     
-    def get_event_breakdown_by_type(self):
-        """Get event processing time breakdown by event type.
-        
-        Returns list of tuples: (event_name, total_time, count, avg_time, percentage)
-        sorted by total time descending.
-        """
-        stats = self.get_statistics()
-        if not stats['event_stats']:
-            return []
-        
-        total_time = stats['active_time']
-        breakdown = []
-        
-        for event_type, data in stats['event_stats'].items():
-            avg_time = data['time'] / data['count'] if data['count'] else 0
-            percentage = (data['time'] / total_time * 100) if total_time else 0
-            breakdown.append((
-                data['name'],
-                data['time'],
-                data['count'], 
-                avg_time,
-                percentage
-            ))
-        
-        return sorted(breakdown, key=lambda x: x[1], reverse=True)
 
 
 class ProfiledQApplication(QApplication):

@@ -1,13 +1,13 @@
-# ABOUTME: Profiling module for monitoring acq4 performance and identifying bottlenecks
-# ABOUTME: Provides function profiling via yappi and Qt event loop profiling via ProfiledQApplication
 import yappi
 import time
 import re
+import weakref
 from datetime import datetime
 from acq4.modules.Module import Module
 from acq4.util import Qt
 from acq4.util.codeEditor import invokeCodeEditor
 from pyqtgraph import TableWidget
+import pyqtgraph as pg
 
 
 class FunctionProfiler:
@@ -361,13 +361,14 @@ class QtEventProfiler:
         self.profile_display.sortByColumn(2, Qt.Qt.DescendingOrder)
         right_splitter.addWidget(self.profile_display)
         
-        # Bottom pane: Most expensive individual events
-        self.slow_events_display = Qt.QTreeWidget()
-        slow_headers = ['Event Type', 'Duration (ms)', 'Receiver', 'Info']
-        self.slow_events_display.setHeaderLabels(slow_headers)
-        self.slow_events_display.setSortingEnabled(True)
-        self.slow_events_display.sortByColumn(1, Qt.Qt.DescendingOrder)
-        right_splitter.addWidget(self.slow_events_display)
+        # Bottom pane: Event breakdown by type and receiver
+        self.type_receiver_display = Qt.QTreeWidget()
+        type_receiver_headers = ['Event Type → Receiver', 'Count', 'Total Time (s)', 'Avg Time (ms)', 'Percentage']
+        self.type_receiver_display.setHeaderLabels(type_receiver_headers)
+        self.type_receiver_display.setSortingEnabled(True)
+        self.type_receiver_display.sortByColumn(2, Qt.Qt.DescendingOrder)
+        self.type_receiver_display.itemDoubleClicked.connect(self._onTypeReceiverDoubleClicked)
+        right_splitter.addWidget(self.type_receiver_display)
         
         # Set right splitter proportions (60% top, 40% bottom)
         right_splitter.setSizes([360, 240])
@@ -464,8 +465,10 @@ class QtEventProfiler:
     
     def _addResultToList(self, profile):
         """Add a Qt profile result to the results list"""
-        stats = profile.get_statistics()
-        item_text = f"{stats['name']} ({stats['total_events']:,} events, {stats['wall_time']:.1f}s)"
+        wall_time = profile.end_time - profile.start_time
+        total_events = len(profile._events)
+        
+        item_text = f"{profile.name} ({total_events:,} events, {wall_time:.1f}s)"
         item = Qt.QListWidgetItem(item_text)
         item.setData(Qt.Qt.UserRole, profile)
         self.results_list.addItem(item)
@@ -485,53 +488,58 @@ class QtEventProfiler:
     def _displayProfileResult(self, profile):
         """Display Qt profile result in both tree widgets"""
         self.profile_display.clear()
-        self.slow_events_display.clear()
+        self.type_receiver_display.clear()
         
-        stats = profile.get_statistics()
+        # Top pane: Event breakdown by type with uniform column format
+        type_stats = profile.get_statistics(group_by='type')
+        for row_data in type_stats:
+            item = Qt.QTreeWidgetItem(self.profile_display)
+            item.setText(0, row_data['description'])
+            item.setText(1, f"{row_data['count']:,}")
+            item.setText(2, f"{row_data['total_time']:.6f}")
+            item.setText(3, f"{row_data['avg_time']*1000:.2f}")
+            item.setText(4, f"{row_data['percentage']:.1f}%")
         
-        # Top pane: Event breakdown by type
-        # Create summary item
-        summary_item = Qt.QTreeWidgetItem(self.profile_display)
-        summary_item.setText(0, f"Session: {stats['name']}")
-        summary_item.setText(1, f"{stats['total_events']:,}")
-        summary_item.setText(2, f"{stats['active_time']:.3f}")
-        summary_item.setText(3, f"{stats['active_fraction']:.1%}")
-        summary_item.setText(4, f"Wall: {stats['wall_time']:.1f}s")
-        
-        # Add event breakdown
-        breakdown = profile.get_event_breakdown_by_type()
-        for event_name, total_time, count, avg_time, percentage in breakdown:
-            if count > 0:  # Only show events that actually occurred
-                item = Qt.QTreeWidgetItem(self.profile_display)
-                item.setText(0, event_name)
-                item.setText(1, f"{count:,}")
-                item.setText(2, f"{total_time:.6f}")
-                item.setText(3, f"{avg_time*1000:.2f}")
-                item.setText(4, f"{percentage:.1f}%")
-        
-        # Bottom pane: Most expensive individual events
-        slow_events = sorted(stats['slow_events'], key=lambda x: x[0], reverse=True)[:50]
-        for event_data in slow_events:
-            if len(event_data) == 3:
-                # Old format (duration, event_name, receiver)
-                duration, event_name, receiver = event_data
-                info = ""
-            else:
-                # New format (duration, event_name, receiver, info)
-                duration, event_name, receiver, info = event_data
-            
-            item = Qt.QTreeWidgetItem(self.slow_events_display)
-            item.setText(0, event_name)
-            item.setText(1, f"{duration*1000:.2f}")
-            item.setText(2, receiver)
-            item.setText(3, info)
+        # Bottom pane: Event breakdown by type and receiver
+        type_receiver_stats = profile.get_statistics(group_by='type_receiver')
+        for row_data in type_receiver_stats:
+            item = Qt.QTreeWidgetItem(self.type_receiver_display)
+            item.setText(0, row_data['description'])
+            item.setText(1, f"{row_data['count']:,}")
+            item.setText(2, f"{row_data['total_time']:.6f}")
+            item.setText(3, f"{row_data['avg_time']*1000:.2f}")
+            item.setText(4, f"{row_data['percentage']:.1f}%")
+            # Store receiver object for double-click inspection using weak reference
+            if 'receiver' in row_data:
+                item.receiver_ref = weakref.ref(row_data['receiver'])
         
         # Auto-resize columns for both displays
         for i in range(self.profile_display.columnCount()):
             self.profile_display.resizeColumnToContents(i)
-        for i in range(self.slow_events_display.columnCount()):
-            self.slow_events_display.resizeColumnToContents(i)
+        for i in range(self.type_receiver_display.columnCount()):
+            self.type_receiver_display.resizeColumnToContents(i)
+    
+    def _onTypeReceiverDoubleClicked(self, item, column):
+        """Handle double-click on type-receiver items to show detailed object info"""
+        receiver_ref = getattr(item, 'receiver_ref', None)
+        if receiver_ref is None:
+            return
+        
+        receiver = receiver_ref()
+        if receiver is None:
+            print("Receiver object has been garbage collected.")
+            return
+        
+        # prints to console
+        print("Receiver object QObject parent chain:")
+        obj = receiver
+        while obj is not None:
+            name = obj.objectName()
+            print(f" - Name: {name:<30}   Type: {type(obj)}")
+            obj = obj.parent()
 
+        print("Receiver object references:")
+        pg.debug.describeObj(receiver)
 
 class ProfileResult:
     """Container for a single function profiling session result"""
