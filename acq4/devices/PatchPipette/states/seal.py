@@ -170,10 +170,10 @@ class SealState(PatchPipetteState):
 
     State name: "seal"
 
-    - monitor resistance to detect loose seal and GOhm seal
+    - monitor resistance to detect loose seal and GΩ seal
     - set holding potential after loose seal
     - modulate pressure to improve likelihood of forming seal
-    - cut pressure after GOhm and transition to cell attached
+    - cut pressure after GΩ and transition to cell attached
 
     Parameters
     ----------
@@ -197,10 +197,10 @@ class SealState(PatchPipetteState):
         transitions to the 'break in' state (in case of partial break-in, we don't want to transition
         directly to 'whole cell' state).
     failureResistanceThreshold : float
-        If the resistance hangs out for too long (*failureTau*) below this value (Ohms) without growing faster than
-        *failureDRDTThreshold*, the seal is considered a failure. Default 100MOhm.
+        If the resistance hangs out for too long (*failureTau*) below this value (Ωs) without growing faster than
+        *failureDRDTThreshold*, the seal is considered a failure. Default 100MΩ.
     failureDRDTThreshold : float
-        See *failureResistanceThreshold*. dR/dt. Default 1MOhm/s
+        See *failureResistanceThreshold*. dR/dt. Default 1MΩ/s
     successMonitorTau : float
         Time constant (seconds) for exponential averaging of resistance measurements when determining whether seal
         resistance has crossed *sealThreshold*. Default 1s.
@@ -217,7 +217,7 @@ class SealState(PatchPipetteState):
     delayBeforePressure : float
         Wait time (seconds) at beginning of seal state before applying negative pressure.
     delayAfterSeal : float
-        Wait time (seconds) after GOhm seal is acquired, before transitioning to next state.
+        Wait time (seconds) after GΩ seal is acquired, before transitioning to next state.
     afterSealPressure : float
         Pressure (Pascals) to apply during *delayAfterSeal* interval. This can help to stabilize the seal after initial
         formation.
@@ -241,13 +241,13 @@ class SealState(PatchPipetteState):
     }
     _parameterTreeConfig = {
         'pressureMode': {'type': 'str', 'default': 'user', 'limits': ['auto', 'user']},
-        'startingPressure': {'type': 'float', 'default': -3e3},
-        'holdingThreshold': {'type': 'float', 'default': 100e6},
-        'holdingPotential': {'type': 'float', 'default': -70e-3},
-        'sealThreshold': {'type': 'float', 'default': 1e9},
+        'startingPressure': {'type': 'float', 'default': -3e3, 'suffix': 'Pa'},
+        'holdingThreshold': {'type': 'float', 'default': 100e6, 'suffix': 'Ω'},
+        'holdingPotential': {'type': 'float', 'default': -70e-3, 'suffix': 'V'},
+        'sealThreshold': {'type': 'float', 'default': 1e9, 'suffix': 'Ω'},
         'breakInThreshold': {'type': 'float', 'default': 10e-12, 'suffix': 'F'},
-        'failureResistanceThreshold': {'type': 'float', 'default': 100e6},
-        'failureDRDTThreshold': {'type': 'float', 'default': 1e6, 'suffix': 'Ohm/s'},
+        'failureResistanceThreshold': {'type': 'float', 'default': 100e6, 'suffix': 'Ω'},
+        'failureDRDTThreshold': {'type': 'float', 'default': 1e6, 'suffix': 'Ω/s'},
         'autoSealTimeout': {'type': 'float', 'default': 30.0, 'suffix': 's'},
         'pressureLimit': {'type': 'float', 'default': -3e3, 'suffix': 'Pa'},
         'successMonitorTau': {'type': 'float', 'default': 1, 'suffix': 's'},
