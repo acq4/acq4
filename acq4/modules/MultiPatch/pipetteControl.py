@@ -130,7 +130,8 @@ class PipetteControl(Qt.QWidget):
             self.pip.clampDevice.sigStateChanged.connect(self.clampStateChanged)
             self.pip.clampDevice.sigHoldingChanged.connect(self.clampHoldingChanged)
             self.clampStateChanged(self.pip.clampDevice.getState())
-            self.clampHoldingChanged(self.pip.clampDevice, self.pip.clampDevice.getMode())
+            self.clampHoldingChanged(self.pip.clampDevice.getMode(), 
+                                     self.pip.clampDevice.getHolding(self.pip.clampDevice.getMode()))
             self._updateAutoBiasUi()
             self._updateActiveHoldingUi()
 
@@ -406,7 +407,8 @@ class PlotWidget(Qt.QWidget):
             self._analysisLabel = None
         if self.mode == 'test pulse':
             self.plot.clear()
-            self._plotTestPulse(tp)
+            if tp is not None:
+                self._plotTestPulse(tp)
         elif self.mode == 'tp analysis':
             self.plot.clear()
             tp.plot(self.plot, label=False)

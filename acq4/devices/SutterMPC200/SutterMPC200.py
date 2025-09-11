@@ -23,11 +23,31 @@ class ChangeNotifier(Qt.QObject):
 
 class SutterMPC200(Stage):
     """
-    This Device class represents a single drive of a Sutter MPC-200 stage/manipulator driver.
-    Config options are: 
-
-        port: <serial port>  # eg. 'COM1' or '/dev/ttyACM0'
-        drive: <drive>       # int 1-4
+    Driver for Sutter Instrument MPC-200 multi-channel stage/manipulator controller.
+    
+    Each device instance represents a single drive (axis group) on the MPC-200 controller.
+    For multiple drives, create separate device instances with different drive numbers.
+    
+    Configuration options:
+    
+    * **port** (str, required): Serial port (e.g., 'COM10' or '/dev/ttyACM0')
+    
+    * **drive** (int, required): Drive number (1-4) on the MPC-200 controller
+    
+    * **scale** (tuple, optional): (x, y, z) scale factors for position reporting
+      (default: (1.0, 1.0, 1.0)). Used if MPC-200 doesn't report scale correctly.
+    
+    * **parentDevice** (str, optional): Name of parent device for coordinate transforms
+    
+    * **transform** (dict, optional): Spatial transform relative to parent device
+    
+    Example configuration::
+    
+        SutterStage:
+            driver: 'SutterMPC200'
+            port: 'COM10'
+            drive: 1
+            scale: [1.0, 1.0, 1.0]
     """
 
     _pos_cache = [None] * 4

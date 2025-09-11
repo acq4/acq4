@@ -91,8 +91,8 @@ class Camera(DAQGeneric, OptomechDevice):
             p = p.parentDevice()
             if isinstance(p, Microscope):
                 self.scopeDev = p
-                self.scopeDev.sigObjectiveChanged.connect(self.objectiveChanged)
-                self.scopeDev.sigLightChanged.connect(self._lightChanged)
+                self.scopeDev.sigObjectiveChanged.connect(self.objectiveChanged, type=Qt.Qt.DirectConnection)
+                self.scopeDev.sigLightChanged.connect(self._lightChanged, type=Qt.Qt.DirectConnection)
                 break
 
         self.transformChanged()
@@ -108,16 +108,16 @@ class Camera(DAQGeneric, OptomechDevice):
         self._frameInfoUpdater = None
 
         self.acqThread = AcquireThread(self)
-        self.acqThread.finished.connect(self.acqThreadFinished)
-        self.acqThread.started.connect(self.acqThreadStarted)
-        self.acqThread.sigShowMessage.connect(self.showMessage)
+        self.acqThread.finished.connect(self.acqThreadFinished, type=Qt.Qt.DirectConnection)
+        self.acqThread.started.connect(self.acqThreadStarted, type=Qt.Qt.DirectConnection)
+        self.acqThread.sigShowMessage.connect(self.showMessage, type=Qt.Qt.DirectConnection)
 
         self._processingThread = FrameProcessingThread()
         self._processingThread.sigFrameFullyProcessed.connect(self.sigNewFrame, type=Qt.Qt.DirectConnection)
         self._processingThread.start()
         self._processingThread.addFrameProcessor(self.addFrameInfo)
 
-        self.sigGlobalTransformChanged.connect(self.transformChanged)
+        self.sigGlobalTransformChanged.connect(self.transformChanged, type=Qt.Qt.DirectConnection)
 
         if config != None:
             # look for 'defaults', then 'params' to preserve backward compatibility.
@@ -228,6 +228,7 @@ class Camera(DAQGeneric, OptomechDevice):
             raise ValueError(f"No camera preset named {preset!r}")
         params = presets[preset]["params"]
         self.setParams(params)
+        return Future.immediate()
 
     def presetHotkeyPressed(self, dev, changes, presetName):
         self.loadPreset(presetName)
@@ -300,7 +301,7 @@ class Camera(DAQGeneric, OptomechDevice):
         self.acqThread.stop(block=block)
 
     @contextmanager
-    def ensureRunning(self, ensureFreshFrames=False):
+    def ensureRunning(self, ensureFreshFrames=False, withKnownLatency=None):
         """Context manager for starting and stopping camera acquisition thread. If used
         with non-blocking frame acquisition, this will still exit the context before
         the frames are necessarily acquired.
@@ -311,9 +312,13 @@ class Camera(DAQGeneric, OptomechDevice):
         """
         running = self.isRunning()
         if ensureFreshFrames:
-            if running:
+            if withKnownLatency is not None:
+                # if we know the latency of the camera, we can just wait for that time
+                if not isinstance(withKnownLatency, (int, float)) or withKnownLatency <= 0:
+                    raise ValueError("withKnownLatency must be a positive number.")
+                time.sleep(withKnownLatency)
+            elif running:
                 self.stop()
-                # todo sleep until all frames are cleared somehow?
                 self.start()
         if not running:
             self.start()
@@ -1022,6 +1027,7 @@ class FrameAcquisitionFuture(Future):
         self._camera = camera
         self._frame_count = frameCount
         self._ensure_fresh_frames = ensureFreshFrames
+        self._known_latency = camera.camConfig.get("freshFrameLatency", None)
         self._stop_when = None
         self._frames = []
         self._timeout = timeout
@@ -1034,7 +1040,7 @@ class FrameAcquisitionFuture(Future):
         with ExitStack() as stack:
             stack.callback(self._camera.sigNewFrame.disconnect, self._queue.put)
             if self._ensure_fresh_frames:
-                stack.enter_context(self._camera.ensureRunning(ensureFreshFrames=True))
+                stack.enter_context(self._camera.ensureRunning(ensureFreshFrames=True, withKnownLatency=self._known_latency))
             lastFrameTime = ptime.time()
             while True:
                 if self.isDone():

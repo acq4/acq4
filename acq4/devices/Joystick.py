@@ -12,6 +12,33 @@ pygame.joystick.init()
 
 
 class Joystick(Device):
+    """
+    Device for interfacing with USB/Bluetooth joysticks and game controllers.
+    
+    Uses pygame to detect and monitor joystick input for controlling other devices.
+    
+    Configuration options:
+    
+    * **index** (int, optional): Joystick index number (0 for first joystick, etc.)
+      Either index or name must be specified.
+    
+    * **name** (str, optional): Joystick name string for identification
+      Either index or name must be specified.
+    
+    The device emits sigStateChanged(self, change) when buttons or axes change.
+    
+    Example configuration::
+    
+        Joystick1:
+            driver: 'Joystick'
+            index: 0
+    
+    or::
+    
+        Joystick1:
+            driver: 'Joystick'
+            name: 'Xbox Controller'
+    """
     sigStateChanged = QtCore.Signal(object, object)  # self, change
 
     def __init__(self, manager, config, name):

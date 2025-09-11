@@ -14,6 +14,54 @@ from ..Device import Device, DeviceTask
 
 
 class Scanner(Device, OptomechDevice):
+    """
+    A galvanometric scanner device for controlling XY scan mirrors.
+    
+    Configuration options:
+    
+    * **XAxis** (dict): DAQ channel configuration for X scan mirror
+        - device: Name of DAQ device
+        - channel: DAQ channel (e.g., '/Dev1/ao2')
+        - type: 'ao'
+    
+    * **YAxis** (dict): DAQ channel configuration for Y scan mirror  
+        - device: Name of DAQ device
+        - channel: DAQ channel (e.g., '/Dev1/ao3')
+        - type: 'ao'
+    
+    * **commandLimits** (list): [min, max] voltage limits for mirror commands (default: [-1.5, 1.5])
+    
+    * **offVoltage** (list, optional): [x, y] voltages for virtual shutter "off" position.
+      When specified, enables virtual shuttering by steering beam off-axis.
+    
+    * **defaultCamera** (str, optional): Name of default camera device for calibration
+    
+    * **defaultLaser** (str, optional): Name of default laser device for calibration
+    
+    * **shutterLasers** (list, optional): List of laser names for which virtual shuttering 
+      should be enabled by default
+    
+    * **calibrationDir** (str, optional): Directory path for storing calibration data
+    
+    Example configuration::
+    
+        Scanner:
+            driver: 'Scanner'
+            parentDevice: 'Microscope'
+            XAxis:
+                device: 'DAQ'
+                channel: '/Dev1/ao2'
+                type: 'ao'
+            YAxis:
+                device: 'DAQ'
+                channel: '/Dev1/ao3'
+                type: 'ao'
+            commandLimits: [-3, 3]
+            offVoltage: [0, -4]
+            defaultCamera: 'Camera'
+            defaultLaser: 'Laser-UV'
+            shutterLasers: ['Laser-UV']
+    """
     
     sigShutterChanged = Qt.Signal()
     

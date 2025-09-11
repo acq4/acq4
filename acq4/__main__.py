@@ -18,6 +18,9 @@ control_arg_parser = Manager.makeArgParser()
 control_arg_parser.add_argument("-profile", action="store_true", help="Run the program under the profiler")
 control_arg_parser.add_argument("--callgraph", action="store_true", help="Run the program under the callgraph profiler")
 control_arg_parser.add_argument("--threadtrace", action="store_true", help="Run a thread tracer in the background")
+# teleprox optional port number
+control_arg_parser.add_argument("--teleprox", type=int, nargs='?', const=0, default=None,
+                                help="Run a teleprox server in the background. If no port number is specified, a random port will be used.")
 args = control_arg_parser.parse_args()
 
 ## Enable stack trace output when a crash is detected
@@ -33,6 +36,17 @@ from .util import Qt
 import pyqtgraph as pg
 if args.threadtrace:
     tt = pg.debug.ThreadTrace()
+
+
+if args.teleprox is not None:    
+    from teleprox import RPCServer
+    if args.teleprox == 0:
+        addr = 'tcp://127.0.0.1:*'
+    else:
+        addr = f'tcp://127.0.0.1:{args.teleprox}'
+    teleprox_debug_server = RPCServer(addr)
+    teleprox_debug_server.run_in_thread()
+    print(f"Teleprox server listening on {teleprox_debug_server.address}")
 
 app = pg.mkQApp()
 
@@ -122,8 +136,6 @@ timer.timeout.connect(donothing)
 timer.start(1000)
 
 ## Start Qt event loop unless running in interactive mode.
-import pyqtgraph as pg
-
 interactive = (sys.flags.interactive == 1) and not pg.Qt.USE_PYSIDE
 if interactive:
     print("Interactive mode; not starting event loop.")
@@ -174,5 +186,5 @@ else:
             app.exec_()
     else:
         app.exec_()
-        # pg.exit()  # pg.exit() causes python to exit before Qt has a chance to clean up. 
+        # pg.exit()  # pg.exit() causes python to exit before Qt has a chance to clean up.
         # this avoids otherwise irritating exit crashes.
