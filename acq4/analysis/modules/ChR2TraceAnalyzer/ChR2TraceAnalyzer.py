@@ -165,6 +165,7 @@ class ChR2TraceAnalyzer(AnalysisModule):
         
         node = self.flowchart.createNode('PlotWidget')
         name = node.name()
+        plot.setObjectName(f"ChR2TraceAnalyzer_{name}")
         node.setPlot(plot)
         
         dock = self._host_.dockArea.addDock(name=name, position='bottom')

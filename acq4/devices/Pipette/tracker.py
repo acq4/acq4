@@ -600,6 +600,7 @@ class DriftMonitor(Qt.QWidget):
         self.setLayout(self.layout)
 
         self.gv = pg.GraphicsLayoutWidget()
+        self.gv.setObjectName("PipetteTracker_graphicsLayoutWidget")
         self.layout.addWidget(self.gv, 0, 0)
 
         self.plot = self.gv.addPlot(labels={"left": ("Drift distance", "m"), "bottom": ("Time", "s")})

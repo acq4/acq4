@@ -46,6 +46,7 @@ class DAQGenericTaskGui(TaskGui):
     def createChannelWidget(self, ch, daqName=None):
         conf = self.dev._DGConfig[ch]
         p = PlotWidget(self)
+        p.setObjectName(f"DAQGeneric_{self.dev.name()}_{ch}_plot")
         
         units = ''
         if 'units' in conf:

@@ -118,7 +118,8 @@ class PipetteControl(Qt.QWidget):
             PlotWidget(mode='test pulse'), 
             PlotWidget(mode='ss resistance')
         ]
-        for plt in self.plots:
+        for i, plt in enumerate(self.plots):
+            plt.plot.setObjectName(f"MultiPatch_{pipette.name()}_plot{i+1}")
             self.ui.plotLayout.addWidget(plt)
             plt.sigModeChanged.connect(self.plotModeChanged)
 
