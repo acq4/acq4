@@ -26,22 +26,56 @@ triggerModes = {
 
 
 class MicroManagerCamera(Camera):
-    """Camera device that uses MicroManager to provide imaging.
+    """
+    Camera device that uses MicroManager to provide imaging support.
 
-    Requires pymmcore to be installed along with MicroManager with the same API version.
-    To configure a new camera:
-    1. First make sure your pymmcore API version matches the MicroManager API version.
-        - MicroManager API version can be found in the MicroManager GUI under Help -> About.
-        - pymmcore API version can be found by running `import pymmcore; print(pymmcore.__version__.split('.')[3])`
-        - If versions are not matched, then download a different version of MicroManager that matches the pymmcore version.
-    2. Next make sure you can load and operate the camera via the MicroManager GUI. 
-        - When selecting your camera in the hardware wizard, take note of the adapter name and device name
-    3. Configure the camera in the ACQ4 configuration file::
-
+    Requires pymmcore to be installed along with MicroManager with matching API versions.
+    
+    MicroManager-specific configuration options:
+    
+    * **mmAdapterName** (str, required): MicroManager adapter name (e.g., 'HamamatsuHam')
+      Find this in MicroManager hardware wizard when setting up the camera
+    
+    * **mmDeviceName** (str, required): MicroManager device name (e.g., 'HamamatsuHam_DCAM') 
+      Find this in MicroManager hardware wizard when setting up the camera
+    
+    * **path** (str, optional): Path to MicroManager installation directory
+      Uses default MicroManager installation if not specified
+    
+    Standard Camera configuration options (see Camera base class):
+    
+    * **parentDevice** (str, optional): Name of parent optical device (microscope, etc.)
+    
+    * **transform** (dict, optional): Spatial transform relative to parent device
+        - pos: Position offset [x, y]
+        - scale: Scale factors [x, y] in m/pixel
+        - angle: Rotation angle in radians
+    
+    * **params** (dict, optional): Camera parameters to set at startup
+        - exposure: Default exposure time
+        - binning: Pixel binning [x, y]
+    
+    Setup instructions:
+    1. Ensure pymmcore API version matches MicroManager API version
+       - MicroManager API: Help -> About in MicroManager GUI
+       - pymmcore API: `import pymmcore; print(pymmcore.__version__.split('.')[3])`
+    2. Test camera operation in MicroManager GUI first
+    3. Note adapter and device names from hardware wizard
+    
+    Example configuration::
+    
         Camera:
             driver: 'MicroManagerCamera'
             mmAdapterName: 'HamamatsuHam'
             mmDeviceName: 'HamamatsuHam_DCAM'
+            parentDevice: 'Microscope'
+            transform:
+                pos: [0, 0]
+                scale: [4.088e-6, -4.088e-6]
+                angle: 0
+            params:
+                exposure: 10e-3
+                binning: [4, 4]
     """
 
     def __init__(self, manager, config, name):
@@ -52,7 +86,6 @@ class MicroManagerCamera(Camera):
         self._triggerProp = None  # the name of the property for setting trigger mode
         self._triggerModes = ({}, {})  # forward and reverse mappings for the names of trigger modes
         self._binningMode = None  # 'x' or 'xy' for binning strings like '1' and '1x1', respectively
-        self._config = config
         Camera.__init__(self, manager, config, name)  ## superclass will call setupCamera when it is ready.
         self.acqBuffer = None
         self.frameId = 0
@@ -60,11 +93,11 @@ class MicroManagerCamera(Camera):
 
     def setupCamera(self):
         # sanity check for MM adapter and device name
-        adapterName = self._config['mmAdapterName']
+        adapterName = self.camConfig['mmAdapterName']
         allAdapters = self.mmc.getDeviceAdapterNames()
         if adapterName not in allAdapters:
-            raise ValueError("Adapter name '%s' is not valid. Options are: %s" % (adapterName, allAdapters))
-        deviceName = self._config['mmDeviceName']
+            raise ValueError(f"Adapter name '{adapterName}' is not valid. Options are: {allAdapters}")
+        deviceName = self.camConfig['mmDeviceName']
         try:
             allDevices = self.mmc.getAvailableDevices(adapterName)
         except Exception as e:
@@ -75,10 +108,10 @@ class MicroManagerCamera(Camera):
         if deviceName == 'CellCam':
             self.camName = 'CellCam' # load.Device() for CellCam needs to have 'CellCam' as device name
         self.mmc.loadDevice(self.camName, adapterName, deviceName)
-        
+
         # the 'Camera ID' property is not prefilled after loadDevice(). Need to assign it:
         if self.camName == 'CellCam':
-            self.mmc.setProperty(self.camName, 'Camera ID', ''.join(self.mmc.getAllowedPropertyValues('CellCam', 'Camera ID'))) 
+            self.mmc.setProperty(self.camName, 'Camera ID', ''.join(self.mmc.getAllowedPropertyValues('CellCam', 'Camera ID')))
         self.mmc.initializeDevice(self.camName)
 
         self._readAllParams()
@@ -385,7 +418,7 @@ class MicroManagerCamera(Camera):
             setParams.append((self._triggerProp, self._triggerModes[1][value]))
 
             # Hamamatsu cameras require setting a trigger source as well
-            if self._config['mmAdapterName'] == 'HamamatsuHam':
+            if self.camConfig['mmAdapterName'] == 'HamamatsuHam':
                 if value == 'Normal':
                     source = 'INTERNAL'
                 elif value == 'TriggerStart':

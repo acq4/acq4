@@ -19,6 +19,9 @@ control_arg_parser.add_argument("-profile", action="store_true", help="Run the p
 control_arg_parser.add_argument("--callgraph", action="store_true", help="Run the program under the callgraph profiler")
 control_arg_parser.add_argument("--threadtrace", action="store_true", help="Run a thread tracer in the background")
 control_arg_parser.add_argument("--qt-profile", action="store_true", help="Use ProfiledQApplication to collect Qt event loop performance statistics")
+# teleprox optional port number
+control_arg_parser.add_argument("--teleprox", type=int, nargs='?', const=0, default=None,
+                                help="Run a teleprox server in the background. If no port number is specified, a random port will be used.")
 args = control_arg_parser.parse_args()
 
 ## Enable stack trace output when a crash is detected
@@ -42,6 +45,18 @@ if args.qt_profile:
     print("Qt profiling enabled. Use app.print_summary_report() to view statistics.")
 else:
     app = pg.mkQApp()
+
+if args.teleprox is not None:    
+    from teleprox import RPCServer
+    if args.teleprox == 0:
+        addr = 'tcp://127.0.0.1:*'
+    else:
+        addr = f'tcp://127.0.0.1:{args.teleprox}'
+    teleprox_debug_server = RPCServer(addr)
+    teleprox_debug_server.run_in_thread()
+    print(f"Teleprox server listening on {teleprox_debug_server.address}")
+
+app = pg.mkQApp()
 
 
 ## Install a simple message handler for Qt errors:
@@ -129,8 +144,6 @@ timer.timeout.connect(donothing)
 timer.start(1000)
 
 ## Start Qt event loop unless running in interactive mode.
-import pyqtgraph as pg
-
 interactive = (sys.flags.interactive == 1) and not pg.Qt.USE_PYSIDE
 if interactive:
     print("Interactive mode; not starting event loop.")
@@ -181,5 +194,5 @@ else:
             app.exec_()
     else:
         app.exec_()
-        # pg.exit()  # pg.exit() causes python to exit before Qt has a chance to clean up. 
+        # pg.exit()  # pg.exit() causes python to exit before Qt has a chance to clean up.
         # this avoids otherwise irritating exit crashes.

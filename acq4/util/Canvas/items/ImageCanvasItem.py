@@ -173,9 +173,9 @@ class ImageCanvasItem(CanvasItem):
         if showTime:
             self.timeSlider.setMinimum(0)
             self.timeSlider.setMaximum(data.shape[0]-1)
-            self.graphicsItem().setImage(data[self.timeSlider.value()].asarray(), autoLevels=self.autoBtn.isChecked())
+            self.graphicsItem().setImage(np.asarray(data[self.timeSlider.value()]), autoLevels=self.autoBtn.isChecked())
         else:
-            self.graphicsItem().setImage(data.asarray(), autoLevels=self.autoBtn.isChecked())
+            self.graphicsItem().setImage(np.asarray(data), autoLevels=self.autoBtn.isChecked())
 
         for widget in self.timeControls:
             widget.setVisible(showTime)

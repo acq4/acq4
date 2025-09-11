@@ -15,18 +15,88 @@ from pyqtgraph import SpinBox, siFormat
 
 class Scientifica(Stage):
     """
-    A Scientifica motorized device.
-
-    This class supports PatchStar, MicroStar, SliceScope, objective changers, etc.
-    The device may be identified either by its serial port or by its description
-    string:
-
-        port: <serial port>  # eg. 'COM1' or '/dev/ttyACM0'
-        name: <string>  # eg. 'SliceScope' or 'MicroStar 2'
-        baudrate: <int>  #  may be 9600 or 38400
-
-    The optional 'baudrate' parameter is used to set the baudrate of the device.
-    Both valid rates will be attempted when initially connecting.
+    A Scientifica motorized device driver for manipulators and stages.
+    
+    * Supports PatchStar, MicroStar, SliceScope, objective changers, and other Scientifica devices.
+    * Requires the ``pyserial`` package for serial communication.
+    * Recommends Scientifica's LinLab software for initial configuration and testing, but note that
+      ACQ4 will not be able to access the serial port while LinLab is running. 
+    
+    Configuration options:
+    
+    * **port** (str, optional): Serial port (e.g., 'COM1' or '/dev/ttyACM0')
+      Either port or name must be specified.
+    
+    * **name** (str, optional): Device name as assigned in LinLab software
+      (e.g., 'SliceScope' or 'MicroStar 2'). Either port or name must be specified.
+    
+    * **baudrate** (int, optional): Serial baud rate (9600 or 38400)
+      Both rates will be attempted if not specified.
+    
+    * **version** (int, optional): Controller version (default: 2)
+      Some devices require version=1 for compatibility.
+    
+    * **scale** (tuple, optional): (x, y, z) scale factors in m/step 
+      (default: (1e-6, 1e-6, 1e-6))
+    
+    * **userSpeed** (float, optional): Default speed for manual control (m/sec).
+      Sets the maximum speed when device is under manual control.
+    
+    * **autoZeroDirection** (tuple, optional): Auto-zero direction for each axis.
+      This affects the direction traveled when "auto-set zero position" is clicked from the manager dock.
+      (default: (-1, -1, -1)). Set to None to disable auto-zero for an axis.
+    
+    * **monitorObjective** (bool, optional): Monitor objective changer state
+      (default: False). Set to True to track objective position changes.
+    
+    * **capabilities** (dict, optional): Override device capabilities
+      Format: {"getPos": (x, y, z), "setPos": (x, y, z), "limits": (x, y, z)}
+      where each tuple contains booleans for each axis.
+    
+    * **isManipulator** (bool, optional): Override manipulator detection
+      If not specified, detection is automatic based on device type.
+    
+    * **params** (dict, optional): Low-level device parameters that are set on the device at ACQ4 startup time. 
+      These may also be configured using LinLab, but we recommend setting them here in order to enforce
+      consistent settings.
+        - axisScale: (x, y, z) axis scaling factors affect the size and direction of steps reported by the device.
+          The absolute value of these is determined by the manufacturer and should not be changed.
+          The sign may be changed to flip the direction of the axis.
+        - joyDirectionX/Y/Z: (bool) Used to switch the direction of the patch pad / patch cube rotary control for each axis.
+          Note that the rotary control direction is also affected by the sign of the axisScale values.
+        - minSpeed, maxSpeed: Speed limits in device units
+        - maxZSpeed, minZSpeed: Z-axis specific speed limits (for devices with separate Z control)
+        - accel: Acceleration setting
+        - joySlowScale, joyFastScale: Joystick speed scaling
+        - joyAccel: Joystick acceleration
+        - approachAngle: Approach mode angle (degrees)
+        - approachMode: Approach mode enabled (bool)
+          Note: the approach mode is also set using a physical switch on the device; setting this parameter
+          here may cause the device to behave contrary to the physical switch state until it is toggled.
+        - objLift: Distance to lift objectives before switching (int; 1 = 10 nm)
+          Note: the sign of this distance depends on the sign of the Z axisScale parameter.
+        - objDisp: Distance between focal planes of objectives (int; 1 = 10 nm)
+          Note: the sign of this distance depends on the sign of the Z axisScale parameter.
+        - objL1, objL2: Legacy objective switching parameters for version 2 devices (int)
+        - currents: Motor current limits (not recommended to change these; be careful to follow manufacturer specs!)
+    
+    Example configuration::
+    
+        SliceScope:
+            driver: 'Scientifica'
+            name: 'SliceScope'
+            scale: [-1e-6, -1e-6, 1e-6]
+            params:
+                axisScale: [5.12, -5.12, -6.4]
+                joyDirectionX: True
+                joyDirectionY: True
+                joyDirectionZ: False
+                minSpeed: 1000
+                maxSpeed: 30000
+                accel: 500
+                joySlowScale: 4
+                joyFastScale: 80
+                joyAccel: 500
     """
 
     def __init__(self, man, config, name):

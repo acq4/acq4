@@ -14,6 +14,29 @@ from acq4.util.Thread import Thread
 
 
 class SerialMouse(Device):
+    """
+    Serial mouse device for manual control of stage positioning.
+    
+    Provides 2D positioning control using a serial mouse interface with 
+    configurable scaling and button monitoring.
+    
+    Configuration options:
+    
+    * **port** (str, required): Serial port for mouse communication
+    
+    * **scale** (list, required): [x, y] scaling factors for mouse movement
+      to stage position conversion
+    
+    The device maintains position state across sessions and provides position
+    and button change signals for integration with other devices.
+    
+    Example configuration::
+    
+        SerialMouse:
+            driver: 'SerialMouse'  
+            port: 'COM4'
+            scale: [1e-6, 1e-6]
+    """
     
     sigSwitchChanged = Qt.Signal(object, object)
     sigPositionChanged = Qt.Signal(object)

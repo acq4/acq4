@@ -18,8 +18,22 @@ from ..util.generator.StimParamSet import SeqParameter
 
 class OdorDelivery(Device):
     """
-    Device class representing an odor delivery device. Config should include a section describing all the possible
-    odors in the following format::
+    Base class for odor delivery systems.
+    
+    Provides common functionality for controlling valve-based odor delivery systems
+    used in olfactory research and behavioral experiments.
+    
+    Configuration options:
+    
+    * **odors** (dict): Odor channel and port definitions
+        - Key: Channel group name (arbitrary string)
+        - Value: Channel configuration dict:
+            - channel: Hardware channel number (int)
+            - ports: Dict mapping port numbers to odor names
+                - Key: Port number (int)
+                - Value: Odor name (str)
+    
+    Config should include a section describing all the possible odors in the following format::
 
         odors:
             first channel name:
