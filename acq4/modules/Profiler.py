@@ -584,3 +584,13 @@ class Profiler(Module):
         self.tab_widget.addTab(self.qt_profiler.widget, "Qt Event Profile")
         
         self.win.show()
+    
+    def quit(self):
+        """Stop all Qt profiles when the profiler module quits."""
+        # Stop all active Qt profiles
+        app = Qt.QApplication.instance()
+        if hasattr(app, 'stop_all_profiles'):
+            app.stop_all_profiles()
+        
+        # Call parent quit method
+        super().quit()
