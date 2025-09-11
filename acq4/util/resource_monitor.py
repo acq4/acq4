@@ -32,6 +32,9 @@ class ResourceMonitorWidget(Qt.QWidget):
         # Memory usage colormap (0-100%)
         self.memoryColormap = pg.ColorMap(positions, colors)
         
+        # CPU usage colormap (0-100%) - same as Qt activity
+        self.cpuColormap = pg.ColorMap(positions, colors)
+        
         # Qt latency colormap (0ms to 500ms+)
         # Green at 1/60s (16.67ms), Red at 500ms
         latency_colors = [(0, 128, 0), (0, 128, 0), (128, 100, 0), (180, 0, 0)]  # Green, Orange, Red
@@ -44,22 +47,13 @@ class ResourceMonitorWidget(Qt.QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(2)
         
-        # Qt profiling label
-        self.qtProfileLabel = Qt.QLabel("Qt Activity: ---%")
-        layout.addWidget(self.qtProfileLabel)
+        # Single multiline label for all metrics
+        self.metricsLabel = Qt.QLabel("CPU: ---%\nMemory: ---%\nQt activity: ---%\nQt latency: --- ms")
+        layout.addWidget(self.metricsLabel)
         
-        # Memory usage label
-        self.memoryLabel = Qt.QLabel("Memory: ---%")
-        layout.addWidget(self.memoryLabel)
-        
-        # Qt latency label
-        self.latencyLabel = Qt.QLabel("Qt latency: --- ms")
-        layout.addWidget(self.latencyLabel)
-        
-        # Check if ProfiledQApplication is active
+        # Store whether ProfiledQApplication is active for conditional display
         app = Qt.QApplication.instance()
-        if not hasattr(app, 'activity_fraction'):
-            self.qtProfileLabel.setVisible(False)
+        self.hasQtProfiling = hasattr(app, 'activity_fraction')
     
     def _setupTimer(self):
         """Setup timers for updating resource displays and measuring Qt latency."""
@@ -76,49 +70,57 @@ class ResourceMonitorWidget(Qt.QWidget):
         # Latency measurement variables
         self.latencyStartTime = None
         self.currentLatency = None
+        
+        # Initialize CPU monitoring (first call returns 0.0, subsequent calls are accurate)
+        try:
+            psutil.cpu_percent(interval=None)
+        except Exception:
+            pass
+        
+        # Initialize metric values for multiline display
+        self.cpuValue = None
+        self.memoryValue = None
+        self.qtActivityValue = None
+        self.latencyValue = None
     
     def _updateDisplays(self):
-        """Update Qt profiling, memory usage, and latency displays."""
+        """Update CPU, memory, Qt profiling, and latency displays."""
         # Start latency measurement
         self._startLatencyMeasurement()
         
-        # Update Qt activity display
-        app = Qt.QApplication.instance()
-        if hasattr(app, 'activity_fraction'):
+        # Update CPU value
+        try:
+            self.cpuValue = psutil.cpu_percent(interval=None)  # Non-blocking call
+        except Exception:
+            self.cpuValue = None
+        
+        # Update memory value
+        try:
+            memory = psutil.virtual_memory()
+            self.memoryValue = memory.percent
+        except Exception:
+            self.memoryValue = None
+        
+        # Update Qt activity value
+        if self.hasQtProfiling:
+            app = Qt.QApplication.instance()
             try:
                 fraction = app.activity_fraction
                 if fraction is None:
-                    self._updateLabel(self.qtProfileLabel, "Qt Activity", None, self.qtColormap)
-                    return
-                percentage = fraction * 100
-                self._updateLabel(self.qtProfileLabel, "Qt Activity", percentage, self.qtColormap)
+                    self.qtActivityValue = None
+                else:
+                    self.qtActivityValue = fraction * 100
             except Exception:
-                self._updateLabel(self.qtProfileLabel, "Qt Activity", None, self.qtColormap)
-        
-        # Update memory display
-        try:
-            memory = psutil.virtual_memory()
-            percentage = memory.percent
-            self._updateLabel(self.memoryLabel, "Memory", percentage, self.memoryColormap)
-        except Exception:
-            self._updateLabel(self.memoryLabel, "Memory", None, self.memoryColormap)
-        
-        # Update latency display with most recent measurement
-        self._updateLatencyDisplay()
-    
-    def _updateLabel(self, label, prefix, percentage, colormap):
-        """Update a label with percentage and colormap-based styling."""
-        if percentage is None:
-            label.setText(f"{prefix}: ---%")
-            color = "#888888"  # Gray for error/unavailable
+                self.qtActivityValue = None
         else:
-            label.setText(f"{prefix}: {percentage:.1f}%")
-            # Map percentage (0-100) to colormap (0.0-1.0)
-            normalized = min(max(percentage / 100.0, 0.0), 1.0)
-            rgb = colormap.map(normalized, mode='byte')
-            color = f"#{rgb[0]:02x}{rgb[1]:02x}{rgb[2]:02x}"
+            self.qtActivityValue = None
         
-        self._setLabelStyle(label, color)
+        # Update latency value (will be set by _latencyTimerFired)
+        # No action needed here, latency is updated asynchronously
+        
+        # Update the multiline display
+        self._updateMultilineDisplay()
+    
     
     def _startLatencyMeasurement(self):
         """Start a latency measurement by recording current time and starting 0ms timer."""
@@ -132,33 +134,65 @@ class ResourceMonitorWidget(Qt.QWidget):
             import time
             elapsed = time.perf_counter() - self.latencyStartTime
             self.currentLatency = elapsed * 1000  # Convert to milliseconds
+            self.latencyValue = self.currentLatency
+            # Update display with new latency value
+            self._updateMultilineDisplay()
     
-    def _updateLatencyDisplay(self):
-        """Update the Qt latency display."""
-        if self.currentLatency is None:
-            self.latencyLabel.setText("Qt latency: --- ms")
-            self._setLabelStyle(self.latencyLabel, "#888888")  # Gray
+    def _updateMultilineDisplay(self):
+        """Update the multiline label with all metric values and colors."""
+        lines = []
+        
+        # CPU line with color
+        if self.cpuValue is None:
+            lines.append('<span style="color: #888888;">CPU: ---%</span>')
         else:
-            # Map latency (0-500ms+) to colormap
-            latency_ms = min(self.currentLatency, 500.0)  # Cap at 500ms for color mapping
-            normalized = latency_ms / 500.0  # Normalize to 0.0-1.0 range
-            rgb = self.latencyColormap.map(normalized, mode='byte')
-            color = f"#{rgb[0]:02x}{rgb[1]:02x}{rgb[2]:02x}"
-            
-            self.latencyLabel.setText(f"Qt latency: {self.currentLatency:.1f} ms")
-            self._setLabelStyle(self.latencyLabel, color)
+            color = self._getColorFromValue(self.cpuValue, self.cpuColormap, 100.0)
+            lines.append(f'<span style="color: {color};">CPU: {self.cpuValue:.1f}%</span>')
+        
+        # Memory line with color
+        if self.memoryValue is None:
+            lines.append('<span style="color: #888888;">Memory: ---%</span>')
+        else:
+            color = self._getColorFromValue(self.memoryValue, self.memoryColormap, 100.0)
+            lines.append(f'<span style="color: {color};">Memory: {self.memoryValue:.1f}%</span>')
+        
+        # Qt Activity line (only if profiling is available)
+        if self.hasQtProfiling:
+            if self.qtActivityValue is None:
+                lines.append('<span style="color: #888888;">Qt Activity: ---%</span>')
+            else:
+                color = self._getColorFromValue(self.qtActivityValue, self.qtColormap, 100.0)
+                lines.append(f'<span style="color: {color};">Qt Activity: {self.qtActivityValue:.1f}%</span>')
+        
+        # Qt Latency line with color
+        if self.latencyValue is None:
+            lines.append('<span style="color: #888888;">Qt latency: --- ms</span>')
+        else:
+            color = self._getColorFromValue(self.latencyValue, self.latencyColormap, 500.0)
+            lines.append(f'<span style="color: {color};">Qt latency: {self.latencyValue:.1f} ms</span>')
+        
+        # Set the multiline text with HTML formatting and apply styling
+        self.metricsLabel.setText("<br>".join(lines))
+        self._applyMultilineStyle()
     
-    def _setLabelStyle(self, label, color):
-        """Set styling for a label with the given color."""
-        label.setStyleSheet(f"""
-            QLabel {{ 
+    def _getColorFromValue(self, value, colormap, max_value):
+        """Get hex color from value using the specified colormap."""
+        normalized = min(max(value / max_value, 0.0), 1.0)
+        rgb = colormap.map(normalized, mode='byte')
+        return f"#{rgb[0]:02x}{rgb[1]:02x}{rgb[2]:02x}"
+    
+    def _applyMultilineStyle(self):
+        """Apply styling to the multiline metrics label."""
+        self.metricsLabel.setStyleSheet("""
+            QLabel { 
                 font-weight: bold; 
-                color: {color};
+                color: #333333;
                 background-color: #f0f0f0;
                 border: 1px solid #cccccc;
                 border-radius: 3px;
-                padding: 2px;
-            }}
+                padding: 4px;
+                font-family: monospace;
+            }
         """)
     
     def cleanup(self):
