@@ -152,7 +152,7 @@ class ScientificaControlThread:
                     # need to send 5 commands uninterrupted in sequence
                     if speed is not None:
                         self.dev.setSpeed(speed)
-                        self.dev.setMinSpeed(speed)
+                        self.dev.setMinSpeed(speed / 10)  # room to accelerate
                     ticks = [x * self.dev.ticksPerMicron for x in pos]
                     self.dev.serial.send(b'ABS %d %d %d' % tuple(ticks))
                     if speed is not None:
