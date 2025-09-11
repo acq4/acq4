@@ -193,7 +193,7 @@ class CellDetectState(PatchPipetteState):
     cellDetectTimeout : float
         Maximum time (s) to wait for cell detection before switching to fallback state (default 30 s)
     pokeDistance : float
-        Distance to push pipette towards target after detecting cell surface
+        Distance to push pipette towards target after detecting cell surface (default 3 µm)
     reachedEndpointState : str
         State to transition to after the search endpoint has been reached, but no cell was detected.
         Default is 'seal'.

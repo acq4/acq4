@@ -144,6 +144,8 @@ class ApproachState(PatchPipetteState):
         Distance (m) to backup before sidestepping (default 10 µm)
     sidestepPassDistance : float
         Distance (m) to pass an obstacle (default 20 µm)
+    visualTargetTracking : bool
+        Whether to use visual tracking to follow the target during approach (default False)
     takeACellfie : bool
         Whether to take a z-stack of the cell at the start of this state (default True)
     cellfieHeight : float
