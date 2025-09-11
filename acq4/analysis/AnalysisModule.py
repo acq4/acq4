@@ -179,24 +179,34 @@ class Element(Qt.QObject):
         args = self.args()
         if typ == 'plot':
             obj = pg.PlotWidget(name=self.name(), **args)
+            obj.setObjectName(f"AnalysisModule_{host.__class__.__name__}_{self.name()}")
         elif typ == 'imageView':
             obj = pg.ImageView(**args)
+            obj.setObjectName(f"AnalysisModule_{host.__class__.__name__}_{self.name()}")
         elif typ == 'canvas':
             obj = Canvas.Canvas(**args)
+            obj.setObjectName(f"AnalysisModule_{host.__class__.__name__}_{self.name()}")
         elif typ == 'fileInput':
             obj = FileLoader.FileLoader(host.dataManager(), **args)
+            obj.setObjectName(f"AnalysisModule_{host.__class__.__name__}_{self.name()}")
         elif typ == 'table':
             obj = pg.TableWidget(**args)
+            obj.setObjectName(f"AnalysisModule_{host.__class__.__name__}_{self.name()}")
         elif typ == 'dataTree':
             obj = pg.DataTreeWidget(**args)
+            obj.setObjectName(f"AnalysisModule_{host.__class__.__name__}_{self.name()}")
         elif typ == 'parameterTree':
             obj = pg.parametertree.ParameterTree(**args)
+            obj.setObjectName(f"AnalysisModule_{host.__class__.__name__}_{self.name()}")
         elif typ == 'graphicsView':
             obj = pg.GraphicsView(**args)
+            obj.setObjectName(f"AnalysisModule_{host.__class__.__name__}_{self.name()}")
         elif typ == 'graphicsLayout':
             obj = pg.GraphicsLayoutWidget(**args)
+            obj.setObjectName(f"AnalysisModule_{host.__class__.__name__}_{self.name()}")
         elif typ == 'viewBox':
             obj = pg.GraphicsView()
+            obj.setObjectName(f"AnalysisModule_{host.__class__.__name__}_{self.name()}")
             obj.setCentralItem(pg.ViewBox(**args))
         else:
             raise TypeError(f"Cannot automatically create element '{self.name}' (type={typ})")

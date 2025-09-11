@@ -94,6 +94,7 @@ class ImageCanvasItem(CanvasItem):
         self.splitter.addWidget(self.filterGroup)
 
         self.histogram = pg.HistogramLUTWidget()
+        self.histogram.setObjectName("ImageCanvasItem_histogram")
         self.histogram.setImageItem(self.graphicsItem())
 
         # addWidget arguments: row, column, rowspan, colspan 

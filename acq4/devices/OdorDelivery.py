@@ -283,6 +283,7 @@ class OdorTaskGui(TaskGui):
         splitter.addWidget(ptree)
 
         self._plot = PlotWidget()
+        self._plot.setObjectName("OdorDelivery_taskPlot")
         splitter.addWidget(self._plot)
 
         # TODO validate if the events will go longer than the total task runner

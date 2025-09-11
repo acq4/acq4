@@ -79,9 +79,23 @@ class QApplicationProfile(QObject):
         if not self._active:
             return
             
-        # Store raw event data with weak reference to receiver to prevent memory leaks
+        # Capture receiver description at event time for later use if receiver gets garbage collected
+        try:
+            if isinstance(receiver, str):
+                receiver_desc = receiver
+            else:
+                class_name = type(receiver).__name__
+                object_name = getattr(receiver, 'objectName', lambda: '')()
+                if object_name:
+                    receiver_desc = f"{class_name}({object_name})"
+                else:
+                    receiver_desc = class_name
+        except Exception:
+            receiver_desc = "<unknown>"
+            
+        # Store raw event data with weak reference to receiver and captured description
         receiver_ref = weakref.ref(receiver)
-        self._events.append((duration, event_type, receiver_ref, event))    
+        self._events.append((duration, event_type, receiver_ref, event, receiver_desc))    
     
     def stop(self):
         """Stop collecting statistics for this profile."""
@@ -111,15 +125,15 @@ class QApplicationProfile(QObject):
         events_by_group = defaultdict(list)
         
         for event_data in self._events:
-            duration, event_type, receiver_ref, event = event_data
+            duration, event_type, receiver_ref, event, receiver_desc = event_data
             
             if group_by == 'type':
                 group_key = event_type
             elif group_by == 'type_receiver':
                 receiver = receiver_ref()
                 if receiver is None:
-                    # Use a placeholder for dead receivers
-                    group_key = (event_type, "<garbage collected>")
+                    # Use the captured description for dead receivers
+                    group_key = (event_type, f"{receiver_desc} <deleted>")
                 else:
                     group_key = (event_type, receiver)
             else:
@@ -130,7 +144,7 @@ class QApplicationProfile(QObject):
         # Add grouped lists, sorted by total time descending
         group_totals = []
         for group_key, events in events_by_group.items():
-            total_time = sum(duration for duration, _, _, _ in events)
+            total_time = sum(duration for duration, _, _, _, _ in events)
             
             if group_by == 'type':
                 event_type = group_key
@@ -139,12 +153,16 @@ class QApplicationProfile(QObject):
                 event_type, receiver = group_key
                 # Create receiver description
                 try:
-                    class_name = type(receiver).__name__
-                    object_name = getattr(receiver, 'objectName', lambda: '')()
-                    if object_name:
-                        receiver_desc = f"{class_name}({object_name})"
+                    if isinstance(receiver, str):
+                        # receiver is already a description string (like "QWidget(mainWindow) <deleted>")
+                        receiver_desc = receiver
                     else:
-                        receiver_desc = class_name
+                        class_name = type(receiver).__name__
+                        object_name = getattr(receiver, 'objectName', lambda: '')()
+                        if object_name:
+                            receiver_desc = f"{class_name}({object_name})"
+                        else:
+                            receiver_desc = class_name
                 except Exception:
                     receiver_desc = "<unknown>"
                 event_type_name = EVENT_NAMES.get(event_type, f"Type({event_type})")
@@ -162,7 +180,7 @@ class QApplicationProfile(QObject):
         
         for description, events in event_lists:
             count = len(events)
-            total_time = sum(duration for duration, _, _, _ in events)
+            total_time = sum(duration for duration, _, _, _, _ in events)
             avg_time = total_time / count if count > 0 else 0
             percentage = (total_time / wall_time * 100) if wall_time > 0 else 0
             

@@ -370,13 +370,13 @@ class QtEventProfiler:
         self.type_receiver_display.itemDoubleClicked.connect(self._onTypeReceiverDoubleClicked)
         right_splitter.addWidget(self.type_receiver_display)
         
-        # Set right splitter proportions (60% top, 40% bottom)
-        right_splitter.setSizes([360, 240])
+        # Set right splitter proportions (33% top, 67% bottom)
+        right_splitter.setSizes([240, 480])
         
         splitter.addWidget(right_splitter)
         
-        # Set main splitter proportions
-        splitter.setSizes([200, 600])
+        # Set main splitter proportions (keep left panel same size, expand right panel)
+        splitter.setSizes([200, 900])
         
         return widget
     
@@ -397,13 +397,6 @@ class QtEventProfiler:
         self.session_name_edit.setText(f"Qt_Profile_{len(self.profile_results) + 1}")
         layout.addWidget(self.session_name_edit)
         
-        # Slow threshold input
-        layout.addWidget(Qt.QLabel("Slow Threshold (ms):"))
-        self.slow_threshold_spin = Qt.QDoubleSpinBox()
-        self.slow_threshold_spin.setRange(0.1, 1000.0)
-        self.slow_threshold_spin.setValue(5.0)
-        self.slow_threshold_spin.setSuffix(" ms")
-        layout.addWidget(self.slow_threshold_spin)
         
         layout.addStretch()
         
@@ -432,9 +425,8 @@ class QtEventProfiler:
         
         # Start profiling session
         session_name = self.session_name_edit.text() or f"Qt_Profile_{len(self.profile_results) + 1}"
-        slow_threshold = self.slow_threshold_spin.value()
         
-        self.current_profile = app.start_profile(session_name, slow_threshold)
+        self.current_profile = app.start_profile(session_name)
         
         # Update UI
         self.is_profiling = True
@@ -510,7 +502,7 @@ class QtEventProfiler:
             item.setText(3, f"{row_data['avg_time']*1000:.2f}")
             item.setText(4, f"{row_data['percentage']:.1f}%")
             # Store receiver object for double-click inspection using weak reference
-            if 'receiver' in row_data:
+            if 'receiver' in row_data and not isinstance(row_data['receiver'], str):
                 item.receiver_ref = weakref.ref(row_data['receiver'])
         
         # Auto-resize columns for both displays
@@ -572,7 +564,7 @@ class Profiler(Module):
         """Initialize the user interface with tabbed profilers"""
         self.win = Qt.QMainWindow()
         self.win.setWindowTitle('Profiler')
-        self.win.resize(1000, 800)
+        self.win.resize(1300, 800)
         
         # Central widget with tabs
         central_widget = Qt.QWidget()

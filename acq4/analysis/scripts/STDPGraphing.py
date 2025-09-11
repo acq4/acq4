@@ -4,6 +4,7 @@ import numpy as np
 
 
 view = pg.GraphicsView()
+view.setObjectName("STDPGraphing_mainView")
 l = pg.GraphicsLayout(border=(100,100,100))
 view.setCentralItem(l)
 
