@@ -21,6 +21,7 @@ sg.setMeta('y', units='W', dec=True, minStep=1e-3, step=0.5, siPrefix=True)
 sg.setMeta('xy', units='J', dec=True, minStep=1e-9, step=0.5, siPrefix=True)
 
 plot = pg.PlotWidget()
+plot.setObjectName("Generator_testPlot")
 plot.show()
 
 def plotData():

@@ -7,6 +7,7 @@ from acq4 import modules
 from acq4.modules.Module import Module
 from acq4.util import Qt
 from acq4.util.debug import printExc
+from acq4.util.resource_monitor import ResourceMonitorWidget
 
 Ui_MainWindow = Qt.importTemplate(".ManagerTemplate")
 
@@ -38,6 +39,7 @@ class Manager(Module):
         self.ui.configList.itemDoubleClicked.connect(self.loadConfig)
         self.ui.moduleList.itemDoubleClicked.connect(self.loadSelectedModule)
         self.ui.quitBtn.clicked.connect(self.requestQuit)
+        
 
         state = self.manager.readConfigFile(self.stateFile)
         # restore window position
@@ -226,7 +228,11 @@ class Manager(Module):
         self.updateModList()
         self.showMessage("Loaded configuration '%s'." % cfg, 10000)
 
+
     def quit(self):
+        # Cleanup resource monitor
+        self.ui.resourceMonitor.cleanup()
+        
         # save ui configuration
         geom = self.win.geometry()
         state = {
