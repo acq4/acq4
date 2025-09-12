@@ -34,7 +34,6 @@ class MIES(Qt.QObject):
     def __init__(self):
         super(MIES, self).__init__(parent=None)
         self.igor = IgorBridge()
-        self.test_pulse_active = False
         self.currentData = None
         self.manual_active = False  # temporary fix for manual mode toggle button, see below
         self._exiting = False
@@ -87,6 +86,10 @@ class MIES(Qt.QObject):
         value = self.getCtrlValue(f'Check_DataAcqHS_0{hs}')
         return True if value == '1' else False
 
+    def enableTestPulse(self, enable:bool):
+        """Enable/disable test pulse for all active headstages"""
+        return self.igor('API_TestPulse', self.getWindowName(), 1 if enable else 0)
+
     def getHolding(self, hs, mode_override=None):
         mode = ""
         if mode_override:
@@ -132,32 +135,24 @@ class MIES(Qt.QObject):
         return clamp_mode
     
     def setAutoBias(self, hs, value: bool):
-        mode: str = self.getClampMode(hs)
-        if mode == "IC":
-            return self.setCtrl('check_DataAcq_AutoBias', value)
+        return self.setCtrl('check_DataAcq_AutoBias', value)
         
     def getAutoBias(self, hs):
-        # mode: str = self.getClampMode(hs)
-        # if mode == "IC":
         value = self.getCtrlValue('check_DataAcq_AutoBias')
         return True if value == "1" else False
         
     def setAutoBiasTarget(self, hs, value):
-        mode: str = self.getClampMode(hs)
-        # if mode == "VC":
-        #     return self.setCtrl('setvar_DataAcq_AutoBiasV', value * 1000)
-        if mode == "IC": # TODO verify with Luke
-            return self.setCtrl('setvar_DataAcq_AutoBiasV', value * 1000)
+        return self.setCtrl('setvar_DataAcq_AutoBiasV', value * 1000)
         
     def getAutoBiasTarget(self, hs):
         return float(self.getCtrlValue('setvar_DataAcq_AutoBiasV')) / 1000
     
-    def toggleTestPulseActive(self): # we have no way of sending a bool to MIES to enable/disable so the state has to be tracked
-        self.setCtrl('StartTestPulseButton')
-
     def setManualPressure(self, pressure):
         # set pressure in MIES, then verify pressure is set in MIES
         # (necessary due to lag in MIES setting pressure)
+        print("SET MANUAL PRESSURE", pressure)
+        import traceback
+        traceback.print_stack()
         v = self.setCtrl("setvar_DataAcq_SSPressure", pressure)
         p = self.getManualPressure()
         if not math.isclose(pressure, p, abs_tol=0.0001):
@@ -190,13 +185,13 @@ class MIES(Qt.QObject):
         else:
             raise ValueError(f"pressure source is not valid: {source}")
 
-    def setApproach(self, hs):
-        windowName = self.getWindowName()
-        return self.igor("P_SetPressureMode", windowName, hs, PRESSURE_METHOD_APPROACH)
+    # def setApproach(self, hs):
+    #     windowName = self.getWindowName()
+    #     return self.igor("P_SetPressureMode", windowName, hs, PRESSURE_METHOD_APPROACH)
 
-    def setSeal(self, hs):
-        windowName = self.getWindowName()
-        return self.igor("P_SetPressureMode", windowName, hs, PRESSURE_METHOD_SEAL)
+    # def setSeal(self, hs):
+    #     windowName = self.getWindowName()
+    #     return self.igor("P_SetPressureMode", windowName, hs, PRESSURE_METHOD_SEAL)
 
     def setHeadstageActive(self, hs, active):
         return self.setCtrl('Check_DataAcqHS_%02d' % hs, active)

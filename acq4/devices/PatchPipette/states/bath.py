@@ -68,7 +68,7 @@ class BathState(PatchPipetteState):
                 bathResistances = []
                 continue
 
-            if at_initial_pressure:
+            if config['bathPressure'] is not None and at_initial_pressure:
                 dev.pressureDevice.setPressure('regulator', config['bathPressure'])
                 at_initial_pressure = False
 

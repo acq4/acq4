@@ -88,6 +88,7 @@ class IgorBridge(Qt.QObject):
         self.run_sub_socket = True
         self.sub_socket_thread = threading.Thread(target=self.sub_socket_run, daemon=True)
         self.sub_socket_thread.start()
+        atexit.register(self.quit)
 
     def sub_socket_run(self):
         sub_socket = zmq_context.socket(zmq.SUB)
@@ -158,6 +159,7 @@ class IgorBridge(Qt.QObject):
         return 'Igor.exe' in subprocess.check_output(['wmic', 'process', 'get', 'description,executablepath'])        
 
     def __call__(self, cmd, *args):
+        print("IGOR REQUEST:", cmd, args)
         return self.req_thread.send(cmd, *args)
     
     def quit(self):
@@ -172,11 +174,14 @@ class IgorReqThread(threading.Thread):
         self.send_queue = queue.Queue()
         self.unresolved_futures = {}
         self.next_result_id = 0
+        self.running = True
         super().__init__(target=self._req_loop, daemon=True)
         self.start()
         atexit.register(self.stop)
 
     def send(self, cmd, *args):
+        if not self.running:
+            raise Exception("IGOR thread is already shut down; cannot send request.")
         fut = concurrent.futures.Future()
         self.send_queue.put((cmd, args, fut))
         return fut
@@ -185,18 +190,28 @@ class IgorReqThread(threading.Thread):
         self.stop_flag = True
 
     def _req_loop(self):
-        self.socket = zmq_context.socket(zmq.DEALER)
-        self.socket.setsockopt(zmq.IDENTITY, b"igorbridge")
-        self.socket.setsockopt(zmq.SNDTIMEO, 1000)
-        self.socket.setsockopt(zmq.RCVTIMEO, 100)
-        success = self.socket.connect(self.address)
+        try:
+            self.socket = zmq_context.socket(zmq.DEALER)
+            self.socket.setsockopt(zmq.IDENTITY, b"igorbridge")
+            self.socket.setsockopt(zmq.SNDTIMEO, 1000)
+            self.socket.setsockopt(zmq.RCVTIMEO, 100)
+            success = self.socket.connect(self.address)
 
+            while not self.stop_flag:
+                self._check_send()
+                self._check_recv()
+        finally:
+            self.running = False
 
-        while not self.stop_flag:
-            self._check_send()
-            self._check_recv()
+            # resolve all remaining futures and unhandled requests
+            print("IGOR thread quitting")
+            for f in self.unresolved_futures:
+                f.set_exception(RuntimeError("IGOR thread closed before getting result from this request"))
+            while self.send_queue.qsize() > 0:
+                cmd, params, fut = self.send_queue.get(block=False)
+                fut.set_exception(RuntimeError("IGOR thread closed before getting result from this request"))
 
-        self.socket.close()
+            self.socket.close()
 
     def _check_send(self):
         # Send some (but not all) messages waiting in the queue
