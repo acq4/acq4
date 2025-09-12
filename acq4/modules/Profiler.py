@@ -1,12 +1,9 @@
 import yappi
-import time
-import re
 import weakref
 from datetime import datetime
 from acq4.modules.Module import Module
 from acq4.util import Qt
 from acq4.util.codeEditor import invokeCodeEditor
-from pyqtgraph import TableWidget
 import pyqtgraph as pg
 
 

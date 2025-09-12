@@ -69,7 +69,8 @@ class QApplicationProfile(QObject):
         
         # Raw event data - analysis deferred
         self._events = []  # Store raw (duration, event_type, receiver, event) tuples
-        
+        self.receiver_descriptions = {}  # {qobject: (description_str, [(parent_name, parent_type), (grandparent_name, grandparent_type), ...])}
+
         # Safety counters
         self._exceptions = 0
         self._active = True
@@ -80,23 +81,36 @@ class QApplicationProfile(QObject):
             return
             
         # Capture receiver description at event time for later use if receiver gets garbage collected
-        try:
-            if isinstance(receiver, str):
-                receiver_desc = receiver
-            else:
-                class_name = type(receiver).__name__
-                object_name = getattr(receiver, 'objectName', lambda: '')()
-                if object_name:
-                    receiver_desc = f"{class_name}({object_name})"
-                else:
-                    receiver_desc = class_name
-        except Exception:
-            receiver_desc = "<unknown>"
+        desc = self.receiver_description(receiver)
             
         # Store raw event data with weak reference to receiver and captured description
         receiver_ref = weakref.ref(receiver)
-        self._events.append((duration, event_type, receiver_ref, event, receiver_desc))    
-    
+        self._events.append((duration, event_type, receiver_ref, event, desc))
+
+    def receiver_description(self, receiver):
+        """Return a description of the given receiver object
+        """
+        if receiver in self.receiver_descriptions:
+            return self.receiver_descriptions[receiver]
+        
+        # string description from class/qobject name
+        class_name = type(receiver).__name__
+        object_name = getattr(receiver, 'objectName', lambda: '')()
+        if object_name:
+            desc = f"{class_name}({object_name})"
+        else:
+            desc = class_name
+
+        # parent chain description
+        parent_chain = []
+        obj = receiver
+        while obj is not None:
+            name = obj.objectName()
+            parent_chain.append((name, type(obj)))
+            obj = obj.parent()
+
+        self.receiver_descriptions[receiver] = (desc, parent_chain)
+
     def stop(self):
         """Stop collecting statistics for this profile."""
         self._active = False
