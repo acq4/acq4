@@ -69,47 +69,16 @@ class QApplicationProfile(QObject):
         
         # Raw event data - analysis deferred
         self._events = []  # Store raw (duration, event_type, receiver, event) tuples
-        self.receiver_descriptions = {}  # {qobject: (description_str, [(parent_name, parent_type), (grandparent_name, grandparent_type), ...])}
 
         # Safety counters
         self._exceptions = 0
         self._active = True
     
-    def record_event(self, duration, event_type, receiver, event):
+    def record_event(self, rec):
         """Record raw event data for later analysis. Called by ProfiledQApplication."""
         if not self._active:
             return
-            
-        # Capture receiver description at event time for later use if receiver gets garbage collected
-        desc = self.receiver_description(receiver)
-            
-        # Store raw event data with weak reference to receiver and captured description
-        receiver_ref = weakref.ref(receiver)
-        self._events.append((duration, event_type, receiver_ref, event, desc))
-
-    def receiver_description(self, receiver):
-        """Return a description of the given receiver object
-        """
-        if receiver in self.receiver_descriptions:
-            return self.receiver_descriptions[receiver]
-        
-        # string description from class/qobject name
-        class_name = type(receiver).__name__
-        object_name = getattr(receiver, 'objectName', lambda: '')()
-        if object_name:
-            desc = f"{class_name}({object_name})"
-        else:
-            desc = class_name
-
-        # parent chain description
-        parent_chain = []
-        obj = receiver
-        while obj is not None:
-            name = obj.objectName()
-            parent_chain.append((name, type(obj)))
-            obj = obj.parent()
-
-        self.receiver_descriptions[receiver] = (desc, parent_chain)
+        self._events.append(rec)
 
     def stop(self):
         """Stop collecting statistics for this profile."""
@@ -139,7 +108,9 @@ class QApplicationProfile(QObject):
         events_by_group = defaultdict(list)
         
         for event_data in self._events:
-            duration, event_type, receiver_ref, event, receiver_desc = event_data
+            event_type = event_data['event_type']
+            receiver_ref = event_data['receiver']
+            description = event_data['description']
             
             if group_by == 'type':
                 group_key = event_type
@@ -147,7 +118,7 @@ class QApplicationProfile(QObject):
                 receiver = receiver_ref()
                 if receiver is None:
                     # Use the captured description for dead receivers
-                    group_key = (event_type, f"{receiver_desc} <deleted>")
+                    group_key = (event_type, f"{description} <deleted>")
                 else:
                     group_key = (event_type, receiver)
             else:
@@ -158,7 +129,7 @@ class QApplicationProfile(QObject):
         # Add grouped lists, sorted by total time descending
         group_totals = []
         for group_key, events in events_by_group.items():
-            total_time = sum(duration for duration, _, _, _, _ in events)
+            total_time = sum(event['duration'] for event in events)
             
             if group_by == 'type':
                 event_type = group_key
@@ -194,7 +165,7 @@ class QApplicationProfile(QObject):
         
         for description, events in event_lists:
             count = len(events)
-            total_time = sum(duration for duration, _, _, _, _ in events)
+            total_time = sum(event['duration'] for event in events)
             avg_time = total_time / count if count > 0 else 0
             percentage = (total_time / wall_time * 100) if wall_time > 0 else 0
             
@@ -223,7 +194,6 @@ class QApplicationProfile(QObject):
         return row_stats
     
 
-
 class ProfiledQApplication(QApplication):
     """QApplication subclass that manages multiple Qt event loop profiling sessions.
     
@@ -234,9 +204,13 @@ class ProfiledQApplication(QApplication):
     
     def __init__(self, *args):
         super().__init__(*args)
-        
+
+        # Cache of receiver descriptions to avoid repeated introspection
+        # {qobject: (description_str, [(parent_name, parent_type), (grandparent_name, grandparent_type), ...])}
+        self.receiver_descriptions = weakref.WeakKeyDictionary()
+
         # Active profiles
-        self._active_profiles = []
+        self._active_profiles: list[QApplicationProfile] = []
         
         # Guard against re-entrancy (should be rare but possible)
         self._in_notify = False
@@ -263,30 +237,65 @@ class ProfiledQApplication(QApplication):
             return super().notify(receiver, event)
         
         self._in_notify = True
-        start_time = time.perf_counter()
-        exception_occurred = False
-        
         try:
-            return super().notify(receiver, event)
-        except Exception:
-            exception_occurred = True
-            raise
+            # Get receiver description (cached) before receiver is potentially deleted
+            desc, parent_chain = self.receiver_description(receiver)
+        
+            # Dispatch raw data to all active profiles (minimal work)
+            start_time = time.perf_counter()
+            try:
+                return super().notify(receiver, event)
+            finally:
+                duration = time.perf_counter() - start_time
+                rec = {
+                    'event': event,
+                    'receiver': weakref.ref(receiver),
+                    'duration': duration,
+                    'description': desc,
+                    'parent_chain': parent_chain,
+                    'event_type': int(event.type()),
+                }
+                for profile in self._active_profiles:
+                    profile.record_event(rec)
+                
+                # Update exponential averaging for activity fraction
+                self._update_activity_average(duration)
+
         finally:
             self._in_notify = False
 
-            # Timing collection - keep this as fast as possible
-            duration = time.perf_counter() - start_time
-            event_type = int(event.type())
-            
-            # Update exponential averaging for activity fraction
-            self._update_activity_average(duration)
-            
-            # Dispatch raw data to all active profiles (minimal work)
-            for profile in self._active_profiles:
-                if profile.is_active():
-                    profile.record_event(duration, event_type, receiver, event)
-                    if exception_occurred:
-                        profile._exceptions += 1
+    def receiver_description(self, receiver):
+        """Return a description of the given receiver object
+        """
+        if receiver in self.receiver_descriptions:
+            return self.receiver_descriptions[receiver]
+        
+        # string description from class/qobject name
+        try:
+            class_name = type(receiver).__name__
+            object_name = getattr(receiver, 'objectName', lambda: '')()
+            if object_name:
+                desc = f"{class_name}({object_name})"
+            else:
+                desc = class_name
+        except RuntimeError:
+            # Qt object has been deleted - use generic description
+            desc = f"<deleted {type(receiver).__name__}>"
+
+        # parent chain description
+        parent_chain = []
+        try:
+            obj = receiver
+            while obj is not None:
+                name = obj.objectName()
+                parent_chain.append((name, type(obj)))
+                obj = obj.parent()
+        except RuntimeError:
+            # Qt object has been deleted during traversal
+            parent_chain.append(("<deleted>", type(None)))
+
+        self.receiver_descriptions[receiver] = (desc, parent_chain)
+        return self.receiver_descriptions[receiver]            
     
     def get_active_profiles(self):
         """Get list of currently active profile instances."""

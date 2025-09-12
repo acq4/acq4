@@ -40,8 +40,6 @@ class Manager(Module):
         self.ui.moduleList.itemDoubleClicked.connect(self.loadSelectedModule)
         self.ui.quitBtn.clicked.connect(self.requestQuit)
         
-        # Setup resource monitoring widget
-        self._setupResourceMonitor()
 
         state = self.manager.readConfigFile(self.stateFile)
         # restore window position
@@ -230,27 +228,10 @@ class Manager(Module):
         self.updateModList()
         self.showMessage("Loaded configuration '%s'." % cfg, 10000)
 
-    def _setupResourceMonitor(self):
-        """Setup resource monitoring widget to replace the original qtProfileLabel."""
-        # Create the resource monitor widget
-        self.resourceMonitor = ResourceMonitorWidget()
-        
-        # Find the qtProfileLabel in the layout and replace it
-        layout = self.ui.verticalLayout
-        for i in range(layout.count()):
-            item = layout.itemAt(i)
-            if item.widget() == self.ui.qtProfileLabel:
-                # Remove the old label
-                self.ui.qtProfileLabel.setVisible(False)
-                layout.removeWidget(self.ui.qtProfileLabel)
-                # Insert the resource monitor at the same position
-                layout.insertWidget(i, self.resourceMonitor)
-                break
 
     def quit(self):
-        # Cleanup resource monitor if it exists
-        if hasattr(self, 'resourceMonitor'):
-            self.resourceMonitor.cleanup()
+        # Cleanup resource monitor
+        self.ui.resourceMonitor.cleanup()
         
         # save ui configuration
         geom = self.win.geometry()

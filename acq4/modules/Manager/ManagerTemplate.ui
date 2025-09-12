@@ -134,26 +134,7 @@
        </spacer>
       </item>
       <item>
-       <widget class="QLabel" name="qtProfileLabel">
-        <property name="text">
-         <string>Qt Activity: ---%</string>
-        </property>
-        <property name="alignment">
-         <set>Qt::AlignCenter</set>
-        </property>
-        <property name="styleSheet">
-         <string notr="true">QLabel { 
-  font-weight: bold; 
-  color: #666666;
-  background-color: #f0f0f0;
-  border: 1px solid #cccccc;
-  border-radius: 3px;
-  padding: 2px;
-}</string>
-        </property>
-        <property name="visible">
-         <bool>false</bool>
-        </property>
+       <widget class="ResourceMonitorWidget" name="resourceMonitor">
        </widget>
       </item>
       <item>
@@ -181,6 +162,11 @@
    <class>LogButton</class>
    <extends>QPushButton</extends>
    <header>acq4.LogWindow</header>
+  </customwidget>
+  <customwidget>
+   <class>ResourceMonitorWidget</class>
+   <extends>QWidget</extends>
+   <header>acq4.util.resource_monitor</header>
   </customwidget>
  </customwidgets>
  <resources/>
