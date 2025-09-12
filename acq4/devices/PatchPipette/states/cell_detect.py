@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from collections import deque
 from threading import Lock
+import time
 from typing import Any, Iterable
 
+from acq4.Manager import getManager
 import numpy as np
 import pyqtgraph as pg
 
@@ -117,8 +119,9 @@ class CellDetectAnalysis(SteadyStateAnalysisBase):
         return self._last_measurement and self._last_measurement['cell_detected_fast']
 
     def cell_detected_slow(self):
-        buffer_full = len(self._last_n_slow_detections) == self._last_n_slow_detections.maxlen
-        return buffer_full and all(self._last_n_slow_detections)
+        return len(self._last_n_slow_detections) == self._last_n_slow_detections.maxlen and all(
+            self._last_n_slow_detections
+        )
 
     def tip_is_broken(self):
         return self._last_measurement and self._last_measurement['tip_is_broken']
@@ -261,13 +264,11 @@ class CellDetectState(PatchPipetteState):
         self.direction_unit = self._calc_direction()
         self._hasWiggled = False
         self._wiggleLock = Lock()
-        self._initialPos = self.dev.pipetteDevice.globalPosition()
 
     def run(self):
         self.dev.ensureCell()
         config = self.config
         self.monitorTestPulse()
-
         while not self.weTookTooLong():
             if detectedThresholdSpeed := self.targetCellFound():
                 if self._moveFuture is not None:
@@ -380,23 +381,26 @@ class CellDetectState(PatchPipetteState):
 
         endpoint = None
 
-        if config['advanceMode'] != 'target':
+        if config['advanceMode'] == 'target':
+            # target mode
+            if config['maxAdvanceDistancePastTarget'] is not None:
+                endpoint = target + pip.globalDirection() * config['maxAdvanceDistancePastTarget']
+            else:
+                raise ValueError('Cell detect state requires maxAdvanceDistancePastTarget when advanceMode==target')
+        else:
             if config['maxAdvanceDistance'] is not None:
                 # max search distance
-                endpoint = self._initialPos + pip.globalDirection() * config['maxAdvanceDistance']
+                startPos = pip.globalPosition()
+                endpoint = startPos + self.direction_unit * config['maxAdvanceDistance']
             elif config['maxAdvanceDepthBelowSurface'] is not None and pip.globalDirection()[2] < 0:
                 # max surface depth
                 endDepth = surface - config['maxAdvanceDepthBelowSurface']
-                endpoint = pip.positionAtDepth(endDepth)
-        elif config['maxAdvanceDistancePastTarget'] is not None:
-            # target mode
-            endpoint = target + pip.globalDirection() * config['maxAdvanceDistancePastTarget']
-
-        if endpoint is None:
-            raise ValueError(
-                "Cell detect state requires one of maxAdvanceDistance, maxAdvanceDepthBelowSurface, or"
-                " maxAdvanceDistancePastTarget."
-            )
+                startPos = pip.globalPosition()
+                travelDepth = endDepth - startPos[2]
+                travel = self.direction_unit * (travelDepth / self.direction_unit[2])
+                endpoint = startPos + travel
+            else:
+                raise ValueError('Cell detect state requires maxAdvanceDistance or maxAdvanceDepthBelowSurface when advanceMode!=target')
 
         return endpoint
 
