@@ -1,6 +1,3 @@
-# ABOUTME: Resource monitor widget for displaying Qt activity and system memory usage
-# ABOUTME: Provides a unified widget for monitoring system resources in ACQ4 applications
-
 import psutil
 import pyqtgraph as pg
 from ..util import Qt
