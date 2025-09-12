@@ -253,6 +253,11 @@ class ApproachState(PatchPipetteState):
 
         return self.config["nextState"]
 
+    def processAtLeastOneTestPulse(self):
+        tps = super().processAtLeastOneTestPulse()
+        self._analysis.process_test_pulses(tps)
+        return tps
+
     def _maybeTakeACellfie(self):
         config = self.config
         if (
