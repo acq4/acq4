@@ -3,7 +3,6 @@ from collections import OrderedDict
 from acq4.util.mies import MIES
 from .patch_clamp import MIESPatchClamp
 from .pressure_control import MIESPressureControl
-from .states import MIESPatchPipetteStateManager
 from ..PatchPipette import PatchPipette
 
 from acq4.util import Qt
@@ -40,7 +39,6 @@ class MIESPatchPipette(PatchPipette):
     
     Requires a running MIES instance with configured headstage hardware.
     """
-    defaultStateManagerClass = MIESPatchPipetteStateManager
 
     def __init__(self, deviceManager, config, name):
         self.mies = MIES.getBridge()
@@ -86,7 +84,3 @@ class MIESPatchPipette(PatchPipette):
         if eventData is not None:
             newEv.update(eventData)
         self.sigNewEvent.emit(self, newEv)
-
-    def quit(self):
-        self.mies.quit()
-        super(MIESPatchPipette, self).quit()
