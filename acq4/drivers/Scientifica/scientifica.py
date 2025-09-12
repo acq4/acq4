@@ -11,7 +11,7 @@ from acq4.drivers.SerialDevice import SerialDevice
 from .control_thread import ScientificaControlThread
 from .serial import ScientificaSerial
 from acq4.util.debug import printExc
-from ...util.typing import Number
+from ...util.acq4_typing import Number
 
 # Data provided by Scientifica
 _device_types = """
@@ -332,6 +332,7 @@ class Scientifica:
               prevent user confusion, setting this value programmatically is discouraged).
             * objLift: Distance to lift the objectives before switching (int; 1 = 10 nm)
             * objDisp: Distance between focal planes of objectives (int; 1 = 10 nm)
+            * objL1, objL2: Legacy objective switching parameters for version 2 devices.
 
         Notes
         -----
@@ -502,10 +503,10 @@ class Scientifica:
 
     def getBaudrate(self):
         return self.serial.getBaudrate()
-    
+
     def setBaudrate(self, rate):
         return self.serial.setBaudrate(rate)
-    
+
     def getObjective(self):
         """Return the currently active objective slot (int; only for MOC devices)"""
         return int(self.serial.send("obj"))

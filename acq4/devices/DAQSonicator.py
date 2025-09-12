@@ -26,28 +26,64 @@ def calculate_slew_rate(wave: np.ndarray, dt: float):
 
 
 class DAQSonicator(Sonicator):
-    """Sonicator controlled by a DAQ device.
-    Config
-    ------
-    capacitance : float
-        The capacitance of the piezoelectric transducer in Farads. This is used to calculate the voltage required to hit
-        a given frequency, as well as the limits of the voltage output.
-    max slew rate : float
-        The maximum safe slew rate of the piezoelectric transducer in V/μs. This is used to calculate the voltage
-        output (default 3.9 V/μs).
-    command : dict
-        The config of the analog output channel in charge of the voltage output to the sonicator.
-    disable : dict (optional)
-        The config of the output channel on which a 5V signal will disable the sonicator.
-    overload : dict (optional)
-        The config of the input channel on which a 5V signal will indicate and overload.
-    protocols : dict
-        Each protocol is a dictionary, in line with the output of Stimulus.save(), for example::
-            clean:
-                type: "Sine"
-                args:
-                    start_time: 0
-                    duration: 5
+    """
+    A sonicator device controlled through DAQ analog/digital channels.
+    
+    Used for ultrasonic cleaning of pipettes and other lab equipment.
+    
+    Configuration options:
+    
+    * **capacitance** (float, optional): Piezoelectric transducer capacitance in Farads
+      Used to calculate voltage requirements for specific frequencies
+    
+    * **max slew rate** (float, optional): Maximum safe slew rate in V/μs (default: 3.9)
+      Safety limit for piezoelectric transducer voltage changes
+    
+    * **command** (dict, required): DAQ analog output channel for voltage control
+        - device: Name of DAQ device
+        - channel: DAQ channel (e.g., '/Dev1/ao0')
+        - type: 'ao'
+        - scale: Voltage scaling factor (optional)
+    
+    * **disable** (dict, optional): DAQ digital output to disable sonicator
+        - device: Name of DAQ device  
+        - channel: DAQ channel (e.g., '/Dev1/port0/line0')
+        - type: 'do'
+        - holding: Default state (0 or 1)
+    
+    * **overload** (dict, optional): DAQ digital input to detect overload condition
+        - device: Name of DAQ device
+        - channel: DAQ channel (e.g., '/Dev1/port0/line1') 
+        - type: 'di'
+    
+    * **protocols** (dict): Pre-defined stimulus protocols
+        Each protocol follows neuroanalysis Stimulus format with type, args, and items.
+        
+    Example configuration::
+    
+        Sonicator1:
+            driver: 'DAQSonicator'
+            max slew rate: 3.8 * V / µs
+            command:
+                device: 'DAQ'
+                channel: '/Dev1/ao0'
+                type: 'ao'
+                scale: 1 / 20
+            disable:
+                device: 'DAQ'
+                channel: '/Dev1/port0/line0'
+                type: 'do'
+                holding: 1
+            overload:
+                device: 'DAQ'
+                channel: '/Dev1/port0/line1'
+                type: 'di'
+            protocols:
+                clean:
+                    type: "Sine"
+                    args:
+                        start_time: 0
+                        duration: 5
                     frequency: 150000
                     amplitude: 1
             quick cleanse:

@@ -32,9 +32,9 @@ It is important to first understand that a 'configuration' is a single document,
     storageDir: "/home/user/data"
     defaultCompression: None
     
-In the example above, the name "storageDir" is assigned the value "/home/user/data".
+In the example above, the name "storageDir" is assigned the value "/home/user/data". The values in this configuration syntax are evaluated as Python expressions, so they can be strings, numbers, lists, or even more complex objects.
 Values may also contain nested lists of name:value pairs:
-    
+
 ::
     
     Camera:
@@ -56,6 +56,21 @@ Since this configuration tree can become quite large and complex, it is often us
         
 This example would read the entire contents of 'folderTypes.cfg' and insert that as the value for 'folderTypes'.
 
+Since the values in the config are evaluated as Python expressions, we can do some more complex things like conditionally setting configuration values based on the machine name (``hostname``), user (``username``), and environment variables (``environ``). For example::
+
+    # automatically set the storage directory based on the user and hostname
+    storageDir: os.path.join(environ['HOME'], 'data', hostname)
+
+::
+
+    # automatically configure a hardware serial number based on the machine name
+    devices:
+        Camera:
+            driver: 'SomeCameraDriver'
+            serial: {'rig1': '123456', 'rig2': '654321'}[hostname]
+
+This feature allows you to create a single configuration file that can be used across multiple machines, with each machine automatically using the correct settings based on its hostname or other environment variables.
+
 Further notes about this syntax:
     
     * You can use "double" or 'single' quotes, but not "both'
@@ -63,7 +78,7 @@ Further notes about this syntax:
     * Some options will call for a list of values. This can be given just by separating the values with commas inline like ``value1, value2`` or with brackets like ``[value1, value2]``
     * All values are evaluated as Python expressions and basic unit symbols are provided, 
       so it is possible to include mathematical expressions like ``scale: (200 * pA) / (100 * mV)`` 
-    * Finally, you may add comments to .cfg if they are preceded with a hash (#) symbol
+    * You may add comments to .cfg if they are preceded with a hash (#) symbol
     
     
 .. _userConfigurationStructure:

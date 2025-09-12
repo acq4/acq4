@@ -19,7 +19,7 @@ class ResealAnalysis(SteadyStateAnalysisBase):
         return {
             '': [
                 pg.InfiniteLine(movable=False, pos=representative._stretch_threshold, angle=0, pen=pg.mkPen('w')),
-                pg.InfiniteLine(movable=False, pos=representative._tear_threshold, angle=0, pen=pg.mkPen('w'))
+                pg.InfiniteLine(movable=False, pos=representative._tearing_threshold, angle=0, pen=pg.mkPen('w'))
             ]
         }
 
@@ -36,13 +36,15 @@ class ResealAnalysis(SteadyStateAnalysisBase):
             plots[''].append(dict(x=analysis["time"], y=analysis["repair_ratio"], pen=pg.mkPen(90, 140, 255), name=None if names else 'Repair Ratio'))
             plots[''].append(dict(x=analysis["time"], y=plottable_booleans(analysis["stretching"]), pen=pg.mkPen('y'), symbol='x', name=None if names else 'Stretching'))
             plots[''].append(dict(x=analysis["time"], y=plottable_booleans(analysis["tearing"]), pen=pg.mkPen('r'), symbol='o', name=None if names else 'Tearing'))
+            plots[''].append(dict(x=analysis["time"], y=plottable_booleans(analysis["torn"]), pen=pg.mkPen('r'), symbol='x', name=None if names else 'Torn'))
             names = True
         return plots
 
-    def __init__(self, stretch_threshold: float, tear_threshold: float, detection_tau: float, repair_tau: float):
+    def __init__(self, stretch_threshold: float, tearing_threshold: float, torn_threshold: float, detection_tau: float, repair_tau: float):
         super().__init__()
         self._stretch_threshold = stretch_threshold
-        self._tear_threshold = tear_threshold
+        self._tearing_threshold = tearing_threshold
+        self._torn_threshold = torn_threshold
         self._detection_tau = detection_tau
         self._repair_tau = repair_tau
 
@@ -53,6 +55,10 @@ class ResealAnalysis(SteadyStateAnalysisBase):
     def is_tearing(self) -> bool:
         """Return True if the resistance is decreasing."""
         return self._last_measurement and self._last_measurement['tearing']
+
+    def is_torn(self) -> bool:
+        """Return True if the resistance is consistently too low."""
+        return self._last_measurement and self._last_measurement['torn']
 
     def process_measurements(self, measurements: np.ndarray) -> np.ndarray:
         ret_array = np.zeros(
@@ -66,12 +72,13 @@ class ResealAnalysis(SteadyStateAnalysisBase):
                 ('repair_ratio', float),
                 ('stretching', bool),
                 ('tearing', bool),
+                ('torn', bool),
             ])
         for i, measurement in enumerate(measurements):
             start_time, resistance = measurement
             if i == 0:
                 if self._last_measurement is None:
-                    ret_array[i] = (start_time, resistance, 1, 1, 0, 0, False, False)
+                    ret_array[i] = (start_time, resistance, 1, 1, 0, 0, False, False, False)
                     self._last_measurement = ret_array[i]
                     continue
                 else:
@@ -87,7 +94,8 @@ class ResealAnalysis(SteadyStateAnalysisBase):
                 dt, last_measurement['repair_avg'], resistance, self._repair_tau)
 
             is_stretching = detection_ratio > self._stretch_threshold or repair_ratio > self._stretch_threshold
-            is_tearing = detection_ratio < self._tear_threshold or repair_ratio < self._tear_threshold
+            is_tearing = detection_ratio < self._tearing_threshold or repair_ratio < self._tearing_threshold
+            is_torn = repair_avg < self._torn_threshold
             ret_array[i] = (
                 start_time,
                 resistance,
@@ -97,6 +105,7 @@ class ResealAnalysis(SteadyStateAnalysisBase):
                 repair_ratio,
                 is_stretching,
                 is_tearing,
+                is_torn,
             )
             self._last_measurement = ret_array[i]
         return ret_array
@@ -149,10 +158,13 @@ class ResealState(PatchPipetteState):
         Maximum access resistance ratio before the membrane is considered to be stretching (default is 1.05)
     tearDetectionThreshold : float
         Minimum access resistance ratio before the membrane is considered to be tearing (default is 1)
+    tornDetectionThreshold : float
+        Ratio of resistance divided by initial resistance below which the membrane is considered to be torn, using the
+        repairTau (default is 0.5)
     retractionSuccessDistance : float
         Distance (meters) to retract before checking for successful reseal (default is 200 µm)
-    resealSuccessResistance : float
-        Resistance (Ω) above which the reseal is considered successful (default is 500MΩ)
+    resealSuccessResistanceMultiplier : float
+        The reseal is considered successful when resistance exceeds initial resistance times this value (default is 4)
     resealSuccessDuration : float
         Duration (seconds) to wait after successful reseal before transitioning to the slurp (default is 5s)
     postSuccessRetractionSpeed : float
@@ -191,13 +203,14 @@ class ResealState(PatchPipetteState):
         'maxRetractionSpeed': {'type': 'float', 'default': 10e-6, 'suffix': 'm/s'},
         'retractionStepInterval': {'type': 'float', 'default': 5, 'suffix': 's'},
         'retractionSuccessDistance': {'type': 'float', 'default': 200e-6, 'suffix': 'm'},
-        'resealSuccessResistance': {'type': 'float', 'default': 500e6, 'suffix': 'Ω'},
+        'resealSuccessResistanceMultiplier': {'type': 'float', 'default': 4.0},
         'resealSuccessDuration': {'type': 'float', 'default': 5, 'suffix': 's'},
         'postSuccessRetractionSpeed': {'type': 'float', 'default': 6e-6, 'suffix': 'm/s'},
         'detectionTau': {'type': 'float', 'default': 1, 'suffix': 's'},
         'repairTau': {'type': 'float', 'default': 10, 'suffix': 's'},
         'stretchDetectionThreshold': {'type': 'float', 'default': 0.005},
         'tearDetectionThreshold': {'type': 'float', 'default': -0.00128},
+        'tornDetectionThreshold': {'type': 'float', 'default': 0.5},
         'slurpPressure': {'type': 'float', 'default': -10e3, 'suffix': 'Pa'},
         'slurpRetractionSpeed': {'type': 'float', 'default': 10e-6, 'suffix': 'm/s'},
         'slurpDuration': {'type': 'float', 'default': 10, 'suffix': 's'},
@@ -211,12 +224,8 @@ class ResealState(PatchPipetteState):
         self._lastResistance = None
         self._firstSuccessTime = None
         self._startPosition = np.array(self.dev.pipetteDevice.globalPosition())
-        self._analysis = ResealAnalysis(
-            stretch_threshold=self.config['stretchDetectionThreshold'],
-            tear_threshold=self.config['tearDetectionThreshold'],
-            detection_tau=self.config['detectionTau'],
-            repair_tau=self.config['repairTau'],
-        )
+        self._analysis = None
+        self._preAnalysisTpss = []
 
     def nuzzle(self):
         """Wiggle the pipette around inside the cell to clear space for a nucleus to be extracted."""
@@ -252,15 +261,30 @@ class ResealState(PatchPipetteState):
 
     def isStretching(self) -> bool:
         """Return True if the resistance is increasing too quickly."""
-        return self._analysis.is_stretching()
+        return self._analysis and self._analysis.is_stretching()
 
     def isTearing(self) -> bool:
         """Return True if the resistance is decreasing."""
-        return self._analysis.is_tearing()
+        return self._analysis and self._analysis.is_tearing()
+
+    def isTorn(self) -> bool:
+        """Return True if the resistance is way too low."""
+        return self._analysis and self._analysis.is_torn()
+
+    def successResistanceThreshold(self):
+        """Return the resistance threshold for a successful reseal."""
+        if self._lastResistance is None:
+            return np.inf
+        return self.config["resealSuccessResistanceMultiplier"] * self.preAnalysisResistance()
+
+    def preAnalysisResistance(self):
+        if len(self._preAnalysisTpss) < 10:
+            return np.inf
+        return np.mean([tp.analysis['steady_state_resistance'] for tp in self._preAnalysisTpss])
 
     def isRetractionSuccessful(self):
         if self.retractionDistance() > self.config['retractionSuccessDistance'] or (
-                self._lastResistance is not None and self._lastResistance > self.config['resealSuccessResistance']
+                self._lastResistance is not None and self._lastResistance > self.successResistanceThreshold()
         ):
             if self._firstSuccessTime is None:
                 self._firstSuccessTime = ptime.time()
@@ -273,7 +297,18 @@ class ResealState(PatchPipetteState):
     def processAtLeastOneTestPulse(self):
         """Wait for at least one test pulse to be processed."""
         tps = super().processAtLeastOneTestPulse()
-        self._lastResistance = self._analysis.process_test_pulses(tps)['resistance'][-1]
+        if self._analysis is None:
+            self._preAnalysisTpss += tps
+            if len(self._preAnalysisTpss) >= 10:
+                self._analysis = ResealAnalysis(
+                    stretch_threshold=self.config['stretchDetectionThreshold'],
+                    tearing_threshold=self.config['tearDetectionThreshold'],
+                    torn_threshold=self.preAnalysisResistance() * self.config['tornDetectionThreshold'],
+                    detection_tau=self.config['detectionTau'],
+                    repair_tau=self.config['repairTau'],
+                )
+        else:
+            self._lastResistance = self._analysis.process_test_pulses(tps)['resistance'][-1]
         return tps
 
     def run(self):
@@ -310,6 +345,12 @@ class ResealState(PatchPipetteState):
                         maxSpeed=self.config['maxRetractionSpeed'],
                         interval=config['retractionStepInterval'],
                     )
+            elif self.isTorn():
+                if retraction_future and not retraction_future.isDone():
+                    retraction_future.stop()
+                self.setState("tissue is torn beyond repair")
+                self._taskDone(interrupted=True, error="Tissue is torn beyond repair.")
+                return config['fallbackState']
             elif retraction_future is None or retraction_future.wasInterrupted():
                 if recovery_future is not None and not recovery_future.isDone():
                     recovery_future.stop()
@@ -338,10 +379,9 @@ class ResealState(PatchPipetteState):
 
     def _retractFromTissue(self):
         # move out of the tissue more quickly
-        dev = self.dev
-        direction = dev.pipetteDevice.globalDirection()
-        return dev.pipetteDevice._moveToGlobal(
-            self.surfaceIntersectionPosition(direction), speed=self.config['postSuccessRetractionSpeed'])
+        pip = self.dev.pipetteDevice
+        surface = pip.scopeDevice().surfaceDepth()
+        return pip.advance(surface, speed=self.config['postSuccessRetractionSpeed'])
 
     def retractionDistance(self):
         return np.linalg.norm(np.array(self.dev.pipetteDevice.globalPosition()) - self._startPosition)

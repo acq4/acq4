@@ -20,6 +20,30 @@ def map_frequency(source_freq, source_min=40e3, source_max=170e3):
 
 
 class MockSonicator(Sonicator):
+    """
+    Simulated sonicator device with audio feedback for testing and demonstration.
+    
+    Maps ultrasonic frequencies (40-170kHz) to audible range (100-2000Hz) and 
+    plays audio through speakers to simulate sonicator operation without hardware.
+    
+    Configuration options (see Sonicator base class):
+    
+    * **protocols** (dict): Pre-defined stimulus protocols
+        Each protocol follows neuroanalysis Stimulus format
+    
+    Example configuration::
+    
+        MockSonicator:
+            driver: 'MockSonicator'
+            protocols:
+                clean:
+                    type: "Sine"
+                    args:
+                        start_time: 0
+                        duration: 5 * s
+                        frequency: 150 * kHz
+                        amplitude: 1
+    """
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.audio = pyaudio.PyAudio()

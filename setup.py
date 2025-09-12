@@ -91,5 +91,7 @@ setup(
     author_email='luke.campagnola@gmail.com',
     version=version,
     packages=packages,
+    package_data={
+        'acq4': ['**/*.ui'],
+    },
 )
-

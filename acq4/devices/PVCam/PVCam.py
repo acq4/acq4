@@ -8,6 +8,71 @@ from acq4.util.Mutex import Mutex
 
 
 class PVCam(Camera):
+    """
+    Camera driver for Photometrics cameras using the PVCam library.
+    
+    Supports Photometrics cameras like QuantEM, Prime, and other scientific cameras
+    that use the PVCam driver interface.
+    
+    PVCam-specific configuration options:
+    
+    * **serial** (str, optional): Camera serial number string
+      If not specified, the first available camera will be used.
+      Use incorrect serial to see available options in error message.
+    
+    Standard Camera configuration options (see Camera base class):
+    
+    * **parentDevice** (str, optional): Name of parent optical device (microscope, etc.)
+    
+    * **transform** (dict, optional): Spatial transform relative to parent device
+        - pos: Position offset [x, y]
+        - scale: Scale factors [x, y] in m/pixel  
+        - angle: Rotation angle in radians
+    
+    * **exposeChannel** (dict, optional): DAQ channel for exposure signal recording
+        - device: Name of DAQ device
+        - channel: DAQ channel path (e.g., '/Dev1/port0/line8')
+        - type: 'di'
+    
+    * **triggerOutChannel** (dict, optional): DAQ channel to receive camera trigger signal
+        - device: Name of DAQ device
+        - channel: DAQ channel path (e.g., '/Dev1/PFI5')
+    
+    * **triggerInChannel** (dict, optional): DAQ channel for triggering camera
+        - device: Name of DAQ device
+        - channel: DAQ channel path (e.g., '/Dev1/port0/line28')
+        - type: 'do'
+        - invert: Whether to invert trigger signal (bool)
+    
+    * **params** (dict, optional): Camera parameters to set at startup
+        - exposure: Default exposure time
+        - TEMP_SETPOINT: Temperature setpoint (if supported)
+    
+    Example configuration::
+    
+        Camera:
+            driver: 'PVCam'
+            serial: 'PM1394Cam'
+            parentDevice: 'Microscope'
+            transform:
+                pos: [0, 0]
+                scale: [1, -1]
+                angle: 0
+            exposeChannel:
+                device: 'DAQ'
+                channel: '/Dev1/port0/line8'
+                type: 'di'
+            triggerOutChannel:
+                device: 'DAQ'
+                channel: '/Dev1/PFI5'
+            triggerInChannel:
+                device: 'DAQ'
+                channel: '/Dev1/port0/line28'
+                type: 'do'
+                invert: True
+            params:
+                exposure: 10e-3
+    """
     def __init__(self, *args, **kargs):
         self.ringSize = 50
         Camera.__init__(self, *args, **kargs)  ## superclass will call setupCamera when it is ready.

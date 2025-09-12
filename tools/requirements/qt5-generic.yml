@@ -16,3 +16,16 @@ dependencies:
     - MetaArray
     - pyyaml
     - neuroanalysis
+    - numba
+    - trimesh
+    - coorx
+    - teleprox
+    - sensapex
+    - pymmcore
+    - click
+    - cellpose
+    - PyDAQmx
+    - pytest
+    - tifffile
+    - vispy
+    - pyopengl
