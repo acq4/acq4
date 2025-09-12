@@ -68,10 +68,12 @@ class SystemMonitor(QtWidgets.QWidget):
         self.plot_widget.showGrid(True, True)
         self.plot_widget.setYRange(0, 100)
         
-        # Plot curves
+        # Add legend first
+        self.plot_widget.addLegend(offset=(10, 10))
+        
+        # Plot curves - legend must exist before curves are added
         self.cpu_curve = self.plot_widget.plot(pen=pg.mkPen(color='red', width=2), name='CPU %')
         self.memory_curve = self.plot_widget.plot(pen=pg.mkPen(color='blue', width=2), name='Memory %')
-        self.plot_widget.addLegend()
         
         # Timeline selection line
         self.timeline_line = pg.InfiniteLine(angle=90, movable=True, pen=pg.mkPen(color='green', width=2))
@@ -91,8 +93,16 @@ class SystemMonitor(QtWidgets.QWidget):
         self.load_btn.clicked.connect(self.load_file_dialog)
         button_layout.addWidget(self.load_btn)
         
-        status_label = QtWidgets.QLabel(f'Poll Interval: {self.poll_interval}s')
-        button_layout.addWidget(status_label)
+        # Poll interval control
+        interval_label = QtWidgets.QLabel('Poll Interval:')
+        button_layout.addWidget(interval_label)
+        
+        self.interval_spinbox = QtWidgets.QSpinBox()
+        self.interval_spinbox.setRange(1, 300)  # 1 second to 5 minutes
+        self.interval_spinbox.setSuffix('s')
+        self.interval_spinbox.setValue(self.poll_interval)
+        self.interval_spinbox.valueChanged.connect(self.on_interval_changed)
+        button_layout.addWidget(self.interval_spinbox)
         button_layout.addStretch()
         
         plot_layout.addLayout(button_layout)
@@ -347,6 +357,14 @@ class SystemMonitor(QtWidgets.QWidget):
                 
         if closest_data:
             self.update_process_tables(closest_data['processes'])
+    
+    def on_interval_changed(self, value):
+        """Handle poll interval changes from the spin box"""
+        self.poll_interval = value
+        
+        # If currently polling, restart the timer with new interval
+        if self.is_polling:
+            self.timer.start(self.poll_interval * 1000)
 
 
 def main():
