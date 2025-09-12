@@ -117,9 +117,8 @@ class CellDetectAnalysis(SteadyStateAnalysisBase):
         return self._last_measurement and self._last_measurement['cell_detected_fast']
 
     def cell_detected_slow(self):
-        return len(self._last_n_slow_detections) == self._last_n_slow_detections.maxlen and all(
-            self._last_n_slow_detections
-        )
+        buffer_full = len(self._last_n_slow_detections) == self._last_n_slow_detections.maxlen
+        return buffer_full and all(self._last_n_slow_detections)
 
     def tip_is_broken(self):
         return self._last_measurement and self._last_measurement['tip_is_broken']

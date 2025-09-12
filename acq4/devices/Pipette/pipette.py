@@ -15,7 +15,7 @@ from acq4.devices.OptomechDevice import OptomechDevice
 from acq4.devices.Stage import Stage, MovePathFuture
 from acq4.modules.Camera import CameraModuleInterface
 from acq4.util import Qt, ptime
-from acq4.util.future import future_wrap
+from acq4.util.future import future_wrap, Future
 from acq4.util.target import Target
 from pyqtgraph import Point, siFormat
 from .planners import PipettePathGenerator
@@ -609,13 +609,14 @@ class Pipette(Device, OptomechDevice):
         pos = self.positionAtDepth(depth)
         return self._moveToGlobal(pos, speed, name=name)
 
-    def retractFromSurface(self, speed='slow'):
+    def retractFromSurface(self, speed='slow') -> Future:
         """Retract the pipette along its axis until it is above the slice surface.
         """
         depth = self.globalPosition()[2]
         appDepth = self.approachDepth()
         if depth < appDepth:
             return self.advance(appDepth, speed=speed)
+        return Future.immediate()
 
     @future_wrap
     def stepwiseAdvance(
