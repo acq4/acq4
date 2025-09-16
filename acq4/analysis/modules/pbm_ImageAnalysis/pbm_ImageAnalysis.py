@@ -1843,6 +1843,7 @@ class pbm_ImageAnalysis(AnalysisModule):
     def newpgImageWindow(self, title='', border='w'):
         newWin = pyqtgrwindow(title=title)
         view = pg.GraphicsView()
+        view.setObjectName(f"pbm_ImageAnalysis_{title}_view")
         newWin.setCentralWidget(view)
         newWin.show()
         img = pg.ImageItem(border=border)
@@ -3149,6 +3150,7 @@ class pyqtgrwindow(Qt.QMainWindow):
     def __init__(self, parent=None, title = '', size=(500,500)):
         super(pyqtgrwindow, self).__init__(parent)
         self.view = pg.GraphicsView()
+        self.view.setObjectName(f"pbm_ImageAnalysis_pyqtgrwindow_{title}_view")
         self.layout = pg.GraphicsLayout(border=None) # pg.mkPen(0, 0, 255))
         self.resize(size[0], size[1])
         self.setWindowTitle(title)

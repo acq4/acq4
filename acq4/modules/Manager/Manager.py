@@ -37,6 +37,7 @@ class Manager(Module):
         self.ui.moduleList.itemDoubleClicked.connect(self.loadSelectedModule)
         self.ui.quitBtn.clicked.connect(self.requestQuit)
 
+
         state = self.manager.readConfigFile(self.stateFile)
         # restore window position
         if "geometry" in state:
@@ -224,7 +225,11 @@ class Manager(Module):
         self.updateModList()
         self.showMessage("Loaded configuration '%s'." % cfg, 10000)
 
+
     def quit(self):
+        # Cleanup resource monitor
+        self.ui.resourceMonitor.cleanup()
+
         # save ui configuration
         geom = self.win.geometry()
         state = {

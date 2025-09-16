@@ -32,6 +32,7 @@ class CameraWindow(Qt.QMainWindow):
         self.cw = dockarea.DockArea()
         self.setCentralWidget(self.cw)
         self.gv = pg.GraphicsView()
+        self.gv.setObjectName("CameraModule_mainGraphicsView")
         self.gvDock = dockarea.Dock(name="View", widget=self.gv, hideTitle=True, size=(600, 600))
         self.cw.addDock(self.gvDock)
 
@@ -43,6 +44,7 @@ class CameraWindow(Qt.QMainWindow):
 
         # And a plot area for displaying depth-related information
         self.depthPlot = pg.PlotWidget(labels={"left": ("Depth", "m")})
+        self.depthPlot.setObjectName("CameraModule_depthPlot")
         self.depthPlot.setYRange(0, 10e-3)
         self.depthPlot.setXRange(-1, 1)
         self.depthPlot.hideAxis("bottom")
@@ -434,6 +436,7 @@ class ROIPlotter(Qt.QWidget):
         self.roiLayout.addWidget(self.roiPlotCheck, 3, 0, 1, 2)
 
         self.roiPlot = pg.PlotWidget()
+        self.roiPlot.setObjectName("CameraModule_roiPlot")
         self.roiLayout.addWidget(self.roiPlot, 0, 2, self.roiLayout.rowCount(), 1)
 
         self.rectBtn.clicked.connect(self._addRectROI)

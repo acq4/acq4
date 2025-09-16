@@ -60,14 +60,17 @@ class LaserTaskGui(DAQGenericTaskGui):
         
         if self.dev.hasTriggerableShutter:
             self.shutterPlot = PlotWidget(name='%s.shutter'%self.dev.name)
+            self.shutterPlot.setObjectName(f"Laser_{self.dev.name}_shutterPlot")
             self.shutterPlot.setLabel('left', text='Shutter')
             self.plotSplitter.addWidget(self.shutterPlot)
         if self.dev.hasQSwitch:
             self.qSwitchPlot = PlotWidget(name='%s.qSwitch'%self.dev.name)
+            self.qSwitchPlot.setObjectName(f"Laser_{self.dev.name}_qSwitchPlot")
             self.qSwitchPlot.setLabel('left', text='Q-Switch')
             self.plotSplitter.addWidget(self.qSwitchPlot)
         if self.dev.hasPCell:
             self.pCellPlot = PlotWidget(name='%s.pCell'%self.dev.name)
+            self.pCellPlot.setObjectName(f"Laser_{self.dev.name}_pCellPlot")
             self.pCellPlot.setLabel('left', text='Pockel Cell', units='V')
             self.plotSplitter.addWidget(self.pCellPlot)
             

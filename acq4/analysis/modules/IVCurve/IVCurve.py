@@ -157,26 +157,32 @@ class IVCurve(AnalysisModule):
 
         # instantiate the graphs using a gridLayout (also facilitates matplotlib export; see export routine below)
         self.data_plot = pg.PlotWidget()
+        self.data_plot.setObjectName("IVCurve_dataPlot")
         self.gridLayout.addWidget(self.data_plot, 0, 0, 3, 1)
         self.label_up(self.data_plot, 'T (s)', 'V (V)', 'Data')
 
         self.cmd_plot = pg.PlotWidget()
+        self.cmd_plot.setObjectName("IVCurve_cmdPlot")
         self.gridLayout.addWidget(self.cmd_plot, 3, 0, 1, 1)
         self.label_up(self.cmd_plot, 'T (s)', 'I (A)', 'Command')
 
         self.RMP_plot = pg.PlotWidget()
+        self.RMP_plot.setObjectName("IVCurve_RMPPlot")
         self.gridLayout.addWidget(self.RMP_plot, 1, 1, 1, 1)
         self.label_up(self.RMP_plot, 'T (s)', 'V (mV)', 'RMP')
 
         self.fiPlot = pg.PlotWidget()
+        self.fiPlot.setObjectName("IVCurve_fiPlot")
         self.gridLayout.addWidget(self.fiPlot, 2, 1, 1, 1)
         self.label_up(self.fiPlot, 'I (pA)', 'Spikes (#)', 'F-I')
 
         self.fslPlot = pg.PlotWidget()
+        self.fslPlot.setObjectName("IVCurve_fslPlot")
         self.gridLayout.addWidget(self.fslPlot, 3, 1, 1, 1)
         self.label_up(self.fslPlot, 'I (pA)', 'Fsl/Fisi (ms)', 'FSL/FISI')
 
         self.IV_plot = pg.PlotWidget()
+        self.IV_plot.setObjectName("IVCurve_IVPlot")
         self.gridLayout.addWidget(self.IV_plot, 0, 1, 1, 1)
         self.label_up(self.IV_plot, 'I (pA)', 'V (V)', 'I-V')
         for row, s in enumerate([20, 10, 10, 10]):
