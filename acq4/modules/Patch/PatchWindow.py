@@ -90,6 +90,7 @@ class PatchWindow(Qt.QMainWindow):
         self.plots = {}
         for k in self.analysisItems:
             p = PlotWidget()
+            p.setObjectName(f"PatchModule_{k}Plot")
             p.setLabel('left', text=k, units=self.analysisItems[k])
             self.ui.plotLayout.addWidget(p)
             self.plots[k] = p
