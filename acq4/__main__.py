@@ -18,6 +18,7 @@ control_arg_parser = Manager.makeArgParser()
 control_arg_parser.add_argument("-profile", action="store_true", help="Run the program under the profiler")
 control_arg_parser.add_argument("--callgraph", action="store_true", help="Run the program under the callgraph profiler")
 control_arg_parser.add_argument("--threadtrace", action="store_true", help="Run a thread tracer in the background")
+control_arg_parser.add_argument("--qt-profile", action="store_true", help="Use ProfiledQApplication to collect Qt event loop performance statistics")
 # teleprox optional port number
 control_arg_parser.add_argument("--teleprox", type=int, nargs='?', const=0, default=None,
                                 help="Run a teleprox server in the background. If no port number is specified, a random port will be used.")
@@ -37,6 +38,13 @@ import pyqtgraph as pg
 if args.threadtrace:
     tt = pg.debug.ThreadTrace()
 
+# Create QApplication - use ProfiledQApplication if --qt-profile flag is set
+if args.qt_profile:
+    from .util.profiled_qapp import ProfiledQApplication
+    app = ProfiledQApplication(sys.argv)
+    print("Qt profiling enabled. Use app.print_summary_report() to view statistics.")
+else:
+    app = pg.mkQApp()
 
 if args.teleprox is not None:    
     from teleprox import RPCServer
