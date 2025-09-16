@@ -6,6 +6,7 @@ import pyqtgraph as pg
 
 
 view = pg.GraphicsView()
+view.setObjectName("STDPHelpers_mainView")
 l = pg.GraphicsLayout(border=(100,100,100))
 view.setCentralItem(l)
 

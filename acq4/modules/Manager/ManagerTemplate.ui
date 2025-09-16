@@ -134,6 +134,10 @@
        </spacer>
       </item>
       <item>
+       <widget class="ResourceMonitorWidget" name="resourceMonitor">
+       </widget>
+      </item>
+      <item>
        <widget class="QPushButton" name="reloadModuleBtn">
         <property name="text">
          <string>Reload Libraries</string>
@@ -158,6 +162,11 @@
    <class>LogButton</class>
    <extends>QPushButton</extends>
    <header>acq4.LogWindow</header>
+  </customwidget>
+  <customwidget>
+   <class>ResourceMonitorWidget</class>
+   <extends>QWidget</extends>
+   <header>acq4.util.resource_monitor</header>
   </customwidget>
  </customwidgets>
  <resources/>
