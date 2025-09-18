@@ -177,7 +177,10 @@ class TestPulseThread(Thread):
     def _makeTpResult(self, task: Task) -> PatchClampTestPulse:
         mode = task.command[self._clampName]['mode']
         params = self.paramsForMode(mode)
-        result: MetaArray = task.getResult()[self._clampName]
+        all_channels = task.getResult()
+        result: MetaArray = all_channels[self._clampName]
+        if result is None:
+            raise ValueError("No data returned from test pulse task")
         start_time = result._info[2]['DAQ']['primary']['startTime']
         pri = result['Channel': 'primary'].asarray()
         pulse_len = len(pri) // params['average']
