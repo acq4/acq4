@@ -69,6 +69,7 @@ class Manager(Qt.QObject):
         parser.add_argument("--base-dir", "-b", help="Base directory to use")
         parser.add_argument("--storage-dir", "-s", help="Storage directory to use")
         parser.add_argument("--log-level", action="store", help="Set the console log level", default="WARNING")
+        parser.add_argument("--root-log-level", action="store", help="Set the root log level", default="DEBUG")
         parser.add_argument("--disable", "-d", help="Disable the device specified", action="append")
         parser.add_argument("--disable-all", "-D", help="Disable all devices", action="store_true")
         parser.add_argument("--exit-on-error", "-x", help="Whether to exit immidiately on the first exception during initial Manager setup", action="store_true")
@@ -102,6 +103,7 @@ class Manager(Qt.QObject):
         self._folderTypes = None
         self._logFile = None
         self._consoleLogLevel = logging.WARNING
+        self._rootLogLevel = logging.DEBUG
 
         try:
             if Manager.CREATED:
@@ -134,6 +136,7 @@ class Manager(Qt.QObject):
         self.disableDevs = args.disable or []
         self.disableAllDevs = args.disable_all
         self._consoleLogLevel = getattr(logging, args.log_level.upper(), logging.WARNING)
+        self._rootLogLevel = getattr(logging, args.root_log_level.upper(), logging.DEBUG)
 
         self.configDir = os.path.dirname(args.config)
         self.readConfig(args.config)
@@ -161,7 +164,9 @@ class Manager(Qt.QObject):
                         # we have to show it now, otherwise we'll have no windows
                         self.showGUI()
                     raise
-            setup_logging(TEMP_LOG, console_level=self._consoleLogLevel)
+            setup_logging(
+                TEMP_LOG, root_level=self._rootLogLevel, console_level=self._consoleLogLevel
+            )
 
         except Exception:
             if self.exitOnError:
@@ -663,7 +668,11 @@ class Manager(Qt.QObject):
         """
         was_temp = self._logFile is None
         self._logFile = d["log.json"]
-        file_handler = setup_logging(self._logFile.name(), console_level=self._consoleLogLevel)
+        file_handler = setup_logging(
+            self._logFile.name(),
+            root_level=self._rootLogLevel,
+            console_level=self._consoleLogLevel,
+        )
         self.sigLogDirChanged.emit(d)
         if was_temp:
             try:
