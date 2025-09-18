@@ -1,8 +1,9 @@
 import math
 import time
 import weakref
-from collections import defaultdict, deque
-from ..util.Qt import QApplication, QEvent, QTimer, QObject
+from collections import defaultdict
+
+from ..util.Qt import QApplication, QEvent, QObject
 
 
 def _build_event_name_map():
@@ -152,13 +153,16 @@ class QApplicationProfile(QObject):
                     receiver_desc = "<unknown>"
                 event_type_name = EVENT_NAMES.get(event_type, f"Type({event_type})")
                 description = f"{event_type_name} → {receiver_desc}"
-            
+            else:
+                raise ValueError(f"Invalid group_by value: {group_by}")
+
             group_totals.append((total_time, description, events))
-        
-        group_totals.sort(reverse=True)
-        for total_time, description, events in group_totals:
-            event_lists.append((description, events))
-        
+
+        group_totals.sort(reverse=True, key=lambda x: (x[0], x[1]))
+        event_lists.extend(
+            (description, events)
+            for total_time, description, events in group_totals
+        )
         # Calculate statistics uniformly for each row/list
         row_stats = []
         wall_time = self.end_time - self.start_time
