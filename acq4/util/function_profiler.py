@@ -161,6 +161,67 @@ class Profile:
 
         return threads
 
+    def get_hierarchical_structure(self):
+        """
+        Get hierarchical call structure for efficient tree widget display.
+
+        Returns:
+            dict: {
+                thread_id: {
+                    'thread_info': thread_info_dict,
+                    'root_calls': [call_id1, call_id2, ...],
+                    'children': {call_id: [child_call_id1, child_call_id2, ...]},
+                    'records': {call_id: record}
+                }
+            }
+        """
+        threads = self.get_events_by_thread()
+        result = {}
+
+        for thread_id, thread_records in threads.items():
+            # Build children mapping for this thread
+            children = {}
+            records_by_id = {}
+            root_calls = []
+
+            for record in thread_records:
+                call_id, parent_id, _, start_time, end_time, func_name, filename, line_no = record
+                records_by_id[call_id] = record
+
+                if parent_id is None:
+                    root_calls.append(call_id)
+                else:
+                    if parent_id not in children:
+                        children[parent_id] = []
+                    children[parent_id].append(call_id)
+
+            # Sort root calls and children by start time
+            root_calls.sort(key=lambda cid: records_by_id[cid][3])
+            for parent_id in children:
+                children[parent_id].sort(key=lambda cid: records_by_id[cid][3])
+
+            # Get thread name
+            import threading
+            thread_name = "Unknown"
+            for thread in threading.enumerate():
+                if thread.ident == thread_id:
+                    thread_name = thread.name
+                    break
+
+            result[thread_id] = {
+                'thread_info': {
+                    'id': thread_id,
+                    'name': thread_name,
+                    'call_count': len(thread_records),
+                    'total_time': sum((r[4] or 0) - r[3] for r in thread_records if r[4] is not None)
+                },
+                'root_calls': root_calls,
+                'children': children,
+                'records': records_by_id
+            }
+
+        return result
+
     def print_events_hierarchical(self, events):
         """Print events in chronological order with hierarchical indentation."""
         if not events:
