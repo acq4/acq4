@@ -3,6 +3,7 @@ from acq4.util import Qt
 from .function_profiler import FunctionProfiler
 from .qt_profiler import QtEventProfiler
 from .memory_profiler import MemoryProfiler
+from .custom_function_profiler import CustomFunctionProfiler
 
 
 class Profiler(Module):
@@ -39,11 +40,13 @@ class Profiler(Module):
         self.function_profiler = FunctionProfiler(self.win)
         self.qt_profiler = QtEventProfiler(self.win)
         self.memory_profiler = MemoryProfiler(self.win)
+        self.custom_function_profiler = CustomFunctionProfiler(self.win)
 
         # Add tabs
         self.tab_widget.addTab(self.function_profiler.widget, "Function Profile")
         self.tab_widget.addTab(self.qt_profiler.widget, "Qt Event Profile")
         self.tab_widget.addTab(self.memory_profiler.widget, "Memory Profile")
+        self.tab_widget.addTab(self.custom_function_profiler.widget, "Custom Function Profile")
 
         self.win.show()
 
