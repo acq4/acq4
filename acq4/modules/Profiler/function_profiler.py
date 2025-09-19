@@ -1,9 +1,14 @@
 # ABOUTME: Function-level profiling using yappi with UI for control and display
 # ABOUTME: Provides yappi profiling with thread analysis and code navigation
-import yappi
 from datetime import datetime
 from acq4.util import Qt
 from acq4.util.codeEditor import invokeCodeEditor
+
+try:
+    import yappi
+    YAPPI_AVAILABLE = True
+except ImportError:
+    YAPPI_AVAILABLE = False
 
 
 class ProfileResult:
@@ -45,30 +50,38 @@ class FunctionProfiler:
         widget = Qt.QWidget()
         layout = Qt.QVBoxLayout(widget)
 
-        # Control panel
-        control_panel = self._createControlPanel()
-        layout.addWidget(control_panel, 0)
+        # Main content area
+        if not YAPPI_AVAILABLE:
+            # Show error message if yappi not available
+            error_label = Qt.QLabel("yappi not available. Install with: pip install yappi")
+            error_label.setStyleSheet("color: red; font-weight: bold; padding: 20px;")
+            error_label.setAlignment(Qt.Qt.AlignCenter)
+            layout.addWidget(error_label)
+        else:
+            # Control panel
+            control_panel = self._createControlPanel()
+            layout.addWidget(control_panel, 0)
 
-        # Main splitter for results list and profile display
-        splitter = Qt.QSplitter(Qt.Qt.Horizontal)
-        layout.addWidget(splitter)
+            # Main splitter for results list and profile display
+            splitter = Qt.QSplitter(Qt.Qt.Horizontal)
+            layout.addWidget(splitter)
 
-        # Left side: Profile results list
-        self.results_list = Qt.QListWidget()
-        self.results_list.itemSelectionChanged.connect(self._onResultSelected)
-        splitter.addWidget(self.results_list)
+            # Left side: Profile results list
+            self.results_list = Qt.QListWidget()
+            self.results_list.itemSelectionChanged.connect(self._onResultSelected)
+            splitter.addWidget(self.results_list)
 
-        # Right side: Profile data display
-        self.profile_display = Qt.QTreeWidget()
-        self.profile_display.setHeaderLabels([col[0] for col in self.COLUMNS])
-        self.profile_display.setSortingEnabled(True)
-        self.profile_display.sortByColumn(2, Qt.Qt.DescendingOrder)
-        self.profile_display.setExpandsOnDoubleClick(False)
-        self.profile_display.itemDoubleClicked.connect(self._onItemDoubleClicked)
-        splitter.addWidget(self.profile_display)
+            # Right side: Profile data display
+            self.profile_display = Qt.QTreeWidget()
+            self.profile_display.setHeaderLabels([col[0] for col in self.COLUMNS])
+            self.profile_display.setSortingEnabled(True)
+            self.profile_display.sortByColumn(2, Qt.Qt.DescendingOrder)
+            self.profile_display.setExpandsOnDoubleClick(False)
+            self.profile_display.itemDoubleClicked.connect(self._onItemDoubleClicked)
+            splitter.addWidget(self.profile_display)
 
-        # Set splitter proportions
-        splitter.setSizes([200, 600])
+            # Set splitter proportions
+            splitter.setSizes([200, 600])
 
         return widget
 
@@ -108,6 +121,9 @@ class FunctionProfiler:
 
     def _toggleProfiling(self):
         """Start or stop profiling session"""
+        if not YAPPI_AVAILABLE:
+            return
+
         if self.is_profiling:
             self._stopProfiling()
         else:

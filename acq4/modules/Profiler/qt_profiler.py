@@ -14,54 +14,72 @@ class QtEventProfiler:
         self.current_profile = None
         self.profile_results = []
 
+        # Check if Qt profiling is available
+        self.qt_profiling_available = self._checkQtProfilingAvailability()
+
         # Create UI
         self.widget = self._createUI()
+
+    def _checkQtProfilingAvailability(self):
+        """Check if Qt event profiling is available"""
+        app = Qt.QApplication.instance()
+        if app is None:
+            return False
+        return hasattr(app, 'start_profile')
 
     def _createUI(self):
         """Create the Qt event profiling UI"""
         widget = Qt.QWidget()
         layout = Qt.QVBoxLayout(widget)
 
-        # Control panel
-        control_panel = self._createControlPanel()
-        layout.addWidget(control_panel, 0)
+        # Main content area
+        if not self.qt_profiling_available:
+            # Show error message if Qt profiling not available
+            error_label = Qt.QLabel("Qt profiling not available. Start acq4 with --qt-profile flag.")
+            error_label.setStyleSheet("color: red; font-weight: bold; padding: 20px;")
+            error_label.setAlignment(Qt.Qt.AlignCenter)
+            layout.addWidget(error_label)
+        else:
+            # Control panel
+            control_panel = self._createControlPanel()
+            layout.addWidget(control_panel, 0)
 
-        # Main splitter
-        splitter = Qt.QSplitter(Qt.Qt.Horizontal)
-        layout.addWidget(splitter)
+            # Main splitter
+            splitter = Qt.QSplitter(Qt.Qt.Horizontal)
+            layout.addWidget(splitter)
 
-        # Left side: Profile sessions list
-        self.results_list = Qt.QListWidget()
-        self.results_list.itemSelectionChanged.connect(self._onResultSelected)
-        splitter.addWidget(self.results_list)
+            # Left side: Profile sessions list
+            self.results_list = Qt.QListWidget()
+            self.results_list.itemSelectionChanged.connect(self._onResultSelected)
+            splitter.addWidget(self.results_list)
 
-        # Right side: Vertical splitter with two panes
-        right_splitter = Qt.QSplitter(Qt.Qt.Vertical)
+            # Right side: Vertical splitter with two panes
+            right_splitter = Qt.QSplitter(Qt.Qt.Vertical)
 
-        # Top pane: Event breakdown by type
-        self.profile_display = Qt.QTreeWidget()
-        headers = ['Event Type', 'Count', 'Total Time (s)', 'Avg Time (ms)', 'Percentage']
-        self.profile_display.setHeaderLabels(headers)
-        self.profile_display.setSortingEnabled(True)
-        self.profile_display.sortByColumn(2, Qt.Qt.DescendingOrder)
-        right_splitter.addWidget(self.profile_display)
+            # Top pane: Event breakdown by type
+            self.profile_display = Qt.QTreeWidget()
+            headers = ['Event Type', 'Count', 'Total Time (s)', 'Avg Time (ms)', 'Percentage']
+            self.profile_display.setHeaderLabels(headers)
+            self.profile_display.setSortingEnabled(True)
+            self.profile_display.sortByColumn(2, Qt.Qt.DescendingOrder)
+            right_splitter.addWidget(self.profile_display)
 
-        # Bottom pane: Event breakdown by type and receiver
-        self.type_receiver_display = Qt.QTreeWidget()
-        type_receiver_headers = ['Event Type → Receiver', 'Count', 'Total Time (s)', 'Avg Time (ms)', 'Percentage']
-        self.type_receiver_display.setHeaderLabels(type_receiver_headers)
-        self.type_receiver_display.setSortingEnabled(True)
-        self.type_receiver_display.sortByColumn(2, Qt.Qt.DescendingOrder)
-        self.type_receiver_display.itemDoubleClicked.connect(self._onTypeReceiverDoubleClicked)
-        right_splitter.addWidget(self.type_receiver_display)
+            # Bottom pane: Event breakdown by type and receiver
+            self.type_receiver_display = Qt.QTreeWidget()
+            type_receiver_headers = ['Event Type → Receiver', 'Count', 'Total Time (s)', 'Avg Time (ms)', 'Percentage']
+            self.type_receiver_display.setHeaderLabels(type_receiver_headers)
+            self.type_receiver_display.setSortingEnabled(True)
+            self.type_receiver_display.sortByColumn(2, Qt.Qt.DescendingOrder)
+            self.type_receiver_display.itemDoubleClicked.connect(self._onTypeReceiverDoubleClicked)
+            right_splitter.addWidget(self.type_receiver_display)
 
-        # Set right splitter proportions (33% top, 67% bottom)
-        right_splitter.setSizes([240, 480])
+            # Set right splitter proportions (33% top, 67% bottom)
+            right_splitter.setSizes([240, 480])
 
-        splitter.addWidget(right_splitter)
+            splitter.addWidget(right_splitter)
 
-        # Set main splitter proportions (keep left panel same size, expand right panel)
-        splitter.setSizes([200, 900])
+            # Set main splitter proportions (keep left panel same size, expand right panel)
+            splitter.setSizes([200, 900])
 
         return widget
 
@@ -88,6 +106,9 @@ class QtEventProfiler:
 
     def _toggleProfiling(self):
         """Start or stop Qt profiling session"""
+        if not self.qt_profiling_available:
+            return
+
         if self.is_profiling:
             self._stopProfiling()
         else:
@@ -95,17 +116,8 @@ class QtEventProfiler:
 
     def _startProfiling(self):
         """Start a new Qt event profiling session"""
-        # Get the QApplication instance
+        # Get the QApplication instance (we know it's valid from availability check)
         app = Qt.QApplication.instance()
-        if app is None:
-            Qt.QMessageBox.warning(self.parent, "Warning", "No QApplication instance found")
-            return
-
-        # Check if it's a ProfiledQApplication
-        if not hasattr(app, 'start_profile'):
-            Qt.QMessageBox.warning(self.parent, "Warning",
-                                 "QApplication is not a ProfiledQApplication. Start acq4 with --qt-profile flag.")
-            return
 
         # Start profiling session
         session_name = self.session_name_edit.text() or f"Qt_Profile_{len(self.profile_results) + 1}"
