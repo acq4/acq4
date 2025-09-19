@@ -86,7 +86,10 @@ class PatchPipetteStateManager(Qt.QObject):
 
     @staticmethod
     def buildPatchProfilesParameters():
-        params = [ProfileParameter(profile) for profile in PatchPipetteStateManager.listProfiles()]
+        params = []
+        for profile in PatchPipetteStateManager.listProfiles():
+            params.append(ProfileParameter(profile))
+            Qt.QApplication.processEvents()
         return Parameter.create(name='profiles', type='group', children=params)
 
     @staticmethod
