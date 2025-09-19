@@ -115,6 +115,11 @@ class FunctionProfiler:
         self.clock_type_combo.addItems(["CPU Time", "Wall Time"])
         layout.addWidget(self.clock_type_combo)
 
+        # Clear profiles button
+        self.clear_btn = Qt.QPushButton("Clear All")
+        self.clear_btn.clicked.connect(self._clearProfiles)
+        layout.addWidget(self.clear_btn)
+
         layout.addStretch()
 
         return panel
@@ -342,3 +347,9 @@ class FunctionProfiler:
             invokeCodeEditor(file_path, line_num)
         except Exception as e:
             print(f"Failed to open editor for {file_path}:{line_num}: {e}")
+
+    def _clearProfiles(self):
+        """Clear all function profile results"""
+        self.profile_results.clear()
+        self.results_list.clear()
+        self.profile_display.clear()
