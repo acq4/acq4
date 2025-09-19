@@ -218,10 +218,6 @@ class MemoryProfiler:
         widget = Qt.QWidget()
         layout = Qt.QVBoxLayout(widget)
 
-        # Control panel
-        control_panel = self._createControlPanel()
-        layout.addWidget(control_panel, 0)
-
         # Main content area
         if not GUPPY_AVAILABLE:
             # Show error message if guppy not available
@@ -230,6 +226,10 @@ class MemoryProfiler:
             error_label.setAlignment(Qt.Qt.AlignCenter)
             layout.addWidget(error_label)
         else:
+            # Control panel
+            control_panel = self._createControlPanel()
+            layout.addWidget(control_panel, 0)
+
             # Main splitter for snapshots list and analysis display
             splitter = Qt.QSplitter(Qt.Qt.Horizontal)
             layout.addWidget(splitter)
@@ -260,28 +260,27 @@ class MemoryProfiler:
         panel.setSizePolicy(Qt.QSizePolicy.Preferred, Qt.QSizePolicy.Fixed)
         layout = Qt.QHBoxLayout(panel)
 
-        if GUPPY_AVAILABLE:
-            # Take snapshot button
-            self.snapshot_btn = Qt.QPushButton("Take Snapshot")
-            self.snapshot_btn.clicked.connect(self._takeSnapshot)
-            layout.addWidget(self.snapshot_btn)
+        # Take snapshot button
+        self.snapshot_btn = Qt.QPushButton("Take Snapshot")
+        self.snapshot_btn.clicked.connect(self._takeSnapshot)
+        layout.addWidget(self.snapshot_btn)
 
-            # Snapshot name input
-            layout.addWidget(Qt.QLabel("Name:"))
-            self.snapshot_name_edit = Qt.QLineEdit()
-            self.snapshot_name_edit.setText(f"Snapshot_{len(self.snapshots) + 1}")
-            layout.addWidget(self.snapshot_name_edit)
+        # Snapshot name input
+        layout.addWidget(Qt.QLabel("Name:"))
+        self.snapshot_name_edit = Qt.QLineEdit()
+        self.snapshot_name_edit.setText(f"Snapshot_{len(self.snapshots) + 1}")
+        layout.addWidget(self.snapshot_name_edit)
 
-            # Set baseline button
-            self.baseline_btn = Qt.QPushButton("Set as Baseline")
-            self.baseline_btn.clicked.connect(self._setBaseline)
-            self.baseline_btn.setEnabled(False)
-            layout.addWidget(self.baseline_btn)
+        # Set baseline button
+        self.baseline_btn = Qt.QPushButton("Set as Baseline")
+        self.baseline_btn.clicked.connect(self._setBaseline)
+        self.baseline_btn.setEnabled(False)
+        layout.addWidget(self.baseline_btn)
 
-            # Clear snapshots button
-            self.clear_btn = Qt.QPushButton("Clear All")
-            self.clear_btn.clicked.connect(self._clearSnapshots)
-            layout.addWidget(self.clear_btn)
+        # Clear snapshots button
+        self.clear_btn = Qt.QPushButton("Clear All")
+        self.clear_btn.clicked.connect(self._clearSnapshots)
+        layout.addWidget(self.clear_btn)
 
         layout.addStretch()
 
@@ -328,8 +327,32 @@ class MemoryProfiler:
 
         self.snapshots_list.addItem(item)
 
-        # Auto-select the new item
-        self.snapshots_list.setCurrentItem(item)
+        # Auto-select all snapshots since the last baseline
+        self._selectSnapshotsSinceBaseline()
+
+    def _selectSnapshotsSinceBaseline(self):
+        """Select all snapshots since the last baseline"""
+        if self.baseline_snapshot is None:
+            # No baseline set - select all snapshots
+            self.snapshots_list.selectAll()
+            return
+
+        # Find the baseline index in the snapshots list
+        baseline_index = -1
+        try:
+            baseline_index = self.snapshots.index(self.baseline_snapshot)
+        except ValueError:
+            # Baseline not found in snapshots list - select all
+            self.snapshots_list.selectAll()
+            return
+
+        # Clear current selection
+        self.snapshots_list.clearSelection()
+
+        # Select all snapshots after the baseline
+        for i in range(baseline_index + 1, self.snapshots_list.count()):
+            item = self.snapshots_list.item(i)
+            item.setSelected(True)
 
     def _onSnapshotSelected(self):
         """Handle selection change in snapshots list"""
