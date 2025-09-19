@@ -106,6 +106,11 @@ class QtEventProfiler:
         self.hold_receivers_checkbox.setChecked(True)  # Default to True for detailed analysis
         layout.addWidget(self.hold_receivers_checkbox)
 
+        # Clear profiles button
+        self.clear_btn = Qt.QPushButton("Clear All")
+        self.clear_btn.clicked.connect(self._clearProfiles)
+        layout.addWidget(self.clear_btn)
+
         layout.addStretch()
 
         return panel
@@ -233,3 +238,10 @@ class QtEventProfiler:
 
         print("Receiver object references:")
         pg.debug.describeObj(record['receiver'], ignore={id(result._receivers): None for result in self.profile_results})
+
+    def _clearProfiles(self):
+        """Clear all Qt profile results"""
+        self.profile_results.clear()
+        self.results_list.clear()
+        self.profile_display.clear()
+        self.type_receiver_display.clear()
