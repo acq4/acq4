@@ -100,6 +100,12 @@ class QtEventProfiler:
         self.session_name_edit.setText(f"Qt_Profile_{len(self.profile_results) + 1}")
         layout.addWidget(self.session_name_edit)
 
+        # Hold receivers checkbox
+        self.hold_receivers_checkbox = Qt.QCheckBox("Hold Receivers")
+        self.hold_receivers_checkbox.setToolTip("Keep references to event receivers for detailed inspection")
+        self.hold_receivers_checkbox.setChecked(True)  # Default to True for detailed analysis
+        layout.addWidget(self.hold_receivers_checkbox)
+
         layout.addStretch()
 
         return panel
@@ -121,8 +127,9 @@ class QtEventProfiler:
 
         # Start profiling session
         session_name = self.session_name_edit.text() or f"Qt_Profile_{len(self.profile_results) + 1}"
+        hold_receivers = self.hold_receivers_checkbox.isChecked()
 
-        self.current_profile = app.start_profile(session_name)
+        self.current_profile = app.start_profile(session_name, hold_receivers=hold_receivers)
 
         # Update UI
         self.is_profiling = True
@@ -187,6 +194,7 @@ class QtEventProfiler:
             item.setText(2, f"{row_data['total_time']:.6f}")
             item.setText(3, f"{row_data['avg_time']*1000:.2f}")
             item.setText(4, f"{row_data['percentage']:.1f}%")
+            item.record = row_data
 
         # Bottom pane: Event breakdown by type and receiver
         type_receiver_stats = profile.get_statistics(group_by='type_receiver')
@@ -197,9 +205,7 @@ class QtEventProfiler:
             item.setText(2, f"{row_data['total_time']:.6f}")
             item.setText(3, f"{row_data['avg_time']*1000:.2f}")
             item.setText(4, f"{row_data['percentage']:.1f}%")
-            # Store receiver object for double-click inspection using weak reference
-            if 'receiver' in row_data and not isinstance(row_data['receiver'], str):
-                item.receiver_ref = weakref.ref(row_data['receiver'])
+            item.record = row_data
 
         # Auto-resize columns for both displays
         for i in range(self.profile_display.columnCount()):
@@ -209,22 +215,21 @@ class QtEventProfiler:
 
     def _onTypeReceiverDoubleClicked(self, item, column):
         """Handle double-click on type-receiver items to show detailed object info"""
-        receiver_ref = getattr(item, 'receiver_ref', None)
-        if receiver_ref is None:
+        record = getattr(item, 'record', None)
+        if record is None:
             return
 
-        receiver = receiver_ref()
-        if receiver is None:
-            print("Receiver object has been garbage collected.")
-            return
+        if record.get('receiver', None) is None:
+            return  # No receiver to inspect
 
         # prints to console
         print("Receiver object QObject parent chain:")
-        obj = receiver
+        obj = record['receiver']
         while obj is not None:
             name = obj.objectName()
-            print(f" - Name: {name:<30}   Type: {type(obj)}")
+            print(f" {name:<15}  {type(obj).__name__}")
             obj = obj.parent()
+        del obj
 
         print("Receiver object references:")
-        pg.debug.describeObj(receiver)
+        pg.debug.describeObj(record['receiver'], ignore={id(result._receivers): None for result in self.profile_results})
