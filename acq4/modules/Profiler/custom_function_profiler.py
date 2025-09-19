@@ -7,6 +7,35 @@ from acq4.util import Qt
 from acq4.util.function_profiler import Profile
 
 
+class NumericalTreeWidgetItem(Qt.QTreeWidgetItem):
+    """Tree widget item that sorts numerical columns properly"""
+
+    def __lt__(self, other):
+        """Custom comparison for proper numerical sorting"""
+        if not isinstance(other, Qt.QTreeWidgetItem):
+            return super().__lt__(other)
+
+        tree = self.treeWidget()
+        if not tree:
+            return super().__lt__(other)
+
+        column = tree.sortColumn()
+
+        # Get UserRole data for numerical comparison
+        self_data = self.data(column, Qt.Qt.UserRole)
+        other_data = other.data(column, Qt.Qt.UserRole)
+
+        # If both have numerical data, use it for comparison
+        if self_data is not None and other_data is not None:
+            try:
+                return float(self_data) < float(other_data)
+            except (ValueError, TypeError):
+                pass
+
+        # Fall back to text comparison
+        return self.text(column) < other.text(column)
+
+
 class ProfileResult:
     """Container for a single custom function profiling session result"""
 
@@ -18,15 +47,16 @@ class ProfileResult:
         self.duration = (self.end_time - self.start_time).total_seconds()
 
 
-class LazyCallItem(Qt.QTreeWidgetItem):
+class LazyCallItem(NumericalTreeWidgetItem):
     """Tree item that lazy-loads function call children"""
 
-    def __init__(self, parent, call_id, record, hierarchical_data, thread_id):
+    def __init__(self, parent, call_id, record, hierarchical_data, thread_id, parent_duration=None):
         super().__init__(parent)
         self.call_id = call_id
         self.record = record
         self.hierarchical_data = hierarchical_data
         self.thread_id = thread_id
+        self.parent_duration = parent_duration
         self.children_loaded = False
 
         # Set item data
@@ -45,11 +75,28 @@ class LazyCallItem(Qt.QTreeWidgetItem):
         # Calculate duration
         duration = (end_time - start_time) if end_time else 0
 
+        # Calculate percentage of parent duration
+        percentage_value = 0.0
+        percentage_text = ""
+        if self.parent_duration and self.parent_duration > 0:
+            percentage_value = (duration / self.parent_duration) * 100
+            percentage_text = f"{percentage_value:.1f}"
+
         # Format display text
         short_filename = filename.split('/')[-1] if '/' in filename else filename
+        duration_ms = duration * 1000
+        start_time_ms = start_time * 1000
+
         self.setText(0, func_name)
-        self.setText(1, f"{duration:.6f}s")
-        self.setText(2, f"{short_filename}:{line_no}")
+        self.setText(1, f"{duration_ms:.3f}")
+        self.setText(2, f"{start_time_ms:.3f}")
+        self.setText(3, percentage_text)
+        self.setText(4, f"{short_filename}:{line_no}")
+
+        # Store numeric values for sorting using Qt.UserRole (in ms for consistency)
+        self.setData(1, Qt.Qt.UserRole, duration_ms)
+        self.setData(2, Qt.Qt.UserRole, start_time_ms)
+        self.setData(3, Qt.Qt.UserRole, percentage_value)
 
     def load_children(self):
         """Load child function calls"""
@@ -64,9 +111,13 @@ class LazyCallItem(Qt.QTreeWidgetItem):
             thread_data = self.hierarchical_data[self.thread_id]
             child_call_ids = thread_data['children'].get(self.call_id, [])
 
+            # Get this call's duration to pass as parent duration to children
+            call_id, parent_id, thread_id, start_time, end_time, func_name, filename, line_no = self.record
+            my_duration = (end_time - start_time) if end_time else 0
+
             for child_call_id in child_call_ids:
                 child_record = thread_data['records'][child_call_id]
-                LazyCallItem(self, child_call_id, child_record, self.hierarchical_data, self.thread_id)
+                LazyCallItem(self, child_call_id, child_record, self.hierarchical_data, self.thread_id, my_duration)
 
             self.children_loaded = True
 
@@ -75,7 +126,7 @@ class LazyCallItem(Qt.QTreeWidgetItem):
             error_item.setText(0, f"Error loading children: {e}")
 
 
-class LazyThreadItem(Qt.QTreeWidgetItem):
+class LazyThreadItem(NumericalTreeWidgetItem):
     """Tree item that lazy-loads thread root calls"""
 
     def __init__(self, parent, thread_id, thread_info, hierarchical_data):
@@ -85,10 +136,22 @@ class LazyThreadItem(Qt.QTreeWidgetItem):
         self.hierarchical_data = hierarchical_data
         self.children_loaded = False
 
+        # Get thread start time from thread_info
+        thread_start_time = thread_info['start_time']
+        thread_duration_ms = thread_info['total_time'] * 1000
+        thread_start_time_ms = thread_start_time * 1000
+
         # Set thread display data
         self.setText(0, f"Thread {thread_id} ({thread_info['name']})")
-        self.setText(1, f"{thread_info['total_time']:.6f}s")
-        self.setText(2, f"{thread_info['call_count']} calls")
+        self.setText(1, f"{thread_duration_ms:.3f}")
+        self.setText(2, f"{thread_start_time_ms:.3f}")
+        self.setText(3, "100.0")  # Threads are always 100% of themselves
+        self.setText(4, f"{thread_info['call_count']} calls")
+
+        # Store numeric values for sorting using Qt.UserRole (in ms for consistency)
+        self.setData(1, Qt.Qt.UserRole, thread_duration_ms)
+        self.setData(2, Qt.Qt.UserRole, thread_start_time_ms)
+        self.setData(3, Qt.Qt.UserRole, 100.0)
 
         # Add dummy child
         self._dummy_child = Qt.QTreeWidgetItem(self)
@@ -105,10 +168,11 @@ class LazyThreadItem(Qt.QTreeWidgetItem):
                 self.removeChild(self._dummy_child)
 
             thread_data = self.hierarchical_data[self.thread_id]
+            thread_total_time = self.thread_info['total_time']
 
             for call_id in thread_data['root_calls']:
                 record = thread_data['records'][call_id]
-                LazyCallItem(self, call_id, record, self.hierarchical_data, self.thread_id)
+                LazyCallItem(self, call_id, record, self.hierarchical_data, self.thread_id, thread_total_time)
 
             self.children_loaded = True
 
@@ -164,8 +228,9 @@ class CustomFunctionProfiler:
 
             # Right side: Call tree display
             self.call_tree = Qt.QTreeWidget()
-            self.call_tree.setHeaderLabels(['Function Call', 'Duration', 'Location'])
-            self.call_tree.setSortingEnabled(False)  # Keep chronological order
+            self.call_tree.setHeaderLabels(['Function Call', 'Duration (ms)', 'Start Time (ms)', 'Percentage (%)', 'Location'])
+            self.call_tree.setSortingEnabled(True)
+            self.call_tree.sortByColumn(1, Qt.Qt.DescendingOrder)  # Default sort by duration
             self.call_tree.itemExpanded.connect(self._onItemExpanded)
             splitter.addWidget(self.call_tree)
 

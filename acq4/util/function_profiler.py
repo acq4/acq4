@@ -47,12 +47,15 @@ class Profile:
         self._next_id = self.Counter()
         self._lock = threading.Lock()
         self._max_depth = max_depth
+        self._profile_start_time = None
+        self._profile_end_time = None
 
     def start(self):
         """Start profiling all function calls across all threads."""
         if self._active:
             return
 
+        self._profile_start_time = time.perf_counter()
         self._active = True
 
         # Use Python 3.12+ threading.setprofile_all_threads to install profiler on all threads
@@ -61,9 +64,23 @@ class Profile:
     def stop(self):
         """Stop profiling and return collected data."""
         if self._active:
+            self._profile_end_time = time.perf_counter()
             self._active = False
             threading.setprofile_all_threads(None)  # Clear profiler from all threads
+
+            # Close any unfinished calls by assigning them the profile end time
+            self._close_unfinished_calls()
+
         return list(self._records.values())
+
+    def _close_unfinished_calls(self):
+        """Assign end times to any calls that were still in progress when profiling stopped."""
+        profile_duration = self._profile_end_time - self._profile_start_time
+        for call_id, record in self._records.items():
+            if record[4] is None:  # end_time is None
+                # Assign the profile duration as the end time (relative to profile start)
+                self._records[call_id] = list(record)
+                self._records[call_id][4] = profile_duration
 
     def _profile_function(self, frame, event, arg):
         """Profile function for capturing function calls across all threads."""
@@ -124,7 +141,8 @@ class Profile:
             else:
                 func_qualified_name = func_name
 
-            start_time = time.perf_counter()
+            # Store time relative to profile start
+            start_time = time.perf_counter() - self._profile_start_time
 
             # Record: [ID, parent_ID, thread_id, start_time, end_time, func_qualified_name, file, line_no]
             record = [call_id, parent_id, thread_id, start_time, None, func_qualified_name, filename, line_no]
@@ -139,7 +157,8 @@ class Profile:
 
         # Only update end time if we recorded this call
         if call_id in self._records:
-            self._records[call_id][4] = time.perf_counter()
+            # Store time relative to profile start
+            self._records[call_id][4] = time.perf_counter() - self._profile_start_time
 
     def get_records(self):
         """Get all recorded function call data."""
@@ -208,12 +227,17 @@ class Profile:
                     thread_name = thread.name
                     break
 
+            # Calculate thread start time (earliest call) and duration (profile duration)
+            thread_start_time = 0  # Thread starts when profiling starts
+            thread_duration = self._profile_end_time - self._profile_start_time if self._profile_end_time else 0
+
             result[thread_id] = {
                 'thread_info': {
                     'id': thread_id,
                     'name': thread_name,
                     'call_count': len(thread_records),
-                    'total_time': sum((r[4] or 0) - r[3] for r in thread_records if r[4] is not None)
+                    'total_time': thread_duration,  # Full profile duration
+                    'start_time': thread_start_time
                 },
                 'root_calls': root_calls,
                 'children': children,
