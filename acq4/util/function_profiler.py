@@ -26,7 +26,7 @@ class Profile:
                 self.value += 1
                 return v
 
-    def __init__(self, max_depth=None):
+    def __init__(self, max_depth=None, max_duration=0, on_finished=None):
         # Check Python version requirement
         if sys.version_info < (3, 12):
             raise RuntimeError(
@@ -47,8 +47,11 @@ class Profile:
         self._next_id = self.Counter()
         self._lock = threading.Lock()
         self._max_depth = max_depth
+        self._max_duration = max_duration  # Maximum duration in seconds (0 = no limit)
         self._profile_start_time = None
         self._profile_end_time = None
+        self._threads: Dict[int, str] = {}  # thread_id -> thread_name
+        self._on_finished = on_finished  # Callback for when profiling finishes
 
     def start(self):
         """Start profiling all function calls across all threads."""
@@ -61,6 +64,12 @@ class Profile:
         # Use Python 3.12+ threading.setprofile_all_threads to install profiler on all threads
         threading.setprofile_all_threads(self._profile_function)
 
+        # Set up automatic stop timer if max_duration is specified
+        if self._max_duration > 0:
+            stop_timer = threading.Timer(self._max_duration, self.stop)
+            stop_timer.daemon = True  # Don't keep process alive
+            stop_timer.start()
+
     def stop(self):
         """Stop profiling and return collected data."""
         if self._active:
@@ -71,7 +80,9 @@ class Profile:
             # Close any unfinished calls by assigning them the profile end time
             self._close_unfinished_calls()
 
-        return list(self._records.values())
+            # Notify callback if profiling was active
+            if self._on_finished:
+                self._on_finished()
 
     def _close_unfinished_calls(self):
         """Assign end times to any calls that were still in progress when profiling stopped."""
@@ -88,6 +99,13 @@ class Profile:
             return
 
         thread_id = threading.get_ident()
+
+        # Record thread name if we haven't seen this thread before
+        if thread_id not in self._threads:
+            # Find thread name
+            current_thread = threading.current_thread()
+            thread_name = current_thread.name if current_thread else "Unknown"
+            self._threads[thread_id] = thread_name
 
         # If this is the first time we see this thread, capture the full stack
         if thread_id not in self._call_stack:
@@ -219,13 +237,8 @@ class Profile:
             for parent_id in children:
                 children[parent_id].sort(key=lambda cid: records_by_id[cid][3])
 
-            # Get thread name
-            import threading
-            thread_name = "Unknown"
-            for thread in threading.enumerate():
-                if thread.ident == thread_id:
-                    thread_name = thread.name
-                    break
+            # Get thread name from stored dict
+            thread_name = self._threads.get(thread_id, "Unknown")
 
             # Calculate thread start time (earliest call) and duration (profile duration)
             thread_start_time = 0  # Thread starts when profiling starts
@@ -245,6 +258,175 @@ class Profile:
             }
 
         return result
+
+    def analyze_function(self, func_name):
+        """
+        Analyze all invocations of a specific function across all threads.
+
+        Returns:
+            dict: {
+                'totals_by_thread': {thread_id: {...}},
+                'callers': {caller_func: {...}},
+                'subcalls': {child_func: {...}}
+            }
+        """
+        records = list(self._records.values())
+
+        # Find all invocations of this function
+        function_calls = []
+        for record in records:
+            call_id, parent_id, thread_id, start_time, end_time, record_func_name, filename, line_no = record
+            if record_func_name == func_name:
+                duration = (end_time - start_time) if end_time else 0
+                function_calls.append({
+                    'call_id': call_id,
+                    'parent_id': parent_id,
+                    'thread_id': thread_id,
+                    'start_time': start_time,
+                    'end_time': end_time,
+                    'duration': duration,
+                    'filename': filename,
+                    'line_no': line_no
+                })
+
+        # Calculate totals by thread
+        totals_by_thread = self._calculate_thread_totals(function_calls)
+
+        # Calculate caller statistics
+        callers = self._calculate_caller_stats(func_name, function_calls, records)
+
+        # Calculate subcall statistics
+        subcalls = self._calculate_subcall_stats(func_name, function_calls, records)
+
+        return {
+            'totals_by_thread': totals_by_thread,
+            'callers': callers,
+            'subcalls': subcalls
+        }
+
+    def _calculate_thread_totals(self, function_calls):
+        """Calculate per-thread statistics for function calls"""
+        thread_stats = {}
+
+        for call in function_calls:
+            thread_id = call['thread_id']
+            duration = call['duration']
+
+            if thread_id not in thread_stats:
+                thread_stats[thread_id] = {
+                    'n_calls': 0,
+                    'total_duration': 0,
+                    'durations': []
+                }
+
+            thread_stats[thread_id]['n_calls'] += 1
+            thread_stats[thread_id]['total_duration'] += duration
+            thread_stats[thread_id]['durations'].append(duration)
+
+        # Calculate derived statistics
+        profile_duration = self._profile_end_time - self._profile_start_time if self._profile_end_time else 0
+
+        for thread_id, stats in thread_stats.items():
+            durations = stats['durations']
+            stats['avg_duration'] = stats['total_duration'] / stats['n_calls']
+            stats['min_duration'] = min(durations)
+            stats['max_duration'] = max(durations)
+            # Percentage of total profile time (since thread ran for full profile duration)
+            stats['percentage'] = (stats['total_duration'] / profile_duration * 100) if profile_duration > 0 else 0
+
+            # Get thread name from stored dict
+            thread_name = self._threads.get(thread_id, "Unknown")
+            stats['thread_name'] = thread_name
+
+        return thread_stats
+
+    def _calculate_caller_stats(self, func_name, function_calls, all_records):
+        """Calculate statistics for functions that call the target function"""
+        caller_stats = {}
+        records_by_id = {r[0]: r for r in all_records}
+
+        for call in function_calls:
+            parent_id = call['parent_id']
+            if parent_id is None:
+                continue
+
+            # Find the parent call record
+            if parent_id not in records_by_id:
+                continue
+
+            parent_record = records_by_id[parent_id]
+            caller_func = parent_record[5]  # func_qualified_name
+
+            if caller_func not in caller_stats:
+                caller_stats[caller_func] = {
+                    'n_calls': 0,
+                    'total_duration': 0,
+                    'durations': [],
+                    'caller_total_duration': 0,
+                    'caller_invocations': []
+                }
+
+            caller_stats[caller_func]['n_calls'] += 1
+            caller_stats[caller_func]['total_duration'] += call['duration']
+            caller_stats[caller_func]['durations'].append(call['duration'])
+
+            # Track this caller invocation
+            caller_duration = (parent_record[4] - parent_record[3]) if parent_record[4] else 0
+            caller_stats[caller_func]['caller_invocations'].append(caller_duration)
+
+        # Calculate derived statistics
+        for caller_func, stats in caller_stats.items():
+            durations = stats['durations']
+            caller_invocations = stats['caller_invocations']
+
+            stats['avg_duration'] = stats['total_duration'] / stats['n_calls']
+            stats['min_duration'] = min(durations)
+            stats['max_duration'] = max(durations)
+
+            # Calculate percentage: time in target function / total time of caller invocations that called target
+            caller_total_time = sum(caller_invocations)
+            stats['percentage'] = (stats['total_duration'] / caller_total_time * 100) if caller_total_time > 0 else 0
+
+        return caller_stats
+
+    def _calculate_subcall_stats(self, func_name, function_calls, all_records):
+        """Calculate statistics for functions called by the target function"""
+        subcall_stats = {}
+        records_by_id = {r[0]: r for r in all_records}
+
+        # Find all child calls of our function invocations
+        for call in function_calls:
+            call_id = call['call_id']
+
+            # Find all records that have this call as their parent
+            for record in all_records:
+                if record[1] == call_id:  # parent_id matches our call_id
+                    child_func = record[5]  # func_qualified_name
+                    child_duration = (record[4] - record[3]) if record[4] else 0
+
+                    if child_func not in subcall_stats:
+                        subcall_stats[child_func] = {
+                            'n_calls': 0,
+                            'total_duration': 0,
+                            'durations': []
+                        }
+
+                    subcall_stats[child_func]['n_calls'] += 1
+                    subcall_stats[child_func]['total_duration'] += child_duration
+                    subcall_stats[child_func]['durations'].append(child_duration)
+
+        # Calculate derived statistics
+        total_function_duration = sum(call['duration'] for call in function_calls)
+
+        for child_func, stats in subcall_stats.items():
+            durations = stats['durations']
+            stats['avg_duration'] = stats['total_duration'] / stats['n_calls']
+            stats['min_duration'] = min(durations)
+            stats['max_duration'] = max(durations)
+            # Percentage of total time spent in target function
+            stats['percentage'] = (stats['total_duration'] / total_function_duration * 100) if total_function_duration > 0 else 0
+
+        return subcall_stats
 
     def print_events_hierarchical(self, events):
         """Print events in chronological order with hierarchical indentation."""
@@ -326,9 +508,9 @@ class Profile:
             print(f"  {func_name}: {total_time:.6f}s total, {call_count} calls, {avg_time:.6f}s avg")
 
 
-def start_profile(max_depth=None):
+def start_profile(max_depth=None, max_duration=0):
     """Start profiling and return a Profile instance."""
-    profile = Profile(max_depth=max_depth)
+    profile = Profile(max_depth=max_depth, max_duration=max_duration)
     profile.start()
     return profile
 
