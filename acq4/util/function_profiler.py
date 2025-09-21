@@ -95,26 +95,33 @@ class Profile:
 
     def _profile_function(self, frame, event, arg):
         """Profile function for capturing function calls across all threads."""
-        if not self._active:
-            return
+        try:
+            if not self._active:
+                return
 
-        thread_id = threading.get_ident()
+            thread_id = threading.get_ident()
 
-        # Record thread name if we haven't seen this thread before
-        if thread_id not in self._threads:
-            # Find thread name
-            current_thread = threading.current_thread()
-            thread_name = current_thread.name if current_thread else "Unknown"
-            self._threads[thread_id] = thread_name
+            # Record thread name if we haven't seen this thread before
+            if thread_id not in self._threads:
+                # Find thread name
+                current_thread = threading.current_thread()
+                thread_name = current_thread.name if current_thread else "Unknown"
+                self._threads[thread_id] = thread_name
 
-        # If this is the first time we see this thread, capture the full stack
-        if thread_id not in self._call_stack:
-            self._capture_full_stack(frame, thread_id)
+            # If this is the first time we see this thread, capture the full stack
+            if thread_id not in self._call_stack:
+                self._capture_full_stack(frame, thread_id)
 
-        if event == 'call':
-            self._handle_call(frame, thread_id)
-        elif event == 'return':
-            self._handle_return(frame, thread_id)
+            if event in ('call', 'c_call'):
+                self._handle_call(frame, thread_id, arg if event == 'c_call' else None)
+            elif event in ('return', 'c_return', 'c_exception'):
+                self._handle_return(frame, thread_id, arg if event.startswith('c_') else None)
+
+        except Exception:
+            # If profiler function has an exception, stop profiling to prevent cascading failures
+            self.stop()
+            # Re-raise the exception so it's still visible
+            raise
 
     def _capture_full_stack(self, frame, thread_id):
         """Capture the full call stack for a thread when first encountered."""
@@ -135,8 +142,8 @@ class Profile:
         for stack_frame in stack_frames:
             self._handle_call(stack_frame, thread_id)
 
-    def _handle_call(self, frame, thread_id):
-        """Handle function call event."""
+    def _handle_call(self, frame, thread_id, c_arg=None):
+        """Handle function call event (Python or C extension)."""
         call_id = self._next_id()
 
         # Get parent ID from call stack
@@ -147,17 +154,25 @@ class Profile:
 
         # Only record if within depth limit
         if self._max_depth is None or len(self._call_stack[thread_id]) <= self._max_depth:
-            # Get function information
-            func_name = frame.f_code.co_name
-            filename = frame.f_code.co_filename
-            line_no = frame.f_lineno
-
-            # Build qualified name
-            if 'self' in frame.f_locals:
-                class_name = frame.f_locals['self'].__class__.__name__
-                func_qualified_name = f"{class_name}.{func_name}"
+            # Get function information (different for C vs Python)
+            if c_arg is not None:
+                # C extension function
+                func_name = getattr(c_arg, '__name__', str(c_arg))
+                func_qualified_name = f"C:{func_name}"
+                filename = "<C extension>"
+                line_no = 0
             else:
-                func_qualified_name = func_name
+                # Python function
+                func_name = frame.f_code.co_name
+                filename = frame.f_code.co_filename
+                line_no = frame.f_lineno
+
+                # Build qualified name
+                if 'self' in frame.f_locals:
+                    class_name = frame.f_locals['self'].__class__.__name__
+                    func_qualified_name = f"{class_name}.{func_name}"
+                else:
+                    func_qualified_name = func_name
 
             # Store time relative to profile start
             start_time = time.perf_counter() - self._profile_start_time
@@ -165,18 +180,71 @@ class Profile:
             # Record: [ID, parent_ID, thread_id, start_time, end_time, func_qualified_name, file, line_no]
             record = [call_id, parent_id, thread_id, start_time, None, func_qualified_name, filename, line_no]
             self._records[call_id] = record
+        print("CALL:", call_id, parent_id, thread_id, func_qualified_name, filename, line_no)
 
-    def _handle_return(self, frame, thread_id):
-        """Handle function return event."""
+    def _handle_return(self, frame, thread_id, c_arg=None):
+        """Handle function return event (Python or C extension)."""
         if thread_id not in self._call_stack or not self._call_stack[thread_id]:
             return
 
         call_id = self._call_stack[thread_id].pop()
 
-        # Only update end time if we recorded this call
+        # Verify that the function being exited matches the one on top of the stack
         if call_id in self._records:
+            expected_record = self._records[call_id]
+            expected_func_name = expected_record[5]  # func_qualified_name
+            expected_filename = expected_record[6]   # filename
+            expected_lineno = expected_record[7]     # line_no
+
+            # Get current frame information (different for C vs Python)
+            if c_arg is not None:
+                # C extension function
+                actual_func_name = getattr(c_arg, '__name__', str(c_arg))
+                actual_qualified_name = f"C:{actual_func_name}"
+                actual_filename = "<C extension>"
+                actual_lineno = 0
+            else:
+                # Python function
+                actual_func_name = frame.f_code.co_name
+                actual_filename = frame.f_code.co_filename
+                actual_lineno = frame.f_lineno
+
+                # Build qualified name for comparison
+                if 'self' in frame.f_locals:
+                    class_name = frame.f_locals['self'].__class__.__name__
+                    actual_qualified_name = f"{class_name}.{actual_func_name}"
+                else:
+                    actual_qualified_name = actual_func_name
+
+            print("RETURN:", call_id, thread_id, actual_qualified_name, actual_filename, actual_lineno)
+
+            # Verify stack consistency
+            if (expected_func_name != actual_qualified_name or
+                expected_filename != actual_filename):
+                # Gather stack context for debugging
+                stack_info = []
+                for i, stack_call_id in enumerate(self._call_stack[thread_id]):
+                    if stack_call_id in self._records:
+                        record = self._records[stack_call_id]
+                        stack_info.append(f"  [{i}] {record[5]} at {record[6]}:{record[7]}")
+                    else:
+                        stack_info.append(f"  [{i}] call_id={stack_call_id} (no record)")
+
+                stack_context = "\n".join(stack_info) if stack_info else "  (empty stack)"
+
+                raise RuntimeError(
+                    f"Stack corruption detected in thread {thread_id}: "
+                    f"Expected to exit {expected_func_name} at {expected_filename}:{expected_lineno}, "
+                    f"but actually exiting {actual_qualified_name} at {actual_filename}:{actual_lineno}\n"
+                    f"Current call stack:\n{stack_context}"
+                )
+
             # Store time relative to profile start
             self._records[call_id][4] = time.perf_counter() - self._profile_start_time
+        else:
+            # Call ID not found in records; this should not happen
+            raise RuntimeError(f"Call ID {call_id} not found in records during return handling.")
+
 
     def get_records(self):
         """Get all recorded function call data."""
