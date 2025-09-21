@@ -4,6 +4,7 @@ from .function_profiler import FunctionProfiler
 from .qt_profiler import QtEventProfiler
 from .memory_profiler import MemoryProfiler
 from .custom_function_profiler import CustomFunctionProfiler
+from .new_profiler import NewProfiler
 
 
 class Profiler(Module):
@@ -41,12 +42,14 @@ class Profiler(Module):
         self.qt_profiler = QtEventProfiler(self.win)
         self.memory_profiler = MemoryProfiler(self.win)
         self.custom_function_profiler = CustomFunctionProfiler(self.win)
+        self.new_profiler = NewProfiler(self.win)
 
         # Add tabs
         self.tab_widget.addTab(self.function_profiler.widget, "Function Profile")
         self.tab_widget.addTab(self.qt_profiler.widget, "Qt Event Profile")
         self.tab_widget.addTab(self.memory_profiler.widget, "Memory Profile")
         self.tab_widget.addTab(self.custom_function_profiler.widget, "Custom Function Profile")
+        self.tab_widget.addTab(self.new_profiler.widget, "New Profiler")
 
         self.win.show()
 

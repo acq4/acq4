@@ -96,6 +96,10 @@ class Profile:
                             print("-------")
                 else:
                     raise ValueError(f"Unknown event type: {event[3]}")
+            # set the end time for any calls that didn't return
+            end_time = self.stop_time
+            for call in stack:
+                call.duration = end_time - call.timestamp
             result[tid] = root_calls
 
         return result
