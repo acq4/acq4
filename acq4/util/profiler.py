@@ -99,12 +99,12 @@ class Profile:
                         last_call = stack.pop()  # if stack is empty here, something went wrong
                         if last_call.try_return(event):
                             break
-                        else:
-                            print("stack:")
-                            print(last_call)
-                            for c in stack:
-                                print(c)
-                            print("-------")
+                        # else:
+                        #     print("stack:")
+                        #     print(last_call)
+                        #     for c in stack:
+                        #         print(c)
+                        #     print("-------")
                 else:
                     raise ValueError(f"Unknown event type: {event[3]}")
             # set the end time for any calls that didn't return
@@ -169,7 +169,7 @@ class CallRecord:
             self.duration = timestamp - self.timestamp
             return True
         
-        print(f"Unmatched return event:\n  {self.event_type}:{ev_type}\n  {self.frame}:{frame} {self.frame is frame}\n  {self.arg}:{arg} {self.arg is arg}")
+        # print(f"Unmatched return event:\n  {self.event_type}:{ev_type}\n  {self.frame}:{frame} {self.frame is frame}\n  {self.arg}:{arg} {self.arg is arg}")
         return False
 
     @property
