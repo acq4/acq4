@@ -261,6 +261,32 @@ class NumericalTreeWidgetItem(Qt.QTreeWidgetItem):
                 self.setText(column, "—" if value is None else format_str.format(value * scale))
                 self._numerical_data[column] = value or 0.0
 
+    def _auto_expand_single_path(self):
+        """Recursively expand single-child paths until reaching a level with multiple children"""
+        # For LazyCallItem, check call_record.children
+        if hasattr(self, 'call_record') and hasattr(self.call_record, 'children'):
+            if len(self.call_record.children) == 1:
+                self._expand_and_continue()
+        # For LazyThreadItem, check root_calls
+        elif hasattr(self, 'root_calls'):
+            if len(self.root_calls) == 1:
+                self._expand_and_continue()
+
+    def _expand_and_continue(self):
+        """Helper method to expand this item and continue auto-expansion"""
+        self.setExpanded(True)
+        if not hasattr(self, 'children_loaded') or not self.children_loaded:
+            self.load_children()
+
+        # Continue expanding the first child after a delay
+        if self.childCount() > 0:
+            child_item = self.child(0)
+            if hasattr(child_item, '_auto_expand_single_path'):
+                # Use longer delay to ensure tree layout and scroll have completed
+                Qt.QTimer.singleShot(50, lambda: child_item._auto_expand_single_path())
+                # Scroll to keep visible with a slight delay after expansion
+                Qt.QTimer.singleShot(100, lambda: self._scroll_to_keep_visible(child_item))
+
     def _scroll_to_keep_visible(self, expanded_child):
         """Implement intelligent scrolling after auto-expansion
 
@@ -271,43 +297,52 @@ class NumericalTreeWidgetItem(Qt.QTreeWidgetItem):
             expanded_child: The child item that was just expanded
         """
         tree_widget = self.treeWidget()
-        if not tree_widget:
+        if not tree_widget or not expanded_child:
             return
 
-        # Find the deepest expanded item by recursively following single children
+        # Find the deepest visible item by recursively following expanded single children
         deepest_item = expanded_child
-        while (hasattr(deepest_item, 'children_loaded') and
-               deepest_item.children_loaded and
+        while (deepest_item.isExpanded() and
                deepest_item.childCount() == 1):
             deepest_item = deepest_item.child(0)
 
         # Get the visual rectangles for both items
-        expanded_rect = tree_widget.visualItemRect(self)
+        parent_rect = tree_widget.visualItemRect(self)
         deepest_rect = tree_widget.visualItemRect(deepest_item)
 
-        if expanded_rect.isNull() or deepest_rect.isNull():
+        if parent_rect.isNull() or deepest_rect.isNull():
             return
 
         # Get viewport geometry
         viewport = tree_widget.viewport()
         viewport_height = viewport.height()
+        viewport_top = 0
+        viewport_bottom = viewport_height
 
-        # Calculate current scroll position
-        current_scroll = tree_widget.verticalScrollBar().value()
+        # Check if deepest item is already visible
+        if (deepest_rect.top() >= viewport_top and
+            deepest_rect.bottom() <= viewport_bottom):
+            return  # Already visible, no scrolling needed
 
-        # Calculate scroll values needed
-        # top_scroll_value: scroll needed to place expanded item at top of view
-        top_scroll_value = current_scroll + expanded_rect.top()
+        # Calculate scroll position to show both parent and deepest item
+        parent_y = parent_rect.top()
+        deepest_y = deepest_rect.bottom()
 
-        # bottom_scroll_value: scroll needed to place deepest item at bottom of view
-        bottom_scroll_value = current_scroll + deepest_rect.bottom() - viewport_height
+        # If the span is too large for viewport, prioritize showing the deepest item
+        span_height = deepest_y - parent_y
+        if span_height > viewport_height:
+            # Just ensure deepest item is visible
+            tree_widget.scrollToItem(deepest_item)
+        else:
+            # Try to show both parent and deepest items
+            # Calculate the scroll needed to show deepest item at bottom of viewport
+            scroll_bar = tree_widget.verticalScrollBar()
+            current_scroll = scroll_bar.value()
+            target_scroll = current_scroll + deepest_y - viewport_height + 20  # 20px margin
 
-        # Use the minimum to avoid scrolling too far
-        new_scroll_value = min(bottom_scroll_value, top_scroll_value)
-
-        # Only scroll if we need to move down (larger scroll values)
-        if new_scroll_value > current_scroll:
-            tree_widget.verticalScrollBar().setValue(int(new_scroll_value))
+            # Only scroll down, not up
+            if target_scroll > current_scroll:
+                scroll_bar.setValue(int(target_scroll))
 
     @staticmethod
     def _formatDuration(duration_seconds):
@@ -381,15 +416,8 @@ class LazyCallItem(NumericalTreeWidgetItem):
 
         self.children_loaded = True
 
-        # Auto-expand if there's only one child
-        if len(self.call_record.children) == 1:
-            child_item = self.child(0)
-            if hasattr(child_item, 'load_children') and hasattr(child_item, 'children_loaded'):
-                if not child_item.children_loaded:
-                    self.setExpanded(True)
-                    child_item.load_children()
-                    # Implement intelligent scrolling after expansion
-                    self._scroll_to_keep_visible(child_item)
+        # Auto-expand recursively until we reach a level with multiple children
+        self._auto_expand_single_path()
 
 
 
@@ -446,15 +474,8 @@ class LazyThreadItem(NumericalTreeWidgetItem):
 
         self.children_loaded = True
 
-        # Auto-expand if there's only one root call
-        if len(self.root_calls) == 1:
-            child_item = self.child(0)
-            if hasattr(child_item, 'load_children') and hasattr(child_item, 'children_loaded'):
-                if not child_item.children_loaded:
-                    self.setExpanded(True)
-                    child_item.load_children()
-                    # Implement intelligent scrolling after expansion
-                    self._scroll_to_keep_visible(child_item)
+        # Auto-expand recursively until we reach a level with multiple children
+        self._auto_expand_single_path()
 
 
 class NewProfiler(Qt.QObject):
@@ -524,7 +545,7 @@ class NewProfiler(Qt.QObject):
             control_panel = self._createControlPanel()
             layout.addWidget(control_panel, 0)
 
-            # Main splitter for results list and profile display
+            # Main horizontal splitter for results list and main content
             main_splitter = Qt.QSplitter(Qt.Qt.Horizontal)
             layout.addWidget(main_splitter)
 
@@ -533,11 +554,11 @@ class NewProfiler(Qt.QObject):
             self.results_list.itemSelectionChanged.connect(self._onResultSelected)
             main_splitter.addWidget(self.results_list)
 
-            # Right side: Vertical splitter for call tree and detail view
+            # Right side: Vertical splitter for call tree (top) and tab widget (bottom)
             right_splitter = Qt.QSplitter(Qt.Qt.Vertical)
             main_splitter.addWidget(right_splitter)
 
-            # Top right: Call tree display
+            # Top: Call tree display
             self.profile_display = Qt.QTreeWidget()
             self.profile_display.setHeaderLabels([
                 "Function/Thread", "Duration (ms)", "Start Time (ms)", "% of Parent", "Module", "Called from"
@@ -550,34 +571,39 @@ class NewProfiler(Qt.QObject):
             self.profile_display.setColumnWidth(NewProfiler.CallTreeColumns.FUNCTION_THREAD, 250)  # Set first column width
             right_splitter.addWidget(self.profile_display)
 
-            # Bottom right container: Function detail view with info label
-            bottom_container = Qt.QWidget()
-            bottom_layout = Qt.QVBoxLayout(bottom_container)
-            bottom_layout.setContentsMargins(0, 0, 0, 0)
-            bottom_layout.setSpacing(2)
+            # Bottom: Tab widget with Analysis and Console tabs
+            self.bottom_tabs = Qt.QTabWidget()
+            right_splitter.addWidget(self.bottom_tabs)
+
+            # Analysis tab container
+            analysis_container = Qt.QWidget()
+            analysis_layout = Qt.QVBoxLayout(analysis_container)
+            analysis_layout.setContentsMargins(0, 0, 0, 0)
+            analysis_layout.setSpacing(2)
 
             # Function info label
             self.function_info_label = Qt.QLabel("Select a function to see details")
             self.function_info_label.setStyleSheet("font-weight: bold; padding: 4px; background-color: #f0f0f0; border: 1px solid #ccc;")
             self.function_info_label.setWordWrap(True)
-            bottom_layout.addWidget(self.function_info_label)
+            analysis_layout.addWidget(self.function_info_label)
 
             # Function detail view
             self.detail_tree = Qt.QTreeWidget()
             self.detail_tree.setHeaderLabels(['Name', 'Module', 'Calls', 'Percentage (%)', 'Total (ms)', 'Avg (ms)', 'Min (ms)', 'Max (ms)'])
             self.detail_tree.setSortingEnabled(True)
             self.detail_tree.setColumnWidth(NewProfiler.DetailTreeColumns.NAME, 250)  # Set first column width
-            bottom_layout.addWidget(self.detail_tree)
+            analysis_layout.addWidget(self.detail_tree)
 
-            right_splitter.addWidget(bottom_container)
-
-            # Add console
+            # Console tab
             self.console = ConsoleWidget(namespace={'profiler': self})
-            right_splitter.addWidget(self.console)
+
+            # Add tabs
+            self.bottom_tabs.addTab(analysis_container, "Analysis")
+            self.bottom_tabs.addTab(self.console, "Console")
 
             # Set splitter proportions
             main_splitter.setSizes([200, 800])
-            right_splitter.setSizes([300, 200, 200])  # call tree, detail tree, console
+            right_splitter.setSizes([400, 300])  # call tree (top), tabs (bottom)
 
         return widget
 
