@@ -203,29 +203,28 @@ class FileHandle(Qt.QObject):
 
     def name(self, relativeTo=None) -> str:
         """Return the full name of this file with its absolute path"""
-        with self.lock:
-            path = self.path
-            if relativeTo == self:
-                path = ''
-            elif relativeTo is not None:
-                commonParent = relativeTo
-                pcount = 0
-                while not (self is commonParent or self.isGrandchildOf(commonParent)):
-                    pcount += 1
-                    commonParent = commonParent.parent()
-                    if commonParent is None:
-                        raise Exception(
-                            f"No relative path found from {relativeTo.name()} to {self.name()}."
-                        )
-                rpath = path[len(os.path.join(commonParent.name(), '')):]
-                if pcount == 0:
-                    return rpath
-                ppath = os.path.join(*(['..'] * pcount))
-                if rpath == '':
-                    return ppath
-                else:
-                    return os.path.join(ppath, rpath)
-            return path
+        path = self.path
+        if relativeTo == self:
+            path = ''
+        elif relativeTo is not None:
+            commonParent = relativeTo
+            pcount = 0
+            while not (self is commonParent or self.isGrandchildOf(commonParent)):
+                pcount += 1
+                commonParent = commonParent.parent()
+                if commonParent is None:
+                    raise Exception(
+                        f"No relative path found from {relativeTo.name()} to {self.name()}."
+                    )
+            rpath = path[len(os.path.join(commonParent.name(), '')):]
+            if pcount == 0:
+                return rpath
+            ppath = os.path.join(*(['..'] * pcount))
+            if rpath == '':
+                return ppath
+            else:
+                return os.path.join(ppath, rpath)
+        return path
 
     def shortName(self):
         """Return the name of this file without its path"""
@@ -237,11 +236,10 @@ class FileHandle(Qt.QObject):
 
     def parent(self):
         self.checkExists()
-        with self.lock:
-            if self.parentDir is None:
-                dirName = os.path.split(self.name())[0]
-                self.parentDir = self.manager.getDirHandle(dirName)
-            return self.parentDir
+        if self.parentDir is None:
+            dirName = os.path.split(self.name())[0]
+            self.parentDir = self.manager.getDirHandle(dirName)
+        return self.parentDir
 
     def info(self):
         self.checkExists()
@@ -360,18 +358,17 @@ class FileHandle(Qt.QObject):
     def nearestLogFile(self):
         """Return the nearest log file to this file, or None if no log file is found."""
         self.checkExists()
-        with self.lock:
-            fh = self
-            while fh is not None:
-                if fh.shortName() in ['log.txt', 'log.json']:
-                    return fh
-                elif fh.isDir():
-                    if fh.exists('log.json'):
-                        return fh['log.json']
-                    if fh.exists('log.txt'):
-                        return fh['log.txt']
-                fh = fh.parent()
-            return None
+        fh = self
+        while fh is not None:
+            if fh.shortName() in ['log.txt', 'log.json']:
+                return fh
+            elif fh.isDir():
+                if fh.exists('log.json'):
+                    return fh['log.json']
+                if fh.exists('log.txt'):
+                    return fh['log.txt']
+            fh = fh.parent()
+        return None
 
     def __eq__(self, other):
         if not isinstance(other, FileHandle):
@@ -382,14 +379,13 @@ class FileHandle(Qt.QObject):
         return hash(abspath(self.name()))
 
     def fileType(self):
-        with self.lock:
-            info = self.info()
-            # Use the recorded object_type to read the file if possible.
-            # Otherwise, ask the filetypes to choose the type for us.
-            if '__object_type__' not in info:
-                return filetypes.suggestReadType(self)
-            else:
-                return info['__object_type__']
+        info = self.info()
+        # Use the recorded object_type to read the file if possible.
+        # Otherwise, ask the filetypes to choose the type for us.
+        if '__object_type__' not in info:
+            return filetypes.suggestReadType(self)
+        else:
+            return info['__object_type__']
 
     def emitChanged(self, change, *args):
         self.delayedChanges.append(change)
@@ -486,9 +482,8 @@ class DirHandle(FileHandle):
 
     def subDirs(self):
         """Return a list of string names for all sub-directories."""
-        with self.lock:
-            ls = self.ls()
-            return [d for d in ls if os.path.isdir(os.path.join(self.name(), d))]
+        ls = self.ls()
+        return [d for d in ls if os.path.isdir(os.path.join(self.name(), d))]
 
     def incrementFileName(self, fileName, useExt=True):
         """Given fileName.ext, finds the next available fileName_NNN.ext"""
@@ -560,15 +555,14 @@ class DirHandle(FileHandle):
         """Return a list of all files in the directory.
         If normcase is True, normalize the case of all names in the list.
         sortMode may be 'date', 'alpha', or None."""
-        with self.lock:
-            if (not useCache) or (sortMode not in self.lsCache):
-                self._updateLsCache(sortMode)
-            files = self.lsCache[sortMode]
+        if (not useCache) or (sortMode not in self.lsCache):
+            self._updateLsCache(sortMode)
+        files = self.lsCache[sortMode]
 
-            if normcase:
-                return list(map(os.path.normcase, files))
-            else:
-                return files[:]
+        if normcase:
+            return list(map(os.path.normcase, files))
+        else:
+            return files[:]
 
     def _updateLsCache(self, sortMode):
         try:
@@ -633,28 +627,25 @@ class DirHandle(FileHandle):
 
     def _fileInfo(self, file):
         """Return a dict of the meta info stored for file"""
-        with self.lock:
-            if not self.isManaged():
-                return {}
-            index = self._readIndex()
-            if file in index:
-                return index[file]
-            else:
-                return {}
+        if not self.isManaged():
+            return {}
+        index = self._readIndex()
+        if file in index:
+            return index[file]
+        else:
+            return {}
 
     def isDir(self, path=None):
-        with self.lock:
-            if path is None:
-                return True
-            else:
-                return self[path].isDir()
+        if path is None:
+            return True
+        else:
+            return self[path].isDir()
 
     def isFile(self, fileName=None):
         if fileName is None:
             return False
-        with self.lock:
-            fn = os.path.abspath(os.path.join(self.path, fileName))
-            return os.path.isfile(fn)
+        fn = os.path.abspath(os.path.join(self.path, fileName))
+        return os.path.isfile(fn)
 
     def createFile(self, fileName, info=None, autoIncrement=False):
         """Create a blank file"""
@@ -720,7 +711,6 @@ class DirHandle(FileHandle):
 
     def indexFile(self, fileName, info=None, protect=False):
         """Add a pre-existing file into the index. Overwrites any pre-existing info for the file unless protect is True"""
-        #print "DirHandle: Adding file %s to index" % fileName
         if info is None:
             info = {}
         with self.lock:
@@ -754,39 +744,35 @@ class DirHandle(FileHandle):
                 self.emitChanged('meta', fileName)
 
     def isManaged(self, fileName=None):
-        with self.lock:
-            if self._indexFileExists is False:
-                return False
-            if fileName is None:
-                return True
-            else:
-                ind = self._readIndex(unmanagedOk=True)
-                if ind is None:
-                    return False
-                return (fileName in ind)
+        if not self._indexFileExists:
+            return False
+        if fileName is None:
+            return True
+        ind = self._readIndex(unmanagedOk=True)
+        if ind is None:
+            return False
+        return fileName in ind
 
     def setInfo(self, *args, **kargs):
         self._setFileInfo('.', *args, **kargs)
 
     def exists(self, name=None):
         """Returns True if the file 'name' exists in this directory, False otherwise."""
-        with self.lock:
-            if self.path is None:
-                return False
-            if name is None:
-                return os.path.exists(self.path)
+        if self.path is None:
+            return False
+        if name is None:
+            return os.path.exists(self.path)
 
-            try:
-                fn = os.path.abspath(os.path.join(self.path, name))
-            except:
-                print(self.path, name)
-                raise
-            return os.path.exists(fn)
+        try:
+            fn = os.path.abspath(os.path.join(self.path, name))
+        except:
+            print(self.path, name)
+            raise
+        return os.path.exists(fn)
 
     def hasMatchingChildren(self, test: Callable[[FileHandle], bool]):
         """Returns True if any child of this directory matches the given test function."""
-        with self.lock:
-            return any(test(self[f]) for f in self.ls())
+        return any(test(self[f]) for f in self.ls())
 
     def representativeFramesForAllImages(self):
         from acq4.util.imaging import Frame
