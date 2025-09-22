@@ -176,10 +176,11 @@ PERFORMANCE CHARACTERISTICS:
 
 import sys
 from datetime import datetime
+from typing import Optional
 from acq4.util import Qt
 import pyqtgraph as pg
 from pyqtgraph.console import ConsoleWidget
-from acq4.util.profiler import Profile, CallRecord, ProfileAnalyzer, TreeDisplayData, ThreadDisplayData
+from acq4.util.profiler import Profile, CallRecord, ProfileAnalyzer, TreeDisplayData, ThreadDisplayData, FunctionAnalysis
 
 
 class ProfileResult:
@@ -327,7 +328,7 @@ class NumericalTreeWidgetItem(Qt.QTreeWidgetItem):
 class LazyCallItem(NumericalTreeWidgetItem):
     """Tree item that lazy-loads child calls"""
 
-    def __init__(self, parent, call_record, profile_start_time, profiler=None):
+    def __init__(self, parent, call_record: CallRecord, profile_start_time: float, profiler=None):
         super().__init__(parent)
         self.call_record: CallRecord = call_record
         self.profile_start_time = profile_start_time  # Store for child items
@@ -769,7 +770,7 @@ class NewProfiler(Qt.QObject):
             if self.console:
                 self.console.setStack(None)
 
-    def _updateFunctionInfoLabel(self, call_record):
+    def _updateFunctionInfoLabel(self, call_record: CallRecord):
         """Update the function info label with selected function details"""
         func_name = call_record.display_name
         filename = call_record.filename
@@ -777,7 +778,7 @@ class NewProfiler(Qt.QObject):
         short_filename = filename.split('/')[-1] if '/' in filename else filename
         self.function_info_label.setText(f"Function: {func_name} | File: {filename} | Line: {line_no}")
 
-    def _highlightFunction(self, call_record):
+    def _highlightFunction(self, call_record: CallRecord):
         """Highlight all instances of the specified function in the call tree"""
         # Clear previous highlighting
         self._clearHighlighting()
@@ -808,7 +809,7 @@ class NewProfiler(Qt.QObject):
 
         self.currently_highlighted_function = None
 
-    def _displayFunctionDetails(self, call_record, result):
+    def _displayFunctionDetails(self, call_record: CallRecord, result):
         """Display detailed analysis of the selected function"""
         self.detail_tree.clear()
 
@@ -874,7 +875,7 @@ class NewProfiler(Qt.QObject):
         return item
 
 
-    def _addCallersSection(self, analysis):
+    def _addCallersSection(self, analysis: FunctionAnalysis):
         """Add callers section to detail tree using FunctionAnalysis"""
         callers_data = analysis.get_callers_with_percentages()
         if not callers_data:
@@ -885,9 +886,11 @@ class NewProfiler(Qt.QObject):
 
         # Get actual CallRecord objects for caller functions using ProfileAnalyzer
         for caller_key, stats in callers_data.items():
-            # Use ProfileAnalyzer to find the actual CallRecord for this caller function
-            caller_record = analysis.analyzer.get_call_record_by_function_key(caller_key)
-            if caller_record:
+            # Use ProfileAnalyzer to find CallRecord instances for this caller function
+            caller_records = analysis.analyzer.get_call_records(caller_key) if analysis.analyzer else []
+            if caller_records:
+                # Use the first record for display (they all represent the same function)
+                caller_record = caller_records[0]
                 display_name = caller_record.display_name
                 module_name = caller_record.module
             else:
@@ -896,7 +899,7 @@ class NewProfiler(Qt.QObject):
 
             self._createStatisticsTreeItem(callers_item, display_name, module_name, stats, stats['percentage'])
 
-    def _addSubcallsSection(self, analysis):
+    def _addSubcallsSection(self, analysis: FunctionAnalysis):
         """Add subcalls section to detail tree using FunctionAnalysis"""
         subcalls_data = analysis.get_subcalls_with_percentages()
         if not subcalls_data:
@@ -907,9 +910,11 @@ class NewProfiler(Qt.QObject):
 
         # Get actual CallRecord objects for subcall functions using ProfileAnalyzer
         for subcall_key, stats in subcalls_data.items():
-            # Use ProfileAnalyzer to find the actual CallRecord for this subcall function
-            subcall_record = analysis.analyzer.get_call_record_by_function_key(subcall_key)
-            if subcall_record:
+            # Use ProfileAnalyzer to find CallRecord instances for this subcall function
+            subcall_records = analysis.analyzer.get_call_records(subcall_key) if analysis.analyzer else []
+            if subcall_records:
+                # Use the first record for display (they all represent the same function)
+                subcall_record = subcall_records[0]
                 display_name = subcall_record.display_name
                 module_name = subcall_record.module
             else:
