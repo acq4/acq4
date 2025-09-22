@@ -175,14 +175,11 @@ PERFORMANCE CHARACTERISTICS:
 """
 
 import sys
-import time
 from datetime import datetime
 from acq4.util import Qt
-
-
-# Only import if Python 3.12+
-if sys.version_info >= (3, 12):
-    from acq4.util.profiler import Profile
+import pyqtgraph as pg
+from pyqtgraph.console import ConsoleWidget
+from acq4.util.profiler import Profile, CallRecord
 
 
 class ProfileResult:
@@ -202,12 +199,16 @@ class ProfileResult:
 class NumericalTreeWidgetItem(Qt.QTreeWidgetItem):
     """QTreeWidgetItem that sorts numerically instead of alphabetically"""
 
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._numerical_data = {}  # Store numerical values by column for sorting
+
     def __lt__(self, other):
         column = self.treeWidget().sortColumn()
         try:
-            # Try to get numerical data from UserRole first
-            my_data = self.data(column, Qt.Qt.UserRole)
-            other_data = other.data(column, Qt.Qt.UserRole)
+            # Try to get numerical data from our attribute first
+            my_data = self._numerical_data.get(column)
+            other_data = getattr(other, '_numerical_data', {}).get(column)
 
             if my_data is not None and other_data is not None:
                 return float(my_data) < float(other_data)
@@ -218,30 +219,107 @@ class NumericalTreeWidgetItem(Qt.QTreeWidgetItem):
             # Fallback to string comparison
             return self.text(column) < other.text(column)
 
+    def _setNumericalData(self, column_values):
+        """Set both text and numerical data for multiple columns
+
+        Args:
+            column_values: dict mapping column index to (text_value, numerical_value) tuples
+        """
+        for column, (text_val, num_val) in column_values.items():
+            self.setText(column, text_val)
+            self._numerical_data[column] = num_val
+
+    def _findParentAttribute(self, attribute_name, default_value=None):
+        """Walk up parent hierarchy to find an attribute
+
+        Args:
+            attribute_name: Name of attribute to find
+            default_value: Value to return if not found
+
+        Returns:
+            The attribute value or default_value
+        """
+        current = self.parent()
+        while current is not None:
+            if hasattr(current, attribute_name):
+                return getattr(current, attribute_name)
+            current = current.parent()
+        return default_value
+
+    def _scroll_to_keep_visible(self, expanded_child):
+        """Implement intelligent scrolling after auto-expansion
+
+        Ensures newly expanded items are visible while keeping the original
+        expanded item in view.
+
+        Args:
+            expanded_child: The child item that was just expanded
+        """
+        tree_widget = self.treeWidget()
+        if not tree_widget:
+            return
+
+        # Find the deepest expanded item by recursively following single children
+        deepest_item = expanded_child
+        while (hasattr(deepest_item, 'children_loaded') and
+               deepest_item.children_loaded and
+               deepest_item.childCount() == 1):
+            deepest_item = deepest_item.child(0)
+
+        # Get the visual rectangles for both items
+        expanded_rect = tree_widget.visualItemRect(self)
+        deepest_rect = tree_widget.visualItemRect(deepest_item)
+
+        if expanded_rect.isNull() or deepest_rect.isNull():
+            return
+
+        # Get viewport geometry
+        viewport = tree_widget.viewport()
+        viewport_height = viewport.height()
+
+        # Calculate current scroll position
+        current_scroll = tree_widget.verticalScrollBar().value()
+
+        # Calculate scroll values needed
+        # top_scroll_value: scroll needed to place expanded item at top of view
+        top_scroll_value = current_scroll + expanded_rect.top()
+
+        # bottom_scroll_value: scroll needed to place deepest item at bottom of view
+        bottom_scroll_value = current_scroll + deepest_rect.bottom() - viewport_height
+
+        # Use the minimum to avoid scrolling too far
+        new_scroll_value = min(bottom_scroll_value, top_scroll_value)
+
+        # Only scroll if we need to move down (larger scroll values)
+        if new_scroll_value > current_scroll:
+            tree_widget.verticalScrollBar().setValue(int(new_scroll_value))
+
+    @staticmethod
+    def _formatDuration(duration_seconds):
+        """Format duration in seconds to milliseconds text
+
+        Args:
+            duration_seconds: Duration in seconds or None
+
+        Returns:
+            Formatted string (e.g., "123.456" or "—")
+        """
+        if duration_seconds is not None and duration_seconds > 0:
+            return f"{duration_seconds * 1000:.3f}"
+        else:
+            return "—"
+
 
 class LazyCallItem(NumericalTreeWidgetItem):
     """Tree item that lazy-loads child calls"""
 
     def __init__(self, parent, call_record, profile_start_time, profiler=None):
         super().__init__(parent)
-        self.call_record = call_record
+        self.call_record: CallRecord = call_record
         self.profiler = profiler
         self.children_loaded = False
 
-        # Get profile duration for initial stack items
-        profile_duration = self._getProfileDuration()
-
-        # Set display data
-        if call_record.duration is not None:
-            # Normal call with duration
-            duration_ms = call_record.duration * 1000
-            duration_text = f"{duration_ms:.3f}"
-            actual_duration = call_record.duration
-        else:
-            # Initial stack item that never returns - use total profile duration
-            duration_ms = profile_duration * 1000
-            duration_text = f"{duration_ms:.3f}"
-            actual_duration = profile_duration
+        actual_duration = call_record.duration
 
         # Calculate percentage: 100 * call_duration / parent_duration
         percentage = 0.0
@@ -250,28 +328,34 @@ class LazyCallItem(NumericalTreeWidgetItem):
             # Parent is a function call
             percentage = 100 * actual_duration / parent.call_record.duration
             percentage_text = f"{percentage:.1f}"
-        elif hasattr(parent, 'call_record') and parent.call_record.duration is None:
-            # Parent is also an initial stack item - use profile duration
-            percentage = 100 * actual_duration / profile_duration
-            percentage_text = f"{percentage:.1f}"
         elif hasattr(parent, 'total_duration') and parent.total_duration > 0:
             # Parent is a thread item
             percentage = 100 * actual_duration / parent.total_duration
             percentage_text = f"{percentage:.1f}"
 
-        # Make start time relative to profile start (begins at 0)
+        # Format duration and calculate values
+        duration_ms = actual_duration * 1000
+        duration_text = self._formatDuration(actual_duration)
         relative_time_ms = (call_record.timestamp - profile_start_time) * 1000
 
-        self.setText(0, self._get_function_name())
-        self.setText(1, duration_text)
-        self.setText(2, f"{relative_time_ms:.3f}")
-        self.setText(3, percentage_text)
-        self.setText(4, f"{call_record.filename}:{call_record.lineno}")
+        # Set text and numerical data using shared method
+        self._setNumericalData({
+            NewProfiler.CallTreeColumns.DURATION: (duration_text, duration_ms),
+            NewProfiler.CallTreeColumns.START_TIME: (f"{relative_time_ms:.3f}", relative_time_ms),
+            NewProfiler.CallTreeColumns.PERCENT_OF_PARENT: (percentage_text, percentage)
+        })
 
-        # Store numeric values for sorting
-        self.setData(1, Qt.Qt.UserRole, duration_ms)
-        self.setData(2, Qt.Qt.UserRole, relative_time_ms)
-        self.setData(3, Qt.Qt.UserRole, percentage)
+        self.setText(NewProfiler.CallTreeColumns.FUNCTION_THREAD, self.call_record.display_name)
+        self.setText(NewProfiler.CallTreeColumns.MODULE, call_record.module)
+
+        # Use calling_location to show where this function was called from
+        calling_location = call_record.calling_location
+        if calling_location:
+            filename, lineno = calling_location
+            self.setText(NewProfiler.CallTreeColumns.LOCATION, f"{filename}:{lineno}")
+        else:
+            # Top-level function - show function definition location as fallback
+            self.setText(NewProfiler.CallTreeColumns.LOCATION, f"{call_record.filename}:{call_record.frame.f_code.co_firstlineno}")
 
         # Register this item for function highlighting
         self._register_for_highlighting()
@@ -281,27 +365,16 @@ class LazyCallItem(NumericalTreeWidgetItem):
             self._dummy_child = Qt.QTreeWidgetItem(self)
             self._dummy_child.setText(0, "Loading...")
 
-    def _get_function_name(self):
-        """Get the function name, handling C functions"""
-        if self.call_record.event_type == 'c_call':
-            return f"C:{self.call_record.arg.__name__}"
-        else:
-            # Check for class methods
-            if 'self' in self.call_record.frame.f_locals:
-                class_name = self.call_record.frame.f_locals['self'].__class__.__name__
-                return f"{class_name}.{self.call_record.funcname}"
-            else:
-                return self.call_record.funcname
 
     def _register_for_highlighting(self):
         """Register this item for function highlighting"""
         if not self.profiler:
             return
 
-        func_name = self._get_function_name()
-        if func_name not in self.profiler.function_to_items:
-            self.profiler.function_to_items[func_name] = []
-        self.profiler.function_to_items[func_name].append(self)
+        function_key = self.call_record.function_key
+        if function_key not in self.profiler.function_to_items:
+            self.profiler.function_to_items[function_key] = []
+        self.profiler.function_to_items[function_key].append(self)
 
     def load_children(self):
         """Load child calls for this item"""
@@ -313,31 +386,22 @@ class LazyCallItem(NumericalTreeWidgetItem):
             self.removeChild(self._dummy_child)
 
         # Add child calls - need to get profile_start_time from parent hierarchy
-        profile_start_time = self._get_profile_start_time()
+        profile_start_time = self._findParentAttribute('profile_start_time', 0)
         for child_call in self.call_record.children:
             LazyCallItem(self, child_call, profile_start_time, self.profiler)
 
         self.children_loaded = True
 
-    def _getProfileDuration(self):
-        """Get the profile duration from parent hierarchy"""
-        # Walk up to find thread item which has the profile duration
-        current = self.parent()
-        while current is not None:
-            if hasattr(current, 'total_duration'):
-                return current.total_duration
-            current = current.parent()
-        return 0  # Fallback
+        # Auto-expand if there's only one child
+        if len(self.call_record.children) == 1:
+            child_item = self.child(0)
+            if hasattr(child_item, 'load_children') and hasattr(child_item, 'children_loaded'):
+                if not child_item.children_loaded:
+                    self.setExpanded(True)
+                    child_item.load_children()
+                    # Implement intelligent scrolling after expansion
+                    self._scroll_to_keep_visible(child_item)
 
-    def _get_profile_start_time(self):
-        """Get the profile start time from parent hierarchy"""
-        # Walk up to find thread item which has the profile start time
-        current = self.parent()
-        while current is not None:
-            if hasattr(current, 'profile_start_time'):
-                return current.profile_start_time
-            current = current.parent()
-        return 0  # Fallback
 
 
 class LazyThreadItem(NumericalTreeWidgetItem):
@@ -369,17 +433,18 @@ class LazyThreadItem(NumericalTreeWidgetItem):
         # Set thread display data
         total_duration_ms = total_duration * 1000
         earliest_time_ms = earliest_time_relative * 1000
+        duration_text = self._formatDuration(total_duration)
 
-        self.setText(0, f"{thread_name} ({thread_id})")
-        self.setText(1, f"{total_duration_ms:.3f}" if total_duration > 0 else "—")
-        self.setText(2, f"{earliest_time_ms:.3f}")
-        self.setText(3, "—")  # Threads have no parent, so no percentage
-        self.setText(4, f"{call_count} calls")
+        self.setText(NewProfiler.CallTreeColumns.FUNCTION_THREAD, f"{thread_name} ({thread_id})")
+        self.setText(NewProfiler.CallTreeColumns.MODULE, "—")  # Threads don't have a specific module
+        self.setText(NewProfiler.CallTreeColumns.LOCATION, f"{call_count} calls")
 
-        # Store numeric values for sorting
-        self.setData(1, Qt.Qt.UserRole, total_duration_ms)
-        self.setData(2, Qt.Qt.UserRole, earliest_time_ms)
-        self.setData(3, Qt.Qt.UserRole, 0.0)
+        # Set numerical data using shared method
+        self._setNumericalData({
+            NewProfiler.CallTreeColumns.DURATION: (duration_text, total_duration_ms),
+            NewProfiler.CallTreeColumns.START_TIME: (f"{earliest_time_ms:.3f}", earliest_time_ms),
+            NewProfiler.CallTreeColumns.PERCENT_OF_PARENT: ("—", 0.0)  # Threads have no parent, so no percentage
+        })
 
         # Add dummy child
         self._dummy_child = Qt.QTreeWidgetItem(self)
@@ -400,9 +465,39 @@ class LazyThreadItem(NumericalTreeWidgetItem):
 
         self.children_loaded = True
 
+        # Auto-expand if there's only one root call
+        if len(self.root_calls) == 1:
+            child_item = self.child(0)
+            if hasattr(child_item, 'load_children') and hasattr(child_item, 'children_loaded'):
+                if not child_item.children_loaded:
+                    self.setExpanded(True)
+                    child_item.load_children()
+                    # Implement intelligent scrolling after expansion
+                    self._scroll_to_keep_visible(child_item)
+
 
 class NewProfiler(Qt.QObject):
     """Handles profiling using the new acq4.util.profiler with hierarchical display"""
+
+    # Column indices for call tree (profile_display)
+    class CallTreeColumns:
+        FUNCTION_THREAD = 0
+        DURATION = 1
+        START_TIME = 2
+        PERCENT_OF_PARENT = 3
+        MODULE = 4
+        LOCATION = 5
+
+    # Column indices for detail tree
+    class DetailTreeColumns:
+        NAME = 0
+        MODULE = 1
+        CALLS = 2
+        PERCENTAGE = 3
+        TOTAL = 4
+        AVG = 5
+        MIN = 6
+        MAX = 7
 
     # Signal emitted when profiler finishes automatically
     profilerFinished = Qt.Signal()
@@ -416,7 +511,7 @@ class NewProfiler(Qt.QObject):
         self.profile_results = []
 
         # Function highlighting system
-        self.function_to_items = {}  # {function_name: [list of tree items]}
+        self.function_to_items = {}  # {function_key: [list of tree items]}
         self.currently_highlighted_function = None
 
         # Check Python version requirement
@@ -464,14 +559,14 @@ class NewProfiler(Qt.QObject):
             # Top right: Call tree display
             self.profile_display = Qt.QTreeWidget()
             self.profile_display.setHeaderLabels([
-                "Function/Thread", "Duration (ms)", "Start Time (ms)", "% of Parent", "Location"
+                "Function/Thread", "Duration (ms)", "Start Time (ms)", "% of Parent", "Module", "Called from"
             ])
             self.profile_display.setSortingEnabled(True)
-            self.profile_display.sortByColumn(1, Qt.Qt.DescendingOrder)
+            self.profile_display.sortByColumn(NewProfiler.CallTreeColumns.DURATION, Qt.Qt.DescendingOrder)
             self.profile_display.setExpandsOnDoubleClick(False)
-            self.profile_display.itemExpanded.connect(self._onItemExpanded)
+            self.profile_display.itemExpanded.connect(lambda item: item.load_children() if hasattr(item, 'load_children') else None)
             self.profile_display.itemSelectionChanged.connect(self._onCallTreeSelectionChanged)
-            self.profile_display.setColumnWidth(0, 250)  # Set first column width
+            self.profile_display.setColumnWidth(NewProfiler.CallTreeColumns.FUNCTION_THREAD, 250)  # Set first column width
             right_splitter.addWidget(self.profile_display)
 
             # Bottom right container: Function detail view with info label
@@ -488,16 +583,20 @@ class NewProfiler(Qt.QObject):
 
             # Function detail view
             self.detail_tree = Qt.QTreeWidget()
-            self.detail_tree.setHeaderLabels(['Name', 'Calls', 'Percentage (%)', 'Total (ms)', 'Avg (ms)', 'Min (ms)', 'Max (ms)'])
+            self.detail_tree.setHeaderLabels(['Name', 'Module', 'Calls', 'Percentage (%)', 'Total (ms)', 'Avg (ms)', 'Min (ms)', 'Max (ms)'])
             self.detail_tree.setSortingEnabled(True)
-            self.detail_tree.setColumnWidth(0, 250)  # Set first column width
+            self.detail_tree.setColumnWidth(NewProfiler.DetailTreeColumns.NAME, 250)  # Set first column width
             bottom_layout.addWidget(self.detail_tree)
 
             right_splitter.addWidget(bottom_container)
 
+            # Add console
+            self.console = ConsoleWidget(namespace={'profiler': self})
+            right_splitter.addWidget(self.console)
+
             # Set splitter proportions
             main_splitter.setSizes([200, 800])
-            right_splitter.setSizes([400, 300])
+            right_splitter.setSizes([300, 200, 200])  # call tree, detail tree, console
 
         return widget
 
@@ -553,7 +652,7 @@ class NewProfiler(Qt.QObject):
         # Create and start profiler with callback for auto-stop notification
         self.current_profiler = Profile(
             max_duration=max_duration if max_duration > 0 else None,
-            finish_callback=self._onProfilerFinished
+            finish_callback=lambda profile: self.profilerFinished.emit()
         )
         self.current_profiler.start()
 
@@ -590,10 +689,6 @@ class NewProfiler(Qt.QObject):
         # Update session name for next run
         self.session_name_edit.setText(f"NewProfile_{len(self.profile_results) + 1}")
 
-    def _onProfilerFinished(self, profile=None):
-        """Callback invoked when profiler finishes automatically"""
-        # Emit signal to safely update UI from another thread
-        self.profilerFinished.emit()
 
     def _handleProfilerFinished(self):
         """Handle profiler auto-stop in the main thread"""
@@ -645,18 +740,17 @@ class NewProfiler(Qt.QObject):
         for i in range(self.profile_display.columnCount()):
             self.profile_display.resizeColumnToContents(i)
 
-    def _onItemExpanded(self, item):
-        """Handle item expansion to trigger lazy loading"""
-        if hasattr(item, 'load_children'):
-            item.load_children()
 
     def _onCallTreeSelectionChanged(self):
-        """Handle selection change in call tree to update detail view"""
+        """Handle selection change in call tree to update detail view and console stack"""
         selected_items = self.profile_display.selectedItems()
         if not selected_items:
             self.detail_tree.clear()
             self.function_info_label.setText("Select a function to see details")
             self._clearHighlighting()
+            # Clear console stack
+            if self.console:
+                self.console.setStack(None)
             return
 
         # Get the current profile result
@@ -672,38 +766,46 @@ class NewProfiler(Qt.QObject):
         selected_item = selected_items[0]
         if isinstance(selected_item, LazyCallItem):
             # Extract function info from the call record
-            func_name = selected_item._get_function_name()
-            filename = selected_item.call_record.filename
-            line_no = selected_item.call_record.lineno
+            call_record = selected_item.call_record
 
             # Update function info label
-            self._updateFunctionInfoLabel(func_name, filename, line_no)
+            self._updateFunctionInfoLabel(call_record)
 
             # Highlight all instances of this function
-            self._highlightFunction(func_name)
+            self._highlightFunction(call_record)
 
-            # Display function details - for now just show basic info
-            # TODO: Implement full analysis once we have the analyze_function equivalent
-            self._displayFunctionDetails(func_name, result)
+            # Display function details
+            self._displayFunctionDetails(call_record, result)
+
+            # Update console stack with the selected function's frame
+            if self.console:
+                self.console.setStack(call_record.frame)
         elif isinstance(selected_item, LazyThreadItem):
             # Thread selected - clear detail view
             self.detail_tree.clear()
             self.function_info_label.setText("Select a function to see details")
             self._clearHighlighting()
+            # Clear console stack
+            if self.console:
+                self.console.setStack(None)
 
-    def _updateFunctionInfoLabel(self, func_name, filename, line_no):
+    def _updateFunctionInfoLabel(self, call_record):
         """Update the function info label with selected function details"""
+        func_name = call_record.display_name
+        filename = call_record.filename
+        line_no = call_record.lineno
         short_filename = filename.split('/')[-1] if '/' in filename else filename
         self.function_info_label.setText(f"Function: {func_name} | File: {filename} | Line: {line_no}")
 
-    def _highlightFunction(self, func_name):
+    def _highlightFunction(self, call_record):
         """Highlight all instances of the specified function in the call tree"""
         # Clear previous highlighting
         self._clearHighlighting()
 
+        function_key = call_record.function_key
         # Store original backgrounds and highlight all instances of this function
-        if func_name in self.function_to_items:
-            for item in self.function_to_items[func_name]:
+        if function_key in self.function_to_items:
+            for item in self.function_to_items[function_key]:
                 # Store original background before changing it
                 if not hasattr(item, '_original_background'):
                     item._original_background = item.background(0)
@@ -711,7 +813,7 @@ class NewProfiler(Qt.QObject):
                 # Apply highlight
                 item.setBackground(0, Qt.QColor(255, 255, 0, 100))  # Light yellow highlight
 
-        self.currently_highlighted_function = func_name
+        self.currently_highlighted_function = function_key
 
     def _clearHighlighting(self):
         """Clear all function highlighting by restoring original backgrounds"""
@@ -726,12 +828,12 @@ class NewProfiler(Qt.QObject):
 
         self.currently_highlighted_function = None
 
-    def _displayFunctionDetails(self, func_name, result):
+    def _displayFunctionDetails(self, call_record, result):
         """Display detailed analysis of the selected function"""
         self.detail_tree.clear()
 
         # Analyze the function across all threads
-        analysis = self._analyzeFunctionInResult(func_name, result)
+        analysis = self._analyzeFunctionInResult(call_record, result)
 
         if not analysis:
             placeholder_item = NumericalTreeWidgetItem(self.detail_tree)
@@ -739,30 +841,78 @@ class NewProfiler(Qt.QObject):
             return
 
         # Create the three main sections
-        self._addTotalsSection(analysis['totals'])
+        self._createStatisticsTreeItem(self.detail_tree, "Totals", analysis['totals'], analysis['totals']['percentage'])
         self._addCallersSection(analysis['callers'])
         self._addSubcallsSection(analysis['subcalls'])
 
         # Auto-resize columns (skip first column which has fixed width)
-        for i in range(1, self.detail_tree.columnCount()):
+        for i in range(NewProfiler.DetailTreeColumns.MODULE, self.detail_tree.columnCount()):
             self.detail_tree.resizeColumnToContents(i)
 
         # Auto-expand all sections
         self.detail_tree.expandAll()
 
-    def _analyzeFunctionInResult(self, func_name, result):
-        """Analyze all invocations of a specific function in the profile result"""
-        # Collect all instances of this function across all threads
-        function_calls = []
-        callers = {}
-        subcalls = {}
+    def _buildFunctionLookup(self, result):
+        """Build a lookup dictionary mapping function keys to call records
 
-        # Walk through all threads to find instances of the function
+        Returns:
+            dict: {function_key: {'calls': [CallRecord, ...], 'callers': {caller_key: [calls]}, 'subcalls': {child_key: [calls]}}}
+        """
+        function_lookup = {}
+
+        def add_call_to_lookup(call, parent_call=None):
+            function_key = call.function_key
+
+            # Initialize function entry if not exists
+            if function_key not in function_lookup:
+                function_lookup[function_key] = {
+                    'calls': [],
+                    'callers': {},
+                    'subcalls': {}
+                }
+
+            # Add this call
+            function_lookup[function_key]['calls'].append(call)
+
+            # Track caller relationship
+            if parent_call:
+                caller_key = parent_call.function_key
+                if caller_key not in function_lookup[function_key]['callers']:
+                    function_lookup[function_key]['callers'][caller_key] = {'calls': [], 'parent_calls': []}
+                function_lookup[function_key]['callers'][caller_key]['calls'].append(call)
+                function_lookup[function_key]['callers'][caller_key]['parent_calls'].append(parent_call)
+
+            # Track subcall relationships
+            for child_call in call.children:
+                child_key = child_call.function_key
+                if child_key not in function_lookup[function_key]['subcalls']:
+                    function_lookup[function_key]['subcalls'][child_key] = []
+                function_lookup[function_key]['subcalls'][child_key].append(child_call)
+
+                # Recursively process children
+                add_call_to_lookup(child_call, call)
+
+        # Process all threads
         for thread_id, root_calls in result.events_data.items():
-            self._walkCallTree(root_calls, func_name, function_calls, callers, subcalls, thread_id)
+            for root_call in root_calls:
+                add_call_to_lookup(root_call)
 
-        if not function_calls:
+        return function_lookup
+
+    def _analyzeFunctionInResult(self, call_record, result):
+        """Analyze all invocations of a specific function in the profile result"""
+        # Build function lookup once for this result
+        if not hasattr(result, '_function_lookup'):
+            result._function_lookup = self._buildFunctionLookup(result)
+
+        function_key = call_record.function_key
+        function_data = result._function_lookup.get(function_key)
+        if not function_data:
             return None
+
+        function_calls = function_data['calls']
+        callers = function_data['callers']
+        subcalls = function_data['subcalls']
 
         # Calculate totals
         total_calls = len(function_calls)
@@ -793,62 +943,87 @@ class NewProfiler(Qt.QObject):
             'subcalls': subcalls
         }
 
-    def _walkCallTree(self, calls, target_func, function_calls, callers, subcalls, thread_id, parent_call=None):
-        """Recursively walk call tree to find function instances and relationships"""
-        for call in calls:
-            func_name = self._getCallFunctionName(call)
 
-            if func_name == target_func:
-                # Found an instance of our target function
-                function_calls.append(call)
+    def _calculateDurationStatistics(self, calls):
+        """Calculate duration statistics for a list of calls
 
-                # Track caller if we have a parent
-                if parent_call:
-                    caller_name = self._getCallFunctionName(parent_call)
-                    if caller_name not in callers:
-                        callers[caller_name] = []
-                    callers[caller_name].append(call)
+        Args:
+            calls: List of call records with duration attribute
 
-                # Track subcalls (children of this call)
-                for child_call in call.children:
-                    child_name = self._getCallFunctionName(child_call)
-                    if child_name not in subcalls:
-                        subcalls[child_name] = []
-                    subcalls[child_name].append(child_call)
+        Returns:
+            dict with n_calls, total_duration, avg_duration, min_duration, max_duration
+        """
+        durations = [call.duration for call in calls if call.duration is not None]
+        if not durations:
+            return None
 
-            # Recurse into children
-            self._walkCallTree(call.children, target_func, function_calls, callers, subcalls, thread_id, call)
+        n_calls = len(durations)
+        total_duration = sum(durations)
+        avg_duration = total_duration / n_calls
+        min_duration = min(durations)
+        max_duration = max(durations)
 
-    def _getCallFunctionName(self, call_record):
-        """Get function name from a call record, matching the LazyCallItem logic"""
-        if call_record.event_type == 'c_call':
-            return f"C:{call_record.arg.__name__}"
-        else:
-            # Check for class methods
-            if 'self' in call_record.frame.f_locals:
-                class_name = call_record.frame.f_locals['self'].__class__.__name__
-                return f"{class_name}.{call_record.funcname}"
+        return {
+            'n_calls': n_calls,
+            'total_duration': total_duration,
+            'avg_duration': avg_duration,
+            'min_duration': min_duration,
+            'max_duration': max_duration
+        }
+
+    def _createStatisticsTreeItem(self, parent, name, stats, percentage=None):
+        """Create a tree item with standard statistics formatting
+
+        Args:
+            parent: Parent tree item
+            name: Name for the item (can be function_key tuple or string)
+            stats: Statistics dictionary from _calculateDurationStatistics
+            percentage: Optional percentage value
+
+        Returns:
+            Created NumericalTreeWidgetItem
+        """
+        item = NumericalTreeWidgetItem(parent)
+
+        # Extract display name from function_key tuple if needed
+        if isinstance(name, tuple) and len(name) >= 3:
+            if name[0] == 'c_call':
+                # For C calls: ('c_call', id, function_name)
+                display_name = f"C:{name[2]}"
             else:
-                return call_record.funcname
+                # For Python calls: (filename, lineno, function_name)
+                display_name = name[2]  # function_name is the third element
+        else:
+            display_name = str(name)
 
-    def _addTotalsSection(self, totals):
-        """Add totals section to detail tree"""
-        totals_item = NumericalTreeWidgetItem(self.detail_tree)
-        totals_item.setText(0, "Totals")
-        totals_item.setText(1, str(totals['n_calls']))
-        totals_item.setText(2, f"{totals['percentage']:.1f}")
-        totals_item.setText(3, f"{totals['total_duration'] * 1000:.3f}")
-        totals_item.setText(4, f"{totals['avg_duration'] * 1000:.3f}")
-        totals_item.setText(5, f"{totals['min_duration'] * 1000:.3f}")
-        totals_item.setText(6, f"{totals['max_duration'] * 1000:.3f}")
+        # Extract module from function_key tuple if available
+        if isinstance(name, tuple) and len(name) >= 3:
+            if name[0] == 'c_call':
+                # For C calls: ('c_call', qualname, module)
+                module_name = name[2] if len(name) > 2 else "—"
+            else:
+                # For Python calls: (filename, lineno, function_name)
+                # Extract module using the module_from_file function
+                from ...util.profiler import module_from_file
+                module_name = module_from_file(name[0])
+        else:
+            module_name = "—"
 
-        # Store numerical data for sorting
-        totals_item.setData(1, Qt.Qt.UserRole, totals['n_calls'])
-        totals_item.setData(2, Qt.Qt.UserRole, totals['percentage'])
-        totals_item.setData(3, Qt.Qt.UserRole, totals['total_duration'] * 1000)
-        totals_item.setData(4, Qt.Qt.UserRole, totals['avg_duration'] * 1000)
-        totals_item.setData(5, Qt.Qt.UserRole, totals['min_duration'] * 1000)
-        totals_item.setData(6, Qt.Qt.UserRole, totals['max_duration'] * 1000)
+        # Set column data using shared method
+        percentage_text = f"{percentage:.1f}" if percentage is not None else "—"
+        item._setNumericalData({
+            NewProfiler.DetailTreeColumns.CALLS: (str(stats['n_calls']), stats['n_calls']),
+            NewProfiler.DetailTreeColumns.PERCENTAGE: (percentage_text, percentage if percentage is not None else 0.0),
+            NewProfiler.DetailTreeColumns.TOTAL: (f"{stats['total_duration'] * 1000:.3f}", stats['total_duration'] * 1000),
+            NewProfiler.DetailTreeColumns.AVG: (f"{stats['avg_duration'] * 1000:.3f}", stats['avg_duration'] * 1000),
+            NewProfiler.DetailTreeColumns.MIN: (f"{stats['min_duration'] * 1000:.3f}", stats['min_duration'] * 1000),
+            NewProfiler.DetailTreeColumns.MAX: (f"{stats['max_duration'] * 1000:.3f}", stats['max_duration'] * 1000)
+        })
+
+        item.setText(NewProfiler.DetailTreeColumns.NAME, display_name)
+        item.setText(NewProfiler.DetailTreeColumns.MODULE, module_name)
+        return item
+
 
     def _addCallersSection(self, callers):
         """Add callers section to detail tree"""
@@ -858,37 +1033,31 @@ class NewProfiler(Qt.QObject):
         callers_item = NumericalTreeWidgetItem(self.detail_tree)
         callers_item.setText(0, "Callers")
 
-        for caller_func, calls in callers.items():
+        for caller_func, caller_data in callers.items():
+            calls = caller_data['calls']
+            parent_calls = caller_data['parent_calls']
+
             # Calculate statistics for this caller
-            durations = [call.duration for call in calls if call.duration is not None]
-            if not durations:
+            stats = self._calculateDurationStatistics(calls)
+            if not stats:
                 continue
 
-            n_calls = len(durations)
-            total_duration = sum(durations)
-            avg_duration = total_duration / n_calls
-            min_duration = min(durations)
-            max_duration = max(durations)
+            # Calculate percentage: time in selected function / total time of caller invocations that called selected function
+            # Get unique parent calls (same parent may call selected function multiple times)
+            unique_parent_calls = {}
+            for parent in parent_calls:
+                if parent.duration is not None:
+                    # Use call ID or timestamp as unique identifier
+                    call_id = id(parent)  # Use object identity as unique key
+                    unique_parent_calls[call_id] = parent
 
-            # Percentage calculation would need parent call durations - simplified for now
-            percentage = 0.0  # TODO: Calculate based on parent call durations
+            if unique_parent_calls:
+                total_caller_time = sum(parent.duration for parent in unique_parent_calls.values())
+                percentage = (stats['total_duration'] / total_caller_time * 100) if total_caller_time > 0 else 0.0
+            else:
+                percentage = 0.0
 
-            caller_item = NumericalTreeWidgetItem(callers_item)
-            caller_item.setText(0, caller_func)
-            caller_item.setText(1, str(n_calls))
-            caller_item.setText(2, f"{percentage:.1f}")
-            caller_item.setText(3, f"{total_duration * 1000:.3f}")
-            caller_item.setText(4, f"{avg_duration * 1000:.3f}")
-            caller_item.setText(5, f"{min_duration * 1000:.3f}")
-            caller_item.setText(6, f"{max_duration * 1000:.3f}")
-
-            # Store numerical data for sorting
-            caller_item.setData(1, Qt.Qt.UserRole, n_calls)
-            caller_item.setData(2, Qt.Qt.UserRole, percentage)
-            caller_item.setData(3, Qt.Qt.UserRole, total_duration * 1000)
-            caller_item.setData(4, Qt.Qt.UserRole, avg_duration * 1000)
-            caller_item.setData(5, Qt.Qt.UserRole, min_duration * 1000)
-            caller_item.setData(6, Qt.Qt.UserRole, max_duration * 1000)
+            self._createStatisticsTreeItem(callers_item, caller_func, stats, percentage)
 
     def _addSubcallsSection(self, subcalls):
         """Add subcalls section to detail tree"""
@@ -904,40 +1073,19 @@ class NewProfiler(Qt.QObject):
         for i in range(self.detail_tree.topLevelItemCount()):
             item = self.detail_tree.topLevelItem(i)
             if item.text(0) == "Totals":
-                parent_total_duration = item.data(3, Qt.Qt.UserRole) / 1000  # Convert back to seconds
+                parent_total_duration = getattr(item, '_numerical_data', {}).get(3, 0) / 1000  # Convert back to seconds
                 break
 
         for child_func, calls in subcalls.items():
             # Calculate statistics for this subcall
-            durations = [call.duration for call in calls if call.duration is not None]
-            if not durations:
+            stats = self._calculateDurationStatistics(calls)
+            if not stats:
                 continue
 
-            n_calls = len(durations)
-            total_duration = sum(durations)
-            avg_duration = total_duration / n_calls
-            min_duration = min(durations)
-            max_duration = max(durations)
-
             # Calculate percentage based on parent function total time
-            percentage = (total_duration / parent_total_duration * 100) if parent_total_duration > 0 else 0.0
+            percentage = (stats['total_duration'] / parent_total_duration * 100) if parent_total_duration > 0 else 0.0
 
-            child_item = NumericalTreeWidgetItem(subcalls_item)
-            child_item.setText(0, child_func)
-            child_item.setText(1, str(n_calls))
-            child_item.setText(2, f"{percentage:.1f}")
-            child_item.setText(3, f"{total_duration * 1000:.3f}")
-            child_item.setText(4, f"{avg_duration * 1000:.3f}")
-            child_item.setText(5, f"{min_duration * 1000:.3f}")
-            child_item.setText(6, f"{max_duration * 1000:.3f}")
-
-            # Store numerical data for sorting
-            child_item.setData(1, Qt.Qt.UserRole, n_calls)
-            child_item.setData(2, Qt.Qt.UserRole, percentage)
-            child_item.setData(3, Qt.Qt.UserRole, total_duration * 1000)
-            child_item.setData(4, Qt.Qt.UserRole, avg_duration * 1000)
-            child_item.setData(5, Qt.Qt.UserRole, min_duration * 1000)
-            child_item.setData(6, Qt.Qt.UserRole, max_duration * 1000)
+            self._createStatisticsTreeItem(subcalls_item, child_func, stats, percentage)
 
     def _clearProfiles(self):
         """Clear all profile results"""

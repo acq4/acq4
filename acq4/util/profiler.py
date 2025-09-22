@@ -1,3 +1,6 @@
+import functools
+import os
+import sys
 import threading
 import queue
 import time
@@ -6,7 +9,10 @@ import weakref
 
 class Profile:
     def __init__(self, max_duration=None, finish_callback=None):
-        self._events = []  # list of (timestamp, thread_id, frame, event, arg)
+        # list of (timestamp, thread_id, frame, event, arg, calling_lineno, current_lineno)
+        # calling_lineno is the line number of the _caller_ at the time of each event
+        # current_lineno is the line number of the current frame at the time of each event
+        self._events = []
         self._thread_names = {}
         self.start_time = None
         self.stop_time = None
@@ -37,7 +43,10 @@ class Profile:
         if thread_id not in self._thread_names:
             self._new_thread(thread_id, frame, now)
 
-        self._events.append((now, thread_id, frame, event, arg))
+        # note: we have to store lineno explicitly because they will probably
+        # change before we process the event later
+        calling_lineno = frame.f_back.f_lineno if frame.f_back else None
+        self._events.append((now, thread_id, frame, event, arg, calling_lineno, frame.f_lineno))
 
     def _new_thread(self, thread_id, frame, now):
         """Record initial stack for a new thread."""
@@ -48,7 +57,8 @@ class Profile:
             stack.append(f)
             f = f.f_back
         for f in reversed(stack):
-            self._events.append((now, thread_id, f, 'initial', None))
+            calling_lineno = f.f_back.f_lineno if f.f_back else None
+            self._events.append((now, thread_id, f, 'initial', None, calling_lineno, f.f_lineno))
 
     def get_events(self):
         """Return a structure detailing all events.
@@ -124,7 +134,7 @@ class Profile:
 
 class CallRecord:
     def __init__(self, event):
-        self.timestamp, self.thread_id, self.frame, self.event_type, self.arg = event
+        self.timestamp, self.thread_id, self.frame, self.event_type, self.arg, self._calling_lineno, self._current_lineno = event
         self.parent = None
         self.children = []
         self.duration = None
@@ -142,7 +152,7 @@ class CallRecord:
 
         If it matches, set the duration and return True.
         """
-        timestamp, thread_id, frame, ev_type, arg = event
+        timestamp, thread_id, frame, ev_type, arg, _, _ = event
         matched_func_return = (
             self.event_type in ('initial', 'call') and 
             ev_type == 'return' and 
@@ -163,15 +173,55 @@ class CallRecord:
 
     @property
     def funcname(self):
-        return self.frame.f_code.co_name
+        """Return the name of the called function."""
+        return self.frame.f_code.co_qualname
     
     @property
     def filename(self):
+        """Return the filename where the called function was defined."""
         return self.frame.f_code.co_filename
-    
+
     @property
     def lineno(self):
-        return self.frame.f_lineno
+        """Return the line number where at the time of this event.
+        
+        For 'call' events, this is the line where the called function is _defined_.
+        For 'c_call' events, this is the line where the C function was _called_."""
+        return self._current_lineno
+
+    @property
+    def calling_location(self):
+        """Return the location (filename, lineno) where this function was called from,
+        or None if this is a top-level function.
+        """
+        if self.event_type == 'c_call':
+            return (self.frame.f_code.co_filename, self._current_lineno)        
+        if self.event_type in ('call', 'initial') and self.frame.f_back is not None:
+            return (self.frame.f_back.f_code.co_filename, self._calling_lineno)
+        else:
+            return None
+
+    @property
+    def module(self):
+        return module_from_file(self.filename)
+
+    @property
+    def display_name(self):
+        """Get formatted function name, handling C functions and class methods"""
+        if self.event_type == 'c_call':
+            return f"C:{self.arg.__qualname__}"
+        else:
+            return f"{self.funcname}"
+
+    @property
+    def function_key(self):
+        """Get unique function key as tuple that uniquely identifies the function"""
+        if self.event_type == 'c_call':
+            # For C calls, use the C function object itself as the unique identifier
+            return ('c_call', self.arg.__qualname__, self.arg.__module__)
+        else:
+            # For Python calls, use filename, line number, and function name
+            return (self.filename, self.lineno, self.display_name)
 
     def __str__(self):
         dur_str = f" [{self.duration*1000:.6f}ms]" if self.duration is not None else ""
@@ -180,6 +230,38 @@ class CallRecord:
         else:
             func = self.funcname
         return f"{func} ({self.filename}:{self.lineno}){dur_str}"
+
+
+@functools.cache
+def module_from_file(path):
+    """Convert a filesystem path to a Python module name, if possible.
+
+    If the path does not correspond to a module, the original path is returned.
+    """
+    full_path = path = os.path.realpath(os.path.abspath(path))
+    if not os.path.exists(path):
+        return full_path
+    real_syspath = [os.path.realpath(os.path.abspath(p)) for p in sys.path]
+    parts = []
+    while True:        
+        if os.path.isfile(path):
+            path, mod_file = os.path.split(path)
+            if mod_file != '__init__.py':
+                parts.insert(0, os.path.splitext(mod_file)[0])
+        if os.path.isdir(path):
+            if path in real_syspath:
+                break
+            if not os.path.isfile(os.path.join(path, '__init__.py')):
+                break
+            parent_path, mod_dir = os.path.split(path)
+            parts.insert(0, mod_dir)
+            if path == parent_path:
+                return full_path
+            path = parent_path
+    if parts:
+        return '.'.join(parts)
+    else:
+        return full_path
 
 
 if __name__ == '__main__':
