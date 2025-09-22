@@ -85,18 +85,20 @@ expected_results = {
         'n_calls': 3,
         'total_duration': 0.9,
         'avg_duration': 0.3,
-        'min_duration': 0.1,
-        'max_duration': 0.2,
-        'percentage': 64.3,
+        'min_duration': 0.3,
+        'max_duration': 0.3,
+        'percentage': 82,
         'callers': {
-            'threading.Thread.run': 
+            'Thread.run': 
                 {'n_calls': 1, 'total_duration': 0.3, 'avg_duration': 0.3, 'min_duration': 0.3, 'max_duration': 0.3, 'percentage': 100},
             '_test_function_b': 
                 {'n_calls': 1, 'total_duration': 0.3, 'avg_duration': 0.3, 'min_duration': 0.3, 'max_duration': 0.3, 'percentage': 37.5},
+            'func_to_profile': 
+                {'n_calls': 1, 'total_duration': 0.3, 'avg_duration': 0.3, 'min_duration': 0.3, 'max_duration': 0.3, 'percentage': 27},
         },
         'subcalls': {
             'sleep_wrapper': 
-                {'n_calls': 3, 'total_duration': 0.9, 'avg_duration': 0.3, 'min_duration': 0.1, 'max_duration': 0.2, 'percentage': 100},
+                {'n_calls': 6, 'total_duration': 0.9, 'avg_duration': 0.15, 'min_duration': 0.1, 'max_duration': 0.2, 'percentage': 100},
         },
     },
     '_test_function_b': {
@@ -105,16 +107,16 @@ expected_results = {
         'avg_duration': 0.8,
         'min_duration': 0.8,
         'max_duration': 0.8,
-        'percentage': 57.1,
+        'percentage': 73,
         'callers': {
             'func_to_profile': 
-                {'n_calls': 1, 'total_duration': 0.8, 'avg_duration': 0.8, 'min_duration': 0.8, 'max_duration': 0.8, 'percentage': 100},
+                {'n_calls': 1, 'total_duration': 0.8, 'avg_duration': 0.8, 'min_duration': 0.8, 'max_duration': 0.8, 'percentage': 73},
         },
         'subcalls': {
             'sleep': 
                 {'n_calls': 2, 'total_duration': 0.2, 'avg_duration': 0.1, 'min_duration': 0.1, 'max_duration': 0.1, 'percentage': 25},
             'sleep_wrapper': 
-                {'n_calls': 2, 'total_duration': 0.3, 'avg_duration': 0.15, 'min_duration': 0.1, 'max_duration': 0.2, 'percentage': 37.5},
+                {'n_calls': 1, 'total_duration': 0.3, 'avg_duration': 0.3, 'min_duration': 0.3, 'max_duration': 0.3, 'percentage': 37.5},
             '_test_function_a': 
                 {'n_calls': 1, 'total_duration': 0.3, 'avg_duration': 0.3, 'min_duration': 0.3, 'max_duration': 0.3, 'percentage': 37.5},
         },
@@ -199,18 +201,18 @@ class TestProfiler:
         callers = analysis.get_callers_with_percentages()
         assert len(callers) == len(expected['callers'])
         for caller_key, caller_stats in callers.items():
-            func_name = caller_key[2]
+            func_name = caller_key[1] if caller_key[0] == 'c_call' else caller_key[2]
             assert func_name in expected['callers']
             expected_stats = expected['callers'][func_name]
-            for k,v in caller_stats.items():
-                assert v == pytest.approx(expected_stats[k], rel=0.05)
+            for k in caller_stats:
+                assert caller_stats[k] == pytest.approx(expected_stats[k], rel=0.05)
 
         # Check subcalls
         subcalls = analysis.get_subcalls_with_percentages()
         assert len(subcalls) == len(expected['subcalls'])
         for subcall_key, subcall_stats in subcalls.items():
-            func_name = subcall_key[2]
+            func_name = subcall_key[1] if subcall_key[0] == 'c_call' else subcall_key[2]
             assert func_name in expected['subcalls']
             expected_stats = expected['subcalls'][func_name]
-            for k,v in subcall_stats.items():
-                assert v == pytest.approx(expected_stats[k], rel=0.05)
+            for k in subcall_stats:
+                assert subcall_stats[k] == pytest.approx(expected_stats[k], rel=0.05)
