@@ -130,7 +130,6 @@ class TestProfiler:
     @pytest.fixture(scope="class")
     def profiled_execution(self) -> Tuple[Dict, ProfileAnalyzer, float]:
         """Execute the same pattern as __main__ and return profiler results"""
-        print("PROFILE - Running once for all tests")
         profiler = Profile()
         profiler.start()
 

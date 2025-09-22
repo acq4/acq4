@@ -68,7 +68,7 @@ class NumericalTreeWidgetItem(Qt.QTreeWidgetItem):
         # Handle text fields
         for name in ['function_thread', 'module', 'location']:
             if name in kwargs:
-                column = getattr(NewProfiler.CallTreeColumns, name.upper())
+                column = getattr(FunctionProfiler.CallTreeColumns, name.upper())
                 self.setText(column, kwargs[name])
 
         # Handle numerical fields with scaling and formatting
@@ -81,7 +81,7 @@ class NumericalTreeWidgetItem(Qt.QTreeWidgetItem):
         for name, format_str, scale in numerical_fields:
             if name in kwargs:
                 value = kwargs[name]
-                column = getattr(NewProfiler.CallTreeColumns, name.upper())
+                column = getattr(FunctionProfiler.CallTreeColumns, name.upper())
                 self.setText(column, "—" if value is None else format_str.format(value * scale))
                 self._numerical_data[column] = value or 0.0
 
@@ -212,7 +212,7 @@ class LazyThreadItem(NumericalTreeWidgetItem):
         self.children_loaded = True
 
 
-class NewProfiler(Qt.QObject):
+class FunctionProfiler(Qt.QObject):
     """Handles profiling using the new acq4.util.profiler with hierarchical display"""
 
     # Column indices for call tree (profile_display)
@@ -298,12 +298,18 @@ class NewProfiler(Qt.QObject):
                 "Function/Thread", "Duration (ms)", "Start Time (ms)", "% of Parent", "Module", "Called from"
             ])
             self.profile_display.setSortingEnabled(True)
-            self.profile_display.sortByColumn(NewProfiler.CallTreeColumns.DURATION, Qt.Qt.DescendingOrder)
+            self.profile_display.sortByColumn(FunctionProfiler.CallTreeColumns.DURATION, Qt.Qt.DescendingOrder)
             self.profile_display.setExpandsOnDoubleClick(False)
             self.profile_display.itemExpanded.connect(self._onItemExpanded)
             self.profile_display.itemSelectionChanged.connect(self._onCallTreeSelectionChanged)
-            self.profile_display.setColumnWidth(NewProfiler.CallTreeColumns.FUNCTION_THREAD, 250)  # Set first column width
+            self.profile_display.setColumnWidth(FunctionProfiler.CallTreeColumns.FUNCTION_THREAD, 250)  # Set first column width
             right_splitter.addWidget(self.profile_display)
+
+            # Function info label (now outside the tabs, always visible)
+            self.function_info_label = Qt.QLabel("Select a function to see details")
+            self.function_info_label.setStyleSheet("font-weight: bold; padding: 4px; background-color: #f0f0f0; border: 1px solid #ccc;")
+            self.function_info_label.setWordWrap(True)
+            right_splitter.addWidget(self.function_info_label)
 
             # Bottom: Tab widget with Analysis and Console tabs
             self.bottom_tabs = Qt.QTabWidget()
@@ -315,17 +321,11 @@ class NewProfiler(Qt.QObject):
             analysis_layout.setContentsMargins(0, 0, 0, 0)
             analysis_layout.setSpacing(2)
 
-            # Function info label
-            self.function_info_label = Qt.QLabel("Select a function to see details")
-            self.function_info_label.setStyleSheet("font-weight: bold; padding: 4px; background-color: #f0f0f0; border: 1px solid #ccc;")
-            self.function_info_label.setWordWrap(True)
-            analysis_layout.addWidget(self.function_info_label)
-
             # Function detail view
             self.detail_tree = Qt.QTreeWidget()
             self.detail_tree.setHeaderLabels(['Name', 'Module', 'Calls', 'Percentage (%)', 'Total (ms)', 'Avg (ms)', 'Min (ms)', 'Max (ms)'])
             self.detail_tree.setSortingEnabled(True)
-            self.detail_tree.setColumnWidth(NewProfiler.DetailTreeColumns.NAME, 250)  # Set first column width
+            self.detail_tree.setColumnWidth(FunctionProfiler.DetailTreeColumns.NAME, 250)  # Set first column width
             analysis_layout.addWidget(self.detail_tree)
 
             # Console tab
@@ -337,7 +337,7 @@ class NewProfiler(Qt.QObject):
 
             # Set splitter proportions
             main_splitter.setSizes([200, 800])
-            right_splitter.setSizes([400, 300])  # call tree (top), tabs (bottom)
+            right_splitter.setSizes([400, 25, 300])  # call tree (top), label (middle), tabs (bottom)
 
         return widget
 
@@ -559,10 +559,18 @@ class NewProfiler(Qt.QObject):
     def _updateFunctionInfoLabel(self, call_record: CallRecord):
         """Update the function info label with selected function details"""
         func_name = call_record.display_name
-        filename = call_record.filename
-        line_no = call_record.lineno
-        short_filename = filename.split('/')[-1] if '/' in filename else filename
-        self.function_info_label.setText(f"Function: {func_name} | File: {filename} | Line: {line_no}")
+        module_name = call_record.module
+
+        # Get calling location info
+        calling_location = call_record.calling_location
+        if calling_location:
+            calling_file, calling_line = calling_location
+            calling_file_short = calling_file.split('/')[-1] if '/' in calling_file else calling_file
+            called_from = f"{calling_file_short}:{calling_line}"
+        else:
+            called_from = "N/A"
+
+        self.function_info_label.setText(f"Selected function: {module_name}.{func_name}  Called from: {called_from}")
 
     def _highlightFunction(self, call_record: CallRecord):
         """Highlight all instances of the specified function in the call tree"""
@@ -623,7 +631,7 @@ class NewProfiler(Qt.QObject):
         self._addSubcallsSection(analysis)
 
         # Auto-resize columns (skip first column which has fixed width)
-        for i in range(NewProfiler.DetailTreeColumns.MODULE, self.detail_tree.columnCount()):
+        for i in range(FunctionProfiler.DetailTreeColumns.MODULE, self.detail_tree.columnCount()):
             self.detail_tree.resizeColumnToContents(i)
 
         # Auto-expand all sections
@@ -647,17 +655,17 @@ class NewProfiler(Qt.QObject):
         # Set column data using shared method
         percentage_text = f"{percentage:.1f}" if percentage is not None else "—"
         item._setNumericalData({
-            NewProfiler.DetailTreeColumns.CALLS: (str(stats['n_calls']), stats['n_calls']),
-            NewProfiler.DetailTreeColumns.PERCENTAGE: (percentage_text, percentage if percentage is not None else 0.0),
-            NewProfiler.DetailTreeColumns.TOTAL: (f"{stats['total_duration']*1000:.3f}", stats['total_duration']*1000),
-            NewProfiler.DetailTreeColumns.AVG: (f"{stats['avg_duration']*1000:.3f}", stats['avg_duration']*1000),
-            NewProfiler.DetailTreeColumns.MIN: (f"{stats['min_duration']*1000:.3f}", stats['min_duration']*1000),
-            NewProfiler.DetailTreeColumns.MAX: (f"{stats['max_duration']*1000:.3f}", stats['max_duration']*1000),
+            FunctionProfiler.DetailTreeColumns.CALLS: (str(stats['n_calls']), stats['n_calls']),
+            FunctionProfiler.DetailTreeColumns.PERCENTAGE: (percentage_text, percentage if percentage is not None else 0.0),
+            FunctionProfiler.DetailTreeColumns.TOTAL: (f"{stats['total_duration']*1000:.3f}", stats['total_duration']*1000),
+            FunctionProfiler.DetailTreeColumns.AVG: (f"{stats['avg_duration']*1000:.3f}", stats['avg_duration']*1000),
+            FunctionProfiler.DetailTreeColumns.MIN: (f"{stats['min_duration']*1000:.3f}", stats['min_duration']*1000),
+            FunctionProfiler.DetailTreeColumns.MAX: (f"{stats['max_duration']*1000:.3f}", stats['max_duration']*1000),
         })
 
         # Set text columns
-        item.setText(NewProfiler.DetailTreeColumns.NAME, display_name)
-        item.setText(NewProfiler.DetailTreeColumns.MODULE, module_name)
+        item.setText(FunctionProfiler.DetailTreeColumns.NAME, display_name)
+        item.setText(FunctionProfiler.DetailTreeColumns.MODULE, module_name)
         return item
 
 

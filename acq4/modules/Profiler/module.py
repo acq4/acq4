@@ -2,7 +2,7 @@ from acq4.modules.Module import Module
 from acq4.util import Qt
 from .qt_profiler import QtEventProfiler
 from .memory_profiler import MemoryProfiler
-from .new_profiler import NewProfiler
+from .function_profiler import FunctionProfiler
 
 
 class Profiler(Module):
@@ -38,7 +38,7 @@ class Profiler(Module):
         # Create profiler instances
         self.qt_profiler = QtEventProfiler(self.win)
         self.memory_profiler = MemoryProfiler(self.win)
-        self.function_profiler = NewProfiler(self.win)
+        self.function_profiler = FunctionProfiler(self.win)
 
         # Add tabs
         self.tab_widget.addTab(self.function_profiler.widget, "Function Profiler")
