@@ -624,11 +624,17 @@ class FunctionProfiler(Qt.QObject):
             'min_duration': analysis.min_duration,
             'max_duration': analysis.max_duration
         }
-        self._createStatisticsTreeItem(self.detail_tree, "Totals", "—", totals_stats, analysis.profile_percentage)
+        totals_tooltip_context = {
+            'type': 'totals',
+            'selected_func': selected_func_name,
+            'other_func': None
+        }
+        self._createStatisticsTreeItem(self.detail_tree, "Totals", "—", totals_stats, analysis.profile_percentage, totals_tooltip_context)
 
         # Pass the analysis object directly to get proper display names
-        self._addCallersSection(analysis)
-        self._addSubcallsSection(analysis)
+        selected_func_name = call_record.display_name
+        self._addCallersSection(analysis, selected_func_name)
+        self._addSubcallsSection(analysis, selected_func_name)
 
         # Auto-resize columns (skip first column which has fixed width)
         for i in range(FunctionProfiler.DetailTreeColumns.MODULE, self.detail_tree.columnCount()):
@@ -637,7 +643,7 @@ class FunctionProfiler(Qt.QObject):
         # Auto-expand all sections
         self.detail_tree.expandAll()
 
-    def _createStatisticsTreeItem(self, parent, display_name, module_name, stats, percentage=None):
+    def _createStatisticsTreeItem(self, parent, display_name, module_name, stats, percentage=None, tooltip_context=None):
         """Create a tree item with statistics using display name and module directly
 
         Args:
@@ -646,6 +652,7 @@ class FunctionProfiler(Qt.QObject):
             module_name: Module name
             stats: Statistics dictionary
             percentage: Optional percentage value
+            tooltip_context: Dict with 'type' ('caller' or 'subcall'), 'selected_func', 'other_func'
 
         Returns:
             Created NumericalTreeWidgetItem
@@ -666,10 +673,28 @@ class FunctionProfiler(Qt.QObject):
         # Set text columns
         item.setText(FunctionProfiler.DetailTreeColumns.NAME, display_name)
         item.setText(FunctionProfiler.DetailTreeColumns.MODULE, module_name)
+
+        # Add tooltip for percentage column if context is provided
+        if tooltip_context and percentage is not None:
+            if tooltip_context['type'] == 'caller':
+                tooltip = (f"Percent of {tooltip_context['other_func']} time spent inside {tooltip_context['selected_func']}\n"
+                          f"(Ignoring invocations of {tooltip_context['other_func']} that do not call {tooltip_context['selected_func']})")
+            elif tooltip_context['type'] == 'subcall':
+                tooltip = (f"Percent of {tooltip_context['selected_func']} time spent inside {tooltip_context['other_func']}\n"
+                          f"(Ignoring invocations of {tooltip_context['selected_func']} that do not call {tooltip_context['other_func']})")
+            elif tooltip_context['type'] == 'totals':
+                tooltip = (f"Percent of total profile time spent in {tooltip_context['selected_func']}\n"
+                          f"(Sum of all invocations of {tooltip_context['selected_func']} relative to entire profile duration)")
+            else:
+                tooltip = None
+
+            if tooltip:
+                item.setToolTip(FunctionProfiler.DetailTreeColumns.PERCENTAGE, tooltip)
+
         return item
 
 
-    def _addCallersSection(self, analysis: FunctionAnalysis):
+    def _addCallersSection(self, analysis: FunctionAnalysis, selected_func_name: str):
         """Add callers section to detail tree using FunctionAnalysis"""
         callers_data = analysis.get_callers_with_percentages()
         if not callers_data:
@@ -691,9 +716,14 @@ class FunctionProfiler(Qt.QObject):
                 display_name = str(caller_key)
                 module_name = "—"
 
-            self._createStatisticsTreeItem(callers_item, display_name, module_name, stats, stats['percentage'])
+            tooltip_context = {
+                'type': 'caller',
+                'selected_func': selected_func_name,
+                'other_func': display_name
+            }
+            self._createStatisticsTreeItem(callers_item, display_name, module_name, stats, stats['percentage'], tooltip_context)
 
-    def _addSubcallsSection(self, analysis: FunctionAnalysis):
+    def _addSubcallsSection(self, analysis: FunctionAnalysis, selected_func_name: str):
         """Add subcalls section to detail tree using FunctionAnalysis"""
         subcalls_data = analysis.get_subcalls_with_percentages()
         if not subcalls_data:
@@ -715,7 +745,12 @@ class FunctionProfiler(Qt.QObject):
                 display_name = str(subcall_key)
                 module_name = "—"
 
-            self._createStatisticsTreeItem(subcalls_item, display_name, module_name, stats, stats['percentage'])
+            tooltip_context = {
+                'type': 'subcall',
+                'selected_func': selected_func_name,
+                'other_func': display_name
+            }
+            self._createStatisticsTreeItem(subcalls_item, display_name, module_name, stats, stats['percentage'], tooltip_context)
 
     def _clearProfiles(self):
         """Clear all profile results"""
