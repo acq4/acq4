@@ -267,12 +267,13 @@ def module_from_file(path):
 class FunctionAnalysis:
     """Analysis results for a specific function across all its invocations in a profile"""
 
-    def __init__(self, function_key, function_calls, callers, subcalls, profile_duration):
+    def __init__(self, function_key, function_calls, callers, subcalls, profile_duration, analyzer=None):
         self.function_key = function_key
         self.function_calls = function_calls  # List of CallRecord instances
         self.callers = callers  # Dict: caller_function_key -> list of CallRecord instances
         self.subcalls = subcalls  # Dict: subcall_function_key -> list of CallRecord instances
         self.profile_duration = profile_duration
+        self.analyzer = analyzer  # Reference to ProfileAnalyzer for looking up other functions
 
         # Calculate totals
         self.total_calls = len(function_calls)
@@ -394,27 +395,22 @@ class FunctionAnalysis:
 class TreeDisplayData:
     """Pre-calculated display data for UI tree items"""
 
-    def __init__(self, call_record, parent_duration=None, profile_start_time=0):
+    def __init__(self, call_record, profile_start_time=0):
         self.call_record = call_record
         self.function_name = call_record.display_name
         self.module = call_record.module
         self.location = self._get_location()
 
-        # Calculate values
+        # Calculate raw values (let UI format them)
         self.duration_seconds = call_record.duration if call_record.duration else 0
-        self.duration_ms = self.duration_seconds * 1000
-        self.start_time_relative = (call_record.timestamp - profile_start_time) * 1000
+        self.start_time_relative_seconds = (call_record.timestamp - profile_start_time)
 
-        # Calculate parent-relative percentage
-        if parent_duration and parent_duration > 0 and self.duration_seconds > 0:
-            self.parent_percentage = (self.duration_seconds / parent_duration) * 100
+        # Calculate parent-relative percentage automatically from call_record.parent
+        if call_record.parent and call_record.parent.duration and call_record.parent.duration > 0 and self.duration_seconds > 0:
+            self.parent_percentage = (self.duration_seconds / call_record.parent.duration) * 100
         else:
+            # Root calls or calls without valid parent duration get 0
             self.parent_percentage = 0.0
-
-        # Formatted strings for display
-        self.duration_text = self._format_duration(self.duration_seconds)
-        self.start_time_text = f"{self.start_time_relative:.3f}"
-        self.percentage_text = f"{self.parent_percentage:.1f}" if self.parent_percentage > 0 else "—"
 
         # Children display data (will be populated by ProfileAnalyzer)
         self.children_display_data = []
@@ -429,12 +425,6 @@ class TreeDisplayData:
             # Top-level function - show function definition location as fallback
             return f"{self.call_record.filename}:{self.call_record.frame.f_code.co_firstlineno}"
 
-    def _format_duration(self, duration_seconds):
-        """Format duration in seconds to milliseconds text"""
-        if duration_seconds is not None and duration_seconds > 0:
-            return f"{duration_seconds * 1000:.3f}"
-        else:
-            return "—"
 
 
 class ThreadDisplayData:
@@ -446,15 +436,13 @@ class ThreadDisplayData:
         self.root_calls = root_calls
         self.profile_start_time = profile_start_time
 
-        # Calculate thread totals
-        self.total_duration = profile_duration
-        self.total_duration_ms = self.total_duration * 1000
+        # Calculate raw values (let UI format them)
+        self.total_duration_seconds = profile_duration
+        self.start_time_relative_seconds = 0.0  # Threads start at beginning
+        self.parent_percentage = None  # Threads have no parent, _setFields will handle "—"
 
-        # Formatted strings
+        # Display name
         self.display_name = f"{thread_name} ({thread_id})"
-        self.duration_text = f"{self.total_duration * 1000:.3f}"
-        self.start_time_text = "0.000"  # Threads start at beginning
-        self.percentage_text = "—"  # Threads have no parent
 
         # Call display data (will be populated by ProfileAnalyzer)
         self.call_display_data = []
@@ -542,8 +530,30 @@ class ProfileAnalyzer:
             function_calls=function_data['calls'],
             callers=function_data['callers'],
             subcalls=function_data['subcalls'],
-            profile_duration=self.profile_duration
+            profile_duration=self.profile_duration,
+            analyzer=self
         )
+
+    def get_call_record_by_function_key(self, function_key):
+        """Get the first CallRecord for a given function_key
+
+        Args:
+            function_key: Function key tuple to look up
+
+        Returns:
+            CallRecord object or None if not found
+        """
+        for thread_id, calls in self.profile_events.items():
+            for call in self._iterate_all_calls(calls):
+                if call.function_key == function_key:
+                    return call
+        return None
+
+    def _iterate_all_calls(self, calls):
+        """Recursively iterate through all calls in a call tree"""
+        for call in calls:
+            yield call
+            yield from self._iterate_all_calls(call.children)
 
     def get_tree_display_data(self, profile_start_time):
         """Get pre-calculated display data for the entire call tree
@@ -574,19 +584,18 @@ class ProfileAnalyzer:
             # Add tree display data for each call in this thread
             thread_data.call_display_data = []
             for root_call in root_calls:
-                call_data = self._build_call_display_tree(root_call, self.profile_duration, profile_start_time)
+                call_data = self._build_call_display_tree(root_call, profile_start_time)
                 thread_data.call_display_data.append(call_data)
 
             result[thread_id] = thread_data
 
         return result
 
-    def _build_call_display_tree(self, call_record, parent_duration, profile_start_time):
+    def _build_call_display_tree(self, call_record, profile_start_time):
         """Recursively build TreeDisplayData for a call and its children
 
         Args:
             call_record: CallRecord to build display data for
-            parent_duration: Duration of parent call for percentage calculation
             profile_start_time: Profile start time for relative time calculation
 
         Returns:
@@ -595,16 +604,14 @@ class ProfileAnalyzer:
         # Create display data for this call
         display_data = TreeDisplayData(
             call_record=call_record,
-            parent_duration=parent_duration,
             profile_start_time=profile_start_time
         )
 
         # Build display data for children
         display_data.children_display_data = []
         if call_record.children:
-            call_duration = call_record.duration if call_record.duration else 0
             for child_call in call_record.children:
-                child_data = self._build_call_display_tree(child_call, call_duration, profile_start_time)
+                child_data = self._build_call_display_tree(child_call, profile_start_time)
                 display_data.children_display_data.append(child_data)
 
         return display_data
