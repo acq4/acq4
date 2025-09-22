@@ -229,22 +229,36 @@ class NumericalTreeWidgetItem(Qt.QTreeWidgetItem):
             self.setText(column, text_val)
             self._numerical_data[column] = num_val
 
-    def _findParentAttribute(self, attribute_name, default_value=None):
-        """Walk up parent hierarchy to find an attribute
+    def _setFields(self, **kwargs):
+        """Set fields using named parameters with automatic formatting and column mapping
 
         Args:
-            attribute_name: Name of attribute to find
-            default_value: Value to return if not found
-
-        Returns:
-            The attribute value or default_value
+            function_thread: Function/thread name (string)
+            module: Module name (string)
+            location: Location string
+            duration: Duration in seconds (float) - automatically formatted to ms
+            start_time: Start time in seconds (float) - automatically formatted to ms
+            percent_of_parent: Percentage (float) - automatically formatted with % or "—"
         """
-        current = self.parent()
-        while current is not None:
-            if hasattr(current, attribute_name):
-                return getattr(current, attribute_name)
-            current = current.parent()
-        return default_value
+        # Handle text fields
+        for name in ['function_thread', 'module', 'location']:
+            if name in kwargs:
+                column = getattr(NewProfiler.CallTreeColumns, name.upper())
+                self.setText(column, kwargs[name])
+
+        # Handle numerical fields with scaling and formatting
+        numerical_fields = [
+            ('duration', '{0:.3f}', 1000),
+            ('start_time', '{0:.3f}', 1000),
+            ('percent_of_parent', '{0:.1f}', 1),
+        ]
+
+        for name, format_str, scale in numerical_fields:
+            if name in kwargs:
+                value = kwargs[name]
+                column = getattr(NewProfiler.CallTreeColumns, name.upper())
+                self.setText(column, "—" if value is None else format_str.format(value * scale))
+                self._numerical_data[column] = value or 0.0
 
     def _scroll_to_keep_visible(self, expanded_child):
         """Implement intelligent scrolling after auto-expansion
@@ -316,29 +330,22 @@ class LazyCallItem(NumericalTreeWidgetItem):
     def __init__(self, parent, call_record, profile_start_time, profiler=None):
         super().__init__(parent)
         self.call_record: CallRecord = call_record
+        self.profile_start_time = profile_start_time  # Store for child items
         self.profiler = profiler
         self.children_loaded = False
 
-        # Calculate parent duration for TreeDisplayData
-        parent_duration = 0.0
-        if hasattr(parent, 'call_record') and parent.call_record.duration is not None:
-            parent_duration = parent.call_record.duration
-        elif hasattr(parent, 'total_duration') and parent.total_duration > 0:
-            parent_duration = parent.total_duration
+        # Use TreeDisplayData for all calculations
+        display_data = TreeDisplayData(call_record, profile_start_time)
 
-        # Use TreeDisplayData for all calculations (no more UI math!)
-        display_data = TreeDisplayData(call_record, parent_duration, profile_start_time)
-
-        # Use TreeDisplayData for all formatting (no more manual calculations!)
-        self._setNumericalData({
-            NewProfiler.CallTreeColumns.DURATION: (display_data.duration_text, display_data.duration_ms),
-            NewProfiler.CallTreeColumns.START_TIME: (display_data.start_time_text, display_data.start_time_relative),
-            NewProfiler.CallTreeColumns.PERCENT_OF_PARENT: (display_data.percentage_text, display_data.parent_percentage)
-        })
-
-        self.setText(NewProfiler.CallTreeColumns.FUNCTION_THREAD, display_data.function_name)
-        self.setText(NewProfiler.CallTreeColumns.MODULE, display_data.module)
-        self.setText(NewProfiler.CallTreeColumns.LOCATION, display_data.location)
+        # Use simple field-based approach (no more column number mapping!)
+        self._setFields(
+            function_thread=display_data.function_name,
+            module=display_data.module,
+            location=display_data.location,
+            duration=display_data.duration_seconds,  # Raw seconds, _setFields formats to ms
+            start_time=display_data.start_time_relative_seconds,  # Raw seconds, _setFields formats to ms
+            percent_of_parent=display_data.parent_percentage
+        )
 
         # Register this item for function highlighting
         self._register_for_highlighting()
@@ -347,7 +354,6 @@ class LazyCallItem(NumericalTreeWidgetItem):
         if call_record.children:
             self._dummy_child = Qt.QTreeWidgetItem(self)
             self._dummy_child.setText(0, "Loading...")
-
 
     def _register_for_highlighting(self):
         """Register this item for function highlighting"""
@@ -368,12 +374,9 @@ class LazyCallItem(NumericalTreeWidgetItem):
         if hasattr(self, '_dummy_child'):
             self.removeChild(self._dummy_child)
 
-        # Add child calls using TreeDisplayData (no more manual profile_start_time lookup)
-        profile_start_time = self._findParentAttribute('profile_start_time', 0)
-
+        # Add child calls using stored profile_start_time
         for child_call in self.call_record.children:
-            # Let LazyCallItem create its own TreeDisplayData
-            LazyCallItem(self, child_call, profile_start_time, self.profiler)
+            LazyCallItem(self, child_call, self.profile_start_time, self.profiler)
 
         self.children_loaded = True
 
@@ -411,19 +414,17 @@ class LazyThreadItem(NumericalTreeWidgetItem):
         )
 
         # Store total duration for percentage calculations by children
-        self.total_duration = thread_display_data.total_duration
+        self.total_duration = thread_display_data.total_duration_seconds
 
-        # Use ThreadDisplayData for all UI text (no more manual formatting!)
-        self.setText(NewProfiler.CallTreeColumns.FUNCTION_THREAD, thread_display_data.display_name)
-        self.setText(NewProfiler.CallTreeColumns.MODULE, "—")  # Threads don't have a specific module
-        self.setText(NewProfiler.CallTreeColumns.LOCATION, f"{len(root_calls)} calls")
-
-        # Set numerical data using ThreadDisplayData
-        self._setNumericalData({
-            NewProfiler.CallTreeColumns.DURATION: (thread_display_data.duration_text, thread_display_data.total_duration_ms),
-            NewProfiler.CallTreeColumns.START_TIME: (thread_display_data.start_time_text, 0.0),
-            NewProfiler.CallTreeColumns.PERCENT_OF_PARENT: (thread_display_data.percentage_text, 0.0)
-        })
+        # Use simple field-based approach (no more column number mapping!)
+        self._setFields(
+            function_thread=thread_display_data.display_name,
+            module="—",  # Threads don't have a specific module
+            location=f"{len(root_calls)} calls",
+            duration=thread_display_data.total_duration_seconds,  # Raw seconds, _setFields formats to ms
+            start_time=thread_display_data.start_time_relative_seconds,  # Raw seconds, _setFields formats to ms
+            percent_of_parent=thread_display_data.parent_percentage  # None, _setFields will show "—"
+        )
 
         # Add dummy child
         self._dummy_child = Qt.QTreeWidgetItem(self)
@@ -828,14 +829,11 @@ class NewProfiler(Qt.QObject):
             'min_duration': analysis.min_duration,
             'max_duration': analysis.max_duration
         }
-        self._createStatisticsTreeItem(self.detail_tree, "Totals", totals_stats, analysis.profile_percentage)
+        self._createStatisticsTreeItem(self.detail_tree, "Totals", "—", totals_stats, analysis.profile_percentage)
 
-        # Use ProfileAnalyzer methods for callers and subcalls (no more UI math!)
-        callers_data = analysis.get_callers_with_percentages()
-        subcalls_data = analysis.get_subcalls_with_percentages()
-
-        self._addCallersSection(callers_data)
-        self._addSubcallsSection(subcalls_data)
+        # Pass the analysis object directly to get proper display names
+        self._addCallersSection(analysis)
+        self._addSubcallsSection(analysis)
 
         # Auto-resize columns (skip first column which has fixed width)
         for i in range(NewProfiler.DetailTreeColumns.MODULE, self.detail_tree.columnCount()):
@@ -844,13 +842,14 @@ class NewProfiler(Qt.QObject):
         # Auto-expand all sections
         self.detail_tree.expandAll()
 
-    def _createStatisticsTreeItem(self, parent, name, stats, percentage=None):
-        """Create a tree item with standard statistics formatting
+    def _createStatisticsTreeItem(self, parent, display_name, module_name, stats, percentage=None):
+        """Create a tree item with statistics using display name and module directly
 
         Args:
             parent: Parent tree item
-            name: Name for the item (can be function_key tuple or string)
-            stats: Statistics dictionary from _calculateDurationStatistics
+            display_name: Already-formatted display name
+            module_name: Module name
+            stats: Statistics dictionary
             percentage: Optional percentage value
 
         Returns:
@@ -858,69 +857,66 @@ class NewProfiler(Qt.QObject):
         """
         item = NumericalTreeWidgetItem(parent)
 
-        # Extract display name from function_key tuple if needed
-        if isinstance(name, tuple) and len(name) >= 3:
-            if name[0] == 'c_call':
-                # For C calls: ('c_call', id, function_name)
-                display_name = f"C:{name[2]}"
-            else:
-                # For Python calls: (filename, lineno, function_name)
-                display_name = name[2]  # function_name is the third element
-        else:
-            display_name = str(name)
-
-        # Extract module from function_key tuple if available
-        if isinstance(name, tuple) and len(name) >= 3:
-            if name[0] == 'c_call':
-                # For C calls: ('c_call', qualname, module)
-                module_name = name[2] if len(name) > 2 else "—"
-            else:
-                # For Python calls: (filename, lineno, function_name)
-                # Extract module using the module_from_file function
-                from ...util.profiler import module_from_file
-                module_name = module_from_file(name[0])
-        else:
-            module_name = "—"
-
         # Set column data using shared method
         percentage_text = f"{percentage:.1f}" if percentage is not None else "—"
         item._setNumericalData({
             NewProfiler.DetailTreeColumns.CALLS: (str(stats['n_calls']), stats['n_calls']),
             NewProfiler.DetailTreeColumns.PERCENTAGE: (percentage_text, percentage if percentage is not None else 0.0),
-            NewProfiler.DetailTreeColumns.TOTAL: (f"{stats['total_duration'] * 1000:.3f}", stats['total_duration'] * 1000),
-            NewProfiler.DetailTreeColumns.AVG: (f"{stats['avg_duration'] * 1000:.3f}", stats['avg_duration'] * 1000),
-            NewProfiler.DetailTreeColumns.MIN: (f"{stats['min_duration'] * 1000:.3f}", stats['min_duration'] * 1000),
-            NewProfiler.DetailTreeColumns.MAX: (f"{stats['max_duration'] * 1000:.3f}", stats['max_duration'] * 1000)
+            NewProfiler.DetailTreeColumns.TOTAL: (f"{stats['total_duration']*1000:.3f}", stats['total_duration']*1000),
+            NewProfiler.DetailTreeColumns.AVG: (f"{stats['avg_duration']*1000:.3f}", stats['avg_duration']*1000),
+            NewProfiler.DetailTreeColumns.MIN: (f"{stats['min_duration']*1000:.3f}", stats['min_duration']*1000),
+            NewProfiler.DetailTreeColumns.MAX: (f"{stats['max_duration']*1000:.3f}", stats['max_duration']*1000),
         })
 
+        # Set text columns
         item.setText(NewProfiler.DetailTreeColumns.NAME, display_name)
         item.setText(NewProfiler.DetailTreeColumns.MODULE, module_name)
         return item
 
 
-    def _addCallersSection(self, callers):
-        """Add callers section to detail tree"""
-        if not callers:
+    def _addCallersSection(self, analysis):
+        """Add callers section to detail tree using FunctionAnalysis"""
+        callers_data = analysis.get_callers_with_percentages()
+        if not callers_data:
             return
 
         callers_item = NumericalTreeWidgetItem(self.detail_tree)
         callers_item.setText(0, "Callers")
 
-        # Callers data already has percentages calculated by ProfileAnalyzer!
-        for caller_func, stats in callers.items():
-            self._createStatisticsTreeItem(callers_item, caller_func, stats, stats['percentage'])
+        # Get actual CallRecord objects for caller functions using ProfileAnalyzer
+        for caller_key, stats in callers_data.items():
+            # Use ProfileAnalyzer to find the actual CallRecord for this caller function
+            caller_record = analysis.analyzer.get_call_record_by_function_key(caller_key)
+            if caller_record:
+                display_name = caller_record.display_name
+                module_name = caller_record.module
+            else:
+                display_name = str(caller_key)
+                module_name = "—"
 
-    def _addSubcallsSection(self, subcalls):
-        """Add subcalls section to detail tree"""
-        if not subcalls:
+            self._createStatisticsTreeItem(callers_item, display_name, module_name, stats, stats['percentage'])
+
+    def _addSubcallsSection(self, analysis):
+        """Add subcalls section to detail tree using FunctionAnalysis"""
+        subcalls_data = analysis.get_subcalls_with_percentages()
+        if not subcalls_data:
             return
 
         subcalls_item = NumericalTreeWidgetItem(self.detail_tree)
         subcalls_item.setText(0, "Subcalls")
 
-        # Subcalls data already has percentages calculated by ProfileAnalyzer!
-        for child_func, stats in subcalls.items():
-            self._createStatisticsTreeItem(subcalls_item, child_func, stats, stats['percentage'])
+        # Get actual CallRecord objects for subcall functions using ProfileAnalyzer
+        for subcall_key, stats in subcalls_data.items():
+            # Use ProfileAnalyzer to find the actual CallRecord for this subcall function
+            subcall_record = analysis.analyzer.get_call_record_by_function_key(subcall_key)
+            if subcall_record:
+                display_name = subcall_record.display_name
+                module_name = subcall_record.module
+            else:
+                display_name = str(subcall_key)
+                module_name = "—"
+
+            self._createStatisticsTreeItem(subcalls_item, display_name, module_name, stats, stats['percentage'])
 
     def _clearProfiles(self):
         """Clear all profile results"""
