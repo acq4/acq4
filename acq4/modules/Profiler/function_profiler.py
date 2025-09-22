@@ -306,15 +306,23 @@ class FunctionProfiler(Qt.QObject):
             self.profile_display.setColumnWidth(FunctionProfiler.CallTreeColumns.FUNCTION_THREAD, 250)  # Set first column width
             right_splitter.addWidget(self.profile_display)
 
-            # Function info label (now outside the tabs, always visible)
+            # Bottom: Container for function info label and analysis tabs
+            bottom_container = Qt.QWidget()
+            bottom_layout = Qt.QVBoxLayout(bottom_container)
+            bottom_layout.setContentsMargins(0, 0, 0, 0)
+            bottom_layout.setSpacing(0)
+
+            # Function info label (now inside bottom container)
             self.function_info_label = Qt.QLabel("Select a function to see details")
             self.function_info_label.setStyleSheet("font-weight: bold; padding: 4px; background-color: #f0f0f0; border: 1px solid #ccc;")
             self.function_info_label.setWordWrap(True)
-            right_splitter.addWidget(self.function_info_label)
+            bottom_layout.addWidget(self.function_info_label)
 
-            # Bottom: Tab widget with Analysis and Console tabs
+            # Tab widget with Analysis and Console tabs
             self.bottom_tabs = Qt.QTabWidget()
-            right_splitter.addWidget(self.bottom_tabs)
+            bottom_layout.addWidget(self.bottom_tabs)
+
+            right_splitter.addWidget(bottom_container)
 
             # Analysis tab container
             analysis_container = Qt.QWidget()
@@ -338,7 +346,7 @@ class FunctionProfiler(Qt.QObject):
 
             # Set splitter proportions
             main_splitter.setSizes([200, 800])
-            right_splitter.setSizes([400, 25, 300])  # call tree (top), label (middle), tabs (bottom)
+            right_splitter.setSizes([400, 325])  # call tree (top), bottom container (label + tabs)
 
         return widget
 
