@@ -204,7 +204,10 @@ class CallRecord:
 
     @property
     def module(self):
-        return module_from_file(self.filename)
+        if self.event_type == 'c_call':
+            return self.arg.__module__
+        else:
+            return module_from_file(self.filename)
 
     @property
     def display_name(self):
