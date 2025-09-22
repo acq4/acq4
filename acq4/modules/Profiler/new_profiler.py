@@ -179,7 +179,7 @@ from datetime import datetime
 from acq4.util import Qt
 import pyqtgraph as pg
 from pyqtgraph.console import ConsoleWidget
-from acq4.util.profiler import Profile, CallRecord
+from acq4.util.profiler import Profile, CallRecord, ProfileAnalyzer, TreeDisplayData, ThreadDisplayData
 
 
 class ProfileResult:
@@ -319,43 +319,26 @@ class LazyCallItem(NumericalTreeWidgetItem):
         self.profiler = profiler
         self.children_loaded = False
 
-        actual_duration = call_record.duration
-
-        # Calculate percentage: 100 * call_duration / parent_duration
-        percentage = 0.0
-        percentage_text = "—"
+        # Calculate parent duration for TreeDisplayData
+        parent_duration = 0.0
         if hasattr(parent, 'call_record') and parent.call_record.duration is not None:
-            # Parent is a function call
-            percentage = 100 * actual_duration / parent.call_record.duration
-            percentage_text = f"{percentage:.1f}"
+            parent_duration = parent.call_record.duration
         elif hasattr(parent, 'total_duration') and parent.total_duration > 0:
-            # Parent is a thread item
-            percentage = 100 * actual_duration / parent.total_duration
-            percentage_text = f"{percentage:.1f}"
+            parent_duration = parent.total_duration
 
-        # Format duration and calculate values
-        duration_ms = actual_duration * 1000
-        duration_text = self._formatDuration(actual_duration)
-        relative_time_ms = (call_record.timestamp - profile_start_time) * 1000
+        # Use TreeDisplayData for all calculations (no more UI math!)
+        display_data = TreeDisplayData(call_record, parent_duration, profile_start_time)
 
-        # Set text and numerical data using shared method
+        # Use TreeDisplayData for all formatting (no more manual calculations!)
         self._setNumericalData({
-            NewProfiler.CallTreeColumns.DURATION: (duration_text, duration_ms),
-            NewProfiler.CallTreeColumns.START_TIME: (f"{relative_time_ms:.3f}", relative_time_ms),
-            NewProfiler.CallTreeColumns.PERCENT_OF_PARENT: (percentage_text, percentage)
+            NewProfiler.CallTreeColumns.DURATION: (display_data.duration_text, display_data.duration_ms),
+            NewProfiler.CallTreeColumns.START_TIME: (display_data.start_time_text, display_data.start_time_relative),
+            NewProfiler.CallTreeColumns.PERCENT_OF_PARENT: (display_data.percentage_text, display_data.parent_percentage)
         })
 
-        self.setText(NewProfiler.CallTreeColumns.FUNCTION_THREAD, self.call_record.display_name)
-        self.setText(NewProfiler.CallTreeColumns.MODULE, call_record.module)
-
-        # Use calling_location to show where this function was called from
-        calling_location = call_record.calling_location
-        if calling_location:
-            filename, lineno = calling_location
-            self.setText(NewProfiler.CallTreeColumns.LOCATION, f"{filename}:{lineno}")
-        else:
-            # Top-level function - show function definition location as fallback
-            self.setText(NewProfiler.CallTreeColumns.LOCATION, f"{call_record.filename}:{call_record.frame.f_code.co_firstlineno}")
+        self.setText(NewProfiler.CallTreeColumns.FUNCTION_THREAD, display_data.function_name)
+        self.setText(NewProfiler.CallTreeColumns.MODULE, display_data.module)
+        self.setText(NewProfiler.CallTreeColumns.LOCATION, display_data.location)
 
         # Register this item for function highlighting
         self._register_for_highlighting()
@@ -385,9 +368,11 @@ class LazyCallItem(NumericalTreeWidgetItem):
         if hasattr(self, '_dummy_child'):
             self.removeChild(self._dummy_child)
 
-        # Add child calls - need to get profile_start_time from parent hierarchy
+        # Add child calls using TreeDisplayData (no more manual profile_start_time lookup)
         profile_start_time = self._findParentAttribute('profile_start_time', 0)
+
         for child_call in self.call_record.children:
+            # Let LazyCallItem create its own TreeDisplayData
             LazyCallItem(self, child_call, profile_start_time, self.profiler)
 
         self.children_loaded = True
@@ -416,34 +401,28 @@ class LazyThreadItem(NumericalTreeWidgetItem):
         self.profiler = profiler
         self.children_loaded = False
 
-        # Thread duration is the total profiling time (same for all threads)
-        total_duration = profile_duration
-        call_count = len(root_calls)
+        # Use ThreadDisplayData for all thread calculations
+        thread_display_data = ThreadDisplayData(
+            thread_id=thread_id,
+            thread_name=thread_name,
+            root_calls=root_calls,
+            profile_duration=profile_duration,
+            profile_start_time=profile_start_time
+        )
 
         # Store total duration for percentage calculations by children
-        self.total_duration = total_duration
+        self.total_duration = thread_display_data.total_duration
 
-        # Get earliest start time from root calls, relative to profile start
-        if root_calls:
-            earliest_time = min(call.timestamp for call in root_calls)
-            earliest_time_relative = earliest_time - profile_start_time
-        else:
-            earliest_time_relative = 0
-
-        # Set thread display data
-        total_duration_ms = total_duration * 1000
-        earliest_time_ms = earliest_time_relative * 1000
-        duration_text = self._formatDuration(total_duration)
-
-        self.setText(NewProfiler.CallTreeColumns.FUNCTION_THREAD, f"{thread_name} ({thread_id})")
+        # Use ThreadDisplayData for all UI text (no more manual formatting!)
+        self.setText(NewProfiler.CallTreeColumns.FUNCTION_THREAD, thread_display_data.display_name)
         self.setText(NewProfiler.CallTreeColumns.MODULE, "—")  # Threads don't have a specific module
-        self.setText(NewProfiler.CallTreeColumns.LOCATION, f"{call_count} calls")
+        self.setText(NewProfiler.CallTreeColumns.LOCATION, f"{len(root_calls)} calls")
 
-        # Set numerical data using shared method
+        # Set numerical data using ThreadDisplayData
         self._setNumericalData({
-            NewProfiler.CallTreeColumns.DURATION: (duration_text, total_duration_ms),
-            NewProfiler.CallTreeColumns.START_TIME: (f"{earliest_time_ms:.3f}", earliest_time_ms),
-            NewProfiler.CallTreeColumns.PERCENT_OF_PARENT: ("—", 0.0)  # Threads have no parent, so no percentage
+            NewProfiler.CallTreeColumns.DURATION: (thread_display_data.duration_text, thread_display_data.total_duration_ms),
+            NewProfiler.CallTreeColumns.START_TIME: (thread_display_data.start_time_text, 0.0),
+            NewProfiler.CallTreeColumns.PERCENT_OF_PARENT: (thread_display_data.percentage_text, 0.0)
         })
 
         # Add dummy child
@@ -832,18 +811,31 @@ class NewProfiler(Qt.QObject):
         """Display detailed analysis of the selected function"""
         self.detail_tree.clear()
 
-        # Analyze the function across all threads
-        analysis = self._analyzeFunctionInResult(call_record, result)
+        # Use ProfileAnalyzer (no more UI analysis!)
+        analyzer = ProfileAnalyzer(result.events_data, result.profile_duration)
+        analysis = analyzer.analyze_function(call_record)
 
         if not analysis:
             placeholder_item = NumericalTreeWidgetItem(self.detail_tree)
             placeholder_item.setText(0, "No analysis data available")
             return
 
-        # Create the three main sections
-        self._createStatisticsTreeItem(self.detail_tree, "Totals", analysis['totals'], analysis['totals']['percentage'])
-        self._addCallersSection(analysis['callers'])
-        self._addSubcallsSection(analysis['subcalls'])
+        # Create totals section using ProfileAnalyzer data
+        totals_stats = {
+            'n_calls': analysis.total_calls,
+            'total_duration': analysis.total_duration,
+            'avg_duration': analysis.avg_duration,
+            'min_duration': analysis.min_duration,
+            'max_duration': analysis.max_duration
+        }
+        self._createStatisticsTreeItem(self.detail_tree, "Totals", totals_stats, analysis.profile_percentage)
+
+        # Use ProfileAnalyzer methods for callers and subcalls (no more UI math!)
+        callers_data = analysis.get_callers_with_percentages()
+        subcalls_data = analysis.get_subcalls_with_percentages()
+
+        self._addCallersSection(callers_data)
+        self._addSubcallsSection(subcalls_data)
 
         # Auto-resize columns (skip first column which has fixed width)
         for i in range(NewProfiler.DetailTreeColumns.MODULE, self.detail_tree.columnCount()):
@@ -851,125 +843,6 @@ class NewProfiler(Qt.QObject):
 
         # Auto-expand all sections
         self.detail_tree.expandAll()
-
-    def _buildFunctionLookup(self, result):
-        """Build a lookup dictionary mapping function keys to call records
-
-        Returns:
-            dict: {function_key: {'calls': [CallRecord, ...], 'callers': {caller_key: [calls]}, 'subcalls': {child_key: [calls]}}}
-        """
-        function_lookup = {}
-
-        def add_call_to_lookup(call, parent_call=None):
-            function_key = call.function_key
-
-            # Initialize function entry if not exists
-            if function_key not in function_lookup:
-                function_lookup[function_key] = {
-                    'calls': [],
-                    'callers': {},
-                    'subcalls': {}
-                }
-
-            # Add this call
-            function_lookup[function_key]['calls'].append(call)
-
-            # Track caller relationship
-            if parent_call:
-                caller_key = parent_call.function_key
-                if caller_key not in function_lookup[function_key]['callers']:
-                    function_lookup[function_key]['callers'][caller_key] = {'calls': [], 'parent_calls': []}
-                function_lookup[function_key]['callers'][caller_key]['calls'].append(call)
-                function_lookup[function_key]['callers'][caller_key]['parent_calls'].append(parent_call)
-
-            # Track subcall relationships
-            for child_call in call.children:
-                child_key = child_call.function_key
-                if child_key not in function_lookup[function_key]['subcalls']:
-                    function_lookup[function_key]['subcalls'][child_key] = []
-                function_lookup[function_key]['subcalls'][child_key].append(child_call)
-
-                # Recursively process children
-                add_call_to_lookup(child_call, call)
-
-        # Process all threads
-        for thread_id, root_calls in result.events_data.items():
-            for root_call in root_calls:
-                add_call_to_lookup(root_call)
-
-        return function_lookup
-
-    def _analyzeFunctionInResult(self, call_record, result):
-        """Analyze all invocations of a specific function in the profile result"""
-        # Build function lookup once for this result
-        if not hasattr(result, '_function_lookup'):
-            result._function_lookup = self._buildFunctionLookup(result)
-
-        function_key = call_record.function_key
-        function_data = result._function_lookup.get(function_key)
-        if not function_data:
-            return None
-
-        function_calls = function_data['calls']
-        callers = function_data['callers']
-        subcalls = function_data['subcalls']
-
-        # Calculate totals
-        total_calls = len(function_calls)
-        total_duration = sum(call.duration for call in function_calls if call.duration is not None)
-        durations = [call.duration for call in function_calls if call.duration is not None]
-
-        if durations:
-            avg_duration = total_duration / len(durations)
-            min_duration = min(durations)
-            max_duration = max(durations)
-        else:
-            avg_duration = min_duration = max_duration = 0
-
-        # Calculate percentages relative to total profiling time
-        profile_duration = result.profile_duration
-        profile_percentage = (total_duration / profile_duration * 100) if profile_duration > 0 else 0
-
-        return {
-            'totals': {
-                'n_calls': total_calls,
-                'total_duration': total_duration,
-                'avg_duration': avg_duration,
-                'min_duration': min_duration,
-                'max_duration': max_duration,
-                'percentage': profile_percentage
-            },
-            'callers': callers,
-            'subcalls': subcalls
-        }
-
-
-    def _calculateDurationStatistics(self, calls):
-        """Calculate duration statistics for a list of calls
-
-        Args:
-            calls: List of call records with duration attribute
-
-        Returns:
-            dict with n_calls, total_duration, avg_duration, min_duration, max_duration
-        """
-        durations = [call.duration for call in calls if call.duration is not None]
-        if not durations:
-            return None
-
-        n_calls = len(durations)
-        total_duration = sum(durations)
-        avg_duration = total_duration / n_calls
-        min_duration = min(durations)
-        max_duration = max(durations)
-
-        return {
-            'n_calls': n_calls,
-            'total_duration': total_duration,
-            'avg_duration': avg_duration,
-            'min_duration': min_duration,
-            'max_duration': max_duration
-        }
 
     def _createStatisticsTreeItem(self, parent, name, stats, percentage=None):
         """Create a tree item with standard statistics formatting
@@ -1033,31 +906,9 @@ class NewProfiler(Qt.QObject):
         callers_item = NumericalTreeWidgetItem(self.detail_tree)
         callers_item.setText(0, "Callers")
 
-        for caller_func, caller_data in callers.items():
-            calls = caller_data['calls']
-            parent_calls = caller_data['parent_calls']
-
-            # Calculate statistics for this caller
-            stats = self._calculateDurationStatistics(calls)
-            if not stats:
-                continue
-
-            # Calculate percentage: time in selected function / total time of caller invocations that called selected function
-            # Get unique parent calls (same parent may call selected function multiple times)
-            unique_parent_calls = {}
-            for parent in parent_calls:
-                if parent.duration is not None:
-                    # Use call ID or timestamp as unique identifier
-                    call_id = id(parent)  # Use object identity as unique key
-                    unique_parent_calls[call_id] = parent
-
-            if unique_parent_calls:
-                total_caller_time = sum(parent.duration for parent in unique_parent_calls.values())
-                percentage = (stats['total_duration'] / total_caller_time * 100) if total_caller_time > 0 else 0.0
-            else:
-                percentage = 0.0
-
-            self._createStatisticsTreeItem(callers_item, caller_func, stats, percentage)
+        # Callers data already has percentages calculated by ProfileAnalyzer!
+        for caller_func, stats in callers.items():
+            self._createStatisticsTreeItem(callers_item, caller_func, stats, stats['percentage'])
 
     def _addSubcallsSection(self, subcalls):
         """Add subcalls section to detail tree"""
@@ -1067,25 +918,9 @@ class NewProfiler(Qt.QObject):
         subcalls_item = NumericalTreeWidgetItem(self.detail_tree)
         subcalls_item.setText(0, "Subcalls")
 
-        # Get the total duration of the parent function for percentage calculation
-        # We need to find the total duration from the totals section
-        parent_total_duration = 0.0
-        for i in range(self.detail_tree.topLevelItemCount()):
-            item = self.detail_tree.topLevelItem(i)
-            if item.text(0) == "Totals":
-                parent_total_duration = getattr(item, '_numerical_data', {}).get(3, 0) / 1000  # Convert back to seconds
-                break
-
-        for child_func, calls in subcalls.items():
-            # Calculate statistics for this subcall
-            stats = self._calculateDurationStatistics(calls)
-            if not stats:
-                continue
-
-            # Calculate percentage based on parent function total time
-            percentage = (stats['total_duration'] / parent_total_duration * 100) if parent_total_duration > 0 else 0.0
-
-            self._createStatisticsTreeItem(subcalls_item, child_func, stats, percentage)
+        # Subcalls data already has percentages calculated by ProfileAnalyzer!
+        for child_func, stats in subcalls.items():
+            self._createStatisticsTreeItem(subcalls_item, child_func, stats, stats['percentage'])
 
     def _clearProfiles(self):
         """Clear all profile results"""
