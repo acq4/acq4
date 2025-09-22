@@ -5,10 +5,11 @@ import threading
 import queue
 import time
 import weakref
+from typing import List, Dict, Tuple, Optional, Callable, Any, Union
 
 
 class Profile:
-    def __init__(self, max_duration=None, finish_callback=None):
+    def __init__(self, max_duration: Optional[float] = None, finish_callback: Optional[Callable] = None):
         # list of (timestamp, thread_id, frame, event, arg, calling_lineno, current_lineno)
         # calling_lineno is the line number of the _caller_ at the time of each event
         # current_lineno is the line number of the current frame at the time of each event
@@ -267,13 +268,13 @@ def module_from_file(path):
 class FunctionAnalysis:
     """Analysis results for a specific function across all its invocations in a profile"""
 
-    def __init__(self, function_key, function_calls, callers, subcalls, profile_duration, analyzer=None):
+    def __init__(self, function_key: Tuple, function_calls: List['CallRecord'], callers: Dict[Tuple, List['CallRecord']], subcalls: Dict[Tuple, List['CallRecord']], profile_duration: float, analyzer: Optional['ProfileAnalyzer'] = None):
         self.function_key = function_key
         self.function_calls = function_calls  # List of CallRecord instances
         self.callers = callers  # Dict: caller_function_key -> list of CallRecord instances
         self.subcalls = subcalls  # Dict: subcall_function_key -> list of CallRecord instances
         self.profile_duration = profile_duration
-        self.analyzer = analyzer  # Reference to ProfileAnalyzer for looking up other functions
+        self.analyzer: Optional['ProfileAnalyzer'] = analyzer  # Reference to ProfileAnalyzer for looking up other functions
 
         # Calculate totals
         self.total_calls = len(function_calls)
@@ -357,22 +358,18 @@ class FunctionAnalysis:
         return result
 
     def _get_caller_total_time(self, caller_function_key):
-        """Get total time spent in caller function across all its invocations
-
-        This requires access to the ProfileAnalyzer to get caller's total time.
-        For now, we'll calculate it from the calls we have.
-        """
-        # This is a simplified approach - in a full implementation,
-        # we'd want the ProfileAnalyzer to provide this information
-        calls = self.callers.get(caller_function_key, [])
-        if not calls:
+        """Get total time spent in caller function across all its invocations"""
+        if not self.analyzer:
             return 0.0
 
-        # Get the parent duration from one of the calls (they should all have same parent)
-        sample_call = calls[0]
-        if hasattr(sample_call, 'parent') and sample_call.parent and sample_call.parent.duration:
-            return sample_call.parent.duration
-        return 0.0
+        # Use the analyzer to get all CallRecord instances for the caller function
+        caller_records = self.analyzer.get_call_records(caller_function_key)
+        if not caller_records:
+            return 0.0
+
+        # Sum up the total duration across all invocations of the caller
+        total_time = sum(record.duration for record in caller_records if record.duration is not None)
+        return total_time
 
     def _calculate_call_stats(self, calls):
         """Calculate statistics for a list of calls"""
@@ -395,7 +392,7 @@ class FunctionAnalysis:
 class TreeDisplayData:
     """Pre-calculated display data for UI tree items"""
 
-    def __init__(self, call_record, profile_start_time=0):
+    def __init__(self, call_record: 'CallRecord', profile_start_time: float = 0):
         self.call_record = call_record
         self.function_name = call_record.display_name
         self.module = call_record.module
@@ -430,7 +427,7 @@ class TreeDisplayData:
 class ThreadDisplayData:
     """Pre-calculated display data for thread tree items"""
 
-    def __init__(self, thread_id, thread_name, root_calls, profile_duration, profile_start_time):
+    def __init__(self, thread_id: int, thread_name: str, root_calls: List['CallRecord'], profile_duration: float, profile_start_time: float):
         self.thread_id = thread_id
         self.thread_name = thread_name
         self.root_calls = root_calls
@@ -451,7 +448,7 @@ class ThreadDisplayData:
 class ProfileAnalyzer:
     """Analyzes profile results to extract function statistics and relationships"""
 
-    def __init__(self, profile_events, profile_duration):
+    def __init__(self, profile_events: Dict[int, List['CallRecord']], profile_duration: float):
         """
         Args:
             profile_events: Dict from Profile.get_events() - {thread_id: [root_calls]}
@@ -509,7 +506,7 @@ class ProfileAnalyzer:
         self._function_lookup = function_lookup
         return function_lookup
 
-    def analyze_function(self, call_record):
+    def analyze_function(self, call_record: 'CallRecord') -> Optional['FunctionAnalysis']:
         """Analyze a specific function across all its invocations
 
         Args:
@@ -534,28 +531,21 @@ class ProfileAnalyzer:
             analyzer=self
         )
 
-    def get_call_record_by_function_key(self, function_key):
-        """Get the first CallRecord for a given function_key
+    def get_call_records(self, function_key: Tuple) -> List['CallRecord']:
+        """Get all CallRecord instances for a given function_key
 
         Args:
             function_key: Function key tuple to look up
 
         Returns:
-            CallRecord object or None if not found
+            List of CallRecord objects (empty list if not found)
         """
-        for thread_id, calls in self.profile_events.items():
-            for call in self._iterate_all_calls(calls):
-                if call.function_key == function_key:
-                    return call
-        return None
+        function_data = self._function_lookup.get(function_key)
+        if function_data and function_data['calls']:
+            return function_data['calls']
+        return []
 
-    def _iterate_all_calls(self, calls):
-        """Recursively iterate through all calls in a call tree"""
-        for call in calls:
-            yield call
-            yield from self._iterate_all_calls(call.children)
-
-    def get_tree_display_data(self, profile_start_time):
+    def get_tree_display_data(self, profile_start_time: float) -> Dict[int, 'ThreadDisplayData']:
         """Get pre-calculated display data for the entire call tree
 
         Args:
@@ -591,7 +581,7 @@ class ProfileAnalyzer:
 
         return result
 
-    def _build_call_display_tree(self, call_record, profile_start_time):
+    def _build_call_display_tree(self, call_record: 'CallRecord', profile_start_time: float) -> List['TreeDisplayData']:
         """Recursively build TreeDisplayData for a call and its children
 
         Args:
