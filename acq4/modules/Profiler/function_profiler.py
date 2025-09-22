@@ -5,6 +5,7 @@ from acq4.util import Qt
 import pyqtgraph as pg
 from pyqtgraph.console import ConsoleWidget
 from acq4.util.profiler import Profile, CallRecord, ProfileAnalyzer, TreeDisplayData, ThreadDisplayData, FunctionAnalysis
+from acq4.util.codeEditor import invokeCodeEditor
 
 
 class ProfileResult:
@@ -303,6 +304,7 @@ class FunctionProfiler(Qt.QObject):
             self.profile_display.setExpandsOnDoubleClick(False)
             self.profile_display.itemExpanded.connect(self._onItemExpanded)
             self.profile_display.itemSelectionChanged.connect(self._onCallTreeSelectionChanged)
+            self.profile_display.itemDoubleClicked.connect(self._onCallTreeDoubleClicked)
             self.profile_display.setColumnWidth(FunctionProfiler.CallTreeColumns.FUNCTION_THREAD, 250)  # Set first column width
             right_splitter.addWidget(self.profile_display)
 
@@ -515,6 +517,21 @@ class FunctionProfiler(Qt.QObject):
             scroll_item = item
         self.profile_display.scrollToItem(scroll_item)
         self.profile_display.scrollToItem(root_item)
+
+    def _onCallTreeDoubleClicked(self, item, column):
+        """Handle double-click on call tree to open code editor at calling location"""
+        if isinstance(item, LazyCallItem):
+            call_record = item.call_record
+            calling_location = call_record.calling_location
+
+            if calling_location:
+                filename, line_number = calling_location
+                try:
+                    invokeCodeEditor(filename, line_number)
+                except Exception as e:
+                    print(f"Failed to open code editor: {e}")
+            else:
+                print(f"No calling location available for {call_record.display_name}")
 
     def _onCallTreeSelectionChanged(self):
         """Handle selection change in call tree to update detail view and console stack"""
