@@ -264,6 +264,352 @@ def module_from_file(path):
         return full_path
 
 
+class FunctionAnalysis:
+    """Analysis results for a specific function across all its invocations in a profile"""
+
+    def __init__(self, function_key, function_calls, callers, subcalls, profile_duration):
+        self.function_key = function_key
+        self.function_calls = function_calls  # List of CallRecord instances
+        self.callers = callers  # Dict: caller_function_key -> list of CallRecord instances
+        self.subcalls = subcalls  # Dict: subcall_function_key -> list of CallRecord instances
+        self.profile_duration = profile_duration
+
+        # Calculate totals
+        self.total_calls = len(function_calls)
+        valid_durations = [call.duration for call in function_calls if call.duration is not None]
+
+        if valid_durations:
+            self.total_duration = sum(valid_durations)
+            self.avg_duration = self.total_duration / len(valid_durations)
+            self.min_duration = min(valid_durations)
+            self.max_duration = max(valid_durations)
+        else:
+            self.total_duration = self.avg_duration = self.min_duration = self.max_duration = 0
+
+        # Calculate percentage relative to total profile time
+        self.profile_percentage = (self.total_duration / profile_duration * 100) if profile_duration > 0 else 0
+
+    def get_caller_stats(self, caller_function_key):
+        """Get statistics for calls from a specific caller"""
+        calls = self.callers.get(caller_function_key, [])
+        return self._calculate_call_stats(calls)
+
+    def get_subcall_stats(self, subcall_function_key):
+        """Get statistics for calls to a specific subcall function"""
+        calls = self.subcalls.get(subcall_function_key, [])
+        return self._calculate_call_stats(calls)
+
+    def get_caller_percentage(self, caller_function_key):
+        """Get percentage of caller's total time spent calling this function"""
+        calls = self.callers.get(caller_function_key, [])
+        if not calls:
+            return 0.0
+
+        # Calculate total time spent in this function when called by this caller
+        total_time_in_function = sum(call.duration for call in calls if call.duration is not None)
+
+        # Get total time of the caller across all its invocations
+        caller_analysis = self._get_caller_total_time(caller_function_key)
+        if not caller_analysis or caller_analysis == 0:
+            return 0.0
+
+        return (total_time_in_function / caller_analysis) * 100
+
+    def get_subcall_percentage(self, subcall_function_key):
+        """Get percentage of this function's time spent in subcall"""
+        calls = self.subcalls.get(subcall_function_key, [])
+        if not calls:
+            return 0.0
+
+        subcall_total_time = sum(call.duration for call in calls if call.duration is not None)
+        if self.total_duration == 0:
+            return 0.0
+
+        return (subcall_total_time / self.total_duration) * 100
+
+    def get_parent_relative_percentage(self, parent_duration):
+        """Get percentage relative to a specific parent duration (for tree display)"""
+        if parent_duration == 0 or self.total_duration == 0:
+            return 0.0
+        return (self.total_duration / parent_duration) * 100
+
+    def get_callers_with_percentages(self):
+        """Get all callers with statistics and percentages"""
+        result = {}
+        for caller_key, calls in self.callers.items():
+            stats = self._calculate_call_stats(calls)
+            if stats:
+                percentage = self.get_caller_percentage(caller_key)
+                stats['percentage'] = percentage
+                result[caller_key] = stats
+        return result
+
+    def get_subcalls_with_percentages(self):
+        """Get all subcalls with statistics and percentages"""
+        result = {}
+        for subcall_key, calls in self.subcalls.items():
+            stats = self._calculate_call_stats(calls)
+            if stats:
+                percentage = self.get_subcall_percentage(subcall_key)
+                stats['percentage'] = percentage
+                result[subcall_key] = stats
+        return result
+
+    def _get_caller_total_time(self, caller_function_key):
+        """Get total time spent in caller function across all its invocations
+
+        This requires access to the ProfileAnalyzer to get caller's total time.
+        For now, we'll calculate it from the calls we have.
+        """
+        # This is a simplified approach - in a full implementation,
+        # we'd want the ProfileAnalyzer to provide this information
+        calls = self.callers.get(caller_function_key, [])
+        if not calls:
+            return 0.0
+
+        # Get the parent duration from one of the calls (they should all have same parent)
+        sample_call = calls[0]
+        if hasattr(sample_call, 'parent') and sample_call.parent and sample_call.parent.duration:
+            return sample_call.parent.duration
+        return 0.0
+
+    def _calculate_call_stats(self, calls):
+        """Calculate statistics for a list of calls"""
+        if not calls:
+            return None
+
+        valid_durations = [call.duration for call in calls if call.duration is not None]
+        if not valid_durations:
+            return None
+
+        return {
+            'n_calls': len(valid_durations),
+            'total_duration': sum(valid_durations),
+            'avg_duration': sum(valid_durations) / len(valid_durations),
+            'min_duration': min(valid_durations),
+            'max_duration': max(valid_durations)
+        }
+
+
+class TreeDisplayData:
+    """Pre-calculated display data for UI tree items"""
+
+    def __init__(self, call_record, parent_duration=None, profile_start_time=0):
+        self.call_record = call_record
+        self.function_name = call_record.display_name
+        self.module = call_record.module
+        self.location = self._get_location()
+
+        # Calculate values
+        self.duration_seconds = call_record.duration if call_record.duration else 0
+        self.duration_ms = self.duration_seconds * 1000
+        self.start_time_relative = (call_record.timestamp - profile_start_time) * 1000
+
+        # Calculate parent-relative percentage
+        if parent_duration and parent_duration > 0 and self.duration_seconds > 0:
+            self.parent_percentage = (self.duration_seconds / parent_duration) * 100
+        else:
+            self.parent_percentage = 0.0
+
+        # Formatted strings for display
+        self.duration_text = self._format_duration(self.duration_seconds)
+        self.start_time_text = f"{self.start_time_relative:.3f}"
+        self.percentage_text = f"{self.parent_percentage:.1f}" if self.parent_percentage > 0 else "—"
+
+        # Children display data (will be populated by ProfileAnalyzer)
+        self.children_display_data = []
+
+    def _get_location(self):
+        """Get formatted location string"""
+        calling_location = self.call_record.calling_location
+        if calling_location:
+            filename, lineno = calling_location
+            return f"{filename}:{lineno}"
+        else:
+            # Top-level function - show function definition location as fallback
+            return f"{self.call_record.filename}:{self.call_record.frame.f_code.co_firstlineno}"
+
+    def _format_duration(self, duration_seconds):
+        """Format duration in seconds to milliseconds text"""
+        if duration_seconds is not None and duration_seconds > 0:
+            return f"{duration_seconds * 1000:.3f}"
+        else:
+            return "—"
+
+
+class ThreadDisplayData:
+    """Pre-calculated display data for thread tree items"""
+
+    def __init__(self, thread_id, thread_name, root_calls, profile_duration, profile_start_time):
+        self.thread_id = thread_id
+        self.thread_name = thread_name
+        self.root_calls = root_calls
+        self.profile_start_time = profile_start_time
+
+        # Calculate thread totals
+        self.total_duration = profile_duration
+        self.total_duration_ms = self.total_duration * 1000
+
+        # Formatted strings
+        self.display_name = f"{thread_name} ({thread_id})"
+        self.duration_text = f"{self.total_duration * 1000:.3f}"
+        self.start_time_text = "0.000"  # Threads start at beginning
+        self.percentage_text = "—"  # Threads have no parent
+
+        # Call display data (will be populated by ProfileAnalyzer)
+        self.call_display_data = []
+
+
+class ProfileAnalyzer:
+    """Analyzes profile results to extract function statistics and relationships"""
+
+    def __init__(self, profile_events, profile_duration):
+        """
+        Args:
+            profile_events: Dict from Profile.get_events() - {thread_id: [root_calls]}
+            profile_duration: Total profile duration in seconds
+        """
+        self.profile_events = profile_events
+        self.profile_duration = profile_duration
+        self._function_lookup = None
+
+    def build_function_lookup(self):
+        """Build lookup table of all function calls, callers, and subcalls"""
+        if self._function_lookup is not None:
+            return self._function_lookup
+
+        function_lookup = {}
+
+        def process_call(call, parent_call=None):
+            """Recursively process calls to build function lookup"""
+            function_key = call.function_key
+
+            # Initialize function entry if not exists
+            if function_key not in function_lookup:
+                function_lookup[function_key] = {
+                    'calls': [],
+                    'callers': {},  # caller_key -> [calls]
+                    'subcalls': {}  # subcall_key -> [calls]
+                }
+
+            # Add this call to the function's call list
+            function_lookup[function_key]['calls'].append(call)
+
+            # Record caller relationship
+            if parent_call is not None:
+                parent_key = parent_call.function_key
+                callers = function_lookup[function_key]['callers']
+                if parent_key not in callers:
+                    callers[parent_key] = []
+                callers[parent_key].append(call)
+
+                # Record subcall relationship on parent
+                parent_subcalls = function_lookup[parent_key]['subcalls']
+                if function_key not in parent_subcalls:
+                    parent_subcalls[function_key] = []
+                parent_subcalls[function_key].append(call)
+
+            # Process children
+            for child_call in call.children:
+                process_call(child_call, call)
+
+        # Process all threads and root calls
+        for thread_id, root_calls in self.profile_events.items():
+            for root_call in root_calls:
+                process_call(root_call)
+
+        self._function_lookup = function_lookup
+        return function_lookup
+
+    def analyze_function(self, call_record):
+        """Analyze a specific function across all its invocations
+
+        Args:
+            call_record: A CallRecord instance to identify the function
+
+        Returns:
+            FunctionAnalysis instance with complete statistics
+        """
+        function_lookup = self.build_function_lookup()
+        function_key = call_record.function_key
+
+        function_data = function_lookup.get(function_key)
+        if not function_data:
+            return None
+
+        return FunctionAnalysis(
+            function_key=function_key,
+            function_calls=function_data['calls'],
+            callers=function_data['callers'],
+            subcalls=function_data['subcalls'],
+            profile_duration=self.profile_duration
+        )
+
+    def get_tree_display_data(self, profile_start_time):
+        """Get pre-calculated display data for the entire call tree
+
+        Args:
+            profile_start_time: Start time of the profile for relative time calculations
+
+        Returns:
+            Dict mapping thread_id to ThreadDisplayData with nested TreeDisplayData
+        """
+        result = {}
+
+        for thread_id, root_calls in self.profile_events.items():
+            # Get thread name (stored in CallRecord or use default)
+            thread_name = "MainThread"  # Default
+            if root_calls:
+                thread_name = getattr(root_calls[0], '_thread_name', f"Thread-{thread_id}")
+
+            # Create thread display data
+            thread_data = ThreadDisplayData(
+                thread_id=thread_id,
+                thread_name=thread_name,
+                root_calls=root_calls,
+                profile_duration=self.profile_duration,
+                profile_start_time=profile_start_time
+            )
+
+            # Add tree display data for each call in this thread
+            thread_data.call_display_data = []
+            for root_call in root_calls:
+                call_data = self._build_call_display_tree(root_call, self.profile_duration, profile_start_time)
+                thread_data.call_display_data.append(call_data)
+
+            result[thread_id] = thread_data
+
+        return result
+
+    def _build_call_display_tree(self, call_record, parent_duration, profile_start_time):
+        """Recursively build TreeDisplayData for a call and its children
+
+        Args:
+            call_record: CallRecord to build display data for
+            parent_duration: Duration of parent call for percentage calculation
+            profile_start_time: Profile start time for relative time calculation
+
+        Returns:
+            TreeDisplayData with nested children_display_data
+        """
+        # Create display data for this call
+        display_data = TreeDisplayData(
+            call_record=call_record,
+            parent_duration=parent_duration,
+            profile_start_time=profile_start_time
+        )
+
+        # Build display data for children
+        display_data.children_display_data = []
+        if call_record.children:
+            call_duration = call_record.duration if call_record.duration else 0
+            for child_call in call_record.children:
+                child_data = self._build_call_display_tree(child_call, call_duration, profile_start_time)
+                display_data.children_display_data.append(child_data)
+
+        return display_data
+
+
 if __name__ == '__main__':
     q = queue.Queue()
 
