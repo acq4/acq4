@@ -210,9 +210,9 @@ class CallRecord:
     def display_name(self):
         """Get formatted function name, handling C functions and class methods"""
         if self.event_type == 'c_call':
-            return f"C:{self.arg.__qualname__}"
+            return self.arg.__qualname__
         else:
-            return f"{self.funcname}"
+            return self.funcname
 
     @property
     def function_key(self):
