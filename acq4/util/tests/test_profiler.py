@@ -130,7 +130,7 @@ class TestProfiler:
 
 
     @pytest.fixture(scope="class")
-    def profiled_execution(self) -> Tuple[Dict, ProfileAnalyzer, float]:
+    def profiled_execution(self) -> ProfileAnalyzer:
         """Execute the same pattern as __main__ and return profiler results"""
         profiler = Profile()
         profiler.start()
@@ -140,11 +140,9 @@ class TestProfiler:
         profiler.stop()
 
         # Analyze results
-        events = profiler.get_events()
-        profile_duration = profiler.stop_time - profiler.start_time
-        analyzer = ProfileAnalyzer(events, profile_duration)
+        analyzer = ProfileAnalyzer(profiler)
 
-        return events, analyzer, profile_duration
+        return analyzer
 
     def _find_calls_by_name(self, events, function_name):
         """Find all CallRecord instances with the given function name"""
@@ -163,7 +161,8 @@ class TestProfiler:
 
     def test_call_tree_structure(self, profiled_execution):
         """Test that the call tree structure is correct"""
-        events, analyzer, profile_duration = profiled_execution
+        analyzer = profiled_execution
+        events = analyzer.profile_events
 
         # find func_to_profile calls
         func_calls = self._find_calls_by_name(events, 'func_to_profile')
@@ -183,7 +182,8 @@ class TestProfiler:
     @pytest.mark.parametrize("func_name", expected_results.keys())
     def test_analysis(self, profiled_execution, func_name):
         """Test that the analysis results match expected values"""
-        events, analyzer, profile_duration = profiled_execution
+        analyzer = profiled_execution
+        events = analyzer.profile_events
         
         call_rec = self._find_calls_by_name(events, func_name)[0]
         analysis = analyzer.analyze_function(call_rec)

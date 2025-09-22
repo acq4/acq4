@@ -10,14 +10,15 @@ from acq4.util.profiler import Profile, CallRecord, ProfileAnalyzer, TreeDisplay
 class ProfileResult:
     """Container for a single profiling session result"""
 
-    def __init__(self, name, start_time, events_data, profile_start_time, profile_stop_time):
+    def __init__(self, name, start_time, profile):
         self.name = name
         self.start_time = start_time
         self.end_time = datetime.now()
-        self.events_data = events_data  # Result from profile.get_events()
-        self.profile_start_time = profile_start_time  # perf_counter() time when profiling started
-        self.profile_stop_time = profile_stop_time  # perf_counter() time when profiling stopped
-        self.profile_duration = profile_stop_time - profile_start_time  # Actual profiling duration
+        self.profile = profile  # The actual Profile instance
+        self.events_data = profile.get_events()  # Result from profile.get_events()
+        self.profile_start_time = profile.start_time  # perf_counter() time when profiling started
+        self.profile_stop_time = profile.stop_time  # perf_counter() time when profiling stopped
+        self.profile_duration = profile.stop_time - profile.start_time  # Actual profiling duration
         self.duration = (self.end_time - self.start_time).total_seconds()
 
 
@@ -414,8 +415,7 @@ class FunctionProfiler(Qt.QObject):
 
         # Create result object
         session_name = self.session_name_edit.text() or f"NewProfile_{len(self.profile_results) + 1}"
-        result = ProfileResult(session_name, self.current_session_start, events_data,
-                             self.current_profiler.start_time, self.current_profiler.stop_time)
+        result = ProfileResult(session_name, self.current_session_start, self.current_profiler)
         self.profile_results.append(result)
 
         # Update UI
@@ -608,13 +608,16 @@ class FunctionProfiler(Qt.QObject):
         self.detail_tree.clear()
 
         # Use ProfileAnalyzer (no more UI analysis!)
-        analyzer = ProfileAnalyzer(result.events_data, result.profile_duration)
+        analyzer = ProfileAnalyzer(result.profile)
         analysis = analyzer.analyze_function(call_record)
 
         if not analysis:
             placeholder_item = NumericalTreeWidgetItem(self.detail_tree)
             placeholder_item.setText(0, "No analysis data available")
             return
+
+        # Get the selected function name for tooltips
+        selected_func_name = call_record.display_name
 
         # Create totals section using ProfileAnalyzer data
         totals_stats = {
@@ -630,9 +633,6 @@ class FunctionProfiler(Qt.QObject):
             'other_func': None
         }
         self._createStatisticsTreeItem(self.detail_tree, "Totals", "—", totals_stats, analysis.profile_percentage, totals_tooltip_context)
-
-        # Pass the analysis object directly to get proper display names
-        selected_func_name = call_record.display_name
         self._addCallersSection(analysis, selected_func_name)
         self._addSubcallsSection(analysis, selected_func_name)
 

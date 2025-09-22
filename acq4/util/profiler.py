@@ -271,17 +271,33 @@ def module_from_file(path):
 class FunctionAnalysis:
     """Analysis results for a specific function across all its invocations in a profile"""
 
-    def __init__(self, function_key: Tuple, function_calls: List['CallRecord'], callers: Dict[Tuple, List['CallRecord']], subcalls: Dict[Tuple, List['CallRecord']], profile_duration: float, analyzer: Optional['ProfileAnalyzer'] = None):
-        self.function_key = function_key
-        self.function_calls = function_calls  # List of CallRecord instances
-        self.callers = callers  # Dict: caller_function_key -> list of CallRecord instances
-        self.subcalls = subcalls  # Dict: subcall_function_key -> list of CallRecord instances
-        self.profile_duration = profile_duration
-        self.analyzer: Optional['ProfileAnalyzer'] = analyzer  # Reference to ProfileAnalyzer for looking up other functions
+    def __init__(self, analyzer: 'ProfileAnalyzer', call_record: 'CallRecord'):
+        """
+        Args:
+            analyzer: ProfileAnalyzer instance containing function lookup data
+            call_record: CallRecord instance to identify the function to analyze
+        """
+        self.analyzer = analyzer
+        self.function_key = call_record.function_key
+
+        # Get function data from analyzer
+        function_lookup = analyzer.build_function_lookup()
+        function_data = function_lookup.get(self.function_key)
+        if not function_data:
+            # Initialize empty data if function not found
+            self.function_calls = []
+            self.callers = {}
+            self.subcalls = {}
+        else:
+            self.function_calls = function_data['calls']  # List of CallRecord instances
+            self.callers = function_data['callers']  # Dict: caller_function_key -> list of CallRecord instances
+            self.subcalls = function_data['subcalls']  # Dict: subcall_function_key -> list of CallRecord instances
+
+        self.profile_duration = analyzer.profile_duration
 
         # Calculate totals
-        self.total_calls = len(function_calls)
-        valid_durations = [call.duration for call in function_calls if call.duration is not None]
+        self.total_calls = len(self.function_calls)
+        valid_durations = [call.duration for call in self.function_calls if call.duration is not None]
 
         if valid_durations:
             self.total_duration = sum(valid_durations)
@@ -292,7 +308,7 @@ class FunctionAnalysis:
             self.total_duration = self.avg_duration = self.min_duration = self.max_duration = 0
 
         # Calculate percentage relative to total profile time
-        self.profile_percentage = (self.total_duration / profile_duration * 100) if profile_duration > 0 else 0
+        self.profile_percentage = (self.total_duration / self.profile_duration * 100) if self.profile_duration > 0 else 0
 
     def get_caller_stats(self, caller_function_key):
         """Get statistics for calls from a specific caller"""
@@ -451,14 +467,14 @@ class ThreadDisplayData:
 class ProfileAnalyzer:
     """Analyzes profile results to extract function statistics and relationships"""
 
-    def __init__(self, profile_events: Dict[int, List['CallRecord']], profile_duration: float):
+    def __init__(self, profile: 'Profile'):
         """
         Args:
-            profile_events: Dict from Profile.get_events() - {thread_id: [root_calls]}
-            profile_duration: Total profile duration in seconds
+            profile: Profile instance to analyze
         """
-        self.profile_events = profile_events
-        self.profile_duration = profile_duration
+        self.profile = profile
+        self.profile_events = profile.get_events()
+        self.profile_duration = profile.stop_time - profile.start_time
         self._function_lookup = None
 
     def build_function_lookup(self):
@@ -525,14 +541,7 @@ class ProfileAnalyzer:
         if not function_data:
             return None
 
-        return FunctionAnalysis(
-            function_key=function_key,
-            function_calls=function_data['calls'],
-            callers=function_data['callers'],
-            subcalls=function_data['subcalls'],
-            profile_duration=self.profile_duration,
-            analyzer=self
-        )
+        return FunctionAnalysis(self, call_record)
 
     def get_call_records(self, function_key: Tuple) -> List['CallRecord']:
         """Get all CallRecord instances for a given function_key
