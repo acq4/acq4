@@ -16,10 +16,14 @@ class Sonicator(Device):
     
     Configuration options:
     
-    * **protocols** (dict): Dictionary of predefined sonication protocols
-        - Key: Protocol name (str)
-        - Value: Protocol definition (format depends on subclass implementation)
-    
+    protocols : dict
+        Dictionary of predefined sonication protocols
+            - Key: Protocol name (str)
+            - Value: Protocol definition (format depends on subclass implementation)
+    disableManualSonicationBelow : float
+        If set, disable the sonication buttons when the pipette is below the surface plus this
+        value.
+
     Subclasses define the specific format and implementation of protocols.
     
     Emits sigSonicationChanged(status) when sonication state changes.
@@ -51,6 +55,14 @@ class Sonicator(Device):
     def deviceInterface(self, win):
         return SonicatorGUI(win, self)
 
+    @property
+    def patchPipetteDevice(self):
+        for pp in self.dm.listInterfaces('patchpipette'):
+            pp = self.dm.getDevice(pp)
+            if pp.sonicatorDevice == self:
+                return pp
+        return None
+
 
 class SonicatorGUI(Qt.QWidget):
     """GUI interface for controlling a sonicator device.
@@ -60,11 +72,14 @@ class SonicatorGUI(Qt.QWidget):
     - Setting custom frequency
     """
 
-    def __init__(self, win, dev):
+    def __init__(self, win, dev: Sonicator):
         Qt.QWidget.__init__(self)
         self.win = win
         self.dev = dev
         self.dev.sigSonicationChanged.connect(self.onSonicationChanged)
+        if dev.config.get("disableManualSonicationBelow") is not None and dev.patchPipetteDevice:
+            manip = self.dev.patchPipetteDevice.pipetteDevice.parentDevice()
+            manip.sigPositionChanged.connect(self._disableManualSonicationAsNeeded)
 
         self.setupUI()
 
@@ -125,14 +140,13 @@ class SonicatorGUI(Qt.QWidget):
             button.setEnabled(not running or activeProtocol == name)
         # self.sonicateBtn.setEnabled(not running or activeProtocol == "manual")
 
-    # def runManualSonication(self):
-    #     """Handle manual sonication button click"""
-    #     frequency = self.freqSpinBox.value()
-    #     duration = self.durationSpinBox.value()
-    #
-    #     self.updateButtonStates(True, "manual")
-    #
-    #     return self.dev.sonicate(frequency, duration)
+    def _disableManualSonicationAsNeeded(self):
+        """Disable manual sonication button if pipette is below safe height"""
+        pos = self.dev.patchPipetteDevice.pipetteDevice.globalPosition()
+        surface = self.dev.patchPipetteDevice.scopeDevice().getSurfaceDepth()
+        safe = surface + self.dev.config["disableManualSonicationBelow"]
+        for btn in self._protocolButtons.values():
+            btn.setEnabled(pos[2] > safe)
 
     def onSonicationChanged(self, status):
         """Called when the sonication changes"""
