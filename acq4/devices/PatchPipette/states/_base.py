@@ -412,7 +412,8 @@ class SteadyStateAnalysisBase(object):
 
     @staticmethod
     def exponential_decay_avg(dt, prev_avg, value, tau):
+        """Compute exponential decay average and ratio of new to old average."""
         alpha = 1 - np.exp(-dt / tau)
         avg = prev_avg * (1 - alpha) + value * alpha
-        ratio = np.log10(avg / prev_avg)
+        ratio = avg / prev_avg
         return avg, ratio
