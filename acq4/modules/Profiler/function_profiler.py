@@ -475,7 +475,7 @@ class FunctionProfiler(Qt.QObject):
         self.function_to_items.clear()
 
         # Get thread names from the profiler
-        thread_names = {}
+        thread_names = result.profile._thread_names
         if self.current_profiler:
             thread_names = self.current_profiler._thread_names
 
