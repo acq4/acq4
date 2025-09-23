@@ -219,8 +219,8 @@ class ResealState(PatchPipetteState):
     retractionStepInterval : float
         Interval (seconds) between stepwise movements of the retraction (default is 5s)
     resealTimeout : float
-        Seconds before reseal attempt exits, not including grabbing the nucleus and baseline measurements (default is
-        10 min)
+        Seconds before reseal attempt exits, not including grabbing the nucleus and baseline
+        measurements (default is 10 min)
     detectionTau : float
         Seconds of resistence measurements to average when detecting tears and stretches (default 1s)
     repairTau : float
@@ -421,6 +421,7 @@ class ResealState(PatchPipetteState):
         return tps
 
     def run(self):
+        self._sanityChecks()
         config = self.config
         dev = self.dev
         baseline_future = self.startRollingResistanceThresholds()
@@ -493,6 +494,19 @@ class ResealState(PatchPipetteState):
         dev.pipetteDevice.focusTip()
         dev.pressureDevice.setPressure(source='regulator', pressure=config['initialPressure'])
         return "outside out"
+
+    def _sanityChecks(self):
+        config = self.config
+        effective_speed = 1e-6 / config['retractionStepInterval']
+        timeout = config['resealTimeout']
+        min_dist = config['minimumSuccessDistance']
+        min_duration = min_dist / effective_speed
+        if min_duration > timeout:
+            self.dev.logger.error(
+                f"With a retraction step interval of {config['retractionStepInterval']}s, "
+                f"the minimum distance of {min_dist*1e6:.1f}µm will take at least {min_duration/60:.1f}min, "
+                f"which exceeds the reseal timeout of {timeout/60:.1f}min."
+            )
 
     def _retractFromTissue(self):
         # move out of the tissue more quickly
