@@ -226,7 +226,7 @@ class ProfiledQApplication(QApplication):
         self._exp_avg_active_fraction = None  # Current exponentially averaged active fraction
         self._last_event_end = time.perf_counter()  # Time when previous event completed
 
-        def start_profile(self, name="profile", slow_threshold_ms=5.0, max_slow_samples=1000, hold_receivers=False):
+    def start_profile(self, name="profile", slow_threshold_ms=5.0, max_slow_samples=1000, hold_receivers=False):
         """Start a new profiling session.
 
         Returns:
