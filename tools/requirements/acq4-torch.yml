@@ -1,7 +1,7 @@
 channels:
-  - pytorch
-  - nvidia
   - defaults
+  - nvidia
+  - pytorch
 dependencies:
   - beautifulsoup4
   - blas
@@ -18,12 +18,13 @@ dependencies:
   - cudatoolkit
   - numpy
   - pillow
+  - pip
   - pyqt=5
   - pyserial
-  - python=3.11
+  - python=3.12
+  - pytorch
   - pytorch-cuda
   - pytorch-mutex
-  - pytorch
   - pyyaml
   - scipy
   - sip
@@ -39,6 +40,7 @@ dependencies:
       - click
       - cloudpickle
       - contourpy
+      - coorx
       - cycler
       - decorator
       - dippykit
@@ -53,8 +55,8 @@ dependencies:
       - fvcore
       - gast
       - google-api-core
-      - google-auth-oauthlib
       - google-auth
+      - google-auth-oauthlib
       - google-cloud-core
       - google-cloud-storage
       - google-crc32c
@@ -62,6 +64,7 @@ dependencies:
       - google-resumable-media
       - googleapis-common-protos
       - grpcio
+      - guppy3
       - h5py
       - hsluv
       - huggingface-hub
@@ -80,8 +83,8 @@ dependencies:
       - llvmlite
       - lxml
       - markdown
-      - matplotlib-inline
       - matplotlib
+      - matplotlib-inline
       - msgpack
       - natsort
       - neuroanalysis
@@ -91,8 +94,8 @@ dependencies:
       - nvidia-cudnn-cu11
       - oauthlib
       - omegaconf
-      - opencv-python-headless
       - opencv-python
+      - opencv-python-headless
       - opt-einsum
       - packaging
       - pandas
@@ -105,15 +108,18 @@ dependencies:
       - portalocker
       - prompt-toolkit
       - protobuf
+      - psutil
       - ptyprocess
       - pure-eval
-      - pyasn1-modules
       - pyasn1
+      - pyasn1-modules
       - pycocotools
       - pydot
       - pygments
       - pymmcore
+      - pyopengl
       - pyparsing
+      - git+https://github.com/acq4/pyqtgraph.git@_working
       - pyrasite
       - pytest
       - python-dateutil
@@ -131,16 +137,18 @@ dependencies:
       - stack-data
       - superqt
       - tabulate
-      - tensorboard-data-server
+      - teleprox
       - tensorboard
+      - tensorboard-data-server
+      - tensorflow
       - tensorflow-estimator
       - tensorflow-io-gcs-filesystem
-      - tensorflow
       - termcolor
       - tifffile
       - timm
       - torchvision
       - traitlets
+      - trimesh
       - typing-extensions
       - tzdata
       - urllib3
