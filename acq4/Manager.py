@@ -19,6 +19,8 @@ import socket
 import getpass
 from collections import OrderedDict
 
+import numpy as np
+
 import pyqtgraph as pg
 import pyqtgraph.reload as reload
 from pyqtgraph import configfile
@@ -380,7 +382,7 @@ class Manager(Qt.QObject):
     def readConfigFile(self, fileName, missingOk=True):
         fileName = self.configFileName(fileName)
         if os.path.isfile(fileName):
-            return configfile.readConfigFile(fileName)
+            return configfile.readConfigFile(fileName, np=np)
         else:
             if missingOk:
                 return {}
