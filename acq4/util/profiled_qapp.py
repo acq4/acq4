@@ -36,12 +36,12 @@ class QApplicationProfile(QObject):
     Multiple QApplicationProfile instances can be active simultaneously to collect
     overlapping statistics for different analysis purposes.
     """
-
-    def __init__(self, name="profile", slow_threshold_ms=5.0, max_slow_samples=1000):
+    def __init__(self, name="profile", slow_threshold_ms=5.0, max_slow_samples=1000, hold_receivers=False):
         super().__init__()
         self.name = name
         self._slow_threshold = slow_threshold_ms / 1000.0
         self._max_slow_samples = max_slow_samples
+        self.hold_receivers = hold_receivers  # If True, hold strong refs to receivers to prevent GC
 
         # Timing state
         self.start_time = time.perf_counter()
@@ -49,6 +49,7 @@ class QApplicationProfile(QObject):
 
         # Raw event data - analysis deferred
         self._events = []  # Store raw (duration, event_type, receiver, event) tuples
+        self._receivers = []  
 
         # Safety counters
         self._exceptions = 0
@@ -59,6 +60,8 @@ class QApplicationProfile(QObject):
         if not self._active:
             return
         self._events.append(rec)
+        if self.hold_receivers:
+            self._receivers.append(rec['receiver']())
 
     def stop(self):
         """Stop collecting statistics for this profile."""
@@ -202,13 +205,13 @@ class ProfiledQApplication(QApplication):
         self._exp_avg_active_fraction = None  # Current exponentially averaged active fraction
         self._last_event_end = time.perf_counter()  # Time when previous event completed
 
-    def start_profile(self, name="profile", slow_threshold_ms=5.0, max_slow_samples=1000):
+    def start_profile(self, name="profile", slow_threshold_ms=5.0, max_slow_samples=1000, hold_receivers=False):
         """Start a new profiling session.
 
         Returns:
             QApplicationProfile: Profile instance that will collect statistics
         """
-        profile = QApplicationProfile(name, slow_threshold_ms, max_slow_samples)
+        profile = QApplicationProfile(name, slow_threshold_ms, max_slow_samples, hold_receivers)
         self._active_profiles.append(profile)
         return profile
 
@@ -270,7 +273,7 @@ class ProfiledQApplication(QApplication):
             while obj is not None:
                 name = obj.objectName()
                 parent_chain.append((name, type(obj)))
-                obj = obj.parent()
+                obj = QObject.parent(obj)  # QObject.parent() because obj.parent() may be overridden
         except RuntimeError:
             # Qt object has been deleted during traversal
             parent_chain.append(("<deleted>", type(None)))
