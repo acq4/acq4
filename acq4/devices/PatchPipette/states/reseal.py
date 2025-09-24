@@ -157,9 +157,11 @@ class ResealAnalysis(SteadyStateAnalysisBase):
             detect_avg, detection_ratio = self.exponential_decay_avg(
                 dt, last_measurement['detect_avg'], resistance, self._detection_tau
             )
+            detection_ratio = np.log10(detection_ratio)
             repair_avg, repair_ratio = self.exponential_decay_avg(
                 dt, last_measurement['repair_avg'], resistance, self._repair_tau
             )
+            repair_ratio = np.log10(repair_ratio)
 
             is_stretching = (
                 detection_ratio > self._stretch_threshold or repair_ratio > self._stretch_threshold
@@ -227,12 +229,14 @@ class ResealState(PatchPipetteState):
     fallbackState : str
         State to transition to if reseal fails (default is 'whole cell')
     stretchDetectionThreshold : float
-        Maximum access resistance ratio before the membrane is considered to be stretching (default is 1.05)
+        Maximum log of the access resistance ratio before the membrane is considered to be
+        stretching (default is 0.005)
     tearDetectionThreshold : float
-        Minimum access resistance ratio before the membrane is considered to be tearing (default is 1)
+        Minimum log of the access resistance ratio before the membrane is considered to be tearing
+        (default is 0.00128)
     tornDetectionThreshold : float
-        Ratio of resistance divided by initial resistance below which the membrane is considered to be torn, using the
-        repairTau (default is 0.5)
+        If the repairTau-rolling average resistance drops below (this number times the initial
+        resistance), the tissue is considered irrevocably torn (default is 0.5)
     retractionSuccessDistance : float
         Distance (meters) to deem reseal successful regardless of resistance (default is 200 µm)
     minimumSuccessDistance : float
@@ -285,7 +289,7 @@ class ResealState(PatchPipetteState):
         'retractionStepInterval': {'type': 'float', 'default': 5, 'suffix': 's'},
         'retractionSuccessDistance': {'type': 'float', 'default': 200e-6, 'suffix': 'm'},
         'minimumSuccessDistance': {'type': 'float', 'default': 20e-6, 'suffix': 'm'},
-        'resealSuccessResistanceMultiplier': {'type': 'float', 'default': 4.0},
+        'resealSuccessResistanceMultiplier': {'type': 'float', 'default': 4.0, 'suffix': '*'},
         'minimumSuccessResistance': {'type': 'float', 'default': 500e6, 'suffix': 'Ω'},
         'obviousResealSuccessResistance': {'type': 'float', 'default': 1e9, 'suffix': 'Ω'},
         'resealSuccessDuration': {'type': 'float', 'default': 5, 'suffix': 's'},

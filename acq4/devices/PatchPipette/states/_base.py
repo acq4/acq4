@@ -54,8 +54,8 @@ class PatchPipetteState(Future):
                                   'optional': True},
         'initialPressure': {'type': 'float', 'default': None, 'optional': True, 'suffix': 'Pa'},
         'initialClampMode': {'type': 'list', 'default': None, 'limits': ['VC', 'IC'], 'optional': True},
-        'initialICHolding': {'type': 'float', 'default': None, 'optional': True},
-        'initialVCHolding': {'type': 'float', 'default': None, 'optional': True},
+        'initialICHolding': {'type': 'float', 'default': None, 'optional': True, 'suffix': 'A'},
+        'initialVCHolding': {'type': 'float', 'default': None, 'optional': True, 'suffix': 'V'},
         'initialTestPulseEnable': {'type': 'bool', 'default': None, 'optional': True},
         'initialTestPulseParameters': {'type': 'group', 'children': []},  # TODO
         'initialAutoBiasEnable': {'type': 'bool', 'default': False, 'optional': True},
@@ -411,7 +411,8 @@ class SteadyStateAnalysisBase(object):
 
     @staticmethod
     def exponential_decay_avg(dt, prev_avg, value, tau):
+        """Compute exponential decay average and ratio of new to old average."""
         alpha = 1 - np.exp(-dt / tau)
         avg = prev_avg * (1 - alpha) + value * alpha
-        ratio = np.log10(avg / prev_avg)
+        ratio = avg / prev_avg
         return avg, ratio
