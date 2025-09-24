@@ -42,6 +42,7 @@ dependencies:
       - cycler
       - decorator
       - dippykit
+      - docstring_parser
       - executing
       - fairscale
       - fastremap
