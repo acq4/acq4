@@ -53,7 +53,7 @@ class BreakInState(PatchPipetteState):
         'nPulses': {'type': 'str', 'default': "[1, 1, 1, 1, 1, 2, 2, 3, 3, 5]"},
         'pulseDurations': {'type': 'str', 'default': "[0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.3, 0.5, 0.7, 1.5]"},
         'pulsePressures': {'type': 'str', 'default': "[-30e3, -35e3, -40e3, -50e3, -60e3, -60e3, -60e3, -60e3, -60e3, -60e3]"},
-        'pulseInterval': {'type': 'float', 'default': 2},
+        'pulseInterval': {'type': 'float', 'default': 2, 'suffix': 's'},
         'resistanceThreshold': {'type': 'float', 'default': 650e6, 'suffix': 'Ω'},
         'capacitanceThreshold': {'type': 'float', 'default': 10e-12, 'suffix': 'F'},
         'holdingCurrentThreshold': {'type': 'float', 'default': -1e-9, 'suffix': 'A'},

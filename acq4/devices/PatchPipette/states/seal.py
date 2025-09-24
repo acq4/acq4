@@ -259,7 +259,7 @@ class SealState(PatchPipetteState):
         'pressureScanInterval': {'type': 'float', 'default': 10.0, 'suffix': 's'},
         'pressureScanRadius': {'type': 'float', 'default': 2 * kPa, 'suffix': 'Pa'},
         'pressureScanDuration': {'type': 'float', 'default': 5.0, 'suffix': 's'},
-        'pressureScanTrust': {'type': 'float', 'default': 0.25},
+        'pressureScanTrust': {'type': 'float', 'default': 0.25, 'suffix': '%'},
     }
 
     def __init__(self, dev, config):

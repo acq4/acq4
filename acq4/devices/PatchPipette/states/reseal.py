@@ -289,7 +289,7 @@ class ResealState(PatchPipetteState):
         'retractionStepInterval': {'type': 'float', 'default': 5, 'suffix': 's'},
         'retractionSuccessDistance': {'type': 'float', 'default': 200e-6, 'suffix': 'm'},
         'minimumSuccessDistance': {'type': 'float', 'default': 20e-6, 'suffix': 'm'},
-        'resealSuccessResistanceMultiplier': {'type': 'float', 'default': 4.0},
+        'resealSuccessResistanceMultiplier': {'type': 'float', 'default': 4.0, 'suffix': '*'},
         'minimumSuccessResistance': {'type': 'float', 'default': 500e6, 'suffix': 'Ω'},
         'obviousResealSuccessResistance': {'type': 'float', 'default': 1e9, 'suffix': 'Ω'},
         'resealSuccessDuration': {'type': 'float', 'default': 5, 'suffix': 's'},
