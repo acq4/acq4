@@ -145,7 +145,7 @@
            <string>All message types:</string>
           </property>
           <property name="checkState">
-           <enum>Checked</enum>
+           <enum>Unchecked</enum>
           </property>
           <property name="flags">
            <set>ItemIsDropEnabled|ItemIsUserCheckable|ItemIsEnabled</set>
@@ -153,6 +153,28 @@
           <item>
            <property name="text">
             <string>user</string>
+           </property>
+           <property name="checkState">
+            <enum>Checked</enum>
+           </property>
+           <property name="flags">
+            <set>ItemIsUserCheckable|ItemIsEnabled</set>
+           </property>
+          </item>
+          <item>
+           <property name="text">
+            <string>debug</string>
+           </property>
+           <property name="checkState">
+            <enum>Unchecked</enum>
+           </property>
+           <property name="flags">
+            <set>ItemIsUserCheckable|ItemIsEnabled</set>
+           </property>
+          </item>
+          <item>
+           <property name="text">
+            <string>info</string>
            </property>
            <property name="checkState">
             <enum>Checked</enum>
