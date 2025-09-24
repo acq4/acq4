@@ -1,5 +1,9 @@
+import contextlib
+import inspect
 from collections import OrderedDict
 from typing import Optional
+
+from docstring_parser import parse
 
 from acq4 import getManager
 from acq4.util import Qt
@@ -277,10 +281,52 @@ class ProfileParameter(Parameter):
 
 
 class StateParameter(Parameter):
+    # Class-level cache to avoid re-parsing docstrings
+    _tooltip_cache = {}
+    _base_tooltips = None  # Cache base tooltips separately since they're reused
+
+    @classmethod
+    def _getBaseTooltips(cls):
+        """Get base tooltips from PatchPipetteState, cached."""
+        if cls._base_tooltips is None:
+            base_docstring = inspect.getdoc(states.PatchPipetteState)
+            cls._base_tooltips = {}
+            if base_docstring:
+                with contextlib.suppress(Exception):
+                    cls._base_tooltips = {
+                        p.arg_name: p.description
+                        for p in parse(base_docstring).params
+                    }
+        return cls._base_tooltips
+
+    @classmethod
+    def _getStateTooltips(cls, state_name):
+        """Get tooltips for a state class, with caching and inheritance."""
+        if state_name in cls._tooltip_cache:
+            return cls._tooltip_cache[state_name]
+
+        # Start with base parameters
+        tooltips = cls._getBaseTooltips().copy()
+
+        # Add/override with state-specific parameters
+        state_class = PatchPipetteStateManager.getStateClass(state_name)
+        state_docstring = inspect.getdoc(state_class)
+        if state_docstring:
+            with contextlib.suppress(Exception):
+                state_params = {
+                    p.arg_name: p.description
+                    for p in parse(state_docstring).params
+                }
+                tooltips.update(state_params)
+
+        cls._tooltip_cache[state_name] = tooltips
+        return tooltips
+
     def __init__(self, name, profile):
         super().__init__(name=name, type='group', children=[])
         self._profile = profile
         self._state = name
+        tooltips = self._getStateTooltips(name)
         profile_config = PatchPipetteStateManager.getProfileConfig(profile)
         if profile_config.get('copyFrom', None):
             defaults = PatchPipetteStateManager.getStateConfig(name, profile_config['copyFrom'])
@@ -289,14 +335,15 @@ class StateParameter(Parameter):
         stateClass = PatchPipetteStateManager.getStateClass(name)
         config = PatchPipetteStateManager.getStateConfig(name, profile)
         for param_config in stateClass.parameterTreeConfig():
-            if param_config['name'] in defaults:
-                param_config['default'] = defaults[param_config['name']]
+            param_name = param_config['name']
+            if param_name in defaults:
+                param_config['default'] = defaults[param_name]
             param_config['pinValueToDefault'] = True
-            if param_config['type'] == 'float':
+            if param_config['type'] == 'float' and param_config.get('suffix') is not None:
                 param_config.setdefault('siPrefix', True)
-            param = Parameter.create(**param_config)
-            if config.get(param.name()) is not None:
-                param.setValue(config[param.name()])
+            param = Parameter.create(**param_config, tooltip=tooltips.get(param_name))
+            if config.get(param_name) is not None:
+                param.setValue(config[param_name])
             self.addChild(param)
 
     def reinitialize(self):
@@ -312,3 +359,23 @@ class StateParameter(Parameter):
     def applyDefaults(self, defaults):
         for key, val in defaults.items():
             self.child(key).setDefault(val, updatePristineValues=True)
+
+
+def add_tooltip_support(param_class):
+    """Monkey-patch Parameter.makeWidget to add tooltip support based on 'tooltip' option."""
+    original_makeTreeItem = param_class.makeTreeItem
+
+    def makeTreeItem_with_tooltip(self, depth):
+        widget = original_makeTreeItem(self, depth)
+        tooltip = self.opts.get('tooltip')
+        if tooltip:
+            if hasattr(widget, 'setToolTip'):
+                for col in range(widget.columnCount()):
+                    print(f"setting {col}-tooltip to '{tooltip[:15]}...'")
+                    widget.setToolTip(col, tooltip)
+        return widget
+
+    param_class.makeTreeItem = makeTreeItem_with_tooltip
+
+
+add_tooltip_support(Parameter)
