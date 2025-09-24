@@ -500,7 +500,6 @@ class MultiPatchLogWidget(Qt.QWidget):
     # TODO selectable cells, pipettes
     # TODO filter log messages by type
     # TODO record the patch profile params and any changes thereof
-    # TODO don't try to display position Z
     # TODO scale markers with si units
     # TODO make sure all the time values start at 0
     def __init__(self, parent=None):
