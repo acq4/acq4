@@ -237,7 +237,7 @@ class Pipette(Device, OptomechDevice):
         cache = self.readConfigFile('stored_positions')
         cache[name] = list(pos)
         self.writeConfigFile(cache, 'stored_positions')
-        self.checkRangeOfMotion(pos)
+        self.checkRangeOfMotion(pos, name)
 
     def loadPosition(self, name, default=None):
         """Return a previously saved position.
@@ -245,10 +245,10 @@ class Pipette(Device, OptomechDevice):
         cache = self.readConfigFile('stored_positions')
         return cache.get(name, default)
 
-    def checkRangeOfMotion(self, pos, tolerance=500e-6):
+    def checkRangeOfMotion(self, pos, name, tolerance=500e-6):
         """Warn user if the position (in global coordinates) is within 500µm of the manipulator's range of motion."""
         manipulator: Stage = self.parentDevice()
-        manipulator.checkRangeOfMotion(self._solveGlobalStagePosition(pos), tolerance)
+        manipulator.checkRangeOfMotion(self._solveGlobalStagePosition(pos), name, tolerance)
 
     def scopeDevice(self):
         if self._scopeDev is None:
