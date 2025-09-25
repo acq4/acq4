@@ -536,6 +536,40 @@ class MultiPatchLogWidget(Qt.QWidget):
         self._buildCtrlUi()
         layout.addWidget(ctrl_widget, 0, 1)
 
+        # Add Z-position display
+        self._addZPositionDisplay()
+
+    def _addZPositionDisplay(self):
+        """Add Z-position display widget to show depth information from the log data."""
+        from acq4.util.ui.ZPositionWidget import ZPositionWidget
+
+        # Add Z-position section to control panel
+        self._ctrl_layout.addWidget(Qt.QLabel('Z-Position:'))
+
+        # Create a depth view plot in the main graphics layout
+        self._depth_plot = self._plots_widget.addPlot(
+            name="Focus Depth",
+            title='Focus Depth',
+            labels=dict(bottom=('Position', ''), left=('Depth', 'm')),
+            row=0,
+            col=1,
+        )
+        self._depth_plot.setMaximumWidth(200)  # Keep it narrow like the original
+
+        # Create Z-position widget using this plot in display-only mode
+        self._zPositionWidget = ZPositionWidget(parent=None, plot=self._depth_plot, interactive=False)
+
+        # Add the depth label to the control layout
+        depthLabel = self._zPositionWidget.getDepthLabel()
+        if depthLabel is not None:
+            self._ctrl_layout.addWidget(depthLabel)
+
+        # Initialize Z-position tracking variables
+        self._currentZPosition = 0.0
+        self._surfaceZPosition = None
+        self._pipetteDepthMarkers = {}  # Track depth markers for each pipette
+        self._pipetteTargetMarkers = {}  # Track target markers for each pipette
+
     def buildPlotForUnits(self, units: str) -> pg.PlotItem:
         if units in self._plots_by_units:
             return self._plots_by_units[units]
@@ -882,6 +916,68 @@ class MultiPatchLogWidget(Qt.QWidget):
             else:
                 img.hide()
         self._displayTestPulseDataAtTime(time)
+        self._updateZPositionDisplay(time)
+
+    def _updateZPositionDisplay(self, time: float):
+        """Update the Z-position display based on log data at the given time."""
+        if not hasattr(self, '_zPositionWidget'):
+            return
+
+        # Calculate current Z position from pipette positions and update markers
+        abs_time = time + self.startTime()
+        total_z = 0.0
+        count = 0
+        x_offset = 0.0  # X position for markers
+
+        for dev_name, data in self._devices.items():
+            position_its = data.get('position_ITS')
+            if position_its is not None and len(position_its) > 0:
+                pos = position_its[abs_time]
+                if pos is not None and len(pos) >= 3:
+                    z_pos = pos[2]
+                    total_z += z_pos
+                    count += 1
+
+                    # Update or create pipette position marker (blue arrow with white border)
+                    if dev_name not in self._pipetteDepthMarkers:
+                        arrow = pg.ArrowItem(pen=pg.mkPen('w', width=2), brush=pg.mkBrush('b'))
+                        arrow.setPos(x_offset, z_pos)
+                        self._depth_plot.addItem(arrow)
+                        self._pipetteDepthMarkers[dev_name] = arrow
+                    else:
+                        self._pipetteDepthMarkers[dev_name].setPos(x_offset, z_pos)
+
+                    # Update or create target marker if we have target data
+                    targets = data.get('target')
+                    if targets is not None and len(targets) > 0:
+                        # Find the most recent target before current time
+                        target_times = targets[:, 0] - self.startTime()
+                        valid_targets = target_times <= time
+                        if np.any(valid_targets):
+                            latest_idx = np.where(valid_targets)[0][-1]
+                            target_z = targets[latest_idx, 3]  # Z coordinate is index 3
+
+                            if dev_name not in self._pipetteTargetMarkers:
+                                target = Target([x_offset, target_z], movable=False,
+                                              pen=pg.mkPen('r'), label=f"{dev_name} target")
+                                target.setVisible(True)
+                                self._depth_plot.addItem(target)
+                                self._pipetteTargetMarkers[dev_name] = target
+                            else:
+                                # Update target position
+                                self._pipetteTargetMarkers[dev_name].setPos([x_offset, target_z])
+
+                    x_offset += 0.1  # Space out markers horizontally
+
+        if count > 0:
+            average_z = total_z / count
+            self._zPositionWidget.setFocusDepth(average_z)
+
+            # Set surface depth if we haven't set it yet and have position data
+            if self._surfaceZPosition is None and abs_time <= self.startTime() + 1.0:
+                # Use the early position as a reference surface
+                self._surfaceZPosition = average_z
+                self._zPositionWidget.setSurfaceDepth(average_z)
 
     def startTime(self) -> float:
         return min(log.firstTime() for log in self._logFiles) or 0
