@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import sys
+import threading
+import time
 from typing import Optional
 
 import numpy as np
 
+from acq4.util import ptime
 from acq4.devices.Stage import Stage, MoveFuture, StageInterface
 from acq4.drivers.Scientifica import Scientifica as ScientificaDriver
 from acq4.util import Qt
@@ -273,10 +277,22 @@ class ScientificaMoveFuture(MoveFuture):
     """Provides access to a move-in-progress on a Scientifica manipulator.
     """
     def __init__(self, dev: Scientifica, pos, speed: float, name=None, **kwds):
-        self._moveReq = dev.driver.moveTo(np.array(pos), speed / 1e-6, name=name, **kwds)
-        targetPos = self._moveReq.target_pos  # will have None values filled in with current position
-        super().__init__(dev, targetPos, speed, name=name)
-        self._moveReq.set_callback(self._requestFinished)
+        self._moveReq = None
+
+        minSpeed = 1e-6 * dev.driver.getParam('minSpeed')
+        if speed < minSpeed:
+            # device _can't_ move this slow; we need to break the move into steps
+            self.stepwiseThread = threading.Thread(target=self._stepwiseMove, daemon=True, name=name)
+            self.doStepwise = True
+            currentPos = dev.getPosition()
+            targetPos = [currentPos[i] if pos[i] is None else pos[i] for i in range(len(pos))]
+            super().__init__(dev, targetPos, speed)
+            self.stepwiseThread.start()
+        else:
+            self._moveReq = dev.driver.moveTo(np.array(pos), speed / 1e-6, name=name, **kwds)
+            targetPos = self._moveReq.target_pos  # will have None values filled in with current position
+            super().__init__(dev, targetPos, speed, name=name)
+            self._moveReq.set_callback(self._requestFinished)
 
     def _requestFinished(self, moveReq):
         try:
@@ -290,7 +306,38 @@ class ScientificaMoveFuture(MoveFuture):
             )
 
     def interrupt(self):
-        self._moveReq.cancel()
+        if self._moveReq is None:
+            self.doStepwise = False
+        else:
+            self._moveReq.cancel()
+
+    def _stepwiseMove(self):
+        try:
+            minSpeed = self.dev.driver.getParam('minSpeed')
+            start = np.array(self.startPos)
+            stop = np.array(self.targetPos)
+            dist = np.linalg.norm(stop - start)
+            speed = self.speed * 1e6  # scientifica position is in um
+            duration = dist / speed
+            startTime = ptime.time()
+            while True:
+                if not self.doStepwise:
+                    raise self.Stopped()
+                now = ptime.time()
+                fracComplete = min(1, (now - startTime) / duration)
+                step = start + (stop-start) * fracComplete
+                self.f = self.dev.driver.moveTo(step, speed=minSpeed)
+                self.f.wait()
+                if fracComplete == 1:
+                    self._taskDone()
+                    break
+        except Exception as exc:
+            print()
+            self._taskDone(
+                interrupted=True,
+                error=str(exc),
+                excInfo=sys.exc_info(),
+            )
 
 
 class ScientificaGUI(StageInterface):
