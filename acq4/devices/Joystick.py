@@ -99,7 +99,7 @@ class PygameEventThread(Thread):
         self.callbacks = {}
         self.stop = False
         atexit.register(self.quit)
-        Thread.__init__(self)
+        Thread.__init__(self, name='PygameEventThread', daemon=True)
 
     def joystickId(self, name):
         try:

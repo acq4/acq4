@@ -9,6 +9,9 @@ from acq4.devices.PatchClamp.patchclamp import PatchClamp
 from acq4.util import Qt
 from acq4.util import ptime
 from neuroanalysis.test_pulse import PatchClampTestPulse
+
+from acq4_automation.feature_tracking.cell import Cell
+from coorx import Point
 from .devgui import PatchPipetteDeviceGui
 from .statemanager import PatchPipetteStateManager
 from ..Camera import Camera
@@ -73,6 +76,7 @@ class PatchPipette(Device):
         self.waitingForSwap = False
         self._lastPos = None
         self._emitTestPulseData = False
+        self.cell = None
 
         # key measurements made during patch process and lifetime of pipette
         self._patchRecord = None
@@ -226,7 +230,17 @@ class PatchPipette(Device):
             self._resetPatchRecord()
         return self._patchRecord
 
+    def setCell(self, cell, target=True):
+        self.cell = cell
+        if target:
+            self.pipetteDevice.setTarget(cell.position.mapped_to('global').coordinates)
+
+    def ensureCell(self):
+        if self.cell is None:
+            self.cell = Cell(Point(self.pipetteDevice.targetPosition(), 'global'))
+
     def finishPatchRecord(self):
+        self.cell = None
         if self._patchRecord is None:
             return
         self._patchRecord['complete'] = True

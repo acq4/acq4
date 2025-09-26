@@ -46,10 +46,10 @@ class BlowoutState(PatchPipetteState):
         self.dev.finishPatchRecord()
         return config['fallbackState']
 
-    def cleanup(self):
+    def _cleanup(self):
         dev = self.dev
         try:
             dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
         except Exception:
             printExc("Error resetting pressure after blowout")
-        return super().cleanup()
+        return super()._cleanup()

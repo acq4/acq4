@@ -7,6 +7,7 @@ import pyqtgraph as pg
 from acq4.util import ptime
 from acq4.util.functions import plottable_booleans
 from acq4.util.future import Future, future_wrap
+from acq4.util.debug import printExc
 from ._base import PatchPipetteState, SteadyStateAnalysisBase
 
 
@@ -341,9 +342,10 @@ class ResealState(PatchPipetteState):
                     self.setState("handling tear")
                     retraction_future.stop()
                     self._moveFuture = recovery_future = dev.pipetteDevice.stepwiseAdvance(
-                        self._startPosition[2],
-                        maxSpeed=self.config['maxRetractionSpeed'],
+                        depth=self._startPosition[2],
+                        speed=self.config['maxRetractionSpeed'],
                         interval=config['retractionStepInterval'],
+                        step=1e-6,
                     )
             elif self.isTorn():
                 if retraction_future and not retraction_future.isDone():
@@ -356,15 +358,16 @@ class ResealState(PatchPipetteState):
                     recovery_future.stop()
                 self.setState("retracting")
                 self._moveFuture = retraction_future = dev.pipetteDevice.stepwiseAdvance(
-                    dev.pipetteDevice.approachDepth(),
-                    maxSpeed=config['maxRetractionSpeed'],
+                    depth=dev.pipetteDevice.approachDepth(),
+                    speed=config['maxRetractionSpeed'],
                     interval=config['retractionStepInterval'],
+                    step=1e-6,
                 )
 
             self.sleep(0.2)
 
         self.setState("reseal deemed successful")
-        self.cleanup()
+        self._cleanup()
         self._moveFuture = self._retractFromTissue()
         self.waitFor(self._moveFuture)
 
@@ -375,7 +378,7 @@ class ResealState(PatchPipetteState):
         self.waitFor(self._moveFuture, timeout=90)
         dev.pipetteDevice.focusTip()
         dev.pressureDevice.setPressure(source='regulator', pressure=config['initialPressure'])
-        self.sleep(np.inf)
+        return "outside out"
 
     def _retractFromTissue(self):
         # move out of the tissue more quickly
@@ -386,9 +389,16 @@ class ResealState(PatchPipetteState):
     def retractionDistance(self):
         return np.linalg.norm(np.array(self.dev.pipetteDevice.globalPosition()) - self._startPosition)
 
-    def cleanup(self):
+    def _cleanup(self):
         if self._moveFuture is not None:
-            self._moveFuture.stop()
+            # TODO individually try-wrap these so all steps are attempted
+            try:
+                self._moveFuture.stop()
+            except Exception:
+                printExc("Failed to stop move future")
         if self._pressureFuture is not None:
-            self._pressureFuture.stop()
-        return super().cleanup()
+            try:
+                self._pressureFuture.stop()
+            except Exception:
+                printExc("Failed to stop pressure future")
+        return super()._cleanup()

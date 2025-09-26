@@ -26,7 +26,7 @@ class RecordThread(Thread):
     sigSavedFrame = Qt.Signal(object)
 
     def __init__(self, ui):
-        Thread.__init__(self)
+        Thread.__init__(self, name="ImageRecordThread")
         self.m = Manager.getManager()
 
         self.stopThread = False

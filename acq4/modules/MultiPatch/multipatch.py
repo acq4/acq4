@@ -127,7 +127,7 @@ class MultiPatchWindow(Qt.QWidget):
         self.ui.toTargetBtn.setOpts(future_producer=self._toTarget, **common_opts)
         self.ui.sealBtn.setOpts(future_producer=self._seal, raiseOnError=False, **common_opts)
         self.ui.reSealBtn.setOpts(future_producer=self._reSeal, raiseOnError=False, **common_opts)
-        self.ui.approachBtn.setOpts(future_producer=self._approach, **common_opts)
+        self.ui.approachBtn.setOpts(future_producer=self._approach, raiseOnError=False, **common_opts)
         self.ui.cleanBtn.setOpts(future_producer=self._clean, raiseOnError=False, **common_opts)
         self.ui.collectBtn.setOpts(future_producer=self._collect, raiseOnError=False, **common_opts)
 
@@ -164,6 +164,7 @@ class MultiPatchWindow(Qt.QWidget):
 
     @property
     def _shouldSaveCalibrationImages(self):
+        # TODO this isn't safe outside of the UI thread
         return self.ui.saveCalibrationsBtn.isChecked()
 
     @_shouldSaveCalibrationImages.setter
@@ -240,7 +241,7 @@ class MultiPatchWindow(Qt.QWidget):
             pip.setState(state)
             for pip in self.selectedPipettes()
             if isinstance(pip, PatchPipette)
-        ])
+        ], name=f"Set pipettes state to {state}")
 
     def _moveHome(self):
         futures = []
@@ -250,7 +251,7 @@ class MultiPatchWindow(Qt.QWidget):
                 pip.setState('out')
                 pip = pip.pipetteDevice
             futures.append(pip.goHome(speed))
-        return MultiFuture(futures)
+        return MultiFuture(futures, name="Move pipettes home")
 
     def _nucleusHome(self):
         return self._setAllSelectedPipettesToState('home with nucleus')
@@ -271,7 +272,7 @@ class MultiPatchWindow(Qt.QWidget):
         for pip in self.selectedPipettes():
             pip.setState('bath')
             futures.append(pip.pipetteDevice.goAboveTarget(speed))
-        return MultiFuture(futures)
+        return MultiFuture(futures, name="Move pipettes above target")
 
     @future_wrap
     def _autoCalibrate(self, _future):
@@ -300,7 +301,7 @@ class MultiPatchWindow(Qt.QWidget):
                 pip.pipetteDevice if isinstance(pip, PatchPipette) else pip
             ).goTarget(speed)
             for pip in self.selectedPipettes()
-        ])
+        ], name="Move pipettes to target")
 
     def _seal(self):
         return self._setAllSelectedPipettesToState('seal')
@@ -309,17 +310,13 @@ class MultiPatchWindow(Qt.QWidget):
         return self._setAllSelectedPipettesToState('reseal')
 
     def _approach(self):
-        speed = self.selectedSpeed(default='fast')
         futures = []
         for pip in self.selectedPipettes():
             if isinstance(pip, PatchPipette):
-                pip.setState('bath')
-                futures.append(pip.pipetteDevice.goApproach(speed))
-                if pip.clampDevice is not None:
-                    pip.clampDevice.autoPipetteOffset()
+                futures.append(pip.setState('approach'))
             else:
-                futures.append(pip.goApproach(speed))
-        return MultiFuture(futures)
+                futures.append(pip.goApproach(self.selectedSpeed(default='fast')))
+        return MultiFuture(futures, name="Move pipettes to approach")
 
     def _clean(self):
         return self._setAllSelectedPipettesToState('clean')
@@ -358,7 +355,7 @@ class MultiPatchWindow(Qt.QWidget):
                 pip.setState('bath')
                 pip = pip.pipetteDevice
             futures.append(pip.goSearch(speed, distance=distance))
-        return MultiFuture(futures)
+        return MultiFuture(futures, name="Move pipettes to search")
 
     # def calibrateWithStage(self, pipettes, positions):
     #     """Begin calibration of selected pipettes and move the stage to a selected position for each pipette.
@@ -416,7 +413,7 @@ class MultiPatchWindow(Qt.QWidget):
         spos = pip.scopeDevice().globalPosition()
         pos = [pos.x(), pos.y(), spos.z()]
         tip_future = pip.setTipOffsetIfAcceptable(pos)
-        tip_future.onFinish(self._handleManualSetTip, pip)
+        tip_future.onFinish(self._handleManualSetTip, pip, inGui=True)
 
     def _handleManualSetTip(self, future, pip):
         success = future.getResult()

@@ -14,11 +14,13 @@ from .reseal import ResealAnalysis, ResealState
 from .seal import SealAnalysis, SealState
 from .whole_cell import WholeCellState
 from .out import OutState
+from .outside_out import OutsideOutState
 
 
 __all__ = [
     'PatchPipetteState',
     'OutState',
+    'OutsideOutState',
     'ApproachState',
     'WholeCellState',
     'BrokenState',

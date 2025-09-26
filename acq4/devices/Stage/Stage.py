@@ -449,7 +449,7 @@ class Stage(Device, OptomechDevice):
             raise ValueError(f"Position {position} should have length {len(self.axes())}")
         self.checkLimits(position)
 
-    def _move(self, pos, speed, linear, **kwds) -> MoveFuture:
+    def _move(self, pos, speed, linear, name=None, **kwds) -> MoveFuture:
         """Must be reimplemented by subclasses and return a MoveFuture instance.
         """
         raise NotImplementedError()
@@ -458,18 +458,18 @@ class Stage(Device, OptomechDevice):
         localPos = self.mapFromGlobal(pos)
         return self._solveStageTransform(localPos)
 
-    def moveToGlobal(self, pos, speed, progress=False, linear=False):
+    def moveToGlobal(self, pos, speed, progress=False, linear=False, name=None):
         """Move the stage to a position expressed in the global coordinate frame.
         """
-        return self.move(position=self.mapGlobalToDevicePosition(pos), speed=speed, progress=progress, linear=linear)
+        return self.move(position=self.mapGlobalToDevicePosition(pos), speed=speed, progress=progress, linear=linear, name=name)
 
-    def movePath(self, path):
+    def movePath(self, path, name=None):
         """Move the stage along a path with multiple waypoints.
 
         The format of *path* is a list of dicts, where each dict specifies keyword arguments
         to self.move(). Optionally, each dict may specify `globalPos` instead of `position`.
         """
-        return MovePathFuture(self, path)
+        return MovePathFuture(self, path, name=name)
 
     def _toAbsolutePosition(self, abs):
         """Helper function to convert absolute position (possibly
@@ -490,7 +490,7 @@ class Stage(Device, OptomechDevice):
         # pick a far-away distance within limits
         print(vel)
 
-    def stop(self):
+    def stop(self, reason=None):
         """Stop moving the device immediately. When you call MoveFuture.stop() from here, look closely at infinite
         recursions.
         """
@@ -698,8 +698,8 @@ class MoveFuture(Future):
     """Used to track the progress of a requested move operation.
     """
 
-    def __init__(self, dev: Stage, pos, speed):
-        super().__init__()
+    def __init__(self, dev: Stage, pos, speed, name=None):
+        Future.__init__(self, name=name)
         self.startTime = ptime.time()
         self.dev = dev
         self.speed = speed
@@ -725,18 +725,18 @@ class MoveFuture(Future):
             return 100
         return 100 * d1 / d2
 
-    def stop(self, reason="stop requested"):
+    def stop(self, reason="stop requested", wait=False):
         """Stop the move in progress.
         """
         with self._isStopCallable as can_call_stop:
             if can_call_stop and not self.isDone():
                 self.dev.stop()
-                super().stop(reason=reason)
+                super().stop(reason=reason, wait=wait)
 
 
 class MovePathFuture(MoveFuture):
-    def __init__(self, dev: Stage, path):
-        super().__init__(dev, None, None)
+    def __init__(self, dev: Stage, path, name=None):
+        super().__init__(dev, None, None, name=name)
 
         self.path = path
         self.currentStep = 0
@@ -751,7 +751,7 @@ class MovePathFuture(MoveFuture):
             except Exception as exc:
                 raise Exception(f"Cannot move {dev.name()} to path step {i}/{len(self.path)}: {step}") from exc
 
-        self._moveThread = threading.Thread(target=self._movePath)
+        self._moveThread = threading.Thread(target=self._movePath, name=f'{self.dev.name()} : {name}')
         self._moveThread.start()
 
     def percentDone(self):
@@ -760,12 +760,12 @@ class MovePathFuture(MoveFuture):
             return 0.0
         return (100 * fut._pathStep + fut.percentDone()) / len(self.path)
 
-    def stop(self, reason=None):
+    def stop(self, reason=None, wait=False):
         fut = self._currentFuture
         if fut is not None:
             fut.stop(reason=reason)
         # skip MoveFuture.stop to avoid the mess with dev.stop()
-        Future.stop(self, reason=reason)
+        Future.stop(self, reason=reason, wait=wait)
 
     def _movePath(self):
         try:
@@ -773,7 +773,7 @@ class MovePathFuture(MoveFuture):
                 step = step.copy()
                 explanation = step.pop('explanation', 'unnamed')
                 try:
-                    fut: Future = self.dev.move(**step)
+                    fut: Future = self.dev.move(**step, name=f'{self.name} step {i+1}/{len(self.path)}: {explanation}')
                     fut._pathStep = i
                     self._currentFuture = fut
                     while not fut.isDone():
@@ -795,6 +795,9 @@ class MovePathFuture(MoveFuture):
                             excInfo=fut._excInfo,
                         )
                         return
+                except Future.Stopped:
+                    # If this future or a step future was stopped, just raise that error again.
+                    raise
                 except Exception as exc:
                     self._taskDone(
                         interrupted=True,
