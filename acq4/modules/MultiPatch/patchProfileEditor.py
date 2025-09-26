@@ -1,13 +1,15 @@
 import json
-from copy import deepcopy
 import os
+from copy import deepcopy
+
+import acq4.util.Qt as qt
 import pyqtgraph as pg
-from acq4.util.debug import logMsg
+from acq4.devices.PatchPipette.statemanager import PatchPipetteStateManager
+from acq4.logging_config import get_logger
 from acq4.util.json_encoder import ACQ4JSONEncoder
 from pyqtgraph.parametertree import Parameter
-import acq4.util.Qt as qt
-from acq4.devices.PatchPipette.statemanager import PatchPipetteStateManager
 
+logger = get_logger(__name__)
 
 class ProfileEditor(qt.QWidget):
     sigProfileChanged = qt.pyqtSignal(object)
@@ -55,7 +57,7 @@ class ProfileEditor(qt.QWidget):
                         continue
                     if PatchPipetteStateManager.getProfileConfig(profile_item.name()).get("copyFrom", None) == profile_name:
                         profile_item.applyDefaults({state_name: {param_name: data}})
-        logMsg(f"Patch profile {profile_name} updated: {json.dumps(loggable, cls=ACQ4JSONEncoder)}")
+        logger.debug(f"Patch profile {profile_name} updated: {json.dumps(loggable, cls=ACQ4JSONEncoder)}")
         self.sigProfileChanged.emit(loggable)
 
     def setTopLevelWindow(self):

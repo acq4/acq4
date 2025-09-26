@@ -44,7 +44,7 @@ class NewScaleMPM(Stage):
         Stage.__init__(self, man, config, name)
         man.sigAbortAll.connect(self.stop)
 
-        self.monitorThread = threading.Thread(target=self.monitor, daemon=True)
+        self.monitorThread = threading.Thread(target=self.monitor, daemon=True, name=f"NewScaleMPMMonitor({name})")
         self.monitorThread.start()
 
     def axes(self):
@@ -114,7 +114,7 @@ class NewScaleMPM(Stage):
 
 class NewScaleMoveFuture(MoveFuture):
     def __init__(self, dev, pos, speed, linear):
-        MoveFuture.__init__(self, dev, pos, speed)
+        MoveFuture.__init__(self, dev, pos, speed, name=f"{dev.name} move")
 
         self._linear = linear
         self._interrupted = False

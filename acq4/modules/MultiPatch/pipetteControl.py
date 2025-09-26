@@ -7,6 +7,8 @@ from acq4.util import Qt
 from neuroanalysis.data import TSeries
 from neuroanalysis.test_pulse import PatchClampTestPulse
 
+from acq4.util.future import future_wrap
+
 Ui_PipetteControl = Qt.importTemplate('.pipetteTemplate')
 
 _vc_mode_opts = dict(
@@ -104,6 +106,7 @@ class PipetteControl(Qt.QWidget):
         self.ui.autoBiasTargetSpin.valueChanged.connect(self.autoBiasSpinChanged)
 
         self.ui.newPipetteBtn.setOpts(future_producer=self.newPipetteClicked, stoppable=True)
+        self.ui.cancelBtn.setOpts(future_producer=self._cancelClicked)
         self.ui.fouledCheck.stateChanged.connect(self.fouledCheckChanged)
         self.ui.brokenCheck.stateChanged.connect(self.brokenCheckChanged)
 
@@ -326,6 +329,10 @@ class PipetteControl(Qt.QWidget):
         self.ui.newPipetteBtn.setStyleSheet("")
         return self.pip.newPipette()
 
+    @future_wrap
+    def _cancelClicked(self, _future):
+        self.pip.getState().stop("user requested cancel", wait=True)
+
     def tipCleanChanged(self, pip, clean):
         with pg.SignalBlock(self.ui.fouledCheck.stateChanged, self.fouledCheckChanged):
             self.ui.fouledCheck.setChecked(not clean)
@@ -424,7 +431,8 @@ class PlotWidget(Qt.QWidget):
                 'capacitance': ('capacitance', 'F'),
             }
             key, units = analysis_by_mode[self.mode]
-            self.plot.plot(history['event_time'] - history['event_time'][0], history[key], clear=True)
+            if len(history['event_time']) > 0:
+                self.plot.plot(history['event_time'] - history['event_time'][0], history[key], clear=True)
             val = tp.analysis[key]
             if val is None:
                 val = np.nan

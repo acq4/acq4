@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-from acq4.util import Qt
 import pyqtgraph as pg
-from acq4.util.debug import Profiler
+from acq4.util import Qt
+from pyqtgraph.debug import Profiler
 
 Ui_Form = Qt.importTemplate('.atlasCtrlTemplate')
 

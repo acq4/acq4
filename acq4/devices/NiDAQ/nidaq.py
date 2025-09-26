@@ -5,7 +5,6 @@ import scipy.signal
 import acq4.util.Mutex as Mutex
 from acq4.devices.Device import Device, DeviceTask
 from acq4.devices.NiDAQ.taskGUI import NiDAQTask
-from acq4.util.debug import printExc
 
 
 class NiDAQ(Device):
@@ -126,7 +125,7 @@ class NiDAQ(Device):
                 try:
                     self.setChannelValue(chan, val, ignoreLock=True)
                 except Exception:
-                    printExc("Error resetting channel value:")
+                    self.logger.exception("Error resetting channel value:")
             self.delayedSet.clear()
         finally:
             self.delayedSet.unlock()
@@ -409,7 +408,7 @@ class Task(DeviceTask):
                 res['info']['filterBidirectional'] = bidir
 
             else:
-                printExc(f"Unknown filter method '{method}'")
+                self.dev.logger.exception(f"Unknown filter method '{method}'")
 
         if ds > 1:
             if res['info']['type'] in ['di', 'do']:
@@ -437,7 +436,7 @@ class Task(DeviceTask):
                 res['info']['denoiseThreshold'] = thresh
                 data = NiDAQ.denoise(data, width, thresh)
             else:
-                printExc(f"Unknown denoise method '{method}'")
+                self.dev.logger.exception(f"Unknown denoise method '{method}'")
 
         res['data'] = data
         res['info']['numPts'] = data.shape[0]

@@ -254,7 +254,6 @@ class ScannerTaskGui(TaskGui):
 
 
         except:
-            #logMsg("Could not find spot size from calibration.", msgType='error') ### This should turn into a HelpfulException.
             exc = sys.exc_info()
             raise HelpfulException("Could not find spot size from calibration. ", exc=exc, reasons=["Correct camera and/or laser device are not selected.", "There is no calibration file for selected camera and laser."], errId=1)
 

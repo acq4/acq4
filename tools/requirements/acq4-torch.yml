@@ -44,6 +44,7 @@ dependencies:
       - cycler
       - decorator
       - dippykit
+      - docstring_parser
       - executing
       - fairscale
       - fastremap
@@ -123,6 +124,7 @@ dependencies:
       - pyrasite
       - pytest
       - python-dateutil
+      - python-json-logger
       - pytz
       - pyyaml
       - pyzmq
