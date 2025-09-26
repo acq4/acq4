@@ -25,10 +25,10 @@ class MultiPatch(Module):
     """
     Config
     ----------
-
     enableMockPatch : bool
-        Whether or not to allow mock patching.
-
+        Whether to allow mock patching.
+    useStacksForSavedCalibrations : bool
+        Whether to use z-stacks when saving calibration images.
     """
     moduleDisplayName = "MultiPatch"
     moduleCategory = "Acquisition"
@@ -425,7 +425,9 @@ class MultiPatchWindow(Qt.QWidget):
             return
 
         if self._shouldSaveCalibrationImages:
-            pip.saveManualCalibration().raiseErrors("Failed to save calibration images")
+            pip.saveManualCalibration(
+                stack=self.module.config.get("useStacksForSavedCalibrations", True)
+            ).raiseErrors("Failed to save calibration images")
 
         # if calibration stage positions were requested, then move the stage now
         if len(self._calibrateStagePositions) > 0:
