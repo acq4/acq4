@@ -343,20 +343,24 @@ class SealState(PatchPipetteState):
         dev.pressureDevice.setPressure(source='regulator', pressure=self.pressure)
 
     def best_pressure(self, start: float, turnaround: float, end: float) -> float:
-        pressures, resistances = self._trim_data_caches(start)
+        try:
+            pressures, resistances = self._trim_data_caches(start)
 
-        best_forwards = find_optimal_pressure(
-            pressures.time_slice(start, turnaround),
-            resistances.time_slice(start, turnaround),
-        )
-        best_backwards = find_optimal_pressure(
-            pressures.time_slice(turnaround, end),
-            resistances.time_slice(turnaround, end),
-        )
+            best_forwards = find_optimal_pressure(
+                pressures.time_slice(start, turnaround),
+                resistances.time_slice(start, turnaround),
+            )
+            best_backwards = find_optimal_pressure(
+                pressures.time_slice(turnaround, end),
+                resistances.time_slice(turnaround, end),
+            )
 
-        best = (best_forwards + best_backwards) / 2
-        best = self.config['pressureScanTrust'] * best + (1 - self.config['pressureScanTrust']) * self.pressure
-        return np.clip(best, self.config['pressureLimit'], 0)
+            best = (best_forwards + best_backwards) / 2
+            best = self.config['pressureScanTrust'] * best + (1 - self.config['pressureScanTrust']) * self.pressure
+            return np.clip(best, self.config['pressureLimit'], 0)
+        except ValueError:
+            self.setState('insufficient resistance data for pressure scan')
+            return self.pressure
 
     def _trim_data_caches(self, start):
         pressures = TSeries(np.array(self._pressures[1]), time_values=np.array(self._pressures[0]))
