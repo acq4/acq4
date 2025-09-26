@@ -228,36 +228,6 @@
         </property>
        </spacer>
       </item>
-      <item row="10" column="0">
-       <widget class="QPushButton" name="pushButton">
-        <property name="enabled">
-         <bool>true</bool>
-        </property>
-        <property name="text">
-         <string>Pip. Offset</string>
-        </property>
-       </widget>
-      </item>
-      <item row="10" column="1">
-       <widget class="QPushButton" name="pushButton_3">
-        <property name="enabled">
-         <bool>true</bool>
-        </property>
-        <property name="text">
-         <string>Pip. Capacit.</string>
-        </property>
-       </widget>
-      </item>
-      <item row="10" column="2">
-       <widget class="QPushButton" name="pushButton_2">
-        <property name="enabled">
-         <bool>true</bool>
-        </property>
-        <property name="text">
-         <string>Bridge Balance</string>
-        </property>
-       </widget>
-      </item>
      </layout>
     </widget>
    </item>

@@ -55,8 +55,8 @@ class PatchPipetteState(Future):
                                   'optional': True},
         'initialPressure': {'type': 'float', 'default': None, 'optional': True, 'suffix': 'Pa'},
         'initialClampMode': {'type': 'list', 'default': None, 'limits': ['VC', 'IC'], 'optional': True},
-        'initialICHolding': {'type': 'float', 'default': None, 'optional': True},
-        'initialVCHolding': {'type': 'float', 'default': None, 'optional': True},
+        'initialICHolding': {'type': 'float', 'default': None, 'optional': True, 'suffix': 'A'},
+        'initialVCHolding': {'type': 'float', 'default': None, 'optional': True, 'suffix': 'V'},
         'initialTestPulseEnable': {'type': 'bool', 'default': None, 'optional': True},
         'initialTestPulseParameters': {'type': 'group', 'children': []},  # TODO
         'initialAutoBiasEnable': {'type': 'bool', 'default': False, 'optional': True},
@@ -302,12 +302,7 @@ class PatchPipetteState(Future):
         """Return the intersection of the direction unit vector with the surface."""
         pip = self.dev.pipetteDevice
         surface = pip.scopeDevice().getSurfaceDepth()
-        direction = pip.globalDirection()
-
-        target = pip.targetPosition()
-        dz = surface - target[2]
-        dist = dz / direction[2]
-        return target + dist * direction
+        return pip.positionAtDepth(surface)
 
     def depthBelowSurface(self, pos=None):
         if pos is None:
@@ -384,15 +379,14 @@ class PatchPipetteState(Future):
     def _onTargetChanged(self, pos):
         self._targetHasChanged = True
 
-    def _distanceToTarget(self, pos=None):
+    def _distanceToTarget(self):
         pip = self.dev.pipetteDevice
         target = np.array(pip.targetPosition())
-        if pos is None:
-            pos = np.array(pip.globalPosition())
+        pos = np.array(pip.globalPosition())
         return np.linalg.norm(target - pos)
 
-    def closeEnoughToTargetToDetectCell(self, pos=None):
-        return self._distanceToTarget(pos) < self.config['minDetectionDistance']
+    def closeEnoughToTargetToDetectCell(self):
+        return self._distanceToTarget() < self.config['minDetectionDistance']
 
 
 class SteadyStateAnalysisBase(object):
@@ -418,7 +412,8 @@ class SteadyStateAnalysisBase(object):
 
     @staticmethod
     def exponential_decay_avg(dt, prev_avg, value, tau):
+        """Compute exponential decay average and ratio of new to old average."""
         alpha = 1 - np.exp(-dt / tau)
         avg = prev_avg * (1 - alpha) + value * alpha
-        ratio = np.log10(avg / prev_avg)
+        ratio = avg / prev_avg
         return avg, ratio

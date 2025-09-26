@@ -25,7 +25,7 @@ TEST_PULSE_METAARRAY_INFO = [
     {'name': 'access_resistance', 'type': 'float', 'units': 'Ω'},
     {'name': 'steady_state_resistance', 'type': 'float', 'units': 'Ω'},
     {'name': 'fit_amplitude', 'type': 'float'},
-    {'name': 'time_constant', 'type': 'float'},
+    {'name': 'time_constant', 'type': 'float', 'suffix': 's'},
     {'name': 'fit_yoffset', 'type': 'float'},
     {'name': 'fit_xoffset', 'type': 'float', 'units': 's'},
     {'name': 'capacitance', 'type': 'float', 'units': 'F'},
@@ -649,6 +649,10 @@ class MultiPatchLogWidget(Qt.QWidget):
         self._displayResealAnalysis = Qt.QCheckBox('Reseal Analysis')
         self._displayResealAnalysis.toggled.connect(self._toggleResealAnalysis)
         self._ctrl_layout.addWidget(self._displayResealAnalysis)
+        self._approachAnalysisItems = {}
+        self._displayApproachAnalysis = Qt.QCheckBox('Approach Analysis')
+        self._displayApproachAnalysis.toggled.connect(self._toggleApproachAnalysis)
+        self._ctrl_layout.addWidget(self._displayApproachAnalysis)
         self._detectAnalysisItems = {}
         self._displayDetectAnalysis = Qt.QCheckBox('Cell Detect Analysis')
         self._displayDetectAnalysis.toggled.connect(self._toggleDetectAnalysis)
@@ -777,7 +781,19 @@ class MultiPatchLogWidget(Qt.QWidget):
             cell_threshold_fast=config['fastDetectionThreshold'],
             cell_threshold_slow=config['slowDetectionThreshold'],
             slow_detection_steps=config['slowDetectionSteps'],
-            obstacle_threshold=np.inf,  # obstacles are just cells to patch in a cell detect state
+            break_threshold=config['breakThreshold'],
+        )
+
+    def _toggleApproachAnalysis(self, state: bool):
+        from acq4.devices.PatchPipette.states import ApproachAnalysis, ApproachState
+
+        config = ApproachState.defaultConfig()
+        self._toggleAnalysis(
+            ApproachAnalysis,
+            self._approachAnalysisItems,
+            state,
+            baseline_tau=config['baselineResistanceTau'],
+            obstacle_threshold=config['obstacleResistanceThreshold'],
             break_threshold=config['breakThreshold'],
         )
 

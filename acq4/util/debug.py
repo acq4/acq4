@@ -43,6 +43,14 @@ def printExc(msg="", indent=4, prefix="|", msgType="error"):
         pgdebug.printExc(f"[failed to log this error to manager] {msgType}: {msg}")
 
 
+@contextlib.contextmanager
+def except_and_print(exc_types, *a, **kw):
+    try:
+        yield
+    except exc_types:
+        printExc(*a, **kw)
+
+
 def logMsg(msg, **kwargs):
     """msg: the text of the log message
        msgType: user, status, error, warning (status is default)
