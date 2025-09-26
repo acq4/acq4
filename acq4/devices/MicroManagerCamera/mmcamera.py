@@ -7,7 +7,6 @@ import numpy as np
 import acq4.util.ptime as ptime
 from acq4.devices.Camera import Camera
 from acq4.util import micromanager
-from acq4.util.debug import printExc
 from acq4.util.micromanager import MicroManagerError
 from pyqtgraph.debug import Profiler
 
@@ -147,9 +146,8 @@ class MicroManagerCamera(Camera):
                 else:
                     time.sleep(0.005)
         if len(frames) < n:
-            printExc(
-                f"Fixed-frame camera acquisition ended before all frames received ({len(frames)}/{n})",
-                msgType="warning"
+            self.logger.exception(
+                f"Fixed-frame camera acquisition ended before all frames received ({len(frames)}/{n})"
             )
         self.mmc.stopSequenceAcquisition()
         return np.concatenate(frames, axis=0)
@@ -336,8 +334,8 @@ class MicroManagerCamera(Camera):
         for k, v in params.items():
             try:
                 self._setParam(k, v, autoCorrect=autoCorrect)
-            except MicroManagerError as e:
-                printExc(f"Unable to set {k} param to {v}: {e}")
+            except MicroManagerError:
+                self.logger.exception(f"Unable to set {k} param to {v}")
             else:
                 p(f'setParam {k!r}')
                 if k == 'binning':

@@ -1,7 +1,8 @@
-import numpy as np
 import pickle
-import scipy
 import time
+
+import numpy as np
+import scipy
 
 import pyqtgraph as pg
 from acq4.Manager import getManager
@@ -10,6 +11,9 @@ from acq4.util.future import Future, future_wrap
 from acq4.util.image_registration import imageTemplateMatch
 from acq4.util.imaging.sequencer import acquire_z_stack
 from .pipette_detection import TemplateMatchPipetteDetector
+from ...logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
 class PipetteTracker:
@@ -64,8 +68,10 @@ class ResnetPipetteTracker(PipetteTracker):
         # Calculate angle of pipette relative to pointing right (positive across columns)
         pipetteAngle = np.arctan2(-imageDir[0], imageDir[1]) * 180 / np.pi
 
+        pxSize = frame.info()["pixelSize"][0]
+
         # measure image pixel offset and z error to pipette tip
-        xyOffset, zErr, snr = self.estimateOffset(img, pipetteAngle)
+        xyOffset, zErr, snr = self.estimateOffset(img, pipetteAngle, pxSize)
         performance = snr * 100
 
         # map pixel offsets back to physical coordinates
@@ -73,9 +79,9 @@ class ResnetPipetteTracker(PipetteTracker):
 
         return (tipPos.x(), tipPos.y(), tipPos.z() + zErr * 1e-6), performance
 
-    def estimateOffset(self, img, pipetteAngle):
+    def estimateOffset(self, img, pipetteAngle, pxSize):
         from acq4_automation.object_detection import do_pipette_tip_detection
-        self.result = do_pipette_tip_detection(img, pipetteAngle, show=False)
+        self.result = do_pipette_tip_detection(img, pipetteAngle, pxSize, show=False)
         return self.result[:3]
 
 
@@ -464,19 +470,19 @@ class CorrelationPipetteTracker(PipetteTracker):
                     try:
                         mfut.wait(updates=True)
                     except:
-                        pg.debug.printExc("Manipulator missed intermediate target:")
+                        logger.exception("Manipulator missed intermediate target:")
 
                     try:
                         ffut.wait(updates=True)
                     except:
-                        pg.debug.printExc("Stage missed target:")
+                        logger.exception("Stage missed target:")
 
                     # step back to actual target position
                     try:
                         self.pipette._moveToGlobal(pos, speed).wait(updates=True)
                     except RuntimeError as exc:
                         misses += 1
-                        pg.debug.printExc("Manipulator missed target:")
+                        logger.exception("Manipulator missed target:")
 
                     time.sleep(0.2)
 

@@ -4,12 +4,14 @@ import numpy as np
 from MetaArray import MetaArray
 
 import acq4.util.DataManager
-import acq4.util.debug as debug
 import pyqtgraph as pg
 import pyqtgraph.flowchart
+from acq4.logging_config import get_logger
 from acq4.util import Qt
 from .CanvasItem import CanvasItem
 from .itemtypes import registerItemType
+
+logger = get_logger(__name__)
 
 
 class ImageCanvasItem(CanvasItem):
@@ -22,7 +24,7 @@ class ImageCanvasItem(CanvasItem):
 
     """
     _typeName = "Image"
-    
+
     def __init__(self, image=None, **opts):
 
         ## If no image was specified, check for a file handle..
@@ -31,7 +33,7 @@ class ImageCanvasItem(CanvasItem):
 
         item = None
         self.data = None
-        
+
         if isinstance(image, Qt.QGraphicsItem):
             item = image
         elif isinstance(image, np.ndarray):
@@ -73,7 +75,7 @@ class ImageCanvasItem(CanvasItem):
                         opts['defaultUserTransform'] = {'scale': (1e-5, 1e-5)}
                         opts['scalable'] = True
             except:
-                debug.printExc('Error reading transformation for image file %s:' % image.name())
+                logger.exception(f'Error reading transformation for image file {image.name()}:')
 
         if item is None:
             item = pg.ImageItem()
@@ -82,7 +84,7 @@ class ImageCanvasItem(CanvasItem):
         self.splitter = Qt.QSplitter()
         self.splitter.setOrientation(Qt.Qt.Vertical)
         self.layout.addWidget(self.splitter, self.layout.rowCount(), 0, 1, 2)
-        
+
         self.filterGroup = pg.GroupBox("Image Filter")
         fgl = Qt.QGridLayout()
         fgl.setContentsMargins(3, 3, 3, 3)
@@ -97,14 +99,14 @@ class ImageCanvasItem(CanvasItem):
         self.histogram.setObjectName("ImageCanvasItem_histogram")
         self.histogram.setImageItem(self.graphicsItem())
 
-        # addWidget arguments: row, column, rowspan, colspan 
+        # addWidget arguments: row, column, rowspan, colspan
         self.splitter.addWidget(self.histogram)
 
         self.imgModeCombo = Qt.QComboBox()
         self.imgModeCombo.addItems(['SourceOver', 'Overlay', 'Plus', 'Multiply'])
         self.layout.addWidget(self.imgModeCombo, self.layout.rowCount(), 0, 1, 1)
         self.imgModeCombo.currentIndexChanged.connect(self.imgModeChanged)
-        
+
         self.autoBtn = Qt.QPushButton("Auto")
         self.autoBtn.setCheckable(True)
         self.autoBtn.setChecked(True)
@@ -123,14 +125,14 @@ class ImageCanvasItem(CanvasItem):
             else:
                 self.filter.setInput(self.data)
             self.updateImage()
-            
+
             # Needed to ensure selection box wraps the image properly
             tr = self.saveTransform()
             self.resetUserTransform()
             self.restoreTransform(tr)
             # Why doesn't this work?
-            #self.selectBoxFromUser() ## move select box to match new bounds
-            
+            # self.selectBoxFromUser() ## move select box to match new bounds
+
     @classmethod
     def checkFile(cls, fh):
         if not fh.isFile():
@@ -186,7 +188,7 @@ class ImageCanvasItem(CanvasItem):
         state['filter'] = self.filter.saveState()
         state['composition'] = self.imgModeCombo.currentText()
         return state
-    
+
     def restoreState(self, state):
         CanvasItem.restoreState(self, state)
         self.filter.restoreState(state['filter'])

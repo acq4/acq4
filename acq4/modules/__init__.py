@@ -1,9 +1,11 @@
+import logging
 import os
 from collections import OrderedDict
 from importlib import import_module
 
 from . import Module
-from ..util.debug import printExc
+
+logger = logging.getLogger(__name__)
 
 
 def getModuleClass(name):
@@ -57,4 +59,4 @@ def importBuiltinClasses():
         try:
             mod = import_module(f"acq4.modules.{f}")
         except Exception:
-            printExc(f"Error importing builtin module from {ff}")
+            logger.exception(f"Error importing builtin module from {ff}")

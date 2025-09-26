@@ -424,7 +424,8 @@ class PlotWidget(Qt.QWidget):
                 'capacitance': ('capacitance', 'F'),
             }
             key, units = analysis_by_mode[self.mode]
-            self.plot.plot(history['event_time'] - history['event_time'][0], history[key], clear=True)
+            if len(history['event_time']) > 0:
+                self.plot.plot(history['event_time'] - history['event_time'][0], history[key], clear=True)
             val = tp.analysis[key]
             if val is None:
                 val = np.nan

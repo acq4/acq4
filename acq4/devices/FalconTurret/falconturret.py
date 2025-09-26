@@ -60,7 +60,7 @@ class FalconTurret(FilterWheel):
             self._initialFuture = self.home()
 
         if self._initialSlot is not None:
-            initThread = threading.Thread(target=self._setInitialPos)
+            initThread = threading.Thread(target=self._setInitialPos, name='FalconTurretInitThread')
             initThread.start()
 
     def _setInitialPos(self):
@@ -79,7 +79,8 @@ class FalconTurret(FilterWheel):
         if pos == 'home':
             self.dev.home(block=False)
         else:
-            self.dev.move_to_slide(pos, block=False)
+            if pos != self.getPosition():
+                self.dev.move_to_slide(pos, block=False)
         return FalconTurretFuture(self, pos)
 
     def home(self):

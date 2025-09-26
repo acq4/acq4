@@ -270,7 +270,7 @@ class MonitorThread(Thread):
                             pos = self.dev.dev.moveTo(drive, pos, speed)
                             self.dev._checkPositionChange(drive, pos)
                     except Exception as err:
-                        debug.printExc('Move error:')
+                        self.dev.logger.exception('Move error:')
                         try:
                             if hasattr(err, 'lastPosition'):
                                 self.dev._checkPositionChange(drive, err.lastPosition)
@@ -283,7 +283,7 @@ class MonitorThread(Thread):
 
                 time.sleep(interval)
             except:
-                debug.printExc('Error in MPC200 monitor thread:')
+                self.dev.logger.exception('Error in MPC200 monitor thread:')
                 time.sleep(maxInterval)
                 
 

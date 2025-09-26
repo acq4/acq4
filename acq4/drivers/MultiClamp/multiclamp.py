@@ -1,6 +1,3 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-
 import atexit
 import ctypes
 import inspect
@@ -9,10 +6,10 @@ import sys
 import threading
 
 from acq4.drivers.MultiClamp.MultiClampTelegraph import wmlib, MultiClampTelegraph
+from acq4.logging_config import get_logger
 from acq4.util.clibrary import winDefs, CParser, find_lib, CLibrary
-from acq4.util.debug import printExc
 
-
+logger = get_logger(__name__)
 DEBUG=False ## Global flag for debugging hangups
 if DEBUG:
     print("MultiClamp driver debug:", DEBUG)
@@ -179,12 +176,11 @@ class MultiClampChannel:
         """
         res = {}
         for p in params:
-            #print "Setting", p, params[p]
             try:
                 self.setParam(p, params[p])
                 res[p] = True
             except:
-                printExc("Error while setting parameter %s=%s" % (p, str(params[p])))
+                logger.exception(f"Error while setting parameter {p}={str(params[p])}")
                 res[p] = False
         return res
         
