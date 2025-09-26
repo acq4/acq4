@@ -5,26 +5,27 @@ import os
 from pathlib import Path
 
 import numpy as np
-
 from MetaArray import MetaArray
+
+import pyqtgraph as pg
 from acq4.devices.Camera import Camera
 from acq4.devices.Microscope import Microscope
 from acq4.devices.Pipette import Pipette
 from acq4.devices.Pipette.calibration import findNewPipette
 from acq4.devices.Pipette.planners import PipettePathGenerator, GeometryAwarePathGenerator
+from acq4.logging_config import get_logger
 from acq4.modules.Camera import CameraWindow
 from acq4.modules.Module import Module
 from acq4.util import Qt
-from acq4.util.debug import logMsg, printExc
 from acq4.util.future import Future, future_wrap
 from acq4.util.imaging import Frame
 from acq4.util.imaging.sequencer import acquire_z_stack
 from acq4.util.target import TargetBox
 from acq4.util.threadrun import runInGuiThread
-import pyqtgraph as pg
 from coorx import SRT3DTransform, TransposeTransform, TTransform
 from pyqtgraph.units import µm, m
 
+logger = get_logger(__name__)
 UiTemplate = Qt.importTemplate(".window")
 
 
@@ -192,16 +193,16 @@ class RankingWindow(Qt.QWidget):
 
     def _save_and_close(self):
         if self.rating is None:
-            logMsg("No rating selected.", msgType="warning")
+            logger.warning("No rating selected.")
             # Optionally show a message box to the user
             return
 
-        logMsg(f"Cell rated {self.rating}, saving as {self.save_format}...")
+        logger.info(f"Cell rated {self.rating}, saving as {self.save_format}...")
         try:
             volume_data, metadata = self._extract_cell_volume(self.cell_center, cube_size=20 * µm)
             self._save_ranked_cell(volume_data, metadata, self.rating, self.save_format, self.save_dir)
         except Exception:
-            printExc(f"Failed to extract or save cell data for cell at {self.cell_center}")
+            logger.exception(f"Failed to extract or save cell data for cell at {self.cell_center}")
         finally:
             self.close()  # Close the window regardless of save success/failure
 
@@ -319,21 +320,20 @@ class RankingWindow(Qt.QWidget):
             filepath = f"{filename_base}.ma"
             try:
                 ma.write(filepath)
-                logMsg(f"Saved cell data to {filepath}")
+                logger.info(f"Saved cell data to {filepath}")
             except Exception:
-                printExc(f"Failed to write MetaArray file: {filepath}")
-                logMsg(f"Error writing MetaArray file: {filepath}", msgType="error")
+                logger.exception(f"Failed to write MetaArray file: {filepath}")
                 # Re-raise or handle more gracefully?
                 raise
 
         elif save_format == "NWB":
-            logMsg("NWB saving not implemented yet.", msgType="warning")
+            logger.warning("NWB saving not implemented yet.")
             filepath = f"{filename_base}.nwb"
-            logMsg(f"Placeholder: Would save cell data to {filepath}")
+            logger.info(f"Placeholder: Would save cell data to {filepath}")
             # TODO: Implement NWB saving logic here using pynwb
 
         else:
-            logMsg(f"Unknown save format: {save_format}", msgType="error")
+            logger.error(f"Unknown save format: {save_format}")
             raise ValueError(f"Unknown save format: {save_format}")
 
 
@@ -609,11 +609,11 @@ class AutomationDebugWindow(Qt.QWidget):
         """Handles results from _detectNeuronsZStack or _testUI."""
         try:
             if future.wasInterrupted():
-                logMsg("Cell detection failed.")
+                logger.info("Cell detection failed.")
                 return
             bounding_boxes = future.getResult()
 
-            logMsg(f"Cell detection complete. Found {len(bounding_boxes)} potential cells")
+            logger.info(f"Cell detection complete. Found {len(bounding_boxes)} potential cells")
             self._displayBoundingBoxes(bounding_boxes)
         finally:
             self.sigWorking.emit(False)
@@ -694,7 +694,7 @@ class AutomationDebugWindow(Qt.QWidget):
             # Use step_z = 1 * µm for real acquisition as previously defined
 
             if multichannel_processing_intended:
-                logMsg(
+                logger.info(
                     f"Starting multichannel Z-stack acquisition: Detection='{detection_preset}', "
                     f"Classification='{classification_preset}'"
                 )
@@ -711,10 +711,9 @@ class AutomationDebugWindow(Qt.QWidget):
                 ).getResult()
 
                 if len(detection_stack) != len(classification_stack):
-                    logMsg(
+                    logger.warning(
                         f"Warning: Z-stack length mismatch: Detection ({len(detection_stack)}) != Classification"
                         f" ({len(classification_stack)}). Trimming to match.",
-                        msgType="warning",
                     )
                     min_length = min(len(detection_stack), len(classification_stack))
                     detection_stack = detection_stack[:min_length]
@@ -742,7 +741,7 @@ class AutomationDebugWindow(Qt.QWidget):
             ),
             timeout=600,
         ).getResult()
-        logMsg(f"Neuron detection finished. Found {len(result)} potential neurons.")
+        logger.info(f"Neuron detection finished. Found {len(result)} potential neurons.")
         self._current_detection_stack = detection_stack
         self._current_classification_stack = classification_stack
         self._unranked_cells = result
@@ -759,7 +758,7 @@ class AutomationDebugWindow(Qt.QWidget):
         if not mock_file_path:
             return None, None
         try:
-            logMsg(f"Loading mock Z-stack from: {mock_file_path}")
+            logger.info(f"Loading mock Z-stack from: {mock_file_path}")
             marr = MetaArray(file=mock_file_path)
             data = marr.asarray()
             info = marr.infoCopy()
@@ -773,23 +772,20 @@ class AutomationDebugWindow(Qt.QWidget):
                 z_vals = z_info["values"]
                 if len(z_vals) > 1:
                     step_z = abs(z_vals[1] - z_vals[0]) * m  # Assume meters
-                    logMsg(f"Using Z step from mock file '{os.path.basename(mock_file_path)}': {step_z / µm:.2f} µm")
+                    logger.info(f"Using Z step from mock file '{os.path.basename(mock_file_path)}': {step_z / µm:.2f} µm")
                 elif len(z_vals) == 1:
-                    logMsg(
+                    logger.warning(
                         f"Only one Z value in mock file '{os.path.basename(mock_file_path)}'. Assuming 1µm step.",
-                        msgType="warning",
                     )
                     step_z = 1 * µm
                 else:
-                    logMsg(
+                    logger.warning(
                         f"No Z values in mock file '{os.path.basename(mock_file_path)}', using default 1µm step.",
-                        msgType="warning",
                     )
                     step_z = 1 * µm
             else:
-                logMsg(
+                logger.warning(
                     f"Z info not in mock file '{os.path.basename(mock_file_path)}', using default 1µm step.",
-                    msgType="warning",
                 )
                 step_z = 1 * µm
 
@@ -815,11 +811,11 @@ class AutomationDebugWindow(Qt.QWidget):
                 current_mock_frame_global_z += step_z
             return stack_frames, step_z
         except Exception:
-            printExc(f"Failed to load or process mock file: {mock_file_path}")
+            logger.exception(f"Failed to load or process mock file: {mock_file_path}")
             return None, None
 
     def _mockNeuronStacks(self, _future: Future) -> tuple[list[Frame] | None, list[Frame] | None, float]:
-        logMsg("Using mock Z-stack file(s) for detection.")
+        logger.info("Using mock Z-stack file(s) for detection.")
         detection_stack = None
         classification_stack = None
         # Default step_z, will be updated by the first successfully loaded mock stack
@@ -836,7 +832,7 @@ class AutomationDebugWindow(Qt.QWidget):
             if det_step_z is not None:
                 step_z = det_step_z
         else:
-            logMsg("Primary mock file path is empty.", msgType="warning")
+            logger.warning("Primary mock file path is empty.")
             # detection_stack remains None, step_z remains default
 
         # Load classification stack if multichannel mock is enabled and path is provided
@@ -853,9 +849,8 @@ class AutomationDebugWindow(Qt.QWidget):
                     classification_mock_path, base_frame, _future
                 )
                 if class_step_z is not None and step_z != class_step_z and detection_stack is not None:
-                    logMsg(
+                    logger.warning(
                         f"Z-step mismatch: Detection mock ({step_z/µm:.2f} µm) vs Classification mock ({class_step_z/µm:.2f} µm). Using detection Z-step.",
-                        msgType="warning",
                     )
                 # If detection_stack failed to load (det_step_z is None), but classification loaded, use its step_z.
                 elif class_step_z is not None and detection_stack is None:
@@ -910,14 +905,14 @@ class AutomationDebugWindow(Qt.QWidget):
             self._open_ranking_windows.remove(window)
         except ValueError:
             # Window might have already been removed or was never added properly
-            printExc("Attempted to remove a ranking window reference that was not found.")
+            logger.exception("Attempted to remove a ranking window reference that was not found.")
 
     @future_wrap
     def _autoTarget(self, _future):
         self.sigWorking.emit(self.ui.autoTargetBtn)
         # If _unranked_cells is populated, use it. Otherwise, run detection.
         if not self._unranked_cells:
-            logMsg("Need new potential cells; running detection")
+            logger.info("Need new potential cells; running detection")
             x, y = self._randomLocation()
             _future.waitFor(self.scopeDevice.setGlobalPosition((x, y)))
             # TODO don't know why this hangs when using waitFor, but it does
@@ -946,7 +941,7 @@ class AutomationDebugWindow(Qt.QWidget):
             raise RuntimeError("No suitable new target found among detected cells.")
         self._previousTargets.append(target)
         self.pipetteDevice.setTarget(target)
-        logMsg(f"Setting pipette target to {target}")
+        logger.info(f"Setting pipette target to {target}")
 
     def _handleAutoFinish(self, fut: Future):
         self.sigWorking.emit(False)

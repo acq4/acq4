@@ -4,7 +4,7 @@ from scipy import stats
 
 
 from MetaArray import MetaArray
-from acq4.Manager import getManager, logMsg
+from acq4.Manager import getManager
 from acq4.devices.DAQGeneric import DAQGeneric, DAQGenericTask
 from acq4.devices.NiDAQ.nidaq import NiDAQ
 from acq4.devices.OptomechDevice import OptomechDevice
@@ -526,7 +526,9 @@ class Laser(DAQGeneric, OptomechDevice):
                 self.updateSamplePower()
                 return powerOn
             else:
-                logMsg("No laser pulse detected by power indicator '%s' while measuring Laser.outputPower()" % powerInd[0], msgType='warning')
+                self.logger.warning(
+                    f"No laser pulse detected by power indicator '{powerInd[0]}' while measuring Laser.outputPower()"
+                )
                 self.setParam(currentPower=0.0)
                 self.updateSamplePower()
                 return 0.0
@@ -571,9 +573,7 @@ class Laser(DAQGeneric, OptomechDevice):
             diff = self.params['expectedPower']*self.params['tolerance']/100.0
             expected = self.params['expectedPower']
         return  (not self.getParam('powerAlert')) or (abs(power-expected) <= diff)
-            #if self.getParam('powerAlert'):
-                #logMsg("%s power is outside expected range. Please adjust expected value or adjust the tuning of the laser." %self.name(), msgType='error')
-        
+
     def getPCellWaveform(self, powerCmd, cmd):
         ### return a waveform of pCell voltages to give the power in powerCmd
         return

@@ -1,6 +1,3 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-
 """
 Description:
     
@@ -54,20 +51,23 @@ Changes to event detector:
 """
 
 
-from acq4.util import Qt
-from acq4.analysis.AnalysisModule import AnalysisModule
 import os
 from collections import OrderedDict
+
+import numpy as np
+
+import acq4.analysis.modules.Photostim.Scan as Scan
+import acq4.analysis.tools.poissonScore as poissonScore
 import acq4.util.DatabaseGui as DatabaseGui
-from acq4.util.ColorMapper import ColorMapper
 import pyqtgraph as pg
 import pyqtgraph.parametertree as ptree
-import numpy as np
-import acq4.analysis.modules.Photostim.Scan as Scan
+from acq4.analysis.AnalysisModule import AnalysisModule
 from acq4.analysis.modules.Photostim.Map import Map
-import acq4.analysis.tools.poissonScore as poissonScore
-import acq4.util.flowchart.EventDetection as FCEventDetection
+from acq4.logging_config import get_logger
+from acq4.util import Qt
+from acq4.util.ColorMapper import ColorMapper
 
+logger = get_logger(__name__)
 
 
 class MapAnalyzer(AnalysisModule):
@@ -210,7 +210,7 @@ class MapAnalyzer(AnalysisModule):
                     else:
                         return False
                 except:
-                    debug.printExc("Error loading file %s" % fh.name())
+                    logger.exception(f"Error loading file {fh.name()}")
                     return False
                 dlg += 1
                 if dlg.wasCanceled():

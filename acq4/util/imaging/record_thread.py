@@ -1,12 +1,11 @@
-from typing import Callable, Optional
+import time
 
 import numpy as np
-import time
 from MetaArray import MetaArray
 
 from acq4 import Manager
+from acq4.logging_config import get_logger
 from acq4.util import Qt
-from acq4.util import debug
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
 
@@ -17,6 +16,7 @@ try:
 except ImportError:
     HAVE_IMAGEFILE = False
 
+logger = get_logger(__name__)
 
 class RecordThread(Thread):
     """Class for offloading image recording to a worker thread."""
@@ -134,7 +134,7 @@ class RecordThread(Thread):
             try:
                 self.handleFrames(newFrames)
             except Exception:
-                debug.printExc("Error in image recording thread:")
+                logger.exception("Error in image recording thread:")
                 self.sigRecordingFailed.emit()
 
             time.sleep(100e-3)

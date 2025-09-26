@@ -1,7 +1,10 @@
-import sys, glob, os, subprocess
-from acq4 import getManager
+import glob
+import logging
+import os
+import subprocess
+import sys
 
-
+logger = logging.getLogger(__name__)
 suggestedEditorOrder = ['vscode', 'sublime', 'pycharm']
 
 editorCommands = {
@@ -63,6 +66,8 @@ def codeEditorCommand():
             misc:
                 codeEditor: r'"C:\\Program Files\\MyEditor\\editor.exe" {{fileName}}:{{lineNum}}'
     """
+    from acq4 import getManager
+
     man = getManager()
     cmd = man.config.get('misc', {}).get('codeEditor', None)
     if cmd is None:
@@ -112,4 +117,5 @@ def generateEditorCommand(editor):
 def invokeCodeEditor(fileName, lineNum, command=None):
     if command is None:
         command = codeEditorCommand()
+    logger.info(f"Invoking code editor: {command.format(fileName=fileName, lineNum=lineNum)}")
     subprocess.Popen(command.format(fileName=fileName, lineNum=lineNum), shell=True)

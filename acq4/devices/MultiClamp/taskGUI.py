@@ -6,7 +6,6 @@ from acq4.devices.Device import TaskGui
 from pyqtgraph.WidgetGroup import WidgetGroup
 from acq4.util import Qt
 from acq4.util.SequenceRunner import runSequence
-from acq4.util.debug import printExc
 
 
 Ui_Form = Qt.importTemplate('.TaskTemplate')
@@ -123,7 +122,7 @@ class MultiClampTaskGui(TaskGui):
             self.stateGroup.setState(state)
             self.devStateChanged()
         except Exception:
-            printExc('Error while restoring MultiClamp task GUI state:')
+            self.dev.logger.exception('Error while restoring MultiClamp task GUI state:')
         finally:
             self._block_update = block
         self.updateWaves()

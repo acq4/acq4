@@ -1,11 +1,7 @@
-# -*- coding: utf-8 -*-
 import time
 from collections import OrderedDict
 
 import pyqtgraph as pg
-
-
-import acq4.util.debug as debug
 from acq4.devices.Device import TaskGui, Device, DeviceTask
 from acq4.devices.OptomechDevice import OptomechDevice
 from acq4.util import Qt
@@ -459,7 +455,7 @@ class FilterWheelPollThread(Thread):
                 pos = self.dev.getPosition()
                 time.sleep(self.interval)
             except:
-                debug.printExc("Error in Filter Wheel poll thread:")
+                self.dev.logger.exception("Error in Filter Wheel poll thread:")
                 time.sleep(1.0)
     
     def stop(self):

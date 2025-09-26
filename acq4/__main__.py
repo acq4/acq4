@@ -25,7 +25,7 @@ control_arg_parser.add_argument("--teleprox", type=int, nargs='?', const=0, defa
 args = control_arg_parser.parse_args()
 
 ## Enable stack trace output when a crash is detected
-from .util.debug import enableFaulthandler
+from pyqtgraph.debug import enableFaulthandler
 
 enableFaulthandler()
 
@@ -149,7 +149,6 @@ if interactive:
     print("Interactive mode; not starting event loop.")
 
     ## import some things useful on the command line
-    from .util.debug import *
     from .util import functions as fn
     import numpy as np
 
