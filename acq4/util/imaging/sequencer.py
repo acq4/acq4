@@ -132,20 +132,19 @@ def _set_focus_depth(
         move.wait(timeout=timeout)
 
 
-@future_wrap
-def _slow_z_stack(imager, start, end, step, _future=None) -> list[Frame]:
+def _stepped_z_stack(imager, start, end, step, future) -> list[Frame]:
     sign = np.sign(end - start)
     direction = sign * -1
     step = sign * abs(step)
     frames_fut = imager.acquireFrames()
-    _set_focus_depth(imager, start, direction, speed="fast", future=_future)
+    _set_focus_depth(imager, start, direction, speed="fast", future=future)
     with imager.ensureRunning(ensureFreshFrames=True):
         for z in np.arange(start, end + step, step):
-            _future.waitFor(imager.acquireFrames(1))
-            _set_focus_depth(imager, z, direction, speed="slow", future=_future)
-        _future.waitFor(imager.acquireFrames(1))
+            future.waitFor(imager.acquireFrames(1))
+            _set_focus_depth(imager, z, direction, speed="slow", future=future)
+        future.waitFor(imager.acquireFrames(1))
     frames_fut.stop()
-    _future.waitFor(frames_fut)
+    future.waitFor(frames_fut)
     return frames_fut.getResult()
 
 
@@ -346,6 +345,7 @@ def acquire_z_stack(
     hysteresis_correction=True,
     slow_fallback=True,
     deviceReservationTimeout=10.0,
+    max_continuous_speed=1e-3,  # m/s
     _future: Future = None,
 ) -> list[Frame]:
     """Acquire a Z stack from the given imager.
@@ -359,7 +359,6 @@ def acquire_z_stack(
     Returns:
         Future: Future object that will contain the frames once the acquisition is complete.
     """
-    # TODO optional conditional slow-z-stack fallback
     # TODO think about strobing the lighting for clearer images
     direction = start - stop
     _set_focus_depth(imager, start, direction, "fast", hysteresis_correction, _future)
@@ -368,25 +367,30 @@ def acquire_z_stack(
     meters_per_frame = abs(step)
     speed = meters_per_frame * z_per_second * 0.5
     man = Manager.getManager()
-    with man.reserveDevices(imager.devicesToReserve(), timeout=deviceReservationTimeout):
-        with imager.ensureRunning(ensureFreshFrames=True):
-            frames_fut = imager.acquireFrames()
-            try:
-                _future.waitFor(imager.acquireFrames(1))  # just to be sure the camera's recording
-                _set_focus_depth(imager, stop, direction, speed, hysteresis_correction, _future)
-                _future.waitFor(imager.acquireFrames(1))  # just to be sure the camera caught up
-            finally:
-                frames_fut.stop()
+    if speed > max_continuous_speed:
+        with man.reserveDevices(imager.devicesToReserve(), timeout=deviceReservationTimeout):
+            frames = _stepped_z_stack(imager, start, stop, step, _future)
+        frames = enforce_linear_z_stack(frames, start, stop, step)
+    else:
+        with man.reserveDevices(imager.devicesToReserve(), timeout=deviceReservationTimeout):
+            with imager.ensureRunning(ensureFreshFrames=True):
+                frames_fut = imager.acquireFrames()
+                try:
+                    _future.waitFor(imager.acquireFrames(1))  # just to be sure the camera's recording
+                    _set_focus_depth(imager, stop, direction, speed, hysteresis_correction, _future)
+                    _future.waitFor(imager.acquireFrames(1))  # just to be sure the camera caught up
+                finally:
+                    frames_fut.stop()
         frames = _future.waitFor(frames_fut).getResult(timeout=10)
         try:
             frames = enforce_linear_z_stack(frames, start, stop, step)
         except ValueError:
-            if slow_fallback:
-                imager.logger.info("Failed to fast-acquire linear z stack. Retrying with stepwise movement.")
-                frames = _future.waitFor(_slow_z_stack(imager, start, stop, step)).getResult()
-                frames = enforce_linear_z_stack(frames, start, stop, step)
-            else:
+            if not slow_fallback:
                 raise
+            imager.logger.info("Failed to fast-acquire linear z stack. Retrying with stepwise movement.")
+            with man.reserveDevices(imager.devicesToReserve(), timeout=deviceReservationTimeout):
+                frames = _stepped_z_stack(imager, start, stop, step, _future)
+            frames = enforce_linear_z_stack(frames, start, stop, step)
     _fix_frame_transforms(frames, step)
     return frames
 
