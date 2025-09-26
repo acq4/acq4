@@ -200,7 +200,7 @@ class Tools(Module):
         try:
             # Use subprocess to get help text - safer than importing
             result = subprocess.run(
-                ['/home/martin/.miniforge3/envs/acq4-torch/bin/python', str(script_path), '--help'],
+                ['python', str(script_path), '--help'],
                 capture_output=True,
                 text=True,
                 timeout=10,
@@ -538,7 +538,7 @@ class Tools(Module):
         script_path = script_info['path']
 
         # Build command line arguments
-        cmd = ['/home/martin/.miniforge3/envs/acq4-torch/bin/python', str(script_path)]
+        cmd = ['python', str(script_path)]
 
         for arg in script_info['args']:
             widget = self.arg_widgets.get(arg['name'])
