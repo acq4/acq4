@@ -28,7 +28,7 @@ from .logging_config import get_logger, setup_logging
 from .util import DataManager, ptime, Qt
 from .util.DataManager import DirHandle
 from .util.HelpfulException import HelpfulException
-from .util.LogWindow import get_log_window
+from .util.LogWindow import get_log_window, get_error_dialog
 
 TEMP_LOG = "temp_log.json"
 setup_logging(TEMP_LOG, log_window=False, console_level=logging.DEBUG)
@@ -343,15 +343,8 @@ class Manager(Qt.QObject):
                     css = open(os.path.join(self.configDir, cfg['stylesheet'])).read()
                     Qt.QApplication.instance().setStyleSheet(css)
 
-                # TODO how will this work in the new logging scheme?
-                # elif key == 'disableErrorPopups':
-                #     if cfg[key] is True:
-                #         self.logWindow.disablePopups(True)
-                #     elif cfg[key] is False:
-                #         self.logWindow.disablePopups(False)
-                #     else:
-                #         print(
-                #             "Warning: ignored config option 'disableErrorPopups'; value must be either True or False.")
+                elif key == 'disableErrorPopups':
+                    get_error_dialog().disable(bool(cfg[key]))
 
                 elif key == 'defaultMouseMode':
                     mode = cfg[key].lower()
@@ -360,8 +353,10 @@ class Manager(Qt.QObject):
                     elif mode == 'threebutton':
                         pg.setConfigOption('leftButtonPan', True)
                     else:
-                        print(
-                            "Warning: ignored config option 'defaultMouseMode'; value must be either 'oneButton' or 'threeButton'.")
+                        logger.warning(
+                            "Warning: ignored config option 'defaultMouseMode'; value must be"
+                            "either 'oneButton' or 'threeButton'."
+                        )
                 elif key == 'useOpenGL':
                     pg.setConfigOption('useOpenGL', cfg[key])
 
@@ -498,7 +493,7 @@ class Manager(Qt.QObject):
         if config is None:
             config = {}
 
-        print('Loading module "%s" as "%s"...' % (moduleClassName, name))
+        logger.info(f'Loading module "{moduleClassName}" as "{name}"...')
 
         # deprecated args
         if importMod is not None:
@@ -550,7 +545,7 @@ class Manager(Qt.QObject):
     def loadDefinedModule(self, name, forceReload=False):
         """Load a module and configure as defined in the config file"""
         if name not in self.definedModules:
-            print("Module '%s' is not defined. Options are: %s" % (name, str(list(self.definedModules.keys()))))
+            logger.error(f"Module '{name}' is not defined. Options are: {list(self.definedModules.keys())}")
             return
         conf = self.definedModules[name]
 
@@ -565,7 +560,7 @@ class Manager(Qt.QObject):
         win = mod.window()
         if 'shortcut' in conf and win is not None:
             self.createWindowShortcut(conf['shortcut'], win)
-        print("Loaded module '%s'" % mod.name)
+        logger.info(f"Loaded module '{mod.name}'")
 
     def moduleHasQuit(self, mod):
         with self.moduleLock:
@@ -922,9 +917,9 @@ class Task:
         try:
             self.cfg = command['protocol']
         except:
-            print("================== Manager Task.__init__ command: =================")
-            print(command)
-            print("===========================================================")
+            logger.error("================== Manager Task.__init__ command: =================")
+            logger.error(command)
+            logger.error("===========================================================")
             raise TypeError("Command specified for task is invalid. (Must be dictionary with 'protocol' key)")
         self.id = Task.id
         Task.id += 1
@@ -1046,7 +1041,7 @@ class Task:
                         self.tasks[devName].start()
                     except:
                         self.startedDevs.remove(devName)
-                        print(f"Error starting device '{devName}'; aborting task.")
+                        logger.error(f"Error starting device '{devName}'; aborting task.")
                         raise
                     prof.mark(f'start {devName}')
                 self.startTime = ptime.time()
@@ -1291,7 +1286,7 @@ class Task:
 
             # If no nodes are ready, then there must be a cycle in the graph
             if len(ready) == 0:
-                print(deps)
+                logger.error(f"Cyclic graph of dependencies: {deps}")
                 raise HelpfulException(
                     "Cannot resolve requested device configure/start order.",
                     docs=["userGuide/configuration.html#devices-configuration"],
@@ -1367,7 +1362,7 @@ class QtDocumentation(Qt.QObject):
         Qt.QTimer.singleShot(1000, self.expandToc)
 
     def activateId(self, id):
-        print("activate:", id)
+        logger.info("activate:", id)
         self.show()
         self.write('activateIdentifier %s\n' % id)
 
@@ -1383,5 +1378,5 @@ class QtDocumentation(Qt.QObject):
         self.process.close()
 
     def processFinished(self):
-        print("Doc viewer exited:", self.process.exitCode())
-        print(str(self.process.readAllStandardError()))
+        logger.info(f"Doc viewer exited: {self.process.exitCode()}")
+        logger.info(str(self.process.readAllStandardError()))
