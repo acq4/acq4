@@ -13,6 +13,8 @@ import time
 import weakref
 from collections import OrderedDict
 
+from MetaArray import MetaArray
+
 import pyqtgraph as pg
 import pyqtgraph.reload as reload
 from pyqtgraph import configfile
@@ -107,7 +109,7 @@ class Manager(Qt.QObject):
 
         try:
             if Manager.CREATED:
-                raise Exception("Manager object already created!")
+                raise ValueError("Manager object already created!")
 
             Manager.CREATED = True
             Manager.single = self
@@ -129,7 +131,10 @@ class Manager(Qt.QObject):
             if self.exitOnError:
                 raise
             else:
-                logger.exception("Error while configuring Manager:")
+                logger.exception(
+                    "Error while configuring Manager",
+                    extra={"docs": ["userGuide/configuration.html"]}
+                )
 
     def initFromCommandLine(self, args: argparse.Namespace):
         self.exitOnError = args.exit_on_error
@@ -172,12 +177,13 @@ class Manager(Qt.QObject):
             if self.exitOnError:
                 raise
             else:
-                logger.exception("Error while acting on command line options: (but continuing on anyway..)")
+                logger.exception("Error while acting on command line options")
         finally:
             self.isReady.set()
             if len(self.modules) == 0:
                 self.quit()
-                raise RuntimeError("No modules loaded during startup, exiting now.")
+                raise RuntimeError(
+                    "No modules loaded during startup (likely due to errors above). Exiting now.")
 
     @staticmethod
     def _getConfigFile():
@@ -266,7 +272,7 @@ class Manager(Qt.QObject):
                 if self.exitOnError:
                     raise
                 else:
-                    logger.exception("Error in ACQ4 configuration:")
+                    logger.exception("Unable to import module specified in config file")
 
         for key, val in cfg.items():
             try:
@@ -297,7 +303,7 @@ class Manager(Qt.QObject):
                             if self.exitOnError:
                                 raise
                             else:
-                                logger.exception(f"Error configuring device {k}:")
+                                logger.exception(f"Error configuring device {k}")
 
                     logger.info("=== Device configuration complete ===")
 
@@ -320,12 +326,13 @@ class Manager(Qt.QObject):
                         else:
                             cstr = comp
                         assert cstr in [None, 'gzip', 'szip', 'lzf']
-                    except Exception:
-                        raise Exception(
-                            f"'defaultCompression' option must be one of: None, 'gzip', 'szip', 'lzf', ('gzip', 0-9), or ('szip', opts). Got: '{comp}'")
+                    except Exception as exc:
+                        raise ValueError(
+                            "'defaultCompression' option must be one of: None, 'gzip', 'szip',"
+                            f" 'lzf', ('gzip', 0-9), or ('szip', opts). Got: '{comp}'"
+                        ) from exc
 
-                    print(f"=== Setting default HDF5 compression: {comp} ===")
-                    from MetaArray import MetaArray
+                    logger.info(f"=== Setting default HDF5 compression: {comp} ===")
                     MetaArray.defaultCompression = comp
 
                 elif key == 'folderTypes':
@@ -366,7 +373,7 @@ class Manager(Qt.QObject):
                 if self.exitOnError:
                     raise
                 else:
-                    logger.exception("Error in ACQ4 configuration:")
+                    logger.exception("Error in ACQ4 configuration", docs=["userGuide/configuration.html"])
 
     def listConfigurations(self):
         """Return a list of the named configurations available"""
@@ -387,7 +394,7 @@ class Manager(Qt.QObject):
             if missingOk:
                 return {}
             else:
-                raise Exception('Config file "%s" not found.' % fileName)
+                raise FileNotFoundError(f'Config file "{fileName}" not found.')
 
     def writeConfigFile(self, data, fileName):
         """Write a file into the currently used config directory."""
@@ -402,7 +409,7 @@ class Manager(Qt.QObject):
         if os.path.exists(fileName):
             return configfile.appendConfigFile(data, fileName)
         else:
-            raise Exception("Could not find file %s" % fileName)
+            raise FileNotFoundError(f"Could not find file '{fileName}'")
 
     def updateConfig(self, config: dict):
         self.config.update(config)
@@ -440,8 +447,8 @@ class Manager(Qt.QObject):
         name = str(name)
         try:
             return self.getInterface('device', name)
-        except KeyError:
-            raise Exception("No device named %s. Options are %s" % (name, ','.join(self.listDevices())))
+        except KeyError as exc:
+            raise ValueError(f"No device named {name}. Options are {','.join(self.listDevices())}") from exc
 
     def listDevices(self):
         """Return a list of the names of available devices.
@@ -512,7 +519,8 @@ class Manager(Qt.QObject):
         return list(self.modules.keys())
 
     def getDirOfSelectedFile(self):
-        """Returns the directory that is currently selected, or the directory of the file that is currently selected in Data Manager."""
+        """Returns the directory that is currently selected, or the directory of the file that is
+        currently selected in Data Manager."""
         try:
             f = self.getModule("Data Manager").selectedFile()
             if not isinstance(f, DirHandle):
@@ -576,10 +584,7 @@ class Manager(Qt.QObject):
             if mod is not None:
                 mod.quit()
         except:
-            if self.exitOnError:
-                raise
-            else:
-                logger.exception(f"Error while requesting module '{name}' quit.")
+            logger.exception(f"Error while requesting that module '{name}' quit.")
 
         ## Module should have called moduleHasQuit already, but just in case:
         mod = self.modules.pop(name, None)
@@ -605,7 +610,7 @@ class Manager(Qt.QObject):
             if self.exitOnError:
                 raise
             else:
-                logger.exception(f"Error creating shortcut '{keys}':")
+                logger.exception(f"Error creating shortcut '{keys}'")
 
         self.shortcuts.append((sh, keys, weakref.ref(win)))
 
@@ -742,7 +747,7 @@ class Manager(Qt.QObject):
         elif isinstance(d, DirHandle):
             dh = d
         else:
-            raise Exception("Invalid argument type: ", type(d), d)
+            raise TypeError("Invalid argument type: ", type(d), d)
 
         changed = False
         if self.baseDir is not dh:
@@ -832,10 +837,7 @@ class Manager(Qt.QObject):
                     try:
                         d.quit()
                     except:
-                        if self.exitOnError:
-                            raise
-                        else:
-                            logger.exception(f"Error while requesting device '{d.name()}' quit.")
+                        logger.exception(f"Error while requesting device '{d.name()}' quit.")
 
                     dlg.setValue(lm + ld - len(devs))
 
@@ -849,7 +851,7 @@ class Manager(Qt.QObject):
 # All other modules can use this function to get the manager instance
 def getManager() -> Manager:
     if Manager.single is None:
-        raise Exception("No manager created yet")
+        raise RuntimeError("No manager created yet")
     return Manager.single
 
 
@@ -938,7 +940,7 @@ class Task:
         for devName in self.devNames:
             task = self.devs[devName].createTask(self.command[devName], self)
             if task is None:
-                logger.exception(f"Device '{devName}' does not have a task interface; ignoring.")
+                logger.warning(f"Device '{devName}' does not have a task interface; ignoring.")
                 continue
             self.tasks[devName] = task
 
@@ -1156,12 +1158,12 @@ class Task:
                         try:
                             self.tasks[t].stop(abort=abort)
                         except:
-                            logger.exception(f"Error while stopping task {t}:")
+                            logger.exception(f"Error while stopping task {t}")
                         prof.mark("   ..task " + t + " stopped")
                     self.stopped = True
 
                 if not abort and not self._tasksDone():
-                    raise Exception("Cannot get result; task is still running.")
+                    raise RuntimeError("Cannot get result; task is still running.")
 
                 if not abort and self.result is None:
                     ## Let each device generate its own output structure.
@@ -1170,7 +1172,10 @@ class Task:
                         try:
                             result[devName] = self.tasks[devName].getResult()
                         except:
-                            logger.exception(f"Error getting result for task {devName} (will set result=None for this task):")
+                            logger.exception(
+                                f"Error getting result for task {devName} (will set result=None for"
+                                " this task)"
+                            )
                             result[devName] = None
                         prof.mark("get result: " + devName)
                     self.result = result
@@ -1287,7 +1292,10 @@ class Task:
             # If no nodes are ready, then there must be a cycle in the graph
             if len(ready) == 0:
                 print(deps)
-                raise Exception("Cannot resolve requested device configure/start order.")
+                raise HelpfulException(
+                    "Cannot resolve requested device configure/start order.",
+                    docs=["userGuide/configuration.html#devices-configuration"],
+                )
 
             # sort by branch cost
             if key is not None:
