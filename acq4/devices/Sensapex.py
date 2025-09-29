@@ -94,6 +94,7 @@ class Sensapex(Stage):
         if "maxAcceleration" in config:
             self.dev.set_max_acceleration(config["maxAcceleration"])
 
+        self._lastUpdate = 0
         self.dev.add_callback(self._positionChanged)
 
         # force cache update for this device.
