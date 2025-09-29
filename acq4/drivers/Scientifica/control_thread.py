@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import logging
 import queue
 import sys
 import threading
 import time
 
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 
 class ScientificaControlThread:
@@ -176,7 +179,7 @@ class ScientificaControlThread:
         except Exception as e:
             self.dev.serial.flush()
             msg = "Ignored error while getting position from Scientifica device:"
-            self.dev.logger.exception(msg)
+            logger.exception(msg)
             return
 
         if self.pos_callback is not None and pos != self.last_pos:
@@ -225,7 +228,7 @@ class ScientificaControlThread:
             obj = self.dev.getObjective()
         except Exception as e:
             self.dev.serial.flush()
-            self.dev.logger.exception(
+            logger.exception(
                 "Ignored error while getting objective from Scientifica device:"
             )
             return
