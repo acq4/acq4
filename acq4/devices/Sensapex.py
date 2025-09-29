@@ -64,8 +64,6 @@ class Sensapex(Stage):
             maxAcceleration: 1000
     """
 
-    _sigRestartUpdateTimer = Qt.Signal(object)  # timeout duration
-
     devices = {}
 
     def __init__(self, man, config: dict, name):
@@ -92,12 +90,6 @@ class Sensapex(Stage):
         self._quitRequested = False
 
         Stage.__init__(self, man, config, name)
-        # Read position updates on a timer to rate-limit
-        self._updateTimer = Qt.QTimer()
-        self._updateTimer.timeout.connect(self._getPosition)
-        self._lastUpdate = 0
-
-        self._sigRestartUpdateTimer.connect(self._restartUpdateTimer)
 
         if "maxAcceleration" in config:
             self.dev.set_max_acceleration(config["maxAcceleration"])
@@ -168,7 +160,8 @@ class Sensapex(Stage):
 
     @property
     def positionUpdatesPerSecond(self):
-        return 1.0 / self.dev.ump.poller.interval
+        return 10.0  # see _positionChanged()
+        # return 1.0 / self.dev.ump.poller.interval
 
     def _getPosition(self):
         # Called by superclass when user requests position refresh
@@ -184,7 +177,6 @@ class Sensapex(Stage):
                     pos = self._lastPos
                 else:
                     raise
-            self._lastUpdate = ptime.time()
             if self._lastPos is not None:
                 dif = np.linalg.norm(np.array(pos, dtype=float) - np.array(self._lastPos, dtype=float))
 
@@ -205,14 +197,10 @@ class Sensapex(Stage):
         # called by driver poller when position has changed
         now = ptime.time()
         # rate limit updates to 10 Hz
-        wait = 100e-3 - (now - self._lastUpdate)
-        if wait > 0:
-            self._sigRestartUpdateTimer.emit(wait)
-        else:
-            self._getPosition()
-
-    def _restartUpdateTimer(self, wait):
-        self._updateTimer.start(int(wait * 1000))
+        if now - self._lastUpdate < 100e-3:
+            return
+        self._getPosition()
+        self._lastUpdate = ptime.time()
 
     def targetPosition(self):
         with self.lock:
