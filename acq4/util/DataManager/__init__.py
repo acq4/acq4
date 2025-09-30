@@ -16,6 +16,8 @@ import weakref
 from collections import OrderedDict
 from typing import Callable
 
+import numpy as np
+
 from acq4 import filetypes
 from acq4.util import Qt, advancedTypes as advancedTypes
 from acq4.util.Mutex import Mutex
@@ -852,7 +854,7 @@ class DirHandle(FileHandle):
                     else:
                         raise Exception("Directory '%s' is not managed!" % (self.name()))
                 try:
-                    self._index = readConfigFile(indexFile)
+                    self._index = readConfigFile(indexFile, np=np)
                     self._indexMTime = os.path.getmtime(indexFile)
                 except:
                     print("***************Error while reading index file %s!*******************" % indexFile)
