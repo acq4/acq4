@@ -178,6 +178,9 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
+echo Environment activated successfully
+echo.
+
 REM Install ACQ4 in development mode
 echo Installing ACQ4 in development mode...
 pip install -e .
@@ -200,6 +203,8 @@ if not "%selected_non_dev%"=="" (
 )
 
 REM Install selected hardware dependencies
+echo.
+echo Checking hardware dependencies: "%selected_hardware%"
 if not "%selected_hardware%"=="" (
     echo Installing hardware dependencies...
     for %%d in (%selected_hardware%) do (
@@ -209,6 +214,8 @@ if not "%selected_hardware%"=="" (
             echo Warning: Failed to install %%d
         )
     )
+) else (
+    echo No hardware dependencies selected
 )
 
 echo.
