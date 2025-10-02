@@ -6,6 +6,8 @@ antlr4-python3-runtime
 asttokens
 astunparse
 backcall
+beautifulsoup4
+boltons
 cachetools
 charset-normalizer
 click
@@ -71,6 +73,7 @@ parso
 pdb-attach
 pexpect
 pickleshare
+pillow
 pluggy
 portalocker
 prompt-toolkit
@@ -87,10 +90,12 @@ pymmcore
 pyopengl
 pyparsing
 pyrasite
+pyserial
 pytest
 python-dateutil
 python-json-logger
 pytz
+pyyaml
 pyzmq
 qtpy
 requests-oauthlib
@@ -99,6 +104,8 @@ rsa
 safetensors
 scikit-image
 scikit-learn
+scipy
+sip
 six
 stack-data
 superqt
@@ -124,15 +131,3 @@ werkzeug
 wrapt
 yacs
 yolo3
-
-# depending on your hardware, you'll probably want to install some of the following
-# pydaqmx
-# pymmcore
-# sensapex-py
-
-# for dev systems, the following are likely to be installed via `pip install -e .`
-git+https://github.com/outofculture/cellpose.git@_working
-coorx
-neuroanalysis
-git+https://github.com/acq4/pyqtgraph.git@_working
-teleprox

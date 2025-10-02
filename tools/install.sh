@@ -88,11 +88,11 @@ select_dependencies() {
         if [[ -n "$package" ]]; then
             if ask_yes_no "Install $package? ($desc)" "$default_answer"; then
                 selected+=("$package")
-                echo "  → Selected: $package"
+                echo "  → Selected: $package" >&2
             else
-                echo "  → Skipped: $package"
+                echo "  → Skipped: $package" >&2
             fi
-            echo
+            echo >&2
         fi
     done < "$file"
 
