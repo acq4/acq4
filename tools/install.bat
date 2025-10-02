@@ -161,8 +161,14 @@ if %errorlevel% equ 0 (
 
 REM Create conda environment (use mamba if available for speed)
 echo Creating conda environment '%env_name%'...
+echo Using command: %ENV_CREATE_CMD%
+echo Working directory: %ACQ4_ROOT%
 cd /d "%ACQ4_ROOT%"
-%ENV_CREATE_CMD% env create --name=%env_name% --file=tools\requirements\acq4-torch.yml
+echo About to run: %ENV_CREATE_CMD% env create --name=%env_name% --file=tools\requirements\acq4-torch.yml
+cmd /c "%ENV_CREATE_CMD% env create --name=%env_name% --file=tools\requirements\acq4-torch.yml"
+echo Environment creation completed with exit code: %errorlevel%
+echo Checking if environment was created...
+conda env list | findstr /r "^%env_name% " >nul 2>&1
 if %errorlevel% neq 0 (
     echo Error creating conda environment
     pause
