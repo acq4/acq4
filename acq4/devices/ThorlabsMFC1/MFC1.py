@@ -155,7 +155,7 @@ class MonitorThread(Thread):
         self.stopped = False
         self.interval = 0.3
         self.minInterval = 100e-3
-        Thread.__init__(self)
+        Thread.__init__(self, name=f'{dev.name()}_MFC1MonitorThread')
 
     def start(self):
         self.stopped = False
@@ -188,7 +188,7 @@ class MonitorThread(Thread):
 
                 time.sleep(interval)
             except:
-                debug.printExc('Error in MFC1 monitor thread:')
+                self.dev.logger.exception('Error in MFC1 monitor thread:')
                 time.sleep(maxInterval)
 
 

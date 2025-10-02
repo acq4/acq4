@@ -10,11 +10,11 @@ from acq4.devices.Stage import Stage
 from acq4.modules.Camera import CameraModuleInterface
 from acq4.util import Qt
 from acq4.util.Mutex import Mutex
-from acq4.util.debug import printExc
+from acq4.util.acq4_typing import Number
 from acq4.util.future import Future, MultiFuture, future_wrap, FutureButton
 from acq4.util.imaging import Frame
 from acq4.util.surface import find_surface
-from acq4.util.acq4_typing import Number
+from acq4.util.ui.ZPositionWidget import ZPositionWidget
 from pyqtgraph.units import µm
 
 Ui_Form = Qt.importTemplate('.deviceTemplate')
@@ -94,7 +94,7 @@ class Microscope(Device, OptomechDevice):
             try:
                 self.objectiveSwitchChanged()
             except:
-                printExc("Could not set initial objective state:")
+                self.logger.exception("Could not set initial objective state:")
         else:
             self.switchDevice = None
             firstObj = next(iter(self.objectives))
@@ -233,7 +233,7 @@ class Microscope(Device, OptomechDevice):
         """
         return self.mapToGlobal(Qt.QVector3D(0, 0, 0)).z()
 
-    def setFocusDepth(self, z, speed='fast'):
+    def setFocusDepth(self, z, speed='fast', name=None):
         """Set the z-position of the focal plane.
 
         This method requires motorized focus control.
@@ -247,7 +247,7 @@ class Microscope(Device, OptomechDevice):
 
         # and this is where it needs to go
         fdpos[2] += dif
-        return fd.moveToGlobal(fdpos, speed)
+        return fd.moveToGlobal(fdpos, speed, name=name)
 
     def getDefaultImager(self):
         name = self.config.get('defaultImager', None)
@@ -296,7 +296,7 @@ class Microscope(Device, OptomechDevice):
         """
         return self.mapToGlobal(pg.Vector(0, 0, 0))
 
-    def setGlobalPosition(self, pos, speed='fast'):
+    def setGlobalPosition(self, pos, speed='fast', name=None):
         """Move the microscope such that its center axis is at a specified global position.
 
         If *pos* is a 3-element vector, then this method will also attempt to set the focus depth
@@ -310,7 +310,7 @@ class Microscope(Device, OptomechDevice):
 
         if len(pos) == 3 and focusDevice is not positionDevice:
             z = pos[2]
-            zFuture = self.setFocusDepth(z)
+            zFuture = self.setFocusDepth(z, name=f'{name} Z')
             pos = pos[:2]
         else:
             zFuture = None
@@ -323,11 +323,11 @@ class Microscope(Device, OptomechDevice):
         sgpos = positionDevice.globalPosition()
         sgpos2 = pg.Vector(sgpos) + (pg.Vector(pos) - gpos)
         sgpos2 = [sgpos2.x(), sgpos2.y(), sgpos2.z()]
-        xyFuture = positionDevice.moveToGlobal(sgpos2, speed)
+        xyFuture = positionDevice.moveToGlobal(sgpos2, speed, name=f'{name} XY')
         if zFuture is None:
             return xyFuture
         else:
-            return MultiFuture([zFuture, xyFuture])
+            return MultiFuture([zFuture, xyFuture], name=f'{self.name()} {name} XY+Z')
 
     def writeCalibration(self):
         cal = {'surfaceDepth': self.getSurfaceDepth()}
@@ -574,33 +574,48 @@ class ScopeCameraModInterface(CameraModuleInterface):
         self.ctrl.setLayout(self.layout)
 
         self.plot = mod.window().getDepthView()
-        self.focusLine = self.plot.addLine(y=0, pen='y')
-        sd = dev.getSurfaceDepth()
-        if sd is None:
-            sd = 0
-        self.surfaceLine = self.plot.addLine(y=sd, pen='g')
-        self.movableFocusLine = self.plot.addLine(y=0, pen='y', markers=[('<|>', 0.5, 10)], movable=True)
 
+        # Create Z-position widget using the existing plot
+        self.zPositionWidget = ZPositionWidget(parent=None, plot=self.plot, interactive=True)
+
+        # Get references to the plot items for compatibility
+        plotItems = self.zPositionWidget.getPlotItems()
+        self.focusLine = plotItems['focusLine']
+        self.surfaceLine = plotItems['surfaceLine']
+        self.movableFocusLine = plotItems['movableFocusLine']
+
+        # Add the existing controls (Set Surface button is in ZPositionWidget)
         # Note: this is placed here because there is currently no better place.
         # Ideally, the sample orientation, height, and anatomical identity would be contained
         # in a Sample or Slice object elsewhere..
-        self.setSurfaceBtn = Qt.QPushButton('Set Surface')
-        self.layout.addWidget(self.setSurfaceBtn, 0, 0)
-        self.setSurfaceBtn.clicked.connect(self.setSurfaceClicked)
 
+        # Get the set surface button from the widget and wire it up
+        self.setSurfaceBtn = self.zPositionWidget.setSurfaceBtn
+        self.setSurfaceBtn.clicked.disconnect()  # Remove the default handler
+        self.setSurfaceBtn.clicked.connect(self.setSurfaceClicked)
+        self.layout.addWidget(self.setSurfaceBtn, 0, 0)  # Add to our layout
+
+        # Add Find Surface button which requires device access
         self.findSurfaceBtn = FutureButton(
             self.findSurface, 'Find Surface', stoppable=True, processing='Scanning...', failure='Failed!')
         self.layout.addWidget(self.findSurfaceBtn, 1, 0)
 
-        self.depthLabel = pg.ValueLabel(suffix='m', siPrefix=True)
-        self.layout.addWidget(self.depthLabel, 2, 0)
+        # Get depth label from the widget and add it to our layout
+        self.depthLabel = self.zPositionWidget.getDepthLabel()
+        if self.depthLabel is not None:
+            self.layout.addWidget(self.depthLabel, 2, 0)
 
+        # Connect device signals
         dev.sigGlobalTransformChanged.connect(self.transformChanged)
         dev.sigSurfaceDepthChanged.connect(self.surfaceDepthChanged)
 
-        # only works with devices that can change their waypoint while in motion
-        # self.movableFocusLine.sigDragged.connect(self.focusDragged)
-        self.movableFocusLine.sigPositionChangeFinished.connect(self.focusDragged)
+        # Connect Z-position widget signal to our focus control
+        self.zPositionWidget.sigFocusChanged.connect(self.focusChangedFromWidget)
+
+        # Initialize with current values
+        sd = dev.getSurfaceDepth()
+        if sd is not None:
+            self.zPositionWidget.setSurfaceDepth(sd)
 
         self.transformChanged()
 
@@ -613,11 +628,11 @@ class ScopeCameraModInterface(CameraModuleInterface):
         return self.getDevice().findSurfaceDepth(self.getDevice().getDefaultImager())
 
     def surfaceDepthChanged(self, depth):
-        self.surfaceLine.setValue(depth)
+        self.zPositionWidget.setSurfaceDepth(depth)
 
     def transformChanged(self):
         focus = self.getDevice().getFocusDepth()
-        self.focusLine.setValue(focus)
+        self.zPositionWidget.setFocusDepth(focus)
 
         # Compute the target focal plane.
         # This is a little tricky because the objective might have an offset+scale relative
@@ -625,19 +640,16 @@ class ScopeCameraModInterface(CameraModuleInterface):
         fd = self.getDevice().focusDevice()
         if fd is None:
             return
-        tpos = fd.globalTargetPosition()
         fpos = fd.globalPosition()
+        tpos = fd.globalTargetPosition()
+        if tpos is None:
+            tpos = fpos
         dif = tpos[2] - fpos[2]
-        with pg.SignalBlock(self.movableFocusLine.sigPositionChangeFinished, self.focusDragged):
-            self.movableFocusLine.setValue(focus + dif)
+        self.zPositionWidget.setTargetDepth(focus + dif)
 
-        sdepth = self.getDevice().getSurfaceDepth()
-        if sdepth is not None:
-            depth = focus - sdepth
-            self.depthLabel.setValue(depth)
-
-    def focusDragged(self):
-        self.getDevice().setFocusDepth(self.movableFocusLine.value())
+    def focusChangedFromWidget(self, depth):
+        """Handle focus changes from the Z-position widget."""
+        self.getDevice().setFocusDepth(depth)
 
     def controlWidget(self):
         return self.ctrl

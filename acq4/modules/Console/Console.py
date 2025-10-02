@@ -20,6 +20,7 @@ class Console(Module):
             'man': manager,
             'pg': pg,
             'np': np,
+            'getQtObjectAtClick': getQtObjectAtClick,
         }
         self.configFile = os.path.join('modules', 'Console.cfg')
         self.stateFile = os.path.join('modules', self.name + '_ui.cfg')
@@ -36,6 +37,8 @@ class Console(Module):
                 pg.show(imageData)
                 pg.plot(plotData)
            np - numpy library
+           getQtObjectAtClick() - Call this function, then click on any Qt widget to return the deepest child object at
+                that position.
            
         """
         
@@ -92,5 +95,95 @@ class ConsoleWidget(console.ConsoleWidget):
         config = self.module.manager.readConfigFile(self.module.configFile, missingOk=True)
         if 'history' in config:
             return config['history']
-        
 
+
+class ClickCapture(Qt.QObject):
+    def __init__(self):
+        super().__init__()
+        self.captured_object = None
+
+    def eventFilter(self, obj, event):
+        if event.type() == Qt.QEvent.MouseButtonPress:
+            pos = Qt.QCursor.pos()
+            self.captured_object = self._dig_deepest(pos)
+
+            Qt.QApplication.restoreOverrideCursor()
+            Qt.QApplication.instance().removeEventFilter(self)
+            return True
+        return False
+
+    def _dig_deepest(self, global_pos):
+        widget = Qt.QApplication.widgetAt(global_pos)
+        if not widget:
+            return None
+
+        return self._recurse_deepest(widget, global_pos)
+
+    def _recurse_deepest(self, widget, global_pos):
+        local_pos = widget.mapFromGlobal(global_pos)
+
+        # Item views: try to get model index/item
+        if isinstance(widget, Qt.QAbstractItemView):
+            index = widget.indexAt(local_pos)
+            if index.isValid():
+                # This is probably as deep as we can go
+                return {
+                    'type': 'item_view_item',
+                    'widget': widget,
+                    'index': index,
+                    'data': widget.model().data(index) if widget.model() else None,
+                    'item': widget.model().itemFromIndex(index) if hasattr(widget.model(), 'itemFromIndex') else None
+                }
+
+        # Graphics views: try to get graphics items
+        if isinstance(widget, Qt.QGraphicsView):
+            scene_pos = widget.mapToScene(local_pos)
+            items = widget.scene().items(scene_pos) if widget.scene() else []
+            if items:
+                return {
+                    'type': 'graphics_item',
+                    'view': widget,
+                    'item': items[0],  # topmost item
+                    'all_items': items
+                }
+
+        # Tab widgets: get the actual tab content
+        if isinstance(widget, Qt.QTabWidget):
+            tab_bar = widget.tabBar()
+            if tab_bar and tab_bar.geometry().contains(local_pos):
+                tab_index = tab_bar.tabAt(tab_bar.mapFromParent(local_pos))
+                if tab_index >= 0:
+                    return {
+                        'type': 'tab',
+                        'widget': widget,
+                        'tab_index': tab_index,
+                        'tab_text': widget.tabText(tab_index)
+                    }
+
+        # Check for child widgets
+        child = widget.childAt(local_pos)
+        if child and child != widget:
+            # Recurse into the child
+            deeper = self._recurse_deepest(child, global_pos)
+            return deeper if deeper else child
+
+        # If we can't go deeper, return this widget
+        return widget
+
+
+def getQtObjectAtClick():
+    app = Qt.QApplication.instance()
+    if not app:
+        raise RuntimeError("No Qt.QApplication instance found")
+
+    capturer = ClickCapture()
+    Qt.QApplication.setOverrideCursor(Qt.QCursor(Qt.Qt.CrossCursor))
+    app.installEventFilter(capturer)
+
+    print("Click to capture deepest object...")
+
+    while capturer.captured_object is None:
+        app.processEvents()
+        Qt.QTimer.singleShot(10, lambda: None)
+
+    return capturer.captured_object

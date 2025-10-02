@@ -26,7 +26,7 @@ class WholeCellState(PatchPipetteState):
             # TODO: monitor for cell loss
             self.sleep(0.1)
 
-    def cleanup(self):
+    def _cleanup(self):
         patchrec = self.dev.patchRecord()
         patchrec['wholeCellStopTime'] = ptime.time()
-        return super().cleanup()
+        return super()._cleanup()

@@ -72,6 +72,7 @@ class VimbaXCamera(Camera):
 
     def __init__(self, dm, config, name):
         self._dev: VmbCamera | None = None
+        self._id = config['id']
         self._lock = RLock()
         self._paramProperties = {}
         self._paramValuesOnDev = {}
@@ -82,7 +83,7 @@ class VimbaXCamera(Camera):
 
     def setupCamera(self):
         with VmbSystem.get_instance() as vmb:
-            _id = self._config['id']
+            _id = self._id
             try:
                 self._dev = vmb.get_camera_by_id(_id)
             except VmbCameraError as e:
@@ -102,7 +103,10 @@ class VimbaXCamera(Camera):
         for f in self._dev.get_all_features():
             if hasattr(f, "get"):
                 name = f.get_name()
-                self._paramValuesOnDev[name] = f.get()
+                try:
+                    self._paramValuesOnDev[name] = f.get()
+                except VmbFeatureError:
+                    continue  # some features are not readable after all
                 f.register_change_handler(self._updateParamCache)
                 rng = None
                 if name in ('BinningX', 'BinningY'):
@@ -198,12 +202,30 @@ class VimbaXCamera(Camera):
                     newvals['region'] = v
                 elif p == 'binning':
                     with self._noParamUpdates():
+                        roi_x, roi_y, roi_w, roi_h = self.getParam('region')
+                        old_x, old_y = self.getParam('binning')
+                        mult_x = v[0] / old_x
+                        mult_y = v[1] / old_y
+                        roi_x = roi_x // mult_x
+                        roi_y = roi_y // mult_y
+                        roi_w = min(roi_w // mult_x, self.getParam('sensorWidth') // v[0] - 1)
+                        roi_h = min(roi_h // mult_y, self.getParam('sensorHeight') // v[1] - 1)
                         newvals, _r = self.setParams(
-                            [('binningX', v[0]), ('binningY', v[1])], autoRestart=autoRestart, autoCorrect=autoCorrect
+                            [
+                                ('binningX', v[0]),
+                                ('binningY', v[1]),
+                                ('regionX', roi_x),
+                                ('regionY', roi_y),
+                                ('regionW', roi_w),
+                                ('regionH', roi_h),
+                            ],
+                            autoRestart=autoRestart,
+                            autoCorrect=autoCorrect,
                         )
                         x = newvals['binningX']
                         y = newvals['binningY']
                         newvals['binning'] = (x, y)
+                        newvals['region'] = (roi_x, roi_y, roi_w, roi_h)
                 elif p == 'triggerMode':
                     self._dev.TriggerMode.set(v in ('On', 1, True))
                     newvals = {p: v}

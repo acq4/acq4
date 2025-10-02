@@ -29,27 +29,6 @@ def _build_event_name_map():
 EVENT_NAMES = _build_event_name_map()
 
 
-def event_name(event):
-    """Get human-readable name for an event."""
-    t = int(event.type())
-    return EVENT_NAMES.get(t, f"Type({t})")
-
-
-def extract_metacall_info(event):
-    """Extract information from MetaCall events.
-
-    Note: PyQt5 MetaCall events don't expose internal signal/slot details
-    without private Qt headers, so we can only provide basic info.
-    """
-    event_type_int = int(event.type())
-    if event_type_int != 43:  # MetaCall is type 43
-        return None
-
-    # MetaCall events in PyQt5 appear as generic QEvent objects
-    # and don't expose sender/signal information publicly
-    return "Signal/slot call (details not available in PyQt5)"
-
-
 class QApplicationProfile(QObject):
     """Handles statistics collection for a specific profiling session.
 

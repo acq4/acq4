@@ -1,17 +1,12 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-from __future__ import with_statement
-
 import time
 from collections import OrderedDict
 
 import numpy as np
-from pyqtgraph.WidgetGroup import WidgetGroup
 
 from acq4.devices.DAQGeneric import DAQGeneric, DAQGenericTask, DAQGenericTaskGui, DataMapping
 from acq4.util import Qt
 from acq4.util.Mutex import Mutex
-from acq4.util.debug import printExc
+from pyqtgraph.WidgetGroup import WidgetGroup
 
 Ui_devGui = Qt.importTemplate('.devGuiTemplate')
 
@@ -242,8 +237,8 @@ class AxoPatch200(DAQGeneric):
         try:
             self.setHolding()
         except:
-            printExc("Error while setting holding value:")
-            
+            self.logger.exception("Error while setting holding value:")
+
         dm.declareInterface(name, ['clamp'], self)
 
     def createTask(self, cmd, parentTask):

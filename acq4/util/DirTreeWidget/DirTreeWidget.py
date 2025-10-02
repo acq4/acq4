@@ -1,8 +1,10 @@
 import contextlib
 import os
 
+from acq4.logging_config import get_logger
 from acq4.util import Qt
-from acq4.util.debug import printExc
+
+logger = get_logger(__name__)
 
 
 class DirTreeWidget(Qt.QTreeWidget):
@@ -135,7 +137,7 @@ class DirTreeWidget(Qt.QTreeWidget):
                 handle.rename(newName)
                 #print "Rename %s -> %s" % (handle.shortName(), item.text(0))
         except:
-            printExc("Error while renaming file:")
+            logger.exception("Error while renaming file:")
         finally:
             item.setText(0, handle.shortName())
 
@@ -309,7 +311,7 @@ class DirTreeWidget(Qt.QTreeWidget):
             try:
                 childHandle = handle[f]
             except:
-                printExc("Error getting file handle:")
+                logger.exception("Error getting file handle:")
                 continue
             item = self.addHandle(childHandle)
             root.addChild(item)
@@ -365,7 +367,7 @@ class DirTreeWidget(Qt.QTreeWidget):
                 s.move(target)
             return True
         except:
-            printExc('Move failed:')
+            logger.exception('Move failed:')
             return False
 
     def contextMenuEvent(self, ev):

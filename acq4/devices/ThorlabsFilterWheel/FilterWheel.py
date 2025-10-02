@@ -333,13 +333,12 @@ class FilterWheelThread(Thread):
     fwPosChanged = Qt.QtCore.Signal(object)
 
     def __init__(self, dev, driver, lock):
-        Thread.__init__(self)
+        Thread.__init__(self, name=f'{dev.name()}_FilterWheelThread')
         self.lock = Mutex(Qt.QtCore.QMutex.Recursive)
         self.dev = dev
         self.driver = driver
         self.driverLock = lock
         self.cmds = {}
-
         
     def run(self):
         self.stopThread = False
@@ -352,7 +351,7 @@ class FilterWheelThread(Thread):
                 self.fwPosChanged.emit(pos)
                 time.sleep(0.5)
             except:
-                debug.printExc("Error in Filter Wheel communication thread:")
+                self.dev.logger.exception("Error in Filter Wheel communication thread:")
                 
             self.lock.lock()
             if self.stopThread:

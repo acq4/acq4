@@ -14,7 +14,7 @@ class Visualize3D(Module):
     def __init__(self, manager, name: str, config: dict):
         super().__init__(manager, name, config)
         self.isReady = threading.Event()
-        self.openWindow(blocking=True)
+        self.openWindow()
         for dev in manager.listInterfaces("OptomechDevice"):
             dev = manager.getDevice(dev)
             self.win.addDevice(dev, self.isReady)
