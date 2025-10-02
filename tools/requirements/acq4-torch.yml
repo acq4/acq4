@@ -1,17 +1,9 @@
 channels:
   - defaults
-  - nvidia
 dependencies:
-  - beautifulsoup4
   - blas
-  - boltons
-  - pillow
   - pip
   - pyqt=5
-  - pyserial
   - python=3.12
-  - pyyaml
-  - scipy
-  - sip
   - pip:
     - -r acq4-torch-pip.txt

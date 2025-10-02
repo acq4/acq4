@@ -1,7 +1,6 @@
 # These dependencies need to be installed, but the user may have local dev copies of them, instead.
 # Format: package_name # Description
 
-cupy # GPU acceleration for improved performance (requires CUDA-supported GPU)
 git+https://github.com/outofculture/cellpose.git@_working # Cell segmentation and analysis
 coorx # Coordinate transformation utilities
 neuroanalysis # Neurophysiology data analysis tools
