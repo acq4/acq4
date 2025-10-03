@@ -12,7 +12,7 @@ from acq4.util.StatusBar import StatusBar
 from pyqtgraph import FileDialog
 from teleprox.log.logviewer import LogViewer
 from . import FileAnalysisView
-from ...logging_config import get_logger
+from ...logging_config import get_logger, HistoricLogRecord
 from ...util.HelpfulException import HelpfulException
 
 logger = get_logger(__name__)
@@ -65,10 +65,7 @@ def load_log_records_legacy(log_file):
 def load_log_records(log_file):
     records = []
     for line in log_file.readlines():
-        data = json.loads(line)
-        r = LogRecord(**data)
-        r.created = data['created']
-        records.append(r)
+        records.append(HistoricLogRecord(**(json.loads(line))))
     return records
 
 

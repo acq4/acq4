@@ -41,6 +41,22 @@ class StringAwareJsonFormatter(JsonFormatter):
             log_record['exc_info'] = None
 
 
+class HistoricLogRecord(logging.LogRecord):
+    """
+    A LogRecord subclass that can be instantiated from a dictionary of attributes and preservers them.
+    """
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.created = kwargs.get('created', self.created)
+        self.msecs = kwargs.get('msecs', self.msecs)
+        self.relativeCreated = kwargs.get('relativeCreated', self.relativeCreated)
+        self.thread = kwargs.get('thread', self.thread)
+        self.threadName = kwargs.get('threadName', self.threadName)
+        self.process = kwargs.get('process', self.process)
+        self.processName = kwargs.get('processName', self.processName)
+
+
 def setup_logging(
     log_file_path: str = "app.log",
     log_window: bool = True,

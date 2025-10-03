@@ -27,7 +27,7 @@ from . import __version__
 from . import devices, modules
 from .Interfaces import InterfaceDirectory
 from .devices.Device import Device, DeviceTask
-from .logging_config import get_logger, setup_logging
+from .logging_config import get_logger, setup_logging, HistoricLogRecord
 from .util import DataManager, ptime, Qt
 from .util.DataManager import DirHandle
 from .util.HelpfulException import HelpfulException
@@ -417,7 +417,7 @@ class Manager(Qt.QObject):
 
     def loadDevice(self, devClassName, conf, name):
         """Create a new instance of a device.
-        
+
         Parameters
         ----------
         devClassName : str
@@ -464,7 +464,7 @@ class Manager(Qt.QObject):
         return DeviceLocker(self, devices, timeout=timeout)
 
     def loadModule(self, moduleClassName, name=None, config=None, forceReload=False, importMod=None, execPath=None):
-        """Create a new instance of an user interface module. 
+        """Create a new instance of an user interface module.
 
         Parameters
         ----------
@@ -681,19 +681,13 @@ class Manager(Qt.QObject):
             try:
                 with open(TEMP_LOG, 'r') as f:
                     for line in f:
-                        entry = json.loads(line)
-                        record = logging.LogRecord(**entry)
-                        record.created = datetime.fromisoformat(entry['timestamp']).timestamp()
-                        file_handler.emit(record)
+                        file_handler.emit(HistoricLogRecord(**(json.loads(line))))
             finally:
                 os.remove(TEMP_LOG)
             log_win = get_log_window()
             with open(self._logFile.name(), 'r') as f:
                 for i, line in enumerate(f):
-                    entry = json.loads(line)
-                    record = logging.LogRecord(**entry)
-                    record.created = datetime.fromisoformat(entry['timestamp']).timestamp()
-                    log_win.new_record(record, sort=False)
+                    log_win.new_record(HistoricLogRecord(**(json.loads(line))), sort=False)
                     if i % 20 == 0:
                         Qt.QApplication.processEvents()
             log_win.ensure_chronological_sorting()
