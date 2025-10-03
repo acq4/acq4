@@ -493,29 +493,23 @@ class Manager(Qt.QObject):
                 raise NameError(f"Module name '{name}' is already in use.")
             self.modules[name] = None  # reserve this spot
 
-        try:
-            if config is None:
-                config = {}
+        if config is None:
+            config = {}
 
         logger.info(f'Loading module "{moduleClassName}" as "{name}"...')
 
-            # deprecated args
-            if importMod is not None:
-                __import__(importMod)
-            elif execPath is not None:
-                self.exec_(execPath)
+        # deprecated args
+        if importMod is not None:
+            __import__(importMod)
+        elif execPath is not None:
+            self.exec_(execPath)
 
-            modclass = modules.getModuleClass(moduleClassName)
+        modclass = modules.getModuleClass(moduleClassName)
 
-            mod = modclass(self, name, config)
-            self.modules[name] = mod
+        mod = modclass(self, name, config)
+        self.modules[name] = mod
 
-            self.sigModulesChanged.emit()
-        finally:
-            # If the module failed to load, remove it from the list of modules
-            with self.moduleLock:
-                if self.modules[name] is None:
-                    del self.modules[name]
+        self.sigModulesChanged.emit()
         return mod
 
     def listModules(self):
