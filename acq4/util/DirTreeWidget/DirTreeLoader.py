@@ -1,7 +1,8 @@
 import acq4.util.DataManager as DataManager
+from acq4.logging_config import get_logger
 from acq4.util import Qt
-from acq4.util.debug import printExc
 
+logger = get_logger(__name__)
 Ui_Form = Qt.importTemplate('.DirTreeTemplate')
 
 
@@ -102,7 +103,7 @@ class DirTreeLoader(Qt.QWidget):
             try:
                 self.selectedFile().delete()
             except:
-                printExc('Error while deleting protocol file:')
+                logger.exception('Error while deleting protocol file:')
                 return
             finally:
                 self.resetDeleteState()

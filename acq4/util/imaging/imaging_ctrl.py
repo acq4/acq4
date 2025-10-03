@@ -1,10 +1,11 @@
 import pyqtgraph as pg
 
 from acq4.util import Qt, ptime
-from acq4.util.debug import printExc
 from .frame_display import FrameDisplay
 from .record_thread import RecordThread
+from ...logging_config import get_logger
 
+logger = get_logger(__name__)
 Ui_Form = Qt.importTemplate(".imaging_template")
 
 
@@ -209,11 +210,11 @@ class ImagingCtrl(Qt.QWidget):
     def recordThreadStopped(self):
         self.endStack()
         self.ui.recordStackBtn.setEnabled(False)  # Recording thread has stopped, can't record anymore.
-        printExc("Recording thread died! See console for error message.")
+        logger.error("Recording thread died! See console for error message.")
 
     def recordingFailed(self):
         self.endStack()
-        printExc("Recording failed! See console for error message.")
+        logger.error("Recording failed! See console for error message.")
 
     def quit(self):
         Qt.disconnect(self.recordThread.finished, self.recordThreadStopped)

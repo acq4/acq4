@@ -1,17 +1,19 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
 """
 """
 
-from acq4.util import Qt
-from acq4.analysis.AnalysisModule import AnalysisModule
+import os
 from collections import OrderedDict
+
 import pyqtgraph as pg
+import pyqtgraph.flowchart as fc
+from acq4.analysis.AnalysisModule import AnalysisModule
+from acq4.logging_config import get_logger
+from acq4.util import Qt
 from acq4.util.DirTreeWidget import DirTreeLoader
 from acq4.util.FileLoader import FileLoader
-import pyqtgraph.flowchart as fc
-import pyqtgraph.debug as debug
-import os
+
+logger = get_logger(__name__)
+
 
 class TraceAnalyzer(AnalysisModule):
     def __init__(self, host):
@@ -93,7 +95,7 @@ class TraceAnalyzer(AnalysisModule):
             try:
                 output.append(self.flowchart.process(Input=fh))
             except:
-                debug.printExc('Error processing %s' % fh)
+                logger.exception(f'Error processing {fh}')
         table.setData(output)
     
     def outputChanged(self):

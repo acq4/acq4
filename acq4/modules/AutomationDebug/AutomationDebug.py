@@ -19,20 +19,22 @@ from acq4.devices.Pipette.planners import (
     PipettePathGenerator,
     GeometryAwarePathGenerator,
 )
+from acq4.logging_config import get_logger
 from acq4.modules.Camera import CameraWindow
 from acq4.modules.Module import Module
 from acq4.modules.TaskRunner import TaskRunner
 from acq4.util import Qt
-from acq4.util.debug import logMsg, printExc
 from acq4.util.future import Future, future_wrap
 from acq4.util.imaging import Frame
 from acq4.util.imaging.sequencer import acquire_z_stack
 from acq4.util.target import TargetBox
 from acq4.util.threadrun import futureInGuiThread, runInGuiThread
+from coorx import SRT3DTransform, TransposeTransform, TTransform
 from pyqtgraph.units import µm, m
 from acq4_automation.feature_tracking.cell import Cell
 from .ranking_window import RankingWindow
 
+logger = get_logger(__name__)
 UiTemplate = Qt.importTemplate(".window")
 
 
@@ -348,20 +350,12 @@ class AutomationDebugWindow(Qt.QWidget):
         """Handles results from _detectNeuronsZStack or _testUI."""
         try:
             if future.wasInterrupted():
-                logMsg("Cell detection failed.")
+                logger.info("Cell detection failed.")
                 return
             neurons = future.getResult()
 
-            logMsg(f"Cell detection complete. Found {len(neurons)} potential cells")
+            logger.info(f"Cell detection complete. Found {len(neurons)} potential cells")
             self._displayBoundingBoxes(neurons)
-            # from acq4_automation.object_detection import NeuronBoxViewer
-            # if self._current_classification_stack is not None:
-            #     data = np.array(([[s.data().T for s in self._current_detection_stack]], [[s.data().T for s in self._current_classification_stack]]))
-            # else:
-            #     data = np.array([s.data().T for s in self._current_detection_stack])
-            # xform = SRT3DTransform.from_pyqtgraph(self._current_detection_stack[0].globalTransform()) * TransposeTransform((1, 0, 2))
-            # self._viewer = NeuronBoxViewer(data, neurons, xform)
-            # self._viewer.show()
         finally:
             self.sigWorking.emit(False)
 
@@ -447,7 +441,7 @@ class AutomationDebugWindow(Qt.QWidget):
             # Use step_z = 1 * µm for real acquisition as previously defined
 
             if multichannel_processing_intended:
-                logMsg(
+                logger.info(
                     f"Starting multichannel Z-stack acquisition: Detection='{detection_preset}', "
                     f"Classification='{classification_preset}'"
                 )
@@ -468,10 +462,9 @@ class AutomationDebugWindow(Qt.QWidget):
                 ).getResult()
 
                 if len(detection_stack) != len(classification_stack):
-                    logMsg(
+                    logger.warning(
                         f"Warning: Z-stack length mismatch: Detection ({len(detection_stack)}) != Classification"
                         f" ({len(classification_stack)}). Trimming to match.",
-                        msgType="warning",
                     )
                     min_length = min(len(detection_stack), len(classification_stack))
                     detection_stack = detection_stack[:min_length]
@@ -501,7 +494,7 @@ class AutomationDebugWindow(Qt.QWidget):
             ),
             timeout=600,
         ).getResult()
-        logMsg(f"Neuron detection finished. Found {len(result)} potential neurons.")
+        logger.info(f"Neuron detection finished. Found {len(result)} potential neurons.")
 
         # results are returned [z_frame, img_row, img_row]
         # map back to global (x, y, z)
@@ -528,7 +521,7 @@ class AutomationDebugWindow(Qt.QWidget):
         if not mock_file_path:
             return None, None
         try:
-            logMsg(f"Loading mock Z-stack from: {mock_file_path}")
+            logger.info(f"Loading mock Z-stack from: {mock_file_path}")
             marr = MetaArray(file=mock_file_path)
             data = marr.asarray()
             info = marr.infoCopy()
@@ -543,25 +536,20 @@ class AutomationDebugWindow(Qt.QWidget):
                 z_vals = z_info["values"]
                 if len(z_vals) > 1:
                     step_z = abs(z_vals[1] - z_vals[0]) * m  # Assume meters
-                    logMsg(
-                        f"Using Z step from mock file '{os.path.basename(mock_file_path)}': {step_z / µm:.2f} µm"
-                    )
+                    logger.info(f"Using Z step from mock file '{os.path.basename(mock_file_path)}': {step_z / µm:.2f} µm")
                 elif len(z_vals) == 1:
-                    logMsg(
+                    logger.warning(
                         f"Only one Z value in mock file '{os.path.basename(mock_file_path)}'. Assuming 1µm step.",
-                        msgType="warning",
                     )
                     step_z = 1 * µm
                 else:
-                    logMsg(
+                    logger.warning(
                         f"No Z values in mock file '{os.path.basename(mock_file_path)}', using default 1µm step.",
-                        msgType="warning",
                     )
                     step_z = 1 * µm
             else:
-                logMsg(
+                logger.warning(
                     f"Z info not in mock file '{os.path.basename(mock_file_path)}', using default 1µm step.",
-                    msgType="warning",
                 )
                 step_z = 1 * µm
 
@@ -592,13 +580,11 @@ class AutomationDebugWindow(Qt.QWidget):
                 current_mock_frame_global_z += step_z
             return stack_frames, step_z
         except Exception:
-            printExc(f"Failed to load or process mock file: {mock_file_path}")
+            logger.exception(f"Failed to load or process mock file: {mock_file_path}")
             return None, None
 
-    def _mockNeuronStacks(
-        self, _future: Future
-    ) -> tuple[list[Frame] | None, list[Frame] | None, float]:
-        logMsg("Using mock Z-stack file(s) for detection.")
+    def _mockNeuronStacks(self, _future: Future) -> tuple[list[Frame] | None, list[Frame] | None, float]:
+        logger.info("Using mock Z-stack file(s) for detection.")
         detection_stack = None
         classification_stack = None
         # Default step_z, will be updated by the first successfully loaded mock stack
@@ -619,7 +605,7 @@ class AutomationDebugWindow(Qt.QWidget):
             if det_step_z is not None:
                 step_z = det_step_z
         else:
-            logMsg("Primary mock file path is empty.", msgType="warning")
+            logger.warning("Primary mock file path is empty.")
             # detection_stack remains None, step_z remains default
 
         # Load classification stack if multichannel mock is enabled and path is provided
@@ -636,14 +622,9 @@ class AutomationDebugWindow(Qt.QWidget):
                 classification_stack, class_step_z = self._create_mock_stack_from_file(
                     classification_mock_path, base_frame, _future
                 )
-                if (
-                    class_step_z is not None
-                    and step_z != class_step_z
-                    and detection_stack is not None
-                ):
-                    logMsg(
+                if class_step_z is not None and step_z != class_step_z and detection_stack is not None:
+                    logger.warning(
                         f"Z-step mismatch: Detection mock ({step_z/µm:.2f} µm) vs Classification mock ({class_step_z/µm:.2f} µm). Using detection Z-step.",
-                        msgType="warning",
                     )
                 # If detection_stack failed to load (det_step_z is None), but classification loaded, use its step_z.
                 elif class_step_z is not None and detection_stack is None:
@@ -704,16 +685,14 @@ class AutomationDebugWindow(Qt.QWidget):
             self._open_ranking_windows.remove(window)
         except ValueError:
             # Window might have already been removed or was never added properly
-            printExc(
-                "Attempted to remove a ranking window reference that was not found."
-            )
+            logger.exception("Attempted to remove a ranking window reference that was not found.")
 
     @future_wrap
     def _autoTarget(self, _future):
         self.sigWorking.emit(self.ui.autoTargetBtn)
         # If _unranked_cells is populated, use it. Otherwise, run detection.
         if not self._unranked_cells:
-            logMsg("Need new potential cells; running detection")
+            logger.info("Need new potential cells; running detection")
             x, y = self._randomLocation()
             _future.waitFor(
                 self.scopeDevice.setGlobalPosition(
@@ -759,8 +738,8 @@ class AutomationDebugWindow(Qt.QWidget):
         if target is None:
             raise RuntimeError("No suitable new target found among detected cells.")
         self._previousTargets.append(target)
-        self.pipetteDevice.setTarget(target)  # TODO setCellTarget?
-        logMsg(f"Setting pipette target to {target}")
+        self.pipetteDevice.setTarget(target)  # TODO setCellTarget
+        logger.info(f"Setting pipette target to {target}")
 
     def _handleAutoFinish(self, fut: Future):
         self.sigWorking.emit(False)

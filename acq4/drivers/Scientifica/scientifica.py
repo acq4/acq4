@@ -7,11 +7,12 @@ import re
 from typing import Optional
 
 from acq4.drivers.SerialDevice import SerialDevice
-
 from .control_thread import ScientificaControlThread
 from .serial import ScientificaSerial
-from acq4.util.debug import printExc
+from ...logging_config import get_logger
 from ...util.acq4_typing import Number
+
+logger = get_logger(__name__)
 
 # Data provided by Scientifica
 _device_types = """
@@ -105,9 +106,8 @@ class Scientifica:
                     devs[s.getDescription()] = com
                     s.close()
                 except Exception:
-                    printExc(
-                        f"Error while initializing Scientifica device at {com} (the device at this port will not be available):"
-                    )
+                    logger.exception(
+                        f"Error while initializing Scientifica device at {com} (the device at this port will not be available):")
 
         cls.availableDevices = devs
         return devs

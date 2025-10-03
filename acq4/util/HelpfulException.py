@@ -12,6 +12,9 @@ class HelpfulException(Exception):
                    ["Device initialization failed during startup.", "Device Gui was closed."]
            docs:
                Referral to documentation.
+           msgType:
+                Type of message to log. One of 'error' (default), 'warning', or 'status'.
+                This can be used to log non-critical exceptions without cluttering the error log.
         When you catch a HelpfulException, you can add additional information to the original exception.
    """
     def __init__(self, message='', exc=None, reasons=None, docs=None, **kwargs):
