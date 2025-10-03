@@ -64,8 +64,9 @@ def setup_logging(
     console_level: int = logging.WARNING,
 ) -> logging.FileHandler:
     """
-    Sets log levels and then creates or refreshes log handlers for a file, the console, teleprox,
-    and optionally the primary Log window and error popup.
+    Sets log levels and then creates or refreshes log handlers for a file, the console,
+    and optionally the primary Log window and error popup. It also starts a teleprox
+    LogServer as needed.
 
     Parameters
     ----------
