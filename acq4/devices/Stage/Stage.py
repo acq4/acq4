@@ -453,6 +453,9 @@ class Stage(Device, OptomechDevice):
             through the axis transform to get the equivalent change in ortholinear
             device coordinates, which are then added to the current position.
         """
+        # TODO this should use calculatedAxisOrientation and its ilk, or maybe go away
+        # TODO hardware-specific implementations?
+        # TODO throw this away
         pos = np.array(self.getPosition())
 
         axis_xform = np.array(self.axisTransform().copyDataTo()).reshape((4, 4))
