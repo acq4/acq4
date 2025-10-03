@@ -466,10 +466,10 @@ class ResealState(PatchPipetteState):
                 return config['fallbackState']
             elif retraction_future is None or retraction_future.wasInterrupted():
                 if retraction_future is not None:
-                    retraction_future.logInterestingExceptions("Reseal retraction error")
+                    retraction_future.logErrors("Reseal retraction error")
                 if recovery_future is not None:
                     recovery_future.stop(wait=True)
-                    recovery_future.logInterestingExceptions("Reseal recovery error")
+                    recovery_future.logErrors("Reseal recovery error")
                 self.setState("retracting")
                 self._moveFuture = retraction_future = dev.pipetteDevice.stepwiseAdvance(
                     depth=dev.pipetteDevice.approachDepth(),

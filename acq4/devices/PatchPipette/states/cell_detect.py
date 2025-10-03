@@ -287,7 +287,7 @@ class CellDetectState(PatchPipetteState):
                 if self._moveFuture is None:
                     self._moveFuture = self._move()
                 if self._moveFuture.isDone():
-                    self._moveFuture.logInterestingExceptions("Error during move")
+                    self._moveFuture.logErrors("Error during move")
                     self._moveFuture = None
                     if self._reachedEndpoint:
                         return self._transition_to_fallback(
