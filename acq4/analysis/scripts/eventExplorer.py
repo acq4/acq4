@@ -67,6 +67,7 @@ if 'events' not in locals():
     layout.addWidget(spl1, row=1, col=0, rowspan=1, colspan=8)
 
     pw1 = pg.PlotWidget()
+    pw1.setObjectName("EventExplorer_amplitudePlot")
     spl1.addWidget(pw1)
     pw1.setLabel('left', 'Amplitude', 'A')
     pw1.setLabel('bottom', 'Decay Tau', 's')
@@ -76,6 +77,7 @@ if 'events' not in locals():
     spl1.addWidget(spl2)
 
     pw2 = pg.PlotWidget(labels={'bottom': ('time', 's')})
+    pw2.setObjectName("EventExplorer_timePlot")
     spl2.addWidget(pw2)
     
     tab = Qt.QTabWidget()
@@ -84,6 +86,7 @@ if 'events' not in locals():
     
     ## For viewing cell morphology
     gv = pg.GraphicsView()
+    gv.setObjectName("EventExplorer_morphologyView")
     gv.setBackgroundBrush(pg.mkBrush('w'))
     image = pg.ImageItem()
     gv.addItem(image)

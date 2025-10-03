@@ -20,7 +20,6 @@ from acq4.util import Qt
 from acq4.util.Mutex import Mutex
 from acq4.util.Mutex import RecursiveMutex
 from acq4.util.Thread import Thread
-from acq4.util.debug import printExc
 from acq4.util.future import Future, future_wrap
 from acq4.util.imaging.frame import Frame
 from pyqtgraph import Vector, SRTTransform3D
@@ -28,6 +27,9 @@ from pyqtgraph.debug import Profiler
 from .CameraInterface import CameraInterface
 from .deviceGUI import CameraDeviceGui
 from .taskGUI import CameraTaskGui
+from ...logging_config import get_logger
+
+generic_logger = get_logger(__name__)
 
 
 class Camera(DAQGeneric, OptomechDevice):
@@ -91,8 +93,8 @@ class Camera(DAQGeneric, OptomechDevice):
             p = p.parentDevice()
             if isinstance(p, Microscope):
                 self.scopeDev = p
-                self.scopeDev.sigObjectiveChanged.connect(self.objectiveChanged)
-                self.scopeDev.sigLightChanged.connect(self._lightChanged)
+                self.scopeDev.sigObjectiveChanged.connect(self.objectiveChanged, type=Qt.Qt.DirectConnection)
+                self.scopeDev.sigLightChanged.connect(self._lightChanged, type=Qt.Qt.DirectConnection)
                 break
 
         self.transformChanged()
@@ -108,16 +110,16 @@ class Camera(DAQGeneric, OptomechDevice):
         self._frameInfoUpdater = None
 
         self.acqThread = AcquireThread(self)
-        self.acqThread.finished.connect(self.acqThreadFinished)
-        self.acqThread.started.connect(self.acqThreadStarted)
-        self.acqThread.sigShowMessage.connect(self.showMessage)
+        self.acqThread.finished.connect(self.acqThreadFinished, type=Qt.Qt.DirectConnection)
+        self.acqThread.started.connect(self.acqThreadStarted, type=Qt.Qt.DirectConnection)
+        self.acqThread.sigShowMessage.connect(self.showMessage, type=Qt.Qt.DirectConnection)
 
         self._processingThread = FrameProcessingThread()
         self._processingThread.sigFrameFullyProcessed.connect(self.sigNewFrame, type=Qt.Qt.DirectConnection)
         self._processingThread.start()
         self._processingThread.addFrameProcessor(self.addFrameInfo)
 
-        self.sigGlobalTransformChanged.connect(self.transformChanged)
+        self.sigGlobalTransformChanged.connect(self.transformChanged, type=Qt.Qt.DirectConnection)
 
         if config != None:
             # look for 'defaults', then 'params' to preserve backward compatibility.
@@ -125,7 +127,7 @@ class Camera(DAQGeneric, OptomechDevice):
             try:
                 self.setParams(defaults)
             except:
-                printExc("Error default setting camera parameters:")
+                self.logger.exception("Error default setting camera parameters:")
 
         # set up preset hotkeys
         for presetName, preset in self.camConfig.get("presets", {}).items():
@@ -228,6 +230,7 @@ class Camera(DAQGeneric, OptomechDevice):
             raise ValueError(f"No camera preset named {preset!r}")
         params = presets[preset]["params"]
         self.setParams(params)
+        return Future.immediate()
 
     def presetHotkeyPressed(self, dev, changes, presetName):
         self.loadPreset(presetName)
@@ -300,7 +303,7 @@ class Camera(DAQGeneric, OptomechDevice):
         self.acqThread.stop(block=block)
 
     @contextmanager
-    def ensureRunning(self, ensureFreshFrames=False):
+    def ensureRunning(self, ensureFreshFrames=False, withKnownLatency=None):
         """Context manager for starting and stopping camera acquisition thread. If used
         with non-blocking frame acquisition, this will still exit the context before
         the frames are necessarily acquired.
@@ -311,9 +314,13 @@ class Camera(DAQGeneric, OptomechDevice):
         """
         running = self.isRunning()
         if ensureFreshFrames:
-            if running:
+            if withKnownLatency is not None:
+                # if we know the latency of the camera, we can just wait for that time
+                if not isinstance(withKnownLatency, (int, float)) or withKnownLatency <= 0:
+                    raise ValueError("withKnownLatency must be a positive number.")
+                time.sleep(withKnownLatency)
+            elif running:
                 self.stop()
-                # todo sleep until all frames are cleared somehow?
                 self.start()
         if not running:
             self.start()
@@ -442,6 +449,25 @@ class Camera(DAQGeneric, OptomechDevice):
             return (*start, *size)
         else:
             return bounds
+
+    def pointIsVisible(self, point, mode="sensor") -> bool:
+        """Check if a point is within the camera's boundaries.
+
+        Parameters
+        ----------
+        point : np.ndarray
+            The point to check, in global coordinates.
+        mode : "sensor" | "roi"
+            See getBoundary() for details on the mode.
+        """
+        if not isinstance(point, (list, tuple, np.ndarray)):
+            raise TypeError("point must be a list, tuple, or numpy array")
+        if len(point) != 2:
+            raise ValueError("point must be a 2D point (x, y)")
+        x, y, w, h = self.getBoundary(globalCoords=True, mode=mode)
+        min_x, max_x = sorted((x, x + w))
+        min_y, max_y = sorted((y, y + h))
+        return min_x <= point[0] <= max_x and min_y <= point[1] <= max_y
 
     def getScopeState(self):
         """Return meta information to be included with each frame. This function must be FAST."""
@@ -828,7 +854,7 @@ class FrameProcessingThread(Thread):
     sigFrameFullyProcessed = Qt.Signal(object)  # Frame
 
     def __init__(self):
-        super().__init__()
+        super().__init__(name="FrameProcessingThread")
         self._stop = False
         self._processors = []
         self._final_processor = None
@@ -870,7 +896,7 @@ class FrameProcessingThread(Thread):
                 try:
                     callback(frame)
                 except Exception:
-                    printExc("Frame processing callback failed")
+                    generic_logger.exception("Frame processing callback failed")
             self.sigFrameFullyProcessed.emit(frame)
 
 
@@ -878,7 +904,7 @@ class AcquireThread(Thread):
     sigShowMessage = Qt.Signal(object)
 
     def __init__(self, dev: Camera):
-        Thread.__init__(self)
+        Thread.__init__(self, name=f"{dev.name()}_acquireThread")
         self.dev = dev
         self.camLock = self.dev.camLock
         self.stopThread = False
@@ -974,7 +1000,7 @@ class AcquireThread(Thread):
             with self.camLock:
                 self.dev.stopCamera()
         except:
-            printExc("Error starting camera acquisition:")
+            self.dev.logger.exception("Error starting camera acquisition:")
             try:
                 with self.camLock:
                     self.dev.stopCamera()
@@ -1018,15 +1044,16 @@ class FrameAcquisitionFuture(Future):
             ensureFreshFrames: bool = False,
     ):
         """Acquire a frames asynchronously, either a fixed number or continuously until stopped."""
-        super().__init__()
+        super().__init__(name=f"{camera.name()}_frameAcquisitionFuture", logLevel='debug')
         self._camera = camera
         self._frame_count = frameCount
         self._ensure_fresh_frames = ensureFreshFrames
+        self._known_latency = camera.camConfig.get("freshFrameLatency", None)
         self._stop_when = None
         self._frames = []
         self._timeout = timeout
         self._queue = queue.Queue()
-        self._thread = threading.Thread(target=self._monitorAcquisition, daemon=True)
+        self._thread = threading.Thread(target=self._monitorAcquisition, daemon=True, name=f"{camera.name()}_frameAquisitionMonitor")
         self._thread.start()
 
     def _monitorAcquisition(self):
@@ -1034,7 +1061,7 @@ class FrameAcquisitionFuture(Future):
         with ExitStack() as stack:
             stack.callback(self._camera.sigNewFrame.disconnect, self._queue.put)
             if self._ensure_fresh_frames:
-                stack.enter_context(self._camera.ensureRunning(ensureFreshFrames=True))
+                stack.enter_context(self._camera.ensureRunning(ensureFreshFrames=True, withKnownLatency=self._known_latency))
             lastFrameTime = ptime.time()
             while True:
                 if self.isDone():
@@ -1044,7 +1071,7 @@ class FrameAcquisitionFuture(Future):
                     lastFrameTime = ptime.time()
                 except queue.Empty:
                     try:
-                        self.checkStop(0.1)  # delay while checking for a stop request
+                        self.sleep(0.1)
                     except self.StopRequested:
                         self._taskDone(interrupted=self._frame_count is not None)
                         break

@@ -6,6 +6,34 @@ from .Stage import Stage, MoveFuture
 
 
 class NewScaleMPM(Stage):
+    """
+    Driver for New Scale Technologies MPM (Micro Positioning Module) devices.
+    
+    These are compact 3-axis piezoelectric positioning stages with network control.
+    
+    Configuration options:
+    
+    * **ipAddress** (str, required): IP address of the MPM device (e.g., '192.168.1.100')
+    
+    * **scale** (tuple, optional): (x, y, z) scale factors in m/step 
+      (default from Stage base class)
+    
+    * **capabilities** (dict, optional): Override device capabilities
+        - getPos: (x, y, z) tuple of booleans for position reading capability
+        - setPos: (x, y, z) tuple of booleans for position setting capability  
+        - limits: (x, y, z) tuple of booleans for limit support
+    
+    * **parentDevice** (str, optional): Name of parent device for coordinate transforms
+    
+    * **transform** (dict, optional): Spatial transform relative to parent device
+    
+    Example configuration::
+    
+        NewScaleMPM1:
+            driver: 'NewScaleMPM'
+            ipAddress: '192.168.1.100'
+            scale: [1e-9, 1e-9, 1e-9]
+    """
 
     devices = {}
 
@@ -16,7 +44,7 @@ class NewScaleMPM(Stage):
         Stage.__init__(self, man, config, name)
         man.sigAbortAll.connect(self.stop)
 
-        self.monitorThread = threading.Thread(target=self.monitor, daemon=True)
+        self.monitorThread = threading.Thread(target=self.monitor, daemon=True, name=f"NewScaleMPMMonitor({name})")
         self.monitorThread.start()
 
     def axes(self):
@@ -86,7 +114,7 @@ class NewScaleMPM(Stage):
 
 class NewScaleMoveFuture(MoveFuture):
     def __init__(self, dev, pos, speed, linear):
-        MoveFuture.__init__(self, dev, pos, speed)
+        MoveFuture.__init__(self, dev, pos, speed, name=f"{dev.name} move")
 
         self._linear = linear
         self._interrupted = False

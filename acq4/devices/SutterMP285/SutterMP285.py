@@ -1,11 +1,9 @@
 import os
+import time
 from copy import deepcopy
 
 import numpy as np
-import time
 
-
-import acq4.util.debug as debug
 import pyqtgraph as pg
 from acq4.devices.Device import Device
 from acq4.devices.OptomechDevice import OptomechDevice
@@ -18,6 +16,40 @@ Ui_Form = Qt.importTemplate('.devTemplate')
 
 
 class SutterMP285(Device, OptomechDevice):
+    """
+    Driver for Sutter Instrument MP-285 micromanipulator.
+    
+    WARNING: The MP-285 has a design flaw where turning an attached ROE (rotary optical encoder)
+    while the computer is communicating with the controller will cause the controller to crash.
+    This can be circumvented with custom interfacing hardware (see drivers/SutterMP285/mp285_hack).
+    
+    Configuration options:
+    
+    * **port** (str, required): Serial port (e.g., 'COM10' or '/dev/ttyUSB0')
+      Windows COM ports: 'COM1' is interpreted as port 0 for pyserial
+    
+    * **baud** (int, optional): Baud rate (default: 9600)
+    
+    * **scale** (tuple, optional): (x, y, z) scale factors for position reporting 
+      (default: (1.0, 1.0, 1.0)). MP-285 should report its own scale correctly.
+    
+    * **useArduino** (bool, optional): Whether Arduino interface hardware is present
+      to protect from ROE/serial collisions (default: False). When False, position 
+      monitoring is disabled for safety.
+    
+    * **parentDevice** (str, optional): Name of parent device for coordinate transforms
+    
+    * **transform** (dict, optional): Spatial transform relative to parent device
+    
+    Example configuration::
+    
+        SutterStage:
+            driver: 'SutterMP285'
+            port: 'COM10'
+            baud: 19200
+            scale: [1.0, 1.0, 1.0]
+            useArduino: False
+    """
 
     sigPositionChanged = Qt.Signal(object)
     sigLimitsChanged = Qt.Signal(object)
@@ -291,7 +323,7 @@ class SutterMP285Thread(Thread):
             self.getImmediatePos()
             monitor = True
         except:
-            debug.printExc("Sutter MP285: Cannot determine position:")
+            self.dev.logger.exception("Sutter MP285: Cannot determine position:")
             monitor = False
         
         while True:
@@ -364,9 +396,8 @@ class SutterMP285Thread(Thread):
                     ## moving; make a guess about the current position
                     pass
             except:
-                pass
-                debug.printExc("Error in MP285 thread:")
-                
+                self.dev.logger.exception("Error in MP285 thread:")
+
             self.lock.lock()
             if self.stopThread:
                 self.lock.unlock()
@@ -399,7 +430,7 @@ class SutterMP285Thread(Thread):
             return None
         except:
             self.sigError.emit("Read error--see console.")
-            debug.printExc("Error getting packet:")
+            self.dev.logger.exception("Error getting packet:")
             return None
         
     def writeVelocity(self, spd, v, limits, pos, resolution):

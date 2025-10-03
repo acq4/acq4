@@ -1,10 +1,12 @@
 import pyqtgraph as pg
 from acq4.util import Qt, ptime
 from acq4.util.cuda import shouldUseCuda, cupy
-from acq4.util.debug import printExc
 from pyqtgraph.debug import Profiler
 from .bg_subtract_ctrl import BgSubtractCtrl
 from .contrast_ctrl import ContrastCtrl
+from ...logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
 class FrameDisplay(Qt.QObject):
@@ -129,7 +131,7 @@ class FrameDisplay(Qt.QObject):
             prof.finish()
 
         except Exception:
-            printExc("Error while drawing new frames:")
+            logger.exception("Error while drawing new frames:")
 
     def _drawFrameInGui(self, data):
         # We will now draw a new frame (even if the frame is unchanged)
@@ -151,3 +153,4 @@ class FrameDisplay(Qt.QObject):
         self.frameTimer.stop()
         self._imageItem = None
         self.hasQuit = True
+        pg.disconnect(self.sigDrawNewFrame, self._drawFrameInGui)

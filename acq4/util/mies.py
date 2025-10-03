@@ -1,3 +1,6 @@
+import math
+import time
+
 from .igorpro import IgorBridge, IgorCallError
 from acq4.util import Qt
 
@@ -38,27 +41,8 @@ class MIES(Qt.QObject):
         self._windowName = None
         self.devices: list[str] = []
         self._sigFutureComplete.connect(self.processUpdate)
-        # self.igor.igor.sig_device_status_changed.connect(self.slot_device_status_changed) # will change for refactor
         self._initTPTime = None
         self._lastTPTime = None
-        self._TPTimer = Qt.QTimer()
-        self._TPTimer.setSingleShot(True)
-        self._TPTimer.timeout.connect(self.getMIESUpdate)
-        self.start()
-
-    def start(self):
-        self._exiting = False
-        self.getMIESUpdate()
-
-    # @Qt.Slot(str, str)
-    # def slot_device_status_changed(self, device_name: str, device_tp_event):
-    #     self.devices[device_name] = device_tp_event
-    #     # potentionally can do more for this event
-
-    def getMIESUpdate(self):
-        future = self.igor("FFI_ReturnTPValues")
-        future.add_done_callback(self._sigFutureComplete.emit)
-        self._TPTimer.start(5000)  # by default recheck after 5 seconds, overridden if we get data
 
     def processUpdate(self, future):
         if not self._exiting:
@@ -94,53 +78,117 @@ class MIES(Qt.QObject):
 
     def selectHeadstage(self, hs):
         return self.setCtrl("slider_DataAcq_ActiveHeadstage", hs)
+    
+    def activateHeadstage(self, hs):
+        return self.setCtrl(f"Check_DataAcqHS_0{hs}", True)
+    
+    def isHeadstageActive(self, hs):
+        value = self.getCtrlValue(f'Check_DataAcqHS_0{hs}')
+        return True if value == '1' else False
 
+    def enableTestPulse(self, enable:bool):
+        """Enable/disable test pulse for all active headstages"""
+        return self.igor('API_TestPulse', self.getWindowName(), 1 if enable else 0)
+
+    def getHolding(self, hs, mode_override=None):
+        mode = ""
+        if mode_override:
+            mode = mode_override
+        else:
+            mode = self.getClampMode(hs)
+        if mode == "VC":
+            return int(self.getCtrlValue('setvar_DataAcq_Hold_VC')) / 1000
+        elif mode == "IC":
+            return int(self.getCtrlValue('setvar_DataAcq_Hold_IC')) / 1e12
+    
+    def setHolding(self, hs, value):
+        mode: str = self.getClampMode(hs)
+        if mode == "VC":
+            return self.setCtrl('setvar_DataAcq_Hold_VC', value * 1000)
+        elif mode == "IC":
+            return self.setCtrl('setvar_DataAcq_Hold_IC', value * 1e12)
+    
+    def setClampMode(self, hs: int, value: str): # IC | VC | I=0
+        rtn_value = None
+        if value == "VC":
+            rtn_value = self.setCtrl(f'Radio_ClampMode_{hs*2}', True)
+        elif value == "IC":
+            rtn_value = self.setCtrl(f'Radio_ClampMode_{hs*2+1}', True)
+        elif value in ["I=0", "i=0"]:
+            rtn_value = self.setCtrl(f'Radio_ClampMode_{hs*2+1}IZ', True)
+
+        return rtn_value
+
+    def getClampMode(self, hs): # IC | VC | I=0
+        clamp_mode = None
+        is_active: str = self.getCtrlValue(f'Radio_ClampMode_{hs*2}') # due to wonky control naming
+        if is_active == "1":
+            clamp_mode = "VC"
+        else:
+            is_active: str = self.getCtrlValue(f'Radio_ClampMode_{hs*2+1}')
+            if is_active == "1":
+                clamp_mode = "IC"
+            else:
+                is_active: str = self.getCtrlValue(f'Radio_ClampMode_{hs*2+1}IZ')
+                if is_active == "1":
+                    clamp_mode = "I=0"
+        return clamp_mode
+    
+    def setAutoBias(self, hs, value: bool):
+        return self.setCtrl('check_DataAcq_AutoBias', value)
+        
+    def getAutoBias(self, hs):
+        value = self.getCtrlValue('check_DataAcq_AutoBias')
+        return True if value == "1" else False
+        
+    def setAutoBiasTarget(self, hs, value):
+        return self.setCtrl('setvar_DataAcq_AutoBiasV', value * 1000)
+        
+    def getAutoBiasTarget(self, hs):
+        return float(self.getCtrlValue('setvar_DataAcq_AutoBiasV')) / 1000
+    
     def setManualPressure(self, pressure):
-        return self.setCtrl("setvar_DataAcq_SSPressure", pressure)
+        # set pressure in MIES, then verify pressure is set in MIES
+        # (necessary due to lag in MIES setting pressure)
+        v = self.setCtrl("setvar_DataAcq_SSPressure", pressure)
+        p = self.getManualPressure()
+        if not math.isclose(pressure, p, abs_tol=0.0001):
+            # test for x seconds
+            found = False
+            to = time.time() + 1 # one second timeout
+            while not found and time.time() > to:
+                p = self.getManualPressure()
+                if math.isclose(pressure, p, abs_tol=0.0001):
+                    found = True
+            if not found:
+                raise Exception("timeout while waiting for MIES pressure match")
+        return v
+    
+    def getManualPressure(self) -> float:
+        return float(self.getCtrlValue('setvar_DataAcq_SSPressure'))
 
     def setPressureSource(self, headstage: int, source: str, pressure=None):
-        # if user, check user access & uncheck apply
-        # if atmosphere, uncheck both
-        # if regulator, check apply and uncheck user
-        # button_DataAcq_SSSetPressureMan, check_DataACq_Pressure_User
-
-        # use P_UpdatePressureMode(string device, variable pressureMode, string pressureControlName, variable checkALL)
-        # with constants ...
-        # Constant PRESSURE_METHOD_ATM      = -1
-        # Constant PRESSURE_METHOD_MANUAL   = 4
         PRESSURE_METOD_ATM = -1
         PRESSURE_METHOD_MANUAL = 4
-        # not sure yet on pressureControlName or checkAll (will check with Tim and update here)
 
-        # update user mode check
         self.setCtrl("check_DataACq_Pressure_User", source == "user")
 
         if source == "user":
             return
         if source == "atmosphere":
             self.igor('DoPressureManual', 'ITC18USB_Dev_0', headstage, 0, 0).result()
-            # self.igor('P_MethodAtmospheric', 'ITC18USB_Dev_0', headstage).result()
-            # self.igor("P_UpdatePressureMode", self.getWindowName(), PRESSURE_METOD_ATM, "button_DataAcq_Approach", 0)
-            # if self.manual_active:
-            #     self.setCtrl("button_DataAcq_SSSetPressureMan", False)
-            #     self.manual_active = False
         elif source == "regulator":
             self.igor('DoPressureManual', 'ITC18USB_Dev_0', headstage, 1, pressure).result()
-            # self.igor('P_ManSetPressure', 'ITC18USB_Dev_0', headstage, 0).result()
-            # self.igor("P_UpdatePressureMode", self.getWindowName(), PRESSURE_METHOD_MANUAL, "button_DataAcq_SSSetPressureMan", 0)
-            # if not self.manual_active:
-            #     self.setCtrl("button_DataAcq_SSSetPressureMan", True)
-            #     self.manual_active = True
         else:
             raise ValueError(f"pressure source is not valid: {source}")
 
-    def setApproach(self, hs):
-        windowName = self.getWindowName()
-        return self.igor("P_SetPressureMode", windowName, hs, PRESSURE_METHOD_APPROACH)
+    # def setApproach(self, hs):
+    #     windowName = self.getWindowName()
+    #     return self.igor("P_SetPressureMode", windowName, hs, PRESSURE_METHOD_APPROACH)
 
-    def setSeal(self, hs):
-        windowName = self.getWindowName()
-        return self.igor("P_SetPressureMode", windowName, hs, PRESSURE_METHOD_SEAL)
+    # def setSeal(self, hs):
+    #     windowName = self.getWindowName()
+    #     return self.igor("P_SetPressureMode", windowName, hs, PRESSURE_METHOD_SEAL)
 
     def setHeadstageActive(self, hs, active):
         return self.setCtrl('Check_DataAcqHS_%02d' % hs, active)
@@ -159,18 +207,18 @@ class MIES(Qt.QObject):
             return self.igor('PGC_SetAndActivateControl', windowName, name)
         else:
             return self.igor('PGC_SetAndActivateControlVar', windowName, name, value)
+        
+    def getCtrlValue(self, mies_ctrl_name):
+        windowName = self.getWindowName()
+        return self.igor('GetGuiControlValue', windowName, mies_ctrl_name).result()
 
     def getWindowName(self, ):
         if self._windowName is None:
             devices = self.getLockedDevices()
             for dev in devices:
                 if dev != "":
-                    print(f"setting windowName: {dev}")
                     self._windowName = devices[0]
-            # if len(devices) > 0:
-            #     self._windowName = devices[0]
         if self._windowName is None:
-            print("DEBUG - Raising exception for windowName==None")
             raise Exception("No device locked in IGOR")
         return self._windowName
 

@@ -43,8 +43,15 @@ class PipetteControl(Qt.QWidget):
             if self.pip.clampDevice is not None:
                 self.pip.clampDevice.sigTestPulseFinished.connect(self.updatePlots)
                 self.pip.clampDevice.sigAutoBiasChanged.connect(self._updateAutoBiasUi)
-            if self.pip.pressureDevice is not None:
+            if self.pip.pressureDevice is None:
+                self.ui.pressureWidget.hide()
+            else:
                 self.ui.pressureWidget.connectPressureDevice(self.pip.pressureDevice)
+            if self.pip.sonicatorDevice is None:
+                self.ui.sonicatorLabel.hide()
+                self.ui.sonicatorActionControl.hide()
+            else:
+                self.pip.sonicatorDevice.sigSonicationChanged.connect(self.ui.sonicatorActionControl.setText)
             self.pip.sigNewPipetteRequested.connect(self.newPipetteRequested)
             self.pip.sigTipCleanChanged.connect(self.tipCleanChanged)
             self.pip.sigTipBrokenChanged.connect(self.tipBrokenChanged)
@@ -96,7 +103,7 @@ class PipetteControl(Qt.QWidget):
         self.ui.icHoldingSpin.valueChanged.connect(self.icHoldingSpinChanged)
         self.ui.autoBiasTargetSpin.valueChanged.connect(self.autoBiasSpinChanged)
 
-        self.ui.newPipetteBtn.clicked.connect(self.newPipetteClicked)
+        self.ui.newPipetteBtn.setOpts(future_producer=self.newPipetteClicked, stoppable=True)
         self.ui.fouledCheck.stateChanged.connect(self.fouledCheckChanged)
         self.ui.brokenCheck.stateChanged.connect(self.brokenCheckChanged)
 
@@ -111,7 +118,8 @@ class PipetteControl(Qt.QWidget):
             PlotWidget(mode='test pulse'), 
             PlotWidget(mode='ss resistance')
         ]
-        for plt in self.plots:
+        for i, plt in enumerate(self.plots):
+            plt.plot.setObjectName(f"MultiPatch_{pipette.name()}_plot{i+1}")
             self.ui.plotLayout.addWidget(plt)
             plt.sigModeChanged.connect(self.plotModeChanged)
 
@@ -123,7 +131,8 @@ class PipetteControl(Qt.QWidget):
             self.pip.clampDevice.sigStateChanged.connect(self.clampStateChanged)
             self.pip.clampDevice.sigHoldingChanged.connect(self.clampHoldingChanged)
             self.clampStateChanged(self.pip.clampDevice.getState())
-            self.clampHoldingChanged(self.pip.clampDevice, self.pip.clampDevice.getMode())
+            self.clampHoldingChanged(self.pip.clampDevice.getMode(), 
+                                     self.pip.clampDevice.getHolding(self.pip.clampDevice.getMode()))
             self._updateAutoBiasUi()
             self._updateActiveHoldingUi()
 
@@ -315,7 +324,7 @@ class PipetteControl(Qt.QWidget):
 
     def newPipetteClicked(self):
         self.ui.newPipetteBtn.setStyleSheet("")
-        self.pip.newPipette()
+        return self.pip.newPipette()
 
     def tipCleanChanged(self, pip, clean):
         with pg.SignalBlock(self.ui.fouledCheck.stateChanged, self.fouledCheckChanged):
@@ -399,7 +408,8 @@ class PlotWidget(Qt.QWidget):
             self._analysisLabel = None
         if self.mode == 'test pulse':
             self.plot.clear()
-            self._plotTestPulse(tp)
+            if tp is not None:
+                self._plotTestPulse(tp)
         elif self.mode == 'tp analysis':
             self.plot.clear()
             tp.plot(self.plot, label=False)
@@ -414,7 +424,8 @@ class PlotWidget(Qt.QWidget):
                 'capacitance': ('capacitance', 'F'),
             }
             key, units = analysis_by_mode[self.mode]
-            self.plot.plot(history['event_time'] - history['event_time'][0], history[key], clear=True)
+            if len(history['event_time']) > 0:
+                self.plot.plot(history['event_time'] - history['event_time'][0], history[key], clear=True)
             val = tp.analysis[key]
             if val is None:
                 val = np.nan

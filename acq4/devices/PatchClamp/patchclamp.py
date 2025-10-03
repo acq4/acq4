@@ -10,7 +10,17 @@ from neuroanalysis.test_pulse import PatchClampTestPulse
 
 
 class PatchClamp(Device):
-    """Base class for all patch clamp amplifier devices.
+    """
+    Base class for all patch clamp amplifier devices.
+    
+    This class provides common functionality for patch clamp amplifiers including
+    test pulse generation, state monitoring, and device interfaces.
+    
+    Common configuration options for subclasses:
+    
+    * **vcHolding** (float, optional): Default voltage clamp holding potential (V)
+    
+    * **icHolding** (float, optional): Default current clamp holding current (A)
     
     Signals
     -------
@@ -18,6 +28,12 @@ class PatchClamp(Device):
         Emitted when any state parameters have changed
     sigHoldingChanged(self, clamp_mode)
         Emitted when the holding value for any clamp mode has changed
+    sigTestPulseFinished(self, testpulse)
+        Emitted when a test pulse measurement is completed
+    sigTestPulseEnabled(self, enabled)
+        Emitted when test pulse is enabled/disabled
+    sigAutoBiasChanged(self, enabled, target)
+        Emitted when auto bias settings change
     """
 
     sigStateChanged = Qt.Signal(object)  # state

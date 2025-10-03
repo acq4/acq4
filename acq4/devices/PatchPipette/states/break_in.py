@@ -3,7 +3,6 @@ from __future__ import annotations
 import time
 
 from acq4.util import ptime
-from acq4.util.debug import printExc
 from pyqtgraph import units
 from ._base import PatchPipetteState
 
@@ -53,7 +52,7 @@ class BreakInState(PatchPipetteState):
         'nPulses': {'type': 'str', 'default': "[1, 1, 1, 1, 1, 2, 2, 3, 3, 5]"},
         'pulseDurations': {'type': 'str', 'default': "[0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.3, 0.5, 0.7, 1.5]"},
         'pulsePressures': {'type': 'str', 'default': "[-30e3, -35e3, -40e3, -50e3, -60e3, -60e3, -60e3, -60e3, -60e3, -60e3]"},
-        'pulseInterval': {'type': 'float', 'default': 2},
+        'pulseInterval': {'type': 'float', 'default': 2, 'suffix': 's'},
         'resistanceThreshold': {'type': 'float', 'default': 650e6, 'suffix': 'Ω'},
         'capacitanceThreshold': {'type': 'float', 'default': 10e-12, 'suffix': 'F'},
         'holdingCurrentThreshold': {'type': 'float', 'default': -1e-9, 'suffix': 'A'},
@@ -140,10 +139,10 @@ class BreakInState(PatchPipetteState):
             #     self._taskDone(interrupted=True, error="Resistance dropped below threshold but no cell detected.")
             #     return False
 
-    def cleanup(self):
+    def _cleanup(self):
         dev = self.dev
         try:
             dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
         except Exception:
-            printExc("Error resetting pressure after clean")
-        super().cleanup()
+            dev.logger.exception("Error resetting pressure after clean")
+        return super()._cleanup()

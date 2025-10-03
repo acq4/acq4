@@ -1,11 +1,12 @@
 import os
-import teleprox
 from typing import Literal
+
+import teleprox
 from acq4.devices.DAQGeneric import DAQGeneric, DAQGenericTask, DAQGenericTaskGui
 from acq4.devices.PatchClamp import PatchClamp
+from acq4.logging_config import log_server
 from acq4.util import Qt
 from acq4.util.Mutex import Mutex
-from acq4.util.debug import printExc
 from pyqtgraph.WidgetGroup import WidgetGroup
 
 ivModes = {'I=0': 'IC', 'VC': 'VC', 'IC': 'IC'}
@@ -19,7 +20,7 @@ class MockClamp(PatchClamp):
 
     Configuration examples::
 
-        # Simuator imported from neuroanalysis
+        # Simulator imported from neuroanalysis
         simulator: 'neuroanalysis'
 
         # simulator using neuron with cell model downloaded from AllenSDK
@@ -54,10 +55,16 @@ class MockClamp(PatchClamp):
         try:
             self.setHolding()
         except Exception:
-            printExc("Error while setting holding value:")
+            self.logger.exception("Error while setting holding value:")
 
         # Start a remote process to run the simulation.
-        self.process = teleprox.ProcessSpawner(conda_env=config.get('condaEnv', None))
+        if log_server is None:
+            raise RuntimeError("Logging server not started; cannot start MockClamp simulator process.")
+        self.process = teleprox.start_process(
+            conda_env=config.get('condaEnv', None),
+            local_server="threaded",
+            log_addr=log_server.address,
+        )
         rsys = self.process.client._import('sys')
         rsys.path.append(os.path.abspath(os.path.dirname(__file__)))
         if config['simulator'] == 'builtin':

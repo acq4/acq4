@@ -9,7 +9,7 @@ from .planners import PipetteMotionPlanner
 
 
 @future_wrap
-def calibratePipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=0.8e-3, _future=None):
+def findNewPipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=0.4e-3, _future=None):
     """
     Find the tip of a new pipette by moving it across the objective while recording from the imager.
     """
@@ -20,12 +20,6 @@ def calibratePipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=
         startDepth = surfaceZ + 2e-3
         _future.waitFor(imager.setFocusDepth(startDepth))
 
-        # collect background images, analyze noise
-        with imager.ensureRunning():
-            bgFrames = imager.acquireFrames(10).getResult()
-            bgFrameArray = np.stack([f.data() for f in bgFrames], axis=0)
-            bgFrame = bgFrameArray.mean(axis=0)
-
         # move pipette to search position
         center = imager.globalCenterPosition(mode='roi')
         pipVector = pipette.globalDirection()
@@ -35,6 +29,12 @@ def calibratePipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=
         # using a planner avoids possible collisions with the objective
         planner = PipetteMotionPlanner(pipette, searchPos1, speed='fast')
         _future.waitFor(planner.move())
+
+        # collect background images, analyze noise
+        with imager.ensureRunning():
+            bgFrames = imager.acquireFrames(10).getResult()
+            bgFrameArray = np.stack([f.data() for f in bgFrames], axis=0)
+            bgFrame = bgFrameArray.mean(axis=0)
 
         # record from imager and pipette position while moving pipette across the objecive
         frames, posEvents = watchMovingPipette(pipette, imager, searchPos2, speed=searchSpeed, _future=_future)
@@ -118,10 +118,25 @@ def calibratePipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=
         zProfile = zDiff.max(axis=2).max(axis=1)  # most-changed pixel in each frame
         zProfile -= scipy.stats.scoreatpercentile(zProfile, 20)
         zThreshold = 0.75 * zProfile.max()
+        # most in-focus z index toward the tip; pipette tip should be near here
         zIndex = np.argwhere(zProfile > zThreshold)[0, 0]
-        tipFrame = zStack[zIndex]
 
-        # find tip
+
+        # # Find pipette tip by doing ML prediction on many frames
+        # # do pipette detection on the nearest 10 frames
+        # predictionFrames = zStack[np.clip(zIndex-5, 0, None):np.clip(zIndex+5, None, len(zStack))]
+        # posPredictions = np.array([pipette.tracker.measureTipPosition(f)[0] for f in predictionFrames])
+        # # use median as best guess
+        # likelyZPosition = np.median(posPredictions[:, 2])
+        # # use xy prediction from frame that is closest to predicted z
+        # frameDepths = [f.depth for f in predictionFrames]
+        # xyIndex = np.searchsorted(frameDepths, likelyZPosition)
+        # globalPos = posPredictions[xyIndex].copy()
+        # globalPos[2] = likelyZPosition
+               
+
+        # find tip by looking for most-in-focusest point of largest object, in the direction of the tip
+        tipFrame = zStack[zIndex]
         tipImg = zDiff[zIndex]
         smoothTipImg = scipy.ndimage.gaussian_filter(tipImg, 2)
         tipThreshold = scipy.stats.scoreatpercentile(smoothTipImg, 98)
@@ -147,17 +162,18 @@ def calibratePipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=
 
         # this is our best guess as to the global position of the pipette tip
         globalPos = tipFrame.mapFromFrameToGlobal([tippestPixel[0], tippestPixel[1], 0])
-        pipette.resetGlobalPosition(globalPos)
 
-        # focusScore = score_frames(zStack)
-        # targetScore = focusScore.min() + 0.1 * (focusScore.max() - focusScore.min())
-        # focusIndex = np.argwhere(focusScore > targetScore)[:,0].min()
-        # depth = zStack[focusIndex].mapFromFrameToGlobal([0, 0, 0])[2]
-        pipette._moveToGlobal(imager.globalCenterPosition(), 'fast').wait()
+        # loop a few times:
+        # reset pipette offset, focus on tip, check again
+        checkedPositions = []
+        for i in range(3):
+            pipette.resetGlobalPosition(globalPos)
+            pipette._moveToGlobal(imager.globalCenterPosition(), 'fast').wait()
+            checkedPositions.append(globalPos)
+            # find tip!
+            globalPos = pipette.tracker.findTipInFrame()
 
-        # find tip!
-        pipette.tracker.autoCalibrate()
-
+        success = _future.waitFor(pipette.setNewPipetteTipOffsetIfAcceptable(globalPos), timeout=None).getResult()
     finally:
         _future.l = locals().copy()
 

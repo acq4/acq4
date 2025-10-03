@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import logging
 import queue
 import sys
 import threading
 import time
 
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 
 class ScientificaControlThread:
@@ -16,7 +19,7 @@ class ScientificaControlThread:
     """
 
     def __init__(self, dev):
-        self.dev = dev
+        self.dev: 'Scientifica' = dev
         self.pos_callback = None
         self.obj_callback = None
         self.default_speed = dev.getSpeed()
@@ -29,7 +32,7 @@ class ScientificaControlThread:
         self.current_move: ScientificaRequestFuture | None = None
         self.request_queue = queue.Queue()
 
-        self.thread = threading.Thread(target=self.run, daemon=True)
+        self.thread = threading.Thread(target=self.run, daemon=True, name='ScientificaControlThread')
         self.thread.start()
 
     def set_pos_callback(self, func):
@@ -50,13 +53,13 @@ class ScientificaControlThread:
         """
         self.default_speed = speed
 
-    def stop(self):
+    def stop(self, reason):
         """Stop the device immediately"""
-        return self._request('stop')
+        return self._request('stop', reason=reason)
 
-    def move(self, pos, speed, retries_allowed=3):
+    def move(self, pos, speed, attempts_allowed=3, name=None):
         """Move the device to *pos* (in µm) with *speed* (in µm/s)"""
-        return self._request('move', pos=pos, speed=speed, retries_allowed=retries_allowed)
+        return self._request('move', pos=pos, speed=speed, attempts_allowed=attempts_allowed, name=name)
 
     def quit(self):
         """Quit the control thread"""
@@ -94,7 +97,7 @@ class ScientificaControlThread:
         cmd = fut.request
         try:
             if cmd == 'stop':
-                self._handle_stop()
+                self._handle_stop(fut)
                 fut.set_result(None)
             elif cmd == 'move':
                 self._handle_move(fut)
@@ -109,30 +112,22 @@ class ScientificaControlThread:
             fut.set_exc_info(sys.exc_info())
 
     def _handle_move(self, fut):
-        speed = fut.kwds['speed']
-        pos = fut.kwds['pos']
         if self.current_move is not None and fut is not self.current_move:
             # don't think this is needed
             # self.dev.serial.send('STOP')
             self.check_position()
             if self.current_move is not None:
-                self.current_move.fail('Interrupted by another move request.')
+                self.current_move.fail(f'Interrupted by another move request ({fut.name})')
             self.current_move = None
-        with self.dev.serial.lock:
-            # need to send 3 commands uninterrupted in sequence
-            if speed is not None:
-                self.dev.setSpeed(speed)
-            ticks = [x * self.dev.ticksPerMicron for x in pos]
-            self.dev.serial.send(b'ABS %d %d %d' % tuple(ticks))
-            if speed is not None:
-                self.dev.setSpeed(self.default_speed)
         self.current_move = fut
+        self.send_move_command()
 
-    def _handle_stop(self):
+    def _handle_stop(self, fut):
         self.dev.serial.send('STOP')
         if self.current_move is not None:
             while True:
-                self.check_position(miss_reason='Stopped by request.')
+                reason = '' if fut.kwds['reason'] is None else f" ({fut.kwds['reason']})"
+                self.check_position(miss_reason=f'Stopped by request{reason}')
                 if self.dev.isMoving():
                     time.sleep(0.1)
                 else:
@@ -148,6 +143,27 @@ class ScientificaControlThread:
             move_req.fail(f"Request to {move_req.request} was cancelled")
         fut.set_result(None)
 
+    def send_move_command(self):
+        fut = self.current_move
+        speed = fut.kwds['speed']
+        pos = fut.kwds['pos']
+        with self.dev.serial.lock:
+            for i in range(3):
+                try:
+                    # need to send 3 commands uninterrupted in sequence
+                    if speed is not None:
+                        self.dev.setSpeed(speed)
+                    ticks = [x * self.dev.ticksPerMicron for x in pos]
+                    self.dev.serial.send(b'ABS %d %d %d' % tuple(ticks))
+                    if speed is not None:
+                        self.dev.setSpeed(self.default_speed)
+                except (TimeoutError, RuntimeError):
+                    if i >= 2:
+                        raise
+                    # ignore and retry
+                    self.dev.serial.flush()
+                break
+
     def check_position(self, miss_reason=None, recheck=True):
         """Check the current position and move status, and update the current move if necessary.
 
@@ -158,12 +174,15 @@ class ScientificaControlThread:
         recheck : bool
             If True, then check the position again after a short delay to ensure that the device has stopped moving.
         """
-        # check position and invoke change callback 
+        # check position and invoke change callback
         try:
             pos = self.dev.getPos()
-        except TimeoutError:
-            # try again later?
+        except Exception as e:
+            self.dev.serial.flush()
+            msg = "Ignored error while getting position from Scientifica device:"
+            logger.exception(msg)
             return
+
         if self.pos_callback is not None and pos != self.last_pos:
             self.pos_callback(pos)
         self.last_pos = pos
@@ -177,19 +196,29 @@ class ScientificaControlThread:
         # stopped; one way or another, the current move is done with this attempt
         fut = self.current_move
         dif = np.linalg.norm(np.array(pos) - np.array(fut.target_pos))
-        if dif < self.move_complete_threshold:  # reached target
+
+        # if we reached the target, then the move is a success.
+        if dif < self.move_complete_threshold:
+            self.current_move = None
             fut.set_result(None)
+            return
         elif recheck:
             # Sometimes devices report they are finished moving before they have
             # completely stopped. Wait a moment, then check again to be sure.
             time.sleep(0.1)
             return self.check_position(miss_reason, recheck=False)
 
+        # If we missed the target and we aren't allowed to check the position again, then
+        # re-attempt the move if possible
+        if fut.can_retry:
+            fut.n_attempts += 1
+            self.send_move_command()
+            return
+
+        # Otherwise, the move request fails
         self.current_move = None
         if miss_reason is not None:
             fut.fail(miss_reason)
-        elif fut.can_retry:
-            fut.retry()
         else:
             fut.fail(
                 f"Stopped moving before reaching target (target={fut.target_pos} actual={pos} dist={dif:1f}µm)"
@@ -198,9 +227,13 @@ class ScientificaControlThread:
     def check_objective(self):
         try:
             obj = self.dev.getObjective()
-        except TimeoutError:
-            # try again later?
+        except Exception as e:
+            self.dev.serial.flush()
+            logger.exception(
+                "Ignored error while getting objective from Scientifica device:"
+            )
             return
+
         if self.obj_callback is not None and obj != self.last_obj:
             self.obj_callback(obj)
         self.last_obj = obj
@@ -223,6 +256,7 @@ class ScientificaRequestFuture:
         self.result = None
         self.exc_info = None
         self.error = None
+        self.n_attempts = 0
 
     def done(self):
         """Return True if the request has finished."""
@@ -243,13 +277,7 @@ class ScientificaRequestFuture:
 
     @property
     def can_retry(self):
-        return self.kwds.get('retries_allowed', 0) > 0 and not self.done()
-
-    def retry(self):
-        if not self.can_retry:
-            raise ValueError('Request as already been retried the maximum number of times')
-        self.kwds['retries_allowed'] -= 1
-        self.thread.request_queue.put(self)
+        return self.kwds.get('attempts_allowed', 0) > self.n_attempts and not self.done()
 
     def cancel(self):
         """Cancel the request if it is not already complete.
@@ -258,7 +286,7 @@ class ScientificaRequestFuture:
         """
         if self.request != 'move':
             raise TypeError('Can only cancel move requests')
-        self.kwds['retries_allowed'] = 0
+        self.kwds['attempts_allowed'] = 0
         return self.thread.cancel_move(self)
 
     def wait(self, timeout=5.0):
@@ -269,10 +297,10 @@ class ScientificaRequestFuture:
         If the request fails, then raise an exception with more information.
         """
         if self._done.wait(timeout=timeout) is False:
-            raise TimeoutError(f'Timeout waiting for {self.request} to complete')
+            raise TimeoutError(f'Timeout waiting for {str(self)} to complete')
         elif self.exc_info is not None:
             raise self.FutureError(
-                f"An error occurred during the request to {self.request}"
+                f"An error occurred during the request to {str(self)}"
             ) from self.exc_info[1]
         elif self.error is not None:
             raise self.FutureError(self.error)
@@ -302,3 +330,6 @@ class ScientificaRequestFuture:
     def target_pos(self):
         assert self.request == 'move'
         return self.kwds['pos']
+
+    def __str__(self):
+        return f"{self.request} {self.kwds.get('name', '')}"

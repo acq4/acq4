@@ -25,7 +25,7 @@ TEST_PULSE_METAARRAY_INFO = [
     {'name': 'access_resistance', 'type': 'float', 'units': 'Ω'},
     {'name': 'steady_state_resistance', 'type': 'float', 'units': 'Ω'},
     {'name': 'fit_amplitude', 'type': 'float'},
-    {'name': 'time_constant', 'type': 'float'},
+    {'name': 'time_constant', 'type': 'float', 'suffix': 's'},
     {'name': 'fit_yoffset', 'type': 'float'},
     {'name': 'fit_xoffset', 'type': 'float', 'units': 's'},
     {'name': 'capacitance', 'type': 'float', 'units': 'F'},
@@ -516,6 +516,7 @@ class MultiPatchLogWidget(Qt.QWidget):
         layout = Qt.QGridLayout()
         self.setLayout(layout)
         self._plots_widget = pg.GraphicsLayoutWidget()
+        self._plots_widget.setObjectName("MultiPatchLog_plotsWidget")
         self._widgets.append(self._plots_widget)
         layout.addWidget(self._plots_widget, 0, 0)
         self._visual_field = self._plots_widget.addPlot()
@@ -648,6 +649,10 @@ class MultiPatchLogWidget(Qt.QWidget):
         self._displayResealAnalysis = Qt.QCheckBox('Reseal Analysis')
         self._displayResealAnalysis.toggled.connect(self._toggleResealAnalysis)
         self._ctrl_layout.addWidget(self._displayResealAnalysis)
+        self._approachAnalysisItems = {}
+        self._displayApproachAnalysis = Qt.QCheckBox('Approach Analysis')
+        self._displayApproachAnalysis.toggled.connect(self._toggleApproachAnalysis)
+        self._ctrl_layout.addWidget(self._displayApproachAnalysis)
         self._detectAnalysisItems = {}
         self._displayDetectAnalysis = Qt.QCheckBox('Cell Detect Analysis')
         self._displayDetectAnalysis.toggled.connect(self._toggleDetectAnalysis)
@@ -732,39 +737,64 @@ class MultiPatchLogWidget(Qt.QWidget):
             analysisItems.clear()
 
     def _toggleSealAnalysis(self, state: bool):
-        from acq4.devices.PatchPipette.states import SealAnalysis
+        from acq4.devices.PatchPipette.states import SealAnalysis, SealState
 
-        # TODO get the current patch profile params
-        self._toggleAnalysis(SealAnalysis, self._sealAnalysisItems, state, tau=5, success_at=1*GΩ, hold_at=100*MΩ)
+        config = SealState.defaultConfig()
+        self._toggleAnalysis(
+            SealAnalysis,
+            self._sealAnalysisItems,
+            state,
+            success_tau=config['successMonitorTau'],
+            success_at=config['sealThreshold'],
+            hold_tau=config['holdMonitorTau'],
+            hold_at=config['holdingThreshold'],
+            failure_tau=config['failureTau'],
+            failure_resistance_threshold=config['failureResistanceThreshold'],
+            failure_dRdt_threshold=config['failureDRDTThreshold'],
+        )
 
     def _toggleResealAnalysis(self, state: bool):
-        from acq4.devices.PatchPipette.states import ResealAnalysis
+        from acq4.devices.PatchPipette.states import ResealAnalysis, ResealState
 
-        # TODO get the current patch profile params
+        config = ResealState.defaultConfig()
         self._toggleAnalysis(
             ResealAnalysis,
             self._resealAnalysisItems,
             state,
-            stretch_threshold=0.005,
-            tear_threshold=-0.00128,
-            detection_tau=5,
-            repair_tau=10,
+            stretch_threshold=config['stretchDetectionThreshold'],
+            tearing_threshold=config['tearDetectionThreshold'],
+            # TODO torn_threshold needs pre-analysis resistance. pin to 100MΩ
+            torn_threshold=100e6 * config['tornDetectionThreshold'],
+            detection_tau=config['detectionTau'],
+            repair_tau=config['repairTau'],
         )
 
     def _toggleDetectAnalysis(self, state: bool):
-        from acq4.devices.PatchPipette.states import CellDetectAnalysis
+        from acq4.devices.PatchPipette.states import CellDetectAnalysis, CellDetectState
 
-        # TODO get the current patch profile params
+        config = CellDetectState.defaultConfig()
         self._toggleAnalysis(
             CellDetectAnalysis,
             self._detectAnalysisItems,
             state,
-            baseline_tau=20,
-            cell_threshold_fast=1e6,
-            cell_threshold_slow=200e3,
-            slow_detection_steps=3,
-            obstacle_threshold=1e6,
-            break_threshold=-1e6,
+            baseline_tau=config['baselineResistanceTau'],
+            cell_threshold_fast=config['fastDetectionThreshold'],
+            cell_threshold_slow=config['slowDetectionThreshold'],
+            slow_detection_steps=config['slowDetectionSteps'],
+            break_threshold=config['breakThreshold'],
+        )
+
+    def _toggleApproachAnalysis(self, state: bool):
+        from acq4.devices.PatchPipette.states import ApproachAnalysis, ApproachState
+
+        config = ApproachState.defaultConfig()
+        self._toggleAnalysis(
+            ApproachAnalysis,
+            self._approachAnalysisItems,
+            state,
+            baseline_tau=config['baselineResistanceTau'],
+            obstacle_threshold=config['obstacleResistanceThreshold'],
+            break_threshold=config['breakThreshold'],
         )
 
     def testPulseAnalysisDataByState(self, field: str):

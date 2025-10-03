@@ -5,6 +5,8 @@ import weakref
 from typing import Union, Optional, Generator
 
 import numpy as np
+from scipy.optimize import linear_sum_assignment
+from skimage.metrics import structural_similarity as ssim
 
 import acq4.Manager as Manager
 import pyqtgraph as pg
@@ -16,75 +18,90 @@ from acq4.util.surface import find_surface
 from acq4.util.threadrun import runInGuiThread
 
 
-def _enforce_linear_z_stack(frames: list[Frame], step: float) -> list[Frame]:
+def enforce_linear_z_stack(frames: list[Frame], start: float, stop: float, step: float) -> list[Frame]:
     """Ensure that the Z stack frames are linearly spaced. Frames are likely to come back with
     grouped z-values due to the stage's infrequent updates (i.e. 4 frames will arrive
     simultaneously, or just in the time it takes to get a new z value). This assumes the z
     values of the first and last frames are correct, but not necessarily any of the other
     frames."""
-    if len(frames) < 2:
-        return frames
     if step == 0:
         raise ValueError("Z stack step size must be non-zero.")
+    start, stop = sorted((start, stop))
     step = abs(step)
-    depths = [(f.depth, f) for f in frames]
-    expected_size = abs(depths[-1][0] - depths[0][0]) / step
-    if len(depths) < expected_size:
+    depths = sorted([(f.depth, i) for i, f in enumerate(frames)])
+    if (stop - start) % step != 0:
+        expected_depths = np.arange(start, stop, step)
+    else:
+        expected_depths = np.arange(start, stop + step, step)
+    if len(depths) < len(expected_depths):
         raise ValueError("Insufficient frames to have one frame per step.")
-    # throw away frames that are nearly identical to the previous frame (hopefully this only
-    # happens at the endpoints)
 
-    def difference_is_significant(frame1: tuple[float, Frame], frame2: tuple[float, Frame]):
-        """Returns whether the absolute difference between the two frames is significant. Frames are
-        tuples of (z, frame)."""
-        z1, frame1 = frame1
-        z2, frame2 = frame2
-        return z1 != z2  # for now
-        # if z1 != z2:
-        #     return True
-        # img1 = frame1.data()
-        # img2 = frame2.data()
-        # dmax = np.iinfo(img1.dtype).max
-        # threshold = (dmax / 512)  # arbitrary
-        # overflowed_diff = img1 - img2  # e.g. uint16: 4 - 1 = 3, 1 - 4 = 65532
-        # if np.issubdtype(img1.dtype, np.unsignedinteger):
-        #     abs_adjust = (img1 < img2).astype(img1.dtype) * dmax + 1  # e.g. uint16: "-1" (65535) if img1 < img2, 1 otherwise
-        #     return np.mean(overflowed_diff * abs_adjust) > threshold
-        # else:
-        #     return np.mean(np.abs(overflowed_diff)) > threshold
-    depths = [depths[0]] + [
-        f for i, f in enumerate(depths[1:], 1)
-        if difference_is_significant(f, depths[i - 1])
-    ]
-    if len(depths) < expected_size:
+    first = depths.pop(0)
+    last = depths.pop(-1)
+
+    def is_significant(frame1: tuple[float, int]):
+        # throw out frames with depth equal to the first or last
+        tol = np.clip(step / 10, 1e-12, 1e-7)
+        return not (np.isclose(frame1[0], first[0], atol=tol) or np.isclose(frame1[0], last[0], atol=tol))
+
+    depths = [first] + [d for d in depths if is_significant(d)] + [last]
+    if len(depths) < len(expected_depths):
         raise ValueError("Insufficient frames to have one frame per step (after pruning nigh identical frames).")
 
-    return [f for _, f in sorted(depths, key=lambda x: x[0])]
-
-    # # TODO do we want this?
-    # # TODO interpolate first?
-    # if frames[0][0] < frames[-1][0]:
-    #     ideal_z_values = np.arange(frames[0][0], frames[-1][0] + step, step)
-    # else:
-    #     ideal_z_values = np.arange(frames[0][0], frames[-1][0] - step, -step)
-    # # [(0, f1), (0, f2), (1, f3)] with ideal z's of [0, 1] should become [(0, f1), (1, f3)]
-    # # [(0, f1), (2, f2), (2, f3), (2, f4)] with ideal z's of [0, 1, 2] should become [(0, f1), (1, f2), (2, f4)]
-    # ideal_idx = 0
-    # actual_idx = 0
-    # actual_z_values = np.array([z for z, _ in frames])
-    # new_frame_idxs = []
-    # while ideal_idx < len(ideal_z_values) and actual_idx < len(frames):
-    #     next_closest = np.argmin(np.abs(actual_z_values - ideal_z_values[ideal_idx]))  # TODO this could be made faster if needed
-    #     next_closest = max(next_closest, actual_idx)  # don't go backwards
-    #     new_frame_idxs.append(next_closest)
-    #     ideal_idx += 1
-    #     actual_idx = next_closest + 1
-    # if len(new_frame_idxs) < expected_size:
-    #     raise ValueError("Insufficient frames to have one frame per step (after walking through).")
-    # return [frames[i][1] for i in new_frame_idxs]
+    # get the closest frame for each expected depth using the Hungarian algorithm
+    interpolated_depths = np.linspace(start, stop, len(depths))
+    cost_matrix = np.abs(expected_depths[:, None] - interpolated_depths[None, :])
+    row_ind, col_ind = linear_sum_assignment(cost_matrix)
+    idxes = np.full(len(expected_depths), -1, dtype=int)
+    for i, j in zip(row_ind, col_ind):
+        idxes[i] = j
+    assert np.all(idxes >= 0), "I did the Hungarian wrong"
+    # frames = [frames[depths[i][1]]
+    ret_frames = []
+    for i in idxes:
+        depth, j = depths[i]
+        frame = frames[j]
+        xform = frame.globalTransform()
+        xform.setTranslate(xform.getTranslation()[0], xform.getTranslation()[1], depth)
+        frame.addInfo(transform=xform.saveState())
+        ret_frames.append(frame)
+    return ret_frames
 
 
-def _set_focus_depth(imager, depth: float, direction: float, speed: Union[float, str], future: Optional[Future] = None):
+def calculate_hysteresis(frames: list[Frame], center: Frame, min_likeness=0.95) -> float:
+    if not frames:
+        raise ValueError("Stack is empty")
+
+    # Check if center frame is potentially in the stack
+    center_data = center.data()
+    if all(not np.array_equal(center_data.shape, f.data().shape) for f in frames):
+        raise ValueError("Center frame is not in the stack")
+
+    similarities = []
+    for f in frames:
+        f_data = f.data()
+        try:
+            similarity = ssim(f_data, center_data)
+            similarities.append(similarity)
+        except ValueError:
+            # Handle frames with different shapes or other issues
+            similarities.append(-float('inf'))
+
+    if all(sim < min_likeness for sim in similarities):
+        raise ValueError("Center frame does not match any frame in the stack")
+
+    closest_match = np.argmax(similarities)
+    return frames[closest_match].depth - frames[len(frames) // 2].depth
+
+
+def _set_focus_depth(
+    imager,
+    depth: float,
+    direction: float,
+    speed: Union[float, str],
+    hysteresis_correction: bool = True,
+    future: Optional[Future] = None,
+):
     if depth is None:
         return
 
@@ -94,10 +111,10 @@ def _set_focus_depth(imager, depth: float, direction: float, speed: Union[float,
     timeout = max(10, 3 * abs(dz) / speed)
 
     # Avoid hysteresis:
-    if direction > 0 and dz > 0:
+    if hysteresis_correction and direction > 0 and dz > 0:
         # stack goes downward
         move = imager.setFocusDepth(depth + 20e-6, speed)
-    elif direction < 0 and dz < 0:
+    elif hysteresis_correction and direction < 0 and dz < 0:
         # stack goes upward
         move = imager.setFocusDepth(depth - 20e-6, speed)
     else:
@@ -121,11 +138,11 @@ def _slow_z_stack(imager, start, end, step, _future=None) -> list[Frame]:
     direction = sign * -1
     step = sign * abs(step)
     frames_fut = imager.acquireFrames()
-    _set_focus_depth(imager, start, direction, speed='fast', future=_future)
+    _set_focus_depth(imager, start, direction, speed="fast", future=_future)
     with imager.ensureRunning(ensureFreshFrames=True):
         for z in np.arange(start, end + step, step):
             _future.waitFor(imager.acquireFrames(1))
-            _set_focus_depth(imager, z, direction, speed='slow', future=_future)
+            _set_focus_depth(imager, z, direction, speed="slow", future=_future)
         _future.waitFor(imager.acquireFrames(1))
     frames_fut.stop()
     _future.waitFor(frames_fut)
@@ -133,8 +150,7 @@ def _slow_z_stack(imager, start, end, step, _future=None) -> list[Frame]:
 
 
 def _hold_imager_focus(idev, hold):
-    """Tell the focus controller to lock or unlock.
-    """
+    """Tell the focus controller to lock or unlock."""
     fdev = idev.getFocusDevice()
     if fdev is None:
         raise Exception(f"Device {idev} is not connected to a focus controller.")
@@ -155,27 +171,29 @@ def _status_message(iteration, maxIter):
 
 
 def _save_results(
-        frames: "Frame | list[Frame]",
-        storage_dir: DirHandle,
-        idx: int,
-        is_timelapse: bool = False,
-        is_mosaic: bool = False,
-        is_z_stack: bool = False,
+    frames: "Frame | list[Frame]",
+    storage_dir: DirHandle,
+    idx: int,
+    is_timelapse: bool = False,
+    is_mosaic: bool = False,
+    is_z_stack: bool = False,
 ):
     """
-        +-----------+--------+---------+------------------------+
-        | timelapse | mosaic | z-stack |    resultant files     |
-        +-----------+--------+---------+------------------------+
-        | true      | true   | true    | folders of z-stack mas |
-        | true      | true   | false   | folders of images      |
-        | true      | false  | true    | multiple z-stack mas   |
-        | true      | false  | false   | single timelapse ma    |
-        | false     | true   | true    | multiple z-stack mas   |
-        | false     | true   | false   | multiple images        |
-        | false     | false  | true    | single z-stack ma      |
-        | false     | false  | false   | single image           |
-        +-----------+--------+---------+------------------------+
+    Returns either the containing dir or the single file handle.
+        +-----------+--------+---------+------------------------+----------------+
+        | timelapse | mosaic | z-stack |    resultant files     |  fh to return  |
+        +-----------+--------+---------+------------------------+----------------+
+        | true      | true   | true    | folders of z-stack mas |  storage_dir   |
+        | true      | true   | false   | folders of images      |  storage_dir   |
+        | true      | false  | true    | multiple z-stack mas   |  storage_dir   |
+        | true      | false  | false   | single timelapse ma    |  timelapse.ma  |
+        | false     | true   | true    | multiple z-stack mas   |  storage_dir   |
+        | false     | true   | false   | multiple images        |  storage_dir   |
+        | false     | false  | true    | single z-stack ma      |  z_stack.ma    |
+        | false     | false  | false   | single image           |  image.tif     |
+        +-----------+--------+---------+------------------------+----------------+
     """
+    ret_fh = storage_dir
     if is_mosaic and is_timelapse:
         storage_dir = storage_dir.getDir(f"mosaic_{idx:03d}", create=True)
 
@@ -187,34 +205,43 @@ def _save_results(
                 stack = frame.saveImage(storage_dir, "z_stack.ma")
             else:
                 stack = frame.appendImage(stack)
+        if not is_timelapse and not is_mosaic:
+            ret_fh = stack
     elif is_timelapse and not is_mosaic:
         if idx == 0:
-            frames.saveImage(storage_dir, "timelapse.ma", autoIncrement=False)
+            ret_fh = frames.saveImage(storage_dir, "timelapse.ma", autoIncrement=False)
         else:
             fh = storage_dir["timelapse.ma"]  # MC: I don't like this
             frames.appendImage(fh)
+            ret_fh = fh
     else:
-        frames.saveImage(storage_dir, "image.tif")
+        fh = frames.saveImage(storage_dir, "image.tif")
+        if not is_mosaic and not is_timelapse:
+            ret_fh = fh
+
+    return ret_fh
 
 
-@future_wrap
+@future_wrap(logLevel='debug')
 def run_image_sequence(
-        imager,
-        count: float = 1,
-        interval: float = 0,
-        pin: "Callable[[Frame]] | None" = None,
-        z_stack: "tuple[float, float, float] | None" = None,
-        mosaic: "tuple[float, float, float, float, float] | None" = None,
-        storage_dir: "DirHandle | None" = None,
-        _future: Future = None
+    imager,
+    count: float = 1,
+    interval: float = 0,
+    pin: "Callable[[Frame]] | None" = None,
+    z_stack: "tuple[float, float, float] | None" = None,
+    mosaic: "tuple[float, float, float, float, float] | None" = None,
+    storage_dir: "DirHandle | None" = None,
+    _future: Future = None,
 ) -> "Frame | list[Frame | list[Frame | list[Frame]]]":
     _hold_imager_focus(imager, True)
     _open_shutter(imager, True)  # don't toggle shutter between stack frames
     man = Manager.getManager()
     result = []
     is_timelapse = count > 1
+    ret_fh = None
 
     def handle_new_frames(f: "Frame | list[Frame]", idx: int):
+        nonlocal ret_fh
         if is_timelapse:
             if idx + 1 > len(result):
                 result.append([])
@@ -229,7 +256,9 @@ def run_image_sequence(
             else:
                 pin(f)
         if storage_dir:
-            _save_results(f, storage_dir, idx, count > 1, bool(mosaic), bool(z_stack))
+            fh = _save_results(f, storage_dir, idx, count > 1, bool(mosaic), bool(z_stack))
+            if ret_fh is None:
+                ret_fh = fh
 
     # record
     with man.reserveDevices(imager.devicesToReserve()):
@@ -252,6 +281,7 @@ def run_image_sequence(
         finally:
             _open_shutter(imager, False)
             _hold_imager_focus(imager, False)
+    _future.imagesSavedIn = ret_fh
     return result
 
 
@@ -289,8 +319,8 @@ def positions_to_cover_region(region, imager_center, imager_region) -> Generator
     pos = region_top_left + move_offset
     x_finished = y_finished = False
     x_tests = (
-            lambda: (pos - coverage_offset)[0] >= region_bottom_right[0],
-            lambda: (pos + coverage_offset)[0] <= region_top_left[0],
+        lambda: (pos - coverage_offset)[0] >= region_bottom_right[0],
+        lambda: (pos + coverage_offset)[0] <= region_top_left[0],
     )
     x_steps = (step[0], -step[0])
     x_direction = 0
@@ -307,8 +337,17 @@ def positions_to_cover_region(region, imager_center, imager_region) -> Generator
         x_finished = False
 
 
-@future_wrap
-def acquire_z_stack(imager, start: float, stop: float, step: float, _future: Future) -> list[Frame]:
+@future_wrap(logLevel='debug')
+def acquire_z_stack(
+    imager,
+    start: float,
+    stop: float,
+    step: float,
+    hysteresis_correction=True,
+    slow_fallback=True,
+    deviceReservationTimeout=10.0,
+    _future: Future = None,
+) -> list[Frame]:
     """Acquire a Z stack from the given imager.
 
     Args:
@@ -320,34 +359,50 @@ def acquire_z_stack(imager, start: float, stop: float, step: float, _future: Fut
     Returns:
         Future: Future object that will contain the frames once the acquisition is complete.
     """
+    # TODO optional conditional slow-z-stack fallback
     # TODO think about strobing the lighting for clearer images
     direction = start - stop
-    _set_focus_depth(imager, start, direction, 'fast', _future)
+    _set_focus_depth(imager, start, direction, "fast", hysteresis_correction, _future)
     stage = imager.scopeDev.getFocusDevice()
     z_per_second = stage.positionUpdatesPerSecond
     meters_per_frame = abs(step)
     speed = meters_per_frame * z_per_second * 0.5
     man = Manager.getManager()
-    with man.reserveDevices(imager.devicesToReserve()):
-        frames_fut = imager.acquireFrames()
+    with man.reserveDevices(imager.devicesToReserve(), timeout=deviceReservationTimeout):
         with imager.ensureRunning(ensureFreshFrames=True):
-            _future.waitFor(imager.acquireFrames(1))  # just to be sure the camera's recording
-            _set_focus_depth(imager, stop, direction, speed, _future)
-            _future.waitFor(imager.acquireFrames(1))  # just to be sure the camera caught up
-            frames_fut.stop()
-            frames = _future.waitFor(frames_fut).getResult(timeout=10)
+            frames_fut = imager.acquireFrames()
+            try:
+                _future.waitFor(imager.acquireFrames(1))  # just to be sure the camera's recording
+                _set_focus_depth(imager, stop, direction, speed, hysteresis_correction, _future)
+                _future.waitFor(imager.acquireFrames(1))  # just to be sure the camera caught up
+            finally:
+                frames_fut.stop()
+        frames = _future.waitFor(frames_fut).getResult(timeout=10)
         try:
-            frames = _enforce_linear_z_stack(frames, step)
+            frames = enforce_linear_z_stack(frames, start, stop, step)
         except ValueError:
-            _future.setState("Failed to enforce linear z stack. Retrying with stepwise movement.")
-            frames = _slow_z_stack(imager, start, stop, step).getResult()
-            frames = _enforce_linear_z_stack(frames, step)
+            if slow_fallback:
+                imager.logger.info("Failed to fast-acquire linear z stack. Retrying with stepwise movement.")
+                frames = _future.waitFor(_slow_z_stack(imager, start, stop, step)).getResult()
+                frames = enforce_linear_z_stack(frames, start, stop, step)
+            else:
+                raise
+    _fix_frame_transforms(frames, step)
     return frames
 
 
+def _fix_frame_transforms(frames, z_step):
+    for f in frames:
+        xform = f.globalTransform()
+        scale = xform.getScale()
+        # Set z scale such that the transform oni the first frame can be used for the entire stack
+        # (which should be approximately true if the frames are about evenly spaced)
+        xform.setScale(scale[0], scale[1], z_step)
+        f.addInfo(transform=xform.saveState())
+
+
 class ImageSequencerCtrl(Qt.QWidget):
-    """GUI for acquiring z-stacks, timelapse, and mosaic.
-    """
+    """GUI for acquiring z-stacks, timelapse, and mosaic."""
 
     def __init__(self, cameraMod):
         self.mod = weakref.ref(cameraMod)
@@ -367,7 +422,9 @@ class ImageSequencerCtrl(Qt.QWidget):
         self.ui.xRightSpin.setOpts(value=0, suffix="m", siPrefix=True, step=10e-6, decimals=6)
         self.ui.yTopSpin.setOpts(value=0, suffix="m", siPrefix=True, step=10e-6, decimals=6)
         self.ui.yBottomSpin.setOpts(value=0, suffix="m", siPrefix=True, step=10e-6, decimals=6)
-        self.ui.mosaicOverlapSpin.setOpts(value=50e-6, suffix="m", siPrefix=True, step=1e-6, decimals=6, bounds=(0, float('inf')))
+        self.ui.mosaicOverlapSpin.setOpts(
+            value=50e-6, suffix="m", siPrefix=True, step=1e-6, decimals=6, bounds=(0, float("inf"))
+        )
 
         self.updateDeviceList()
         self.ui.statusLabel.setText("[ stopped ]")
@@ -409,8 +466,7 @@ class ImageSequencerCtrl(Qt.QWidget):
         self.updateStatus()
 
     def makeProtocol(self):
-        """Build a description of everything that needs to be done during the sequence.
-        """
+        """Build a description of everything that needs to be done during the sequence."""
         prot = {"imager": self.selectedImager()}
         if self.ui.zStackGroup.isChecked():
             start = self.ui.zStartSpin.value()
@@ -466,7 +522,7 @@ class ImageSequencerCtrl(Qt.QWidget):
             prot["storage_dir"] = dh
             self.setRunning(True)
             self._future = run_image_sequence(**prot)
-            self._future.sigFinished.connect(self.threadStopped)
+            self._future.onFinish(self.threadStopped, inGui=True)
             self._future.sigStateChanged.connect(self.threadMessage)
         except Exception:
             self.threadStopped(self._future)
@@ -489,7 +545,6 @@ class ImageSequencerCtrl(Qt.QWidget):
             self.updateStatus()
             if self._future is not None:
                 fut = self._future
-                self._future.sigFinished.disconnect(self.threadStopped)
                 self._future.sigStateChanged.disconnect(self.threadMessage)
                 self._future = None
                 if not self._manuallyStopped:

@@ -1,13 +1,11 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-
 import os
 
 from acq4 import modules
+from acq4.logging_config import get_logger
 from acq4.modules.Module import Module
 from acq4.util import Qt
-from acq4.util.debug import printExc
 
+logger = get_logger(__name__)
 Ui_MainWindow = Qt.importTemplate(".ManagerTemplate")
 
 
@@ -22,7 +20,7 @@ class Manager(Module):
         self.win.setWindowIcon(Qt.QIcon(os.path.join(mp, "icon.png")))
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self.win)
-        self.stateFile = os.path.join("modules", self.name + "_ui.cfg")
+        self.stateFile = os.path.join("modules", f"{self.name}_ui.cfg")
 
         self.modGroupOrder = ["Acquisition", "Analysis", "Utilities"]
 
@@ -38,6 +36,7 @@ class Manager(Module):
         self.ui.configList.itemDoubleClicked.connect(self.loadConfig)
         self.ui.moduleList.itemDoubleClicked.connect(self.loadSelectedModule)
         self.ui.quitBtn.clicked.connect(self.requestQuit)
+
 
         state = self.manager.readConfigFile(self.stateFile)
         # restore window position
@@ -69,7 +68,7 @@ class Manager(Module):
                     self.win.tabifyDockWidget(firstDock, dock)
             except:
                 self.showMessage("Error creating dock for device '%s', see console for details." % d, 10000)
-                printExc("Error while creating dock for device '%s':" % d)
+                logger.exception(f"Error while creating dock for device '{d}':")
 
     def createDockForDevice(self, deviceName):
         dw = self.manager.getDevice(deviceName).deviceInterface(self)
@@ -226,7 +225,11 @@ class Manager(Module):
         self.updateModList()
         self.showMessage("Loaded configuration '%s'." % cfg, 10000)
 
+
     def quit(self):
+        # Cleanup resource monitor
+        self.ui.resourceMonitor.cleanup()
+
         # save ui configuration
         geom = self.win.geometry()
         state = {

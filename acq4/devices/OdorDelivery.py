@@ -18,8 +18,22 @@ from ..util.generator.StimParamSet import SeqParameter
 
 class OdorDelivery(Device):
     """
-    Device class representing an odor delivery device. Config should include a section describing all the possible
-    odors in the following format::
+    Base class for odor delivery systems.
+    
+    Provides common functionality for controlling valve-based odor delivery systems
+    used in olfactory research and behavioral experiments.
+    
+    Configuration options:
+    
+    * **odors** (dict): Odor channel and port definitions
+        - Key: Channel group name (arbitrary string)
+        - Value: Channel configuration dict:
+            - channel: Hardware channel number (int)
+            - ports: Dict mapping port numbers to odor names
+                - Key: Port number (int)
+                - Value: Odor name (str)
+    
+    Config should include a section describing all the possible odors in the following format::
 
         odors:
             first channel name:
@@ -283,6 +297,7 @@ class OdorTaskGui(TaskGui):
         splitter.addWidget(ptree)
 
         self._plot = PlotWidget()
+        self._plot.setObjectName("OdorDelivery_taskPlot")
         splitter.addWidget(self._plot)
 
         # TODO validate if the events will go longer than the total task runner
@@ -430,12 +445,12 @@ class OdorTask(DeviceTask):
 
 class OdorFuture(Future):
     def __init__(self, dev, schedule: List[OdorEvent]):
-        super().__init__()
+        super().__init__(name=f"{dev.name()}_odor_future")
         self._dev = dev
         self._schedule = schedule
         self._duration = max(ev.startTime + ev.duration for ev in schedule)
         self._time_elapsed = 0
-        self._thread = threading.Thread(target=self._executeSchedule)
+        self._thread = threading.Thread(target=self._executeSchedule, name=f"{dev.name()}_odor_schedule")
         self._thread.start()
 
     def percentDone(self):

@@ -5,6 +5,22 @@ from acq4.util import Qt
 
 
 class MockKeyboard(Keyboard):
+    """
+    Simulated keyboard device for testing and demonstration.
+    
+    Provides the same interface as real programmable keyboards but without hardware.
+    Creates a GUI with clickable buttons for registered key callbacks.
+    
+    Configuration options:
+    
+    No device-specific configuration options. Key callbacks are registered 
+    programmatically via addKeyCallback() method.
+    
+    Example configuration::
+    
+        MockKeyboard:
+            driver: 'MockKeyboard'
+    """
     def setBacklights(self, state, **kwds):
         pass
 

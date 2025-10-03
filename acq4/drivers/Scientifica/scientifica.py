@@ -7,11 +7,12 @@ import re
 from typing import Optional
 
 from acq4.drivers.SerialDevice import SerialDevice
-
 from .control_thread import ScientificaControlThread
 from .serial import ScientificaSerial
-from acq4.util.debug import printExc
-from ...util.typing import Number
+from ...logging_config import get_logger
+from ...util.acq4_typing import Number
+
+logger = get_logger(__name__)
 
 # Data provided by Scientifica
 _device_types = """
@@ -31,10 +32,15 @@ IVM,230,175,-6.4,-6.4,-6.4,0,1.14
 IVM Mini,230,175,-6.4,-6.4,-6.4,0,1.14
 """
 
+MANIPULATOR_DEVICE_TYPES = [
+    'patchstar', 'microstar', 'ivm_manipulator', 'extended_patchstar',
+    'ivm_mini', 'ivm_3000_rotary', 'ivm_3000',
+]
+
 
 class Scientifica:
     """
-    Provides interface to a Scientifica manipulator.
+    Provides interface to a Scientifica manipulator or stage.
 
     This can be initialized either with the com port name or with the string description
     of the device.
@@ -100,9 +106,8 @@ class Scientifica:
                     devs[s.getDescription()] = com
                     s.close()
                 except Exception:
-                    printExc(
-                        f"Error while initializing Scientifica device at {com} (the device at this port will not be available):"
-                    )
+                    logger.exception(
+                        f"Error while initializing Scientifica device at {com} (the device at this port will not be available):")
 
         cls.availableDevices = devs
         return devs
@@ -208,6 +213,9 @@ class Scientifica:
         typ = self.send('type').decode()
         return types.get(typ, typ)
 
+    def isManipulator(self):
+        return self.getType() in MANIPULATOR_DEVICE_TYPES
+
     def setPositionCallback(self, cb):
         self.ctrlThread.set_pos_callback(cb)
 
@@ -221,10 +229,7 @@ class Scientifica:
     def hasSeparateZSpeed(self):
         if self._version < 3:
             return False
-        return self.getType() not in [
-            'patchstar', 'microstar', 'ivm_manipulator', 'extended_patchstar',
-            'ivm_mini', 'ivm_3000_rotary', 'ivm_3000',
-        ]
+        return not self.isManipulator()
 
     def getDescription(self):
         """Return this device's description string.
@@ -249,7 +254,10 @@ class Scientifica:
             else:
                 packet = self.send('P')
             try:
-                return [int(x) / self.ticksPerMicron for x in packet.split(b'\t')]
+                pos = [int(x) / self.ticksPerMicron for x in packet.split(b'\t')]
+                if len(pos) != 3:
+                    raise TypeError(f"Got wrong position length from scientifica controller ({pos})")
+                return pos
             except ValueError:
                 if _tryagain:
                     # packet corruption; clear and try again
@@ -275,6 +283,8 @@ class Scientifica:
         'approachMode': ('APPROACH', 'APPROACH %d', bool),
         'objDisp': ('OBJDISP', 'OBJDISP %d', float),
         'objLift': ('OBJLIFT', 'OBJLIFT %d', float),
+        'objL1': ('OBJL1', 'OBJDISP %d', int),  # used for version 2 devices instead
+        'objL2': ('OBJL2', 'OBJDISP %d', int),  # of objLift and objDisp
     }
 
     @staticmethod
@@ -322,6 +332,7 @@ class Scientifica:
               prevent user confusion, setting this value programmatically is discouraged).
             * objLift: Distance to lift the objectives before switching (int; 1 = 10 nm)
             * objDisp: Distance between focal planes of objectives (int; 1 = 10 nm)
+            * objL1, objL2: Legacy objective switching parameters for version 2 devices.
 
         Notes
         -----
@@ -435,7 +446,7 @@ class Scientifica:
         if self.hasSeparateZSpeed():
             self.setParam('maxZSpeed', speed)
 
-    def moveTo(self, pos, speed=None):
+    def moveTo(self, pos, speed=None, name=None, attempts_allowed=3):
         """Set the position of the manipulator.
         
         *pos* must be a list of 3 items, each is either an integer representing the desired position
@@ -451,7 +462,7 @@ class Scientifica:
             currentPos = self.getPos()
             pos = [pos[i] if pos[i] is not None else currentPos[i] for i in (0, 1, 2)]
 
-        return self.ctrlThread.move(tuple(pos), speed)
+        return self.ctrlThread.move(tuple(pos), speed, attempts_allowed=attempts_allowed, name=name)
 
     def zeroPosition(self, axis: str | None = None):
         """Reset the stage coordinates to (0, 0, 0) without moving the stage. If *axis* is given,
@@ -477,10 +488,10 @@ class Scientifica:
         """
         self.send('CURRENT %d %d' % (int(run), int(standby)))
 
-    def stop(self):
+    def stop(self, reason):
         """Stop moving the manipulator.
         """
-        return self.ctrlThread.stop()
+        return self.ctrlThread.stop(reason=reason)
 
     def isMoving(self):
         """Return True if the manipulator is moving.
@@ -492,10 +503,10 @@ class Scientifica:
 
     def getBaudrate(self):
         return self.serial.getBaudrate()
-    
+
     def setBaudrate(self, rate):
         return self.serial.setBaudrate(rate)
-    
+
     def getObjective(self):
         """Return the currently active objective slot (int; only for MOC devices)"""
         return int(self.serial.send("obj"))

@@ -240,26 +240,32 @@ class PSPReversal(AnalysisModule):
 
         # instantiate the graphs using a gridLayout
         self.data_plot = pg.PlotWidget()
+        self.data_plot.setObjectName("PSPReversal_dataPlot")
         self.grid_layout.addWidget(self.data_plot, 0, 0, 3, 1)
         self.label_up(self.data_plot, 'T (s)', 'V (V)', 'Data')
 
         self.cmd_plot = pg.PlotWidget()
+        self.cmd_plot.setObjectName("PSPReversal_cmdPlot")
         self.grid_layout.addWidget(self.cmd_plot, 3, 0, 1, 1)
         self.label_up(self.cmd_plot, 'T (s)', 'I (A)', 'Command')
 
         self.rmp_plot = pg.PlotWidget()
+        self.rmp_plot.setObjectName("PSPReversal_rmpPlot")
         self.grid_layout.addWidget(self.rmp_plot, 1, 1, 1, 1)
         self.label_up(self.rmp_plot, 'T (s)', 'V (mV)', 'Holding')
 
         self.unused_plot = pg.PlotWidget()
+        self.unused_plot.setObjectName("PSPReversal_unusedPlot")
         self.grid_layout.addWidget(self.unused_plot, 2, 1, 1, 1)
         # self.label_up(self.unused_plot, 'I (pA)', 'Fsl/Fisi (ms)', 'FSL/FISI')
 
         self.command_plot = pg.PlotWidget()
+        self.command_plot.setObjectName("PSPReversal_commandPlot")
         self.grid_layout.addWidget(self.command_plot, 3, 1, 1, 1)
         self.label_up(self.command_plot, 'T (s)', 'V (mV)', 'Commands (T)')
 
         self.iv_plot = pg.PlotWidget()
+        self.iv_plot.setObjectName("PSPReversal_ivPlot")
         self.grid_layout.addWidget(self.iv_plot, 0, 1, 1, 1)
         self.label_up(self.iv_plot, 'I (pA)', 'V (V)', 'I-V')
         for row, s in enumerate([20, 10, 10, 10]):

@@ -1,4 +1,3 @@
-import contextlib
 import json
 import os
 import re
@@ -128,7 +127,7 @@ class MultiPatchWindow(Qt.QWidget):
         self.ui.toTargetBtn.setOpts(future_producer=self._toTarget, **common_opts)
         self.ui.sealBtn.setOpts(future_producer=self._seal, raiseOnError=False, **common_opts)
         self.ui.reSealBtn.setOpts(future_producer=self._reSeal, raiseOnError=False, **common_opts)
-        self.ui.approachBtn.setOpts(future_producer=self._approach, **common_opts)
+        self.ui.approachBtn.setOpts(future_producer=self._approach, raiseOnError=False, **common_opts)
         self.ui.cleanBtn.setOpts(future_producer=self._clean, raiseOnError=False, **common_opts)
         self.ui.collectBtn.setOpts(future_producer=self._collect, raiseOnError=False, **common_opts)
 
@@ -163,11 +162,20 @@ class MultiPatchWindow(Qt.QWidget):
 
         self.loadConfig()
 
+    @property
+    def _shouldSaveCalibrationImages(self):
+        # TODO this isn't safe outside of the UI thread
+        return self.ui.saveCalibrationsBtn.isChecked()
+
+    @_shouldSaveCalibrationImages.setter
+    def _shouldSaveCalibrationImages(self, value):
+        self.ui.saveCalibrationsBtn.setChecked(True)
+
     def _turnOffSlowBtn(self, checked):
         self.ui.slowBtn.setChecked(False)
 
     def _turnOffFastBtn(self, checked):
-        self.ui.FastBtn.setChecked(False)
+        self.ui.fastBtn.setChecked(False)
 
     def saveConfig(self):
         geom = self.geometry()
@@ -178,6 +186,7 @@ class MultiPatchWindow(Qt.QWidget):
                 (ctrl.pip.name(), plot.mode): plot.plot.saveState()
                 for ctrl in self.pipCtrls for plot in ctrl.plots
             },
+            "should save calibration images": self._shouldSaveCalibrationImages,
         }
         getManager().writeConfigFile(config, self._configFileName())
 
@@ -195,6 +204,7 @@ class MultiPatchWindow(Qt.QWidget):
                     plot = next((plot for plot in ctrl.plots if plot.mode == plotname), None)
                     if plot is not None:
                         plot.plot.restoreState(config["plots"][(pipette, plotname)])
+        self._shouldSaveCalibrationImages = config.get("should save calibration images", True)
 
     def _configFileName(self):
         return os.path.join('modules', f'{self.module.name}.cfg')
@@ -231,7 +241,7 @@ class MultiPatchWindow(Qt.QWidget):
             pip.setState(state)
             for pip in self.selectedPipettes()
             if isinstance(pip, PatchPipette)
-        ])
+        ], name=f"Set pipettes state to {state}")
 
     def _moveHome(self):
         futures = []
@@ -241,7 +251,7 @@ class MultiPatchWindow(Qt.QWidget):
                 pip.setState('out')
                 pip = pip.pipetteDevice
             futures.append(pip.goHome(speed))
-        return MultiFuture(futures)
+        return MultiFuture(futures, name="Move pipettes home")
 
     def _nucleusHome(self):
         return self._setAllSelectedPipettesToState('home with nucleus')
@@ -262,12 +272,20 @@ class MultiPatchWindow(Qt.QWidget):
         for pip in self.selectedPipettes():
             pip.setState('bath')
             futures.append(pip.pipetteDevice.goAboveTarget(speed))
-        return MultiFuture(futures)
+        return MultiFuture(futures, name="Move pipettes above target")
 
     @future_wrap
     def _autoCalibrate(self, _future):
-        for pip in self.selectedPipettes():
-            pip.pipetteDevice.tracker.autoCalibrate()
+        work_to_do = self.selectedPipettes()
+        while work_to_do:
+            patchpip = work_to_do.pop(0)
+            pip = patchpip.pipetteDevice if isinstance(patchpip, PatchPipette) else patchpip
+            pos = pip.tracker.findTipInFrame()
+            success = _future.waitFor(pip.setTipOffsetIfAcceptable(pos), timeout=None).getResult()
+            if not success:
+                work_to_do.insert(0, patchpip)
+                continue
+
             _future.checkStop()
 
     def _cellDetect(self):
@@ -283,7 +301,7 @@ class MultiPatchWindow(Qt.QWidget):
                 pip.pipetteDevice if isinstance(pip, PatchPipette) else pip
             ).goTarget(speed)
             for pip in self.selectedPipettes()
-        ])
+        ], name="Move pipettes to target")
 
     def _seal(self):
         return self._setAllSelectedPipettesToState('seal')
@@ -292,17 +310,13 @@ class MultiPatchWindow(Qt.QWidget):
         return self._setAllSelectedPipettesToState('reseal')
 
     def _approach(self):
-        speed = self.selectedSpeed(default='fast')
         futures = []
         for pip in self.selectedPipettes():
             if isinstance(pip, PatchPipette):
-                pip.setState('bath')
-                futures.append(pip.pipetteDevice.goApproach(speed))
-                if pip.clampDevice is not None:
-                    pip.clampDevice.autoPipetteOffset()
+                futures.append(pip.setState('approach'))
             else:
-                futures.append(pip.goApproach(speed))
-        return MultiFuture(futures)
+                futures.append(pip.goApproach(self.selectedSpeed(default='fast')))
+        return MultiFuture(futures, name="Move pipettes to approach")
 
     def _clean(self):
         return self._setAllSelectedPipettesToState('clean')
@@ -341,7 +355,7 @@ class MultiPatchWindow(Qt.QWidget):
                 pip.setState('bath')
                 pip = pip.pipetteDevice
             futures.append(pip.goSearch(speed, distance=distance))
-        return MultiFuture(futures)
+        return MultiFuture(futures, name="Move pipettes to search")
 
     # def calibrateWithStage(self, pipettes, positions):
     #     """Begin calibration of selected pipettes and move the stage to a selected position for each pipette.
@@ -398,7 +412,17 @@ class MultiPatchWindow(Qt.QWidget):
         pos = self._cammod.window().getView().mapSceneToView(ev.scenePos())
         spos = pip.scopeDevice().globalPosition()
         pos = [pos.x(), pos.y(), spos.z()]
-        pip.resetGlobalPosition(pos)
+        tip_future = pip.setTipOffsetIfAcceptable(pos)
+        tip_future.onFinish(self._handleManualSetTip, pip, inGui=True)
+
+    def _handleManualSetTip(self, future, pip):
+        success = future.getResult()
+        if not success:
+            self._calibratePips.insert(0, pip)
+            return
+
+        if self._shouldSaveCalibrationImages:
+            pip.saveManualCalibration().raiseErrors("Failed to save calibration images")
 
         # if calibration stage positions were requested, then move the stage now
         if len(self._calibrateStagePositions) > 0:
