@@ -12,6 +12,7 @@ import threading
 import time
 import weakref
 from collections import OrderedDict
+from datetime import datetime
 
 from MetaArray import MetaArray
 
@@ -680,14 +681,18 @@ class Manager(Qt.QObject):
             try:
                 with open(TEMP_LOG, 'r') as f:
                     for line in f:
-                        record = logging.LogRecord(**json.loads(line))
+                        entry = json.loads(line)
+                        record = logging.LogRecord(**entry)
+                        record.created = datetime.fromisoformat(entry['timestamp']).timestamp()
                         file_handler.emit(record)
             finally:
                 os.remove(TEMP_LOG)
             log_win = get_log_window()
             with open(self._logFile.name(), 'r') as f:
                 for i, line in enumerate(f):
-                    record = logging.LogRecord(**json.loads(line))
+                    entry = json.loads(line)
+                    record = logging.LogRecord(**entry)
+                    record.created = datetime.fromisoformat(entry['timestamp']).timestamp()
                     log_win.new_record(record, sort=False)
                     if i % 20 == 0:
                         Qt.QApplication.processEvents()
