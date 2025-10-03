@@ -12,7 +12,6 @@ import numpy as np
 from acq4 import getManager
 from acq4.util import Qt
 from acq4.util.future import Future, future_wrap
-
 from neuroanalysis.test_pulse import PatchClampTestPulse
 from pyqtgraph import disconnect
 from pyqtgraph.units import µm
@@ -54,8 +53,8 @@ class PatchPipetteState(Future):
                                   'optional': True},
         'initialPressure': {'type': 'float', 'default': None, 'optional': True, 'suffix': 'Pa'},
         'initialClampMode': {'type': 'list', 'default': None, 'limits': ['VC', 'IC'], 'optional': True},
-        'initialICHolding': {'type': 'float', 'default': None, 'optional': True},
-        'initialVCHolding': {'type': 'float', 'default': None, 'optional': True},
+        'initialICHolding': {'type': 'float', 'default': None, 'optional': True, 'suffix': 'A'},
+        'initialVCHolding': {'type': 'float', 'default': None, 'optional': True, 'suffix': 'V'},
         'initialTestPulseEnable': {'type': 'bool', 'default': None, 'optional': True},
         'initialTestPulseParameters': {'type': 'group', 'children': []},  # TODO
         'initialAutoBiasEnable': {'type': 'bool', 'default': False, 'optional': True},
@@ -411,7 +410,8 @@ class SteadyStateAnalysisBase(object):
 
     @staticmethod
     def exponential_decay_avg(dt, prev_avg, value, tau):
+        """Compute exponential decay average and ratio of new to old average."""
         alpha = 1 - np.exp(-dt / tau)
         avg = prev_avg * (1 - alpha) + value * alpha
-        ratio = np.log10(avg / prev_avg)
+        ratio = avg / prev_avg
         return avg, ratio

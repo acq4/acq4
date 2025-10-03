@@ -145,15 +145,12 @@ class SealAnalysis(SteadyStateAnalysisBase):
 
 
 def find_optimal_pressure(pressures, resistances) -> float:
-    try:
-        win = 3
-        dRss = np.diff(np.log(np.convolve(resistances.data, np.ones(win) / win, mode='valid')))
-        closest_indices = find_closest(pressures.time_values, resistances.time_values)
-        p_like_r = pressures.data[closest_indices][1:]
-        p_like_r = np.convolve(p_like_r, np.ones(win) / win, mode='valid')
-        return float(p_like_r[np.argmax(dRss)])
-    except ValueError as exc:
-        raise ValueError("Cannot calculate optimal pressure without resistance data") from exc
+    win = 3
+    dRss = np.diff(np.log(np.convolve(resistances.data, np.ones(win) / win, mode='valid')))
+    closest_indices = find_closest(pressures.time_values, resistances.time_values)
+    p_like_r = pressures.data[closest_indices][1:]
+    p_like_r = np.convolve(p_like_r, np.ones(win) / win, mode='valid')
+    return float(p_like_r[np.argmax(dRss)])
 
 
 def find_closest(data, values):
@@ -259,7 +256,7 @@ class SealState(PatchPipetteState):
         'pressureScanInterval': {'type': 'float', 'default': 10.0, 'suffix': 's'},
         'pressureScanRadius': {'type': 'float', 'default': 2 * kPa, 'suffix': 'Pa'},
         'pressureScanDuration': {'type': 'float', 'default': 5.0, 'suffix': 's'},
-        'pressureScanTrust': {'type': 'float', 'default': 0.25},
+        'pressureScanTrust': {'type': 'float', 'default': 0.25, 'suffix': '%'},
     }
 
     def __init__(self, dev, config):

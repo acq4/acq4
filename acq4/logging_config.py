@@ -8,6 +8,12 @@ from acq4.util.LogWindow import get_log_window, get_error_dialog
 from teleprox.log import LogServer
 
 log_server: LogServer | None = None
+_handlers = []
+
+def __reload__(old):
+    global log_server, _handlers
+    log_server = old.get('log_server', None)
+    _handlers = old.get('_handlers', [])
 
 
 class StringAwareJsonFormatter(JsonFormatter):
@@ -41,20 +47,38 @@ class StringAwareJsonFormatter(JsonFormatter):
             log_record['exc_info'] = None
 
 
+class HistoricLogRecord(logging.LogRecord):
+    """
+    A LogRecord subclass that can be instantiated from a dictionary of attributes and preservers them.
+    """
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.created = kwargs.get('created', self.created)
+        self.msecs = kwargs.get('msecs', self.msecs)
+        self.relativeCreated = kwargs.get('relativeCreated', self.relativeCreated)
+        self.thread = kwargs.get('thread', self.thread)
+        self.threadName = kwargs.get('threadName', self.threadName)
+        self.process = kwargs.get('process', self.process)
+        self.processName = kwargs.get('processName', self.processName)
+
+
 def setup_logging(
     log_file_path: str = "app.log",
-    log_window: bool = True,
-    root_level: int = logging.DEBUG,
+    gui: bool = True,
+    acq4_level: int = logging.DEBUG,
     console_level: int = logging.WARNING,
 ) -> logging.FileHandler:
     """
-    Set up the complete logging configuration.
+    Sets log levels and then creates or refreshes log handlers for a file, the console,
+    and optionally the primary Log window and error popup. It also starts a teleprox
+    LogServer as needed.
 
     Parameters
     ----------
     log_file_path: Path to the log file
-    log_window: Whether to connect to GUI log window and error dialog
-    root_level: Root logger level
+    gui: Whether to connect to GUI log window and error dialog
+    acq4_level: 'acq4' logger level
     console_level: Console handler level
 
     Returns
@@ -64,21 +88,20 @@ def setup_logging(
     global log_server
 
     root_logger = logging.getLogger()
-    root_logger.setLevel(logging.WARNING)
-    root_logger.handlers.clear()
+    for handler in _handlers:
+        root_logger.removeHandler(handler)
+    _handlers.clear()
 
     acq4_logger = logging.getLogger("acq4")
-    acq4_logger.setLevel(root_level)
-
-    # Clear any existing handlers
-    acq4_logger.handlers.clear()
+    acq4_logger.setLevel(acq4_level)
 
     # 1. Console handler (stderr, WARNING and above)
     console_handler = logging.StreamHandler(sys.stderr)
     console_handler.setLevel(console_level)
     console_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     console_handler.setFormatter(console_formatter)
-    acq4_logger.addHandler(console_handler)
+    root_logger.addHandler(console_handler)
+    _handlers.append(console_handler)
 
     # 2. File handler (all messages, JSON format)
     file_handler = logging.FileHandler(log_file_path)
@@ -90,22 +113,25 @@ def setup_logging(
         exc_info_as_array=True,
     )
     file_handler.setFormatter(json_formatter)
-    acq4_logger.addHandler(file_handler)
+    root_logger.addHandler(file_handler)
+    _handlers.append(file_handler)
 
     # 3. Teleprox
     if log_server is None:
         log_server = LogServer(acq4_logger)
 
     # 4. GUI Log Window handler (all messages)
-    if log_window:
+    if gui:
         log_window = get_log_window()
         log_window.handler.setLevel(logging.DEBUG)
-        acq4_logger.addHandler(log_window.handler)
+        root_logger.addHandler(log_window.handler)
+        _handlers.append(log_window.handler)
 
         # 5. GUI error dialog handler (ERROR and above)
         error_dialog = get_error_dialog()
         error_dialog.handler.setLevel(logging.ERROR)
-        acq4_logger.addHandler(error_dialog.handler)
+        root_logger.addHandler(error_dialog.handler)
+        _handlers.append(error_dialog.handler)
 
     return file_handler
 
@@ -118,19 +144,6 @@ def get_logger(name: str = "acq4") -> logging.Logger:
     if name != "acq4" and not name.startswith("acq4."):
         name = f"acq4.{name}"
     return logging.getLogger(name)
-
-
-def set_logger_level(logger_name: str, level: int) -> None:
-    """
-    Dynamically change a specific logger's level.
-
-    Args:
-        logger_name: Name of the logger (e.g., 'acq4.devices.camera')
-        level: New level (logging.DEBUG, logging.INFO, 25, etc.)
-    """
-    logger = logging.getLogger(logger_name)
-    logger.setLevel(level)
-    print(f"Set {logger_name} to {logging.getLevelName(level)}")
 
 
 def list_active_loggers() -> list:

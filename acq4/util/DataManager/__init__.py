@@ -16,6 +16,8 @@ import weakref
 from collections import OrderedDict
 from typing import Callable
 
+import numpy as np
+
 from acq4 import filetypes
 from acq4.logging_config import get_logger
 from acq4.util import Qt, advancedTypes as advancedTypes
@@ -353,7 +355,7 @@ class FileHandle(Qt.QObject):
         self.checkExists()
         with self.lock:
             with open(self.name(), 'r') as fd:
-                yield from fd
+                return list(fd)
 
     def nearestLogFile(self):
         """Return the nearest log file to this file, or None if no log file is found."""
@@ -824,7 +826,7 @@ class DirHandle(FileHandle):
                     else:
                         raise Exception("Directory '%s' is not managed!" % (self.name()))
                 try:
-                    self._index = readConfigFile(indexFile)
+                    self._index = readConfigFile(indexFile, np=np)
                     self._indexMTime = os.path.getmtime(indexFile)
                 except:
                     print("***************Error while reading index file %s!*******************" % indexFile)

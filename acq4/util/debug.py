@@ -16,7 +16,7 @@ def installExceptionHandler():
 
 
 @contextlib.contextmanager
-def except_and_print(exc_types, *a, **kw):
+def log_and_ignore_exception(exc_types, *a, **kw):
     try:
         yield
     except exc_types:

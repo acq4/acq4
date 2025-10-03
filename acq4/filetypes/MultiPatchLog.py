@@ -25,7 +25,7 @@ TEST_PULSE_METAARRAY_INFO = [
     {'name': 'access_resistance', 'type': 'float', 'units': 'Ω'},
     {'name': 'steady_state_resistance', 'type': 'float', 'units': 'Ω'},
     {'name': 'fit_amplitude', 'type': 'float'},
-    {'name': 'time_constant', 'type': 'float'},
+    {'name': 'time_constant', 'type': 'float', 'suffix': 's'},
     {'name': 'fit_yoffset', 'type': 'float'},
     {'name': 'fit_xoffset', 'type': 'float', 'units': 's'},
     {'name': 'capacitance', 'type': 'float', 'units': 'F'},

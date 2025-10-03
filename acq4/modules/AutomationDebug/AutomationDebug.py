@@ -1,17 +1,18 @@
 from __future__ import annotations
 
 import os
-import traceback
+import datetime
 from pathlib import Path
 
 import numpy as np
-from coorx import Point
-
+import pyqtgraph as pg
 import pyqtgraph as pg
 from MetaArray import MetaArray
-from acq4 import getManager
+from acq4_automation.feature_tracking.cell import Cell
+from coorx import Point
+from coorx import SRT3DTransform, TransposeTransform, TTransform
+from pyqtgraph.units import µm, m
 
-import pyqtgraph as pg
 from acq4.devices.Camera import Camera
 from acq4.devices.Microscope import Microscope
 from acq4.devices.PatchPipette import PatchPipette
@@ -21,22 +22,17 @@ from acq4.devices.Pipette.planners import (
     PipettePathGenerator,
     GeometryAwarePathGenerator,
 )
-from acq4.devices.Pipette.planners import PipettePathGenerator, GeometryAwarePathGenerator
 from acq4.logging_config import get_logger
 from acq4.modules.Camera import CameraWindow
 from acq4.modules.Module import Module
-from acq4.modules.TaskRunner import TaskRunner
 from acq4.util import Qt
 from acq4.util.future import Future, future_wrap
 from acq4.util.imaging import Frame
 from acq4.util.imaging.sequencer import acquire_z_stack
 from acq4.util.target import TargetBox
 from acq4.util.threadrun import futureInGuiThread, runInGuiThread
-from acq4.util.threadrun import runInGuiThread
-from coorx import SRT3DTransform, TransposeTransform, TTransform
-from pyqtgraph.units import µm, m
-from acq4_automation.feature_tracking.cell import Cell
 from .ranking_window import RankingWindow
+from ... import getManager
 
 logger = get_logger(__name__)
 UiTemplate = Qt.importTemplate(".window")
@@ -1064,7 +1060,7 @@ class AutomationDebugWindow(Qt.QWidget):
         if target is None:
             raise RuntimeError("No suitable new target found among detected cells.")
         self._previousTargets.append(target)
-        self.pipetteDevice.setTarget(target)
+        self.pipetteDevice.setTarget(target)  # TODO setCellTarget
         logger.info(f"Setting pipette target to {target}")
 
     def _handleAutoFinish(self, fut: Future):

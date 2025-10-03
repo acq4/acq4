@@ -6,7 +6,7 @@ import numpy as np
 
 import pyqtgraph as pg
 from acq4.util import ptime
-from acq4.util.debug import except_and_print
+from acq4.util.debug import log_and_ignore_exception
 from acq4.util.functions import plottable_booleans
 from acq4.util.future import Future, future_wrap
 from ._base import PatchPipetteState, SteadyStateAnalysisBase
@@ -157,9 +157,11 @@ class ResealAnalysis(SteadyStateAnalysisBase):
             detect_avg, detection_ratio = self.exponential_decay_avg(
                 dt, last_measurement['detect_avg'], resistance, self._detection_tau
             )
+            detection_ratio = np.log10(detection_ratio)
             repair_avg, repair_ratio = self.exponential_decay_avg(
                 dt, last_measurement['repair_avg'], resistance, self._repair_tau
             )
+            repair_ratio = np.log10(repair_ratio)
 
             is_stretching = (
                 detection_ratio > self._stretch_threshold or repair_ratio > self._stretch_threshold
@@ -227,12 +229,14 @@ class ResealState(PatchPipetteState):
     fallbackState : str
         State to transition to if reseal fails (default is 'whole cell')
     stretchDetectionThreshold : float
-        Maximum access resistance ratio before the membrane is considered to be stretching (default is 1.05)
+        Maximum log of the access resistance ratio before the membrane is considered to be
+        stretching (default is 0.005)
     tearDetectionThreshold : float
-        Minimum access resistance ratio before the membrane is considered to be tearing (default is 1)
+        Minimum log of the access resistance ratio before the membrane is considered to be tearing
+        (default is 0.00128)
     tornDetectionThreshold : float
-        Ratio of resistance divided by initial resistance below which the membrane is considered to be torn, using the
-        repairTau (default is 0.5)
+        If the repairTau-rolling average resistance drops below (this number times the initial
+        resistance), the tissue is considered irrevocably torn (default is 0.5)
     retractionSuccessDistance : float
         Distance (meters) to deem reseal successful regardless of resistance (default is 200 µm)
     minimumSuccessDistance : float
@@ -285,16 +289,16 @@ class ResealState(PatchPipetteState):
         'retractionStepInterval': {'type': 'float', 'default': 5, 'suffix': 's'},
         'retractionSuccessDistance': {'type': 'float', 'default': 200e-6, 'suffix': 'm'},
         'minimumSuccessDistance': {'type': 'float', 'default': 20e-6, 'suffix': 'm'},
-        'resealSuccessResistanceMultiplier': {'type': 'float', 'default': 4.0},
+        'resealSuccessResistanceMultiplier': {'type': 'float', 'default': 4.0, 'suffix': '*'},
         'minimumSuccessResistance': {'type': 'float', 'default': 500e6, 'suffix': 'Ω'},
         'obviousResealSuccessResistance': {'type': 'float', 'default': 1e9, 'suffix': 'Ω'},
         'resealSuccessDuration': {'type': 'float', 'default': 5, 'suffix': 's'},
         'postSuccessRetractionSpeed': {'type': 'float', 'default': 6e-6, 'suffix': 'm/s'},
         'detectionTau': {'type': 'float', 'default': 1, 'suffix': 's'},
         'repairTau': {'type': 'float', 'default': 10, 'suffix': 's'},
-        'stretchDetectionThreshold': {'type': 'float', 'default': 0.005, 'suffix': '%'},
-        'tearDetectionThreshold': {'type': 'float', 'default': -0.00128, 'suffix': '%'},
-        'tornDetectionThreshold': {'type': 'float', 'default': 0.5, 'suffix': '%'},
+        'stretchDetectionThreshold': {'type': 'float', 'default': 0.005, 'suffix': '%', 'siPrefix': False},
+        'tearDetectionThreshold': {'type': 'float', 'default': -0.00128, 'suffix': '%', 'siPrefix': False},
+        'tornDetectionThreshold': {'type': 'float', 'default': 0.5, 'suffix': '%', 'siPrefix': False},
         'slurpPressure': {'type': 'float', 'default': -10e3, 'suffix': 'Pa'},
         'slurpRetractionSpeed': {'type': 'float', 'default': 10e-6, 'suffix': 'm/s'},
         'slurpDuration': {'type': 'float', 'default': 10, 'suffix': 's'},
@@ -462,10 +466,10 @@ class ResealState(PatchPipetteState):
                 return config['fallbackState']
             elif retraction_future is None or retraction_future.wasInterrupted():
                 if retraction_future is not None:
-                    retraction_future.printInterestingExceptions("Reseal retraction error")
+                    retraction_future.logErrors("Reseal retraction error")
                 if recovery_future is not None:
                     recovery_future.stop(wait=True)
-                    recovery_future.printInterestingExceptions("Reseal recovery error")
+                    recovery_future.logErrors("Reseal recovery error")
                 self.setState("retracting")
                 self._moveFuture = retraction_future = dev.pipetteDevice.stepwiseAdvance(
                     depth=dev.pipetteDevice.approachDepth(),
@@ -503,9 +507,9 @@ class ResealState(PatchPipetteState):
 
     def _cleanup(self):
         if self._moveFuture is not None:
-            with except_and_print(Exception, "Failed to stop move future"):
+            with log_and_ignore_exception(Exception, "Failed to stop move future"):
                 self._moveFuture.stop()
         if self._pressureFuture is not None:
-            with except_and_print(Exception, "Failed to stop pressure future"):
+            with log_and_ignore_exception(Exception, "Failed to stop pressure future"):
                 self._pressureFuture.stop()
         return super()._cleanup()

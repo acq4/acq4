@@ -10,7 +10,7 @@ import numpy as np
 import pyqtgraph as pg
 
 from acq4.util import ptime
-from acq4.util.debug import except_and_print
+from acq4.util.debug import log_and_ignore_exception
 from acq4.util.functions import plottable_booleans
 from acq4.util.future import future_wrap
 from ._base import PatchPipetteState, SteadyStateAnalysisBase
@@ -287,7 +287,7 @@ class CellDetectState(PatchPipetteState):
                 if self._moveFuture is None:
                     self._moveFuture = self._move()
                 if self._moveFuture.isDone():
-                    self._moveFuture.printInterestingExceptions("Error during move")
+                    self._moveFuture.logErrors("Error during move")
                     self._moveFuture = None
                     if self._reachedEndpoint:
                         return self._transition_to_fallback(
@@ -495,9 +495,9 @@ class CellDetectState(PatchPipetteState):
 
     def _cleanup(self):
         if self._moveFuture is not None and not self._moveFuture.isDone():
-            with except_and_print(Exception, "Error stopping move during cleanup"):
+            with log_and_ignore_exception(Exception, "Error stopping move during cleanup"):
                 self._moveFuture.stop()
-        with except_and_print(Exception, "Error storing target position"):
+        with log_and_ignore_exception(Exception, "Error storing target position"):
             patchrec = self.dev.patchRecord()
             patchrec['cellDetectFinalTarget'] = tuple(self.dev.pipetteDevice.targetPosition())
         return super()._cleanup()
