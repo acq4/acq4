@@ -5,10 +5,21 @@ from acq4.devices.Device import Device
 
 
 class StageSwitch(Device):
-    """Switch device that uses stage position to determine its output.
+    """
+    Switch device that uses stage position to determine its output.
 
     This is used, for example, in the Scientifica SliceScope where one stage axis is used to
     switch between objectives.
+
+    Configuration options:
+
+    * **switches** (dict, required): Dictionary defining switches to monitor
+        - Key: Switch name (e.g., 'objective')
+        - Value: Switch configuration dict containing:
+            - **device** (str): Name of Stage device to monitor
+            - Position value mappings (int/str keys): Threshold definitions as tuples
+              where each tuple defines axis ranges as [min, max] values. Use None 
+              for unbounded ranges.
 
     Example configuration::
 

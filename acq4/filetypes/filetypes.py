@@ -7,8 +7,10 @@ Functions for accessing available fileTypes. Generally these are used by DataMan
 and should not be accessed directly.
 """
 import os
-import acq4.util.debug as debug
 
+from acq4.logging_config import get_logger
+
+logger = get_logger(__name__)
 KNOWN_FILE_TYPES = None
 
 
@@ -41,7 +43,7 @@ def suggestWriteType(data, fileName=None):
         try:
             cls = getFileType(typ)
         except Exception:
-            debug.printExc(f"ignoring filetype {typ}")
+            logger.exception(f"ignoring filetype {typ}")
             continue
         priority = cls.acceptsData(data, fileName)
         if priority is False:
@@ -104,7 +106,7 @@ def listFileTypes():
             try:
                 getFileType(typ)
             except Exception:
-                debug.printExc(f"Error loading file type library '{typ}':")
+                logger.exception(f"Error loading file type library '{typ}':")
     return list(KNOWN_FILE_TYPES.keys())
 
 

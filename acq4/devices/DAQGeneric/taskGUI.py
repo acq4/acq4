@@ -1,14 +1,10 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-
 import weakref
 
 from acq4.devices.DAQGeneric.DaqChannelGui import OutputChannelGui, InputChannelGui
 from acq4.devices.Device import TaskGui
+from acq4.util import Qt
 from pyqtgraph import PlotWidget
 from pyqtgraph.WidgetGroup import WidgetGroup
-from acq4.util import Qt
-from acq4.util.debug import printExc
 
 Ui_Form = Qt.importTemplate('.TaskTemplate')
 
@@ -46,6 +42,7 @@ class DAQGenericTaskGui(TaskGui):
     def createChannelWidget(self, ch, daqName=None):
         conf = self.dev._DGConfig[ch]
         p = PlotWidget(self)
+        p.setObjectName(f"DAQGeneric_{self.dev.name()}_{ch}_plot")
         
         units = ''
         if 'units' in conf:
@@ -85,11 +82,12 @@ class DAQGenericTaskGui(TaskGui):
                 try:
                     self.channels[ch].restoreState(state['channels'][ch])
                 except KeyError:
-                    printExc("Warning: Cannot restore state for channel %s.%s (channel does not exist on this device)" % (self.dev.name(), ch))
-                    continue    
+                    msg = f"Warning: Cannot restore state for channel {self.dev.name()}.{ch} (channel does not exist on this device)"
+                    self.dev.logger.exception(msg)
+                    continue
         except:
-            printExc('Error while restoring GUI state:')
-        
+            self.dev.logger.exception('Error while restoring GUI state:')
+
     def listSequence(self):
         ## returns sequence parameter names and lengths
         l = {}

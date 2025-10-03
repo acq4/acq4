@@ -64,8 +64,10 @@ class ResnetPipetteTracker(PipetteTracker):
         # Calculate angle of pipette relative to pointing right (positive across columns)
         pipetteAngle = np.arctan2(-imageDir[0], imageDir[1]) * 180 / np.pi
 
+        pxSize = frame.info()["pixelSize"][0]
+
         # measure image pixel offset and z error to pipette tip
-        xyOffset, zErr, snr = self.estimateOffset(img, pipetteAngle)
+        xyOffset, zErr, snr = self.estimateOffset(img, pipetteAngle, pxSize)
         performance = snr * 100
 
         # map pixel offsets back to physical coordinates
@@ -73,9 +75,9 @@ class ResnetPipetteTracker(PipetteTracker):
 
         return (tipPos.x(), tipPos.y(), tipPos.z() + zErr * 1e-6), performance
 
-    def estimateOffset(self, img, pipetteAngle):
+    def estimateOffset(self, img, pipetteAngle, pxSize):
         from acq4_automation.object_detection import do_pipette_tip_detection
-        self.result = do_pipette_tip_detection(img, pipetteAngle, show=False)
+        self.result = do_pipette_tip_detection(img, pipetteAngle, pxSize, show=False)
         return self.result[:3]
 
 
@@ -600,6 +602,7 @@ class DriftMonitor(Qt.QWidget):
         self.setLayout(self.layout)
 
         self.gv = pg.GraphicsLayoutWidget()
+        self.gv.setObjectName("PipetteTracker_graphicsLayoutWidget")
         self.layout.addWidget(self.gv, 0, 0)
 
         self.plot = self.gv.addPlot(labels={"left": ("Drift distance", "m"), "bottom": ("Time", "s")})

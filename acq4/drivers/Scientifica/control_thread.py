@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import queue
 import sys
 import threading
@@ -7,7 +8,7 @@ import time
 
 import numpy as np
 
-from acq4.util.debug import printExc
+logger = logging.getLogger(__name__)
 
 
 class ScientificaControlThread:
@@ -31,7 +32,7 @@ class ScientificaControlThread:
         self.current_move: ScientificaRequestFuture | None = None
         self.request_queue = queue.Queue()
 
-        self.thread = threading.Thread(target=self.run, daemon=True)
+        self.thread = threading.Thread(target=self.run, daemon=True, name='ScientificaControlThread')
         self.thread.start()
 
     def set_pos_callback(self, func):
@@ -52,13 +53,13 @@ class ScientificaControlThread:
         """
         self.default_speed = speed
 
-    def stop(self):
+    def stop(self, reason):
         """Stop the device immediately"""
-        return self._request('stop')
+        return self._request('stop', reason=reason)
 
-    def move(self, pos, speed, attempts_allowed=3):
+    def move(self, pos, speed, attempts_allowed=3, name=None):
         """Move the device to *pos* (in µm) with *speed* (in µm/s)"""
-        return self._request('move', pos=pos, speed=speed, attempts_allowed=attempts_allowed)
+        return self._request('move', pos=pos, speed=speed, attempts_allowed=attempts_allowed, name=name)
 
     def quit(self):
         """Quit the control thread"""
@@ -96,7 +97,7 @@ class ScientificaControlThread:
         cmd = fut.request
         try:
             if cmd == 'stop':
-                self._handle_stop()
+                self._handle_stop(fut)
                 fut.set_result(None)
             elif cmd == 'move':
                 self._handle_move(fut)
@@ -116,16 +117,17 @@ class ScientificaControlThread:
             # self.dev.serial.send('STOP')
             self.check_position()
             if self.current_move is not None:
-                self.current_move.fail('Interrupted by another move request.')
+                self.current_move.fail(f'Interrupted by another move request ({fut.name})')
             self.current_move = None
         self.current_move = fut
         self.send_move_command()
 
-    def _handle_stop(self):
+    def _handle_stop(self, fut):
         self.dev.serial.send('STOP')
         if self.current_move is not None:
             while True:
-                self.check_position(miss_reason='Stopped by request.')
+                reason = '' if fut.kwds['reason'] is None else f" ({fut.kwds['reason']})"
+                self.check_position(miss_reason=f'Stopped by request{reason}')
                 if self.dev.isMoving():
                     time.sleep(0.1)
                 else:
@@ -172,12 +174,13 @@ class ScientificaControlThread:
         recheck : bool
             If True, then check the position again after a short delay to ensure that the device has stopped moving.
         """
-        # check position and invoke change callback 
+        # check position and invoke change callback
         try:
             pos = self.dev.getPos()
-        except Exception:
+        except Exception as e:
             self.dev.serial.flush()
-            printExc("Ignored error while getting position from Scientifica device:")
+            msg = "Ignored error while getting position from Scientifica device:"
+            logger.exception(msg)
             return
 
         if self.pos_callback is not None and pos != self.last_pos:
@@ -224,9 +227,11 @@ class ScientificaControlThread:
     def check_objective(self):
         try:
             obj = self.dev.getObjective()
-        except Exception:
+        except Exception as e:
             self.dev.serial.flush()
-            printExc("Ignored error while getting objective from Scientifica device:")
+            logger.exception(
+                "Ignored error while getting objective from Scientifica device:"
+            )
             return
 
         if self.obj_callback is not None and obj != self.last_obj:
@@ -292,10 +297,10 @@ class ScientificaRequestFuture:
         If the request fails, then raise an exception with more information.
         """
         if self._done.wait(timeout=timeout) is False:
-            raise TimeoutError(f'Timeout waiting for {self.request} to complete')
+            raise TimeoutError(f'Timeout waiting for {str(self)} to complete')
         elif self.exc_info is not None:
             raise self.FutureError(
-                f"An error occurred during the request to {self.request}"
+                f"An error occurred during the request to {str(self)}"
             ) from self.exc_info[1]
         elif self.error is not None:
             raise self.FutureError(self.error)
@@ -325,3 +330,6 @@ class ScientificaRequestFuture:
     def target_pos(self):
         assert self.request == 'move'
         return self.kwds['pos']
+
+    def __str__(self):
+        return f"{self.request} {self.kwds.get('name', '')}"

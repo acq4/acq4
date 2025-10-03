@@ -1,0 +1,59 @@
+import logging
+
+import teleprox
+
+SERVER_PORT = 60738
+SERVER_ADDRESS = f"tcp://localhost:{SERVER_PORT}"
+
+ms_client = None
+ms_process = None  # only exists if it was started this time
+logger = logging.getLogger('motionsynergy_server')
+logger.setLevel(logging.INFO)
+log_server = teleprox.log.remote.LogServer(logger=logger)
+
+
+def get_client(dll_path):
+    """Return an RPCClient connected to the motionSynergy server."""
+    global ms_client
+    if ms_client is None:
+        try:
+            ms_client = teleprox.RPCClient.get_client(
+                address=SERVER_ADDRESS, local_server="threaded"
+            )
+            ms_client._import('teleprox.log').set_logger_address(log_server.address)
+            logger.info("Connected to motionSynergy server.")
+        except ConnectionRefusedError as exc:
+            exc.add_note("No motionsynergy server running; starting one now..")
+            ms_client = start_server(
+                dll_path=dll_path,
+                log_addr=log_server.address,
+            )
+    if not ms_client["smartstage"].control_thread.is_running():
+        ms_client["smartstage"].control_thread.start_thread()
+    return ms_client
+
+
+def start_server(dll_path, log_addr):
+    global ms_process
+    print("Starting motionSynergy server..")
+    ms_process = teleprox.start_process(
+        'motionsynergy_server',
+        qt=True,
+        address=SERVER_ADDRESS,
+        daemon=True,
+        log_addr=log_addr,
+        log_level='INFO',
+        local_server="threaded",
+    )
+
+    ms_server = ms_process.client._import('acq4.drivers.dovermotion.motionsynergy_api')
+    ms_server.install_tray_icon()
+    motionSynergy, instrumentSettings = ms_server.get_motionsynergyapi(dll_path)
+    ms_process.client['motionsynergy_module'] = ms_server
+    ms_process.client['motionSynergy'] = motionSynergy
+    ms_process.client['instrumentSettings'] = instrumentSettings
+
+    ss = ms_process.client._import('acq4.drivers.dovermotion.smartstage').SmartStage(_timeout=90)
+    ms_process.client['smartstage'] = ss
+
+    return ms_process.client

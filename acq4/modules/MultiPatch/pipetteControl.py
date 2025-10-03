@@ -118,7 +118,8 @@ class PipetteControl(Qt.QWidget):
             PlotWidget(mode='test pulse'), 
             PlotWidget(mode='ss resistance')
         ]
-        for plt in self.plots:
+        for i, plt in enumerate(self.plots):
+            plt.plot.setObjectName(f"MultiPatch_{pipette.name()}_plot{i+1}")
             self.ui.plotLayout.addWidget(plt)
             plt.sigModeChanged.connect(self.plotModeChanged)
 
@@ -407,7 +408,8 @@ class PlotWidget(Qt.QWidget):
             self._analysisLabel = None
         if self.mode == 'test pulse':
             self.plot.clear()
-            self._plotTestPulse(tp)
+            if tp is not None:
+                self._plotTestPulse(tp)
         elif self.mode == 'tp analysis':
             self.plot.clear()
             tp.plot(self.plot, label=False)
@@ -422,7 +424,8 @@ class PlotWidget(Qt.QWidget):
                 'capacitance': ('capacitance', 'F'),
             }
             key, units = analysis_by_mode[self.mode]
-            self.plot.plot(history['event_time'] - history['event_time'][0], history[key], clear=True)
+            if len(history['event_time']) > 0:
+                self.plot.plot(history['event_time'] - history['event_time'][0], history[key], clear=True)
             val = tp.analysis[key]
             if val is None:
                 val = np.nan

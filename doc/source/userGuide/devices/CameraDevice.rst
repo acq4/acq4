@@ -3,7 +3,7 @@
 Camera Devices
 ==============
 
-Support for scientific cameras currently includes all devices which use either PVCam (Photometrics) or QCam (Q-Imaging) drivers. Cameras support live-imaging modes via the :ref:`Camera module <userModulesCamera>` as well as controlled data acquisition modes that specify the timing and behavior of the device via the :ref:`Task Runner module <userModulesTaskRunner>`. In live-imaging mode, the camera collects frames freely and sends them to a user-interface module for display. This mode is generally used for visualizing the preparation throughout the experiment including while navigating and during placement of electrodes for stimulating or patching. Cameras may also make use of connections to data acquisition channels. During task execution, the camera may be triggered by the data acquisition board or serve as the starting trigger for another device. 
+ACQ4 supports a wide variety of scientific cameras through multiple driver interfaces, with most cameras now accessed via the MicroManager interface for maximum compatibility. Cameras support live-imaging modes via the :ref:`Camera module <userModulesCamera>` as well as controlled data acquisition modes that specify the timing and behavior of the device via the :ref:`Task Runner module <userModulesTaskRunner>`. In live-imaging mode, the camera collects frames freely and sends them to a user-interface module for display. This mode is generally used for visualizing the preparation throughout the experiment including while navigating and during placement of electrodes for stimulating or patching. Cameras may also make use of connections to data acquisition channels. During task execution, the camera may be triggered by the data acquisition board or serve as the starting trigger for another device. 
 
 In addition, many cameras export a TTL signal that indicates the timing of frame exposures. When it is recorded, this signal is analyzed to determine starting exposure time of each camera frame, allowing the precise synchronization of imaging and electrophysiology or other signals. Image data is stored to disk alongside the raw exposure and trigger signals, and the time values of each frame are stored as meta-data. The result is that physiological recordings made synchronously with imaging can be automatically registered temporally during analysis.
 
@@ -21,14 +21,16 @@ Cameras support the following features:
 Note that the exact features available will depend on the capabilities of the camera hardware.
 
 
-Camera device subclasses:
+Camera device drivers:
     
 .. toctree::
     :maxdepth: 1
     
+    MicroManagerCameraDevice
+    VimbaXCameraDevice
+    MockCameraDevice
     QCamDevice
     PVCamDevice
-    MockCameraDevice
 
 
 .. _userDevicesCameraHardware:
@@ -50,6 +52,14 @@ In addition to electrical connections, it is also useful to consider the physica
 
 Configuration Options
 ---------------------
+
+**Driver Selection**
+
+For new setups, the **MicroManagerCamera** driver is recommended as it provides the broadest hardware compatibility through MicroManager's extensive plugin system. This driver supports cameras from most major manufacturers including Photometrics, Hamamatsu, FLIR/Point Grey, Allied Vision, and many others.
+
+The **VimbaXCamera** driver provides direct support for Allied Vision cameras and may offer better performance than the MicroManager interface for those specific cameras.
+
+Legacy drivers (**QCamDevice** and **PVCamDevice**) are still available but are no longer actively maintained and may not work with newer camera models or software versions.
 
 All cameras support a base set of configuration options, and each camera type supports its own extra options based on the features of that camera. 
 
@@ -85,7 +95,11 @@ The following is an example camera configuration:
     
 The configuration parameters common to all camera types are:
 
-* **driver** must be one of the available Camera device types (:ref:`QCam <userDevicesQImagingCameras>`, :ref:`PVCam <userDevicesPhotometricsCameras>`, or :ref:`MockCamera <userDevicesMockCamera>`).
+* **driver** must be one of the available Camera device types. The most commonly used drivers are:
+    * **MicroManagerCamera** - Supports most scientific cameras via MicroManager interface (recommended)
+    * **VimbaXCamera** - Allied Vision cameras using VimbaX interface
+    * **MockCamera** - Simulated camera for testing
+    * **QCamDevice** and **PVCamDevice** - Legacy direct drivers (no longer recommended)
 * **parentDevice** and **transform**, which define the camera's :ref:`optomechanical configuration <userDevicesOptomech>`.
 * :ref:`DAQ channel specifications <userDevicesDAQGenericChannelSpecification>` for each of the digital channels that are connected to the DAQ: 
     * **exposeChannel**

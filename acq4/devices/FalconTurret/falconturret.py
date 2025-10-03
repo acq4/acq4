@@ -5,6 +5,47 @@ from ..FilterWheel.filterwheel import FilterWheel, FilterWheelFuture, FilterWhee
 
 
 class FalconTurret(FilterWheel):
+    """
+    Driver for Falcon Optics motorized filter turret/wheel devices.
+    
+    Provides automated filter wheel control with homing and position calibration.
+    
+    Falcon-specific configuration options:
+    
+    * **configFile** (str, optional): Path to Falcon Optics configuration file
+      Uses default configuration if not specified
+    
+    * **initialSlot** (int, optional): Filter position to move to after homing
+      Device will home first, then move to this position
+    
+    Standard FilterWheel configuration options (see FilterWheel base class):
+    
+    * **filters** (dict): Filter definitions for each position
+        - Key: Position number (int)  
+        - Value: Filter configuration dict with 'name' and optional 'description'
+    
+    * **parentDevice** (str, optional): Name of parent optical device
+    
+    * **transform** (dict, optional): Spatial transform relative to parent device
+    
+    Example configuration::
+    
+        FalconTurret:
+            driver: 'FalconTurret'
+            configFile: '/path/to/falcon_config.ini'
+            initialSlot: 0
+            parentDevice: 'Microscope'
+            filters:
+                0:
+                    name: 'FITC'
+                    description: 'Green fluorescence filter'
+                1:
+                    name: 'Texas Red'
+                    description: 'Red fluorescence filter'
+                2:
+                    name: 'DAPI'
+                    description: 'Blue fluorescence filter'
+    """
     def __init__(self, dm, config, name):
         self.dev = falconoptics.Falcon(config_file=config.get('configFile', None))
         logger = logging.getLogger('falconoptics')
@@ -19,7 +60,7 @@ class FalconTurret(FilterWheel):
             self._initialFuture = self.home()
 
         if self._initialSlot is not None:
-            initThread = threading.Thread(target=self._setInitialPos)
+            initThread = threading.Thread(target=self._setInitialPos, name='FalconTurretInitThread')
             initThread.start()
 
     def _setInitialPos(self):
@@ -38,7 +79,8 @@ class FalconTurret(FilterWheel):
         if pos == 'home':
             self.dev.home(block=False)
         else:
-            self.dev.move_to_slide(pos, block=False)
+            if pos != self.getPosition():
+                self.dev.move_to_slide(pos, block=False)
         return FalconTurretFuture(self, pos)
 
     def home(self):

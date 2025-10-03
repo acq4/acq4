@@ -39,10 +39,21 @@ def getDevices():
 
 
 class XKeys(Keyboard):
-    """P.I. Engineering X-Keys input device.
-
-    Configuration example::
-
+    """
+    P.I. Engineering X-Keys programmable keyboard device.
+    
+    Supports various X-Keys models with programmable keys and backlighting.
+    
+    Configuration options:
+    
+    * **index** (int, required): Device index (0 for first X-Keys device, etc.)
+      Use incorrect index to see available device list in error message.
+    
+    The device provides individual key state monitoring and programmable 
+    red/blue LED backlighting for supported models.
+    
+    Example configuration::
+    
         PIKeyboard:
             driver: 'XKeys'
             index: 0

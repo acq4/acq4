@@ -3,7 +3,6 @@ from collections import OrderedDict
 from acq4.util.mies import MIES
 from .patch_clamp import MIESPatchClamp
 from .pressure_control import MIESPressureControl
-from .states import MIESPatchPipetteStateManager
 from ..PatchPipette import PatchPipette
 
 from acq4.util import Qt
@@ -11,10 +10,35 @@ from acq4.util import ptime
 
 
 class MIESPatchPipette(PatchPipette):
-    """A single patch pipette channel that uses a running MIES instance to handle
-    electrophysiology and pressure control.
     """
-    defaultStateManagerClass = MIESPatchPipetteStateManager
+    A patch pipette device that uses a running MIES instance for electrophysiology 
+    and pressure control.
+    
+    Configuration options:
+    
+    * **headstage** (int, required): MIES headstage number to use for this pipette
+    
+    * **pipetteDevice** (str, optional): Name of Pipette device for tip tracking
+    
+    * **sonicatorDevice** (str, optional): Name of sonicator device for cleaning
+    
+    * **stateManagerClass** (str, optional): Custom state manager class name
+    
+    * All other options from PatchPipette base class are supported
+    
+    This device automatically creates internal MIESPatchClamp and MIESPressureControl 
+    devices named "{name}_clamp" and "{name}_pressure" respectively.
+    
+    Example configuration::
+    
+        PatchPipette1:
+            driver: 'MIESPatchPipette'
+            headstage: 0
+            pipetteDevice: 'Pipette1'
+            sonicatorDevice: 'Sonicator1'
+    
+    Requires a running MIES instance with configured headstage hardware.
+    """
 
     def __init__(self, deviceManager, config, name):
         self.mies = MIES.getBridge()
@@ -60,7 +84,3 @@ class MIESPatchPipette(PatchPipette):
         if eventData is not None:
             newEv.update(eventData)
         self.sigNewEvent.emit(self, newEv)
-
-    def quit(self):
-        self.mies.quit()
-        super(MIESPatchPipette, self).quit()

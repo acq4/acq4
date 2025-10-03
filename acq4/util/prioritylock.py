@@ -42,7 +42,7 @@ class PriorityLock(object):
         self.unlock_event = Event()
         self.unlock_event.set()
 
-        self.lock_thread = Thread(target=self._lock_loop)
+        self.lock_thread = Thread(target=self._lock_loop, name="PriorityLockThread")
         self.lock_thread.daemon = True
         self.lock_thread.start()
 

@@ -1,12 +1,9 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-
 from acq4.devices.Device import TaskGui
+from acq4.logging_config import get_logger
 from pyqtgraph.WidgetGroup import WidgetGroup
 from acq4.util import Qt
-from acq4.util.debug import printExc
 
-
+logger = get_logger(__name__)
 Ui_Form = Qt.importTemplate('.TaskTemplate')
 
 
@@ -76,7 +73,7 @@ class NiDAQTask(TaskGui):
             self._block_update = True
             self.stateGroup.setState(state)
         except Exception:
-            printExc("Error while loading DAQ task GUI configuration (proceeding with default configuration) :")
+            logger.exception("Error while loading DAQ task GUI configuration (proceeding with default configuration) :")
         finally:
             self._block_update = block
             self.stateChanged()
