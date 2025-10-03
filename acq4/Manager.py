@@ -34,7 +34,7 @@ from .util.HelpfulException import HelpfulException
 from .util.LogWindow import get_log_window, get_error_dialog
 
 TEMP_LOG = "temp_log.json"
-setup_logging(TEMP_LOG, log_window=False, console_level=logging.DEBUG)
+setup_logging(TEMP_LOG, gui=False, console_level=logging.DEBUG)
 logger = get_logger()
 
 
@@ -173,7 +173,7 @@ class Manager(Qt.QObject):
                         self.showGUI()
                     raise
             setup_logging(
-                TEMP_LOG, root_level=self._rootLogLevel, console_level=self._consoleLogLevel
+                TEMP_LOG, acq4_level=self._rootLogLevel, console_level=self._consoleLogLevel
             )
 
         except Exception:
@@ -673,7 +673,7 @@ class Manager(Qt.QObject):
         self._logFile = d["log.json"]
         file_handler = setup_logging(
             self._logFile.name(),
-            root_level=self._rootLogLevel,
+            acq4_level=self._rootLogLevel,
             console_level=self._consoleLogLevel,
         )
         self.sigLogDirChanged.emit(d)

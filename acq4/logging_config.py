@@ -59,8 +59,8 @@ class HistoricLogRecord(logging.LogRecord):
 
 def setup_logging(
     log_file_path: str = "app.log",
-    log_window: bool = True,
-    root_level: int = logging.DEBUG,
+    gui: bool = True,
+    acq4_level: int = logging.DEBUG,
     console_level: int = logging.WARNING,
 ) -> logging.FileHandler:
     """
@@ -70,8 +70,8 @@ def setup_logging(
     Parameters
     ----------
     log_file_path: Path to the log file
-    log_window: Whether to connect to GUI log window and error dialog
-    root_level: Root logger level
+    gui: Whether to connect to GUI log window and error dialog
+    acq4_level: 'acq4' logger level
     console_level: Console handler level
 
     Returns
@@ -80,12 +80,8 @@ def setup_logging(
     """
     global log_server
 
-    root_logger = logging.getLogger()
-    root_logger.setLevel(logging.WARNING)
-    root_logger.handlers.clear()
-
     acq4_logger = logging.getLogger("acq4")
-    acq4_logger.setLevel(root_level)
+    acq4_logger.setLevel(acq4_level)
 
     # Clear any existing handlers
     acq4_logger.handlers.clear()
@@ -114,7 +110,7 @@ def setup_logging(
         log_server = LogServer(acq4_logger)
 
     # 4. GUI Log Window handler (all messages)
-    if log_window:
+    if gui:
         log_window = get_log_window()
         log_window.handler.setLevel(logging.DEBUG)
         acq4_logger.addHandler(log_window.handler)
