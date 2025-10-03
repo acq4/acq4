@@ -10,11 +10,11 @@ import traceback
 from typing import Callable, ParamSpec, Optional, overload
 from typing import Generic, TypeVar
 
+from acq4.logging_config import get_logger
+from acq4.util import Qt, ptime
 from pyqtgraph import FeedbackButton
 
-from acq4.util import Qt, ptime
-from acq4.util.debug import printExc, logMsg
-
+logger = get_logger(__name__)
 FUTURE_RETVAL_TYPE = TypeVar("FUTURE_RETVAL_TYPE")
 WAITING_RETVAL_TYPE = TypeVar("WAITING_RETVAL_TYPE")
 
@@ -53,7 +53,7 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         """Generate a useful name for a Future based on the code line that created it"""
         frame = inspect.currentframe().f_back  # start in parent's frame
         for _ in range(depth):
-            frame = frame.f_back  # walk up the stack 
+            frame = frame.f_back  # walk up the stack
         return f"(unnamed from {frame.f_code.co_filename}:{frame.f_lineno})"
 
     def __init__(self, onError=None, name=None, logLevel='debug'):
@@ -195,7 +195,7 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
             try:
                 self._onError(self)
             except Exception as e:
-                printExc(f"Error in Future.onError callback: {self._onError}")
+                logger.exception(f"Error in Future.onError callback: {self._onError}")
         self.finishedEvent.set()  # tell wait() that we're done
         self.sigFinished.emit(self)  # tell everyone else that we're done
         self._callCallbacks()
@@ -251,7 +251,7 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
                 else:
                     callback(self, *args, **kwargs)
             except Exception as e:
-                printExc(f"Error in Future callback: {callback}")
+                logger.exception(f"Error in Future callback: {callback}")
 
     def errorMessage(self):
         """Return a string description of the reason for a task failure,

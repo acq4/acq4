@@ -12,7 +12,6 @@ import acq4.Manager as Manager
 import pyqtgraph as pg
 from acq4.util import Qt, ptime
 from acq4.util.DataManager import DirHandle
-from acq4.util.debug import logMsg
 from acq4.util.future import Future, future_wrap
 from acq4.util.imaging import Frame
 from acq4.util.surface import find_surface
@@ -383,7 +382,7 @@ def acquire_z_stack(
             frames = enforce_linear_z_stack(frames, start, stop, step)
         except ValueError:
             if slow_fallback:
-                logMsg("Failed to fast-acquire linear z stack. Retrying with stepwise movement.")
+                imager.logger.info("Failed to fast-acquire linear z stack. Retrying with stepwise movement.")
                 frames = _future.waitFor(_slow_z_stack(imager, start, stop, step)).getResult()
                 frames = enforce_linear_z_stack(frames, start, stop, step)
             else:

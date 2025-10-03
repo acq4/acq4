@@ -11,9 +11,7 @@ import numpy as np
 
 from acq4 import getManager
 from acq4.util import Qt
-from acq4.util.debug import printExc
 from acq4.util.future import Future, future_wrap
-
 from neuroanalysis.test_pulse import PatchClampTestPulse
 from pyqtgraph import disconnect
 from pyqtgraph.units import µm

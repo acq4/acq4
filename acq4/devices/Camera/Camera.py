@@ -20,7 +20,6 @@ from acq4.util import Qt
 from acq4.util.Mutex import Mutex
 from acq4.util.Mutex import RecursiveMutex
 from acq4.util.Thread import Thread
-from acq4.util.debug import printExc
 from acq4.util.future import Future, future_wrap
 from acq4.util.imaging.frame import Frame
 from pyqtgraph import Vector, SRTTransform3D
@@ -28,6 +27,9 @@ from pyqtgraph.debug import Profiler
 from .CameraInterface import CameraInterface
 from .deviceGUI import CameraDeviceGui
 from .taskGUI import CameraTaskGui
+from ...logging_config import get_logger
+
+generic_logger = get_logger(__name__)
 
 
 class Camera(DAQGeneric, OptomechDevice):
@@ -125,7 +127,7 @@ class Camera(DAQGeneric, OptomechDevice):
             try:
                 self.setParams(defaults)
             except:
-                printExc("Error default setting camera parameters:")
+                self.logger.exception("Error default setting camera parameters:")
 
         # set up preset hotkeys
         for presetName, preset in self.camConfig.get("presets", {}).items():
@@ -894,7 +896,7 @@ class FrameProcessingThread(Thread):
                 try:
                     callback(frame)
                 except Exception:
-                    printExc("Frame processing callback failed")
+                    generic_logger.exception("Frame processing callback failed")
             self.sigFrameFullyProcessed.emit(frame)
 
 
@@ -998,7 +1000,7 @@ class AcquireThread(Thread):
             with self.camLock:
                 self.dev.stopCamera()
         except:
-            printExc("Error starting camera acquisition:")
+            self.dev.logger.exception("Error starting camera acquisition:")
             try:
                 with self.camLock:
                     self.dev.stopCamera()

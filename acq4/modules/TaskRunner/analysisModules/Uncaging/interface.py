@@ -1,6 +1,3 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-
 import weakref
 
 import numpy as np
@@ -9,7 +6,6 @@ from scipy.ndimage.filters import gaussian_filter
 from acq4.Manager import getManager
 from acq4.modules.TaskRunner.analysisModules.AnalysisModule import AnalysisModule
 from acq4.util import Qt
-from acq4.util.debug import printExc
 
 Ui_Form = Qt.importTemplate('.UncagingTemplate')
 
@@ -183,7 +179,9 @@ class Task:
         
         scanUi = self.ui().pr.getDevice(scannerDev)
         if not hasattr(scanUi, 'pointSize'):
-            printExc('The device "%s" does not appear to be a scanner; skipping analysis.' % scannerDev)
+            scannerDev.logger.exception(
+                f'The device "{scannerDev}" does not appear to be a scanner; skipping analysis.'
+            )
         pointSize = scanUi.pointSize()
         
         #if self.state['displayImageCheck']:
@@ -383,8 +381,8 @@ class Task:
                 if scene is not None:
                     scene.removeItem(item)
             except:
-                printExc("Error while cleaning up uncaging analysis:")
-                
+                self.ui().scannerDev.logger.exception("Error while cleaning up uncaging analysis:")
+
         #del self.imgItem
         #del self.frames
         #del self.img

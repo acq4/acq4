@@ -1,16 +1,16 @@
 import os.path
-from collections import OrderedDict
-import numpy as np
 import weakref
+from collections import OrderedDict
 
+import numpy as np
 
 import acq4.Manager as Manager
 import pyqtgraph as pg
 import pyqtgraph.dockarea as dockarea
 from acq4.util import Qt, ptime
 from acq4.util.StatusBar import StatusBar
-from acq4.util.debug import Profiler
 from acq4.util.imaging.sequencer import ImageSequencerCtrl
+from pyqtgraph.debug import Profiler
 from pyqtgraph.graphicsItems.ROI import RulerROI
 
 

@@ -1,5 +1,4 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
+import logging
 
 if __name__ == '__main__':
     import sys
@@ -13,6 +12,7 @@ import numpy as np
 import os
 import pyqtgraph.configfile as configfile
 
+logger = logging.getLogger(__name__)
 Ui_Form = Qt.importTemplate('.CMTemplate')
 
 
@@ -173,7 +173,7 @@ class ColorMapper(Qt.QWidget):
                 self.loadedFile = None
                 self.refreshFileList()
             except:
-                printExc('Error while deleting color scheme:')
+                logger.exception('Error while deleting color scheme:')
                 return
             finally:
                 self.deleteState = 0

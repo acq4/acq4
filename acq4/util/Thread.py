@@ -1,7 +1,7 @@
 import threading
 
 from acq4.util import Qt
-from .debug import enableFaulthandler
+from pyqtgraph.debug import enableFaulthandler
 
 
 class Thread(Qt.QThread):

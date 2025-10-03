@@ -19,12 +19,13 @@ from typing import Callable
 import numpy as np
 
 from acq4 import filetypes
+from acq4.logging_config import get_logger
 from acq4.util import Qt, advancedTypes as advancedTypes
 from acq4.util.Mutex import Mutex
-from acq4.util.debug import printExc
 from pyqtgraph import SignalProxy, BusyCursor
 from pyqtgraph.configfile import readConfigFile, writeConfigFile, appendConfigFile
 
+logger = get_logger(__name__)
 if not hasattr(Qt.QtCore, 'Signal'):
     Qt.Signal = Qt.pyqtSignal
     Qt.Slot = Qt.pyqtSlot
@@ -350,6 +351,38 @@ class FileHandle(Qt.QObject):
 
             return data
 
+    def readlines(self):
+        if self.fileType() is not None:
+            raise TypeError("readlines() can only be used on text files.")
+        self.checkExists()
+        with self.lock:
+            with open(self.name(), 'r') as fd:
+                return list(fd)
+
+    def nearestLogFile(self):
+        """Return the nearest log file to this file, or None if no log file is found."""
+        self.checkExists()
+        with self.lock:
+            fh = self
+            while fh is not None:
+                if fh.shortName() in ['log.txt', 'log.json']:
+                    return fh
+                elif fh.isDir():
+                    if fh.exists('log.json'):
+                        return fh['log.json']
+                    if fh.exists('log.txt'):
+                        return fh['log.txt']
+                fh = fh.parent()
+            return None
+
+    def __eq__(self, other):
+        if not isinstance(other, FileHandle):
+            return False
+        return abspath(self.name()) == abspath(other.name())
+
+    def __hash__(self):
+        return hash(abspath(self.name()))
+
     def fileType(self):
         with self.lock:
             info = self.info()
@@ -395,7 +428,7 @@ class FileHandle(Qt.QObject):
 
     def checkExists(self):
         if not self.exists():
-            raise Exception("File '%s' does not exist." % self.path)
+            raise FileNotFoundError(f"File '{self.path}' does not exist.")
 
     def checkDeleted(self):
         if self.path is None:
@@ -443,9 +476,6 @@ class DirHandle(FileHandle):
         """Return the name of the index file for this directory. NOT the same as indexFile()"""
         return os.path.join(self.path, '.index')
 
-    def _logFile(self):
-        return os.path.join(self.path, '.log')
-
     def __getitem__(self, item):
         item = item.lstrip(os.path.sep)
         fileName = os.path.join(self.name(), item)
@@ -455,50 +485,6 @@ class DirHandle(FileHandle):
         if self.isManaged():
             raise Exception("Directory is already managed!")
         self._writeIndex(OrderedDict([('.', {})]))
-
-    def logMsg(self, msg, tags=None):
-        """Write a message into the log for this directory."""
-        if tags is None:
-            tags = {}
-        with self.lock:
-            if type(tags) is not dict:
-                raise Exception("tags argument must be a dict")
-            tags['__timestamp__'] = time.time()
-            tags['__message__'] = str(msg)
-
-            fd = open(self._logFile(), 'a')
-            fd.write("%s\n" % repr(tags))
-            fd.close()
-            self.emitChanged('log', tags)
-
-    def readLog(self, recursive=0):
-        """Return a list containing one dict for each log line"""
-        with self.lock:
-            logf = self._logFile()
-            if not os.path.exists(logf):
-                log = []
-            else:
-                try:
-                    fd = open(logf, 'r')
-                    lines = fd.readlines()
-                    fd.close()
-                    log = [eval(l.strip()) for l in lines]
-                except:
-                    print("****************** Error reading log file %s! *********************" % logf)
-                    raise
-
-            if recursive > 0:
-                for d in self.subDirs():
-                    dh = self[d]
-                    subLog = dh.readLog(recursive=recursive-1)
-                    for msg in subLog:
-                        if 'subdir' not in msg:
-                            msg['subdir'] = ''
-                        msg['subdir'] = os.path.join(dh.shortName(), msg['subdir'])
-                    log  = log + subLog
-                log.sort(key=lambda a: a['__timestamp__'])
-
-            return log
 
     def subDirs(self):
         """Return a list of string names for all sub-directories."""
@@ -590,9 +576,9 @@ class DirHandle(FileHandle):
         try:
             files = os.listdir(self.name())
         except Exception:
-            printExc(f"Error while listing files in {self.name()}:")
+            logger.exception(f"Error while listing files in {self.name()}:")
             files = []
-        for i in ['.index', '.log']:
+        for i in ['.index']:
             if i in files:
                 files.remove(i)
 

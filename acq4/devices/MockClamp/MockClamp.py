@@ -1,12 +1,12 @@
 import os
-import teleprox
 from typing import Literal
+
+import teleprox
 from acq4.devices.DAQGeneric import DAQGeneric, DAQGenericTask, DAQGenericTaskGui
 from acq4.devices.PatchClamp import PatchClamp
 from acq4.logging_config import log_server
 from acq4.util import Qt
 from acq4.util.Mutex import Mutex
-from acq4.util.debug import printExc
 from pyqtgraph.WidgetGroup import WidgetGroup
 
 ivModes = {'I=0': 'IC', 'VC': 'VC', 'IC': 'IC'}
@@ -20,7 +20,7 @@ class MockClamp(PatchClamp):
 
     Configuration examples::
 
-        # Simuator imported from neuroanalysis
+        # Simulator imported from neuroanalysis
         simulator: 'neuroanalysis'
 
         # simulator using neuron with cell model downloaded from AllenSDK
@@ -55,7 +55,7 @@ class MockClamp(PatchClamp):
         try:
             self.setHolding()
         except Exception:
-            printExc("Error while setting holding value:")
+            self.logger.exception("Error while setting holding value:")
 
         # Start a remote process to run the simulation.
         if log_server is None:

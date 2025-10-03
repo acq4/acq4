@@ -1,17 +1,18 @@
 ##Needs to:
 ##    output set of parameters: Ih current, rectification, FI plots (and analysis based on)
 ##    load IV directory, plot raw data, sends data to a function(flowchart) which returns a list of parameters. 
-from __future__ import print_function
 
 import os
 from collections import OrderedDict
 
 import numpy as np
 
-import acq4.util.debug as debug
 from acq4.analysis.AnalysisModule import AnalysisModule
+from acq4.logging_config import get_logger
 from pyqtgraph import mkPen
 from pyqtgraph.flowchart import Flowchart
+
+logger = get_logger(__name__)
 
 
 class IVCurve(AnalysisModule):
@@ -51,8 +52,8 @@ class IVCurve(AnalysisModule):
             ## load default chart
             self.flowchart.loadFile(os.path.join(flowchartDir, 'default.fc'))
         except:
-            debug.printExc('Error loading default flowchart:')
-        
+            logger.exception('Error loading default flowchart:')
+
         #self.flowchart.sigOutputChanged.connect(self.outputChanged)
         
     def loadFileRequested(self, fh):

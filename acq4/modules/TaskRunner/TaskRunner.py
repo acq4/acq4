@@ -1,13 +1,13 @@
 import contextlib
+import gc
+import os
+import sys
+import time
 from collections import OrderedDict
 from functools import reduce
 
-import gc
 import numpy as np
-import os
 import six
-import sys
-import time
 
 import acq4.util.DirTreeWidget as DirTreeWidget
 import pyqtgraph as pg
@@ -18,11 +18,14 @@ from acq4.util.HelpfulException import HelpfulException
 from acq4.util.SequenceRunner import runSequence
 from acq4.util.StatusBar import StatusBar
 from acq4.util.Thread import Thread
-from acq4.util.debug import printExc, Profiler, logMsg, Mutex
+from pyqtgraph.debug import Profiler
+from pyqtgraph.util.mutex import Mutex
 from acq4.util.future import Future
 from . import analysisModules
 from ..Module import Module
+from ...logging_config import get_logger
 
+logger = get_logger(__name__)
 Ui_MainWindow = Qt.importTemplate('.TaskRunnerTemplate')
 
 
@@ -255,7 +258,7 @@ class TaskRunner(Module):
             if self.firstDock is None:
                 self.firstDock = dock
             else:
-                # by default, docks are tabbed. 
+                # by default, docks are tabbed.
                 # if dock state is stored, this will be corrected later.
                 Qt.QApplication.sendPostedEvents(dock, 0)  # required to ensure new tab is visible
                 self.win.tabifyDockWidget(self.firstDock, dock)
@@ -265,7 +268,7 @@ class TaskRunner(Module):
 
             return True
         except:
-            printExc("Analysis module creation failed:")
+            logger.exception("Analysis module creation failed:")
             return False
 
     def removeAnalysisDock(self, mod):
@@ -274,7 +277,7 @@ class TaskRunner(Module):
         try:
             self.analysisDocks[mod].widget().quit()
         except:
-            printExc("Error closing analysis dock:")
+            logger.exception("Error closing analysis dock:")
         dock = self.analysisDocks[mod]
         if self.firstDock is dock:
             self.firstDock = None
@@ -384,7 +387,7 @@ class TaskRunner(Module):
                     dev = self.manager.getDevice(d)
                     dw = dev.taskInterface(self)
                 except:
-                    printExc("Error while creating dock '%s':" % d)
+                    logger.exception(f"Error while creating dock '{d}':")
                     del self.docks[d]
 
                 if d in self.docks:
@@ -411,14 +414,14 @@ class TaskRunner(Module):
                 # print "request dock %s quit" % d
                 self.docks[d].widget().quit()
             except:
-                printExc("Error while requesting dock '%s' quit:" % d)
+                logger.exception(f"Error while requesting dock '{d}' quit:")
             try:
                 if self.firstDock is self.docks[d]:
                     self.firstDock = None
                 self.win.removeDockWidget(self.docks[d])
                 self.docks[d].close()
             except:
-                printExc("Error while closing dock '%s':" % d)
+                logger.exception(f"Error while closing dock '{d}':")
         self.docks = {}
 
         for d in list(self.analysisDocks.keys()):
@@ -506,7 +509,7 @@ class TaskRunner(Module):
                         self.docks[d].widget().restoreState(prot.devices[d])
                         prof.mark('configured dock: ' + d)
                     except:
-                        printExc("Error while loading task dock:")
+                        logger.exception("Error while loading task dock:")
 
             ## create and configure analysis docks
             if 'analysis' in prot.conf:
@@ -517,7 +520,7 @@ class TaskRunner(Module):
                         self.analysisDocks[k].widget().restoreState(conf)
                         prof.mark('configured dock: ' + k)
                     except:
-                        printExc("Error while loading analysis dock:")
+                        logger.exception("Error while loading analysis dock:")
 
             ## Load sequence parameter state (must be done after docks have loaded)
             self.ui.sequenceParamList.loadState(prot.conf['params'])
@@ -661,7 +664,7 @@ class TaskRunner(Module):
                 dh.flushSignals()  ## do this now rather than later when task is running
 
             self.sigTaskSequenceStarted.emit({})
-            logMsg('Started %s task sequence of length %i' % (self.currentTask.name(), pLen), importance=6)
+            logger.info(f'Started {self.currentTask.name()} task sequence of length {pLen:d}')
             # print 'PR task positions:
             future = self.taskThread.startTask(prot, paramInds)
 
@@ -823,7 +826,7 @@ class TaskRunner(Module):
                     self.docks[d].widget().handleResult(frame['result'][d], frame['params'])
                     prof.mark('finished %s' % d)
             except:
-                printExc("Error while handling result from device '%s'" % d)
+                logger.exception(f"Error while handling result from device '{d}'")
 
         self.sigNewFrame.emit(frame)
         prof.mark('emit newFrame')
@@ -993,7 +996,7 @@ class TaskThread(Thread):
             self.paramSpace = paramSpace
             self.lastRunTime = None
             self.start()  ### causes self.run() to be called from new thread
-            logMsg("Task started.", importance=1)
+            logger.debug("Task started.")
 
             return self._currentFuture
 
@@ -1023,7 +1026,7 @@ class TaskThread(Thread):
         except Exception as exc:
             self.task = None  ## free up this memory
             self.paramSpace = None
-            printExc("Error in task thread, exiting.")
+            logger.exception("Error in task thread, exiting.")
             self._currentFuture._taskDone(interrupted=True, excInfo=sys.exc_info())
             self._currentFuture = None
             self.sigExitFromError.emit()
@@ -1099,8 +1102,8 @@ class TaskThread(Thread):
                 self._currentTask = None
             with contextlib.suppress(Exception):
                 task.stop(abort=True)
-            printExc("\nError starting task:")
-            raise HelpfulException("\nError starting task:", exc) from exc
+            logger.exception("Error starting task:")
+            raise HelpfulException("Error starting task:", exc) from exc
 
         prof.mark('start task')
         ### Do not put code outside of these try: blocks; may cause device lockup
