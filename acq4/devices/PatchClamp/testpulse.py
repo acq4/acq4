@@ -7,6 +7,7 @@ from MetaArray import MetaArray
 from acq4.util import Qt, ptime
 from acq4.util.Thread import Thread
 from neuroanalysis.data import TSeries, PatchClampRecording
+from neuroanalysis.stimuli import SquarePulse
 from neuroanalysis.test_pulse import PatchClampTestPulse
 from acq4.Manager import getManager, Task
 from acq4.analysis.dataModels.PatchEPhys import getBridgeBalanceCompensation
@@ -95,7 +96,7 @@ class TestPulseThread(Thread):
         self._stop = True
         if block and not self.wait(10000):
             raise RuntimeError("Timed out waiting for test pulse thread exit.")
-                
+
     def run(self):
         while True:
             try:
@@ -107,7 +108,7 @@ class TestPulseThread(Thread):
                 if interval is None:
                     # start again immediately
                     continue
-                
+
                 # otherwise, wait until interval is over
                 while True:
                     nextRun = start + self._params['interval']
@@ -148,14 +149,14 @@ class TestPulseThread(Thread):
             if self._clampDev.getMode() != currentMode:
                 task.releaseDevices()
                 return
-            
+
             task.execute()
-                
+
             while not task.isDone():
                 if checkStop:
                     self.checkStop()
                 time.sleep(0.01)
-        
+
             tp = None
             if params['autoBiasEnabled']:
                 # update bias before unlocking
@@ -223,7 +224,7 @@ class TestPulseThread(Thread):
         pri.recording = rec
         cmd.recording = rec
 
-        tp = PatchClampTestPulse(rec)
+        tp = PatchClampTestPulse(rec, stimulus=task.command[self._clampName]["stimulus"])
         if self._params['postProcessing'] is not None:
             tp = self._params['postProcessing'](tp)
         return tp
@@ -234,22 +235,29 @@ class TestPulseThread(Thread):
         params['numPts'] = numPts  # send this back for analysis
         mode = params['clampMode']
 
-        cmdData = np.empty(numPts * params['average'])
-        cmdData[:] = self._clampDev.getHolding(mode)
-
-        for i in range(params['average']):
-            start = (numPts * i) + int(params['preDuration'] * params['sampleRate'])
-            stop = start + int(params['pulseDuration'] * params['sampleRate'])
-            cmdData[start:stop] += params['amplitude']
+        square = SquarePulse(
+            start_time=params['preDuration'],
+            duration=params['pulseDuration'],
+            amplitude=params['amplitude'],
+        )
+        cmdData = np.tile(
+            square.eval(n_pts=numPts, t0=0, sample_rate=params['sampleRate']).data,
+            params['average'],
+        ) + self._clampDev.getHolding(mode)
 
         cmd = {
             'protocol': {'duration': duration * params['average']},
-            self._daqName: {'rate': params['sampleRate'], 'numPts': numPts * params['average'], 'downsample': params['downsample']},
+            self._daqName: {
+                'rate': params['sampleRate'],
+                'numPts': numPts * params['average'],
+                'downsample': params['downsample'],
+            },
             self._clampName: {
                 'mode': mode,
                 'command': cmdData,
+                'stimulus': square,
                 'recordState': ['BridgeBalResist', 'BridgeBalEnable'],
-            }
+            },
         }
 
         return self._manager.createTask(cmd)

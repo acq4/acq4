@@ -372,6 +372,8 @@ class Stage(Device, OptomechDevice):
         """
         # imagine what the global transform will look like after we reach the target..
         target = self.targetPosition()
+        if target is None:
+            return None
         tr = self.baseTransform() * self._makeStageTransform(target)[0]
         pd = self.parentDevice()
         if pd is not None:

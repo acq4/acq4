@@ -31,8 +31,8 @@ class MockClamp(PatchClamp):
     """
     def __init__(self, dm, config, name):
         self.daqConfig = {
-            'command': config['Command'],
-            'primary': config['ScaledSignal'],
+            'command': config['commandChannel'],
+            'primary': config['primaryChannel'],
         }
 
         PatchClamp.__init__(self, dm, config, name)

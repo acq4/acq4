@@ -496,7 +496,7 @@ class Manager(Qt.QObject):
         if config is None:
             config = {}
 
-            logger.info(f'Loading module "{moduleClassName}" as "{name}"...')
+        logger.info(f'Loading module "{moduleClassName}" as "{name}"...')
 
         # deprecated args
         if importMod is not None:
