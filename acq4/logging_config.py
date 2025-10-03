@@ -64,7 +64,8 @@ def setup_logging(
     console_level: int = logging.WARNING,
 ) -> logging.FileHandler:
     """
-    Set up the complete logging configuration.
+    Sets log levels and then creates or refreshes log handlers for a file, the console, teleprox,
+    and optionally the primary Log window and error popup.
 
     Parameters
     ----------
@@ -134,19 +135,6 @@ def get_logger(name: str = "acq4") -> logging.Logger:
     if name != "acq4" and not name.startswith("acq4."):
         name = f"acq4.{name}"
     return logging.getLogger(name)
-
-
-def set_logger_level(logger_name: str, level: int) -> None:
-    """
-    Dynamically change a specific logger's level.
-
-    Args:
-        logger_name: Name of the logger (e.g., 'acq4.devices.camera')
-        level: New level (logging.DEBUG, logging.INFO, 25, etc.)
-    """
-    logger = logging.getLogger(logger_name)
-    logger.setLevel(level)
-    print(f"Set {logger_name} to {logging.getLevelName(level)}")
 
 
 def list_active_loggers() -> list:

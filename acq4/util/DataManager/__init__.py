@@ -355,7 +355,7 @@ class FileHandle(Qt.QObject):
         self.checkExists()
         with self.lock:
             with open(self.name(), 'r') as fd:
-                yield from fd
+                return list(fd)
 
     def nearestLogFile(self):
         """Return the nearest log file to this file, or None if no log file is found."""
