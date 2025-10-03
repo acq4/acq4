@@ -8,6 +8,7 @@ from acq4.util.LogWindow import get_log_window, get_error_dialog
 from teleprox.log import LogServer
 
 log_server: LogServer | None = None
+_handlers = []
 
 
 class StringAwareJsonFormatter(JsonFormatter):
@@ -81,18 +82,21 @@ def setup_logging(
     """
     global log_server
 
+    root_logger = logging.getLogger()
+    for handler in _handlers:
+        root_logger.removeHandler(handler)
+    _handlers.clear()
+
     acq4_logger = logging.getLogger("acq4")
     acq4_logger.setLevel(acq4_level)
-
-    # Clear any existing handlers
-    acq4_logger.handlers.clear()
 
     # 1. Console handler (stderr, WARNING and above)
     console_handler = logging.StreamHandler(sys.stderr)
     console_handler.setLevel(console_level)
     console_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     console_handler.setFormatter(console_formatter)
-    acq4_logger.addHandler(console_handler)
+    root_logger.addHandler(console_handler)
+    _handlers.append(console_handler)
 
     # 2. File handler (all messages, JSON format)
     file_handler = logging.FileHandler(log_file_path)
@@ -104,7 +108,8 @@ def setup_logging(
         exc_info_as_array=True,
     )
     file_handler.setFormatter(json_formatter)
-    acq4_logger.addHandler(file_handler)
+    root_logger.addHandler(file_handler)
+    _handlers.append(file_handler)
 
     # 3. Teleprox
     if log_server is None:
@@ -114,12 +119,14 @@ def setup_logging(
     if gui:
         log_window = get_log_window()
         log_window.handler.setLevel(logging.DEBUG)
-        acq4_logger.addHandler(log_window.handler)
+        root_logger.addHandler(log_window.handler)
+        _handlers.append(log_window.handler)
 
         # 5. GUI error dialog handler (ERROR and above)
         error_dialog = get_error_dialog()
         error_dialog.handler.setLevel(logging.ERROR)
-        acq4_logger.addHandler(error_dialog.handler)
+        root_logger.addHandler(error_dialog.handler)
+        _handlers.append(error_dialog.handler)
 
     return file_handler
 
