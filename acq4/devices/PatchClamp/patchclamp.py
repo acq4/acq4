@@ -97,11 +97,6 @@ class PatchClamp(Device):
 
     def testPulsePostProcessing(self, tp: PatchClampTestPulse):
         """Perform extra modifications to the test pulse, e.g. manually override its analysis."""
-        # Accessing tp.analysis actually calculates it, done so here intentionally to keep it in
-        # the bg thread.
-        if tp.analysis is None:
-            self.logger.warning(f"Test pulse analysis failed for device {self.name()}")
-            return tp
         if self._testPulseAnalysisOverrides:
             tp.analysis.update(self._testPulseAnalysisOverrides)
         return tp

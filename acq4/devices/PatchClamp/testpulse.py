@@ -187,10 +187,13 @@ class TestPulseThread(Thread):
                 break
             try:
                 tp.analysis  # force calculation now, while we're in the bg thread
-            except Exception:
+            except:
                 self._clampDev.logger.exception("Error calculating test pulse analysis")
             if self._params['postProcessing'] is not None:
-                tp = self._params['postProcessing'](tp)
+                try:
+                    tp = self._params['postProcessing'](tp)
+                except:
+                    self._clampDev.logger.exception("Error in test pulse post-processing")
             self.sigTestPulseFinished.emit(self._clampDev, tp)
 
     def _makeTpResult(self, task: Task) -> PatchClampTestPulse:
