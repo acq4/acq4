@@ -1,3 +1,4 @@
+import queue
 import time
 from typing import Literal
 
@@ -59,6 +60,9 @@ class TestPulseThread(Thread):
         self._daqName = self._clampDev.getDAQName("primary")
         self._clampName = self._clampDev.name()
         self._manager = getManager()
+        self._testPulsesToProcess = queue.Queue()
+        self._processingThread = Thread(name=f"TestPulseProcessing({dev.name()})", target=self._processTestPulses)
+        self._processingThread.start()
 
         self.setParameters(**params)
 
@@ -97,6 +101,8 @@ class TestPulseThread(Thread):
 
     def stop(self, block=False):
         self._stop = True
+        self._testPulsesToProcess.put(None)
+        self._processingThread.join()
         if block and not self.wait(10000):
             raise RuntimeError("Timed out waiting for test pulse thread exit.")
 
@@ -172,7 +178,20 @@ class TestPulseThread(Thread):
             # no auto bias, release before doing analysis
             tp = self._makeTpResult(task)
 
-        self.sigTestPulseFinished.emit(self._clampDev, tp)
+        self._testPulsesToProcess.put(tp)
+
+    def _processTestPulses(self):
+        while True:
+            tp = self._testPulsesToProcess.get()
+            if tp is None:
+                break
+            try:
+                tp.analysis  # force calculation now, while we're in the bg thread
+            except Exception:
+                self._clampDev.logger.exception("Error calculating test pulse analysis")
+            if self._params['postProcessing'] is not None:
+                tp = self._params['postProcessing'](tp)
+            self.sigTestPulseFinished.emit(self._clampDev, tp)
 
     def _makeTpResult(self, task: Task) -> PatchClampTestPulse:
         mode = task.command[self._clampName]['mode']
@@ -230,10 +249,7 @@ class TestPulseThread(Thread):
         pri.recording = rec
         cmd.recording = rec
 
-        tp = PatchClampTestPulse(rec, stimulus=task.command[self._clampName]["stimulus"])
-        if self._params['postProcessing'] is not None:
-            tp = self._params['postProcessing'](tp)
-        return tp
+        return PatchClampTestPulse(rec, stimulus=task.command[self._clampName]["stimulus"])
 
     def createTask(self, params: dict) -> Task:
         duration = params['preDuration'] + params['pulseDuration'] + params['postDuration']
