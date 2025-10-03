@@ -399,6 +399,15 @@ class Pipette(Device, OptomechDevice):
         path = self.dm.dirHandle(path, create=True)
 
         cam: Camera = self.imagingDevice()
+        with cam.ensureRunning():
+            img = _future.waitFor(cam.acquireFrames(n=1, ensureFreshFrames=True)).getResult()[0]
+        img.addInfo({"tip position": self.globalPosition()})
+        path.writeFile(
+            img.data(),
+            "manual-calibration.ma",
+            info=img.info(),
+            autoIncrement=True,
+        )
         if stack:
             depth = cam.getFocusDepth()
             is_below_surface = depth <= self.scopeDevice().getSurfaceDepth()
@@ -417,16 +426,6 @@ class Pipette(Device, OptomechDevice):
                 "tip position": self.globalPosition(),
             }
             fh.setInfo(info)
-        else:
-            with cam.ensureRunning():
-                img = _future.waitFor(cam.acquireFrames(n=1, ensureFreshFrames=True)).getResult()[0]
-            img.addInfo({"tip position": self.globalPosition()})
-            path.writeFile(
-                img.data(),
-                "manual-calibration.ma",
-                info=img.info(),
-                autoIncrement=True,
-            )
 
     def resetGlobalPosition(self, pos):
         """Set the device transform such that the pipette tip is located at the global position *pos*.
