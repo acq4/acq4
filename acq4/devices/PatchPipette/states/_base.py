@@ -256,7 +256,7 @@ class PatchPipetteState(Future):
                 self._visualTargetTrackingFuture.stop("State cleanup")
                 self._visualTargetTrackingFuture = None
         except Exception:
-            printExc("Error stopping visual target tracking")
+            self.logger.exception("Error stopping visual target tracking")
         disconnect(self.dev.pipetteDevice.sigTargetChanged, self._onTargetChanged)
         return Future.immediate()
 

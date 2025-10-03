@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import contextlib
 import functools
-import itertools
 import threading
 from typing import Tuple, List
 
@@ -11,8 +10,8 @@ import numpy as np
 import pyqtgraph as pg
 from acq4.util import Qt, ptime
 from acq4.util.Mutex import Mutex
-from pyqtgraph import siFormat
 from coorx import AffineTransform
+from pyqtgraph import siFormat
 from .calibration import ManipulatorAxesCalibrationWindow, StageAxesCalibrationWindow
 from ..Device import Device
 from ..OptomechDevice import OptomechDevice
@@ -436,6 +435,48 @@ class Stage(Device, OptomechDevice):
             self._progressTimer.start(100)
 
         return mfut
+
+    def step(self, deltas: Tuple[float, ...], speed: str | float) -> MoveFuture:
+        """Step method to move device by specified deltas along device axes.
+
+        Args:
+            deltas: Tuple of deltas for each device axis in global scale (SI units).
+                   These represent movements along the device's internal axes,
+                   accounting for axis orientations and scales.
+            speed: Movement speed (string like 'fast'/'slow' or float in m/s)
+
+        Returns:
+            MoveFuture for tracking the movement
+
+        Note:
+            This method handles non-orthogonal axis orientations by mapping deltas
+            through the axis transform to get the equivalent change in ortholinear
+            device coordinates, which are then added to the current position.
+        """
+        # TODO this should use calculatedAxisOrientation and its ilk, or maybe go away
+        # TODO hardware-specific implementations?
+        # TODO throw this away
+        pos = np.array(self.getPosition())
+
+        axis_xform = np.array(self.axisTransform().copyDataTo()).reshape((4, 4))
+        axis_xform = AffineTransform(matrix=axis_xform[:3, :3], offset=axis_xform[:3, 3])
+
+        # Map deltas through axis transform to get ortholinear coordinate changes
+        ortho = np.array(axis_xform.map(deltas)) - np.array(axis_xform.map(np.zeros(len(deltas))))
+
+        # Divide away the scale; we only wanted the orientation
+        scale = self.config.get('scale', None)
+        if scale is not None:
+            ortho /= np.array(scale)
+
+        # Add changes to current position
+        target = pos + ortho
+
+        # Map it to a global position
+        target_global = self.inverseBaseTransform().map(target)
+
+        # Perform the move
+        return self.move(target_global, speed=speed)
 
     def checkMove(self, position, speed=None, progress=None, linear=None, **kwds):
         """Raise an exception if arguments are invalid for move()

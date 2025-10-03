@@ -1127,7 +1127,6 @@ class TaskThread(Thread):
             result = task.getResult()
         except:
             ## Make sure the task is fully stopped if there was a failure at any point.
-            # printExc("\nError during task execution:")
             print("\nStopping task..")
             task.stop(abort=True)
             print("")

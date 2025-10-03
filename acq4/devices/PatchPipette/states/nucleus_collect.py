@@ -93,6 +93,6 @@ class NucleusCollectState(PatchPipetteState):
         try:
             self.resetPosition(_future)
         except Exception:
-            printExc("Error resetting pipette position after collection")
+            self.dev.logger.exception("Error resetting pipette position after collection")
 
         _future.waitFor(super()._cleanup(), timeout=None)

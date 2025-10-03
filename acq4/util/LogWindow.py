@@ -2,7 +2,6 @@ import re
 import webbrowser
 from logging import LogRecord
 
-from acq4.util import Qt
 from pyqtgraph import FeedbackButton
 from teleprox.log.logviewer import LogViewer
 from teleprox.log.logviewer.constants import ItemDataRole
@@ -11,6 +10,8 @@ from teleprox.log.logviewer.filtering import LogFilterProxyModel
 from teleprox.log.logviewer.filtering import USE_CHAINED_FILTERING
 from teleprox.log.logviewer.log_model import LogModel
 from teleprox.log.logviewer.viewer import QtLogHandler
+
+from acq4.util import Qt
 
 LOG_UI = None
 ERROR_DIALOG = None

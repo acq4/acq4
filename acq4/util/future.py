@@ -14,7 +14,6 @@ from acq4.logging_config import get_logger
 from acq4.util import Qt, ptime
 from pyqtgraph import FeedbackButton
 
-logger = get_logger(__name__)
 FUTURE_RETVAL_TYPE = TypeVar("FUTURE_RETVAL_TYPE")
 WAITING_RETVAL_TYPE = TypeVar("WAITING_RETVAL_TYPE")
 
@@ -61,6 +60,7 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
 
         self.startTime = ptime.time()
         self._name = self.nameFromStack() if name is None else name
+        self.logger = get_logger(f"{__name__}.{self._name}")
         self.logLevel = logLevel
         self._isDone = False
         self._callbacks = []
@@ -81,11 +81,11 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         self._creationStack = traceback.extract_stack()[:-1]  # Exclude current frame
         self._creationThread = threading.current_thread()
 
-        self.logMsg(f"Future [{self._name}] created")
+        self.log(f"Future [{self._name}] created")
 
-    def logMsg(self, message):
+    def log(self, message):
         if self.logLevel is not None:
-            logMsg(message, level=self.logLevel)
+            getattr(self.logger, self.logLevel, self.logger.debug)(message)
 
     @property
     def name(self):
@@ -93,7 +93,7 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
 
     @name.setter
     def name(self, value):
-        self.logMsg(f"Future name changed from [{self._name}] to [{value}]")
+        self.log(f"Future name changed from [{self._name}] to [{value}]")
         self._name = value
 
     def __repr__(self):
@@ -137,7 +137,7 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         """
         if state == self._state:
             return
-        self.logMsg(f"Future [{self._name}] state changed: {state}")
+        self.log(f"Future [{self._name}] state changed: {state}")
         self._state = state
         self.sigStateChanged.emit(self, state)
 
@@ -160,7 +160,7 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
 
         if reason is not None:
             self._errorMessage = reason
-        self.logMsg(f"Asking Future [{self._name}] to stop: {reason}")
+        self.log(f"Asking Future [{self._name}] to stop: {reason}")
         self._stopRequested = True
         for f in self._stopsToPropagate:
             f.stop(reason=reason)
@@ -186,7 +186,7 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
                 msg = msg + " [interrupted]"
             if error is not None:
                 msg = msg + f" [{error}]"
-            self.logMsg(msg)
+            self.log(msg)
         # if interrupted:
         #     self.setState(state or f"interrupted (error: {error})")
         # else:
@@ -195,7 +195,7 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
             try:
                 self._onError(self)
             except Exception as e:
-                logger.exception(f"Error in Future.onError callback: {self._onError}")
+                self.logger.exception(f"Error in Future.onError callback: {self._onError}")
         self.finishedEvent.set()  # tell wait() that we're done
         self.sigFinished.emit(self)  # tell everyone else that we're done
         self._callCallbacks()
@@ -213,7 +213,7 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
             try:
                 self.wait()
             except Exception:
-                logger.exception(message)
+                self.logger.exception(message)
 
     def exceptionRaised(self):
         return self._excInfo[1] if self._excInfo is not None else None
@@ -251,7 +251,7 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
                 else:
                     callback(self, *args, **kwargs)
             except Exception as e:
-                logger.exception(f"Error in Future callback: {callback}")
+                self.logger.exception(f"Error in Future callback: {callback}")
 
     def errorMessage(self):
         """Return a string description of the reason for a task failure,

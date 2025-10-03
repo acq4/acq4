@@ -351,7 +351,7 @@ class FilterWheelThread(Thread):
                 self.fwPosChanged.emit(pos)
                 time.sleep(0.5)
             except:
-                debug.printExc("Error in Filter Wheel communication thread:")
+                self.dev.logger.exception("Error in Filter Wheel communication thread:")
                 
             self.lock.lock()
             if self.stopThread:

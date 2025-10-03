@@ -1,7 +1,8 @@
+import queue
+import time
 from typing import Literal
 
 import numpy as np
-import time
 from MetaArray import MetaArray
 
 from acq4.util import Qt, ptime
@@ -9,8 +10,11 @@ from acq4.util.Thread import Thread
 from neuroanalysis.data import TSeries, PatchClampRecording
 from neuroanalysis.stimuli import SquarePulse
 from neuroanalysis.test_pulse import PatchClampTestPulse
+
 from acq4.Manager import getManager, Task
 from acq4.analysis.dataModels.PatchEPhys import getBridgeBalanceCompensation
+from acq4.util import Qt, ptime
+from acq4.util.Thread import Thread
 from acq4.util.functions import downsample
 
 
@@ -56,6 +60,9 @@ class TestPulseThread(Thread):
         self._daqName = self._clampDev.getDAQName("primary")
         self._clampName = self._clampDev.name()
         self._manager = getManager()
+        self._testPulsesToProcess = queue.Queue()
+        self._processingThread = Thread(name=f"TestPulseProcessing({dev.name()})", target=self._processTestPulses)
+        self._processingThread.start()
 
         self.setParameters(**params)
 
@@ -94,6 +101,8 @@ class TestPulseThread(Thread):
 
     def stop(self, block=False):
         self._stop = True
+        self._testPulsesToProcess.put(None)
+        self._processingThread.join()
         if block and not self.wait(10000):
             raise RuntimeError("Timed out waiting for test pulse thread exit.")
 
@@ -169,12 +178,31 @@ class TestPulseThread(Thread):
             # no auto bias, release before doing analysis
             tp = self._makeTpResult(task)
 
-        self.sigTestPulseFinished.emit(self._clampDev, tp)
+        self._testPulsesToProcess.put(tp)
+
+    def _processTestPulses(self):
+        while True:
+            tp = self._testPulsesToProcess.get()
+            if tp is None:
+                break
+            try:
+                tp.analysis  # force calculation now, while we're in the bg thread
+            except:
+                self._clampDev.logger.exception("Error calculating test pulse analysis")
+            if self._params['postProcessing'] is not None:
+                try:
+                    tp = self._params['postProcessing'](tp)
+                except:
+                    self._clampDev.logger.exception("Error in test pulse post-processing")
+            self.sigTestPulseFinished.emit(self._clampDev, tp)
 
     def _makeTpResult(self, task: Task) -> PatchClampTestPulse:
         mode = task.command[self._clampName]['mode']
         params = self.paramsForMode(mode)
-        result: MetaArray = task.getResult()[self._clampName]
+        all_channels = task.getResult()
+        result: MetaArray = all_channels[self._clampName]
+        if result is None:
+            raise ValueError("No data returned from test pulse task")
         start_time = result._info[2]['DAQ']['primary']['startTime']
         pri = result['Channel': 'primary'].asarray()
         pulse_len = len(pri) // params['average']
@@ -224,10 +252,7 @@ class TestPulseThread(Thread):
         pri.recording = rec
         cmd.recording = rec
 
-        tp = PatchClampTestPulse(rec, stimulus=task.command[self._clampName]["stimulus"])
-        if self._params['postProcessing'] is not None:
-            tp = self._params['postProcessing'](tp)
-        return tp
+        return PatchClampTestPulse(rec, stimulus=task.command[self._clampName]["stimulus"])
 
     def createTask(self, params: dict) -> Task:
         duration = params['preDuration'] + params['pulseDuration'] + params['postDuration']

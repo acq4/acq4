@@ -284,7 +284,7 @@ class MonitorThread(Thread):
 
                 time.sleep(interval)
             except Exception:
-                debug.printExc('Error in MicromanagerStage monitor thread:')
+                self.dev.logger.exception('Error in MicromanagerStage monitor thread:')
                 time.sleep(maxInterval)
 
 

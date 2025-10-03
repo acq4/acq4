@@ -1,13 +1,13 @@
-# -*- coding: utf-8 -*-
 import importlib
+import logging
 
 import numpy as np
 
 from pyqtgraph import SRTTransform, ItemGroup
-from pyqtgraph import debug
 from pyqtgraph.Qt import QtCore, QT_LIB, QtWidgets
 from pyqtgraph.graphicsItems.ROI import ROI
 
+logger = logging.getLogger(__name__)
 ui_template = importlib.import_module(
     f'.TransformGuiTemplate_{QT_LIB.lower()}', package=__package__)
 
@@ -349,7 +349,7 @@ class CanvasItem(QtCore.QObject):
             self.sigTransformChangeFinished.emit(self)
         except:
             self.userTransform = SRTTransform()
-            debug.printExc("Failed to load transform:")
+            logger.exception("Failed to load transform:")
         
     def saveTransform(self):
         """Return a dict containing the current user transform"""

@@ -8,7 +8,6 @@ import numpy as np
 import pyqtgraph as pg
 from acq4 import getManager
 from acq4.util import ptime
-from acq4.util.debug import printExc
 from acq4.util.functions import plottable_booleans
 from acq4.util.future import future_wrap
 from acq4.util.imaging.sequencer import run_image_sequence
@@ -424,6 +423,6 @@ class ApproachState(PatchPipetteState):
             try:
                 self._moveFuture.stop("State finished", wait=True)
             except Exception:
-                printExc("Error stopping pipette advance during cleanup")
+                self.dev.logger.exception("Error stopping pipette advance during cleanup")
 
         return super()._cleanup()

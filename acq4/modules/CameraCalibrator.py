@@ -1,5 +1,5 @@
-# ABOUTME: A module for calibrating latency between light source activation and camera detection
-# ABOUTME: Provides UI for selecting camera/light source and running calibration measurements
+# A module for calibrating latency between light source activation and camera detection
+# Provides UI for selecting camera/light source and running calibration measurements
 
 from __future__ import annotations
 

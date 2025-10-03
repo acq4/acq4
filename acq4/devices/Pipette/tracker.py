@@ -1,7 +1,8 @@
-import numpy as np
 import pickle
-import scipy
 import time
+
+import numpy as np
+import scipy
 
 import pyqtgraph as pg
 from acq4.Manager import getManager
@@ -10,6 +11,9 @@ from acq4.util.future import Future, future_wrap
 from acq4.util.image_registration import imageTemplateMatch
 from acq4.util.imaging.sequencer import acquire_z_stack
 from .pipette_detection import TemplateMatchPipetteDetector
+from ...logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
 class PipetteTracker:
@@ -466,19 +470,19 @@ class CorrelationPipetteTracker(PipetteTracker):
                     try:
                         mfut.wait(updates=True)
                     except:
-                        pg.debug.printExc("Manipulator missed intermediate target:")
+                        logger.exception("Manipulator missed intermediate target:")
 
                     try:
                         ffut.wait(updates=True)
                     except:
-                        pg.debug.printExc("Stage missed target:")
+                        logger.exception("Stage missed target:")
 
                     # step back to actual target position
                     try:
                         self.pipette._moveToGlobal(pos, speed).wait(updates=True)
                     except RuntimeError as exc:
                         misses += 1
-                        pg.debug.printExc("Manipulator missed target:")
+                        logger.exception("Manipulator missed target:")
 
                     time.sleep(0.2)
 
