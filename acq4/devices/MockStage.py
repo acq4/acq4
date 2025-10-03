@@ -161,7 +161,7 @@ class MockStage(Stage):
 
     @property
     def positionUpdatesPerSecond(self):
-        return 1.0 / (2 * self.stageThread.interval)
+        return 1.0 / self.stageThread.interval
 
     def _getPosition(self):
         return self.stageThread.getPosition()
@@ -192,7 +192,7 @@ class MockMoveFuture(MoveFuture):
     """Provides access to a move-in-progress on a mock manipulator.
     """
     def __init__(self, dev, pos, speed):
-        MoveFuture.__init__(self, dev, pos, speed)
+        MoveFuture.__init__(self, dev, pos, speed, name=f'{dev.name()}_move')
         self.targetPos = pos
 
         self.dev.stageThread.setTarget(self, pos, speed)
@@ -223,7 +223,7 @@ class MockStageThread(Thread):
         self.interval = 30e-3
         self.lastUpdate = None
         self.currentMove = None
-        Thread.__init__(self)
+        Thread.__init__(self, name='MockStageThread')
         
     def start(self):
         self._quit = False
@@ -263,6 +263,7 @@ class MockStageThread(Thread):
     def run(self):
         lastUpdate = ptime.time()
         while True:
+            now = ptime.time()
             with self.lock:
                 if self._quit:
                     break
@@ -271,7 +272,6 @@ class MockStageThread(Thread):
                 velocity = self.velocity
                 pos = self.pos
 
-            now = ptime.time()
             dt = now - lastUpdate
             lastUpdate = now
             
@@ -291,7 +291,7 @@ class MockStageThread(Thread):
             elif self.velocity is not None and not np.all(velocity == 0):
                 self._setPosition(pos + velocity * dt)
                 
-            time.sleep(self.interval)
+            time.sleep(max(0, self.interval - (ptime.time() - now)))
     
     def _setPosition(self, pos):
         self.pos = np.array(pos)

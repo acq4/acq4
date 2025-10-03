@@ -1139,7 +1139,7 @@ class ImagingThread(Thread):
     sigAborted = Qt.Signal()
 
     def __init__(self, laserDev, scannerDev):
-        Thread.__init__(self)
+        Thread.__init__(self, name=f"{scannerDev.name()} imaging thread")
         self._abort = False
         self._video = True
         self._closeShutter = True  # whether to close shutter at end of acquisition

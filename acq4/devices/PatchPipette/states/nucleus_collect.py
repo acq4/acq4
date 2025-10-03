@@ -78,7 +78,7 @@ class NucleusCollectState(PatchPipetteState):
             _future.waitFor(pip._moveToGlobal(self.startPos, speed='fast'), timeout=None)
 
     @future_wrap
-    def cleanup(self, _future):
+    def _cleanup(self, _future):
         try:
             if self.sonication is not None and not self.sonication.isDone():
                 self.sonication.stop("parent task is cleaning up before sonication finished")
@@ -90,4 +90,9 @@ class NucleusCollectState(PatchPipetteState):
         except Exception:
             self.dev.logger.exception("Error resetting pressure after collection")
 
-        self.resetPosition(_future)
+        try:
+            self.resetPosition(_future)
+        except Exception:
+            printExc("Error resetting pipette position after collection")
+
+        _future.waitFor(super()._cleanup(), timeout=None)

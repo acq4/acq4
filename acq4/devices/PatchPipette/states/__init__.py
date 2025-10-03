@@ -1,5 +1,5 @@
 from ._base import PatchPipetteState
-from .approach import ApproachState
+from .approach import ApproachState, ApproachAnalysis
 from .bath import BathState
 from .blowout import BlowoutState
 from .break_in import BreakInState
@@ -14,12 +14,15 @@ from .reseal import ResealAnalysis, ResealState
 from .seal import SealAnalysis, SealState
 from .whole_cell import WholeCellState
 from .out import OutState
+from .outside_out import OutsideOutState
 
 
 __all__ = [
     'PatchPipetteState',
     'OutState',
+    'OutsideOutState',
     'ApproachState',
+    'ApproachAnalysis',
     'WholeCellState',
     'BrokenState',
     'FouledState',

@@ -15,6 +15,14 @@ def installExceptionHandler():
     exceptionHandling.register(exception_callback)
 
 
+@contextlib.contextmanager
+def log_and_ignore_exception(exc_types, *a, **kw):
+    try:
+        yield
+    except exc_types:
+        logger.exception(*a, **kw)
+
+
 thread_locals = threading.local()
 
 

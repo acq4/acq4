@@ -250,7 +250,7 @@ class MonitorThread(Thread):
         self.interval = 0.3
         self.minInterval = 100e-3
 
-        Thread.__init__(self)
+        Thread.__init__(self, name=f'{dev.name()}_MonitorThread')
 
     def start(self):
         self.stopped = False
@@ -293,7 +293,7 @@ class MicroManagerMoveFuture(MoveFuture):
     """
 
     def __init__(self, dev, pos, speed, userSpeed, moveXY=True, moveZ=True):
-        MoveFuture.__init__(self, dev, pos, speed)
+        MoveFuture.__init__(self, dev, pos, speed, name=f'{dev.name()}_move')
         self._interrupted = False
         self._errorMSg = None
         self._finished = False

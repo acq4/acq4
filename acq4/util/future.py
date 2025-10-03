@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import contextlib
 import functools
+import inspect
 import sys
 import threading
 import time
 import traceback
-from typing import Callable, Generic, TypeVar, ParamSpec, Optional
+from typing import Callable, ParamSpec, Optional, overload
+from typing import Generic, TypeVar
 
 from acq4.logging_config import get_logger
 from acq4.util import Qt, ptime
@@ -29,28 +32,38 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         """Raised by checkStop if stop() has been invoked."""
 
     class Stopped(Exception):
-        """Raised by exceptions that were politely stopped."""
+        """Raised by futures that were politely stopped."""
 
     class Timeout(Exception):
         """Raised by wait() if the timeout period elapses."""
 
     @classmethod
-    def immediate(cls, result=None, error=None, excInfo=None, stopped=False) -> Future:
+    def immediate(cls, result=None, error=None, excInfo=None, stopped=False, name=None) -> Future:
         """Create a future that is already resolved with the optional result."""
-        fut = cls()
+        if name is None:
+            name = cls.nameFromStack()
+        fut = cls(name=name, logLevel=None)
         if stopped:
             fut.stop(reason=error)
         fut._taskDone(returnValue=result, error=error, interrupted=(error or excInfo) is not None, excInfo=excInfo)
         return fut
 
-    def __init__(self, onError=None):
+    @staticmethod
+    def nameFromStack(depth=1):
+        """Generate a useful name for a Future based on the code line that created it"""
+        frame = inspect.currentframe().f_back  # start in parent's frame
+        for _ in range(depth):
+            frame = frame.f_back  # walk up the stack
+        return f"(unnamed from {frame.f_code.co_filename}:{frame.f_lineno})"
+
+    def __init__(self, onError=None, name=None, logLevel='debug'):
         Qt.QObject.__init__(self)
 
         self.startTime = ptime.time()
-
+        self._name = self.nameFromStack() if name is None else name
+        self.logLevel = logLevel
         self._isDone = False
         self._callbacks = []
-        self.sigFinished.connect(self._callCallbacks)
         self._onError = onError
         self._completionLock = threading.Lock()
         self._wasInterrupted = False
@@ -64,12 +77,35 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         self._returnVal: "T | None" = None
         self.finishedEvent = threading.Event()
 
+        # Capture creation stack for enhanced exception tracebacks
+        self._creationStack = traceback.extract_stack()[:-1]  # Exclude current frame
+        self._creationThread = threading.current_thread()
+
+        self.logMsg(f"Future [{self._name}] created")
+
+    def logMsg(self, message):
+        if self.logLevel is not None:
+            logMsg(message, level=self.logLevel)
+
+    @property
+    def name(self):
+        return self._name
+
+    @name.setter
+    def name(self, value):
+        self.logMsg(f"Future name changed from [{self._name}] to [{value}]")
+        self._name = value
+
+    def __repr__(self):
+        return f"<{self.__class__.__name__} {self._name}>"
+
     def executeInThread(self, func, args, kwds):
         """Execute the specified function in a separate thread.
 
         The function should call _taskDone() when finished (or raise an exception).
         """
-        self._executingThread = threading.Thread(target=self.executeAndSetReturn, args=(func, args, kwds), daemon=True)
+        self._executingThread = threading.Thread(target=self.executeAndSetReturn, args=(func, args, kwds), daemon=True,
+                                                 name=f"execute thread for {repr(self)}")
         self._executingThread.start()
 
     def executeAndSetReturn(self, func, args, kwds):
@@ -101,6 +137,7 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         """
         if state == self._state:
             return
+        self.logMsg(f"Future [{self._name}] state changed: {state}")
         self._state = state
         self.sigStateChanged.emit(self, state)
 
@@ -111,20 +148,25 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         """
         raise NotImplementedError("method must be reimplmented in subclass")
 
-    def stop(self, reason="task stop requested"):
+    def stop(self, reason: str | None = "task stop requested", wait=False):
         """Stop the task (nicely).
 
         Subclasses may extend this method and/or use checkStop to determine whether
-        stop() has been called.
+        stop() has been called. Returns immediately unless *wait* is True, in which case
+        this method will block until the task has stopped.
         """
         if self.isDone():
             return
 
         if reason is not None:
             self._errorMessage = reason
+        self.logMsg(f"Asking Future [{self._name}] to stop: {reason}")
         self._stopRequested = True
         for f in self._stopsToPropagate:
             f.stop(reason=reason)
+        if wait:
+            with contextlib.suppress(self.Stopped):
+                self.wait()
 
     def _taskDone(self, interrupted=False, error=None, state=None, excInfo=None, returnValue=None):
         """Called by subclasses when the task is done (regardless of the reason)"""
@@ -139,10 +181,16 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
             self._wasInterrupted = interrupted
             if returnValue is not None:
                 self._returnVal = returnValue
-        if interrupted:
-            self.setState(state or f"interrupted (error: {error})")
-        else:
-            self.setState(state or "complete")
+            msg = f"Future [{self._name}] finished."
+            if interrupted:
+                msg = msg + " [interrupted]"
+            if error is not None:
+                msg = msg + f" [{error}]"
+            self.logMsg(msg)
+        # if interrupted:
+        #     self.setState(state or f"interrupted (error: {error})")
+        # else:
+        #     self.setState(state or "complete")
         if self._onError is not None and (error or excInfo):
             try:
                 self._onError(self)
@@ -150,6 +198,7 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
                 logger.exception(f"Error in Future.onError callback: {self._onError}")
         self.finishedEvent.set()  # tell wait() that we're done
         self.sigFinished.emit(self)  # tell everyone else that we're done
+        self._callCallbacks()
 
     def wasInterrupted(self):
         """Return True if the task was interrupted before completing (due to an error or a stop request)."""
@@ -159,6 +208,13 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         """Return True if the task was stopped."""
         return self._stopRequested
 
+    def logErrors(self, message=""):
+        if self.wasInterrupted() and not self.wasStopped():
+            try:
+                self.wait()
+            except Exception:
+                logger.exception(message)
+
     def exceptionRaised(self):
         return self._excInfo[1] if self._excInfo is not None else None
 
@@ -167,23 +223,33 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         with self._completionLock:
             return self._isDone
 
-    def onFinish(self, callback, *args, **kwargs):
+    def onFinish(self, callback, *args, inGui: bool = False, **kwargs):
         """Make sure the callback is called when the future is finished, including if the future is already done."""
+        from acq4.util.threadrun import runInGuiThread
+
         with self._completionLock:
             done = self._isDone
             if not done:
-                self._callbacks.append((callback, args, kwargs))
+                self._callbacks.append((inGui, callback, args, kwargs))
         if done:
-            callback(self, *args, **kwargs)
+            if inGui:
+                runInGuiThread(callback, self, *args, **kwargs)
+            else:
+                callback(self, *args, **kwargs)
 
     def _callCallbacks(self):
         """Call all callbacks registered with onFinish().
 
         This is called when the task is completed.
         """
-        for callback, args, kwargs in self._callbacks:
+        from acq4.util.threadrun import runInGuiThread
+
+        for inGui, callback, args, kwargs in self._callbacks:
             try:
-                callback(self, *args, **kwargs)
+                if inGui:
+                    runInGuiThread(callback, self, *args, **kwargs)
+                else:
+                    callback(self, *args, **kwargs)
             except Exception as e:
                 logger.exception(f"Error in Future callback: {callback}")
 
@@ -205,7 +271,7 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         start = ptime.time()
         while True:
             if (timeout is not None) and (ptime.time() > start + timeout):
-                raise self.Timeout("Timeout waiting for task to complete.")
+                raise self.Timeout(f"Timeout waiting for task {self} to complete.")
 
             if self.isDone():
                 break
@@ -217,18 +283,25 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
 
         if self.wasInterrupted():
             err = self.errorMessage()
+            original_exc = self.exceptionRaised()
+
             if err is None:
-                if not self._stopRequested and self.exceptionRaised() is not None:
-                    raise self.exceptionRaised()
+                if not self._stopRequested and original_exc is not None:
+                    raise self.enhanceException(original_exc)
                 msg = f"Task {self} did not complete (no extra message)."
             else:
                 msg = f"Task {self} did not complete: {err}"
 
             if self._stopRequested:
                 raise self.Stopped(msg)
-            elif self.exceptionRaised() is not None:
-                raise RuntimeError(msg) from self.exceptionRaised()
+            elif original_exc is not None:
+                raise RuntimeError(msg) from self.enhanceException(original_exc)
             raise RuntimeError(msg)
+
+    def enhanceException(self, exc):
+        exc.future_creation_stack = self._creationStack
+        exc.future_creation_thread = self._creationThread
+        return exc
 
     def _wait(self, duration):
         """Default sleep implementation used by wait(); may be overridden to return early."""
@@ -273,7 +346,7 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
                 if future.wasInterrupted():  # a _real_ timeout, as opposed to our 0.1s loopbeat
                     future.wait()  # let it sing
                 if timeout is not None and time.time() - start > timeout:
-                    raise self.Timeout(f"Timed out waiting for {future!r}") from e
+                    raise self.Timeout(f"Timed out waiting {timeout}s for {future!r}") from e
         return future
 
     def raiseErrors(self, message, pollInterval=1.0):
@@ -297,7 +370,7 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         monitorFn = functools.partial(
             self._monitorErrors, message=message, pollInterval=pollInterval, originalFrame=originalFrame
         )
-        self._errorMonitorThread = threading.Thread(target=monitorFn, daemon=True)
+        self._errorMonitorThread = threading.Thread(target=monitorFn, daemon=True, name=f"error monitor for {self}")
         self._errorMonitorThread.start()
 
     def _monitorErrors(self, message, pollInterval, originalFrame):
@@ -320,39 +393,68 @@ WRAPPED_FN_PARAMS = ParamSpec("WRAPPED_FN_PARAMS")
 WRAPPED_FN_RETVAL_TYPE = TypeVar("WRAPPED_FN_RETVAL_TYPE")
 
 
-# MC this doesn't handle typing correctly as Future.wrap, but I don't know why...
-def future_wrap(
-    func: Callable[WRAPPED_FN_PARAMS, WRAPPED_FN_RETVAL_TYPE]
-) -> Callable[WRAPPED_FN_PARAMS, Future[WRAPPED_FN_RETVAL_TYPE]]:
-    """Decorator to execute a function in a Thread wrapped in a future. The function must take a Future
-    named "_future" as a keyword argument. This Future can be variously used to checkStop() the
-    function, wait for other futures, and will be returned by the decorated function call. The function
-    can still be called with `block=True` to prevent threaded execution, if device locking is a concern.
-    Usage:
-        @future_wrap
-        def myFunc(arg1, arg2, _future=None):
-            ...
-            _future.checkStop()
-            _future.waitFor(someOtherFuture)
-            ...
-        result = myFunc(arg1, arg2).getResult()
-        threadless_result = myFunc(arg1, arg2, block=True).getResult()
-    """
+class FutureWrapper:
+    def __init__(self, logLevel='debug'):
+        self.logLevel = logLevel
 
-    @functools.wraps(func)
-    def wrapper(*args: WRAPPED_FN_PARAMS.args, **kwds: WRAPPED_FN_PARAMS.kwargs) -> Future[WRAPPED_FN_RETVAL_TYPE]:
-        future = Future(onError=kwds.pop("onFutureError", None))
-        if kwds.pop("block", False):
-            kwds["_future"] = future
-            if parent := kwds.pop("checkStopThrough", None):
-                parent.propagateStopsInto(future)
-            future.executeAndSetReturn(func, args, kwds)
-            future.wait()
-        else:
-            future.executeInThread(func, args, kwds)
-        return future
+    @overload
+    def __call__(
+        self,
+        func: Callable[WRAPPED_FN_PARAMS, WRAPPED_FN_RETVAL_TYPE],
+    ) -> Callable[WRAPPED_FN_PARAMS, Future[WRAPPED_FN_RETVAL_TYPE]]:
+        ...
 
-    return wrapper
+    @overload
+    def __call__(
+        self,
+        logLevel: str,
+    ) -> FutureWrapper:
+        ...
+
+    def __call__(
+            self,
+            func: Callable[WRAPPED_FN_PARAMS, WRAPPED_FN_RETVAL_TYPE] | None = None,
+            *,
+            logLevel: str | None = None,
+    ) -> Callable[WRAPPED_FN_PARAMS, Future[WRAPPED_FN_RETVAL_TYPE]] | FutureWrapper:
+        """Decorator to execute a function in a Thread wrapped in a future. The function must take a Future
+        named "_future" as a keyword argument. This Future can be variously used to checkStop() the
+        function, wait for other futures, and will be returned by the decorated function call. The function
+        can still be called with `block=True` to prevent threaded execution, if device locking is a concern.
+        Usage:
+            @future_wrap
+            def myFunc(arg1, arg2, _future=None):
+                ...
+                _future.checkStop()
+                _future.waitFor(someOtherFuture)
+                ...
+            result = myFunc(arg1, arg2).getResult()
+            threadless_result = myFunc(arg1, arg2, block=True).getResult()
+        """
+        if logLevel is not None:
+            if func is not None:
+                raise ValueError(f"Cannot have func {func} and logLevel {logLevel}")
+            return FutureWrapper(logLevel)
+
+        @functools.wraps(func)
+        def wrapper(*args: WRAPPED_FN_PARAMS.args, **kwds: WRAPPED_FN_PARAMS.kwargs) -> Future[WRAPPED_FN_RETVAL_TYPE]:
+            frame = inspect.currentframe().f_back
+            name = f"(wrapped {func.__qualname__} from {frame.f_code.co_filename}:{frame.f_lineno})"
+            future = Future(onError=kwds.pop("onFutureError", None), name=name, logLevel=self.logLevel)
+            if kwds.pop("block", False):
+                kwds["_future"] = future
+                if parent := kwds.pop("checkStopThrough", None):
+                    parent.propagateStopsInto(future)
+                future.executeAndSetReturn(func, args, kwds)
+                future.wait()
+            else:
+                future.executeInThread(func, args, kwds)
+            return future
+
+        return wrapper
+
+
+future_wrap = FutureWrapper()
 
 
 class MultiException(Exception):
@@ -369,8 +471,8 @@ class MultiException(Exception):
 class MultiFuture(Future):
     """Future tracking progress of multiple sub-futures."""
 
-    def __init__(self, futures):
-        super().__init__()
+    def __init__(self, futures, name=None):
+        super().__init__(name=name)
         self.futures = futures
         for fut in futures:
             fut.onFinish(self._subFutureFinished)
@@ -383,10 +485,10 @@ class MultiFuture(Future):
     def _subFutureStateChanged(self, future, state):
         self.sigStateChanged.emit(future, state)  # TODO not self?
 
-    def stop(self, reason="task stop requested"):
+    def stop(self, reason="task stop requested", wait=False):
         for f in self.futures:
-            f.stop(reason=reason)
-        return super().stop(reason=reason)
+            f.stop(reason=reason, wait=wait)
+        return super().stop(reason=reason, wait=wait)
 
     def percentDone(self):
         return min(f.percentDone() for f in self.futures)
@@ -397,7 +499,7 @@ class MultiFuture(Future):
     def exceptionRaised(self):
         exceptions = [f.exceptionRaised() for f in self.futures if f.exceptionRaised() is not None]
         if len(exceptions) == 1:
-            raise exceptions[0]
+            return exceptions[0]
         elif exceptions:
             return MultiException("Multiple futures errored", exceptions)
         return None
@@ -406,7 +508,19 @@ class MultiFuture(Future):
         return all(f.isDone() for f in self.futures)
 
     def errorMessage(self):
-        return "; ".join([str(f.errorMessage()) or "" for f in self.futures])
+        error_messages = []
+        for f in self.futures:
+            # Try to get a meaningful error message from the future
+            error_msg = f.errorMessage()
+            if error_msg is None and f.wasInterrupted():
+                # If no error message but future was interrupted, try to extract from exception
+                exc = f.exceptionRaised()
+                if exc is not None:
+                    error_msg = str(exc)
+            if error_msg:
+                error_messages.append(str(error_msg))
+
+        return "; ".join(error_messages) if error_messages else None
 
     def getResult(self):
         return [f.getResult() for f in self.futures]
@@ -422,15 +536,15 @@ class FutureButton(FeedbackButton):
     sigStateChanged = Qt.Signal(object, object)  # future, state
 
     def __init__(
-        self,
-        future_producer: Optional[Callable[ParamSpec, Future]] = None,
-        *args,
-        stoppable: bool = False,
-        success=None,
-        failure=None,
-        raiseOnError: bool = True,
-        processing=None,
-        showStatus: bool = True,
+            self,
+            future_producer: Optional[Callable[[ParamSpec], Future]] = None,
+            *args,
+            stoppable: bool = False,
+            success=None,
+            failure=None,
+            raiseOnError: bool = True,
+            processing=None,
+            showStatus: bool = True,
     ):
         """Create a new FutureButton.
 

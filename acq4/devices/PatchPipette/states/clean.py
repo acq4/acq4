@@ -61,7 +61,7 @@ class CleanState(PatchPipetteState):
             if len(sequence) == 0:
                 continue
 
-            self.waitFor(pip.moveTo(stage, "fast"))
+            self.waitFor(pip.moveTo(stage, "fast"), timeout=30)
 
             if dev.sonicatorDevice is not None:
                 self.sonication = dev.sonicatorDevice.doProtocol(config['sonicationProtocol'])
@@ -88,7 +88,7 @@ class CleanState(PatchPipetteState):
             parent_future.waitFor(fut, timeout=None)
 
     @future_wrap
-    def cleanup(self, _future):
+    def _cleanup(self, _future):
         dev = self.dev
         try:
             if self.sonication is not None and not self.sonication.isDone():
@@ -101,4 +101,9 @@ class CleanState(PatchPipetteState):
         except Exception:
             dev.logger.exception("Error resetting pressure after clean")
 
-        _future.waitFor(dev.pipetteDevice.moveTo('home', 'fast'))
+        try:
+            _future.waitFor(dev.pipetteDevice.moveTo('home', 'fast'))
+        except Exception:
+            dev.logger.exception("Error resetting pipette position after clean")
+
+        _future.waitFor(super()._cleanup(), timeout=None)

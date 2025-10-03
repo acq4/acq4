@@ -450,6 +450,25 @@ class Camera(DAQGeneric, OptomechDevice):
         else:
             return bounds
 
+    def pointIsVisible(self, point, mode="sensor") -> bool:
+        """Check if a point is within the camera's boundaries.
+
+        Parameters
+        ----------
+        point : np.ndarray
+            The point to check, in global coordinates.
+        mode : "sensor" | "roi"
+            See getBoundary() for details on the mode.
+        """
+        if not isinstance(point, (list, tuple, np.ndarray)):
+            raise TypeError("point must be a list, tuple, or numpy array")
+        if len(point) != 2:
+            raise ValueError("point must be a 2D point (x, y)")
+        x, y, w, h = self.getBoundary(globalCoords=True, mode=mode)
+        min_x, max_x = sorted((x, x + w))
+        min_y, max_y = sorted((y, y + h))
+        return min_x <= point[0] <= max_x and min_y <= point[1] <= max_y
+
     def getScopeState(self):
         """Return meta information to be included with each frame. This function must be FAST."""
         with self.lock:
@@ -835,7 +854,7 @@ class FrameProcessingThread(Thread):
     sigFrameFullyProcessed = Qt.Signal(object)  # Frame
 
     def __init__(self):
-        super().__init__()
+        super().__init__(name="FrameProcessingThread")
         self._stop = False
         self._processors = []
         self._final_processor = None
@@ -885,7 +904,7 @@ class AcquireThread(Thread):
     sigShowMessage = Qt.Signal(object)
 
     def __init__(self, dev: Camera):
-        Thread.__init__(self)
+        Thread.__init__(self, name=f"{dev.name()}_acquireThread")
         self.dev = dev
         self.camLock = self.dev.camLock
         self.stopThread = False
@@ -1025,7 +1044,7 @@ class FrameAcquisitionFuture(Future):
             ensureFreshFrames: bool = False,
     ):
         """Acquire a frames asynchronously, either a fixed number or continuously until stopped."""
-        super().__init__()
+        super().__init__(name=f"{camera.name()}_frameAcquisitionFuture", logLevel='debug')
         self._camera = camera
         self._frame_count = frameCount
         self._ensure_fresh_frames = ensureFreshFrames
@@ -1034,7 +1053,7 @@ class FrameAcquisitionFuture(Future):
         self._frames = []
         self._timeout = timeout
         self._queue = queue.Queue()
-        self._thread = threading.Thread(target=self._monitorAcquisition, daemon=True)
+        self._thread = threading.Thread(target=self._monitorAcquisition, daemon=True, name=f"{camera.name()}_frameAquisitionMonitor")
         self._thread.start()
 
     def _monitorAcquisition(self):

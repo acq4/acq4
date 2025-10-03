@@ -83,7 +83,7 @@ class SensapexObjectiveChanger(Device):
 
 class _PositionPollThread(Thread):
     def __init__(self, dev, poll_interval):
-        Thread.__init__(self)
+        Thread.__init__(self, name=f"PositionPollThread_{dev.name()}")
         self._dev = dev
         self._poll_interval = poll_interval
 
@@ -95,12 +95,12 @@ class _PositionPollThread(Thread):
 
 class ObjectiveChangeFuture(Future):
     def __init__(self, dev: SensapexObjectiveChanger, pos):
-        Future.__init__(self)
+        Future.__init__(self, name=f"ObjectiveChangeFuture_{dev.name()}")
         self.dev = dev
         self.target = pos
         self._start = ptime.time()
         self._retried = False
-        self.pollThread = threading.Thread(target=self.poll)
+        self.pollThread = threading.Thread(target=self.poll, name=f"{dev.name()} objective poll thread")
         self.pollThread.daemon = True
 
         if dev.getLensPosition() == pos:

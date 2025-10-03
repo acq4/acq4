@@ -158,6 +158,8 @@ class TaskRunner(Module):
         self.ui.sequenceParamList.itemChanged.connect(self.updateSeqReport)
         self.ui.analysisList.itemClicked.connect(self.analysisItemClicked)
 
+        manager.declareInterface(name, ['taskRunnerModule'], self)
+
     def protoGroupChanged(self, param, value):
         self.sigTaskChanged.emit(param, value)
         if param == 'repetitions':
@@ -305,18 +307,30 @@ class TaskRunner(Module):
 
         self.updateSeqReport()
 
-    def updateSeqReport(self):
+    @property
+    def sequenceInfo(self):
         s = self.protoStateGroup.state()
         period = max(s['duration'] + s['leadTime'], s['cycleTime'])
         items = self.ui.sequenceParamList.listParams()[:]
-        if len(items) == 0:
-            self.ui.paramSpaceLabel.setText('0')
-            self.ui.seqTimeLabel.setText('0')
-            tot = 0
-        else:
+        if items:
             psi = [len(i[2]) for i in items]
             ps = list(map(str, psi))
             tot = reduce(lambda x, y: x * y, psi)
+        else:
+            ps = []
+            tot = 0
+        return {"period": period, "items": items, "totalParams": tot, "paramSpace": ps}
+
+    def updateSeqReport(self):
+        info = self.sequenceInfo
+        items = info["items"]
+        tot = info["totalParams"]
+        period = info["period"]
+        ps = info["paramSpace"]
+        if len(items) == 0:
+            self.ui.paramSpaceLabel.setText('0')
+            self.ui.seqTimeLabel.setText('0')
+        else:
             self.ui.paramSpaceLabel.setText(' x '.join(ps) + ' = %d' % tot)
             self.ui.seqTimeLabel.setText('%0.3f sec' % (period * tot))
 
@@ -955,7 +969,7 @@ class TaskThread(Thread):
     sigTaskStarted = Qt.Signal(object)
 
     def __init__(self, ui):
-        Thread.__init__(self)
+        Thread.__init__(self, name="TaskRunner_Thread")
         self.ui = ui
         self.dm = self.ui.manager
         self.lock = Mutex(Qt.QMutex.Recursive)
@@ -1174,14 +1188,14 @@ class TaskFuture(Future):
         self._taskCount = 0
         self._collectResults = collectResults
         self.results = []
-        Future.__init__(self)
+        Future.__init__(self, name='TaskRunnerFuture')
 
     def percentDone(self):
         return self._taskCount / self._nTasks
 
-    def stop(self):
+    def stop(self, *args, **kwds):
         self._taskThread.stop(task=self._task)
-        return Future.stop(self)
+        return Future.stop(self, *args, **kwds)
 
     def newFrame(self, frame):
         if self._collectResults:

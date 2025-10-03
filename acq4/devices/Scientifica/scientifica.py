@@ -185,17 +185,17 @@ class Scientifica(Stage):
                 "limits": (False, False, False),
             }
 
-    def stop(self):
+    def stop(self, reason=None):
         """Stop the manipulator immediately."""
         with self.lock:
-            self.abort()
+            self.abort(reason=reason)
 
-    def abort(self):
+    def abort(self, reason=None):
         """Stop the manipulator immediately."""
-        self.driver.stop()
-        if self._lastMove is not None:
-            self._lastMove.interrupt()
-            self._lastMove = None
+        self.driver.stop(reason=reason)
+        # if self._lastMove is not None:
+        #     self._lastMove.interrupt()
+        #     self._lastMove = None
 
     def setUserSpeed(self, v):
         """Set the maximum speed of the stage (m/sec) when under manual control.
@@ -241,13 +241,13 @@ class Scientifica(Stage):
         self.driver.close()
         Stage.quit(self)
 
-    def _move(self, pos, speed, linear, **kwds):
+    def _move(self, pos, speed, linear, name=None, **kwds):
         with self.lock:
             if self._lastMove is not None and not self._lastMove.isDone():
                 self.stop()
             speed = self._interpretSpeed(speed)
 
-            self._lastMove = ScientificaMoveFuture(self, pos, speed, **kwds)
+            self._lastMove = ScientificaMoveFuture(self, pos, speed, name=name, **kwds)
             return self._lastMove
 
     def deviceInterface(self, win):
@@ -275,22 +275,22 @@ class Scientifica(Stage):
 class ScientificaMoveFuture(MoveFuture):
     """Provides access to a move-in-progress on a Scientifica manipulator.
     """
-    def __init__(self, dev: Scientifica, pos, speed: float, **kwds):
+    def __init__(self, dev: Scientifica, pos, speed: float, name=None, **kwds):
         self._moveReq = None
 
         minSpeed = 1e-6 * dev.driver.getParam('minSpeed')
         if speed < minSpeed:
             # device _can't_ move this slow; we need to break the move into steps
-            self.stepwiseThread = threading.Thread(target=self._stepwiseMove, daemon=True)
+            self.stepwiseThread = threading.Thread(target=self._stepwiseMove, daemon=True, name=name)
             self.doStepwise = True
             currentPos = dev.getPosition()
             targetPos = [currentPos[i] if pos[i] is None else pos[i] for i in range(len(pos))]
             super().__init__(dev, targetPos, speed)
             self.stepwiseThread.start()
         else:
-            self._moveReq = dev.driver.moveTo(np.array(pos), speed / 1e-6, **kwds)
+            self._moveReq = dev.driver.moveTo(np.array(pos), speed / 1e-6, name=name, **kwds)
             targetPos = self._moveReq.target_pos  # will have None values filled in with current position
-            super().__init__(dev, targetPos, speed)
+            super().__init__(dev, targetPos, speed, name=name)
             self._moveReq.set_callback(self._requestFinished)
 
     def _requestFinished(self, moveReq):
@@ -309,7 +309,7 @@ class ScientificaMoveFuture(MoveFuture):
             self.doStepwise = False
         else:
             self._moveReq.cancel()
-        
+
     def _stepwiseMove(self):
         try:
             minSpeed = self.dev.driver.getParam('minSpeed')

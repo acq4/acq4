@@ -14,7 +14,16 @@ from ._base import PatchPipetteState, SteadyStateAnalysisBase
 
 class SealAnalysis(SteadyStateAnalysisBase):
     @classmethod
-    def plot_items(cls, tau, success_at, hold_at):
+    def plot_items(
+        cls,
+        success_tau,
+        success_at,
+        hold_tau,
+        hold_at,
+        failure_tau,
+        failure_resistance_threshold,
+        failure_dRdt_threshold,
+    ):
         return {'Ω': [
             pg.InfiniteLine(movable=False, pos=success_at, angle=0, pen=pg.mkPen('g')),
             pg.InfiniteLine(movable=False, pos=hold_at, angle=0, pen=pg.mkPen('w')),
@@ -33,9 +42,9 @@ class SealAnalysis(SteadyStateAnalysisBase):
             # TODO this plot looks to have already been broken
             plots['Ω'].append(dict(
                 x=analysis["time"],
-                y=analysis["resistance_avg"],
+                y=analysis["resistance_avg_for_success"],
                 pen=pg.mkPen('b'),
-                name=None if labels else 'Resistance Avg',
+                name=None if labels else 'Resistance Avg for Seal',
             ))
             plots[''].append(dict(
                 x=analysis["time"],
@@ -47,8 +56,8 @@ class SealAnalysis(SteadyStateAnalysisBase):
             plots[''].append(dict(
                 x=analysis["time"],
                 y=plottable_booleans(analysis["failure"]),
-                symbol='o',
-                pen=pg.mkPen('g'),
+                symbol='x',
+                pen=pg.mkPen('r'),
                 name=None if labels else 'Seal Failure',
             ))
             labels = True
@@ -101,7 +110,9 @@ class SealAnalysis(SteadyStateAnalysisBase):
                     dt, self._last_measurement['resistance_avg_for_hold'], resistance, self._hold_tau)
                 resistance_avg_for_failure, _ = self.exponential_decay_avg(
                     dt, self._last_measurement['resistance_avg_for_failure'], resistance, self._failure_tau)
-                dRdt_for_failure = (resistance - self._last_measurement['steady_state_resistance']) / dt
+                dRdt = (resistance - self._last_measurement['steady_state_resistance']) / dt
+                dRdt_for_failure, _ = self.exponential_decay_avg(
+                    dt, self._last_measurement['dRdt_for_failure'], dRdt, self._failure_tau)
             success = resistance_avg_for_success > self._success_at
             hold = resistance_avg_for_hold > self._hold_at
             failure = (
@@ -156,10 +167,10 @@ class SealState(PatchPipetteState):
 
     State name: "seal"
 
-    - monitor resistance to detect loose seal and GOhm seal
+    - monitor resistance to detect loose seal and GΩ seal
     - set holding potential after loose seal
     - modulate pressure to improve likelihood of forming seal
-    - cut pressure after GOhm and transition to cell attached
+    - cut pressure after GΩ and transition to cell attached
 
     Parameters
     ----------
@@ -183,10 +194,10 @@ class SealState(PatchPipetteState):
         transitions to the 'break in' state (in case of partial break-in, we don't want to transition
         directly to 'whole cell' state).
     failureResistanceThreshold : float
-        If the resistance hangs out for too long (*failureTau*) below this value (Ohms) without growing faster than
-        *failureDRDTThreshold*, the seal is considered a failure. Default 100MOhm.
+        If the resistance hangs out for too long (*failureTau*) below this value (Ωs) without growing faster than
+        *failureDRDTThreshold*, the seal is considered a failure. Default 100MΩ.
     failureDRDTThreshold : float
-        See *failureResistanceThreshold*. dR/dt. Default 1MOhm/s
+        See *failureResistanceThreshold*. dR/dt. Default 1MΩ/s
     successMonitorTau : float
         Time constant (seconds) for exponential averaging of resistance measurements when determining whether seal
         resistance has crossed *sealThreshold*. Default 1s.
@@ -203,7 +214,7 @@ class SealState(PatchPipetteState):
     delayBeforePressure : float
         Wait time (seconds) at beginning of seal state before applying negative pressure.
     delayAfterSeal : float
-        Wait time (seconds) after GOhm seal is acquired, before transitioning to next state.
+        Wait time (seconds) after GΩ seal is acquired, before transitioning to next state.
     afterSealPressure : float
         Pressure (Pascals) to apply during *delayAfterSeal* interval. This can help to stabilize the seal after initial
         formation.
@@ -227,13 +238,13 @@ class SealState(PatchPipetteState):
     }
     _parameterTreeConfig = {
         'pressureMode': {'type': 'str', 'default': 'user', 'limits': ['auto', 'user']},
-        'startingPressure': {'type': 'float', 'default': -3e3},
-        'holdingThreshold': {'type': 'float', 'default': 100e6},
-        'holdingPotential': {'type': 'float', 'default': -70e-3},
-        'sealThreshold': {'type': 'float', 'default': 1e9},
+        'startingPressure': {'type': 'float', 'default': -3e3, 'suffix': 'Pa'},
+        'holdingThreshold': {'type': 'float', 'default': 100e6, 'suffix': 'Ω'},
+        'holdingPotential': {'type': 'float', 'default': -70e-3, 'suffix': 'V'},
+        'sealThreshold': {'type': 'float', 'default': 1e9, 'suffix': 'Ω'},
         'breakInThreshold': {'type': 'float', 'default': 10e-12, 'suffix': 'F'},
-        'failureResistanceThreshold': {'type': 'float', 'default': 100e6},
-        'failureDRDTThreshold': {'type': 'float', 'default': 1e6, 'suffix': 'Ohm/s'},
+        'failureResistanceThreshold': {'type': 'float', 'default': 100e6, 'suffix': 'Ω'},
+        'failureDRDTThreshold': {'type': 'float', 'default': 1e6, 'suffix': 'Ω/s'},
         'autoSealTimeout': {'type': 'float', 'default': 30.0, 'suffix': 's'},
         'pressureLimit': {'type': 'float', 'default': -3e3, 'suffix': 'Pa'},
         'successMonitorTau': {'type': 'float', 'default': 1, 'suffix': 's'},
@@ -245,7 +256,7 @@ class SealState(PatchPipetteState):
         'pressureScanInterval': {'type': 'float', 'default': 10.0, 'suffix': 's'},
         'pressureScanRadius': {'type': 'float', 'default': 2 * kPa, 'suffix': 'Pa'},
         'pressureScanDuration': {'type': 'float', 'default': 5.0, 'suffix': 's'},
-        'pressureScanTrust': {'type': 'float', 'default': 0.25},
+        'pressureScanTrust': {'type': 'float', 'default': 0.25, 'suffix': '%'},
     }
 
     def __init__(self, dev, config):
@@ -408,6 +419,6 @@ class SealState(PatchPipetteState):
         self._resistances = [resistances.time_values, resistances.data]
         return pressures, resistances
 
-    def cleanup(self):
+    def _cleanup(self):
         self.dev.pressureDevice.setPressure(source='atmosphere')
-        return super().cleanup()
+        return super()._cleanup()

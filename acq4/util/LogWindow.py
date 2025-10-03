@@ -1,10 +1,6 @@
-import os
 import re
-import subprocess
-import sys
 import webbrowser
 from logging import LogRecord
-from pathlib import Path
 
 from acq4.util import Qt
 from pyqtgraph import FeedbackButton
