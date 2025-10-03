@@ -10,11 +10,10 @@ from acq4.devices.Stage import Stage
 from acq4.modules.Camera import CameraModuleInterface
 from acq4.util import Qt
 from acq4.util.Mutex import Mutex
-from acq4.util.debug import printExc
+from acq4.util.acq4_typing import Number
 from acq4.util.future import Future, MultiFuture, future_wrap, FutureButton
 from acq4.util.imaging import Frame
 from acq4.util.surface import find_surface
-from acq4.util.acq4_typing import Number
 from pyqtgraph.units import µm
 
 Ui_Form = Qt.importTemplate('.deviceTemplate')
@@ -94,7 +93,7 @@ class Microscope(Device, OptomechDevice):
             try:
                 self.objectiveSwitchChanged()
             except:
-                printExc("Could not set initial objective state:")
+                self.logger.exception("Could not set initial objective state:")
         else:
             self.switchDevice = None
             firstObj = next(iter(self.objectives))
@@ -233,7 +232,7 @@ class Microscope(Device, OptomechDevice):
         """
         return self.mapToGlobal(Qt.QVector3D(0, 0, 0)).z()
 
-    def setFocusDepth(self, z, speed='fast'):
+    def setFocusDepth(self, z, speed='fast', name=None):
         """Set the z-position of the focal plane.
 
         This method requires motorized focus control.
@@ -247,7 +246,7 @@ class Microscope(Device, OptomechDevice):
 
         # and this is where it needs to go
         fdpos[2] += dif
-        return fd.moveToGlobal(fdpos, speed)
+        return fd.moveToGlobal(fdpos, speed, name=name)
 
     def getDefaultImager(self):
         name = self.config.get('defaultImager', None)
@@ -296,7 +295,7 @@ class Microscope(Device, OptomechDevice):
         """
         return self.mapToGlobal(pg.Vector(0, 0, 0))
 
-    def setGlobalPosition(self, pos, speed='fast'):
+    def setGlobalPosition(self, pos, speed='fast', name=None):
         """Move the microscope such that its center axis is at a specified global position.
 
         If *pos* is a 3-element vector, then this method will also attempt to set the focus depth
@@ -310,7 +309,7 @@ class Microscope(Device, OptomechDevice):
 
         if len(pos) == 3 and focusDevice is not positionDevice:
             z = pos[2]
-            zFuture = self.setFocusDepth(z)
+            zFuture = self.setFocusDepth(z, name=f'{name} Z')
             pos = pos[:2]
         else:
             zFuture = None
@@ -323,11 +322,11 @@ class Microscope(Device, OptomechDevice):
         sgpos = positionDevice.globalPosition()
         sgpos2 = pg.Vector(sgpos) + (pg.Vector(pos) - gpos)
         sgpos2 = [sgpos2.x(), sgpos2.y(), sgpos2.z()]
-        xyFuture = positionDevice.moveToGlobal(sgpos2, speed)
+        xyFuture = positionDevice.moveToGlobal(sgpos2, speed, name=f'{name} XY')
         if zFuture is None:
             return xyFuture
         else:
-            return MultiFuture([zFuture, xyFuture])
+            return MultiFuture([zFuture, xyFuture], name=f'{self.name()} {name} XY+Z')
 
     def writeCalibration(self):
         cal = {'surfaceDepth': self.getSurfaceDepth()}
@@ -625,8 +624,10 @@ class ScopeCameraModInterface(CameraModuleInterface):
         fd = self.getDevice().focusDevice()
         if fd is None:
             return
-        tpos = fd.globalTargetPosition()
         fpos = fd.globalPosition()
+        tpos = fd.globalTargetPosition()
+        if tpos is None:
+            tpos = fpos
         dif = tpos[2] - fpos[2]
         with pg.SignalBlock(self.movableFocusLine.sigPositionChangeFinished, self.focusDragged):
             self.movableFocusLine.setValue(focus + dif)

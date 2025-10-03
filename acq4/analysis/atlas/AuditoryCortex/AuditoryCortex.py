@@ -9,7 +9,7 @@ import acq4.util.DataManager as DataManager
 import pyqtgraph as pg
 from acq4.analysis.atlas.AuditoryCortex.CortexROI import CortexROI
 from acq4.util import Qt
-from acq4.util.debug import Profiler
+from pyqtgraph.debug import Profiler
 
 
 class AuditoryCortex(Atlas.Atlas):

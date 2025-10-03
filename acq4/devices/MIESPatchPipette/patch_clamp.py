@@ -38,9 +38,9 @@ class MIESPatchClamp(PatchClamp):
         pass 
 
     def enableTestPulse(self, enable=True, block=False):
-        tpa = self.mies.igor.test_pulse_active
-        if tpa != enable:
-            self.mies.toggleTestPulseActive()
+        result = self.mies.enableTestPulse(enable)
+        if block:
+            return result.result()
 
     def autoPipetteOffset(self):
         self.mies.selectHeadstage(self._headstage)
@@ -65,19 +65,20 @@ class MIESPatchClamp(PatchClamp):
         return {'holding': self.getHolding(mode)}
     
     def enableAutoBias(self, enable=True):
-        self.mies.setAutoBias(self._headstage, enable)
         self.setTestPulseParameters(autoBiasEnabled=enable)
-        self.sigAutoBiasChanged.emit(self, enable, self.autoBiasTarget())
+        if self.autoBiasEnabled() != enable:
+            self.mies.setAutoBias(self._headstage, enable)
+            self.sigAutoBiasChanged.emit(self, enable, self.autoBiasTarget())
 
     def autoBiasEnabled(self):
         return self.mies.getAutoBias(self._headstage)
     
-    def setAutoBiasTarget(self, v):
+    def setAutoBiasTarget(self, target_value):
         current_value = self.autoBiasTarget()
-        if current_value != v:
-            self.mies.setAutoBiasTarget(self._headstage, v)
+        if current_value != target_value:
+            self.mies.setAutoBiasTarget(self._headstage, target_value)
             enabled = self.autoBiasEnabled()
-            self.sigAutoBiasChanged.emit(self, enabled, v)
+            self.sigAutoBiasChanged.emit(self, enabled, target_value)
 
     def autoBiasTarget(self):
         return self.mies.getAutoBiasTarget(self._headstage)

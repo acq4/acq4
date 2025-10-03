@@ -26,6 +26,7 @@ dependencies:
     - cellpose
     - PyDAQmx
     - pytest
+    - python-json-logger
     - tifffile
     - vispy
     - pyopengl

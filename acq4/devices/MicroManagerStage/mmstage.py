@@ -7,7 +7,6 @@ from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
 from acq4.util.micromanager import getMMCorePy
 from ..Stage import Stage, MoveFuture, StageInterface
-from ...util.debug import printExc
 
 
 class MicroManagerStage(Stage):
@@ -169,7 +168,7 @@ class MicroManagerStage(Stage):
                     self._lastMove._stopped()
                     self._lastMove = None
             except:
-                printExc("Error stopping axis %s:" % ax)
+                self.logger.exception(f"Error stopping axis {ax}:")
 
     @property
     def positionUpdatesPerSecond(self):
@@ -251,7 +250,7 @@ class MonitorThread(Thread):
         self.interval = 0.3
         self.minInterval = 100e-3
 
-        Thread.__init__(self)
+        Thread.__init__(self, name=f'{dev.name()}_MonitorThread')
 
     def start(self):
         self.stopped = False
@@ -294,7 +293,7 @@ class MicroManagerMoveFuture(MoveFuture):
     """
 
     def __init__(self, dev, pos, speed, userSpeed, moveXY=True, moveZ=True):
-        MoveFuture.__init__(self, dev, pos, speed)
+        MoveFuture.__init__(self, dev, pos, speed, name=f'{dev.name()}_move')
         self._interrupted = False
         self._errorMSg = None
         self._finished = False

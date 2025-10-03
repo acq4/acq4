@@ -1,11 +1,9 @@
 import os
+import time
 from copy import deepcopy
 
 import numpy as np
-import time
 
-
-import acq4.util.debug as debug
 import pyqtgraph as pg
 from acq4.devices.Device import Device
 from acq4.devices.OptomechDevice import OptomechDevice
@@ -325,7 +323,7 @@ class SutterMP285Thread(Thread):
             self.getImmediatePos()
             monitor = True
         except:
-            debug.printExc("Sutter MP285: Cannot determine position:")
+            self.dev.logger.exception("Sutter MP285: Cannot determine position:")
             monitor = False
         
         while True:
@@ -398,9 +396,8 @@ class SutterMP285Thread(Thread):
                     ## moving; make a guess about the current position
                     pass
             except:
-                pass
-                debug.printExc("Error in MP285 thread:")
-                
+                self.dev.logger.exception("Error in MP285 thread:")
+
             self.lock.lock()
             if self.stopThread:
                 self.lock.unlock()
@@ -433,7 +430,7 @@ class SutterMP285Thread(Thread):
             return None
         except:
             self.sigError.emit("Read error--see console.")
-            debug.printExc("Error getting packet:")
+            self.dev.logger.exception("Error getting packet:")
             return None
         
     def writeVelocity(self, spd, v, limits, pos, resolution):

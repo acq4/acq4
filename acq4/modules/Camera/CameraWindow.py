@@ -1,16 +1,16 @@
 import os.path
-from collections import OrderedDict
-import numpy as np
 import weakref
+from collections import OrderedDict
 
+import numpy as np
 
 import acq4.Manager as Manager
 import pyqtgraph as pg
 import pyqtgraph.dockarea as dockarea
 from acq4.util import Qt, ptime
 from acq4.util.StatusBar import StatusBar
-from acq4.util.debug import Profiler
 from acq4.util.imaging.sequencer import ImageSequencerCtrl
+from pyqtgraph.debug import Profiler
 from pyqtgraph.graphicsItems.ROI import RulerROI
 
 
@@ -32,6 +32,7 @@ class CameraWindow(Qt.QMainWindow):
         self.cw = dockarea.DockArea()
         self.setCentralWidget(self.cw)
         self.gv = pg.GraphicsView()
+        self.gv.setObjectName("CameraModule_mainGraphicsView")
         self.gvDock = dockarea.Dock(name="View", widget=self.gv, hideTitle=True, size=(600, 600))
         self.cw.addDock(self.gvDock)
 
@@ -43,6 +44,7 @@ class CameraWindow(Qt.QMainWindow):
 
         # And a plot area for displaying depth-related information
         self.depthPlot = pg.PlotWidget(labels={"left": ("Depth", "m")})
+        self.depthPlot.setObjectName("CameraModule_depthPlot")
         self.depthPlot.setYRange(0, 10e-3)
         self.depthPlot.setXRange(-1, 1)
         self.depthPlot.hideAxis("bottom")
@@ -156,8 +158,6 @@ class CameraWindow(Qt.QMainWindow):
         self.interfaces[name].quit()
 
     def _removeInterface(self, iface):
-        print("======== remove", iface)
-        print(self.interfaces)
         name = None
         if isinstance(iface, CameraModuleInterface):
             for k, v in self.interfaces.items():
@@ -434,6 +434,7 @@ class ROIPlotter(Qt.QWidget):
         self.roiLayout.addWidget(self.roiPlotCheck, 3, 0, 1, 2)
 
         self.roiPlot = pg.PlotWidget()
+        self.roiPlot.setObjectName("CameraModule_roiPlot")
         self.roiLayout.addWidget(self.roiPlot, 0, 2, self.roiLayout.rowCount(), 1)
 
         self.rectBtn.clicked.connect(self._addRectROI)

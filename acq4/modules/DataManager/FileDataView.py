@@ -61,6 +61,7 @@ class FileDataView(Qt.QSplitter):
     def displayDataAsPlot(self, data):
         self.clear()
         w = pg.MultiPlotWidget(self)
+        w.setObjectName("DataManager_multiPlotWidget")
         self.addWidget(w)
         w.plot(data)
         self._widgets.append(w)

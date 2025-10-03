@@ -90,7 +90,7 @@ class SerialDevice(object):
         n = self.serial.inWaiting()
         if n > 0:
             d = self.serial.read(n)
-            logging.info('Serial port %s readAll: %r', self.__serialOpts['port'], d)
+            # logging.info('Serial port %s readAll: %r', self.__serialOpts['port'], d)
             return d
         return ''
 
@@ -98,7 +98,7 @@ class SerialDevice(object):
         """Write *data* to the serial port"""
         if sys.version > '3' and isinstance(data, str):
             data = data.encode()
-        logging.info('Serial port %s write: %r', self.__serialOpts['port'], data)
+        # logging.info('Serial port %s write: %r', self.__serialOpts['port'], data)
         self.serial.write(data)
 
     def read(self, length, timeout=5.0, term=None):
@@ -121,9 +121,9 @@ class SerialDevice(object):
                 extra = self.readAll()
                 err = DataError("Packet corrupt: %s (len=%d)" % (repr(packet), len(packet)), packet, extra)
                 raise err
-            logging.info('Serial port %s read: %r', self.__serialOpts['port'], packet)
+            # logging.info('Serial port %s read: %r', self.__serialOpts['port'], packet)
             return packet[:-len(term)]
-        logging.info('Serial port %s read: %r', self.__serialOpts['port'], packet)
+        # logging.info('Serial port %s read: %r', self.__serialOpts['port'], packet)
         return packet
 
     def _readWithTimeout(self, nBytes, timeout):

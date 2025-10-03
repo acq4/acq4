@@ -6,8 +6,6 @@ import pyqtgraph as pg
 from acq4.util.future import future_wrap
 from coorx import SRT3DTransform
 from ... import getManager
-from ...util.HelpfulException import HelpfulException
-from ...util.debug import printExc
 from ...util.geometry import GeometryMotionPlanner, Plane
 
 if TYPE_CHECKING:
@@ -251,7 +249,7 @@ class GeometryAwarePathGenerator(PipettePathGenerator):
             planner.make_convolved_obstacles(self.pip.getGeometry(), from_pip_to_global, viz)
             print(f"cache primed for {self.pip.name()}")
         except RuntimeError:
-            printExc("Blew up while attempting to prime path finding cache")
+            self.pip.logger.exception("Blew up while attempting to prime path finding cache")
 
     def _planAroundSurface(self, pos):
         surface = self.pip.approachDepth()
@@ -336,7 +334,7 @@ class PipetteMotionPlanner:
             self.future.stop()
 
     def _move(self):
-        return self.pip._movePath(self.path())
+        return self.pip._movePath(self.path(), name=f"{self.pip.name()} {type(self).__name__} path")
 
     def path(self):
         startPosGlobal = self.pip.globalPosition()
@@ -426,6 +424,7 @@ class SearchMotionPlanner(PipetteMotionPlanner):
 
     @future_wrap
     def _move(self, _future):
+        _future.name = f"{self.pip.name()} search"
         pip = self.pip
         speed = self.speed
         distance = self.kwds.get("distance", 0)
@@ -443,7 +442,7 @@ class SearchMotionPlanner(PipetteMotionPlanner):
         # move scope such that camera will be focused at searchDepth
         if focusDepth < searchDepth:
             scopeFocus = scope.getFocusDepth()
-            fut = scope.setFocusDepth(scopeFocus + searchDepth - focusDepth)
+            fut = scope.setFocusDepth(scopeFocus + searchDepth - focusDepth, name=f"set focus for {self.pip.name()} search")
             # wait for objective to lift before starting pipette motion
             _future.waitFor(fut)
 
@@ -456,7 +455,7 @@ class SearchMotionPlanner(PipetteMotionPlanner):
 
         path = self.safePath(pip.globalPosition(), globalTarget, speed)
 
-        _future.waitFor(pip._movePath(path))
+        _future.waitFor(pip._movePath(path, name=f"{self.pip.name()} search path"))
 
 
 class ApproachMotionPlanner(PipetteMotionPlanner):
@@ -490,8 +489,8 @@ class AboveTargetMotionPlanner(PipetteMotionPlanner):
         waypoint1, waypoint2 = self.aboveTargetPath()
 
         path = self.safePath(pip.globalPosition(), waypoint1, speed, APPROACH_TO_CORRECT_FOR_HYSTERESIS)
-        _future.waitFor(pip._movePath(path))
-        move_scope = scope.setGlobalPosition(waypoint2)
+        _future.waitFor(pip._movePath(path + [(waypoint2, "fast", True, "Above target")]))
+        move_scope = scope.setGlobalPosition(waypoint2, name=f"move scope for {self.pip.name()} above target")
         _future.waitFor(move_scope)  # TODO act simultaneously once we can handle motion planning around moving objects
 
     def aboveTargetPath(self):
@@ -548,7 +547,7 @@ class IdleMotionPlanner(PipetteMotionPlanner):
         ds = pip._opts["idleDistance"]  # move to 7 mm from center
         globalIdlePos = -ds * np.cos(angle), -ds * np.sin(angle), idleDepth
 
-        _future.waitFor(pip._moveToGlobal(globalIdlePos, speed))
+        _future.waitFor(pip._moveToGlobal(globalIdlePos, speed, name=f"{pip.name()} idle"))
 
 
 def defaultMotionPlanners() -> dict[str, type[PipetteMotionPlanner]]:

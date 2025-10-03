@@ -56,6 +56,7 @@ class AtlasCanvasItem(CanvasItem):
         self.sliceLayout = Qt.QGridLayout()
         self.sliceWidget.setLayout(self.sliceLayout)
         self.sliceGraphicsView = pg.GraphicsLayoutWidget()
+        self.sliceGraphicsView.setObjectName("AtlasCanvasItem_sliceGraphicsView")
         self.sliceLayout.addWidget(self.sliceGraphicsView, 0, 0)
         self.sliceView = self.sliceGraphicsView.addViewBox()
         self.sliceView.addItem(self.atlasView.img1)

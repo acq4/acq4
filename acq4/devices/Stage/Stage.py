@@ -126,7 +126,7 @@ class Stage(Device, OptomechDevice):
         """Return a tuple of axis names implemented by this device, like ('x', 'y', 'z').
 
         The axes described in the above data structure correspond to the mechanical
-        actuators on the device; they do not necessarily correspond to the axes in the 
+        actuators on the device; they do not necessarily correspond to the axes in the
         global coordinate system or the local coordinate system of the device.
 
         This method must be reimplemented by subclasses.
@@ -135,15 +135,15 @@ class Stage(Device, OptomechDevice):
 
     def capabilities(self):
         """Return a structure describing the capabilities of this device::
-        
+
             {
                 'getPos': (x, y, z),      # bool: whether each axis can be read from the device
                 'setPos': (x, y, z),      # bool: whether each axis can be set on the device
                 'limits': (x, y, z),      # bool: whether limits can be set for each axis
             }
-            
+
         The axes described in the above data structure correspond to the mechanical
-        actuators on the device; they do not necessarily correspond to the axes in the 
+        actuators on the device; they do not necessarily correspond to the axes in the
         global coordinate system or the local coordinate system of the device.
 
         Subclasses must reimplement this method.
@@ -175,7 +175,7 @@ class Stage(Device, OptomechDevice):
 
     def stageTransform(self):
         """Return the transform that implements the translation/rotation generated
-        by the current hardware state. 
+        by the current hardware state.
         """
         return pg.SRTTransform3D(self._stageTransform)
 
@@ -194,7 +194,7 @@ class Stage(Device, OptomechDevice):
         If the inverse transform is None, then it will be automatically generated
         on demand by calling transform.inverted().
 
-        Subclasses may override this method; the default uses _axisTransform to 
+        Subclasses may override this method; the default uses _axisTransform to
         map from the device position to a 3D translation matrix. This covers only cases
         where the stage axes perform linear translations. For rotation or nonlinear
         movement, this method must be reimplemented.
@@ -215,7 +215,7 @@ class Stage(Device, OptomechDevice):
 
         The default implementation simply inverts _axisTransform to generate this solution;
         devices with more complex kinematics need to reimplement this method.
-        """ 
+        """
         tr = self.stageTransform().getTranslation() + pg.Vector(posChange)
         return pg.Vector(self.inverseAxisTransform().map(tr))
 
@@ -248,7 +248,7 @@ class Stage(Device, OptomechDevice):
     def calculatedAxisOrientation(self, axis: str):
         """Return the pitch and yaw of a stage axis.
 
-        The pitch is returned in degrees relative to global horizontal (positive values point downward), 
+        The pitch is returned in degrees relative to global horizontal (positive values point downward),
         whereas the yaw is returned in degrees around the global Z axis relative to the global +X direction.
 
         The *axis* argument specifies which axis to return, one of '+x', '-x', '+y', '-y', '+z', or '-z'.
@@ -315,9 +315,9 @@ class Stage(Device, OptomechDevice):
         return pg.Transform3D(self._inverseBaseTransform)
 
     def setBaseTransform(self, tr):
-        """Set the base transform of the stage. 
+        """Set the base transform of the stage.
 
-        This sets the starting position and orientation of the stage before the 
+        This sets the starting position and orientation of the stage before the
         hardware-reported stage position is taken into account.
         """
         self._baseTransform = tr * 1  # *1 makes a copy
@@ -347,7 +347,7 @@ class Stage(Device, OptomechDevice):
             return self._lastPos[:]
 
     def globalPosition(self):
-        """Return the position of the local coordinate system origin relative to 
+        """Return the position of the local coordinate system origin relative to
         the global coordinate system.
         """
         # note: the origin of the local coordinate frame is the center position of the device.
@@ -360,7 +360,7 @@ class Stage(Device, OptomechDevice):
         raise NotImplementedError()
 
     def targetPosition(self):
-        """If the stage is moving, return the target position. Otherwise return 
+        """If the stage is moving, return the target position. Otherwise return
         the current position.
         """
         raise NotImplementedError()
@@ -372,6 +372,8 @@ class Stage(Device, OptomechDevice):
         """
         # imagine what the global transform will look like after we reach the target..
         target = self.targetPosition()
+        if target is None:
+            return None
         tr = self.baseTransform() * self._makeStageTransform(target)[0]
         pd = self.parentDevice()
         if pd is not None:
@@ -387,12 +389,12 @@ class Stage(Device, OptomechDevice):
 
     def setDefaultSpeed(self, speed):
         """Set the default speed of the device when moving.
-        
-        Generally speeds are specified approximately in m/s, although many 
-        devices lack the capability to accurately set speed. This value may 
-        also be 'fast' to indicate the device should move as quickly as 
+
+        Generally speeds are specified approximately in m/s, although many
+        devices lack the capability to accurately set speed. This value may
+        also be 'fast' to indicate the device should move as quickly as
         possible, or 'slow' to indicate the device should minimize vibrations
-        while moving.        
+        while moving.
         """
         if speed not in ('fast', 'slow'):
             speed = abs(float(speed))
@@ -401,25 +403,25 @@ class Stage(Device, OptomechDevice):
     def isMoving(self):
         """Return True if the device is currently moving.
         """
-        raise NotImplementedError()        
+        raise NotImplementedError()
 
     def move(self, position, speed=None, progress=False, linear=False, **kwds) -> MoveFuture:
         """Move the device to a new position.
-        
+
         *position* specifies the absolute position in the stage coordinate system (as defined by the device)
 
         Optionally, *position* values may be None to indicate no movement along that axis.
-        
+
         If the *speed* argument is given, it temporarily overrides the default
         speed that was defined by the last call to setSpeed().
 
         If *linear* is True, then the movement is required to be in a straight line. By default,
         this argument is False, which means movement on each axis is conducted independently (the axis
         order depends on hardware).
-        
+
         If *progress* is True, then display a progress bar until the move is complete.
 
-        Return a MoveFuture instance that can be used to monitor the progress 
+        Return a MoveFuture instance that can be used to monitor the progress
         of the move.
         """
         if speed is None:
@@ -449,7 +451,7 @@ class Stage(Device, OptomechDevice):
             raise ValueError(f"Position {position} should have length {len(self.axes())}")
         self.checkLimits(position)
 
-    def _move(self, pos, speed, linear, **kwds) -> MoveFuture:
+    def _move(self, pos, speed, linear, name=None, **kwds) -> MoveFuture:
         """Must be reimplemented by subclasses and return a MoveFuture instance.
         """
         raise NotImplementedError()
@@ -458,18 +460,18 @@ class Stage(Device, OptomechDevice):
         localPos = self.mapFromGlobal(pos)
         return self._solveStageTransform(localPos)
 
-    def moveToGlobal(self, pos, speed, progress=False, linear=False):
+    def moveToGlobal(self, pos, speed, progress=False, linear=False, name=None):
         """Move the stage to a position expressed in the global coordinate frame.
         """
-        return self.move(position=self.mapGlobalToDevicePosition(pos), speed=speed, progress=progress, linear=linear)
+        return self.move(position=self.mapGlobalToDevicePosition(pos), speed=speed, progress=progress, linear=linear, name=name)
 
-    def movePath(self, path):
+    def movePath(self, path, name=None):
         """Move the stage along a path with multiple waypoints.
 
         The format of *path* is a list of dicts, where each dict specifies keyword arguments
         to self.move(). Optionally, each dict may specify `globalPos` instead of `position`.
         """
-        return MovePathFuture(self, path)
+        return MovePathFuture(self, path, name=name)
 
     def _toAbsolutePosition(self, abs):
         """Helper function to convert absolute position (possibly
@@ -490,7 +492,7 @@ class Stage(Device, OptomechDevice):
         # pick a far-away distance within limits
         print(vel)
 
-    def stop(self):
+    def stop(self, reason=None):
         """Stop moving the device immediately. When you call MoveFuture.stop() from here, look closely at infinite
         recursions.
         """
@@ -698,8 +700,8 @@ class MoveFuture(Future):
     """Used to track the progress of a requested move operation.
     """
 
-    def __init__(self, dev: Stage, pos, speed):
-        super().__init__()
+    def __init__(self, dev: Stage, pos, speed, name=None):
+        Future.__init__(self, name=name)
         self.startTime = ptime.time()
         self.dev = dev
         self.speed = speed
@@ -709,9 +711,9 @@ class MoveFuture(Future):
 
     def percentDone(self):
         """Return the percent of the move that has completed.
-        
+
         The default implementation calls getPosition on the device to determine
-        the percent complete. Devices that do not provide position updates while 
+        the percent complete. Devices that do not provide position updates while
         moving should reimplement this method.
         """
         if self.isDone():
@@ -725,18 +727,18 @@ class MoveFuture(Future):
             return 100
         return 100 * d1 / d2
 
-    def stop(self, reason="stop requested"):
+    def stop(self, reason="stop requested", wait=False):
         """Stop the move in progress.
         """
         with self._isStopCallable as can_call_stop:
             if can_call_stop and not self.isDone():
                 self.dev.stop()
-                super().stop(reason=reason)
+                super().stop(reason=reason, wait=wait)
 
 
 class MovePathFuture(MoveFuture):
-    def __init__(self, dev: Stage, path):
-        super().__init__(dev, None, None)
+    def __init__(self, dev: Stage, path, name=None):
+        super().__init__(dev, None, None, name=name)
 
         self.path = path
         self.currentStep = 0
@@ -751,7 +753,7 @@ class MovePathFuture(MoveFuture):
             except Exception as exc:
                 raise Exception(f"Cannot move {dev.name()} to path step {i}/{len(self.path)}: {step}") from exc
 
-        self._moveThread = threading.Thread(target=self._movePath)
+        self._moveThread = threading.Thread(target=self._movePath, name=f'{self.dev.name()} : {name}')
         self._moveThread.start()
 
     def percentDone(self):
@@ -760,12 +762,12 @@ class MovePathFuture(MoveFuture):
             return 0.0
         return (100 * fut._pathStep + fut.percentDone()) / len(self.path)
 
-    def stop(self, reason=None):
+    def stop(self, reason=None, wait=False):
         fut = self._currentFuture
         if fut is not None:
             fut.stop(reason=reason)
         # skip MoveFuture.stop to avoid the mess with dev.stop()
-        Future.stop(self, reason=reason)
+        Future.stop(self, reason=reason, wait=wait)
 
     def _movePath(self):
         try:
@@ -773,7 +775,7 @@ class MovePathFuture(MoveFuture):
                 step = step.copy()
                 explanation = step.pop('explanation', 'unnamed')
                 try:
-                    fut: Future = self.dev.move(**step)
+                    fut: Future = self.dev.move(**step, name=f'{self.name} step {i+1}/{len(self.path)}: {explanation}')
                     fut._pathStep = i
                     self._currentFuture = fut
                     while not fut.isDone():
@@ -795,6 +797,9 @@ class MovePathFuture(MoveFuture):
                             excInfo=fut._excInfo,
                         )
                         return
+                except Future.Stopped:
+                    # If this future or a step future was stopped, just raise that error again.
+                    raise
                 except Exception as exc:
                     self._taskDone(
                         interrupted=True,

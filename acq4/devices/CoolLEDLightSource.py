@@ -54,7 +54,7 @@ class CoolLEDLightSource(LightSource):
         self._writeBuffer = ""
         self._writeLock = Mutex()
 
-        self._ioThread = Thread(target=self._ioAsNeeded)
+        self._ioThread = Thread(target=self._ioAsNeeded, name="CoolLEDIOThread")
         self._ioThread.start()
 
     @staticmethod

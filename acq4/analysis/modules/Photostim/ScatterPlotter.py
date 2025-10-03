@@ -16,6 +16,7 @@ class ScatterPlotter(Qt.QSplitter):
         Qt.QSplitter.__init__(self)
         self.setOrientation(Qt.Qt.Horizontal)
         self.plot = pg.PlotWidget()
+        self.plot.setObjectName("Photostim_ScatterPlotter_plot")
         self.addWidget(self.plot)
         self.ctrl = Qt.QWidget()
         self.addWidget(self.ctrl)

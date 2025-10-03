@@ -35,7 +35,7 @@ class WorkThread(threading.Thread):
         self.addr = addr
         self.lock = lock
         self.mc = mc
-        threading.Thread.__init__(self)
+        threading.Thread.__init__(self, name="MultiClampServerThread")
         
     def run(self):
         while True:

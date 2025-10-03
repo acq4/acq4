@@ -1,14 +1,12 @@
-from __future__ import print_function
-
-import os
 from importlib import import_module
 
+from acq4.logging_config import get_logger
 from pyqtgraph import reload
 ## Extend pyqtgraph.flowchart by adding several specialized nodes
 from pyqtgraph.flowchart import *
 from pyqtgraph.flowchart.library import isNodeClass
-from acq4.util.debug import printExc
 
+logger = get_logger(__name__)
 
 def loadLibrary(reloadLibs=False):
     global NODE_LIST, NODE_TREE
@@ -26,7 +24,7 @@ def loadLibrary(reloadLibs=False):
             mod = import_module(".{}".format(pathName), package="acq4.util.flowchart")
             # mod = __import__('.' + pathName, globals(), locals())
         except:
-            printExc("Error loading flowchart library %s:" % pathName)
+            logger.exception(f"Error loading flowchart library {pathName}:")
             continue
 
         for n in dir(mod):

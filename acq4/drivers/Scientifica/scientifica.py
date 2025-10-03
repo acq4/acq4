@@ -7,11 +7,12 @@ import re
 from typing import Optional
 
 from acq4.drivers.SerialDevice import SerialDevice
-
 from .control_thread import ScientificaControlThread
 from .serial import ScientificaSerial
-from acq4.util.debug import printExc
+from ...logging_config import get_logger
 from ...util.acq4_typing import Number
+
+logger = get_logger(__name__)
 
 # Data provided by Scientifica
 _device_types = """
@@ -105,9 +106,8 @@ class Scientifica:
                     devs[s.getDescription()] = com
                     s.close()
                 except Exception:
-                    printExc(
-                        f"Error while initializing Scientifica device at {com} (the device at this port will not be available):"
-                    )
+                    logger.exception(
+                        f"Error while initializing Scientifica device at {com} (the device at this port will not be available):")
 
         cls.availableDevices = devs
         return devs
@@ -446,7 +446,7 @@ class Scientifica:
         if self.hasSeparateZSpeed():
             self.setParam('maxZSpeed', speed)
 
-    def moveTo(self, pos, speed=None, attempts_allowed=3):
+    def moveTo(self, pos, speed=None, name=None, attempts_allowed=3):
         """Set the position of the manipulator.
         
         *pos* must be a list of 3 items, each is either an integer representing the desired position
@@ -462,7 +462,7 @@ class Scientifica:
             currentPos = self.getPos()
             pos = [pos[i] if pos[i] is not None else currentPos[i] for i in (0, 1, 2)]
 
-        return self.ctrlThread.move(tuple(pos), speed, attempts_allowed=attempts_allowed)
+        return self.ctrlThread.move(tuple(pos), speed, attempts_allowed=attempts_allowed, name=name)
 
     def zeroPosition(self, axis: str | None = None):
         """Reset the stage coordinates to (0, 0, 0) without moving the stage. If *axis* is given,
@@ -488,10 +488,10 @@ class Scientifica:
         """
         self.send('CURRENT %d %d' % (int(run), int(standby)))
 
-    def stop(self):
+    def stop(self, reason):
         """Stop moving the manipulator.
         """
-        return self.ctrlThread.stop()
+        return self.ctrlThread.stop(reason=reason)
 
     def isMoving(self):
         """Return True if the manipulator is moving.
