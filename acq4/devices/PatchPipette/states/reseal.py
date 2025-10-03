@@ -6,7 +6,7 @@ import numpy as np
 
 import pyqtgraph as pg
 from acq4.util import ptime
-from acq4.util.debug import except_and_print
+from acq4.util.debug import log_and_ignore_exception
 from acq4.util.functions import plottable_booleans
 from acq4.util.future import Future, future_wrap
 from ._base import PatchPipetteState, SteadyStateAnalysisBase
@@ -507,9 +507,9 @@ class ResealState(PatchPipetteState):
 
     def _cleanup(self):
         if self._moveFuture is not None:
-            with except_and_print(Exception, "Failed to stop move future"):
+            with log_and_ignore_exception(Exception, "Failed to stop move future"):
                 self._moveFuture.stop()
         if self._pressureFuture is not None:
-            with except_and_print(Exception, "Failed to stop pressure future"):
+            with log_and_ignore_exception(Exception, "Failed to stop pressure future"):
                 self._pressureFuture.stop()
         return super()._cleanup()
