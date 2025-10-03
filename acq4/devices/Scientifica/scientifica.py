@@ -11,7 +11,6 @@ from acq4.util import ptime
 from acq4.devices.Stage import Stage, MoveFuture, StageInterface
 from acq4.drivers.Scientifica import Scientifica as ScientificaDriver
 from acq4.util import Qt
-from acq4.util.debug import logMsg
 from acq4.util.future import future_wrap, Future, FutureButton
 from acq4.util.threadrun import runInGuiThread
 from pyqtgraph import SpinBox, siFormat
@@ -487,7 +486,7 @@ class ScientificaGUI(StageInterface):
                         self._moveAndWait(far_away, axis, _future)
                         diff += self._zeroAxis(axis)
 
-            logMsg(f"Auto-zeroed {self.dev.name()} by {diff}")
+            self.dev.logger.info(f"Auto-zeroed {self.dev.name()} by {diff}")
             move_future = self.dev.moveToGlobal(globalStartPos + diff, "fast")
             slippedAxes = np.abs(diff) > 50e-6
             if np.any(slippedAxes):

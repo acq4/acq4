@@ -7,10 +7,11 @@ import time
 import traceback
 from typing import Callable, Generic, TypeVar, ParamSpec, Optional
 
+from acq4.logging_config import get_logger
 from acq4.util import Qt, ptime
-from acq4.util.debug import printExc
 from pyqtgraph import FeedbackButton
 
+logger = get_logger(__name__)
 FUTURE_RETVAL_TYPE = TypeVar("FUTURE_RETVAL_TYPE")
 WAITING_RETVAL_TYPE = TypeVar("WAITING_RETVAL_TYPE")
 
@@ -146,7 +147,7 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
             try:
                 self._onError(self)
             except Exception as e:
-                printExc(f"Error in Future.onError callback: {self._onError}")
+                logger.exception(f"Error in Future.onError callback: {self._onError}")
         self.finishedEvent.set()  # tell wait() that we're done
         self.sigFinished.emit(self)  # tell everyone else that we're done
 
@@ -184,7 +185,7 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
             try:
                 callback(self, *args, **kwargs)
             except Exception as e:
-                printExc(f"Error in Future callback: {callback}")
+                logger.exception(f"Error in Future callback: {callback}")
 
     def errorMessage(self):
         """Return a string description of the reason for a task failure,

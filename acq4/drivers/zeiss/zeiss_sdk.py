@@ -20,8 +20,9 @@ from threading import Lock
 # running under linux has not been tested yet
 import clr
 
-from acq4.util.debug import printExc
+from acq4.logging_config import get_logger
 
+logger = get_logger(__name__)
 # DEFAULT_API_DLL_LOCATION = "C:\Program Files\Carl Zeiss\MTB 2011 - 2.17.0.15\MTB Api\MTBApi.dll"
 DEFAULT_API_DLL_LOCATION = "C:\Program Files\Carl Zeiss\MTB 2011 - 2.16.0.9\MTB Api\MTBApi.dll"
 MTB = None
@@ -178,7 +179,7 @@ class ZeissMtbContinual(ZeissMtbComponent):
             try:
                 return handler(*args, **kwargs)
             except Exception:
-                printExc("")
+                logger.exception("")
 
         return wrappedHandler
 

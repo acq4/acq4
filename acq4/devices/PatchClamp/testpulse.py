@@ -6,7 +6,6 @@ from MetaArray import MetaArray
 
 from acq4.util import Qt, ptime
 from acq4.util.Thread import Thread
-from acq4.util.debug import printExc
 from neuroanalysis.data import TSeries, PatchClampRecording
 from neuroanalysis.test_pulse import PatchClampTestPulse
 from acq4.Manager import getManager, Task
@@ -119,8 +118,10 @@ class TestPulseThread(Thread):
                     self.checkStop()
             except self.StopRequested:
                 break
-            except Exception:
-                printExc("Error in test pulse thread (will try again):", msgType='warning')
+            except Exception as e:
+                self._clampDev.logger.warning(
+                    "Error in test pulse thread (will try again)", exc_info=e
+                )
                 time.sleep(2.0)
 
     def runOnce(self, checkStop=False):

@@ -10,7 +10,6 @@ from typing import Any, Optional, Iterable
 import numpy as np
 
 from acq4.util import Qt
-from acq4.util.debug import printExc, logExc
 from acq4.util.future import Future
 from neuroanalysis.test_pulse import PatchClampTestPulse
 from pyqtgraph import disconnect

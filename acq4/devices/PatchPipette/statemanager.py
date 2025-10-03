@@ -1,11 +1,8 @@
-import queue
-import sys
 from collections import OrderedDict
 from typing import Optional
 
 from acq4 import getManager
 from acq4.util import Qt
-from acq4.util.debug import printExc
 from pyqtgraph import disconnect
 from pyqtgraph.parametertree import Parameter
 from . import states
@@ -206,7 +203,7 @@ class PatchPipetteStateManager(Qt.QObject):
             try:
                 self.configureState(oldJob.stateName, _allowReset=False)
             except Exception:
-                printExc("Error occurred while trying to reset state from a previous error:")
+                self.dev.logger.exception("Error occurred while trying to reset state from a previous error:")
             raise
 
     def activeChanged(self, pip, active):
@@ -233,11 +230,11 @@ class PatchPipetteStateManager(Qt.QObject):
             try:
                 job.wait(timeout=10)
             except job.Timeout:
-                printExc(f"Timed out waiting for job {job} to complete")
+                self.dev.logger.exception(f"Timed out waiting for job {job} to complete")
             except job.Stopped:
                 pass
             except Exception:
-                printExc(f"{self.dev.name()} failed in state {job.stateName}:")
+                self.dev.logger.exception(f"{self.dev.name()} failed in state {job.stateName}:")
             self.jobFinished(job, allowNextState=allowNextState)
 
     def jobStateChanged(self, job, state):
@@ -247,7 +244,7 @@ class PatchPipetteStateManager(Qt.QObject):
         try:
             job.cleanup().wait()
         except Exception:
-            printExc(f"Error during {job.stateName} cleanup:")
+            self.dev.logger.exception(f"Error during {job.stateName} cleanup:")
         disconnect(job.sigStateChanged, self.jobStateChanged)
         disconnect(job.sigFinished, self.jobFinished)
         if allowNextState and job.nextState is not None:

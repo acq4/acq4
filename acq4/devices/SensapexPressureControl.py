@@ -6,7 +6,6 @@ from time import sleep
 from acq4.drivers.sensapex import UMP
 from acq4.util import Qt
 from .PressureControl import PressureControl, PressureControlWidget
-from ..util.debug import logExc
 
 
 class SensapexPressureControl(PressureControl):
@@ -83,7 +82,7 @@ class SensapexPressureControl(PressureControl):
                 self.getBusyStatus()
                 self.measurePressure()
             except Exception:
-                logExc("Pressure poller thread hit an error; retrying")
+                self.logger.exception("Pressure poller thread hit an error; retrying")
             finally:
                 sleep(self._pollInterval)
 
