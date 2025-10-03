@@ -10,6 +10,11 @@ from teleprox.log import LogServer
 log_server: LogServer | None = None
 _handlers = []
 
+def __reload__(old):
+    global log_server, _handlers
+    log_server = old.get('log_server', None)
+    _handlers = old.get('_handlers', [])
+
 
 class StringAwareJsonFormatter(JsonFormatter):
     """
