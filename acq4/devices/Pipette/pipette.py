@@ -15,7 +15,7 @@ from acq4.devices.OptomechDevice import OptomechDevice
 from acq4.devices.Stage import Stage, MovePathFuture
 from acq4.modules.Camera import CameraModuleInterface
 from acq4.util import Qt, ptime
-from acq4.util.future import future_wrap
+from acq4.util.future import future_wrap, Future
 from acq4.util.target import Target
 from pyqtgraph import Point, siFormat
 from .planners import PipettePathGenerator
@@ -609,13 +609,14 @@ class Pipette(Device, OptomechDevice):
         pos = self.positionAtDepth(depth)
         return self._moveToGlobal(pos, speed, name=name)
 
-    def retractFromSurface(self, speed='slow'):
+    def retractFromSurface(self, speed='slow') -> Future:
         """Retract the pipette along its axis until it is above the slice surface.
         """
         depth = self.globalPosition()[2]
         appDepth = self.approachDepth()
         if depth < appDepth:
             return self.advance(appDepth, speed=speed)
+        return Future.immediate()
 
     @future_wrap
     def stepwiseAdvance(
@@ -634,8 +635,8 @@ class Pipette(Device, OptomechDevice):
         depth : float | None
             The target depth (in global coordinates) to advance to.
         target : np.ndarray | None
-            If specified, the pipette will advance toward this target position instead of the specified depth.
-            The target should be in global coordinates.
+            If specified, the pipette will advance toward this target position instead of the
+            specified depth. The target should be in global coordinates.
         speed : float
             The speed (in m/s) to use for the movement.
         interval : float
@@ -657,8 +658,8 @@ class Pipette(Device, OptomechDevice):
             if np.sign(direction[2]) != initial_direction:
                 break  # overshot
             distance = np.linalg.norm(direction)
-            step = pos + step * direction / distance
-            _future.waitFor(self._moveToGlobal(step, speed=speed, linear=True))
+            next_pos = pos + step * direction / distance
+            _future.waitFor(self._moveToGlobal(next_pos, speed=speed, linear=True))
             if distance <= step:
                 break
             _future.sleep(interval)

@@ -1,16 +1,115 @@
 from __future__ import annotations
 
 from threading import Lock
+from typing import Iterable, Any
 
 import numpy as np
 
+import pyqtgraph as pg
 from acq4 import getManager
 from acq4.util import ptime
 from acq4.util.debug import printExc
+from acq4.util.functions import plottable_booleans
 from acq4.util.future import future_wrap
 from acq4.util.imaging.sequencer import run_image_sequence
-from ._base import PatchPipetteState
-from .cell_detect import CellDetectAnalysis
+from ._base import PatchPipetteState, SteadyStateAnalysisBase
+
+
+class ApproachAnalysis(SteadyStateAnalysisBase):
+    """Class to analyze test pulses and determine approach behavior."""
+
+    @classmethod
+    def plots_for_data(
+        cls, data: Iterable[np.ndarray], *args, **kwargs
+    ) -> dict[str, Iterable[dict[str, Any]]]:
+        plots = {'Ω': [], '': []}
+        names = False
+        for d in data:
+            analyzer = cls(*args, **kwargs)
+            analysis = analyzer.process_measurements(d)
+            plots['Ω'].append(
+                dict(
+                    x=analysis["time"],
+                    y=analysis["baseline_avg"],
+                    pen=pg.mkPen('#88F'),
+                    name=None if names else 'Baseline Detect Avg',
+                )
+            )
+            plots[''].append(
+                dict(
+                    x=analysis["time"],
+                    y=plottable_booleans(analysis["obstacle_detected"]),
+                    pen=pg.mkPen('r'),
+                    symbol='x',
+                    name=None if names else 'Obstacle Detected',
+                )
+            )
+            names = True
+        return plots
+
+    def __init__(
+        self,
+        baseline_tau: float,
+        obstacle_threshold: float,
+        break_threshold: float,
+    ):
+        super().__init__()
+        self._baseline_tau = baseline_tau
+        self._obstacle_threshold = obstacle_threshold
+        self._break_threshold = break_threshold
+        self._measurment_count = 0
+
+    def process_measurements(self, measurements: np.ndarray) -> np.ndarray:
+        ret_array = np.zeros(
+            len(measurements),
+            dtype=[
+                ('time', float),
+                ('resistance', float),
+                ('baseline_avg', float),
+                ('obstacle_detected', bool),
+                ('tip_is_broken', bool),
+            ],
+        )
+        for i, measurement in enumerate(measurements):
+            start_time, resistance = measurement
+            self._measurment_count += 1
+            if i == 0:
+                if self._last_measurement is None:
+                    ret_array[i] = (
+                        start_time,  # time
+                        resistance,  # resistance
+                        resistance,  # baseline_avg
+                        False,  # obstacle_detected
+                        False,  # tip_is_broken
+                    )
+                    self._last_measurement = ret_array[i]
+                    continue
+                last_measurement = self._last_measurement
+            else:
+                last_measurement = ret_array[i - 1]
+
+            dt = start_time - last_measurement['time']
+            baseline_avg, _ = self.exponential_decay_avg(
+                dt, last_measurement['baseline_avg'], resistance, self._baseline_tau
+            )
+            obstacle_detected = resistance > self._obstacle_threshold + baseline_avg
+            tip_is_broken = resistance < baseline_avg + self._break_threshold
+
+            ret_array[i] = (
+                start_time,
+                resistance,
+                baseline_avg,
+                obstacle_detected,
+                tip_is_broken,
+            )
+        self._last_measurement = ret_array[-1]
+        return ret_array
+
+    def obstacle_detected(self):
+        return self._last_measurement and self._last_measurement['obstacle_detected']
+
+    def tip_is_broken(self):
+        return self._last_measurement and self._last_measurement['tip_is_broken']
 
 
 class ApproachState(PatchPipetteState):
@@ -27,7 +126,7 @@ class ApproachState(PatchPipetteState):
     advanceStepDistance : float
         Distance (m) per step when advanceContinuous=False (default 1 µm)
     minDetectionDistance : float
-        Minimum distance (m) from target before cell detection can be considered (default 15 µm)
+        Minimum distance (m) from target before cell detection can be considered (default 7 µm)
     aboveSurfaceSpeed : float
         Speed (m/s) to advance the pipette when above the surface (default 20 um/s)
     belowSurfaceSpeed : float
@@ -35,15 +134,19 @@ class ApproachState(PatchPipetteState):
     obstacleDetection : bool
         If True, sidestep obstacles (default False)
     obstacleRecoveryTime : float
-        Time (s) allowed after retreating from an obstacle to let resistance to return to normal (default 1 s)
+        Time (s) allowed after retreating from an obstacle to let resistance to return to
+        normal (default 1 s)
     obstacleResistanceThreshold : float
-        Resistance (Ohm) threshold above the initial resistance measurement for detecting an obstacle (default 1 MOhm)
+        Resistance (Ohm) threshold above the initial resistance measurement for detecting an
+        obstacle (default 1 MOhm)
     sidestepLateralDistance : float
         Distance (m) to sidestep an obstacle (default 10 µm)
     sidestepBackupDistance : float
         Distance (m) to backup before sidestepping (default 10 µm)
     sidestepPassDistance : float
         Distance (m) to pass an obstacle (default 20 µm)
+    visualTargetTracking : bool
+        Whether to use visual tracking to follow the target during approach (default False)
     takeACellfie : bool
         Whether to take a z-stack of the cell at the start of this state (default True)
     cellfieHeight : float
@@ -51,11 +154,13 @@ class ApproachState(PatchPipetteState):
     cellfieStep : float
         Vertical distance (m) between z-stack slices (default 1 µm)
     cellfiePipetteClearance : float
-        Minimum distance (m) between target and pipette tip in which to allow the z-stack to be taken (default 100 µm)
+        Minimum distance (m) between target and pipette tip in which to allow the z-stack to be
+        taken (default 100 µm)
     pipetteRecalibrateDistance : float
         Distance between pipette and target at which to pause and recalibrate the pipette offset
+        (default 75 µm)
     pipetteRecalibrationMaxChange : float
-        Maximum distance allowed for an automatic pipette tip position update
+        Maximum distance allowed for an automatic pipette tip position update (default 15 µm)
     """
 
     stateName = "approach"
@@ -71,7 +176,7 @@ class ApproachState(PatchPipetteState):
         "advanceContinuous": {"default": True, "type": "bool"},
         "advanceStepInterval": {"default": 0.1, "type": "float", "suffix": "s"},
         "advanceStepDistance": {"default": 1e-6, "type": "float", "suffix": "m"},
-        "minDetectionDistance": {"default": 15e-6, "type": "float", "suffix": "m"},
+        "minDetectionDistance": {"default": 7e-6, "type": "float", "suffix": "m"},
         "aboveSurfaceSpeed": {"default": 20e-6, "type": "float", "suffix": "m/s"},
         "belowSurfaceSpeed": {"default": 5e-6, "type": "float", "suffix": "m/s"},
         "visualTargetTracking": {"default": False, "type": "bool"},
@@ -80,9 +185,6 @@ class ApproachState(PatchPipetteState):
         "cellfieStep": {"default": 1e-6, "type": "float", "suffix": "m"},
         "cellfiePipetteClearance": {"default": 100e-6, "type": "float", "suffix": "m"},
         "baselineResistanceTau": {"default": 20, "type": "float", "suffix": "s"},
-        "fastDetectionThreshold": {"default": 1e6, "type": "float", "suffix": "Ω"},
-        "slowDetectionThreshold": {"default": 0.2e6, "type": "float", "suffix": "Ω"},
-        "slowDetectionSteps": {"default": 3, "type": "int"},
         "breakThreshold": {"default": -1e6, "type": "float", "suffix": "Ω"},
         "obstacleDetection": {"default": False, "type": "bool"},
         "obstacleRecoveryTime": {"default": 1, "type": "float", "suffix": "s"},
@@ -92,19 +194,16 @@ class ApproachState(PatchPipetteState):
         "sidestepPassDistance": {"default": 20e-6, "type": "float", "suffix": "m"},
         "pipetteRecalibrateDistance": {"default": 75e-6, "type": "float", "suffix": "m"},
         "pipetteRecalibrationMaxChange": {"default": 15e-6, "type": "float", "suffix": "m"},
-        "nextState": {"type": "str", "default": "bath"},
+        "nextState": {"type": "str", "default": "cell detect"},
     }
 
     def __init__(self, *args, **kwds):
         super().__init__(*args, **kwds)
         self._moveFuture = None
-        self._analysis = CellDetectAnalysis(
-            self.config["baselineResistanceTau"],
-            np.inf,  # not trying to find cells here
-            np.inf,  # not trying to find cells here
-            999999,  # not trying to find cells here
-            self.config["obstacleResistanceThreshold"],
-            self.config["breakThreshold"],
+        self._analysis = ApproachAnalysis(
+            baseline_tau=self.config["baselineResistanceTau"],
+            obstacle_threshold=self.config["obstacleResistanceThreshold"],
+            break_threshold=self.config["breakThreshold"],
         )
         self.direction_unit = self._calc_direction()
         self._wiggleLock = Lock()
@@ -155,11 +254,19 @@ class ApproachState(PatchPipetteState):
 
         return self.config["nextState"]
 
+    def processAtLeastOneTestPulse(self):
+        tps = super().processAtLeastOneTestPulse()
+        self._analysis.process_test_pulses(tps)
+        return tps
+
     def _maybeTakeACellfie(self):
         config = self.config
-        if not config["takeACellfie"] or self._distanceToTarget() <= config["cellfiePipetteClearance"]:
+        if (
+            not config["takeACellfie"]
+            or self._distanceToTarget() <= config["cellfiePipetteClearance"]
+        ):
             return
-        self.setState("cell detect: taking initial z-stack")
+        self.setState("approach: taking initial z-stack")
         self.waitFor(self.dev.focusOnTarget("fast"))
         start = self.dev.pipetteDevice.targetPosition()[2] - (config["cellfieHeight"] / 2)
         end = start + config["cellfieHeight"]
@@ -178,14 +285,17 @@ class ApproachState(PatchPipetteState):
         if self._distanceToTarget() < self.config["pipetteRecalibrateDistance"]:
             if self._moveFuture is not None:
                 # should restart on next main loop
-                self._moveFuture.stop("Make sure the pipette is where we expect it to be", wait=True)
+                self._moveFuture.stop(
+                    "Make sure the pipette is where we expect it to be", wait=True
+                )
                 self._moveFuture = None
 
             pip = self.dev.pipetteDevice
             imgr = self.dev.imagingDevice()
             manager = getManager()
             with manager.reserveDevices(
-                [pip, imgr, imgr.scopeDev.positionDevice(), imgr.scopeDev.focusDevice()], timeout=30.0
+                [pip, imgr, imgr.scopeDev.positionDevice(), imgr.scopeDev.focusDevice()],
+                timeout=30.0,
             ):
                 self.sleep(1.0)
                 initial_pos = pos = np.array(pip.globalPosition())
@@ -202,7 +312,9 @@ class ApproachState(PatchPipetteState):
                     pip.resetGlobalPosition(pos)
                     self.setState(f"Recalibrate finished (found tip again at {pos})")
                 else:
-                    self.setState(f"cancel pipette position update; prediction is too far away ({dist*1e6}µm)")
+                    self.setState(
+                        f"cancel pipette position update; prediction is too far away ({dist*1e6}µm)"
+                    )
 
             self._pipetteRecalibrated = True
 
@@ -212,7 +324,8 @@ class ApproachState(PatchPipetteState):
         if self.aboveSurface():
             self.setState("move to surface")
             self._waitForMoveWhileTargetChanges(
-                self.surfaceIntersectionPosition, config['aboveSurfaceSpeed'], True, _future)
+                self.surfaceIntersectionPosition, config['aboveSurfaceSpeed'], True, _future
+            )
         self.setState(f'move to endpoint: {self.endpoint()}')
         self._waitForMoveWhileTargetChanges(
             position_fn=self.endpoint,
@@ -224,7 +337,7 @@ class ApproachState(PatchPipetteState):
         )
 
     def endpoint(self):
-        """Return the last position along the pipette search path to be traveled at full speed."""
+        """Return the last position along the pipette search path to be traveled to at full speed."""
         pip = self.dev.pipetteDevice
         target = np.array(pip.targetPosition())
         return target - (self.direction_unit * self.config["minDetectionDistance"])
@@ -238,7 +351,8 @@ class ApproachState(PatchPipetteState):
 
     def sidestepDirection(self, vector):
         """
-        Create a vector orthogonal to the input vector, oriented π/2 radians more widdershins than last invocation.
+        Create a vector orthogonal to the input vector, oriented π/2 radians more widdershins than
+        last invocation.
 
         Parameters:
         vector : ndarray
@@ -260,7 +374,9 @@ class ApproachState(PatchPipetteState):
         ortho_vec2 = np.cross(unit_vector, ortho_vec)
 
         # Apply the rotation by angle in the plane of ortho_vec and ortho_vec2
-        return ortho_vec * np.cos(self._sidestepDirection) + ortho_vec2 * np.sin(self._sidestepDirection)
+        return ortho_vec * np.cos(self._sidestepDirection) + ortho_vec2 * np.sin(
+            self._sidestepDirection
+        )
 
     def avoidObstacle(self, already_retracted=False):
         self.setState("avoiding obstacle" + (" (recursively)" if already_retracted else ""))

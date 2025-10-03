@@ -10,7 +10,6 @@ from acq4.util import Qt
 from acq4.util import ptime
 from neuroanalysis.test_pulse import PatchClampTestPulse
 
-from acq4_automation.feature_tracking.cell import Cell
 from coorx import Point
 from .devgui import PatchPipetteDeviceGui
 from .statemanager import PatchPipetteStateManager
@@ -19,6 +18,7 @@ from ..Device import Device
 from ..Pipette import Pipette
 from ..PressureControl import PressureControl
 from ..Sonicator import Sonicator
+from ...util.debug import logMsg
 
 
 class PatchPipette(Device):
@@ -35,6 +35,7 @@ class PatchPipette(Device):
     If you intend this for use with the MultiPatch module, the device name in the configuration
     needs to end in a number.
     """
+
     sigStateChanged = Qt.Signal(object, object, object)  # self, newState, oldState
     sigActiveChanged = Qt.Signal(object, object)  # self, active
     sigPressureChanged = Qt.Signal(object, object, object)  # self, source, pressure
@@ -100,8 +101,12 @@ class PatchPipette(Device):
         self.pipetteDevice.sigMoveFinished.connect(self._pipetteMoveFinished)
         self.pipetteDevice.sigMoveRequested.connect(self._pipetteMoveRequested)
         self.pipetteDevice.sigTargetChanged.connect(self._pipetteTargetChanged)
-        self.pipetteDevice.parentDevice().sigPositionChanged.connect(self._manipulatorTransformChanged)
-        self.pipetteDevice.parentDevice().sigOrientationChanged.connect(self._manipulatorTransformChanged)
+        self.pipetteDevice.parentDevice().sigPositionChanged.connect(
+            self._manipulatorTransformChanged
+        )
+        self.pipetteDevice.parentDevice().sigOrientationChanged.connect(
+            self._manipulatorTransformChanged
+        )
 
         deviceManager.declareInterface(name, ['patchpipette'], self)
 
@@ -157,8 +162,7 @@ class PatchPipette(Device):
         return fut
 
     def newPipette(self):
-        """A new physical pipette has been attached; reset any per-pipette state.
-        """
+        """A new physical pipette has been attached; reset any per-pipette state."""
         self.setTipBroken(False)
         self.setTipClean(True)
         self.calibrated = False
@@ -171,8 +175,7 @@ class PatchPipette(Device):
         return self.pipetteDevice.findNewPipette()
 
     def requestNewPipette(self):
-        """Call to emit a signal requesting a new pipette.
-        """
+        """Call to emit a signal requesting a new pipette."""
         self.waitingForSwap = True
         self.sigNewPipetteRequested.emit(self)
 
@@ -185,8 +188,7 @@ class PatchPipette(Device):
         return self._pipetteRecord
 
     def newPatchAttempt(self):
-        """Ready to begin a new patch attempt; reset TP history and patch record.
-        """
+        """Ready to begin a new patch attempt; reset TP history and patch record."""
         self.finishPatchRecord()
         if self.clampDevice:
             self.clampDevice.resetTestPulseHistory()
@@ -195,35 +197,37 @@ class PatchPipette(Device):
     def _resetPatchRecord(self):
         self.finishPatchRecord()
         piprec = self.pipetteRecord()
-        self._patchRecord = OrderedDict([
-            ('patchPipette', self.name()),
-            ('pipetteOriginalResistance', piprec['originalResistance']),
-            ('pipetteCleanCount', piprec['cleanCount']),
-            ('initialResistance', None),
-            ('initialOffset', None),
-            ('attemptedCellDetect', False),
-            ('detectedCell', None),
-            ('cellDetectInitialTarget', None),
-            ('cellDetectFinalTarget', None),
-            ('attemptedSeal', False),
-            ('sealSuccessful', None),
-            ('fouledBeforeSeal', None),
-            ('resistanceBeforeSeal', None),
-            ('resistanceBeforeBreakin', None),
-            ('offsetBeforeSeal', None),
-            ('attemptedBreakin', False),
-            ('breakinSuccessful', None),
-            ('spontaneousBreakin', None),
-            ('initialBaselineCurrent', None),
-            ('initialBaselinePotential', None),
-            ('wholeCellStartTime', None),
-            ('wholeCellStopTime', None),
-            ('wholeCellPosition', None),
-            ('resealResistance', None),
-            ('resistanceAfterBlowout', None),
-            ('offsetAfterBlowout', None),
-            ('complete', False),
-        ])
+        self._patchRecord = OrderedDict(
+            [
+                ('patchPipette', self.name()),
+                ('pipetteOriginalResistance', piprec['originalResistance']),
+                ('pipetteCleanCount', piprec['cleanCount']),
+                ('initialResistance', None),
+                ('initialOffset', None),
+                ('attemptedCellDetect', False),
+                ('detectedCell', None),
+                ('cellDetectInitialTarget', None),
+                ('cellDetectFinalTarget', None),
+                ('attemptedSeal', False),
+                ('sealSuccessful', None),
+                ('fouledBeforeSeal', None),
+                ('resistanceBeforeSeal', None),
+                ('resistanceBeforeBreakin', None),
+                ('offsetBeforeSeal', None),
+                ('attemptedBreakin', False),
+                ('breakinSuccessful', None),
+                ('spontaneousBreakin', None),
+                ('initialBaselineCurrent', None),
+                ('initialBaselinePotential', None),
+                ('wholeCellStartTime', None),
+                ('wholeCellStopTime', None),
+                ('wholeCellPosition', None),
+                ('resealResistance', None),
+                ('resistanceAfterBlowout', None),
+                ('offsetAfterBlowout', None),
+                ('complete', False),
+            ]
+        )
 
     def patchRecord(self):
         if self._patchRecord is None:
@@ -237,7 +241,15 @@ class PatchPipette(Device):
 
     def ensureCell(self):
         if self.cell is None:
-            self.cell = Cell(Point(self.pipetteDevice.targetPosition(), 'global'))
+            try:
+                from acq4_automation.feature_tracking.cell import Cell
+
+                self.cell = Cell(Point(self.pipetteDevice.targetPosition(), 'global'))
+            except ImportError:
+                logMsg(
+                    "Cell-based features are unavailable without the acq4_automation package",
+                    msgType='error',
+                )
 
     def finishPatchRecord(self):
         self.cell = None
@@ -249,7 +261,9 @@ class PatchPipette(Device):
 
     def pressureChanged(self, dev, source, pressure):
         self.sigPressureChanged.emit(self, source, pressure)
-        self.emitNewEvent('pressure_changed', OrderedDict([('source', source), ('pressure', pressure)]))
+        self.emitNewEvent(
+            'pressure_changed', OrderedDict([('source', source), ('pressure', pressure)])
+        )
 
     def sonicationChanged(self, state: str):
         self.emitNewEvent('sonication_changed', {'state': state})
@@ -267,13 +281,11 @@ class PatchPipette(Device):
         return self._stateManager.requestStateChange(state)
 
     def listStates(self):
-        """Return a list of all known state names this pipette can be set to.
-        """
+        """Return a list of all known state names this pipette can be set to."""
         return self._stateManager.listStates()
 
     def _setState(self, state, oldState):
-        """Called by state manager when state has changed.
-        """
+        """Called by state manager when state has changed."""
         self._writeStateFile()
         self.emitNewEvent('state_change', OrderedDict([('state', state), ('old_state', oldState)]))
         self.sigStateChanged.emit(self, state, oldState)
@@ -345,11 +357,16 @@ class PatchPipette(Device):
         self.emitNewEvent('move_start', {'position': tuple(pos)})
 
     def _pipetteMoveRequested(self, pip, pos, speed, opts):
-        self.emitNewEvent('move_requested', OrderedDict([
-            ('position', tuple(pos)), 
-            ('speed', speed), 
-            ('opts', repr(opts)),
-        ]))
+        self.emitNewEvent(
+            'move_requested',
+            OrderedDict(
+                [
+                    ('position', tuple(pos)),
+                    ('speed', speed),
+                    ('opts', repr(opts)),
+                ]
+            ),
+        )
 
     def _pipetteMoveFinished(self, pip, pos):
         self.sigMoveFinished.emit(self, pos)
@@ -372,11 +389,13 @@ class PatchPipette(Device):
         self.emitNewEvent('test_pulse', data)
 
     def emitNewEvent(self, eventType, eventData=None):
-        newEv = OrderedDict([
-            ('device', self.name()),
-            ('event_time', ptime.time()),
-            ('event', eventType),
-        ])
+        newEv = OrderedDict(
+            [
+                ('device', self.name()),
+                ('event_time', ptime.time()),
+                ('event', eventType),
+            ]
+        )
         if eventData is not None:
             newEv.update(eventData)
         self.sigNewEvent.emit(self, newEv)
