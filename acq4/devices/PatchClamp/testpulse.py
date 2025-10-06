@@ -14,11 +14,12 @@ from neuroanalysis.test_pulse import PatchClampTestPulse
 from acq4.Manager import getManager, Task
 from acq4.analysis.dataModels.PatchEPhys import getBridgeBalanceCompensation
 from acq4.util import Qt, ptime
-from acq4.util.Thread import Thread
+from acq4.util.Thread import Thread as QtThread
+from threading import Thread
 from acq4.util.functions import downsample
 
 
-class TestPulseThread(Thread):
+class TestPulseThread(QtThread):
     """Background thread that runs periodic test pulses on a single patch clamp channel.
     """
 
@@ -28,7 +29,7 @@ class TestPulseThread(Thread):
         pass
 
     def __init__(self, dev: 'PatchClamp', params):
-        Thread.__init__(self, name=f"TestPulseThread({dev.name()})")
+        super().__init__(name=f"TestPulseThread({dev.name()})")
         self._clampDev = dev
         self._stop = False
         self._params = {
@@ -62,7 +63,6 @@ class TestPulseThread(Thread):
         self._manager = getManager()
         self._testPulsesToProcess = queue.Queue()
         self._processingThread = Thread(name=f"TestPulseProcessing({dev.name()})", target=self._processTestPulses)
-        self._processingThread.start()
 
         self.setParameters(**params)
 
@@ -97,12 +97,14 @@ class TestPulseThread(Thread):
 
     def start(self, **kwargs):
         self._stop = False
-        Thread.start(self, **kwargs)
+        self._processingThread.start()
+        super().start(**kwargs)
 
     def stop(self, block=False):
         self._stop = True
-        self._testPulsesToProcess.put(None)
-        self._processingThread.join()
+        if self._processingThread.is_alive():
+            self._testPulsesToProcess.put(None)
+            self._processingThread.join()
         if block and not self.wait(10000):
             raise RuntimeError("Timed out waiting for test pulse thread exit.")
 
