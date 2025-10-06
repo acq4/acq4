@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from functools import cached_property
 
 from acq4.devices.Device import Device
 from acq4.util import Qt
@@ -55,7 +56,7 @@ class Sonicator(Device):
     def deviceInterface(self, win):
         return SonicatorGUI(win, self)
 
-    @property
+    @cached_property
     def patchPipetteDevice(self):
         for pp in self.dm.listInterfaces('patchpipette'):
             pp = self.dm.getDevice(pp)
