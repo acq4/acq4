@@ -80,7 +80,7 @@ class SonicatorGUI(Qt.QWidget):
         self.dev.sigSonicationChanged.connect(self.onSonicationChanged)
         if dev.config.get("disableManualSonicationBelow") is not None and dev.patchPipetteDevice:
             manip = self.dev.patchPipetteDevice.pipetteDevice.parentDevice()
-            manip.sigPositionChanged.connect(self._disableManualSonicationAsNeeded)
+            manip.sigPositionChanged.connect(Qt.ThrottledSlot(0.2, self._disableManualSonicationAsNeeded))
 
         self.setupUI()
 
@@ -141,7 +141,7 @@ class SonicatorGUI(Qt.QWidget):
             button.setEnabled(not running or activeProtocol == name)
         # self.sonicateBtn.setEnabled(not running or activeProtocol == "manual")
 
-    def _disableManualSonicationAsNeeded(self):
+    def _disableManualSonicationAsNeeded(self, *args):
         """Disable manual sonication button if pipette is below safe height"""
         pos = self.dev.patchPipetteDevice.pipetteDevice.globalPosition()
         surface = self.dev.patchPipetteDevice.scopeDevice().getSurfaceDepth()
