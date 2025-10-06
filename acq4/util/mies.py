@@ -151,22 +151,21 @@ class MIES(Qt.QObject):
         # set pressure in MIES, then verify pressure is set in MIES
         # (necessary due to lag in MIES setting pressure)
         print("SET MANUAL PRESSURE", pressure)
-        self.igor("DoPressureManual", pressure)
-        # import traceback
-        # traceback.print_stack()
-        # v = self.setCtrl("setvar_DataAcq_SSPressure", pressure)
-        # p = self.getManualPressure()
-        # if not math.isclose(pressure, p, abs_tol=0.0001):
-        #     # test for x seconds
-        #     found = False
-        #     to = time.time() + 1 # one second timeout
-        #     while not found and time.time() > to:
-        #         p = self.getManualPressure()
-        #         if math.isclose(pressure, p, abs_tol=0.0001):
-        #             found = True
-        #     if not found:
-        #         raise Exception("timeout while waiting for MIES pressure match")
-        # return v
+        import traceback
+        traceback.print_stack()
+        v = self.setCtrl("setvar_DataAcq_SSPressure", pressure)
+        p = self.getManualPressure()
+        if not math.isclose(pressure, p, abs_tol=0.0001):
+            # test for x seconds
+            found = False
+            to = time.time() + 1 # one second timeout
+            while not found and time.time() > to:
+                p = self.getManualPressure()
+                if math.isclose(pressure, p, abs_tol=0.0001):
+                    found = True
+            if not found:
+                raise Exception("timeout while waiting for MIES pressure match")
+        return v
     
     def getManualPressure(self) -> float:
         return float(self.getCtrlValue('setvar_DataAcq_SSPressure'))
