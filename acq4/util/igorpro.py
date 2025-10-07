@@ -270,8 +270,14 @@ class IgorReqThread(threading.Thread):
         elif err != 0:
             msg = reply.get("errorCode", {}).get("msg", "")
             raise IgorCallError("Call failed with message: {}".format(msg))
+
+        result = reply.get("result", {})
+        if isinstance(result, list):
+            return (self._parse_return_value(r) for r in result)
         else:
-            result = reply.get("result", {})
+            return self._parse_return_value(result)
+            
+    def _parse_return_value(self, result):
             restype = result.get("type", "")
             val = result.get("value", None)
             if (restype == "wave") and (val is not None):
