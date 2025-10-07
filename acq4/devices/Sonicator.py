@@ -5,7 +5,8 @@ from functools import cached_property
 
 from acq4.devices.Device import Device
 from acq4.util import Qt
-from acq4.util.future import Future, FutureButton
+from acq4.util.PromptUser import prompt
+from acq4.util.future import Future, FutureButton, future_wrap
 
 
 class Sonicator(Device):
@@ -21,7 +22,7 @@ class Sonicator(Device):
         Dictionary of predefined sonication protocols
             - Key: Protocol name (str)
             - Value: Protocol definition (format depends on subclass implementation)
-    disableManualSonicationBelow : float
+    unsafeSonicationBelow : float
         If set, disable the sonication buttons when the pipette is below the surface plus this
         value.
 
@@ -37,20 +38,44 @@ class Sonicator(Device):
         self.config = config
         self.protocols = config.get("protocols", {})
 
-    def doProtocol(self, protocol: str | object) -> Future:
+    def safeToSonicate(self, _future: Future = None, askUser=True) -> bool:
+        pos = self.patchPipetteDevice.pipetteDevice.globalPosition()
+        well = self.patchPipetteDevice.pipetteDevice.getCleaningWell()
+        if well and well.containsPoint(pos):
+            return True
+        lower_bound = self.config.get("unsafeSonicationBelow")
+        if lower_bound is not None:
+            lower_bound += self.patchPipetteDevice.scopeDevice().getSurfaceDepth()
+            if pos[2] > lower_bound:
+                return True
+        if not askUser:
+            return False
+        response = _future.waitFor(
+            prompt(
+                "Sonication Safety Warning",
+                "Sonication may be unsafe at the current pipette position. Proceed?",
+                ["Yes", "No"],
+            )
+        ).getResult()
+        return response == "Yes"
+
+    @future_wrap
+    def doProtocol(self, protocol: str | object, _future):
+        if not self.safeToSonicate(_future):
+            self.logger.info("Sonication deemed unsafe. Aborting.")
+            return
         status = "Running"
         if protocol in self.protocols:
             status = protocol
             protocol = self.protocols[protocol]
         self.sigSonicationChanged.emit(status)
-        future = self._doProtocol(protocol)
-        future.onFinish(self._onProtocolFinished)
-        return future
+        _future.waitFor(self._doProtocol(protocol))
+        self._onProtocolFinished()
 
     def _doProtocol(self, protocol: object) -> Future:
         raise NotImplementedError()
 
-    def _onProtocolFinished(self, future):
+    def _onProtocolFinished(self):
         self.sigSonicationChanged.emit("Idle")
 
     def deviceInterface(self, win):
@@ -78,9 +103,6 @@ class SonicatorGUI(Qt.QWidget):
         self.win = win
         self.dev = dev
         self.dev.sigSonicationChanged.connect(self.onSonicationChanged)
-        if dev.config.get("disableManualSonicationBelow") is not None and dev.patchPipetteDevice:
-            manip = self.dev.patchPipetteDevice.pipetteDevice.parentDevice()
-            manip.sigPositionChanged.connect(Qt.ThrottledSlot(0.2, self._disableManualSonicationAsNeeded))
 
         self.setupUI()
 
@@ -111,16 +133,6 @@ class SonicatorGUI(Qt.QWidget):
         self.currentStatusLabel = Qt.QLabel("Idle")
         statusLayout.addRow("Current Action:", self.currentStatusLabel)
 
-        # self.freqSpinBox = pg.SpinBox(value=150000, siPrefix=True, suffix="Hz", bounds=[40000, 170000], dec=True)
-        # statusLayout.addRow("Frequency:", self.freqSpinBox)
-        #
-        # self.durationSpinBox = pg.SpinBox(value=1.0, siPrefix=True, suffix="s", bounds=[1e-6, 10.0], dec=True)
-        # statusLayout.addRow("Duration:", self.durationSpinBox)
-        #
-        # self.sonicateBtn = FutureButton(self.runManualSonication, "Sonicate")
-        # self.sonicateBtn.sigFinished.connect(self.onProtocolFinished)
-        # statusLayout.addRow("", self.sonicateBtn)
-
         # Add all groups to main layout
         self.layout.addWidget(protocolGroup)
         self.layout.addWidget(statusGroup)
@@ -139,15 +151,6 @@ class SonicatorGUI(Qt.QWidget):
         """Enable/disable buttons based on current state"""
         for name, button in self._protocolButtons.items():
             button.setEnabled(not running or activeProtocol == name)
-        # self.sonicateBtn.setEnabled(not running or activeProtocol == "manual")
-
-    def _disableManualSonicationAsNeeded(self, *args):
-        """Disable manual sonication button if pipette is below safe height"""
-        pos = self.dev.patchPipetteDevice.pipetteDevice.globalPosition()
-        surface = self.dev.patchPipetteDevice.scopeDevice().getSurfaceDepth()
-        safe = surface + self.dev.config["disableManualSonicationBelow"]
-        for btn in self._protocolButtons.values():
-            btn.setEnabled(pos[2] > safe)
 
     def onSonicationChanged(self, status):
         """Called when the sonication changes"""
