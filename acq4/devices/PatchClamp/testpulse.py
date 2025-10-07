@@ -97,7 +97,8 @@ class TestPulseThread(QtThread):
 
     def start(self, **kwargs):
         self._stop = False
-        self._processingThread.start()
+        if not self._processingThread.is_alive():
+            self._processingThread.start()
         super().start(**kwargs)
 
     def stop(self, block=False):
