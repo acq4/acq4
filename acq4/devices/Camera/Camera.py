@@ -660,12 +660,13 @@ class CameraTask(DAQGenericTask):
         prof.mark("set params")
 
         # If the camera is triggering the daq, stop acquisition now and request that it starts after the DAQ
-        #   (daq must be started first so that it is armed to received the camera trigger)
+        #   (daq must be started first so that it is armed to receive the camera trigger)
         if self.camCmd.get("triggerProtocol", False):
-            assert 'triggerOutChannel' in self.dev.camConfig, (
-                f"Task requests {self.dev.name()} to trigger the protocol to start, "
-                "but no trigger lines are configured ('triggerOutChannel' needed in config)"
-            )
+            if 'triggerOutChannel' not in self.dev.camConfig:
+                raise ValueError(
+                    f"Task requests {self.dev.name()} to trigger the protocol to start, but no "
+                    "trigger lines are configured ('triggerOutChannel' needed in config)"
+                )
             restart = True
             daqName = self.dev.camConfig["triggerOutChannel"]["device"]
             self.__startOrder = [daqName], []
