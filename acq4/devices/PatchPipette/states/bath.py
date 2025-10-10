@@ -26,9 +26,6 @@ class BathState(PatchPipetteState):
 
     stateName = 'bath'
 
-    def __init__(self, *args, **kwds):
-        super().__init__(*args, **kwds)
-
     _parameterDefaultOverrides = {
         'initialPressure': 3500.0,  # 0.5 PSI
         'initialPressureSource': 'regulator',

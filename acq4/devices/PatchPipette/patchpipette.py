@@ -267,14 +267,14 @@ class PatchPipette(Device):
     def setSelected(self):
         pass
 
-    def setState(self, state, setActive=True):
+    def setState(self, state, setActive=True, **config):
         """Attempt to set the state (out, bath, seal, whole cell, etc.) of this patch pipette.
 
         The actual resulting state is returned.
         """
         if setActive:
             self.setActive(True)
-        return self._stateManager.requestStateChange(state)
+        return self._stateManager.requestStateChange(state, **config)
 
     def listStates(self):
         """Return a list of all known state names this pipette can be set to."""
