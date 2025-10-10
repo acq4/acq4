@@ -33,12 +33,45 @@ class PatchPipetteState(Future):
 
     Parameters
     ----------
+    initialPressureSource : str
+        Initial pressure source; one of 'atmosphere', 'regulator', or 'user' (default None)
+    initialPressure : float
+        Initial pressure (Pascals) (default None)
+    initialClampMode : str
+        Initial clamp mode; one of 'VC' or 'IC' (default None)
+    initialICHolding : float
+        Initial holding current (Amps) if initialClampMode is 'IC' (default None)
+    initialVCHolding : float
+        Initial holding voltage (Volts) if initialClampMode is 'VC' (default None)
+    initialTestPulseEnable : bool
+        If True, enable test pulse generation at the start of the state (default None)
+    initialTestPulseParameters : dict
+        Test pulse parameters to set at the start of the state (default None)
+    initialAutoBiasEnable : bool
+        If True, enable auto bias at the start of the state (default False)
+    initialAutoBiasTarget : float
+        Auto bias target (Volts) to set at the start of the state (default 0 V)
+    fallbackState : str
+        Name of state to transition to if this state fails (default None)
+    finishPatchRecord : bool
+        If True, finish the current patch record when entering this state (default False)
+    newPipette : bool
+        If True, start a new pipette when entering this state (default False)
     reserveDAQ : bool
         If True, reserve the DAQ during the entire state. This is used to ensure that the state
         has real time access to test pulses (for cell detection, obstacle detection, etc)
         (default False)
     DAQReservationTimeout : float
         Maximum time (s) to wait for DAQ reservation if reserveDAQ=True (defualt 30 s)
+    aboveSurfacePressure : float
+        Pressure (Pascals) to apply when the pipette is above the surface (default 1500 Pa)
+    belowSurfacePressureMin : float
+        Minimum pressure (Pascals) to apply when the pipette is below the surface (default 1500 Pa)
+    belowSurfacePressureMax : float
+        Maximum pressure (Pascals) to apply when the pipette is below the surface (default 5000 Pa)
+    belowSurfacePressureChange : float
+        Rate of pressure increase (Pascals/meter) as the pipette goes deeper below the surface
+        (default 50 Pa/µm)
     """
 
     # state subclasses must set a string name
