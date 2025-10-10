@@ -597,6 +597,7 @@ class CameraTask(DAQGenericTask):
         # acq is not running, task does not need camera to restart:
         #   start acq in start, stop acq in stop
         self._dev_needs_restart = False
+        self._dev_was_running = False
 
     def configure(self):
         # Merge command into default values:
@@ -653,7 +654,8 @@ class CameraTask(DAQGenericTask):
 
         # We want to avoid this if at all possible since it may be very expensive
         self._dev_needs_restart = restart
-        if restart and self.dev.isRunning():
+        self._dev_was_running = self.dev.isRunning()
+        if restart and self._dev_was_running:
             self.dev.stop(block=True)
         prof.mark("stop")
 
@@ -698,7 +700,8 @@ class CameraTask(DAQGenericTask):
         with self.lock:
             self.stopRecording = True
             self._stopTime = time.time()
-            self.dev.stopCamera()
+            if self._dev_needs_restart and self._dev_was_running:
+                self.dev.stopCamera()  # leave the acq thread for filling in the future
             if self.fixedFrameCount is None:
                 self._future.stopWhen(lambda frame: frame.info()["time"] >= self._stopTime, blocking=False)
 
@@ -716,7 +719,9 @@ class CameraTask(DAQGenericTask):
             self._future.stop()  # TODO this could error for fixedFrameCount!=None
             self.resultObj = CameraTaskResult(self, self._future.getResult(timeout=1), daqResult)
             if self._dev_needs_restart:
-                self.dev.start(block=False)
+                self.dev.stop(block=True)
+                if self._dev_was_running:
+                    self.dev.start(block=False)
                 self._dev_needs_restart = False
         return self.resultObj
 
