@@ -934,6 +934,8 @@ class AcquireThread(Thread):
             self.dev.stopCamera()
 
     def start(self, *args, block=True):
+        if self.isRunning():
+            raise RuntimeError("Acquisition thread is already running.")
         self.cameraStartEvent.clear()
         self.lock.lock()
         self.stopThread = False
