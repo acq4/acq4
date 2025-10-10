@@ -583,11 +583,20 @@ class CameraTask(DAQGenericTask):
         self.camCmd = cmd
         self.lock = Mutex()
         self.recordHandle = None
-        self._dev_needs_restart = False
         self.stopRecording = False
         self._stopTime = 0
         self.resultObj = None
         self._future = None
+
+        # acq is running, task needs camera to restart:
+        #   stop acq in configure, start acq in start, stop acq in stop, start acq in getResults
+        # acq is not running, task needs camera to restart:
+        #   start acq in start, stop acq in stop
+        # acq is running, task does not need camera to restart:
+        #   do nothing
+        # acq is not running, task does not need camera to restart:
+        #   start acq in start, stop acq in stop
+        self._dev_needs_restart = False
 
     def configure(self):
         # Merge command into default values:

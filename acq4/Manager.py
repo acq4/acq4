@@ -931,7 +931,7 @@ class Task:
         self.devs = {devName: self.dm.getDevice(devName) for devName in self.devNames}
 
         ## Create task objects. Each task object is a handle to the device which is unique for this task run.
-        self.tasks = {}
+        self.tasks: dict[str, DeviceTask] = {}
 
         for devName in self.devNames:
             task = self.devs[devName].createTask(self.command[devName], self)
