@@ -636,7 +636,7 @@ class Stage(Device, OptomechDevice):
             if limit[1] is not None and x > limit[1]:
                 raise ValueError(f"Position requested for device {self.name()} exceeds limits: {stagePos} {ax_name} axis > {limit[1]}")
 
-    def checkRangeOfMotion(self, pos, tolerance=500e-6):
+    def checkRangeOfMotion(self, pos, name, tolerance=500e-6):
         """Raise an exception if the specified global position is within *tolerance* of the limits of the device."""
         pos = np.array(pos)
         bad_axes = []
@@ -660,6 +660,7 @@ class Stage(Device, OptomechDevice):
                 reasons=[
                     f"Manipulator limits: {self.getLimits()}",
                     f"Position: ({stage_pos[0]:f}, {stage_pos[1]:f}, {stage_pos[2]:f})",
+                    f"Position name: {name}",
                 ],
             )
 
