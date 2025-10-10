@@ -88,7 +88,7 @@ class MIES(Qt.QObject):
 
     def enableTestPulse(self, enable:bool):
         """Enable/disable test pulse for all active headstages"""
-        return self.igor('FFI_TestpulseMDSingleResult', self.getWindowName(), 1 if enable else 0)
+        return self.igor('FFI_TestpulseMD', self.getWindowName(), 1 if enable else 0)
 
     def getHolding(self, hs, mode_override=None):
         mode = ""
