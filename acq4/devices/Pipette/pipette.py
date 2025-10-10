@@ -81,7 +81,10 @@ class Pipette(Device, OptomechDevice):
       in idle mode. Default is 7 * mm.
       
     * **recordingChambers** (list, optional): List of names of RecordingChamber devices that this Pipette is meant to work with.
-    
+
+    * **cleaningWell** (str, optional): Name of the well (RecordingChamber) device associated with
+        this pipette for cleaning.
+
     * **reasonableTipOffsetDistance** (float, optional): When updating the tip offset, this is the maximum distance (in meters)
         from the original tip offset that is considered reasonable. If the tip offset is outside this distance, 
         the user will be prompted to confirm the new offset. Default is 30 * um.
@@ -103,6 +106,7 @@ class Pipette(Device, OptomechDevice):
             approachHeight: 100 * um
             idleHeight: 1 * mm
             recordingChambers: ['Chamber1']
+            cleaningWell: 'CleaningWell1'
     """
 
     sigTargetChanged = Qt.Signal(object, object)
@@ -786,6 +790,15 @@ class Pipette(Device, OptomechDevice):
         """
         man = getManager()
         return [man.getDevice(d) for d in self.config.get('recordingChambers', [])]
+
+    def getCleaningWell(self) -> RecordingChamber | None:
+        """Return the RecordingChamber instance that is associated with this Pipette for cleaning
+        (see 'cleaningWell' config option).
+        """
+        name = self.config.get('cleaningWell', None)
+        if name is None:
+            return None
+        return self.dm.getDevice(name)
 
     def startRecording(self):
         """Return an object that records all motion updates from this pipette
