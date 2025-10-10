@@ -82,9 +82,9 @@
        </widget>
       </item>
       <item row="1" column="2">
-       <widget class="QPushButton" name="calibrateBtn">
+       <widget class="QPushButton" name="setTipBtn">
         <property name="text">
-         <string>Calibrate</string>
+         <string>Set tip</string>
         </property>
         <property name="checkable">
          <bool>true</bool>
@@ -106,9 +106,9 @@
        </widget>
       </item>
       <item row="2" column="2">
-       <widget class="FutureButton" name="autoCalibrateBtn">
+       <widget class="FutureButton" name="autoFindTipBtn">
         <property name="text">
-         <string>Auto cal.</string>
+         <string>Auto-find tip</string>
         </property>
        </widget>
       </item>
@@ -239,9 +239,9 @@
     </widget>
    </item>
    <item row="3" column="0">
-    <widget class="QPushButton" name="saveCalibrationsBtn">
+    <widget class="QPushButton" name="saveTipImageBtn">
      <property name="text">
-      <string>Save Calibration</string>
+      <string>Save Tip Image</string>
      </property>
      <property name="checkable">
       <bool>true</bool>
