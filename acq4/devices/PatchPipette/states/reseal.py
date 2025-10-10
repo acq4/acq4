@@ -429,7 +429,7 @@ class ResealState(PatchPipetteState):
             self.nuzzle()
         self.checkStop()
         self.setState("measuring baseline resistance")
-        self.waitFor(baseline_future, timeout=self.config['repairTau'])
+        self.waitFor(baseline_future, timeout=2 * self.config['repairTau'])
         dev.pressureDevice.setPressure(source='regulator', pressure=config['retractionPressure'])
 
         start_time = ptime.time()  # getting the nucleus and baseline measurements doesn't count
