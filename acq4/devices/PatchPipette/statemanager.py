@@ -171,32 +171,30 @@ class PatchPipetteStateManager(Qt.QObject):
         """
         pass
 
-    def requestStateChange(self, state):
+    def requestStateChange(self, state, **config):
         """Pipette has requested a state change; either accept and configure the new
         state or reject the new state.
 
         Return the state that has been chosen.
         """
-        return runInGuiThread(self._stateChangeRequested, state)
+        return runInGuiThread(self._stateChangeRequested, state, **config)
 
-    def _stateChangeRequested(self, state):
+    def _stateChangeRequested(self, state, **config):
         if state not in self.stateHandlers:
             raise ValueError(f"Unknown patch pipette state {state!r}")
-        return self.configureState(state)
+        return self.configureState(state, **config)
 
-    def configureState(self, state, *args, **kwds):
+    def configureState(self, state, _allowReset=True, **configOverride):
         oldJob = self.currentJob
-        allowReset = kwds.pop('_allowReset', True)
         self.stopJob(allowNextState=False)
         try:
             stateHandler = self.stateHandlers[state]
 
             # assemble state config from defaults and anything specified in args here
             config = self.getStateConfig(state, self._profile)
-            config.update(kwds.pop('config', {}))
-            kwds['config'] = config
+            config.update(configOverride)
 
-            job = stateHandler(self.dev, *args, **kwds)
+            job = stateHandler(self.dev, config)
             job.sigStateChanged.connect(self.jobStateChanged)
             job.sigFinished.connect(self.jobFinished)
             oldState = None if oldJob is None else oldJob.stateName
@@ -208,17 +206,17 @@ class PatchPipetteStateManager(Qt.QObject):
         except Exception:
             # in case of failure, attempt to restore previous state
             self.currentJob = None
-            if not allowReset or oldJob is None:
+            if not _allowReset or oldJob is None:
                 raise
             try:
-                self.configureState(oldJob.stateName, _allowReset=False)
+                self.configureState(oldJob.stateName, _allowReset=False, **oldJob.config)
             except Exception:
                 self.dev.logger.exception("Error occurred while trying to reset state from a previous error:")
             raise
 
     def activeChanged(self, pip, active):
         if active and self.getState() is not None:
-            self.configureState(self.getState().stateName)
+            self.configureState(self.getState().stateName, **self.getState().config)
         else:
             self.stopJob()
             if self.dev.clampDevice is not None:
@@ -258,7 +256,7 @@ class PatchPipetteStateManager(Qt.QObject):
         disconnect(job.sigStateChanged, self.jobStateChanged)
         disconnect(job.sigFinished, self.jobFinished)
         if allowNextState and job.nextState is not None:
-            self.requestStateChange(job.nextState)
+            self.requestStateChange(job.nextState, **job.nextStateConfig)
 
 
 class ProfileParameter(Parameter):

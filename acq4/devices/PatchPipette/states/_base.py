@@ -134,12 +134,12 @@ class PatchPipetteState(Future):
         return {c['name']: c.get('default', None) for c in cls.parameterTreeConfig()}
 
     def __init__(self, dev, config=None):
-        self._targetHasChanged = False
         from acq4.devices.PatchPipette import PatchPipette
 
+        self._targetHasChanged = False
         Future.__init__(self, name=f"State {self.stateName} for {dev}")
-
         self.dev: PatchPipette = dev
+        self.nextStateConfig = {}
 
         # generate full config by combining passed-in arguments with default config
         self.config = self.defaultConfig()
