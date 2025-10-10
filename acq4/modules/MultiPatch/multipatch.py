@@ -127,6 +127,7 @@ class MultiPatchWindow(Qt.QWidget):
         self.ui.toTargetBtn.setOpts(future_producer=self._toTarget, **common_opts)
         self.ui.sealBtn.setOpts(future_producer=self._seal, raiseOnError=False, **common_opts)
         self.ui.reSealBtn.setOpts(future_producer=self._reSeal, raiseOnError=False, **common_opts)
+        self.ui.reSealNoNuzzleBtn.setOpts(future_producer=self._reSealNoNuzzle, raiseOnError=False, **common_opts)
         self.ui.approachBtn.setOpts(future_producer=self._approach, raiseOnError=False, **common_opts)
         self.ui.cleanBtn.setOpts(future_producer=self._clean, raiseOnError=False, **common_opts)
         self.ui.collectBtn.setOpts(future_producer=self._collect, raiseOnError=False, **common_opts)
@@ -236,9 +237,9 @@ class MultiPatchWindow(Qt.QWidget):
             ctrl.setPlotModes(modes)
         self.saveConfig()
 
-    def _setAllSelectedPipettesToState(self, state):
+    def _setAllSelectedPipettesToState(self, state, **config):
         return MultiFuture([
-            pip.setState(state)
+            pip.setState(state, **config)
             for pip in self.selectedPipettes()
             if isinstance(pip, PatchPipette)
         ], name=f"Set pipettes state to {state}")
@@ -308,6 +309,9 @@ class MultiPatchWindow(Qt.QWidget):
 
     def _reSeal(self):
         return self._setAllSelectedPipettesToState('reseal')
+
+    def _reSealNoNuzzle(self):
+        return self._setAllSelectedPipettesToState('reseal', nuzzleRepetitions=0)
 
     def _approach(self):
         futures = []
