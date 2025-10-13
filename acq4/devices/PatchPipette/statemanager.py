@@ -371,7 +371,6 @@ def add_tooltip_support(param_class):
         if tooltip:
             if hasattr(widget, 'setToolTip'):
                 for col in range(widget.columnCount()):
-                    print(f"setting {col}-tooltip to '{tooltip[:15]}...'")
                     widget.setToolTip(col, tooltip)
         return widget
 
