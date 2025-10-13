@@ -185,28 +185,3 @@ class FlowLayout(pg.QtWidgets.QLayout):
             line_height = max(line_height, item.sizeHint().height())
 
         return y + line_height - rect.y()
-
-
-class ThrottledSlot:
-    """Wrap a slot function to limit how often it can be called.
-
-    Parameters:
-    interval : float
-        Minimum time interval between calls, in seconds.
-    slot_func : callable
-        The slot function to be called.
-    """
-
-    def __init__(self, interval, slot_func):
-        self.interval = interval
-        self.slot_ref = weakref.WeakMethod(slot_func) if hasattr(slot_func, '__self__') else weakref.ref(slot_func)
-        self.last_call = 0
-
-    def __call__(self, *args, **kwargs):
-        slot_func = self.slot_ref()
-        if slot_func is None:
-            return
-        now = ptime.time()
-        if now - self.last_call >= self.interval:
-            self.last_call = now
-            slot_func(*args, **kwargs)
