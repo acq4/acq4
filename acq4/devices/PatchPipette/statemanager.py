@@ -1,4 +1,3 @@
-import contextlib
 import inspect
 from collections import OrderedDict
 from typing import Optional
@@ -6,11 +5,14 @@ from typing import Optional
 from docstring_parser import parse
 
 from acq4 import getManager
+from acq4.logging_config import get_logger
 from acq4.util import Qt
 from pyqtgraph import disconnect
 from pyqtgraph.parametertree import Parameter
 from . import states
 from ...util.threadrun import runInGuiThread
+
+logger = get_logger(__name__)
 
 
 class PatchPipetteStateManager(Qt.QObject):
@@ -285,18 +287,23 @@ class StateParameter(Parameter):
     _tooltip_cache = {}
     _base_tooltips = None  # Cache base tooltips separately since they're reused
 
+    @staticmethod
+    def _getTooltipsFromClass(cls):
+        """Extract tooltips from a class's docstring."""
+        try:
+            docstring = inspect.getdoc(cls)
+            if not docstring:
+                return {}
+            return {p.arg_name: p.description for p in parse(docstring).params}
+        except Exception:
+            logger.warning(f"Error parsing docstring for tooltips in class {cls.__name__}", exc_info=True)
+            return {}
+
     @classmethod
     def _getBaseTooltips(cls):
         """Get base tooltips from PatchPipetteState, cached."""
         if cls._base_tooltips is None:
-            base_docstring = inspect.getdoc(states.PatchPipetteState)
-            cls._base_tooltips = {}
-            if base_docstring:
-                with contextlib.suppress(Exception):
-                    cls._base_tooltips = {
-                        p.arg_name: p.description
-                        for p in parse(base_docstring).params
-                    }
+            cls._base_tooltips = cls._getTooltipsFromClass(states.PatchPipetteState)
         return cls._base_tooltips
 
     @classmethod
@@ -309,15 +316,8 @@ class StateParameter(Parameter):
         tooltips = cls._getBaseTooltips().copy()
 
         # Add/override with state-specific parameters
-        state_class = PatchPipetteStateManager.getStateClass(state_name)
-        state_docstring = inspect.getdoc(state_class)
-        if state_docstring:
-            with contextlib.suppress(Exception):
-                state_params = {
-                    p.arg_name: p.description
-                    for p in parse(state_docstring).params
-                }
-                tooltips.update(state_params)
+        state_params = cls._getTooltipsFromClass(PatchPipetteStateManager.getStateClass(state_name))
+        tooltips.update(state_params)
 
         cls._tooltip_cache[state_name] = tooltips
         return tooltips
@@ -341,6 +341,8 @@ class StateParameter(Parameter):
             param_config['pinValueToDefault'] = True
             if param_config['type'] == 'float' and param_config.get('suffix') is not None:
                 param_config.setdefault('siPrefix', True)
+            if param_name not in tooltips:
+                logger.warning(f"No tooltip found for parameter '{param_name}' in state '{name}'")
             param = Parameter.create(**param_config, tooltip=tooltips.get(param_name))
             if config.get(param_name) is not None:
                 param.setValue(config[param_name])
