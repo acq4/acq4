@@ -1,12 +1,18 @@
+import inspect
 from collections import OrderedDict
 from typing import Optional
 
+from docstring_parser import parse
+
 from acq4 import getManager
+from acq4.logging_config import get_logger
 from acq4.util import Qt
 from pyqtgraph import disconnect
 from pyqtgraph.parametertree import Parameter
 from . import states
 from ...util.threadrun import runInGuiThread
+
+logger = get_logger(__name__)
 
 
 class PatchPipetteStateManager(Qt.QObject):
@@ -277,10 +283,50 @@ class ProfileParameter(Parameter):
 
 
 class StateParameter(Parameter):
+    # Class-level cache to avoid re-parsing docstrings
+    _tooltip_cache = {}
+    _base_tooltips = None  # Cache base tooltips separately since they're reused
+
+    @staticmethod
+    def _getTooltipsFromClass(cls):
+        """Extract tooltips from a class's docstring."""
+        try:
+            docstring = inspect.getdoc(cls)
+            if not docstring:
+                return {}
+            return {p.arg_name: p.description for p in parse(docstring).params}
+        except Exception:
+            logger.warning(f"Error parsing docstring for tooltips in class {cls.__name__}", exc_info=True)
+            return {}
+
+    @classmethod
+    def _getBaseTooltips(cls):
+        """Get base tooltips from PatchPipetteState, cached."""
+        if cls._base_tooltips is None:
+            cls._base_tooltips = cls._getTooltipsFromClass(states.PatchPipetteState)
+        return cls._base_tooltips
+
+    @classmethod
+    def _getStateTooltips(cls, state_name):
+        """Get tooltips for a state class, with caching and inheritance."""
+        if state_name in cls._tooltip_cache:
+            return cls._tooltip_cache[state_name]
+
+        # Start with base parameters
+        tooltips = cls._getBaseTooltips().copy()
+
+        # Add/override with state-specific parameters
+        state_params = cls._getTooltipsFromClass(PatchPipetteStateManager.getStateClass(state_name))
+        tooltips.update(state_params)
+
+        cls._tooltip_cache[state_name] = tooltips
+        return tooltips
+
     def __init__(self, name, profile):
         super().__init__(name=name, type='group', children=[])
         self._profile = profile
         self._state = name
+        tooltips = self._getStateTooltips(name)
         profile_config = PatchPipetteStateManager.getProfileConfig(profile)
         if profile_config.get('copyFrom', None):
             defaults = PatchPipetteStateManager.getStateConfig(name, profile_config['copyFrom'])
@@ -289,14 +335,17 @@ class StateParameter(Parameter):
         stateClass = PatchPipetteStateManager.getStateClass(name)
         config = PatchPipetteStateManager.getStateConfig(name, profile)
         for param_config in stateClass.parameterTreeConfig():
-            if param_config['name'] in defaults:
-                param_config['default'] = defaults[param_config['name']]
+            param_name = param_config['name']
+            if param_name in defaults:
+                param_config['default'] = defaults[param_name]
             param_config['pinValueToDefault'] = True
-            if param_config['type'] == 'float':
+            if param_config['type'] == 'float' and param_config.get('suffix') is not None:
                 param_config.setdefault('siPrefix', True)
-            param = Parameter.create(**param_config)
-            if config.get(param.name()) is not None:
-                param.setValue(config[param.name()])
+            if param_name not in tooltips:
+                logger.warning(f"No tooltip found for parameter '{param_name}' in state '{name}'")
+            param = Parameter.create(**param_config, tooltip=tooltips.get(param_name))
+            if config.get(param_name) is not None:
+                param.setValue(config[param_name])
             self.addChild(param)
 
     def reinitialize(self):
