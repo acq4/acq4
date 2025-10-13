@@ -23,8 +23,7 @@ class Sonicator(Device):
             - Key: Protocol name (str)
             - Value: Protocol definition (format depends on subclass implementation)
     unsafeSonicationBelow : float
-        If set, disable the sonication buttons when the pipette is below the surface plus this
-        value.
+        If set, disable sonication when the pipette is below the surface plus this value.
 
     Subclasses define the specific format and implementation of protocols.
     
