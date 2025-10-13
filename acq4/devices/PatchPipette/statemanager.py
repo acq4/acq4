@@ -361,22 +361,3 @@ class StateParameter(Parameter):
     def applyDefaults(self, defaults):
         for key, val in defaults.items():
             self.child(key).setDefault(val, updatePristineValues=True)
-
-
-def add_tooltip_support(param_class):
-    """Monkey-patch Parameter.makeWidget to add tooltip support based on 'tooltip' option."""
-    original_makeTreeItem = param_class.makeTreeItem
-
-    def makeTreeItem_with_tooltip(self, depth):
-        widget = original_makeTreeItem(self, depth)
-        tooltip = self.opts.get('tooltip')
-        if tooltip:
-            if hasattr(widget, 'setToolTip'):
-                for col in range(widget.columnCount()):
-                    widget.setToolTip(col, tooltip)
-        return widget
-
-    param_class.makeTreeItem = makeTreeItem_with_tooltip
-
-
-add_tooltip_support(Parameter)
