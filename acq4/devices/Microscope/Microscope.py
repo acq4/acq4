@@ -173,7 +173,7 @@ class Microscope(Device, OptomechDevice):
     @future_wrap
     def loadPreset(self, name, _future):
         conf = self.presets[name]
-        futures = []
+        futures: list[Future] = []
         for dev_name, state in conf.items():
             if dev_name == "objective":
                 self.setObjectiveIndex(state)
@@ -575,42 +575,32 @@ class ScopeCameraModInterface(CameraModuleInterface):
 
         self.plot = mod.window().getDepthView()
 
-        # Create Z-position widget using the existing plot
-        self.zPositionWidget = ZPositionWidget(parent=None, plot=self.plot, interactive=True)
+        # Create Z-position widget
+        self.zPositionWidget = ZPositionWidget(self.plot)
+        self.movableFocusLine = self.plot.addLine(
+            y=0, pen='y', markers=[('<|>', 0.5, 10)], movable=True
+        )
+        self.movableFocusLine.sigPositionChangeFinished.connect(self.focusChangedFromWidget)
 
-        # Get references to the plot items for compatibility
-        plotItems = self.zPositionWidget.getPlotItems()
-        self.focusLine = plotItems['focusLine']
-        self.surfaceLine = plotItems['surfaceLine']
-        self.movableFocusLine = plotItems['movableFocusLine']
-
-        # Add the existing controls (Set Surface button is in ZPositionWidget)
-        # Note: this is placed here because there is currently no better place.
         # Ideally, the sample orientation, height, and anatomical identity would be contained
-        # in a Sample or Slice object elsewhere..
+        # in a Sample or Slice object elsewhere...
 
-        # Get the set surface button from the widget and wire it up
-        self.setSurfaceBtn = self.zPositionWidget.setSurfaceBtn
-        self.setSurfaceBtn.clicked.disconnect()  # Remove the default handler
+        # Add controls
+
+        self.setSurfaceBtn = Qt.QPushButton('Set Surface')
         self.setSurfaceBtn.clicked.connect(self.setSurfaceClicked)
         self.layout.addWidget(self.setSurfaceBtn, 0, 0)  # Add to our layout
 
-        # Add Find Surface button which requires device access
         self.findSurfaceBtn = FutureButton(
             self.findSurface, 'Find Surface', stoppable=True, processing='Scanning...', failure='Failed!')
         self.layout.addWidget(self.findSurfaceBtn, 1, 0)
 
         # Get depth label from the widget and add it to our layout
-        self.depthLabel = self.zPositionWidget.getDepthLabel()
-        if self.depthLabel is not None:
-            self.layout.addWidget(self.depthLabel, 2, 0)
+        self.layout.addWidget(self.zPositionWidget.depthLabel, 2, 0)
 
         # Connect device signals
         dev.sigGlobalTransformChanged.connect(self.transformChanged)
         dev.sigSurfaceDepthChanged.connect(self.surfaceDepthChanged)
-
-        # Connect Z-position widget signal to our focus control
-        self.zPositionWidget.sigFocusChanged.connect(self.focusChangedFromWidget)
 
         # Initialize with current values
         sd = dev.getSurfaceDepth()
@@ -649,6 +639,7 @@ class ScopeCameraModInterface(CameraModuleInterface):
 
     def focusChangedFromWidget(self, depth):
         """Handle focus changes from the Z-position widget."""
+        depth = self.movableFocusLine.value()
         self.getDevice().setFocusDepth(depth)
 
     def controlWidget(self):

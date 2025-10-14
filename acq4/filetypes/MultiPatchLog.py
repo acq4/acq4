@@ -550,23 +550,23 @@ class MultiPatchLogWidget(Qt.QWidget):
         self._depth_plot = self._plots_widget.addPlot(
             name="Focus Depth",
             title='Focus Depth',
-            labels=dict(bottom=('Position', ''), left=('Depth', 'm')),
+            labels={'left': ('Depth', 'm')},
             row=0,
             col=1,
         )
+        self._depth_plot.setXRange(-1, 1)
+        self._depth_plot.hideAxis("bottom")
+        self._depth_plot.setMouseEnabled(x=False)
         self._depth_plot.setMaximumWidth(200)  # Keep it narrow like the original
 
-        # Create Z-position widget using this plot in display-only mode
-        self._zPositionWidget = ZPositionWidget(parent=None, plot=self._depth_plot, interactive=False)
+        # Create Z-position widget
+        self._zPositionWidget = ZPositionWidget(self._depth_plot)
 
         # Add the depth label to the control layout
-        depthLabel = self._zPositionWidget.getDepthLabel()
-        if depthLabel is not None:
-            self._ctrl_layout.addWidget(depthLabel)
+        self._ctrl_layout.addWidget(self._zPositionWidget.depthLabel)
 
         # Initialize Z-position tracking variables
         self._currentZPosition = 0.0
-        self._surfaceZPosition = None
         self._pipetteDepthMarkers = {}  # Track depth markers for each pipette
         self._pipetteTargetMarkers = {}  # Track target markers for each pipette
 
@@ -918,15 +918,19 @@ class MultiPatchLogWidget(Qt.QWidget):
         self._displayTestPulseDataAtTime(time)
         self._updateZPositionDisplay(time)
 
+    def _isStageDevice(self, dev_name: str) -> bool:
+        """Determine if a device is likely a stage/microscope device based on its name."""
+        name_lower = dev_name.lower()
+        stage_patterns = ['stage', 'microscope', 'scope']
+        return any(pattern in name_lower for pattern in stage_patterns)
+
     def _updateZPositionDisplay(self, time: float):
         """Update the Z-position display based on log data at the given time."""
         if not hasattr(self, '_zPositionWidget'):
             return
 
-        # Calculate current Z position from pipette positions and update markers
+        # Update Z-position display and markers
         abs_time = time + self.startTime()
-        total_z = 0.0
-        count = 0
         x_offset = 0.0  # X position for markers
 
         for dev_name, data in self._devices.items():
@@ -935,8 +939,20 @@ class MultiPatchLogWidget(Qt.QWidget):
                 pos = position_its[abs_time]
                 if pos is not None and len(pos) >= 3:
                     z_pos = pos[2]
-                    total_z += z_pos
-                    count += 1
+
+                    # Track stage position for focus depth
+                    if self._isStageDevice(dev_name):
+                        self._zPositionWidget.setFocusDepth(z_pos)
+
+                        # Check for stage target data for surface depth
+                        targets = data.get('target')
+                        if targets is not None and len(targets) > 0:
+                            target_times = targets[:, 0] - self.startTime()
+                            valid_targets = target_times <= time
+                            if np.any(valid_targets):
+                                latest_idx = np.where(valid_targets)[0][-1]
+                                stage_target_z = targets[latest_idx, 3]  # Z coordinate is index 3
+                                self._zPositionWidget.setSurfaceDepth(stage_target_z)
 
                     # Update or create pipette position marker (blue arrow with white border)
                     if dev_name not in self._pipetteDepthMarkers:
@@ -947,37 +963,28 @@ class MultiPatchLogWidget(Qt.QWidget):
                     else:
                         self._pipetteDepthMarkers[dev_name].setPos(x_offset, z_pos)
 
-                    # Update or create target marker if we have target data
-                    targets = data.get('target')
-                    if targets is not None and len(targets) > 0:
-                        # Find the most recent target before current time
-                        target_times = targets[:, 0] - self.startTime()
-                        valid_targets = target_times <= time
-                        if np.any(valid_targets):
-                            latest_idx = np.where(valid_targets)[0][-1]
-                            target_z = targets[latest_idx, 3]  # Z coordinate is index 3
+                    # Update or create target marker if we have target data (for non-stage devices)
+                    if not self._isStageDevice(dev_name):
+                        targets = data.get('target')
+                        if targets is not None and len(targets) > 0:
+                            # Find the most recent target before current time
+                            target_times = targets[:, 0] - self.startTime()
+                            valid_targets = target_times <= time
+                            if np.any(valid_targets):
+                                latest_idx = np.where(valid_targets)[0][-1]
+                                target_z = targets[latest_idx, 3]  # Z coordinate is index 3
 
-                            if dev_name not in self._pipetteTargetMarkers:
-                                target = Target([x_offset, target_z], movable=False,
-                                              pen=pg.mkPen('r'), label=f"{dev_name} target")
-                                target.setVisible(True)
-                                self._depth_plot.addItem(target)
-                                self._pipetteTargetMarkers[dev_name] = target
-                            else:
-                                # Update target position
-                                self._pipetteTargetMarkers[dev_name].setPos([x_offset, target_z])
+                                if dev_name not in self._pipetteTargetMarkers:
+                                    target = Target([x_offset, target_z], movable=False,
+                                                  pen=pg.mkPen('r'), label=f"{dev_name} target")
+                                    target.setVisible(True)
+                                    self._depth_plot.addItem(target)
+                                    self._pipetteTargetMarkers[dev_name] = target
+                                else:
+                                    # Update target position
+                                    self._pipetteTargetMarkers[dev_name].setPos([x_offset, target_z])
 
                     x_offset += 0.1  # Space out markers horizontally
-
-        if count > 0:
-            average_z = total_z / count
-            self._zPositionWidget.setFocusDepth(average_z)
-
-            # Set surface depth if we haven't set it yet and have position data
-            if self._surfaceZPosition is None and abs_time <= self.startTime() + 1.0:
-                # Use the early position as a reference surface
-                self._surfaceZPosition = average_z
-                self._zPositionWidget.setSurfaceDepth(average_z)
 
     def startTime(self) -> float:
         return min(log.firstTime() for log in self._logFiles) or 0
