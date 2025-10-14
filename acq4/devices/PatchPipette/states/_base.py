@@ -365,6 +365,8 @@ class PatchPipetteState(Future):
 
         cell.enableTracking(True)
         cell.sigTrackingMultipleFramesStart.connect(self._pausePipetteForExtendedTracking)
+        disconnect(cell.sigPositionChanged, self.dev.pipetteDevice.setTarget)
+        cell.sigPositionChanged.connect(self.dev.pipetteDevice.setTarget)
         return cell._trackingFuture
 
     def _pausePipetteForExtendedTracking(self, cell):
