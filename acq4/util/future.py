@@ -594,6 +594,7 @@ class FutureButton(FeedbackButton):
         if isGuiThread:
             self.setEnabled(self._stoppable)
             self.setText(message, temporary=True)
+            self.setChecked(True)
             self.setToolTip(tip, temporary=True)
             self.setStyleSheet("background-color: #AFA; color: #000;", temporary=True)
             if processEvents:
