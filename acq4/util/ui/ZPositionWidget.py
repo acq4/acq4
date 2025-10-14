@@ -5,7 +5,8 @@ from acq4.util import Qt
 
 
 class ZPositionWidget(Qt.QWidget):
-    """Z-position display widget for showing depth information."""
+    """Z-position display widget for showing depth information. This has no controls or device
+    connections."""
 
     def __init__(self, plot):
         super().__init__(None)
@@ -18,28 +19,20 @@ class ZPositionWidget(Qt.QWidget):
         self.depthLabel = pg.ValueLabel(suffix='m', siPrefix=True)
 
     def setFocusDepth(self, depth: float):
-        """Set the current focus depth."""
+        """Set the focus depth marker."""
         self.focusLine.setValue(depth)
         self._updateDepthLabel()
 
     def setSurfaceDepth(self, depth: float):
-        """Set the surface depth reference."""
+        """Set the surface depth marker."""
         self.surfaceLine.setValue(depth)
         self._updateDepthLabel()
 
     def setTargetDepth(self, depth: float):
-        """Set the target depth."""
+        """Set the target depth marker."""
         self.targetLine.setValue(depth)
-
-    def getFocusDepth(self) -> float:
-        """Get current focus depth."""
-        return self.focusLine.value()
-
-    def getSurfaceDepth(self) -> float:
-        """Get current surface depth."""
-        return self.surfaceLine.value()
 
     def _updateDepthLabel(self):
         """Update the depth label showing distance from surface."""
-        depth = self.getFocusDepth() - self.getSurfaceDepth()
+        depth = self.focusLine.value() - self.surfaceLine.value()
         self.depthLabel.setValue(depth)
