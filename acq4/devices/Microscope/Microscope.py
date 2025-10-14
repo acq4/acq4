@@ -636,6 +636,8 @@ class ScopeCameraModInterface(CameraModuleInterface):
             tpos = fpos
         dif = tpos[2] - fpos[2]
         self.zPositionWidget.setTargetDepth(focus + dif)
+        with pg.SignalBlock(self.movableFocusLine.sigPositionChangeFinished, self.focusChangedFromWidget):
+            self.movableFocusLine.setValue(focus + dif)
 
     def focusChangedFromWidget(self, depth):
         """Handle focus changes from the Z-position widget."""
