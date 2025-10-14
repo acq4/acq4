@@ -45,7 +45,7 @@ class LogButton(FeedbackButton):
     def __init__(self, *args):
         FeedbackButton.__init__(self, *args)
 
-        self.clicked.connect(get_log_window().show)
+        self.clicked.connect(get_log_window().raise_window)
 
 
 class ErrorDialog(Qt.QDialog):
@@ -261,6 +261,12 @@ class DocumentedLogViewer(LogViewer):
 
         # Connect our custom signal to open URLs in browser
         self.documentation_link_clicked.connect(self._open_documentation_link)
+
+    def raise_window(self):
+        """Bring the log window to the front."""
+        self.show()
+        self.raise_()
+        self.activateWindow()
 
     def _replace_model_with_custom(self):
         """Replace the standard LogModel with our CustomLogModel."""
