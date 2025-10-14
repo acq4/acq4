@@ -411,12 +411,7 @@ class FutureWrapper:
     ) -> FutureWrapper:
         ...
 
-    def __call__(
-            self,
-            func: Callable[WRAPPED_FN_PARAMS, WRAPPED_FN_RETVAL_TYPE] | None = None,
-            *,
-            logLevel: str | None = None,
-    ) -> Callable[WRAPPED_FN_PARAMS, Future[WRAPPED_FN_RETVAL_TYPE]] | FutureWrapper:
+    def __call__(self, func=None, *, logLevel=None):
         """Decorator to execute a function in a Thread wrapped in a future. The function must take a Future
         named "_future" as a keyword argument. This Future can be variously used to checkStop() the
         function, wait for other futures, and will be returned by the decorated function call. The function
