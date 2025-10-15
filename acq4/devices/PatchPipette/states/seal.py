@@ -397,13 +397,18 @@ class SealState(PatchPipetteState):
     def best_pressure(self, start: float, turnaround: float, end: float) -> float:
         pressures, resistances = self._trim_data_caches(start)
 
+        resist_forward = resistances.time_slice(start, turnaround)
+        resist_backward = resistances.time_slice(turnaround, end)
+        if len(resist_forward) < 2 or len(resist_backward) < 2:
+            self.setState('insufficient resistance data for pressure scan')
+            return self.pressure
         best_forwards = find_optimal_pressure(
             pressures.time_slice(start, turnaround),
-            resistances.time_slice(start, turnaround),
+            resist_forward,
         )
         best_backwards = find_optimal_pressure(
             pressures.time_slice(turnaround, end),
-            resistances.time_slice(turnaround, end),
+            resist_backward,
         )
 
         best = (best_forwards + best_backwards) / 2
