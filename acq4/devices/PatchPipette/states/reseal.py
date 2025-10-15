@@ -238,10 +238,11 @@ class ResealState(PatchPipetteState):
         If the repairTau-rolling average resistance drops below (this number times the initial
         resistance), the tissue is considered irrevocably torn (default is 0.5)
     retractionSuccessDistance : float
-        Distance (meters) to deem reseal successful regardless of resistance (default is 200 µm)
+        Distance (meters) away from target to deem reseal successful regardless of resistance
+        (default is 200 µm)
     minimumSuccessDistance : float
-        Minimum distance (meters) to retract before checking for successful reseal, regardless of
-        resistance (default is 20µm)
+        Minimum distance (meters) from the target to retract before checking for successful reseal,
+        regardless of resistance (default is 20µm)
     resealSuccessResistanceMultiplier : float
         The reseal is considered successful when resistance exceeds initial resistance times this
         value (default is 4)
@@ -311,7 +312,7 @@ class ResealState(PatchPipetteState):
         self._moveFuture = None
         self._lastResistance = None
         self._firstSuccessTime = None
-        self._startPosition = np.array(self.dev.pipetteDevice.globalPosition())
+        self._targetPosition = np.array(self.dev.pipetteDevice.targetPosition())
         self._analysis = None
         self._preAnalysisTpss = []
 
@@ -454,7 +455,7 @@ class ResealState(PatchPipetteState):
                     self.setState("handling tear")
                     retraction_future.stop()
                     self._moveFuture = recovery_future = dev.pipetteDevice.stepwiseAdvance(
-                        depth=self._startPosition[2],
+                        depth=self._targetPosition[2],
                         speed=self.config['maxRetractionSpeed'],
                         interval=config['retractionStepInterval'],
                         step=1e-6,
@@ -516,7 +517,7 @@ class ResealState(PatchPipetteState):
 
     def retractionDistance(self):
         return np.linalg.norm(
-            np.array(self.dev.pipetteDevice.globalPosition()) - self._startPosition
+            np.array(self.dev.pipetteDevice.globalPosition()) - self._targetPosition
         )
 
     def _cleanup(self):

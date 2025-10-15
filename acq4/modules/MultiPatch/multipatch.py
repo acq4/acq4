@@ -311,7 +311,7 @@ class MultiPatchWindow(Qt.QWidget):
         return self._setAllSelectedPipettesToState('reseal')
 
     def _reSealNoNuzzle(self):
-        return self._setAllSelectedPipettesToState('reseal', nuzzleRepetitions=0)
+        return self._setAllSelectedPipettesToState('reseal', extractNucleus=False)
 
     def _approach(self):
         futures = []
