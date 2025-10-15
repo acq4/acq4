@@ -5,6 +5,7 @@ import ast
 import importlib.util
 import inspect
 import os
+import platform
 import subprocess
 import sys
 from pathlib import Path
@@ -100,11 +101,23 @@ class Tools(Module):
         scroll_area.setWidget(self.args_widget)
         layout.addWidget(scroll_area)
 
-        # Run button
+        # Daemon checkbox and run button
+        run_container = Qt.QWidget()
+        run_layout = Qt.QHBoxLayout(run_container)
+        run_layout.setContentsMargins(0, 0, 0, 0)
+
+        self.daemon_checkbox = Qt.QCheckBox("Run as daemon (continues after ACQ4 quits)")
+        self.daemon_checkbox.setChecked(True)
+        run_layout.addWidget(self.daemon_checkbox)
+
+        run_layout.addStretch()  # Push run button to the right
+
         self.run_button = Qt.QPushButton("Run Script")
         self.run_button.clicked.connect(self._run_script)
         self.run_button.setEnabled(False)
-        layout.addWidget(self.run_button)
+        run_layout.addWidget(self.run_button)
+
+        layout.addWidget(run_container)
 
         # Output area
         output_label = Qt.QLabel("Output:")
@@ -577,11 +590,93 @@ class Tools(Module):
                     cmd.extend([arg_flag, str(value)])
             # If no value provided and it's not required, skip it
 
-        # Run the script asynchronously
-        self.output_text.append(f"Running: {' '.join(cmd)}\n")
+        # Check if daemon mode is enabled
+        is_daemon = self.daemon_checkbox.isChecked()
 
-        # Start the process asynchronously (don't disable the button)
-        self._start_async_process(cmd)
+        if is_daemon:
+            # Run in daemon mode - detached from ACQ4
+            self.output_text.append(f"Running as daemon: {' '.join(cmd)}\n")
+            self._start_daemon_process(cmd)
+        else:
+            # Run the script asynchronously
+            self.output_text.append(f"Running: {' '.join(cmd)}\n")
+            self._start_async_process(cmd)
+
+    def _start_daemon_process(self, cmd):
+        """Start a subprocess in daemon mode that persists after ACQ4 exits."""
+        try:
+            system = platform.system().lower()
+
+            if system == 'windows':
+                # On Windows, use subprocess with DETACHED_PROCESS to detach from parent
+                import subprocess
+                DETACHED_PROCESS = 0x00000008
+                process = subprocess.Popen(
+                    cmd,
+                    cwd=str(self.tools_dir.parent),
+                    env={**os.environ, 'PYTHONPATH': str(self.tools_dir.parent)},
+                    creationflags=DETACHED_PROCESS,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    stdin=subprocess.DEVNULL
+                )
+                self.output_text.append(f"Daemon process started with PID: {process.pid}\n")
+
+            else:
+                # On Unix-like systems (Linux, macOS), use os.fork() for proper daemonization
+                if hasattr(os, 'fork'):
+                    pid = os.fork()
+                    if pid == 0:
+                        # Child process - daemonize and exec
+                        try:
+                            # Second fork to ensure we're not a session leader
+                            if os.fork() > 0:
+                                os._exit(0)
+                        except OSError:
+                            os._exit(1)
+
+                        # Decouple from parent environment
+                        os.chdir(str(self.tools_dir.parent))
+                        os.setsid()
+                        os.umask(0)
+
+                        # Redirect standard file descriptors to devnull
+                        with open('/dev/null', 'r') as devnull_in, \
+                             open('/dev/null', 'w') as devnull_out, \
+                             open('/dev/null', 'w') as devnull_err:
+
+                            os.dup2(devnull_in.fileno(), sys.stdin.fileno())
+                            os.dup2(devnull_out.fileno(), sys.stdout.fileno())
+                            os.dup2(devnull_err.fileno(), sys.stderr.fileno())
+
+                        # Set environment and execute the command
+                        env = os.environ.copy()
+                        env['PYTHONPATH'] = str(self.tools_dir.parent)
+                        os.execvpe(cmd[0], cmd, env)
+
+                    elif pid > 0:
+                        # Parent process - wait for first child to exit
+                        os.waitpid(pid, 0)
+                        self.output_text.append(f"Daemon process forked successfully\n")
+                    else:
+                        raise OSError("Fork failed")
+
+                else:
+                    # Fallback for systems without fork (should not happen on Linux/macOS)
+                    process = subprocess.Popen(
+                        cmd,
+                        cwd=str(self.tools_dir.parent),
+                        env={**os.environ, 'PYTHONPATH': str(self.tools_dir.parent)},
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        stdin=subprocess.DEVNULL
+                    )
+                    self.output_text.append(f"Background process started with PID: {process.pid}\n")
+
+        except Exception as e:
+            self.output_text.append(f"Error starting daemon process: {e}\n")
+            # Fallback to regular async process
+            self._start_async_process(cmd)
 
     def _start_async_process(self, cmd):
         """Start a subprocess asynchronously using QProcess."""
