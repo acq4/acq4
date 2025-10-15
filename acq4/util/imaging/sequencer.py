@@ -344,35 +344,53 @@ def acquire_z_stack(
     step: float,
     hysteresis_correction=True,
     slow_fallback=True,
-    deviceReservationTimeout=10.0,
-    max_continuous_speed=1e-3,  # m/s
+    device_reservation_timeout=10.0,
+    max_dz_per_frame=5e-6,  # m
     _future: Future = None,
 ) -> list[Frame]:
     """Acquire a Z stack from the given imager.
 
-    Args:
-        imager: Imager instance
-        start: z position to begin
-        stop: z position to end (can be above or below start)
-        step: expected distance between frames
+    Parameters
+    ----------
+    imager: np.ndarray
+        The imager instance to use for acquisition.
+    start: float
+        Z position to begin the stack.
+    stop: float
+        Z position to end the stack (can be above or below start).
+    step: float
+        Expected distance between frames.
+    hysteresis_correction: bool
+        If True, approach each z position from the same direction to avoid hysteresis.
+    slow_fallback: bool
+        If True, and the fast acquisition method fails to produce a linear stack, retry with the
+        slower stepwise method.
+    device_reservation_timeout: float
+        Maximum time to wait for device reservation.
+    max_dz_per_frame: float
 
-    Returns:
-        Future: Future object that will contain the frames once the acquisition is complete.
+    Returns
+    -------
+    Future[list[Frame]]
+        Future wrapped around the acquired frames, with corrected z positions.
     """
     # TODO think about strobing the lighting for clearer images
     direction = start - stop
     _set_focus_depth(imager, start, direction, "fast", hysteresis_correction, _future)
     stage = imager.scopeDev.getFocusDevice()
+    exposure = imager.getParam('exposure')
+    # todo estimate the depth of field of the objective from its numerical aperture and wavelength
     z_per_second = stage.positionUpdatesPerSecond
     meters_per_frame = abs(step)
     speed = meters_per_frame * z_per_second * 0.5
+    dz_per_frame = speed * exposure
     man = Manager.getManager()
-    if speed > max_continuous_speed:
-        with man.reserveDevices(imager.devicesToReserve(), timeout=deviceReservationTimeout):
+    if dz_per_frame > max_dz_per_frame:
+        with man.reserveDevices(imager.devicesToReserve(), timeout=device_reservation_timeout):
             frames = _stepped_z_stack(imager, start, stop, step, _future)
         frames = enforce_linear_z_stack(frames, start, stop, step)
     else:
-        with man.reserveDevices(imager.devicesToReserve(), timeout=deviceReservationTimeout):
+        with man.reserveDevices(imager.devicesToReserve(), timeout=device_reservation_timeout):
             with imager.ensureRunning(ensureFreshFrames=True):
                 frames_fut = imager.acquireFrames()
                 try:
@@ -388,7 +406,7 @@ def acquire_z_stack(
             if not slow_fallback:
                 raise
             imager.logger.info("Failed to fast-acquire linear z stack. Retrying with stepwise movement.")
-            with man.reserveDevices(imager.devicesToReserve(), timeout=deviceReservationTimeout):
+            with man.reserveDevices(imager.devicesToReserve(), timeout=device_reservation_timeout):
                 frames = _stepped_z_stack(imager, start, stop, step, _future)
             frames = enforce_linear_z_stack(frames, start, stop, step)
     _fix_frame_transforms(frames, step)
