@@ -97,7 +97,8 @@ class TestPulseThread(QtThread):
 
     def start(self, **kwargs):
         self._stop = False
-        self._processingThread.start()
+        if not self._processingThread.is_alive():
+            self._processingThread.start()
         super().start(**kwargs)
 
     def stop(self, block=False):
@@ -105,6 +106,7 @@ class TestPulseThread(QtThread):
         if self._processingThread.is_alive():
             self._testPulsesToProcess.put(None)
             self._processingThread.join()
+            self._processingThread = Thread(name=f"TestPulseProcessing({self._clampDev.name()})", target=self._processTestPulses)
         if block and not self.wait(10000):
             raise RuntimeError("Timed out waiting for test pulse thread exit.")
 
