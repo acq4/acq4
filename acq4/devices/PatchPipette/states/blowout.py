@@ -43,7 +43,7 @@ class BlowoutState(PatchPipetteState):
         tp = tps[-1].analysis
         patchrec['resistanceAfterBlowout'] = tp['steady_state_resistance']
         self.dev.finishPatchRecord()
-        return config['fallbackState']
+        return {"state": config['fallbackState']}
 
     def _cleanup(self):
         dev = self.dev

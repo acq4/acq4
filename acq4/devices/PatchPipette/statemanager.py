@@ -255,8 +255,8 @@ class PatchPipetteStateManager(Qt.QObject):
             self.dev.logger.exception(f"Error during {job.stateName} cleanup:")
         disconnect(job.sigStateChanged, self.jobStateChanged)
         disconnect(job.sigFinished, self.jobFinished)
-        if allowNextState and job.nextState is not None:
-            self.requestStateChange(job.nextState, **job.nextStateConfig)
+        if allowNextState and job.nextState.get("state") is not None:
+            self.requestStateChange(**job.nextState)
 
 
 class ProfileParameter(Parameter):

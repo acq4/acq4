@@ -338,9 +338,10 @@ class SealState(PatchPipetteState):
                 if self._analysis.failure() or dt > config['autoSealTimeout']:
                     self._patchrec['sealSuccessful'] = False
                     self._taskDone(interrupted=True, error=f"Seal failed after {dt:f} seconds")
+                    next_state = {"state": config["fallbackState"]}
                     if holdingSet:
-                        self.nextStateConfig['initialVCHolding'] = config['holdingPotential']
-                    return config['fallbackState']
+                        next_state["initialVCHolding"] = config["holdingPotential"]
+                    return next_state
 
                 self.updatePressure()
 
@@ -361,7 +362,7 @@ class SealState(PatchPipetteState):
 
         self._taskDone()
         self._patchrec['sealSuccessful'] = True
-        return 'cell attached'
+        return {"state": 'cell attached'}
 
     def setInitialPressure(self):
         mode = self.config['pressureMode']

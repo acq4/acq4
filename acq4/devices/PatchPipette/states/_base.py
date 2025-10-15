@@ -139,7 +139,6 @@ class PatchPipetteState(Future):
         self._targetHasChanged = False
         Future.__init__(self, name=f"State {self.stateName} for {dev}")
         self.dev: PatchPipette = dev
-        self.nextStateConfig = {}
 
         # generate full config by combining passed-in arguments with default config
         self.config = self.defaultConfig()
@@ -152,7 +151,7 @@ class PatchPipetteState(Future):
         self._pauseMovement = False
         # indicates state that should be transitioned to next, if any.
         # This is usually set by the return value of run(), and must be invoked by the state manager.
-        self.nextState = self.config.get('fallbackState', None)
+        self.nextState = {"state": self.config.get('fallbackState', None)}
         self.dev.sigTargetChanged.connect(self._onTargetChanged)
 
     def initialize(self):

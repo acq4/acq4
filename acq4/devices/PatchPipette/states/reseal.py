@@ -442,7 +442,7 @@ class ResealState(PatchPipetteState):
                 and ptime.time() - start_time > config['resealTimeout']
             ):
                 self._taskDone(interrupted=True, error="Timed out attempting to reseal.")
-                return config['fallbackState']
+                return {"state": config['fallbackState']}
 
             self.processAtLeastOneTestPulse()
 
@@ -465,7 +465,7 @@ class ResealState(PatchPipetteState):
                     retraction_future.stop()
                 self.setState("tissue is torn beyond repair")
                 self._taskDone(interrupted=True, error="Tissue is torn beyond repair.")
-                return config['fallbackState']
+                return {"state": config['fallbackState']}
             elif retraction_future is None or retraction_future.wasInterrupted():
                 if retraction_future is not None:
                     retraction_future.logErrors("Reseal retraction error")
@@ -494,7 +494,7 @@ class ResealState(PatchPipetteState):
         self.waitFor(self._moveFuture, timeout=90)
         dev.pipetteDevice.focusTip()
         dev.pressureDevice.setPressure(source='regulator', pressure=config['initialPressure'])
-        return "outside out"
+        return {"state": "outside out"}
 
     def _sanityChecks(self):
         config = self.config

@@ -237,13 +237,13 @@ class ApproachState(PatchPipetteState):
                 if self._analysis.tip_is_broken():
                     self._taskDone(interrupted=True, error="Pipette broken")
                     self.dev.patchRecord()["detectedCell"] = False
-                    return "broken"
+                    return {"state": "broken"}
                 if self.obstacleDetected():
                     try:
                         self.avoidObstacle()
                     except TimeoutError:
                         self._taskDone(interrupted=True, error="Fouled by obstacle")
-                        return "fouled"
+                        return {"state": "fouled"}
                 if self._moveFuture is None:
                     self._moveFuture = self._move()
                 if self._moveFuture.isDone():
@@ -251,7 +251,7 @@ class ApproachState(PatchPipetteState):
                     self.setState('Move finished; next state')
                     break
 
-        return self.config["nextState"]
+        return {"state": self.config["nextState"]}
 
     def processAtLeastOneTestPulse(self):
         tps = super().processAtLeastOneTestPulse()
