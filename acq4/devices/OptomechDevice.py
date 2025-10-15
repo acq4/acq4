@@ -240,7 +240,7 @@ class OptomechDevice(InterfaceMixin):
             if self.__parent is not None:
                 self.__parent.sigGlobalTransformChanged.disconnect(self.__parentDeviceTransformChanged)
                 self.__parent.sigGlobalSubdeviceTransformChanged.disconnect(self.__parentSubdeviceTransformChanged)
-                self.__parent.sigGlobalopticsChanged.disconnect(self.__parentOpticsChanged)
+                self.__parent.sigGlobalOpticsChanged.disconnect(self.__parentOpticsChanged)
                 self.__parent.sigGlobalSubdeviceChanged.disconnect(self.__parentSubdeviceChanged)
                 self.__parent.sigGlobalSubdeviceListChanged.disconnect(self.__parentSubdeviceListChanged)
                 self.__parent.__children.remove(self)
@@ -670,8 +670,8 @@ class OptomechDevice(InterfaceMixin):
     def removeSubdevice(self, subdev):
         self.invalidateCachedTransforms()
         subdev = self.getSubdevice(subdev)
-        subdev.sigTransformChanged.disconnect(self.__subdeviceTransformChanged, type=Qt.Qt.DirectConnection)
-        subdev.sigOpticsChanged.disconnect(self.__subdeviceOpticsChanged, type=Qt.Qt.DirectConnection)
+        subdev.sigTransformChanged.disconnect(self.__subdeviceTransformChanged)
+        subdev.sigOpticsChanged.disconnect(self.__subdeviceOpticsChanged)
         with self.__lock:
             del self.__subdevices[subdev.name()]
             if len(self.__subdevices) == 0:

@@ -540,7 +540,7 @@ class AutomationDebugWindow(Qt.QWidget):
         cell.sigPositionChanged.connect(self._updatePipetteTarget)
         self.sigWorking.emit(self.ui.trackFeaturesBtn)
         try:
-            while cell.isTracking:
+            while cell.isTracking():
                 _future.sleep(1)
         except Exception:
             cell.enableTracking(False)

@@ -2,8 +2,11 @@
 """
 import os
 import sys
+import weakref
 
 import pyqtgraph as pg
+
+from acq4.util import ptime
 
 # make one large namespace containing everything; pyqtgraph handles translation
 # between different Qt versions

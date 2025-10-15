@@ -14,6 +14,7 @@ from acq4.util.acq4_typing import Number
 from acq4.util.future import Future, MultiFuture, future_wrap, FutureButton
 from acq4.util.imaging import Frame
 from acq4.util.surface import find_surface
+from acq4.util.ui.ZPositionWidget import ZPositionWidget
 from pyqtgraph.units import µm
 
 Ui_Form = Qt.importTemplate('.deviceTemplate')
@@ -172,7 +173,7 @@ class Microscope(Device, OptomechDevice):
     @future_wrap
     def loadPreset(self, name, _future):
         conf = self.presets[name]
-        futures = []
+        futures: list[Future] = []
         for dev_name, state in conf.items():
             if dev_name == "objective":
                 self.setObjectiveIndex(state)
@@ -573,33 +574,38 @@ class ScopeCameraModInterface(CameraModuleInterface):
         self.ctrl.setLayout(self.layout)
 
         self.plot = mod.window().getDepthView()
-        self.focusLine = self.plot.addLine(y=0, pen='y')
-        sd = dev.getSurfaceDepth()
-        if sd is None:
-            sd = 0
-        self.surfaceLine = self.plot.addLine(y=sd, pen='g')
-        self.movableFocusLine = self.plot.addLine(y=0, pen='y', markers=[('<|>', 0.5, 10)], movable=True)
 
-        # Note: this is placed here because there is currently no better place.
+        # Create Z-position widget
+        self.zPositionWidget = ZPositionWidget(self.plot)
+        self.movableFocusLine = self.plot.addLine(
+            y=0, pen='y', markers=[('<|>', 0.5, 10)], movable=True
+        )
+        self.movableFocusLine.sigPositionChangeFinished.connect(self.focusChangedFromWidget)
+
         # Ideally, the sample orientation, height, and anatomical identity would be contained
-        # in a Sample or Slice object elsewhere..
+        # in a Sample or Slice object elsewhere...
+
+        # Add controls
+
         self.setSurfaceBtn = Qt.QPushButton('Set Surface')
-        self.layout.addWidget(self.setSurfaceBtn, 0, 0)
         self.setSurfaceBtn.clicked.connect(self.setSurfaceClicked)
+        self.layout.addWidget(self.setSurfaceBtn, 0, 0)  # Add to our layout
 
         self.findSurfaceBtn = FutureButton(
             self.findSurface, 'Find Surface', stoppable=True, processing='Scanning...', failure='Failed!')
         self.layout.addWidget(self.findSurfaceBtn, 1, 0)
 
-        self.depthLabel = pg.ValueLabel(suffix='m', siPrefix=True)
-        self.layout.addWidget(self.depthLabel, 2, 0)
+        # Get depth label from the widget and add it to our layout
+        self.layout.addWidget(self.zPositionWidget.depthLabel, 2, 0)
 
+        # Connect device signals
         dev.sigGlobalTransformChanged.connect(self.transformChanged)
         dev.sigSurfaceDepthChanged.connect(self.surfaceDepthChanged)
 
-        # only works with devices that can change their waypoint while in motion
-        # self.movableFocusLine.sigDragged.connect(self.focusDragged)
-        self.movableFocusLine.sigPositionChangeFinished.connect(self.focusDragged)
+        # Initialize with current values
+        sd = dev.getSurfaceDepth()
+        if sd is not None:
+            self.zPositionWidget.setSurfaceDepth(sd)
 
         self.transformChanged()
 
@@ -612,11 +618,11 @@ class ScopeCameraModInterface(CameraModuleInterface):
         return self.getDevice().findSurfaceDepth(self.getDevice().getDefaultImager())
 
     def surfaceDepthChanged(self, depth):
-        self.surfaceLine.setValue(depth)
+        self.zPositionWidget.setSurfaceDepth(depth)
 
     def transformChanged(self):
         focus = self.getDevice().getFocusDepth()
-        self.focusLine.setValue(focus)
+        self.zPositionWidget.setFocusDepth(focus)
 
         # Compute the target focal plane.
         # This is a little tricky because the objective might have an offset+scale relative
@@ -629,16 +635,14 @@ class ScopeCameraModInterface(CameraModuleInterface):
         if tpos is None:
             tpos = fpos
         dif = tpos[2] - fpos[2]
-        with pg.SignalBlock(self.movableFocusLine.sigPositionChangeFinished, self.focusDragged):
+        self.zPositionWidget.setTargetDepth(focus + dif)
+        with pg.SignalBlock(self.movableFocusLine.sigPositionChangeFinished, self.focusChangedFromWidget):
             self.movableFocusLine.setValue(focus + dif)
 
-        sdepth = self.getDevice().getSurfaceDepth()
-        if sdepth is not None:
-            depth = focus - sdepth
-            self.depthLabel.setValue(depth)
-
-    def focusDragged(self):
-        self.getDevice().setFocusDepth(self.movableFocusLine.value())
+    def focusChangedFromWidget(self, depth):
+        """Handle focus changes from the Z-position widget."""
+        depth = self.movableFocusLine.value()
+        self.getDevice().setFocusDepth(depth)
 
     def controlWidget(self):
         return self.ctrl
