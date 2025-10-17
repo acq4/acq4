@@ -36,6 +36,7 @@ class QApplicationProfile(QObject):
     Multiple QApplicationProfile instances can be active simultaneously to collect
     overlapping statistics for different analysis purposes.
     """
+
     def __init__(self, name="profile", slow_threshold_ms=5.0, max_slow_samples=1000, hold_receivers=False):
         super().__init__()
         self.name = name
@@ -49,7 +50,7 @@ class QApplicationProfile(QObject):
 
         # Raw event data - analysis deferred
         self._events = []  # Store raw (duration, event_type, receiver, event) tuples
-        self._receivers = []  
+        self._receivers = []
 
         # Safety counters
         self._exceptions = 0
@@ -313,7 +314,8 @@ class ProfiledQApplication(QApplication):
             else:
                 # Exponential smoothing with proper time weighting
                 self._exp_avg_active_fraction = (
-                    alpha * activity_fraction + (1.0 - alpha) * self._exp_avg_active_fraction
+                    alpha * activity_fraction +
+                    (1.0 - alpha) * self._exp_avg_active_fraction
                 )
 
         self._last_event_end = current_time

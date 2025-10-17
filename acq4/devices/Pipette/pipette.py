@@ -50,36 +50,36 @@ class Pipette(Device, OptomechDevice):
       Positive values point downward. This option must be specified in the configuration.
       If the value 'auto' is given, then the pitch is derived from the parent manipulator's X axis
       (or other specified by parentAutoAxis) pitch.
-      
+
     * **yaw** (float or 'auto', required): The angle of the pipette (in degrees) relative to the global +X axis (points to the operator's right
       when facing the microscope).
       Positive values are clockwise from global +X. This option must be specified in the configuration.
       If the value 'auto' is given, then the yaw is derived from the parent manipulator's X axis
       (or other specified by parentAutoAxis) yaw.
-      
+
     * **parentAutoAxis** (str, optional): One of '+x' (default), '-x', '+y', '-y', '+z', or '-z' indicating the axis and direction in the
       parent manipulator's coordinate system that points along the pipette and toward the tip. This axis
       is used by the *pitch* and *yaw* options when they are set to 'auto'. If the pipette is not parallel
       to one of these axes, then a numerical value must be provided for the pitch and/or yaw.
-      
+
     * **searchHeight** (float, optional): The distance to focus above the sample surface when searching for pipette tips. This
       should be about 1-2mm, enough to avoid collisions between the pipette tip and the sample during search.
       Default is 2 * mm.
-      
+
     * **searchTipHeight** (float, optional): The distance above the sample surface to bring the (putative) pipette tip position
       when searching for new pipette tips. For low working-distance objectives, this should be about 0.5 mm less
       than *searchHeight* to avoid collisions between the tip and the objective during search.
       Default is 1.5 * mm.
-      
+
     * **approachHeight** (float, optional): The distance to bring the pipette tip above the sample surface when beginning
       a diagonal approach. Default is 100 * um.
-      
+
     * **idleHeight** (float, optional): The distance to bring the pipette tip above the sample surface when in idle position.
       Default is 1 * mm.
-      
+
     * **idleDistance** (float, optional): The x/y distance from the global origin from which the pipette top should be placed
       in idle mode. Default is 7 * mm.
-      
+
     * **recordingChambers** (list, optional): List of names of RecordingChamber devices that this Pipette is meant to work with.
 
     * **cleaningWell** (str, optional): Name of the well (RecordingChamber) device associated with

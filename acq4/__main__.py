@@ -46,7 +46,7 @@ if args.qt_profile:
 else:
     app = pg.mkQApp()
 
-if args.teleprox is not None:    
+if args.teleprox is not None:
     from teleprox import RPCServer
     if args.teleprox == 0:
         addr = 'tcp://127.0.0.1:*'
@@ -55,8 +55,6 @@ if args.teleprox is not None:
     teleprox_debug_server = RPCServer(addr)
     teleprox_debug_server.run_in_thread()
     print(f"Teleprox server listening on {teleprox_debug_server.address}")
-
-app = pg.mkQApp()
 
 
 ## Install a simple message handler for Qt errors:
