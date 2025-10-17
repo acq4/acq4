@@ -112,7 +112,7 @@ def findNewPipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=0.
 
         # autofocus
         z_range = (startDepth - 500e-6, startDepth + 500e-6, 20e-6)
-        zStack = acquire_z_stack(imager, *z_range, block=True).getResult()
+        zStack = acquire_z_stack(imager, *z_range, block=True, max_dz_per_frame=np.inf).getResult()
         zStackArray = np.stack([frame.data() for frame in zStack])
         zDiff = np.abs(np.diff(zStackArray.astype(float), axis=0))
         zProfile = zDiff.max(axis=2).max(axis=1)  # most-changed pixel in each frame
