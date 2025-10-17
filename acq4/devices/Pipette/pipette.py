@@ -397,7 +397,7 @@ class Pipette(Device, OptomechDevice):
             return self.offset
 
     @future_wrap
-    def saveManualCalibration(self, stack=True, _future=None):
+    def saveManualTipPosition(self, stack=True, _future=None):
         path = os.path.join(self.configPath(), "manual-calibrations")
         path = self.dm.configFileName(path)
         path = self.dm.dirHandle(path, create=True)
