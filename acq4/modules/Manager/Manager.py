@@ -38,6 +38,7 @@ class Manager(Module):
         self.ui.quitBtn.clicked.connect(self.requestQuit)
 
 
+
         state = self.manager.readConfigFile(self.stateFile)
         # restore window position
         if "geometry" in state:

@@ -18,6 +18,8 @@ from MetaArray import MetaArray
 
 import numpy as np
 
+import numpy as np
+
 import pyqtgraph as pg
 import pyqtgraph.reload as reload
 from pyqtgraph import configfile

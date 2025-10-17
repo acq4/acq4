@@ -140,7 +140,7 @@ class PatchClamp(Device):
 
     def _testPulseFinished(self, dev, result: PatchClampTestPulse):
         self._lastTestPulse = result
-        if self._testPulseHistorySize >= self._testPulseHistory.shape[0]:
+        if self._testPulseHistory is not None and self._testPulseHistorySize >= self._testPulseHistory.shape[0]:
             newTPH = np.empty(self._testPulseHistory.shape[0] * 2, dtype=self._testPulseHistory.dtype)
             newTPH[:self._testPulseHistory.shape[0]] = self._testPulseHistory
             self._testPulseHistory = newTPH
