@@ -138,7 +138,7 @@ class QApplicationProfile(QObject):
 
             group_totals.append((total_time, description, events))
 
-        group_totals.sort(reverse=True)
+        group_totals.sort(reverse=True, key=lambda x: x[0])
         for total_time, description, events in group_totals:
             event_lists.append((description, events))
 
