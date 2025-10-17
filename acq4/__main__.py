@@ -22,7 +22,6 @@ control_arg_parser.add_argument("--qt-profile", action="store_true", help="Use P
 # teleprox optional port number
 control_arg_parser.add_argument("--teleprox", type=int, nargs='?', const=0, default=None,
                                 help="Run a teleprox server in the background. If no port number is specified, a random port will be used.")
-control_arg_parser.add_argument("--qt-profile", action="store_true", help="Use ProfiledQApplication to collect Qt event loop performance statistics")
 args = control_arg_parser.parse_args()
 
 ## Enable stack trace output when a crash is detected
