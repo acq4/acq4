@@ -21,6 +21,7 @@ control_arg_parser.add_argument("--threadtrace", action="store_true", help="Run 
 # teleprox optional port number
 control_arg_parser.add_argument("--teleprox", type=int, nargs='?', const=0, default=None,
                                 help="Run a teleprox server in the background. If no port number is specified, a random port will be used.")
+control_arg_parser.add_argument("--qt-profile", action="store_true", help="Use ProfiledQApplication to collect Qt event loop performance statistics")
 args = control_arg_parser.parse_args()
 
 ## Enable stack trace output when a crash is detected
@@ -37,8 +38,15 @@ import pyqtgraph as pg
 if args.threadtrace:
     tt = pg.debug.ThreadTrace()
 
+# Create QApplication - use ProfiledQApplication if --qt-profile flag is set
+if args.qt_profile:
+    from .util.profiled_qapp import ProfiledQApplication
+    app = ProfiledQApplication(sys.argv)
+    print("Qt profiling enabled. Use app.print_summary_report() to view statistics.")
+else:
+    app = pg.mkQApp()
 
-if args.teleprox is not None:    
+if args.teleprox is not None:
     from teleprox import RPCServer
     if args.teleprox == 0:
         addr = 'tcp://127.0.0.1:*'
@@ -47,8 +55,6 @@ if args.teleprox is not None:
     teleprox_debug_server = RPCServer(addr)
     teleprox_debug_server.run_in_thread()
     print(f"Teleprox server listening on {teleprox_debug_server.address}")
-
-app = pg.mkQApp()
 
 
 ## Install a simple message handler for Qt errors:

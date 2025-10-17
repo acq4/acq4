@@ -42,6 +42,7 @@ class STDPAnalyzer(AnalysisModule):
         self.plots.setupUi(self.plotsWidget)
 
         self.pairingPlot = pg.PlotWidget()
+        self.pairingPlot.setObjectName("STDPAnalyzer_pairingPlot")
 
         self.fileLoader = STDPFileLoader.STDPFileLoader(self.dataManager(), host=self, showFileTree=True)
 
