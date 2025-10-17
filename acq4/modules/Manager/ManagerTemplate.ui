@@ -161,7 +161,7 @@
   <customwidget>
    <class>LogButton</class>
    <extends>QPushButton</extends>
-   <header>acq4.LogWindow</header>
+   <header>acq4.util.LogWindow</header>
   </customwidget>
   <customwidget>
    <class>ResourceMonitorWidget</class>

@@ -1,18 +1,17 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-import weakref
+import pyqtgraph as pg
+from acq4.logging_config import get_logger
 from acq4.util import Qt
 from .CanvasItem import CanvasItem
-import pyqtgraph as pg
-import pyqtgraph.graphicsItems.TargetItem
 from .itemtypes import registerItemType
 
+logger = get_logger(__name__)
 try:
     from aiccf.ui import AtlasSliceView
     from aiccf.data import CCFAtlasData
     HAVE_AICCF = True
-except ImportError:
+except Exception:
     HAVE_AICCF = False
+    logger.exception("Could not import aiccf module; AtlasCanvasItem will not be available.")
 
 
 class AtlasCanvasItem(CanvasItem):
