@@ -155,11 +155,13 @@ class ChannelRecorder(Qt.QSplitter):
         Qt.QSplitter.__init__(self, Qt.Qt.Vertical)
 
         self.plot = pg.PlotWidget(labels={'left': ('Primary', self.units), 'bottom': ('Time', 's')}, title="%s (%s)" % (dev, mode))
+        self.plot.setObjectName(f"NoiseMonitor_{dev}_{mode}_primaryPlot")
         self.plot.setDownsampling(auto=True)
         self.plot.setClipToView(True)
         self.addWidget(self.plot)
         
         self.envelopePlot = pg.PlotWidget(labels={'left': ('Mean, Stdev, Peaks', self.units), 'bottom': ('Time', 's')})
+        self.envelopePlot.setObjectName(f"NoiseMonitor_{dev}_{mode}_envelopePlot")
         self.addWidget(self.envelopePlot)
         
         self.specView = pg.PlotItem(labels={'left': ('Frequency', 'Hz'), 'bottom': ('Time', 's')})

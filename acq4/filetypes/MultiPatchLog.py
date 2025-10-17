@@ -516,6 +516,7 @@ class MultiPatchLogWidget(Qt.QWidget):
         layout = Qt.QGridLayout()
         self.setLayout(layout)
         self._plots_widget = pg.GraphicsLayoutWidget()
+        self._plots_widget.setObjectName("MultiPatchLog_plotsWidget")
         self._widgets.append(self._plots_widget)
         layout.addWidget(self._plots_widget, 0, 0)
         self._visual_field = self._plots_widget.addPlot()
