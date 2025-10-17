@@ -27,7 +27,7 @@ class Device(InterfaceMixin, Qt.QObject):  # QObject calls super, which is disas
 
         # task reservation lock -- this is a recursive lock to allow a task to run its own subtasks
         # (for example, setting a holding value before exiting a task).
-        # However, under some circumstances we might try to run two concurrent tasks from the same 
+        # However, under some circumstances we might try to run two concurrent tasks from the same
         # thread (eg, due to calling processEvents() while waiting for the task to complete). We
         # don't have a good solution for this problem at present..
         self._lock_ = Mutex(Qt.QMutex.Recursive)
@@ -42,8 +42,8 @@ class Device(InterfaceMixin, Qt.QObject):  # QObject calls super, which is disas
         """Return the string name of this device.
         """
         return self._name
-    
-    def createTask(self, cmd: dict, task: acq4.Manager.Task):
+
+    def createTask(self, cmd: dict, task: acq4.Manager.Task) -> DeviceTask:
         # Read configuration, configure tasks
         # Return a handle unique to this task
         # See TaskGUI.listSequences and TaskGUI.generateTask for more info on usage.
@@ -120,21 +120,20 @@ class Device(InterfaceMixin, Qt.QObject):  # QObject calls super, which is disas
             if not l:
                 # print("Device %s lock failed." % self.name())
                 return False
-                #print "  Device is currently locked from:"
-                #print self._lock_tb_
-                #raise Exception("Could not acquire lock", 1)  ## 1 indicates failed non-blocking attempt
+                # print "  Device is currently locked from:"
+                # print self._lock_tb_
+                # raise Exception("Could not acquire lock", 1)  ## 1 indicates failed non-blocking attempt
         self._lock_tb_ = ''.join(traceback.format_stack()[:-1])
         # print("Device %s lock ok" % self.name())
         return True
-        
+
     def release(self):
         try:
             self._lock_.unlock()
             # print("Device %s unlocked" % self.name())
             self._lock_tb_ = None
         except:
-            msg = "WARNING: Failed to release device lock for %s" % self.name()
-            logger.exception(msg)
+            self.logger.exception(f"Failed to release device lock for {self.name()}")
 
     def getTriggerChannels(self, daq: str) -> dict:
         """Return the name of the channel(s) on *daq* can be used to synchronize between this device and a DAQ.
@@ -152,18 +151,34 @@ class Device(InterfaceMixin, Qt.QObject):  # QObject calls super, which is disas
             be None.
         """
         return {'input': None, 'output': None}
-    
+
     def __repr__(self):
         return f'<{self.__class__.__name__} "{self.name()}">'
-    
+
 
 class DeviceTask(object):
     """
     DeviceTask handles all behavior of a single device during 
     execution of a task, including configuring the device based on the 
     contents of its command, starting the device, and collecting results.    
-    
+
     DeviceTask instances are usually created by calling Device.createTask().
+
+    The typical lifecycle of a DeviceTask is as follows:
+        1. DeviceTask is created by Device.createTask().
+        2. Controller calls getConfigOrder() and getPrepTimeEstimate() on all DeviceTasks to
+           determine configuration order.
+        3. Controller calls configure() on each DeviceTask in an order that satisfies the
+           dependencies declared by getConfigOrder().
+        4. Controller calls getStartOrder() on all DeviceTasks to determine start order.
+        5. Controller calls start() on each DeviceTask in an order that satisfies the dependencies
+           declared by getStartOrder().
+        6. If requested, controller calls abort() (which calls stop()) on each DeviceTask.
+        7. Controller periodically calls isDone() on each DeviceTask until all return True.
+        8. Controller calls stop() on each DeviceTask.
+        9. Controller calls getResult() and optionally storeResult() on each DeviceTask to collect
+           and store results.
+        10. Controller deletes DeviceTask instances.
     """
     def __init__(self, dev, cmd, parentTask):
         """
