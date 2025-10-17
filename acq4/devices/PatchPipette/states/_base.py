@@ -288,14 +288,12 @@ class PatchPipetteState(Future):
         with log_and_ignore_exception(Exception, "Error disabling visual target tracking"):
             if self.dev.cell is not None:
                 self.dev.cell.enableTracking(False)
-        retfut = Future.immediate()
         with log_and_ignore_exception(Exception, "Error stopping visual target tracking"):
             if self._visualTargetTrackingFuture is not None:
                 self._cell.enableTracking(False)
                 self._visualTargetTrackingFuture.stop("State cleanup")
-                retfut = self._visualTargetTrackingFuture
             self._visualTargetTrackingFuture = None
-        return retfut
+        return Future.immediate()
 
     def _runJob(self):
         """Function invoked in background thread.
