@@ -88,7 +88,7 @@ class MIES(Qt.QObject):
 
     def enableTestPulse(self, enable:bool):
         """Enable/disable test pulse for all active headstages"""
-        return self.igor('API_TestPulse', self.getWindowName(), 1 if enable else 0)
+        return self.igor('FFI_TestpulseMD', self.getWindowName(), 1 if enable else 0)
 
     def getHolding(self, hs, mode_override=None):
         mode = ""
@@ -150,6 +150,9 @@ class MIES(Qt.QObject):
     def setManualPressure(self, pressure):
         # set pressure in MIES, then verify pressure is set in MIES
         # (necessary due to lag in MIES setting pressure)
+        print("SET MANUAL PRESSURE", pressure)
+        import traceback
+        traceback.print_stack()
         v = self.setCtrl("setvar_DataAcq_SSPressure", pressure)
         p = self.getManualPressure()
         if not math.isclose(pressure, p, abs_tol=0.0001):

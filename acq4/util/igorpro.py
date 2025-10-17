@@ -159,6 +159,7 @@ class IgorBridge(Qt.QObject):
         return 'Igor.exe' in subprocess.check_output(['wmic', 'process', 'get', 'description,executablepath'])        
 
     def __call__(self, cmd, *args):
+        print("IGOR REQUEST:", cmd, args)
         return self.req_thread.send(cmd, *args)
     
     def quit(self):
@@ -270,8 +271,14 @@ class IgorReqThread(threading.Thread):
         elif err != 0:
             msg = reply.get("errorCode", {}).get("msg", "")
             raise IgorCallError("Call failed with message: {}".format(msg))
+
+        result = reply.get("result", {})
+        if isinstance(result, list):
+            return (self._parse_return_value(r) for r in result)
         else:
-            result = reply.get("result", {})
+            return self._parse_return_value(result)
+            
+    def _parse_return_value(self, result):
             restype = result.get("type", "")
             val = result.get("value", None)
             if (restype == "wave") and (val is not None):
