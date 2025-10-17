@@ -419,7 +419,7 @@ class AutomationDebugWindow(Qt.QWidget):
         )
         self.ui.trackFeaturesBtn.sigFinished.connect(self._handleFeatureTrackingFinish)
         self.ui.visualizeTrackingBtn.clicked.connect(self._visualizeTracking)
-        self.ui.visualizeTrackingBtn.setEnabled(False)
+        self.ui.visualizeTrackingBtn.setEnabled(True)
 
         self.ui.testPipetteBtn.setOpts(
             future_producer=self.doPipetteCalibrationTest,
@@ -561,7 +561,7 @@ class AutomationDebugWindow(Qt.QWidget):
     def _visualizeTracking(self):
         cell = self.patchPipetteDevice.cell or self._cell
         if cell is None or cell._tracker is None:
-            logger.info("No cell tracking available to visualize.")
+            logger.error("No cell tracking available to visualize.")
             return
         from acq4_automation.feature_tracking.visualization import LiveTrackerVisualizer
         visualizer = LiveTrackerVisualizer(cell._tracker)
@@ -601,8 +601,6 @@ class AutomationDebugWindow(Qt.QWidget):
         )
         self.ui.rankCellsBtn.setEnabled(len(self._unranked_cells) > 0)
         # self.ui.autopatchDemoBtn.setEnabled(working == self.ui.autopatchDemoBtn or not working)
-        cell = self.patchPipetteDevice.cell or self._cell
-        self.ui.visualizeTrackingBtn.setEnabled(cell is not None and cell._tracker is not None)
 
     @property
     def cameraDevice(self) -> Camera:
