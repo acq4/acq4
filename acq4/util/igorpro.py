@@ -9,10 +9,13 @@ import atexit
 import json
 import zmq
 import time
+import logging
 
 from acq4.util.json_encoder import ACQ4JSONEncoder
-# sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 from acq4.util import Qt
+
+
+logger = logging.getLogger('igorpro')
 
 dtypes = { 
     0x02: 'float32',
@@ -159,7 +162,8 @@ class IgorBridge(Qt.QObject):
         return 'Igor.exe' in subprocess.check_output(['wmic', 'process', 'get', 'description,executablepath'])        
 
     def __call__(self, cmd, *args):
-        print("IGOR REQUEST:", cmd, args)
+        print(f"Igor request: {cmd}{args}")
+        logger.debug("Igor request: %s %s", cmd, args)
         return self.req_thread.send(cmd, *args)
     
     def quit(self):
@@ -204,7 +208,7 @@ class IgorReqThread(threading.Thread):
             self.running = False
 
             # resolve all remaining futures and unhandled requests
-            for f in self.unresolved_futures:
+            for f in self.unresolved_futures.values():
                 f.set_exception(RuntimeError("IGOR thread closed before getting result from this request"))
             while self.send_queue.qsize() > 0:
                 cmd, params, fut = self.send_queue.get(block=False)
@@ -238,7 +242,7 @@ class IgorReqThread(threading.Thread):
                 try:
                     message_id = int(reply["messageID"])
                 except KeyError as ke:
-                    raise ke
+                    raise RuntimeError(f"Igor message has no ID: {reply}")
                 future = self.unresolved_futures.pop(message_id)
                 if future is None:
                     raise RuntimeError(f"No future found for messageID {message_id}")

@@ -134,64 +134,36 @@ class MIES(Qt.QObject):
                     clamp_mode = "I=0"
         return clamp_mode
     
-    def setAutoBias(self, hs, value: bool):
+    def setAutoBias(self, headstage, value: bool):
+        self.selectHeadstage(headstage)
         return self.setCtrl('check_DataAcq_AutoBias', value)
         
-    def getAutoBias(self, hs):
+    def getAutoBias(self, headstage):
+        self.selectHeadstage(headstage)
         value = self.getCtrlValue('check_DataAcq_AutoBias')
         return True if value == "1" else False
         
-    def setAutoBiasTarget(self, hs, value):
+    def setAutoBiasTarget(self, headstage, value):
+        self.selectHeadstage(headstage)
         return self.setCtrl('setvar_DataAcq_AutoBiasV', value * 1000)
         
-    def getAutoBiasTarget(self, hs):
+    def getAutoBiasTarget(self, headstage):
+        self.selectHeadstage(headstage)
         return float(self.getCtrlValue('setvar_DataAcq_AutoBiasV')) / 1000
     
-    def setManualPressure(self, pressure):
-        # set pressure in MIES, then verify pressure is set in MIES
-        # (necessary due to lag in MIES setting pressure)
-        print("SET MANUAL PRESSURE", pressure)
-        import traceback
-        traceback.print_stack()
-        v = self.setCtrl("setvar_DataAcq_SSPressure", pressure)
-        p = self.getManualPressure()
-        if not math.isclose(pressure, p, abs_tol=0.0001):
-            # test for x seconds
-            found = False
-            to = time.time() + 1 # one second timeout
-            while not found and time.time() > to:
-                p = self.getManualPressure()
-                if math.isclose(pressure, p, abs_tol=0.0001):
-                    found = True
-            if not found:
-                raise Exception("timeout while waiting for MIES pressure match")
-        return v
-    
-    def getManualPressure(self) -> float:
+    def getManualPressure(self, headstage) -> float:
+        self.selectHeadstage(headstage)
         return float(self.getCtrlValue('setvar_DataAcq_SSPressure'))
-
-    def setPressureSource(self, headstage: int, source: str, pressure=None):
-        PRESSURE_METOD_ATM = -1
-        PRESSURE_METHOD_MANUAL = 4
-
-        self.setCtrl("check_DataACq_Pressure_User", source == "user")
-
-        if source == "user":
-            return
-        if source == "atmosphere":
-            self.igor('DoPressureManual', 'ITC18USB_Dev_0', headstage, 0, 0).result()
-        elif source == "regulator":
-            self.igor('DoPressureManual', 'ITC18USB_Dev_0', headstage, 1, pressure).result()
-        else:
-            raise ValueError(f"pressure source is not valid: {source}")
-
-    # def setApproach(self, hs):
-    #     windowName = self.getWindowName()
-    #     return self.igor("P_SetPressureMode", windowName, hs, PRESSURE_METHOD_APPROACH)
-
-    # def setSeal(self, hs):
-    #     windowName = self.getWindowName()
-    #     return self.igor("P_SetPressureMode", windowName, hs, PRESSURE_METHOD_SEAL)
+    
+    def setPressureAndSource(self, headstage, source, pressure):
+        if source == 'user':
+            self.selectHeadstage(headstage)
+            return self.setCtrl("check_DataACq_Pressure_User", True)
+        try:
+            source_val = {'atmosphere': 0, 'regulator': 1}[source]
+        except KeyError:
+            raise ValueError(f"Invalid pressure source '{source}'")
+        return self.igor('DoPressureManual', self.getWindowName(), headstage, source_val, pressure)
 
     def setHeadstageActive(self, hs, active):
         return self.setCtrl('Check_DataAcqHS_%02d' % hs, active)

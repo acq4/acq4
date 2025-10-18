@@ -35,6 +35,7 @@ class PatchClamp(Device):
         self._testPulseHistorySize = 0
         self._testPulseHistory = None
         self._testPulseAnalysisOverrides = {}
+        self.resetTestPulseHistory()
 
     def deviceInterface(self, win):
         return PatchClampDeviceGui(self, win)
