@@ -120,12 +120,8 @@ class ResourceMonitorWidget(Qt.QWidget):
             self.requestLatencyTimestamp.emit()
 
             # Wait for the GUI thread to respond
-            try:
-                gui_timestamp = self.latencyQueue.get(timeout=2.0)
-                latency_ms = (gui_timestamp - latency_start) * 1000
-                data['latency'] = latency_ms
-            except queue.Empty:
-                data['latency'] = None
+            gui_timestamp = self.latencyQueue.get()
+            data['latency'] = gui_timestamp - latency_start
 
             # Send data to GUI thread
             self.resourceDataReady.emit(data)
@@ -178,7 +174,7 @@ class ResourceMonitorWidget(Qt.QWidget):
             lines.append('<span style="color: #888888;">Qt latency: --- ms</span>')
         else:
             color = self._getColorFromValue(latency_value, self.latencyColormap, 500.0)
-            lines.append(f'<span style="color: {color};">Qt latency: {latency_value:.1f} ms</span>')
+            lines.append(f'<span style="color: {color};">Qt latency: {latency_value*1000:.1f} ms</span>')
 
         # Set the multiline text with HTML formatting and apply styling
         self.metricsLabel.setText("<br>".join(lines))
