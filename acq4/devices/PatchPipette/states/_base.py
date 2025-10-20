@@ -367,7 +367,22 @@ class PatchPipetteState(Future):
         cell.sigTrackingMultipleFramesStart.connect(self._pausePipetteForExtendedTracking)
         disconnect(cell.sigPositionChanged, self.dev.pipetteDevice.setTarget)
         cell.sigPositionChanged.connect(self.dev.pipetteDevice.setTarget)
+        cell._trackingFuture.sigFinished.connect(self._visualTargetTrackingFinished)
         return cell._trackingFuture
+
+    def _visualTargetTrackingFinished(self, future):
+        from acq4_automation.feature_tracking.visualization import LiveTrackerVisualizer
+
+        if not hasattr(self.dev, '_trackingVisualizers'):
+            self.dev._trackingVisualizers = []
+        if self.dev.cell is None:
+            return
+        if not future.wasInterrupted():
+            return
+        visualizer = LiveTrackerVisualizer(self.dev.cell._tracker)
+        self.dev._trackingVisualizers.append(visualizer)
+        # TODO clean these up eventually or we'll leak memory
+        visualizer.show()
 
     def _pausePipetteForExtendedTracking(self, cell):
         self._pauseMovement = True
