@@ -266,7 +266,8 @@ class CellDetectState(PatchPipetteState):
         self._wiggleLock = Lock()
 
     def run(self):
-        self.dev.ensureCell()
+        if self.dev.cell is None:
+            self.dev.newCell()
         config = self.config
         self.monitorTestPulse()
         while not self.weTookTooLong():
