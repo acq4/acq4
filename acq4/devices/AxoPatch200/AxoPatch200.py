@@ -217,7 +217,6 @@ class AxoPatch200(DAQGeneric):
             'ic': config.get('icHolding', 0.0)
         }
         
-        self.config = config
         self.modeLock = Mutex(Mutex.Recursive)   ## protects self.mdCanceled
         self.devLock = Mutex(Mutex.Recursive)    ## protects self.holding, possibly self.config, ..others, perhaps?
         self.mdCanceled = False

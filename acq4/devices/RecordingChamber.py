@@ -20,11 +20,10 @@ class RecordingChamber(Device, OptomechDevice):
 
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
-        self.config = config
         self.radius = config["radius"]
         OptomechDevice.__init__(self, dm, config, name)
 
-    def getGeometry(self):
+    def getGeometry(self, name=None):
         if isinstance(self.config.get("geometry"), dict):
             defaults = {"color": (0.3, 0.3, 0.3, 0.7)}
             defaults.update(self.config["geometry"])

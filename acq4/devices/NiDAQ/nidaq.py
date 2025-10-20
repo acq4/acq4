@@ -57,7 +57,6 @@ class NiDAQ(Device):
 
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
-        self.config = config
         self.exclusiveDevice = config.get('device', None)
         self._defaultAIRange = config.get('defaultAIRange', [-10, 10])
         self._defaultAORange = config.get('defaultAORange', [-10, 10])

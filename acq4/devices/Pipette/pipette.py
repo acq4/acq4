@@ -125,7 +125,6 @@ class Pipette(Device, OptomechDevice):
     def __init__(self, deviceManager, config, name):
         Device.__init__(self, deviceManager, config, name)
         OptomechDevice.__init__(self, deviceManager, config, name)
-        self.config = config
         self.moving = False
         self._scopeDev = None
         self._imagingDev = None

@@ -1579,7 +1579,7 @@ class Geometry:
     #     from pymp import Planner
     #     import hppfcl
     #
-    #     urdf: str = self._config
+    #     urdf: str = self.config
     #     srdf = f"{urdf[:-5]}.srdf"
     #     end_effector = ET.parse(srdf).getroot().find("end_effector").attrib["name"]
     #     joints = [j.attrib["name"] for j in ET.parse(urdf).getroot().findall("joint") if j.attrib["type"] != "fixed"]

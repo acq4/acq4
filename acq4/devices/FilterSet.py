@@ -90,4 +90,4 @@ class FilterSet(Device, OptomechDevice):
         OptomechDevice.__init__(self, dm, omconfig, name)
 
     def description(self):
-        return self._config.get('description')
+        return self.config.get('description')

@@ -67,7 +67,6 @@ class Stage(Device, OptomechDevice):
         self._inverseStageTransform = Qt.QMatrix4x4()
         self.isManipulator = config.get("isManipulator", False)
 
-        self.config = config
         self.lock = Mutex(Qt.QMutex.Recursive)
 
         nAxes = len(self.axes())

@@ -44,7 +44,6 @@ class PatchClamp(Device):
 
     def __init__(self, deviceManager, config, name):
         Device.__init__(self, deviceManager, config, name)
-        self.config = config
         self._lastTestPulse = None
         self._testPulseThread = None
         self._initTestPulse(config.get('testPulse', {}))
