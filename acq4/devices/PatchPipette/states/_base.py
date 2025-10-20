@@ -377,7 +377,7 @@ class PatchPipetteState(Future):
             self.dev._trackingVisualizers = []
         if self.dev.cell is None:
             return
-        if not future.wasInterrupted():
+        if future.wasStopped():
             return
         visualizer = LiveTrackerVisualizer(self.dev.cell._tracker)
         self.dev._trackingVisualizers.append(visualizer)
