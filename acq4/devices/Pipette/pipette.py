@@ -188,12 +188,12 @@ class Pipette(Device, OptomechDevice):
 
         deviceManager.sigAbortAll.connect(self.stop)
 
-    def getGeometry(self):
+    def getGeometry(self, name=None):
         if isinstance(self.config.get("geometry"), dict):
             defaults = {'color': (0, 1, 0.2, 1)}
             defaults.update(self.config["geometry"])
             self.config["geometry"] = defaults
-        return super().getGeometry()
+        return super().getGeometry(name)
 
     def getBoundaries(self) -> List[Plane]:
         if self._boundaries is None:

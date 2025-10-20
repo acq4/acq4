@@ -149,7 +149,7 @@ class Microscope(Device, OptomechDevice):
         self.sigObjectiveChanged.emit((self.currentObjective, lastObj))
         self.sigGeometryChanged.emit(self)
 
-    def getGeometry(self):
+    def getGeometry(self, name=None):
         objective = self.getObjective()
         if objective is None:
             return None
@@ -373,7 +373,7 @@ class Objective(Device, OptomechDevice):
         if 'scale' in config:
             self.setScale(config['scale'])
 
-    def getGeometry(self):
+    def getGeometry(self, name=None):
         return None
 
     def getGeometryForMicroscope(self, name):

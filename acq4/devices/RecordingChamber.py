@@ -28,7 +28,7 @@ class RecordingChamber(Device, OptomechDevice):
             defaults = {"color": (0.3, 0.3, 0.3, 0.7)}
             defaults.update(self.config["geometry"])
             self.config["geometry"] = defaults
-        return super().getGeometry()
+        return super().getGeometry(name)
 
     def cameraModuleInterface(self, mod):
         """Return an object to interact with camera module."""

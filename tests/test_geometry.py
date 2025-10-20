@@ -698,7 +698,7 @@ class FakeDevice(Qt.QObject):
     def name(self):
         return self._name
 
-    def getGeometry(self):
+    def getGeometry(self, name=None):
         return self.geom
 
     def globalPhysicalTransform(self):
