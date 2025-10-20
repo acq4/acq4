@@ -77,36 +77,43 @@ class MIES(Qt.QObject):
         self.currentData = None
 
     def selectHeadstage(self, hs):
-        return self.setCtrl("slider_DataAcq_ActiveHeadstage", hs)
+        if hs != 0:
+            raise NotImplementedError("Multiple headstages not currently implemented")
+        return
+        # return self.setCtrl("slider_DataAcq_ActiveHeadstage", hs)
     
     def activateHeadstage(self, hs):
         return self.setCtrl(f"Check_DataAcqHS_0{hs}", True)
     
     def isHeadstageActive(self, hs):
         value = self.getCtrlValue(f'Check_DataAcqHS_0{hs}')
-        return True if value == '1' else False
+        return value == '1'
 
     def enableTestPulse(self, enable:bool):
         """Enable/disable test pulse for all active headstages"""
         return self.igor('FFI_TestpulseMD', self.getWindowName(), 1 if enable else 0)
 
-    def getHolding(self, hs, mode_override=None):
-        mode = ""
-        if mode_override:
-            mode = mode_override
-        else:
-            mode = self.getClampMode(hs)
+    def getHolding(self, hs, mode):
+        self.selectHeadstage(hs)
         if mode == "VC":
-            return int(self.getCtrlValue('setvar_DataAcq_Hold_VC')) / 1000
+            val = float(self.getCtrlValue('setvar_DataAcq_Hold_VC')) / 1000
+            enabled = self.getCtrlValue('check_DatAcq_HoldEnableVC') == '1'
         elif mode == "IC":
-            return int(self.getCtrlValue('setvar_DataAcq_Hold_IC')) / 1e12
+            val = float(self.getCtrlValue('setvar_DataAcq_Hold_IC')) / 1e12
+            enabled = self.getCtrlValue('check_DatAcq_HoldEnable') == '1'
+        return val, enabled
     
-    def setHolding(self, hs, value):
-        mode: str = self.getClampMode(hs)
+    def setHolding(self, headstage, mode, value):
+        self.selectHeadstage(headstage)
         if mode == "VC":
-            return self.setCtrl('setvar_DataAcq_Hold_VC', value * 1000)
-        elif mode == "IC":
-            return self.setCtrl('setvar_DataAcq_Hold_IC', value * 1e12)
+            ret = self.setCtrl('setvar_DataAcq_Hold_VC', value * 1000)
+            if value != 0:
+                ret = self.setCtrl('check_DatAcq_HoldEnableVC', True)
+        else:
+            ret = self.setCtrl('setvar_DataAcq_Hold_IC', value * 1e12)
+            if value != 0:
+                ret = self.setCtrl('check_DatAcq_HoldEnable', True)
+        return ret
     
     def setClampMode(self, hs: int, value: str): # IC | VC | I=0
         rtn_value = None
@@ -114,7 +121,7 @@ class MIES(Qt.QObject):
             rtn_value = self.setCtrl(f'Radio_ClampMode_{hs*2}', True)
         elif value == "IC":
             rtn_value = self.setCtrl(f'Radio_ClampMode_{hs*2+1}', True)
-        elif value in ["I=0", "i=0"]:
+        elif value.lower() == "i=0":
             rtn_value = self.setCtrl(f'Radio_ClampMode_{hs*2+1}IZ', True)
 
         return rtn_value
@@ -134,11 +141,11 @@ class MIES(Qt.QObject):
                     clamp_mode = "I=0"
         return clamp_mode
     
-    def setAutoBias(self, headstage, value: bool):
+    def setAutoBiasEnabled(self, headstage, value: bool):
         self.selectHeadstage(headstage)
         return self.setCtrl('check_DataAcq_AutoBias', value)
         
-    def getAutoBias(self, headstage):
+    def getAutoBiasEnabled(self, headstage):
         self.selectHeadstage(headstage)
         value = self.getCtrlValue('check_DataAcq_AutoBias')
         return True if value == "1" else False
@@ -168,8 +175,18 @@ class MIES(Qt.QObject):
     def setHeadstageActive(self, hs, active):
         return self.setCtrl('Check_DataAcqHS_%02d' % hs, active)
 
-    def autoPipetteOffset(self):
+    def autoPipetteOffset(self, headstage):
+        self.selectHeadstage(headstage)
         return self.setCtrl('button_DataAcq_AutoPipOffset_VC')
+
+    def autoBridgeBalance(self, headstage):
+        self.selectHeadstage(headstage)
+        return self.setCtrl('button_DataAcq_AutoBridgeBal_IC')
+
+    def autoCapComp(self, headstage):
+        self.selectHeadstage(headstage)
+        self.setCtrl('button_DataAcq_FastComp_VC')
+        return self.setCtrl('button_DataAcq_SlowComp_VC')
 
     def getLockedDevices(self):
         res = self.igor("GetListOfLockedDevices").result()

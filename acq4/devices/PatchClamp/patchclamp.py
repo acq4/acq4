@@ -16,8 +16,14 @@ class PatchClamp(Device):
     -------
     sigStateChanged(state)
         Emitted when any state parameters have changed
-    sigHoldingChanged(self, clamp_mode)
+    sigHoldingChanged(clamp_mode, holding_value)
         Emitted when the holding value for any clamp mode has changed
+    sigTestPulseFinished(self, test_pulse: TestPulse)
+        Emitted when a test pulse has completed
+    sigTestPulseEnabled(self, enabled)
+        Emitted when the test pulse has been enabled or disabled
+    sigAutoBiasChanged(self, enabled, target)
+        Emitted when any IC auto bias parameters have changed
     """
 
     sigStateChanged = Qt.Signal(object)  # state
