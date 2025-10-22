@@ -57,8 +57,6 @@ class FilterSet(Device, OptomechDevice):
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
 
-        self._orig_config = config
-
         # build config for optomechdevice
         omconfig = config.copy()
         optics = omconfig.pop('optics', {})
