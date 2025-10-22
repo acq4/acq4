@@ -1,12 +1,5 @@
-import math
-import time
-
-from .igorpro import IgorBridge, IgorCallError
+from .igorpro import IgorBridge
 from acq4.util import Qt
-
-# MIES constants, see MIES_Constants.ipf
-PRESSURE_METHOD_APPROACH = 0
-PRESSURE_METHOD_SEAL = 1
 
 
 def __reload__(old):
@@ -16,12 +9,7 @@ def __reload__(old):
 class MIES(Qt.QObject):
     """Bridge for communicating with MIES (multi-patch ephys and pressure control in IgorPro)
     """
-    sigDataReady = Qt.Signal(object)
-    _sigFutureComplete = Qt.Signal(object)
     _bridge = None
-    ALLDATA = None
-    PEAKRES = 1
-    SSRES = 2
 
     @classmethod
     def getBridge(cls):
@@ -34,47 +22,7 @@ class MIES(Qt.QObject):
     def __init__(self):
         super(MIES, self).__init__(parent=None)
         self.igor = IgorBridge()
-        self.currentData = None
-        self.manual_active = False  # temporary fix for manual mode toggle button, see below
-        self._exiting = False
-        # self.windowName = 'ITC1600_Dev_0'
         self._windowName = None
-        self.devices: list[str] = []
-        self._sigFutureComplete.connect(self.processUpdate)
-        self._initTPTime = None
-        self._lastTPTime = None
-
-    def processUpdate(self, future):
-        if not self._exiting:
-            try:
-                res = future.result()
-                data = res[..., 0]  # dimension hack when return value suddenly changed
-                self.currentData = data
-                self._updateTPTimes(data)
-                self.sigDataReady.emit(data)
-                nextCallWait = 2000
-            except (IgorCallError, TypeError):
-                # Test pulse isn't running, let's wait a little longer
-                nextCallWait = 2000
-            self._TPTimer.start(nextCallWait)
-
-    def _updateTPTimes(self, TPArray):
-        """Update globally tracked initial and end TP times"""
-        if self._initTPTime is None:
-            try:
-                self._initTPTime = TPArray[0, :][TPArray[0, :] > 0].min()
-            except ValueError:
-                pass
-        self._lastTPTime = TPArray[0, :].max()
-
-    def getTPRange(self):
-        if self._initTPTime is None:
-            return 0, 0
-        else:
-            return self._initTPTime, self._lastTPTime
-
-    def resetData(self):
-        self.currentData = None
 
     def selectHeadstage(self, hs):
         if hs != 0:
@@ -215,7 +163,6 @@ class MIES(Qt.QObject):
         return self._windowName
 
     def quit(self):
-        self._exiting = True
         self.igor.quit()
 
 

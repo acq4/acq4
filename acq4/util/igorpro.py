@@ -8,7 +8,7 @@ import concurrent.futures
 import atexit
 import json
 import zmq
-import time
+import datetime
 import logging
 
 from acq4.util.json_encoder import ACQ4JSONEncoder
@@ -111,7 +111,6 @@ class IgorBridge(Qt.QObject):
                     val = message["tp"] == "starting"
                     self.sigMiesTestPulseStateChanged.emit(val)
                 elif topic == self.topic_filters["live"]:
-                    self.test_pulse_active = True
                     self.sigTestPulseReady.emit(message, pub_response[2])
                 elif topic == self.topic_filters["CONFIG_FIN"]:
                     self.sigMiesConfigurationFinished.emit()
@@ -149,7 +148,6 @@ class IgorBridge(Qt.QObject):
         return 'Igor.exe' in subprocess.check_output(['wmic', 'process', 'get', 'description,executablepath'])        
 
     def __call__(self, cmd, *args):
-        print(f"Igor request: {cmd}{args}")
         logger.debug("Igor request: %s %s", cmd, args)
         return self.req_thread.send(cmd, *args)
     

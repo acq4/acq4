@@ -75,17 +75,14 @@ class MIESPatchClamp(PatchClamp):
         # {"PipetteOffsetIC": {"unit": "mV", "value": 0}}
 
         for key, val in message.items():
+            # print(f"MIESClampStateChanged: {key} -> {val}")
             if val['unit'] == 'On/Off':
                 self._state[key] = bool(int(val['value']))
             elif val['unit'] == '%':
                 self._state[key] = float(val['value'])
             else:
-                if key in ['HoldingPotential', 'BiasCurrent']:
-                    # bug: MIES sending unscaled values; ignore units for now
-                    self._state[key] = float(val['value'])
-                else:
-                    # use pg.siEval to get scaled value
-                    self._state[key] = pg.siEval(f"{val['value']} {val['unit']}")
+                # convert '-70.0 mV' -> -0.07 
+                self._state[key] = pg.siEval(f"{val['value']} {val['unit']}")
             
             if key.startswith('HoldingPotential'):
                 self.sigHoldingChanged.emit('VC', self.getHolding('VC'))
@@ -215,6 +212,7 @@ class MIESTestPulseThread(TestPulseThread):
 
     def process_pulses(self):
         """In background thread: receive data from MIES, convert, analyze, and emit."""
+        last_error_time = 0
         while True:
             try:
                 next_tp_data = self.tp_queue.get()
@@ -222,8 +220,10 @@ class MIESTestPulseThread(TestPulseThread):
                 tp.analysis  # run and cache analysis results
                 self.sigTestPulseFinished.emit(self._clampDev, tp)
             except Exception as exc:
-                print(f"Error in MIESTestPulseThread: {exc}")
-                time.sleep(1)
+                now = time.time()
+                if now - last_error_time > 3:
+                    print(f"Error in MIESTestPulseThread: {exc}")
+                    last_error_time = now
 
     def make_test_pulse(self, tp_meta, data_buffer):
         """Create a PatchClampTestPulse instance from MIES test pulse data
