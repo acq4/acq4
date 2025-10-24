@@ -33,24 +33,6 @@
 - **Python**: manage dependencies through `pyproject.toml`; avoid `requirements.txt`, Poetry, or bare `pip`. Use the interpreter specified in local configuration (see `AGENTS.local.md`) and format with Black (language guidelines).
 - **Source Control**: use concise Conventional Commit messages written in present-tense imperative. Avoid destructive git commands; prefer safe alternatives like `git revert`, backup branches, and `git push --force-with-lease` when absolutely necessary (source-control guidelines).
 
-## Built-in Commands & Automations
-
-- `brainstorm`: iterative Q&A to build a detailed spec, ending in `spec.md`.
-- `plan` / `plan-gh`: produce step-by-step implementation prompts, store in `plan.md`, also create `todo.md` (GitHub variant adds issue creation).
-- `plan-tdd`: like `plan` but emphasizes TDD and stores prompts in `prompt_plan.md`.
-- `do-prompt-plan`: execute unfinished prompts in `plan.md`, updating status after passing tests.
-- `do-todo`: implement items from `todo.md`, referencing GitHub issue #X and checking them off.
-- `do-issues` / `gh-issue`: pick or work on GitHub issues, post plans, branch, implement with tests, open PRs.
-- `work`: follow prompts in `prompt_plan.md`, ensuring builds/tests succeed before committing.
-- `find-missing-tests`: audit code and enumerate absent tests suitable for GitHub issues.
-- `make-github-issues`: review code, write top issues, and ensure no duplicates when filing.
-- `security-review`: inspect code with a security lens and report vulnerabilities.
-- `session-summary`: generate `session_{slug}_{timestamp}.md` capturing outcomes, costs, efficiencies, turn count, and observations.
-
-## Command Locations
-
-- Shared command prompts live under `~/.claude/commands/` and are mirrored to `~/.codex/commands/`; keep both directories synchronized.
-
 ## Project Overview
 
 ACQ4 is a platform for neurophysiology acquisition and analysis, focusing on patch clamp electrophysiology, optogenetics, and related techniques. It provides tools for data acquisition, management, and analysis with features including:
