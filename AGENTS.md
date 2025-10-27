@@ -30,8 +30,16 @@
 
 ## Technology Notes
 
-- **Python**: manage dependencies through `pyproject.toml`; avoid `requirements.txt`, Poetry, or bare `pip`. Use the interpreter specified in local configuration (see `AGENTS.local.md`) and format with Black (language guidelines).
+- **Python**: Use the interpreter specified in local configuration (see `AGENTS.local.md`) and format with `black -S -l 100` (language guidelines).
+- UI and acquisition stacks are Qt-heavy (PyQt5 via QtPy) with lots of scientific/ML dependencies
+- Requirements are stored in `tools/requirements/acq4-torch*`; keep those environment files as the source of truth when new packages are needed.
 - **Source Control**: use concise Conventional Commit messages written in present-tense imperative. Avoid destructive git commands; prefer safe alternatives like `git revert`, backup branches, and `git push --force-with-lease` when absolutely necessary (source-control guidelines).
+- Follow the repository default branch workflow—`CONTRIBUTING.md` currently targets pull requests at `main`.
+
+## Configuration & Utilities
+
+- Runtime configuration is discovered via the search paths defined in `acq4/__init__.py` (local `config/`, system installs such as `/etc/acq4`, then bundled examples). Mirror the structure in `config/example/` when adding new configs.
+- Helper scripts for data inspection and maintenance live in `tools/`; respect the existing entry points rather than duplicating functionality.
 
 ## Project Overview
 
@@ -136,7 +144,7 @@ Data management handles experiment data organization:
 - Style generally follows PEP8 with some exceptions
 - Variable names use camelCase rather than snake_case in any class/context that touches Qt, snake_case otherwise.
 - Documentation uses numpy docstring format
-- Pull requests should be made against the `main` branch
+- Default pull requests target the `develop` branch unless Flesh Friend requests otherwise.
 - All values should be in unscaled SI units. Use the `acq4.util.units` module for more readable scales.
 
 ## Common Development Tasks
@@ -148,9 +156,10 @@ When working with this codebase:
 3. For UI work, check existing modules for patterns and conventions.
 4. Be careful with device resource locking and release.
 5. Be careful with threads and Qt event loops.
+6. Place tests under `tests/`
 
 ## Documentation
 
-Documentation is generated with Sphinx:
-- Online documentation: https://acq4.readthedocs.io/
-- Source files in `doc/source/`
+- Documentation is generated with Sphinx
+- Online documentation: https://acq4.readthedocs.io/en/latest
+- Source files in `doc/source/` and inline docstrings
