@@ -31,10 +31,10 @@
 ## Technology Notes
 
 - **Python**: Use the interpreter specified in local configuration (see `AGENTS.local.md`) and format with `black -S -l 100` (language guidelines).
-- UI and acquisition stacks are Qt-heavy (PyQt5 via QtPy) with lots of scientific/ML dependencies
+- UI and acquisition stacks are Qt-heavy with lots of scientific/ML dependencies
+- **Qt Framework**: ACQ4 uses PyQtGraph for GUI. Import Qt from unified wrapper: `from acq4.util.Qt import ...` for cross-backend compatibility.
 - Requirements are stored in `tools/requirements/acq4-torch*`; keep those environment files as the source of truth when new packages are needed.
 - **Source Control**: use concise Conventional Commit messages written in present-tense imperative. Avoid destructive git commands; prefer safe alternatives like `git revert`, backup branches, and `git push --force-with-lease` when absolutely necessary (source-control guidelines).
-- Follow the repository default branch workflow—`CONTRIBUTING.md` currently targets pull requests at `main`.
 
 ## Configuration & Utilities
 
@@ -142,21 +142,150 @@ Data management handles experiment data organization:
 ## Code Conventions
 
 - Style generally follows PEP8 with some exceptions
-- Variable names use camelCase rather than snake_case in any class/context that touches Qt, snake_case otherwise.
+- Variable names use **camelCase** in any class/context that touches Qt, **snake_case** otherwise
 - Documentation uses numpy docstring format
-- Default pull requests target the `develop` branch unless Flesh Friend requests otherwise.
-- All values should be in unscaled SI units. Use the `acq4.util.units` module for more readable scales.
+- Pull requests should be made against the `main` branch
+- All values stored internally in **unscaled SI units** (meters, seconds, volts, amperes)
+- Use unit constants from `acq4.util.functions` for readable scales in config and code (e.g., `470*nm`, `100*um/s`)
+- All code files should start with a 2-line comment/docstring explaining the file's purpose
+
+## Configuration System
+
+ACQ4 uses PyQTGraph's configfile module for parsing configurations:
+
+- **Format**: YAML-like with Python expression evaluation
+- **Unit expressions**: Config values can use unit constants (e.g., `wavelength: 470*nm`, `speed: 100*um/s`)
+- **Available in expressions**: `hostname`, `username`, `environ`, and all unit constants from `pyqtgraph.units`
+- **Device configs**: Stored in `config/devices/DeviceName_config/` directories
+  - Access via `Device.readConfigFile(filename)`, `Device.writeConfigFile(data, filename)`
+  - Contains calibrations, stored positions, reference frames
+
+## Key Utilities and Patterns
+
+### Interface System (`acq4/Interfaces.py`)
+
+Component discovery and capability declaration:
+
+```python
+# Register a component:
+self.dm.declareInterface(name, ['device'], self)
+
+# Discover components:
+if hasattr(obj, 'implements') and obj.implements('my_api'):
+    # Safe to use API methods
+```
+
+### DataManager (`acq4/util/DataManager/`)
+
+Handle-based file/directory access (thread-safe):
+
+```python
+from acq4.util.DataManager import getManager, getDirHandle
+dm = getManager()
+dirHandle = dm.getDirHandle('/path/to/data')
+fileHandle = dirHandle['filename.ext']
+data = fileHandle.read()
+dirHandle.writeFile(data, 'output.ma')
+```
+
+### Resource Locking (`acq4/util/Mutex.py`)
+
+Prevent device conflicts using mutex locks:
+
+```python
+# Recommended context manager pattern:
+with device.reserved():
+    device.doSomething()
+
+# Multiple device reservation:
+manager.reserveDevices(['dev1', 'dev2'], block=True, timeout=20)
+```
+
+### Manager Access
+
+```python
+from acq4.Manager import getManager
+manager = getManager()  # Get current manager singleton
+# or often instances will keep a reference at `self.dm` 
+```
+
+## Task Execution Patterns
+
+Tasks coordinate multi-device operations:
+
+```python
+# Task creation:
+task = manager.createTask(cmd)
+task.execute()          # Run all device tasks
+result = task.getResult()
+```
+
+**Dependency management**: Use `getConfigOrder()` and `getStartOrder()` to declare task dependencies.
+
+## Data Formats and I/O
+
+### MetaArray (Primary Data Format)
+
+Labeled multi-dimensional arrays stored in `.ma` files:
+
+```python
+from MetaArray import MetaArray as MA
+
+# Create with metadata:
+data = MA(array_data, info=[
+    {'name': 'Time', 'units': 's', 'values': time_array},
+    {'name': 'Channel', 'values': ['Voltage', 'Current']},
+])
+
+# Access with named indexing:
+voltage = data['Channel', 'Voltage']
+```
+
+### File Type System
+
+Custom file handlers in `acq4/filetypes/`:
+- Each FileType declares `extensions`, `dataTypes`, and `priority`
+- Implements `read(fileHandle)` and `write(data, dirHandle, fileName)`
+- System automatically selects appropriate handler based on priority
+
+## Logging
+
+ACQ4 uses JSON-formatted logging:
+
+```python
+from acq4.logging_config import get_logger
+
+logger = get_logger(__name__)
+logger.info("Operation started", extra={'device': 'Camera1'})
+```
+
+- Logs written to JSON file for structured analysis
+- GUI log window available for real-time monitoring
+- Module-specific loggers follow pattern: `acq4.device.ModuleName.DeviceName`
 
 ## Common Development Tasks
 
 When working with this codebase:
 
-1. Follow existing patterns for adding new devices or modules.
-2. Use the Interface system for component discovery.
-3. For UI work, check existing modules for patterns and conventions.
-4. Be careful with device resource locking and release.
-5. Be careful with threads and Qt event loops.
-6. Place tests under `tests/`
+1. Follow existing patterns for adding new devices or modules
+2. Use the Interface system for component discovery
+3. For UI work, check existing modules for patterns and conventions
+4. Use device locking when extended operations require continuous guaranteed hardware control 
+5. Be careful with the Qt gui thread. Keep as much processing in bg threads as possible and otherwise use `Qt.QApplication.processEvents()` in long loops
+6. Access files through DataManager handles, not direct file operations
+7. Use unit constants in configs and calculations, store values in unscaled SI units internally
+8. DeviceTask lifecycle: configure → start → isDone → getResult
+
+### Launch Options
+
+```bash
+python -m acq4                      # Normal mode
+python -m acq4 -x                  # Exit on error (recommended)
+python -m acq4 -c /path/to/config  # Custom config file
+python -m acq4 --profile           # cProfile profiling
+python -m acq4 --callgraph         # Callgraph profiling
+python -m acq4 --teleprox 9999     # Remote RPC debugging
+```
 
 ## Documentation
 
