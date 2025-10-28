@@ -7,8 +7,12 @@ import pyqtgraph as pg
 app = pg.mkQApp()
 
 root = tempfile.mkdtemp()
+
+
 def remove_tempdir():
     shutil.rmtree(root)
+
+
 atexit.register(remove_tempdir)
 
 
@@ -72,6 +76,3 @@ def test_datamanager():
     d1.delete()
     dw.rebuildTree()
     assert dw.topLevelItemCount() == 1
-
-
-
