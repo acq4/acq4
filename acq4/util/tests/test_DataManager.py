@@ -98,6 +98,14 @@ def test_cell():
     cell1.setCellfie(cellfie)
     np.testing.assert_array_equal(cell1.getCellfie(), cellfie)
 
+    dm.getDataManager().cache = {}
+    dh_copy = dm.getDirHandle(root)
+    cell1_copy2 = dh_copy.getCellHandle(cell1.id)
+    assert cell1.id == cell1_copy2.id
+    assert cell1 is not cell1_copy2
+    assert cell1.info()['cell_info'] == cell1_copy2.info()['cell_info']
+    np.testing.assert_array_equal(cell1_copy2.getCellfie(), cellfie)
+
 
 def test_patch_attempt():
     dh = dm.getDirHandle(root)
@@ -114,3 +122,11 @@ def test_patch_attempt():
     assert pa1.getCell() is None
     pa1.setCell(dh.getCellHandle())
     assert pa1_copy.getCell() is not None
+
+    dm.getDataManager().cache = {}
+    dh_copy = dm.getDirHandle(root)
+    pa1_copy2 = dh_copy.getPatchAttemptHandle(pa1.id)
+    assert pa1.id == pa1_copy2.id
+    assert pa1 is not pa1_copy2
+    assert pa1.info()['pa_info'] == pa1_copy2.info()['pa_info']
+    assert pa1_copy2.getCell().id == pa1.getCell().id
