@@ -71,7 +71,7 @@ class DataManager(Qt.QObject):
                 self._addHandle(fileName, FileHandle(fileName, self))
             return self._getCache(fileName)
 
-    def getCellHandle(self, uid=None, parentDir=None):
+    def getCellHandle(self, uid, parentDir):
         """Return a FileHandle for storing cell-specific data.
         If uid is None, a new unique identifier will be generated.
         """
@@ -88,7 +88,7 @@ class DataManager(Qt.QObject):
                 self._addHandle(uid, CellHandle(uid, cell_dh, self))
             return self._getCache(uid)
 
-    def getPatchAttemptHandle(self, uid=None, parentDir=None):
+    def getPatchAttemptHandle(self, uid, parentDir):
         if uid is None:
             uid = str(uuid4())
         all_pa_dir = "patch_attempts"
