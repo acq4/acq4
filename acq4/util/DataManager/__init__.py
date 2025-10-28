@@ -24,10 +24,9 @@ def abspath(fileName):
 
 
 def getDataManager():
-    inst = DataManager.INSTANCE
-    if inst is None:
-        raise ValueError('No DataManger created yet!')
-    return inst
+    if DataManager.INSTANCE is None:
+        return DataManager()
+    return DataManager.INSTANCE
 
 
 def getHandle(fileName):
@@ -76,7 +75,7 @@ class DataManager(Qt.QObject):
             return self._getCache(fileName)
 
     def getHandle(self, fileName):
-        """Return a FileHandle or DirHandle for the given fileName. 
+        """Return a FileHandle or DirHandle for the given fileName.
         If the file does not exist, a handle will still be returned, but is not guaranteed to have the correct type.
         """
         fn = os.path.abspath(fileName)
@@ -105,12 +104,6 @@ class DataManager(Qt.QObject):
     def _addHandle(self, fileName, handle):
         """Cache a handle and watch it for changes"""
         self._setCache(fileName, handle)
-        ## make sure all file handles belong to the main GUI thread
-        app = Qt.QApplication.instance()
-        if app is not None:
-            handle.moveToThread(app.thread())
-        ## No signals; handles should explicitly inform the manager of changes
-        # Qt.QObject.connect(handle, Qt.SIGNAL('changed'), self._handleChanged)
 
     def _handleChanged(self, handle, change, *args):
         with self.lock:
