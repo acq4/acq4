@@ -83,11 +83,12 @@ def test_datamanager():
 
 
 def test_cell():
-    cell1 = dm.getCellHandle()
-    cell2 = dm.getCellHandle()
+    dh = dm.getDirHandle(root)
+    cell1 = dh.getCellHandle()
+    cell2 = dh.getCellHandle()
     assert cell1 is not cell2
 
-    cell1_copy = dm.getCellHandle(cell1.id)
+    cell1_copy = dh.getCellHandle(cell1.id)
     assert cell1 is cell1_copy
 
     cell1.setInfo({'cell_info': 123})
@@ -96,3 +97,20 @@ def test_cell():
     cellfie = np.array([[1, 2], [3, 4]])
     cell1.setCellfie(cellfie)
     np.testing.assert_array_equal(cell1.getCellfie(), cellfie)
+
+
+def test_patch_attempt():
+    dh = dm.getDirHandle(root)
+    pa1 = dh.getPatchAttemptHandle()
+    pa2 = dh.getPatchAttemptHandle()
+    assert pa1 is not pa2
+
+    pa1_copy = dh.getPatchAttemptHandle(pa1.id)
+    assert pa1 is pa1_copy
+
+    pa1.setInfo({'pa_info': 456})
+    assert pa1_copy.info()['pa_info'] == 456
+
+    assert pa1.getCell() is None
+    pa1.setCell(dh.getCellHandle())
+    assert pa1_copy.getCell() is not None

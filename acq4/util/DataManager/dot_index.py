@@ -390,6 +390,12 @@ class DirHandle(FileHandle):
             self.indexFile(fileName)
         return fh
 
+    def getCellHandle(self, uid=None):
+        return self.manager.getCellHandle(uid=uid, parentDir=self.name())
+
+    def getPatchAttemptHandle(self, uid=None):
+        return self.manager.getPatchAttemptHandle(uid=uid, parentDir=self.name())
+
     def dirExists(self, dirName):
         return os.path.isdir(os.path.join(self.path, dirName))
 

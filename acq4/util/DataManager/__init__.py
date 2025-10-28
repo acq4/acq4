@@ -1,7 +1,5 @@
 """
 DataManager.py - DataManager, FileHandle, and DirHandle classes
-Copyright 2010  Luke Campagnola
-Distributed under MIT/X11 license. See license.txt for more infomation.
 
 These classes implement a data management system that allows modules
 to easily store and retrieve data files along with metadata. The objects
@@ -13,10 +11,11 @@ from uuid import uuid4
 
 from acq4.logging_config import get_logger
 from acq4.util import Qt
-from .cell import CellHandle
-from .dot_index import FileHandle, DirHandle
-from .common import abspath
 from acq4.util.Mutex import Mutex
+from .cell import CellHandle
+from .common import abspath
+from .dot_index import FileHandle, DirHandle
+from .patch_attempt import PatchAttemptHandle
 
 logger = get_logger(__name__)
 
@@ -37,10 +36,6 @@ def getDirHandle(fileName, create=False):
 
 def getFileHandle(fileName):
     return getDataManager().getFileHandle(fileName)
-
-
-def getCellHandle(uid=None, parentDir=None):
-    return getDataManager().getCellHandle(uid, parentDir=parentDir)
 
 
 def getInfo(name) -> dict:
@@ -86,12 +81,27 @@ class DataManager(Qt.QObject):
         if parentDir is not None:
             all_cells_dir = os.path.join(parentDir, all_cells_dir)
         self.getDirHandle(all_cells_dir, create=True)
-        cell_dir = os.path.join("cells", uid)
+        cell_dir = os.path.join(all_cells_dir, uid)
         cell_dh = self.getDirHandle(cell_dir, create=True)
         with self.lock:
             if not self._cacheHasName(uid):
                 self._addHandle(uid, CellHandle(uid, cell_dh, self))
             return self._getCache(uid)
+
+    def getPatchAttemptHandle(self, uid=None, parentDir=None):
+        if uid is None:
+            uid = str(uuid4())
+        all_pa_dir = "patch_attempts"
+        if parentDir is not None:
+            all_pa_dir = os.path.join(parentDir, all_pa_dir)
+        self.getDirHandle(all_pa_dir, create=True)
+        pa_dir = os.path.join(all_pa_dir, uid)
+        pa_dh = self.getDirHandle(pa_dir, create=True)
+        with self.lock:
+            if not self._cacheHasName(uid):
+                self._addHandle(uid, PatchAttemptHandle(uid, pa_dh, self))
+            return self._getCache(uid)
+
 
     def getHandle(self, fileName):
         """Return a FileHandle or DirHandle for the given fileName.
@@ -181,7 +191,6 @@ __all__ = [
     "getHandle",
     "getDirHandle",
     "getFileHandle",
-    "getCellHandle",
     "FileHandle",
     "DirHandle",
 ]

@@ -14,9 +14,9 @@ class CellHandle:
         self.dirHandle = dirHandle
         self.dataManager = dataManager
 
-    def setInfo(self, info: dict):
+    def setInfo(self, info: dict = None, **kwargs) -> None:
         """Store metadata associated with this cell."""
-        self.dirHandle.setInfo(info)
+        self.dirHandle.setInfo(info, **kwargs)
 
     def info(self) -> dict:
         """Retrieve metadata associated with this cell."""
