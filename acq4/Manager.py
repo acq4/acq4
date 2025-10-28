@@ -12,7 +12,6 @@ import threading
 import time
 import weakref
 from collections import OrderedDict
-from datetime import datetime
 
 from MetaArray import MetaArray
 
