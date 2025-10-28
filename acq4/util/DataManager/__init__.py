@@ -12,15 +12,11 @@ import weakref
 
 from acq4.logging_config import get_logger
 from acq4.util import Qt
-from acq4.util.DataManager.dot_index import FileHandle, DirHandle
+from .dot_index import FileHandle, DirHandle
+from .common import abspath
 from acq4.util.Mutex import Mutex
 
 logger = get_logger(__name__)
-
-
-def abspath(fileName):
-    """Return an absolute path string which is guaranteed to uniquely identify a file."""
-    return os.path.normcase(os.path.abspath(fileName))
 
 
 def getDataManager():
@@ -157,10 +153,7 @@ class DataManager(Qt.QObject):
         return abspath(name) in self.cache
 
 
-dm = DataManager()
-
 __all__ = [
-    "dm",
     "getDataManager",
     "getHandle",
     "getDirHandle",
