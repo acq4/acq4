@@ -1,8 +1,13 @@
-from __future__ import print_function
-import tempfile, shutil, atexit, os
+import atexit
+import os
+import shutil
+import tempfile
+
+import numpy as np
+
 import acq4.util.DataManager as dm
-from acq4.util.DirTreeWidget import DirTreeWidget
 import pyqtgraph as pg
+from acq4.util.DirTreeWidget import DirTreeWidget
 
 app = pg.mkQApp()
 
@@ -50,8 +55,8 @@ def test_datamanager():
 
     # test _getTree
     d3 = rh.mkdir('subdir3')
-    assert d3.name() not in dm.dm._getTree(d1.name())
-    assert d2.name() in dm.dm._getTree(d1.name())
+    assert d3.name() not in dm.getDataManager()._getTree(d1.name())
+    assert d2.name() in dm.getDataManager()._getTree(d1.name())
 
     #
     # root
@@ -76,3 +81,19 @@ def test_datamanager():
     d1.delete()
     dw.rebuildTree()
     assert dw.topLevelItemCount() == 1
+
+
+def test_cell():
+    cell1 = dm.getCellHandle()
+    cell2 = dm.getCellHandle()
+    assert cell1 is not cell2
+
+    cell1_copy = dm.getCellHandle(cell1.id)
+    assert cell1 is cell1_copy
+
+    cell1.setInfo({'cell_info': 123})
+    assert cell1_copy.info()['cell_info'] == 123
+
+    cellfie = np.array([[1, 2], [3, 4]])
+    cell1.setCellfie(cellfie)
+    np.testing.assert_array_equal(cell1.getCellfie(), cellfie)

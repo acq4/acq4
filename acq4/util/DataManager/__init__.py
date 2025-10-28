@@ -9,9 +9,11 @@ probably only need to be created via functions in the Manager class.
 """
 import os
 import weakref
+from uuid import uuid4
 
 from acq4.logging_config import get_logger
 from acq4.util import Qt
+from .cell import CellHandle
 from .dot_index import FileHandle, DirHandle
 from .common import abspath
 from acq4.util.Mutex import Mutex
@@ -35,6 +37,10 @@ def getDirHandle(fileName, create=False):
 
 def getFileHandle(fileName):
     return getDataManager().getFileHandle(fileName)
+
+
+def getCellHandle(uid=None, parentDir=None):
+    return getDataManager().getCellHandle(uid, parentDir=parentDir)
 
 
 def getInfo(name) -> dict:
@@ -69,6 +75,23 @@ class DataManager(Qt.QObject):
             if not self._cacheHasName(fileName):
                 self._addHandle(fileName, FileHandle(fileName, self))
             return self._getCache(fileName)
+
+    def getCellHandle(self, uid=None, parentDir=None):
+        """Return a FileHandle for storing cell-specific data.
+        If uid is None, a new unique identifier will be generated.
+        """
+        if uid is None:
+            uid = str(uuid4())
+        all_cells_dir = "cells"
+        if parentDir is not None:
+            all_cells_dir = os.path.join(parentDir, all_cells_dir)
+        self.getDirHandle(all_cells_dir, create=True)
+        cell_dir = os.path.join("cells", uid)
+        cell_dh = self.getDirHandle(cell_dir, create=True)
+        with self.lock:
+            if not self._cacheHasName(uid):
+                self._addHandle(uid, CellHandle(uid, cell_dh, self))
+            return self._getCache(uid)
 
     def getHandle(self, fileName):
         """Return a FileHandle or DirHandle for the given fileName.
@@ -164,6 +187,7 @@ __all__ = [
     "getHandle",
     "getDirHandle",
     "getFileHandle",
+    "getCellHandle",
     "FileHandle",
     "DirHandle",
 ]
