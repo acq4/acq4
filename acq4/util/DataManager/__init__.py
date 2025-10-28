@@ -91,17 +91,16 @@ class DataManager(Qt.QObject):
     def getPatchAttemptHandle(self, uid, parentDir):
         if uid is None:
             uid = str(uuid4())
-        all_pa_dir = "patch_attempts"
+        all_patch_dir = "patch_attempts"
         if parentDir is not None:
-            all_pa_dir = os.path.join(parentDir, all_pa_dir)
-        self.getDirHandle(all_pa_dir, create=True)
-        pa_dir = os.path.join(all_pa_dir, uid)
-        pa_dh = self.getDirHandle(pa_dir, create=True)
+            all_patch_dir = os.path.join(parentDir, all_patch_dir)
+        self.getDirHandle(all_patch_dir, create=True)
+        patch_dir = os.path.join(all_patch_dir, uid)
+        patch_dh = self.getDirHandle(patch_dir, create=True)
         with self.lock:
             if not self._cacheHasName(uid):
-                self._addHandle(uid, PatchAttemptHandle(uid, pa_dh, self))
+                self._addHandle(uid, PatchAttemptHandle(uid, patch_dh, self))
             return self._getCache(uid)
-
 
     def getHandle(self, fileName):
         """Return a FileHandle or DirHandle for the given fileName.
