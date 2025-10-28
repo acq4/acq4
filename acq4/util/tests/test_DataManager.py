@@ -22,7 +22,6 @@ atexit.register(remove_tempdir)
 
 
 def test_datamanager():
-
     rh = dm.getDirHandle(root)
 
     # check handles are cached

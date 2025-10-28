@@ -23,7 +23,7 @@ logger = get_logger(__name__)
 
 def getDataManager():
     if DataManager.INSTANCE is None:
-        DataManager()
+        return DataManager()
     return DataManager.INSTANCE
 
 
@@ -123,12 +123,6 @@ class DataManager(Qt.QObject):
     def _addHandle(self, fileName, handle):
         """Cache a handle and watch it for changes"""
         self._setCache(fileName, handle)
-        ## make sure all file handles belong to the main GUI thread
-        app = Qt.QApplication.instance()
-        if app is not None:
-            handle.moveToThread(app.thread())
-        ## No signals; handles should explicitly inform the manager of changes
-        # Qt.QObject.connect(handle, Qt.SIGNAL('changed'), self._handleChanged)
 
     def _handleChanged(self, handle, change, *args):
         with self.lock:

@@ -19,12 +19,11 @@ from .common import abspath
 logger = get_logger(__name__)
 
 
-class FileHandle(Qt.QObject):
-    sigChanged = Qt.Signal(object, object, object)  # (self, change, (args))
-    sigDelayedChange = Qt.Signal(object, object)  # (self, changes)
-
+class FileHandle:
     def __init__(self, path, manager):
-        Qt.QObject.__init__(self)
+        super().__init__()
+        self.sigChanged = Qt.signalEmitter(object, object, object)
+        self.sigDelayedChange = Qt.signalEmitter(object, object)
         self.manager = manager
         self.delayedChanges = []
         self.path = os.path.abspath(path)
@@ -36,10 +35,10 @@ class FileHandle(Qt.QObject):
             self.sigproxy = None
 
     def getFile(self, fn):
-        return getFileHandle(os.path.join(self.name(), fn))
+        return self.manager.getFileHandle(os.path.join(self.name(), fn))
 
     def __repr__(self):
-        return "<%s '%s' (0x%x)>" % (self.__class__.__name__, self.name(), self.__hash__())
+        return f"<{self.__class__.__name__} '{self.name()}' (0x{self.__hash__():x})>"
 
     def __reduce__(self):
         return (self.manager.getHandle, (self.name(),))
@@ -219,7 +218,7 @@ class FileHandle(Qt.QObject):
         return abspath(self.name()) == abspath(other.name())
 
     def __hash__(self):
-        return hash(abspath(self.name()))
+        return hash(id(self))
 
     def fileType(self):
         info = self.info()
