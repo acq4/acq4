@@ -9,11 +9,14 @@ from typing import Callable
 import numpy as np
 
 from acq4 import filetypes
+from acq4.logging_config import get_logger
 from acq4.util import Qt, advancedTypes as advancedTypes
-from acq4.util.DataManager import getHandle, abspath, logger
 from acq4.util.Mutex import Mutex
 from pyqtgraph import SignalProxy, BusyCursor
 from pyqtgraph.configfile import readConfigFile, writeConfigFile, appendConfigFile
+from .common import abspath
+
+logger = get_logger(__name__)
 
 
 class FileHandle(Qt.QObject):
@@ -39,7 +42,7 @@ class FileHandle(Qt.QObject):
         return "<%s '%s' (0x%x)>" % (self.__class__.__name__, self.name(), self.__hash__())
 
     def __reduce__(self):
-        return (getHandle, (self.name(),))
+        return (self.manager.getHandle, (self.name(),))
 
     def name(self, relativeTo=None) -> str:
         """Return the full name of this file with its absolute path"""
