@@ -2,11 +2,12 @@
 """
 import os
 import sys
-import weakref
 
 import pyqtgraph as pg
 
-from acq4.util import ptime
+if not hasattr(pg.Qt.QtCore, 'Signal'):
+    pg.Qt.Signal = pg.Qt.pyqtSignal
+    pg.Qt.Slot = pg.Qt.pyqtSlot
 
 # make one large namespace containing everything; pyqtgraph handles translation
 # between different Qt versions
