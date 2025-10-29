@@ -541,7 +541,7 @@ class AutomationDebugWindow(Qt.QWidget):
             while cell.isTracking():
                 _future.sleep(1)
         except Exception:
-            cell.enableTracking(False)
+            cell.enable_tracking(False)
             cell.sigPositionChanged.disconnect(self._updatePipetteTarget)
             raise
 
@@ -561,8 +561,8 @@ class AutomationDebugWindow(Qt.QWidget):
         if cell is None or cell._tracker is None:
             logger.error("No cell tracking available to visualize.")
             return
-        from acq4_automation.feature_tracking.visualization import LiveTrackerVisualizer
-        visualizer = LiveTrackerVisualizer(cell._tracker)
+
+        visualizer = cell.make_visualizer()
         self._visualizers.append(visualizer)
         visualizer.show()
 
@@ -819,9 +819,8 @@ class AutomationDebugWindow(Qt.QWidget):
 
         self._current_detection_stack = detection_stack
         self._current_classification_stack = classification_stack
-        self._unranked_cells = [
-            self.module.manager.getBaseDir().getCellHandle(position=r) for r in globalPos
-        ]
+        base_dir = self.module.manager.getBaseDir()
+        self._unranked_cells = [base_dir.getCellHandle(position=r) for r in globalPos]
         return globalPos
 
     def _create_mock_stack_from_file(
@@ -1120,7 +1119,7 @@ class AutomationDebugWindow(Qt.QWidget):
                 self._autopatchFindPipetteTip(_future)
                 _future.setState("Autopatch: go approach")
                 _future.waitFor(ppip.pipetteDevice.goApproach("fast"))
-                cell.enableTracking()
+                cell.enable_tracking()
                 try:
                     _future.setState("Autopatch: patch cell")
                     logger.warning("Autopatch: Start cell patching")
@@ -1170,7 +1169,7 @@ class AutomationDebugWindow(Qt.QWidget):
             while True:
                 if (state := ppip.getState().stateName) != "cell detect":
                     if not detect_finished:
-                        cell.enableTracking(False)
+                        cell.enable_tracking(False)
                         self.cameraDevice.moveCenterToGlobal(cell.position, "fast")
                         detect_finished = True
                 if state in ("whole cell", "bath", "broken", "fouled"):
@@ -1179,7 +1178,7 @@ class AutomationDebugWindow(Qt.QWidget):
                 _future.sleep(0.1)
             return state
         finally:
-            cell.enableTracking(False)
+            cell.enable_tracking(False)
             pg.disconnect(cell.sigPositionChanged, self._updatePipetteTarget)
 
     def _autopatchFindCell(self, _future):

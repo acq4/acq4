@@ -290,7 +290,7 @@ class PatchPipetteState(Future):
                 self._cell.enableTracking(False)
         with log_and_ignore_exception(Exception, "Error stopping visual target tracking"):
             if self._visualTargetTrackingFuture is not None:
-                self._cell.enableTracking(False)
+                self._cell.enable_tracking(False)
                 self._visualTargetTrackingFuture.stop("State cleanup")
             self._visualTargetTrackingFuture = None
         return Future.immediate()
@@ -352,7 +352,7 @@ class PatchPipetteState(Future):
             return
         if self.closeEnoughToTargetToDetectCell():
             if self._visualTargetTrackingFuture is not None:
-                self._cell.enableTracking(False)
+                self._cell.enable_tracking(False)
                 self._visualTargetTrackingFuture = None
             return
         if self._visualTargetTrackingFuture is None:
@@ -363,14 +363,14 @@ class PatchPipetteState(Future):
         cell = self._cell
         if cell is None:
             raise RuntimeError("Cannot visually track target; no cell is assigned to this pipette device.")
-        if not cell.isInitialized:
-            cell.initializeTracker(self.dev.pipetteDevice.imagingDevice()).wait()
+        if not cell.is_initialized:
+            cell.initialize_tracker(self.dev.pipetteDevice.imagingDevice()).wait()
 
-        cell.enableTracking(True)
+        cell.enable_tracking(True)
         cell.sigTrackingMultipleFramesStart.connect(self._pausePipetteForExtendedTracking)
         cell.sigPositionChanged.connect(self.dev.pipetteDevice.setTarget)
-        cell._trackingFuture.sigFinished.connect(self._visualTargetTrackingFinished)
-        return cell._trackingFuture
+        cell.tracking_future.sigFinished.connect(self._visualTargetTrackingFinished)
+        return cell.tracking_future
 
     def _visualTargetTrackingFinished(self, future):
         from acq4_automation.feature_tracking.visualization import LiveTrackerVisualizer

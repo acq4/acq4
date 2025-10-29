@@ -11,6 +11,8 @@ class CellHandle:
     """
 
     def __init__(self, uid, dir_handle, **kwargs):
+        from acq4_automation.feature_tracking.cell import Cell
+
         super().__init__()
         self.id = uid
         self._dh = dir_handle
@@ -20,7 +22,6 @@ class CellHandle:
         if self.position is None:
             raise ValueError("CellHandle must be initialized with a 'position' in info")
 
-        from acq4_automation.feature_tracking.cell import Cell
         self._tracker = Cell(self.position)
         self.sigPositionChanged = self._tracker.sigPositionChanged
         self.sigTrackingMultipleFramesStart = self._tracker.sigTrackingMultipleFramesStart
@@ -49,5 +50,18 @@ class CellHandle:
     def initialize_tracker(self, camera) -> Future:
         return self._tracker.initializeTracker(camera)
 
-    def enable_tracking(self):
-        self._tracker.enableTracking()
+    def enable_tracking(self, enable=True, interval=0) -> None:
+        self._tracker.enableTracking(enable, interval)
+
+    def make_visualizer(self):
+        from acq4_automation.feature_tracking.visualization import LiveTrackerVisualizer
+
+        return LiveTrackerVisualizer(self._tracker._tracker)
+
+    @property
+    def is_initialized(self):
+        return self._tracker.isInitialized
+
+    @property
+    def tracking_future(self):
+        return self._tracker._trackingFuture

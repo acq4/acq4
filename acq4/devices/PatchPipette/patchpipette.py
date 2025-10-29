@@ -3,12 +3,11 @@ from __future__ import annotations
 from collections import OrderedDict
 
 import numpy as np
-from neuroanalysis.test_pulse import PatchClampTestPulse
 
 from acq4.devices.PatchClamp.patchclamp import PatchClamp
 from acq4.util import Qt
 from acq4.util import ptime
-from coorx import Point
+from neuroanalysis.test_pulse import PatchClampTestPulse
 from .devgui import PatchPipetteDeviceGui
 from .statemanager import PatchPipetteStateManager
 from ..Camera import Camera
@@ -237,14 +236,9 @@ class PatchPipette(Device):
             self.pipetteDevice.setTarget(cell.position.mapped_to('global').coordinates)
 
     def newCell(self):
-        try:
-            from acq4_automation.feature_tracking.cell import Cell
-
-            self.cell = Cell(Point(self.pipetteDevice.targetPosition(), 'global'))
-        except ImportError:
-            self.logger.exception(
-                "Cell-based features are unavailable without the acq4_automation package",
-            )
+        if self.cell is None:
+            self.cell = self.dm.getBaseDir().getCellHandle(
+                position=self.pipetteDevice.targetPosition())
 
     def finishPatchRecord(self):
         if self._patchRecord is None:
