@@ -56,6 +56,7 @@ class CellHandle:
     def _save_tracker_cellfie(self, future):
         if future.wasInterrupted():
             return
+        # tedious wrapper for now; this class will eventually hold more of this behavior directly
         stack = self._tracker._tracker.motion_estimator.object_stacks[0]
         stack = MetaArray(stack.data)
         self.set_cellfie(stack, {"transform": stack.transform.full_matrix})
