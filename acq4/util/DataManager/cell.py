@@ -1,6 +1,7 @@
 from MetaArray import MetaArray
 
 from acq4.util.future import Future
+from coorx import Point
 
 
 class CellHandle:
@@ -22,7 +23,7 @@ class CellHandle:
         if self.position is None:
             raise ValueError("CellHandle must be initialized with a 'position' in info")
 
-        self._tracker = Cell(self.position)
+        self._tracker = Cell(Point(self.position, "global"))
         self.sigPositionChanged = self._tracker.sigPositionChanged
         self.sigTrackingMultipleFramesStart = self._tracker.sigTrackingMultipleFramesStart
         self.sigTrackingMultipleFramesFinish = self._tracker.sigTrackingMultipleFramesFinish
@@ -35,8 +36,8 @@ class CellHandle:
         """Retrieve metadata associated with this cell."""
         return self._dh.info()
 
-    def set_cellfie(self, data) -> None:
-        self._dh.writeFile(data, "cellfie.ma")
+    def set_cellfie(self, data, info) -> None:
+        self._dh.writeFile(data, "cellfie.ma", info)
 
     def get_cellfie(self) -> MetaArray | None:
         if self._dh.isFile("cellfie.ma"):
@@ -48,7 +49,16 @@ class CellHandle:
         return self.info().get("position", None)
 
     def initialize_tracker(self, camera) -> Future:
-        return self._tracker.initializeTracker(camera)
+        future = self._tracker.initializeTracker(camera)
+        future.onFinish(self._save_tracker_cellfie)
+        return future
+
+    def _save_tracker_cellfie(self, future):
+        if future.wasInterrupted():
+            return
+        stack = self._tracker._tracker.motion_estimator.object_stacks[0]
+        stack = MetaArray(stack.data)
+        self.set_cellfie(stack, {"transform": stack.transform.full_matrix})
 
     def enable_tracking(self, enable=True, interval=0) -> None:
         self._tracker.enableTracking(enable, interval)

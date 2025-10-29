@@ -8,6 +8,7 @@ import numpy as np
 import acq4.util.DataManager as dm
 import pyqtgraph as pg
 from acq4.util.DirTreeWidget import DirTreeWidget
+from coorx import TTransform
 
 app = pg.mkQApp()
 
@@ -95,7 +96,7 @@ def test_cell():
     assert cell1_copy.info()['cell_info'] == 123
 
     cellfie = np.array([[1, 2], [3, 4]])
-    cell1.set_cellfie(cellfie)
+    cell1.set_cellfie(cellfie, {"transform": TTransform([0, 1, 2]).full_matrix})
     np.testing.assert_array_equal(cell1.get_cellfie(), cellfie)
 
     dm.getDataManager().cache = {}
