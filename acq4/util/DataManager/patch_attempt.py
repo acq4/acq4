@@ -1,22 +1,23 @@
 class PatchAttemptHandle:
-    def __init__(self, uid, dirHandle, dataManager):
+    def __init__(self, uid, dir_handle, **kwargs):
         super().__init__()
         self.id = uid
-        self.dirHandle = dirHandle
-        self.dataManager = dataManager
+        self._dh = dir_handle
+        if kwargs:
+            self.set_info(kwargs)
 
-    def setInfo(self, info: dict = None, **kwargs):
+    def set_info(self, info: dict = None, **kwargs):
         """Store metadata associated with this patch attempt."""
-        self.dirHandle.setInfo(info, **kwargs)
+        self._dh.setInfo(info, **kwargs)
 
     def info(self) -> dict:
-        return self.dirHandle.info()
+        return self._dh.info()
 
-    def getCell(self) -> 'CellHandle | None':
+    def get_cell(self) -> 'CellHandle | None':
         cell_id = self.info().get('cell_id', None)
         if cell_id is not None:
-            return self.dirHandle.parent().getCellHandle(cell_id)
+            return self._dh.parent().parent().getCellHandle(cell_id)
         return None
 
-    def setCell(self, cell: 'CellHandle') -> None:
-        self.setInfo(cell_id=cell.id)
+    def set_cell(self, cell: 'CellHandle') -> None:
+        self.set_info(cell_id=cell.id)

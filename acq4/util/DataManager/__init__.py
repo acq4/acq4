@@ -71,35 +71,27 @@ class DataManager(Qt.QObject):
                 self._addHandle(fileName, FileHandle(fileName, self))
             return self._getCache(fileName)
 
-    def getCellHandle(self, uid, parentDir):
+    def getCellHandle(self, uid: str, parentDir: DirHandle, **init_kwargs):
         """Return a FileHandle for storing cell-specific data.
         If uid is None, a new unique identifier will be generated.
         """
         if uid is None:
             uid = str(uuid4())
-        all_cells_dir = "cells"
-        if parentDir is not None:
-            all_cells_dir = os.path.join(parentDir, all_cells_dir)
-        self.getDirHandle(all_cells_dir, create=True)
-        cell_dir = os.path.join(all_cells_dir, uid)
-        cell_dh = self.getDirHandle(cell_dir, create=True)
+        all_cells_dir = parentDir.getDir("cells", create=True, autoIncrement=False)
+        cell_dh = all_cells_dir.getDir(uid, create=True, autoIncrement=False)
         with self.lock:
             if not self._cacheHasName(uid):
-                self._addHandle(uid, CellHandle(uid, cell_dh, self))
+                self._addHandle(uid, CellHandle(uid, cell_dh, **init_kwargs))
             return self._getCache(uid)
 
-    def getPatchAttemptHandle(self, uid, parentDir):
+    def getPatchAttemptHandle(self, uid: str, parentDir: DirHandle, **init_kwargs):
         if uid is None:
             uid = str(uuid4())
-        all_patch_dir = "patch_attempts"
-        if parentDir is not None:
-            all_patch_dir = os.path.join(parentDir, all_patch_dir)
-        self.getDirHandle(all_patch_dir, create=True)
-        patch_dir = os.path.join(all_patch_dir, uid)
-        patch_dh = self.getDirHandle(patch_dir, create=True)
+        all_patch_dir = parentDir.getDir("patch_attempts", create=True, autoIncrement=False)
+        patch_dh = all_patch_dir.getDir(uid, create=True, autoIncrement=False)
         with self.lock:
             if not self._cacheHasName(uid):
-                self._addHandle(uid, PatchAttemptHandle(uid, patch_dh, self))
+                self._addHandle(uid, PatchAttemptHandle(uid, patch_dh, **init_kwargs))
             return self._getCache(uid)
 
     def getHandle(self, fileName):

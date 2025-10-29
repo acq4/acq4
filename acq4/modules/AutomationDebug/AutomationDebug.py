@@ -6,9 +6,7 @@ from pathlib import Path
 
 import numpy as np
 import pyqtgraph as pg
-import pyqtgraph as pg
 from MetaArray import MetaArray
-from acq4_automation.feature_tracking.cell import Cell
 from coorx import Point
 from coorx import SRT3DTransform, TransposeTransform, TTransform
 from pyqtgraph.units import µm, m
@@ -534,9 +532,9 @@ class AutomationDebugWindow(Qt.QWidget):
         self.sigWorking.emit(self.ui.trackFeaturesBtn)
         pipette = self.pipetteDevice
         target = Point(pipette.targetPosition(), "global")
-        cell = self._cell = Cell(target)
-        _future.waitFor(cell.initializeTracker(self.cameraDevice))
-        cell.enableTracking()
+        cell = self._cell = self.module.manager.getBaseDir().getCellHandle(position=target)
+        _future.waitFor(cell.initialize_tracker(self.cameraDevice))
+        cell.enable_tracking()
         cell.sigPositionChanged.connect(self._updatePipetteTarget)
         self.sigWorking.emit(self.ui.trackFeaturesBtn)
         try:
@@ -552,8 +550,8 @@ class AutomationDebugWindow(Qt.QWidget):
         target = Point(self.pipetteDevice.targetPosition(), "global")
         cell = self.patchPipetteDevice.cell
         if cell is None or cell.position != target:
-            cell = Cell(target)
-            _future.waitFor(cell.initializeTracker(self.cameraDevice))
+            cell = self.module.manager.getBaseDir().getCellHandle(position=target)
+            _future.waitFor(cell.initialize_tracker(self.cameraDevice))
         self._unranked_cells.append(cell)
         boxPositions = [c.position for c in self._unranked_cells]
         _future.waitFor(futureInGuiThread(self._displayBoundingBoxes, boxPositions))
@@ -821,7 +819,9 @@ class AutomationDebugWindow(Qt.QWidget):
 
         self._current_detection_stack = detection_stack
         self._current_classification_stack = classification_stack
-        self._unranked_cells = [Cell(r) for r in globalPos]
+        self._unranked_cells = [
+            self.module.manager.getBaseDir().getCellHandle(position=r) for r in globalPos
+        ]
         return globalPos
 
     def _create_mock_stack_from_file(
@@ -1203,7 +1203,7 @@ class AutomationDebugWindow(Qt.QWidget):
         # if (pos - margin) not in stack or (pos + margin) not in stack:
         # stack = None
         try:
-            _future.waitFor(cell.initializeTracker(self.cameraDevice))
+            _future.waitFor(cell.initialize_tracker(self.cameraDevice))
         except _future.StopRequested:
             raise
         except ValueError as e:

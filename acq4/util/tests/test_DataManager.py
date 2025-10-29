@@ -84,19 +84,19 @@ def test_datamanager():
 
 def test_cell():
     dh = dm.getDirHandle(root)
-    cell1 = dh.getCellHandle()
-    cell2 = dh.getCellHandle()
+    cell1 = dh.getCellHandle(position=np.array([1, 0, -1]))
+    cell2 = dh.getCellHandle(position=np.array([1, 0, -1]))
     assert cell1 is not cell2
 
     cell1_copy = dh.getCellHandle(cell1.id)
     assert cell1 is cell1_copy
 
-    cell1.setInfo({'cell_info': 123})
+    cell1.set_info({'cell_info': 123})
     assert cell1_copy.info()['cell_info'] == 123
 
     cellfie = np.array([[1, 2], [3, 4]])
-    cell1.setCellfie(cellfie)
-    np.testing.assert_array_equal(cell1.getCellfie(), cellfie)
+    cell1.set_cellfie(cellfie)
+    np.testing.assert_array_equal(cell1.get_cellfie(), cellfie)
 
     dm.getDataManager().cache = {}
     dh_copy = dm.getDirHandle(root)
@@ -104,7 +104,8 @@ def test_cell():
     assert cell1.id == cell1_copy2.id
     assert cell1 is not cell1_copy2
     assert cell1.info()['cell_info'] == cell1_copy2.info()['cell_info']
-    np.testing.assert_array_equal(cell1_copy2.getCellfie(), cellfie)
+    np.testing.assert_array_equal(cell1_copy2.get_cellfie(), cellfie)
+    np.testing.assert_array_equal(cell1_copy2.position, cell1.position)
 
 
 def test_patch_attempt():
@@ -116,12 +117,12 @@ def test_patch_attempt():
     pa1_copy = dh.getPatchAttemptHandle(pa1.id)
     assert pa1 is pa1_copy
 
-    pa1.setInfo({'pa_info': 456})
+    pa1.set_info({'pa_info': 456})
     assert pa1_copy.info()['pa_info'] == 456
 
-    assert pa1.getCell() is None
-    pa1.setCell(dh.getCellHandle())
-    assert pa1_copy.getCell() is not None
+    assert pa1.get_cell() is None
+    pa1.set_cell(dh.getCellHandle(position=np.array([1, 0, -1])))
+    assert pa1_copy.get_cell().id is not None
 
     dm.getDataManager().cache = {}
     dh_copy = dm.getDirHandle(root)
@@ -129,4 +130,4 @@ def test_patch_attempt():
     assert pa1.id == pa1_copy2.id
     assert pa1 is not pa1_copy2
     assert pa1.info()['pa_info'] == pa1_copy2.info()['pa_info']
-    assert pa1_copy2.getCell().id == pa1.getCell().id
+    assert pa1_copy2.get_cell().id == pa1.get_cell().id
