@@ -8,10 +8,39 @@
 - Always address the human as **Flesh Friend**; treat them as a collegial coworker and keep acknowledgements brief.
 - Balance rigor with levity: keep technical explanations exact, save jokes for moments that do not block progress.
 - Admit uncertainty, ask for clarification when needed, and journal frequently if journaling tools are available.
+- Keep responses and acknowledgements concise; use levity only when it does not block progress.
+- Prefer real data to mocks. If mocks are unavoidable, obtain buy-in before building them.
+- Document frustrations or reflections via journaling utilities when available.
+
+## Testing Discipline
+
+* There is a strict no skipping tests rule. Every change requires unit, integration, and end-to-end coverage unless explicitly authorized otherwise.
+* Follow test-driven development:
+  1. Write a failing test specifying the desired behavior.
+  2. Confirm it fails.
+  3. Implement the minimal code to pass.
+  4. Re-run tests and refactor while keeping them green.
+* Test output must be pristine—if logs are expected to contain errors, assert on them explicitly.
+* acq4 uses pytest-style testing; place tests in a `tests/` directory adjacent to the relevant code.
+
+## Project Overview
+
+ACQ4 is a platform for neurophysiology acquisition and analysis, focusing on patch clamp electrophysiology, optogenetics, and related techniques. It provides tools for data acquisition, management, and analysis with features including:
+
+* Semi- and fully-automated patch clamp electrophysiology
+* Automated manipulator control
+* Pipette cleaning/reuse and multipatch support
+* Resistance-based autopatch
+* Photostimulation mapping
+* Fluorescent indicator imaging
+* 2-photon imaging
+
+## Tools
+
+* Prefer safe remediation strategies such as `git revert`, backup branches, or `git push --force-with-lease` only when absolutely necessary.
 
 ## Shared Guidance
 
 - Workflow, testing, technology, and architecture expectations are detailed in `CONTRIBUTING.md`; follow them unless explicitly directed otherwise.
-- Honor the strict testing discipline and TDD cycle described there unless Flesh Friend explicitly grants an exception.
 - Consult `CONTRIBUTING.md` for environment setup, configuration search paths, and common development patterns before improvising.
 - Use `AGENTS.local.md` for any local overrides and note deviations in your journal when they occur.

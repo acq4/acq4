@@ -8,25 +8,13 @@ Contributions to acq4 are welcome! This document collects shared expectations fo
 * Pull requests should include only a focused and related set of changes. Mixed features and unrelated changes are more likely to be rejected.
 * For major changes, it is recommended to discuss your plans on the mailing list or in a github issue before putting in too much effort.
 * Many changes (especially new devices and user interface modules) can be implemented as an extension module rather than modifying the acq4 codebase; this can be a faster way to make your code available to the world.
+* Separate style-only changes (e.g., reformatting) from functional changes to make review easier.
 
 ## Collaboration & Workflow
 
-* Favor small, maintainable changes; avoid reimplementing large surfaces without explicit approval.
-* Preserve existing comments unless demonstrably incorrect and avoid “improved/new” style names—comments should stay evergreen and code files begin with a concise two-line header explaining their role.
-* Keep responses and acknowledgements concise; use levity only when it does not block progress.
-* Prefer real data to mocks. If mocks are unavoidable, obtain buy-in before building them.
-* Document frustrations or reflections via journaling utilities when available.
-
-## Testing Discipline
-
-* There is a strict no skipping tests rule. Every change requires unit, integration, and end-to-end coverage unless explicitly authorized otherwise.
-* Follow test-driven development:
-  1. Write a failing test specifying the desired behavior.
-  2. Confirm it fails.
-  3. Implement the minimal code to pass.
-  4. Re-run tests and refactor while keeping them green.
-* Test output must be pristine—if logs are expected to contain errors, assert on them explicitly.
-* acq4 uses pytest-style testing; place tests in a `tests/` directory adjacent to the relevant code.
+* Favor small, maintainable changes; avoid redesigning large surfaces.
+* Preserve existing comments unless demonstrably incorrect.
+* Avoid “improved/new” style names; comments should stay evergreen.
 
 ## Documentation
 
@@ -36,15 +24,13 @@ Contributions to acq4 are welcome! This document collects shared expectations fo
 
 ## Style Guidelines
 
-* acq4 prefers PEP8 for most style issues, balancing readability with practicality.
+* acq4 prefers PEP8 and numpy for most style issues, balancing readability with practicality.
 * Qt-adjacent names should use camelCase rather than snake_case for consistency.
-* Python formatting relies on `black -S -l 100` using the interpreter configured locally (see `AGENTS.local.md` for machine-specific notes).
+* Automate python formatting with `black -S -l 100`
 
 ## Source Control
 
 * Use concise Conventional Commit messages written in present-tense imperative.
-* Never run `git commit --no-verify`.
-* Prefer safe remediation strategies such as `git revert`, backup branches, or `git push --force-with-lease` only when absolutely necessary.
 
 ## Development Environment
 
@@ -88,25 +74,13 @@ pytest -v
 ## Technology Notes
 
 * The UI and acquisition stacks are Qt-heavy with many scientific and ML dependencies.
-* Import Qt from the unified wrapper: `from acq4.util.Qt import ...` for cross-backend compatibility.
+* Import Qt from the unified wrapper: `from acq4.util import Qt` for cross-backend compatibility.
 * Requirements are stored in `tools/requirements/acq4-torch*`; treat those environment files as the source of truth when new packages are needed.
 
 ## Configuration & Utilities
 
 * Runtime configuration is discovered via the search paths defined in `acq4/__init__.py` (local `config/`, system installs such as `/etc/acq4`, then bundled examples). Mirror the structure in `config/example/` when adding new configs.
-* Helper scripts for data inspection and maintenance live in `tools/`; use existing entry points rather than duplicating functionality.
-
-## Project Overview
-
-ACQ4 is a platform for neurophysiology acquisition and analysis, focusing on patch clamp electrophysiology, optogenetics, and related techniques. It provides tools for data acquisition, management, and analysis with features including:
-
-* Semi- and fully-automated patch clamp electrophysiology
-* Automated manipulator control
-* Pipette cleaning/reuse and multipatch support
-* Resistance-based autopatch
-* Photostimulation mapping
-* Fluorescent indicator imaging
-* 2-photon imaging
+* Helper scripts for data inspection and maintenance live in `tools/`.
 
 ## Architecture Overview
 
@@ -176,8 +150,8 @@ if hasattr(obj, 'implements') and obj.implements('my_api'):
 Handle-based file/directory access (thread-safe):
 
 ```python
-from acq4.util.DataManager import getManager, getDirHandle
-dm = getManager()
+from acq4.util.DataManager import getDataManager, getDirHandle
+dm = getDataManager()
 dirHandle = dm.getDirHandle('/path/to/data')
 fileHandle = dirHandle['filename.ext']
 data = fileHandle.read()
@@ -194,7 +168,8 @@ with device.reserved():
     device.doSomething()
 
 # Multiple device reservation:
-manager.reserveDevices(['dev1', 'dev2'], block=True, timeout=20)
+with manager.reserveDevices(['dev1', 'dev2'], block=True, timeout=20):
+    # Safe to operate on dev1 and dev2
 ```
 
 ### Manager Access
@@ -205,7 +180,7 @@ manager = getManager()  # Get current manager singleton
 # or often instances will keep a reference at `self.dm`
 ```
 
-## Task Execution Patterns
+### Task Execution
 
 Tasks coordinate multi-device operations:
 
@@ -265,17 +240,6 @@ When working with this codebase:
 3. For UI work, check existing modules for patterns and conventions.
 4. Use device locking when extended operations require continuous hardware control.
 5. Keep heavy processing off the Qt GUI thread; otherwise call `Qt.QApplication.processEvents()` in long loops.
-6. Access files through DataManager handles, not direct file operations.
-7. Use unit constants in configs and calculations; store values internally in unscaled SI units.
+6. Access data files through DataManager handles, not direct file operations.
+7. Use unit constants from `pyqtgraph.units`; store values in unscaled SI units.
 8. DeviceTask lifecycle: configure → start → isDone → getResult.
-
-## Launch Options
-
-```bash
-python -m acq4                      # Normal mode
-python -m acq4 -x                  # Exit on error (recommended)
-python -m acq4 -c /path/to/config  # Custom config file
-python -m acq4 --profile           # cProfile profiling
-python -m acq4 --callgraph         # Callgraph profiling
-python -m acq4 --teleprox 9999     # Remote RPC debugging
-```
