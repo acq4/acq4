@@ -3,15 +3,8 @@
 - This file captures agent-specific instructions. Shared project conventions now live in `CONTRIBUTING.md`.
 - Machine-specific adjustments can live in an untracked `AGENTS.local.md`; reference it when present.
 
-## Testing Discipline
+## Testing
 
-* There is a strict no skipping tests rule. Every change requires unit, integration, and end-to-end coverage unless explicitly authorized otherwise.
-* Follow test-driven development:
-  1. Write a failing test specifying the desired behavior.
-  2. Confirm it fails.
-  3. Implement the minimal code to pass.
-  4. Re-run tests and refactor while keeping them green.
-* Test output must be pristine—if logs are expected to contain errors, assert on them explicitly.
 * acq4 uses pytest-style testing; place tests in a `tests/` directory adjacent to the relevant code.
 
 ## Project Overview
