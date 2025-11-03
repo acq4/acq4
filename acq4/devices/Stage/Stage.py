@@ -987,15 +987,3 @@ class StageInterface(Qt.QWidget):
                 self.calibrateWindow = StageAxesCalibrationWindow(self.dev)
         self.calibrateWindow.show()
         self.calibrateWindow.raise_()
-
-
-class StageHold(object):
-    def __init__(self, stage):
-        self.stage = stage
-
-    def __enter__(self):
-        self.stage.setHolding(True)
-        return self
-
-    def __exit__(self, *args):
-        self.stage.setHolding(False)
