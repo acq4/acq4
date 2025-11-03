@@ -1,6 +1,5 @@
 import threading
 import time
-from collections import deque
 from typing import Optional
 
 import numpy as np
@@ -108,7 +107,7 @@ class Sensapex(Stage):
         # clear cached position for this device and re-read to generate an initial position update
         self._lastPos = None
         self._posLock = threading.Lock()
-        self._positionChanges = deque(maxlen=1)
+        self._latestPositionUpdate = None
         self._positionWatcher = threading.Thread(target=self._positionWatcherTask, daemon=True)
         self._positionWatcher.start()
         self.getPosition(refresh=True)
@@ -189,16 +188,17 @@ class Sensapex(Stage):
 
     def _positionChanged(self, dev, newPos, oldPos):
         with self._posLock:
-            self._positionChanges.append(newPos)
+            self._latestPositionUpdate = newPos
 
     def _positionWatcherTask(self):
         updateInterval = 1.0 / self.positionUpdatesPerSecond
         while not self._quitRequested:
             time.sleep(updateInterval)
             with self._posLock:
-                if len(self._positionChanges) == 0:
+                if self._latestPositionUpdate is None:
                     continue
-                pos = self._positionChanges.popleft()
+                pos = self._latestPositionUpdate
+                self._latestPositionUpdate = None
             if self._lastPos is not None:
                 dif = np.linalg.norm(np.array(pos, dtype=float) - np.array(self._lastPos, dtype=float))
 
