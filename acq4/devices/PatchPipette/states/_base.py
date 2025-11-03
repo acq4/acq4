@@ -286,8 +286,8 @@ class PatchPipetteState(Future):
         """
         disconnect(self.dev.pipetteDevice.sigTargetChanged, self._onTargetChanged)
         with log_and_ignore_exception(Exception, "Error disabling visual target tracking"):
-            if self.dev.cell is not None:
-                self.dev.cell.enableTracking(False)
+            if self._cell is not None:
+                self._cell.enableTracking(False)
         with log_and_ignore_exception(Exception, "Error stopping visual target tracking"):
             if self._visualTargetTrackingFuture is not None:
                 self._cell.enableTracking(False)
