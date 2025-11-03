@@ -147,6 +147,7 @@ class PatchPipetteState(Future):
         self._cleanupMutex = threading.Lock()
         self._cleanupFuture = None
         self._pressureAdjustment = None
+        self._cell = None
         self._visualTargetTrackingFuture = None
         self._pauseMovement = False
         # indicates state that should be transitioned to next, if any.
@@ -284,7 +285,7 @@ class PatchPipetteState(Future):
         """
         try:
             if self._visualTargetTrackingFuture is not None:
-                self.dev.cell.enableTracking(False)
+                self._cell.enableTracking(False)
                 self._visualTargetTrackingFuture.stop("State cleanup")
                 self._visualTargetTrackingFuture = None
         except Exception:
@@ -349,14 +350,15 @@ class PatchPipetteState(Future):
             return
         if self.closeEnoughToTargetToDetectCell():
             if self._visualTargetTrackingFuture is not None:
-                self.dev.cell.enableTracking(False)
+                self._cell.enableTracking(False)
                 self._visualTargetTrackingFuture = None
             return
         if self._visualTargetTrackingFuture is None:
+            self._cell = self.dev.cell
             self._visualTargetTrackingFuture = self._visualTargetTracking()
 
     def _visualTargetTracking(self):
-        cell = self.dev.cell
+        cell = self._cell
         if cell is None:
             raise RuntimeError("Cannot visually track target; no cell is assigned to this pipette device.")
         if not cell.isInitialized:
@@ -364,7 +366,22 @@ class PatchPipetteState(Future):
 
         cell.enableTracking(True)
         cell.sigTrackingMultipleFramesStart.connect(self._pausePipetteForExtendedTracking)
+        cell.sigPositionChanged.connect(self.dev.pipetteDevice.setTarget)
+        cell._trackingFuture.sigFinished.connect(self._visualTargetTrackingFinished)
         return cell._trackingFuture
+
+    def _visualTargetTrackingFinished(self, future):
+        from acq4_automation.feature_tracking.visualization import LiveTrackerVisualizer
+
+        if not hasattr(self.dev, '_trackingVisualizers'):
+            self.dev._trackingVisualizers = []
+        disconnect(self._cell.sigPositionChanged, self.dev.pipetteDevice.setTarget)
+        if future.wasStopped():
+            return
+        visualizer = LiveTrackerVisualizer(self._cell._tracker)
+        self.dev._trackingVisualizers.append(visualizer)
+        # TODO clean these up eventually or we'll leak memory
+        visualizer.show()
 
     def _pausePipetteForExtendedTracking(self, cell):
         self._pauseMovement = True

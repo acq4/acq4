@@ -236,19 +236,17 @@ class PatchPipette(Device):
         if target:
             self.pipetteDevice.setTarget(cell.position.mapped_to('global').coordinates)
 
-    def ensureCell(self):
-        if self.cell is None:
-            try:
-                from acq4_automation.feature_tracking.cell import Cell
+    def newCell(self):
+        try:
+            from acq4_automation.feature_tracking.cell import Cell
 
-                self.cell = Cell(Point(self.pipetteDevice.targetPosition(), 'global'))
-            except ImportError:
-                self.logger.exception(
-                    "Cell-based features are unavailable without the acq4_automation package",
-                )
+            self.cell = Cell(Point(self.pipetteDevice.targetPosition(), 'global'))
+        except ImportError:
+            self.logger.exception(
+                "Cell-based features are unavailable without the acq4_automation package",
+            )
 
     def finishPatchRecord(self):
-        self.cell = None
         if self._patchRecord is None:
             return
         self._patchRecord['complete'] = True

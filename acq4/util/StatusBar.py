@@ -2,7 +2,7 @@ from __future__ import print_function
 
 
 from acq4.util import Qt
-from acq4.LogWindow import LogButton
+from acq4.util.LogWindow import LogButton
 
 
 class StatusBar(Qt.QStatusBar):
