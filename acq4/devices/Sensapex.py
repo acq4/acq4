@@ -96,6 +96,10 @@ class Sensapex(Stage):
             self.dev.set_max_acceleration(config["maxAcceleration"])
 
         self._lastUpdate = 0
+        self._lastPos = None
+        self._positionUpdates = queue.Queue()
+        self._positionWatcher = threading.Thread(target=self._positionWatcherTask, daemon=True)
+        self._positionWatcher.start()
         self.dev.add_callback(self._positionChanged)
 
         # force cache update for this device.
@@ -106,10 +110,6 @@ class Sensapex(Stage):
         man.sigAbortAll.connect(self.stop)
 
         # clear cached position for this device and re-read to generate an initial position update
-        self._lastPos = None
-        self._positionUpdates = queue.Queue()
-        self._positionWatcher = threading.Thread(target=self._positionWatcherTask, daemon=True)
-        self._positionWatcher.start()
         self.getPosition(refresh=True)
 
         # TODO: set any extra parameters specified in the config
