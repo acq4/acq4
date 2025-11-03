@@ -601,11 +601,21 @@ class CameraTask(DAQGenericTask):
         self.camCmd = cmd
         self.lock = Mutex()
         self.recordHandle = None
-        self._dev_needs_restart = False
         self.stopRecording = False
         self._stopTime = 0
         self.resultObj = None
         self._future = None
+
+        # acq is running, task needs camera to restart:
+        #   stop acq in configure, start acq in start, stop acq in stop, start acq in getResults
+        # acq is not running, task needs camera to restart:
+        #   start acq in start, stop acq in stop
+        # acq is running, task does not need camera to restart:
+        #   do nothing
+        # acq is not running, task does not need camera to restart:
+        #   start acq in start, stop acq in stop
+        self._dev_needs_restart = False
+        self._dev_was_running = False
 
     def configure(self):
         # Merge command into default values:
@@ -650,12 +660,13 @@ class CameraTask(DAQGenericTask):
         prof.mark("set params")
 
         # If the camera is triggering the daq, stop acquisition now and request that it starts after the DAQ
-        #   (daq must be started first so that it is armed to received the camera trigger)
+        #   (daq must be started first so that it is armed to receive the camera trigger)
         if self.camCmd.get("triggerProtocol", False):
-            assert 'triggerOutChannel' in self.dev.camConfig, (
-                f"Task requests {self.dev.name()} to trigger the protocol to start, "
-                "but no trigger lines are configured ('triggerOutChannel' needed in config)"
-            )
+            if 'triggerOutChannel' not in self.dev.camConfig:
+                raise ValueError(
+                    f"Task requests {self.dev.name()} to trigger the protocol to start, but no "
+                    "trigger lines are configured ('triggerOutChannel' needed in config)"
+                )
             restart = True
             daqName = self.dev.camConfig["triggerOutChannel"]["device"]
             self.__startOrder = [daqName], []
@@ -666,7 +677,8 @@ class CameraTask(DAQGenericTask):
 
         # We want to avoid this if at all possible since it may be very expensive
         self._dev_needs_restart = restart
-        if restart and self.dev.isRunning():
+        self._dev_was_running = self.dev.isRunning()
+        if restart and self._dev_was_running:
             self.dev.stop(block=True)
         prof.mark("stop")
 
@@ -711,7 +723,8 @@ class CameraTask(DAQGenericTask):
         with self.lock:
             self.stopRecording = True
             self._stopTime = time.time()
-            self.dev.stopCamera()
+            if self._dev_needs_restart and self._dev_was_running:
+                self.dev.stopCamera()  # leave the acq thread for filling in the future
             if self.fixedFrameCount is None:
                 self._future.stopWhen(
                     lambda frame: frame.info()["time"] >= self._stopTime, blocking=False
@@ -732,8 +745,10 @@ class CameraTask(DAQGenericTask):
                 time.sleep(0.05)
             self._future.stop()  # TODO this could error for fixedFrameCount!=None
             self.resultObj = CameraTaskResult(self, self._future.getResult(timeout=1), daqResult)
-            if self._dev_needs_restart:
-                self.dev.start(block=False)
+            if self._dev_needs_restart or not self._dev_was_running:
+                self.dev.stop(block=True)
+                if self._dev_was_running:
+                    self.dev.start(block=False)
                 self._dev_needs_restart = False
         return self.resultObj
 
@@ -956,6 +971,8 @@ class AcquireThread(Thread):
             self.dev.stopCamera()
 
     def start(self, *args, block=True):
+        if self.isRunning():
+            raise RuntimeError("Acquisition thread is already running.")
         self.cameraStartEvent.clear()
         self.lock.lock()
         self.stopThread = False
