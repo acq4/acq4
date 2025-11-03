@@ -745,7 +745,7 @@ class CameraTask(DAQGenericTask):
                 time.sleep(0.05)
             self._future.stop()  # TODO this could error for fixedFrameCount!=None
             self.resultObj = CameraTaskResult(self, self._future.getResult(timeout=1), daqResult)
-            if self._dev_needs_restart:
+            if self._dev_needs_restart or not self._dev_was_running:
                 self.dev.stop(block=True)
                 if self._dev_was_running:
                     self.dev.start(block=False)
