@@ -41,7 +41,7 @@ conda env create --name=acq4 --file=tools/requirements/acq4-torch.yml
 conda activate acq4
 
 # Install ACQ4 in development mode
-python setup.py develop
+pip install -e .
 ```
 
 ### Starting ACQ4
