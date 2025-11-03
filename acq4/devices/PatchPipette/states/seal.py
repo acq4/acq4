@@ -340,7 +340,7 @@ class SealState(PatchPipetteState):
                     self._taskDone(interrupted=True, error=f"Seal failed after {dt:f} seconds")
                     next_state = {"state": config["fallbackState"]}
                     if holdingSet:
-                        next_state["initialVCHolding"] = config["holdingPotential"]
+                        next_state["initialVCHolding"] = None
                     return next_state
 
                 self.updatePressure()
