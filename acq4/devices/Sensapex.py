@@ -216,7 +216,6 @@ class Sensapex(Stage):
         Sensapex.devices.pop(self.devid, None)
         if len(Sensapex.devices) == 0:
             UMP.get_ump().close()
-        self._positionWatcher.join()
 
     def _move(self, pos, speed, linear, name=None, **kwds):
         if self._force_linear_movement:
