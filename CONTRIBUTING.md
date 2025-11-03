@@ -14,7 +14,6 @@ Contributions to acq4 are welcome! This document collects shared expectations fo
 
 * Favor small, maintainable changes; avoid redesigning large surfaces.
 * Preserve existing comments unless demonstrably incorrect.
-* Avoid “improved/new” style names; comments should stay evergreen.
 
 ## Documentation
 
@@ -27,10 +26,6 @@ Contributions to acq4 are welcome! This document collects shared expectations fo
 * acq4 prefers PEP8 and numpy for most style issues, balancing readability with practicality.
 * Qt-adjacent names should use camelCase rather than snake_case for consistency.
 * Automate python formatting with `black -S -l 100`
-
-## Source Control
-
-* Use concise Conventional Commit messages written in present-tense imperative.
 
 ## Development Environment
 

@@ -19,10 +19,6 @@ ACQ4 is a platform for neurophysiology acquisition and analysis, focusing on pat
 * Fluorescent indicator imaging
 * 2-photon imaging
 
-## Tools
-
-* Prefer safe remediation strategies such as `git revert`, backup branches, or `git push --force-with-lease` only when absolutely necessary.
-
 ## Shared Guidance
 
 - Workflow, testing, technology, and architecture expectations are detailed in `CONTRIBUTING.md`; follow them unless explicitly directed otherwise.
