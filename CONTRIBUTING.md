@@ -72,11 +72,6 @@ pytest -v
 * Import Qt from the unified wrapper: `from acq4.util import Qt` for cross-backend compatibility.
 * Requirements are stored in `tools/requirements/acq4-torch*`; treat those environment files as the source of truth when new packages are needed.
 
-## Configuration & Utilities
-
-* Runtime configuration is discovered via the search paths defined in `acq4/__init__.py` (local `config/`, system installs such as `/etc/acq4`, then bundled examples). Mirror the structure in `config/example/` when adding new configs.
-* Helper scripts for data inspection and maintenance live in `tools/`.
-
 ## Architecture Overview
 
 ### Manager (Core Controller)
