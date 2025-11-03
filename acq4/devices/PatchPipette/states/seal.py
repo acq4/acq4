@@ -182,7 +182,7 @@ class SealState(PatchPipetteState):
     holdingThreshold : float
         Seal resistance (ohms) above which the holding potential will switch
         from its initial value to the value specified in the *holdingPotential*
-        parameter.
+        parameter. Default 100MΩ
     holdingPotential : float
         Holding potential (volts) to apply to the pipette after the seal resistance
         becomes greater than *holdingThreshold*.
@@ -338,7 +338,10 @@ class SealState(PatchPipetteState):
                 if self._analysis.failure() or dt > config['autoSealTimeout']:
                     self._patchrec['sealSuccessful'] = False
                     self._taskDone(interrupted=True, error=f"Seal failed after {dt:f} seconds")
-                    return config['fallbackState']
+                    next_state = {"state": config["fallbackState"]}
+                    if holdingSet:
+                        next_state["initialVCHolding"] = None
+                    return next_state
 
                 self.updatePressure()
 
@@ -359,7 +362,7 @@ class SealState(PatchPipetteState):
 
         self._taskDone()
         self._patchrec['sealSuccessful'] = True
-        return 'cell attached'
+        return {"state": 'cell attached'}
 
     def setInitialPressure(self):
         mode = self.config['pressureMode']

@@ -64,7 +64,7 @@ class CellAttachedState(PatchPipetteState):
         delay = config['autoBreakInDelay']
         while True:
             if delay is not None and ptime.time() - startTime > delay:
-                return 'break in'
+                return {"state": 'break in'}
 
             self.checkStop()
 
@@ -76,7 +76,7 @@ class CellAttachedState(PatchPipetteState):
             holding = tp.analysis['baseline_current']
             if holding < self.config['holdingCurrentThreshold']:
                 self._taskDone(interrupted=True, error='Holding current exceeded threshold.')
-                return config['spontaneousDetachmentState']
+                return {"state": config['spontaneousDetachmentState']}
 
             cap = tp.analysis['capacitance']
             dt = ptime.time() - last_measure
@@ -89,11 +89,11 @@ class CellAttachedState(PatchPipetteState):
             ssr = tp.analysis['steady_state_resistance']
             if cap_avg > config['capacitanceThreshold'] and ssr < config['minimumBreakInResistance']:
                 patchrec['spontaneousBreakin'] = True
-                return config['spontaneousBreakInState']
+                return {"state": config['spontaneousBreakInState']}
 
             if ssr < config['resistanceThreshold']:
                 self._taskDone(interrupted=True, error='Steady state resistance dropped below threshold.')
-                return config['spontaneousDetachmentState']
+                return {"state": config['spontaneousDetachmentState']}
 
             patchrec['resistanceBeforeBreakin'] = ssr
             patchrec['capacitanceBeforeBreakin'] = cap
