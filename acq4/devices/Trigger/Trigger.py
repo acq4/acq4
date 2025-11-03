@@ -21,10 +21,6 @@ class Trigger(Device):
             channels:
                 DAQ: '/Dev1/PFI5'
     """
-    def __init__(self, dm, config, name):
-        Device.__init__(self, dm, config, name)
-        self.config = config
 
     def getTriggerChannels(self, daq: str) -> dict:
         return {'input': self.config['channels'].get(daq, None), 'output': None}
-

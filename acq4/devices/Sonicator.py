@@ -34,7 +34,6 @@ class Sonicator(Device):
 
     def __init__(self, deviceManager, config, name):
         super().__init__(deviceManager, config, name)
-        self.config = config
         self.protocols = config.get("protocols", {})
 
     def safeToSonicate(self, _future: Future = None, askUser=True) -> bool:

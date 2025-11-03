@@ -120,7 +120,7 @@ class OptomechDevice(InterfaceMixin):
         self.sigGeometryChanged = self.__sigProxy.sigGeometryChanged
 
         self.__devManager = dm
-        self.__config = config
+        self._omconfig = config  # Redundant: Device also saves this
         self.__name = name
 
         # __ports is a list of port names to which devices may be attached.
@@ -192,10 +192,10 @@ class OptomechDevice(InterfaceMixin):
         dm.declareInterface(name, ["OptomechDevice"], self)
 
     def getGeometry(self, name=None) -> Geometry | None:
-        if "geometry" in self.__config:
+        if "geometry" in self._omconfig:
             name = self.geometryCacheKey if name is None else name
             return Geometry(
-                config=self.__config["geometry"],
+                config=self._omconfig["geometry"],
                 name=f"[primary geometry of {name}]",
                 parent_name=name,
             )

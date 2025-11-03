@@ -78,11 +78,10 @@ class Camera(DAQGeneric, OptomechDevice):
 
         self.lock = Mutex(Mutex.Recursive)
 
-        self.camConfig = config
         self.stateStack = []
 
-        if "scaleFactor" not in self.camConfig:
-            self.camConfig["scaleFactor"] = [1.0, 1.0]
+        if "scaleFactor" not in self.config:
+            self.config["scaleFactor"] = [1.0, 1.0]
 
         # Default values for scope state. These will be used if there is no scope defined.
         self.scopeState = {}
@@ -136,7 +135,7 @@ class Camera(DAQGeneric, OptomechDevice):
                 self.logger.exception("Error default setting camera parameters:")
 
         # set up preset hotkeys
-        for presetName, preset in self.camConfig.get("presets", {}).items():
+        for presetName, preset in self.config.get("presets", {}).items():
             if "hotkey" not in preset:
                 continue
             dev = dm.getDevice(preset["hotkey"]["device"])
@@ -231,10 +230,10 @@ class Camera(DAQGeneric, OptomechDevice):
 
     def listPresets(self):
         """Return a list of all preset names."""
-        return list(self.camConfig.get("presets", {}).keys())
+        return list(self.config.get("presets", {}).keys())
 
     def loadPreset(self, preset):
-        presets = self.camConfig.get("presets", None)
+        presets = self.config.get("presets", None)
         if presets is None or preset not in presets:
             raise ValueError(f"No camera preset named {preset!r}")
         params = presets[preset]["params"]
@@ -410,19 +409,19 @@ class Camera(DAQGeneric, OptomechDevice):
     def getTriggerChannels(self, daq: str):
         chans = {'input': None, 'output': None}
         if (
-            "triggerOutChannel" in self.camConfig
-            and self.camConfig["triggerOutChannel"]["device"] == daq
+            "triggerOutChannel" in self.config
+            and self.config["triggerOutChannel"]["device"] == daq
         ):
-            chans['input'] = self.camConfig["triggerOutChannel"]['channel']
+            chans['input'] = self.config["triggerOutChannel"]['channel']
         if (
-            "triggerInChannel" in self.camConfig
-            and self.camConfig["triggerInChannel"]["device"] == daq
+            "triggerInChannel" in self.config
+            and self.config["triggerInChannel"]["device"] == daq
         ):
-            chans['output'] = self.camConfig["triggerInChannel"]['channel']
+            chans['output'] = self.config["triggerInChannel"]['channel']
         return chans
 
     def getExposureChannel(self):
-        return self.camConfig.get('exposeChannel', None)
+        return self.config.get('exposeChannel', None)
 
     def taskInterface(self, taskRunner):
         return CameraTaskGui(self, taskRunner)

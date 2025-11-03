@@ -34,7 +34,7 @@ class Device(InterfaceMixin, Qt.QObject):  # QObject calls super, which is disas
         self._lock_tb_ = None
         self.dm = deviceManager
         self.dm.declareInterface(name, ['device'], self)
-        self._config = config
+        self.config = config
         Device._deviceCreationOrder.append(Weakref(self))
         self._name = name
 

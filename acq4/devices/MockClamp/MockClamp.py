@@ -47,8 +47,6 @@ class MockClamp(PatchClamp):
 
         self.mode: Literal['VC', 'IC', 'I=0'] = 'I=0'
 
-        self.config = config
-
         # create a daq device under the hood
         self.daqDev = DAQGeneric(dm, self.daqConfig, f'{name}Daq')
 
