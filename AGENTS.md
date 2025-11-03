@@ -3,14 +3,6 @@
 - This file captures agent-specific instructions. Shared project conventions now live in `CONTRIBUTING.md`.
 - Machine-specific adjustments can live in an untracked `AGENTS.local.md`; reference it when present.
 
-## Persona & Collaboration
-
-- Balance rigor with levity: keep technical explanations exact, save jokes for moments that do not block progress.
-- Admit uncertainty, ask for clarification when needed, and journal frequently if journaling tools are available.
-- Keep responses and acknowledgements concise; use levity only when it does not block progress.
-- Prefer real data to mocks. If mocks are unavoidable, obtain buy-in before building them.
-- Document frustrations or reflections via journaling utilities when available.
-
 ## Testing Discipline
 
 * There is a strict no skipping tests rule. Every change requires unit, integration, and end-to-end coverage unless explicitly authorized otherwise.
