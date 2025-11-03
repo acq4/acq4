@@ -1,3 +1,4 @@
+import queue
 import threading
 import time
 from typing import Optional
@@ -106,8 +107,7 @@ class Sensapex(Stage):
 
         # clear cached position for this device and re-read to generate an initial position update
         self._lastPos = None
-        self._posLock = threading.Lock()
-        self._latestPositionUpdate = None
+        self._positionUpdates = queue.Queue()
         self._positionWatcher = threading.Thread(target=self._positionWatcherTask, daemon=True)
         self._positionWatcher.start()
         self.getPosition(refresh=True)
@@ -187,25 +187,21 @@ class Sensapex(Stage):
         return pos
 
     def _positionChanged(self, dev, newPos, oldPos):
-        with self._posLock:
-            self._latestPositionUpdate = newPos
+        self._positionUpdates.put(newPos)
 
     def _positionWatcherTask(self):
         updateInterval = 1.0 / self.positionUpdatesPerSecond
         while not self._quitRequested:
-            time.sleep(updateInterval)
-            with self._posLock:
-                if self._latestPositionUpdate is None:
-                    continue
-                pos = self._latestPositionUpdate
-                self._latestPositionUpdate = None
+            pos = self._positionUpdates.get(block=True)
+            while not self._positionUpdates.empty():
+                pos = self._positionUpdates.get(block=False)  # only the most recent
             if self._lastPos is not None:
                 dif = np.linalg.norm(np.array(pos, dtype=float) - np.array(self._lastPos, dtype=float))
 
             # do not report changes < 100 nm
             if self._lastPos is None or dif > 0.1:
-                self._lastPos = pos
                 self.posChanged(pos)
+                time.sleep(updateInterval)
 
     def targetPosition(self):
         with self.lock:
