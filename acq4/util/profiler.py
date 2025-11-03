@@ -91,14 +91,20 @@ class Profile:
                     stack.append(call_rec)
 
                 elif event[3] in ('return', 'c_return', 'c_exception'):
+                    if len(stack) == 0:
+                        # ignore unmatched returns when stack is empty -- can happen with multi-threading
+                        continue
+
                     if event[3] in ('c_return', 'c_exception') and stack[-1].event_type == 'initial':
                         # ignore unmatched C returns at the top level -- these don't appear in the initial stack
                         continue
 
-                    while True:
-                        last_call = stack.pop()  # if stack is empty here, something went wrong
+                    while len(stack) > 0:
+                        last_call = stack.pop()
                         if last_call.try_return(event):
                             break
+                        # If we can't match this return event, we've lost synchronization
+                        # Continue popping until we find a match or exhaust the stack
                         # else:
                         #     print("stack:")
                         #     print(last_call)
