@@ -1,5 +1,6 @@
 import threading
 import time
+from collections import deque
 from typing import Optional
 
 import numpy as np
@@ -106,6 +107,10 @@ class Sensapex(Stage):
 
         # clear cached position for this device and re-read to generate an initial position update
         self._lastPos = None
+        self._posLock = threading.Lock()
+        self._positionChanges = deque(maxlen=1)
+        self._positionWatcher = threading.Thread(target=self._positionWatcherTask, daemon=True)
+        self._positionWatcher.start()
         self.getPosition(refresh=True)
 
         # TODO: set any extra parameters specified in the config
@@ -161,7 +166,7 @@ class Sensapex(Stage):
 
     @property
     def positionUpdatesPerSecond(self):
-        return 10.0  # see _positionChanged()
+        return 10.0
         # return 1.0 / self.dev.ump.poller.interval
 
     def _getPosition(self):
@@ -178,30 +183,29 @@ class Sensapex(Stage):
                     pos = self._lastPos
                 else:
                     raise
+        self.posChanged(pos)
+
+        return pos
+
+    def _positionChanged(self, dev, newPos, oldPos):
+        with self._posLock:
+            self._positionChanges.append(newPos)
+
+    def _positionWatcherTask(self):
+        updateInterval = 1.0 / self.positionUpdatesPerSecond
+        while not self._quitRequested:
+            time.sleep(updateInterval)
+            with self._posLock:
+                if len(self._positionChanges) == 0:
+                    continue
+                pos = self._positionChanges.popleft()
             if self._lastPos is not None:
                 dif = np.linalg.norm(np.array(pos, dtype=float) - np.array(self._lastPos, dtype=float))
 
             # do not report changes < 100 nm
             if self._lastPos is None or dif > 0.1:
                 self._lastPos = pos
-                emit = True
-            else:
-                emit = False
-
-        if emit:
-            # don't emit signal while locked
-            self.posChanged(pos)
-
-        return pos
-
-    def _positionChanged(self, dev, newPos, oldPos):
-        # called by driver poller when position has changed
-        now = ptime.time()
-        # rate limit updates to 10 Hz
-        if now - self._lastUpdate < 100e-3:
-            return
-        self._getPosition()
-        self._lastUpdate = ptime.time()
+                self.posChanged(pos)
 
     def targetPosition(self):
         with self.lock:
@@ -216,6 +220,7 @@ class Sensapex(Stage):
         Sensapex.devices.pop(self.devid, None)
         if len(Sensapex.devices) == 0:
             UMP.get_ump().close()
+        self._positionWatcher.join()
 
     def _move(self, pos, speed, linear, name=None, **kwds):
         if self._force_linear_movement:
