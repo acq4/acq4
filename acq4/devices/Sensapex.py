@@ -1,3 +1,4 @@
+import queue
 import threading
 import time
 from typing import Optional
@@ -64,8 +65,6 @@ class Sensapex(Stage):
             maxAcceleration: 1000
     """
 
-    _sigRestartUpdateTimer = Qt.Signal(object)  # timeout duration
-
     devices = {}
 
     def __init__(self, man, config: dict, name):
@@ -92,16 +91,15 @@ class Sensapex(Stage):
         self._quitRequested = False
 
         Stage.__init__(self, man, config, name)
-        # Read position updates on a timer to rate-limit
-        self._updateTimer = Qt.QTimer()
-        self._updateTimer.timeout.connect(self._getPosition)
-        self._lastUpdate = 0
-
-        self._sigRestartUpdateTimer.connect(self._restartUpdateTimer)
 
         if "maxAcceleration" in config:
             self.dev.set_max_acceleration(config["maxAcceleration"])
 
+        self._lastUpdate = 0
+        self._lastPos = None
+        self._positionUpdates = queue.Queue()
+        self._positionWatcher = threading.Thread(target=self._positionWatcherTask, daemon=True)
+        self._positionWatcher.start()
         self.dev.add_callback(self._positionChanged)
 
         # force cache update for this device.
@@ -112,7 +110,6 @@ class Sensapex(Stage):
         man.sigAbortAll.connect(self.stop)
 
         # clear cached position for this device and re-read to generate an initial position update
-        self._lastPos = None
         self.getPosition(refresh=True)
 
         # TODO: set any extra parameters specified in the config
@@ -168,7 +165,8 @@ class Sensapex(Stage):
 
     @property
     def positionUpdatesPerSecond(self):
-        return 1.0 / self.dev.ump.poller.interval
+        return 10.0
+        # return 1.0 / self.dev.ump.poller.interval
 
     def _getPosition(self):
         # Called by superclass when user requests position refresh
@@ -184,35 +182,26 @@ class Sensapex(Stage):
                     pos = self._lastPos
                 else:
                     raise
-            self._lastUpdate = ptime.time()
+        self.posChanged(pos)
+
+        return pos
+
+    def _positionChanged(self, dev, newPos, oldPos):
+        self._positionUpdates.put(newPos)
+
+    def _positionWatcherTask(self):
+        updateInterval = 1.0 / self.positionUpdatesPerSecond
+        while not self._quitRequested:
+            pos = self._positionUpdates.get(block=True)
+            while not self._positionUpdates.empty():
+                pos = self._positionUpdates.get(block=False)  # only the most recent
             if self._lastPos is not None:
                 dif = np.linalg.norm(np.array(pos, dtype=float) - np.array(self._lastPos, dtype=float))
 
             # do not report changes < 100 nm
             if self._lastPos is None or dif > 0.1:
-                self._lastPos = pos
-                emit = True
-            else:
-                emit = False
-
-        if emit:
-            # don't emit signal while locked
-            self.posChanged(pos)
-
-        return pos
-
-    def _positionChanged(self, dev, newPos, oldPos):
-        # called by driver poller when position has changed
-        now = ptime.time()
-        # rate limit updates to 10 Hz
-        wait = 100e-3 - (now - self._lastUpdate)
-        if wait > 0:
-            self._sigRestartUpdateTimer.emit(wait)
-        else:
-            self._getPosition()
-
-    def _restartUpdateTimer(self, wait):
-        self._updateTimer.start(int(wait * 1000))
+                self.posChanged(pos)
+                time.sleep(updateInterval)
 
     def targetPosition(self):
         with self.lock:
