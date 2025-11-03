@@ -11,6 +11,7 @@ import numpy as np
 
 from acq4 import getManager
 from acq4.util import Qt
+from acq4.util.debug import log_and_ignore_exception
 from acq4.util.future import Future, future_wrap
 from neuroanalysis.test_pulse import PatchClampTestPulse
 from pyqtgraph import disconnect
@@ -283,14 +284,15 @@ class PatchPipetteState(Future):
         """Called after job completes, whether it failed or succeeded. Ask `self.wasInterrupted()` to see if the
         state was stopped early. Return a Future that completes when cleanup is done.
         """
-        try:
+        disconnect(self.dev.pipetteDevice.sigTargetChanged, self._onTargetChanged)
+        with log_and_ignore_exception(Exception, "Error disabling visual target tracking"):
+            if self._cell is not None:
+                self._cell.enableTracking(False)
+        with log_and_ignore_exception(Exception, "Error stopping visual target tracking"):
             if self._visualTargetTrackingFuture is not None:
                 self._cell.enableTracking(False)
                 self._visualTargetTrackingFuture.stop("State cleanup")
-                self._visualTargetTrackingFuture = None
-        except Exception:
-            self.logger.exception("Error stopping visual target tracking")
-        disconnect(self.dev.pipetteDevice.sigTargetChanged, self._onTargetChanged)
+            self._visualTargetTrackingFuture = None
         return Future.immediate()
 
     def _runJob(self):
