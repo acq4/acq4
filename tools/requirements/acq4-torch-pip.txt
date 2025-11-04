@@ -64,7 +64,6 @@ numba
 numpy
 oauthlib
 omegaconf
-opencv-python
 opencv-python-headless
 opt-einsum
 packaging
