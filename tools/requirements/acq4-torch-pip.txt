@@ -49,6 +49,7 @@ iopath
 ipdb
 ipython
 jedi
+jupyterlab
 keras
 kiwisolver
 lazy-loader
@@ -90,6 +91,7 @@ pymmcore
 pyopengl
 pyparsing
 pyrasite
+pyqtwebengine
 pyserial
 pytest
 python-dateutil
@@ -126,6 +128,7 @@ tzdata
 urllib3
 urwid
 vispy
+voila
 wcwidth
 werkzeug
 wrapt
