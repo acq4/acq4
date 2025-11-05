@@ -69,8 +69,8 @@ class Stage(Device, OptomechDevice):
 
         self.lock = Mutex(Qt.QMutex.Recursive)
 
-        nAxes = len(self.axes())
-        self._lastPos = [0] * nAxes
+        self.nAxes = len(self.axes())
+        self._lastPos = [0] * self.nAxes
 
         # default implementation just uses this matrix to
         # convert from device position to translation vector
@@ -82,7 +82,7 @@ class Stage(Device, OptomechDevice):
         self.setFastSpeed(config.get('fastSpeed', 1e-3))
         self.setSlowSpeed(config.get('slowSpeed', 10e-6))
 
-        self._limits = [(None, None)] * nAxes
+        self._limits = [(None, None)] * self.nAxes
         if 'limits' in config:
             self.setLimits(**config['limits'])
 
@@ -135,16 +135,16 @@ class Stage(Device, OptomechDevice):
         """Return a structure describing the capabilities of this device::
 
             {
-                'getPos': (x, y, z),      # bool: whether each axis can be read from the device
-                'setPos': (x, y, z),      # bool: whether each axis can be set on the device
-                'limits': (x, y, z),      # bool: whether limits can be set for each axis
+                'getPos': (x, y, z, d),      # bool: whether each axis can be read from the device
+                'setPos': (x, y, z, d),      # bool: whether each axis can be set on the device
+                'limits': (x, y, z, d),      # bool: whether limits can be set for each axis
             }
 
         The axes described in the above data structure correspond to the mechanical
         actuators on the device; they do not necessarily correspond to the axes in the
         global coordinate system or the local coordinate system of the device.
 
-        Subclasses must reimplement this method.
+        Subclasses must reimplement this method. Only nAxes values are required.
         """
         # todo: add other capability flags like resolution, speed, closed-loop, etc?
         raise NotImplementedError
@@ -251,9 +251,9 @@ class Stage(Device, OptomechDevice):
 
         The *axis* argument specifies which axis to return, one of '+x', '-x', '+y', '-y', '+z', or '-z'.
         """
-        assert axis in {'+x', '-x', '+y', '-y', '+z', '-z'}
+        assert axis in {'+x', '-x', '+y', '-y', '+z', '-z', '+d', '-d'}
         m = self.axisTransform().matrix()
-        axis_index = {'x': 0, 'y': 1, 'z': 2}[axis[1]]
+        axis_index = {'x': 0, 'y': 1, 'z': 2, 'd': 3}[axis[1]]
         axis_sign = 1 if axis[0] == '+' else -1
         selected_axis = pg.Vector(axis_sign * m[:3, axis_index])
         globalz = pg.Vector([0, 0, 1])
@@ -558,16 +558,16 @@ class Stage(Device, OptomechDevice):
                 )
         return manager.getDevice(camName)
 
-    def setLimits(self, x=None, y=None, z=None):
+    def setLimits(self, x=None, y=None, z=None, d=None):
         """Set the (min, max) position limits to enforce for each axis.
 
-        Accepts keyword arguments 'x', 'y', 'z'; each supplied argument must be
+        Accepts keyword arguments 'x', 'y', 'z', 'd'; each supplied argument must be
         a (min, max) tuple where either value may be None to disable the limit.
 
         Note that some devices do not support limits.
         """
         changed = []
-        for axis, limit in enumerate((x, y, z)):
+        for axis, limit in enumerate((x, y, z, d)):
             if limit is None:
                 continue
             assert len(limit) == 2
@@ -626,7 +626,7 @@ class Stage(Device, OptomechDevice):
     def checkLimits(self, stagePos):
         """Raise an exception if *stagePos* (in stage coordinates) is outside the configured limits"""
         for axis, limit in enumerate(self._limits):
-            ax_name = 'xyz'[axis]
+            ax_name = 'xyzd'[axis]
             x = stagePos[axis]
             if x is None:
                 continue
@@ -896,8 +896,8 @@ class StageInterface(Qt.QWidget):
             if cap['getPos'][axis]:
                 axLabel = Qt.QLabel(axisName)
                 axLabel.setMaximumWidth(15)
-                globalPosLabel = Qt.QLabel('0')
-                stagePosLabel = Qt.QLabel('0')
+                globalPosLabel = Qt.QLabel('')
+                stagePosLabel = Qt.QLabel('')
                 self.posLabels[axis] = (globalPosLabel, stagePosLabel)
                 widgets = [axLabel, globalPosLabel, stagePosLabel]
                 if cap['limits'][axis]:
@@ -942,10 +942,11 @@ class StageInterface(Qt.QWidget):
     def update(self):
         globalPos = self.dev.globalPosition()
         stagePos = self.dev.getPosition()
-        for i in self.posLabels:
-            text = pg.siFormat(globalPos[i], suffix='m', precision=5)
+        for i, v in enumerate(globalPos):
+            text = pg.siFormat(v, suffix='m', precision=5)
             self.posLabels[i][0].setText(text)
-            self.posLabels[i][1].setText(str(stagePos[i]))
+        for i, v in enumerate(stagePos):
+            self.posLabels[i][1].setText(str(v))
 
     def updateLimits(self):
         limits = self.dev.getLimits()

@@ -6,4 +6,4 @@
 cupy # GPU acceleration for image processing
 pydaqmx # National Instruments DAQmx support for data acquisition cards
 pymmcore # Micro-Manager camera and device control
-sensapex-py # Sensapex micromanipulator and stage control
+sensapex # Sensapex micromanipulator and stage control

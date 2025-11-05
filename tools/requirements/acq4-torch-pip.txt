@@ -91,6 +91,7 @@ pyparsing
 pyrasite
 pyserial
 pytest
+pytest-qt
 python-dateutil
 python-json-logger
 pytz

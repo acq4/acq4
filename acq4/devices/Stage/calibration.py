@@ -237,13 +237,13 @@ class ManipulatorAxesCalibrationWindow(Qt.QWidget):
             else:
                 return
 
-        axStagePos = [stagePos[list(axisPoints[ax]), ax] for ax in (0, 1, 2)]
-        axParentPos = [parentPos[list(axisPoints[ax])] for ax in (0, 1, 2)]
+        axStagePos = [stagePos[list(axisPoints[ax]), ax] for ax in range(self.dev.nAxes)]
+        axParentPos = [parentPos[list(axisPoints[ax])] for ax in range(self.dev.nAxes)]
 
         # find optimal linear mapping for each axis
-        m = np.eye(4)
-        for i in (0, 1, 2):
-            for j in (0, 1, 2):
+        m = np.eye(self.dev.nAxes + 1)
+        for i in range(3):
+            for j in range(self.dev.nAxes):
                 line = scipy.stats.linregress(axStagePos[j], axParentPos[j][:, i])
                 m[i, j] = line.slope
 
@@ -273,22 +273,21 @@ class ManipulatorAxesCalibrationWindow(Qt.QWidget):
         for i in range(len(self.calibration["points"])):
             item = self.pointTree.topLevelItem(i)
             dist = np.linalg.norm(error[i])
-            item.setText(2, "%0.2f um  (%0.3g, %0.3g, %0.3g)" % (1e6 * dist, error[i][0], error[i][1], error[i][2]))
+            item.setText(2, f"{1e6 * dist:0.2f} um  ({error[i][0]:0.3g}, {error[i][1]:0.3g}, {error[i][2]:0.3g})")
 
         # send new transform to device
         self.dev.setAxisTransform(self.transform)
 
     def _unzippedCalibrationPoints(self):
         npts = len(self.calibration["points"])
-        stagePos = np.empty((npts, 3))
+        stagePos = np.empty((npts, self.dev.nAxes))
         parentPos = np.empty((npts, 3))
         for i, pt in enumerate(self.calibration["points"]):
             stagePos[i] = pt[0]
             parentPos[i] = pt[1]
         return parentPos, stagePos
 
-    @staticmethod
-    def _groupPointsByAxis(points):
+    def _groupPointsByAxis(self, points):
         def changeAxis(p1, p2):
             # Which single axis has changed between 2 points?
             diff = np.abs(p2 - p1)
@@ -299,7 +298,7 @@ class ManipulatorAxesCalibrationWindow(Qt.QWidget):
             else:
                 return None
 
-        axisPoints = [set(), set(), set()]
+        axisPoints = [set() for _ in range(self.dev.nAxes)]
         for i in range(1, len(points)):
             currentAxis = changeAxis(points[i - 1], points[i])
             if currentAxis is None:
@@ -321,9 +320,9 @@ class ManipulatorAxesCalibrationWindow(Qt.QWidget):
             axisPoints[axis] = contig_groups[idx_at_longest]
         return axisPoints
 
-    @staticmethod
-    def _hasSufficientPoints(axisPoints):
-        return all(len(axisPoints[ax]) > 2 for ax in (0, 1, 2))
+    def _hasSufficientPoints(self, axisPoints):
+        return self.dev.nAxes == len(axisPoints) and all(
+            len(axisPoints[ax]) > 2 for ax in range(self.dev.nAxes))
 
     def _clearCalibration(self):
         for i in range(len(self.calibration["points"])):
