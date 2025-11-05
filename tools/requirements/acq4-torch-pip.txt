@@ -47,6 +47,7 @@ imageio
 iniconfig
 iopath
 ipdb
+ipykernel
 ipython
 jedi
 jupyterlab

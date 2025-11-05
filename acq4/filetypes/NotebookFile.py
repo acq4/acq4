@@ -17,7 +17,7 @@ class NotebookFile(FileType):
 
     extensions = [".ipynb"]
     dataTypes = [dict]
-    priority = 50
+    priority = 60  # Higher than PyQTGraphConfigFile to win for notebook-like dicts
 
     @classmethod
     def write(cls, data, dirHandle, fileName, **args):
@@ -87,16 +87,16 @@ class NotebookFile(FileType):
         if not isinstance(data, dict):
             return False
 
-        # Check if filename suggests notebook
-        if any(ext in fileName.lower() for ext in cls.extensions):
-            return cls.priority
+        # Check if filename suggests notebook (must end with .ipynb)
+        if fileName and any(fileName.lower().endswith(ext) for ext in cls.extensions):
+            return cls.priority * 2  # Very high priority for explicit .ipynb files
 
-        # Check if data has notebook structure
+        # Check if data has notebook structure (high priority)
         if 'cells' in data or 'nbformat' in data:
             return cls.priority
 
-        # Generic dict might be notebook metadata
-        return cls.priority // 2
+        # Not a notebook
+        return False
 
     @classmethod
     def createEmptyNotebook(cls, title="Untitled"):

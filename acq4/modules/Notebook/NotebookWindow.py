@@ -5,6 +5,7 @@ Distributed under MIT/X11 license. See license.txt for more information.
 """
 
 import os
+import sys
 import subprocess
 import json
 import tempfile
@@ -80,11 +81,46 @@ class NotebookWindow(Qt.QMainWindow):
         self.setStatusBar(self.statusBar)
         self.statusBar.showMessage("Ready")
 
+        # Ensure ACQ4 kernel is available for Jupyter
+        self._ensureACQ4Kernel()
+
         # Load initial state
         self._loadState()
         self._refreshFileList()
 
         self.show()
+
+    def _ensureACQ4Kernel(self):
+        """Ensure Jupyter has a kernel spec that uses the ACQ4 Python interpreter.
+
+        This creates/updates a kernel spec so notebooks opened from ACQ4 will
+        run in the same Python environment.
+        """
+        try:
+            # Try to install/update the kernel spec
+            import subprocess
+
+            # Get the current Python executable
+            python_exe = sys.executable
+
+            # Install kernel spec using ipykernel
+            # This will create a kernel named 'acq4' that uses the current Python
+            result = subprocess.run(
+                [python_exe, '-m', 'ipykernel', 'install', '--user', '--name', 'acq4', '--display-name', 'ACQ4 Python'],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+
+            if result.returncode == 0:
+                print(f"ACQ4 Jupyter kernel installed: {python_exe}")
+            else:
+                # Not critical if this fails
+                print(f"Note: Could not install ACQ4 kernel spec: {result.stderr}")
+
+        except Exception as e:
+            # This is not critical - Jupyter will fall back to default kernel
+            print(f"Note: Could not configure ACQ4 Jupyter kernel: {e}")
 
     def _createToolbar(self):
         """Create the toolbar with control buttons."""
@@ -385,28 +421,51 @@ class NotebookWindow(Qt.QMainWindow):
             name += '.ipynb'
 
         try:
-            # Create empty notebook structure
+            # Create empty notebook structure with ACQ4 kernel
             from acq4.filetypes.NotebookFile import NotebookFile
             empty_notebook = NotebookFile.createEmptyNotebook(title=name)
 
-            # Write to Data Manager
-            fh = currentDir.writeFile(empty_notebook, name)
+            # Configure to use ACQ4 Python interpreter
+            empty_notebook['metadata']['kernelspec'] = {
+                'display_name': 'ACQ4 Python',
+                'language': 'python',
+                'name': 'acq4'  # Use our custom kernel
+            }
+            empty_notebook['metadata']['language_info'] = {
+                'name': 'python',
+                'version': f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
+                'file_extension': '.py',
+                'mimetype': 'text/x-python',
+                'nbconvert_exporter': 'python',
+                'pygments_lexer': 'ipython3'
+            }
+
+            # Write to Data Manager - explicitly specify fileType to ensure correct type
+            fh = currentDir.writeFile(empty_notebook, name, fileType='NotebookFile')
 
             self.statusBar.showMessage(f"Created: {name}")
-            self._refreshFileList()
 
-            # Select the new notebook
-            for i in range(self.fileList.count()):
-                item = self.fileList.item(i)
-                if item.text() == name:
-                    self.fileList.setCurrentItem(item)
-                    break
+            # Refresh the file list
+            Qt.QTimer.singleShot(100, self._refreshFileList)
+
+            # Select the new notebook after refresh
+            def selectNotebook():
+                for i in range(self.fileList.count()):
+                    item = self.fileList.item(i)
+                    if item.text() == name:
+                        self.fileList.setCurrentItem(item)
+                        self._openNotebookFile(item.data(Qt.Qt.UserRole))
+                        break
+
+            Qt.QTimer.singleShot(200, selectNotebook)
 
         except Exception as e:
             Qt.QMessageBox.critical(
                 self, "Error",
                 f"Failed to create notebook: {e}"
             )
+            import traceback
+            traceback.print_exc()
             print(f"Error in _onNewNotebook: {e}")
 
     def _onOpenJupyter(self):
