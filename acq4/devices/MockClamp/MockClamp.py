@@ -49,6 +49,7 @@ class MockClamp(PatchClamp):
 
         # create a daq device under the hood
         self.daqDev = DAQGeneric(dm, self.daqConfig, f'{name}Daq')
+        self.config = config  # override config stored by DAQGeneric
 
         try:
             self.setHolding()

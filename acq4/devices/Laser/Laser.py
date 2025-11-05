@@ -141,6 +141,7 @@ class Laser(DAQGeneric, OptomechDevice):
                         
         daqConfig['power'] = {'type': 'ao', 'units': 'W'}  ## virtual channel used for creating control widgets
         DAQGeneric.__init__(self, manager, daqConfig, name)
+        self.config = config  # override config stored by DAQGeneric
         OptomechDevice.__init__(self, manager, config, name)
        
         self.lock = Mutex(Qt.QMutex.Recursive)

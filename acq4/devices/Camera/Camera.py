@@ -74,6 +74,7 @@ class Camera(DAQGeneric, OptomechDevice):
         if "triggerInChannel" in config:
             daqConfig["trigger"] = config["triggerInChannel"]
         DAQGeneric.__init__(self, dm, daqConfig, name)
+        self.config = config  # override config stored by DAQGeneric
         OptomechDevice.__init__(self, dm, config, name)
 
         self.lock = Mutex(Mutex.Recursive)

@@ -222,7 +222,8 @@ class AxoPatch200(DAQGeneric):
         self.mdCanceled = False
         
         DAQGeneric.__init__(self, dm, daqConfig, name)
-        
+        self.config = config  # override config stored by DAQGeneric
+
         self.modeDialog = Qt.QMessageBox()
         self.modeDialog.hide()
         self.modeDialog.setModal(False)
