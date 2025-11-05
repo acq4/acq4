@@ -15,7 +15,7 @@ from pyqtgraph import siFormat
 from .calibration import ManipulatorAxesCalibrationWindow, StageAxesCalibrationWindow
 from ..Device import Device
 from ..OptomechDevice import OptomechDevice
-from ... import getManager
+from acq4 import getManager
 from ...util.HelpfulException import HelpfulException
 from ...util.future import Future, FutureButton
 from ...util.geometry import Plane
