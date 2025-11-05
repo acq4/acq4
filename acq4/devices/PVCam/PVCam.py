@@ -89,13 +89,13 @@ class PVCam(Camera):
         if len(cams) < 1:
             raise Exception('No cameras found by pvcam driver')
         
-        if self.camConfig['serial'] is None:  ## Just pick first camera
+        if self.config['serial'] is None:  ## Just pick first camera
             ind = 0
         else:
-            if self.camConfig['serial'] in cams:
-                ind = cams.index(self.camConfig['serial'])
+            if self.config['serial'] in cams:
+                ind = cams.index(self.config['serial'])
             else:
-                raise Exception('Can not find pvcam camera "%s". Options are: %s' % (str(self.camConfig['serial']), str(cams)))
+                raise Exception('Can not find pvcam camera "%s". Options are: %s' % (str(self.config['serial']), str(cams)))
         print("Selected camera:", cams[ind])
         self.cam = self.pvc.getCamera(cams[ind])
     

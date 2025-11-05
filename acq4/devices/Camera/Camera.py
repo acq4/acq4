@@ -634,14 +634,14 @@ class CameraTask(DAQGenericTask):
 
         # If the DAQ is triggering the camera, then the camera must start before the DAQ
         if params["triggerMode"] != "Normal":
-            if 'triggerInChannel' in self.dev.camConfig:
-                daqName = self.dev.camConfig["triggerInChannel"]["device"]
+            if 'triggerInChannel' in self.dev.config:
+                daqName = self.dev.config["triggerInChannel"]["device"]
                 self.__startOrder[1].append(daqName)
 
             # Make sure we haven't requested something stupid..
             if (
                 self.camCmd.get("triggerProtocol", False)
-                and self.dev.camConfig["triggerOutChannel"]["device"] == daqName
+                and self.dev.config["triggerOutChannel"]["device"] == daqName
             ):
                 raise Exception(
                     "Task requested camera to trigger and be triggered by the same device."
@@ -661,13 +661,13 @@ class CameraTask(DAQGenericTask):
         # If the camera is triggering the daq, stop acquisition now and request that it starts after the DAQ
         #   (daq must be started first so that it is armed to receive the camera trigger)
         if self.camCmd.get("triggerProtocol", False):
-            if 'triggerOutChannel' not in self.dev.camConfig:
+            if 'triggerOutChannel' not in self.dev.config:
                 raise ValueError(
                     f"Task requests {self.dev.name()} to trigger the protocol to start, but no "
                     "trigger lines are configured ('triggerOutChannel' needed in config)"
                 )
             restart = True
-            daqName = self.dev.camConfig["triggerOutChannel"]["device"]
+            daqName = self.dev.config["triggerOutChannel"]["device"]
             self.__startOrder = [daqName], []
             prof.mark("conf 1")
 
@@ -1099,7 +1099,7 @@ class FrameAcquisitionFuture(Future):
         self._camera = camera
         self._frame_count = frameCount
         self._ensure_fresh_frames = ensureFreshFrames
-        self._known_latency = camera.camConfig.get("freshFrameLatency", None)
+        self._known_latency = camera.config.get("freshFrameLatency", None)
         self._stop_when = None
         self._frames = []
         self._timeout = timeout
