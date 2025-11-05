@@ -94,6 +94,7 @@ pyparsing
 pyrasite
 pyqtwebengine
 pyserial
+qtconsole
 pytest
 python-dateutil
 python-json-logger
