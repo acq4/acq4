@@ -227,7 +227,7 @@ class MockStageThread(Thread):
     positionChanged = Qt.Signal(object)
     
     def __init__(self):
-        self.pos = np.zeros(3)
+        self.pos = None
         self.target = None
         self.speed = None
         self.velocity = None
@@ -289,6 +289,8 @@ class MockStageThread(Thread):
             lastUpdate = now
             
             if target is not None:
+                if pos is None:
+                    pos = np.zeros_like(target)
                 dif = target - pos
                 dist = np.linalg.norm(dif)
                 stepDist = speed * dt

@@ -221,18 +221,15 @@ class Stage(Device, OptomechDevice):
         """Transformation matrix with columns that point in the direction that each manipulator axis moves.
 
         This transform gives the relationship between the coordinates reported by the device and real world coordinates.
-        It assumes a 3-axis, linear stage, where the axes are not necessarily orthogonal to each other.
+        It assumes a linear stage, where the axes are not necessarily orthogonal to each other.
 
         This matrix is usually derived from calibration points. Before calibration, it provides only scale
         factors.
         """
         if self._axisTransform is None:
-            self._axisTransform = pg.Transform3D()
-            self._inverseAxisTransform = pg.Transform3D()
-            scale = self.config.get('scale', None)
-            if scale is not None:
-                self._axisTransform.scale(*scale)
-                self._inverseAxisTransform.scale(*[1.0 / x for x in scale])
+            scale = np.array(list(self.config.get('scale', [1] * self.nAxes)) + [1])
+            self._axisTransform = np.eye(self.nAxes + 1) * scale
+            self._inverseAxisTransform = np.eye(self.nAxes + 1) / scale
         return pg.Transform3D(self._axisTransform)
 
     def setAxisTransform(self, tr):
@@ -674,20 +671,18 @@ class Stage(Device, OptomechDevice):
             raise RuntimeError(f"No home position set for {self.name()}")
         return self.moveToGlobal(homePos, speed=speed)
 
-    def setHomePosition(self, pos=None):
+    def setHomePosition(self):
         """Set the home position in global coordinates.
         """
-        self.setStoredLocation('home', pos)
+        self.setStoredLocation('home')
 
     def getStoredLocation(self, name):
         return self.readConfigFile('stored_locations').get(name, None)
 
-    def setStoredLocation(self, name: str, pos=None):
-        if pos is None:
-            pos = self.globalPosition()
-        self.checkLimits(self.mapGlobalToDevicePosition(pos))
+    def setStoredLocation(self, name: str):
+        self.checkLimits(self.getPosition())
         locations = self.readConfigFile('stored_locations')
-        locations[name] = list(pos)
+        locations[name] = list(self.globalPosition())
         self.writeConfigFile(locations, 'stored_locations')
 
     def clearStoredLocation(self, name):

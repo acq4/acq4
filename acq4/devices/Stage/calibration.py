@@ -233,7 +233,7 @@ class ManipulatorAxesCalibrationWindow(Qt.QWidget):
         if not self._hasSufficientPoints(axisPoints):
             self._clearCalibration()
             if raiseOnInsufficientPoints:
-                raise Exception("Could not find colinear points along all 3 axes")
+                raise ValueError(f"Could not find colinear points along all {self.dev.nAxes} axes")
             else:
                 return
 
@@ -241,25 +241,30 @@ class ManipulatorAxesCalibrationWindow(Qt.QWidget):
         axParentPos = [parentPos[list(axisPoints[ax])] for ax in range(self.dev.nAxes)]
 
         # find optimal linear mapping for each axis
-        m = np.eye(self.dev.nAxes + 1)
+        transform = np.eye(self.dev.nAxes + 1)
         for i in range(3):
             for j in range(self.dev.nAxes):
                 line = scipy.stats.linregress(axStagePos[j], axParentPos[j][:, i])
-                m[i, j] = line.slope
-
-        transform = pg.Transform3D(m)
+                transform[i, j] = line.slope
 
         # find optimal offset
-        offset = (parentPos - pg.transformCoordinates(transform, stagePos, transpose=True)).mean(axis=0)
-        m[:3, 3] = offset
-        self.transform = pg.Transform3D(m)
+        stageMappedToParent = pg.transformCoordinates(transform, stagePos, transpose=True)[:, :3]
+        offset = (parentPos - stageMappedToParent).mean(axis=0)
+        transform[:3, self.dev.nAxes] = offset
+        self.transform = transform
 
+        # self._showTransformError(parentPos, stagePos)
+
+        # send new transform to device
+        self.dev.setAxisTransform(self.transform)
+
+    def _showTransformError(self, parentPos: np.ndarray, stagePos: np.ndarray):
         # measure and display errors for each point
         def mapPoint(axisTr, _stage_pos, localPos):
             # given a stage position and axis transform, map from localPos to parent coordinate system
             if isinstance(axisTr, np.ndarray):
-                ident = np.eye(4)
-                ident[:3] = axisTr.reshape(3, 4)
+                ident = np.eye(self.dev.nAxes + 1)
+                ident[:self.dev.nAxes] = axisTr.reshape(self.dev.nAxes, self.dev.nAxes + 1)
                 axisTr = pg.Transform3D(ident)
             st = self.dev._makeStageTransform(_stage_pos, axisTr)[0]
             tr = pg.Transform3D(self.dev.baseTransform() * st)
@@ -274,9 +279,6 @@ class ManipulatorAxesCalibrationWindow(Qt.QWidget):
             item = self.pointTree.topLevelItem(i)
             dist = np.linalg.norm(error[i])
             item.setText(2, f"{1e6 * dist:0.2f} um  ({error[i][0]:0.3g}, {error[i][1]:0.3g}, {error[i][2]:0.3g})")
-
-        # send new transform to device
-        self.dev.setAxisTransform(self.transform)
 
     def _unzippedCalibrationPoints(self):
         npts = len(self.calibration["points"])
