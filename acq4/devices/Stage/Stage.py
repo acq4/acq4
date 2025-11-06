@@ -3,7 +3,7 @@ from __future__ import annotations
 import contextlib
 import functools
 import threading
-from typing import Tuple, List
+from typing import Tuple, List, Any
 
 import numpy as np
 
@@ -249,7 +249,7 @@ class Stage(Device, OptomechDevice):
         The *axis* argument specifies which axis to return, one of '+x', '-x', '+y', '-y', '+z', or '-z'.
         """
         assert axis in {'+x', '-x', '+y', '-y', '+z', '-z', '+d', '-d'}
-        m = self.axisTransform().matrix()
+        m = self.axisTransformMatrix()
         axis_index = {'x': 0, 'y': 1, 'z': 2, 'd': 3}[axis[1]]
         axis_sign = 1 if axis[0] == '+' else -1
         selected_axis = pg.Vector(axis_sign * m[:3, axis_index])
@@ -257,6 +257,11 @@ class Stage(Device, OptomechDevice):
         pitch = selected_axis.angle(globalz) - 90
         yaw = np.arctan2(selected_axis[1], selected_axis[0]) * 180 / np.pi
         return {'pitch': pitch, 'yaw': yaw}
+
+    def axisTransformMatrix(self) -> np.ndarray[Any, np.dtype[Any]]:
+        if self.nAxes == 3:
+            return self.axisTransform().matrix()
+        return np.array(self._axisTransform).reshape((self.nAxes + 1, self.nAxes + 1))
 
     # def calculatedYaw(self) -> float:
     #     """Return the X-axis pitch (angle relative to horizontal) in degrees

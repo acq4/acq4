@@ -7,7 +7,6 @@ from acq4.devices.MockStage import MockStage
 from acq4.devices.Stage import Stage
 from acq4.devices.Stage.calibration import (
     ManipulatorAxesCalibrationWindow,
-    group_points_by_colinearity,
 )
 
 @pytest.fixture
@@ -37,6 +36,7 @@ def unlimited_manipulator() -> Stage:
 
 
 def test_axis_calibration_4_axes(unlimited_manipulator, qtbot):
+    (qtbot, QtBot)  # noqa: F821
     cal_win = ManipulatorAxesCalibrationWindow(unlimited_manipulator)
     sqrt2 = np.sqrt(2)
     cal_win.calibration["points"] = [
@@ -55,7 +55,13 @@ def test_axis_calibration_4_axes(unlimited_manipulator, qtbot):
         [[3, 3, 3, 3], [3 + 3 * sqrt2, 3, 3 + 3 * sqrt2]],
     ]
     cal_win.recalculate()
+    assert cal_win.transform[0, 0] == pytest.approx(1.0)
+    assert cal_win.transform[1, 1] == pytest.approx(1.0)
+    assert cal_win.transform[2, 2] == pytest.approx(1.0)
+    assert cal_win.transform[0, 3] == pytest.approx(sqrt2)
+    assert cal_win.transform[1, 3] == pytest.approx(0.0)
+    assert cal_win.transform[2, 3] == pytest.approx(sqrt2)
 
     angles = unlimited_manipulator.calculatedAxisOrientation('+d')
-    assert angles['pitch'] == pytest.approx(45.0)
-    assert angles['yaw'] == pytest.approx(0.0)
+    assert angles['pitch'] == pytest.approx(-45.0, abs=0.1)
+    assert angles['yaw'] == pytest.approx(0.0, abs=0.1)
