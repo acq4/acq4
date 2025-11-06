@@ -50,6 +50,7 @@ ipdb
 ipykernel
 ipython
 jedi
+jupyter-server
 jupyterlab
 keras
 kiwisolver
@@ -94,7 +95,6 @@ pyparsing
 pyrasite
 pyqtwebengine
 pyserial
-qtconsole
 pytest
 python-dateutil
 python-json-logger

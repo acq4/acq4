@@ -17,6 +17,8 @@ import pyqtgraph as pg
 from acq4.util import Qt
 from acq4.util.DataManager import getHandle
 
+from .EmbeddedJupyterServer import EmbeddedJupyterServer
+
 
 # Try to import QWebEngineView for embedded web display
 try:
@@ -29,16 +31,6 @@ except ImportError:
     except ImportError:
         WEBENGINE_AVAILABLE = False
         QWebEngineView = None
-
-# Try to import qtconsole for embedded Jupyter with ACQ4 memory access
-try:
-    from qtconsole.rich_jupyter_widget import RichJupyterWidget
-    from qtconsole.inprocess import QtInProcessKernelManager
-    QTCONSOLE_AVAILABLE = True
-except ImportError:
-    QTCONSOLE_AVAILABLE = False
-    RichJupyterWidget = None
-    QtInProcessKernelManager = None
 
 
 class NotebookWindow(Qt.QMainWindow):
@@ -63,16 +55,12 @@ class NotebookWindow(Qt.QMainWindow):
         self.config = config
         self.hasQuit = False
         self.currentNotebook = None
-        self.voilaProcess = None
-        self.voilaPort = None
 
-        # Embedded kernel for in-process notebook execution
-        self.kernelManager = None
-        self.kernelClient = None
-        self.embeddedConsoles = []  # Track open embedded console windows
+        # Embedded Jupyter server with ACQ4 memory access
+        self.jupyterServer = None
 
-        self.setWindowTitle("Notebook")
-        self.resize(1000, 700)
+        self.setWindowTitle("Notebook - ACQ4")
+        self.resize(1200, 800)
 
         # Create central widget with splitter layout
         self.centralWidget = Qt.QWidget()
@@ -95,14 +83,10 @@ class NotebookWindow(Qt.QMainWindow):
         # Status bar
         self.statusBar = Qt.QStatusBar()
         self.setStatusBar(self.statusBar)
-        self.statusBar.showMessage("Ready")
+        self.statusBar.showMessage("Starting Jupyter server...")
 
-        # Initialize embedded kernel for in-process notebook execution
-        if QTCONSOLE_AVAILABLE:
-            self._initEmbeddedKernel()
-        else:
-            # Still ensure external kernel is configured
-            self._ensureACQ4Kernel()
+        # Start embedded Jupyter server with ACQ4 access
+        self._initEmbeddedServer()
 
         # Load initial state
         self._loadState()
@@ -110,50 +94,60 @@ class NotebookWindow(Qt.QMainWindow):
 
         self.show()
 
-    def _initEmbeddedKernel(self):
-        """Initialize an in-process Jupyter kernel with ACQ4 namespace.
+    def _initEmbeddedServer(self):
+        """Initialize an embedded Jupyter server with ACQ4 memory access.
 
-        This kernel runs in the same process as ACQ4, allowing notebooks to
-        access the Manager, devices, and all ACQ4 data in memory.
+        This starts a Jupyter server in-process that creates kernels with
+        direct access to ACQ4's Manager, devices, and live data.
         """
         try:
-            # Create an in-process kernel manager
-            self.kernelManager = QtInProcessKernelManager()
-            self.kernelManager.start_kernel()
-            self.kernelClient = self.kernelManager.client()
-            self.kernelClient.start_channels()
+            # Determine notebook directory (use current data dir if available)
+            current_dir = self.module.getCurrentDir()
+            if current_dir:
+                notebook_dir = current_dir.name()
+            else:
+                notebook_dir = os.path.expanduser("~")
 
-            # Get the kernel and inject ACQ4 namespace
-            kernel = self.kernelManager.kernel
-            kernel.shell.push({
-                'man': self.module.manager,
-                'manager': self.module.manager,
-                'pg': pg,
-                'np': np,
-                'Qt': Qt,
-            })
+            # Create and start embedded server
+            self.jupyterServer = EmbeddedJupyterServer(
+                acq4_manager=self.module.manager,
+                notebook_dir=notebook_dir
+            )
+            self.jupyterServer.start()
 
-            # Add helpful startup message to kernel
-            startup_msg = """
-# ACQ4 Jupyter Notebook
-# This notebook runs in the same process as ACQ4 and has access to:
-#   man, manager  - The ACQ4 Manager object
-#                   man.getCurrentDir()  # current data directory
-#                   man.getDevice("Name")
-#                   man.getModule("Name")
-#   pg            - pyqtgraph library
-#   np            - numpy library
-#   Qt            - Qt library
-"""
-            print("Embedded ACQ4 Jupyter kernel initialized")
-            print(startup_msg)
+            self.statusBar.showMessage(
+                f"Jupyter server running on port {self.jupyterServer.port}"
+            )
+
+            # Load the Jupyter tree view in the embedded browser
+            if self.webView and WEBENGINE_AVAILABLE:
+                Qt.QTimer.singleShot(1000, self._loadJupyterTree)
+
+            print(f"✓ Embedded Jupyter server started with ACQ4 access")
+            print(f"  Server: http://127.0.0.1:{self.jupyterServer.port}")
+            print(f"  Notebook dir: {notebook_dir}")
+            print("  All kernels have access to: man, manager, pg, np, Qt")
 
         except Exception as e:
-            print(f"Warning: Could not initialize embedded kernel: {e}")
+            Qt.QMessageBox.critical(
+                self, "Server Error",
+                f"Failed to start embedded Jupyter server:\n{e}\n\n"
+                "The module will still work but without embedded editing."
+            )
+            print(f"Error starting embedded server: {e}")
             import traceback
             traceback.print_exc()
-            # Fall back to external kernel
-            self._ensureACQ4Kernel()
+            self.statusBar.showMessage("Error starting server - see console")
+
+    def _loadJupyterTree(self):
+        """Load the Jupyter file browser in the embedded web view."""
+        if self.jupyterServer and self.webView:
+            current_dir = self.module.getCurrentDir()
+            if current_dir:
+                url = self.jupyterServer.get_tree_url(current_dir.name())
+            else:
+                url = self.jupyterServer.get_tree_url()
+            self.webView.setUrl(Qt.QUrl(url))
 
     def _ensureACQ4Kernel(self):
         """Ensure Jupyter has a kernel spec that uses the ACQ4 Python interpreter.
@@ -199,32 +193,17 @@ class NotebookWindow(Qt.QMainWindow):
 
         toolbar.addSeparator()
 
-        # Edit with Embedded Jupyter (shares ACQ4 memory!)
-        if QTCONSOLE_AVAILABLE:
-            editEmbeddedBtn = Qt.QPushButton("Edit (Embedded)")
-            editEmbeddedBtn.clicked.connect(self._onEditEmbedded)
-            editEmbeddedBtn.setToolTip("Open in embedded Jupyter console with ACQ4 memory access")
-            editEmbeddedBtn.setStyleSheet("QPushButton { font-weight: bold; }")
-            toolbar.addWidget(editEmbeddedBtn)
+        # Home button - return to Jupyter tree view
+        homeBtn = Qt.QPushButton("Home")
+        homeBtn.clicked.connect(self._loadJupyterTree)
+        homeBtn.setToolTip("Return to Jupyter file browser")
+        toolbar.addWidget(homeBtn)
 
-        # Open in external Jupyter (separate process, no ACQ4 access)
-        openJupyterBtn = Qt.QPushButton("Edit (External)")
-        openJupyterBtn.clicked.connect(self._onOpenJupyter)
-        openJupyterBtn.setToolTip("Open in Jupyter Lab (separate process, no ACQ4 memory access)")
-        toolbar.addWidget(openJupyterBtn)
-
-        toolbar.addSeparator()
-
-        # Open in Voila button
-        if WEBENGINE_AVAILABLE:
-            openVoilaBtn = Qt.QPushButton("View with Voila")
-            openVoilaBtn.clicked.connect(self._onOpenVoila)
-            toolbar.addWidget(openVoilaBtn)
-
-        # Open in browser button
-        openBrowserBtn = Qt.QPushButton("Open in Browser")
-        openBrowserBtn.clicked.connect(self._onOpenBrowser)
-        toolbar.addWidget(openBrowserBtn)
+        # Open in external Jupyter (separate process, for comparison)
+        openExternalBtn = Qt.QPushButton("Open External Jupyter")
+        openExternalBtn.clicked.connect(self._onOpenExternal)
+        openExternalBtn.setToolTip("Open Jupyter Lab in separate process (no ACQ4 memory access)")
+        toolbar.addWidget(openExternalBtn)
 
         toolbar.addSeparator()
 
@@ -375,7 +354,7 @@ class NotebookWindow(Qt.QMainWindow):
             print(f"Error in _refreshFileList: {e}")
 
     def _onFileDoubleClicked(self, item):
-        """Handle double-click on a notebook file.
+        """Handle double-click on a notebook file - open in embedded Jupyter.
 
         Parameters
         ----------
@@ -383,7 +362,7 @@ class NotebookWindow(Qt.QMainWindow):
             The clicked item
         """
         notebookPath = item.data(Qt.Qt.UserRole)
-        self._openNotebookFile(notebookPath)
+        self._openNotebookInEmbeddedJupyter(notebookPath)
 
     def _onFileSelectionChanged(self):
         """Handle selection change in file list."""
@@ -393,8 +372,8 @@ class NotebookWindow(Qt.QMainWindow):
             self.currentNotebook = notebookPath
             self.statusBar.showMessage(f"Selected: {os.path.basename(notebookPath)}")
 
-    def _openNotebookFile(self, notebookPath):
-        """Open a notebook file for viewing.
+    def _openNotebookInEmbeddedJupyter(self, notebookPath):
+        """Open a notebook in the embedded Jupyter interface.
 
         Parameters
         ----------
@@ -403,73 +382,42 @@ class NotebookWindow(Qt.QMainWindow):
         """
         self.currentNotebook = notebookPath
 
-        if self.webView:
-            # For now, show basic info about the notebook
-            try:
-                with open(notebookPath, 'r', encoding='utf-8') as f:
-                    nb_data = json.load(f)
+        if not self.jupyterServer:
+            Qt.QMessageBox.warning(
+                self, "Server Not Running",
+                "Embedded Jupyter server is not running."
+            )
+            return
 
-                num_cells = len(nb_data.get('cells', []))
-                title = nb_data.get('metadata', {}).get('title', 'Untitled')
+        if not self.webView or not WEBENGINE_AVAILABLE:
+            Qt.QMessageBox.warning(
+                self, "WebEngine Not Available",
+                "QWebEngineView is not available. Install PyQtWebEngine to use embedded editing."
+            )
+            return
 
-                html = f"""
-                <!DOCTYPE html>
-                <html>
-                <head>
-                    <style>
-                        body {{
-                            font-family: Arial, sans-serif;
-                            padding: 40px;
-                            background-color: #f5f5f5;
-                        }}
-                        .container {{
-                            max-width: 600px;
-                            margin: 0 auto;
-                            background: white;
-                            padding: 30px;
-                            border-radius: 8px;
-                            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-                        }}
-                        h1 {{
-                            color: #333;
-                        }}
-                        .info {{
-                            color: #666;
-                            line-height: 1.6;
-                        }}
-                        .actions {{
-                            margin-top: 20px;
-                            padding-top: 20px;
-                            border-top: 1px solid #ddd;
-                        }}
-                    </style>
-                </head>
-                <body>
-                    <div class="container">
-                        <h1>{title}</h1>
-                        <div class="info">
-                            <p><strong>File:</strong> {os.path.basename(notebookPath)}</p>
-                            <p><strong>Cells:</strong> {num_cells}</p>
-                            <p><strong>Format:</strong> nbformat {nb_data.get('nbformat', 'unknown')}</p>
-                        </div>
-                        <div class="actions">
-                            <p>Use the toolbar buttons to:</p>
-                            <ul>
-                                <li>Open in Jupyter for full editing</li>
-                                <li>View with Voila for interactive display</li>
-                                <li>Open in browser for external viewing</li>
-                            </ul>
-                        </div>
-                    </div>
-                </body>
-                </html>
-                """
-                self.webView.setHtml(html)
-                self.statusBar.showMessage(f"Loaded: {os.path.basename(notebookPath)}")
+        try:
+            # Get URL for this notebook
+            url = self.jupyterServer.get_notebook_url(notebookPath)
 
-            except Exception as e:
-                self.statusBar.showMessage(f"Error loading notebook: {e}")
-                print(f"Error in _openNotebookFile: {e}")
+            # Navigate to the notebook
+            self.webView.setUrl(Qt.QUrl(url))
+
+            self.statusBar.showMessage(
+                f"Editing: {os.path.basename(notebookPath)} (with ACQ4 access)"
+            )
+
+            print(f"✓ Opened notebook in embedded Jupyter: {os.path.basename(notebookPath)}")
+            print(f"  Kernel has access to: man, manager, pg, np, Qt")
+
+        except Exception as e:
+            Qt.QMessageBox.critical(
+                self, "Error",
+                f"Failed to open notebook: {e}"
+            )
+            print(f"Error opening notebook: {e}")
+            import traceback
+            traceback.print_exc()
 
     def _onNewNotebook(self):
         """Create a new notebook in the current directory."""
@@ -524,16 +472,18 @@ class NotebookWindow(Qt.QMainWindow):
             # Refresh the file list
             Qt.QTimer.singleShot(100, self._refreshFileList)
 
-            # Select the new notebook after refresh
-            def selectNotebook():
+            # Select and open the new notebook after refresh
+            def selectAndOpenNotebook():
                 for i in range(self.fileList.count()):
                     item = self.fileList.item(i)
                     if item.text() == name:
                         self.fileList.setCurrentItem(item)
-                        self._openNotebookFile(item.data(Qt.Qt.UserRole))
+                        # Open in embedded Jupyter
+                        notebook_path = item.data(Qt.Qt.UserRole)
+                        self._openNotebookInEmbeddedJupyter(notebook_path)
                         break
 
-            Qt.QTimer.singleShot(200, selectNotebook)
+            Qt.QTimer.singleShot(200, selectAndOpenNotebook)
 
         except Exception as e:
             Qt.QMessageBox.critical(
@@ -544,119 +494,17 @@ class NotebookWindow(Qt.QMainWindow):
             traceback.print_exc()
             print(f"Error in _onNewNotebook: {e}")
 
-    def _onEditEmbedded(self):
-        """Open the current notebook in an embedded Jupyter console.
-
-        This console shares ACQ4's memory space, allowing access to the Manager,
-        devices, and all live data.
-        """
-        if self.currentNotebook is None:
-            Qt.QMessageBox.warning(
-                self, "No Notebook Selected",
-                "Please select a notebook first."
-            )
-            return
-
-        if not QTCONSOLE_AVAILABLE:
-            Qt.QMessageBox.warning(
-                self, "QtConsole Not Available",
-                "QtConsole is not installed. Please install it:\n"
-                "pip install qtconsole"
-            )
-            return
-
-        if self.kernelManager is None:
-            Qt.QMessageBox.critical(
-                self, "Kernel Not Available",
-                "Embedded kernel failed to initialize."
-            )
-            return
-
+    def _onOpenExternal(self):
+        """Open Jupyter Lab in a separate process (for comparison/reference)."""
         try:
-            # Create a new Jupyter console widget
-            console = RichJupyterWidget()
-            console.kernel_manager = self.kernelManager
-            console.kernel_client = self.kernelClient
+            # Get current directory
+            current_dir = self.module.getCurrentDir()
+            if current_dir:
+                notebook_dir = current_dir.name()
+            else:
+                notebook_dir = os.path.expanduser("~")
 
-            # Create a window for the console
-            window = Qt.QMainWindow()
-            window.setCentralWidget(console)
-            window.setWindowTitle(f"ACQ4 Notebook: {os.path.basename(self.currentNotebook)}")
-            window.resize(1000, 700)
-
-            # Load and execute the notebook
-            with open(self.currentNotebook, 'r', encoding='utf-8') as f:
-                nb_data = json.load(f)
-
-            # Execute all code cells
-            console.execute("%clear")
-            console.execute("# Loaded from: " + self.currentNotebook)
-
-            for cell in nb_data.get('cells', []):
-                if cell.get('cell_type') == 'code':
-                    source = ''.join(cell.get('source', []))
-                    if source.strip():
-                        console.execute(source, hidden=False)
-                elif cell.get('cell_type') == 'markdown':
-                    # Show markdown as comments
-                    source = ''.join(cell.get('source', []))
-                    for line in source.split('\n'):
-                        if line.strip():
-                            console.execute(f"# {line}", hidden=True)
-
-            # Add save function to kernel namespace
-            kernel = self.kernelManager.kernel
-            notebook_path = self.currentNotebook
-
-            def save_notebook():
-                """Save current kernel state back to notebook file."""
-                # For now, just print a message
-                # Full implementation would capture kernel state and write back to .ipynb
-                print(f"Note: Manual save to {notebook_path} not yet implemented")
-                print("Use 'Edit (External)' in Jupyter Lab to save changes to the notebook file")
-
-            kernel.shell.push({'save_notebook': save_notebook})
-
-            # Show info message
-            console.execute("""
-print("=" * 60)
-print("ACQ4 Embedded Jupyter Notebook")
-print("=" * 60)
-print("This console shares memory with ACQ4!")
-print("Available: man, manager, pg, np, Qt")
-print("")
-print("NOTE: Changes are NOT auto-saved to the .ipynb file.")
-print("      Use 'Edit (External)' to modify and save the notebook.")
-print("=" * 60)
-""", hidden=True)
-
-            window.show()
-
-            # Track the console window
-            self.embeddedConsoles.append(window)
-
-            self.statusBar.showMessage(f"Opened in embedded console: {os.path.basename(self.currentNotebook)}")
-
-        except Exception as e:
-            Qt.QMessageBox.critical(
-                self, "Error",
-                f"Failed to open in embedded console: {e}"
-            )
-            import traceback
-            traceback.print_exc()
-
-    def _onOpenJupyter(self):
-        """Open the current notebook in Jupyter Lab or Notebook (external process)."""
-        if self.currentNotebook is None:
-            Qt.QMessageBox.warning(
-                self, "No Notebook Selected",
-                "Please select a notebook first."
-            )
-            return
-
-        try:
             # Try Jupyter Lab first, fall back to Jupyter Notebook
-            notebook_dir = os.path.dirname(self.currentNotebook)
 
             try:
                 # Try jupyter lab
@@ -798,28 +646,12 @@ print("=" * 60)
 
         self.hasQuit = True
 
-        # Stop Voila server
-        self._stopVoila()
-
-        # Close all embedded console windows
-        for console_window in self.embeddedConsoles:
+        # Stop embedded Jupyter server
+        if self.jupyterServer:
             try:
-                console_window.close()
-            except:
-                pass
-        self.embeddedConsoles.clear()
-
-        # Shut down embedded kernel
-        if self.kernelClient:
-            try:
-                self.kernelClient.stop_channels()
-            except:
-                pass
-        if self.kernelManager:
-            try:
-                self.kernelManager.shutdown_kernel()
-            except:
-                pass
+                self.jupyterServer.stop()
+            except Exception as e:
+                print(f"Error stopping Jupyter server: {e}")
 
         self._saveState()
         self.close()
