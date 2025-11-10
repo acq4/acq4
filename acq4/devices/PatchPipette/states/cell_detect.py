@@ -281,7 +281,7 @@ class CellDetectState(PatchPipetteState):
             self.adjustPressureForDepth()
             self.maybeVisuallyTrackTarget()
             if self._analysis.tip_is_broken():
-                self._taskDone(interrupted=True, error="Pipette broken")
+                self._taskDone(interrupted=True, error="Pipette break detected with `breakThreshold`.")
                 self.dev.patchRecord()['detectedCell'] = False
                 return {"state": 'broken'}
             if config['autoAdvance']:
