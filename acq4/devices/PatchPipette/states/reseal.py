@@ -348,7 +348,7 @@ class ResealState(PatchPipetteState):
         retraction_future = None
         while not self.isRetractionSuccessful():
             if config['resealTimeout'] is not None and ptime.time() - start_time > config['resealTimeout']:
-                self._taskDone(interrupted=True, error="Timed out attempting to reseal.")
+                self._taskDone(interrupted=True, error="Took longer than `resealTimeout` attempting to reseal.")
                 return config['fallbackState']
 
             self.processAtLeastOneTestPulse()
@@ -370,7 +370,7 @@ class ResealState(PatchPipetteState):
                 if retraction_future and not retraction_future.isDone():
                     retraction_future.stop()
                 self.setState("tissue is torn beyond repair")
-                self._taskDone(interrupted=True, error="Tissue is torn beyond repair.")
+                self._taskDone(interrupted=True, error="Tissue is torn beyond repair (via `tornDetectionThreshold`).")
                 return config['fallbackState']
             elif retraction_future is None or retraction_future.wasInterrupted():
                 if recovery_future is not None and not recovery_future.isDone():
