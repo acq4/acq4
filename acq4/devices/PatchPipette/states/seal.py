@@ -9,7 +9,7 @@ import pyqtgraph as pg
 from acq4.util.functions import plottable_booleans
 from neuroanalysis.data import TSeries
 from pyqtgraph.units import kPa
-from ._base import PatchPipetteState, SteadyStateAnalysisBase
+from ._base import PatchPipetteState, SteadyStateAnalysisBase, exponential_decay_avg
 
 
 class SealAnalysis(SteadyStateAnalysisBase):
@@ -104,9 +104,9 @@ class SealAnalysis(SteadyStateAnalysisBase):
                 dRdt_for_failure = self._failure_dRdt_threshold * 10 * self._failure_tau
             else:
                 dt = t - self._last_measurement['time']
-                resistance_avg_for_success, _ = self.exponential_decay_avg(
+                resistance_avg_for_success, _ = exponential_decay_avg(
                     dt, self._last_measurement['resistance_avg_for_success'], resistance, self._success_tau)
-                resistance_avg_for_hold, _ = self.exponential_decay_avg(
+                resistance_avg_for_hold, _ = exponential_decay_avg(
                     dt, self._last_measurement['resistance_avg_for_hold'], resistance, self._hold_tau)
                 resistance_avg_for_failure, _ = self.exponential_decay_avg(
                     dt, self._last_measurement['resistance_avg_for_failure'], resistance, self._failure_tau)
