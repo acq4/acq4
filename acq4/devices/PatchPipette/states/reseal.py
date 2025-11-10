@@ -7,7 +7,7 @@ import pyqtgraph as pg
 from acq4.util import ptime
 from acq4.util.functions import plottable_booleans
 from acq4.util.future import Future, future_wrap
-from ._base import PatchPipetteState, SteadyStateAnalysisBase
+from ._base import PatchPipetteState, SteadyStateAnalysisBase, exponential_decay_avg
 
 
 class ResealAnalysis(SteadyStateAnalysisBase):
@@ -88,9 +88,9 @@ class ResealAnalysis(SteadyStateAnalysisBase):
 
             dt = start_time - last_measurement['time']
 
-            detect_avg, detection_ratio = self.exponential_decay_avg(
+            detect_avg, detection_ratio = exponential_decay_avg(
                 dt, last_measurement['detect_avg'], resistance, self._detection_tau)
-            repair_avg, repair_ratio = self.exponential_decay_avg(
+            repair_avg, repair_ratio = exponential_decay_avg(
                 dt, last_measurement['repair_avg'], resistance, self._repair_tau)
 
             is_stretching = detection_ratio > self._stretch_threshold or repair_ratio > self._stretch_threshold
