@@ -466,5 +466,5 @@ def exponential_decay_avg(dt, prev_avg, value, tau):
         return value, 0
     alpha = 1 - np.exp(-dt / tau)
     avg = prev_avg * (1 - alpha) + value * alpha
-    ratio = np.log10(avg / prev_avg)
+    ratio = avg / prev_avg
     return avg, ratio
