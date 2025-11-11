@@ -60,7 +60,7 @@ for %%P in (conda.exe conda.bat) do (
 for %%C in ("%USERPROFILE%\Miniconda3\condabin\conda.bat" "%USERPROFILE%\miniconda3\Scripts\conda.exe" "%USERPROFILE%\AppData\Local\miniconda3\condabin\conda.bat" "%USERPROFILE%\AppData\Local\miniconda3\Scripts\conda.exe" "%USERPROFILE%\Anaconda3\Scripts\conda.exe" "%ProgramData%\Miniconda3\Scripts\conda.exe" "C:\Miniconda3\condabin\conda.bat") do (
     call :consider_conda "%%~fC"
 )
-for %%R in ("%USERPROFILE%" "%HOME%" "%HOMEDRIVE%%HOMEPATH%" "%HOMESHARE%" "%HOMEDRIVE%\home\%USERNAME%" "%SystemDrive%\home\%USERNAME%") do (
+for %%R in ("%USERPROFILE%" "%HOMEDRIVE%%HOMEPATH%" "%HOMESHARE%" "%HOMEDRIVE%\home\%USERNAME%" "%SystemDrive%\home\%USERNAME%") do (
     if not "%%~R"=="" (
         call :probe_conda_root "%%~fR"
     )
@@ -90,7 +90,11 @@ goto :eof
 set "ACQ4_CAND_PATH=%~1"
 if "%ACQ4_CAND_PATH%"=="" goto :eof
 for %%I in ("%ACQ4_CAND_PATH%") do set "ACQ4_CAND_PATH=%%~fI"
-if not exist "%ACQ4_CAND_PATH%" goto :eof
+echo Checking conda candidate: %ACQ4_CAND_PATH%
+if not exist "%ACQ4_CAND_PATH%" (
+    echo   -> not found.
+    goto :eof
+)
 set "CAND_VERSION="
 for /f "tokens=1,2" %%S in ('cmd /d /c ""%ACQ4_CAND_PATH%" --version 2^>nul"') do (
     if not defined CAND_VERSION (
@@ -102,17 +106,27 @@ for /f "tokens=1,2" %%S in ('cmd /d /c ""%ACQ4_CAND_PATH%" --version 2^>nul"') d
     )
 )
 if defined CAND_VERSION (
+    echo   -> version %CAND_VERSION%
     if not defined BEST_VERSION (
+        echo   -> recording as current best candidate.
         set "BEST_VERSION=%CAND_VERSION%"
         set "BEST_CONDA=%ACQ4_CAND_PATH%"
     ) else (
         call :compare_versions "%CAND_VERSION%" "%BEST_VERSION%"
         if "%ACQ4_VER_CMP%"=="1" (
+            echo   -> newer than previous best (%BEST_VERSION%); updating best candidate.
             set "BEST_VERSION=%CAND_VERSION%"
             set "BEST_CONDA=%ACQ4_CAND_PATH%"
+        ) else if "%ACQ4_VER_CMP%"=="0" (
+            echo   -> same version as current best (%BEST_VERSION%); keeping existing best path.
+        ) else if "%ACQ4_VER_CMP%"=="2" (
+            echo   -> older than current best (%BEST_VERSION%); skipping.
+        ) else (
+            echo   -> unable to compare versions (error %ACQ4_VER_CMP%); skipping.
         )
     )
 ) else if not defined FALLBACK_CONDA (
+    echo   -> unable to parse version; recording as fallback.
     set "FALLBACK_CONDA=%ACQ4_CAND_PATH%"
 )
 set "CAND_VERSION="
