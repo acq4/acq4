@@ -7,6 +7,7 @@ import dataclasses
 import functools
 import os
 import queue
+import re
 import shutil
 import shlex
 import subprocess
@@ -103,16 +104,19 @@ DEPENDENCY_METADATA: Dict[str, Dict[str, Dict[str, str]]] = {
             "display_name": "CuPy",
             "pypi_package": "cupy",
             "description": "GPU acceleration for imaging workloads.",
+            "post_install_doc": "Requires NVIDIA CUDA Toolkit. Download from <a href='https://developer.nvidia.com/cuda-downloads'>https://developer.nvidia.com/cuda-downloads</a>",
         },
         "pydaqmx": {
             "display_name": "PyDAQmx",
             "pypi_package": "PyDAQmx",
             "description": "National Instruments DAQ interface.",
+            "post_install_doc": "Requires NI-DAQmx drivers. Download from <a href='https://www.ni.com/en-us/support/downloads/drivers/download.ni-daqmx.html'>National Instruments website</a>",
         },
         "pymmcore": {
             "display_name": "PyMMCore",
             "pypi_package": "pymmcore",
             "description": "Micro-Manager device bridge.",
+            "post_install_doc": "Requires Micro-Manager installation. Download from <a href='https://micro-manager.org/Download_Micro-Manager_Latest_Release'>https://micro-manager.org</a>",
         },
         "sensapex-py": {
             "display_name": "sensapex-py",
@@ -485,6 +489,7 @@ class DependencyOption:
     normalized_name: str = field(init=False)
     cli_name: str = ""
     aliases: set[str] = field(default_factory=set)
+    post_install_doc: str = ""
 
     def __post_init__(self) -> None:
         self.normalized_name = normalize_spec_name(self.spec)
@@ -652,6 +657,7 @@ def parse_optional_dependencies(content: Optional[str] = None,
             package_name = pkg_meta.get("pypi_package")
             cli_source = package_name or display_name or spec_value
             alias_values = {package_name, display_name}
+            post_install_doc = pkg_meta.get("post_install_doc", "")
             options.append(
                 DependencyOption(
                     spec=spec_value,
@@ -661,6 +667,7 @@ def parse_optional_dependencies(content: Optional[str] = None,
                     display_name=display_name,
                     cli_name=cli_source,
                     aliases={value for value in alias_values if value},
+                    post_install_doc=post_install_doc,
                 )
             )
     return options
@@ -1892,6 +1899,10 @@ class InstallPage(QtWidgets.QWizardPage):
         self.log_tree.setUniformRowHeights(True)
         self.log_tree.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.log_tree.setTextElideMode(QtCore.Qt.TextElideMode.ElideNone)
+        self.log_tree.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.ExtendedSelection)
+        self.log_tree.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.CustomContextMenu)
+        self.log_tree.customContextMenuRequested.connect(self._show_log_context_menu)
+        self.log_tree.setToolTip("Right-click or use Ctrl+C to copy selected log lines")
         header = self.log_tree.header()
         header.setStretchLastSection(False)
         header.setSectionResizeMode(QtWidgets.QHeaderView.ResizeMode.ResizeToContents)
@@ -2143,6 +2154,66 @@ class InstallPage(QtWidgets.QWizardPage):
         index = self.log_tree.indexFromItem(item)
         self.log_tree.scrollTo(index, QtWidgets.QAbstractItemView.ScrollHint.PositionAtBottom)
 
+    def _show_log_context_menu(self, position: QtCore.QPoint) -> None:
+        """Show context menu for log tree with copy options."""
+        menu = QtWidgets.QMenu(self.log_tree)
+
+        # Copy action
+        copy_action = menu.addAction("Copy Selected Lines")
+        copy_action.setShortcut(QtGui.QKeySequence.StandardKey.Copy)
+        copy_action.triggered.connect(self._copy_selected_log_lines)
+
+        # Select All action
+        select_all_action = menu.addAction("Select All")
+        select_all_action.setShortcut(QtGui.QKeySequence.StandardKey.SelectAll)
+        select_all_action.triggered.connect(self.log_tree.selectAll)
+
+        # Only enable copy if there's a selection
+        selected_items = self.log_tree.selectedItems()
+        copy_action.setEnabled(len(selected_items) > 0)
+
+        menu.exec(self.log_tree.viewport().mapToGlobal(position))
+
+    def _copy_selected_log_lines(self) -> None:
+        """Copy selected log lines to clipboard."""
+        selected_items = self.log_tree.selectedItems()
+        if not selected_items:
+            return
+
+        # Collect text from selected items, preserving tree hierarchy
+        lines: List[str] = []
+        for item in selected_items:
+            # Get the indentation level
+            level = 0
+            parent = item.parent()
+            while parent is not None:
+                level += 1
+                parent = parent.parent()
+
+            # Add indentation
+            indent = "  " * level
+            text = item.text(0)
+            lines.append(f"{indent}{text}")
+
+        # Copy to clipboard
+        clipboard = QtWidgets.QApplication.clipboard()
+        if clipboard:
+            clipboard.setText("\n".join(lines))
+
+    def keyPressEvent(self, event: QtGui.QKeyEvent) -> None:  # noqa: N802
+        """Handle keyboard shortcuts."""
+        # Ctrl+C to copy selected lines
+        if event.matches(QtGui.QKeySequence.StandardKey.Copy):
+            self._copy_selected_log_lines()
+            event.accept()
+            return
+        # Ctrl+A to select all log lines
+        if event.matches(QtGui.QKeySequence.StandardKey.SelectAll):
+            self.log_tree.selectAll()
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
     def _handle_finished(self, success: bool, detail: str) -> None:
         self._running = False
         self._update_navigation(running=False, success=success)
@@ -2151,7 +2222,21 @@ class InstallPage(QtWidgets.QWizardPage):
         if success:
             self._completed = True
             self.completeChanged.emit()
-            QtWidgets.QMessageBox.information(self, "Installer", "Installation complete.")
+
+            # Check for post-install documentation
+            post_install_message = self._build_post_install_message()
+            if post_install_message:
+                msg_box = QtWidgets.QMessageBox(self)
+                msg_box.setWindowTitle("Installation Complete")
+                msg_box.setIcon(QtWidgets.QMessageBox.Icon.Information)
+                msg_box.setText("<p><b>Installation complete.</b></p>"
+                               "<p>The following packages require additional 3rd-party software to be installed:</p>"
+                               + post_install_message)
+                msg_box.setTextFormat(QtCore.Qt.TextFormat.RichText)
+                msg_box.setStandardButtons(QtWidgets.QMessageBox.StandardButton.Ok)
+                msg_box.exec()
+            else:
+                QtWidgets.QMessageBox.information(self, "Installer", "Installation complete.")
         else:
             if cancelled:
                 QtWidgets.QMessageBox.information(self, "Installer", "Installation cancelled.")
@@ -2159,6 +2244,31 @@ class InstallPage(QtWidgets.QWizardPage):
                 QtWidgets.QMessageBox.critical(self, "Installer", detail)
             self._prompt_cleanup()
         self._perform_pending_navigation()
+
+    def _build_post_install_message(self) -> str:
+        """Build HTML message with post-install documentation for selected packages."""
+        if not self._state:
+            return ""
+
+        # Get selected optional dependencies with post-install docs
+        packages_with_docs: List[Tuple[str, str]] = []
+        selected_specs = set(self._state.selected_optional)
+
+        for dep in self._state.optional_dependencies:
+            if dep.spec in selected_specs and dep.post_install_doc:
+                display_name = dep.display_name or dep.spec
+                packages_with_docs.append((display_name, dep.post_install_doc))
+
+        if not packages_with_docs:
+            return ""
+
+        # Build HTML list
+        html_parts = ["<ul>"]
+        for name, doc in packages_with_docs:
+            html_parts.append(f"<li><b>{name}</b>: {doc}</li>")
+        html_parts.append("</ul>")
+
+        return "".join(html_parts)
 
     def _update_navigation(self, running: bool, success: bool) -> None:
         wizard = self.wizard()
@@ -2951,6 +3061,22 @@ def run_unattended_install(state: InstallerState) -> None:
         sys.exit(1)
     else:
         print("Installation complete", flush=True)
+
+        # Display post-install documentation
+        packages_with_docs: List[Tuple[str, str]] = []
+        selected_specs = set(state.selected_optional)
+        for dep in state.optional_dependencies:
+            if dep.spec in selected_specs and dep.post_install_doc:
+                display_name = dep.display_name or dep.spec
+                # Strip HTML tags for plain text output
+                plain_doc = re.sub(r'<a href=[\'"]([^\'"]+)[\'"]>([^<]+)</a>', r'\2 (\1)', dep.post_install_doc)
+                plain_doc = re.sub(r'<[^>]+>', '', plain_doc)
+                packages_with_docs.append((display_name, plain_doc))
+
+        if packages_with_docs:
+            print("\nThe following packages require additional 3rd-party software to be installed:")
+            for name, doc in packages_with_docs:
+                print(f"  - {name}: {doc}")
 
 
 def normalized_clone_names(selection: Iterable[str]) -> set[str]:

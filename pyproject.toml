@@ -45,7 +45,7 @@ dependencies = [
     "coorx",
     "teleprox",
     "neuroanalysis",
-    "git+https://github.com/acq4/pyqtgraph.git@acq4_working",
+    "pyqtgraph @ git+https://github.com/acq4/pyqtgraph.git@acq4_working",
 ]
 
 [project.optional-dependencies]
@@ -57,13 +57,13 @@ hardware = [
     "pyparsing",
 ]
 analysis = [
-    "git+https://github.com/campagnola/pycsf",
-    "git+https://github.com/campagnola/ccfviewer",
+    "pycsf @ git+https://github.com/campagnola/pycsf",
+    "ccfviewer @ git+https://github.com/campagnola/ccfviewer",
 ]
 ml-models = [
     "torch",
     "torchvision",
-    "git+https://github.com/outofculture/cellpose.git@_working",
+    "cellpose @ git+https://github.com/outofculture/cellpose.git@_working",
 ]
 docs = [
     "numpydoc>=1.1.0",
