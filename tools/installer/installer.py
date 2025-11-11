@@ -233,25 +233,110 @@ class InstallerCancelled(InstallerError):
 
 
 def repo_root() -> Path:
+    """Return the repository root directory when running from a cloned repo.
+
+    Returns
+    -------
+    Path
+        Path to the repository root (two directories up from this script).
+    """
     return Path(__file__).resolve().parents[2]
 
 
-def load_pyproject_data() -> Dict[str, Any]:
-    """Parse pyproject.toml and return its contents."""
+def fetch_pyproject_from_github(repo_url: str, branch: str) -> str:
+    """Download pyproject.toml content from a GitHub repository.
+
+    Parameters
+    ----------
+    repo_url : str
+        GitHub repository URL (e.g., "https://github.com/acq4/acq4").
+    branch : str
+        Branch or tag name to fetch from.
+
+    Returns
+    -------
+    str
+        The pyproject.toml file content as a string.
+
+    Raises
+    ------
+    InstallerError
+        If the download fails or the file cannot be found.
+    """
+    parts = urlsplit(repo_url)
+    if parts.netloc not in {"github.com", "www.github.com"}:
+        raise InstallerError(f"Only GitHub URLs are supported for fetching pyproject.toml: {repo_url}")
+
+    path_components = parts.path.strip("/").split("/")
+    if len(path_components) < 2:
+        raise InstallerError(f"Invalid GitHub repository URL: {repo_url}")
+
+    owner, repo_name = path_components[0], path_components[1]
+    if repo_name.endswith(".git"):
+        repo_name = repo_name[:-4]
+
+    raw_url = f"https://raw.githubusercontent.com/{owner}/{repo_name}/{branch}/pyproject.toml"
+
+    try:
+        with urlopen(raw_url, timeout=10) as response:
+            content = response.read().decode("utf-8")
+            return content
+    except URLError as exc:
+        raise InstallerError(f"Failed to download pyproject.toml from {raw_url}: {exc}") from exc
+
+
+def load_pyproject_data(content: Optional[str] = None, repo_path: Optional[Path] = None) -> Dict[str, Any]:
+    """Parse pyproject.toml and return its contents.
+
+    Parameters
+    ----------
+    content : str, optional
+        The pyproject.toml content as a string. If provided, this is parsed directly.
+    repo_path : Path, optional
+        Path to the repository root directory. If provided, pyproject.toml is read from
+        this location. Ignored if content is provided.
+
+    Returns
+    -------
+    dict
+        Parsed pyproject.toml data.
+
+    Raises
+    ------
+    InstallerError
+        If pyproject.toml cannot be found or parsed.
+    """
     global _PYPROJECT_DATA_CACHE
-    if _PYPROJECT_DATA_CACHE is not None:
-        return _PYPROJECT_DATA_CACHE
-    path = repo_root() / "pyproject.toml"
-    if not path.exists():
-        raise InstallerError(f"pyproject.toml not found at {path}")
+
     if tomllib is None:  # pragma: no cover - environment-specific
         raise InstallerError(
             "Parsing pyproject.toml requires Python 3.11+ or the 'tomli' package to be installed.")
+
+    if content is not None:
+        try:
+            data = tomllib.loads(content)
+            return data
+        except Exception as exc:  # noqa: BLE001
+            raise InstallerError(f"Failed to parse pyproject.toml: {exc}") from exc
+
+    if repo_path is not None:
+        path = repo_path / "pyproject.toml"
+    else:
+        if _PYPROJECT_DATA_CACHE is not None:
+            return _PYPROJECT_DATA_CACHE
+        path = repo_root() / "pyproject.toml"
+
+    if not path.exists():
+        raise InstallerError(f"pyproject.toml not found at {path}")
+
     try:
         data = tomllib.loads(path.read_text(encoding="utf-8"))
     except Exception as exc:  # noqa: BLE001
         raise InstallerError(f"Failed to parse pyproject.toml: {exc}") from exc
-    _PYPROJECT_DATA_CACHE = data
+
+    if repo_path is None and content is None:
+        _PYPROJECT_DATA_CACHE = data
+
     return data
 
 
@@ -262,16 +347,28 @@ def _format_group_title(name: str) -> str:
     return label[0].upper() + label[1:]
 
 
-def dependency_groups_from_pyproject() -> List[DependencyGroup]:
-    """Return dependency groups (extras) defined in pyproject.toml."""
+def dependency_groups_from_pyproject(content: Optional[str] = None,
+                                     repo_path: Optional[Path] = None) -> List[DependencyGroup]:
+    """Return dependency groups (extras) defined in pyproject.toml.
+
+    Parameters
+    ----------
+    content : str, optional
+        The pyproject.toml content as a string. If provided, parses this directly.
+    repo_path : Path, optional
+        Path to the repository root. If provided, reads pyproject.toml from this location.
+        Ignored if content is provided.
+
+    Returns
+    -------
+    list of DependencyGroup
+        Dependency groups extracted from pyproject.toml.
+    """
     global _DEPENDENCY_GROUPS_CACHE
-    if _DEPENDENCY_GROUPS_CACHE is None:
-        _DEPENDENCY_GROUPS_CACHE = _build_dependency_groups_from_pyproject()
-    return _DEPENDENCY_GROUPS_CACHE
+    if content is None and repo_path is None and _DEPENDENCY_GROUPS_CACHE is not None:
+        return _DEPENDENCY_GROUPS_CACHE
 
-
-def _build_dependency_groups_from_pyproject() -> List[DependencyGroup]:
-    data = load_pyproject_data()
+    data = load_pyproject_data(content=content, repo_path=repo_path)
     project = data.get("project") or {}
     optional = project.get("optional-dependencies") or {}
     groups: List[DependencyGroup] = []
@@ -282,18 +379,38 @@ def _build_dependency_groups_from_pyproject() -> List[DependencyGroup]:
         description = meta.get("description", "")
         groups.append(DependencyGroup(key=key, title=title, packages=pkg_list,
                                       optional=True, description=description))
+
+    if content is None and repo_path is None:
+        _DEPENDENCY_GROUPS_CACHE = groups
+
     return groups
 
 
-def project_dependencies() -> List[str]:
-    """Return core dependencies defined in pyproject.toml."""
+def project_dependencies(repo_path: Optional[Path] = None) -> List[str]:
+    """Return core dependencies defined in pyproject.toml.
+
+    Parameters
+    ----------
+    repo_path : Path, optional
+        Path to the repository root. If provided, reads pyproject.toml from this location.
+
+    Returns
+    -------
+    list of str
+        Core dependency specs from pyproject.toml.
+    """
     global _PROJECT_DEPENDENCIES_CACHE
-    if _PROJECT_DEPENDENCIES_CACHE is None:
-        data = load_pyproject_data()
-        project = data.get("project") or {}
-        deps = project.get("dependencies") or []
+    if repo_path is None and _PROJECT_DEPENDENCIES_CACHE is not None:
+        return _PROJECT_DEPENDENCIES_CACHE
+
+    data = load_pyproject_data(repo_path=repo_path)
+    project = data.get("project") or {}
+    deps = project.get("dependencies") or []
+
+    if repo_path is None:
         _PROJECT_DEPENDENCIES_CACHE = list(deps)
-    return _PROJECT_DEPENDENCIES_CACHE
+
+    return list(deps)
 
 
 def editable_dependencies() -> Dict[str, EditableDependency]:
@@ -475,10 +592,24 @@ def normalize_spec_name(spec: str) -> str:
     return value.strip().lower()
 
 
-def parse_optional_dependencies() -> List[DependencyOption]:
-    """Return optional dependency entries defined via pyproject extras."""
+def parse_optional_dependencies(content: Optional[str] = None,
+                                repo_path: Optional[Path] = None) -> List[DependencyOption]:
+    """Return optional dependency entries defined via pyproject extras.
+
+    Parameters
+    ----------
+    content : str, optional
+        The pyproject.toml content as a string. If provided, parses this directly.
+    repo_path : Path, optional
+        Path to the repository root. If provided, reads pyproject.toml from this location.
+
+    Returns
+    -------
+    list of DependencyOption
+        Optional dependency descriptors extracted from pyproject.toml.
+    """
     options: List[DependencyOption] = []
-    for group in dependency_groups_from_pyproject():
+    for group in dependency_groups_from_pyproject(content=content, repo_path=repo_path):
         for spec in group.packages:
             spec_value = spec.strip()
             if not spec_value:
@@ -699,8 +830,7 @@ def register_location_cli_arguments(parser: argparse.ArgumentParser) -> None:
     )
 
 
-def register_dependency_cli_arguments(parser: argparse.ArgumentParser,
-                                      options: List[DependencyOption]) -> None:
+def register_dependency_cli_arguments(parser: argparse.ArgumentParser) -> None:
     """Add CLI options for optional dependency selection."""
     parser.add_argument(
         ARG_OPTIONAL_MODE,
@@ -1157,14 +1287,15 @@ class LocationPage(QtWidgets.QWizardPage):
 
 
 class DependenciesPage(QtWidgets.QWizardPage):
-    def __init__(self, options: List[DependencyOption], groups: List[DependencyGroup],
-                 editable_map: Dict[str, EditableDependency]) -> None:
+    def __init__(self, editable_map: Dict[str, EditableDependency]) -> None:
         super().__init__()
         self.setTitle("Dependencies")
-        self.options = options
-        self.groups = groups
+        self.options: List[DependencyOption] = []
+        self.groups: List[DependencyGroup] = []
         self.editable_map = editable_map
-        self.option_lookup: Dict[str, DependencyOption] = {dep.spec: dep for dep in self.options}
+        self.option_lookup: Dict[str, DependencyOption] = {}
+        self._initialized = False
+        self._pending_cli_args: Optional[argparse.Namespace] = None
         layout = QtWidgets.QVBoxLayout(self)
         description = QtWidgets.QLabel(
             "Optional packages enable specific hardware drivers, lab workflows, documentation builds, and other extras. "
@@ -1173,19 +1304,14 @@ class DependenciesPage(QtWidgets.QWizardPage):
         description.setWordWrap(True)
         layout.addWidget(description)
         self.option_items: Dict[str, QtWidgets.QTreeWidgetItem] = {}
-        self.tree: Optional[QtWidgets.QTreeWidget] = None
-        if groups:
-            self.tree = QtWidgets.QTreeWidget()
-            self.tree.setHeaderHidden(True)
-            self.tree.setRootIsDecorated(True)
-            self.tree.setUniformRowHeights(True)
-            self.tree.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.NoSelection)
-            layout.addWidget(self.tree)
-            self._populate_tree()
-        else:
-            empty_label = QtWidgets.QLabel("No optional dependency groups were found.")
-            empty_label.setStyleSheet("color: #a94442;")
-            layout.addWidget(empty_label)
+        self.tree = QtWidgets.QTreeWidget()
+        self.tree.setHeaderHidden(True)
+        self.tree.setRootIsDecorated(True)
+        self.tree.setUniformRowHeights(True)
+        self.tree.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.NoSelection)
+        layout.addWidget(self.tree)
+        self.status_label = QtWidgets.QLabel("")
+        layout.addWidget(self.status_label)
         clone_label = QtWidgets.QLabel(
             "Editable clones fetch the full source for select packages so you can make changes and track them in-place. "
             "Only enable these if you plan to develop those libraries locally; each clone adds a separate git checkout."
@@ -1200,6 +1326,35 @@ class DependenciesPage(QtWidgets.QWizardPage):
         layout.addWidget(self.clone_tree)
         self.clone_items: Dict[str, QtWidgets.QTreeWidgetItem] = {}
         self._populate_clone_tree()
+
+    def initializePage(self) -> None:
+        """Fetch pyproject.toml from GitHub and populate the dependency tree."""
+        if self._initialized:
+            return
+
+        wizard = cast(InstallWizard, self.wizard())
+        repo_url = wizard.repo_url()
+        branch = wizard.branch()
+
+        self.status_label.setText(f"Fetching dependencies from {repo_url} ({branch})...")
+        QtWidgets.QApplication.processEvents()
+
+        try:
+            content = fetch_pyproject_from_github(repo_url, branch)
+            self.groups = dependency_groups_from_pyproject(content=content)
+            self.options = parse_optional_dependencies(content=content)
+            self.option_lookup = {dep.spec: dep for dep in self.options}
+            self._populate_tree()
+            self.status_label.setText("")
+            self._initialized = True
+
+            # Apply CLI args if they were provided before initialization
+            if self._pending_cli_args is not None:
+                self._apply_cli_args_internal(self._pending_cli_args)
+                self._pending_cli_args = None
+        except InstallerError as exc:
+            self.status_label.setStyleSheet("color: #a94442;")
+            self.status_label.setText(f"Error loading dependencies: {exc}")
 
     def _populate_tree(self) -> None:
         assert self.tree is not None
@@ -1269,6 +1424,17 @@ class DependenciesPage(QtWidgets.QWizardPage):
         return selected
 
     def apply_cli_args(self, args: argparse.Namespace) -> None:
+        """Apply CLI arguments to this page.
+
+        If the page hasn't been initialized yet, store the args for later application.
+        """
+        if not self._initialized:
+            self._pending_cli_args = args
+        else:
+            self._apply_cli_args_internal(args)
+
+    def _apply_cli_args_internal(self, args: argparse.Namespace) -> None:
+        """Apply CLI arguments to the dependency selections."""
         try:
             selected_specs = resolve_optional_selection_from_args(args, self.options, self.groups)
         except InstallerError:
@@ -2008,13 +2174,10 @@ def run_git_command(cmd: Iterable[str], logger: StructuredLogger, cwd: Optional[
 
 
 class InstallWizard(QtWidgets.QWizard):
-    def __init__(self, optional_dependencies: List[DependencyOption], dependency_groups: List[DependencyGroup],
-                 editable_map: Dict[str, EditableDependency], cli_args: argparse.Namespace,
+    def __init__(self, editable_map: Dict[str, EditableDependency], cli_args: argparse.Namespace,
                  test_flags: Optional[set[str]] = None) -> None:
         super().__init__()
         self.setWindowTitle("ACQ4 Installer")
-        self.optional_dependencies = optional_dependencies
-        self.dependency_groups = dependency_groups
         self.editable_map = editable_map
         self.cli_args = cli_args
         self.test_flags = test_flags or set()
@@ -2022,7 +2185,7 @@ class InstallWizard(QtWidgets.QWizard):
         git_missing = "no-git" in self.test_flags or not is_git_available()
         self.git_page = GitPage() if git_missing else None
         self.location_page = LocationPage()
-        self.dependencies_page = DependenciesPage(self.optional_dependencies, self.dependency_groups, self.editable_map)
+        self.dependencies_page = DependenciesPage(self.editable_map)
         self.config_page = ConfigPage()
         self.summary_page = SummaryPage()
         self.install_page = InstallPage()
@@ -2130,7 +2293,7 @@ class InstallerExecutor:
         if self.state.editable_selection:
             tasks.append(("Clone editable dependencies", lambda: self._handle_editable_dependencies(conda_exe, env_dir, base_dir)))
         tasks.extend([
-            ("Install ACQ4 runtime dependencies", lambda: self._install_project_dependencies(conda_exe, env_dir, clone_skip)),
+            ("Install ACQ4 runtime dependencies", lambda: self._install_project_dependencies(conda_exe, env_dir, clone_skip, base_dir / ACQ4_SOURCE_DIRNAME)),
             ("Install ACQ4 package", lambda: self._install_acq4_package(conda_exe, env_dir, base_dir / ACQ4_SOURCE_DIRNAME)),
         ])
         if selected_optional_specs:
@@ -2212,8 +2375,8 @@ class InstallerExecutor:
         run_command(cmd, self.logger, task_id=self._active_task_id, cancel_event=self.cancel_event)
 
     def _install_project_dependencies(self, conda_exe: str, env_dir: Path,
-                                      skip_names: Iterable[str]) -> None:
-        deps = project_dependencies()
+                                      skip_names: Iterable[str], repo_path: Path) -> None:
+        deps = project_dependencies(repo_path=repo_path)
         skip_set = {name.lower() for name in skip_names}
         install_specs: List[str] = []
         for spec in deps:
@@ -2485,13 +2648,8 @@ class InstallerWorker(QtCore.QObject):
         self._cancel_event.set()
 
 
-def build_cli_parser(optional_dependencies: List[DependencyOption]) -> argparse.ArgumentParser:
+def build_cli_parser() -> argparse.ArgumentParser:
     """Construct the CLI parser shared between GUI and unattended modes.
-
-    Parameters
-    ----------
-    optional_dependencies : list of DependencyOption
-        Optional dependencies available for selection; used to limit choices.
 
     Returns
     -------
@@ -2503,7 +2661,7 @@ def build_cli_parser(optional_dependencies: List[DependencyOption]) -> argparse.
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     register_location_cli_arguments(parser)
-    register_dependency_cli_arguments(parser, optional_dependencies)
+    register_dependency_cli_arguments(parser)
     register_config_cli_arguments(parser)
     parser.add_argument(
         "--unattended",
@@ -2524,8 +2682,7 @@ def build_cli_parser(optional_dependencies: List[DependencyOption]) -> argparse.
     return parser
 
 
-def state_from_cli_args(args: argparse.Namespace, optional_dependencies: List[DependencyOption],
-                        dependency_groups: List[DependencyGroup],
+def state_from_cli_args(args: argparse.Namespace,
                         editable_map: Dict[str, EditableDependency]) -> InstallerState:
     """Build an InstallerState instance from parsed CLI arguments.
 
@@ -2533,10 +2690,6 @@ def state_from_cli_args(args: argparse.Namespace, optional_dependencies: List[De
     ----------
     args : argparse.Namespace
         Parsed CLI namespace.
-    optional_dependencies : list of DependencyOption
-        Optional dependencies used for validation.
-    dependency_groups : list of DependencyGroup
-        Optional dependency groups for resolving --optional-groups.
     editable_map : dict
         Editable dependency descriptors used for CLI selection resolution.
 
@@ -2550,6 +2703,12 @@ def state_from_cli_args(args: argparse.Namespace, optional_dependencies: List[De
     branch_value = (args.branch or DEFAULT_BRANCH).strip() or DEFAULT_BRANCH
     repo_value = (getattr(args, "repo_url", None) or ACQ4_REPO_URL).strip() or ACQ4_REPO_URL
     github_token = (getattr(args, "github_token", None) or "").strip() or None
+
+    # Fetch pyproject.toml to get dependency information
+    content = fetch_pyproject_from_github(repo_value, branch_value)
+    dependency_groups = dependency_groups_from_pyproject(content=content)
+    optional_dependencies = parse_optional_dependencies(content=content)
+
     selected_optional = resolve_optional_selection_from_args(args, optional_dependencies, dependency_groups)
     editable_selection = resolve_editable_selection_from_args(args, editable_map)
     config_mode = getattr(args, "config_mode", None)
@@ -2628,7 +2787,7 @@ def collect_state(wizard: InstallWizard) -> InstallerState:
         branch=wizard.branch(),
         repo_url=wizard.repo_url(),
         github_token=wizard.github_token(),
-        optional_dependencies=wizard.optional_dependencies,
+        optional_dependencies=wizard.dependencies_page.options,
         selected_optional=wizard.selected_optional_specs(),
         editable_selection=wizard.selected_editable_keys(),
         config_mode=wizard.config_mode(),
@@ -2643,24 +2802,22 @@ def parse_test_flags(raw_flags: Optional[str]) -> set[str]:
 
 def main() -> None:
     """Entry point for the ACQ4 installer."""
-    dependency_groups = dependency_groups_from_pyproject()
-    optional_dependencies = parse_optional_dependencies()
     editable_map = editable_dependencies()
-    parser = build_cli_parser(optional_dependencies)
+    parser = build_cli_parser()
     args = parser.parse_args()
     test_flags = parse_test_flags(getattr(args, "test_flags", None))
     if getattr(args, "no_ui", False):
         args.unattended = True
     if args.unattended:
         try:
-            state = state_from_cli_args(args, optional_dependencies, dependency_groups, editable_map)
+            state = state_from_cli_args(args, editable_map)
         except InstallerError as exc:
             print(f"Invalid unattended configuration: {exc}", file=sys.stderr)
             sys.exit(1)
         run_unattended_install(state)
         return
     app = QtWidgets.QApplication(sys.argv)
-    wizard = InstallWizard(optional_dependencies, dependency_groups, editable_map, args, test_flags)
+    wizard = InstallWizard(editable_map, args, test_flags)
     wizard.exec()
     sys.exit(0)
 
