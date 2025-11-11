@@ -990,185 +990,95 @@ class GitPage(QtWidgets.QWizardPage):
         return is_git_available()
 
 
-class LocationPage(QtWidgets.QWizardPage):
-    BRANCH_REFRESH_DELAY_MS = 500
+class GitRepoWidget(QtWidgets.QWidget):
+    """Reusable widget combining a git repository URL input and branch/tag dropdown.
 
-    def __init__(self) -> None:
-        super().__init__()
-        self.setTitle("Installation Target")
-        outer_layout = QtWidgets.QVBoxLayout(self)
+    Fetches branches only when the user presses Enter or focuses off the repo text field,
+    avoiding excessive git ls-remote calls while typing.
+    """
 
-        # Target location section (top of vertical split)
-        target_group = QtWidgets.QGroupBox("Target Location")
-        target_form = QtWidgets.QFormLayout(target_group)
-        target_help = QtWidgets.QLabel(
-            "Pick an empty folder where ACQ4 and its conda environment will be created. "
-            "This is required for every installation; the installer will create the directory for you."
-        )
-        target_help.setWordWrap(True)
-        target_form.addRow(target_help)
-        default_path = Path.home() / DEFAULT_INSTALL_DIR_NAME
-        self.path_edit = QtWidgets.QLineEdit(str(default_path))
-        self.registerField("install_path*", self.path_edit)
-        browse_btn = QtWidgets.QPushButton("Browse…")
-        browse_btn.clicked.connect(self._select_path)
-        path_row = QtWidgets.QHBoxLayout()
-        path_row.addWidget(self.path_edit)
-        path_row.addWidget(browse_btn)
-        target_form.addRow("Install location", path_row)
-        self.path_status_label = QtWidgets.QLabel()
-        self.path_status_label.setWordWrap(True)
-        target_form.addRow(self.path_status_label)
+    repoChanged = QtCore.pyqtSignal(str)
+    branchChanged = QtCore.pyqtSignal(str)
 
-        # Version section (bottom of vertical split)
-        version_group = QtWidgets.QGroupBox("ACQ4 Version")
-        version_form = QtWidgets.QFormLayout(version_group)
-        version_help = QtWidgets.QLabel(
-            "These values determine which version of ACQ4 will be installed from the Git repository."
-            " Use the default values unless you know you need a specific branch or tag."
-        )
-        version_help.setWordWrap(True)
-        version_form.addRow(version_help)
-        self.repo_edit = QtWidgets.QLineEdit(ACQ4_REPO_URL)
-        self.registerField("repo_url*", self.repo_edit)
-        version_form.addRow("Repository URL", self.repo_edit)
+    def __init__(self, default_repo: str = "", default_branch: str = DEFAULT_BRANCH,
+                 parent: Optional[QtWidgets.QWidget] = None) -> None:
+        super().__init__(parent)
+        self._github_token: Optional[str] = None
+        self.branch_fetch_thread: Optional[threading.Thread] = None
+        self.branch_fetch_cancel = threading.Event()
+
+        layout = QtWidgets.QFormLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        self.repo_edit = QtWidgets.QLineEdit(default_repo)
+        layout.addRow("Repository URL", self.repo_edit)
+
         self.branch_combo = QtWidgets.QComboBox()
         self.branch_combo.setEditable(True)
         self.branch_combo.setInsertPolicy(QtWidgets.QComboBox.InsertPolicy.NoInsert)
         self.branch_combo.setSizeAdjustPolicy(QtWidgets.QComboBox.SizeAdjustPolicy.AdjustToContents)
         self.branch_combo.setMinimumContentsLength(20)
-        self.branch_combo.setEditText(DEFAULT_BRANCH)
-        self.registerField("branch", self.branch_combo, "currentText", self.branch_combo.currentTextChanged)
-        version_form.addRow("Tag or branch", self.branch_combo)
-        self.github_token_edit = QtWidgets.QLineEdit()
-        self.github_token_edit.setEchoMode(QtWidgets.QLineEdit.EchoMode.Password)
-        self.github_token_edit.setPlaceholderText("Optional")
-        self.registerField("github_token", self.github_token_edit)
-        version_form.addRow("GitHub token", self.github_token_edit)
-        token_help = QtWidgets.QLabel(
-            "Optional: provide a GitHub personal access token that will be used whenever code is cloned from GitHub. "
-            " (This can be used to facilitate pushing code/config changes from your install back to GitHub). "
-        )
-        token_help.setWordWrap(True)
-        version_form.addRow(token_help)
-        self.branch_status_label = QtWidgets.QLabel()
-        self.branch_status_label.setWordWrap(True)
-        version_form.addRow(self.branch_status_label)
+        self.branch_combo.setEditText(default_branch)
+        layout.addRow("Tag or branch", self.branch_combo)
 
-        outer_layout.addWidget(target_group)
-        outer_layout.addWidget(version_group)
-        outer_layout.addStretch(1)
-        self.branch_fetch_thread: Optional[threading.Thread] = None
-        self.branch_fetch_cancel = threading.Event()
-        self.branch_reload_timer = QtCore.QTimer(self)
-        self.branch_reload_timer.setSingleShot(True)
-        self.branch_reload_timer.timeout.connect(self._load_branch_choices)
-        self.path_edit.textChanged.connect(self._validate_path)
-        self.repo_edit.textChanged.connect(self._handle_repo_change)
-        self.github_token_edit.textChanged.connect(self._handle_token_change)
-        self._set_branch_status("Loading branch/tag list…")
-        self._validate_path()
+        self.status_label = QtWidgets.QLabel()
+        self.status_label.setWordWrap(True)
+        layout.addRow(self.status_label)
+
+        # Only fetch branches when user presses Enter or focuses off the field
+        self.repo_edit.editingFinished.connect(self._load_branch_choices)
+        self.branch_combo.currentTextChanged.connect(lambda text: self.branchChanged.emit(text))
+
+        self._set_status("Ready to fetch branches")
+
+    def set_github_token(self, token: Optional[str]) -> None:
+        """Update the GitHub token and refresh branches if needed."""
+        self._github_token = token
         self._load_branch_choices()
 
-    def _select_path(self) -> None:
-        directory = QtWidgets.QFileDialog.getExistingDirectory(self, "Select install directory", str(Path.home()))
-        if directory:
-            self.path_edit.setText(directory)
+    def repo_url(self) -> str:
+        """Return the current repository URL."""
+        return self.repo_edit.text().strip()
 
-    def _validate_path(self) -> None:
-        text = self.path_edit.text().strip()
-        try:
-            path = Path(text).expanduser()
-        except Exception:
-            self._set_path_status("Invalid path. Please choose another location.", error=True)
-            self.completeChanged.emit()
-            return
-        if not text:
-            self._set_path_status("", error=False)
-        elif path.exists() and not path.is_dir():
-            self._set_path_status("Selected path exists but is not a directory. Choose a new location.", error=True)
-        elif path.exists():
-            self._set_path_status("Selected path already exists and cannot be used.", error=True)
-        else:
-            self._set_path_status("Directory will be created automatically.", error=False)
-        self.completeChanged.emit()
+    def branch(self) -> str:
+        """Return the current branch/tag."""
+        return self.branch_combo.currentText().strip()
 
-    def isComplete(self) -> bool:  # noqa: N802
-        text = self.path_edit.text().strip()
-        if not text:
-            return False
-        if not self.repo_edit.text().strip():
-            return False
-        try:
-            path = Path(text).expanduser()
-        except Exception:
-            return False
-        return not path.exists()
+    def set_repo_url(self, url: str) -> None:
+        """Set the repository URL."""
+        self.repo_edit.setText(url)
 
-    def apply_cli_args(self, args: argparse.Namespace) -> None:
-        if getattr(args, "install_path", None):
-            raw_path = Path(str(args.install_path)).expanduser()
-            try:
-                resolved = raw_path.resolve()
-            except Exception:
-                resolved = raw_path
-            self.path_edit.setText(str(resolved))
-        if getattr(args, "repo_url", None):
-            self.repo_edit.setText(str(args.repo_url))
-        if getattr(args, "branch", None):
-            self.branch_combo.setEditText(str(args.branch))
-        if getattr(args, "github_token", None):
-            self.github_token_edit.setText(str(args.github_token))
+    def set_branch(self, branch: str) -> None:
+        """Set the branch/tag."""
+        self.branch_combo.setEditText(branch)
 
-    def cli_arguments(self) -> List[str]:
-        path_value = self.path_edit.text().strip()
-        repo_value = self.repo_edit.text().strip() or ACQ4_REPO_URL
-        branch_value = self.branch_combo.currentText().strip() or DEFAULT_BRANCH
-        token_value = self._current_token()
-        args = [
-            ARG_INSTALL_PATH,
-            path_value,
-            ARG_REPO_URL,
-            repo_value,
-            ARG_BRANCH,
-            branch_value,
-        ]
-        if token_value:
-            args.extend([ARG_GITHUB_TOKEN, token_value])
-        return args
-
-    def _set_path_status(self, message: str, *, error: bool) -> None:
+    def _set_status(self, message: str, *, error: bool = False) -> None:
         if error:
-            self.path_status_label.setStyleSheet("color: #a94442;")
+            self.status_label.setStyleSheet("color: #a94442;")
         else:
-            self.path_status_label.setStyleSheet("")
-        self.path_status_label.setText(message)
+            self.status_label.setStyleSheet("")
+        self.status_label.setText(message)
 
-    def _schedule_branch_refresh(self) -> None:
-        self.branch_reload_timer.start(self.BRANCH_REFRESH_DELAY_MS)
-        self._set_branch_status("Updating branch/tag list…")
-
-    def _handle_repo_change(self) -> None:
-        self._schedule_branch_refresh()
-        self.completeChanged.emit()
-
-    def _handle_token_change(self) -> None:
-        self._schedule_branch_refresh()
-
-    def _current_token(self) -> Optional[str]:
-        token = self.github_token_edit.text().strip()
-        return token or None
+    def _cancel_branch_process(self) -> None:
+        if self.branch_fetch_thread and self.branch_fetch_thread.is_alive():
+            self.branch_fetch_cancel.set()
+            self.branch_fetch_thread.join(timeout=1.0)
 
     def _load_branch_choices(self) -> None:
-        repo_value = self.repo_edit.text().strip() or ACQ4_REPO_URL
-        remote_for_command = github_url_with_token(repo_value, self._current_token())
-        if not is_git_available():
-            self._set_branch_status("Git is not available; enter a branch/tag manually.", error=True)
+        repo_value = self.repo_edit.text().strip()
+        if not repo_value:
+            self._set_status("Enter a repository URL", error=True)
             return
+
+        remote_for_command = github_url_with_token(repo_value, self._github_token)
+        if not is_git_available():
+            self._set_status("Git is not available; enter a branch/tag manually.", error=True)
+            return
+
         self._cancel_branch_process()
         self.branch_fetch_cancel.clear()
         self.branch_combo.setEnabled(False)
-        self._set_branch_status("Loading branch/tag list…")
+        self._set_status("Loading branch/tag list…")
 
         def fetch_branches():
             try:
@@ -1214,16 +1124,17 @@ class LocationPage(QtWidgets.QWizardPage):
         self.branch_combo.setEnabled(True)
         if exit_code != 0:
             detail = stderr.strip() or "git ls-remote failed."
-            self._set_branch_status(f"Unable to list branches for {repo_value}: {detail}", error=True)
+            self._set_status(f"Unable to list branches for {repo_value}: {detail}", error=True)
             return
         names = self._parse_ref_names(stdout)
         if DEFAULT_BRANCH in names:
             names = [DEFAULT_BRANCH] + [name for name in names if name != DEFAULT_BRANCH]
         self._populate_branch_combo(names)
         if names:
-            self._set_branch_status(f"Loaded {len(names)} branches/tags.")
+            self._set_status(f"Loaded {len(names)} branches/tags.")
         else:
-            self._set_branch_status("No branches/tags reported; enter a reference manually.", error=True)
+            self._set_status("No branches/tags reported; enter a reference manually.", error=True)
+        self.repoChanged.emit(repo_value)
 
     @QtCore.pyqtSlot(str, str)
     def _handle_branch_fetch_error(
@@ -1232,7 +1143,7 @@ class LocationPage(QtWidgets.QWizardPage):
             error: str) -> None:
         self.branch_fetch_thread = None
         self.branch_combo.setEnabled(True)
-        self._set_branch_status(f"Unable to run git ls-remote for {repo_value}: {error}", error=True)
+        self._set_status(f"Unable to run git ls-remote for {repo_value}: {error}", error=True)
 
     def _parse_ref_names(self, stdout: str) -> List[str]:
         seen: set[str] = set()
@@ -1267,23 +1178,155 @@ class LocationPage(QtWidgets.QWizardPage):
                 self.branch_combo.setCurrentIndex(index)
             else:
                 self.branch_combo.setEditText(current_text)
-        elif names:
-            self.branch_combo.setCurrentIndex(0)
-        else:
-            self.branch_combo.setEditText(DEFAULT_BRANCH)
         self.branch_combo.blockSignals(False)
 
-    def _cancel_branch_process(self) -> None:
-        if self.branch_fetch_thread is not None:
-            self.branch_fetch_cancel.set()
-            self.branch_fetch_thread = None
 
-    def _set_branch_status(self, message: str, *, error: bool = False) -> None:
-        if error:
-            self.branch_status_label.setStyleSheet("color: #a94442;")
+class LocationPage(QtWidgets.QWizardPage):
+    def __init__(self) -> None:
+        super().__init__()
+        self.setTitle("Installation Target")
+        outer_layout = QtWidgets.QVBoxLayout(self)
+
+        # Target location section (top of vertical split)
+        target_group = QtWidgets.QGroupBox("Target Location")
+        target_form = QtWidgets.QFormLayout(target_group)
+        target_help = QtWidgets.QLabel(
+            "Pick an empty folder where ACQ4 and its conda environment will be created. "
+            "This is required for every installation; the installer will create the directory for you."
+        )
+        target_help.setWordWrap(True)
+        target_form.addRow(target_help)
+        default_path = Path.home() / DEFAULT_INSTALL_DIR_NAME
+        self.path_edit = QtWidgets.QLineEdit(str(default_path))
+        self.registerField("install_path*", self.path_edit)
+        browse_btn = QtWidgets.QPushButton("Browse…")
+        browse_btn.clicked.connect(self._select_path)
+        path_row = QtWidgets.QHBoxLayout()
+        path_row.addWidget(self.path_edit)
+        path_row.addWidget(browse_btn)
+        target_form.addRow("Install location", path_row)
+        self.path_status_label = QtWidgets.QLabel()
+        self.path_status_label.setWordWrap(True)
+        target_form.addRow(self.path_status_label)
+
+        # Version section (bottom of vertical split)
+        version_group = QtWidgets.QGroupBox("ACQ4 Version")
+        version_layout = QtWidgets.QVBoxLayout(version_group)
+        version_help = QtWidgets.QLabel(
+            "These values determine which version of ACQ4 will be installed from the Git repository."
+            " Use the default values unless you know you need a specific branch or tag."
+        )
+        version_help.setWordWrap(True)
+        version_layout.addWidget(version_help)
+
+        self.git_repo_widget = GitRepoWidget(default_repo=ACQ4_REPO_URL, default_branch=DEFAULT_BRANCH)
+        self.registerField("repo_url*", self.git_repo_widget.repo_edit)
+        self.registerField("branch", self.git_repo_widget.branch_combo, "currentText",
+                          self.git_repo_widget.branch_combo.currentTextChanged)
+        self.git_repo_widget.repoChanged.connect(lambda _: self.completeChanged.emit())
+        version_layout.addWidget(self.git_repo_widget)
+
+        token_form = QtWidgets.QFormLayout()
+        self.github_token_edit = QtWidgets.QLineEdit()
+        self.github_token_edit.setEchoMode(QtWidgets.QLineEdit.EchoMode.Password)
+        self.github_token_edit.setPlaceholderText("Optional")
+        self.registerField("github_token", self.github_token_edit)
+        token_form.addRow("GitHub token", self.github_token_edit)
+        token_help = QtWidgets.QLabel(
+            "Optional: provide a GitHub personal access token that will be used whenever code is cloned from GitHub. "
+            " (This can be used to facilitate pushing code/config changes from your install back to GitHub). "
+        )
+        token_help.setWordWrap(True)
+        token_form.addRow(token_help)
+        version_layout.addLayout(token_form)
+
+        outer_layout.addWidget(target_group)
+        outer_layout.addWidget(version_group)
+        outer_layout.addStretch(1)
+        self.path_edit.textChanged.connect(self._validate_path)
+        self.github_token_edit.textChanged.connect(self._handle_token_change)
+        self._validate_path()
+
+    def _select_path(self) -> None:
+        directory = QtWidgets.QFileDialog.getExistingDirectory(self, "Select install directory", str(Path.home()))
+        if directory:
+            self.path_edit.setText(directory)
+
+    def _validate_path(self) -> None:
+        text = self.path_edit.text().strip()
+        try:
+            path = Path(text).expanduser()
+        except Exception:
+            self._set_path_status("Invalid path. Please choose another location.", error=True)
+            self.completeChanged.emit()
+            return
+        if not text:
+            self._set_path_status("", error=False)
+        elif path.exists() and not path.is_dir():
+            self._set_path_status("Selected path exists but is not a directory. Choose a new location.", error=True)
+        elif path.exists():
+            self._set_path_status("Selected path already exists and cannot be used.", error=True)
         else:
-            self.branch_status_label.setStyleSheet("")
-        self.branch_status_label.setText(message)
+            self._set_path_status("Directory will be created automatically.", error=False)
+        self.completeChanged.emit()
+
+    def isComplete(self) -> bool:  # noqa: N802
+        text = self.path_edit.text().strip()
+        if not text:
+            return False
+        if not self.git_repo_widget.repo_url():
+            return False
+        try:
+            path = Path(text).expanduser()
+        except Exception:
+            return False
+        return not path.exists()
+
+    def apply_cli_args(self, args: argparse.Namespace) -> None:
+        if getattr(args, "install_path", None):
+            raw_path = Path(str(args.install_path)).expanduser()
+            try:
+                resolved = raw_path.resolve()
+            except Exception:
+                resolved = raw_path
+            self.path_edit.setText(str(resolved))
+        if getattr(args, "repo_url", None):
+            self.git_repo_widget.set_repo_url(str(args.repo_url))
+        if getattr(args, "branch", None):
+            self.git_repo_widget.set_branch(str(args.branch))
+        if getattr(args, "github_token", None):
+            self.github_token_edit.setText(str(args.github_token))
+
+    def cli_arguments(self) -> List[str]:
+        path_value = self.path_edit.text().strip()
+        repo_value = self.git_repo_widget.repo_url() or ACQ4_REPO_URL
+        branch_value = self.git_repo_widget.branch() or DEFAULT_BRANCH
+        token_value = self._current_token()
+        args = [
+            ARG_INSTALL_PATH,
+            path_value,
+            ARG_REPO_URL,
+            repo_value,
+            ARG_BRANCH,
+            branch_value,
+        ]
+        if token_value:
+            args.extend([ARG_GITHUB_TOKEN, token_value])
+        return args
+
+    def _set_path_status(self, message: str, *, error: bool) -> None:
+        if error:
+            self.path_status_label.setStyleSheet("color: #a94442;")
+        else:
+            self.path_status_label.setStyleSheet("")
+        self.path_status_label.setText(message)
+
+    def _handle_token_change(self) -> None:
+        self.git_repo_widget.set_github_token(self._current_token())
+
+    def _current_token(self) -> Optional[str]:
+        token = self.github_token_edit.text().strip()
+        return token or None
 
 
 class DependenciesPage(QtWidgets.QWizardPage):
@@ -1495,8 +1538,6 @@ class ConfigPage(QtWidgets.QWizardPage):
         new_help.setIndent(24)
         layout.addWidget(new_help)
 
-        self.repo_edit = QtWidgets.QLineEdit()
-        self.repo_edit.setPlaceholderText("https://github.com/your/config-repo.git")
         clone_block = QtWidgets.QVBoxLayout()
         clone_block.addWidget(self.clone_radio)
         clone_help = QtWidgets.QLabel(
@@ -1506,10 +1547,14 @@ class ConfigPage(QtWidgets.QWizardPage):
         clone_help.setWordWrap(True)
         clone_help.setIndent(24)
         clone_block.addWidget(clone_help)
-        clone_input_row = QtWidgets.QHBoxLayout()
-        clone_input_row.setContentsMargins(32, 0, 0, 0)
-        clone_input_row.addWidget(self.repo_edit)
-        clone_block.addLayout(clone_input_row)
+        clone_widget_container = QtWidgets.QWidget()
+        clone_widget_container.setContentsMargins(32, 0, 0, 0)
+        clone_widget_layout = QtWidgets.QVBoxLayout(clone_widget_container)
+        clone_widget_layout.setContentsMargins(0, 0, 0, 0)
+        self.git_repo_widget = GitRepoWidget(default_repo="", default_branch="main")
+        self.git_repo_widget.repo_edit.setPlaceholderText("https://github.com/your/config-repo.git")
+        clone_widget_layout.addWidget(self.git_repo_widget)
+        clone_block.addWidget(clone_widget_container)
         layout.addLayout(clone_block)
 
         self.copy_path_edit = QtWidgets.QLineEdit()
@@ -1534,13 +1579,13 @@ class ConfigPage(QtWidgets.QWizardPage):
         self.clone_radio.toggled.connect(self._update_mode_widgets)
         self.copy_radio.toggled.connect(self._update_mode_widgets)
         self.new_radio.toggled.connect(self._update_mode_widgets)
-        self.repo_edit.textChanged.connect(lambda _: self.completeChanged.emit())
+        self.git_repo_widget.repoChanged.connect(lambda _: self.completeChanged.emit())
         self.copy_path_edit.textChanged.connect(lambda _: self.completeChanged.emit())
         self._update_mode_widgets()
 
     def isComplete(self) -> bool:  # noqa: N802
         if self.clone_radio.isChecked():
-            return bool(self.repo_edit.text().strip())
+            return bool(self.git_repo_widget.repo_url())
         if self.copy_radio.isChecked():
             return bool(self.copy_path_edit.text().strip())
         return True
@@ -1551,7 +1596,7 @@ class ConfigPage(QtWidgets.QWizardPage):
             self.clone_radio.setChecked(True)
             repo = getattr(args, "config_repo", "") or ""
             if repo:
-                self.repo_edit.setText(repo)
+                self.git_repo_widget.set_repo_url(repo)
         elif mode == "new":
             self.new_radio.setChecked(True)
         elif mode == "copy":
@@ -1561,7 +1606,7 @@ class ConfigPage(QtWidgets.QWizardPage):
                 self.copy_path_edit.setText(path)
         elif getattr(args, "config_repo", None):
             self.clone_radio.setChecked(True)
-            self.repo_edit.setText(str(args.config_repo))
+            self.git_repo_widget.set_repo_url(str(args.config_repo))
         elif getattr(args, "config_path", None):
             self.copy_radio.setChecked(True)
             self.copy_path_edit.setText(str(args.config_path))
@@ -1575,7 +1620,7 @@ class ConfigPage(QtWidgets.QWizardPage):
         else:
             mode = "new"
         args = [ARG_CONFIG_MODE, mode]
-        repo = self.repo_edit.text().strip()
+        repo = self.git_repo_widget.repo_url()
         if self.clone_radio.isChecked() and repo:
             args.extend([ARG_CONFIG_REPO, repo])
         path = self.copy_path_edit.text().strip()
@@ -1586,7 +1631,7 @@ class ConfigPage(QtWidgets.QWizardPage):
     def _update_mode_widgets(self) -> None:
         clone_enabled = self.clone_radio.isChecked()
         copy_enabled = self.copy_radio.isChecked()
-        self.repo_edit.setEnabled(clone_enabled)
+        self.git_repo_widget.setEnabled(clone_enabled)
         self.copy_path_edit.setEnabled(copy_enabled)
         self.copy_browse_button.setEnabled(copy_enabled)
         self.completeChanged.emit()
@@ -2196,6 +2241,12 @@ class InstallWizard(QtWidgets.QWizard):
         self.addPage(self.config_page)
         self.addPage(self.summary_page)
         self.addPage(self.install_page)
+
+        # Connect github token from LocationPage to ConfigPage's git_repo_widget
+        self.location_page.github_token_edit.textChanged.connect(
+            lambda token: self.config_page.git_repo_widget.set_github_token(token.strip() or None)
+        )
+
         self.apply_cli_arguments(cli_args)
         self._apply_default_size()
 
@@ -2232,7 +2283,7 @@ class InstallWizard(QtWidgets.QWizard):
         return "new"
 
     def config_repo(self) -> Optional[str]:
-        text = self.config_page.repo_edit.text().strip()
+        text = self.config_page.git_repo_widget.repo_url()
         return text or None
 
     def config_copy_path(self) -> Optional[Path]:
@@ -2396,6 +2447,7 @@ class InstallerExecutor:
             "-m",
             "pip",
             "install",
+            "--index-url=https://pypi.org/simple/",
             *install_specs,
         ]
         run_command(
@@ -2416,6 +2468,7 @@ class InstallerExecutor:
             "-m",
             "pip",
             "install",
+            "--index-url=https://pypi.org/simple/",
             "--no-deps",
             "-e",
             str(source_dir),
@@ -2442,6 +2495,7 @@ class InstallerExecutor:
             "-m",
             "pip",
             "install",
+            "--index-url=https://pypi.org/simple/",
             *specs,
         ]
         env = self._pip_env()
@@ -2488,6 +2542,7 @@ class InstallerExecutor:
                 "-m",
                 "pip",
                 "install",
+                "--index-url=https://pypi.org/simple/",
                 "-e",
                 str(target),
             ]

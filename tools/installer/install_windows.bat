@@ -227,8 +227,6 @@ if not exist "%INSTALLER_ENV_PATH%\conda-meta" (
     if defined CREATE_LOG if exist "!CREATE_LOG!" del "!CREATE_LOG!" >nul 2>&1
     set "CREATE_LOG="
 )
-echo Upgrading pip in installer environment...
-call "%CONDA_EXE%" run -n "%INSTALLER_ENV_NAME%" python -m pip install --upgrade pip --index-url=https://pypi.org/simple/
 echo Installing dependencies in installer environment...
 call "%CONDA_EXE%" run -n "%INSTALLER_ENV_NAME%" python -m pip install --upgrade %QT_PACKAGE% %TOML_PARSER_PACKAGE% --index-url=https://pypi.org/simple/
 goto :eof
