@@ -63,17 +63,31 @@ for %%P in (conda.exe conda.bat) do (
 )
 
 rem Check most common conda installation locations
+rem Note: Scripts\conda.exe is checked before condabin\conda.bat because
+rem condabin\conda.bat may return incorrect version information
 for %%C in (
+    "%USERPROFILE%\miniconda3\Scripts\conda.exe"
+    "%USERPROFILE%\Miniconda3\Scripts\conda.exe"
+    "%USERPROFILE%\anaconda3\Scripts\conda.exe"
+    "%USERPROFILE%\Anaconda3\Scripts\conda.exe"
     "%USERPROFILE%\miniconda3\condabin\conda.bat"
     "%USERPROFILE%\Miniconda3\condabin\conda.bat"
     "%USERPROFILE%\anaconda3\condabin\conda.bat"
     "%USERPROFILE%\Anaconda3\condabin\conda.bat"
+    "%LOCALAPPDATA%\miniconda3\Scripts\conda.exe"
+    "%LOCALAPPDATA%\Miniconda3\Scripts\conda.exe"
+    "%LOCALAPPDATA%\anaconda3\Scripts\conda.exe"
+    "%LOCALAPPDATA%\Anaconda3\Scripts\conda.exe"
     "%LOCALAPPDATA%\miniconda3\condabin\conda.bat"
     "%LOCALAPPDATA%\Miniconda3\condabin\conda.bat"
     "%LOCALAPPDATA%\anaconda3\condabin\conda.bat"
     "%LOCALAPPDATA%\Anaconda3\condabin\conda.bat"
+    "%ProgramData%\miniconda3\Scripts\conda.exe"
+    "%ProgramData%\Miniconda3\Scripts\conda.exe"
     "%ProgramData%\miniconda3\condabin\conda.bat"
     "%ProgramData%\Miniconda3\condabin\conda.bat"
+    "C:\miniconda3\Scripts\conda.exe"
+    "C:\Miniconda3\Scripts\conda.exe"
     "C:\miniconda3\condabin\conda.bat"
     "C:\Miniconda3\condabin\conda.bat"
 ) do (
@@ -84,10 +98,12 @@ for %%C in (
 
 if defined BEST_CONDA (
     set "CONDA_EXE=%BEST_CONDA%"
-    echo Using conda at %CONDA_EXE% version %BEST_VERSION%
+    echo.
+    echo Selected conda: %CONDA_EXE% ^(version %BEST_VERSION%^)
 ) else if defined FALLBACK_CONDA (
     set "CONDA_EXE=%FALLBACK_CONDA%"
-    echo Using conda at %CONDA_EXE% ^(version check failed^)
+    echo.
+    echo Selected conda: %CONDA_EXE% ^(version unknown^)
 )
 
 set "BEST_CONDA="
@@ -103,21 +119,23 @@ if not exist "%ACQ4_CAND_PATH%" goto :eof
 rem Get version from conda --version
 set "CAND_VERSION="
 for /f "tokens=2" %%V in ('cmd /d /c ""%ACQ4_CAND_PATH%" --version 2^>nul"') do (
-    if not defined CAND_VERSION set "CAND_VERSION=%%~V"
+    if not defined CAND_VERSION set "CAND_VERSION=%%V"
 )
 
 if defined CAND_VERSION (
+    echo Found conda: %ACQ4_CAND_PATH% ^(version %CAND_VERSION%^)
     if not defined BEST_VERSION (
         set "BEST_VERSION=%CAND_VERSION%"
         set "BEST_CONDA=%ACQ4_CAND_PATH%"
     ) else (
         call :compare_versions "%CAND_VERSION%" "%BEST_VERSION%"
-        if "%ACQ4_VER_CMP%"=="1" (
+        if "!ACQ4_VER_CMP!"=="1" (
             set "BEST_VERSION=%CAND_VERSION%"
             set "BEST_CONDA=%ACQ4_CAND_PATH%"
         )
     )
 ) else (
+    echo Found conda: %ACQ4_CAND_PATH% ^(version unknown^)
     if not defined FALLBACK_CONDA (
         set "FALLBACK_CONDA=%ACQ4_CAND_PATH%"
     )
