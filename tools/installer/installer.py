@@ -777,7 +777,7 @@ def build_unattended_script_content(cli_args: List[str], *, is_windows: bool) ->
             "echo Downloading ACQ4 bootstrap script...\n"
             f"powershell -NoProfile -Command \"Invoke-WebRequest -Uri '{WINDOWS_BOOTSTRAP_URL}' -OutFile '%BOOTSTRAP%'\" || "
             "goto :fail\n"
-            f"call {bootstrap_call}\n"
+            f"{bootstrap_call}\n"
             "set \"RESULT=%ERRORLEVEL%\"\n"
             "del \"%BOOTSTRAP%\" >nul 2>&1\n"
             "exit /b %RESULT%\n"
@@ -1658,17 +1658,30 @@ class SummaryPage(QtWidgets.QWizardPage):
         layout.addWidget(self.summary_label)
         layout.addSpacing(12)
         self.export_help = QtWidgets.QLabel(
-            "Use the Export button to “bake” this configuration into a reusable unattended script. "
+            'Use the Export button to "bake" this configuration into a reusable unattended script. '
             "That script installs ACQ4 with the exact settings shown above on other machines."
         )
         self.export_help.setWordWrap(True)
         layout.addWidget(self.export_help)
+
+        export_row = QtWidgets.QHBoxLayout()
         self.export_button = QtWidgets.QPushButton("Export unattended script…")
         size_policy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Maximum,
                                             QtWidgets.QSizePolicy.Policy.Fixed)
         self.export_button.setSizePolicy(size_policy)
         self.export_button.clicked.connect(self._export_script)
-        layout.addWidget(self.export_button, alignment=QtCore.Qt.AlignmentFlag.AlignLeft)
+        export_row.addWidget(self.export_button)
+
+        self.unattended_checkbox = QtWidgets.QCheckBox("Unattended install")
+        self.unattended_checkbox.setChecked(True)
+        self.unattended_checkbox.setToolTip(
+            "When checked, the exported script will run without user interaction. "
+            "Uncheck to create an interactive installer script."
+        )
+        export_row.addWidget(self.unattended_checkbox)
+        export_row.addStretch(1)
+
+        layout.addLayout(export_row)
         self._previous_next_text: Optional[str] = None
 
     def initializePage(self) -> None:  # noqa: N802
@@ -1714,10 +1727,12 @@ class SummaryPage(QtWidgets.QWizardPage):
         wizard: Optional[InstallWizard] = self.wizard()  # type: ignore[assignment]
         if wizard is None:
             return
-        cli_args = wizard.cli_arguments(unattended=True)
+        unattended = self.unattended_checkbox.isChecked()
+        cli_args = wizard.cli_arguments(unattended=unattended)
         is_windows = os.name == "nt"
         default_suffix = ".bat" if is_windows else ".sh"
-        default_name = f"acq4_unattended_install{default_suffix}"
+        script_type = "unattended" if unattended else "attended"
+        default_name = f"acq4_{script_type}_install{default_suffix}"
         dialog_fn = QtWidgets.QFileDialog.getSaveFileName
         filters = "Script files (*.sh *.bat);;Shell scripts (*.sh);;Batch scripts (*.bat)"
         default_path = Path.cwd() / default_name
