@@ -60,15 +60,13 @@ for %%P in (conda.exe conda.bat) do (
 for %%C in ("%USERPROFILE%\Miniconda3\condabin\conda.bat" "%USERPROFILE%\miniconda3\Scripts\conda.exe" "%USERPROFILE%\AppData\Local\miniconda3\condabin\conda.bat" "%USERPROFILE%\AppData\Local\miniconda3\Scripts\conda.exe" "%USERPROFILE%\Anaconda3\Scripts\conda.exe" "%ProgramData%\Miniconda3\Scripts\conda.exe" "C:\Miniconda3\condabin\conda.bat") do (
     call :consider_conda "%%~fC"
 )
-if defined HOME (
-    for %%C in ("%HOME%\Miniconda3\condabin\conda.bat" "%HOME%\Miniconda3\Scripts\conda.exe" "%HOME%\miniconda3\condabin\conda.bat" "%HOME%\miniconda3\Scripts\conda.exe" "%HOME%\AppData\Local\Miniconda3\condabin\conda.bat" "%HOME%\AppData\Local\Miniconda3\Scripts\conda.exe" "%HOME%\AppData\Local\miniconda3\condabin\conda.bat" "%HOME%\AppData\Local\miniconda3\Scripts\conda.exe") do (
-        call :consider_conda "%%~fC"
+for %%R in ("%USERPROFILE%" "%HOME%" "%HOMEDRIVE%%HOMEPATH%" "%HOMESHARE%" "%HOMEDRIVE%\home\%USERNAME%" "%SystemDrive%\home\%USERNAME%") do (
+    if not "%%~R"=="" (
+        call :probe_conda_root "%%~fR"
     )
 )
 if defined LOCALAPPDATA (
-    for %%C in ("%LOCALAPPDATA%\Miniconda3\condabin\conda.bat" "%LOCALAPPDATA%\Miniconda3\Scripts\conda.exe" "%LOCALAPPDATA%\miniconda3\condabin\conda.bat" "%LOCALAPPDATA%\miniconda3\Scripts\conda.exe") do (
-        call :consider_conda "%%~fC"
-    )
+    call :probe_conda_root "%LOCALAPPDATA%"
 )
 if defined BEST_CONDA (
     set "CONDA_EXE=%BEST_CONDA%"
@@ -119,6 +117,28 @@ if defined CAND_VERSION (
 )
 set "CAND_VERSION="
 set "ACQ4_VER_CMP="
+goto :eof
+
+:probe_conda_root
+set "ACQ4_PROBE_ROOT=%~1"
+if "%ACQ4_PROBE_ROOT%"=="" goto :eof
+for %%B in ("%ACQ4_PROBE_ROOT%" "%ACQ4_PROBE_ROOT%\AppData\Local") do (
+    if not "%%~fB"=="" (
+        call :probe_conda_base "%%~fB"
+    )
+)
+set "ACQ4_PROBE_ROOT="
+goto :eof
+
+:probe_conda_base
+set "ACQ4_PROBE_BASE=%~1"
+if "%ACQ4_PROBE_BASE%"=="" goto :eof
+for %%D in (Miniconda3 miniconda3 Anaconda3 anaconda3 Mambaforge mambaforge) do (
+    for %%C in ("%ACQ4_PROBE_BASE%\%%~D\condabin\conda.bat" "%ACQ4_PROBE_BASE%\%%~D\Scripts\conda.exe") do (
+        call :consider_conda "%%~fC"
+    )
+)
+set "ACQ4_PROBE_BASE="
 goto :eof
 
 :compare_versions
