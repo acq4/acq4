@@ -114,13 +114,13 @@ if defined CAND_VERSION (
     ) else (
         call :compare_versions "%CAND_VERSION%" "%BEST_VERSION%"
         if "%ACQ4_VER_CMP%"=="1" (
-            echo   -> newer than previous best (%BEST_VERSION%); updating best candidate.
+            echo   -> newer than previous best ^(%BEST_VERSION%^); updating best candidate.
             set "BEST_VERSION=%CAND_VERSION%"
             set "BEST_CONDA=%ACQ4_CAND_PATH%"
         ) else if "%ACQ4_VER_CMP%"=="0" (
-            echo   -> same version as current best (%BEST_VERSION%); keeping existing best path.
+            echo   -> same version as current best ^(%BEST_VERSION%^); keeping existing best path.
         ) else if "%ACQ4_VER_CMP%"=="2" (
-            echo   -> older than current best (%BEST_VERSION%); skipping.
+            echo   -> older than current best ^(%BEST_VERSION%^); skipping.
         ) else (
             echo   -> unable to compare versions (error %ACQ4_VER_CMP%); skipping.
         )
@@ -136,8 +136,10 @@ goto :eof
 :probe_conda_root
 set "ACQ4_PROBE_ROOT=%~1"
 if "%ACQ4_PROBE_ROOT%"=="" goto :eof
+echo Probing root: %ACQ4_PROBE_ROOT%
 for %%B in ("%ACQ4_PROBE_ROOT%" "%ACQ4_PROBE_ROOT%\AppData\Local") do (
     if not "%%~fB"=="" (
+        echo   -> checking base directory: %%~fB
         call :probe_conda_base "%%~fB"
     )
 )
@@ -148,6 +150,7 @@ goto :eof
 set "ACQ4_PROBE_BASE=%~1"
 if "%ACQ4_PROBE_BASE%"=="" goto :eof
 for %%D in (Miniconda3 miniconda3 Anaconda3 anaconda3 Mambaforge mambaforge) do (
+    echo     -> probing distribution %%~D under %ACQ4_PROBE_BASE%
     for %%C in ("%ACQ4_PROBE_BASE%\%%~D\condabin\conda.bat" "%ACQ4_PROBE_BASE%\%%~D\Scripts\conda.exe") do (
         call :consider_conda "%%~fC"
     )
