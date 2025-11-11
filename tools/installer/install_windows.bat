@@ -71,7 +71,7 @@ if defined LOCALAPPDATA (
 if defined BEST_CONDA (
     set "CONDA_EXE=%BEST_CONDA%"
     if defined BEST_VERSION (
-        echo Using conda at %CONDA_EXE% (version %BEST_VERSION%^)
+        echo Using conda at %CONDA_EXE% version %BEST_VERSION%
     ) else (
         echo Using conda at %CONDA_EXE%
     )
@@ -114,15 +114,15 @@ if defined CAND_VERSION (
     ) else (
         call :compare_versions "%CAND_VERSION%" "%BEST_VERSION%"
         if "%ACQ4_VER_CMP%"=="1" (
-            echo   -> newer than previous best ^(%BEST_VERSION%^); updating best candidate.
+            echo   -> newer than previous best %BEST_VERSION%; updating best candidate.
             set "BEST_VERSION=%CAND_VERSION%"
             set "BEST_CONDA=%ACQ4_CAND_PATH%"
         ) else if "%ACQ4_VER_CMP%"=="0" (
-            echo   -> same version as current best ^(%BEST_VERSION%^); keeping existing best path.
+            echo   -> same version as current best %BEST_VERSION%; keeping existing best path.
         ) else if "%ACQ4_VER_CMP%"=="2" (
-            echo   -> older than current best ^(%BEST_VERSION%^); skipping.
+            echo   -> older than current best %BEST_VERSION%; skipping.
         ) else (
-            echo   -> unable to compare versions (error %ACQ4_VER_CMP%); skipping.
+            echo   -> unable to compare versions error %ACQ4_VER_CMP%; skipping.
         )
     )
 ) else if not defined FALLBACK_CONDA (
