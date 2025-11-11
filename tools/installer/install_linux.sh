@@ -33,22 +33,83 @@ log() {
 }
 
 find_conda() {
-    if [[ -n "${CONDA_EXE:-}" && -x "${CONDA_EXE}" ]]; then
-        echo "${CONDA_EXE}"
+    local -a candidate_list=()
+    if [[ -n "${CONDA_EXE:-}" ]]; then
+        candidate_list+=("${CONDA_EXE}")
+    fi
+
+    local path_candidate
+    path_candidate="$(command -v conda 2>/dev/null || true)"
+    if [[ -n "${path_candidate}" ]]; then
+        candidate_list+=("${path_candidate}")
+    fi
+
+    candidate_list+=("${HOME}/miniconda3/bin/conda" \
+                     "${HOME}/anaconda3/bin/conda" \
+                     "/opt/conda/bin/conda")
+
+    declare -A seen=()
+    local -a candidates=()
+    for path_candidate in "${candidate_list[@]}"; do
+        if [[ -n "${path_candidate}" && -x "${path_candidate}" && -z "${seen[${path_candidate}]:-}" ]]; then
+            candidates+=("${path_candidate}")
+            seen["${path_candidate}"]=1
+        fi
+    done
+
+    local best_path=""
+    local best_version=""
+    local fallback_path=""
+    local candidate version_output version latest
+    for candidate in "${candidates[@]}"; do
+        if version_output="$("${candidate}" --version 2>/dev/null)"; then
+            version="${version_output##* }"
+            version="${version//[[:space:]]/}"
+            if [[ -z "${version}" ]]; then
+                if [[ -z "${fallback_path}" ]]; then
+                    fallback_path="${candidate}"
+                fi
+                continue
+            fi
+            if [[ -z "${best_version}" ]]; then
+                best_version="${version}"
+                best_path="${candidate}"
+            else
+                latest="$(printf '%s\n%s\n' "${version}" "${best_version}" | sort -V | tail -n1)"
+                if [[ "${latest}" == "${version}" && "${version}" != "${best_version}" ]]; then
+                    best_version="${version}"
+                    best_path="${candidate}"
+                fi
+            fi
+        else
+            if [[ -z "${fallback_path}" ]]; then
+                fallback_path="${candidate}"
+            fi
+        fi
+    done
+
+    if [[ -n "${best_path}" ]]; then
+        if [[ -n "${best_version}" ]]; then
+            log "Using conda at ${best_path} (version ${best_version})"
+        else
+            log "Using conda at ${best_path}"
+        fi
+        echo "${best_path}"
         return 0
     fi
 
-    local candidates=("$(command -v conda 2>/dev/null || true)" \
-                      "${HOME}/miniconda3/bin/conda" \
-                      "${HOME}/anaconda3/bin/conda" \
-                      "/opt/conda/bin/conda")
+    if [[ -n "${fallback_path}" ]]; then
+        log "Using conda at ${fallback_path}"
+        echo "${fallback_path}"
+        return 0
+    fi
 
-    for candidate in "${candidates[@]}"; do
-        if [[ -n "${candidate}" && -x "${candidate}" ]]; then
-            echo "${candidate}"
-            return 0
-        fi
-    done
+    if (( ${#candidates[@]} > 0 )); then
+        log "Using conda at ${candidates[0]}"
+        echo "${candidates[0]}"
+        return 0
+    fi
+
     return 1
 }
 

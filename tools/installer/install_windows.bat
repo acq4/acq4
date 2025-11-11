@@ -44,22 +44,76 @@ call :cleanup_installer
 exit /b %RESULT%
 
 :find_conda
-if defined CONDA_EXE if exist "%CONDA_EXE%" goto :eof
+set "BEST_CONDA="
+set "BEST_VERSION="
+set "FALLBACK_CONDA="
+if defined CONDA_EXE (
+    call :consider_conda "%CONDA_EXE%"
+)
 for %%P in (conda.exe conda.bat) do (
     for %%Q in ("%%~$PATH:P") do (
-        if not "%%~fQ"=="" if exist "%%~fQ" (
-            set "CONDA_EXE=%%~fQ"
-            goto :eof
+        if not "%%~fQ"=="" (
+            call :consider_conda "%%~fQ"
         )
     )
 )
-set "CANDIDATES=%USERPROFILE%\Miniconda3\condabin\conda.bat;%USERPROFILE%\miniconda3\Scripts\conda.exe;%USERPROFILE%\Anaconda3\Scripts\conda.exe;%ProgramData%\Miniconda3\Scripts\conda.exe;C:\Miniconda3\condabin\conda.bat"
-for %%C in (%CANDIDATES%) do (
-    if exist "%%~fC" (
-        set "CONDA_EXE=%%~fC"
-        goto :eof
-    )
+for %%C in ("%USERPROFILE%\Miniconda3\condabin\conda.bat" "%USERPROFILE%\miniconda3\Scripts\conda.exe" "%USERPROFILE%\Anaconda3\Scripts\conda.exe" "%ProgramData%\Miniconda3\Scripts\conda.exe" "C:\Miniconda3\condabin\conda.bat") do (
+    call :consider_conda "%%~fC"
 )
+if defined BEST_CONDA (
+    set "CONDA_EXE=%BEST_CONDA%"
+    if defined BEST_VERSION (
+        echo Using conda at %CONDA_EXE% (version %BEST_VERSION%)
+    ) else (
+        echo Using conda at %CONDA_EXE%
+    )
+) else if defined FALLBACK_CONDA (
+    set "CONDA_EXE=%FALLBACK_CONDA%"
+    echo Using conda at %CONDA_EXE%
+)
+set "BEST_CONDA="
+set "BEST_VERSION="
+set "FALLBACK_CONDA="
+goto :eof
+
+:consider_conda
+set "ACQ4_CAND_PATH=%~1"
+if "%ACQ4_CAND_PATH%"=="" goto :eof
+for %%I in ("%ACQ4_CAND_PATH%") do set "ACQ4_CAND_PATH=%%~fI"
+if not exist "%ACQ4_CAND_PATH%" goto :eof
+call :candidate_version "%ACQ4_CAND_PATH%"
+if defined CAND_VERSION (
+    if not defined BEST_VERSION (
+        set "BEST_VERSION=%CAND_VERSION%"
+        set "BEST_CONDA=%ACQ4_CAND_PATH%"
+    ) else (
+        call :compare_versions "%CAND_VERSION%" "%BEST_VERSION%"
+        if "%ACQ4_VER_CMP%"=="1" (
+            set "BEST_VERSION=%CAND_VERSION%"
+            set "BEST_CONDA=%ACQ4_CAND_PATH%"
+        )
+    )
+) else if not defined FALLBACK_CONDA (
+    set "FALLBACK_CONDA=%ACQ4_CAND_PATH%"
+)
+set "CAND_VERSION="
+set "ACQ4_VER_CMP="
+goto :eof
+
+:candidate_version
+set "CAND_VERSION="
+set "ACQ4_VERSION_PATH=%~1"
+if "%ACQ4_VERSION_PATH%"=="" goto :eof
+if not exist "%ACQ4_VERSION_PATH%" goto :eof
+for /f "tokens=2 delims= " %%V in ('""%ACQ4_VERSION_PATH%" --version 2^>nul') do (
+    if not defined CAND_VERSION set "CAND_VERSION=%%~V"
+)
+goto :eof
+
+:compare_versions
+set "ACQ4_VER_CMP="
+powershell -NoProfile -Command "$a = '%~1'; $b = '%~2'; try { $v1 = [version]$a; $v2 = [version]$b } catch { exit 3 }; if ($v1 -gt $v2) { exit 1 } elseif ($v1 -lt $v2) { exit 2 } else { exit 0 }" >nul 2>&1
+set "ACQ4_VER_CMP=%ERRORLEVEL%"
 goto :eof
 
 :install_miniconda
