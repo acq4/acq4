@@ -166,7 +166,7 @@ echo ===========================================================================
 echo.
 set "TMP_INSTALLER=%TEMP%\miniconda-%RANDOM%.exe"
 echo Downloading from: %MINICONDA_URL%
-powershell -NoProfile -Command "Invoke-WebRequest -Uri '%MINICONDA_URL%' -OutFile '%TMP_INSTALLER%'" || goto :fail_install
+curl -L -o "%TMP_INSTALLER%" "%MINICONDA_URL%" || goto :fail_install
 
 echo.
 echo ===============================================================================
@@ -289,17 +289,13 @@ if not defined TMP_INSTALLER (
 )
 echo Temporary installer path: %TMP_INSTALLER%
 echo Downloading installer from %INSTALLER_URL%
-set "ACQ4_INSTALLER_OUTFILE=%TMP_INSTALLER%"
-powershell -NoProfile -Command "try { Invoke-WebRequest -Uri '%INSTALLER_URL%' -OutFile $env:ACQ4_INSTALLER_OUTFILE -ErrorAction Stop } catch { Write-Host 'Download failed:' $_.Exception.Message; exit 1 }" >nul 2>&1
-set "PS_STATUS=%ERRORLEVEL%"
-set "ACQ4_INSTALLER_OUTFILE="
-if not "%PS_STATUS%"=="0" (
-    echo ERROR: Unable to download installer.py (exit code: %PS_STATUS%).
+curl -L -o "%TMP_INSTALLER%" "%INSTALLER_URL%" >nul 2>&1
+if errorlevel 1 (
+    echo ERROR: Unable to download installer.py
     if exist "%TMP_INSTALLER%" del "%TMP_INSTALLER%" >nul 2>&1
     goto :eof
 )
 echo Download completed successfully
-set "PS_STATUS="
 set "DOWNLOADED_INSTALLER=%TMP_INSTALLER%"
 set "INSTALLER_SCRIPT=%TMP_INSTALLER%"
 goto :eof
