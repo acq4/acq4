@@ -7,7 +7,7 @@ if exist "%~f0" (
 )
 set "DOWNLOADED_INSTALLER="
 set "RESULT=0"
-set "INSTALLER_URL=https://raw.githubusercontent.com/acq4/acq4/main/tools/installer/installer.py"
+set "INSTALLER_URL=https://raw.githubusercontent.com/AllenInstitute/acq4/ivscc-rc/tools/installer/installer.py"
 set "INSTALLER_ENV_NAME=_acq4_installer_env"
 set "PYTHON_VERSION=3.12"
 set "QT_PACKAGE=pyqt6"
@@ -99,11 +99,11 @@ for %%C in (
 if defined BEST_CONDA (
     set "CONDA_EXE=%BEST_CONDA%"
     echo.
-    echo Selected conda: %CONDA_EXE% ^(version %BEST_VERSION%^)
+    echo Selected conda: !CONDA_EXE! ^(version %BEST_VERSION%^)
 ) else if defined FALLBACK_CONDA (
     set "CONDA_EXE=%FALLBACK_CONDA%"
     echo.
-    echo Selected conda: %CONDA_EXE% ^(version unknown^)
+    echo Selected conda: !CONDA_EXE! ^(version unknown^)
 )
 
 set "BEST_CONDA="
@@ -206,30 +206,31 @@ if not exist "%INSTALLER_ENV_PATH%\conda-meta" (
     echo Creating installer environment...
     set "CREATE_LOG=%TEMP%\acq4-conda-create-%RANDOM%.log"
     set "PYTHON_SPEC=python=%PYTHON_VERSION%"
-    echo Running: "%CONDA_EXE%" create -y -n "%INSTALLER_ENV_NAME%" %PYTHON_SPEC% pip
-    set "ACQ4_CREATE_CMD=""%CONDA_EXE%" create -y -n "%INSTALLER_ENV_NAME%" %PYTHON_SPEC% pip"
-    powershell -NoProfile -Command "$ErrorActionPreference = 'SilentlyContinue'; $log = $env:CREATE_LOG; $cmd = $env:ACQ4_CREATE_CMD; cmd.exe /d /c $cmd 2>&1 | Tee-Object -FilePath $log; exit $LASTEXITCODE"
+    echo Running: "%CONDA_EXE%" create -y -n "%INSTALLER_ENV_NAME%" !PYTHON_SPEC!
+    call "%CONDA_EXE%" create -y -n "%INSTALLER_ENV_NAME%" !PYTHON_SPEC! > "!CREATE_LOG!" 2>&1
     set "CREATE_STATUS=%ERRORLEVEL%"
-    set "ACQ4_CREATE_CMD="
     set "PYTHON_SPEC="
-    if not "%CREATE_STATUS%"=="0" (
-        if defined CREATE_LOG if exist "%CREATE_LOG%" (
-            findstr /C:"NoWritableEnvsDirError" "%CREATE_LOG%" >nul 2>&1 && (
+    if not "!CREATE_STATUS!"=="0" (
+        if defined CREATE_LOG if exist "!CREATE_LOG!" (
+            findstr /C:"NoWritableEnvsDirError" "!CREATE_LOG!" >nul 2>&1 && (
                 echo Conda could not create the installer environment: no writable envs directories are configured.
                 echo Please ensure at least one entry in 'conda info --json' under envs_dirs is writable.
             )
-            findstr /C:"NoWritablePkgsDirError" "%CREATE_LOG%" >nul 2>&1 && (
+            findstr /C:"NoWritablePkgsDirError" "!CREATE_LOG!" >nul 2>&1 && (
                 echo Conda could not download packages: no writable package cache directories are configured.
             )
-            type "%CREATE_LOG%"
-            del "%CREATE_LOG%" >nul 2>&1
+            type "!CREATE_LOG!"
+            del "!CREATE_LOG!" >nul 2>&1
         )
-        exit /b %CREATE_STATUS%
+        exit /b !CREATE_STATUS!
     )
-    if defined CREATE_LOG if exist "%CREATE_LOG%" del "%CREATE_LOG%" >nul 2>&1
+    if defined CREATE_LOG if exist "!CREATE_LOG!" del "!CREATE_LOG!" >nul 2>&1
     set "CREATE_LOG="
 )
-call "%CONDA_EXE%" run -n "%INSTALLER_ENV_NAME%" python -m pip install --quiet --upgrade %QT_PACKAGE% %TOML_PARSER_PACKAGE%
+echo Upgrading pip in installer environment...
+call "%CONDA_EXE%" run -n "%INSTALLER_ENV_NAME%" python -m pip install --upgrade pip --index-url=https://pypi.org/simple/
+echo Installing dependencies in installer environment...
+call "%CONDA_EXE%" run -n "%INSTALLER_ENV_NAME%" python -m pip install --upgrade %QT_PACKAGE% %TOML_PARSER_PACKAGE% --index-url=https://pypi.org/simple/
 goto :eof
 
 :download_installer
