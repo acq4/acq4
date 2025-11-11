@@ -90,8 +90,9 @@ if not defined INSTALLER_ENV_PATH goto :eof
 if not exist "%INSTALLER_ENV_PATH%\conda-meta" (
     echo Creating installer environment...
     set "CREATE_LOG=%TEMP%\acq4-conda-create-%RANDOM%.log"
-    call "%CONDA_EXE%" create -y -n "%INSTALLER_ENV_NAME%" python=%PYTHON_VERSION% pip >"%CREATE_LOG%" 2>&1
-    if errorlevel 1 (
+    powershell -NoProfile -Command "$log = $env:CREATE_LOG; $args = @('create','-y','-n',$env:INSTALLER_ENV_NAME,'python=' + $env:PYTHON_VERSION,'pip'); & $env:CONDA_EXE @args 2>&1 | Tee-Object -FilePath $log; exit $LASTEXITCODE"
+    set "CREATE_STATUS=%ERRORLEVEL%"
+    if not "%CREATE_STATUS%"=="0" (
         findstr /C:"NoWritableEnvsDirError" "%CREATE_LOG%" >nul 2>&1 && (
             echo Conda could not create the installer environment: no writable envs directories are configured.
             echo Please ensure at least one entry in 'conda info --json' under envs_dirs is writable.
@@ -101,7 +102,7 @@ if not exist "%INSTALLER_ENV_PATH%\conda-meta" (
         )
         type "%CREATE_LOG%"
         del "%CREATE_LOG%" >nul 2>&1
-        exit /b 1
+        exit /b %CREATE_STATUS%
     )
     del "%CREATE_LOG%" >nul 2>&1
 )
