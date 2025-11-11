@@ -90,9 +90,13 @@ goto :eof
     if not exist "%INSTALLER_ENV_PATH%\conda-meta" (
         echo Creating installer environment...
         set "CREATE_LOG=%TEMP%\acq4-conda-create-%RANDOM%.log"
-        echo Running: "%CONDA_EXE%" create -y -n "%INSTALLER_ENV_NAME%" python=%PYTHON_VERSION% pip
-        powershell -NoProfile -Command "$log = $env:CREATE_LOG; $args = @('create','-y','-n',$env:INSTALLER_ENV_NAME,'python=' + $env:PYTHON_VERSION,'pip'); & $env:CONDA_EXE @args 2>&1 | Tee-Object -FilePath $log; exit $LASTEXITCODE"
+        set "PYTHON_SPEC=python=%PYTHON_VERSION%"
+        echo Running: "%CONDA_EXE%" create -y -n "%INSTALLER_ENV_NAME%" %PYTHON_SPEC% pip
+        set "ACQ4_CREATE_CMD=""%CONDA_EXE%" create -y -n "%INSTALLER_ENV_NAME%" %PYTHON_SPEC% pip"
+        powershell -NoProfile -Command "$log = $env:CREATE_LOG; $cmd = $env:ACQ4_CREATE_CMD; cmd.exe /d /c $cmd 2>&1 | Tee-Object -FilePath $log; exit $LASTEXITCODE"
         set "CREATE_STATUS=%ERRORLEVEL%"
+        set "ACQ4_CREATE_CMD="
+        set "PYTHON_SPEC="
         if not "%CREATE_STATUS%"=="0" (
             findstr /C:"NoWritableEnvsDirError" "%CREATE_LOG%" >nul 2>&1 && (
                 echo Conda could not create the installer environment: no writable envs directories are configured.
