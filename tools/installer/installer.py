@@ -61,7 +61,7 @@ START_BAT_TEMPLATE = r"""@echo off
 REM ACQ4 Launcher
 REM This script activates the ACQ4 conda environment and starts ACQ4
 
-call "{conda_exe}" activate "{env_path}"
+call "{conda_activate_bat}" "{env_path}"
 if errorlevel 1 (
     echo Failed to activate conda environment: {env_path}
     pause
@@ -809,8 +809,14 @@ def create_start_bat(base_dir: Path, conda_exe: str, env_path: Path) -> Path:
     Path
         Path to the created bat file.
     """
+    # Derive activate.bat path from conda.exe path
+    # conda_exe is typically: C:\...\Scripts\conda.exe
+    # activate.bat is at: C:\...\Scripts\activate.bat
+    conda_path = Path(conda_exe)
+    conda_activate_bat = conda_path.parent / "activate.bat"
+
     bat_content = START_BAT_TEMPLATE.format(
-        conda_exe=conda_exe,
+        conda_activate_bat=str(conda_activate_bat),
         env_path=str(env_path)
     )
     bat_path = base_dir / "start_acq4.bat"
@@ -837,7 +843,8 @@ def create_desktop_shortcut_windows(bat_path: Path, base_dir: Path) -> None:
     """
     desktop = Path(os.path.expanduser("~")) / "Desktop"
     desktop.mkdir(parents=True, exist_ok=True)
-    shortcut_path = desktop / WINDOWS_SHORTCUT_NAME
+    shortcut_name = f"ACQ4 ({base_dir.name}).lnk"
+    shortcut_path = desktop / shortcut_name
 
     # Try to find the ACQ4 icon
     icon_path = base_dir / ACQ4_SOURCE_DIRNAME / "acq4" / "icons" / "acq4.ico"
