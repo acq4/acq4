@@ -81,7 +81,16 @@ set "ACQ4_CAND_PATH=%~1"
 if "%ACQ4_CAND_PATH%"=="" goto :eof
 for %%I in ("%ACQ4_CAND_PATH%") do set "ACQ4_CAND_PATH=%%~fI"
 if not exist "%ACQ4_CAND_PATH%" goto :eof
-call :candidate_version "%ACQ4_CAND_PATH%"
+set "CAND_VERSION="
+for /f "tokens=1,2" %%S in ('cmd /d /c ""%ACQ4_CAND_PATH%" --version 2^>nul"') do (
+    if not defined CAND_VERSION (
+        if "%%T"=="" (
+            set "CAND_VERSION=%%~S"
+        ) else (
+            set "CAND_VERSION=%%~T"
+        )
+    )
+)
 if defined CAND_VERSION (
     if not defined BEST_VERSION (
         set "BEST_VERSION=%CAND_VERSION%"
@@ -98,16 +107,6 @@ if defined CAND_VERSION (
 )
 set "CAND_VERSION="
 set "ACQ4_VER_CMP="
-goto :eof
-
-:candidate_version
-set "CAND_VERSION="
-set "ACQ4_VERSION_PATH=%~1"
-if "%ACQ4_VERSION_PATH%"=="" goto :eof
-if not exist "%ACQ4_VERSION_PATH%" goto :eof
-for /f "tokens=2 delims= " %%V in ('""%ACQ4_VERSION_PATH%" --version 2^>nul') do (
-    if not defined CAND_VERSION set "CAND_VERSION=%%~V"
-)
 goto :eof
 
 :compare_versions
@@ -164,31 +163,35 @@ set "ACQ4_CONDA_VERSION_RESULT="
 exit /b 0
 
 :ensure_installer_env
-    call :resolve_env_path
-    if not defined INSTALLER_ENV_PATH goto :eof
-    if not exist "%INSTALLER_ENV_PATH%\conda-meta" (
-        echo Creating installer environment...
-        set "CREATE_LOG=%TEMP%\acq4-conda-create-%RANDOM%.log"
-        set "PYTHON_SPEC=python=%PYTHON_VERSION%"
-        echo Running: "%CONDA_EXE%" create -y -n "%INSTALLER_ENV_NAME%" %PYTHON_SPEC% pip
-        set "ACQ4_CREATE_CMD=""%CONDA_EXE%" create -y -n "%INSTALLER_ENV_NAME%" %PYTHON_SPEC% pip"
-        powershell -NoProfile -Command "$ErrorActionPreference = 'SilentlyContinue'; $log = $env:CREATE_LOG; $cmd = $env:ACQ4_CREATE_CMD; cmd.exe /d /c $cmd 2>&1 | Tee-Object -FilePath $log; exit $LASTEXITCODE"
-        set "CREATE_STATUS=%ERRORLEVEL%"
-        set "ACQ4_CREATE_CMD="
-        set "PYTHON_SPEC="
-        if not "%CREATE_STATUS%"=="0" (
+call :resolve_env_path
+if not defined INSTALLER_ENV_PATH goto :eof
+set "CREATE_LOG="
+if not exist "%INSTALLER_ENV_PATH%\conda-meta" (
+    echo Creating installer environment...
+    set "CREATE_LOG=%TEMP%\acq4-conda-create-%RANDOM%.log"
+    set "PYTHON_SPEC=python=%PYTHON_VERSION%"
+    echo Running: "%CONDA_EXE%" create -y -n "%INSTALLER_ENV_NAME%" %PYTHON_SPEC% pip
+    set "ACQ4_CREATE_CMD=""%CONDA_EXE%" create -y -n "%INSTALLER_ENV_NAME%" %PYTHON_SPEC% pip"
+    powershell -NoProfile -Command "$ErrorActionPreference = 'SilentlyContinue'; $log = $env:CREATE_LOG; $cmd = $env:ACQ4_CREATE_CMD; cmd.exe /d /c $cmd 2>&1 | Tee-Object -FilePath $log; exit $LASTEXITCODE"
+    set "CREATE_STATUS=%ERRORLEVEL%"
+    set "ACQ4_CREATE_CMD="
+    set "PYTHON_SPEC="
+    if not "%CREATE_STATUS%"=="0" (
+        if defined CREATE_LOG if exist "%CREATE_LOG%" (
             findstr /C:"NoWritableEnvsDirError" "%CREATE_LOG%" >nul 2>&1 && (
                 echo Conda could not create the installer environment: no writable envs directories are configured.
-            echo Please ensure at least one entry in 'conda info --json' under envs_dirs is writable.
+                echo Please ensure at least one entry in 'conda info --json' under envs_dirs is writable.
+            )
+            findstr /C:"NoWritablePkgsDirError" "%CREATE_LOG%" >nul 2>&1 && (
+                echo Conda could not download packages: no writable package cache directories are configured.
+            )
+            type "%CREATE_LOG%"
+            del "%CREATE_LOG%" >nul 2>&1
         )
-        findstr /C:"NoWritablePkgsDirError" "%CREATE_LOG%" >nul 2>&1 && (
-            echo Conda could not download packages: no writable package cache directories are configured.
-        )
-        type "%CREATE_LOG%"
-        del "%CREATE_LOG%" >nul 2>&1
         exit /b %CREATE_STATUS%
     )
-    del "%CREATE_LOG%" >nul 2>&1
+    if defined CREATE_LOG if exist "%CREATE_LOG%" del "%CREATE_LOG%" >nul 2>&1
+    set "CREATE_LOG="
 )
 call "%CONDA_EXE%" run -n "%INSTALLER_ENV_NAME%" python -m pip install --quiet --upgrade %QT_PACKAGE% %TOML_PARSER_PACKAGE%
 goto :eof
