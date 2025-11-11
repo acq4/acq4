@@ -90,11 +90,15 @@ goto :eof
 set "ACQ4_CAND_PATH=%~1"
 if "%ACQ4_CAND_PATH%"=="" goto :eof
 for %%I in ("%ACQ4_CAND_PATH%") do set "ACQ4_CAND_PATH=%%~fI"
+set "ACQ4_CONSIDER_FOUND="
+set "ACQ4_CONSIDER_VERSION="
 echo Checking conda candidate: %ACQ4_CAND_PATH%
 if not exist "%ACQ4_CAND_PATH%" (
     echo   -> not found.
-    goto :eof
+    goto :consider_cleanup
 )
+set "ACQ4_CONSIDER_FOUND=1"
+echo   -> file exists
 set "CAND_VERSION="
 for /f "tokens=1,2" %%S in ('cmd /d /c ""%ACQ4_CAND_PATH%" --version 2^>nul"') do (
     if not defined CAND_VERSION (
@@ -106,6 +110,7 @@ for /f "tokens=1,2" %%S in ('cmd /d /c ""%ACQ4_CAND_PATH%" --version 2^>nul"') d
     )
 )
 if defined CAND_VERSION (
+    set "ACQ4_CONSIDER_VERSION=%CAND_VERSION%"
     echo   -> version %CAND_VERSION%
     if not defined BEST_VERSION (
         echo   -> recording as current best candidate.
@@ -125,37 +130,71 @@ if defined CAND_VERSION (
             echo   -> unable to compare versions error %ACQ4_VER_CMP%; skipping.
         )
     )
-) else if not defined FALLBACK_CONDA (
-    echo   -> unable to parse version; recording as fallback.
+) else (
+    echo   -> unable to parse version output.
+    if not defined FALLBACK_CONDA (
+        echo   -> recording as fallback path.
+        set "FALLBACK_CONDA=%ACQ4_CAND_PATH%"
+    )
+)
+goto :consider_cleanup
+
+:consider_cleanup
+if not defined ACQ4_CONSIDER_FOUND if not defined FALLBACK_CONDA (
     set "FALLBACK_CONDA=%ACQ4_CAND_PATH%"
 )
 set "CAND_VERSION="
 set "ACQ4_VER_CMP="
+if not defined ACQ4_CONSIDER_FOUND (
+    echo   -> nothing usable found at this candidate path.
+)
 goto :eof
 
 :probe_conda_root
 set "ACQ4_PROBE_ROOT=%~1"
 if "%ACQ4_PROBE_ROOT%"=="" goto :eof
 echo Probing root: %ACQ4_PROBE_ROOT%
+set "ACQ4_ROOT_FOUND_RESULT="
 for %%B in ("%ACQ4_PROBE_ROOT%" "%ACQ4_PROBE_ROOT%\AppData\Local") do (
     if not "%%~fB"=="" (
         echo   -> checking base directory: %%~fB
         call :probe_conda_base "%%~fB"
+        if defined ACQ4_BASE_FOUND_RESULT (
+            echo   -> at least one conda executable found under %%~fB
+            set "ACQ4_ROOT_FOUND_RESULT=1"
+        ) else (
+            echo   -> no conda executables found under %%~fB
+        )
     )
 )
+if not defined ACQ4_ROOT_FOUND_RESULT (
+    echo   -> no conda executables found anywhere under %ACQ4_PROBE_ROOT%
+)
 set "ACQ4_PROBE_ROOT="
+set "ACQ4_BASE_FOUND_RESULT="
+set "ACQ4_ROOT_FOUND_RESULT="
 goto :eof
 
 :probe_conda_base
 set "ACQ4_PROBE_BASE=%~1"
 if "%ACQ4_PROBE_BASE%"=="" goto :eof
+set "ACQ4_BASE_FOUND_RESULT="
 for %%D in (Miniconda3 miniconda3 Anaconda3 anaconda3 Mambaforge mambaforge) do (
     echo     -> probing distribution %%~D under %ACQ4_PROBE_BASE%
+    set "ACQ4_FOUND_DIST="
     for %%C in ("%ACQ4_PROBE_BASE%\%%~D\condabin\conda.bat" "%ACQ4_PROBE_BASE%\%%~D\Scripts\conda.exe") do (
         call :consider_conda "%%~fC"
+        if defined ACQ4_CONSIDER_FOUND set "ACQ4_FOUND_DIST=1"
+    )
+    if defined ACQ4_FOUND_DIST (
+        echo       -> found conda executable under %ACQ4_PROBE_BASE%\%%~D
+        set "ACQ4_BASE_FOUND_RESULT=1"
+    ) else (
+        echo       -> no conda executable under %ACQ4_PROBE_BASE%\%%~D
     )
 )
 set "ACQ4_PROBE_BASE="
+set "ACQ4_FOUND_DIST="
 goto :eof
 
 :compare_versions
