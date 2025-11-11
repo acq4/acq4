@@ -60,10 +60,20 @@ for %%P in (conda.exe conda.bat) do (
 for %%C in ("%USERPROFILE%\Miniconda3\condabin\conda.bat" "%USERPROFILE%\miniconda3\Scripts\conda.exe" "%USERPROFILE%\AppData\Local\miniconda3\condabin\conda.bat" "%USERPROFILE%\AppData\Local\miniconda3\Scripts\conda.exe" "%USERPROFILE%\Anaconda3\Scripts\conda.exe" "%ProgramData%\Miniconda3\Scripts\conda.exe" "C:\Miniconda3\condabin\conda.bat") do (
     call :consider_conda "%%~fC"
 )
+if defined HOME (
+    for %%C in ("%HOME%\Miniconda3\condabin\conda.bat" "%HOME%\Miniconda3\Scripts\conda.exe" "%HOME%\miniconda3\condabin\conda.bat" "%HOME%\miniconda3\Scripts\conda.exe" "%HOME%\AppData\Local\Miniconda3\condabin\conda.bat" "%HOME%\AppData\Local\Miniconda3\Scripts\conda.exe" "%HOME%\AppData\Local\miniconda3\condabin\conda.bat" "%HOME%\AppData\Local\miniconda3\Scripts\conda.exe") do (
+        call :consider_conda "%%~fC"
+    )
+)
+if defined LOCALAPPDATA (
+    for %%C in ("%LOCALAPPDATA%\Miniconda3\condabin\conda.bat" "%LOCALAPPDATA%\Miniconda3\Scripts\conda.exe" "%LOCALAPPDATA%\miniconda3\condabin\conda.bat" "%LOCALAPPDATA%\miniconda3\Scripts\conda.exe") do (
+        call :consider_conda "%%~fC"
+    )
+)
 if defined BEST_CONDA (
     set "CONDA_EXE=%BEST_CONDA%"
     if defined BEST_VERSION (
-        echo Using conda at %CONDA_EXE% (version %BEST_VERSION%)
+        echo Using conda at %CONDA_EXE% (version %BEST_VERSION%^)
     ) else (
         echo Using conda at %CONDA_EXE%
     )
