@@ -56,6 +56,21 @@ DEFAULT_CONDA_PACKAGES = ["pip"]
 LINUX_BOOTSTRAP_URL = RAW_GITHUB_BASE + "tools/installer/install_linux.sh"
 WINDOWS_BOOTSTRAP_URL = RAW_GITHUB_BASE + "tools/installer/install_windows.bat"
 
+START_BAT_TEMPLATE = r"""@echo off
+REM ACQ4 Launcher
+REM This script activates the ACQ4 conda environment and starts ACQ4
+
+call "{conda_exe}" activate "{env_path}"
+if errorlevel 1 (
+    echo Failed to activate conda environment: {env_path}
+    pause
+    exit /b 1
+)
+
+python -m acq4 -x
+pause
+"""
+
 DEPENDENCY_METADATA: Dict[str, Dict[str, Dict[str, str]]] = {
     "groups": {
         "hardware": {
@@ -119,6 +134,7 @@ DEPENDENCY_METADATA: Dict[str, Dict[str, Dict[str, str]]] = {
         "neuroanalysis": {
             "display_name": "neuroanalysis",
             "pypi_package": "neuroanalysis",
+            "git_url": "https://github.com/AllenInstitute/neuroanalysis.git",
             "description": "Neurophysiology analysis tools.",
         },
         "git+https://github.com/acq4/pyqtgraph.git@acq4_working": {
@@ -243,7 +259,7 @@ def repo_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
 
-def fetch_pyproject_from_github(repo_url: str, branch: str) -> str:
+def fetch_pyproject_from_github(repo_url: str, branch: str) -> Tuple[str, bool]:
     """Download pyproject.toml content from a GitHub repository.
 
     Parameters
@@ -255,13 +271,16 @@ def fetch_pyproject_from_github(repo_url: str, branch: str) -> str:
 
     Returns
     -------
-    str
-        The pyproject.toml file content as a string.
+    tuple of (str, bool)
+        A tuple containing:
+        - The pyproject.toml file content as a string
+        - A boolean indicating whether fallback to acq4/acq4:main was used
 
     Raises
     ------
     InstallerError
-        If the download fails or the file cannot be found.
+        If the download fails or the file cannot be found, even after
+        falling back to the main ACQ4 repository.
     """
     parts = urlsplit(repo_url)
     if parts.netloc not in {"github.com", "www.github.com"}:
@@ -280,8 +299,20 @@ def fetch_pyproject_from_github(repo_url: str, branch: str) -> str:
     try:
         with urlopen(raw_url, timeout=10) as response:
             content = response.read().decode("utf-8")
-            return content
+            return content, False
     except URLError as exc:
+        # If the fetch fails and we're not already looking at the main ACQ4 repo,
+        # fall back to fetching from github.com/acq4/acq4:main
+        is_main_acq4 = (owner.lower() == "acq4" and repo_name.lower() == "acq4" and branch.lower() == "main")
+        if not is_main_acq4:
+            fallback_url = f"https://raw.githubusercontent.com/acq4/acq4/main/pyproject.toml"
+            try:
+                with urlopen(fallback_url, timeout=10) as response:
+                    content = response.read().decode("utf-8")
+                    return content, True
+            except URLError:
+                # Fallback also failed, raise the original error
+                pass
         raise InstallerError(f"Failed to download pyproject.toml from {raw_url}: {exc}") from exc
 
 
@@ -496,6 +527,7 @@ class InstallerState:
     config_mode: str = "new"
     config_repo_url: Optional[str] = None
     config_copy_path: Optional[Path] = None
+    create_desktop_shortcut: bool = True
 
 
 @dataclass
@@ -751,6 +783,78 @@ def quote_windows_arguments(args: List[str]) -> str:
     if not args:
         return ""
     return subprocess.list2cmdline(args)
+
+
+def create_start_bat(base_dir: Path, conda_exe: str, env_path: Path) -> Path:
+    """Create a start_acq4.bat file in the base install directory.
+
+    Parameters
+    ----------
+    base_dir : Path
+        The base installation directory.
+    conda_exe : str
+        Path to the conda executable.
+    env_path : Path
+        Path to the conda environment.
+
+    Returns
+    -------
+    Path
+        Path to the created bat file.
+    """
+    bat_content = START_BAT_TEMPLATE.format(
+        conda_exe=conda_exe,
+        env_path=str(env_path)
+    )
+    bat_path = base_dir / "start_acq4.bat"
+    bat_path.write_text(bat_content, encoding="utf-8")
+    return bat_path
+
+
+def create_desktop_shortcut_windows(bat_path: Path, base_dir: Path) -> None:
+    """Create a Windows desktop shortcut pointing to the start bat file.
+
+    Parameters
+    ----------
+    bat_path : Path
+        Path to the start_acq4.bat file.
+    base_dir : Path
+        The base installation directory (to find the icon).
+
+    Notes
+    -----
+    This function creates a shortcut to the bat file and attempts to configure
+    it to disable Quick Edit mode in the console window. Quick Edit mode can
+    cause the console to pause when text is accidentally selected, which is
+    undesirable for long-running applications.
+    """
+    desktop = Path(os.path.expanduser("~")) / "Desktop"
+    desktop.mkdir(parents=True, exist_ok=True)
+    shortcut_path = desktop / WINDOWS_SHORTCUT_NAME
+
+    # Try to find the ACQ4 icon
+    icon_path = base_dir / ACQ4_SOURCE_DIRNAME / "acq4" / "icons" / "acq4.ico"
+    icon_location = str(icon_path) if icon_path.exists() else ""
+
+    # PowerShell script to create shortcut and modify its properties
+    # Note: Disabling Quick Edit requires modifying the .lnk file binary directly
+    # which is not easily done via WScript.Shell. We create the shortcut here,
+    # and users can manually disable Quick Edit by right-clicking the shortcut,
+    # selecting Properties > Options > and unchecking "Quick Edit Mode" if needed.
+    ps_script = (
+        "$ws = New-Object -ComObject WScript.Shell;"
+        f"$s = $ws.CreateShortcut('{shortcut_path}');"
+        f"$s.TargetPath = '{bat_path}';"
+        "$s.Arguments = '';"
+        f"$s.WorkingDirectory = '{base_dir}';"
+    )
+
+    if icon_location:
+        ps_script += f"$s.IconLocation = '{icon_location}';"
+
+    ps_script += "$s.Save();"
+
+    subprocess.run(["powershell", "-NoProfile", "-Command", ps_script], check=True)
 
 
 def build_unattended_script_content(cli_args: List[str], *, is_windows: bool) -> str:
@@ -1030,6 +1134,10 @@ class GitRepoWidget(QtWidgets.QWidget):
         self.branch_combo.currentTextChanged.connect(lambda text: self.branchChanged.emit(text))
 
         self._set_status("Ready to fetch branches")
+
+        # If initialized with a repo URL, fetch branches immediately
+        if default_repo:
+            self._load_branch_choices()
 
     def set_github_token(self, token: Optional[str]) -> None:
         """Update the GitHub token and refresh branches if needed."""
@@ -1370,6 +1478,13 @@ class DependenciesPage(QtWidgets.QWizardPage):
         self.clone_items: Dict[str, QtWidgets.QTreeWidgetItem] = {}
         self._populate_clone_tree()
 
+        # Desktop shortcut checkbox (Windows only)
+        self.create_shortcut_checkbox = QtWidgets.QCheckBox("Create desktop shortcut to start ACQ4")
+        self.create_shortcut_checkbox.setChecked(True)
+        if sys.platform != "win32":
+            self.create_shortcut_checkbox.setVisible(False)
+        layout.addWidget(self.create_shortcut_checkbox)
+
     def initializePage(self) -> None:
         """Fetch pyproject.toml from GitHub and populate the dependency tree."""
         if self._initialized:
@@ -1383,12 +1498,19 @@ class DependenciesPage(QtWidgets.QWizardPage):
         QtWidgets.QApplication.processEvents()
 
         try:
-            content = fetch_pyproject_from_github(repo_url, branch)
+            content, used_fallback = fetch_pyproject_from_github(repo_url, branch)
             self.groups = dependency_groups_from_pyproject(content=content)
             self.options = parse_optional_dependencies(content=content)
             self.option_lookup = {dep.spec: dep for dep in self.options}
             self._populate_tree()
-            self.status_label.setText("")
+            if used_fallback:
+                self.status_label.setStyleSheet("color: #8a6d3b;")  # Warning color
+                self.status_label.setText(
+                    f"Note: pyproject.toml not found in {repo_url} ({branch}). "
+                    "Using dependency list from github.com/acq4/acq4:main instead."
+                )
+            else:
+                self.status_label.setText("")
             self._initialized = True
 
             # Apply CLI args if they were provided before initialization
@@ -1665,7 +1787,7 @@ class SummaryPage(QtWidgets.QWizardPage):
         layout.addWidget(self.export_help)
 
         export_row = QtWidgets.QHBoxLayout()
-        self.export_button = QtWidgets.QPushButton("Export unattended script…")
+        self.export_button = QtWidgets.QPushButton("Export installation script…")
         size_policy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Maximum,
                                             QtWidgets.QSizePolicy.Policy.Fixed)
         self.export_button.setSizePolicy(size_policy)
@@ -1731,8 +1853,7 @@ class SummaryPage(QtWidgets.QWizardPage):
         cli_args = wizard.cli_arguments(unattended=unattended)
         is_windows = os.name == "nt"
         default_suffix = ".bat" if is_windows else ".sh"
-        script_type = "unattended" if unattended else "attended"
-        default_name = f"acq4_{script_type}_install{default_suffix}"
+        default_name = f"acq4_install{default_suffix}"
         dialog_fn = QtWidgets.QFileDialog.getSaveFileName
         filters = "Script files (*.sh *.bat);;Shell scripts (*.sh);;Batch scripts (*.bat)"
         default_path = Path.cwd() / default_name
@@ -2365,8 +2486,8 @@ class InstallerExecutor:
         if selected_optional_specs:
             tasks.append(("Install optional dependencies", lambda: self._install_optional_dependencies(conda_exe, env_dir, selected_optional_specs)))
         tasks.append(("Prepare configuration", lambda: self._prepare_config(base_dir)))
-        if os.name == "nt":
-            tasks.append(("Create desktop shortcut", lambda: self._create_shortcut_if_needed(base_dir, env_dir)))
+        if os.name == "nt" and self.state.create_desktop_shortcut:
+            tasks.append(("Create desktop shortcut", lambda: self._create_shortcut_if_needed(base_dir, env_dir, conda_exe)))
         self.logger.set_task_total(len(tasks))
         for title, fn in tasks:
             self._run_task(title, fn)
@@ -2597,7 +2718,7 @@ class InstallerExecutor:
             source = base_dir / ACQ4_SOURCE_DIRNAME / "config" / "example"
             shutil.copytree(source, config_dir)
 
-    def _create_shortcut_if_needed(self, base_dir: Path, env_dir: Path) -> None:
+    def _create_shortcut_if_needed(self, base_dir: Path, env_dir: Path, conda_exe: str) -> None:
         if os.name != "nt":
             self.logger.message("Skipping shortcut creation on non-Windows platforms", task_id=self._active_task_id)
             return
@@ -2606,23 +2727,19 @@ class InstallerExecutor:
             self.logger.message("python.exe not found in the environment; skipping shortcut creation",
                                 task_id=self._active_task_id)
             return
-        desktop = Path(os.path.expanduser("~")) / "Desktop"
-        desktop.mkdir(parents=True, exist_ok=True)
-        shortcut_path = desktop / WINDOWS_SHORTCUT_NAME
-        target = str(python_exe)
-        arguments = f"-m acq4 -x -c {base_dir / CONFIG_DIRNAME}"
-        ps_script = (
-            "$ws = New-Object -ComObject WScript.Shell;"
-            f"$s = $ws.CreateShortcut('{shortcut_path}');"
-            f"$s.TargetPath = '{target}';"
-            f"$s.Arguments = '{arguments}';"
-            f"$s.WorkingDirectory = '{base_dir / ACQ4_SOURCE_DIRNAME}';"
-            "$s.IconLocation = '';"
-            "$s.Save();"
-        )
+
+        self.logger.message("Creating start_acq4.bat launcher script", task_id=self._active_task_id)
+        try:
+            bat_path = create_start_bat(base_dir, conda_exe, env_dir)
+        except Exception as e:
+            self.logger.message(f"Failed to create bat file: {e}", task_id=self._active_task_id)
+            return
+
         self.logger.message("Creating Windows desktop shortcut", task_id=self._active_task_id)
-        run_command(["powershell", "-NoProfile", "-Command", ps_script], self.logger,
-                    task_id=self._active_task_id, cancel_event=self.cancel_event)
+        try:
+            create_desktop_shortcut_windows(bat_path, base_dir)
+        except Exception as e:
+            self.logger.message(f"Failed to create desktop shortcut: {e}", task_id=self._active_task_id)
 
     def _pip_env(self) -> Dict[str, str]:
         env = os.environ.copy()
@@ -2775,7 +2892,10 @@ def state_from_cli_args(args: argparse.Namespace,
     github_token = (getattr(args, "github_token", None) or "").strip() or None
 
     # Fetch pyproject.toml to get dependency information
-    content = fetch_pyproject_from_github(repo_value, branch_value)
+    content, used_fallback = fetch_pyproject_from_github(repo_value, branch_value)
+    if used_fallback:
+        print(f"Warning: pyproject.toml not found in {repo_value} ({branch_value}).")
+        print("Using dependency list from github.com/acq4/acq4:main instead.")
     dependency_groups = dependency_groups_from_pyproject(content=content)
     optional_dependencies = parse_optional_dependencies(content=content)
 
@@ -2863,6 +2983,7 @@ def collect_state(wizard: InstallWizard) -> InstallerState:
         config_mode=wizard.config_mode(),
         config_repo_url=wizard.config_repo(),
         config_copy_path=wizard.config_copy_path(),
+        create_desktop_shortcut=wizard.dependencies_page.create_shortcut_checkbox.isChecked(),
     )
 
 

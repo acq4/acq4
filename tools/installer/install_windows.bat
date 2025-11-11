@@ -1,6 +1,11 @@
 @echo off
 setlocal enabledelayedexpansion
 
+echo ===============================================================================
+echo ACQ4 Windows Bootstrap Installer
+echo ===============================================================================
+echo.
+
 set "SCRIPT_DIR="
 if exist "%~f0" (
     set "SCRIPT_DIR=%~dp0"
@@ -8,33 +13,46 @@ if exist "%~f0" (
 set "DOWNLOADED_INSTALLER="
 set "RESULT=0"
 set "INSTALLER_URL=https://raw.githubusercontent.com/AllenInstitute/acq4/ivscc-rc/tools/installer/installer.py"
-set "INSTALLER_ENV_NAME=_acq4_installer_env"
+set "INSTALLER_ENV_NAME=_acq4_installer"
 set "PYTHON_VERSION=3.12"
 set "QT_PACKAGE=pyqt6"
 set "TOML_PARSER_PACKAGE=tomli"
 set "MIN_CONDA_VERSION=4.14.0"
 set "MINICONDA_URL=https://repo.anaconda.com/miniconda/Miniconda3-latest-Windows-x86_64.exe"
 set "MINICONDA_PREFIX=%USERPROFILE%\Miniconda3"
+echo Searching for conda installation...
 call :find_conda
 if not defined CONDA_EXE (
+    echo Conda not found, attempting to install Miniconda...
     call :install_miniconda
 )
 if not defined CONDA_EXE (
-    echo Failed to locate or install conda. Exiting.
+    echo ERROR: Failed to locate or install conda. Exiting.
     exit /b 1
 )
 
+echo Checking conda version...
 call :check_conda_version
-if errorlevel 1 exit /b 1
+if errorlevel 1 (
+    echo ERROR: Conda version check failed
+    exit /b 1
+)
 
 call :ensure_installer_env
+echo.
+echo Downloading installer script...
 call :download_installer
 if not defined INSTALLER_SCRIPT (
-    echo Failed to prepare installer script.
+    echo ERROR: Failed to prepare installer script.
     set "RESULT=1"
     goto :cleanup_exit
 )
 
+echo.
+echo ===============================================================================
+echo Starting the ACQ4 installation script...
+echo ===============================================================================
+echo.
 call "%CONDA_EXE%" run -n "%INSTALLER_ENV_NAME%" python "%INSTALLER_SCRIPT%" %*
 set "RESULT=%ERRORLEVEL%"
 goto :cleanup_exit
@@ -63,33 +81,15 @@ for %%P in (conda.exe conda.bat) do (
 )
 
 rem Check most common conda installation locations
-rem Note: Scripts\conda.exe is checked before condabin\conda.bat because
-rem condabin\conda.bat may return incorrect version information
 for %%C in (
     "%USERPROFILE%\miniconda3\Scripts\conda.exe"
-    "%USERPROFILE%\Miniconda3\Scripts\conda.exe"
     "%USERPROFILE%\anaconda3\Scripts\conda.exe"
-    "%USERPROFILE%\Anaconda3\Scripts\conda.exe"
-    "%USERPROFILE%\miniconda3\condabin\conda.bat"
-    "%USERPROFILE%\Miniconda3\condabin\conda.bat"
-    "%USERPROFILE%\anaconda3\condabin\conda.bat"
-    "%USERPROFILE%\Anaconda3\condabin\conda.bat"
     "%LOCALAPPDATA%\miniconda3\Scripts\conda.exe"
-    "%LOCALAPPDATA%\Miniconda3\Scripts\conda.exe"
     "%LOCALAPPDATA%\anaconda3\Scripts\conda.exe"
-    "%LOCALAPPDATA%\Anaconda3\Scripts\conda.exe"
-    "%LOCALAPPDATA%\miniconda3\condabin\conda.bat"
-    "%LOCALAPPDATA%\Miniconda3\condabin\conda.bat"
-    "%LOCALAPPDATA%\anaconda3\condabin\conda.bat"
-    "%LOCALAPPDATA%\Anaconda3\condabin\conda.bat"
     "%ProgramData%\miniconda3\Scripts\conda.exe"
-    "%ProgramData%\Miniconda3\Scripts\conda.exe"
-    "%ProgramData%\miniconda3\condabin\conda.bat"
-    "%ProgramData%\Miniconda3\condabin\conda.bat"
+    "%ProgramData%\anaconda3\Scripts\conda.exe"
     "C:\miniconda3\Scripts\conda.exe"
-    "C:\Miniconda3\Scripts\conda.exe"
-    "C:\miniconda3\condabin\conda.bat"
-    "C:\Miniconda3\condabin\conda.bat"
+    "C:\anaconda3\Scripts\conda.exe"
 ) do (
     if exist "%%~C" (
         call :consider_conda "%%~C"
@@ -100,10 +100,16 @@ if defined BEST_CONDA (
     set "CONDA_EXE=%BEST_CONDA%"
     echo.
     echo Selected conda: !CONDA_EXE! ^(version %BEST_VERSION%^)
+    echo.
 ) else if defined FALLBACK_CONDA (
     set "CONDA_EXE=%FALLBACK_CONDA%"
     echo.
     echo Selected conda: !CONDA_EXE! ^(version unknown^)
+    echo.
+) else (
+    echo.
+    echo No conda installation found
+    echo.
 )
 
 set "BEST_CONDA="
@@ -152,27 +158,32 @@ set "ACQ4_VER_CMP=%ERRORLEVEL%"
 goto :eof
 
 :install_miniconda
-echo Conda executable not found.
-set /p "RESP=Download and install Miniconda to %MINICONDA_PREFIX%? [y/N] "
-if /I not "%RESP%"=="Y" (
-    if /I not "%RESP%"=="Yes" goto :eof
-)
+echo.
+echo ===============================================================================
+echo Conda was not found on this system.
+echo Downloading the Miniconda installer to set up Python environments for ACQ4...
+echo ===============================================================================
+echo.
 set "TMP_INSTALLER=%TEMP%\miniconda-%RANDOM%.exe"
-echo Downloading Miniconda installer...
+echo Downloading from: %MINICONDA_URL%
 powershell -NoProfile -Command "Invoke-WebRequest -Uri '%MINICONDA_URL%' -OutFile '%TMP_INSTALLER%'" || goto :fail_install
 
-echo Running Miniconda installer...
-"%TMP_INSTALLER%" /InstallationType=JustMe /AddToPath=0 /RegisterPython=0 /S /D=%MINICONDA_PREFIX%
+echo.
+echo ===============================================================================
+echo Starting the Conda installer.
+echo This is needed to set up the Python environments used by ACQ4.
+echo Please complete the installation wizard and then this script will continue.
+echo ===============================================================================
+echo.
+"%TMP_INSTALLER%"
 del "%TMP_INSTALLER%" >nul 2>&1
-if exist "%MINICONDA_PREFIX%\condabin\conda.bat" (
-    set "CONDA_EXE=%MINICONDA_PREFIX%\condabin\conda.bat"
-) else if exist "%MINICONDA_PREFIX%\Scripts\conda.exe" (
-    set "CONDA_EXE=%MINICONDA_PREFIX%\Scripts\conda.exe"
-)
+
+rem Re-search for conda after installation
+call :find_conda
 goto :eof
 
 :fail_install
-echo Failed to install Miniconda.
+echo Failed to download the Miniconda installer.
 if exist "%TMP_INSTALLER%" del "%TMP_INSTALLER%" >nul 2>&1
 set "CONDA_EXE="
 goto :eof
@@ -199,11 +210,22 @@ set "ACQ4_CONDA_VERSION_RESULT="
 exit /b 0
 
 :ensure_installer_env
-call :resolve_env_path
-if not defined INSTALLER_ENV_PATH goto :eof
-set "CREATE_LOG="
-if not exist "%INSTALLER_ENV_PATH%\conda-meta" (
-    echo Creating installer environment...
+echo.
+echo Checking for installer environment...
+rem Check if the environment exists by querying conda
+set "ENV_EXISTS="
+set "ENV_CHECK_FILE=%TEMP%\acq4-env-check-%RANDOM%.txt"
+call "%CONDA_EXE%" env list > "%ENV_CHECK_FILE%" 2>&1
+findstr /C:"%INSTALLER_ENV_NAME%" "%ENV_CHECK_FILE%" >nul 2>&1
+if not errorlevel 1 (
+    set "ENV_EXISTS=1"
+)
+del "%ENV_CHECK_FILE%" >nul 2>&1
+
+if defined ENV_EXISTS (
+    echo Installer environment "%INSTALLER_ENV_NAME%" already exists, reusing it
+) else (
+    echo Installer environment "%INSTALLER_ENV_NAME%" does not exist, creating it now...
     set "CREATE_LOG=%TEMP%\acq4-conda-create-%RANDOM%.log"
     set "PYTHON_SPEC=python=%PYTHON_VERSION%"
     echo Running: "%CONDA_EXE%" create -y -n "%INSTALLER_ENV_NAME%" !PYTHON_SPEC!
@@ -211,6 +233,7 @@ if not exist "%INSTALLER_ENV_PATH%\conda-meta" (
     set "CREATE_STATUS=%ERRORLEVEL%"
     set "PYTHON_SPEC="
     if not "!CREATE_STATUS!"=="0" (
+        echo ERROR: Environment creation failed with exit code !CREATE_STATUS!
         if defined CREATE_LOG if exist "!CREATE_LOG!" (
             findstr /C:"NoWritableEnvsDirError" "!CREATE_LOG!" >nul 2>&1 && (
                 echo Conda could not create the installer environment: no writable envs directories are configured.
@@ -224,37 +247,58 @@ if not exist "%INSTALLER_ENV_PATH%\conda-meta" (
         )
         exit /b !CREATE_STATUS!
     )
+    echo Environment created successfully
     if defined CREATE_LOG if exist "!CREATE_LOG!" del "!CREATE_LOG!" >nul 2>&1
     set "CREATE_LOG="
 )
+
+echo Verifying Python is available in installer environment...
+call "%CONDA_EXE%" run -n "%INSTALLER_ENV_NAME%" python --version >nul 2>&1
+if errorlevel 1 (
+    echo ERROR: Python not found in installer environment "%INSTALLER_ENV_NAME%"
+    echo Try running: conda env remove -n "%INSTALLER_ENV_NAME%" and then re-run this script
+    exit /b 1
+)
+echo Python verified successfully
+
 echo Installing dependencies in installer environment...
+echo Running: "%CONDA_EXE%" run -n "%INSTALLER_ENV_NAME%" python -m pip install --upgrade %QT_PACKAGE% %TOML_PARSER_PACKAGE%
 call "%CONDA_EXE%" run -n "%INSTALLER_ENV_NAME%" python -m pip install --upgrade %QT_PACKAGE% %TOML_PARSER_PACKAGE% --index-url=https://pypi.org/simple/
+if errorlevel 1 (
+    echo ERROR: Failed to install dependencies in installer environment
+    exit /b 1
+)
+echo Dependencies installed successfully
 goto :eof
 
 :download_installer
 set "INSTALLER_SCRIPT="
 if defined SCRIPT_DIR if exist "%SCRIPT_DIR%installer.py" (
+    echo Using local installer script: %SCRIPT_DIR%installer.py
     set "INSTALLER_SCRIPT=%SCRIPT_DIR%installer.py"
     goto :eof
 )
 set "TMP_INSTALLER="
+echo Generating temporary file path...
 for /f "usebackq tokens=* delims=" %%T in (`powershell -NoProfile -Command "Join-Path ([System.IO.Path]::GetTempPath()) ('acq4-installer-' + [guid]::NewGuid().ToString() + '.py')"`) do (
     if not defined TMP_INSTALLER set "TMP_INSTALLER=%%~T"
 )
 if not defined TMP_INSTALLER (
-    echo Unable to create temporary file for installer download.
+    echo ERROR: Unable to create temporary file for installer download.
     goto :eof
 )
+echo Temporary installer path: %TMP_INSTALLER%
 echo Downloading installer from %INSTALLER_URL%
 set "ACQ4_INSTALLER_OUTFILE=%TMP_INSTALLER%"
 powershell -NoProfile -Command "try { Invoke-WebRequest -Uri '%INSTALLER_URL%' -OutFile $env:ACQ4_INSTALLER_OUTFILE -ErrorAction Stop } catch { Write-Host 'Download failed:' $_.Exception.Message; exit 1 }" >nul 2>&1
 set "PS_STATUS=%ERRORLEVEL%"
 set "ACQ4_INSTALLER_OUTFILE="
 if not "%PS_STATUS%"=="0" (
-    echo Unable to download installer.py.
+    echo ERROR: Unable to download installer.py (exit code: %PS_STATUS%).
     if exist "%TMP_INSTALLER%" del "%TMP_INSTALLER%" >nul 2>&1
     goto :eof
 )
+echo Download completed successfully
 set "PS_STATUS="
 set "DOWNLOADED_INSTALLER=%TMP_INSTALLER%"
 set "INSTALLER_SCRIPT=%TMP_INSTALLER%"
@@ -262,14 +306,4 @@ goto :eof
 
 :cleanup_installer
 if defined DOWNLOADED_INSTALLER if exist "%DOWNLOADED_INSTALLER%" del "%DOWNLOADED_INSTALLER%" >nul 2>&1
-goto :eof
-
-:resolve_env_path
-set "INSTALLER_ENV_PATH="
-set "CONDA_BASE="
-for /f "usebackq tokens=* delims=" %%B in (`cmd /c ""%CONDA_EXE%" info --base"`) do (
-    if not defined CONDA_BASE set "CONDA_BASE=%%~B"
-)
-if not defined CONDA_BASE goto :eof
-set "INSTALLER_ENV_PATH=%CONDA_BASE%\envs\%INSTALLER_ENV_NAME%"
 goto :eof
