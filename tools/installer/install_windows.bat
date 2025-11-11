@@ -67,9 +67,11 @@ if defined BEST_CONDA (
     ) else (
         echo Using conda at %CONDA_EXE%
     )
-) else if defined FALLBACK_CONDA (
-    set "CONDA_EXE=%FALLBACK_CONDA%"
-    echo Using conda at %CONDA_EXE%
+) else (
+    if defined FALLBACK_CONDA (
+        set "CONDA_EXE=%FALLBACK_CONDA%"
+        echo Using conda at %CONDA_EXE%
+    )
 )
 set "BEST_CONDA="
 set "BEST_VERSION="
