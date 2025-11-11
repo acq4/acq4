@@ -22,6 +22,7 @@ PYTHON_VERSION="3.12"
 QT_PACKAGE="pyqt6"
 TOML_PARSER_PACKAGE="tomli"
 INSTALLER_ENV_NAME="_acq4_installer_env"
+MIN_CONDA_VERSION="4.14.0"
 MINICONDA_URL="https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh"
 MINICONDA_PREFIX="${HOME}/miniconda3"
 DOWNLOADED_INSTALLER=""
@@ -108,6 +109,27 @@ ensure_installer_env() {
         "${QT_PACKAGE}" "${TOML_PARSER_PACKAGE}"
 }
 
+check_conda_version() {
+    local conda_exe="$1"
+    local version_output
+    if ! version_output="$("${conda_exe}" --version 2>/dev/null)"; then
+        log "Unable to determine conda version; please ensure '${conda_exe}' is executable."
+        exit 1
+    fi
+    local version="${version_output##* }"
+    version="${version//[[:space:]]/}"
+    if [[ -z "${version}" ]]; then
+        log "Unable to parse conda version from output: ${version_output}"
+        exit 1
+    fi
+    local earliest
+    earliest="$(printf '%s\n%s\n' "${MIN_CONDA_VERSION}" "${version}" | sort -V | head -n1)"
+    if [[ "${earliest}" != "${MIN_CONDA_VERSION}" ]]; then
+        log "Conda version ${version} is too old; 'conda run' requires ${MIN_CONDA_VERSION} or newer."
+        exit 1
+    fi
+}
+
 download_installer_script() {
     if [[ -n "${SCRIPT_DIR}" ]]; then
         local local_installer="${SCRIPT_DIR}/installer.py"
@@ -161,6 +183,7 @@ main() {
         conda_exe="$(install_miniconda)"
     fi
     export CONDA_EXE="${conda_exe}"
+    check_conda_version "${conda_exe}"
     ensure_installer_env "${conda_exe}"
     if [[ -z "${BOOTSTRAP_ENV_PATH}" ]]; then
         BOOTSTRAP_ENV_PATH="$(installer_env_path "${conda_exe}")"

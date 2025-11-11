@@ -12,6 +12,7 @@ set "INSTALLER_ENV_NAME=_acq4_installer_env"
 set "PYTHON_VERSION=3.12"
 set "QT_PACKAGE=pyqt6"
 set "TOML_PARSER_PACKAGE=tomli"
+set "MIN_CONDA_VERSION=4.14.0"
 set "MINICONDA_URL=https://repo.anaconda.com/miniconda/Miniconda3-latest-Windows-x86_64.exe"
 set "MINICONDA_PREFIX=%USERPROFILE%\Miniconda3"
 call :find_conda
@@ -22,6 +23,9 @@ if not defined CONDA_EXE (
     echo Failed to locate or install conda. Exiting.
     exit /b 1
 )
+
+call :check_conda_version
+if errorlevel 1 exit /b 1
 
 call :ensure_installer_env
 call :download_installer
@@ -84,6 +88,27 @@ if exist "%TMP_INSTALLER%" del "%TMP_INSTALLER%" >nul 2>&1
 set "CONDA_EXE="
 goto :eof
 
+:check_conda_version
+set "CONDA_VERSION="
+for /f "tokens=2 delims= " %%V in ('"%CONDA_EXE%" --version 2^>nul') do (
+    if not defined CONDA_VERSION set "CONDA_VERSION=%%~V"
+)
+if not defined CONDA_VERSION (
+    echo Unable to determine conda version via "%CONDA_EXE% --version".
+    exit /b 1
+)
+powershell -NoProfile -Command "$req = [version]'%MIN_CONDA_VERSION%'; $raw = '%CONDA_VERSION%'; try { $cur = [version]($raw.Split()[0]) } catch { $cur = $null }; if (-not $cur) { exit 2 }; if ($cur -lt $req) { exit 1 }" >nul 2>&1
+set "ACQ4_CONDA_VERSION_RESULT=%ERRORLEVEL%"
+if "%ACQ4_CONDA_VERSION_RESULT%"=="1" (
+    echo Conda version %CONDA_VERSION% is too old; 'conda run' requires %MIN_CONDA_VERSION% or newer.
+    exit /b 1
+) else if "%ACQ4_CONDA_VERSION_RESULT%"=="2" (
+    echo Unable to parse conda version "%CONDA_VERSION%".
+    exit /b 1
+)
+set "ACQ4_CONDA_VERSION_RESULT="
+exit /b 0
+
 :ensure_installer_env
     call :resolve_env_path
     if not defined INSTALLER_ENV_PATH goto :eof
@@ -93,7 +118,7 @@ goto :eof
         set "PYTHON_SPEC=python=%PYTHON_VERSION%"
         echo Running: "%CONDA_EXE%" create -y -n "%INSTALLER_ENV_NAME%" %PYTHON_SPEC% pip
         set "ACQ4_CREATE_CMD=""%CONDA_EXE%" create -y -n "%INSTALLER_ENV_NAME%" %PYTHON_SPEC% pip"
-        powershell -NoProfile -Command "$log = $env:CREATE_LOG; $cmd = $env:ACQ4_CREATE_CMD; cmd.exe /d /c $cmd 2>&1 | Tee-Object -FilePath $log; exit $LASTEXITCODE"
+        powershell -NoProfile -Command "$ErrorActionPreference = 'SilentlyContinue'; $log = $env:CREATE_LOG; $cmd = $env:ACQ4_CREATE_CMD; cmd.exe /d /c $cmd 2>&1 | Tee-Object -FilePath $log; exit $LASTEXITCODE"
         set "CREATE_STATUS=%ERRORLEVEL%"
         set "ACQ4_CREATE_CMD="
         set "PYTHON_SPEC="
