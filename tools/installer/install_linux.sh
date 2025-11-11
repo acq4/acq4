@@ -84,9 +84,13 @@ ensure_installer_env() {
     BOOTSTRAP_ENV_PATH="${env_path}"
     if [[ ! -d "${env_path}/conda-meta" ]]; then
         log "Creating installer environment..."
+        local create_cmd=("${conda_exe}" create -y -n "${INSTALLER_ENV_NAME}" "python=${PYTHON_VERSION}" pip)
+        local create_cmd_str
+        printf -v create_cmd_str '%q ' "${create_cmd[@]}"
+        log "Running: ${create_cmd_str% }"
         local create_log
         create_log="$(mktemp -t acq4-conda-create-XXXXXX.log)"
-        if ! "${conda_exe}" create -y -n "${INSTALLER_ENV_NAME}" "python=${PYTHON_VERSION}" pip 2>&1 | tee "${create_log}"; then
+        if ! "${create_cmd[@]}" 2>&1 | tee "${create_log}"; then
             if grep -q "NoWritableEnvsDirError" "${create_log}"; then
                 log "Conda could not create the installer environment: no writable envs directories are configured."
                 log "Please ensure 'conda info --json' lists at least one writable path under 'envs_dirs'."
