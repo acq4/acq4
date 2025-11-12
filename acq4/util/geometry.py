@@ -1819,15 +1819,13 @@ class Plane:
         self.point = point
         self.name = name
 
-    def line_intersects(self, start: np.ndarray, end: np.ndarray) -> bool:
-        if self.contains_point(start) or self.contains_point(end):
-            return False
-        diff = end - start
-        denom = np.dot(self.normal, diff)
-        if denom == 0:
-            return False
-        t = np.dot(self.normal, self.point - start) / denom
-        return 0 <= t <= 1
+    def intersecting_point(self, line: Line, tolerance=1e-9) -> np.ndarray | None:
+        denom = np.dot(self.normal, line.direction)
+        if denom < tolerance:
+            # parallel or even coplanar
+            return None
+        t = np.dot(self.normal, self.point - line.point) / denom
+        return line.point + t * line.direction
 
     def contains_point(self, pt: np.ndarray, tolerance: float = 1e-9) -> bool:
         # If the dot product is close to zero, the point is on the plane
@@ -1879,3 +1877,136 @@ class Plane:
 
     def __repr__(self):
         return str(self)
+
+
+def overspecified_inverse_kinematics(
+    point,
+    device_to_global: Transform,
+    bounds: list[tuple[float, float]],
+    neutral: list[float | None],
+):
+    """Calculate the global_to_device kinematics for a point given a device with more dimensions than the
+    space in which it operates.
+
+    Strategy
+    ---------
+    Calculate the bounding planes in the neutral position. If the point is inside, we're done.
+    Otherwise, draw a neutral_axis parallel to the neutral axis through the point and find the
+    distance to bounding planes.
+
+    Parameters
+    ----------
+    point : Mappable
+        Target point in global coordinates
+    device_to_global : Transform
+        Mapping from device coordinates to global. Assumed not to be invertible.
+    bounds : list[tuple[float, float]]
+        A list of (min, max) pairs for each dimension of the device in its own coordinate system.
+        E.g. [(0, 20000), ...]
+    neutral : list[float | None]
+        A list containing the neutral position in device coordinates. Only one dimension can be so
+        designated, with all the others set to None. E.g. [None, None, None, 0]
+
+    Returns
+    -------
+    position : np.ndarray
+        The calculated position in the device coordinate system.
+
+    Raises
+    ------
+    ValueError
+        If any of the arguments are invalid, or if no valid position could be found.
+    """
+    neutral_index = None
+    for i, n in enumerate(neutral):
+        if n is not None:
+            if neutral_index is not None:
+                raise ValueError("Only one neutral axis can be specified")
+            neutral_index = i
+    if neutral_index is None:
+        raise ValueError("One neutral axis must be specified")
+
+    origin_in_global = device_to_global.map(np.zeros(len(neutral)))
+    neutral_in_global = device_to_global.map(np.array([0 if n is None else n for n in neutral]))
+    neutral_axis_dir = neutral_in_global - origin_in_global
+    neutral_axis = Line(neutral_axis_dir, point)
+    neutral_axis_scale = np.linalg.norm(neutral_axis_dir) / abs(neutral[neutral_index])
+
+    # construct global_to_device transform, excluding neutral axis
+    global_to_device = []
+    for i in range(len(neutral)):
+        if i == neutral_index:
+            continue
+        dev_axis = np.zeros(len(neutral))
+        dev_axis[i] = 1
+        global_axis = device_to_global.map(dev_axis) - origin_in_global
+        global_to_device.append(global_axis)
+    global_to_device = AffineTransform(np.asarray(global_to_device).T, neutral_in_global).inverse
+
+    def _prep_device_pos(pt, neutral_pos) -> np.ndarray:
+        pos = global_to_device.map(pt).tolist()
+        pos.insert(neutral_index, neutral_pos)
+        return np.array(pos)
+
+    nonneutral_bounds = [b for i, b in enumerate(bounds) if i != neutral_index]
+    bound_planes_in_global = limits_to_boundaries(
+        nonneutral_bounds, global_to_device.inverse, "dev"
+    )
+
+    if all(p.allows_point(point) for p in bound_planes_in_global):
+        # point is already in bounds; neutral position is fine
+        return _prep_device_pos(point, neutral[neutral_index])
+
+    intersections = []
+    for plane in bound_planes_in_global:
+        intersect_pt = plane.intersecting_point(neutral_axis)
+        if intersect_pt is not None:
+            displacement = point - intersect_pt
+            intersections.append((intersect_pt, displacement))
+
+    # sort boundary intersections by distance to the point
+    intersections.sort(key=lambda x: np.linalg.norm(x[1]))
+    for intersect_pt, displacement in intersections:
+        neutral_pos = displacement.dot(neutral_axis.direction) / neutral_axis_scale + neutral[neutral_index]
+        candidate = _prep_device_pos(intersect_pt, neutral_pos)
+        if all(bounds[i][0] <= candidate[i] <= bounds[i][1] for i in range(len(candidate))):
+            return candidate
+    raise ValueError("No valid position found within bounds")
+
+
+def limits_to_boundaries(
+    limits: list[tuple[float | None, float | None]], xform: AffineTransform, name: str
+) -> list[Plane]:
+    """
+    Parameters
+    ----------
+    limits : list[tuple[float | None, float | None]]
+        A list of (min, max) pairs for each dimension. None can be used to indicate no limit in that direction.
+    xform : AffineTransform
+        Transform that maps from the local coordinate system of the limits to the global coordinate system.
+    name : str
+        Name to use for the planes.
+
+    Returns
+    -------
+    list[Plane]
+        A list of Planes representing the global boundaries defined by the limits.
+    """
+    corners = {
+        "min": xform.map(np.array([ax[0] for ax in limits])),
+        "max": xform.map(np.array([ax[1] for ax in limits])),
+    }
+    axes = [xform.map(np.eye(3)[i]) - xform.map(np.zeros(3)) for i in range(3)]
+    normals = {
+        0: np.cross(axes[1], axes[2]),
+        1: np.cross(axes[2], axes[0]),
+        2: np.cross(axes[0], axes[1]),
+    }
+    # flip normals to point inward
+    diagonal = corners["max"] - corners["min"]
+    normals[0] = normals[0] * np.sign(np.dot(normals[0], diagonal))
+    normals[1] = normals[1] * np.sign(np.dot(normals[1], diagonal))
+    normals[2] = normals[2] * np.sign(np.dot(normals[2], diagonal))
+    return [Plane(normals[n], corners["min"], f"{name}'s min {n}") for n in normals] + [
+        Plane(-normals[n], corners["max"], f"{name}'s max {n}") for n in normals
+    ]

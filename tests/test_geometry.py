@@ -5,9 +5,16 @@ import pytest
 
 from acq4.modules.Visualize3D import VisualizerWindow
 from acq4.util import Qt
-from acq4.util.geometry import Geometry, Volume, Plane, Line, point_in_bounds
+from acq4.util.geometry import (
+    Geometry,
+    Volume,
+    Plane,
+    Line,
+    point_in_bounds,
+    overspecified_inverse_kinematics,
+)
 from acq4.util.geometry import GeometryMotionPlanner
-from coorx import NullTransform, TTransform, SRT3DTransform, Transform
+from coorx import NullTransform, TTransform, SRT3DTransform, Transform, AffineTransform
 from coorx import Point
 
 
@@ -681,6 +688,89 @@ def test_cylinder_pathfinding_performance():
     return avg_time, avg_path_length, path
 
 
+def test_overspecified_inverse_kinematics_neutral():
+    bounds, half, neutral, transform = overspecified()
+
+    neutral_pt = [-1, 0, 0]
+    neutral_pos = overspecified_inverse_kinematics(neutral_pt, transform, bounds, neutral)
+    assert np.allclose(neutral_pos, [1, 0, 0, 0])
+
+
+def test_overspecified_inverse_kinematics_in_bounds():
+    bounds, half, neutral, transform = overspecified()
+
+    in_bounds_pt = [-2, -2, -2]
+    in_bounds_pos = overspecified_inverse_kinematics(in_bounds_pt, transform, bounds, neutral)
+    # x should be pinned at 1, d should be (2 - x) / half, z should be 2 - (d * half)
+    assert np.allclose(in_bounds_pos, [1, 2, 1, 1 / half])
+    # now a bunch of random in-bounds points
+    for _ in range(100):
+        rand_pos = [
+            n if n is not None else np.random.uniform(b[0], b[1]) for n, b in zip(neutral, bounds)
+        ]
+        rand_pt = transform.map(rand_pos)[:3]
+        solved_pos = overspecified_inverse_kinematics(rand_pt, transform, bounds, neutral)
+        assert np.allclose(solved_pos, rand_pos)
+
+
+def test_overspecified_inverse_kinematics_extremes():
+    bounds, half, neutral, transform = overspecified()
+
+    origin_pt = [0, 0, 0]
+    origin_pos = overspecified_inverse_kinematics(origin_pt, transform, bounds, neutral)
+    assert np.allclose(origin_pos, [0, 0, 0, 0])
+
+    max_pt = [-5 - 5 * half, -5, -5 - 5 * half]
+    max_pos = overspecified_inverse_kinematics(max_pt, transform, bounds, neutral)
+    assert np.allclose(max_pos, [5, 5, 5, 5])
+
+
+def test_overspecified_inverse_kinematics_with_x():
+    bounds, half, neutral, transform = overspecified()
+
+    only_possible_with_x_pt = [-7, -2, -2]
+    only_possible_with_x_pos = overspecified_inverse_kinematics(
+        only_possible_with_x_pt, transform, bounds, neutral
+    )
+    assert np.allclose(only_possible_with_x_pos, [5, 2, 0, 2 / half])
+    # and a bunch more random points across the whole space
+    bounds = np.asarray(bounds)
+    for _ in range(100):
+        rand_pos = np.random.uniform(bounds[:, 0], bounds[:, 1])
+        rand_pt = transform.map(rand_pos)[:3]
+        solved_pos = overspecified_inverse_kinematics(rand_pt, transform, bounds, neutral)
+        assert np.allclose(solved_pos, rand_pos)
+
+
+def test_overspecified_inverse_kinematics_impossible():
+    bounds, half, neutral, transform = overspecified()
+
+    impossible = [
+        [-2, -20, -2],
+        [-2, -2, 10],
+        [10, -2, -2],
+        [-20, -2, -2],
+        [-2, -2, -20],
+        [0, 1, 0],
+    ]
+    for impossible_pt in impossible:
+        with pytest.raises(ValueError):
+            overspecified_inverse_kinematics(impossible_pt, transform, bounds, neutral)
+
+
+def overspecified():
+    # keep the math easy and distinguishable, but still get coverage
+    half = 2**0.5 / 2
+    x = [-1, 0, 0]
+    y = [0, -1, 0]
+    z = [0, 0, -1]
+    d = [-half, 0, -half]  # 45° in x-z plane
+    transform = AffineTransform(np.asarray([x, y, z, d]).T, offset=np.zeros(3))
+    bounds = [(0, 5)] * 4
+    neutral = [1, None, None, None]
+    return bounds, half, neutral, transform
+
+
 draw_n = 0
 
 
@@ -735,7 +825,7 @@ if __name__ == "__main__":
     #     "test",
     # )
     geom = Geometry({"type": "box", "size": [1.0, 1.0, 1.0]}, "test_mesh", "test")
-    bounds = [
+    some_bounds = [
         Plane(np.array([1, 0, 0]), np.array([0, 0, 0])),
         Plane(np.array([0, 1, 0]), np.array([0, 0, 0])),
         Plane(np.array([0, 0, 1]), np.array([0, 0, 0])),
@@ -744,12 +834,12 @@ if __name__ == "__main__":
         Plane(np.array([0, 0, 1]), np.array([1, 1, 1])),
     ]
 
-    dev = FakeDevice("test", geom)  # , bounds=bounds)
+    dev = FakeDevice("test", geom)  # , bounds=some_bounds)
     visualizer.addDevice(dev)
     viz = visualizer.pathPlanVisualizer(dev)
     # test_paths_stay_inside_bounds(geom, viz)
     # test_grazing_paths((0.6, 0.6, 0.6), viz)
-    # test_bounds_prevent_path(geom, bounds, viz)
+    # test_bounds_prevent_path(geom, some_bounds, viz)
     # test_path_with_funner_traveler(geom, viz)
     # test_single_voxel_voxelization(geom, viz)
     # test_find_path(geom, viz)
