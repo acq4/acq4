@@ -611,7 +611,10 @@ def normalize_spec_name(spec: str) -> str:
         Lower-case identifier that can be used for deduping selections.
     """
     value = spec.strip()
-    if "#egg=" in value:
+    # Handle PEP 508 direct references (e.g., "package @ git+https://...")
+    if " @ " in value:
+        value = value.split(" @ ")[0]
+    elif "#egg=" in value:
         value = value.split("#egg=")[-1]
     elif value.startswith("git+"):
         tail = value.split("/")[-1]
