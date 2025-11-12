@@ -52,7 +52,7 @@ dependencies = [
 hardware = [
     "pydaqmx",
     "pymmcore",
-    "sensapex-py",
+    "sensapex",
     "pyserial",
     "pyparsing",
 ]

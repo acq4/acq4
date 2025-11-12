@@ -120,10 +120,11 @@ DEPENDENCY_METADATA: Dict[str, Dict[str, Dict[str, str]]] = {
         },
         "sensapex-py": {
             "display_name": "sensapex-py",
-            "pypi_package": "sensapex-py",
+            "pypi_package": "sensapex",
+            "git_url": "https://github.com/sensapex/sensapex-py.git",
             "description": "Sensapex manipulator control.",
         },
-        "git+https://github.com/outofculture/cellpose.git@_working": {
+        "cellpose": {
             "display_name": "cellpose (ACQ4 fork)",
             "pypi_package": "cellpose",
             "git_url": "https://github.com/outofculture/cellpose.git",
@@ -141,7 +142,7 @@ DEPENDENCY_METADATA: Dict[str, Dict[str, Dict[str, str]]] = {
             "git_url": "https://github.com/AllenInstitute/neuroanalysis.git",
             "description": "Neurophysiology analysis tools.",
         },
-        "git+https://github.com/acq4/pyqtgraph.git@acq4_working": {
+        "pyqtgraph": {
             "display_name": "pyqtgraph (ACQ4)",
             "pypi_package": "pyqtgraph",
             "git_url": "https://github.com/acq4/pyqtgraph.git",
@@ -185,8 +186,8 @@ def _package_meta(spec: str) -> Dict[str, str]:
     if spec in packages:
         return packages[spec]
     normalized = normalize_spec_name(spec)
-    for candidate_spec, meta in packages.items():
-        if normalize_spec_name(candidate_spec) == normalized:
+    for candidate_pkg_name, meta in packages.items():
+        if normalize_spec_name(candidate_pkg_name) == normalized:
             return meta
     return {}
 
@@ -458,19 +459,19 @@ def editable_dependencies() -> Dict[str, EditableDependency]:
 def _build_editable_dependency_map() -> Dict[str, EditableDependency]:
     packages = DEPENDENCY_METADATA.get("packages", {})
     result: Dict[str, EditableDependency] = {}
-    for spec, meta in packages.items():
+    for pkg_name, meta in packages.items():
         git_url = meta.get("git_url")
         if not git_url:
             continue
-        title = meta.get("display_name") or spec
+        title = meta.get("display_name") or pkg_name
         description = meta.get("description", "")
-        key_source = meta.get("pypi_package") or title or spec
+        key_source = meta.get("pypi_package") or title or pkg_name
         key = normalize_spec_name(key_source)
-        alias_values = {key_source, spec, title}
+        alias_values = {key_source, pkg_name, title}
         aliases = {normalize_spec_name(value) for value in alias_values if value}
         result[key] = EditableDependency(
             key=key,
-            spec=spec,
+            spec=pkg_name,
             git_url=git_url,
             display_name=title,
             description=description,
