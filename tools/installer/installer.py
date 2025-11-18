@@ -732,9 +732,9 @@ def resolve_optional_selection_from_args(args: argparse.Namespace,
     list of str
         The dependency specs to install.
     """
-    mode = getattr(args, "optional_mode", None)
-    raw_optional_arg = getattr(args, "optional_dep", None)
-    raw_group_arg = getattr(args, "optional_groups", None)
+    mode = args.optional_mode
+    raw_optional_arg = args.optional_dep
+    raw_group_arg = args.optional_groups
     requested_names = _parse_cli_list(raw_optional_arg)
     requested_groups = _parse_cli_list(raw_group_arg)
     provided_optional_arg = (raw_optional_arg is not None) or (raw_group_arg is not None)
@@ -775,7 +775,7 @@ def resolve_optional_selection_from_args(args: argparse.Namespace,
 def resolve_editable_selection_from_args(args: argparse.Namespace,
                                          editable_map: Dict[str, EditableDependency]) -> List[str]:
     """Return editable dependency keys selected via CLI arguments."""
-    raw_value = getattr(args, "editable_clone", None)
+    raw_value = args.editable_clone
     names = _parse_cli_list(raw_value)
     if not names:
         return []
@@ -1420,18 +1420,18 @@ class LocationPage(QtWidgets.QWizardPage):
         return not path.exists()
 
     def apply_cli_args(self, args: argparse.Namespace) -> None:
-        if getattr(args, "install_path", None):
+        if args.install_path:
             raw_path = Path(str(args.install_path)).expanduser()
             try:
                 resolved = raw_path.resolve()
             except Exception:
                 resolved = raw_path
             self.path_edit.setText(str(resolved))
-        if getattr(args, "repo_url", None):
+        if args.repo_url:
             self.git_repo_widget.set_repo_url(str(args.repo_url))
-        if getattr(args, "branch", None):
+        if args.branch:
             self.git_repo_widget.set_branch(str(args.branch))
-        if getattr(args, "github_token", None):
+        if args.github_token:
             self.github_token_edit.setText(str(args.github_token))
 
     def cli_arguments(self) -> List[str]:
@@ -1758,28 +1758,27 @@ class ConfigPage(QtWidgets.QWizardPage):
         return True
 
     def apply_cli_args(self, args: argparse.Namespace) -> None:
-        mode = getattr(args, "config_mode", None)
+        mode = args.config_mode
         if mode == "clone":
             self.clone_radio.setChecked(True)
-            repo = getattr(args, "config_repo", "") or ""
+            repo = args.config_repo or ""
             if repo:
                 self.git_repo_widget.set_repo_url(repo)
         elif mode == "new":
             self.new_radio.setChecked(True)
         elif mode == "copy":
             self.copy_radio.setChecked(True)
-            path = getattr(args, "config_path", "") or ""
+            path = args.config_path or ""
             if path:
                 self.copy_path_edit.setText(path)
-        elif getattr(args, "config_repo", None):
+        elif args.config_repo:
             self.clone_radio.setChecked(True)
             self.git_repo_widget.set_repo_url(str(args.config_repo))
-        elif getattr(args, "config_path", None):
+        elif args.config_path:
             self.copy_radio.setChecked(True)
             self.copy_path_edit.setText(str(args.config_path))
-        config_file = getattr(args, "config_file", None)
-        if config_file:
-            self.config_file_combo.setEditText(config_file)
+        if args.config_file:
+            self.config_file_combo.setEditText(args.config_file)
         self._update_mode_widgets()
 
     def cli_arguments(self) -> List[str]:
@@ -3220,8 +3219,8 @@ def state_from_cli_args(args: argparse.Namespace,
     install_path_value = args.install_path or str((Path.home() / DEFAULT_INSTALL_DIR_NAME))
     install_path = Path(str(install_path_value)).expanduser().resolve()
     branch_value = (args.branch or DEFAULT_BRANCH).strip() or DEFAULT_BRANCH
-    repo_value = (getattr(args, "repo_url", None) or ACQ4_REPO_URL).strip() or ACQ4_REPO_URL
-    github_token = (getattr(args, "github_token", None) or "").strip() or None
+    repo_value = (args.repo_url or ACQ4_REPO_URL).strip() or ACQ4_REPO_URL
+    github_token = (args.github_token or "").strip() or None
 
     # Fetch pyproject.toml to get dependency information
     content, used_fallback = fetch_pyproject_from_github(repo_value, branch_value)
@@ -3233,11 +3232,11 @@ def state_from_cli_args(args: argparse.Namespace,
 
     selected_optional = resolve_optional_selection_from_args(args, optional_dependencies, dependency_groups)
     editable_selection = resolve_editable_selection_from_args(args, editable_map)
-    config_mode = getattr(args, "config_mode", None)
-    config_repo = getattr(args, "config_repo", None)
-    config_path_value = getattr(args, "config_path", None)
+    config_mode = args.config_mode
+    config_repo = args.config_repo
+    config_path_value = args.config_path
     config_copy_path = Path(str(config_path_value)).expanduser().resolve() if config_path_value else None
-    config_file = getattr(args, "config_file", None)
+    config_file = args.config_file
     if config_repo and config_mode is None:
         config_mode = "clone"
     if config_copy_path and config_mode is None:
@@ -3347,8 +3346,8 @@ def main() -> None:
     editable_map = editable_dependencies()
     parser = build_cli_parser()
     args = parser.parse_args()
-    test_flags = parse_test_flags(getattr(args, "test_flags", None))
-    if getattr(args, "no_ui", False):
+    test_flags = parse_test_flags(args.test_flags)
+    if args.no_ui:
         args.unattended = True
     if args.unattended:
         try:
