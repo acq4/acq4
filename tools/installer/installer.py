@@ -1025,6 +1025,8 @@ class GitRepoWidget(QtWidgets.QWidget):
         self.status_label.setWordWrap(True)
         layout.addRow(self.status_label)
 
+        # Clear branches immediately when user starts editing the URL
+        self.repo_edit.textChanged.connect(self._clear_branch_choices)
         # Only fetch branches when user presses Enter or focuses off the field
         self.repo_edit.editingFinished.connect(self._load_branch_choices)
         self.branch_combo.currentTextChanged.connect(lambda text: self.branchChanged.emit(text))
@@ -1228,7 +1230,6 @@ class LocationPage(QtWidgets.QWizardPage):
 
         token_form = QtWidgets.QFormLayout()
         self.github_token_edit = QtWidgets.QLineEdit()
-        self.github_token_edit.setEchoMode(QtWidgets.QLineEdit.EchoMode.Password)
         self.github_token_edit.setPlaceholderText("Optional")
         self.registerField("github_token", self.github_token_edit)
         token_form.addRow("GitHub token", self.github_token_edit)
