@@ -69,7 +69,7 @@ if errorlevel 1 (
     exit /b 1
 )
 
-python -m acq4 -x
+python -m acq4 -x -c "{config_file_path}"
 pause
 """
 
@@ -798,7 +798,7 @@ def quote_windows_arguments(args: List[str]) -> str:
     return subprocess.list2cmdline(args)
 
 
-def create_start_bat(base_dir: Path, conda_exe: str, env_path: Path) -> Path:
+def create_start_bat(base_dir: Path, conda_exe: str, env_path: Path, config_file_path: Path) -> Path:
     """Create a start_acq4.bat file in the base install directory.
 
     Parameters
@@ -809,6 +809,8 @@ def create_start_bat(base_dir: Path, conda_exe: str, env_path: Path) -> Path:
         Path to the conda executable.
     env_path : Path
         Path to the conda environment.
+    config_file_path : Path
+        Path to the ACQ4 configuration file.
 
     Returns
     -------
@@ -823,7 +825,8 @@ def create_start_bat(base_dir: Path, conda_exe: str, env_path: Path) -> Path:
 
     bat_content = START_BAT_TEMPLATE.format(
         conda_activate_bat=str(conda_activate_bat),
-        env_path=str(env_path)
+        env_path=str(env_path),
+        config_file_path=str(config_file_path)
     )
     bat_path = base_dir / "start_acq4.bat"
     bat_path.write_text(bat_content, encoding="utf-8")
@@ -1977,8 +1980,6 @@ class SummaryPage(QtWidgets.QWizardPage):
             config_source = f"copy ({copy_path})" if copy_path else "copy"
         else:
             config_source = "new"
-        config_file = wizard.config_file()
-        config_file_display = config_file if config_file else "default.cfg"
         editable_display = ", ".join(wizard.selected_editable_keys()) or "None"
         summary_items = [
             ("Install directory", path),
@@ -1989,7 +1990,9 @@ class SummaryPage(QtWidgets.QWizardPage):
             ("Config source", config_source),
         ]
         if mode in ("clone", "copy"):
-            summary_items.append(("Config file", config_file_display))
+            config_file = wizard.config_file()
+            if config_file:
+                summary_items.append(("Config file", config_file))
         summary_html = "<ul>" + "".join(
             f"<li><b>{title}:</b> {value}</li>" for title, value in summary_items
         ) + "</ul>"
@@ -3055,9 +3058,11 @@ class InstallerExecutor:
                                 task_id=self._active_task_id)
             return
 
+        config_file_path = base_dir / CONFIG_DIRNAME / self.state.config_file
+
         self.logger.message("Creating start_acq4.bat launcher script", task_id=self._active_task_id)
         try:
-            bat_path = create_start_bat(base_dir, conda_exe, env_dir)
+            bat_path = create_start_bat(base_dir, conda_exe, env_dir, config_file_path)
         except Exception as e:
             self.logger.message(f"Failed to create bat file: {e}", task_id=self._active_task_id)
             return
