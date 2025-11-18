@@ -121,7 +121,7 @@ DEPENDENCY_METADATA: Dict[str, Dict[str, Dict[str, str]]] = {
         "sensapex-py": {
             "display_name": "sensapex-py",
             "pypi_package": "sensapex",
-            "git_url": "https://github.com/sensapex/sensapex-py.git",
+            "git_url": "https://github.com/acq4/sensapex-py.git",
             "description": "Sensapex manipulator control.",
         },
         "cellpose": {
