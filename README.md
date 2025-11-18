@@ -30,7 +30,7 @@ Quick Installation
 Windows:
 
 ```
-curl -o temp.bat http://acq4.org/install_windows.bat && install_windows.bat && del install_windows.bat
+curl -o install_acq4.bat http://acq4.org/install_acq4.bat && install_acq4.bat && del install_acq4.bat
 ```
 
 
