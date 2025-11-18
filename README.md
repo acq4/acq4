@@ -24,6 +24,17 @@ Features
 - 2-photon imaging
 
 
+Quick Installation
+------------------
+
+Windows:
+
+```
+curl -o temp.bat http://acq4.org/install_windows.bat && install_windows.bat && del install_windows.bat
+```
+
+
+
 Questions?
 ----------
 
