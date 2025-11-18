@@ -7,6 +7,7 @@ import dataclasses
 import functools
 import os
 import queue
+import re
 import shutil
 import shlex
 import subprocess
@@ -57,6 +58,21 @@ DEFAULT_CONDA_PACKAGES = ["pip"]
 LINUX_BOOTSTRAP_URL = RAW_GITHUB_BASE + "tools/installer/install_linux.sh"
 WINDOWS_BOOTSTRAP_URL = RAW_GITHUB_BASE + "tools/installer/install_windows.bat"
 
+START_BAT_TEMPLATE = r"""@echo off
+REM ACQ4 Launcher
+REM This script activates the ACQ4 conda environment and starts ACQ4
+
+call "{conda_activate_bat}" "{env_path}"
+if errorlevel 1 (
+    echo Failed to activate conda environment: {env_path}
+    pause
+    exit /b 1
+)
+
+python -m acq4 -x
+pause
+"""
+
 DEPENDENCY_METADATA: Dict[str, Dict[str, Dict[str, str]]] = {
     "groups": {
         "hardware": {
@@ -89,23 +105,27 @@ DEPENDENCY_METADATA: Dict[str, Dict[str, Dict[str, str]]] = {
             "display_name": "CuPy",
             "pypi_package": "cupy",
             "description": "GPU acceleration for imaging workloads.",
+            "post_install_doc": "Requires NVIDIA CUDA Toolkit. Download from <a href='https://developer.nvidia.com/cuda-downloads'>https://developer.nvidia.com/cuda-downloads</a>",
         },
         "pydaqmx": {
             "display_name": "PyDAQmx",
             "pypi_package": "PyDAQmx",
             "description": "National Instruments DAQ interface.",
+            "post_install_doc": "Requires NI-DAQmx drivers. Download from <a href='https://www.ni.com/en-us/support/downloads/drivers/download.ni-daqmx.html'>National Instruments website</a>",
         },
         "pymmcore": {
             "display_name": "PyMMCore",
             "pypi_package": "pymmcore",
             "description": "Micro-Manager device bridge.",
+            "post_install_doc": "Requires Micro-Manager installation. Download from <a href='https://micro-manager.org/Download_Micro-Manager_Latest_Release'>https://micro-manager.org</a>",
         },
         "sensapex-py": {
             "display_name": "sensapex-py",
-            "pypi_package": "sensapex-py",
+            "pypi_package": "sensapex",
+            "git_url": "https://github.com/acq4/sensapex-py.git",
             "description": "Sensapex manipulator control.",
         },
-        "git+https://github.com/outofculture/cellpose.git@_working": {
+        "cellpose": {
             "display_name": "cellpose (ACQ4 fork)",
             "pypi_package": "cellpose",
             "git_url": "https://github.com/outofculture/cellpose.git",
@@ -120,9 +140,10 @@ DEPENDENCY_METADATA: Dict[str, Dict[str, Dict[str, str]]] = {
         "neuroanalysis": {
             "display_name": "neuroanalysis",
             "pypi_package": "neuroanalysis",
+            "git_url": "https://github.com/AllenInstitute/neuroanalysis.git",
             "description": "Neurophysiology analysis tools.",
         },
-        "git+https://github.com/acq4/pyqtgraph.git@acq4_working": {
+        "pyqtgraph": {
             "display_name": "pyqtgraph (ACQ4)",
             "pypi_package": "pyqtgraph",
             "git_url": "https://github.com/acq4/pyqtgraph.git",
@@ -166,8 +187,8 @@ def _package_meta(spec: str) -> Dict[str, str]:
     if spec in packages:
         return packages[spec]
     normalized = normalize_spec_name(spec)
-    for candidate_spec, meta in packages.items():
-        if normalize_spec_name(candidate_spec) == normalized:
+    for candidate_pkg_name, meta in packages.items():
+        if normalize_spec_name(candidate_pkg_name) == normalized:
             return meta
     return {}
 
@@ -244,7 +265,7 @@ def repo_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
 
-def fetch_pyproject_from_github(repo_url: str, branch: str) -> str:
+def fetch_pyproject_from_github(repo_url: str, branch: str) -> Tuple[str, bool]:
     """Download pyproject.toml content from a GitHub repository.
 
     Parameters
@@ -256,13 +277,16 @@ def fetch_pyproject_from_github(repo_url: str, branch: str) -> str:
 
     Returns
     -------
-    str
-        The pyproject.toml file content as a string.
+    tuple of (str, bool)
+        A tuple containing:
+        - The pyproject.toml file content as a string
+        - A boolean indicating whether fallback to acq4/acq4:main was used
 
     Raises
     ------
     InstallerError
-        If the download fails or the file cannot be found.
+        If the download fails or the file cannot be found, even after
+        falling back to the main ACQ4 repository.
     """
     parts = urlsplit(repo_url)
     if parts.netloc not in {"github.com", "www.github.com"}:
@@ -281,8 +305,20 @@ def fetch_pyproject_from_github(repo_url: str, branch: str) -> str:
     try:
         with urlopen(raw_url, timeout=10) as response:
             content = response.read().decode("utf-8")
-            return content
+            return content, False
     except URLError as exc:
+        # If the fetch fails and we're not already looking at the main ACQ4 repo,
+        # fall back to fetching from github.com/acq4/acq4:main
+        is_main_acq4 = (owner.lower() == "acq4" and repo_name.lower() == "acq4" and branch.lower() == "main")
+        if not is_main_acq4:
+            fallback_url = f"https://raw.githubusercontent.com/acq4/acq4/main/pyproject.toml"
+            try:
+                with urlopen(fallback_url, timeout=10) as response:
+                    content = response.read().decode("utf-8")
+                    return content, True
+            except URLError:
+                # Fallback also failed, raise the original error
+                pass
         raise InstallerError(f"Failed to download pyproject.toml from {raw_url}: {exc}") from exc
 
 
@@ -424,19 +460,19 @@ def editable_dependencies() -> Dict[str, EditableDependency]:
 def _build_editable_dependency_map() -> Dict[str, EditableDependency]:
     packages = DEPENDENCY_METADATA.get("packages", {})
     result: Dict[str, EditableDependency] = {}
-    for spec, meta in packages.items():
+    for pkg_name, meta in packages.items():
         git_url = meta.get("git_url")
         if not git_url:
             continue
-        title = meta.get("display_name") or spec
+        title = meta.get("display_name") or pkg_name
         description = meta.get("description", "")
-        key_source = meta.get("pypi_package") or title or spec
+        key_source = meta.get("pypi_package") or title or pkg_name
         key = normalize_spec_name(key_source)
-        alias_values = {key_source, spec, title}
+        alias_values = {key_source, pkg_name, title}
         aliases = {normalize_spec_name(value) for value in alias_values if value}
         result[key] = EditableDependency(
             key=key,
-            spec=spec,
+            spec=pkg_name,
             git_url=git_url,
             display_name=title,
             description=description,
@@ -455,6 +491,7 @@ class DependencyOption:
     normalized_name: str = field(init=False)
     cli_name: str = ""
     aliases: set[str] = field(default_factory=set)
+    post_install_doc: str = ""
 
     def __post_init__(self) -> None:
         self.normalized_name = normalize_spec_name(self.spec)
@@ -498,6 +535,7 @@ class InstallerState:
     config_repo_url: Optional[str] = None
     config_copy_path: Optional[Path] = None
     config_file: Optional[str] = None
+    create_desktop_shortcut: bool = True
 
 
 @dataclass
@@ -576,7 +614,10 @@ def normalize_spec_name(spec: str) -> str:
         Lower-case identifier that can be used for deduping selections.
     """
     value = spec.strip()
-    if "#egg=" in value:
+    # Handle PEP 508 direct references (e.g., "package @ git+https://...")
+    if " @ " in value:
+        value = value.split(" @ ")[0]
+    elif "#egg=" in value:
         value = value.split("#egg=")[-1]
     elif value.startswith("git+"):
         tail = value.split("/")[-1]
@@ -622,6 +663,7 @@ def parse_optional_dependencies(content: Optional[str] = None,
             package_name = pkg_meta.get("pypi_package")
             cli_source = package_name or display_name or spec_value
             alias_values = {package_name, display_name}
+            post_install_doc = pkg_meta.get("post_install_doc", "")
             options.append(
                 DependencyOption(
                     spec=spec_value,
@@ -631,6 +673,7 @@ def parse_optional_dependencies(content: Optional[str] = None,
                     display_name=display_name,
                     cli_name=cli_source,
                     aliases={value for value in alias_values if value},
+                    post_install_doc=post_install_doc,
                 )
             )
     return options
@@ -753,6 +796,85 @@ def quote_windows_arguments(args: List[str]) -> str:
     if not args:
         return ""
     return subprocess.list2cmdline(args)
+
+
+def create_start_bat(base_dir: Path, conda_exe: str, env_path: Path) -> Path:
+    """Create a start_acq4.bat file in the base install directory.
+
+    Parameters
+    ----------
+    base_dir : Path
+        The base installation directory.
+    conda_exe : str
+        Path to the conda executable.
+    env_path : Path
+        Path to the conda environment.
+
+    Returns
+    -------
+    Path
+        Path to the created bat file.
+    """
+    # Derive activate.bat path from conda.exe path
+    # conda_exe is typically: C:\...\Scripts\conda.exe
+    # activate.bat is at: C:\...\Scripts\activate.bat
+    conda_path = Path(conda_exe)
+    conda_activate_bat = conda_path.parent / "activate.bat"
+
+    bat_content = START_BAT_TEMPLATE.format(
+        conda_activate_bat=str(conda_activate_bat),
+        env_path=str(env_path)
+    )
+    bat_path = base_dir / "start_acq4.bat"
+    bat_path.write_text(bat_content, encoding="utf-8")
+    return bat_path
+
+
+def create_desktop_shortcut_windows(bat_path: Path, base_dir: Path) -> None:
+    """Create a Windows desktop shortcut pointing to the start bat file.
+
+    Parameters
+    ----------
+    bat_path : Path
+        Path to the start_acq4.bat file.
+    base_dir : Path
+        The base installation directory (to find the icon).
+
+    Notes
+    -----
+    This function creates a shortcut to the bat file and attempts to configure
+    it to disable Quick Edit mode in the console window. Quick Edit mode can
+    cause the console to pause when text is accidentally selected, which is
+    undesirable for long-running applications.
+    """
+    desktop = Path(os.path.expanduser("~")) / "Desktop"
+    desktop.mkdir(parents=True, exist_ok=True)
+    shortcut_name = f"ACQ4 ({base_dir.name}).lnk"
+    shortcut_path = desktop / shortcut_name
+
+    # Try to find the ACQ4 icon
+    icon_path = base_dir / ACQ4_SOURCE_DIRNAME / "acq4" / "icons" / "acq4.ico"
+    icon_location = str(icon_path) if icon_path.exists() else ""
+
+    # PowerShell script to create shortcut and modify its properties
+    # Note: Disabling Quick Edit requires modifying the .lnk file binary directly
+    # which is not easily done via WScript.Shell. We create the shortcut here,
+    # and users can manually disable Quick Edit by right-clicking the shortcut,
+    # selecting Properties > Options > and unchecking "Quick Edit Mode" if needed.
+    ps_script = (
+        "$ws = New-Object -ComObject WScript.Shell;"
+        f"$s = $ws.CreateShortcut('{shortcut_path}');"
+        f"$s.TargetPath = '{bat_path}';"
+        "$s.Arguments = '';"
+        f"$s.WorkingDirectory = '{base_dir}';"
+    )
+
+    if icon_location:
+        ps_script += f"$s.IconLocation = '{icon_location}';"
+
+    ps_script += "$s.Save();"
+
+    subprocess.run(["powershell", "-NoProfile", "-Command", ps_script], check=True)
 
 
 def build_unattended_script_content(cli_args: List[str], *, is_windows: bool) -> str:
@@ -1039,6 +1161,10 @@ class GitRepoWidget(QtWidgets.QWidget):
         self.branch_combo.currentTextChanged.connect(lambda text: self.branchChanged.emit(text))
 
         self._set_status("Ready to fetch branches")
+
+        # If initialized with a repo URL, fetch branches immediately
+        if default_repo:
+            self._load_branch_choices()
 
     def set_github_token(self, token: Optional[str]) -> None:
         """Update the GitHub token and refresh branches if needed."""
@@ -1378,6 +1504,13 @@ class DependenciesPage(QtWidgets.QWizardPage):
         self.clone_items: Dict[str, QtWidgets.QTreeWidgetItem] = {}
         self._populate_clone_tree()
 
+        # Desktop shortcut checkbox (Windows only)
+        self.create_shortcut_checkbox = QtWidgets.QCheckBox("Create desktop shortcut to start ACQ4")
+        self.create_shortcut_checkbox.setChecked(True)
+        if sys.platform != "win32":
+            self.create_shortcut_checkbox.setVisible(False)
+        layout.addWidget(self.create_shortcut_checkbox)
+
     def initializePage(self) -> None:
         """Fetch pyproject.toml from GitHub and populate the dependency tree."""
         if self._initialized:
@@ -1391,12 +1524,19 @@ class DependenciesPage(QtWidgets.QWizardPage):
         QtWidgets.QApplication.processEvents()
 
         try:
-            content = fetch_pyproject_from_github(repo_url, branch)
+            content, used_fallback = fetch_pyproject_from_github(repo_url, branch)
             self.groups = dependency_groups_from_pyproject(content=content)
             self.options = parse_optional_dependencies(content=content)
             self.option_lookup = {dep.spec: dep for dep in self.options}
             self._populate_tree()
-            self.status_label.setText("")
+            if used_fallback:
+                self.status_label.setStyleSheet("color: #8a6d3b;")  # Warning color
+                self.status_label.setText(
+                    f"Note: pyproject.toml not found in {repo_url} ({branch}). "
+                    "Using dependency list from github.com/acq4/acq4:main instead."
+                )
+            else:
+                self.status_label.setText("")
             self._initialized = True
 
             # Apply CLI args if they were provided before initialization
@@ -1803,7 +1943,7 @@ class SummaryPage(QtWidgets.QWizardPage):
         layout.addWidget(self.export_help)
 
         export_row = QtWidgets.QHBoxLayout()
-        self.export_button = QtWidgets.QPushButton("Export unattended script…")
+        self.export_button = QtWidgets.QPushButton("Export installation script…")
         size_policy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Maximum,
                                             QtWidgets.QSizePolicy.Policy.Fixed)
         self.export_button.setSizePolicy(size_policy)
@@ -1873,8 +2013,7 @@ class SummaryPage(QtWidgets.QWizardPage):
         cli_args = wizard.cli_arguments(unattended=unattended)
         is_windows = os.name == "nt"
         default_suffix = ".bat" if is_windows else ".sh"
-        script_type = "unattended" if unattended else "attended"
-        default_name = f"acq4_{script_type}_install{default_suffix}"
+        default_name = f"acq4_install{default_suffix}"
         dialog_fn = QtWidgets.QFileDialog.getSaveFileName
         filters = "Script files (*.sh *.bat);;Shell scripts (*.sh);;Batch scripts (*.bat)"
         default_path = Path.cwd() / default_name
@@ -1913,6 +2052,10 @@ class InstallPage(QtWidgets.QWizardPage):
         self.log_tree.setUniformRowHeights(True)
         self.log_tree.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.log_tree.setTextElideMode(QtCore.Qt.TextElideMode.ElideNone)
+        self.log_tree.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.ExtendedSelection)
+        self.log_tree.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.CustomContextMenu)
+        self.log_tree.customContextMenuRequested.connect(self._show_log_context_menu)
+        self.log_tree.setToolTip("Right-click or use Ctrl+C to copy selected log lines")
         header = self.log_tree.header()
         header.setStretchLastSection(False)
         header.setSectionResizeMode(QtWidgets.QHeaderView.ResizeMode.ResizeToContents)
@@ -2164,6 +2307,66 @@ class InstallPage(QtWidgets.QWizardPage):
         index = self.log_tree.indexFromItem(item)
         self.log_tree.scrollTo(index, QtWidgets.QAbstractItemView.ScrollHint.PositionAtBottom)
 
+    def _show_log_context_menu(self, position: QtCore.QPoint) -> None:
+        """Show context menu for log tree with copy options."""
+        menu = QtWidgets.QMenu(self.log_tree)
+
+        # Copy action
+        copy_action = menu.addAction("Copy Selected Lines")
+        copy_action.setShortcut(QtGui.QKeySequence.StandardKey.Copy)
+        copy_action.triggered.connect(self._copy_selected_log_lines)
+
+        # Select All action
+        select_all_action = menu.addAction("Select All")
+        select_all_action.setShortcut(QtGui.QKeySequence.StandardKey.SelectAll)
+        select_all_action.triggered.connect(self.log_tree.selectAll)
+
+        # Only enable copy if there's a selection
+        selected_items = self.log_tree.selectedItems()
+        copy_action.setEnabled(len(selected_items) > 0)
+
+        menu.exec(self.log_tree.viewport().mapToGlobal(position))
+
+    def _copy_selected_log_lines(self) -> None:
+        """Copy selected log lines to clipboard."""
+        selected_items = self.log_tree.selectedItems()
+        if not selected_items:
+            return
+
+        # Collect text from selected items, preserving tree hierarchy
+        lines: List[str] = []
+        for item in selected_items:
+            # Get the indentation level
+            level = 0
+            parent = item.parent()
+            while parent is not None:
+                level += 1
+                parent = parent.parent()
+
+            # Add indentation
+            indent = "  " * level
+            text = item.text(0)
+            lines.append(f"{indent}{text}")
+
+        # Copy to clipboard
+        clipboard = QtWidgets.QApplication.clipboard()
+        if clipboard:
+            clipboard.setText("\n".join(lines))
+
+    def keyPressEvent(self, event: QtGui.QKeyEvent) -> None:  # noqa: N802
+        """Handle keyboard shortcuts."""
+        # Ctrl+C to copy selected lines
+        if event.matches(QtGui.QKeySequence.StandardKey.Copy):
+            self._copy_selected_log_lines()
+            event.accept()
+            return
+        # Ctrl+A to select all log lines
+        if event.matches(QtGui.QKeySequence.StandardKey.SelectAll):
+            self.log_tree.selectAll()
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
     def _handle_finished(self, success: bool, detail: str) -> None:
         self._running = False
         self._update_navigation(running=False, success=success)
@@ -2172,7 +2375,21 @@ class InstallPage(QtWidgets.QWizardPage):
         if success:
             self._completed = True
             self.completeChanged.emit()
-            QtWidgets.QMessageBox.information(self, "Installer", "Installation complete.")
+
+            # Check for post-install documentation
+            post_install_message = self._build_post_install_message()
+            if post_install_message:
+                msg_box = QtWidgets.QMessageBox(self)
+                msg_box.setWindowTitle("Installation Complete")
+                msg_box.setIcon(QtWidgets.QMessageBox.Icon.Information)
+                msg_box.setText("<p><b>Installation complete.</b></p>"
+                               "<p>The following packages require additional 3rd-party software to be installed:</p>"
+                               + post_install_message)
+                msg_box.setTextFormat(QtCore.Qt.TextFormat.RichText)
+                msg_box.setStandardButtons(QtWidgets.QMessageBox.StandardButton.Ok)
+                msg_box.exec()
+            else:
+                QtWidgets.QMessageBox.information(self, "Installer", "Installation complete.")
         else:
             if cancelled:
                 QtWidgets.QMessageBox.information(self, "Installer", "Installation cancelled.")
@@ -2180,6 +2397,31 @@ class InstallPage(QtWidgets.QWizardPage):
                 QtWidgets.QMessageBox.critical(self, "Installer", detail)
             self._prompt_cleanup()
         self._perform_pending_navigation()
+
+    def _build_post_install_message(self) -> str:
+        """Build HTML message with post-install documentation for selected packages."""
+        if not self._state:
+            return ""
+
+        # Get selected optional dependencies with post-install docs
+        packages_with_docs: List[Tuple[str, str]] = []
+        selected_specs = set(self._state.selected_optional)
+
+        for dep in self._state.optional_dependencies:
+            if dep.spec in selected_specs and dep.post_install_doc:
+                display_name = dep.display_name or dep.spec
+                packages_with_docs.append((display_name, dep.post_install_doc))
+
+        if not packages_with_docs:
+            return ""
+
+        # Build HTML list
+        html_parts = ["<ul>"]
+        for name, doc in packages_with_docs:
+            html_parts.append(f"<li><b>{name}</b>: {doc}</li>")
+        html_parts.append("</ul>")
+
+        return "".join(html_parts)
 
     def _update_navigation(self, running: bool, success: bool) -> None:
         wizard = self.wizard()
@@ -2571,8 +2813,8 @@ class InstallerExecutor:
         if selected_optional_specs:
             tasks.append(("Install optional dependencies", lambda: self._install_optional_dependencies(conda_exe, env_dir, selected_optional_specs)))
         tasks.append(("Prepare configuration", lambda: self._prepare_config(base_dir)))
-        if os.name == "nt":
-            tasks.append(("Create desktop shortcut", lambda: self._create_shortcut_if_needed(base_dir, env_dir)))
+        if os.name == "nt" and self.state.create_desktop_shortcut:
+            tasks.append(("Create desktop shortcut", lambda: self._create_shortcut_if_needed(base_dir, env_dir, conda_exe)))
         self.logger.set_task_total(len(tasks))
         for title, fn in tasks:
             self._run_task(title, fn)
@@ -2803,7 +3045,7 @@ class InstallerExecutor:
             source = base_dir / ACQ4_SOURCE_DIRNAME / "config" / "example"
             shutil.copytree(source, config_dir)
 
-    def _create_shortcut_if_needed(self, base_dir: Path, env_dir: Path) -> None:
+    def _create_shortcut_if_needed(self, base_dir: Path, env_dir: Path, conda_exe: str) -> None:
         if os.name != "nt":
             self.logger.message("Skipping shortcut creation on non-Windows platforms", task_id=self._active_task_id)
             return
@@ -2812,25 +3054,19 @@ class InstallerExecutor:
             self.logger.message("python.exe not found in the environment; skipping shortcut creation",
                                 task_id=self._active_task_id)
             return
-        desktop = Path(os.path.expanduser("~")) / "Desktop"
-        desktop.mkdir(parents=True, exist_ok=True)
-        shortcut_path = desktop / WINDOWS_SHORTCUT_NAME
-        target = str(python_exe)
-        config_file = self.state.config_file or "default.cfg"
-        config_file_path = base_dir / CONFIG_DIRNAME / config_file
-        arguments = f"-m acq4 -x -c {config_file_path}"
-        ps_script = (
-            "$ws = New-Object -ComObject WScript.Shell;"
-            f"$s = $ws.CreateShortcut('{shortcut_path}');"
-            f"$s.TargetPath = '{target}';"
-            f"$s.Arguments = '{arguments}';"
-            f"$s.WorkingDirectory = '{base_dir / ACQ4_SOURCE_DIRNAME}';"
-            "$s.IconLocation = '';"
-            "$s.Save();"
-        )
+
+        self.logger.message("Creating start_acq4.bat launcher script", task_id=self._active_task_id)
+        try:
+            bat_path = create_start_bat(base_dir, conda_exe, env_dir)
+        except Exception as e:
+            self.logger.message(f"Failed to create bat file: {e}", task_id=self._active_task_id)
+            return
+
         self.logger.message("Creating Windows desktop shortcut", task_id=self._active_task_id)
-        run_command(["powershell", "-NoProfile", "-Command", ps_script], self.logger,
-                    task_id=self._active_task_id, cancel_event=self.cancel_event)
+        try:
+            create_desktop_shortcut_windows(bat_path, base_dir)
+        except Exception as e:
+            self.logger.message(f"Failed to create desktop shortcut: {e}", task_id=self._active_task_id)
 
     def _pip_env(self) -> Dict[str, str]:
         env = os.environ.copy()
@@ -2983,7 +3219,10 @@ def state_from_cli_args(args: argparse.Namespace,
     github_token = (getattr(args, "github_token", None) or "").strip() or None
 
     # Fetch pyproject.toml to get dependency information
-    content = fetch_pyproject_from_github(repo_value, branch_value)
+    content, used_fallback = fetch_pyproject_from_github(repo_value, branch_value)
+    if used_fallback:
+        print(f"Warning: pyproject.toml not found in {repo_value} ({branch_value}).")
+        print("Using dependency list from github.com/acq4/acq4:main instead.")
     dependency_groups = dependency_groups_from_pyproject(content=content)
     optional_dependencies = parse_optional_dependencies(content=content)
 
@@ -3042,6 +3281,22 @@ def run_unattended_install(state: InstallerState) -> None:
     else:
         print("Installation complete", flush=True)
 
+        # Display post-install documentation
+        packages_with_docs: List[Tuple[str, str]] = []
+        selected_specs = set(state.selected_optional)
+        for dep in state.optional_dependencies:
+            if dep.spec in selected_specs and dep.post_install_doc:
+                display_name = dep.display_name or dep.spec
+                # Strip HTML tags for plain text output
+                plain_doc = re.sub(r'<a href=[\'"]([^\'"]+)[\'"]>([^<]+)</a>', r'\2 (\1)', dep.post_install_doc)
+                plain_doc = re.sub(r'<[^>]+>', '', plain_doc)
+                packages_with_docs.append((display_name, plain_doc))
+
+        if packages_with_docs:
+            print("\nThe following packages require additional 3rd-party software to be installed:")
+            for name, doc in packages_with_docs:
+                print(f"  - {name}: {doc}")
+
 
 def normalized_clone_names(selection: Iterable[str]) -> set[str]:
     """Return a lowercase set of dependency identifiers chosen for cloning."""
@@ -3074,6 +3329,7 @@ def collect_state(wizard: InstallWizard) -> InstallerState:
         config_repo_url=wizard.config_repo(),
         config_copy_path=wizard.config_copy_path(),
         config_file=wizard.config_file(),
+        create_desktop_shortcut=wizard.dependencies_page.create_shortcut_checkbox.isChecked(),
     )
 
 
