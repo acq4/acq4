@@ -40,6 +40,7 @@ ARG_EDITABLE_CLONE = "--editable-clone"
 ARG_CONFIG_MODE = "--config-mode"
 ARG_CONFIG_REPO = "--config-repo"
 ARG_CONFIG_PATH = "--config-path"
+ARG_CONFIG_FILE = "--config-file"
 ARG_GITHUB_TOKEN = "--github-token"
 
 RAW_GITHUB_BASE = "https://raw.githubusercontent.com/acq4/acq4/main/"
@@ -496,6 +497,7 @@ class InstallerState:
     config_mode: str = "new"
     config_repo_url: Optional[str] = None
     config_copy_path: Optional[Path] = None
+    config_file: Optional[str] = None
 
 
 @dataclass
@@ -878,6 +880,11 @@ def register_config_cli_arguments(parser: argparse.ArgumentParser) -> None:
         ARG_CONFIG_PATH,
         dest="config_path",
         help="Path to an existing configuration directory (required when --config-mode copy).",
+    )
+    parser.add_argument(
+        ARG_CONFIG_FILE,
+        dest="config_file",
+        help="Configuration file to use from the config directory (defaults to default.cfg if it exists).",
     )
 
 
@@ -1577,11 +1584,27 @@ class ConfigPage(QtWidgets.QWizardPage):
         copy_row.addWidget(self.copy_browse_button)
         copy_block.addLayout(copy_row)
         layout.addLayout(copy_block)
+
+        # Config file selection (for both copy and clone modes)
+        config_file_container = QtWidgets.QWidget()
+        config_file_container.setContentsMargins(32, 0, 0, 0)
+        config_file_layout = QtWidgets.QFormLayout(config_file_container)
+        config_file_layout.setContentsMargins(0, 0, 0, 0)
+        self.config_file_combo = QtWidgets.QComboBox()
+        self.config_file_combo.setEditable(True)
+        self.config_file_combo.setPlaceholderText("default.cfg")
+        config_file_layout.addRow("Config file:", self.config_file_combo)
+        self.config_file_status_label = QtWidgets.QLabel()
+        self.config_file_status_label.setWordWrap(True)
+        config_file_layout.addRow(self.config_file_status_label)
+        layout.addWidget(config_file_container)
+        self.config_file_container = config_file_container
+
         self.clone_radio.toggled.connect(self._update_mode_widgets)
         self.copy_radio.toggled.connect(self._update_mode_widgets)
         self.new_radio.toggled.connect(self._update_mode_widgets)
-        self.git_repo_widget.repoChanged.connect(lambda _: self.completeChanged.emit())
-        self.copy_path_edit.textChanged.connect(lambda _: self.completeChanged.emit())
+        self.git_repo_widget.repoChanged.connect(self._on_clone_repo_changed)
+        self.copy_path_edit.textChanged.connect(self._on_copy_path_changed)
         self._update_mode_widgets()
 
     def isComplete(self) -> bool:  # noqa: N802
@@ -1611,6 +1634,9 @@ class ConfigPage(QtWidgets.QWizardPage):
         elif getattr(args, "config_path", None):
             self.copy_radio.setChecked(True)
             self.copy_path_edit.setText(str(args.config_path))
+        config_file = getattr(args, "config_file", None)
+        if config_file:
+            self.config_file_combo.setEditText(config_file)
         self._update_mode_widgets()
 
     def cli_arguments(self) -> List[str]:
@@ -1627,14 +1653,20 @@ class ConfigPage(QtWidgets.QWizardPage):
         path = self.copy_path_edit.text().strip()
         if self.copy_radio.isChecked() and path:
             args.extend([ARG_CONFIG_PATH, path])
+        config_file = self.config_file_combo.currentText().strip()
+        if config_file and (self.copy_radio.isChecked() or self.clone_radio.isChecked()):
+            args.extend([ARG_CONFIG_FILE, config_file])
         return args
 
     def _update_mode_widgets(self) -> None:
         clone_enabled = self.clone_radio.isChecked()
         copy_enabled = self.copy_radio.isChecked()
+        config_file_enabled = clone_enabled or copy_enabled
         self.git_repo_widget.setEnabled(clone_enabled)
         self.copy_path_edit.setEnabled(copy_enabled)
         self.copy_browse_button.setEnabled(copy_enabled)
+        self.config_file_container.setVisible(config_file_enabled)
+        self.config_file_combo.setEnabled(config_file_enabled)
         self.completeChanged.emit()
 
     def _browse_copy_path(self) -> None:
@@ -1646,6 +1678,111 @@ class ConfigPage(QtWidgets.QWizardPage):
         )
         if directory:
             self.copy_path_edit.setText(directory)
+
+    def _on_copy_path_changed(self, path_text: str) -> None:
+        """Update config file list when copy path changes."""
+        self.completeChanged.emit()
+        if not self.copy_radio.isChecked():
+            return
+        path_text = path_text.strip()
+        if not path_text:
+            self.config_file_combo.clear()
+            self.config_file_status_label.setText("")
+            return
+        config_path = Path(path_text).expanduser().resolve()
+        if not config_path.exists() or not config_path.is_dir():
+            self.config_file_combo.clear()
+            self.config_file_status_label.setText("Invalid directory path")
+            return
+        # List files in the directory
+        try:
+            files = [f.name for f in config_path.iterdir() if f.is_file() and not f.name.startswith(".")]
+            self._populate_config_file_combo(files)
+        except (OSError, PermissionError) as e:
+            self.config_file_combo.clear()
+            self.config_file_status_label.setText(f"Error reading directory: {e}")
+
+    def _on_clone_repo_changed(self, repo_url: str) -> None:
+        """Update config file list when clone repo changes."""
+        self.completeChanged.emit()
+        if not self.clone_radio.isChecked():
+            return
+        if not repo_url:
+            self.config_file_combo.clear()
+            self.config_file_status_label.setText("")
+            return
+        # Fetch files from git repo in a background thread
+        self.config_file_status_label.setText("Loading file list from repository...")
+        self.config_file_combo.setEnabled(False)
+
+        def fetch_files():
+            try:
+                wizard = self.wizard()
+                token = wizard.github_token() if wizard else None
+                branch = self.git_repo_widget.branch() or "main"
+                repo_with_token = github_url_with_token(repo_url, token)
+                files = list_git_repo_files(repo_with_token, branch)
+                QtCore.QMetaObject.invokeMethod(
+                    self,
+                    "_handle_git_files_loaded",
+                    QtCore.Qt.ConnectionType.QueuedConnection,
+                    QtCore.Q_ARG(list, files)
+                )
+            except Exception as exc:
+                QtCore.QMetaObject.invokeMethod(
+                    self,
+                    "_handle_git_files_error",
+                    QtCore.Qt.ConnectionType.QueuedConnection,
+                    QtCore.Q_ARG(str, str(exc))
+                )
+
+        thread = threading.Thread(target=fetch_files, daemon=True)
+        thread.start()
+
+    @QtCore.pyqtSlot(list)
+    def _handle_git_files_loaded(self, files: List[str]) -> None:
+        """Handle successful loading of files from git repo."""
+        self.config_file_combo.setEnabled(True)
+        self._populate_config_file_combo(files)
+        if files:
+            self.config_file_status_label.setText(f"Found {len(files)} files")
+        else:
+            self.config_file_status_label.setText("No files found in repository root")
+
+    @QtCore.pyqtSlot(str)
+    def _handle_git_files_error(self, error: str) -> None:
+        """Handle error loading files from git repo."""
+        self.config_file_combo.setEnabled(True)
+        self.config_file_combo.clear()
+        self.config_file_status_label.setText(f"Error loading files: {error}")
+
+    def _populate_config_file_combo(self, files: List[str]) -> None:
+        """Populate the config file combo box with the given files."""
+        current_text = self.config_file_combo.currentText().strip()
+        self.config_file_combo.blockSignals(True)
+        self.config_file_combo.clear()
+
+        # Sort files, prioritizing default.cfg
+        sorted_files = sorted(files)
+        if "default.cfg" in sorted_files:
+            sorted_files.remove("default.cfg")
+            sorted_files.insert(0, "default.cfg")
+
+        for filename in sorted_files:
+            self.config_file_combo.addItem(filename)
+
+        # Restore previous selection or default to default.cfg
+        if current_text and current_text in files:
+            index = self.config_file_combo.findText(current_text)
+            if index >= 0:
+                self.config_file_combo.setCurrentIndex(index)
+        elif "default.cfg" in files:
+            self.config_file_combo.setCurrentText("default.cfg")
+        elif sorted_files:
+            self.config_file_combo.setCurrentIndex(0)
+
+        self.config_file_combo.blockSignals(False)
+        self.config_file_status_label.setText("")
 
 
 class SummaryPage(QtWidgets.QWizardPage):
@@ -1700,6 +1837,8 @@ class SummaryPage(QtWidgets.QWizardPage):
             config_source = f"copy ({copy_path})" if copy_path else "copy"
         else:
             config_source = "new"
+        config_file = wizard.config_file()
+        config_file_display = config_file if config_file else "default.cfg"
         editable_display = ", ".join(wizard.selected_editable_keys()) or "None"
         summary_items = [
             ("Install directory", path),
@@ -1709,6 +1848,8 @@ class SummaryPage(QtWidgets.QWizardPage):
             ("Editable clones", editable_display),
             ("Config source", config_source),
         ]
+        if mode in ("clone", "copy"):
+            summary_items.append(("Config file", config_file_display))
         summary_html = "<ul>" + "".join(
             f"<li><b>{title}:</b> {value}</li>" for title, value in summary_items
         ) + "</ul>"
@@ -2234,6 +2375,66 @@ def run_git_command(cmd: Iterable[str], logger: StructuredLogger, cwd: Optional[
     run_command(cmd, logger, cwd=cwd, env=env, task_id=task_id, cancel_event=cancel_event, mask_values=mask_values)
 
 
+def list_git_repo_files(repo_url: str, branch: str) -> List[str]:
+    """List files at the root of a git repository.
+
+    Parameters
+    ----------
+    repo_url : str
+        Git repository URL (should already have token embedded if needed)
+    branch : str
+        Branch or tag to list files from
+
+    Returns
+    -------
+    list of str
+        List of filenames at the root of the repository
+    """
+    import tempfile
+    temp_dir = Path(tempfile.mkdtemp(prefix="acq4_config_"))
+    try:
+        env = make_git_env()
+
+        # Bare clone with depth 1
+        result = subprocess.run(
+            ["git", "clone", "--bare", "--depth", "1", "--single-branch", "--branch", branch, repo_url, str(temp_dir)],
+            capture_output=True,
+            text=True,
+            env=env,
+            timeout=60
+        )
+
+        if result.returncode != 0:
+            raise InstallerError(f"Failed to clone repository: {result.stderr}")
+
+        # List files at the root using git ls-tree
+        result = subprocess.run(
+            ["git", "--git-dir", str(temp_dir), "ls-tree", "HEAD"],
+            capture_output=True,
+            text=True,
+            env=env,
+            timeout=10
+        )
+
+        if result.returncode != 0:
+            raise InstallerError(f"Failed to list repository files: {result.stderr}")
+
+        # Parse output - format is: <mode> <type> <object> <file>
+        # Only return blobs (files), not trees (directories)
+        files = []
+        for line in result.stdout.splitlines():
+            parts = line.split(None, 3)
+            if len(parts) >= 4:
+                obj_type = parts[1]
+                filename = parts[3]
+                if obj_type == "blob" and not filename.startswith("."):
+                    files.append(filename)
+        return sorted(files)
+    finally:
+        if temp_dir.exists():
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+
 class InstallWizard(QtWidgets.QWizard):
     def __init__(self, editable_map: Dict[str, EditableDependency], cli_args: argparse.Namespace,
                  test_flags: Optional[set[str]] = None) -> None:
@@ -2307,6 +2508,10 @@ class InstallWizard(QtWidgets.QWizard):
         if not text:
             return None
         return Path(text).expanduser().resolve()
+
+    def config_file(self) -> Optional[str]:
+        text = self.config_page.config_file_combo.currentText().strip()
+        return text or None
 
     def apply_cli_arguments(self, args: argparse.Namespace) -> None:
         self.location_page.apply_cli_args(args)
@@ -2611,7 +2816,9 @@ class InstallerExecutor:
         desktop.mkdir(parents=True, exist_ok=True)
         shortcut_path = desktop / WINDOWS_SHORTCUT_NAME
         target = str(python_exe)
-        arguments = f"-m acq4 -x -c {base_dir / CONFIG_DIRNAME}"
+        config_file = self.state.config_file or "default.cfg"
+        config_file_path = base_dir / CONFIG_DIRNAME / config_file
+        arguments = f"-m acq4 -x -c {config_file_path}"
         ps_script = (
             "$ws = New-Object -ComObject WScript.Shell;"
             f"$s = $ws.CreateShortcut('{shortcut_path}');"
@@ -2786,6 +2993,7 @@ def state_from_cli_args(args: argparse.Namespace,
     config_repo = getattr(args, "config_repo", None)
     config_path_value = getattr(args, "config_path", None)
     config_copy_path = Path(str(config_path_value)).expanduser().resolve() if config_path_value else None
+    config_file = getattr(args, "config_file", None)
     if config_repo and config_mode is None:
         config_mode = "clone"
     if config_copy_path and config_mode is None:
@@ -2809,6 +3017,7 @@ def state_from_cli_args(args: argparse.Namespace,
         config_mode=config_mode,
         config_repo_url=config_repo,
         config_copy_path=config_copy_path,
+        config_file=config_file,
     )
 
 
@@ -2864,6 +3073,7 @@ def collect_state(wizard: InstallWizard) -> InstallerState:
         config_mode=wizard.config_mode(),
         config_repo_url=wizard.config_repo(),
         config_copy_path=wizard.config_copy_path(),
+        config_file=wizard.config_file(),
     )
 
 
