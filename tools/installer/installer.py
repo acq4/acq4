@@ -2504,8 +2504,25 @@ class InstallPage(QtWidgets.QWizardPage):
             "<p>The following packages require additional 3rd-party software to be installed:</p>"
             + post_install_message
         )
-        text_edit.setMinimumHeight(150)
-        text_edit.setMaximumHeight(300)
+
+        # Make it look like embedded rich text: no border, transparent background, clickable links
+        text_edit.setFrameStyle(QtWidgets.QFrame.Shape.NoFrame)
+        text_edit.setStyleSheet("QTextEdit { background-color: transparent; }")
+        text_edit.setOpenExternalLinks(True)
+
+        # Auto-resize to fit contents
+        text_edit.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        text_edit.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        text_edit.setSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Expanding,
+            QtWidgets.QSizePolicy.Policy.Minimum
+        )
+
+        # Calculate height needed for content
+        doc = text_edit.document()
+        doc.setTextWidth(self.log_tree.viewport().width() - 40)  # Account for indentation
+        height = doc.size().height() + 10  # Add small padding
+        text_edit.setFixedHeight(int(height))
 
         # Attach the widget to the tree item
         self.log_tree.setItemWidget(widget_item, 0, text_edit)
