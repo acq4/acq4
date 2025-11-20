@@ -2400,20 +2400,10 @@ class InstallPage(QtWidgets.QWizardPage):
             self._completed = True
             self.completeChanged.emit()
 
-            # Check for post-install documentation
+            # Add summary with post-install documentation to log
             post_install_message = self._build_post_install_message()
             if post_install_message:
-                msg_box = QtWidgets.QMessageBox(self)
-                msg_box.setWindowTitle("Installation Complete")
-                msg_box.setIcon(QtWidgets.QMessageBox.Icon.Information)
-                msg_box.setText("<p><b>Installation complete.</b></p>"
-                               "<p>The following packages require additional 3rd-party software to be installed:</p>"
-                               + post_install_message)
-                msg_box.setTextFormat(QtCore.Qt.TextFormat.RichText)
-                msg_box.setStandardButtons(QtWidgets.QMessageBox.StandardButton.Ok)
-                msg_box.exec()
-            else:
-                QtWidgets.QMessageBox.information(self, "Installer", "Installation complete.")
+                self._add_summary_to_log(post_install_message)
         else:
             if cancelled:
                 QtWidgets.QMessageBox.information(self, "Installer", "Installation cancelled.")
@@ -2446,6 +2436,35 @@ class InstallPage(QtWidgets.QWizardPage):
         html_parts.append("</ul>")
 
         return "".join(html_parts)
+
+    def _add_summary_to_log(self, post_install_message: str) -> None:
+        """Add a Summary section to the log tree with post-install documentation."""
+        # Create top-level Summary item
+        summary_item = QtWidgets.QTreeWidgetItem(["Summary"])
+        summary_item.setExpanded(True)
+        summary_item.setIcon(0, self._success_icon)
+        self.log_tree.addTopLevelItem(summary_item)
+
+        # Create a child item to hold the QTextEdit widget
+        widget_item = QtWidgets.QTreeWidgetItem()
+        summary_item.addChild(widget_item)
+
+        # Create QTextEdit for displaying the message
+        text_edit = QtWidgets.QTextEdit()
+        text_edit.setReadOnly(True)
+        text_edit.setHtml(
+            "<p><b>Installation complete.</b></p>"
+            "<p>The following packages require additional 3rd-party software to be installed:</p>"
+            + post_install_message
+        )
+        text_edit.setMinimumHeight(150)
+        text_edit.setMaximumHeight(300)
+
+        # Attach the widget to the tree item
+        self.log_tree.setItemWidget(widget_item, 0, text_edit)
+
+        # Scroll to the summary
+        self._scroll_to_item(summary_item)
 
     def _update_navigation(self, running: bool, success: bool) -> None:
         wizard = self.wizard()
