@@ -40,6 +40,7 @@ ARG_OPTIONAL_GROUPS = "--optional-groups"
 ARG_EDITABLE_CLONE = "--editable-clone"
 ARG_CONFIG_MODE = "--config-mode"
 ARG_CONFIG_REPO = "--config-repo"
+ARG_CONFIG_BRANCH = "--config-branch"
 ARG_CONFIG_PATH = "--config-path"
 ARG_CONFIG_FILE = "--config-file"
 ARG_GITHUB_TOKEN = "--github-token"
@@ -546,6 +547,7 @@ class InstallerState:
     editable_selection: List[str] = field(default_factory=list)
     config_mode: str = "new"
     config_repo_url: Optional[str] = None
+    config_repo_branch: Optional[str] = None
     config_copy_path: Optional[Path] = None
     config_file: Optional[str] = None
     create_desktop_shortcut: bool = True
@@ -1023,6 +1025,11 @@ def register_config_cli_arguments(parser: argparse.ArgumentParser) -> None:
         ARG_CONFIG_REPO,
         dest="config_repo",
         help="URL of configuration repository (required when --config-mode clone).",
+    )
+    parser.add_argument(
+        ARG_CONFIG_BRANCH,
+        dest="config_branch",
+        help="Branch to use when cloning configuration repository (defaults to 'main').",
     )
     parser.add_argument(
         ARG_CONFIG_PATH,
@@ -1817,6 +1824,9 @@ class ConfigPage(QtWidgets.QWizardPage):
             repo = args.config_repo or ""
             if repo:
                 self.git_repo_widget.set_repo_url(repo)
+            branch = args.config_branch or ""
+            if branch:
+                self.git_repo_widget.set_branch(branch)
         elif mode == "new":
             self.new_radio.setChecked(True)
         elif mode == "copy":
@@ -1827,6 +1837,8 @@ class ConfigPage(QtWidgets.QWizardPage):
         elif args.config_repo:
             self.clone_radio.setChecked(True)
             self.git_repo_widget.set_repo_url(str(args.config_repo))
+            if args.config_branch:
+                self.git_repo_widget.set_branch(str(args.config_branch))
         elif args.config_path:
             self.copy_radio.setChecked(True)
             self.copy_path_edit.setText(str(args.config_path))
@@ -1848,6 +1860,9 @@ class ConfigPage(QtWidgets.QWizardPage):
         repo = self.git_repo_widget.repo_url()
         if self.clone_radio.isChecked() and repo:
             args.extend([ARG_CONFIG_REPO, repo])
+            branch = self.git_repo_widget.branch()
+            if branch:
+                args.extend([ARG_CONFIG_BRANCH, branch])
         path = self.copy_path_edit.text().strip()
         if self.copy_radio.isChecked() and path:
             args.extend([ARG_CONFIG_PATH, path])
@@ -2866,6 +2881,10 @@ class InstallWizard(QtWidgets.QWizard):
         text = self.config_page.git_repo_widget.repo_url()
         return text or None
 
+    def config_repo_branch(self) -> Optional[str]:
+        text = self.config_page.git_repo_widget.branch()
+        return text or None
+
     def config_copy_path(self) -> Optional[Path]:
         text = self.config_page.copy_path_edit.text().strip()
         if not text:
@@ -3151,10 +3170,15 @@ class InstallerExecutor:
         if config_dir.exists():
             raise InstallerError(f"Config directory already exists at {config_dir}")
         if self.state.config_mode == "clone" and self.state.config_repo_url:
-            self.logger.message(f"Cloning configuration from {self.state.config_repo_url}", task_id=self._active_task_id)
+            if not self.state.config_repo_branch:
+                raise InstallerError("Config repository branch must be specified when cloning.")
+            self.logger.message(
+                f"Cloning configuration from {self.state.config_repo_url} ({self.state.config_repo_branch})",
+                task_id=self._active_task_id
+            )
             repo_with_token = github_url_with_token(self.state.config_repo_url, self.state.github_token)
             run_git_command(
-                ["git", "clone", repo_with_token, str(config_dir)],
+                ["git", "clone", "--branch", self.state.config_repo_branch, "--single-branch", repo_with_token, str(config_dir)],
                 self.logger,
                 task_id=self._active_task_id,
                 cancel_event=self.cancel_event,
@@ -3358,6 +3382,7 @@ def state_from_cli_args(args: argparse.Namespace,
     editable_selection = resolve_editable_selection_from_args(args, editable_map)
     config_mode = args.config_mode
     config_repo = args.config_repo
+    config_repo_branch = args.config_branch
     config_path_value = args.config_path
     config_copy_path = Path(str(config_path_value)).expanduser().resolve() if config_path_value else None
     config_file = args.config_file
@@ -3366,8 +3391,11 @@ def state_from_cli_args(args: argparse.Namespace,
     if config_copy_path and config_mode is None:
         config_mode = "copy"
     config_mode = config_mode or "new"
-    if config_mode == "clone" and not config_repo:
-        raise InstallerError("--config-repo is required when --config-mode clone is specified.")
+    if config_mode == "clone":
+        if not config_repo:
+            raise InstallerError("--config-repo is required when --config-mode clone is specified.")
+        if not config_repo_branch:
+            raise InstallerError("--config-branch is required when --config-mode clone is specified.")
     if config_mode == "copy":
         if not config_copy_path:
             raise InstallerError("--config-path is required when --config-mode copy is specified.")
@@ -3383,6 +3411,7 @@ def state_from_cli_args(args: argparse.Namespace,
         editable_selection=editable_selection,
         config_mode=config_mode,
         config_repo_url=config_repo,
+        config_repo_branch=config_repo_branch,
         config_copy_path=config_copy_path,
         config_file=config_file,
     )
@@ -3455,6 +3484,7 @@ def collect_state(wizard: InstallWizard) -> InstallerState:
         editable_selection=wizard.selected_editable_keys(),
         config_mode=wizard.config_mode(),
         config_repo_url=wizard.config_repo(),
+        config_repo_branch=wizard.config_repo_branch(),
         config_copy_path=wizard.config_copy_path(),
         config_file=wizard.config_file(),
         create_desktop_shortcut=wizard.dependencies_page.create_shortcut_checkbox.isChecked(),
