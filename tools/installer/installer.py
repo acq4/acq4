@@ -1202,6 +1202,12 @@ class GitRepoWidget(QtWidgets.QWidget):
             self.branch_fetch_cancel.set()
             self.branch_fetch_thread.join(timeout=1.0)
 
+    def _clear_branch_choices(self) -> None:
+        """Clear branch choices when repository URL changes."""
+        self._cancel_branch_process()
+        self.branch_combo.clear()
+        self._set_status("Ready to fetch branches")
+
     def _load_branch_choices(self) -> None:
         repo_value = self.repo_edit.text().strip()
         if not repo_value:
