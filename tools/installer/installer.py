@@ -2521,22 +2521,35 @@ class InstallPage(QtWidgets.QWizardPage):
         text_edit.setStyleSheet("QTextBrowser { background-color: transparent; }")
         text_edit.setOpenExternalLinks(True)
 
-        # Auto-resize to fit contents
+        # Disable scrollbars - we'll size the widget to show all content
         text_edit.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         text_edit.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         text_edit.setSizePolicy(
             QtWidgets.QSizePolicy.Policy.Expanding,
-            QtWidgets.QSizePolicy.Policy.Minimum
+            QtWidgets.QSizePolicy.Policy.Fixed
         )
 
-        # Calculate height needed for content
-        doc = text_edit.document()
-        doc.setTextWidth(self.log_tree.viewport().width() - 40)  # Account for indentation
-        height = doc.size().height() + 10  # Add small padding
-        text_edit.setFixedHeight(int(height))
-
-        # Attach the widget to the tree item
+        # Attach the widget to the tree item first
         self.log_tree.setItemWidget(widget_item, 0, text_edit)
+
+        # Calculate proper width and height after widget is attached
+        # Get the actual column width (accounting for indentation and margins)
+        column_width = self.log_tree.columnWidth(0)
+        indent_width = self.log_tree.indentation() * 2  # Parent + child indentation
+        margins = 20  # Internal margins
+        available_width = column_width - indent_width - margins
+
+        # Set document width and calculate required height
+        doc = text_edit.document()
+        doc.setTextWidth(available_width)
+        required_height = int(doc.size().height()) + 10  # Add padding
+
+        # Set the widget size
+        text_edit.setFixedHeight(required_height)
+        text_edit.setMinimumWidth(available_width)
+
+        # Tell the tree item how tall it needs to be
+        widget_item.setSizeHint(0, QtCore.QSize(available_width, required_height))
 
         # Scroll to the summary
         self._scroll_to_item(summary_item)
