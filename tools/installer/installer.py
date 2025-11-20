@@ -914,7 +914,7 @@ def build_unattended_script_content(cli_args: List[str], *, is_windows: bool) ->
             "setlocal enabledelayedexpansion\n"
             "set \"BOOTSTRAP=%TEMP%\\acq4-bootstrap-%RANDOM%.bat\"\n"
             "echo Downloading ACQ4 bootstrap script...\n"
-            f"powershell -NoProfile -Command \"Invoke-WebRequest -Uri '{WINDOWS_BOOTSTRAP_URL}' -OutFile '%BOOTSTRAP%'\" || "
+            f"curl -L -o \"%BOOTSTRAP%\" \"{WINDOWS_BOOTSTRAP_URL}\" || "
             "goto :fail\n"
             f"{bootstrap_call}\n"
             "set \"RESULT=%ERRORLEVEL%\"\n"
@@ -1720,20 +1720,28 @@ class ConfigPage(QtWidgets.QWizardPage):
         clone_help.setWordWrap(True)
         clone_help.setIndent(24)
         clone_block.addWidget(clone_help)
-        clone_widget_container = QtWidgets.QWidget()
-        clone_widget_container.setContentsMargins(32, 0, 0, 0)
-        clone_widget_layout = QtWidgets.QVBoxLayout(clone_widget_container)
+        self.clone_widget_container = QtWidgets.QWidget()
+        self.clone_widget_container.setContentsMargins(32, 0, 0, 0)
+        clone_widget_layout = QtWidgets.QVBoxLayout(self.clone_widget_container)
         clone_widget_layout.setContentsMargins(0, 0, 0, 0)
         self.git_repo_widget = GitRepoWidget(default_repo="", default_branch="main")
         self.git_repo_widget.repo_edit.setPlaceholderText("https://github.com/your/config-repo.git")
         clone_widget_layout.addWidget(self.git_repo_widget)
-        clone_block.addWidget(clone_widget_container)
+
+        # Config file selection for clone mode
+        clone_config_file_layout = QtWidgets.QFormLayout()
+        self.clone_config_file_combo = QtWidgets.QComboBox()
+        self.clone_config_file_combo.setEditable(True)
+        self.clone_config_file_combo.setPlaceholderText("default.cfg")
+        clone_config_file_layout.addRow("Config file:", self.clone_config_file_combo)
+        self.clone_config_file_status_label = QtWidgets.QLabel()
+        self.clone_config_file_status_label.setWordWrap(True)
+        clone_config_file_layout.addRow(self.clone_config_file_status_label)
+        clone_widget_layout.addLayout(clone_config_file_layout)
+
+        clone_block.addWidget(self.clone_widget_container)
         layout.addLayout(clone_block)
 
-        self.copy_path_edit = QtWidgets.QLineEdit()
-        self.copy_path_edit.setPlaceholderText("Path to existing ACQ4 config directory")
-        self.copy_browse_button = QtWidgets.QPushButton("Browse…")
-        self.copy_browse_button.clicked.connect(self._browse_copy_path)
         copy_block = QtWidgets.QVBoxLayout()
         copy_block.addWidget(self.copy_radio)
         copy_help = QtWidgets.QLabel(
@@ -1743,32 +1751,40 @@ class ConfigPage(QtWidgets.QWizardPage):
         copy_help.setWordWrap(True)
         copy_help.setIndent(24)
         copy_block.addWidget(copy_help)
+
+        self.copy_widget_container = QtWidgets.QWidget()
+        self.copy_widget_container.setContentsMargins(32, 0, 0, 0)
+        copy_widget_layout = QtWidgets.QVBoxLayout(self.copy_widget_container)
+        copy_widget_layout.setContentsMargins(0, 0, 0, 0)
+
+        self.copy_path_edit = QtWidgets.QLineEdit()
+        self.copy_path_edit.setPlaceholderText("Path to existing ACQ4 config directory")
+        self.copy_browse_button = QtWidgets.QPushButton("Browse…")
+        self.copy_browse_button.clicked.connect(self._browse_copy_path)
         copy_row = QtWidgets.QHBoxLayout()
-        copy_row.setContentsMargins(32, 0, 0, 0)
         copy_row.addWidget(self.copy_path_edit)
         copy_row.addWidget(self.copy_browse_button)
-        copy_block.addLayout(copy_row)
-        layout.addLayout(copy_block)
+        copy_widget_layout.addLayout(copy_row)
 
-        # Config file selection (for both copy and clone modes)
-        config_file_container = QtWidgets.QWidget()
-        config_file_container.setContentsMargins(32, 0, 0, 0)
-        config_file_layout = QtWidgets.QFormLayout(config_file_container)
-        config_file_layout.setContentsMargins(0, 0, 0, 0)
-        self.config_file_combo = QtWidgets.QComboBox()
-        self.config_file_combo.setEditable(True)
-        self.config_file_combo.setPlaceholderText("default.cfg")
-        config_file_layout.addRow("Config file:", self.config_file_combo)
-        self.config_file_status_label = QtWidgets.QLabel()
-        self.config_file_status_label.setWordWrap(True)
-        config_file_layout.addRow(self.config_file_status_label)
-        layout.addWidget(config_file_container)
-        self.config_file_container = config_file_container
+        # Config file selection for copy mode
+        copy_config_file_layout = QtWidgets.QFormLayout()
+        self.copy_config_file_combo = QtWidgets.QComboBox()
+        self.copy_config_file_combo.setEditable(True)
+        self.copy_config_file_combo.setPlaceholderText("default.cfg")
+        copy_config_file_layout.addRow("Config file:", self.copy_config_file_combo)
+        self.copy_config_file_status_label = QtWidgets.QLabel()
+        self.copy_config_file_status_label.setWordWrap(True)
+        copy_config_file_layout.addRow(self.copy_config_file_status_label)
+        copy_widget_layout.addLayout(copy_config_file_layout)
+
+        copy_block.addWidget(self.copy_widget_container)
+        layout.addLayout(copy_block)
 
         self.clone_radio.toggled.connect(self._update_mode_widgets)
         self.copy_radio.toggled.connect(self._update_mode_widgets)
         self.new_radio.toggled.connect(self._update_mode_widgets)
         self.git_repo_widget.repoChanged.connect(self._on_clone_repo_changed)
+        self.git_repo_widget.branchChanged.connect(self._on_clone_branch_changed)
         self.copy_path_edit.textChanged.connect(self._on_copy_path_changed)
         self._update_mode_widgets()
 
@@ -1800,7 +1816,10 @@ class ConfigPage(QtWidgets.QWizardPage):
             self.copy_radio.setChecked(True)
             self.copy_path_edit.setText(str(args.config_path))
         if args.config_file:
-            self.config_file_combo.setEditText(args.config_file)
+            if self.clone_radio.isChecked():
+                self.clone_config_file_combo.setEditText(args.config_file)
+            elif self.copy_radio.isChecked():
+                self.copy_config_file_combo.setEditText(args.config_file)
         self._update_mode_widgets()
 
     def cli_arguments(self) -> List[str]:
@@ -1817,7 +1836,12 @@ class ConfigPage(QtWidgets.QWizardPage):
         path = self.copy_path_edit.text().strip()
         if self.copy_radio.isChecked() and path:
             args.extend([ARG_CONFIG_PATH, path])
-        config_file = self.config_file_combo.currentText().strip()
+        if self.clone_radio.isChecked():
+            config_file = self.clone_config_file_combo.currentText().strip()
+        elif self.copy_radio.isChecked():
+            config_file = self.copy_config_file_combo.currentText().strip()
+        else:
+            config_file = ""
         if config_file and (self.copy_radio.isChecked() or self.clone_radio.isChecked()):
             args.extend([ARG_CONFIG_FILE, config_file])
         return args
@@ -1825,12 +1849,8 @@ class ConfigPage(QtWidgets.QWizardPage):
     def _update_mode_widgets(self) -> None:
         clone_enabled = self.clone_radio.isChecked()
         copy_enabled = self.copy_radio.isChecked()
-        config_file_enabled = clone_enabled or copy_enabled
-        self.git_repo_widget.setEnabled(clone_enabled)
-        self.copy_path_edit.setEnabled(copy_enabled)
-        self.copy_browse_button.setEnabled(copy_enabled)
-        self.config_file_container.setVisible(config_file_enabled)
-        self.config_file_combo.setEnabled(config_file_enabled)
+        self.clone_widget_container.setVisible(clone_enabled)
+        self.copy_widget_container.setVisible(copy_enabled)
         self.completeChanged.emit()
 
     def _browse_copy_path(self) -> None:
@@ -1850,34 +1870,45 @@ class ConfigPage(QtWidgets.QWizardPage):
             return
         path_text = path_text.strip()
         if not path_text:
-            self.config_file_combo.clear()
-            self.config_file_status_label.setText("")
+            self.copy_config_file_combo.clear()
+            self.copy_config_file_status_label.setText("")
             return
         config_path = Path(path_text).expanduser().resolve()
         if not config_path.exists() or not config_path.is_dir():
-            self.config_file_combo.clear()
-            self.config_file_status_label.setText("Invalid directory path")
+            self.copy_config_file_combo.clear()
+            self.copy_config_file_status_label.setText("Invalid directory path")
             return
         # List files in the directory
         try:
             files = [f.name for f in config_path.iterdir() if f.is_file() and not f.name.startswith(".")]
-            self._populate_config_file_combo(files)
+            self._populate_config_file_combo(files, "copy")
         except (OSError, PermissionError) as e:
-            self.config_file_combo.clear()
-            self.config_file_status_label.setText(f"Error reading directory: {e}")
+            self.copy_config_file_combo.clear()
+            self.copy_config_file_status_label.setText(f"Error reading directory: {e}")
 
     def _on_clone_repo_changed(self, repo_url: str) -> None:
         """Update config file list when clone repo changes."""
         self.completeChanged.emit()
         if not self.clone_radio.isChecked():
             return
+        self._refresh_clone_file_list()
+
+    def _on_clone_branch_changed(self, branch: str) -> None:
+        """Update config file list when clone branch changes."""
+        if not self.clone_radio.isChecked():
+            return
+        self._refresh_clone_file_list()
+
+    def _refresh_clone_file_list(self) -> None:
+        """Refresh the config file list from the git repository."""
+        repo_url = self.git_repo_widget.repo_url()
         if not repo_url:
-            self.config_file_combo.clear()
-            self.config_file_status_label.setText("")
+            self.clone_config_file_combo.clear()
+            self.clone_config_file_status_label.setText("")
             return
         # Fetch files from git repo in a background thread
-        self.config_file_status_label.setText("Loading file list from repository...")
-        self.config_file_combo.setEnabled(False)
+        self.clone_config_file_status_label.setText("Loading file list from repository...")
+        self.clone_config_file_combo.setEnabled(False)
 
         def fetch_files():
             try:
@@ -1906,25 +1937,39 @@ class ConfigPage(QtWidgets.QWizardPage):
     @QtCore.pyqtSlot(list)
     def _handle_git_files_loaded(self, files: List[str]) -> None:
         """Handle successful loading of files from git repo."""
-        self.config_file_combo.setEnabled(True)
-        self._populate_config_file_combo(files)
+        self.clone_config_file_combo.setEnabled(True)
+        self._populate_config_file_combo(files, "clone")
         if files:
-            self.config_file_status_label.setText(f"Found {len(files)} files")
+            self.clone_config_file_status_label.setText(f"Found {len(files)} files")
         else:
-            self.config_file_status_label.setText("No files found in repository root")
+            self.clone_config_file_status_label.setText("No files found in repository root")
 
     @QtCore.pyqtSlot(str)
     def _handle_git_files_error(self, error: str) -> None:
         """Handle error loading files from git repo."""
-        self.config_file_combo.setEnabled(True)
-        self.config_file_combo.clear()
-        self.config_file_status_label.setText(f"Error loading files: {error}")
+        self.clone_config_file_combo.setEnabled(True)
+        self.clone_config_file_combo.clear()
+        self.clone_config_file_status_label.setText(f"Error loading files: {error}")
 
-    def _populate_config_file_combo(self, files: List[str]) -> None:
-        """Populate the config file combo box with the given files."""
-        current_text = self.config_file_combo.currentText().strip()
-        self.config_file_combo.blockSignals(True)
-        self.config_file_combo.clear()
+    def _populate_config_file_combo(self, files: List[str], mode: str) -> None:
+        """Populate the config file combo box with the given files.
+
+        Args:
+            files: List of file names to populate
+            mode: Either "clone" or "copy" to determine which combo box to use
+        """
+        if mode == "clone":
+            combo = self.clone_config_file_combo
+            status_label = self.clone_config_file_status_label
+        elif mode == "copy":
+            combo = self.copy_config_file_combo
+            status_label = self.copy_config_file_status_label
+        else:
+            raise ValueError(f"Invalid mode: {mode}")
+
+        current_text = combo.currentText().strip()
+        combo.blockSignals(True)
+        combo.clear()
 
         # Sort files, prioritizing default.cfg
         sorted_files = sorted(files)
@@ -1933,20 +1978,20 @@ class ConfigPage(QtWidgets.QWizardPage):
             sorted_files.insert(0, "default.cfg")
 
         for filename in sorted_files:
-            self.config_file_combo.addItem(filename)
+            combo.addItem(filename)
 
         # Restore previous selection or default to default.cfg
         if current_text and current_text in files:
-            index = self.config_file_combo.findText(current_text)
+            index = combo.findText(current_text)
             if index >= 0:
-                self.config_file_combo.setCurrentIndex(index)
+                combo.setCurrentIndex(index)
         elif "default.cfg" in files:
-            self.config_file_combo.setCurrentText("default.cfg")
+            combo.setCurrentText("default.cfg")
         elif sorted_files:
-            self.config_file_combo.setCurrentIndex(0)
+            combo.setCurrentIndex(0)
 
-        self.config_file_combo.blockSignals(False)
-        self.config_file_status_label.setText("")
+        combo.blockSignals(False)
+        status_label.setText("")
 
 
 class SummaryPage(QtWidgets.QWizardPage):
@@ -2797,7 +2842,12 @@ class InstallWizard(QtWidgets.QWizard):
         return Path(text).expanduser().resolve()
 
     def config_file(self) -> Optional[str]:
-        text = self.config_page.config_file_combo.currentText().strip()
+        if self.config_page.clone_radio.isChecked():
+            text = self.config_page.clone_config_file_combo.currentText().strip()
+        elif self.config_page.copy_radio.isChecked():
+            text = self.config_page.copy_config_file_combo.currentText().strip()
+        else:
+            text = ""
         return text or None
 
     def apply_cli_arguments(self, args: argparse.Namespace) -> None:
