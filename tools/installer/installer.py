@@ -125,6 +125,18 @@ DEPENDENCY_METADATA: Dict[str, Dict[str, Dict[str, str]]] = {
             "git_url": "https://github.com/acq4/sensapex-py.git",
             "description": "Sensapex manipulator control.",
         },
+        "pytic": {
+            "display_name": "pytic",
+            "pypi_package": "pytic",
+            "git_url": "https://github.com/AllenInstitute/pytic.git",
+            "description": "TIC motor control",
+        },
+        "falconoptics": {
+            "display_name": "falconoptics",
+            "pypi_package": "falconoptics",
+            "git_url": "https://github.com/AllenInstitute/falconoptics.git",
+            "description": "Falcon optics motor turret.",
+        },
         "cellpose": {
             "display_name": "cellpose (ACQ4 fork)",
             "pypi_package": "cellpose",
@@ -172,7 +184,7 @@ DEPENDENCY_METADATA: Dict[str, Dict[str, Dict[str, str]]] = {
         },
         "acq4_automation": {
             "display_name": "acq4_automation",
-            "git_url": "https://github.com/AllenInstitute/acq4_automation.git",
+            "git_url": "https://github.com/AllenInstitute/acq4-automation.git",
             "description": "Allen Institute automation helpers for patch clamp.",
         },
     },
