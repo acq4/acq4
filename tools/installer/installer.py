@@ -1171,8 +1171,12 @@ class GitRepoWidget(QtWidgets.QWidget):
 
     def set_github_token(self, token: Optional[str]) -> None:
         """Update the GitHub token and refresh branches if needed."""
+        if self._github_token == token:
+            return
         self._github_token = token
-        self._load_branch_choices()
+        # Only reload branches if we have a repo URL
+        if self.repo_edit.text().strip():
+            self._load_branch_choices()
 
     def repo_url(self) -> str:
         """Return the current repository URL."""
@@ -1387,7 +1391,7 @@ class LocationPage(QtWidgets.QWizardPage):
         outer_layout.addWidget(version_group)
         outer_layout.addStretch(1)
         self.path_edit.textChanged.connect(self._validate_path)
-        self.github_token_edit.textChanged.connect(self._handle_token_change)
+        self.github_token_edit.editingFinished.connect(self._handle_token_change)
         self._validate_path()
 
     def _select_path(self) -> None:
@@ -2710,8 +2714,10 @@ class InstallWizard(QtWidgets.QWizard):
         self.addPage(self.install_page)
 
         # Connect github token from LocationPage to ConfigPage's git_repo_widget
-        self.location_page.github_token_edit.textChanged.connect(
-            lambda token: self.config_page.git_repo_widget.set_github_token(token.strip() or None)
+        self.location_page.github_token_edit.editingFinished.connect(
+            lambda: self.config_page.git_repo_widget.set_github_token(
+                self.location_page.github_token_edit.text().strip() or None
+            )
         )
 
         self.apply_cli_arguments(cli_args)
