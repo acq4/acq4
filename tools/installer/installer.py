@@ -38,7 +38,6 @@ ARG_OPTIONAL_MODE = "--optional-mode"
 ARG_OPTIONAL_DEP = "--optional-dep"
 ARG_OPTIONAL_GROUPS = "--optional-groups"
 ARG_EDITABLE_CLONE = "--editable-clone"
-ARG_CONFIG_MODE = "--config-mode"
 ARG_CONFIG_REPO = "--config-repo"
 ARG_CONFIG_BRANCH = "--config-branch"
 ARG_CONFIG_PATH = "--config-path"
@@ -1014,32 +1013,32 @@ def register_dependency_cli_arguments(parser: argparse.ArgumentParser) -> None:
 
 
 def register_config_cli_arguments(parser: argparse.ArgumentParser) -> None:
-    """Add CLI options controlling configuration handling."""
-    parser.add_argument(
-        ARG_CONFIG_MODE,
-        choices=["new", "clone", "copy"],
-        default=None,
-        help="Choose whether to create a new config, clone from a repository, or copy an existing directory.",
-    )
+    """Add CLI options controlling configuration handling.
+
+    Configuration mode is determined automatically:
+    - Clone mode: if --config-repo and --config-branch are specified
+    - Copy mode: if --config-path is specified
+    - New mode: if neither are specified (creates default config)
+    """
     parser.add_argument(
         ARG_CONFIG_REPO,
         dest="config_repo",
-        help="URL of configuration repository (required when --config-mode clone).",
+        help="URL of configuration repository to clone. Requires --config-branch.",
     )
     parser.add_argument(
         ARG_CONFIG_BRANCH,
         dest="config_branch",
-        help="Branch to use when cloning configuration repository (defaults to 'main').",
+        help="Branch to use when cloning configuration repository. Requires --config-repo.",
     )
     parser.add_argument(
         ARG_CONFIG_PATH,
         dest="config_path",
-        help="Path to an existing configuration directory (required when --config-mode copy).",
+        help="Path to an existing configuration directory to copy. Cannot be used with --config-repo.",
     )
     parser.add_argument(
         ARG_CONFIG_FILE,
         dest="config_file",
-        help="Configuration file to use from the config directory (defaults to default.cfg if it exists).",
+        help="Configuration file to use from the cloned/copied config directory.",
     )
 
 
@@ -1818,23 +1817,8 @@ class ConfigPage(QtWidgets.QWizardPage):
         return True
 
     def apply_cli_args(self, args: argparse.Namespace) -> None:
-        mode = args.config_mode
-        if mode == "clone":
-            self.clone_radio.setChecked(True)
-            repo = args.config_repo or ""
-            if repo:
-                self.git_repo_widget.set_repo_url(repo)
-            branch = args.config_branch or ""
-            if branch:
-                self.git_repo_widget.set_branch(branch)
-        elif mode == "new":
-            self.new_radio.setChecked(True)
-        elif mode == "copy":
-            self.copy_radio.setChecked(True)
-            path = args.config_path or ""
-            if path:
-                self.copy_path_edit.setText(path)
-        elif args.config_repo:
+        # Infer mode from which arguments are present
+        if args.config_repo:
             self.clone_radio.setChecked(True)
             self.git_repo_widget.set_repo_url(str(args.config_repo))
             if args.config_branch:
@@ -1842,6 +1826,9 @@ class ConfigPage(QtWidgets.QWizardPage):
         elif args.config_path:
             self.copy_radio.setChecked(True)
             self.copy_path_edit.setText(str(args.config_path))
+        else:
+            self.new_radio.setChecked(True)
+
         if args.config_file:
             if self.clone_radio.isChecked():
                 self.clone_config_file_combo.setEditText(args.config_file)
@@ -1850,30 +1837,27 @@ class ConfigPage(QtWidgets.QWizardPage):
         self._update_mode_widgets()
 
     def cli_arguments(self) -> List[str]:
-        if self.copy_radio.isChecked():
-            mode = "copy"
-        elif self.clone_radio.isChecked():
-            mode = "clone"
-        else:
-            mode = "new"
-        args = [ARG_CONFIG_MODE, mode]
-        repo = self.git_repo_widget.repo_url()
-        if self.clone_radio.isChecked() and repo:
-            args.extend([ARG_CONFIG_REPO, repo])
+        args: List[str] = []
+
+        if self.clone_radio.isChecked():
+            repo = self.git_repo_widget.repo_url()
+            if repo:
+                args.extend([ARG_CONFIG_REPO, repo])
             branch = self.git_repo_widget.branch()
             if branch:
                 args.extend([ARG_CONFIG_BRANCH, branch])
-        path = self.copy_path_edit.text().strip()
-        if self.copy_radio.isChecked() and path:
-            args.extend([ARG_CONFIG_PATH, path])
-        if self.clone_radio.isChecked():
             config_file = self.clone_config_file_combo.currentText().strip()
+            if config_file:
+                args.extend([ARG_CONFIG_FILE, config_file])
         elif self.copy_radio.isChecked():
+            path = self.copy_path_edit.text().strip()
+            if path:
+                args.extend([ARG_CONFIG_PATH, path])
             config_file = self.copy_config_file_combo.currentText().strip()
-        else:
-            config_file = ""
-        if config_file and (self.copy_radio.isChecked() or self.clone_radio.isChecked()):
-            args.extend([ARG_CONFIG_FILE, config_file])
+            if config_file:
+                args.extend([ARG_CONFIG_FILE, config_file])
+        # else: new mode - no args needed
+
         return args
 
     def _update_mode_widgets(self) -> None:
@@ -3373,27 +3357,32 @@ def state_from_cli_args(args: argparse.Namespace,
 
     selected_optional = resolve_optional_selection_from_args(args, optional_dependencies, dependency_groups)
     editable_selection = resolve_editable_selection_from_args(args, editable_map)
-    config_mode = args.config_mode
+    # Parse config arguments
     config_repo = args.config_repo
     config_repo_branch = args.config_branch
     config_path_value = args.config_path
     config_copy_path = Path(str(config_path_value)).expanduser().resolve() if config_path_value else None
     config_file = args.config_file
-    if config_repo and config_mode is None:
+
+    # Sanity check: can't specify both clone and copy options
+    if config_repo and config_copy_path:
+        raise InstallerError("Cannot specify both --config-repo and --config-path. Choose one configuration source.")
+
+    # Infer mode and validate
+    if config_repo:
         config_mode = "clone"
-    if config_copy_path and config_mode is None:
-        config_mode = "copy"
-    config_mode = config_mode or "new"
-    if config_mode == "clone":
-        if not config_repo:
-            raise InstallerError("--config-repo is required when --config-mode clone is specified.")
         if not config_repo_branch:
-            raise InstallerError("--config-branch is required when --config-mode clone is specified.")
-    if config_mode == "copy":
-        if not config_copy_path:
-            raise InstallerError("--config-path is required when --config-mode copy is specified.")
+            raise InstallerError("--config-branch is required when using --config-repo.")
+    elif config_copy_path:
+        config_mode = "copy"
         if not config_copy_path.exists() or not config_copy_path.is_dir():
             raise InstallerError(f"Config path {config_copy_path} does not exist or is not a directory.")
+    else:
+        config_mode = "new"
+
+    # Sanity check: --config-branch only makes sense with --config-repo
+    if config_repo_branch and not config_repo:
+        raise InstallerError("--config-branch requires --config-repo.")
     return InstallerState(
         install_path=install_path,
         branch=branch_value,
