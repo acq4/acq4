@@ -1933,7 +1933,64 @@ class Plane:
         return str(self)
 
 
-def overspecified_inverse_kinematics(
+def greedy_axis_inverse_kinematics(
+    point,
+    device_to_global: Transform,
+    bounds: list[tuple[float, float]],
+    axis: int,
+    starting_point: list[float],
+):
+    """Calculate the global_to_device kinematics for a point given a device with more dimensions than the
+    space in which it operates.
+
+    Strategy
+    ---------
+    Set the greedy axis to as close to point as possible, starting at the starting_point. Then
+    solve for the other axes.
+
+    Parameters
+    ----------
+    point : Mappable
+        Target point in global coordinates
+    device_to_global : Transform
+        Mapping from device coordinates to global. Assumed not to be invertible.
+    bounds : list[tuple[float, float]]
+        A list of (min, max) pairs for each dimension of the device in its own coordinate system.
+        E.g. [(0, 20000), ...]
+    axis : int
+        The axis which should be preferred.
+    starting_point : list[float]
+        The starting position in device coordinates.
+
+    Returns
+    -------
+    position : np.ndarray
+        The calculated position in the device coordinate system.
+
+    Raises
+    ------
+    ValueError
+        If any of the arguments are invalid, or if no valid position could be found.
+    """
+    origin_in_global = device_to_global.map(np.zeros(len(bounds)))
+    axis_dev = np.zeros(len(bounds))
+    axis_dev[axis] = 1
+    axis_in_global = device_to_global.map(axis_dev) - origin_in_global
+    axis_scale = np.linalg.norm(axis_in_global)
+    start_in_global = device_to_global.map(np.array(starting_point))
+    displacement = np.asarray(point) - start_in_global
+    greedy_pos = (displacement.dot(axis_in_global) / axis_scale) + starting_point[axis]
+    greedy_pos = max(bounds[axis][0], min(bounds[axis][1], greedy_pos))
+    neutral: list = [None] * len(bounds)
+    neutral[axis] = greedy_pos
+    return neutral_anchored_inverse_kinematics(
+        point,
+        device_to_global,
+        bounds,
+        neutral,
+    )
+
+def neutral_anchored_inverse_kinematics(
     point,
     device_to_global: Transform,
     bounds: list[tuple[float, float]],
