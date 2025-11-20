@@ -3334,12 +3334,6 @@ def build_cli_parser() -> argparse.ArgumentParser:
         help="Run installer without showing the GUI (requires all options via CLI).",
     )
     parser.add_argument(
-        "--no-ui",
-        action="store_true",
-        dest="no_ui",
-        help=argparse.SUPPRESS,
-    )
-    parser.add_argument(
         "--test",
         dest="test_flags",
         help="Internal testing flag: comma-separated list of behaviors to simulate (e.g., no-git).",
@@ -3500,8 +3494,6 @@ def main() -> None:
     parser = build_cli_parser()
     args = parser.parse_args()
     test_flags = parse_test_flags(args.test_flags)
-    if args.no_ui:
-        args.unattended = True
     if args.unattended:
         try:
             state = state_from_cli_args(args, editable_map)
