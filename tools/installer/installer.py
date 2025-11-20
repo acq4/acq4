@@ -69,6 +69,7 @@ if errorlevel 1 (
     exit /b 1
 )
 
+cd "{acq4_path}"
 python -m acq4 -x -c "{config_file_path}"
 pause
 """
@@ -838,7 +839,8 @@ def create_start_bat(base_dir: Path, conda_exe: str, env_path: Path, config_file
     bat_content = START_BAT_TEMPLATE.format(
         conda_activate_bat=str(conda_activate_bat),
         env_path=str(env_path),
-        config_file_path=str(config_file_path)
+        config_file_path=str(config_file_path),
+        acq4_path=str(base_dir / ACQ4_SOURCE_DIRNAME),
     )
     bat_path = base_dir / "start_acq4.bat"
     bat_path.write_text(bat_content, encoding="utf-8")
