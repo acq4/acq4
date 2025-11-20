@@ -2524,9 +2524,8 @@ class InstallPage(QtWidgets.QWizardPage):
         summary_item.addChild(widget_item)
         summary_item.setExpanded(True)
 
-        # Create QTextEdit for displaying the message
-        text_edit = QtWidgets.QTextEdit()
-        text_edit.setReadOnly(True)
+        # Create QTextBrowser for displaying the message with clickable links
+        text_edit = QtWidgets.QTextBrowser()
         text_edit.setHtml(
             "<p><b>Installation complete.</b></p>"
             "<p>The following packages require additional 3rd-party software to be installed:</p>"
@@ -2535,7 +2534,7 @@ class InstallPage(QtWidgets.QWizardPage):
 
         # Make it look like embedded rich text: no border, transparent background, clickable links
         text_edit.setFrameStyle(QtWidgets.QFrame.Shape.NoFrame)
-        text_edit.setStyleSheet("QTextEdit { background-color: transparent; }")
+        text_edit.setStyleSheet("QTextBrowser { background-color: transparent; }")
         text_edit.setOpenExternalLinks(True)
 
         # Auto-resize to fit contents
