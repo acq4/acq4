@@ -2496,6 +2496,53 @@ class InstallPage(QtWidgets.QWizardPage):
 
         return "".join(html_parts)
 
+    def _build_installation_summary(self) -> str:
+        """Build HTML summary of installation locations and sources."""
+        if not self._state:
+            return "<p><b>Installation complete.</b></p>"
+
+        html_parts = ["<p><b>Installation complete.</b></p>"]
+
+        # ACQ4 installation
+        base_dir = self._state.install_path
+        acq4_dir = base_dir / ACQ4_SOURCE_DIRNAME
+        html_parts.append(
+            f"<p><b>ACQ4 installed to:</b> <code>{acq4_dir}</code><br>"
+            f"<b>Source:</b> {self._state.repo_url} (branch: {self._state.branch})</p>"
+        )
+
+        # Configuration
+        config_dir = base_dir / CONFIG_DIRNAME
+        if self._state.config_mode == "clone":
+            config_source = f"{self._state.config_repo_url} (branch: {self._state.config_repo_branch})"
+        elif self._state.config_mode == "copy":
+            config_source = f"Copied from {self._state.config_copy_path}"
+        else:
+            config_source = "Default configuration"
+
+        html_parts.append(
+            f"<p><b>Configuration:</b> <code>{config_dir}</code><br>"
+            f"<b>Source:</b> {config_source}</p>"
+        )
+
+        # Editable dependencies
+        if self._state.editable_selection:
+            dep_dir = base_dir / DEPENDENCIES_DIRNAME
+            dep_list = ", ".join(self._state.editable_selection)
+            html_parts.append(
+                f"<p><b>Editable dependencies:</b> <code>{dep_dir}</code><br>"
+                f"<b>Packages:</b> {dep_list}</p>"
+            )
+
+        # Startup script (Windows only)
+        if os.name == "nt":
+            startup_script = base_dir / "start_acq4.bat"
+            html_parts.append(
+                f"<p><b>Startup script:</b> <code>{startup_script}</code></p>"
+            )
+
+        return "".join(html_parts)
+
     def _add_summary_to_log(self, post_install_message: str) -> None:
         """Add a Summary section to the log tree with post-install documentation."""
         # Create top-level Summary item
@@ -2508,13 +2555,20 @@ class InstallPage(QtWidgets.QWizardPage):
         summary_item.addChild(widget_item)
         summary_item.setExpanded(True)
 
+        # Build installation summary
+        summary_html = self._build_installation_summary()
+
+        # Add post-install message if present
+        if post_install_message:
+            summary_html += (
+                "<p><b>Next Steps:</b></p>"
+                "<p>The following packages require additional 3rd-party software to be installed:</p>"
+                + post_install_message
+            )
+
         # Create QTextBrowser for displaying the message with clickable links
         text_edit = QtWidgets.QTextBrowser()
-        text_edit.setHtml(
-            "<p><b>Installation complete.</b></p>"
-            "<p>The following packages require additional 3rd-party software to be installed:</p>"
-            + post_install_message
-        )
+        text_edit.setHtml(summary_html)
 
         # Make it look like embedded rich text: no border, transparent background, clickable links
         text_edit.setFrameStyle(QtWidgets.QFrame.Shape.NoFrame)
