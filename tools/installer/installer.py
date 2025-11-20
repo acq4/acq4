@@ -586,10 +586,15 @@ class StructuredLogger:
     def start_task(self, title: str) -> int:
         self._task_counter += 1
         task_id = self._task_counter
+        if self.text_fn is not None:
+            self.text_fn(f"\n=== {title} ===")
         self._emit("task-start", task_id=task_id, title=title)
         return task_id
 
     def finish_task(self, task_id: int, success: bool = True) -> None:
+        if self.text_fn is not None:
+            status = "✓ Completed" if success else "✗ Failed"
+            self.text_fn(f"{status}\n")
         self._emit("task-complete", task_id=task_id, success=success)
         self._progress_value = min(self._progress_value + 1, self._progress_total)
         self._emit("progress", total=self._progress_total, value=self._progress_value)
@@ -597,6 +602,8 @@ class StructuredLogger:
     def start_command(self, task_id: Optional[int], display_cmd: str) -> int:
         self._command_counter += 1
         command_id = self._command_counter
+        if self.text_fn is not None:
+            self.text_fn(f"$ {display_cmd}")
         self._emit("command-start", command_id=command_id, task_id=task_id, text=display_cmd)
         return command_id
 
@@ -610,6 +617,8 @@ class StructuredLogger:
     def finish_command(self, command_id: Optional[int], success: bool) -> None:
         if command_id is None:
             return
+        if self.text_fn is not None and not success:
+            self.text_fn("Command failed")
         self._emit("command-complete", command_id=command_id, success=success)
 
 def normalize_spec_name(spec: str) -> str:
@@ -2026,7 +2035,7 @@ class SummaryPage(QtWidgets.QWizardPage):
         export_row.addWidget(self.export_button)
 
         self.unattended_checkbox = QtWidgets.QCheckBox("Unattended install")
-        self.unattended_checkbox.setChecked(True)
+        self.unattended_checkbox.setChecked(False)
         self.unattended_checkbox.setToolTip(
             "When checked, the exported script will run without user interaction. "
             "Uncheck to create an interactive installer script."
@@ -2492,13 +2501,13 @@ class InstallPage(QtWidgets.QWizardPage):
         """Add a Summary section to the log tree with post-install documentation."""
         # Create top-level Summary item
         summary_item = QtWidgets.QTreeWidgetItem(["Summary"])
-        summary_item.setExpanded(True)
         summary_item.setIcon(0, self._success_icon)
         self.log_tree.addTopLevelItem(summary_item)
 
         # Create a child item to hold the QTextEdit widget
         widget_item = QtWidgets.QTreeWidgetItem()
         summary_item.addChild(widget_item)
+        summary_item.setExpanded(True)
 
         # Create QTextEdit for displaying the message
         text_edit = QtWidgets.QTextEdit()
@@ -2643,7 +2652,6 @@ def run_command(cmd: Iterable[str], logger: StructuredLogger, cwd: Optional[Path
     if cwd:
         display_cmd = f"(cd {cwd}) {display_cmd}"
     masked_display = _mask(display_cmd)
-    logger.message(masked_display, task_id=task_id, broadcast=False)
     command_id = logger.start_command(task_id, masked_display)
     process = subprocess.Popen(
         cmd_list,
