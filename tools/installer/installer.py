@@ -1201,8 +1201,12 @@ class GitRepoWidget(QtWidgets.QWidget):
         return self.branch_combo.currentText().strip()
 
     def set_repo_url(self, url: str) -> None:
-        """Set the repository URL."""
+        """Set the repository URL and trigger branch loading."""
         self.repo_edit.setText(url)
+        # Programmatically setting the URL should also load branches,
+        # just like when a user enters a URL and presses Enter
+        if url.strip():
+            self._load_branch_choices()
 
     def set_branch(self, branch: str) -> None:
         """Set the branch/tag."""
