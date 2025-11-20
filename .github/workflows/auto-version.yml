@@ -10,8 +10,7 @@ permissions:
 
 jobs:
   bump-version:
-    # Skip if the commit message contains '[skip-version]' or if it's already a version bump
-    if: "!contains(github.event.head_commit.message, '[skip-version]') && !contains(github.event.head_commit.message, 'chore: bump version')"
+    if: ${{ github.actor != 'github-actions[bot]' }}
     runs-on: ubuntu-latest
 
     steps:
@@ -21,48 +20,133 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.x'
-
-      - name: Increment version
-        id: bump
+      - name: Detect requested version bump
+        id: prepare
+        env:
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+          REPO: ${{ github.repository }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Read current version from __init__.py
+          set -euo pipefail
+
           VERSION_FILE="acq4/__init__.py"
-          CURRENT_VERSION=$(grep "__version__ = " $VERSION_FILE | sed "s/__version__ = '\(.*\)'/\1/")
+          SKIP_PATTERN='\[skip-version\]'
+          MAJOR_PATTERN='(\[major\]|\[major-version\]|#major\b|major bump)'
+          MINOR_PATTERN='(\[minor\]|\[minor-version\]|#minor\b|minor bump)'
 
-          echo "Current version: $CURRENT_VERSION"
+          if [ ! -f "$VERSION_FILE" ]; then
+            echo "::error::Version file $VERSION_FILE not found."
+            exit 1
+          fi
 
-          # Parse version components (major.minor.patch)
+          RANGE=""
+          if [ -n "${BEFORE:-}" ] && git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
+            RANGE="${BEFORE}..${AFTER}"
+          else
+            RANGE="${AFTER}"
+          fi
+
+          LOG_MESSAGES=$(git log --format=%B "$RANGE")
+
+          if echo "$LOG_MESSAGES" | grep -Eiq "$SKIP_PATTERN"; then
+            echo "skip_bump=true" >> "$GITHUB_OUTPUT"
+            echo "skip_reason=Found [skip-version] in commit history." >> "$GITHUB_OUTPUT"
+            echo "should_bump=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if git rev-parse HEAD^ >/dev/null 2>&1; then
+            if git diff HEAD^ HEAD -- "$VERSION_FILE" | grep -q "__version__"; then
+              echo "skip_bump=true" >> "$GITHUB_OUTPUT"
+              echo "skip_reason=Latest commit already updates version metadata." >> "$GITHUB_OUTPUT"
+              echo "should_bump=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+
+          MERGE_PARENTS=$(git log -1 --pretty=%P "$AFTER" || true)
+          if [ -n "$MERGE_PARENTS" ] && [ "$(echo "$MERGE_PARENTS" | wc -w)" -gt 1 ]; then
+            IS_MERGE_COMMIT="true"
+          else
+            IS_MERGE_COMMIT="false"
+          fi
+
+          BUMP_TYPE="patch"
+          if echo "$LOG_MESSAGES" | grep -Eiq "$MAJOR_PATTERN"; then
+            BUMP_TYPE="major"
+          elif echo "$LOG_MESSAGES" | grep -Eiq "$MINOR_PATTERN"; then
+            BUMP_TYPE="minor"
+          else
+            if [ "$IS_MERGE_COMMIT" = "true" ]; then
+              MERGE_MESSAGE=$(git log -1 --pretty=%B "$AFTER")
+              if [[ "$MERGE_MESSAGE" =~ Merge\ pull\ request\ \#([0-9]+) ]]; then
+                PR_NUMBER="${BASH_REMATCH[1]}"
+                PR_DATA=$(curl -sS \
+                  -H "Authorization: Bearer $GITHUB_TOKEN" \
+                  -H "Accept: application/vnd.github+json" \
+                  "https://api.github.com/repos/$REPO/pulls/$PR_NUMBER")
+                PR_TEXT=$(echo "$PR_DATA" | jq -r '[.title, .body] | map(select(. != null)) | join("\n")')
+                if echo "$PR_TEXT" | grep -Eiq "$MAJOR_PATTERN"; then
+                  BUMP_TYPE="major"
+                elif echo "$PR_TEXT" | grep -Eiq "$MINOR_PATTERN"; then
+                  BUMP_TYPE="minor"
+                fi
+              fi
+            fi
+          fi
+
+          CURRENT_VERSION=$(sed -n "s/^__version__ = '\(.*\)'$/\1/p" "$VERSION_FILE" | head -n1)
+
+          if [ -z "$CURRENT_VERSION" ]; then
+            echo "::error::Unable to determine current version."
+            exit 1
+          fi
+
           IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_VERSION"
 
-          # Increment patch version
-          NEW_PATCH=$((PATCH + 1))
-          NEW_VERSION="${MAJOR}.${MINOR}.${NEW_PATCH}"
+          case "$BUMP_TYPE" in
+            major)
+              NEW_VERSION="$((MAJOR + 1)).0.0"
+              ;;
+            minor)
+              NEW_VERSION="${MAJOR}.$((MINOR + 1)).0"
+              ;;
+            *)
+              NEW_VERSION="${MAJOR}.${MINOR}.$((PATCH + 1))"
+              ;;
+          esac
 
-          echo "New version: $NEW_VERSION"
+          if [ "$NEW_VERSION" = "$CURRENT_VERSION" ]; then
+            echo "skip_bump=true" >> "$GITHUB_OUTPUT"
+            echo "skip_reason=Computed version matches current version; nothing to do." >> "$GITHUB_OUTPUT"
+            echo "should_bump=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
 
-          # Update version in __init__.py
-          sed -i "s/__version__ = '.*'/__version__ = '$NEW_VERSION'/" $VERSION_FILE
+          sed -i "s/__version__ = '.*'/__version__ = '$NEW_VERSION'/" "$VERSION_FILE"
 
-          # Export for later steps
-          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
-          echo "old_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          echo "old_version=$CURRENT_VERSION" >> "$GITHUB_OUTPUT"
+          echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+          echo "bump_type=$BUMP_TYPE" >> "$GITHUB_OUTPUT"
+          echo "should_bump=true" >> "$GITHUB_OUTPUT"
 
       - name: Configure Git
+        if: steps.prepare.outputs.should_bump == 'true'
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
 
-      - name: Commit and push version bump
+      - name: Commit version bump
+        if: steps.prepare.outputs.should_bump == 'true'
         run: |
+          set -euo pipefail
           git add acq4/__init__.py
-          git commit -m "chore: bump version to ${{ steps.bump.outputs.new_version }} [skip-version]"
+          git commit -m "chore: bump version to ${{ steps.prepare.outputs.new_version }} [skip-version]"
           git push
 
       - name: Create git tag
+        if: steps.prepare.outputs.should_bump == 'true'
         run: |
-          git tag "acq4-${{ steps.bump.outputs.new_version }}"
-          git push origin "acq4-${{ steps.bump.outputs.new_version }}"
+          git tag "acq4-${{ steps.prepare.outputs.new_version }}"
+          git push origin "acq4-${{ steps.prepare.outputs.new_version }}"
