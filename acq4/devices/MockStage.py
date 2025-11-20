@@ -271,6 +271,8 @@ class MockStageThread(Thread):
     
     def getPosition(self):
         with self.lock:
+            if self.pos is None:
+                return np.zeros(4)
             return self.pos.copy()
     
     def run(self):

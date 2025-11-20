@@ -2021,7 +2021,9 @@ def overspecified_inverse_kinematics(
     # sort boundary intersections by distance to the point
     intersections.sort(key=lambda x: np.linalg.norm(x[1]))
     for intersect_pt, displacement in intersections:
-        neutral_pos = displacement.dot(neutral_axis.direction) / neutral_axis_scale + neutral[neutral_index]
+        neutral_pos = (
+            displacement.dot(neutral_axis.direction) / neutral_axis_scale + neutral[neutral_index]
+        )
         candidate = _prep_device_pos(intersect_pt, neutral_pos)
         if all(bounds[i][0] <= candidate[i] <= bounds[i][1] for i in range(len(candidate))):
             return candidate

@@ -1,3 +1,5 @@
+from itertools import combinations
+
 import numpy as np
 import scipy.optimize
 import scipy.stats
@@ -8,6 +10,7 @@ from acq4.devices.Stage import Stage
 from acq4.util import Qt, ptime
 from acq4.util.HelpfulException import HelpfulException
 from acq4.util.target import Target
+from coorx import AffineTransform
 
 
 class StageAxesCalibrationWindow(Qt.QWidget):
@@ -205,8 +208,7 @@ class ManipulatorAxesCalibrationWindow(Qt.QWidget):
     def saveCalibrationToDevice(self):
         self.recalculate(raiseOnInsufficientPoints=True)
         self.calibration["transform"] = (
-            None if self.transform is None else [list(row) for row in self.transform.matrix()]
-        )
+            None if self.transform is None else self.transform.__getstate__())
         self.dev.writeConfigFile(self.calibration, "calibration")
         self.saveBtn.setText("save calibration")
 
@@ -241,17 +243,17 @@ class ManipulatorAxesCalibrationWindow(Qt.QWidget):
         axParentPos = [parentPos[list(axisPoints[ax])] for ax in range(self.dev.nAxes)]
 
         # find optimal linear mapping for each axis
-        transform = np.eye(self.dev.nAxes + 1)
+        transform = np.eye(self.dev.nAxes)
         for i in range(3):
             for j in range(self.dev.nAxes):
                 line = scipy.stats.linregress(axStagePos[j], axParentPos[j][:, i])
                 transform[i, j] = line.slope
 
         # find optimal offset
-        stageMappedToParent = pg.transformCoordinates(transform, stagePos, transpose=True)[:, :3]
+        self.transform = AffineTransform(transform)
+        stageMappedToParent = self.transform.map(stagePos)[..., :3]
         offset = (parentPos - stageMappedToParent).mean(axis=0)
-        transform[:3, self.dev.nAxes] = offset
-        self.transform = transform
+        self.transform.translate(np.append(offset, 0))
 
         # self._showTransformError(parentPos, stagePos)
 
@@ -266,7 +268,7 @@ class ManipulatorAxesCalibrationWindow(Qt.QWidget):
                 ident = np.eye(self.dev.nAxes + 1)
                 ident[:self.dev.nAxes] = axisTr.reshape(self.dev.nAxes, self.dev.nAxes + 1)
                 axisTr = pg.Transform3D(ident)
-            st = self.dev._makeStageTransform(_stage_pos, axisTr)[0]
+            st = self.dev._makeStageTransform(_stage_pos, axisTr)
             tr = pg.Transform3D(self.dev.baseTransform() * st)
             return tr.map(localPos)
 
@@ -358,6 +360,66 @@ class ManipulatorAxesCalibrationWindow(Qt.QWidget):
             target = self.pointTree.topLevelItem(i).target
             if target is not None:
                 target.show()
+
+
+def find_colinear_points(points, p1, p2, tolerance):
+    """Find all points that are within tolerance of the line defined by p1 and p2."""
+    # Line direction vector
+    direction = p2 - p1
+    direction = direction / np.linalg.norm(direction)
+
+    colinear = []
+    for i, point in enumerate(points):
+        # Vector from p1 to current point
+        v = point - p1
+
+        # Projection onto line direction
+        proj_length = np.dot(v, direction)
+        projection = proj_length * direction
+
+        # Perpendicular distance to line
+        perpendicular = v - projection
+        distance = np.linalg.norm(perpendicular)
+
+        if distance <= tolerance:
+            colinear.append(i)
+
+    return colinear
+
+
+def group_points_by_colinearity(points, min_points=4, tolerance=1e-6):
+    """
+    Find ALL groups of colinear points, allowing overlaps.
+    Returns groups sorted by size (largest first).
+    """
+    points = np.array(points)
+    n = len(points)
+
+    if n < min_points:
+        return []
+
+    groups = []
+    seen_groups = set()  # To avoid duplicates
+
+    # Try all pairs of points
+    for i, j in combinations(range(n), 2):
+        p1, p2 = points[i], points[j]
+
+        if np.allclose(p1, p2, atol=tolerance):
+            continue
+
+        colinear_indices = find_colinear_points(points, p1, p2, tolerance)
+
+        if len(colinear_indices) >= min_points:
+            # Convert to frozenset for hashable comparison
+            group_set = frozenset(colinear_indices)
+            if group_set not in seen_groups:
+                seen_groups.add(group_set)
+                groups.append(sorted(colinear_indices))
+
+    # Sort by group size, largest first
+    groups.sort(key=len, reverse=True)
+    return groups
 
 
 class AutomatedStageCalibration(object):

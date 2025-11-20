@@ -22,6 +22,7 @@ from acq4.util.Mutex import RecursiveMutex
 from acq4.util.Thread import Thread
 from acq4.util.future import Future, future_wrap
 from acq4.util.imaging.frame import Frame
+from coorx import TTransform, SRT3DTransform
 from pyqtgraph import Vector, SRTTransform3D
 from pyqtgraph.debug import Profiler
 from .CameraInterface import CameraInterface
@@ -108,8 +109,7 @@ class Camera(DAQGeneric, OptomechDevice):
 
         self.setupCamera()
         self.sensorSize = self.getParam("sensorSize")
-        tr = pg.SRTTransform3D()
-        tr.translate(-self.sensorSize[0] * 0.5, -self.sensorSize[1] * 0.5)
+        tr = TTransform(offset=(-self.sensorSize[0] * 0.5, -self.sensorSize[1] * 0.5, 0))
         self.setDeviceTransform(self.deviceTransform() * tr)
         self._frameInfoUpdater = None
 
@@ -155,7 +155,9 @@ class Camera(DAQGeneric, OptomechDevice):
 
     def _makeFrameInfoUpdater(self, templateInfo):
         scope_state = self.getScopeState()
-        dev_xform = pg.SRTTransform3D(scope_state["transform"])
+        dev_xform = scope_state["transform"].copy()
+        dev_xform["offset"] = dev_xform.pop("pos", None)
+        dev_xform = SRT3DTransform(**dev_xform)
         ps = scope_state["pixelSize"]  # size of CCD pixel
 
         def _update(frame):

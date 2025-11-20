@@ -38,7 +38,7 @@ def unlimited_manipulator() -> Stage:
 def test_axis_calibration_4_axes(unlimited_manipulator, qtbot):
     (qtbot, QtBot)  # noqa: F821
     cal_win = ManipulatorAxesCalibrationWindow(unlimited_manipulator)
-    sqrt2 = np.sqrt(2)
+    half = np.sqrt(2) / 2
     cal_win.calibration["points"] = [
         [[0, 0, 0, 0], [0, 0, 0]],
         [[1, 0, 0, 0], [1, 0, 0]],
@@ -50,18 +50,25 @@ def test_axis_calibration_4_axes(unlimited_manipulator, qtbot):
         [[3, 3, 1, 0], [3, 3, 1]],
         [[3, 3, 2, 0], [3, 3, 2]],
         [[3, 3, 3, 0], [3, 3, 3]],
-        [[3, 3, 3, 1], [3 + sqrt2, 3, 3 + sqrt2]],
-        [[3, 3, 3, 2], [3 + 2 * sqrt2, 3, 3 + 2 * sqrt2]],
-        [[3, 3, 3, 3], [3 + 3 * sqrt2, 3, 3 + 3 * sqrt2]],
+        [[3, 3, 3, 1], [3 + half, 3, 3 + half]],
+        [[3, 3, 3, 2], [3 + 2 * half, 3, 3 + 2 * half]],
+        [[3, 3, 3, 3], [3 + 3 * half, 3, 3 + 3 * half]],
     ]
     cal_win.recalculate()
-    assert cal_win.transform[0, 0] == pytest.approx(1.0)
-    assert cal_win.transform[1, 1] == pytest.approx(1.0)
-    assert cal_win.transform[2, 2] == pytest.approx(1.0)
-    assert cal_win.transform[0, 3] == pytest.approx(sqrt2)
-    assert cal_win.transform[1, 3] == pytest.approx(0.0)
-    assert cal_win.transform[2, 3] == pytest.approx(sqrt2)
+    tr_matrix = cal_win.transform.full_matrix
+    assert tr_matrix[0, 0] == pytest.approx(1.0)
+    assert tr_matrix[1, 1] == pytest.approx(1.0)
+    assert tr_matrix[2, 2] == pytest.approx(1.0)
+    assert tr_matrix[0, 3] == pytest.approx(half)
+    assert tr_matrix[1, 3] == pytest.approx(0.0)
+    assert tr_matrix[2, 3] == pytest.approx(half)
 
     angles = unlimited_manipulator.calculatedAxisOrientation('+d')
     assert angles['pitch'] == pytest.approx(-45.0, abs=0.1)
     assert angles['yaw'] == pytest.approx(0.0, abs=0.1)
+
+    for pos, global_pos in cal_win.calibration["points"]:
+        mapped = unlimited_manipulator.mapDeviceToGlobalPosition(pos)
+        np.testing.assert_allclose(mapped, global_pos, atol=0.1)
+
+    qtbot.wait(100)

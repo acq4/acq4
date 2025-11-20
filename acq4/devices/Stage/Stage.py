@@ -3,22 +3,22 @@ from __future__ import annotations
 import contextlib
 import functools
 import threading
-from typing import Tuple, List, Any
+from typing import Tuple, List
 
 import numpy as np
 
 import pyqtgraph as pg
 from acq4.util import Qt, ptime
 from acq4.util.Mutex import Mutex
-from coorx import AffineTransform
+from coorx import AffineTransform, TTransform
 from pyqtgraph import siFormat
 from .calibration import ManipulatorAxesCalibrationWindow, StageAxesCalibrationWindow
 from ..Device import Device
-from ..OptomechDevice import OptomechDevice
+from ..OptomechDevice import OptomechDevice, map_through_transform
 from acq4 import getManager
 from ...util.HelpfulException import HelpfulException
 from ...util.future import Future, FutureButton
-from ...util.geometry import Plane
+from ...util.geometry import Plane, limits_to_boundaries
 
 
 class Stage(Device, OptomechDevice):
@@ -54,17 +54,15 @@ class Stage(Device, OptomechDevice):
 
         # total device transform will be composed of a base transform (defined in the config)
         # and a dynamic translation provided by the hardware.
-        self._baseTransform = self.deviceTransform() * 1  # *1 makes a copy
-        self._inverseBaseTransform = None
+        self._baseTransform = self.deviceTransform()
 
-        m = pg.SRTTransform3D(self._baseTransform)
-        angle, axis = m.getRotation()
-        scale = m.getScale()
+        m = self._baseTransform
+        angle, axis = m.rotation
+        scale = m.scale
         if tuple(scale) != (1, 1, 1) or angle != 0:
             raise ValueError("Stage transform must be only translation.")
 
-        self._stageTransform = Qt.QMatrix4x4()
-        self._inverseStageTransform = Qt.QMatrix4x4()
+        self._stageTransform = AffineTransform(dims=(3, 3))
         self.isManipulator = config.get("isManipulator", False)
 
         self.lock = Mutex(Qt.QMutex.Recursive)
@@ -75,7 +73,6 @@ class Stage(Device, OptomechDevice):
         # default implementation just uses this matrix to
         # convert from device position to translation vector
         self._axisTransform = None
-        self._inverseAxisTransform = None
         self._calculatedXAxisOrientation = None
 
         self._defaultSpeed = 'fast'
@@ -93,7 +90,7 @@ class Stage(Device, OptomechDevice):
         calibration = self.readConfigFile('calibration')
         axisTr = calibration.get('transform', None)
         if axisTr is not None:
-            self._axisTransform = pg.Transform3D(axisTr)
+            self._axisTransform = AffineTransform(axisTr)
 
         # set up joystick callbacks if requested
         jsdevs = set()
@@ -175,15 +172,10 @@ class Stage(Device, OptomechDevice):
         """Return the transform that implements the translation/rotation generated
         by the current hardware state.
         """
-        return pg.SRTTransform3D(self._stageTransform)
+        return self._stageTransform
 
     def inverseStageTransform(self):
-        if self._inverseStageTransform is None:
-            inv, invertible = self.stageTransform().inverted()
-            if not invertible:
-                raise Exception("Transform is not invertible.")
-            self._inverseStageTransform = inv
-        return pg.SRTTransform3D(self._inverseStageTransform)
+        return self.stageTransform().inverse
 
     def _makeStageTransform(self, pos, axisTransform=None):
         """Return a stage transform (as should be returned by stageTransform)
@@ -193,20 +185,14 @@ class Stage(Device, OptomechDevice):
         on demand by calling transform.inverted().
 
         Subclasses may override this method; the default uses _axisTransform to
-        map from the device position to a 3D translation matrix. This covers only cases
+        map from the device position to a translation matrix. This covers only cases
         where the stage axes perform linear translations. For rotation or nonlinear
         movement, this method must be reimplemented.
         """
-        tr = pg.SRTTransform3D()
         if axisTransform is None:
             axisTransform = self.axisTransform()
-        offset = pg.Vector(axisTransform.map(pg.Vector(pos)))
-        tr.translate(offset)
-
-        inv = pg.SRTTransform3D()
-        inv.translate(-offset)
-
-        return tr, inv
+        offset = map_through_transform(pos, axisTransform)[:3]
+        return TTransform(offset=offset, dims=(3, 3))
 
     def _solveStageTransform(self, posChange):
         """Given a desired change of local origin, return the device position required.
@@ -214,10 +200,13 @@ class Stage(Device, OptomechDevice):
         The default implementation simply inverts _axisTransform to generate this solution;
         devices with more complex kinematics need to reimplement this method.
         """
-        tr = self.stageTransform().getTranslation() + pg.Vector(posChange)
+        if self.nAxes > 3:
+            # TODO 4-axis logic
+            raise NotImplementedError("TODO: _solveStageTransform must be fixed")
+        tr = self.stageTransform().offset + pg.Vector(posChange)
         return pg.Vector(self.inverseAxisTransform().map(tr))
 
-    def axisTransform(self) -> pg.Transform3D:
+    def axisTransform(self) -> AffineTransform:
         """Transformation matrix with columns that point in the direction that each manipulator axis moves.
 
         This transform gives the relationship between the coordinates reported by the device and real world coordinates.
@@ -228,18 +217,17 @@ class Stage(Device, OptomechDevice):
         """
         if self._axisTransform is None:
             scale = np.array(list(self.config.get('scale', [1] * self.nAxes)) + [1])
-            self._axisTransform = np.eye(self.nAxes + 1) * scale
-            self._inverseAxisTransform = np.eye(self.nAxes + 1) / scale
-        return pg.Transform3D(self._axisTransform)
+            self._axisTransform = AffineTransform(matrix=np.eye(self.nAxes) * scale)
+        return self._axisTransform
 
     def setAxisTransform(self, tr):
         self._axisTransform = tr
-        self._inverseAxisTransform = None
         self._calculatedXAxisOrientation = None
         self._updateTransform()
         self.sigOrientationChanged.emit(self)
 
     @functools.lru_cache
+    # TODO this needs to be invalidated when the axis transform changes
     def calculatedAxisOrientation(self, axis: str):
         """Return the pitch and yaw of a stage axis.
 
@@ -249,7 +237,7 @@ class Stage(Device, OptomechDevice):
         The *axis* argument specifies which axis to return, one of '+x', '-x', '+y', '-y', '+z', or '-z'.
         """
         assert axis in {'+x', '-x', '+y', '-y', '+z', '-z', '+d', '-d'}
-        m = self.axisTransformMatrix()
+        m = self.axisTransform().full_matrix
         axis_index = {'x': 0, 'y': 1, 'z': 2, 'd': 3}[axis[1]]
         axis_sign = 1 if axis[0] == '+' else -1
         selected_axis = pg.Vector(axis_sign * m[:3, axis_index])
@@ -257,11 +245,6 @@ class Stage(Device, OptomechDevice):
         pitch = selected_axis.angle(globalz) - 90
         yaw = np.arctan2(selected_axis[1], selected_axis[0]) * 180 / np.pi
         return {'pitch': pitch, 'yaw': yaw}
-
-    def axisTransformMatrix(self) -> np.ndarray[Any, np.dtype[Any]]:
-        if self.nAxes == 3:
-            return self.axisTransform().matrix()
-        return np.array(self._axisTransform).reshape((self.nAxes + 1, self.nAxes + 1))
 
     # def calculatedYaw(self) -> float:
     #     """Return the X-axis pitch (angle relative to horizontal) in degrees
@@ -271,12 +254,9 @@ class Stage(Device, OptomechDevice):
     #     return math.atan2(-a[2, 0], math.sqrt(a[2, 1] ** 2 + a[2, 2] ** 2)) * 180 / math.pi
 
     def inverseAxisTransform(self):
-        if self._inverseAxisTransform is None:
-            inv, invertible = self.axisTransform().inverted()
-            if not invertible:
-                raise Exception("Transform is not invertible.")
-            self._inverseAxisTransform = inv
-        return pg.QtGui.QMatrix4x4(self._inverseAxisTransform)
+        if self.nAxes > 3:
+            raise ValueError("Transform is not invertible.")
+        return self.axisTransform().inverse
 
     def _solveAxisTransform(self, stagePos, parentPos, localPos):
         """Return an axis transform matrix that maps localPos to parentPos, given
@@ -294,7 +274,7 @@ class Stage(Device, OptomechDevice):
         with self.lock:
             lastPos = self._lastPos
             self._lastPos = pos
-            self._stageTransform, self._inverseStageTransform = self._makeStageTransform(pos)
+            self._stageTransform = self._makeStageTransform(pos)
             self._updateTransform()
 
         self.sigPositionChanged.emit(self, pos, lastPos)
@@ -302,17 +282,12 @@ class Stage(Device, OptomechDevice):
     def baseTransform(self):
         """Return the base transform for this Stage.
         """
-        return pg.Transform3D(self._baseTransform)
+        return self._baseTransform
 
     def inverseBaseTransform(self):
         """Return the inverse of the base transform for this Stage.
         """
-        if self._inverseBaseTransform is None:
-            inv, invertible = self.baseTransform().inverted()
-            if not invertible:
-                raise Exception("Transform is not invertible.")
-            self._inverseBaseTransform = inv
-        return pg.Transform3D(self._inverseBaseTransform)
+        return self._baseTransform.inverse
 
     def setBaseTransform(self, tr):
         """Set the base transform of the stage.
@@ -320,8 +295,7 @@ class Stage(Device, OptomechDevice):
         This sets the starting position and orientation of the stage before the
         hardware-reported stage position is taken into account.
         """
-        self._baseTransform = tr * 1  # *1 makes a copy
-        self._inverseBaseTransform = None
+        self._baseTransform = tr
         self._updateTransform()
 
     def _updateTransform(self):
@@ -374,11 +348,11 @@ class Stage(Device, OptomechDevice):
         target = self.targetPosition()
         if target is None:
             return None
-        tr = self.baseTransform() * self._makeStageTransform(target)[0]
+        tr = self.baseTransform() * self._makeStageTransform(target)
         pd = self.parentDevice()
         if pd is not None:
             tr = pd.globalTransform() * tr
-        return self._mapTransform([0, 0, 0], tr)
+        return map_through_transform([0, 0, 0], tr)
 
     def getState(self):
         with self.lock:
@@ -458,9 +432,7 @@ class Stage(Device, OptomechDevice):
         # TODO hardware-specific implementations?
         # TODO throw this away
         pos = np.array(self.getPosition())
-
-        axis_xform = np.array(self.axisTransform().copyDataTo()).reshape((4, 4))
-        axis_xform = AffineTransform(matrix=axis_xform[:3, :3], offset=axis_xform[:3, 3])
+        axis_xform = self.axisTransform()
 
         # Map deltas through axis transform to get ortholinear coordinate changes
         ortho = np.array(axis_xform.map(deltas)) - np.array(axis_xform.map(np.zeros(len(deltas))))
@@ -501,6 +473,10 @@ class Stage(Device, OptomechDevice):
     def mapGlobalToDevicePosition(self, pos):
         localPos = self.mapFromGlobal(pos)
         return self._solveStageTransform(localPos)
+
+    def mapDeviceToGlobalPosition(self, pos):
+        pos = map_through_transform(pos, self.axisTransform())[:3]
+        return self.mapToGlobal(pos)
 
     def moveToGlobal(self, pos, speed, progress=False, linear=False, name=None):
         """Move the stage to a position expressed in the global coordinate frame.
@@ -595,27 +571,8 @@ class Stage(Device, OptomechDevice):
         if None in [m for ax in limits for m in ax]:
             return []
         # TODO do we need to use _baseTransform, too?
-        xform = np.array(self.axisTransform().copyDataTo()).reshape(4, 4)
-        xform = AffineTransform(matrix=xform[:3, :3], offset=xform[:3, 3])
-        corners = {
-            "min": xform.map(np.array([ax[0] for ax in limits])),
-            "max": xform.map(np.array([ax[1] for ax in limits])),
-        }
-        axes = [xform.map(np.eye(3)[i]) - xform.map(np.zeros(3)) for i in range(3)]
-        normals = {
-            "z": np.cross(axes[0], axes[1]),
-            "y": np.cross(axes[2], axes[0]),
-            "x": np.cross(axes[1], axes[2]),
-        }
-        # flip normals to point inward
-        diagonal = corners["max"] - corners["min"]
-        normals["x"] = normals["x"] * np.sign(np.dot(normals["x"], diagonal))
-        normals["y"] = normals["y"] * np.sign(np.dot(normals["y"], diagonal))
-        normals["z"] = normals["z"] * np.sign(np.dot(normals["z"], diagonal))
-        return (
-            [Plane(normals[n], corners["min"], f"{self.name()}'s min {n}") for n in normals] +
-            [Plane(-normals[n], corners["max"], f"{self.name()}'s max {n}") for n in normals]
-        )
+        xform = self.axisTransform()
+        return limits_to_boundaries(limits, xform, self.name())
 
     def _setHardwareLimits(self, axis:int, limit:tuple):
         raise NotImplementedError("Must be implemented in subclass.")

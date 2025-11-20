@@ -15,6 +15,7 @@ from acq4.util.future import Future, MultiFuture, future_wrap, FutureButton
 from acq4.util.imaging import Frame
 from acq4.util.surface import find_surface
 from acq4.util.ui.ZPositionWidget import ZPositionWidget
+from coorx import TTransform
 from pyqtgraph.units import µm
 
 Ui_Form = Qt.importTemplate('.deviceTemplate')
@@ -195,7 +196,7 @@ class Microscope(Device, OptomechDevice):
         return iface
 
     def physicalTransform(self, subdev=None):
-        tr = pg.SRTTransform3D({"pos": pg.SRTTransform3D(self.deviceTransform()).getTranslation()})
+        tr = TTransform(offset=self.deviceTransform().offset)
         dev = self.getSubdevice(subdev)
         if dev is None:
             return tr
@@ -379,11 +380,8 @@ class Objective(Device, OptomechDevice):
     def getGeometryForMicroscope(self, name):
         return super().getGeometry(name)
 
-    def deviceTransform(self, subdev=None):
-        return pg.SRTTransform3D(super().deviceTransform(subdev))
-
     def physicalTransform(self, subdev=None):
-        tr = pg.SRTTransform3D(dict(pos=self.offset()))
+        tr = TTransform(offset=self.offset())
         dev = self.getSubdevice(subdev)
         if dev is None:
             return tr
@@ -392,7 +390,8 @@ class Objective(Device, OptomechDevice):
 
     def setOffset(self, pos):
         tr = self.deviceTransform()
-        tr.setTranslate(pos)
+        tr.offset = pos
+        # TODO modify in place makes set redundant
         self.setDeviceTransform(tr)
 
     def setScale(self, scale):
@@ -400,14 +399,15 @@ class Objective(Device, OptomechDevice):
             scale = (scale, scale, 1)
 
         tr = self.deviceTransform()
-        tr.setScale(scale)
+        tr.scale = scale
+        # TODO modify in place makes set redundant
         self.setDeviceTransform(tr)
 
     def offset(self):
-        return self.deviceTransform().getTranslation()
+        return self.deviceTransform().offset
 
     def scale(self):
-        return self.deviceTransform().getScale()
+        return self.deviceTransform().scale
 
     def key(self):
         return self._key
