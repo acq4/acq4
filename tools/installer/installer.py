@@ -118,7 +118,7 @@ DEPENDENCY_METADATA: Dict[str, Dict[str, Dict[str, str]]] = {
             "display_name": "PyMMCore",
             "pypi_package": "pymmcore",
             "description": "Micro-Manager device bridge.",
-            "post_install_doc": "Requires Micro-Manager installation. Download from <a href='https://micro-manager.org/Download_Micro-Manager_Latest_Release'>https://micro-manager.org</a>",
+            "post_install_doc": "Requires Micro-Manager installation. Download from <a href='https://micro-manager.org/Micro-Manager_Nightly_Builds'>Micro-Manager Nightly Builds</a>",
         },
         "sensapex-py": {
             "display_name": "sensapex-py",
