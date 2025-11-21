@@ -31,6 +31,10 @@ class Scientifica(Stage):
 
     The optional 'baudrate' parameter is used to set the baudrate of the device.
     Both valid rates will be attempted when initially connecting.
+
+    Testing:
+
+        python -i -m acq4.drivers.Scientifica.test "Slicescope"
     """
 
     def __init__(self, man, config, name):
