@@ -2586,24 +2586,24 @@ class InstallPage(QtWidgets.QWizardPage):
         # Attach the widget to the tree item first
         self.log_tree.setItemWidget(widget_item, 0, text_edit)
 
-        # Calculate proper width and height after widget is attached
-        # Get the actual column width (accounting for indentation and margins)
-        column_width = self.log_tree.columnWidth(0)
+        # Calculate proper width and height
+        # Use viewport width for accurate available space (column width may not be set yet)
+        viewport_width = self.log_tree.viewport().width()
         indent_width = self.log_tree.indentation() * 2  # Parent + child indentation
         margins = 20  # Internal margins
-        available_width = column_width - indent_width - margins
+        available_width = max(400, viewport_width - indent_width - margins)  # Minimum 400px
 
         # Set document width and calculate required height
         doc = text_edit.document()
         doc.setTextWidth(available_width)
         required_height = int(doc.size().height()) + 10  # Add padding
 
-        # Set the widget size
+        # Set the widget size - don't restrict width, let it expand
         text_edit.setFixedHeight(required_height)
-        text_edit.setMinimumWidth(available_width)
+        # Don't set minimum width - let the Expanding policy handle it
 
-        # Tell the tree item how tall it needs to be
-        widget_item.setSizeHint(0, QtCore.QSize(available_width, required_height))
+        # Tell the tree item how tall it needs to be (width will auto-expand)
+        widget_item.setSizeHint(0, QtCore.QSize(-1, required_height))
 
         # Scroll to the summary
         self._scroll_to_item(summary_item)
