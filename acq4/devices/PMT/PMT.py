@@ -43,6 +43,7 @@ class PMT(DAQGeneric, OptomechDevice):
             if k in config:
                 self.omConf[k] = config.pop(k)
         DAQGeneric.__init__(self, dm, config, name)
+        self.config = config  # override config stored by DAQGeneric
         OptomechDevice.__init__(self, dm, config, name)
 
     def getFilterDevice(self):

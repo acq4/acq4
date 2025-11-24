@@ -11,6 +11,7 @@ import numpy as np
 
 from acq4 import getManager
 from acq4.util import Qt
+from acq4.util.debug import log_and_ignore_exception
 from acq4.util.future import Future, future_wrap
 from neuroanalysis.test_pulse import PatchClampTestPulse
 from pyqtgraph import disconnect
@@ -134,11 +135,10 @@ class PatchPipetteState(Future):
         return {c['name']: c.get('default', None) for c in cls.parameterTreeConfig()}
 
     def __init__(self, dev, config=None):
-        self._targetHasChanged = False
         from acq4.devices.PatchPipette import PatchPipette
 
+        self._targetHasChanged = False
         Future.__init__(self, name=f"State {self.stateName} for {dev}")
-
         self.dev: PatchPipette = dev
 
         # generate full config by combining passed-in arguments with default config
@@ -148,11 +148,12 @@ class PatchPipetteState(Future):
         self._cleanupMutex = threading.Lock()
         self._cleanupFuture = None
         self._pressureAdjustment = None
+        self._cell = None
         self._visualTargetTrackingFuture = None
         self._pauseMovement = False
         # indicates state that should be transitioned to next, if any.
         # This is usually set by the return value of run(), and must be invoked by the state manager.
-        self.nextState = self.config.get('fallbackState', None)
+        self.nextState = {"state": self.config.get('fallbackState', None)}
         self.dev.sigTargetChanged.connect(self._onTargetChanged)
 
     def initialize(self):
@@ -283,14 +284,15 @@ class PatchPipetteState(Future):
         """Called after job completes, whether it failed or succeeded. Ask `self.wasInterrupted()` to see if the
         state was stopped early. Return a Future that completes when cleanup is done.
         """
-        try:
-            if self._visualTargetTrackingFuture is not None:
-                self.dev.cell.enableTracking(False)
-                self._visualTargetTrackingFuture.stop("State cleanup")
-                self._visualTargetTrackingFuture = None
-        except Exception:
-            self.logger.exception("Error stopping visual target tracking")
         disconnect(self.dev.pipetteDevice.sigTargetChanged, self._onTargetChanged)
+        with log_and_ignore_exception(Exception, "Error disabling visual target tracking"):
+            if self._cell is not None:
+                self._cell.enableTracking(False)
+        with log_and_ignore_exception(Exception, "Error stopping visual target tracking"):
+            if self._visualTargetTrackingFuture is not None:
+                self._cell.enableTracking(False)
+                self._visualTargetTrackingFuture.stop("State cleanup")
+            self._visualTargetTrackingFuture = None
         return Future.immediate()
 
     def _runJob(self):
@@ -350,14 +352,15 @@ class PatchPipetteState(Future):
             return
         if self.closeEnoughToTargetToDetectCell():
             if self._visualTargetTrackingFuture is not None:
-                self.dev.cell.enableTracking(False)
+                self._cell.enableTracking(False)
                 self._visualTargetTrackingFuture = None
             return
         if self._visualTargetTrackingFuture is None:
+            self._cell = self.dev.cell
             self._visualTargetTrackingFuture = self._visualTargetTracking()
 
     def _visualTargetTracking(self):
-        cell = self.dev.cell
+        cell = self._cell
         if cell is None:
             raise RuntimeError("Cannot visually track target; no cell is assigned to this pipette device.")
         if not cell.isInitialized:
@@ -365,7 +368,22 @@ class PatchPipetteState(Future):
 
         cell.enableTracking(True)
         cell.sigTrackingMultipleFramesStart.connect(self._pausePipetteForExtendedTracking)
+        cell.sigPositionChanged.connect(self.dev.pipetteDevice.setTarget)
+        cell._trackingFuture.sigFinished.connect(self._visualTargetTrackingFinished)
         return cell._trackingFuture
+
+    def _visualTargetTrackingFinished(self, future):
+        from acq4_automation.feature_tracking.visualization import LiveTrackerVisualizer
+
+        if not hasattr(self.dev, '_trackingVisualizers'):
+            self.dev._trackingVisualizers = []
+        disconnect(self._cell.sigPositionChanged, self.dev.pipetteDevice.setTarget)
+        if future.wasStopped():
+            return
+        visualizer = LiveTrackerVisualizer(self._cell._tracker)
+        self.dev._trackingVisualizers.append(visualizer)
+        # TODO clean these up eventually or we'll leak memory
+        visualizer.show()
 
     def _pausePipetteForExtendedTracking(self, cell):
         self._pauseMovement = True
@@ -441,10 +459,12 @@ class SteadyStateAnalysisBase(object):
     def process_measurements(self, measurements: np.ndarray) -> np.ndarray:
         raise NotImplementedError()
 
-    @staticmethod
-    def exponential_decay_avg(dt, prev_avg, value, tau):
-        """Compute exponential decay average and ratio of new to old average."""
-        alpha = 1 - np.exp(-dt / tau)
-        avg = prev_avg * (1 - alpha) + value * alpha
-        ratio = avg / prev_avg
-        return avg, ratio
+
+def exponential_decay_avg(dt, prev_avg, value, tau):
+    """Compute exponential decay average and ratio of new average to previous average."""
+    if prev_avg is None:
+        return value, 0
+    alpha = 1 - np.exp(-dt / tau)
+    avg = prev_avg * (1 - alpha) + value * alpha
+    ratio = avg / prev_avg
+    return avg, ratio

@@ -129,7 +129,7 @@ class FilterWheel(Device, OptomechDevice):
         By default this returns the largest configured slot number, but 
         subclasses may override this method.
         """
-        return max(map(int, self._config['slots'].keys())) + 1
+        return max(map(int, self.config['slots'].keys())) + 1
     
     def setPosition(self, pos):
         """Set the filter wheel position and return a FilterWheelFuture instance

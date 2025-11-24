@@ -1,9 +1,0 @@
-# Hardware-Specific ACQ4 Dependencies
-# These packages provide support for specific hardware devices
-# Only install packages for hardware you actually have
-# Format: package_name # Description
-
-cupy # GPU acceleration for image processing
-pydaqmx # National Instruments DAQmx support for data acquisition cards
-pymmcore # Micro-Manager camera and device control
-sensapex-py # Sensapex micromanipulator and stage control

@@ -78,7 +78,7 @@ class CleanState(PatchPipetteState):
         dev.setTipClean(True)
         self.currentFuture = None
         dev.newPatchAttempt()
-        return 'out'
+        return {"state": 'out'}
 
     def resetPosition(self, parent_future):
         # todo we need to handle this somehow for both path generators

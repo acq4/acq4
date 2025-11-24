@@ -81,8 +81,8 @@ class DAQGeneric(Device):
     """
     sigHoldingChanged = Qt.Signal(object, object)
 
-    def __init__(self, dm, config, name):
-        Device.__init__(self, dm, config, name)
+    def __init__(self, dm, config, name, deviceConfig=None):
+        Device.__init__(self, dm, deviceConfig or config, name)
         self._DGLock = Mutex(Qt.QMutex.Recursive)  ## protects access to _DGHolding, _DGConfig
         ## Do some sanity checks here on the configuration
 

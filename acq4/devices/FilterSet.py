@@ -1,3 +1,5 @@
+from copy import deepcopy
+
 from .OptomechDevice import OptomechDevice
 from .Device import Device
 
@@ -57,10 +59,8 @@ class FilterSet(Device, OptomechDevice):
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
 
-        self._orig_config = config
-
         # build config for optomechdevice
-        omconfig = config.copy()
+        omconfig = deepcopy(config)
         optics = omconfig.pop('optics', {})
         ports = omconfig.pop('ports', {})
         if len(optics) > 0:
@@ -90,4 +90,4 @@ class FilterSet(Device, OptomechDevice):
         OptomechDevice.__init__(self, dm, omconfig, name)
 
     def description(self):
-        return self._config.get('description')
+        return self.config.get('description')

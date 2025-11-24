@@ -16,8 +16,6 @@ from datetime import datetime
 
 from MetaArray import MetaArray
 
-import numpy as np
-
 import pyqtgraph as pg
 import pyqtgraph.reload as reload
 from pyqtgraph import configfile
@@ -88,7 +86,7 @@ class Manager(Qt.QObject):
         m.initFromCommandLine(args)
         return m
 
-    def __init__(self, configFile=None):
+    def __init__(self):
         self.moduleLock = Mutex(recursive=True)  ## used for keeping some basic methods thread-safe
         # self.devices = OrderedDict()  # all currently loaded devices
         self.isReady = threading.Event()
@@ -216,6 +214,7 @@ class Manager(Qt.QObject):
             'hostname': socket.gethostname(),
             'username': getpass.getuser(),
             'environ': os.environ,
+            'configpath': self.configDir,
         }
         cfg = configfile.readConfigFile(configFile, **ns)
         self.config.update(cfg)
@@ -387,7 +386,7 @@ class Manager(Qt.QObject):
     def readConfigFile(self, fileName, missingOk=True):
         fileName = self.configFileName(fileName)
         if os.path.isfile(fileName):
-            return configfile.readConfigFile(fileName, np=np)
+            return configfile.readConfigFile(fileName)
         else:
             if missingOk:
                 return {}
@@ -931,7 +930,7 @@ class Task:
         self.devs = {devName: self.dm.getDevice(devName) for devName in self.devNames}
 
         ## Create task objects. Each task object is a handle to the device which is unique for this task run.
-        self.tasks = {}
+        self.tasks: dict[str, DeviceTask] = {}
 
         for devName in self.devNames:
             task = self.devs[devName].createTask(self.command[devName], self)

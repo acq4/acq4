@@ -67,7 +67,6 @@ class Stage(Device, OptomechDevice):
         self._inverseStageTransform = Qt.QMatrix4x4()
         self.isManipulator = config.get("isManipulator", False)
 
-        self.config = config
         self.lock = Mutex(Qt.QMutex.Recursive)
 
         nAxes = len(self.axes())
@@ -98,7 +97,7 @@ class Stage(Device, OptomechDevice):
 
         # set up joystick callbacks if requested
         jsdevs = set()
-        self._jsAxes = set()   # just used to listen for specific events
+        self._jsAxes = set()  # just used to listen for specific events
         self._jsButtons = set()
         if 'joystick' in config:
             for axis, axcfg in config['joystick'].items():
@@ -106,7 +105,9 @@ class Stage(Device, OptomechDevice):
                 try:
                     js = dm.getDevice(jsname)
                 except Exception:
-                    print(f'Joystick device "{jsname}" not found; disabling control from this device.')
+                    print(
+                        f'Joystick device "{jsname}" not found; disabling control from this device.'
+                    )
                     continue
                 jsdevs.add(js)
                 self._jsAxes.add((js, jsaxis))
@@ -151,8 +152,7 @@ class Stage(Device, OptomechDevice):
         raise NotImplementedError
 
     def setFastSpeed(self, v):
-        """Set the maximum speed of the stage (m/sec) when under programmed control.
-        """
+        """Set the maximum speed of the stage (m/sec) when under programmed control."""
         self.fastSpeed = v
 
     def setSlowSpeed(self, v):
@@ -281,7 +281,10 @@ class Stage(Device, OptomechDevice):
         """Return an axis transform matrix that maps localPos to parentPos, given
         stagePos.
         """
-        offset = pg.transformCoordinates(self.inverseBaseTransform(), parentPos, transpose=True) - localPos
+        offset = (
+            pg.transformCoordinates(self.inverseBaseTransform(), parentPos, transpose=True)
+            - localPos
+        )
         return pg.solve3DTransform(stagePos[:4], offset[:4])[:3]
 
     def posChanged(self, pos):
@@ -299,13 +302,11 @@ class Stage(Device, OptomechDevice):
         self.sigPositionChanged.emit(self, pos, lastPos)
 
     def baseTransform(self):
-        """Return the base transform for this Stage.
-        """
+        """Return the base transform for this Stage."""
         return pg.Transform3D(self._baseTransform)
 
     def inverseBaseTransform(self):
-        """Return the inverse of the base transform for this Stage.
-        """
+        """Return the inverse of the base transform for this Stage."""
         if self._inverseBaseTransform is None:
             inv, invertible = self.baseTransform().inverted()
             if not invertible:
@@ -329,8 +330,7 @@ class Stage(Device, OptomechDevice):
 
     @property
     def positionUpdatesPerSecond(self):
-        """Return the rate at which the device reports position updates.
-        """
+        """Return the rate at which the device reports position updates."""
         raise NotImplementedError()
 
     def getPosition(self, refresh=False):
@@ -400,8 +400,7 @@ class Stage(Device, OptomechDevice):
         self._defaultSpeed = speed
 
     def isMoving(self):
-        """Return True if the device is currently moving.
-        """
+        """Return True if the device is currently moving."""
         raise NotImplementedError()
 
     def move(self, position, speed=None, progress=False, linear=False, **kwds) -> MoveFuture:
@@ -479,8 +478,7 @@ class Stage(Device, OptomechDevice):
         return self.move(target_global, speed=speed)
 
     def checkMove(self, position, speed=None, progress=None, linear=None, **kwds):
-        """Raise an exception if arguments are invalid for move()
-        """
+        """Raise an exception if arguments are invalid for move()"""
         assert position is not None
         speed = speed or self._defaultSpeed
         speed = self._interpretSpeed(speed)
@@ -493,8 +491,7 @@ class Stage(Device, OptomechDevice):
         self.checkLimits(position)
 
     def _move(self, pos, speed, linear, name=None, **kwds) -> MoveFuture:
-        """Must be reimplemented by subclasses and return a MoveFuture instance.
-        """
+        """Must be reimplemented by subclasses and return a MoveFuture instance."""
         raise NotImplementedError()
 
     def mapGlobalToDevicePosition(self, pos):
@@ -502,9 +499,14 @@ class Stage(Device, OptomechDevice):
         return self._solveStageTransform(localPos)
 
     def moveToGlobal(self, pos, speed, progress=False, linear=False, name=None):
-        """Move the stage to a position expressed in the global coordinate frame.
-        """
-        return self.move(position=self.mapGlobalToDevicePosition(pos), speed=speed, progress=progress, linear=linear, name=name)
+        """Move the stage to a position expressed in the global coordinate frame."""
+        return self.move(
+            position=self.mapGlobalToDevicePosition(pos),
+            speed=speed,
+            progress=progress,
+            linear=linear,
+            name=name,
+        )
 
     def movePath(self, path, name=None):
         """Move the stage along a path with multiple waypoints.
@@ -520,7 +522,7 @@ class Stage(Device, OptomechDevice):
         """
         if any(x is None for x in abs):
             pos = self.getPosition()
-            for i,x in enumerate(abs):
+            for i, x in enumerate(abs):
                 if x is not None:
                     pos[i] = x
         else:
@@ -528,8 +530,7 @@ class Stage(Device, OptomechDevice):
         return pos
 
     def setVelocity(self, vel):
-        """Begin moving the stage with a constant velocity.
-        """
+        """Begin moving the stage with a constant velocity."""
         # pick a far-away distance within limits
         print(vel)
 
@@ -582,8 +583,7 @@ class Stage(Device, OptomechDevice):
             self.sigLimitsChanged.emit(changed)
 
     def getLimits(self) -> List[tuple[float | None, float | None]]:
-        """Return a list of the (min, max) position limits for each axis.
-        """
+        """Return a list of the (min, max) position limits for each axis."""
         return self._limits[:]
 
     def getBoundaries(self) -> List[Plane]:
@@ -611,12 +611,11 @@ class Stage(Device, OptomechDevice):
         normals["x"] = normals["x"] * np.sign(np.dot(normals["x"], diagonal))
         normals["y"] = normals["y"] * np.sign(np.dot(normals["y"], diagonal))
         normals["z"] = normals["z"] * np.sign(np.dot(normals["z"], diagonal))
-        return (
-            [Plane(normals[n], corners["min"], f"{self.name()}'s min {n}") for n in normals] +
-            [Plane(-normals[n], corners["max"], f"{self.name()}'s max {n}") for n in normals]
-        )
+        return [Plane(normals[n], corners["min"], f"{self.name()}'s min {n}") for n in normals] + [
+            Plane(-normals[n], corners["max"], f"{self.name()}'s max {n}") for n in normals
+        ]
 
-    def _setHardwareLimits(self, axis:int, limit:tuple):
+    def _setHardwareLimits(self, axis: int, limit: tuple):
         raise NotImplementedError("Must be implemented in subclass.")
 
     def checkGlobalLimits(self, globalPos):
@@ -632,9 +631,13 @@ class Stage(Device, OptomechDevice):
             if x is None:
                 continue
             if limit[0] is not None and x < limit[0]:
-                raise ValueError(f"Position requested for device {self.name()} exceeds limits: {stagePos} {ax_name} axis < {limit[0]}")
+                raise ValueError(
+                    f"Position requested for device {self.name()} exceeds limits: {stagePos} {ax_name} axis < {limit[0]}"
+                )
             if limit[1] is not None and x > limit[1]:
-                raise ValueError(f"Position requested for device {self.name()} exceeds limits: {stagePos} {ax_name} axis > {limit[1]}")
+                raise ValueError(
+                    f"Position requested for device {self.name()} exceeds limits: {stagePos} {ax_name} axis > {limit[1]}"
+                )
 
     def checkRangeOfMotion(self, pos, name, tolerance=500e-6):
         """Raise an exception if the specified global position is within *tolerance* of the limits of the device."""
@@ -653,7 +656,9 @@ class Stage(Device, OptomechDevice):
             axis_names = {0: 'x', 1: 'y', 2: 'z'}
             axes = ', '.join(axis_names[axis] for axis in bad_axes)
             stage_pos = self.mapGlobalToDevicePosition(pos)
-            possible_problem = "pipette pull consistency" if self.isManipulator else "hardware reliability"
+            possible_problem = (
+                "pipette pull consistency" if self.isManipulator else "hardware reliability"
+            )
             raise HelpfulException(
                 f"The specified position is within ±{siFormat(tolerance, suffix='m')} of the {axes} limit(s) of "
                 f"{self.name()} and may not always be accessible, depending on your {possible_problem}.",
@@ -665,8 +670,7 @@ class Stage(Device, OptomechDevice):
             )
 
     def homePosition(self):
-        """Return the stored home position of this stage in global coordinates.
-        """
+        """Return the stored home position of this stage in global coordinates."""
         return self.getStoredLocation('home')
 
     def goHome(self, speed='fast'):
@@ -676,8 +680,7 @@ class Stage(Device, OptomechDevice):
         return self.moveToGlobal(homePos, speed=speed)
 
     def setHomePosition(self, pos=None):
-        """Set the home position in global coordinates.
-        """
+        """Set the home position in global coordinates."""
         self.setStoredLocation('home', pos)
 
     def getStoredLocation(self, name):
@@ -725,6 +728,7 @@ class Stage(Device, OptomechDevice):
 
 class CallOnce:
     """Used to prevent a callable from being called more than once in a stack. Note that this is not a mutex."""
+
     def __init__(self):
         self.called = False
 
@@ -739,8 +743,7 @@ class CallOnce:
 
 
 class MoveFuture(Future):
-    """Used to track the progress of a requested move operation.
-    """
+    """Used to track the progress of a requested move operation."""
 
     def __init__(self, dev: Stage, pos, speed, name=None):
         Future.__init__(self, name=name)
@@ -763,15 +766,14 @@ class MoveFuture(Future):
         s = np.array(self.startPos)
         t = np.array(self.targetPos)
         p = np.array(self.dev.getPosition())
-        d1 = ((p - s)**2).sum()**0.5
-        d2 = ((t - s)**2).sum()**0.5
+        d1 = ((p - s) ** 2).sum() ** 0.5
+        d2 = ((t - s) ** 2).sum() ** 0.5
         if d2 == 0:
             return 100
         return 100 * d1 / d2
 
     def stop(self, reason="stop requested", wait=False):
-        """Stop the move in progress.
-        """
+        """Stop the move in progress."""
         with self._isStopCallable as can_call_stop:
             if can_call_stop and not self.isDone():
                 self.dev.stop()
@@ -793,9 +795,13 @@ class MovePathFuture(MoveFuture):
             try:
                 self.dev.checkMove(**step)
             except Exception as exc:
-                raise Exception(f"Cannot move {dev.name()} to path step {i}/{len(self.path)}: {step}") from exc
+                raise Exception(
+                    f"Cannot move {dev.name()} to path step {i}/{len(self.path)}: {step}"
+                ) from exc
 
-        self._moveThread = threading.Thread(target=self._movePath, name=f'{self.dev.name()} : {name}')
+        self._moveThread = threading.Thread(
+            target=self._movePath, name=f'{self.dev.name()} : {name}'
+        )
         self._moveThread.start()
 
     def percentDone(self):
@@ -817,7 +823,9 @@ class MovePathFuture(MoveFuture):
                 step = step.copy()
                 explanation = step.pop('explanation', 'unnamed')
                 try:
-                    fut: Future = self.dev.move(**step, name=f'{self.name} step {i+1}/{len(self.path)}: {explanation}')
+                    fut: Future = self.dev.move(
+                        **step, name=f'{self.name} step {i+1}/{len(self.path)}: {explanation}'
+                    )
                     fut._pathStep = i
                     self._currentFuture = fut
                     while not fut.isDone():
@@ -829,7 +837,9 @@ class MovePathFuture(MoveFuture):
                             break
 
                     if self._stopRequested:
-                        self._taskDone(interrupted=True, error="Move was cancelled by external request")
+                        self._taskDone(
+                            interrupted=True, error="Move was cancelled by external request"
+                        )
                         return
 
                     if fut.wasInterrupted():
@@ -854,12 +864,11 @@ class MovePathFuture(MoveFuture):
                 self._taskDone()  # success!
 
     def undo(self):
-        """Reverse the moves generated in this future and return a new future.
-        """
+        """Reverse the moves generated in this future and return a new future."""
         fwdPath = [{'position': self.startPos}] + self.path[:]
         revPath = []
-        for i in range(min(self.currentStep, len(self.path)-1), -1, -1):
-            step = fwdPath[i+1].copy()
+        for i in range(min(self.currentStep, len(self.path) - 1), -1, -1):
+            step = fwdPath[i + 1].copy()
             step['position'] = fwdPath[i]['position']
             step['explanation'] = f"undo {step.get('explanation')}"
             revPath.append(step)
@@ -912,7 +921,7 @@ class StageInterface(Qt.QWidget):
                         check.clicked.connect(self.limitCheckClicked)
 
                 nextRow = self.positionLabelLayout.rowCount()
-                for i,w in enumerate(widgets):
+                for i, w in enumerate(widgets):
                     self.positionLabelLayout.addWidget(w, nextRow, i)
                 self.axCtrls[axis] = widgets
 
@@ -922,7 +931,9 @@ class StageInterface(Qt.QWidget):
         self.layout.addWidget(self.btnContainer, self.layout.rowCount(), 0)
         self.btnLayout.setContentsMargins(0, 0, 0, 0)
 
-        self.goHomeBtn = FutureButton(self.goHomeClicked, 'Home', stoppable=True, processing='Going home...')
+        self.goHomeBtn = FutureButton(
+            self.goHomeClicked, 'Home', stoppable=True, processing='Going home...'
+        )
         self.btnLayout.addWidget(self.goHomeBtn, 0, 0)
 
         self.setHomeBtn = Qt.QPushButton('Set Home')
@@ -954,7 +965,7 @@ class StageInterface(Qt.QWidget):
         for axis in range(len(cap['limits'])):
             if not cap['limits'][axis]:
                 continue
-            for i,limit in enumerate(limits[axis]):
+            for i, limit in enumerate(limits[axis]):
                 check = self.limitChecks[axis][i]
                 pfx = ('Min:', 'Max:')[i]
                 if limit is None:

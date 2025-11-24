@@ -47,7 +47,6 @@ class Microscope(Device, OptomechDevice):
         Device.__init__(self, dm, config, name)
         OptomechDevice.__init__(self, dm, config, name)
 
-        self.config = config
         self.presets = config.get('presets', {})
         self.lock = Mutex(Qt.QMutex.Recursive)
         self.switchDevice = None
@@ -150,7 +149,7 @@ class Microscope(Device, OptomechDevice):
         self.sigObjectiveChanged.emit((self.currentObjective, lastObj))
         self.sigGeometryChanged.emit(self)
 
-    def getGeometry(self):
+    def getGeometry(self, name=None):
         objective = self.getObjective()
         if objective is None:
             return None
@@ -374,7 +373,7 @@ class Objective(Device, OptomechDevice):
         if 'scale' in config:
             self.setScale(config['scale'])
 
-    def getGeometry(self):
+    def getGeometry(self, name=None):
         return None
 
     def getGeometryForMicroscope(self, name):
@@ -418,7 +417,7 @@ class Objective(Device, OptomechDevice):
 
     @property
     def radius(self):
-        return self._config.get('radius')
+        return self.config.get('radius')
 
     def __repr__(self):
         return (f"<Objective {self._scope.name()}.{self.name()} "

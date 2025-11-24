@@ -14,6 +14,9 @@ from acq4.util.debug import log_and_ignore_exception
 from acq4.util.functions import plottable_booleans
 from acq4.util.future import future_wrap
 from ._base import PatchPipetteState, SteadyStateAnalysisBase
+from pyqtgraph.units import µm
+from acq4.util.imaging.sequencer import run_image_sequence
+from ._base import PatchPipetteState, SteadyStateAnalysisBase, exponential_decay_avg
 
 
 class CellDetectAnalysis(SteadyStateAnalysisBase):
@@ -96,7 +99,7 @@ class CellDetectAnalysis(SteadyStateAnalysisBase):
                 last_measurement = ret_array[i - 1]
 
             dt = start_time - last_measurement['time']
-            baseline_avg, _ = self.exponential_decay_avg(
+            baseline_avg, _ = exponential_decay_avg(
                 dt, last_measurement['baseline_avg'], resistance, self._baseline_tau
             )
             cell_detected_fast = resistance > self._cell_threshold_fast + baseline_avg
@@ -266,7 +269,8 @@ class CellDetectState(PatchPipetteState):
         self._wiggleLock = Lock()
 
     def run(self):
-        self.dev.ensureCell()
+        if self.dev.cell is None:
+            self.dev.newCell()
         config = self.config
         self.monitorTestPulse()
         while not self.weTookTooLong():
@@ -280,9 +284,9 @@ class CellDetectState(PatchPipetteState):
             self.adjustPressureForDepth()
             self.maybeVisuallyTrackTarget()
             if self._analysis.tip_is_broken():
-                self._taskDone(interrupted=True, error="Pipette broken")
+                self._taskDone(interrupted=True, error="Pipette break detected with `breakThreshold`.")
                 self.dev.patchRecord()['detectedCell'] = False
-                return 'broken'
+                return {"state": 'broken'}
             if config['autoAdvance']:
                 if self._moveFuture is None:
                     self._moveFuture = self._move()
@@ -334,13 +338,13 @@ class CellDetectState(PatchPipetteState):
     def _transition_to_fallback(self, msg):
         self._taskDone(interrupted=True, error=msg)
         self.dev.patchRecord()['detectedCell'] = False
-        return self.config['fallbackState']
+        return {"state": self.config['fallbackState']}
 
     def _transition_to_seal(self, speed):
         self.setState(f"cell detected ({speed} criteria)")
         self._taskDone()
         self.dev.patchRecord()['detectedCell'] = True
-        return self.config['reachedEndpointState']
+        return {"state": self.config['reachedEndpointState']}
 
     def _calc_direction(self):
         # what direction are we moving?

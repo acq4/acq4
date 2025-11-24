@@ -1,4 +1,4 @@
-from scipy.signal import butter, lfilter, sosfilt
+from scipy.signal import butter, sosfilt
 
 import pyqtgraph as pg
 
@@ -8,6 +8,16 @@ def butter_transform(x, y, order, cutoff):
     sos = butter(order, cutoff, fs=sample_rate, btype="low", analog=False, output="sos")
     return x, sosfilt(sos, y)
 
+
+orig_set_image = pg.ImageView.setImage
+def _set_image(self, img, **kwargs):
+    """Handle metaarrays"""
+    if hasattr(img, 'implements') and img.implements('MetaArray'):
+        img = img.asarray()
+
+    return orig_set_image(self, img, **kwargs)
+
+pg.ImageView.setImage = _set_image
 
 if hasattr(pg.PlotItem, "addDefaultDataTransformOption"):
     pg.PlotItem.addDefaultDataTransformOption(

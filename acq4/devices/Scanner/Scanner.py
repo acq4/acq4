@@ -69,7 +69,6 @@ class Scanner(Device, OptomechDevice):
         Device.__init__(self, dm, config, name)
         OptomechDevice.__init__(self, dm, config, name)
         
-        self.config = config
         self.lock = Mutex(Qt.QMutex.Recursive)
         self.devGui = None
         self.lastRunTime = None

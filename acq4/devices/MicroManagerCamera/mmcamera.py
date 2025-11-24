@@ -92,11 +92,11 @@ class MicroManagerCamera(Camera):
 
     def setupCamera(self):
         # sanity check for MM adapter and device name
-        adapterName = self.camConfig['mmAdapterName']
+        adapterName = self.config['mmAdapterName']
         allAdapters = self.mmc.getDeviceAdapterNames()
         if adapterName not in allAdapters:
             raise ValueError(f"Adapter name '{adapterName}' is not valid. Options are: {allAdapters}")
-        deviceName = self.camConfig['mmDeviceName']
+        deviceName = self.config['mmDeviceName']
         try:
             allDevices = self.mmc.getAvailableDevices(adapterName)
         except Exception as e:
@@ -416,7 +416,7 @@ class MicroManagerCamera(Camera):
             setParams.append((self._triggerProp, self._triggerModes[1][value]))
 
             # Hamamatsu cameras require setting a trigger source as well
-            if self.camConfig['mmAdapterName'] == 'HamamatsuHam':
+            if self.config['mmAdapterName'] == 'HamamatsuHam':
                 if value == 'Normal':
                     source = 'INTERNAL'
                 elif value == 'TriggerStart':

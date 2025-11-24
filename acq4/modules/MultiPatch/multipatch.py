@@ -27,8 +27,8 @@ class MultiPatch(Module):
     ----------
     enableMockPatch : bool
         Whether to allow mock patching.
-    useStacksForSavedCalibrations : bool
-        Whether to use z-stacks when saving calibration images.
+    useStacksForSavedTipImages : bool
+        Whether to use z-stacks when saving tip images.
     """
     moduleDisplayName = "MultiPatch"
     moduleCategory = "Acquisition"
@@ -48,9 +48,8 @@ class MultiPatchWindow(Qt.QWidget):
     def __init__(self, module):
         self._eventStorageFile = None
         self._testPulseStacks = {}
-
-        self._calibratePips = []
-        self._calibrateStagePositions = []
+        self.eventHistory = []
+        self._pipsToSetTips = []
         self._setTargetPips = []
         self._profileEditor = None
 
@@ -121,19 +120,20 @@ class MultiPatchWindow(Qt.QWidget):
         self.ui.coarseSearchBtn.setOpts(future_producer=self._coarseSearch, **common_opts)
         self.ui.fineSearchBtn.setOpts(future_producer=self._fineSearch, **common_opts)
         self.ui.aboveTargetBtn.setOpts(future_producer=self._aboveTarget, **common_opts)
-        self.ui.autoCalibrateBtn.setOpts(future_producer=self._autoCalibrate, **common_opts)
+        self.ui.autoFindTipBtn.setOpts(future_producer=self._autoFindTip, **common_opts)
         self.ui.cellDetectBtn.setOpts(future_producer=self._cellDetect, raiseOnError=False, **common_opts)
         self.ui.breakInBtn.setOpts(future_producer=self._breakIn, raiseOnError=False, **common_opts)
         self.ui.toTargetBtn.setOpts(future_producer=self._toTarget, **common_opts)
         self.ui.sealBtn.setOpts(future_producer=self._seal, raiseOnError=False, **common_opts)
         self.ui.reSealBtn.setOpts(future_producer=self._reSeal, raiseOnError=False, **common_opts)
+        self.ui.reSealNoNuzzleBtn.setOpts(future_producer=self._reSealNoNuzzle, raiseOnError=False, **common_opts)
         self.ui.approachBtn.setOpts(future_producer=self._approach, raiseOnError=False, **common_opts)
         self.ui.cleanBtn.setOpts(future_producer=self._clean, raiseOnError=False, **common_opts)
         self.ui.collectBtn.setOpts(future_producer=self._collect, raiseOnError=False, **common_opts)
 
         self.ui.profileCombo.currentIndexChanged.connect(self.profileComboChanged)
         self.ui.editProfileBtn.clicked.connect(self.openProfileEditor)
-        self.ui.calibrateBtn.toggled.connect(self.calibrateToggled)
+        self.ui.setTipBtn.toggled.connect(self.setTipToggled)
         self.ui.setTargetBtn.toggled.connect(self.setTargetToggled)
 
         self.ui.hideMarkersBtn.toggled.connect(self.hideBtnToggled)
@@ -152,7 +152,6 @@ class MultiPatchWindow(Qt.QWidget):
         else:
             self.xkdev = None
 
-        self.eventHistory = []
         self.resetHistory()
 
         if self.microscope:
@@ -163,13 +162,13 @@ class MultiPatchWindow(Qt.QWidget):
         self.loadConfig()
 
     @property
-    def _shouldSaveCalibrationImages(self):
+    def _shouldSaveTipImages(self):
         # TODO this isn't safe outside of the UI thread
-        return self.ui.saveCalibrationsBtn.isChecked()
+        return self.ui.saveTipImageBtn.isChecked()
 
-    @_shouldSaveCalibrationImages.setter
-    def _shouldSaveCalibrationImages(self, value):
-        self.ui.saveCalibrationsBtn.setChecked(True)
+    @_shouldSaveTipImages.setter
+    def _shouldSaveTipImages(self, value):
+        self.ui.saveTipImageBtn.setChecked(True)
 
     def _turnOffSlowBtn(self, checked):
         self.ui.slowBtn.setChecked(False)
@@ -186,7 +185,7 @@ class MultiPatchWindow(Qt.QWidget):
                 (ctrl.pip.name(), plot.mode): plot.plot.saveState()
                 for ctrl in self.pipCtrls for plot in ctrl.plots
             },
-            "should save calibration images": self._shouldSaveCalibrationImages,
+            "should save tip images": self._shouldSaveTipImages,
         }
         getManager().writeConfigFile(config, self._configFileName())
 
@@ -204,7 +203,7 @@ class MultiPatchWindow(Qt.QWidget):
                     plot = next((plot for plot in ctrl.plots if plot.mode == plotname), None)
                     if plot is not None:
                         plot.plot.restoreState(config["plots"][(pipette, plotname)])
-        self._shouldSaveCalibrationImages = config.get("should save calibration images", True)
+        self._shouldSaveTipImages = config.get("should save tip images", True)
 
     def _configFileName(self):
         return os.path.join('modules', f'{self.module.name}.cfg')
@@ -236,9 +235,9 @@ class MultiPatchWindow(Qt.QWidget):
             ctrl.setPlotModes(modes)
         self.saveConfig()
 
-    def _setAllSelectedPipettesToState(self, state):
+    def _setAllSelectedPipettesToState(self, state, **config):
         return MultiFuture([
-            pip.setState(state)
+            pip.setState(state, **config)
             for pip in self.selectedPipettes()
             if isinstance(pip, PatchPipette)
         ], name=f"Set pipettes state to {state}")
@@ -275,17 +274,13 @@ class MultiPatchWindow(Qt.QWidget):
         return MultiFuture(futures, name="Move pipettes above target")
 
     @future_wrap
-    def _autoCalibrate(self, _future):
+    def _autoFindTip(self, _future):
         work_to_do = self.selectedPipettes()
         while work_to_do:
             patchpip = work_to_do.pop(0)
             pip = patchpip.pipetteDevice if isinstance(patchpip, PatchPipette) else patchpip
             pos = pip.tracker.findTipInFrame()
-            success = _future.waitFor(pip.setTipOffsetIfAcceptable(pos), timeout=None).getResult()
-            if not success:
-                work_to_do.insert(0, patchpip)
-                continue
-
+            _future.waitFor(pip.setTipOffsetIfAcceptable(pos), timeout=None).getResult()
             _future.checkStop()
 
     def _cellDetect(self):
@@ -309,6 +304,9 @@ class MultiPatchWindow(Qt.QWidget):
     def _reSeal(self):
         return self._setAllSelectedPipettesToState('reseal')
 
+    def _reSealNoNuzzle(self):
+        return self._setAllSelectedPipettesToState('reseal', extractNucleus=False)
+
     def _approach(self):
         futures = []
         for pip in self.selectedPipettes():
@@ -323,18 +321,6 @@ class MultiPatchWindow(Qt.QWidget):
 
     def _collect(self):
         return self._setAllSelectedPipettesToState('collect')
-
-    def _setTarget(self):
-        pass
-
-    def _handle_setTarget_finish(self, results):
-        pass
-
-    def _calibrate(self):
-        pass
-
-    def _handle_calibrate_finish(self, results):
-        pass
 
     def selectedSpeed(self, default):
         if self.ui.fastBtn.isChecked():
@@ -357,56 +343,44 @@ class MultiPatchWindow(Qt.QWidget):
             futures.append(pip.goSearch(speed, distance=distance))
         return MultiFuture(futures, name="Move pipettes to search")
 
-    # def calibrateWithStage(self, pipettes, positions):
-    #     """Begin calibration of selected pipettes and move the stage to a selected position for each pipette.
-    #     """
-    #     self.ui.calibrateBtn.setChecked(False)
-    #     self.ui.calibrateBtn.setChecked(True)
-    #     pipettes[0].scopeDevice().setGlobalPosition(positions.pop(0))
-    #     self._calibratePips = pipettes
-    #     self._calibrateStagePositions = positions
-
-    def calibrateToggled(self, b):
+    def setTipToggled(self, b):
         cammod = getManager().getModule('Camera')
         self._cammod = cammod
         pips = self.selectedPipettes()
         if b is True:
             self.ui.setTargetBtn.setChecked(False)
             if len(pips) == 0:
-                self.ui.calibrateBtn.setChecked(False)
+                self.ui.setTipBtn.setChecked(False)
                 return
-            # start calibration of selected pipettes
-            cammod.window().getView().scene().sigMouseClicked.connect(self.cameraModuleClicked_calibrate)
-            self._calibratePips = pips
+            # start manual tip setting of selected pipettes
+            cammod.window().getView().scene().sigMouseClicked.connect(self.cameraModuleClicked_setTip)
+            self._pipsToSetTips = pips
         else:
-            # stop calibration
-            pg.disconnect(cammod.window().getView().scene().sigMouseClicked, self.cameraModuleClicked_calibrate)
-            self._calibratePips = []
-            self._calibrateStagePositions = []
+            # stop manual tip setting
+            pg.disconnect(cammod.window().getView().scene().sigMouseClicked, self.cameraModuleClicked_setTip)
+            self._pipsToSetTips = []
 
     def setTargetToggled(self, b):
         cammod = getManager().getModule('Camera')
         self._cammod = cammod
         pips = self.selectedPipettes()
         if b is True:
-            self.ui.calibrateBtn.setChecked(False)
+            self.ui.setTipBtn.setChecked(False)
             if len(pips) == 0:
                 self.ui.setTargetBtn.setChecked(False)
                 return
-            # start calibration of selected pipettes
             cammod.window().getView().scene().sigMouseClicked.connect(self.cameraModuleClicked_setTarget)
             self._setTargetPips = pips
         else:
-            # stop calibration
             pg.disconnect(cammod.window().getView().scene().sigMouseClicked, self.cameraModuleClicked_setTarget)
             self._setTargetPips = []
 
-    def cameraModuleClicked_calibrate(self, ev):
+    def cameraModuleClicked_setTip(self, ev):
         if ev.button() != Qt.Qt.LeftButton:
             return
 
         # Set next pipette position from mouse click
-        pip = self._calibratePips.pop(0)
+        pip = self._pipsToSetTips.pop(0)
         if isinstance(pip, PatchPipette):
             pip = pip.pipetteDevice
         pos = self._cammod.window().getView().mapSceneToView(ev.scenePos())
@@ -418,21 +392,16 @@ class MultiPatchWindow(Qt.QWidget):
     def _handleManualSetTip(self, future, pip):
         success = future.getResult()
         if not success:
-            self._calibratePips.insert(0, pip)
+            self._pipsToSetTips.insert(0, pip)
             return
 
-        if self._shouldSaveCalibrationImages:
-            pip.saveManualCalibration(
-                stack=self.module.config.get("useStacksForSavedCalibrations", True)
-            ).raiseErrors("Failed to save calibration images")
+        if self._shouldSaveTipImages:
+            pip.saveManualTipPosition(
+                stack=self.module.config.get("useStacksForSavedTipImages", True)
+            ).raiseErrors("Failed to save tip images")
 
-        # if calibration stage positions were requested, then move the stage now
-        if len(self._calibrateStagePositions) > 0:
-            stagepos = self._calibrateStagePositions.pop(0)
-            pip.scopeDevice().setGlobalPosition(stagepos, speed='slow')
-
-        if len(self._calibratePips) == 0:
-            self.ui.calibrateBtn.setChecked(False)
+        if len(self._pipsToSetTips) == 0:
+            self.ui.setTipBtn.setChecked(False)
             self.updateXKeysBacklight()
 
     def cameraModuleClicked_setTarget(self, ev):
@@ -487,7 +456,7 @@ class MultiPatchWindow(Qt.QWidget):
         none = len(pips) == 0
 
         if none:
-            self.ui.calibrateBtn.setChecked(False)
+            self.ui.setTipBtn.setChecked(False)
             self.ui.setTargetBtn.setChecked(False)
             self.ui.selectedGroupBox.setTitle("Selected:")
             self.ui.selectedGroupBox.setEnabled(False)
@@ -535,7 +504,7 @@ class MultiPatchWindow(Qt.QWidget):
 
         bl[1, 2] = 1 if self.ui.hideMarkersBtn.isChecked() else 0
         bl[0, 2] = 1 if self.ui.setTargetBtn.isChecked() else 0
-        bl[2, 2] = 1 if self.ui.calibrateBtn.isChecked() else 0
+        bl[2, 2] = 1 if self.ui.setTipBtn.isChecked() else 0
         bl[4, 1] = 1 if self.ui.slowBtn.isChecked() else 0
         bl[4, 2] = 1 if self.ui.fastBtn.isChecked() else 0
         bl[7, 2] = 1 if self.ui.recordBtn.isChecked() else 0
@@ -568,7 +537,7 @@ class MultiPatchWindow(Qt.QWidget):
             (0, 2): self.ui.setTargetBtn,
             (2, 0): self.ui.coarseSearchBtn,
             (2, 1): self.ui.fineSearchBtn,
-            (2, 2): self.ui.calibrateBtn,
+            (2, 2): self.ui.setTipBtn,
             (3, 1): self.ui.aboveTargetBtn,
             (3, 2): self.ui.approachBtn,
             (4, 1): self.ui.slowBtn,

@@ -69,7 +69,7 @@ class NucleusCollectState(PatchPipetteState):
             self.waitFor(self.sonication)
 
         dev.pipetteRecord()['expelled_nucleus'] = True
-        return 'out'
+        return {"state": 'out'}
 
     def resetPosition(self, _future=None):
         pip = self.dev.pipetteDevice

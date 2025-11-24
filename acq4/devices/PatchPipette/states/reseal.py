@@ -9,7 +9,7 @@ from acq4.util import ptime
 from acq4.util.debug import log_and_ignore_exception
 from acq4.util.functions import plottable_booleans
 from acq4.util.future import Future, future_wrap
-from ._base import PatchPipetteState, SteadyStateAnalysisBase
+from ._base import PatchPipetteState, SteadyStateAnalysisBase, exponential_decay_avg
 
 
 class ResealAnalysis(SteadyStateAnalysisBase):
@@ -154,11 +154,11 @@ class ResealAnalysis(SteadyStateAnalysisBase):
 
             dt = start_time - last_measurement['time']
 
-            detect_avg, detection_ratio = self.exponential_decay_avg(
+            detect_avg, detection_ratio = exponential_decay_avg(
                 dt, last_measurement['detect_avg'], resistance, self._detection_tau
             )
             detection_ratio = np.log10(detection_ratio)
-            repair_avg, repair_ratio = self.exponential_decay_avg(
+            repair_avg, repair_ratio = exponential_decay_avg(
                 dt, last_measurement['repair_avg'], resistance, self._repair_tau
             )
             repair_ratio = np.log10(repair_ratio)
@@ -238,10 +238,11 @@ class ResealState(PatchPipetteState):
         If the repairTau-rolling average resistance drops below (this number times the initial
         resistance), the tissue is considered irrevocably torn (default is 0.5)
     retractionSuccessDistance : float
-        Distance (meters) to deem reseal successful regardless of resistance (default is 200 µm)
+        Distance (meters) away from target to deem reseal successful regardless of resistance
+        (default is 200 µm)
     minimumSuccessDistance : float
-        Minimum distance (meters) to retract before checking for successful reseal, regardless of
-        resistance (default is 20µm)
+        Minimum distance (meters) from the target to retract before checking for successful reseal,
+        regardless of resistance (default is 20µm)
     resealSuccessResistanceMultiplier : float
         The reseal is considered successful when resistance exceeds initial resistance times this
         value (default is 4)
@@ -311,7 +312,7 @@ class ResealState(PatchPipetteState):
         self._moveFuture = None
         self._lastResistance = None
         self._firstSuccessTime = None
-        self._startPosition = np.array(self.dev.pipetteDevice.globalPosition())
+        self._targetPosition = np.array(self.dev.pipetteDevice.targetPosition())
         self._analysis = None
         self._preAnalysisTpss = []
 
@@ -429,7 +430,7 @@ class ResealState(PatchPipetteState):
             self.nuzzle()
         self.checkStop()
         self.setState("measuring baseline resistance")
-        self.waitFor(baseline_future, timeout=self.config['repairTau'])
+        self.waitFor(baseline_future, timeout=2 * self.config['repairTau'])
         dev.pressureDevice.setPressure(source='regulator', pressure=config['retractionPressure'])
 
         start_time = ptime.time()  # getting the nucleus and baseline measurements doesn't count
@@ -440,8 +441,8 @@ class ResealState(PatchPipetteState):
                 config['resealTimeout'] is not None
                 and ptime.time() - start_time > config['resealTimeout']
             ):
-                self._taskDone(interrupted=True, error="Timed out attempting to reseal.")
-                return config['fallbackState']
+                self._taskDone(interrupted=True, error="Took longer than `resealTimeout` attempting to reseal.")
+                return {"state": config['fallbackState']}
 
             self.processAtLeastOneTestPulse()
 
@@ -454,7 +455,7 @@ class ResealState(PatchPipetteState):
                     self.setState("handling tear")
                     retraction_future.stop()
                     self._moveFuture = recovery_future = dev.pipetteDevice.stepwiseAdvance(
-                        depth=self._startPosition[2],
+                        depth=self._targetPosition[2],
                         speed=self.config['maxRetractionSpeed'],
                         interval=config['retractionStepInterval'],
                         step=1e-6,
@@ -463,8 +464,8 @@ class ResealState(PatchPipetteState):
                 if retraction_future and not retraction_future.isDone():
                     retraction_future.stop()
                 self.setState("tissue is torn beyond repair")
-                self._taskDone(interrupted=True, error="Tissue is torn beyond repair.")
-                return config['fallbackState']
+                self._taskDone(interrupted=True, error="Tissue is torn beyond repair (via `tornDetectionThreshold`).")
+                return {"state": config['fallbackState']}
             elif retraction_future is None or retraction_future.wasInterrupted():
                 if retraction_future is not None:
                     retraction_future.logErrors("Reseal retraction error")
@@ -493,7 +494,7 @@ class ResealState(PatchPipetteState):
         self.waitFor(self._moveFuture, timeout=90)
         dev.pipetteDevice.focusTip()
         dev.pressureDevice.setPressure(source='regulator', pressure=config['initialPressure'])
-        return "outside out"
+        return {"state": "outside out"}
 
     def _sanityChecks(self):
         config = self.config
@@ -516,7 +517,7 @@ class ResealState(PatchPipetteState):
 
     def retractionDistance(self):
         return np.linalg.norm(
-            np.array(self.dev.pipetteDevice.globalPosition()) - self._startPosition
+            np.array(self.dev.pipetteDevice.globalPosition()) - self._targetPosition
         )
 
     def _cleanup(self):

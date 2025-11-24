@@ -26,9 +26,6 @@ class BathState(PatchPipetteState):
 
     stateName = 'bath'
 
-    def __init__(self, *args, **kwds):
-        super().__init__(*args, **kwds)
-
     _parameterDefaultOverrides = {
         'initialPressure': 3500.0,  # 0.5 PSI
         'initialPressureSource': 'regulator',
@@ -90,16 +87,18 @@ class BathState(PatchPipetteState):
                 else:
                     continue
 
-            # check for pipette break
             if config['breakThreshold'] is not None and (ssr < initialResistance + config['breakThreshold']):
                 self.setState('broken pipette detected')
-                self._taskDone(interrupted=True, error="Pipette broken")
-                return 'broken'
+                self._taskDone(
+                    interrupted=True,
+                    error=f"Pipette break detected using `breakThreshold`; {ssr * 1e-6:0.2f}MOhm < {(initialResistance + config['breakThreshold']) * 1e-6:0.2f}MOhm",
+                )
+                return {"state": 'broken'}
 
-            # if close to target, switch to cell detect
-            # pos = dev.globalPosition()
-            # target = dev.
             if config['clogThreshold'] is not None and (ssr > initialResistance + config['clogThreshold']):
                 self.setState('clogged pipette detected')
-                self._taskDone(interrupted=True, error="Pipette clogged")
-                return 'fouled'
+                self._taskDone(
+                    interrupted=True,
+                    error=f"Pipette clog detected using `clogThreshold`; {ssr * 1e-6:0.2f}MOhm > {(initialResistance + config['clogThreshold']) * 1e-6:0.2f}MOhm",
+                )
+                return {"state": 'fouled'}

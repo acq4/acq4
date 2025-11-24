@@ -74,15 +74,15 @@ class Camera(DAQGeneric, OptomechDevice):
         if "triggerInChannel" in config:
             daqConfig["trigger"] = config["triggerInChannel"]
         DAQGeneric.__init__(self, dm, daqConfig, name)
+        self.config = config  # override config stored by DAQGeneric
         OptomechDevice.__init__(self, dm, config, name)
 
         self.lock = Mutex(Mutex.Recursive)
 
-        self.camConfig = config
         self.stateStack = []
 
-        if "scaleFactor" not in self.camConfig:
-            self.camConfig["scaleFactor"] = [1.0, 1.0]
+        if "scaleFactor" not in self.config:
+            self.config["scaleFactor"] = [1.0, 1.0]
 
         # Default values for scope state. These will be used if there is no scope defined.
         self.scopeState = {}
@@ -136,7 +136,7 @@ class Camera(DAQGeneric, OptomechDevice):
                 self.logger.exception("Error default setting camera parameters:")
 
         # set up preset hotkeys
-        for presetName, preset in self.camConfig.get("presets", {}).items():
+        for presetName, preset in self.config.get("presets", {}).items():
             if "hotkey" not in preset:
                 continue
             dev = dm.getDevice(preset["hotkey"]["device"])
@@ -231,10 +231,10 @@ class Camera(DAQGeneric, OptomechDevice):
 
     def listPresets(self):
         """Return a list of all preset names."""
-        return list(self.camConfig.get("presets", {}).keys())
+        return list(self.config.get("presets", {}).keys())
 
     def loadPreset(self, preset):
-        presets = self.camConfig.get("presets", None)
+        presets = self.config.get("presets", None)
         if presets is None or preset not in presets:
             raise ValueError(f"No camera preset named {preset!r}")
         params = presets[preset]["params"]
@@ -410,19 +410,19 @@ class Camera(DAQGeneric, OptomechDevice):
     def getTriggerChannels(self, daq: str):
         chans = {'input': None, 'output': None}
         if (
-            "triggerOutChannel" in self.camConfig
-            and self.camConfig["triggerOutChannel"]["device"] == daq
+            "triggerOutChannel" in self.config
+            and self.config["triggerOutChannel"]["device"] == daq
         ):
-            chans['input'] = self.camConfig["triggerOutChannel"]['channel']
+            chans['input'] = self.config["triggerOutChannel"]['channel']
         if (
-            "triggerInChannel" in self.camConfig
-            and self.camConfig["triggerInChannel"]["device"] == daq
+            "triggerInChannel" in self.config
+            and self.config["triggerInChannel"]["device"] == daq
         ):
-            chans['output'] = self.camConfig["triggerInChannel"]['channel']
+            chans['output'] = self.config["triggerInChannel"]['channel']
         return chans
 
     def getExposureChannel(self):
-        return self.camConfig.get('exposeChannel', None)
+        return self.config.get('exposeChannel', None)
 
     def taskInterface(self, taskRunner):
         return CameraTaskGui(self, taskRunner)
@@ -601,11 +601,21 @@ class CameraTask(DAQGenericTask):
         self.camCmd = cmd
         self.lock = Mutex()
         self.recordHandle = None
-        self._dev_needs_restart = False
         self.stopRecording = False
         self._stopTime = 0
         self.resultObj = None
         self._future = None
+
+        # acq is running, task needs camera to restart:
+        #   stop acq in configure, start acq in start, stop acq in stop, start acq in getResults
+        # acq is not running, task needs camera to restart:
+        #   start acq in start, stop acq in stop
+        # acq is running, task does not need camera to restart:
+        #   do nothing
+        # acq is not running, task does not need camera to restart:
+        #   start acq in start, stop acq in stop
+        self._dev_needs_restart = False
+        self._dev_was_running = False
 
     def configure(self):
         # Merge command into default values:
@@ -625,14 +635,14 @@ class CameraTask(DAQGenericTask):
 
         # If the DAQ is triggering the camera, then the camera must start before the DAQ
         if params["triggerMode"] != "Normal":
-            if 'triggerInChannel' in self.dev.camConfig:
-                daqName = self.dev.camConfig["triggerInChannel"]["device"]
+            if 'triggerInChannel' in self.dev.config:
+                daqName = self.dev.config["triggerInChannel"]["device"]
                 self.__startOrder[1].append(daqName)
 
             # Make sure we haven't requested something stupid..
             if (
                 self.camCmd.get("triggerProtocol", False)
-                and self.dev.camConfig["triggerOutChannel"]["device"] == daqName
+                and self.dev.config["triggerOutChannel"]["device"] == daqName
             ):
                 raise Exception(
                     "Task requested camera to trigger and be triggered by the same device."
@@ -650,14 +660,15 @@ class CameraTask(DAQGenericTask):
         prof.mark("set params")
 
         # If the camera is triggering the daq, stop acquisition now and request that it starts after the DAQ
-        #   (daq must be started first so that it is armed to received the camera trigger)
+        #   (daq must be started first so that it is armed to receive the camera trigger)
         if self.camCmd.get("triggerProtocol", False):
-            assert 'triggerOutChannel' in self.dev.camConfig, (
-                f"Task requests {self.dev.name()} to trigger the protocol to start, "
-                "but no trigger lines are configured ('triggerOutChannel' needed in config)"
-            )
+            if 'triggerOutChannel' not in self.dev.config:
+                raise ValueError(
+                    f"Task requests {self.dev.name()} to trigger the protocol to start, but no "
+                    "trigger lines are configured ('triggerOutChannel' needed in config)"
+                )
             restart = True
-            daqName = self.dev.camConfig["triggerOutChannel"]["device"]
+            daqName = self.dev.config["triggerOutChannel"]["device"]
             self.__startOrder = [daqName], []
             prof.mark("conf 1")
 
@@ -666,7 +677,8 @@ class CameraTask(DAQGenericTask):
 
         # We want to avoid this if at all possible since it may be very expensive
         self._dev_needs_restart = restart
-        if restart and self.dev.isRunning():
+        self._dev_was_running = self.dev.isRunning()
+        if restart and self._dev_was_running:
             self.dev.stop(block=True)
         prof.mark("stop")
 
@@ -711,7 +723,8 @@ class CameraTask(DAQGenericTask):
         with self.lock:
             self.stopRecording = True
             self._stopTime = time.time()
-            self.dev.stopCamera()
+            if self._dev_needs_restart and self._dev_was_running:
+                self.dev.stopCamera()  # leave the acq thread for filling in the future
             if self.fixedFrameCount is None:
                 self._future.stopWhen(
                     lambda frame: frame.info()["time"] >= self._stopTime, blocking=False
@@ -732,8 +745,10 @@ class CameraTask(DAQGenericTask):
                 time.sleep(0.05)
             self._future.stop()  # TODO this could error for fixedFrameCount!=None
             self.resultObj = CameraTaskResult(self, self._future.getResult(timeout=1), daqResult)
-            if self._dev_needs_restart:
-                self.dev.start(block=False)
+            if self._dev_needs_restart or not self._dev_was_running:
+                self.dev.stop(block=True)
+                if self._dev_was_running:
+                    self.dev.start(block=False)
                 self._dev_needs_restart = False
         return self.resultObj
 
@@ -956,6 +971,8 @@ class AcquireThread(Thread):
             self.dev.stopCamera()
 
     def start(self, *args, block=True):
+        if self.isRunning():
+            raise RuntimeError("Acquisition thread is already running.")
         self.cameraStartEvent.clear()
         self.lock.lock()
         self.stopThread = False
@@ -1083,7 +1100,7 @@ class FrameAcquisitionFuture(Future):
         self._camera = camera
         self._frame_count = frameCount
         self._ensure_fresh_frames = ensureFreshFrames
-        self._known_latency = camera.camConfig.get("freshFrameLatency", None)
+        self._known_latency = camera.config.get("freshFrameLatency", None)
         self._stop_when = None
         self._frames = []
         self._timeout = timeout

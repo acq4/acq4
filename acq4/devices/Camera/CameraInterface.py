@@ -128,7 +128,7 @@ class CameraInterface(CameraModuleInterface):
         self.imagingCtrl.ui.acquireFrameBtn.setEnabled(False)
 
         # Hotkey signals
-        for action, key in self.cam.camConfig.get('hotkeys', {}).items():
+        for action, key in self.cam.config.get('hotkeys', {}).items():
             if action not in ['snap', 'start']:
                 raise ValueError("Unknown hotkey action %r" % action)
 

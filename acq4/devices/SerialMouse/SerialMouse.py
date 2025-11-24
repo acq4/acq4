@@ -43,7 +43,6 @@ class SerialMouse(Device):
     
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
-        self.config = config
         self.lock = Mutex(Qt.QMutex.Recursive)
         self.port = config['port']
         self.scale = config['scale']

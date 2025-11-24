@@ -103,7 +103,6 @@ class Laser(DAQGeneric, OptomechDevice):
     sigWavelengthChanged = Qt.Signal(object)
     
     def __init__(self, manager, config, name):
-        self.config = config
         self.manager = manager
         self.hasPowerIndicator = False
         self.hasShutter = False
@@ -142,6 +141,7 @@ class Laser(DAQGeneric, OptomechDevice):
                         
         daqConfig['power'] = {'type': 'ao', 'units': 'W'}  ## virtual channel used for creating control widgets
         DAQGeneric.__init__(self, manager, daqConfig, name)
+        self.config = config  # override config stored by DAQGeneric
         OptomechDevice.__init__(self, manager, config, name)
        
         self.lock = Mutex(Qt.QMutex.Recursive)
@@ -478,7 +478,7 @@ class Laser(DAQGeneric, OptomechDevice):
             mTime = pConfig.get('measurementTime', None)
             
             if mTime is None or sTime is None:
-                raise Exception("The power indicator (%s) specified for %s needs to be configured with both a 'settlingTime' value and a 'measurementTime' value." %(self.config['powerIndicator']['channel'], self.name()))
+                raise Exception("The power indicator (%s) specified for %s needs to be configured with both a 'settlingTime' value and a 'measurementTime' value." % (self.config['powerIndicator']['channel'], self.name()))
             
             dur = 0.1 + (sTime+mTime)
             nPts = int(dur*rate)
@@ -630,7 +630,7 @@ class Laser(DAQGeneric, OptomechDevice):
             
         if self.hasTriggerableShutter:
             shutterCmd = np.zeros(nPts, dtype=np.byte)
-            delay = self.config['shutter'].get('delay', 0.0) 
+            delay = self.config['shutter'].get('delay', 0.0)
             shutterCmd[cmdWaveform != 0] = 1 ## open shutter when we expect power
             ## open shutter a little before we expect power because it has a delay
             delayPts = int(delay * rate)

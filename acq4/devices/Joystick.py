@@ -43,7 +43,6 @@ class Joystick(Device):
 
     def __init__(self, manager, config, name):
         Device.__init__(self, manager, config, name)
-        self.config = config
         eventThread = PygameEventThread.get()
         if 'index' in config:
             jsid = config['index']

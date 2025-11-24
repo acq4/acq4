@@ -9,7 +9,7 @@ import pyqtgraph as pg
 from acq4.util.functions import plottable_booleans
 from neuroanalysis.data import TSeries
 from pyqtgraph.units import kPa
-from ._base import PatchPipetteState, SteadyStateAnalysisBase
+from ._base import PatchPipetteState, SteadyStateAnalysisBase, exponential_decay_avg
 
 
 class SealAnalysis(SteadyStateAnalysisBase):
@@ -104,9 +104,9 @@ class SealAnalysis(SteadyStateAnalysisBase):
                 dRdt_for_failure = self._failure_dRdt_threshold * 10 * self._failure_tau
             else:
                 dt = t - self._last_measurement['time']
-                resistance_avg_for_success, _ = self.exponential_decay_avg(
+                resistance_avg_for_success, _ = exponential_decay_avg(
                     dt, self._last_measurement['resistance_avg_for_success'], resistance, self._success_tau)
-                resistance_avg_for_hold, _ = self.exponential_decay_avg(
+                resistance_avg_for_hold, _ = exponential_decay_avg(
                     dt, self._last_measurement['resistance_avg_for_hold'], resistance, self._hold_tau)
                 resistance_avg_for_failure, _ = self.exponential_decay_avg(
                     dt, self._last_measurement['resistance_avg_for_failure'], resistance, self._failure_tau)
@@ -182,7 +182,7 @@ class SealState(PatchPipetteState):
     holdingThreshold : float
         Seal resistance (ohms) above which the holding potential will switch
         from its initial value to the value specified in the *holdingPotential*
-        parameter.
+        parameter. Default 100MΩ
     holdingPotential : float
         Holding potential (volts) to apply to the pipette after the seal resistance
         becomes greater than *holdingThreshold*.
@@ -337,8 +337,11 @@ class SealState(PatchPipetteState):
 
                 if self._analysis.failure() or dt > config['autoSealTimeout']:
                     self._patchrec['sealSuccessful'] = False
-                    self._taskDone(interrupted=True, error=f"Seal failed after {dt:f} seconds")
-                    return config['fallbackState']
+                    self._taskDone(interrupted=True, error=f"Seal took longer than `autoSealTimeout` ({dt:f}s)")
+                    next_state = {"state": config["fallbackState"]}
+                    if holdingSet:
+                        next_state["initialVCHolding"] = None
+                    return next_state
 
                 self.updatePressure()
 
@@ -359,7 +362,7 @@ class SealState(PatchPipetteState):
 
         self._taskDone()
         self._patchrec['sealSuccessful'] = True
-        return 'cell attached'
+        return {"state": 'cell attached'}
 
     def setInitialPressure(self):
         mode = self.config['pressureMode']

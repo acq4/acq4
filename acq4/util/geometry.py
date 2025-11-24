@@ -28,8 +28,12 @@ def truncated_cone(
     segments: int = 32,
 ) -> (np.ndarray, np.ndarray):
     theta = np.linspace(0, 2 * np.pi, segments, endpoint=False)
-    bottom_circle = np.column_stack((bottom_radius * np.cos(theta), bottom_radius * np.sin(theta), np.zeros(segments)))
-    top_circle = np.column_stack((top_radius * np.cos(theta), top_radius * np.sin(theta), np.full(segments, height)))
+    bottom_circle = np.column_stack(
+        (bottom_radius * np.cos(theta), bottom_radius * np.sin(theta), np.zeros(segments))
+    )
+    top_circle = np.column_stack(
+        (top_radius * np.cos(theta), top_radius * np.sin(theta), np.full(segments, height))
+    )
 
     vertices = np.vstack((bottom_circle, top_circle))
 
@@ -183,7 +187,9 @@ def find_intersected_voxels_3ddda(line_start, line_end, voxel_space_max):
 
     # Calculate t values for next voxel boundaries
     next_boundary = current_voxel + np.maximum(step, 0)
-    t_max = np.divide(next_boundary - line_start, direction, where=abs(direction) > 1e-10, out=np.full(3, np.inf))
+    t_max = np.divide(
+        next_boundary - line_start, direction, where=abs(direction) > 1e-10, out=np.full(3, np.inf)
+    )
 
     # Delta t for moving one voxel along each axis
     delta_t = np.divide(step, direction, where=abs(direction) > 1e-10, out=np.full(3, np.inf))
@@ -329,7 +335,9 @@ def find_intersected_voxels_numba(
     voxel_space_max_array = np.asarray(voxel_space_max, dtype=np.int64)
 
     # Call the internal Numba-optimized function
-    intersected_voxels = _compute_intersected_voxels(line_start_array, line_end_array, voxel_space_max_array)
+    intersected_voxels = _compute_intersected_voxels(
+        line_start_array, line_end_array, voxel_space_max_array
+    )
 
     # Yield the results
     for voxel in intersected_voxels:
@@ -415,7 +423,11 @@ def find_intersected_voxels_supercover(
             tz += delta_tz
 
         # If the current voxel is within bounds, yield it
-        if np.all(current_voxel >= 0) and np.all(current_voxel <= voxel_space_max) and traveled <= line_length:
+        if (
+            np.all(current_voxel >= 0)
+            and np.all(current_voxel <= voxel_space_max)
+            and traveled <= line_length
+        ):
             # Verify with your existing function for correctness
             if line_intersects_voxel(line_start, line_end, current_voxel):
                 yield tuple(current_voxel)
@@ -674,7 +686,9 @@ def generate_even_sphere_points(n_points: int, sphere_radius: float):
     return np.array(directions) * radii[:, np.newaxis]
 
 
-def generate_biased_sphere_points(n_points: int, sphere_radius: float, bias_direction: np.ndarray, concentration=1.0):
+def generate_biased_sphere_points(
+    n_points: int, sphere_radius: float, bias_direction: np.ndarray, concentration=1.0
+):
     """
     Generate random points within a sphere with directional bias.
 
@@ -750,7 +764,9 @@ def a_star_ish(
         yield (radius * (finish - pt) / np.linalg.norm(finish - pt)) + pt
         cost_scale = np.log(1 + cost_so_far)
         concentration = max(0.2, concentration_max - (1.0 * cost_scale))
-        points = generate_biased_sphere_points(count, radius**cost_scale, finish - pt, concentration)
+        points = generate_biased_sphere_points(
+            count, radius**cost_scale, finish - pt, concentration
+        )
         yield from (points + pt)
         yield finish
 
@@ -774,7 +790,11 @@ def a_star_ish(
             neigh_key = tuple(neighbor)
             this_cost = edge_cost(current, neighbor)
             tentative_g_score = g_score[curr_key] + this_cost
-            if neigh_key not in g_score or tentative_g_score < g_score[neigh_key] or np.all(neighbor == finish):
+            if (
+                neigh_key not in g_score
+                or tentative_g_score < g_score[neigh_key]
+                or np.all(neighbor == finish)
+            ):
                 came_from[neigh_key] = curr_key
                 g_score[neigh_key] = tentative_g_score
                 f_score[neigh_key] = tentative_g_score + 2 * heuristic(neighbor, finish)
@@ -938,16 +958,22 @@ def rrt_connect(
                                 # Found a path!
                                 if tree_idx == 0:
                                     # Start tree to goal tree
-                                    path = new_node.path_to_root() + connect_node.path_to_root()[::-1]
+                                    path = (
+                                        new_node.path_to_root() + connect_node.path_to_root()[::-1]
+                                    )
                                 else:
                                     # Goal tree to start tree
-                                    path = connect_node.path_to_root() + new_node.path_to_root()[::-1]
+                                    path = (
+                                        connect_node.path_to_root() + new_node.path_to_root()[::-1]
+                                    )
 
                                 # Simplify the path
                                 return simplify_path(path, edge_cost, callback)
 
                 # Visualization callback
-                if callback is not None and i < 10 or i % 10 == 0:  # Reduce callback frequency for performance
+                if (
+                    callback is not None and i < 10 or i % 10 == 0
+                ):  # Reduce callback frequency for performance
                     # Find best connection between trees for visualization
                     best_start = None
                     best_goal = None
@@ -968,7 +994,10 @@ def rrt_connect(
                     for s_node in start_samples:
                         for g_node in goal_samples:
                             dist = np.linalg.norm(s_node.position - g_node.position)
-                            if dist < best_dist and edge_cost(s_node.position, g_node.position) < np.inf:
+                            if (
+                                dist < best_dist
+                                and edge_cost(s_node.position, g_node.position) < np.inf
+                            ):
                                 best_dist = dist
                                 best_start = s_node
                                 best_goal = g_node
@@ -1102,7 +1131,9 @@ class GeometryMotionPlanner:
             visualizer.startPath([start.coordinates, stop.coordinates], bounds)
         in_bounds, bound_plane = point_in_bounds(start.coordinates, bounds)
         if not in_bounds:
-            raise ValueError(f"Starting point {start} is on the wrong side of the {bound_plane} boundary")
+            raise ValueError(
+                f"Starting point {start} is on the wrong side of the {bound_plane} boundary"
+            )
         profile.mark("basic setup")
 
         obstacles = self.make_convolved_obstacles(traveler, to_global_from_traveler, visualizer)
@@ -1201,7 +1232,9 @@ class GeometryMotionPlanner:
             visualizer.startPath([start.coordinates, stop.coordinates], bounds)
         in_bounds, bound_plane = point_in_bounds(start.coordinates, bounds)
         if not in_bounds:
-            raise ValueError(f"Starting point {start} is on the wrong side of the {bound_plane} boundary")
+            raise ValueError(
+                f"Starting point {start} is on the wrong side of the {bound_plane} boundary"
+            )
         profile.mark("basic setup")
 
         obstacles = self.make_convolved_obstacles(traveler, to_global_from_traveler, visualizer)
@@ -1282,7 +1315,9 @@ class GeometryMotionPlanner:
             with self._cache_lock:
                 if cache_key not in self._cache:
                     convolved_obst = obst.make_convolved_voxels(
-                        traveler, to_global_from_obst.inverse * to_global_from_traveler, self.voxel_size
+                        traveler,
+                        to_global_from_obst.inverse * to_global_from_traveler,
+                        self.voxel_size,
                     )
                     # TODO is this bad? explicitly setting transforms frequently is...
                     convolved_obst.transform = obst.transform * convolved_obst.transform
@@ -1318,7 +1353,11 @@ def convolve_kernel_onto_volume(volume: np.ndarray, kernel: np.ndarray) -> np.nd
     # Output shape
     v_shape = volume.shape
     k_shape = kernel.shape
-    out_shape = (v_shape[0] + k_shape[0] - 1, v_shape[1] + k_shape[1] - 1, v_shape[2] + k_shape[2] - 1)
+    out_shape = (
+        v_shape[0] + k_shape[0] - 1,
+        v_shape[1] + k_shape[1] - 1,
+        v_shape[2] + k_shape[2] - 1,
+    )
 
     # Initialize output array
     result = np.zeros(out_shape, dtype=np.bool_)
@@ -1342,6 +1381,7 @@ def convolve_kernel_onto_volume(volume: np.ndarray, kernel: np.ndarray) -> np.nd
 
 def convolve_kernel_onto_volume_scipy(volume: np.ndarray, kernel: np.ndarray) -> np.ndarray:
     import scipy.signal
+
     return scipy.signal.convolve(volume.astype(int), kernel.astype(int), mode="full").astype(bool)
 
 
@@ -1467,7 +1507,9 @@ class Geometry:
         if config is not None:
             self.parse_config()
         if getattr(self, "_transform", None) is None:
-            self._transform: Transform = transform or NullTransform(3, **self._default_transform_args())
+            self._transform: Transform = transform or NullTransform(
+                3, **self._default_transform_args()
+            )
 
     def parse_config(self):
         """Create 3D mesh from a configuration. Format example::
@@ -1579,7 +1621,7 @@ class Geometry:
     #     from pymp import Planner
     #     import hppfcl
     #
-    #     urdf: str = self._config
+    #     urdf: str = self.config
     #     srdf = f"{urdf[:-5]}.srdf"
     #     end_effector = ET.parse(srdf).getroot().find("end_effector").attrib["name"]
     #     joints = [j.attrib["name"] for j in ET.parse(urdf).getroot().findall("joint") if j.attrib["type"] != "fixed"]
@@ -1675,7 +1717,9 @@ class Geometry:
     ) -> Volume:
         """Return a Volume that represents the accessible space the other geometry could move through without a
         collision."""
-        to_self_from_other = self.transform.inverse * to_my_parent_from_other_parent * other.transform
+        to_self_from_other = (
+            self.transform.inverse * to_my_parent_from_other_parent * other.transform
+        )
         xformed = other.transformed_to(self.transform, to_self_from_other)
         xformed_voxels = xformed.voxel_template(voxel_size)
         # this prevents two pipette tips from smashing into each other, but it makes it harder to deal
@@ -1688,7 +1732,9 @@ class Geometry:
         other_origin_in_my_parent = to_my_parent_from_other_parent.map(other_origin)
         other_origin_in_self = self.transform.inverse.map(other_origin_in_my_parent)
         other_origin_in_xformed_voxels = xformed_voxels.transform.inverse.map(other_origin_in_self)
-        center = (np.array(shadow.T.shape) - other_origin_in_xformed_voxels - (0.5, 0.5, 0.5)).round()
+        center = (
+            np.array(shadow.T.shape) - other_origin_in_xformed_voxels - (0.5, 0.5, 0.5)
+        ).round()
         self_voxels = self.voxel_template(voxel_size)
         return self_voxels.convolve(shadow, center, f"[shadow of {xformed.name}]")
 
@@ -1783,7 +1829,9 @@ class Line:
 def are_colinear(l1, l2):
     a, b = l1
     c, d = l2
-    return np.allclose(np.cross(b - a, d - c), 0, atol=1e-10) and np.allclose(np.cross(a - c, b - c), 0, atol=1e-10)
+    return np.allclose(np.cross(b - a, d - c), 0, atol=1e-10) and np.allclose(
+        np.cross(a - c, b - c), 0, atol=1e-10
+    )
 
 
 class Plane:
@@ -1803,16 +1851,22 @@ class Plane:
         for a, b, c in itertools.product(lines, lines, lines):
             if a == b or b == c or a == c:
                 continue
-            if (start := a.intersecting_point(b)) is not None and (end := a.intersecting_point(c)) is not None:
+            if (start := a.intersecting_point(b)) is not None and (
+                end := a.intersecting_point(c)
+            ) is not None:
                 if np.allclose(start, end, atol=1e-9):
                     continue
-                if innermost and any(not p.allows_point(start) or not p.allows_point(end) for p in planes):
+                if innermost and any(
+                    not p.allows_point(start) or not p.allows_point(end) for p in planes
+                ):
                     continue
                 start = tuple(start)  # tuples so we can key a dict
                 end = tuple(end)
                 if start not in segments.get(end, ApproxSet()):
                     segments.setdefault(start, ApproxSet()).add(end)
-        return [(np.array(start), np.array(end)) for start, ends in segments.items() for end in ends]
+        return [
+            (np.array(start), np.array(end)) for start, ends in segments.items() for end in ends
+        ]
 
     def __init__(self, normal, point, name=None):
         self.normal = normal / np.linalg.norm(normal)

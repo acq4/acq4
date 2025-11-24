@@ -57,7 +57,6 @@ class SutterMP285(Device, OptomechDevice):
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
         OptomechDevice.__init__(self, dm, config, name)
-        self.config = config
         self.configFile = os.path.join('devices', name + '_config.cfg')
         self.lock = Mutex(Qt.QMutex.Recursive)
         self.port = config['port']  ## windows com ports start at COM1, pyserial ports start at 0
