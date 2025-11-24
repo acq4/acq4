@@ -85,7 +85,7 @@ class Manager(Qt.QObject):
         m.initFromCommandLine(args)
         return m
 
-    def __init__(self, configFile=None):
+    def __init__(self):
         self.moduleLock = Mutex(recursive=True)  ## used for keeping some basic methods thread-safe
         # self.devices = OrderedDict()  # all currently loaded devices
         self.modules = OrderedDict()  # all currently running modules
@@ -201,6 +201,7 @@ class Manager(Qt.QObject):
             'hostname': socket.gethostname(),
             'username': getpass.getuser(),
             'environ': os.environ,
+            'configpath': self.configDir,
         }
         cfg = configfile.readConfigFile(configFile, **ns)
         self.config.update(cfg)
