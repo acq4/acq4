@@ -1,9 +1,0 @@
-channels:
-  - defaults
-dependencies:
-  - blas
-  - pip
-  - pyqt=5
-  - python=3.12
-  - pip:
-    - -r acq4-torch-pip.txt

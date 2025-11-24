@@ -1,12 +1,5 @@
-import math
-import time
-
-from .igorpro import IgorBridge, IgorCallError
+from .igorpro import IgorBridge
 from acq4.util import Qt
-
-# MIES constants, see MIES_Constants.ipf
-PRESSURE_METHOD_APPROACH = 0
-PRESSURE_METHOD_SEAL = 1
 
 
 def __reload__(old):
@@ -16,12 +9,7 @@ def __reload__(old):
 class MIES(Qt.QObject):
     """Bridge for communicating with MIES (multi-patch ephys and pressure control in IgorPro)
     """
-    sigDataReady = Qt.Signal(object)
-    _sigFutureComplete = Qt.Signal(object)
     _bridge = None
-    ALLDATA = None
-    PEAKRES = 1
-    SSRES = 2
 
     @classmethod
     def getBridge(cls):
@@ -34,79 +22,46 @@ class MIES(Qt.QObject):
     def __init__(self):
         super(MIES, self).__init__(parent=None)
         self.igor = IgorBridge()
-        self.currentData = None
-        self.manual_active = False  # temporary fix for manual mode toggle button, see below
-        self._exiting = False
-        # self.windowName = 'ITC1600_Dev_0'
         self._windowName = None
-        self.devices: list[str] = []
-        self._sigFutureComplete.connect(self.processUpdate)
-        self._initTPTime = None
-        self._lastTPTime = None
-
-    def processUpdate(self, future):
-        if not self._exiting:
-            try:
-                res = future.result()
-                data = res[..., 0]  # dimension hack when return value suddenly changed
-                self.currentData = data
-                self._updateTPTimes(data)
-                self.sigDataReady.emit(data)
-                nextCallWait = 2000
-            except (IgorCallError, TypeError):
-                # Test pulse isn't running, let's wait a little longer
-                nextCallWait = 2000
-            self._TPTimer.start(nextCallWait)
-
-    def _updateTPTimes(self, TPArray):
-        """Update globally tracked initial and end TP times"""
-        if self._initTPTime is None:
-            try:
-                self._initTPTime = TPArray[0, :][TPArray[0, :] > 0].min()
-            except ValueError:
-                pass
-        self._lastTPTime = TPArray[0, :].max()
-
-    def getTPRange(self):
-        if self._initTPTime is None:
-            return 0, 0
-        else:
-            return self._initTPTime, self._lastTPTime
-
-    def resetData(self):
-        self.currentData = None
 
     def selectHeadstage(self, hs):
-        return self.setCtrl("slider_DataAcq_ActiveHeadstage", hs)
+        if hs != 0:
+            raise NotImplementedError("Multiple headstages not currently implemented")
+        return
+        # return self.setCtrl("slider_DataAcq_ActiveHeadstage", hs)
     
     def activateHeadstage(self, hs):
         return self.setCtrl(f"Check_DataAcqHS_0{hs}", True)
     
     def isHeadstageActive(self, hs):
         value = self.getCtrlValue(f'Check_DataAcqHS_0{hs}')
-        return True if value == '1' else False
+        return value == '1'
 
     def enableTestPulse(self, enable:bool):
         """Enable/disable test pulse for all active headstages"""
-        return self.igor('API_TestPulse', self.getWindowName(), 1 if enable else 0)
+        return self.igor('FFI_TestpulseMD', self.getWindowName(), 1 if enable else 0)
 
-    def getHolding(self, hs, mode_override=None):
-        mode = ""
-        if mode_override:
-            mode = mode_override
-        else:
-            mode = self.getClampMode(hs)
+    def getHolding(self, hs, mode):
+        self.selectHeadstage(hs)
         if mode == "VC":
-            return int(self.getCtrlValue('setvar_DataAcq_Hold_VC')) / 1000
+            val = float(self.getCtrlValue('setvar_DataAcq_Hold_VC')) / 1000
+            enabled = self.getCtrlValue('check_DatAcq_HoldEnableVC') == '1'
         elif mode == "IC":
-            return int(self.getCtrlValue('setvar_DataAcq_Hold_IC')) / 1e12
+            val = float(self.getCtrlValue('setvar_DataAcq_Hold_IC')) / 1e12
+            enabled = self.getCtrlValue('check_DatAcq_HoldEnable') == '1'
+        return val, enabled
     
-    def setHolding(self, hs, value):
-        mode: str = self.getClampMode(hs)
+    def setHolding(self, headstage, mode, value):
+        self.selectHeadstage(headstage)
         if mode == "VC":
-            return self.setCtrl('setvar_DataAcq_Hold_VC', value * 1000)
-        elif mode == "IC":
-            return self.setCtrl('setvar_DataAcq_Hold_IC', value * 1e12)
+            ret = self.setCtrl('setvar_DataAcq_Hold_VC', value * 1000)
+            if value != 0:
+                ret = self.setCtrl('check_DatAcq_HoldEnableVC', True)
+        else:
+            ret = self.setCtrl('setvar_DataAcq_Hold_IC', value * 1e12)
+            if value != 0:
+                ret = self.setCtrl('check_DatAcq_HoldEnable', True)
+        return ret
     
     def setClampMode(self, hs: int, value: str): # IC | VC | I=0
         rtn_value = None
@@ -114,7 +69,7 @@ class MIES(Qt.QObject):
             rtn_value = self.setCtrl(f'Radio_ClampMode_{hs*2}', True)
         elif value == "IC":
             rtn_value = self.setCtrl(f'Radio_ClampMode_{hs*2+1}', True)
-        elif value in ["I=0", "i=0"]:
+        elif value.lower() == "i=0":
             rtn_value = self.setCtrl(f'Radio_ClampMode_{hs*2+1}IZ', True)
 
         return rtn_value
@@ -134,67 +89,52 @@ class MIES(Qt.QObject):
                     clamp_mode = "I=0"
         return clamp_mode
     
-    def setAutoBias(self, hs, value: bool):
+    def setAutoBiasEnabled(self, headstage, value: bool):
+        self.selectHeadstage(headstage)
         return self.setCtrl('check_DataAcq_AutoBias', value)
         
-    def getAutoBias(self, hs):
+    def getAutoBiasEnabled(self, headstage):
+        self.selectHeadstage(headstage)
         value = self.getCtrlValue('check_DataAcq_AutoBias')
         return True if value == "1" else False
         
-    def setAutoBiasTarget(self, hs, value):
+    def setAutoBiasTarget(self, headstage, value):
+        self.selectHeadstage(headstage)
         return self.setCtrl('setvar_DataAcq_AutoBiasV', value * 1000)
         
-    def getAutoBiasTarget(self, hs):
+    def getAutoBiasTarget(self, headstage):
+        self.selectHeadstage(headstage)
         return float(self.getCtrlValue('setvar_DataAcq_AutoBiasV')) / 1000
     
-    def setManualPressure(self, pressure):
-        # set pressure in MIES, then verify pressure is set in MIES
-        # (necessary due to lag in MIES setting pressure)
-        v = self.setCtrl("setvar_DataAcq_SSPressure", pressure)
-        p = self.getManualPressure()
-        if not math.isclose(pressure, p, abs_tol=0.0001):
-            # test for x seconds
-            found = False
-            to = time.time() + 1 # one second timeout
-            while not found and time.time() > to:
-                p = self.getManualPressure()
-                if math.isclose(pressure, p, abs_tol=0.0001):
-                    found = True
-            if not found:
-                raise Exception("timeout while waiting for MIES pressure match")
-        return v
-    
-    def getManualPressure(self) -> float:
+    def getManualPressure(self, headstage) -> float:
+        self.selectHeadstage(headstage)
         return float(self.getCtrlValue('setvar_DataAcq_SSPressure'))
-
-    def setPressureSource(self, headstage: int, source: str, pressure=None):
-        PRESSURE_METOD_ATM = -1
-        PRESSURE_METHOD_MANUAL = 4
-
-        self.setCtrl("check_DataACq_Pressure_User", source == "user")
-
-        if source == "user":
-            return
-        if source == "atmosphere":
-            self.igor('DoPressureManual', 'ITC18USB_Dev_0', headstage, 0, 0).result()
-        elif source == "regulator":
-            self.igor('DoPressureManual', 'ITC18USB_Dev_0', headstage, 1, pressure).result()
-        else:
-            raise ValueError(f"pressure source is not valid: {source}")
-
-    # def setApproach(self, hs):
-    #     windowName = self.getWindowName()
-    #     return self.igor("P_SetPressureMode", windowName, hs, PRESSURE_METHOD_APPROACH)
-
-    # def setSeal(self, hs):
-    #     windowName = self.getWindowName()
-    #     return self.igor("P_SetPressureMode", windowName, hs, PRESSURE_METHOD_SEAL)
+    
+    def setPressureAndSource(self, headstage, source, pressure):
+        if source == 'user':
+            self.selectHeadstage(headstage)
+            return self.setCtrl("check_DataACq_Pressure_User", True)
+        try:
+            source_val = {'atmosphere': 0, 'regulator': 1}[source]
+        except KeyError:
+            raise ValueError(f"Invalid pressure source '{source}'")
+        return self.igor('DoPressureManual', self.getWindowName(), headstage, source_val, pressure)
 
     def setHeadstageActive(self, hs, active):
         return self.setCtrl('Check_DataAcqHS_%02d' % hs, active)
 
-    def autoPipetteOffset(self):
+    def autoPipetteOffset(self, headstage):
+        self.selectHeadstage(headstage)
         return self.setCtrl('button_DataAcq_AutoPipOffset_VC')
+
+    def autoBridgeBalance(self, headstage):
+        self.selectHeadstage(headstage)
+        return self.setCtrl('button_DataAcq_AutoBridgeBal_IC')
+
+    def autoCapComp(self, headstage):
+        self.selectHeadstage(headstage)
+        self.setCtrl('button_DataAcq_FastComp_VC')
+        return self.setCtrl('button_DataAcq_SlowComp_VC')
 
     def getLockedDevices(self):
         res = self.igor("GetListOfLockedDevices").result()
@@ -223,7 +163,6 @@ class MIES(Qt.QObject):
         return self._windowName
 
     def quit(self):
-        self._exiting = True
         self.igor.quit()
 
 

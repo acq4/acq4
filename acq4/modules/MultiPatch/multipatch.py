@@ -280,11 +280,7 @@ class MultiPatchWindow(Qt.QWidget):
             patchpip = work_to_do.pop(0)
             pip = patchpip.pipetteDevice if isinstance(patchpip, PatchPipette) else patchpip
             pos = pip.tracker.findTipInFrame()
-            success = _future.waitFor(pip.setTipOffsetIfAcceptable(pos), timeout=None).getResult()
-            if not success:
-                work_to_do.insert(0, patchpip)
-                continue
-
+            _future.waitFor(pip.setTipOffsetIfAcceptable(pos), timeout=None).getResult()
             _future.checkStop()
 
     def _cellDetect(self):

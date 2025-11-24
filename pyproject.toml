@@ -1,0 +1,89 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "acq4"
+dynamic = ["version"]
+description = "Neurophysiology acquisition and analysis platform"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { file = "LICENSE.txt" }
+authors = [
+    { name = "Luke Campagnola", email = "lukec@alleninstitute.org" },
+]
+keywords = ["neurophysiology", "electrophysiology", "microscopy", "patch clamp"]
+classifiers = [
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Scientific/Engineering",
+]
+dependencies = [
+    "MetaArray",
+    "docstring_parser",
+    "python-json-logger",
+    "pyqt5",
+    "h5py",
+    "matplotlib",
+    "numba",
+    "numpy",
+    "opencv-python-headless",
+    "pandas",
+    "pillow",
+    "psutil",
+    "pyopengl",
+    "pyyaml",
+    "scikit-image",
+    "scikit-learn",
+    "scipy",
+    "tifffile",
+    "trimesh",
+    "vispy",
+    "coorx",
+    "teleprox",
+    "neuroanalysis",
+    "pyqtgraph @ git+https://github.com/acq4/pyqtgraph.git@acq4_working",
+]
+
+[project.optional-dependencies]
+hardware = [
+    "pydaqmx",
+    "pymmcore",
+    "sensapex",
+    "pyserial",
+    "pyparsing",
+]
+analysis = [
+    "pycsf @ git+https://github.com/campagnola/pycsf",
+    "ccfviewer @ git+https://github.com/campagnola/ccfviewer",
+]
+ml-models = [
+    "torch",
+    "torchvision",
+    "cellpose @ git+https://github.com/outofculture/cellpose.git@_working",
+]
+docs = [
+    "numpydoc>=1.1.0",
+    "Sphinx>=4.1.2",
+    "sphinx-rtd-theme>=0.5.2",
+]
+testing = [
+    "pytest",
+]
+
+[project.urls]
+Homepage = "http://www.acq4.org"
+Repository = "https://github.com/acq4/acq4"
+Documentation = "http://www.acq4.org"
+
+[tool.setuptools]
+packages = { find = { include = ["acq4*"] } }
+
+[tool.setuptools.package-data]
+acq4 = ["**/*.ui"]
+
+[tool.setuptools.dynamic]
+version = { attr = "acq4.__version__" }
