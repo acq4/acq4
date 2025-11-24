@@ -13,7 +13,7 @@ from acq4.util.functions import plottable_booleans
 from acq4.util.future import future_wrap
 from pyqtgraph.units import µm
 from acq4.util.imaging.sequencer import run_image_sequence
-from ._base import PatchPipetteState, SteadyStateAnalysisBase
+from ._base import PatchPipetteState, SteadyStateAnalysisBase, exponential_decay_avg
 
 
 class CellDetectAnalysis(SteadyStateAnalysisBase):
@@ -99,10 +99,10 @@ class CellDetectAnalysis(SteadyStateAnalysisBase):
                 last_measurement = ret_array[i - 1]
 
             dt = start_time - last_measurement['time']
-            baseline_avg, _ = self.exponential_decay_avg(
+            baseline_avg, _ = exponential_decay_avg(
                 dt, last_measurement['baseline_avg'], resistance, self._baseline_tau)
             cell_detected_fast = resistance > self._cell_threshold_fast + baseline_avg
-            slow_avg, _ = self.exponential_decay_avg(
+            slow_avg, _ = exponential_decay_avg(
                 dt, last_measurement['slow_avg'], resistance, dt * self._slow_detection_steps)
             cell_detected_slow = (
                     self._measurment_count >= self._slow_detection_steps and
@@ -332,14 +332,14 @@ class CellDetectState(PatchPipetteState):
             self.processAtLeastOneTestPulse()
             self.adjustPressureForDepth()
             if self._analysis.tip_is_broken():
-                self._taskDone(interrupted=True, error="Pipette broken")
+                self._taskDone(interrupted=True, error="Pipette break detected with `breakThreshold`.")
                 self.dev.patchRecord()['detectedCell'] = False
                 return 'broken'
             if self.obstacleDetected():
                 try:
                     self.avoidObstacle()
                 except TimeoutError:
-                    self._taskDone(interrupted=True, error="Fouled by obstacle")
+                    self._taskDone(interrupted=True, error="Fouling by obstacle detected with `obstacleResistanceThreshold`.")
                     return 'fouled'
             if config['autoAdvance']:
                 if config['advanceContinuous']:
@@ -363,7 +363,7 @@ class CellDetectState(PatchPipetteState):
                     self.lastMove = now
 
                     self.singleStep()
-        self._taskDone(interrupted=True, error="Timed out waiting for cell detect.")
+        self._taskDone(interrupted=True, error="Timed out waiting `cellDetectTimeout` for cell detect.")
         return config['fallbackState']
 
     def adjustPressureForDepth(self):

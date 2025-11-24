@@ -263,9 +263,12 @@ class SteadyStateAnalysisBase(object):
     def process_measurements(self, measurements: np.ndarray) -> np.ndarray:
         raise NotImplementedError()
 
-    @staticmethod
-    def exponential_decay_avg(dt, prev_avg, value, tau):
-        alpha = 1 - np.exp(-dt / tau)
-        avg = prev_avg * (1 - alpha) + value * alpha
-        ratio = np.log10(avg / prev_avg)
-        return avg, ratio
+
+def exponential_decay_avg(dt, prev_avg, value, tau):
+    """Compute exponential decay average and ratio of new average to previous average."""
+    if prev_avg is None:
+        return value, 0
+    alpha = 1 - np.exp(-dt / tau)
+    avg = prev_avg * (1 - alpha) + value * alpha
+    ratio = np.log10(avg / prev_avg)
+    return avg, ratio
