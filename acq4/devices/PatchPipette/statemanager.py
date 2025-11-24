@@ -96,7 +96,7 @@ class PatchPipetteStateManager(Qt.QObject):
         for profile in PatchPipetteStateManager.listProfiles():
             params.append(ProfileParameter(profile))
             Qt.QApplication.processEvents()
-        return Parameter.create(name='profiles', type='group', children=params)
+        return Parameter.create(name='profiles', type='group', value=None, children=params)
 
     @staticmethod
     def _loadGlobalProfilesOnce():
@@ -264,7 +264,7 @@ class PatchPipetteStateManager(Qt.QObject):
 
 class ProfileParameter(Parameter):
     def __init__(self, profile):
-        super().__init__(name=profile, type='group', children=[
+        super().__init__(name=profile, type='group', value=None, children=[
             {'name': 'copyFrom', 'type': 'str', 'default': ''},
         ])
         config = PatchPipetteStateManager.getProfileConfig(profile)
@@ -324,7 +324,7 @@ class StateParameter(Parameter):
         return tooltips
 
     def __init__(self, name, profile):
-        super().__init__(name=name, type='group', children=[])
+        super().__init__(name=name, type='group', value=None, children=[])
         self._profile = profile
         self._state = name
         tooltips = self._getStateTooltips(name)
@@ -340,6 +340,7 @@ class StateParameter(Parameter):
             if param_name in defaults:
                 param_config['default'] = defaults[param_name]
             param_config['pinValueToDefault'] = True
+            param_config.setdefault('value', None)
             if param_config['type'] == 'float' and param_config.get('suffix') is not None:
                 param_config.setdefault('siPrefix', True)
             if param_name not in tooltips:
