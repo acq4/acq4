@@ -55,6 +55,9 @@ hardware = [
     "sensapex",
     "pyserial",
     "pyparsing",
+    "pytic",
+    "falconoptics @ git+https://github.com/AllenInstitute/falconoptics",
+    "pywin32",
 ]
 analysis = [
     "pycsf @ git+https://github.com/campagnola/pycsf",

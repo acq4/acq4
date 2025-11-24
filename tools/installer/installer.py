@@ -38,9 +38,10 @@ ARG_OPTIONAL_MODE = "--optional-mode"
 ARG_OPTIONAL_DEP = "--optional-dep"
 ARG_OPTIONAL_GROUPS = "--optional-groups"
 ARG_EDITABLE_CLONE = "--editable-clone"
-ARG_CONFIG_MODE = "--config-mode"
 ARG_CONFIG_REPO = "--config-repo"
+ARG_CONFIG_BRANCH = "--config-branch"
 ARG_CONFIG_PATH = "--config-path"
+ARG_CONFIG_FILE = "--config-file"
 ARG_GITHUB_TOKEN = "--github-token"
 
 RAW_GITHUB_BASE = "https://raw.githubusercontent.com/acq4/acq4/main/"
@@ -68,7 +69,8 @@ if errorlevel 1 (
     exit /b 1
 )
 
-python -m acq4 -x
+cd "{acq4_path}"
+python -m acq4 -x -c "{config_file_path}"
 pause
 """
 
@@ -116,13 +118,25 @@ DEPENDENCY_METADATA: Dict[str, Dict[str, Dict[str, str]]] = {
             "display_name": "PyMMCore",
             "pypi_package": "pymmcore",
             "description": "Micro-Manager device bridge.",
-            "post_install_doc": "Requires Micro-Manager installation. Download from <a href='https://micro-manager.org/Download_Micro-Manager_Latest_Release'>https://micro-manager.org</a>",
+            "post_install_doc": "Requires Micro-Manager installation. Download from <a href='https://micro-manager.org/Micro-Manager_Nightly_Builds'>Micro-Manager Nightly Builds</a>",
         },
         "sensapex-py": {
             "display_name": "sensapex-py",
             "pypi_package": "sensapex",
-            "git_url": "https://github.com/sensapex/sensapex-py.git",
+            "git_url": "https://github.com/acq4/sensapex-py.git",
             "description": "Sensapex manipulator control.",
+        },
+        "pytic": {
+            "display_name": "pytic",
+            "pypi_package": "pytic",
+            "git_url": "https://github.com/AllenInstitute/pytic.git",
+            "description": "TIC motor control",
+        },
+        "falconoptics": {
+            "display_name": "falconoptics",
+            "pypi_package": "falconoptics",
+            "git_url": "https://github.com/AllenInstitute/falconoptics.git",
+            "description": "Falcon optics motor turret.",
         },
         "cellpose": {
             "display_name": "cellpose (ACQ4 fork)",
@@ -171,7 +185,7 @@ DEPENDENCY_METADATA: Dict[str, Dict[str, Dict[str, str]]] = {
         },
         "acq4_automation": {
             "display_name": "acq4_automation",
-            "git_url": "https://github.com/AllenInstitute/acq4_automation.git",
+            "git_url": "https://github.com/AllenInstitute/acq4-automation.git",
             "description": "Allen Institute automation helpers for patch clamp.",
         },
     },
@@ -532,7 +546,9 @@ class InstallerState:
     editable_selection: List[str] = field(default_factory=list)
     config_mode: str = "new"
     config_repo_url: Optional[str] = None
+    config_repo_branch: Optional[str] = None
     config_copy_path: Optional[Path] = None
+    config_file: Optional[str] = None
     create_desktop_shortcut: bool = True
 
 
@@ -571,10 +587,15 @@ class StructuredLogger:
     def start_task(self, title: str) -> int:
         self._task_counter += 1
         task_id = self._task_counter
+        if self.text_fn is not None:
+            self.text_fn(f"\n=== {title} ===")
         self._emit("task-start", task_id=task_id, title=title)
         return task_id
 
     def finish_task(self, task_id: int, success: bool = True) -> None:
+        if self.text_fn is not None:
+            status = "✓ Completed" if success else "✗ Failed"
+            self.text_fn(f"{status}\n")
         self._emit("task-complete", task_id=task_id, success=success)
         self._progress_value = min(self._progress_value + 1, self._progress_total)
         self._emit("progress", total=self._progress_total, value=self._progress_value)
@@ -582,6 +603,8 @@ class StructuredLogger:
     def start_command(self, task_id: Optional[int], display_cmd: str) -> int:
         self._command_counter += 1
         command_id = self._command_counter
+        if self.text_fn is not None:
+            self.text_fn(f"$ {display_cmd}")
         self._emit("command-start", command_id=command_id, task_id=task_id, text=display_cmd)
         return command_id
 
@@ -595,6 +618,8 @@ class StructuredLogger:
     def finish_command(self, command_id: Optional[int], success: bool) -> None:
         if command_id is None:
             return
+        if self.text_fn is not None and not success:
+            self.text_fn("Command failed")
         self._emit("command-complete", command_id=command_id, success=success)
 
 def normalize_spec_name(spec: str) -> str:
@@ -730,9 +755,9 @@ def resolve_optional_selection_from_args(args: argparse.Namespace,
     list of str
         The dependency specs to install.
     """
-    mode = getattr(args, "optional_mode", None)
-    raw_optional_arg = getattr(args, "optional_dep", None)
-    raw_group_arg = getattr(args, "optional_groups", None)
+    mode = args.optional_mode
+    raw_optional_arg = args.optional_dep
+    raw_group_arg = args.optional_groups
     requested_names = _parse_cli_list(raw_optional_arg)
     requested_groups = _parse_cli_list(raw_group_arg)
     provided_optional_arg = (raw_optional_arg is not None) or (raw_group_arg is not None)
@@ -773,7 +798,7 @@ def resolve_optional_selection_from_args(args: argparse.Namespace,
 def resolve_editable_selection_from_args(args: argparse.Namespace,
                                          editable_map: Dict[str, EditableDependency]) -> List[str]:
     """Return editable dependency keys selected via CLI arguments."""
-    raw_value = getattr(args, "editable_clone", None)
+    raw_value = args.editable_clone
     names = _parse_cli_list(raw_value)
     if not names:
         return []
@@ -796,7 +821,7 @@ def quote_windows_arguments(args: List[str]) -> str:
     return subprocess.list2cmdline(args)
 
 
-def create_start_bat(base_dir: Path, conda_exe: str, env_path: Path) -> Path:
+def create_start_bat(base_dir: Path, conda_exe: str, env_path: Path, config_file_path: Path) -> Path:
     """Create a start_acq4.bat file in the base install directory.
 
     Parameters
@@ -807,6 +832,8 @@ def create_start_bat(base_dir: Path, conda_exe: str, env_path: Path) -> Path:
         Path to the conda executable.
     env_path : Path
         Path to the conda environment.
+    config_file_path : Path
+        Path to the ACQ4 configuration file.
 
     Returns
     -------
@@ -821,7 +848,9 @@ def create_start_bat(base_dir: Path, conda_exe: str, env_path: Path) -> Path:
 
     bat_content = START_BAT_TEMPLATE.format(
         conda_activate_bat=str(conda_activate_bat),
-        env_path=str(env_path)
+        env_path=str(env_path),
+        config_file_path=str(config_file_path),
+        acq4_path=str(base_dir / ACQ4_SOURCE_DIRNAME),
     )
     bat_path = base_dir / "start_acq4.bat"
     bat_path.write_text(bat_content, encoding="utf-8")
@@ -897,7 +926,7 @@ def build_unattended_script_content(cli_args: List[str], *, is_windows: bool) ->
             "setlocal enabledelayedexpansion\n"
             "set \"BOOTSTRAP=%TEMP%\\acq4-bootstrap-%RANDOM%.bat\"\n"
             "echo Downloading ACQ4 bootstrap script...\n"
-            f"powershell -NoProfile -Command \"Invoke-WebRequest -Uri '{WINDOWS_BOOTSTRAP_URL}' -OutFile '%BOOTSTRAP%'\" || "
+            f"curl -L -o \"%BOOTSTRAP%\" \"{WINDOWS_BOOTSTRAP_URL}\" || "
             "goto :fail\n"
             f"{bootstrap_call}\n"
             "set \"RESULT=%ERRORLEVEL%\"\n"
@@ -984,22 +1013,32 @@ def register_dependency_cli_arguments(parser: argparse.ArgumentParser) -> None:
 
 
 def register_config_cli_arguments(parser: argparse.ArgumentParser) -> None:
-    """Add CLI options controlling configuration handling."""
-    parser.add_argument(
-        ARG_CONFIG_MODE,
-        choices=["new", "clone", "copy"],
-        default=None,
-        help="Choose whether to create a new config, clone from a repository, or copy an existing directory.",
-    )
+    """Add CLI options controlling configuration handling.
+
+    Configuration mode is determined automatically:
+    - Clone mode: if --config-repo and --config-branch are specified
+    - Copy mode: if --config-path is specified
+    - New mode: if neither are specified (creates default config)
+    """
     parser.add_argument(
         ARG_CONFIG_REPO,
         dest="config_repo",
-        help="URL of configuration repository (required when --config-mode clone).",
+        help="URL of configuration repository to clone. Requires --config-branch.",
+    )
+    parser.add_argument(
+        ARG_CONFIG_BRANCH,
+        dest="config_branch",
+        help="Branch to use when cloning configuration repository. Requires --config-repo.",
     )
     parser.add_argument(
         ARG_CONFIG_PATH,
         dest="config_path",
-        help="Path to an existing configuration directory (required when --config-mode copy).",
+        help="Path to an existing configuration directory to copy. Cannot be used with --config-repo.",
+    )
+    parser.add_argument(
+        ARG_CONFIG_FILE,
+        dest="config_file",
+        help="Configuration file to use from the cloned/copied config directory.",
     )
 
 
@@ -1147,6 +1186,8 @@ class GitRepoWidget(QtWidgets.QWidget):
         self.status_label.setWordWrap(True)
         layout.addRow(self.status_label)
 
+        # Clear branches immediately when user starts editing the URL
+        self.repo_edit.textChanged.connect(self._clear_branch_choices)
         # Only fetch branches when user presses Enter or focuses off the field
         self.repo_edit.editingFinished.connect(self._load_branch_choices)
         self.branch_combo.currentTextChanged.connect(lambda text: self.branchChanged.emit(text))
@@ -1159,8 +1200,12 @@ class GitRepoWidget(QtWidgets.QWidget):
 
     def set_github_token(self, token: Optional[str]) -> None:
         """Update the GitHub token and refresh branches if needed."""
+        if self._github_token == token:
+            return
         self._github_token = token
-        self._load_branch_choices()
+        # Only reload branches if we have a repo URL
+        if self.repo_edit.text().strip():
+            self._load_branch_choices()
 
     def repo_url(self) -> str:
         """Return the current repository URL."""
@@ -1171,8 +1216,12 @@ class GitRepoWidget(QtWidgets.QWidget):
         return self.branch_combo.currentText().strip()
 
     def set_repo_url(self, url: str) -> None:
-        """Set the repository URL."""
+        """Set the repository URL and trigger branch loading."""
         self.repo_edit.setText(url)
+        # Programmatically setting the URL should also load branches,
+        # just like when a user enters a URL and presses Enter
+        if url.strip():
+            self._load_branch_choices()
 
     def set_branch(self, branch: str) -> None:
         """Set the branch/tag."""
@@ -1189,6 +1238,12 @@ class GitRepoWidget(QtWidgets.QWidget):
         if self.branch_fetch_thread and self.branch_fetch_thread.is_alive():
             self.branch_fetch_cancel.set()
             self.branch_fetch_thread.join(timeout=1.0)
+
+    def _clear_branch_choices(self) -> None:
+        """Clear branch choices when repository URL changes."""
+        self._cancel_branch_process()
+        self.branch_combo.clear()
+        self._set_status("Ready to fetch branches")
 
     def _load_branch_choices(self) -> None:
         repo_value = self.repo_edit.text().strip()
@@ -1354,7 +1409,6 @@ class LocationPage(QtWidgets.QWizardPage):
 
         token_form = QtWidgets.QFormLayout()
         self.github_token_edit = QtWidgets.QLineEdit()
-        self.github_token_edit.setEchoMode(QtWidgets.QLineEdit.EchoMode.Password)
         self.github_token_edit.setPlaceholderText("Optional")
         self.registerField("github_token", self.github_token_edit)
         token_form.addRow("GitHub token", self.github_token_edit)
@@ -1370,7 +1424,7 @@ class LocationPage(QtWidgets.QWizardPage):
         outer_layout.addWidget(version_group)
         outer_layout.addStretch(1)
         self.path_edit.textChanged.connect(self._validate_path)
-        self.github_token_edit.textChanged.connect(self._handle_token_change)
+        self.github_token_edit.editingFinished.connect(self._handle_token_change)
         self._validate_path()
 
     def _select_path(self) -> None:
@@ -1409,18 +1463,18 @@ class LocationPage(QtWidgets.QWizardPage):
         return not path.exists()
 
     def apply_cli_args(self, args: argparse.Namespace) -> None:
-        if getattr(args, "install_path", None):
+        if args.install_path:
             raw_path = Path(str(args.install_path)).expanduser()
             try:
                 resolved = raw_path.resolve()
             except Exception:
                 resolved = raw_path
             self.path_edit.setText(str(resolved))
-        if getattr(args, "repo_url", None):
+        if args.repo_url:
             self.git_repo_widget.set_repo_url(str(args.repo_url))
-        if getattr(args, "branch", None):
+        if args.branch:
             self.git_repo_widget.set_branch(str(args.branch))
-        if getattr(args, "github_token", None):
+        if args.github_token:
             self.github_token_edit.setText(str(args.github_token))
 
     def cli_arguments(self) -> List[str]:
@@ -1687,20 +1741,28 @@ class ConfigPage(QtWidgets.QWizardPage):
         clone_help.setWordWrap(True)
         clone_help.setIndent(24)
         clone_block.addWidget(clone_help)
-        clone_widget_container = QtWidgets.QWidget()
-        clone_widget_container.setContentsMargins(32, 0, 0, 0)
-        clone_widget_layout = QtWidgets.QVBoxLayout(clone_widget_container)
+        self.clone_widget_container = QtWidgets.QWidget()
+        self.clone_widget_container.setContentsMargins(32, 0, 0, 0)
+        clone_widget_layout = QtWidgets.QVBoxLayout(self.clone_widget_container)
         clone_widget_layout.setContentsMargins(0, 0, 0, 0)
         self.git_repo_widget = GitRepoWidget(default_repo="", default_branch="main")
         self.git_repo_widget.repo_edit.setPlaceholderText("https://github.com/your/config-repo.git")
         clone_widget_layout.addWidget(self.git_repo_widget)
-        clone_block.addWidget(clone_widget_container)
+
+        # Config file selection for clone mode
+        clone_config_file_layout = QtWidgets.QFormLayout()
+        self.clone_config_file_combo = QtWidgets.QComboBox()
+        self.clone_config_file_combo.setEditable(True)
+        self.clone_config_file_combo.setPlaceholderText("default.cfg")
+        clone_config_file_layout.addRow("Config file:", self.clone_config_file_combo)
+        self.clone_config_file_status_label = QtWidgets.QLabel()
+        self.clone_config_file_status_label.setWordWrap(True)
+        clone_config_file_layout.addRow(self.clone_config_file_status_label)
+        clone_widget_layout.addLayout(clone_config_file_layout)
+
+        clone_block.addWidget(self.clone_widget_container)
         layout.addLayout(clone_block)
 
-        self.copy_path_edit = QtWidgets.QLineEdit()
-        self.copy_path_edit.setPlaceholderText("Path to existing ACQ4 config directory")
-        self.copy_browse_button = QtWidgets.QPushButton("Browse…")
-        self.copy_browse_button.clicked.connect(self._browse_copy_path)
         copy_block = QtWidgets.QVBoxLayout()
         copy_block.addWidget(self.copy_radio)
         copy_help = QtWidgets.QLabel(
@@ -1710,17 +1772,41 @@ class ConfigPage(QtWidgets.QWizardPage):
         copy_help.setWordWrap(True)
         copy_help.setIndent(24)
         copy_block.addWidget(copy_help)
+
+        self.copy_widget_container = QtWidgets.QWidget()
+        self.copy_widget_container.setContentsMargins(32, 0, 0, 0)
+        copy_widget_layout = QtWidgets.QVBoxLayout(self.copy_widget_container)
+        copy_widget_layout.setContentsMargins(0, 0, 0, 0)
+
+        self.copy_path_edit = QtWidgets.QLineEdit()
+        self.copy_path_edit.setPlaceholderText("Path to existing ACQ4 config directory")
+        self.copy_browse_button = QtWidgets.QPushButton("Browse…")
+        self.copy_browse_button.clicked.connect(self._browse_copy_path)
         copy_row = QtWidgets.QHBoxLayout()
-        copy_row.setContentsMargins(32, 0, 0, 0)
         copy_row.addWidget(self.copy_path_edit)
         copy_row.addWidget(self.copy_browse_button)
-        copy_block.addLayout(copy_row)
+        copy_widget_layout.addLayout(copy_row)
+
+        # Config file selection for copy mode
+        copy_config_file_layout = QtWidgets.QFormLayout()
+        self.copy_config_file_combo = QtWidgets.QComboBox()
+        self.copy_config_file_combo.setEditable(True)
+        self.copy_config_file_combo.setPlaceholderText("default.cfg")
+        copy_config_file_layout.addRow("Config file:", self.copy_config_file_combo)
+        self.copy_config_file_status_label = QtWidgets.QLabel()
+        self.copy_config_file_status_label.setWordWrap(True)
+        copy_config_file_layout.addRow(self.copy_config_file_status_label)
+        copy_widget_layout.addLayout(copy_config_file_layout)
+
+        copy_block.addWidget(self.copy_widget_container)
         layout.addLayout(copy_block)
+
         self.clone_radio.toggled.connect(self._update_mode_widgets)
         self.copy_radio.toggled.connect(self._update_mode_widgets)
         self.new_radio.toggled.connect(self._update_mode_widgets)
-        self.git_repo_widget.repoChanged.connect(lambda _: self.completeChanged.emit())
-        self.copy_path_edit.textChanged.connect(lambda _: self.completeChanged.emit())
+        self.git_repo_widget.repoChanged.connect(self._on_clone_repo_changed)
+        self.git_repo_widget.branchChanged.connect(self._on_clone_branch_changed)
+        self.copy_path_edit.textChanged.connect(self._on_copy_path_changed)
         self._update_mode_widgets()
 
     def isComplete(self) -> bool:  # noqa: N802
@@ -1731,49 +1817,54 @@ class ConfigPage(QtWidgets.QWizardPage):
         return True
 
     def apply_cli_args(self, args: argparse.Namespace) -> None:
-        mode = getattr(args, "config_mode", None)
-        if mode == "clone":
-            self.clone_radio.setChecked(True)
-            repo = getattr(args, "config_repo", "") or ""
-            if repo:
-                self.git_repo_widget.set_repo_url(repo)
-        elif mode == "new":
-            self.new_radio.setChecked(True)
-        elif mode == "copy":
-            self.copy_radio.setChecked(True)
-            path = getattr(args, "config_path", "") or ""
-            if path:
-                self.copy_path_edit.setText(path)
-        elif getattr(args, "config_repo", None):
+        # Infer mode from which arguments are present
+        if args.config_repo:
             self.clone_radio.setChecked(True)
             self.git_repo_widget.set_repo_url(str(args.config_repo))
-        elif getattr(args, "config_path", None):
+            if args.config_branch:
+                self.git_repo_widget.set_branch(str(args.config_branch))
+        elif args.config_path:
             self.copy_radio.setChecked(True)
             self.copy_path_edit.setText(str(args.config_path))
+        else:
+            self.new_radio.setChecked(True)
+
+        if args.config_file:
+            if self.clone_radio.isChecked():
+                self.clone_config_file_combo.setEditText(args.config_file)
+            elif self.copy_radio.isChecked():
+                self.copy_config_file_combo.setEditText(args.config_file)
         self._update_mode_widgets()
 
     def cli_arguments(self) -> List[str]:
-        if self.copy_radio.isChecked():
-            mode = "copy"
-        elif self.clone_radio.isChecked():
-            mode = "clone"
-        else:
-            mode = "new"
-        args = [ARG_CONFIG_MODE, mode]
-        repo = self.git_repo_widget.repo_url()
-        if self.clone_radio.isChecked() and repo:
-            args.extend([ARG_CONFIG_REPO, repo])
-        path = self.copy_path_edit.text().strip()
-        if self.copy_radio.isChecked() and path:
-            args.extend([ARG_CONFIG_PATH, path])
+        args: List[str] = []
+
+        if self.clone_radio.isChecked():
+            repo = self.git_repo_widget.repo_url()
+            if repo:
+                args.extend([ARG_CONFIG_REPO, repo])
+            branch = self.git_repo_widget.branch()
+            if branch:
+                args.extend([ARG_CONFIG_BRANCH, branch])
+            config_file = self.clone_config_file_combo.currentText().strip()
+            if config_file:
+                args.extend([ARG_CONFIG_FILE, config_file])
+        elif self.copy_radio.isChecked():
+            path = self.copy_path_edit.text().strip()
+            if path:
+                args.extend([ARG_CONFIG_PATH, path])
+            config_file = self.copy_config_file_combo.currentText().strip()
+            if config_file:
+                args.extend([ARG_CONFIG_FILE, config_file])
+        # else: new mode - no args needed
+
         return args
 
     def _update_mode_widgets(self) -> None:
         clone_enabled = self.clone_radio.isChecked()
         copy_enabled = self.copy_radio.isChecked()
-        self.git_repo_widget.setEnabled(clone_enabled)
-        self.copy_path_edit.setEnabled(copy_enabled)
-        self.copy_browse_button.setEnabled(copy_enabled)
+        self.clone_widget_container.setVisible(clone_enabled)
+        self.copy_widget_container.setVisible(copy_enabled)
         self.completeChanged.emit()
 
     def _browse_copy_path(self) -> None:
@@ -1785,6 +1876,136 @@ class ConfigPage(QtWidgets.QWizardPage):
         )
         if directory:
             self.copy_path_edit.setText(directory)
+
+    def _on_copy_path_changed(self, path_text: str) -> None:
+        """Update config file list when copy path changes."""
+        self.completeChanged.emit()
+        if not self.copy_radio.isChecked():
+            return
+        path_text = path_text.strip()
+        if not path_text:
+            self.copy_config_file_combo.clear()
+            self.copy_config_file_status_label.setText("")
+            return
+        config_path = Path(path_text).expanduser().resolve()
+        if not config_path.exists() or not config_path.is_dir():
+            self.copy_config_file_combo.clear()
+            self.copy_config_file_status_label.setText("Invalid directory path")
+            return
+        # List files in the directory
+        try:
+            files = [f.name for f in config_path.iterdir() if f.is_file() and not f.name.startswith(".")]
+            self._populate_config_file_combo(files, "copy")
+        except (OSError, PermissionError) as e:
+            self.copy_config_file_combo.clear()
+            self.copy_config_file_status_label.setText(f"Error reading directory: {e}")
+
+    def _on_clone_repo_changed(self, repo_url: str) -> None:
+        """Update config file list when clone repo changes."""
+        self.completeChanged.emit()
+        if not self.clone_radio.isChecked():
+            return
+        self._refresh_clone_file_list()
+
+    def _on_clone_branch_changed(self, branch: str) -> None:
+        """Update config file list when clone branch changes."""
+        if not self.clone_radio.isChecked():
+            return
+        self._refresh_clone_file_list()
+
+    def _refresh_clone_file_list(self) -> None:
+        """Refresh the config file list from the git repository."""
+        repo_url = self.git_repo_widget.repo_url()
+        if not repo_url:
+            self.clone_config_file_combo.clear()
+            self.clone_config_file_status_label.setText("")
+            return
+        # Fetch files from git repo in a background thread
+        self.clone_config_file_status_label.setText("Loading file list from repository...")
+        self.clone_config_file_combo.setEnabled(False)
+
+        def fetch_files():
+            try:
+                wizard = self.wizard()
+                token = wizard.github_token() if wizard else None
+                branch = self.git_repo_widget.branch() or "main"
+                repo_with_token = github_url_with_token(repo_url, token)
+                files = list_git_repo_files(repo_with_token, branch)
+                QtCore.QMetaObject.invokeMethod(
+                    self,
+                    "_handle_git_files_loaded",
+                    QtCore.Qt.ConnectionType.QueuedConnection,
+                    QtCore.Q_ARG(list, files)
+                )
+            except Exception as exc:
+                QtCore.QMetaObject.invokeMethod(
+                    self,
+                    "_handle_git_files_error",
+                    QtCore.Qt.ConnectionType.QueuedConnection,
+                    QtCore.Q_ARG(str, str(exc))
+                )
+
+        thread = threading.Thread(target=fetch_files, daemon=True)
+        thread.start()
+
+    @QtCore.pyqtSlot(list)
+    def _handle_git_files_loaded(self, files: List[str]) -> None:
+        """Handle successful loading of files from git repo."""
+        self.clone_config_file_combo.setEnabled(True)
+        self._populate_config_file_combo(files, "clone")
+        if files:
+            self.clone_config_file_status_label.setText(f"Found {len(files)} files")
+        else:
+            self.clone_config_file_status_label.setText("No files found in repository root")
+
+    @QtCore.pyqtSlot(str)
+    def _handle_git_files_error(self, error: str) -> None:
+        """Handle error loading files from git repo."""
+        self.clone_config_file_combo.setEnabled(True)
+        self.clone_config_file_combo.clear()
+        self.clone_config_file_status_label.setText(f"Error loading files: {error}")
+
+    def _populate_config_file_combo(self, files: List[str], mode: str) -> None:
+        """Populate the config file combo box with the given files.
+
+        Args:
+            files: List of file names to populate
+            mode: Either "clone" or "copy" to determine which combo box to use
+        """
+        if mode == "clone":
+            combo = self.clone_config_file_combo
+            status_label = self.clone_config_file_status_label
+        elif mode == "copy":
+            combo = self.copy_config_file_combo
+            status_label = self.copy_config_file_status_label
+        else:
+            raise ValueError(f"Invalid mode: {mode}")
+
+        current_text = combo.currentText().strip()
+        combo.blockSignals(True)
+        combo.clear()
+
+        # Sort files, prioritizing default.cfg
+        sorted_files = sorted(files)
+        if "default.cfg" in sorted_files:
+            sorted_files.remove("default.cfg")
+            sorted_files.insert(0, "default.cfg")
+
+        for filename in sorted_files:
+            combo.addItem(filename)
+
+        # Restore previous selection or default to default.cfg
+        if current_text and current_text in files:
+            index = combo.findText(current_text)
+            if index >= 0:
+                combo.setCurrentIndex(index)
+        elif "default.cfg" in files:
+            combo.setCurrentText("default.cfg")
+        elif sorted_files:
+            combo.setCurrentIndex(0)
+
+        combo.blockSignals(False)
+        status_label.setText("")
 
 
 class SummaryPage(QtWidgets.QWizardPage):
@@ -1813,7 +2034,7 @@ class SummaryPage(QtWidgets.QWizardPage):
         export_row.addWidget(self.export_button)
 
         self.unattended_checkbox = QtWidgets.QCheckBox("Unattended install")
-        self.unattended_checkbox.setChecked(True)
+        self.unattended_checkbox.setChecked(False)
         self.unattended_checkbox.setToolTip(
             "When checked, the exported script will run without user interaction. "
             "Uncheck to create an interactive installer script."
@@ -1848,6 +2069,10 @@ class SummaryPage(QtWidgets.QWizardPage):
             ("Editable clones", editable_display),
             ("Config source", config_source),
         ]
+        if mode in ("clone", "copy"):
+            config_file = wizard.config_file()
+            if config_file:
+                summary_items.append(("Config file", config_file))
         summary_html = "<ul>" + "".join(
             f"<li><b>{title}:</b> {value}</li>" for title, value in summary_items
         ) + "</ul>"
@@ -2234,20 +2459,10 @@ class InstallPage(QtWidgets.QWizardPage):
             self._completed = True
             self.completeChanged.emit()
 
-            # Check for post-install documentation
+            # Add summary with post-install documentation to log
             post_install_message = self._build_post_install_message()
             if post_install_message:
-                msg_box = QtWidgets.QMessageBox(self)
-                msg_box.setWindowTitle("Installation Complete")
-                msg_box.setIcon(QtWidgets.QMessageBox.Icon.Information)
-                msg_box.setText("<p><b>Installation complete.</b></p>"
-                               "<p>The following packages require additional 3rd-party software to be installed:</p>"
-                               + post_install_message)
-                msg_box.setTextFormat(QtCore.Qt.TextFormat.RichText)
-                msg_box.setStandardButtons(QtWidgets.QMessageBox.StandardButton.Ok)
-                msg_box.exec()
-            else:
-                QtWidgets.QMessageBox.information(self, "Installer", "Installation complete.")
+                self._add_summary_to_log(post_install_message)
         else:
             if cancelled:
                 QtWidgets.QMessageBox.information(self, "Installer", "Installation cancelled.")
@@ -2280,6 +2495,64 @@ class InstallPage(QtWidgets.QWizardPage):
         html_parts.append("</ul>")
 
         return "".join(html_parts)
+
+    def _add_summary_to_log(self, post_install_message: str) -> None:
+        """Add a Summary section to the log tree with post-install documentation."""
+        # Create top-level Summary item
+        summary_item = QtWidgets.QTreeWidgetItem(["Summary"])
+        summary_item.setIcon(0, self._success_icon)
+        self.log_tree.addTopLevelItem(summary_item)
+
+        # Create a child item to hold the QTextEdit widget
+        widget_item = QtWidgets.QTreeWidgetItem()
+        summary_item.addChild(widget_item)
+        summary_item.setExpanded(True)
+
+        # Create QTextBrowser for displaying the message with clickable links
+        text_edit = QtWidgets.QTextBrowser()
+        text_edit.setHtml(
+            "<p><b>Installation complete.</b></p>"
+            "<p>The following packages require additional 3rd-party software to be installed:</p>"
+            + post_install_message
+        )
+
+        # Make it look like embedded rich text: no border, transparent background, clickable links
+        text_edit.setFrameStyle(QtWidgets.QFrame.Shape.NoFrame)
+        text_edit.setStyleSheet("QTextBrowser { background-color: transparent; }")
+        text_edit.setOpenExternalLinks(True)
+
+        # Disable scrollbars - we'll size the widget to show all content
+        text_edit.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        text_edit.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        text_edit.setSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Expanding,
+            QtWidgets.QSizePolicy.Policy.Fixed
+        )
+
+        # Attach the widget to the tree item first
+        self.log_tree.setItemWidget(widget_item, 0, text_edit)
+
+        # Calculate proper width and height after widget is attached
+        # Get the actual column width (accounting for indentation and margins)
+        column_width = self.log_tree.columnWidth(0)
+        indent_width = self.log_tree.indentation() * 2  # Parent + child indentation
+        margins = 20  # Internal margins
+        available_width = column_width - indent_width - margins
+
+        # Set document width and calculate required height
+        doc = text_edit.document()
+        doc.setTextWidth(available_width)
+        required_height = int(doc.size().height()) + 10  # Add padding
+
+        # Set the widget size
+        text_edit.setFixedHeight(required_height)
+        text_edit.setMinimumWidth(available_width)
+
+        # Tell the tree item how tall it needs to be
+        widget_item.setSizeHint(0, QtCore.QSize(available_width, required_height))
+
+        # Scroll to the summary
+        self._scroll_to_item(summary_item)
 
     def _update_navigation(self, running: bool, success: bool) -> None:
         wizard = self.wizard()
@@ -2390,7 +2663,6 @@ def run_command(cmd: Iterable[str], logger: StructuredLogger, cwd: Optional[Path
     if cwd:
         display_cmd = f"(cd {cwd}) {display_cmd}"
     masked_display = _mask(display_cmd)
-    logger.message(masked_display, task_id=task_id, broadcast=False)
     command_id = logger.start_command(task_id, masked_display)
     process = subprocess.Popen(
         cmd_list,
@@ -2475,6 +2747,66 @@ def run_git_command(cmd: Iterable[str], logger: StructuredLogger, cwd: Optional[
     run_command(cmd, logger, cwd=cwd, env=env, task_id=task_id, cancel_event=cancel_event, mask_values=mask_values)
 
 
+def list_git_repo_files(repo_url: str, branch: str) -> List[str]:
+    """List files at the root of a git repository.
+
+    Parameters
+    ----------
+    repo_url : str
+        Git repository URL (should already have token embedded if needed)
+    branch : str
+        Branch or tag to list files from
+
+    Returns
+    -------
+    list of str
+        List of filenames at the root of the repository
+    """
+    import tempfile
+    temp_dir = Path(tempfile.mkdtemp(prefix="acq4_config_"))
+    try:
+        env = make_git_env()
+
+        # Bare clone with depth 1
+        result = subprocess.run(
+            ["git", "clone", "--bare", "--depth", "1", "--single-branch", "--branch", branch, repo_url, str(temp_dir)],
+            capture_output=True,
+            text=True,
+            env=env,
+            timeout=60
+        )
+
+        if result.returncode != 0:
+            raise InstallerError(f"Failed to clone repository: {result.stderr}")
+
+        # List files at the root using git ls-tree
+        result = subprocess.run(
+            ["git", "--git-dir", str(temp_dir), "ls-tree", "HEAD"],
+            capture_output=True,
+            text=True,
+            env=env,
+            timeout=10
+        )
+
+        if result.returncode != 0:
+            raise InstallerError(f"Failed to list repository files: {result.stderr}")
+
+        # Parse output - format is: <mode> <type> <object> <file>
+        # Only return blobs (files), not trees (directories)
+        files = []
+        for line in result.stdout.splitlines():
+            parts = line.split(None, 3)
+            if len(parts) >= 4:
+                obj_type = parts[1]
+                filename = parts[3]
+                if obj_type == "blob" and not filename.startswith("."):
+                    files.append(filename)
+        return sorted(files)
+    finally:
+        if temp_dir.exists():
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+
 class InstallWizard(QtWidgets.QWizard):
     def __init__(self, editable_map: Dict[str, EditableDependency], cli_args: argparse.Namespace,
                  test_flags: Optional[set[str]] = None) -> None:
@@ -2500,8 +2832,10 @@ class InstallWizard(QtWidgets.QWizard):
         self.addPage(self.install_page)
 
         # Connect github token from LocationPage to ConfigPage's git_repo_widget
-        self.location_page.github_token_edit.textChanged.connect(
-            lambda token: self.config_page.git_repo_widget.set_github_token(token.strip() or None)
+        self.location_page.github_token_edit.editingFinished.connect(
+            lambda: self.config_page.git_repo_widget.set_github_token(
+                self.location_page.github_token_edit.text().strip() or None
+            )
         )
 
         self.apply_cli_arguments(cli_args)
@@ -2543,11 +2877,24 @@ class InstallWizard(QtWidgets.QWizard):
         text = self.config_page.git_repo_widget.repo_url()
         return text or None
 
+    def config_repo_branch(self) -> Optional[str]:
+        text = self.config_page.git_repo_widget.branch()
+        return text or None
+
     def config_copy_path(self) -> Optional[Path]:
         text = self.config_page.copy_path_edit.text().strip()
         if not text:
             return None
         return Path(text).expanduser().resolve()
+
+    def config_file(self) -> Optional[str]:
+        if self.config_page.clone_radio.isChecked():
+            text = self.config_page.clone_config_file_combo.currentText().strip()
+        elif self.config_page.copy_radio.isChecked():
+            text = self.config_page.copy_config_file_combo.currentText().strip()
+        else:
+            text = ""
+        return text or None
 
     def apply_cli_arguments(self, args: argparse.Namespace) -> None:
         self.location_page.apply_cli_args(args)
@@ -2819,10 +3166,15 @@ class InstallerExecutor:
         if config_dir.exists():
             raise InstallerError(f"Config directory already exists at {config_dir}")
         if self.state.config_mode == "clone" and self.state.config_repo_url:
-            self.logger.message(f"Cloning configuration from {self.state.config_repo_url}", task_id=self._active_task_id)
+            if not self.state.config_repo_branch:
+                raise InstallerError("Config repository branch must be specified when cloning.")
+            self.logger.message(
+                f"Cloning configuration from {self.state.config_repo_url} ({self.state.config_repo_branch})",
+                task_id=self._active_task_id
+            )
             repo_with_token = github_url_with_token(self.state.config_repo_url, self.state.github_token)
             run_git_command(
-                ["git", "clone", repo_with_token, str(config_dir)],
+                ["git", "clone", "--branch", self.state.config_repo_branch, "--single-branch", repo_with_token, str(config_dir)],
                 self.logger,
                 task_id=self._active_task_id,
                 cancel_event=self.cancel_event,
@@ -2849,9 +3201,11 @@ class InstallerExecutor:
                                 task_id=self._active_task_id)
             return
 
+        config_file_path = base_dir / CONFIG_DIRNAME / self.state.config_file
+
         self.logger.message("Creating start_acq4.bat launcher script", task_id=self._active_task_id)
         try:
-            bat_path = create_start_bat(base_dir, conda_exe, env_dir)
+            bat_path = create_start_bat(base_dir, conda_exe, env_dir, config_file_path)
         except Exception as e:
             self.logger.message(f"Failed to create bat file: {e}", task_id=self._active_task_id)
             return
@@ -2977,12 +3331,6 @@ def build_cli_parser() -> argparse.ArgumentParser:
         help="Run installer without showing the GUI (requires all options via CLI).",
     )
     parser.add_argument(
-        "--no-ui",
-        action="store_true",
-        dest="no_ui",
-        help=argparse.SUPPRESS,
-    )
-    parser.add_argument(
         "--test",
         dest="test_flags",
         help="Internal testing flag: comma-separated list of behaviors to simulate (e.g., no-git).",
@@ -3009,8 +3357,8 @@ def state_from_cli_args(args: argparse.Namespace,
     install_path_value = args.install_path or str((Path.home() / DEFAULT_INSTALL_DIR_NAME))
     install_path = Path(str(install_path_value)).expanduser().resolve()
     branch_value = (args.branch or DEFAULT_BRANCH).strip() or DEFAULT_BRANCH
-    repo_value = (getattr(args, "repo_url", None) or ACQ4_REPO_URL).strip() or ACQ4_REPO_URL
-    github_token = (getattr(args, "github_token", None) or "").strip() or None
+    repo_value = (args.repo_url or ACQ4_REPO_URL).strip() or ACQ4_REPO_URL
+    github_token = (args.github_token or "").strip() or None
 
     # Fetch pyproject.toml to get dependency information
     content, used_fallback = fetch_pyproject_from_github(repo_value, branch_value)
@@ -3022,22 +3370,32 @@ def state_from_cli_args(args: argparse.Namespace,
 
     selected_optional = resolve_optional_selection_from_args(args, optional_dependencies, dependency_groups)
     editable_selection = resolve_editable_selection_from_args(args, editable_map)
-    config_mode = getattr(args, "config_mode", None)
-    config_repo = getattr(args, "config_repo", None)
-    config_path_value = getattr(args, "config_path", None)
+    # Parse config arguments
+    config_repo = args.config_repo
+    config_repo_branch = args.config_branch
+    config_path_value = args.config_path
     config_copy_path = Path(str(config_path_value)).expanduser().resolve() if config_path_value else None
-    if config_repo and config_mode is None:
+    config_file = args.config_file
+
+    # Sanity check: can't specify both clone and copy options
+    if config_repo and config_copy_path:
+        raise InstallerError("Cannot specify both --config-repo and --config-path. Choose one configuration source.")
+
+    # Infer mode and validate
+    if config_repo:
         config_mode = "clone"
-    if config_copy_path and config_mode is None:
+        if not config_repo_branch:
+            raise InstallerError("--config-branch is required when using --config-repo.")
+    elif config_copy_path:
         config_mode = "copy"
-    config_mode = config_mode or "new"
-    if config_mode == "clone" and not config_repo:
-        raise InstallerError("--config-repo is required when --config-mode clone is specified.")
-    if config_mode == "copy":
-        if not config_copy_path:
-            raise InstallerError("--config-path is required when --config-mode copy is specified.")
         if not config_copy_path.exists() or not config_copy_path.is_dir():
             raise InstallerError(f"Config path {config_copy_path} does not exist or is not a directory.")
+    else:
+        config_mode = "new"
+
+    # Sanity check: --config-branch only makes sense with --config-repo
+    if config_repo_branch and not config_repo:
+        raise InstallerError("--config-branch requires --config-repo.")
     return InstallerState(
         install_path=install_path,
         branch=branch_value,
@@ -3048,7 +3406,9 @@ def state_from_cli_args(args: argparse.Namespace,
         editable_selection=editable_selection,
         config_mode=config_mode,
         config_repo_url=config_repo,
+        config_repo_branch=config_repo_branch,
         config_copy_path=config_copy_path,
+        config_file=config_file,
     )
 
 
@@ -3119,7 +3479,9 @@ def collect_state(wizard: InstallWizard) -> InstallerState:
         editable_selection=wizard.selected_editable_keys(),
         config_mode=wizard.config_mode(),
         config_repo_url=wizard.config_repo(),
+        config_repo_branch=wizard.config_repo_branch(),
         config_copy_path=wizard.config_copy_path(),
+        config_file=wizard.config_file(),
         create_desktop_shortcut=wizard.dependencies_page.create_shortcut_checkbox.isChecked(),
     )
 
@@ -3133,9 +3495,7 @@ def main() -> None:
     editable_map = editable_dependencies()
     parser = build_cli_parser()
     args = parser.parse_args()
-    test_flags = parse_test_flags(getattr(args, "test_flags", None))
-    if getattr(args, "no_ui", False):
-        args.unattended = True
+    test_flags = parse_test_flags(args.test_flags)
     if args.unattended:
         try:
             state = state_from_cli_args(args, editable_map)
