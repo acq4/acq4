@@ -138,6 +138,18 @@ DEPENDENCY_METADATA: Dict[str, Dict[str, Dict[str, str]]] = {
             "git_url": "https://github.com/AllenInstitute/falconoptics.git",
             "description": "Falcon optics motor turret.",
         },
+        "torch": {
+            "display_name": "PyTorch",
+            "pypi_package": "torch",
+            "description": "Deep learning framework with automatic CUDA detection.",
+            "setup_handler": "handle_torch_install",
+        },
+        "torchvision": {
+            "display_name": "torchvision",
+            "pypi_package": "torchvision",
+            "description": "Computer vision models and utilities for PyTorch.",
+            "setup_handler": "handle_torch_install",
+        },
         "cellpose": {
             "display_name": "cellpose (ACQ4 fork)",
             "pypi_package": "cellpose",
@@ -550,6 +562,7 @@ class InstallerState:
     config_copy_path: Optional[Path] = None
     config_file: Optional[str] = None
     create_desktop_shortcut: bool = True
+    install_notes: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -2541,6 +2554,13 @@ class InstallPage(QtWidgets.QWizardPage):
                 f"<p><b>Startup script:</b> <code>{startup_script}</code></p>"
             )
 
+        # Installation notes (e.g., PyTorch CUDA version)
+        if self._state.install_notes:
+            notes_html = "<br>".join(self._state.install_notes)
+            html_parts.append(
+                f"<p><b>Installation notes:</b><br>{notes_html}</p>"
+            )
+
         return "".join(html_parts)
 
     def _add_summary_to_log(self, post_install_message: str) -> None:
@@ -2971,6 +2991,165 @@ class InstallWizard(QtWidgets.QWizard):
         self.resize(int(width * 1.5), int(height * 1.5))
 
 
+@dataclass
+class SetupHandlerResult:
+    """Result of a dependency setup handler."""
+    handled_specs: List[str]
+    remaining_specs: List[str]
+    index_url: Optional[str]
+    summary: str
+
+
+def detect_cuda_version() -> Optional[str]:
+    """Detect CUDA version using nvidia-smi.
+
+    Returns
+    -------
+    str or None
+        CUDA version string (e.g., "12.2") if detected, None otherwise.
+    """
+    try:
+        result = subprocess.run(
+            ["nvidia-smi"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode != 0:
+            return None
+
+        # Parse "CUDA Version: X.Y" from nvidia-smi output
+        match = re.search(r"CUDA Version:\s*(\d+\.\d+)", result.stdout)
+        if match:
+            return match.group(1)
+    except (FileNotFoundError, subprocess.TimeoutExpired, Exception):
+        pass
+    return None
+
+
+def validate_pytorch_index_url(url: str) -> bool:
+    """Check if a PyTorch index URL is valid by making a HEAD request.
+
+    Parameters
+    ----------
+    url : str
+        The index URL to validate.
+
+    Returns
+    -------
+    bool
+        True if the URL is accessible, False otherwise.
+    """
+    try:
+        with urlopen(url, timeout=5) as response:
+            return response.status == 200
+    except (URLError, Exception):
+        return False
+
+
+def map_cuda_to_pytorch_version(cuda_version: str) -> Optional[str]:
+    """Map CUDA version to PyTorch CUDA version identifier.
+
+    Parameters
+    ----------
+    cuda_version : str
+        CUDA version string (e.g., "12.4").
+
+    Returns
+    -------
+    str or None
+        PyTorch CUDA identifier (e.g., "cu124") or None if parse fails.
+    """
+    try:
+        major, minor = cuda_version.split(".")[:2]
+        return f"cu{major}{minor}"
+    except (ValueError, IndexError):
+        print(f"Unable to parse CUDA version: {cuda_version}")
+        return None
+
+
+def handle_torch_install(
+    specs: List[str],
+    logger: StructuredLogger,
+    task_id: Optional[int] = None,
+) -> SetupHandlerResult:
+    """Handle PyTorch installation with CUDA-aware package selection.
+
+    Parameters
+    ----------
+    specs : list of str
+        List of package specs to install (should include torch/torchvision).
+    logger : StructuredLogger
+        Logger for recording installation messages.
+    task_id : int, optional
+        Task ID for logging.
+
+    Returns
+    -------
+    SetupHandlerResult
+        Result containing handled specs, remaining specs, index URL, and summary.
+    """
+    # Filter out torch and torchvision from specs
+    torch_specs = []
+    other_specs = []
+    for spec in specs:
+        normalized = normalize_spec_name(spec)
+        if normalized in ("torch", "torchvision"):
+            torch_specs.append(spec)
+        else:
+            other_specs.append(spec)
+
+    if not torch_specs:
+        return SetupHandlerResult(
+            handled_specs=[],
+            remaining_specs=specs,
+            index_url=None,
+            summary="",
+        )
+
+    logger.message("Detecting CUDA version for PyTorch installation...", task_id=task_id)
+    cuda_version = detect_cuda_version()
+
+    if cuda_version:
+        logger.message(f"Detected CUDA version: {cuda_version}", task_id=task_id)
+        pytorch_cuda = map_cuda_to_pytorch_version(cuda_version)
+
+        if pytorch_cuda:
+            index_url = f"https://download.pytorch.org/whl/{pytorch_cuda}"
+            logger.message(f"Validating PyTorch index URL: {index_url}", task_id=task_id)
+
+            if validate_pytorch_index_url(index_url):
+                logger.message(f"Using PyTorch with CUDA support ({pytorch_cuda})", task_id=task_id)
+                summary = f"PyTorch installed with CUDA {pytorch_cuda} support"
+                return SetupHandlerResult(
+                    handled_specs=torch_specs,
+                    remaining_specs=other_specs,
+                    index_url=index_url,
+                    summary=summary,
+                )
+            else:
+                logger.message(
+                    f"PyTorch index URL not available for CUDA {cuda_version}, falling back to CPU-only",
+                    task_id=task_id,
+                )
+        else:
+            logger.message(
+                f"CUDA {cuda_version} not supported by PyTorch, falling back to CPU-only",
+                task_id=task_id,
+            )
+    else:
+        logger.message("No CUDA detected, installing CPU-only PyTorch", task_id=task_id)
+
+    # Fall back to CPU-only installation (default PyPI)
+    summary = "PyTorch installed with CPU-only support"
+    return SetupHandlerResult(
+        handled_specs=torch_specs,
+        remaining_specs=other_specs,
+        index_url=None,
+        summary=summary,
+    )
+
+
 class InstallerExecutor:
     """Shared implementation that performs all installer side effects."""
 
@@ -3142,20 +3321,37 @@ class InstallerExecutor:
             conda_exe=conda_exe,
         )
 
-    def _install_optional_dependencies(self, conda_exe: str, env_dir: Path, specs: List[str]) -> None:
+    def _pip_install_specs(self, specs: List[str], conda_exe: str, env_dir: Path,
+                           index_url: Optional[str] = None) -> None:
+        """Install a list of package specs via pip.
+
+        Parameters
+        ----------
+        specs : list of str
+            Package specifications to install.
+        conda_exe : str
+            Path to conda executable.
+        env_dir : Path
+            Path to conda environment.
+        index_url : str, optional
+            PyPI index URL to use. Defaults to https://pypi.org/simple/
+        """
         if not specs:
-            self.logger.message("No optional dependencies selected", task_id=self._active_task_id)
             return
-        self.logger.message("Installing optional dependencies via pip...", task_id=self._active_task_id)
+
         cmd = [
             "python",
             "-u",
             "-m",
             "pip",
             "install",
-            "--index-url=https://pypi.org/simple/",
-            *specs,
         ]
+        if index_url:
+            cmd.append(f"--index-url={index_url}")
+        else:
+            cmd.append("--index-url=https://pypi.org/simple/")
+        cmd.extend(specs)
+
         env = self._pip_env()
         run_command(
             cmd,
@@ -3166,6 +3362,103 @@ class InstallerExecutor:
             conda_env=env_dir,
             conda_exe=conda_exe,
         )
+
+    def _install_optional_dependencies(self, conda_exe: str, env_dir: Path, specs: List[str]) -> None:
+        if not specs:
+            self.logger.message("No optional dependencies selected", task_id=self._active_task_id)
+            return
+
+        # Check if any specs have a setup_handler in metadata
+        handler_name = None
+        for spec in specs:
+            pkg_meta = _package_meta(spec)
+            if pkg_meta.get("setup_handler"):
+                handler_name = pkg_meta["setup_handler"]
+                break
+
+        if handler_name:
+            # Look up the handler function and call it
+            handler_fn = globals().get(handler_name)
+            if not handler_fn:
+                raise InstallerError(f"Setup handler '{handler_name}' not found")
+
+            result = handler_fn(specs, self.logger, task_id=self._active_task_id)
+
+            # Install packages handled by setup_handler
+            if result.handled_specs:
+                self.logger.message("Installing packages with custom setup...", task_id=self._active_task_id)
+                cmd = [
+                    "python",
+                    "-u",
+                    "-m",
+                    "pip",
+                    "install",
+                ]
+                if result.index_url:
+                    cmd.append(f"--index-url={result.index_url}")
+                else:
+                    cmd.append("--index-url=https://pypi.org/simple/")
+                cmd.extend(result.handled_specs)
+
+                env = self._pip_env()
+                run_command(
+                    cmd,
+                    self.logger,
+                    env=env,
+                    task_id=self._active_task_id,
+                    cancel_event=self.cancel_event,
+                    conda_env=env_dir,
+                    conda_exe=conda_exe,
+                )
+
+                # Store the summary
+                if result.summary:
+                    self.state.install_notes.append(result.summary)
+
+            # Install remaining dependencies
+            if result.remaining_specs:
+                self.logger.message("Installing other optional dependencies...", task_id=self._active_task_id)
+                cmd = [
+                    "python",
+                    "-u",
+                    "-m",
+                    "pip",
+                    "install",
+                    "--index-url=https://pypi.org/simple/",
+                    *result.remaining_specs,
+                ]
+                env = self._pip_env()
+                run_command(
+                    cmd,
+                    self.logger,
+                    env=env,
+                    task_id=self._active_task_id,
+                    cancel_event=self.cancel_event,
+                    conda_env=env_dir,
+                    conda_exe=conda_exe,
+                )
+        else:
+            # No setup handlers, install all dependencies normally
+            self.logger.message("Installing optional dependencies via pip...", task_id=self._active_task_id)
+            cmd = [
+                "python",
+                "-u",
+                "-m",
+                "pip",
+                "install",
+                "--index-url=https://pypi.org/simple/",
+                *specs,
+            ]
+            env = self._pip_env()
+            run_command(
+                cmd,
+                self.logger,
+                env=env,
+                task_id=self._active_task_id,
+                cancel_event=self.cancel_event,
+                conda_env=env_dir,
+                conda_exe=conda_exe,
+            )
 
     def _handle_editable_dependencies(self, conda_exe: str, env_dir: Path, base_dir: Path) -> None:
         if not self.state.editable_selection:
@@ -3502,6 +3795,12 @@ def run_unattended_install(state: InstallerState) -> None:
             print("\nThe following packages require additional 3rd-party software to be installed:")
             for name, doc in packages_with_docs:
                 print(f"  - {name}: {doc}")
+
+        # Display installation notes
+        if state.install_notes:
+            print("\nInstallation notes:")
+            for note in state.install_notes:
+                print(f"  - {note}")
 
 
 def normalized_clone_names(selection: Iterable[str]) -> set[str]:
