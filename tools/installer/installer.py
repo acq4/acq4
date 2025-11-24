@@ -3228,7 +3228,7 @@ class InstallerExecutor:
             )
             repo_with_token = github_url_with_token(self.state.config_repo_url, self.state.github_token)
             run_git_command(
-                ["git", "clone", "--branch", self.state.config_repo_branch, "--single-branch", repo_with_token, str(config_dir)],
+                ["git", "clone", "--branch", self.state.config_repo_branch, repo_with_token, str(config_dir)],
                 self.logger,
                 task_id=self._active_task_id,
                 cancel_event=self.cancel_event,
