@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 
 from acq4.util import ptime
-from ._base import PatchPipetteState
+from ._base import PatchPipetteState, exponential_decay_avg
 
 
 class CellAttachedState(PatchPipetteState):
@@ -62,6 +62,7 @@ class CellAttachedState(PatchPipetteState):
         config = self.config
         last_measure = startTime = ptime.time()
         cap_avg = None
+        ssr_avg = None
         delay = config['autoBreakInDelay']
         while True:
             if delay is not None and ptime.time() - startTime > delay:
@@ -85,20 +86,18 @@ class CellAttachedState(PatchPipetteState):
             cap = tp.analysis['capacitance']
             dt = ptime.time() - last_measure
             last_measure += dt
-            if cap_avg is None:
-                cap_avg = tp.analysis['capacitance']
-            cap_avg_tau = 1  # seconds
-            cap_alpha = 1 - np.exp(-dt / cap_avg_tau)
-            cap_avg = cap_avg * (1 - cap_alpha) + cap * cap_alpha
+            tau = 1  # seconds
+            cap_avg, _ = exponential_decay_avg(dt, cap_avg, cap, tau)
             ssr = tp.analysis['steady_state_resistance']
-            if cap_avg > config['capacitanceThreshold'] and ssr < config['minimumBreakInResistance']:
+            ssr_avg, _ = exponential_decay_avg(dt, ssr_avg, ssr, tau)
+            if cap_avg > config['capacitanceThreshold'] and ssr_avg < config['minimumBreakInResistance']:
                 patchrec['spontaneousBreakin'] = True
                 return config['spontaneousBreakInState']
 
-            if ssr < config['resistanceThreshold']:
+            if ssr_avg < config['resistanceThreshold']:
                 self._taskDone(
                     interrupted=True,
-                    error=f'Spontaneous detachment: steady state resistance {ssr / 1e6:.1f}MΩ dropped below `resistanceThreshold`.',
+                    error=f'Spontaneous detachment: steady state resistance {ssr_avg / 1e6:.1f}MΩ dropped below `resistanceThreshold`.',
                 )
                 return config['spontaneousDetachmentState']
 
