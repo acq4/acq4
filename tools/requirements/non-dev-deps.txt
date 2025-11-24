@@ -1,8 +1,0 @@
-# These dependencies need to be installed, but the user may have local dev copies of them, instead.
-# Format: package_name # Description
-
-git+https://github.com/outofculture/cellpose.git@_working # Cell segmentation and analysis
-coorx # Coordinate transformation utilities
-neuroanalysis # Neurophysiology data analysis tools
-git+https://github.com/acq4/pyqtgraph.git@acq4_working # Enhanced plotting and visualization
-teleprox # Remote procedure call utilities

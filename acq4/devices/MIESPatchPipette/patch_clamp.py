@@ -1,11 +1,12 @@
+import time, queue, threading
+import numpy as np
+import pyqtgraph as pg
 from acq4.util.mies import MIES
 from ..PatchClamp import PatchClamp
 from ..PatchClamp.testpulse import TestPulseThread
 from neuroanalysis.data import TSeries, PatchClampRecording
 from neuroanalysis.test_pulse import PatchClampTestPulse
-import numpy as np
 
-import json
 
 class MIESPatchClamp(PatchClamp):
     """PatchClamp device implemented over MIES bridge
@@ -13,26 +14,85 @@ class MIESPatchClamp(PatchClamp):
     def __init__(self, manager, config, name):
         self._headstage = config.pop('headstage')
         self.mies = MIES.getBridge()
+
+        self._auto_bias_target_from_vc = False
+
+        # grab initial stage values
+        vc_holding, vc_holding_enable = self.mies.getHolding(self._headstage, 'VC')
+        ic_holding, ic_holding_enable = self.mies.getHolding(self._headstage, 'IC')
+        autobias_target = self.mies.getAutoBiasTarget(self._headstage)
+        autobias_enable = self.mies.getAutoBiasEnabled(self._headstage)
+        clamp_mode = self.mies.getClampMode(self._headstage)
+
+        self._state = {
+            'mode': clamp_mode,
+            'HoldingPotential': vc_holding,
+            'HoldingPotentialEnable': vc_holding_enable,
+            'RSCompChaining': None,
+            'Correction': None,
+            'WholeCellCap': None,
+            'RSCompChaining': None,
+            'Correction': None,
+            'PipetteOffsetVC': None,
+            'BiasCurrent': ic_holding,
+            'BiasCurrentEnable': ic_holding_enable,
+            'AutoBiasVcom': autobias_target,
+            'AutoBiasVcomVariance': None,
+            'AutoBiasIbiasmax': None,
+            'AutoBiasEnable': autobias_enable,
+            'PipetteOffsetIC': None,
+        }
+
         self.mies.igor.sigMiesClampModeChanged.connect(self.miesClampModeChanged)
-        self.mies.igor.sigMiesHoldingPotentialChanged.connect(self.miesHoldingPotentialChanged)
-        self.mies.igor.sigMiesBiasCurrentChanged.connect(self.miesBiasCurrentChanged)
+        self.mies.igor.sigMiesClampStateChanged.connect(self.miesClampStateChanged)
         self.mies.igor.sigMiesTestPulseStateChanged.connect(self.miesTestPulseStateChanged)
         PatchClamp.__init__(self, manager, config, name)
     
-    def miesClampModeChanged(self, mode):
-        s = {'mode': self.getMode(), 'holding': self.getHolding(mode=mode)}
-        self.sigStateChanged.emit(s)
-        self.sigHoldingChanged.emit(s['mode'], s['holding'])
+    def miesClampModeChanged(self, headstage, mode):
+        if headstage != self._headstage:
+            return
+        self._state['mode'] = mode
+        self.sigStateChanged.emit(self._state)
+        self.sigHoldingChanged.emit(mode, self.getHolding())
 
-    def miesHoldingPotentialChanged(self, value):
-        s = {'mode': self.getMode(), 'holding': value}
-        self.sigStateChanged.emit(s)
-        self.sigHoldingChanged.emit(s['mode'], s['holding'])
+    def miesClampStateChanged(self, headstage, message):
+        if headstage != self._headstage:
+            return
 
-    def miesBiasCurrentChanged(self, value):
-        s = {'mode': self.getMode(), 'holding': value}
-        self.sigStateChanged.emit(s)
-        self.sigHoldingChanged.emit(s['mode'], s['holding'])
+        # Example messages:
+        # {"HoldingPotential": {"unit": "mV", "value": 0.001}}
+        # {"RSCompChaining": {"unit": "On/Off", "value": 0}}
+        # {"Correction": {"unit": "%", "value": 0}}
+        # {"WholeCellCap": {"unit": "pF", "value": 1e-12}}
+        # {"RSCompChaining": {"unit": "On/Off", "value": 0}}
+        # {"Correction": {"unit": "%", "value": 0}}
+        # {"PipetteOffsetVC": {"unit": "mV", "value": 0}}
+        # {"BiasCurrent": {"unit": "pA", "value": 1e-12}}
+        # {"AutoBiasVcom": {"unit": "mV", "value": 0}}  # auto bias target voltage
+        # {"AutoBiasVcomVariance": {"unit": "mV", "value": 1}}
+        # {"AutoBiasIbiasmax": {"unit": "pA", "value": 200}}
+        # {"AutoBiasEnable": {"unit": "On/Off", "value": 0}}
+        # {"PipetteOffsetIC": {"unit": "mV", "value": 0}}
+
+        for key, val in message.items():
+            # print(f"MIESClampStateChanged: {key} -> {val}")
+            if val['unit'] == 'On/Off':
+                self._state[key] = bool(int(val['value']))
+            elif val['unit'] == '%':
+                self._state[key] = float(val['value'])
+            else:
+                # convert '-70.0 mV' -> -0.07 
+                self._state[key] = pg.siEval(f"{val['value']} {val['unit']}")
+            
+            if key.startswith('HoldingPotential'):
+                self.sigHoldingChanged.emit('VC', self.getHolding('VC'))
+            elif key.startswith('BiasCurrent'):
+                self.sigHoldingChanged.emit('IC', self.getHolding('IC'))
+
+            if key in ['AutoBiasEnable', 'AutoBiasVcom']:
+                self.sigAutoBiasChanged.emit(self, self._state['AutoBiasEnable'], self._state['AutoBiasVcom'])
+        
+        self.sigStateChanged.emit(self._state)
 
     def miesTestPulseStateChanged(self, enabled: bool):
         pass 
@@ -43,20 +103,32 @@ class MIESPatchClamp(PatchClamp):
             return result.result()
 
     def autoPipetteOffset(self):
-        self.mies.selectHeadstage(self._headstage)
-        self.mies.autoPipetteOffset()
+        self.mies.autoPipetteOffset(self._headstage)
+
+    def autoBridgeBalance(self):
+        self.mies.autoBridgeBalance(self._headstage)
+
+    def autoCapComp(self):
+        self.mies.autoCapComp(self._headstage)
 
     def setMode(self, mode):
         self.mies.setClampMode(self._headstage, mode)
 
     def getMode(self):
-        return self.mies.getClampMode(self._headstage)
+        return self._state['mode']
 
     def setHolding(self, mode=None, value=None):
-        self.mies.setHolding(self._headstage, value)
+        self.mies.setHolding(self._headstage, mode, value)
+        if mode == 'VC' and self._auto_bias_target_from_vc:
+            self._updateAutoBiasTarget(value)
 
     def getHolding(self, mode=None):
-        return self.mies.getHolding(self._headstage, mode_override=mode)
+        if mode is None:
+            mode = self.getMode()
+
+        state_key = {'V': 'HoldingPotential', 'I': 'BiasCurrent'}[mode[0]]
+        enabled = self._state[state_key + 'Enable'] 
+        return 0 if not enabled else self._state[state_key]
 
     def getState(self):
         return {'mode': self.getMode()}
@@ -67,21 +139,34 @@ class MIESPatchClamp(PatchClamp):
     def enableAutoBias(self, enable=True):
         self.setTestPulseParameters(autoBiasEnabled=enable)
         if self.autoBiasEnabled() != enable:
-            self.mies.setAutoBias(self._headstage, enable)
+            self.mies.setAutoBiasEnabled(self._headstage, enable)
             self.sigAutoBiasChanged.emit(self, enable, self.autoBiasTarget())
 
     def autoBiasEnabled(self):
-        return self.mies.getAutoBias(self._headstage)
+        return self._state['AutoBiasEnable']
     
     def setAutoBiasTarget(self, target_value):
+        """Set the auto bias target potential.
+
+        If target_value is None, then this value is locked to the VC holding potential.
+        """
         current_value = self.autoBiasTarget()
+        self._auto_bias_target_from_vc = target_value is None
+
         if current_value != target_value:
-            self.mies.setAutoBiasTarget(self._headstage, target_value)
+            if target_value is None:
+                target_value = self.getHolding('VC')
+            self._updateAutoBiasTarget(target_value)
             enabled = self.autoBiasEnabled()
             self.sigAutoBiasChanged.emit(self, enabled, target_value)
 
+    def _updateAutoBiasTarget(self, target):
+        return self.mies.setAutoBiasTarget(self._headstage, target)
+
     def autoBiasTarget(self):
-        return self.mies.getAutoBiasTarget(self._headstage)
+        if self._auto_bias_target_from_vc:
+            return None
+        return self._state['AutoBiasVcom']
     
     def _initTestPulse(self, params):
         self.resetTestPulseHistory()
@@ -101,25 +186,103 @@ class MIESPatchClamp(PatchClamp):
 
 
 class MIESTestPulseThread(TestPulseThread):
-    def __init__(self, dev: PatchClamp, params):
+    """
+    TestPulseThread is for acquiring and analyzing test pulses in the background.
+    MIESTestPulseThread does only the analysis; MIES does the acquisition and sends data here.
+    """
+    def __init__(self, dev: MIESPatchClamp, params):
         self.last_tp_raw = None
         self.last_tp_meta = None
         
+        self.tp_queue = queue.Queue()
+
+        # technically this chass is already subclasses from Thread, but
+        # in the suberclass this is used in a very different way, and I son't want to risk
+        # any strange collisions here
+        self.analysis_thread = threading.Thread(target=self.process_pulses, daemon=True)
+
         TestPulseThread.__init__(self, dev, params)
         self.mies = MIES.getBridge()
-        self.mies.igor.sigTestPulseReady.connect(self.emitTestPulse)
+        self.mies.igor.sigTestPulseReady.connect(self.test_pulse_received)
+
+        self.analysis_thread.start()
         
-    def emitTestPulse(self, message):
-        tp_meta = json.loads(message[1].decode("utf-8"))
-        if tp_meta['properties']['device'].startswith('DB_'):
+    def test_pulse_received(self, tp_meta, data_buffer):
+        self.tp_queue.put((tp_meta, data_buffer))
+
+    def process_pulses(self):
+        """In background thread: receive data from MIES, convert, analyze, and emit."""
+        last_error_time = 0
+        while True:
+            try:
+                next_tp_data = self.tp_queue.get()
+                tp = self.make_test_pulse(*next_tp_data)
+                tp.analysis  # run and cache analysis results
+                self.sigTestPulseFinished.emit(self._clampDev, tp)
+            except Exception as exc:
+                now = time.time()
+                if now - last_error_time > 3:
+                    print(f"Error in MIESTestPulseThread: {exc}")
+                    last_error_time = now
+
+    def make_test_pulse(self, tp_meta, data_buffer):
+        """Create a PatchClampTestPulse instance from MIES test pulse data
+        """
+        # Example tp_meta:
+        # {
+        #     'amplifier': {
+        #         'AutoBiasEnable': {'unit': 'On/Off', 'value': 0}, 
+        #         'AutoBiasIbiasmax': {'unit': 'pA', 'value': 200}, 
+        #         'AutoBiasVcom': {'unit': 'mV', 'value': 0}, 
+        #         'AutoBiasVcomVariance': {'unit': 'mV', 'value': 1}, 
+        #         'BiasCurrent': {'unit': 'pA', 'value': 1}, 
+        #         'BiasCurrentEnable': {'unit': 'On/Off', 'value': 0}, 
+        #         'BridgeBalance': {'unit': 'MΩ', 'value': 0}, 
+        #         'BridgeBalanceEnable': {'unit': 'On/Off', 'value': 0}, 
+        #         'CapNeut': {'unit': 'pF', 'value': 0}, 
+        #         'CapNeutEnable': {'unit': 'On/Off', 'value': 0}, 
+        #         'PipetteOffsetIC': {'unit': 'mV', 'value': 0}
+        #     }, 
+        #     'properties': {
+        #         'baseline fraction': {'unit': '%', 'value': 45}, 
+        #         'clamp amplitude': {'unit': 'pA', 'value': 50}, 
+        #         'clamp mode': 1, 
+        #         'device': 'ITC18USB_Dev_0', 
+        #         'headstage': 0, 
+        #         'pulse duration ADC': {'unit': 'points', 'value': 2000}, 
+        #         'pulse duration DAC': {'unit': 'points', 'value': 2000}, 
+        #         'pulse start point ADC': {'unit': 'point', 'value': 9000}, 
+        #         'pulse start point DAC': {'unit': 'point', 'value': 9000}, 
+        #         'sample interval ADC': {'unit': 'ms', 'value': 0.005}, 
+        #         'sample interval DAC': {'unit': 'ms', 'value': 0.005}, 
+        #         'timestamp': {'unit': 's', 'value': 3843808306.022667}, 
+        #         'timestampUTC': {'unit': 's', 'value': 3843833506.022667}, 
+        #         'tp cycle id': 662833, 
+        #         'tp length ADC': {'unit': 'points', 'value': 20000}, 
+        #         'tp length DAC': {'unit': 'points', 'value': 20000}, 
+        #         'tp marker': 1471556619
+        #     }, 
+        #     'results': {
+        #         'average baseline steady state': {'unit': 'mV', 'value': 1023.96875}, 
+        #         'average tp steady state': {'unit': 'mV', 'value': 1023.96875}, 
+        #         'instantaneous': {'unit': 'mV', 'value': 1023.96875}, 
+        #         'instantaneous resistance': {'unit': 'MΩ', 'value': 0}, 
+        #         'steady state resistance': {'unit': 'MΩ', 'value': 0}
+        #     }
+        # }
+
+        if tp_meta['properties']['device'] != self.mies.getWindowName():
             # ignore messages from data browser
             return
+        if tp_meta['properties']['headstage'] != self._clampDev._headstage:
+            # ignore messages from other headstages
+            return
+        
         self.last_tp_meta = tp_meta
-        self.last_tp = np.frombuffer(message[2], dtype=np.float32)
+        self.last_tp = np.frombuffer(data_buffer, dtype=np.float32)
 
-        mode_list = ['VC', 'IC', 'I=0']
         mies_mode = tp_meta['properties']['clamp mode']
-        mode = mode_list[mies_mode]
+        mode = ['VC', 'IC', 'I=0'][mies_mode]
 
         holding = 0
         amplitude = 0
@@ -171,6 +334,4 @@ class MIESTestPulseThread(TestPulseThread):
             **extra_kwds,
         )
 
-        tp = PatchClampTestPulse(rec)
-
-        self.sigTestPulseFinished.emit(self._clampDev, tp)
+        return PatchClampTestPulse(rec)
