@@ -1,24 +1,31 @@
 Getting Started with Development
 =================================
 
-Development Environment
------------------------
-
 Setting up a development environment
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+------------------------------------
 
-.. code-block:: bash
+If you already have a working ACQ4 installation from the user guide
+(see `Installation <installation.html>`_), you can use that as-is for development.
 
-    # Clone the repository
+If you would like to check out ACQ4 from git manually, you will need a python 3.12 environment.
+These instructions demonstrate using conda, but any valid python environment should do.
+
+.. code-block::
+
     git clone https://github.com/acq4/acq4.git
     cd acq4
-
-    # Create and activate a conda environment
-    conda env create --name=acq4 --file=tools/requirements/acq4-torch.yml
+    conda create --name acq4 python=3.12
     conda activate acq4
+    pip install -e .[dev]
 
-    # Install ACQ4 in development mode
-    pip install -e .
+Other optional dependencies can be specified (separated by commas) in addition to `dev`:
+ * `hardware` - for hardware support (NIDAQmx, Sensapex, etc)
+ * `ml-models` - for computer vision features
+ * `analysis` - for some legacy analysis tools
+ * `docs` - for building the documentation
+ * `all` - for all optional dependencies
+
+See pyproject.toml for what those dependencies are.
 
 Starting ACQ4
 -------------
@@ -26,6 +33,8 @@ Starting ACQ4
 .. code-block:: bash
 
     python -m acq4 -x
+
+Look through the other `--help` options for more ways to start ACQ4.
 
 Running Tests
 -------------
@@ -49,5 +58,4 @@ Technology Notes
 
 * The UI and acquisition stacks are Qt-heavy with many scientific and ML dependencies.
 * Import Qt from the unified wrapper: ``from acq4.util import Qt`` for cross-backend compatibility.
-* Requirements are stored in ``tools/requirements/acq4-torch*``; treat those environment files as the
-  source of truth when new packages are needed.
+* PyQtGraph is used extensively for UI components, especially data visualization.

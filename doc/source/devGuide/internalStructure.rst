@@ -14,7 +14,6 @@ The Manager class (``acq4/Manager.py``) serves as the central controller for the
 
 * Loads and configures devices
 * Manages modules (UI components)
-* Handles data management
 * Coordinates device interactions
 * Provides configuration management
 * Controls application lifecycle
@@ -52,8 +51,9 @@ The interface system (``acq4/Interfaces.py``) enables component discovery:
 Data Management
 ---------------
 
-Data management handles experiment data organization:
+DataManager handles data organization:
 
 * Directory structure for organizing data
 * File I/O for various data formats
+* MetaArray format for multi-dimensional data
 * Metadata storage and retrieval
