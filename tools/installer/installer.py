@@ -2995,8 +2995,6 @@ class InstallWizard(QtWidgets.QWizard):
 class SetupHandlerResult:
     """Result of a dependency setup handler."""
     handled_specs: List[str]
-    remaining_specs: List[str]
-    index_url: Optional[str]
     summary: str
 
 
@@ -3071,7 +3069,8 @@ def map_cuda_to_pytorch_version(cuda_version: str) -> Optional[str]:
 def handle_torch_install(
     specs: List[str],
     logger: StructuredLogger,
-    task_id: Optional[int] = None,
+    task_id: Optional[int],
+    install_callback: Callable[[List[str], Optional[str]], None],
 ) -> SetupHandlerResult:
     """Handle PyTorch installation with CUDA-aware package selection.
 
@@ -3083,33 +3082,31 @@ def handle_torch_install(
         Logger for recording installation messages.
     task_id : int, optional
         Task ID for logging.
+    install_callback : callable
+        Callback function to install packages: install_callback(specs, index_url).
 
     Returns
     -------
     SetupHandlerResult
-        Result containing handled specs, remaining specs, index URL, and summary.
+        Result containing handled specs and summary message.
     """
     # Filter out torch and torchvision from specs
     torch_specs = []
-    other_specs = []
     for spec in specs:
         normalized = normalize_spec_name(spec)
         if normalized in ("torch", "torchvision"):
             torch_specs.append(spec)
-        else:
-            other_specs.append(spec)
 
     if not torch_specs:
         return SetupHandlerResult(
             handled_specs=[],
-            remaining_specs=specs,
-            index_url=None,
             summary="",
         )
 
     logger.message("Detecting CUDA version for PyTorch installation...", task_id=task_id)
     cuda_version = detect_cuda_version()
 
+    index_url = None
     if cuda_version:
         logger.message(f"Detected CUDA version: {cuda_version}", task_id=task_id)
         pytorch_cuda = map_cuda_to_pytorch_version(cuda_version)
@@ -3121,10 +3118,9 @@ def handle_torch_install(
             if validate_pytorch_index_url(index_url):
                 logger.message(f"Using PyTorch with CUDA support ({pytorch_cuda})", task_id=task_id)
                 summary = f"PyTorch installed with CUDA {pytorch_cuda} support"
+                install_callback(torch_specs, index_url)
                 return SetupHandlerResult(
                     handled_specs=torch_specs,
-                    remaining_specs=other_specs,
-                    index_url=index_url,
                     summary=summary,
                 )
             else:
@@ -3142,10 +3138,9 @@ def handle_torch_install(
 
     # Fall back to CPU-only installation (default PyPI)
     summary = "PyTorch installed with CPU-only support"
+    install_callback(torch_specs, None)
     return SetupHandlerResult(
         handled_specs=torch_specs,
-        remaining_specs=other_specs,
-        index_url=None,
         summary=summary,
     )
 
@@ -3368,97 +3363,41 @@ class InstallerExecutor:
             self.logger.message("No optional dependencies selected", task_id=self._active_task_id)
             return
 
-        # Check if any specs have a setup_handler in metadata
-        handler_name = None
+        # Group specs by handler
+        handlers_map: Dict[str, List[str]] = {}
+        no_handler_specs: List[str] = []
+
         for spec in specs:
             pkg_meta = _package_meta(spec)
-            if pkg_meta.get("setup_handler"):
-                handler_name = pkg_meta["setup_handler"]
-                break
+            handler_name = pkg_meta.get("setup_handler")
+            if handler_name:
+                if handler_name not in handlers_map:
+                    handlers_map[handler_name] = []
+                handlers_map[handler_name].append(spec)
+            else:
+                no_handler_specs.append(spec)
 
-        if handler_name:
-            # Look up the handler function and call it
+        # Process each handler
+        for handler_name, handler_specs in handlers_map.items():
             handler_fn = globals().get(handler_name)
             if not handler_fn:
                 raise InstallerError(f"Setup handler '{handler_name}' not found")
 
-            result = handler_fn(specs, self.logger, task_id=self._active_task_id)
+            # Create install callback for this handler
+            def install_callback(specs_to_install: List[str], index_url: Optional[str]) -> None:
+                self._pip_install_specs(specs_to_install, conda_exe, env_dir, index_url)
 
-            # Install packages handled by setup_handler
-            if result.handled_specs:
-                self.logger.message("Installing packages with custom setup...", task_id=self._active_task_id)
-                cmd = [
-                    "python",
-                    "-u",
-                    "-m",
-                    "pip",
-                    "install",
-                ]
-                if result.index_url:
-                    cmd.append(f"--index-url={result.index_url}")
-                else:
-                    cmd.append("--index-url=https://pypi.org/simple/")
-                cmd.extend(result.handled_specs)
+            # Call handler - it will install via callback
+            result = handler_fn(handler_specs, self.logger, self._active_task_id, install_callback)
 
-                env = self._pip_env()
-                run_command(
-                    cmd,
-                    self.logger,
-                    env=env,
-                    task_id=self._active_task_id,
-                    cancel_event=self.cancel_event,
-                    conda_env=env_dir,
-                    conda_exe=conda_exe,
-                )
+            # Store summary
+            if result.summary:
+                self.state.install_notes.append(result.summary)
 
-                # Store the summary
-                if result.summary:
-                    self.state.install_notes.append(result.summary)
-
-            # Install remaining dependencies
-            if result.remaining_specs:
-                self.logger.message("Installing other optional dependencies...", task_id=self._active_task_id)
-                cmd = [
-                    "python",
-                    "-u",
-                    "-m",
-                    "pip",
-                    "install",
-                    "--index-url=https://pypi.org/simple/",
-                    *result.remaining_specs,
-                ]
-                env = self._pip_env()
-                run_command(
-                    cmd,
-                    self.logger,
-                    env=env,
-                    task_id=self._active_task_id,
-                    cancel_event=self.cancel_event,
-                    conda_env=env_dir,
-                    conda_exe=conda_exe,
-                )
-        else:
-            # No setup handlers, install all dependencies normally
+        # Install specs without handlers
+        if no_handler_specs:
             self.logger.message("Installing optional dependencies via pip...", task_id=self._active_task_id)
-            cmd = [
-                "python",
-                "-u",
-                "-m",
-                "pip",
-                "install",
-                "--index-url=https://pypi.org/simple/",
-                *specs,
-            ]
-            env = self._pip_env()
-            run_command(
-                cmd,
-                self.logger,
-                env=env,
-                task_id=self._active_task_id,
-                cancel_event=self.cancel_event,
-                conda_env=env_dir,
-                conda_exe=conda_exe,
-            )
+            self._pip_install_specs(no_handler_specs, conda_exe, env_dir)
 
     def _handle_editable_dependencies(self, conda_exe: str, env_dir: Path, base_dir: Path) -> None:
         if not self.state.editable_selection:
