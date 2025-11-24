@@ -24,6 +24,17 @@ Features
 - 2-photon imaging
 
 
+Quick Installation
+------------------
+
+Windows:
+
+```
+curl -o install_acq4.bat http://acq4.org/install_acq4.bat && install_acq4.bat && del install_acq4.bat
+```
+
+
+
 Questions?
 ----------
 
