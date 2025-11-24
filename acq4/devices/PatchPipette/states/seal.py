@@ -285,7 +285,7 @@ class SealState(PatchPipetteState):
 
                 if dt > config['autoSealTimeout']:
                     self._patchrec['sealSuccessful'] = False
-                    self._taskDone(interrupted=True, error=f"Seal failed after {dt:f} seconds")
+                    self._taskDone(interrupted=True, error=f"Seal took longer than `autoSealTimeout` ({dt:f}s)")
                     return config['fallbackState']
 
                 self.updatePressure()

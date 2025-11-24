@@ -332,14 +332,14 @@ class CellDetectState(PatchPipetteState):
             self.processAtLeastOneTestPulse()
             self.adjustPressureForDepth()
             if self._analysis.tip_is_broken():
-                self._taskDone(interrupted=True, error="Pipette broken")
+                self._taskDone(interrupted=True, error="Pipette break detected with `breakThreshold`.")
                 self.dev.patchRecord()['detectedCell'] = False
                 return 'broken'
             if self.obstacleDetected():
                 try:
                     self.avoidObstacle()
                 except TimeoutError:
-                    self._taskDone(interrupted=True, error="Fouled by obstacle")
+                    self._taskDone(interrupted=True, error="Fouling by obstacle detected with `obstacleResistanceThreshold`.")
                     return 'fouled'
             if config['autoAdvance']:
                 if config['advanceContinuous']:
@@ -363,7 +363,7 @@ class CellDetectState(PatchPipetteState):
                     self.lastMove = now
 
                     self.singleStep()
-        self._taskDone(interrupted=True, error="Timed out waiting for cell detect.")
+        self._taskDone(interrupted=True, error="Timed out waiting `cellDetectTimeout` for cell detect.")
         return config['fallbackState']
 
     def adjustPressureForDepth(self):

@@ -99,7 +99,7 @@ class BreakInState(PatchPipetteState):
                 attempt += 1
 
             if attempt >= len(config['nPulses']):
-                self._taskDone(interrupted=True, error='Breakin failed after %d attempts' % attempt)
+                self._taskDone(interrupted=True, error=f'Breakin failed after {attempt} attempts')
                 patchrec['breakinSuccessful'] = False
                 return config['fallbackState']
 
@@ -124,21 +124,16 @@ class BreakInState(PatchPipetteState):
         analysis = tp.analysis
         holding = analysis['baseline_current']
         if holding < self.config['holdingCurrentThreshold']:
-            self._taskDone(interrupted=True, error='Holding current exceeded threshold.')
+            self._taskDone(
+                interrupted=True,
+                error=f'Holding current {holding * 1e9:.1f}nA exceeded `holdingCurrentThreshold`.',
+            )
             return False
 
-        # If ssr and cap cross threshold => successful break in
-        # If only ssr crosses threshold => lost cell
-        # If only cap crosses threshold => partial break in, keep trying
-        ssr = analysis['steady_state_resistance']
-        cap = analysis['capacitance']
-        if self.config['resistanceThreshold'] is not None and ssr < self.config['resistanceThreshold']:
-            return True
-            # if cap > self.config['capacitanceThreshold']:
-            #     return True
-            # else:
-            #     self._taskDone(interrupted=True, error="Resistance dropped below threshold but no cell detected.")
-            #     return False
+        return (
+            self.config['resistanceThreshold'] is not None
+            and analysis['steady_state_resistance'] < self.config['resistanceThreshold']
+        )
 
     def cleanup(self):
         dev = self.dev
