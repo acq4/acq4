@@ -15,11 +15,6 @@ alike — workflow, testing, and technical context. Robot-specific notes live in
   code available to the world.
 * Separate style-only changes (e.g., reformatting) from functional changes to make review easier.
 
-## Collaboration & Workflow
-
-* Favor small, maintainable changes; avoid redesigning large surfaces.
-* Preserve existing comments unless demonstrably incorrect.
-
 ## Documentation
 
 * Update documentation alongside behavior changes and confirm that Sphinx builds remain healthy.

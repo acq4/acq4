@@ -19,6 +19,11 @@ ACQ4 is a platform for neurophysiology acquisition and analysis, focusing on pat
 * Fluorescent indicator imaging
 * 2-photon imaging
 
+## Collaboration & Workflow
+
+* Favor small, maintainable changes; avoid redesigning large surfaces.
+* Preserve existing comments unless demonstrably incorrect.
+
 ## Shared Guidance
 
 - Workflow, testing, technology, and architecture expectations are detailed in `CONTRIBUTING.md`; follow them unless explicitly directed otherwise.
