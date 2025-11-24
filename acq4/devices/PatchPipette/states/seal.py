@@ -9,7 +9,7 @@ import pyqtgraph as pg
 from acq4.util.functions import plottable_booleans
 from neuroanalysis.data import TSeries
 from pyqtgraph.units import kPa
-from ._base import PatchPipetteState, SteadyStateAnalysisBase
+from ._base import PatchPipetteState, SteadyStateAnalysisBase, exponential_decay_avg
 
 
 class SealAnalysis(SteadyStateAnalysisBase):
@@ -76,9 +76,9 @@ class SealAnalysis(SteadyStateAnalysisBase):
                 ratio = 1
             else:
                 dt = t - self._last_measurement['time']
-                resistance_avg_for_success, ratio = self.exponential_decay_avg(
+                resistance_avg_for_success, ratio = exponential_decay_avg(
                     dt, self._last_measurement['resistance_avg_for_success'], resistance, self._success_tau)
-                resistance_avg_for_hold, ratio = self.exponential_decay_avg(
+                resistance_avg_for_hold, ratio = exponential_decay_avg(
                     dt, self._last_measurement['resistance_avg_for_hold'], resistance, self._hold_tau)
             success = resistance_avg_for_success > self._success_at
             hold = resistance_avg_for_hold > self._hold_at
@@ -285,7 +285,7 @@ class SealState(PatchPipetteState):
 
                 if dt > config['autoSealTimeout']:
                     self._patchrec['sealSuccessful'] = False
-                    self._taskDone(interrupted=True, error=f"Seal failed after {dt:f} seconds")
+                    self._taskDone(interrupted=True, error=f"Seal took longer than `autoSealTimeout` ({dt:f}s)")
                     return config['fallbackState']
 
                 self.updatePressure()

@@ -89,7 +89,7 @@ class PatchPipetteStateManager(Qt.QObject):
     @staticmethod
     def buildPatchProfilesParameters():
         params = [ProfileParameter(profile) for profile in PatchPipetteStateManager.listProfiles()]
-        return Parameter.create(name='profiles', type='group', children=params)
+        return Parameter.create(name='profiles', type='group', value=None, children=params)
 
     @staticmethod
     def _loadGlobalProfilesOnce():
@@ -256,7 +256,7 @@ class PatchPipetteStateManager(Qt.QObject):
 
 class ProfileParameter(Parameter):
     def __init__(self, profile):
-        super().__init__(name=profile, type='group', children=[
+        super().__init__(name=profile, type='group', value=None, children=[
             {'name': 'copyFrom', 'type': 'str', 'default': ''},
         ])
         config = PatchPipetteStateManager.getProfileConfig(profile)
@@ -277,7 +277,7 @@ class ProfileParameter(Parameter):
 
 class StateParameter(Parameter):
     def __init__(self, name, profile):
-        super().__init__(name=name, type='group', children=[])
+        super().__init__(name=name, type='group', value=None, children=[])
         self._profile = profile
         self._state = name
         profile_config = PatchPipetteStateManager.getProfileConfig(profile)
@@ -291,6 +291,7 @@ class StateParameter(Parameter):
             if param_config['name'] in defaults:
                 param_config['default'] = defaults[param_config['name']]
             param_config['pinValueToDefault'] = True
+            param_config.setdefault('value', None)
             param = Parameter.create(**param_config)
             if config.get(param.name()) is not None:
                 param.setValue(config[param.name()])
