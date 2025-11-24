@@ -33,6 +33,12 @@ Windows:
 curl -o install_acq4.bat http://acq4.org/install_acq4.bat && install_acq4.bat && del install_acq4.bat
 ```
 
+Linux:
+
+```bash
+wget http://acq4.org/install_acq4.sh -O install_acq4.sh && bash install_acq4.sh && rm install_acq4.sh
+```
+
 
 
 Questions?
