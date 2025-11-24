@@ -1,8 +1,6 @@
 import contextlib
 import threading
 
-import serial
-
 from acq4.drivers.SerialDevice import SerialDevice
 
 

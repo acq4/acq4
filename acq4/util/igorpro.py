@@ -8,11 +8,14 @@ import concurrent.futures
 import atexit
 import json
 import zmq
-import time
+import datetime
+import logging
 
 from acq4.util.json_encoder import ACQ4JSONEncoder
-# sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 from acq4.util import Qt
+
+
+logger = logging.getLogger('igorpro')
 
 dtypes = { 
     0x02: 'float32',
@@ -49,12 +52,11 @@ atexit.register(close_context)
 
 
 class IgorBridge(Qt.QObject):
-    sigTestPulseReady = Qt.Signal(object)
+    sigTestPulseReady = Qt.Signal(object, object)  # message, data_buffer
     sigMiesConfigurationFinished = Qt.Signal()
     sigMiesTestPulseStateChanged = Qt.Signal(bool)
-    sigMiesClampModeChanged = Qt.Signal(str)
-    sigMiesHoldingPotentialChanged = Qt.Signal(float)
-    sigMiesBiasCurrentChanged = Qt.Signal(float)
+    sigMiesClampModeChanged = Qt.Signal(int, str)  # headstage, mode
+    sigMiesClampStateChanged = Qt.Signal(int, object)  # headstage, state
 
     def __init__(self, req_port=5670, sub_port=5770):
         super().__init__()
@@ -78,13 +80,8 @@ class IgorBridge(Qt.QObject):
             "I_EQUAL_ZERO_MODE": "I=0"
         }
         
-        self.test_pulse_active = False
-        self.clamp_mode = "VC"
-        self.holding_potential = 0.0
-        self.bias_current = 0.0
-        
         self.req_thread = IgorReqThread(address=f"tcp://localhost:{req_port}")
-        self.sub_socket_port = 5770
+        self.sub_socket_port = sub_port
         self.run_sub_socket = True
         self.sub_socket_thread = threading.Thread(target=self.sub_socket_run, daemon=True)
         self.sub_socket_thread.start()
@@ -105,32 +102,24 @@ class IgorBridge(Qt.QObject):
         while self.run_sub_socket:
             try:
                 pub_response = sub_socket.recv_multipart()
-                if pub_response[0] == self.topic_filters["DA_CHANGE"]:
-                    msg = json.loads(pub_response[-1].decode("utf-8"))
-                    val = False
-                    if msg["tp"] == "starting":
-                        val = True
-                    self.test_pulse_active = val
-                    self.sigMiesTestPulseStateChanged.emit(val) # in case it's need elsewhere
-                elif pub_response[0] == self.topic_filters["live"]:
-                    self.test_pulse_active = True
-                    self.sigTestPulseReady.emit(pub_response) # trim to proper obj
-                elif pub_response[0] == self.topic_filters["CONFIG_FIN"]:
+                topic = pub_response[0]
+                message = json.loads(pub_response[1].decode("utf-8"))
+                # if topic != self.topic_filters["live"]:
+                #     print("IGOR PUB:", topic, message)
+
+                if topic == self.topic_filters["DA_CHANGE"]:
+                    val = message["tp"] == "starting"
+                    self.sigMiesTestPulseStateChanged.emit(val)
+                elif topic == self.topic_filters["live"]:
+                    self.sigTestPulseReady.emit(message, pub_response[2])
+                elif topic == self.topic_filters["CONFIG_FIN"]:
                     self.sigMiesConfigurationFinished.emit()
-                elif pub_response[0] == self.topic_filters["AMP_CLAMP_MODE_CHANGE"]:
-                    clamp_mode = json.loads(pub_response[1].decode("utf-8"))['clamp mode']['new']
-                    clamp_mode = self.clamp_mode_mapping[clamp_mode]
-                    self.clamp_mode = clamp_mode
-                    self.sigMiesClampModeChanged.emit(clamp_mode)
-                elif pub_response[0] == self.topic_filters["AMP_CHANGE"]:
-                    changed_value = json.loads(pub_response[1].decode("utf-8"))['amplifier action']
-                    if "HoldingPotential" in changed_value:
-                        self.holding_potential = changed_value["HoldingPotential"]["value"]
-                        self.sigMiesHoldingPotentialChanged.emit(self.holding_potential)
-                    if "BiasCurrent" in changed_value:
-                        self.bias_current = changed_value["BiasCurrent"]["value"]
-                        self.sigMiesBiasCurrentChanged.emit(self.bias_current)
-                time.sleep(0.1)
+                elif topic == self.topic_filters["AMP_CLAMP_MODE_CHANGE"]:
+                    clamp_mode = self.clamp_mode_mapping[message['clamp mode']['new']]
+                    headstage = int(message['headstage'])
+                    self.sigMiesClampModeChanged.emit(headstage, clamp_mode)
+                elif topic == self.topic_filters["AMP_CHANGE"]:
+                    self.sigMiesClampStateChanged.emit(int(message['headstage']), message['amplifier action'])
             except zmq.error.Again:
                 pass
             except zmq.error.ZMQError as e:
@@ -159,6 +148,7 @@ class IgorBridge(Qt.QObject):
         return 'Igor.exe' in subprocess.check_output(['wmic', 'process', 'get', 'description,executablepath'])        
 
     def __call__(self, cmd, *args):
+        logger.debug("Igor request: %s %s", cmd, args)
         return self.req_thread.send(cmd, *args)
     
     def quit(self):
@@ -172,6 +162,7 @@ class IgorReqThread(threading.Thread):
         self.stop_flag = False
         self.send_queue = queue.Queue()
         self.unresolved_futures = {}
+        self.resolved_ids = set()
         self.next_result_id = 0
         self.running = True
         super().__init__(target=self._req_loop, daemon=True, name="IgorReqThread")
@@ -203,7 +194,7 @@ class IgorReqThread(threading.Thread):
             self.running = False
 
             # resolve all remaining futures and unhandled requests
-            for f in self.unresolved_futures:
+            for f in self.unresolved_futures.values():
                 f.set_exception(RuntimeError("IGOR thread closed before getting result from this request"))
             while self.send_queue.qsize() > 0:
                 cmd, params, fut = self.send_queue.get(block=False)
@@ -223,6 +214,7 @@ class IgorReqThread(threading.Thread):
                     msg_id = self.next_result_id
                     self.next_result_id += 1
                     self.unresolved_futures[msg_id] = fut
+                    # print(f"IGOR SEND: {msg_id} {cmd} {params}")
                     self.socket.send_multipart(self.format_call(cmd, params, msg_id))
                 except zmq.error.Again:
                     pass
@@ -237,8 +229,17 @@ class IgorReqThread(threading.Thread):
                 try:
                     message_id = int(reply["messageID"])
                 except KeyError as ke:
-                    raise ke
-                future = self.unresolved_futures.pop(message_id)
+                    raise RuntimeError(f"Igor message has no ID: {reply}")
+                # print(f"IGOR RECV: {message_id} {reply}")
+                try:
+                    future = self.unresolved_futures.pop(message_id)
+                except KeyError:
+                    if message_id in self.resolved_ids:
+                        raise ValueError(f"Received IGOR message {message_id} multiple times.")
+                    else:
+                        raise ValueError(f"Received unexpectd IGOR message {message_id}")
+                self.resolved_ids.add(message_id)
+
                 if future is None:
                     raise RuntimeError(f"No future found for messageID {message_id}")
                 try:
