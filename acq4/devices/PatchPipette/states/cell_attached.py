@@ -38,6 +38,7 @@ class CellAttachedState(PatchPipetteState):
         Name of state to transition to when the pipette completely loses its seal. Default is 'fouled', but
         consider using 'seal' or 'cell detect' for a retry.
     """
+
     stateName = 'cell attached'
     _parameterDefaultOverrides = {
         'initialPressureSource': 'atmosphere',
@@ -75,7 +76,10 @@ class CellAttachedState(PatchPipetteState):
             tp = tps[-1]
             holding = tp.analysis['baseline_current']
             if holding < self.config['holdingCurrentThreshold']:
-                self._taskDone(interrupted=True, error='Holding current exceeded threshold.')
+                self._taskDone(
+                    interrupted=True,
+                    error=f'Spontaneous detachment: holding current {holding * 1e9:.2f}nA is below `holdingCurrentThreshold`.',
+                )
                 return {"state": config['spontaneousDetachmentState']}
 
             cap = tp.analysis['capacitance']
@@ -92,7 +96,10 @@ class CellAttachedState(PatchPipetteState):
                 return {"state": config['spontaneousBreakInState']}
 
             if ssr < config['resistanceThreshold']:
-                self._taskDone(interrupted=True, error='Steady state resistance dropped below threshold.')
+                self._taskDone(
+                    interrupted=True,
+                    error=f'Spontaneous detachment: steady state resistance {ssr / 1e6:.1f}MΩ dropped below `resistanceThreshold`.',
+                )
                 return {"state": config['spontaneousDetachmentState']}
 
             patchrec['resistanceBeforeBreakin'] = ssr
