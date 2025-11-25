@@ -2202,6 +2202,191 @@ class SummaryPage(QtWidgets.QWizardPage):
                                               f"Script saved to {target_path}. Run it to repeat this installation.")
 
 
+class HtmlLogTreeWidget(QtWidgets.QTreeWidget):
+    """A tree widget that supports displaying HTML content using QLabel widgets.
+
+    This widget extends QTreeWidget to allow certain items to display HTML content
+    by embedding QLabel widgets. It also provides built-in support for:
+    - Copying selected items to clipboard (Ctrl+C)
+    - Selecting all items (Ctrl+A)
+    - Context menu with copy and select all options
+    """
+
+    def __init__(self, parent: Optional[QtWidgets.QWidget] = None) -> None:
+        super().__init__(parent)
+        self._setup_ui()
+
+    def _setup_ui(self) -> None:
+        """Configure the tree widget appearance and behavior."""
+        self.setHeaderHidden(True)
+        self.setUniformRowHeights(True)
+        self.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.setTextElideMode(QtCore.Qt.TextElideMode.ElideNone)
+        self.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.ExtendedSelection)
+        self.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.CustomContextMenu)
+        self.customContextMenuRequested.connect(self._show_context_menu)
+        self.setToolTip("Right-click or use Ctrl+C to copy selected log lines")
+
+        header = self.header()
+        header.setStretchLastSection(True)
+        header.setSectionResizeMode(QtWidgets.QHeaderView.ResizeMode.Stretch)
+
+    def add_item(self, text: str, parent: Optional[QtWidgets.QTreeWidgetItem] = None,
+                 is_html: bool = False, italic: bool = False,
+                 color: Optional[str] = None, font_family: Optional[str] = None,
+                 icon: Optional[QtGui.QIcon] = None, expanded: bool = False) -> QtWidgets.QTreeWidgetItem:
+        """Add a new item to the tree.
+
+        Parameters
+        ----------
+        text : str
+            Text or HTML content to display.
+        parent : QTreeWidgetItem, optional
+            Parent item. If None, adds as top-level item.
+        is_html : bool, optional
+            If True, renders text as HTML using a QLabel widget.
+        italic : bool, optional
+            If True, makes the text italic.
+        color : str, optional
+            Text color (e.g., "#555555").
+        font_family : str, optional
+            Font family (e.g., "Monospace").
+        icon : QIcon, optional
+            Icon to display next to the item.
+        expanded : bool, optional
+            If True, expands the item.
+
+        Returns
+        -------
+        QTreeWidgetItem
+            The created item.
+        """
+        # Auto-detect HTML if not explicitly specified
+        if not is_html and text:
+            is_html = "<" in text and ">" in text and any(
+                tag in text for tag in ["<p>", "<b>", "<code>", "<pre>", "<br>", "<a "]
+            )
+
+        # Create item with empty text if HTML will be used
+        item = QtWidgets.QTreeWidgetItem(["" if is_html else text])
+
+        # Apply font styling
+        if italic or font_family:
+            font = item.font(0)
+            if italic:
+                font.setItalic(True)
+            if font_family:
+                font.setFamily(font_family)
+            item.setFont(0, font)
+
+        # Apply color
+        if color:
+            brush = QtGui.QBrush(QtGui.QColor(color))
+            item.setForeground(0, brush)
+
+        # Apply icon
+        if icon:
+            item.setIcon(0, icon)
+
+        # Set expanded state
+        item.setExpanded(expanded)
+
+        # Add to tree
+        if parent is None:
+            self.addTopLevelItem(item)
+        else:
+            parent.addChild(item)
+
+        # Handle HTML content
+        if is_html:
+            label = QtWidgets.QLabel()
+            label.setTextFormat(QtCore.Qt.TextFormat.RichText)
+            label.setText(text)
+            label.setWordWrap(True)
+            label.setOpenExternalLinks(True)
+            label.setStyleSheet("QLabel { background-color: transparent; }")
+            label.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding,
+                              QtWidgets.QSizePolicy.Policy.Minimum)
+            self.setItemWidget(item, 0, label)
+
+            # Update size hints
+            if parent is None:
+                label.setFixedHeight(self.rowHeight(self.indexFromItem(item).row()))
+            else:
+                label.adjustSize()
+                item.setSizeHint(0, QtCore.QSize(label.sizeHint().width(), label.sizeHint().height()))
+
+        # Scroll to new item
+        self.scroll_to_item(item)
+
+        return item
+
+    def scroll_to_item(self, item: QtWidgets.QTreeWidgetItem) -> None:
+        """Scroll the tree to ensure the given item is visible at the bottom."""
+        index = self.indexFromItem(item)
+        self.scrollTo(index, QtWidgets.QAbstractItemView.ScrollHint.PositionAtBottom)
+
+    def _show_context_menu(self, position: QtCore.QPoint) -> None:
+        """Show context menu with copy and select all options."""
+        menu = QtWidgets.QMenu(self)
+
+        # Copy action
+        copy_action = menu.addAction("Copy Selected Lines")
+        copy_action.setShortcut(QtGui.QKeySequence.StandardKey.Copy)
+        copy_action.triggered.connect(self.copy_selected_lines)
+
+        # Select All action
+        select_all_action = menu.addAction("Select All")
+        select_all_action.setShortcut(QtGui.QKeySequence.StandardKey.SelectAll)
+        select_all_action.triggered.connect(self.selectAll)
+
+        # Only enable copy if there's a selection
+        selected_items = self.selectedItems()
+        copy_action.setEnabled(len(selected_items) > 0)
+
+        menu.exec(self.viewport().mapToGlobal(position))
+
+    def copy_selected_lines(self) -> None:
+        """Copy selected items to clipboard, preserving tree hierarchy."""
+        selected_items = self.selectedItems()
+        if not selected_items:
+            return
+
+        # Collect text from selected items, preserving tree hierarchy
+        lines: List[str] = []
+        for item in selected_items:
+            # Get the indentation level
+            level = 0
+            parent = item.parent()
+            while parent is not None:
+                level += 1
+                parent = parent.parent()
+
+            # Add indentation
+            indent = "  " * level
+            text = item.text(0)
+            lines.append(f"{indent}{text}")
+
+        # Copy to clipboard
+        clipboard = QtWidgets.QApplication.clipboard()
+        if clipboard:
+            clipboard.setText("\n".join(lines))
+
+    def keyPressEvent(self, event: QtGui.QKeyEvent) -> None:  # noqa: N802
+        """Handle keyboard shortcuts."""
+        # Ctrl+C to copy selected lines
+        if event.matches(QtGui.QKeySequence.StandardKey.Copy):
+            self.copy_selected_lines()
+            event.accept()
+            return
+        # Ctrl+A to select all
+        if event.matches(QtGui.QKeySequence.StandardKey.SelectAll):
+            self.selectAll()
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
+
 class InstallPage(QtWidgets.QWizardPage):
     def __init__(self) -> None:
         super().__init__()
@@ -2211,18 +2396,7 @@ class InstallPage(QtWidgets.QWizardPage):
         description = QtWidgets.QLabel("ACQ4 will now be installed. You can review progress and logs below.")
         description.setWordWrap(True)
         layout.addWidget(description)
-        self.log_tree = QtWidgets.QTreeWidget()
-        self.log_tree.setHeaderHidden(True)
-        self.log_tree.setUniformRowHeights(False)
-        self.log_tree.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        self.log_tree.setTextElideMode(QtCore.Qt.TextElideMode.ElideNone)
-        self.log_tree.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.ExtendedSelection)
-        self.log_tree.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.CustomContextMenu)
-        self.log_tree.customContextMenuRequested.connect(self._show_log_context_menu)
-        self.log_tree.setToolTip("Right-click or use Ctrl+C to copy selected log lines")
-        header = self.log_tree.header()
-        header.setStretchLastSection(True)
-        header.setSectionResizeMode(QtWidgets.QHeaderView.ResizeMode.Stretch)
+        self.log_tree = HtmlLogTreeWidget()
         layout.addWidget(self.log_tree)
         self.progress_bar = QtWidgets.QProgressBar()
         self.progress_bar.setRange(0, 0)
@@ -2382,11 +2556,8 @@ class InstallPage(QtWidgets.QWizardPage):
         if kind == "task-start":
             title = data["title"]
             task_id = data["task_id"]
-            item = QtWidgets.QTreeWidgetItem([title])
-            item.setExpanded(True)
-            self.log_tree.addTopLevelItem(item)
+            item = self.log_tree.add_item(title, expanded=True)
             self._task_items[task_id] = item
-            self._scroll_to_item(item)
         elif kind == "task-complete":
             task_id = data["task_id"]
             success = data["success"]
@@ -2394,7 +2565,9 @@ class InstallPage(QtWidgets.QWizardPage):
             if item is None:
                 raise InstallerError(f"Task {task_id} not found in task items")
             item.setIcon(0, self._success_icon if success else self._error_icon)
-            item.setExpanded(not success)
+            # Expand failed tasks, or the Installation Summary task (which should always be shown)
+            is_summary = item.text(0) == "Installation Summary"
+            item.setExpanded(not success or is_summary)
         elif kind == "command-start":
             command_id = data["command_id"]
             task_id = data["task_id"]
@@ -2402,23 +2575,15 @@ class InstallPage(QtWidgets.QWizardPage):
             parent = self._task_items.get(task_id)
             if parent is None:
                 raise InstallerError(f"Parent task {task_id} not found for command {command_id}")
-            item = QtWidgets.QTreeWidgetItem([text])
-            item.setExpanded(True)
-            parent.addChild(item)
+            item = self.log_tree.add_item(text, parent=parent, expanded=True)
             self._command_items[command_id] = item
-            self._scroll_to_item(item)
         elif kind == "command-output":
             command_id = data["command_id"]
             text = data["text"]
             parent = self._command_items.get(command_id)
             if parent is None:
                 raise InstallerError(f"Command {command_id} not found in command items")
-            output_item = QtWidgets.QTreeWidgetItem([text])
-            font = output_item.font(0)
-            font.setFamily("Monospace")
-            output_item.setFont(0, font)
-            parent.addChild(output_item)
-            self._scroll_to_item(output_item)
+            self.log_tree.add_item(text, parent=parent, font_family="Monospace")
         elif kind == "command-complete":
             command_id = data["command_id"]
             success = data["success"]
@@ -2444,86 +2609,7 @@ class InstallPage(QtWidgets.QWizardPage):
         if not text:
             return
         parent = self._task_items.get(task_id) if task_id is not None else None
-        if parent is None:
-            item = QtWidgets.QTreeWidgetItem([text])
-            font = item.font(0)
-            font.setItalic(True)
-            item.setFont(0, font)
-            brush = QtGui.QBrush(QtGui.QColor("#555555"))
-            item.setForeground(0, brush)
-            self.log_tree.addTopLevelItem(item)
-            self._scroll_to_item(item)
-        else:
-            child = QtWidgets.QTreeWidgetItem([text])
-            font = child.font(0)
-            font.setItalic(True)
-            child.setFont(0, font)
-            parent.addChild(child)
-            self._scroll_to_item(child)
-
-    def _scroll_to_item(self, item: QtWidgets.QTreeWidgetItem) -> None:
-        index = self.log_tree.indexFromItem(item)
-        self.log_tree.scrollTo(index, QtWidgets.QAbstractItemView.ScrollHint.PositionAtBottom)
-
-    def _show_log_context_menu(self, position: QtCore.QPoint) -> None:
-        """Show context menu for log tree with copy options."""
-        menu = QtWidgets.QMenu(self.log_tree)
-
-        # Copy action
-        copy_action = menu.addAction("Copy Selected Lines")
-        copy_action.setShortcut(QtGui.QKeySequence.StandardKey.Copy)
-        copy_action.triggered.connect(self._copy_selected_log_lines)
-
-        # Select All action
-        select_all_action = menu.addAction("Select All")
-        select_all_action.setShortcut(QtGui.QKeySequence.StandardKey.SelectAll)
-        select_all_action.triggered.connect(self.log_tree.selectAll)
-
-        # Only enable copy if there's a selection
-        selected_items = self.log_tree.selectedItems()
-        copy_action.setEnabled(len(selected_items) > 0)
-
-        menu.exec(self.log_tree.viewport().mapToGlobal(position))
-
-    def _copy_selected_log_lines(self) -> None:
-        """Copy selected log lines to clipboard."""
-        selected_items = self.log_tree.selectedItems()
-        if not selected_items:
-            return
-
-        # Collect text from selected items, preserving tree hierarchy
-        lines: List[str] = []
-        for item in selected_items:
-            # Get the indentation level
-            level = 0
-            parent = item.parent()
-            while parent is not None:
-                level += 1
-                parent = parent.parent()
-
-            # Add indentation
-            indent = "  " * level
-            text = item.text(0)
-            lines.append(f"{indent}{text}")
-
-        # Copy to clipboard
-        clipboard = QtWidgets.QApplication.clipboard()
-        if clipboard:
-            clipboard.setText("\n".join(lines))
-
-    def keyPressEvent(self, event: QtGui.QKeyEvent) -> None:  # noqa: N802
-        """Handle keyboard shortcuts."""
-        # Ctrl+C to copy selected lines
-        if event.matches(QtGui.QKeySequence.StandardKey.Copy):
-            self._copy_selected_log_lines()
-            event.accept()
-            return
-        # Ctrl+A to select all log lines
-        if event.matches(QtGui.QKeySequence.StandardKey.SelectAll):
-            self.log_tree.selectAll()
-            event.accept()
-            return
-        super().keyPressEvent(event)
+        self.log_tree.add_item(text, parent=parent, italic=True, color="#555555")
 
     def _handle_finished(self, success: bool, detail: str) -> None:
         self._running = False
@@ -2534,10 +2620,8 @@ class InstallPage(QtWidgets.QWizardPage):
             self._completed = True
             self.completeChanged.emit()
 
-            # Add summary with post-install documentation to log
-            post_install_message = self._build_post_install_message()
-            if post_install_message:
-                self._add_summary_to_log(post_install_message)
+            # Summary is now logged automatically by InstallerExecutor
+            pass
         else:
             if cancelled:
                 QtWidgets.QMessageBox.information(self, "Installer", "Installation cancelled.")
@@ -2545,181 +2629,6 @@ class InstallPage(QtWidgets.QWizardPage):
                 QtWidgets.QMessageBox.critical(self, "Installer", detail)
             self._prompt_cleanup()
         self._perform_pending_navigation()
-
-    def _build_post_install_message(self) -> str:
-        """Build HTML message with post-install documentation for selected packages."""
-        if not self._state:
-            return ""
-
-        # Get selected optional dependencies with post-install docs
-        packages_with_docs: List[Tuple[str, str]] = []
-        selected_specs = set(self._state.selected_optional)
-
-        for dep in self._state.optional_dependencies:
-            if dep.spec in selected_specs and dep.post_install_doc:
-                display_name = dep.display_name or dep.spec
-                packages_with_docs.append((display_name, dep.post_install_doc))
-
-        if not packages_with_docs:
-            return ""
-
-        # Build HTML list
-        html_parts = ["<ul>"]
-        for name, doc in packages_with_docs:
-            html_parts.append(f"<li><b>{name}</b>: {doc}</li>")
-        html_parts.append("</ul>")
-
-        return "".join(html_parts)
-
-    def _build_installation_summary(self) -> str:
-        """Build HTML summary of installation locations and sources."""
-        if not self._state:
-            return "<p><b>Installation complete.</b></p>"
-
-        html_parts = ["<p><b>Installation complete.</b></p>"]
-
-        # ACQ4 installation
-        base_dir = self._state.install_path
-        acq4_dir = base_dir / ACQ4_SOURCE_DIRNAME
-        html_parts.append(
-            f"<p><b>ACQ4 installed to:</b> <code>{acq4_dir}</code><br>"
-            f"<b>Source:</b> {self._state.repo_url} (branch: {self._state.branch})</p>"
-        )
-
-        # Configuration
-        config_dir = base_dir / CONFIG_DIRNAME
-        if self._state.config_mode == "clone":
-            config_source = f"{self._state.config_repo_url} (branch: {self._state.config_repo_branch})"
-        elif self._state.config_mode == "copy":
-            config_source = f"Copied from {self._state.config_copy_path}"
-        else:
-            config_source = "Default configuration"
-
-        html_parts.append(
-            f"<p><b>Configuration:</b> <code>{config_dir}</code><br>"
-            f"<b>Source:</b> {config_source}</p>"
-        )
-
-        # Editable dependencies
-        if self._state.editable_selection:
-            dep_dir = base_dir / DEPENDENCIES_DIRNAME
-            dep_list = ", ".join(self._state.editable_selection)
-            html_parts.append(
-                f"<p><b>Editable dependencies:</b> <code>{dep_dir}</code><br>"
-                f"<b>Packages:</b> {dep_list}</p>"
-            )
-
-        # Startup script (Windows only)
-        if os.name == "nt":
-            startup_script = base_dir / "start_acq4.bat"
-            html_parts.append(
-                f"<p><b>Startup script:</b> <code>{startup_script}</code></p>"
-            )
-
-        # Installation notes (e.g., PyTorch CUDA version)
-        if self._state.install_notes:
-            notes_html = "<br>".join(self._state.install_notes)
-            html_parts.append(
-                f"<p><b>Installation notes:</b><br>{notes_html}</p>"
-            )
-
-        # How to start ACQ4
-        html_parts.append("<p><b>How to start ACQ4:</b></p>")
-        if os.name == "nt":
-            if self._state.create_desktop_shortcut:
-                shortcut_name = f"ACQ4 ({base_dir.name})"
-                html_parts.append(
-                    f"<p>A desktop shortcut named <b>\"{shortcut_name}\"</b> has been created. "
-                    f"Double-click it to launch ACQ4.</p>"
-                )
-            else:
-                startup_script = base_dir / "start_acq4.bat"
-                html_parts.append(
-                    f"<p>Run the startup script: <code>{startup_script}</code></p>"
-                )
-        else:
-            # Non-Windows platforms need manual activation
-            if self._state.config_file is None:
-                raise InstallerError("Config file is required but was not set")
-            env_dir = base_dir / CONDA_ENV_DIRNAME
-            config_path = base_dir / CONFIG_DIRNAME / self._state.config_file
-            acq4_path = base_dir / ACQ4_SOURCE_DIRNAME
-            html_parts.append(
-                "<p>Activate the conda environment and run ACQ4:</p>"
-                f"<pre>conda activate {env_dir}\n"
-                f"python -m acq4 -c {config_path}</pre>"
-                f"<p>Or run directly from the source directory:</p>"
-                f"<pre>conda activate {env_dir}\n"
-                f"cd {acq4_path}\n"
-                f"python -m acq4 -c {config_path}</pre>"
-            )
-
-        return "".join(html_parts)
-
-    def _add_summary_to_log(self, post_install_message: str) -> None:
-        """Add a Summary section to the log tree with post-install documentation."""
-        # Create top-level Summary item
-        summary_item = QtWidgets.QTreeWidgetItem(["Summary"])
-        summary_item.setIcon(0, self._success_icon)
-        self.log_tree.addTopLevelItem(summary_item)
-
-        # Create a child item to hold the QTextEdit widget
-        widget_item = QtWidgets.QTreeWidgetItem()
-        summary_item.addChild(widget_item)
-        summary_item.setExpanded(True)
-
-        # Build installation summary
-        summary_html = self._build_installation_summary()
-
-        # Add post-install message if present
-        if post_install_message:
-            summary_html += (
-                "<p><b>Next Steps:</b></p>"
-                "<p>The following packages require additional 3rd-party software to be installed:</p>"
-                + post_install_message
-            )
-
-        # Create QTextBrowser for displaying the message with clickable links
-        text_edit = QtWidgets.QTextBrowser()
-        text_edit.setHtml(summary_html)
-
-        # Make it look like embedded rich text: no border, transparent background, clickable links
-        text_edit.setFrameStyle(QtWidgets.QFrame.Shape.NoFrame)
-        text_edit.setStyleSheet("QTextBrowser { background-color: transparent; }")
-        text_edit.setOpenExternalLinks(True)
-
-        # Disable scrollbars - we'll size the widget to show all content
-        text_edit.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        text_edit.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        text_edit.setSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Expanding,
-            QtWidgets.QSizePolicy.Policy.Fixed
-        )
-
-        # Attach the widget to the tree item first
-        self.log_tree.setItemWidget(widget_item, 0, text_edit)
-
-        # Calculate proper width and height
-        # Use viewport width for accurate available space (column width may not be set yet)
-        viewport_width = self.log_tree.viewport().width()
-        indent_width = self.log_tree.indentation() * 2  # Parent + child indentation
-        margins = 20  # Internal margins
-        available_width = max(400, viewport_width - indent_width - margins)  # Minimum 400px
-
-        # Set document width and calculate required height
-        doc = text_edit.document()
-        doc.setTextWidth(available_width)
-        required_height = int(doc.size().height()) + 10  # Add padding
-
-        # Set the widget size - don't restrict width, let it expand
-        text_edit.setFixedHeight(required_height)
-        # Don't set minimum width - let the Expanding policy handle it
-
-        # Tell the tree item how tall it needs to be (width will auto-expand)
-        widget_item.setSizeHint(0, QtCore.QSize(-1, required_height))
-
-        # Scroll to the summary
-        self._scroll_to_item(summary_item)
 
     def _update_navigation(self, running: bool, success: bool) -> None:
         wizard = self.wizard()
@@ -3277,6 +3186,7 @@ class InstallerExecutor:
         tasks.append(("Prepare configuration", lambda: self._prepare_config(base_dir)))
         if os.name == "nt" and self.state.create_desktop_shortcut:
             tasks.append(("Create desktop shortcut", lambda: self._create_shortcut_if_needed(base_dir, env_dir, conda_exe)))
+        tasks.append(("Installation Summary", lambda: self._log_installation_summary(base_dir, env_dir)))
         self.logger.set_task_total(len(tasks))
         for title, fn in tasks:
             self._run_task(title, fn)
@@ -3574,6 +3484,110 @@ class InstallerExecutor:
             source = base_dir / ACQ4_SOURCE_DIRNAME / "config" / "example"
             shutil.copytree(source, config_dir)
             self.logger.message(f"Default configuration copied successfully", task_id=self._active_task_id)
+
+    def _log_installation_summary(self, base_dir: Path, env_dir: Path) -> None:
+        """Log the installation summary as regular messages."""
+        config_dir = base_dir / CONFIG_DIRNAME
+
+        # Installation paths
+        self.logger.message(f"<p><b>Installation directory:</b> <code>{base_dir}</code></p>", task_id=self._active_task_id)
+        self.logger.message(f"<p><b>ACQ4 source:</b> <code>{base_dir / ACQ4_SOURCE_DIRNAME}</code></p>", task_id=self._active_task_id)
+        self.logger.message(f"<p><b>Conda environment:</b> <code>{env_dir}</code></p>", task_id=self._active_task_id)
+
+        # Configuration
+        if self.state.config_mode == "clone":
+            config_source = f"Cloned from {self.state.config_repo_url} ({self.state.config_repo_branch})"
+        elif self.state.config_mode == "copy":
+            config_source = f"Copied from {self.state.config_copy_path}"
+        else:
+            config_source = "Default configuration"
+
+        self.logger.message(
+            f"<p><b>Configuration:</b> <code>{config_dir}</code><br>"
+            f"<b>Source:</b> {config_source}</p>",
+            task_id=self._active_task_id
+        )
+
+        # Editable dependencies
+        if self.state.editable_selection:
+            dep_dir = base_dir / DEPENDENCIES_DIRNAME
+            dep_list = ", ".join(self.state.editable_selection)
+            self.logger.message(
+                f"<p><b>Editable dependencies:</b> <code>{dep_dir}</code><br>"
+                f"<b>Packages:</b> {dep_list}</p>",
+                task_id=self._active_task_id
+            )
+
+        # Startup script (Windows only)
+        if os.name == "nt":
+            startup_script = base_dir / "start_acq4.bat"
+            self.logger.message(
+                f"<p><b>Startup script:</b> <code>{startup_script}</code></p>",
+                task_id=self._active_task_id
+            )
+
+        # Installation notes (e.g., PyTorch CUDA version)
+        if self.state.install_notes:
+            notes_html = "<br>".join(self.state.install_notes)
+            self.logger.message(
+                f"<p><b>Installation notes:</b><br>{notes_html}</p>",
+                task_id=self._active_task_id
+            )
+
+        # How to start ACQ4
+        self.logger.message("<p><b>How to start ACQ4:</b></p>", task_id=self._active_task_id)
+        if os.name == "nt":
+            if self.state.create_desktop_shortcut:
+                shortcut_name = f"ACQ4 ({base_dir.name})"
+                self.logger.message(
+                    f"<p>A desktop shortcut named <b>\"{shortcut_name}\"</b> has been created. "
+                    f"Double-click it to launch ACQ4.</p>",
+                    task_id=self._active_task_id
+                )
+            else:
+                startup_script = base_dir / "start_acq4.bat"
+                self.logger.message(
+                    f"<p>Run the startup script: <code>{startup_script}</code></p>",
+                    task_id=self._active_task_id
+                )
+        else:
+            # Non-Windows platforms need manual activation
+            if self.state.config_file is None:
+                raise InstallerError("Config file is required but was not set")
+            config_path = base_dir / CONFIG_DIRNAME / self.state.config_file
+            acq4_path = base_dir / ACQ4_SOURCE_DIRNAME
+            self.logger.message(
+                "<p>Activate the conda environment and run ACQ4:</p>"
+                f"<pre>conda activate {env_dir}\n"
+                f"python -m acq4 -c {config_path}</pre>",
+                task_id=self._active_task_id
+            )
+            self.logger.message(
+                f"<p>Or run directly from the source directory:</p>"
+                f"<pre>conda activate {env_dir}\n"
+                f"cd {acq4_path}\n"
+                f"python -m acq4 -c {config_path}</pre>",
+                task_id=self._active_task_id
+            )
+
+        # Post-install documentation for packages
+        packages_with_docs: List[Tuple[str, str]] = []
+        selected_specs = set(self.state.selected_optional)
+        for dep in self.state.optional_dependencies:
+            if dep.spec in selected_specs and dep.post_install_doc:
+                packages_with_docs.append((dep.display_name, dep.post_install_doc))
+
+        if packages_with_docs:
+            self.logger.message("<p><b>Next Steps:</b></p>", task_id=self._active_task_id)
+            self.logger.message(
+                "<p>The following packages require additional 3rd-party software to be installed:</p>",
+                task_id=self._active_task_id
+            )
+            for pkg_name, url in packages_with_docs:
+                self.logger.message(
+                    f"<p><b>{pkg_name}:</b> <a href=\"{url}\">{url}</a></p>",
+                    task_id=self._active_task_id
+                )
 
     def _create_shortcut_if_needed(self, base_dir: Path, env_dir: Path, conda_exe: str) -> None:
         if os.name != "nt":
@@ -3930,9 +3944,11 @@ def main() -> None:
         return
     app = QtWidgets.QApplication(sys.argv)
     wizard = InstallWizard(editable_map, args, test_flags)
-    wizard.exec()
-    sys.exit(0)
 
+    if sys.flags.interactive == 0:
+        wizard.exec()
+        sys.exit(0)
+    
 
 if __name__ == "__main__":
     main()
