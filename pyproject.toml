@@ -80,14 +80,6 @@ dev = [
     "black",
     "acq4[testing]",
 ]
-all = [
-    "acq4[hardware]",
-    "acq4[analysis]",
-    "acq4[ml-models]",
-    "acq4[docs]",
-    "acq4[testing]",
-    "acq4[dev]",
-]
 
 [project.urls]
 Homepage = "http://www.acq4.org"

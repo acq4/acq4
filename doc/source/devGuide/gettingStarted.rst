@@ -23,7 +23,6 @@ Other optional dependencies can be specified (separated by commas) in addition t
  * `ml-models` - for computer vision features
  * `analysis` - for some legacy analysis tools
  * `docs` - for building the documentation
- * `all` - for all optional dependencies
 
 See pyproject.toml for what those dependencies are.
 
