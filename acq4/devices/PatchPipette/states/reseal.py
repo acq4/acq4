@@ -9,7 +9,7 @@ from acq4.util import ptime
 from acq4.util.debug import log_and_ignore_exception
 from acq4.util.functions import plottable_booleans
 from acq4.util.future import Future, future_wrap
-from ._base import PatchPipetteState, SteadyStateAnalysisBase
+from ._base import PatchPipetteState, SteadyStateAnalysisBase, exponential_decay_avg
 
 
 class ResealAnalysis(SteadyStateAnalysisBase):
@@ -154,11 +154,11 @@ class ResealAnalysis(SteadyStateAnalysisBase):
 
             dt = start_time - last_measurement['time']
 
-            detect_avg, detection_ratio = self.exponential_decay_avg(
+            detect_avg, detection_ratio = exponential_decay_avg(
                 dt, last_measurement['detect_avg'], resistance, self._detection_tau
             )
             detection_ratio = np.log10(detection_ratio)
-            repair_avg, repair_ratio = self.exponential_decay_avg(
+            repair_avg, repair_ratio = exponential_decay_avg(
                 dt, last_measurement['repair_avg'], resistance, self._repair_tau
             )
             repair_ratio = np.log10(repair_ratio)
@@ -441,7 +441,7 @@ class ResealState(PatchPipetteState):
                 config['resealTimeout'] is not None
                 and ptime.time() - start_time > config['resealTimeout']
             ):
-                self._taskDone(interrupted=True, error="Timed out attempting to reseal.")
+                self._taskDone(interrupted=True, error="Took longer than `resealTimeout` attempting to reseal.")
                 return {"state": config['fallbackState']}
 
             self.processAtLeastOneTestPulse()
@@ -464,7 +464,7 @@ class ResealState(PatchPipetteState):
                 if retraction_future and not retraction_future.isDone():
                     retraction_future.stop()
                 self.setState("tissue is torn beyond repair")
-                self._taskDone(interrupted=True, error="Tissue is torn beyond repair.")
+                self._taskDone(interrupted=True, error="Tissue is torn beyond repair (via `tornDetectionThreshold`).")
                 return {"state": config['fallbackState']}
             elif retraction_future is None or retraction_future.wasInterrupted():
                 if retraction_future is not None:

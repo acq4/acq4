@@ -166,8 +166,19 @@ ensure_installer_env() {
         fi
         rm -f "${create_log}"
     fi
+
+    log "Verifying Python is available in installer environment..."
+    if ! "${conda_exe}" run -n "${INSTALLER_ENV_NAME}" python --version >/dev/null 2>&1; then
+        log "ERROR: Python not found in installer environment '${INSTALLER_ENV_NAME}'"
+        log "Try running: conda env remove -n '${INSTALLER_ENV_NAME}' and then re-run this script"
+        exit 1
+    fi
+    log "Python verified successfully"
+
+    log "Installing dependencies in installer environment..."
     "${conda_exe}" run -n "${INSTALLER_ENV_NAME}" python -m pip install --quiet --upgrade \
-        "${QT_PACKAGE}" "${TOML_PARSER_PACKAGE}"
+        "${QT_PACKAGE}" "${TOML_PARSER_PACKAGE}" --index-url=https://pypi.org/simple/
+    log "Dependencies installed successfully"
 }
 
 check_conda_version() {

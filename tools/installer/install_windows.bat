@@ -12,7 +12,7 @@ if exist "%~f0" (
 )
 set "DOWNLOADED_INSTALLER="
 set "RESULT=0"
-set "INSTALLER_URL=https://raw.githubusercontent.com/AllenInstitute/acq4/ivscc-rc/tools/installer/installer.py"
+set "INSTALLER_URL=https://raw.githubusercontent.com/acq4/acq4/main/tools/installer/installer.py"
 set "INSTALLER_ENV_NAME=_acq4_installer"
 set "PYTHON_VERSION=3.12"
 set "QT_PACKAGE=pyqt6"

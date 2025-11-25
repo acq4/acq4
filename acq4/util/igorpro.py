@@ -162,6 +162,7 @@ class IgorReqThread(threading.Thread):
         self.stop_flag = False
         self.send_queue = queue.Queue()
         self.unresolved_futures = {}
+        self.resolved_ids = set()
         self.next_result_id = 0
         self.running = True
         super().__init__(target=self._req_loop, daemon=True, name="IgorReqThread")
@@ -213,6 +214,7 @@ class IgorReqThread(threading.Thread):
                     msg_id = self.next_result_id
                     self.next_result_id += 1
                     self.unresolved_futures[msg_id] = fut
+                    # print(f"IGOR SEND: {msg_id} {cmd} {params}")
                     self.socket.send_multipart(self.format_call(cmd, params, msg_id))
                 except zmq.error.Again:
                     pass
@@ -228,7 +230,16 @@ class IgorReqThread(threading.Thread):
                     message_id = int(reply["messageID"])
                 except KeyError as ke:
                     raise RuntimeError(f"Igor message has no ID: {reply}")
-                future = self.unresolved_futures.pop(message_id)
+                # print(f"IGOR RECV: {message_id} {reply}")
+                try:
+                    future = self.unresolved_futures.pop(message_id)
+                except KeyError:
+                    if message_id in self.resolved_ids:
+                        raise ValueError(f"Received IGOR message {message_id} multiple times.")
+                    else:
+                        raise ValueError(f"Received unexpectd IGOR message {message_id}")
+                self.resolved_ids.add(message_id)
+
                 if future is None:
                     raise RuntimeError(f"No future found for messageID {message_id}")
                 try:
