@@ -58,14 +58,14 @@ class DataManager(Qt.QObject):
 
     def getDirHandle(self, dirName, create=False):
         with self.lock:
-            dirName = os.path.abspath(dirName)
+            dirName = abspath(dirName)
             if not self._cacheHasName(dirName):
                 self._addHandle(dirName, DirHandle(dirName, self, create=create))
             return self._getCache(dirName)
 
     def getFileHandle(self, fileName):
         with self.lock:
-            fileName = os.path.abspath(fileName)
+            fileName = abspath(fileName)
             if not self._cacheHasName(fileName):
                 self._addHandle(fileName, FileHandle(fileName, self))
             return self._getCache(fileName)
@@ -74,7 +74,7 @@ class DataManager(Qt.QObject):
         """Return a FileHandle or DirHandle for the given fileName.
         If the file does not exist, a handle will still be returned, but is not guaranteed to have the correct type.
         """
-        fn = os.path.abspath(fileName)
+        fn = abspath(fileName)
         if os.path.isdir(fn) or (not os.path.exists(fn) and fn.endswith(os.path.sep)):
             return self.getDirHandle(fileName)
         else:
@@ -110,7 +110,7 @@ class DataManager(Qt.QObject):
                 tree = self._getTree(oldName)
                 for h in tree:
                     ## Update key to cached handle
-                    newh = os.path.abspath(os.path.join(newName, h[len(oldName+os.path.sep):]))
+                    newh = abspath(os.path.join(newName, h[len(oldName+os.path.sep):]))
                     self._setCache(newh, self._getCache(h))
 
                     ## If the change originated from h's parent, inform it that this change has occurred.

@@ -26,7 +26,7 @@ class FileHandle:
         self.sigDelayedChange = Qt.signalEmitter(object, object)
         self.manager = manager
         self.delayedChanges = []
-        self.path = os.path.abspath(path)
+        self.path = abspath(path)
         self.parentDir = None
         self.lock = Mutex(Qt.QMutex.Recursive)
         if Qt.QApplication.instance() is not None:
@@ -486,7 +486,7 @@ class DirHandle(FileHandle):
     def isFile(self, fileName=None):
         if fileName is None:
             return False
-        fn = os.path.abspath(os.path.join(self.path, fileName))
+        fn = abspath(os.path.join(self.path, fileName))
         return os.path.isfile(fn)
 
     def createFile(self, fileName, info=None, autoIncrement=False):
@@ -606,7 +606,7 @@ class DirHandle(FileHandle):
             return os.path.exists(self.path)
 
         try:
-            fn = os.path.abspath(os.path.join(self.path, name))
+            fn = abspath(os.path.join(self.path, name))
         except:
             print(self.path, name)
             raise
