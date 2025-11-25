@@ -2609,7 +2609,24 @@ class InstallPage(QtWidgets.QWizardPage):
         if not text:
             return
         parent = self._task_items.get(task_id) if task_id is not None else None
-        self.log_tree.add_item(text, parent=parent, italic=True, color="#555555")
+
+        # Split multi-line messages into separate items
+        # Handle both plain text newlines and HTML <br> tags
+        if "<br>" in text or "<br/>" in text or "<br />" in text:
+            # HTML with line breaks - split on <br> tags
+            lines = re.split(r'<br\s*/?>', text, flags=re.IGNORECASE)
+        elif "\n" in text:
+            # Plain text with newlines
+            lines = text.split("\n")
+        else:
+            # Single line message
+            lines = [text]
+
+        # Add each line as a separate item
+        for line in lines:
+            line = line.strip()
+            if line:  # Skip empty lines
+                self.log_tree.add_item(line, parent=parent, italic=True, color="#555555")
 
     def _handle_finished(self, success: bool, detail: str) -> None:
         self._running = False
