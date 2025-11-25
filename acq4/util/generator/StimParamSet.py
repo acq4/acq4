@@ -84,10 +84,11 @@ class SeqParameter(SimpleParameter):
         initialParams = [ch.name() for ch in self]
         
         newParams = [
-            {'name': 'sequence', 'type': 'list', 'value': 'off', 'limits': ['off', 'range', 'list']},
+            {'name': 'sequence', 'type': 'list', 'value': 'off', 'limits': ['off', 'range (n)', 'range (step)', 'list']},
             {'name': 'start', 'type': 'float', 'axis': axis, 'value': 0, 'visible': False}, 
             {'name': 'stop', 'type': 'float', 'axis': axis, 'value': 0, 'visible': False}, 
             {'name': 'steps', 'type': 'int', 'value': 10, 'visible': False},
+            {'name': 'step size', 'type': 'float', 'axis': axis, 'value': 10, 'visible': False},
             {'name': 'log spacing', 'type': 'bool', 'value': False, 'visible': False}, 
             {'name': 'list', 'type': 'str', 'value': '', 'visible': False}, 
             {'name': 'randomize', 'type': 'bool', 'value': False, 'visible': False}, 
@@ -99,7 +100,8 @@ class SeqParameter(SimpleParameter):
         
         self.visibleParams = {  ## list of params to display in each mode
             'off': initialParams+['sequence'],
-            'range': initialParams+['sequence', 'start', 'stop', 'steps', 'log spacing', 'randomize'],
+            'range (n)': initialParams+['sequence', 'start', 'stop', 'steps', 'log spacing', 'randomize'],
+            'range (step)': initialParams+['sequence', 'start', 'stop', 'step size', 'randomize'],
             'list': initialParams+['sequence', 'list', 'randomize'],
         }
 
@@ -133,11 +135,16 @@ class SeqParameter(SimpleParameter):
                 'default': self.valueString(self),
                 'sequence': self['sequence'],
             }
-            if self['sequence'] == 'range':
+            if self['sequence'] == 'range (n)':
                 seqData['start'] = self.valueString(self.param('start'))
                 seqData['stop'] = self.valueString(self.param('stop'))
                 seqData['steps'] = self['steps']
                 seqData['log spacing'] = self['log spacing']
+                seqData['randomize'] = self['randomize']
+            elif self['sequence'] == 'range (step)':
+                seqData['start'] = self.valueString(self.param('start'))
+                seqData['stop'] = self.valueString(self.param('stop'))
+                seqData['step size'] = self['step size']
                 seqData['randomize'] = self['randomize']
                 #seq = seq + "%s : %s / %d" % (self.valueString(self.start), self.valueString(self.stop), self['steps'])
             elif self['sequence'] == 'list':
@@ -167,6 +174,8 @@ class SeqParameter(SimpleParameter):
         for k in state:
             if k == 'value':
                 continue
+            if k == 'range':
+                k = 'range (n)'  # backward compatibility
             self[k] = state[k]
             self.param(k).setDefault(state[k])
     
