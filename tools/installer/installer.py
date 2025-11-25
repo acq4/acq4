@@ -34,7 +34,6 @@ except ModuleNotFoundError:  # pragma: no cover - fallback for Python < 3.11
 ARG_INSTALL_PATH = "--install-path"
 ARG_BRANCH = "--branch"
 ARG_REPO_URL = "--repo-url"
-ARG_OPTIONAL_MODE = "--optional-mode"
 ARG_OPTIONAL_DEP = "--optional-dep"
 ARG_OPTIONAL_GROUPS = "--optional-groups"
 ARG_EDITABLE_CLONE = "--editable-clone"
@@ -290,7 +289,7 @@ def repo_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
 
-def fetch_pyproject_from_github(repo_url: str, branch: str) -> Tuple[str, bool]:
+def fetch_pyproject_from_github(repo_url: str, branch: str) -> str:
     """Download pyproject.toml content from a GitHub repository.
 
     Parameters
@@ -302,16 +301,13 @@ def fetch_pyproject_from_github(repo_url: str, branch: str) -> Tuple[str, bool]:
 
     Returns
     -------
-    tuple of (str, bool)
-        A tuple containing:
-        - The pyproject.toml file content as a string
-        - A boolean indicating whether fallback to acq4/acq4:main was used
+    str
+        The pyproject.toml file content as a string.
 
     Raises
     ------
     InstallerError
-        If the download fails or the file cannot be found, even after
-        falling back to the main ACQ4 repository.
+        If the download fails or the file cannot be found.
     """
     parts = urlsplit(repo_url)
     if parts.netloc not in {"github.com", "www.github.com"}:
@@ -330,20 +326,8 @@ def fetch_pyproject_from_github(repo_url: str, branch: str) -> Tuple[str, bool]:
     try:
         with urlopen(raw_url, timeout=10) as response:
             content = response.read().decode("utf-8")
-            return content, False
+            return content
     except URLError as exc:
-        # If the fetch fails and we're not already looking at the main ACQ4 repo,
-        # fall back to fetching from github.com/acq4/acq4:main
-        is_main_acq4 = (owner.lower() == "acq4" and repo_name.lower() == "acq4" and branch.lower() == "main")
-        if not is_main_acq4:
-            fallback_url = f"https://raw.githubusercontent.com/acq4/acq4/main/pyproject.toml"
-            try:
-                with urlopen(fallback_url, timeout=10) as response:
-                    content = response.read().decode("utf-8")
-                    return content, True
-            except URLError:
-                # Fallback also failed, raise the original error
-                pass
         raise InstallerError(f"Failed to download pyproject.toml from {raw_url}: {exc}") from exc
 
 
@@ -778,24 +762,21 @@ def resolve_optional_selection_from_args(args: argparse.Namespace,
     list of str
         The dependency specs to install.
     """
-    mode = args.optional_mode
     raw_optional_arg = args.optional_dep
     raw_group_arg = args.optional_groups
     requested_names = _parse_cli_list(raw_optional_arg)
     requested_groups = _parse_cli_list(raw_group_arg)
     provided_optional_arg = (raw_optional_arg is not None) or (raw_group_arg is not None)
-    if mode is None:
-        mode = "list" if provided_optional_arg else "all"
-    if mode not in {"all", "none", "list"}:
-        raise InstallerError(f"Invalid optional selection mode: {mode}")
-    if mode == "all":
-        return [dep.spec for dep in options]
-    if mode == "none":
-        return []
+
+    # If no optional args provided, install all optional dependencies
     if not provided_optional_arg:
-        raise InstallerError("Optional selection mode 'list' requires --optional-dep or --optional-groups.")
+        return [dep.spec for dep in options]
+
+    # If empty list provided, install none
     if not requested_names and not requested_groups:
         return []
+
+    # Resolve the requested dependencies and groups
     alias_lookup = _optional_alias_lookup(options)
     group_lookup = _group_alias_lookup(groups)
     resolved: List[str] = []
@@ -1007,17 +988,11 @@ def register_location_cli_arguments(parser: argparse.ArgumentParser) -> None:
 def register_dependency_cli_arguments(parser: argparse.ArgumentParser) -> None:
     """Add CLI options for optional dependency selection."""
     parser.add_argument(
-        ARG_OPTIONAL_MODE,
-        choices=["all", "none", "list"],
-        help="Selection mode for optional dependencies (default: all, or list when --optional-dep is provided).",
-        default=None,
-    )
-    parser.add_argument(
         ARG_OPTIONAL_DEP,
         dest="optional_dep",
         help=(
             "Comma-separated list of optional package names to include (matches display/pip names, not specs). "
-            "Only used when --optional-mode list; pass an empty string to select none."
+            "If not provided, all optional dependencies will be installed. Pass an empty string to select none."
         ),
         default=None,
     )
@@ -1590,19 +1565,12 @@ class DependenciesPage(QtWidgets.QWizardPage):
         QtWidgets.QApplication.processEvents()
 
         try:
-            content, used_fallback = fetch_pyproject_from_github(repo_url, branch)
+            content = fetch_pyproject_from_github(repo_url, branch)
             self.groups = dependency_groups_from_pyproject(content=content)
             self.options = parse_optional_dependencies(content=content)
             self.option_lookup = {dep.spec: dep for dep in self.options}
             self._populate_tree()
-            if used_fallback:
-                self.status_label.setStyleSheet("color: #8a6d3b;")  # Warning color
-                self.status_label.setText(
-                    f"Note: pyproject.toml not found in {repo_url} ({branch}). "
-                    "Using dependency list from github.com/acq4/acq4:main instead."
-                )
-            else:
-                self.status_label.setText("")
+            self.status_label.setText("")
             self._initialized = True
 
             # Apply CLI args if they were provided before initialization
@@ -1712,12 +1680,14 @@ class DependenciesPage(QtWidgets.QWizardPage):
     def cli_arguments(self) -> List[str]:
         specs = self.selected_specs()
         args: List[str] = []
+        # If all dependencies selected, omit the flag (default behavior is "all")
         if len(specs) == len(self.options):
-            args.extend([ARG_OPTIONAL_MODE, "all"])
+            pass  # Default is to install all
         elif not specs:
-            args.extend([ARG_OPTIONAL_MODE, "none"])
+            # Empty string means install none
+            args.extend([ARG_OPTIONAL_DEP, ""])
         else:
-            args.extend([ARG_OPTIONAL_MODE, "list"])
+            # Specific list of dependencies
             cli_names: List[str] = []
             for spec in specs:
                 dep = self.option_lookup.get(spec)
@@ -3681,10 +3651,7 @@ def state_from_cli_args(args: argparse.Namespace,
     github_token = (args.github_token or "").strip() or None
 
     # Fetch pyproject.toml to get dependency information
-    content, used_fallback = fetch_pyproject_from_github(repo_value, branch_value)
-    if used_fallback:
-        print(f"Warning: pyproject.toml not found in {repo_value} ({branch_value}).")
-        print("Using dependency list from github.com/acq4/acq4:main instead.")
+    content = fetch_pyproject_from_github(repo_value, branch_value)
     dependency_groups = dependency_groups_from_pyproject(content=content)
     optional_dependencies = parse_optional_dependencies(content=content)
 
