@@ -204,11 +204,11 @@ DEPENDENCY_METADATA: Dict[str, Dict[str, Dict[str, str]]] = {
 }
 
 def _group_meta(key: str) -> Dict[str, str]:
-    return DEPENDENCY_METADATA.get("groups", {}).get(key, {})
+    return DEPENDENCY_METADATA["groups"].get(key, {})
 
 
 def _package_meta(spec: str) -> Dict[str, str]:
-    packages = DEPENDENCY_METADATA.get("packages", {})
+    packages = DEPENDENCY_METADATA["packages"]
     if spec in packages:
         return packages[spec]
     normalized = normalize_spec_name(spec)
@@ -431,11 +431,17 @@ def dependency_groups_from_pyproject(content: Optional[str] = None,
         return _DEPENDENCY_GROUPS_CACHE
 
     data = load_pyproject_data(content=content, repo_path=repo_path)
-    project = data.get("project") or {}
-    optional = project.get("optional-dependencies") or {}
+    project = data.get("project", {})
+    if not isinstance(project, dict):
+        raise InstallerError(f"pyproject.toml 'project' section must be a table, got {type(project).__name__}")
+    optional = project.get("optional-dependencies", {})
+    if not isinstance(optional, dict):
+        raise InstallerError(f"pyproject.toml 'optional-dependencies' must be a table, got {type(optional).__name__}")
     groups: List[DependencyGroup] = []
     for key, packages in optional.items():
-        pkg_list = list(packages or [])
+        if not isinstance(packages, list):
+            raise InstallerError(f"pyproject.toml optional-dependencies[{key}] must be a list, got {type(packages).__name__}")
+        pkg_list = list(packages)
         meta = _group_meta(key)
         title = meta.get("title") or _format_group_title(key)
         description = meta.get("description", "")
@@ -466,8 +472,12 @@ def project_dependencies(repo_path: Optional[Path] = None) -> List[str]:
         return _PROJECT_DEPENDENCIES_CACHE
 
     data = load_pyproject_data(repo_path=repo_path)
-    project = data.get("project") or {}
-    deps = project.get("dependencies") or []
+    project = data.get("project", {})
+    if not isinstance(project, dict):
+        raise InstallerError(f"pyproject.toml 'project' section must be a table, got {type(project).__name__}")
+    deps = project.get("dependencies", [])
+    if not isinstance(deps, list):
+        raise InstallerError(f"pyproject.toml 'dependencies' must be a list, got {type(deps).__name__}")
 
     if repo_path is None:
         _PROJECT_DEPENDENCIES_CACHE = list(deps)
@@ -483,7 +493,7 @@ def editable_dependencies() -> Dict[str, EditableDependency]:
 
 
 def _build_editable_dependency_map() -> Dict[str, EditableDependency]:
-    packages = DEPENDENCY_METADATA.get("packages", {})
+    packages = DEPENDENCY_METADATA["packages"]
     result: Dict[str, EditableDependency] = {}
     for pkg_name, meta in packages.items():
         git_url = meta.get("git_url")
@@ -1478,10 +1488,7 @@ class LocationPage(QtWidgets.QWizardPage):
     def apply_cli_args(self, args: argparse.Namespace) -> None:
         if args.install_path:
             raw_path = Path(str(args.install_path)).expanduser()
-            try:
-                resolved = raw_path.resolve()
-            except Exception:
-                resolved = raw_path
+            resolved = raw_path.resolve()
             self.path_edit.setText(str(resolved))
         if args.repo_url:
             self.git_repo_widget.set_repo_url(str(args.repo_url))
@@ -2145,7 +2152,7 @@ class InstallPage(QtWidgets.QWizardPage):
         layout.addWidget(description)
         self.log_tree = QtWidgets.QTreeWidget()
         self.log_tree.setHeaderHidden(True)
-        self.log_tree.setUniformRowHeights(True)
+        self.log_tree.setUniformRowHeights(False)
         self.log_tree.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.log_tree.setTextElideMode(QtCore.Qt.TextElideMode.ElideNone)
         self.log_tree.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.ExtendedSelection)
@@ -2153,8 +2160,8 @@ class InstallPage(QtWidgets.QWizardPage):
         self.log_tree.customContextMenuRequested.connect(self._show_log_context_menu)
         self.log_tree.setToolTip("Right-click or use Ctrl+C to copy selected log lines")
         header = self.log_tree.header()
-        header.setStretchLastSection(False)
-        header.setSectionResizeMode(QtWidgets.QHeaderView.ResizeMode.ResizeToContents)
+        header.setStretchLastSection(True)
+        header.setSectionResizeMode(QtWidgets.QHeaderView.ResizeMode.Stretch)
         layout.addWidget(self.log_tree)
         self.progress_bar = QtWidgets.QProgressBar()
         self.progress_bar.setRange(0, 0)
@@ -2312,45 +2319,39 @@ class InstallPage(QtWidgets.QWizardPage):
         kind = event.kind
         data = event.data
         if kind == "task-start":
-            title = data.get("title", "Task")
-            task_id = data.get("task_id")
-            if task_id is None:
-                return
+            title = data["title"]
+            task_id = data["task_id"]
             item = QtWidgets.QTreeWidgetItem([title])
             item.setExpanded(True)
             self.log_tree.addTopLevelItem(item)
             self._task_items[task_id] = item
             self._scroll_to_item(item)
         elif kind == "task-complete":
-            task_id = data.get("task_id")
-            success = data.get("success", False)
+            task_id = data["task_id"]
+            success = data["success"]
             item = self._task_items.get(task_id)
             if item is None:
-                return
+                raise InstallerError(f"Task {task_id} not found in task items")
             item.setIcon(0, self._success_icon if success else self._error_icon)
             item.setExpanded(not success)
         elif kind == "command-start":
-            command_id = data.get("command_id")
-            task_id = data.get("task_id")
-            text = data.get("text", "Command")
-            if command_id is None:
-                return
+            command_id = data["command_id"]
+            task_id = data["task_id"]
+            text = data["text"]
             parent = self._task_items.get(task_id)
             if parent is None:
-                parent = QtWidgets.QTreeWidgetItem(["Task"])
-                parent.setExpanded(True)
-                self.log_tree.addTopLevelItem(parent)
+                raise InstallerError(f"Parent task {task_id} not found for command {command_id}")
             item = QtWidgets.QTreeWidgetItem([text])
             item.setExpanded(True)
             parent.addChild(item)
             self._command_items[command_id] = item
             self._scroll_to_item(item)
         elif kind == "command-output":
-            command_id = data.get("command_id")
-            text = data.get("text", "")
+            command_id = data["command_id"]
+            text = data["text"]
             parent = self._command_items.get(command_id)
             if parent is None:
-                return
+                raise InstallerError(f"Command {command_id} not found in command items")
             output_item = QtWidgets.QTreeWidgetItem([text])
             font = output_item.font(0)
             font.setFamily("Monospace")
@@ -2358,20 +2359,20 @@ class InstallPage(QtWidgets.QWizardPage):
             parent.addChild(output_item)
             self._scroll_to_item(output_item)
         elif kind == "command-complete":
-            command_id = data.get("command_id")
-            success = data.get("success", False)
+            command_id = data["command_id"]
+            success = data["success"]
             item = self._command_items.get(command_id)
             if item is None:
-                return
+                raise InstallerError(f"Command {command_id} not found in command items")
             item.setIcon(0, self._success_icon if success else self._error_icon)
             item.setExpanded(not success)
         elif kind == "message":
-            text = data.get("text", "")
-            task_id = data.get("task_id")
+            text = data["text"]
+            task_id = data.get("task_id")  # task_id can legitimately be None for top-level messages
             self._append_message(text, task_id)
         elif kind == "progress":
-            total = data.get("total", 0)
-            value = data.get("value", 0)
+            total = data["total"]
+            value = data["value"]
             if total <= 0:
                 self.progress_bar.setRange(0, 0)
             else:
@@ -2381,7 +2382,7 @@ class InstallPage(QtWidgets.QWizardPage):
     def _append_message(self, text: str, task_id: Optional[int]) -> None:
         if not text:
             return
-        parent = self._task_items.get(task_id)
+        parent = self._task_items.get(task_id) if task_id is not None else None
         if parent is None:
             item = QtWidgets.QTreeWidgetItem([text])
             font = item.font(0)
@@ -2559,6 +2560,37 @@ class InstallPage(QtWidgets.QWizardPage):
             notes_html = "<br>".join(self._state.install_notes)
             html_parts.append(
                 f"<p><b>Installation notes:</b><br>{notes_html}</p>"
+            )
+
+        # How to start ACQ4
+        html_parts.append("<p><b>How to start ACQ4:</b></p>")
+        if os.name == "nt":
+            if self._state.create_desktop_shortcut:
+                shortcut_name = f"ACQ4 ({base_dir.name})"
+                html_parts.append(
+                    f"<p>A desktop shortcut named <b>\"{shortcut_name}\"</b> has been created. "
+                    f"Double-click it to launch ACQ4.</p>"
+                )
+            else:
+                startup_script = base_dir / "start_acq4.bat"
+                html_parts.append(
+                    f"<p>Run the startup script: <code>{startup_script}</code></p>"
+                )
+        else:
+            # Non-Windows platforms need manual activation
+            if self._state.config_file is None:
+                raise InstallerError("Config file is required but was not set")
+            env_dir = base_dir / CONDA_ENV_DIRNAME
+            config_path = base_dir / CONFIG_DIRNAME / self._state.config_file
+            acq4_path = base_dir / ACQ4_SOURCE_DIRNAME
+            html_parts.append(
+                "<p>Activate the conda environment and run ACQ4:</p>"
+                f"<pre>conda activate {env_dir}\n"
+                f"python -m acq4 -c {config_path}</pre>"
+                f"<p>Or run directly from the source directory:</p>"
+                f"<pre>conda activate {env_dir}\n"
+                f"cd {acq4_path}\n"
+                f"python -m acq4 -c {config_path}</pre>"
             )
 
         return "".join(html_parts)
@@ -3227,7 +3259,7 @@ class InstallerExecutor:
     def _create_conda_env(self, conda_exe: str, env_dir: Path, python_pkg: str) -> None:
         if env_dir.exists():
             raise InstallerError(f"Conda environment already exists at {env_dir}")
-        self.logger.message("Creating base conda environment (this can take a while)...", task_id=self._active_task_id)
+        self.logger.message("Creating base conda environment...", task_id=self._active_task_id)
         cmd = [
             conda_exe,
             "create",
@@ -3470,12 +3502,14 @@ class InstallerExecutor:
             source = self.state.config_copy_path
             if not source.exists() or not source.is_dir():
                 raise InstallerError(f"Config path {source} does not exist or is not a directory.")
-            self.logger.message(f"Copying configuration from {source}", task_id=self._active_task_id)
+            self.logger.message(f"Copying configuration from {source} to {config_dir}", task_id=self._active_task_id)
             shutil.copytree(source, config_dir)
+            self.logger.message(f"Configuration copied successfully", task_id=self._active_task_id)
         else:
-            self.logger.message("Copying default configuration", task_id=self._active_task_id)
+            self.logger.message(f"Copying default configuration to {config_dir}", task_id=self._active_task_id)
             source = base_dir / ACQ4_SOURCE_DIRNAME / "config" / "example"
             shutil.copytree(source, config_dir)
+            self.logger.message(f"Default configuration copied successfully", task_id=self._active_task_id)
 
     def _create_shortcut_if_needed(self, base_dir: Path, env_dir: Path, conda_exe: str) -> None:
         if os.name != "nt":
