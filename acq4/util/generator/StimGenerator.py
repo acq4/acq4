@@ -478,20 +478,6 @@ def seqParse(seqStr):
         v2 = str(seq[-1])
         v3 = str(len(seq))
         
-
-    #if stepChar == '/':
-        #if 'l' in opts:
-            #seq = fn.logSpace(v1, v2, v3)
-        #else:
-            #seq = np.linspace(v1, v2, v3)
-    #else:
-        #if 'l' in opts:
-            #n = (np.log(v2/v1) / np.log(v3)) + 1
-            #seq = fn.logSpace(v1, v2, n)
-        #else:
-            #seq = np.arange(v1, v2, v3)
-    #if 'r' in opts:
-        #np.random.shuffle(seq)
     return {'name': name, 'default': single, 'sequence': 'range', 
         'start': v1, 'stop': v2, 'steps': v3,
         'log spacing': 'l' in opts, 'randomize': 'r' in opts

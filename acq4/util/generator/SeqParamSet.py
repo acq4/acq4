@@ -79,10 +79,11 @@ class SeqParameter(GroupParameter):
         
         args['children'] = [
             {'name': 'default', 'type': 'str', 'value': '0'},
-            {'name': 'sequence', 'type': 'list', 'value': 'off', 'limits': ['off', 'range', 'list', 'eval']},
+            {'name': 'sequence', 'type': 'list', 'value': 'off', 'limits': ['off', 'range (n)', 'range (step)', 'list', 'eval']},
             {'name': 'start', 'type': 'str', 'value': '0', 'visible': False}, 
             {'name': 'stop', 'type': 'str', 'value': '0', 'visible': False}, 
             {'name': 'steps', 'type': 'int', 'value': 10, 'visible': False},
+            {'name': 'step size', 'type': 'str', 'value': '0', 'visible': False},
             {'name': 'log spacing', 'type': 'bool', 'value': False, 'visible': False}, 
             {'name': 'list', 'type': 'str', 'value': '', 'visible': False}, 
             {'name': 'randomize', 'type': 'bool', 'value': False, 'visible': False}, 
@@ -94,7 +95,8 @@ class SeqParameter(GroupParameter):
         
         self.visibleParams = {  ## list of params to display in each mode
             'off': ['default', 'sequence'],
-            'range': ['default', 'sequence', 'start', 'stop', 'steps', 'log spacing', 'randomize'],
+            'range (n)': ['default', 'sequence', 'start', 'stop', 'steps', 'log spacing', 'randomize'],
+            'range (step)': ['default', 'sequence', 'start', 'stop', 'step size', 'randomize'],
             'list': ['default', 'sequence', 'list', 'randomize'],
             'eval': ['default', 'sequence', 'expression']
         }
@@ -134,7 +136,7 @@ class SeqParameter(GroupParameter):
         mode = self['sequence']
         if mode == 'off':
             seq = []
-        elif mode == 'range':
+        if mode == 'range (n)':
             start = self.evalStr('start')
             stop = self.evalStr('stop')
             nPts = self['steps']
@@ -142,6 +144,14 @@ class SeqParameter(GroupParameter):
                 seq = fn.logSpace(start, stop, nPts)
             else:
                 seq = np.linspace(start, stop, nPts)
+        elif mode == 'range (step)':
+            start = self.evalStr('start')
+            stop = self.evalStr('stop')
+            step = self.evalStr('step size')
+            n = int(np.ceil((stop - start) / step))
+            if n > 1e4:
+                raise SeqEvalError('step size', 'Generated sequence would have more than 10,000 points.')
+            seq = np.arange(n) * step + start
         elif mode == 'list':
             if self['list'] == '':
                 seq = []
@@ -172,6 +182,8 @@ class SeqParameter(GroupParameter):
         
     def setState(self, state):
         for k in state:
+            if k == 'range':
+                k = 'range (n)'  # backward compatibility
             self[k] = state[k]
             self.param(k).setDefault(state[k])
         

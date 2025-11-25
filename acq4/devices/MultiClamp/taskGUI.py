@@ -289,13 +289,13 @@ class MultiClampTaskGui(TaskGui):
             if mode == 'VC':
                 newUnit = 'V'
                 oldUnit = 'A'
-                spinOpts = dict(suffix='V', siPrefix=True, dec=True, step=0.5, minStep=1e-3)
+                spinOpts = dict(suffix='V', siPrefix=True, dec=True, step=0.5, minStep=1e-3, scaleAtZero=1e-3)
                 self.ui.waveGeneratorWidget.setMeta('y', **spinOpts)
                 self.ui.waveGeneratorWidget.setMeta('xy', units='V*s', siPrefix=True, dec=True, step=0.5, minStep=1e-6)
             else:
                 newUnit = 'A'
                 oldUnit = 'V'
-                spinOpts = dict(suffix='A', siPrefix=True, dec=True, step=0.5, minStep=1e-12)
+                spinOpts = dict(suffix='A', siPrefix=True, dec=True, step=0.5, minStep=1e-12, scaleAtZero=1e-12)
                 self.ui.waveGeneratorWidget.setMeta('y', **spinOpts)
                 self.ui.waveGeneratorWidget.setMeta('xy', units='C', siPrefix=True, dec=True, step=0.5, minStep=1e-15)
             self.ui.holdingSpin.setOpts(**spinOpts)
