@@ -581,13 +581,47 @@ class InstallerLogEvent:
 
 class StructuredLogger:
     def __init__(self, text_fn: Optional[Callable[[str], None]] = None,
-                 event_handler: Optional[Callable[[InstallerLogEvent], None]] = None) -> None:
+                 event_handler: Optional[Callable[[InstallerLogEvent], None]] = None,
+                 log_file: Optional[Path] = None) -> None:
         self.text_fn = text_fn
         self.event_handler = event_handler
+        self.log_file = log_file
+        self._log_file_handle: Optional[Any] = None
         self._task_counter = 0
         self._command_counter = 0
         self._progress_total = 0
         self._progress_value = 0
+
+        # Open log file if provided
+        if self.log_file is not None:
+            try:
+                self.log_file.parent.mkdir(parents=True, exist_ok=True)
+                self._log_file_handle = open(self.log_file, "w", encoding="utf-8", buffering=1)  # Line buffered
+            except Exception as exc:
+                # If we can't open the log file, just continue without it
+                self._log_file_handle = None
+                if self.text_fn is not None:
+                    self.text_fn(f"Warning: Could not open log file {self.log_file}: {exc}")
+
+    def close(self) -> None:
+        """Close the log file if it's open."""
+        if self._log_file_handle is not None:
+            try:
+                self._log_file_handle.close()
+            except Exception:
+                pass
+            self._log_file_handle = None
+
+    def _write_to_log_file(self, text: str) -> None:
+        """Write text to the log file if it's open."""
+        if self._log_file_handle is not None:
+            try:
+                self._log_file_handle.write(text)
+                if not text.endswith("\n"):
+                    self._log_file_handle.write("\n")
+                self._log_file_handle.flush()
+            except Exception:
+                pass  # Silent failure - don't let log file issues break the installation
 
     def _emit(self, kind: str, **data: Any) -> None:
         if self.event_handler is None:
@@ -602,21 +636,26 @@ class StructuredLogger:
     def message(self, text: str, task_id: Optional[int] = None, *, broadcast: bool = True) -> None:
         if self.text_fn is not None:
             self.text_fn(text)
+        self._write_to_log_file(text)
         if broadcast:
             self._emit("message", text=text, task_id=task_id)
 
     def start_task(self, title: str) -> int:
         self._task_counter += 1
         task_id = self._task_counter
+        text = f"\n=== {title} ==="
         if self.text_fn is not None:
-            self.text_fn(f"\n=== {title} ===")
+            self.text_fn(text)
+        self._write_to_log_file(text)
         self._emit("task-start", task_id=task_id, title=title)
         return task_id
 
     def finish_task(self, task_id: int, success: bool = True) -> None:
+        status = "✓ Completed" if success else "✗ Failed"
+        text = f"{status}\n"
         if self.text_fn is not None:
-            status = "✓ Completed" if success else "✗ Failed"
-            self.text_fn(f"{status}\n")
+            self.text_fn(text)
+        self._write_to_log_file(text)
         self._emit("task-complete", task_id=task_id, success=success)
         self._progress_value = min(self._progress_value + 1, self._progress_total)
         self._emit("progress", total=self._progress_total, value=self._progress_value)
@@ -624,14 +663,17 @@ class StructuredLogger:
     def start_command(self, task_id: Optional[int], display_cmd: str) -> int:
         self._command_counter += 1
         command_id = self._command_counter
+        text = f"$ {display_cmd}"
         if self.text_fn is not None:
-            self.text_fn(f"$ {display_cmd}")
+            self.text_fn(text)
+        self._write_to_log_file(text)
         self._emit("command-start", command_id=command_id, task_id=task_id, text=display_cmd)
         return command_id
 
     def command_output(self, command_id: Optional[int], text: str) -> None:
         if self.text_fn is not None:
             self.text_fn(text)
+        self._write_to_log_file(text)
         if command_id is None:
             return
         self._emit("command-output", command_id=command_id, text=text)
@@ -639,8 +681,11 @@ class StructuredLogger:
     def finish_command(self, command_id: Optional[int], success: bool) -> None:
         if command_id is None:
             return
-        if self.text_fn is not None and not success:
-            self.text_fn("Command failed")
+        if not success:
+            text = "Command failed"
+            if self.text_fn is not None:
+                self.text_fn(text)
+            self._write_to_log_file(text)
         self._emit("command-complete", command_id=command_id, success=success)
 
 def normalize_spec_name(spec: str) -> str:
@@ -3606,9 +3651,13 @@ class InstallerWorker(QtCore.QObject):
         self.finished.emit(success, detail)
 
     def _run_internal(self) -> None:
-        logger = StructuredLogger(text_fn=None, event_handler=self._queue_event)
+        log_file = self.state.install_path / "install-log.txt"
+        logger = StructuredLogger(text_fn=None, event_handler=self._queue_event, log_file=log_file)
         executor = InstallerExecutor(self.state, logger, cancel_event=self._cancel_event)
-        executor.run()
+        try:
+            executor.run()
+        finally:
+            logger.close()
 
     def request_cancel(self) -> None:
         self._cancel_event.set()
@@ -3724,14 +3773,17 @@ def run_unattended_install(state: InstallerState) -> None:
     def log_text(message: str) -> None:
         print(message, flush=True)
 
-    logger = StructuredLogger(text_fn=log_text)
+    log_file = state.install_path / "install-log.txt"
+    logger = StructuredLogger(text_fn=log_text, log_file=log_file)
     executor = InstallerExecutor(state, logger)
     try:
         executor.run()
     except Exception as exc:  # noqa: BLE001
+        logger.close()
         print(f"Installation failed: {exc}", file=sys.stderr)
         sys.exit(1)
     else:
+        logger.close()
         print("Installation complete", flush=True)
 
         # Display post-install documentation
