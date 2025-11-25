@@ -612,6 +612,38 @@ class StructuredLogger:
                 pass
             self._log_file_handle = None
 
+    def move_log_file(self, new_path: Path) -> None:
+        """Move the log file to a new location.
+
+        This is used to move from a temp location to the final install directory.
+
+        Parameters
+        ----------
+        new_path : Path
+            New location for the log file.
+        """
+        if self.log_file is None or self._log_file_handle is None:
+            return
+
+        try:
+            # Close the current file
+            self._log_file_handle.close()
+            self._log_file_handle = None
+
+            # Move the file to new location
+            import shutil
+            new_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(self.log_file), str(new_path))
+
+            # Update path and reopen at new location
+            self.log_file = new_path
+            self._log_file_handle = open(self.log_file, "a", encoding="utf-8", buffering=1)
+        except Exception as exc:
+            # If move fails, just continue logging to the old location or stop logging
+            self._log_file_handle = None
+            if self.text_fn is not None:
+                self.text_fn(f"Warning: Could not move log file to {new_path}: {exc}")
+
     def _write_to_log_file(self, text: str) -> None:
         """Write text to the log file if it's open."""
         if self._log_file_handle is not None:
@@ -3271,6 +3303,9 @@ class InstallerExecutor:
     def _prepare_install_dir(self, base_dir: Path) -> None:
         self.logger.message(f"Preparing install directory at {base_dir}", task_id=self._active_task_id)
         ensure_directory_empty(base_dir)
+        # Move log file from temp location to install directory
+        final_log_path = base_dir / "install-log.txt"
+        self.logger.move_log_file(final_log_path)
 
     def _clone_acq4_repo(self, base_dir: Path, repo_url: str, branch: str) -> None:
         dest = base_dir / ACQ4_SOURCE_DIRNAME
@@ -3651,13 +3686,21 @@ class InstallerWorker(QtCore.QObject):
         self.finished.emit(success, detail)
 
     def _run_internal(self) -> None:
-        log_file = self.state.install_path / "install-log.txt"
-        logger = StructuredLogger(text_fn=None, event_handler=self._queue_event, log_file=log_file)
+        # Use temp file initially - will be moved to install dir after it's created
+        import tempfile
+        temp_log = Path(tempfile.gettempdir()) / f"acq4-install-{os.getpid()}.log"
+        logger = StructuredLogger(text_fn=None, event_handler=self._queue_event, log_file=temp_log)
         executor = InstallerExecutor(self.state, logger, cancel_event=self._cancel_event)
         try:
             executor.run()
         finally:
             logger.close()
+            # Clean up temp file if it still exists (log should have been moved to install dir)
+            if temp_log.exists():
+                try:
+                    temp_log.unlink()
+                except Exception:
+                    pass
 
     def request_cancel(self) -> None:
         self._cancel_event.set()
@@ -3742,6 +3785,9 @@ def state_from_cli_args(args: argparse.Namespace,
             raise InstallerError(f"Config path {config_copy_path} does not exist or is not a directory.")
     else:
         config_mode = "new"
+        # For "new" mode, default to default.cfg since that's what's in the example config
+        if not config_file:
+            config_file = "default.cfg"
 
     # Sanity check: --config-branch only makes sense with --config-repo
     if config_repo_branch and not config_repo:
@@ -3773,17 +3819,31 @@ def run_unattended_install(state: InstallerState) -> None:
     def log_text(message: str) -> None:
         print(message, flush=True)
 
-    log_file = state.install_path / "install-log.txt"
-    logger = StructuredLogger(text_fn=log_text, log_file=log_file)
+    # Use temp file initially - will be moved to install dir after it's created
+    import tempfile
+    temp_log = Path(tempfile.gettempdir()) / f"acq4-install-{os.getpid()}.log"
+    logger = StructuredLogger(text_fn=log_text, log_file=temp_log)
     executor = InstallerExecutor(state, logger)
     try:
         executor.run()
     except Exception as exc:  # noqa: BLE001
         logger.close()
+        # Clean up temp file if it still exists
+        if temp_log.exists():
+            try:
+                temp_log.unlink()
+            except Exception:
+                pass
         print(f"Installation failed: {exc}", file=sys.stderr)
         sys.exit(1)
     else:
         logger.close()
+        # Clean up temp file if it still exists (log should have been moved to install dir)
+        if temp_log.exists():
+            try:
+                temp_log.unlink()
+            except Exception:
+                pass
         print("Installation complete", flush=True)
 
         # Display post-install documentation
@@ -3828,6 +3888,11 @@ def resolve_selected_optional_specs(options: Iterable[DependencyOption], selecte
 
 def collect_state(wizard: InstallWizard) -> InstallerState:
     """Capture the installer wizard selections into a serializable state."""
+    config_mode = wizard.config_mode()
+    config_file = wizard.config_file()
+    # For "new" mode, default to default.cfg since that's what's in the example config
+    if config_mode == "new" and not config_file:
+        config_file = "default.cfg"
     return InstallerState(
         install_path=wizard.install_path(),
         branch=wizard.branch(),
@@ -3836,11 +3901,11 @@ def collect_state(wizard: InstallWizard) -> InstallerState:
         optional_dependencies=wizard.dependencies_page.options,
         selected_optional=wizard.selected_optional_specs(),
         editable_selection=wizard.selected_editable_keys(),
-        config_mode=wizard.config_mode(),
+        config_mode=config_mode,
         config_repo_url=wizard.config_repo(),
         config_repo_branch=wizard.config_repo_branch(),
         config_copy_path=wizard.config_copy_path(),
-        config_file=wizard.config_file(),
+        config_file=config_file,
         create_desktop_shortcut=wizard.dependencies_page.create_shortcut_checkbox.isChecked(),
     )
 
