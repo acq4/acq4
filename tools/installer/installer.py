@@ -289,15 +289,15 @@ def repo_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
 
-def fetch_pyproject_from_github(repo_url: str, branch: str) -> str:
-    """Download pyproject.toml content from a GitHub repository.
+def fetch_pyproject(repo_url: str, branch: str) -> str:
+    """Fetch pyproject.toml content from a GitHub repository or local path.
 
     Parameters
     ----------
     repo_url : str
-        GitHub repository URL (e.g., "https://github.com/acq4/acq4").
+        GitHub repository URL (e.g., "https://github.com/acq4/acq4") or local file path.
     branch : str
-        Branch or tag name to fetch from.
+        Branch or tag name to fetch from (ignored for local paths).
 
     Returns
     -------
@@ -309,26 +309,40 @@ def fetch_pyproject_from_github(repo_url: str, branch: str) -> str:
     InstallerError
         If the download fails or the file cannot be found.
     """
+    # Check if this is a GitHub URL
     parts = urlsplit(repo_url)
-    if parts.netloc not in {"github.com", "www.github.com"}:
-        raise InstallerError(f"Only GitHub URLs are supported for fetching pyproject.toml: {repo_url}")
+    is_github = parts.netloc in {"github.com", "www.github.com"}
 
-    path_components = parts.path.strip("/").split("/")
-    if len(path_components) < 2:
-        raise InstallerError(f"Invalid GitHub repository URL: {repo_url}")
+    if is_github:
+        # GitHub URL - download from raw.githubusercontent.com
+        path_components = parts.path.strip("/").split("/")
+        if len(path_components) < 2:
+            raise InstallerError(f"Invalid GitHub repository URL: {repo_url}")
 
-    owner, repo_name = path_components[0], path_components[1]
-    if repo_name.endswith(".git"):
-        repo_name = repo_name[:-4]
+        owner, repo_name = path_components[0], path_components[1]
+        if repo_name.endswith(".git"):
+            repo_name = repo_name[:-4]
 
-    raw_url = f"https://raw.githubusercontent.com/{owner}/{repo_name}/{branch}/pyproject.toml"
+        raw_url = f"https://raw.githubusercontent.com/{owner}/{repo_name}/{branch}/pyproject.toml"
 
-    try:
-        with urlopen(raw_url, timeout=10) as response:
-            content = response.read().decode("utf-8")
-            return content
-    except URLError as exc:
-        raise InstallerError(f"Failed to download pyproject.toml from {raw_url}: {exc}") from exc
+        try:
+            with urlopen(raw_url, timeout=10) as response:
+                content = response.read().decode("utf-8")
+                return content
+        except URLError as exc:
+            raise InstallerError(f"Failed to download pyproject.toml from {raw_url}: {exc}") from exc
+    else:
+        # Assume local path
+        local_path = Path(repo_url).expanduser().resolve()
+        pyproject_path = local_path / "pyproject.toml"
+
+        if not pyproject_path.exists():
+            raise InstallerError(f"pyproject.toml not found at {pyproject_path}")
+
+        try:
+            return pyproject_path.read_text(encoding="utf-8")
+        except Exception as exc:
+            raise InstallerError(f"Failed to read pyproject.toml from {pyproject_path}: {exc}") from exc
 
 
 def load_pyproject_data(content: Optional[str] = None, repo_path: Optional[Path] = None) -> Dict[str, Any]:
@@ -1565,7 +1579,7 @@ class DependenciesPage(QtWidgets.QWizardPage):
         QtWidgets.QApplication.processEvents()
 
         try:
-            content = fetch_pyproject_from_github(repo_url, branch)
+            content = fetch_pyproject(repo_url, branch)
             self.groups = dependency_groups_from_pyproject(content=content)
             self.options = parse_optional_dependencies(content=content)
             self.option_lookup = {dep.spec: dep for dep in self.options}
@@ -3651,7 +3665,7 @@ def state_from_cli_args(args: argparse.Namespace,
     github_token = (args.github_token or "").strip() or None
 
     # Fetch pyproject.toml to get dependency information
-    content = fetch_pyproject_from_github(repo_value, branch_value)
+    content = fetch_pyproject(repo_value, branch_value)
     dependency_groups = dependency_groups_from_pyproject(content=content)
     optional_dependencies = parse_optional_dependencies(content=content)
 
