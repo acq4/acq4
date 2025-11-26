@@ -2307,6 +2307,11 @@ class HtmlLogTreeWidget(QtWidgets.QTreeWidget):
             label.setStyleSheet("QLabel { background-color: transparent; }")
             label.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding,
                               QtWidgets.QSizePolicy.Policy.Minimum)
+            # Enable text interaction to allow clicking links without selecting the item
+            label.setTextInteractionFlags(
+                QtCore.Qt.TextInteractionFlag.TextBrowserInteraction |
+                QtCore.Qt.TextInteractionFlag.LinksAccessibleByMouse
+            )
             self.setItemWidget(item, 0, label)
 
             # Update size hints
