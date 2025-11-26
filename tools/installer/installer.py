@@ -42,6 +42,9 @@ ARG_CONFIG_BRANCH = "--config-branch"
 ARG_CONFIG_PATH = "--config-path"
 ARG_CONFIG_FILE = "--config-file"
 ARG_GITHUB_TOKEN = "--github-token"
+ARG_STARTUP_MODULES = "--startup-modules"
+ARG_EXIT_ON_ERROR = "--exit-on-error"
+ARG_CREATE_SHORTCUT = "--create-shortcut"
 
 RAW_GITHUB_BASE = "https://raw.githubusercontent.com/acq4/acq4/main/"
 ACQ4_REPO_URL = "https://github.com/acq4/acq4"
@@ -69,7 +72,7 @@ if errorlevel 1 (
 )
 
 cd "{acq4_path}"
-python -m acq4 -x -c "{config_file_path}"
+python -m acq4 -c "{config_file_path}"{extra_args}
 pause
 """
 
@@ -569,6 +572,8 @@ class InstallerState:
     config_repo_branch: Optional[str] = None
     config_copy_path: Optional[Path] = None
     config_file: Optional[str] = None
+    startup_modules: List[str] = field(default_factory=list)
+    exit_on_error: bool = True
     create_desktop_shortcut: bool = True
     install_notes: List[str] = field(default_factory=list)
 
@@ -916,7 +921,8 @@ def quote_windows_arguments(args: List[str]) -> str:
     return subprocess.list2cmdline(args)
 
 
-def create_start_bat(base_dir: Path, conda_exe: str, env_path: Path, config_file_path: Path) -> Path:
+def create_start_bat(base_dir: Path, conda_exe: str, env_path: Path, config_file_path: Path,
+                     startup_modules: Optional[List[str]] = None, exit_on_error: bool = True) -> Path:
     """Create a start_acq4.bat file in the base install directory.
 
     Parameters
@@ -929,6 +935,10 @@ def create_start_bat(base_dir: Path, conda_exe: str, env_path: Path, config_file
         Path to the conda environment.
     config_file_path : Path
         Path to the ACQ4 configuration file.
+    startup_modules : List[str], optional
+        List of module names to start with -m flags.
+    exit_on_error : bool
+        Whether to use the -x (exit on error) flag.
 
     Returns
     -------
@@ -941,11 +951,23 @@ def create_start_bat(base_dir: Path, conda_exe: str, env_path: Path, config_file
     conda_path = Path(conda_exe)
     conda_activate_bat = conda_path.parent / "activate.bat"
 
+    # Build module arguments
+    extra_args = []
+    if startup_modules:
+        extra_args.extend([f'-m "{module}"' for module in startup_modules])
+
+    # Build exit flag
+    if exit_on_error:
+        extra_args.append("-x")
+
+    extra_args = (" " + " ".join(extra_args)) if extra_args else ""
+
     bat_content = START_BAT_TEMPLATE.format(
         conda_activate_bat=str(conda_activate_bat),
         env_path=str(env_path),
         config_file_path=str(config_file_path),
         acq4_path=str(base_dir / ACQ4_SOURCE_DIRNAME),
+        extra_args=extra_args,
     )
     bat_path = base_dir / "start_acq4.bat"
     bat_path.write_text(bat_content, encoding="utf-8")
@@ -1126,6 +1148,30 @@ def register_config_cli_arguments(parser: argparse.ArgumentParser) -> None:
         ARG_CONFIG_FILE,
         dest="config_file",
         help="Configuration file to use from the cloned/copied config directory.",
+    )
+
+
+def register_startup_cli_arguments(parser: argparse.ArgumentParser) -> None:
+    """Add CLI options controlling startup script behavior."""
+    parser.add_argument(
+        ARG_STARTUP_MODULES,
+        dest="startup_modules",
+        help="Comma-separated list of module names to start automatically (e.g., 'Camera,Data Manager').",
+        default=None,
+    )
+    parser.add_argument(
+        ARG_EXIT_ON_ERROR,
+        dest="exit_on_error",
+        help="Use the -x (exit on error) flag when starting ACQ4 (default: true).",
+        default=None,
+        choices=["true", "false"],
+    )
+    parser.add_argument(
+        ARG_CREATE_SHORTCUT,
+        dest="create_shortcut",
+        help="Create a desktop shortcut (Windows only, default: true).",
+        default=None,
+        choices=["true", "false"],
     )
 
 
@@ -1634,13 +1680,6 @@ class DependenciesPage(QtWidgets.QWizardPage):
         self.clone_items: Dict[str, QtWidgets.QTreeWidgetItem] = {}
         self._populate_clone_tree()
 
-        # Desktop shortcut checkbox (Windows only)
-        self.create_shortcut_checkbox = QtWidgets.QCheckBox("Create desktop shortcut to start ACQ4")
-        self.create_shortcut_checkbox.setChecked(True)
-        if sys.platform != "win32":
-            self.create_shortcut_checkbox.setVisible(False)
-        layout.addWidget(self.create_shortcut_checkbox)
-
     def initializePage(self) -> None:
         """Fetch pyproject.toml from GitHub and populate the dependency tree."""
         if self._initialized:
@@ -2085,6 +2124,138 @@ class ConfigPage(QtWidgets.QWizardPage):
 
         combo.blockSignals(False)
         status_label.setText("")
+
+
+class StartupPage(QtWidgets.QWizardPage):
+    """Wizard page for configuring ACQ4 startup behavior."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.setTitle("Startup Configuration")
+        layout = QtWidgets.QVBoxLayout(self)
+
+        intro_label = QtWidgets.QLabel(
+            "Configure how ACQ4 will start when launched from the startup script or desktop shortcut."
+        )
+        intro_label.setWordWrap(True)
+        layout.addWidget(intro_label)
+
+        # Startup modules section
+        modules_group = QtWidgets.QGroupBox("Auto-start Modules")
+        modules_layout = QtWidgets.QVBoxLayout(modules_group)
+
+        modules_help = QtWidgets.QLabel(
+            "Specify which modules should start automatically when ACQ4 launches. "
+            "Enter module names separated by commas (e.g., Camera, MultiPatch, Data Manager, Task Runner)."
+        )
+        modules_help.setWordWrap(True)
+        modules_layout.addWidget(modules_help)
+
+        self.modules_edit = QtWidgets.QLineEdit()
+        self.modules_edit.setPlaceholderText("e.g., Camera, MultiPatch, Data Manager, Task Runner")
+        self.modules_edit.textChanged.connect(self._update_command_preview)
+        modules_layout.addWidget(self.modules_edit)
+
+        layout.addWidget(modules_group)
+
+        # Exit on error option
+        error_group = QtWidgets.QGroupBox("Error Handling")
+        error_layout = QtWidgets.QVBoxLayout(error_group)
+
+        self.exit_on_error_checkbox = QtWidgets.QCheckBox("Exit on error (use -x flag)")
+        self.exit_on_error_checkbox.setChecked(True)
+        self.exit_on_error_checkbox.toggled.connect(self._update_command_preview)
+        error_layout.addWidget(self.exit_on_error_checkbox)
+
+        error_help = QtWidgets.QLabel(
+            "When enabled, ACQ4 will exit immediately if an error occurs during startup. "
+            "This is recommended to catch configuration issues early."
+        )
+        error_help.setWordWrap(True)
+        error_help.setStyleSheet("color: gray; font-size: 9pt;")
+        error_layout.addWidget(error_help)
+
+        layout.addWidget(error_group)
+
+        # Desktop shortcut (Windows only)
+        self.create_shortcut_checkbox = QtWidgets.QCheckBox("Create desktop shortcut to start ACQ4")
+        self.create_shortcut_checkbox.setChecked(True)
+        if sys.platform != "win32":
+            self.create_shortcut_checkbox.setVisible(False)
+        layout.addWidget(self.create_shortcut_checkbox)
+
+        # Command preview
+        preview_group = QtWidgets.QGroupBox("Startup Command Preview")
+        preview_layout = QtWidgets.QVBoxLayout(preview_group)
+
+        self.command_label = QtWidgets.QLabel()
+        self.command_label.setWordWrap(True)
+        self.command_label.setStyleSheet("font-family: monospace; background-color: #f0f0f0; padding: 8px;")
+        preview_layout.addWidget(self.command_label)
+
+        layout.addWidget(preview_group)
+
+        # Initialize command preview
+        self._update_command_preview()
+
+        layout.addStretch()
+
+    def _update_command_preview(self) -> None:
+        """Update the command preview label based on current selections."""
+        # Parse modules
+        modules_text = self.modules_edit.text().strip()
+        modules = [m.strip() for m in modules_text.split(",") if m.strip()]
+
+        # Build command
+        parts = ["python -m acq4"]
+
+        if self.exit_on_error_checkbox.isChecked():
+            parts.append("-x")
+
+        parts.append("-c <config_file>")
+
+        for module in modules:
+            parts.append(f'-m "{module}"')
+
+        command = " ".join(parts)
+        self.command_label.setText(command)
+
+    def apply_cli_args(self, args: argparse.Namespace) -> None:
+        """Apply CLI arguments to this page's widgets."""
+        if args.startup_modules is not None:
+            self.modules_edit.setText(args.startup_modules)
+
+        if args.exit_on_error is not None:
+            self.exit_on_error_checkbox.setChecked(args.exit_on_error == "true")
+
+        if args.create_shortcut is not None:
+            self.create_shortcut_checkbox.setChecked(args.create_shortcut == "true")
+
+    def cli_arguments(self) -> List[str]:
+        """Generate CLI arguments representing this page's selections."""
+        args = []
+
+        modules_text = self.modules_edit.text().strip()
+        if modules_text:
+            args.extend([ARG_STARTUP_MODULES, modules_text])
+
+        args.extend([ARG_EXIT_ON_ERROR, "true" if self.exit_on_error_checkbox.isChecked() else "false"])
+
+        if sys.platform == "win32":
+            args.extend([ARG_CREATE_SHORTCUT, "true" if self.create_shortcut_checkbox.isChecked() else "false"])
+
+        return args
+
+    def startup_modules(self) -> List[str]:
+        """Return the list of startup modules."""
+        modules_text = self.modules_edit.text().strip()
+        if not modules_text:
+            return []
+        return [m.strip() for m in modules_text.split(",") if m.strip()]
+
+    def exit_on_error(self) -> bool:
+        """Return whether exit-on-error is enabled."""
+        return self.exit_on_error_checkbox.isChecked()
 
 
 class SummaryPage(QtWidgets.QWizardPage):
@@ -2917,6 +3088,7 @@ class InstallWizard(QtWidgets.QWizard):
         self.location_page = LocationPage()
         self.dependencies_page = DependenciesPage(self.editable_map)
         self.config_page = ConfigPage()
+        self.startup_page = StartupPage()
         self.summary_page = SummaryPage()
         self.install_page = InstallPage()
         if self.git_page is not None:
@@ -2924,6 +3096,7 @@ class InstallWizard(QtWidgets.QWizard):
         self.addPage(self.location_page)
         self.addPage(self.dependencies_page)
         self.addPage(self.config_page)
+        self.addPage(self.startup_page)
         self.addPage(self.summary_page)
         self.addPage(self.install_page)
 
@@ -2996,12 +3169,14 @@ class InstallWizard(QtWidgets.QWizard):
         self.location_page.apply_cli_args(args)
         self.dependencies_page.apply_cli_args(args)
         self.config_page.apply_cli_args(args)
+        self.startup_page.apply_cli_args(args)
 
     def cli_arguments(self, unattended: bool = False) -> List[str]:
         args: List[str] = []
         args.extend(self.location_page.cli_arguments())
         args.extend(self.dependencies_page.cli_arguments())
         args.extend(self.config_page.cli_arguments())
+        args.extend(self.startup_page.cli_arguments())
         if unattended:
             args.insert(0, "--unattended")
         return args
@@ -3623,7 +3798,11 @@ class InstallerExecutor:
 
         self.logger.message("Creating start_acq4.bat launcher script", task_id=self._active_task_id)
         try:
-            bat_path = create_start_bat(base_dir, conda_exe, env_dir, config_file_path)
+            bat_path = create_start_bat(
+                base_dir, conda_exe, env_dir, config_file_path,
+                startup_modules=self.state.startup_modules,
+                exit_on_error=self.state.exit_on_error
+            )
         except Exception as e:
             self.logger.message(f"Failed to create bat file: {e}", task_id=self._active_task_id)
             return
@@ -3755,6 +3934,7 @@ def build_cli_parser() -> argparse.ArgumentParser:
     register_location_cli_arguments(parser)
     register_dependency_cli_arguments(parser)
     register_config_cli_arguments(parser)
+    register_startup_cli_arguments(parser)
     parser.add_argument(
         "--unattended",
         action="store_true",
@@ -3826,6 +4006,20 @@ def state_from_cli_args(args: argparse.Namespace,
     # Sanity check: --config-branch only makes sense with --config-repo
     if config_repo_branch and not config_repo:
         raise InstallerError("--config-branch requires --config-repo.")
+
+    # Parse startup parameters
+    startup_modules = []
+    if args.startup_modules:
+        startup_modules = [m.strip() for m in args.startup_modules.split(",") if m.strip()]
+
+    exit_on_error = True
+    if args.exit_on_error is not None:
+        exit_on_error = args.exit_on_error == "true"
+
+    create_shortcut = True
+    if args.create_shortcut is not None:
+        create_shortcut = args.create_shortcut == "true"
+
     return InstallerState(
         install_path=install_path,
         branch=branch_value,
@@ -3839,6 +4033,9 @@ def state_from_cli_args(args: argparse.Namespace,
         config_repo_branch=config_repo_branch,
         config_copy_path=config_copy_path,
         config_file=config_file,
+        startup_modules=startup_modules,
+        exit_on_error=exit_on_error,
+        create_desktop_shortcut=create_shortcut,
     )
 
 
@@ -3940,7 +4137,9 @@ def collect_state(wizard: InstallWizard) -> InstallerState:
         config_repo_branch=wizard.config_repo_branch(),
         config_copy_path=wizard.config_copy_path(),
         config_file=config_file,
-        create_desktop_shortcut=wizard.dependencies_page.create_shortcut_checkbox.isChecked(),
+        startup_modules=wizard.startup_page.startup_modules(),
+        exit_on_error=wizard.startup_page.exit_on_error(),
+        create_desktop_shortcut=wizard.startup_page.create_shortcut_checkbox.isChecked(),
     )
 
 
