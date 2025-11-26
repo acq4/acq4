@@ -1,1 +1,4 @@
-from .DataManagerModule import *
+from .DataManagerModule import DataManager
+
+
+__all__ = ["DataManager"]
