@@ -256,6 +256,7 @@ class Stage(Device, OptomechDevice):
         """Return an axis transform matrix that maps localPos to parentPos, given
         stagePos.
         """
+        # TODO huh? 4-axis needs something different
         offset = (
             pg.transformCoordinates(self.inverseBaseTransform(), parentPos, transpose=True)
             - localPos
