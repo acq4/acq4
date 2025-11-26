@@ -210,7 +210,7 @@ class Stage(Device, OptomechDevice):
         factors.
         """
         if self._axisTransform is None:
-            scale = np.asarray(list(self.config.get('scale', [1] * self.nAxes)) + [1])
+            scale = np.asarray(list(self.config.get('scale', [1] * self.nAxes)))
             self._axisTransform = AffineTransform(matrix=np.eye(self.nAxes) * scale)
         return self._axisTransform
 
