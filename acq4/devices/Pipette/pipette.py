@@ -250,7 +250,7 @@ class Pipette(Device, OptomechDevice):
             pos = self.globalPosition()
         manip_pos = self._solveGlobalStagePosition(pos)
         manip: Stage = self.parentStage
-        manip.checkLimits(manip.mapGlobalToDevicePosition(manip_pos))
+        manip.checkRangeOfMotion(manip_pos, name, tolerance=0)
 
         cache = self.readConfigFile('stored_positions')
         cache[name] = list(pos)

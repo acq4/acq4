@@ -1939,7 +1939,7 @@ def greedy_axis_inverse_kinematics(
     bounds: list[tuple[float, float]],
     axis: int,
     starting_point: list[float],
-):
+) -> np.ndarray:
     """Calculate the global_to_device kinematics for a point given a device with more dimensions than the
     space in which it operates.
 
@@ -1995,7 +1995,7 @@ def neutral_anchored_inverse_kinematics(
     device_to_global: Transform,
     bounds: list[tuple[float, float]],
     neutral: list[float | None],
-):
+) -> np.ndarray:
     """Calculate the global_to_device kinematics for a point given a device with more dimensions than the
     space in which it operates.
 

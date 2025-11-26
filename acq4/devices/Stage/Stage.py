@@ -18,7 +18,12 @@ from ..OptomechDevice import OptomechDevice, map_through_transform
 from acq4 import getManager
 from ...util.HelpfulException import HelpfulException
 from ...util.future import Future, FutureButton
-from ...util.geometry import Plane, limits_to_boundaries
+from ...util.geometry import (
+    Plane,
+    limits_to_boundaries,
+    greedy_axis_inverse_kinematics,
+    neutral_anchored_inverse_kinematics,
+)
 
 
 class Stage(Device, OptomechDevice):
@@ -194,18 +199,6 @@ class Stage(Device, OptomechDevice):
             axisTransform = self.axisTransform()
         offset = map_through_transform(pos, axisTransform)[:3]
         return TTransform(offset=offset, dims=(3, 3))
-
-    def _solveStageTransform(self, posChange):
-        """Given a desired change of local origin, return the device position required.
-
-        The default implementation simply inverts _axisTransform to generate this solution;
-        devices with more complex kinematics need to reimplement this method.
-        """
-        if self.nAxes > 3:
-            # TODO 4-axis logic
-            raise NotImplementedError("TODO: _solveStageTransform must be fixed")
-        tr = self.stageTransform().offset + pg.Vector(posChange)
-        return pg.Vector(self.inverseAxisTransform().map(tr))
 
     def axisTransform(self) -> AffineTransform:
         """Transformation matrix with columns that point in the direction that each manipulator axis moves.
@@ -468,9 +461,44 @@ class Stage(Device, OptomechDevice):
         """Must be reimplemented by subclasses and return a MoveFuture instance."""
         raise NotImplementedError()
 
-    def mapGlobalToDevicePosition(self, pos):
-        localPos = self.mapFromGlobal(pos)
-        return self._solveStageTransform(localPos)
+    def mapGlobalToDevicePosition(self, globalPos, linear=None, previousPos=None):
+        """Given a desired global position, return the device position required."""
+        if self.nAxes > 3 and (linear is None or previousPos is None):
+            raise ValueError(
+                "Inverse mapping on 4-axis stages requires 'linear' and 'previousPos'."
+            )
+        local_pos = self.mapFromGlobal(globalPos)
+        if self.nAxes <= 3:
+            # we can use a simple inverse transform
+            tr = self.stageTransform().offset + pg.Vector(local_pos)
+            return pg.Vector(self.inverseAxisTransform().map(tr))
+
+        if linear:
+            # move primarily along the axis most aligned to this displacement
+            primary_axis = None
+            max_dot = 0
+            for i in range(self.nAxes):
+                axis_vec = np.asarray(self.axisTransform().full_matrix[:3, i])
+                axis_vec = axis_vec / np.linalg.norm(axis_vec)
+                dot = abs(axis_vec.dot(np.asarray(local_pos)))
+                if dot > max_dot:
+                    max_dot = dot
+                    primary_axis = i
+            return greedy_axis_inverse_kinematics(
+                local_pos,
+                self.axisTransform(),
+                self.getLimits(),
+                primary_axis,
+                previousPos,
+            )
+
+        # otherwise, hold to a neutral position of d=0
+        return neutral_anchored_inverse_kinematics(
+            local_pos,
+            self.axisTransform(),
+            self.getLimits(),
+            [None, None, None, 0],
+        )
 
     def mapDeviceToGlobalPosition(self, pos):
         pos = map_through_transform(pos, self.axisTransform())[:3]
@@ -479,7 +507,7 @@ class Stage(Device, OptomechDevice):
     def moveToGlobal(self, pos, speed, progress=False, linear=False, name=None):
         """Move the stage to a position expressed in the global coordinate frame."""
         return self.move(
-            position=self.mapGlobalToDevicePosition(pos),
+            position=self.mapGlobalToDevicePosition(pos, linear, self.getPosition()),
             speed=speed,
             progress=progress,
             linear=linear,
@@ -578,9 +606,9 @@ class Stage(Device, OptomechDevice):
     def _setHardwareLimits(self, axis: int, limit: tuple):
         raise NotImplementedError("Must be implemented in subclass.")
 
-    def checkGlobalLimits(self, globalPos):
+    def checkGlobalLimits(self, globalPos, linear):
         """Raise an exception if *globalPos* (in global coordinates) is outside the configured limits"""
-        stagePos = self.mapGlobalToDevicePosition(globalPos)
+        stagePos = self.mapGlobalToDevicePosition(globalPos, linear, self.getPosition())
         self.checkLimits(stagePos)
 
     def checkLimits(self, stagePos):
@@ -601,6 +629,9 @@ class Stage(Device, OptomechDevice):
 
     def checkRangeOfMotion(self, pos, name, tolerance=500e-6):
         """Raise an exception if the specified global position is within *tolerance* of the limits of the device."""
+        if self.nAxes != 3:
+            # TODO make this 4-axis compatible
+            raise NotImplementedError("checkRangeOfMotion is only implemented for 3-axis stages.")
         pos = np.array(pos)
         bad_axes = []
         for axis in (0, 1, 2):
@@ -746,20 +777,22 @@ class MovePathFuture(MoveFuture):
         self.currentStep = 0
         self._currentFuture = None
 
+        prev = dev.getPosition()
         for step in self.path:
             if step.get("globalPos") is not None:
-                step["position"] = dev.mapGlobalToDevicePosition(step.pop("globalPos"))
+                step["position"] = dev.mapGlobalToDevicePosition(
+                    step.pop("globalPos"), step.get("linear", False), prev
+                )
+                prev = step["position"]
         for i, step in enumerate(self.path):
             try:
-                self.dev.checkMove(**step)
+                dev.checkMove(**step)
             except Exception as exc:
                 raise Exception(
                     f"Cannot move {dev.name()} to path step {i}/{len(self.path)}: {step}"
                 ) from exc
 
-        self._moveThread = threading.Thread(
-            target=self._movePath, name=f'{self.dev.name()} : {name}'
-        )
+        self._moveThread = threading.Thread(target=self._movePath, name=f'{dev.name()} : {name}')
         self._moveThread.start()
 
     def percentDone(self):
