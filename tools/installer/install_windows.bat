@@ -15,8 +15,7 @@ set "RESULT=0"
 set "INSTALLER_URL=https://raw.githubusercontent.com/AllenInstitute/acq4/ivscc/tools/installer/installer.py"
 set "INSTALLER_ENV_NAME=_acq4_installer"
 set "PYTHON_VERSION=3.12"
-set "QT_PACKAGE=pyqt6"
-set "TOML_PARSER_PACKAGE=tomli"
+set "PY_PACKAGES=pyqt6 tomli pywin32"
 set "MIN_CONDA_VERSION=4.14.0"
 set "MINICONDA_URL=https://repo.anaconda.com/miniconda/Miniconda3-latest-Windows-x86_64.exe"
 set "MINICONDA_PREFIX=%USERPROFILE%\Miniconda3"
@@ -262,8 +261,8 @@ if errorlevel 1 (
 echo Python verified successfully
 
 echo Installing dependencies in installer environment...
-echo Running: "%CONDA_EXE%" run -n "%INSTALLER_ENV_NAME%" python -m pip install --upgrade %QT_PACKAGE% %TOML_PARSER_PACKAGE%
-call "%CONDA_EXE%" run -n "%INSTALLER_ENV_NAME%" python -m pip install --upgrade %QT_PACKAGE% %TOML_PARSER_PACKAGE% --index-url=https://pypi.org/simple/
+echo Running: "%CONDA_EXE%" run -n "%INSTALLER_ENV_NAME%" python -m pip install --upgrade %PY_PACKAGES%
+call "%CONDA_EXE%" run -n "%INSTALLER_ENV_NAME%" python -m pip install --upgrade %PY_PACKAGES% --index-url=https://pypi.org/simple/
 if errorlevel 1 (
     echo ERROR: Failed to install dependencies in installer environment
     exit /b 1

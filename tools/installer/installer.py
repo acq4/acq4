@@ -2433,7 +2433,7 @@ class HtmlLogTreeWidget(QtWidgets.QTreeWidget):
         # Auto-detect HTML if not explicitly specified
         if not is_html and text:
             is_html = "<" in text and ">" in text and any(
-                tag in text for tag in ["<p>", "<b>", "<code>", "<pre>", "<br>", "<a "]
+                tag in text for tag in ["", "<b>", "<code>", "<pre>", "<br>", "<a "]
             )
 
         # Create item with empty text if HTML will be used
@@ -3685,9 +3685,9 @@ class InstallerExecutor:
         config_dir = base_dir / CONFIG_DIRNAME
 
         # Installation paths
-        self.logger.message(f"<p><b>Installation directory:</b> <code>{base_dir}</code></p>", task_id=self._active_task_id)
-        self.logger.message(f"<p><b>ACQ4 source:</b> <code>{base_dir / ACQ4_SOURCE_DIRNAME}</code></p>", task_id=self._active_task_id)
-        self.logger.message(f"<p><b>Conda environment:</b> <code>{env_dir}</code></p>", task_id=self._active_task_id)
+        self.logger.message(f"<b>Installation directory:</b> <code>{base_dir}</code>", task_id=self._active_task_id)
+        self.logger.message(f"<b>ACQ4 source:</b> <code>{base_dir / ACQ4_SOURCE_DIRNAME}</code>", task_id=self._active_task_id)
+        self.logger.message(f"<b>Conda environment:</b> <code>{env_dir}</code>", task_id=self._active_task_id)
 
         # Configuration
         if self.state.config_mode == "clone":
@@ -3698,8 +3698,8 @@ class InstallerExecutor:
             config_source = "Default configuration"
 
         self.logger.message(
-            f"<p><b>Configuration:</b> <code>{config_dir}</code><br>"
-            f"<b>Source:</b> {config_source}</p>",
+            f"<b>Configuration:</b> <code>{config_dir}</code><br>"
+            f"<b>Source:</b> {config_source}",
             task_id=self._active_task_id
         )
 
@@ -3708,8 +3708,8 @@ class InstallerExecutor:
             dep_dir = base_dir / DEPENDENCIES_DIRNAME
             dep_list = ", ".join(self.state.editable_selection)
             self.logger.message(
-                f"<p><b>Editable dependencies:</b> <code>{dep_dir}</code><br>"
-                f"<b>Packages:</b> {dep_list}</p>",
+                f"<b>Editable dependencies:</b> <code>{dep_dir}</code><br>"
+                f"<b>Packages:</b> {dep_list}",
                 task_id=self._active_task_id
             )
 
@@ -3717,7 +3717,7 @@ class InstallerExecutor:
         if os.name == "nt":
             startup_script = base_dir / "start_acq4.bat"
             self.logger.message(
-                f"<p><b>Startup script:</b> <code>{startup_script}</code></p>",
+                f"<b>Startup script:</b> <code>{startup_script}</code>",
                 task_id=self._active_task_id
             )
 
@@ -3725,24 +3725,24 @@ class InstallerExecutor:
         if self.state.install_notes:
             notes_html = "<br>".join(self.state.install_notes)
             self.logger.message(
-                f"<p><b>Installation notes:</b><br>{notes_html}</p>",
+                f"<b>Installation notes:</b><br>{notes_html}",
                 task_id=self._active_task_id
             )
 
         # How to start ACQ4
-        self.logger.message("<p><b>How to start ACQ4:</b></p>", task_id=self._active_task_id)
+        self.logger.message("<b>How to start ACQ4:</b>", task_id=self._active_task_id)
         if os.name == "nt":
             if self.state.create_desktop_shortcut:
                 shortcut_name = f"ACQ4 ({base_dir.name})"
                 self.logger.message(
-                    f"<p>A desktop shortcut named <b>\"{shortcut_name}\"</b> has been created. "
-                    f"Double-click it to launch ACQ4.</p>",
+                    f"A desktop shortcut named <b>\"{shortcut_name}\"</b> has been created. "
+                    f"Double-click it to launch ACQ4.",
                     task_id=self._active_task_id
                 )
             else:
                 startup_script = base_dir / "start_acq4.bat"
                 self.logger.message(
-                    f"<p>Run the startup script: <code>{startup_script}</code></p>",
+                    f"Run the startup script: <code>{startup_script}</code>",
                     task_id=self._active_task_id
                 )
         else:
@@ -3752,13 +3752,13 @@ class InstallerExecutor:
             config_path = base_dir / CONFIG_DIRNAME / self.state.config_file
             acq4_path = base_dir / ACQ4_SOURCE_DIRNAME
             self.logger.message(
-                "<p>Activate the conda environment and run ACQ4:</p>"
+                "Activate the conda environment and run ACQ4:"
                 f"<pre>conda activate {env_dir}\n"
                 f"python -m acq4 -c {config_path}</pre>",
                 task_id=self._active_task_id
             )
             self.logger.message(
-                f"<p>Or run directly from the source directory:</p>"
+                f"Or run directly from the source directory:"
                 f"<pre>conda activate {env_dir}\n"
                 f"cd {acq4_path}\n"
                 f"python -m acq4 -c {config_path}</pre>",
@@ -3773,14 +3773,14 @@ class InstallerExecutor:
                 packages_with_docs.append((dep.display_name, dep.post_install_doc))
 
         if packages_with_docs:
-            self.logger.message("<p><b>Next Steps:</b></p>", task_id=self._active_task_id)
+            self.logger.message("<b>Next Steps:</b>", task_id=self._active_task_id)
             self.logger.message(
-                "<p>The following packages require additional 3rd-party software to be installed:</p>",
+                "The following packages require additional 3rd-party software to be installed:",
                 task_id=self._active_task_id
             )
             for pkg_name, url in packages_with_docs:
                 self.logger.message(
-                    f"<p><b>{pkg_name}:</b> <a href=\"{url}\">{url}</a></p>",
+                    f"<b>{pkg_name}:</b> <a href=\"{url}\">{url}</a>",
                     task_id=self._active_task_id
                 )
 
