@@ -964,10 +964,10 @@ def create_desktop_shortcut_windows(bat_path: Path, base_dir: Path) -> None:
 
     Notes
     -----
-    This function creates a shortcut to the bat file and attempts to configure
-    it to disable Quick Edit mode in the console window. Quick Edit mode can
-    cause the console to pause when text is accidentally selected, which is
-    undesirable for long-running applications.
+    This function creates a shortcut to the bat file and configures the console
+    window with Quick Edit mode disabled and custom buffer/window sizes. Quick
+    Edit mode can cause the console to pause when text is accidentally selected,
+    which is undesirable for long-running applications.
     """
     desktop = Path(os.path.expanduser("~")) / "Desktop"
     desktop.mkdir(parents=True, exist_ok=True)
@@ -976,27 +976,25 @@ def create_desktop_shortcut_windows(bat_path: Path, base_dir: Path) -> None:
 
     # Try to find the ACQ4 icon
     icon_path = base_dir / ACQ4_SOURCE_DIRNAME / "acq4" / "icons" / "acq4.ico"
-    icon_location = str(icon_path) if icon_path.exists() else ""
 
-    # PowerShell script to create shortcut and modify its properties
-    # Note: Disabling Quick Edit requires modifying the .lnk file binary directly
-    # which is not easily done via WScript.Shell. We create the shortcut here,
-    # and users can manually disable Quick Edit by right-clicking the shortcut,
-    # selecting Properties > Options > and unchecking "Quick Edit Mode" if needed.
-    ps_script = (
-        "$ws = New-Object -ComObject WScript.Shell;"
-        f"$s = $ws.CreateShortcut('{shortcut_path}');"
-        f"$s.TargetPath = '{bat_path}';"
-        "$s.Arguments = '';"
-        f"$s.WorkingDirectory = '{base_dir}';"
-    )
+    # Use create_lnk.py script to create shortcut with custom console settings
+    create_lnk_script = base_dir / ACQ4_SOURCE_DIRNAME / "tools" / "create_lnk.py"
 
-    if icon_location:
-        ps_script += f"$s.IconLocation = '{icon_location}';"
+    cmd = [
+        "python",
+        str(create_lnk_script),
+        str(shortcut_path),
+        str(bat_path),
+        "--working-dir", str(base_dir),
+        "--quickedit", "off",
+        "--window", "160x60",
+        "--buffer", "160x9999"
+    ]
 
-    ps_script += "$s.Save();"
+    if icon_path.exists():
+        cmd.extend(["--icon", str(icon_path)])
 
-    subprocess.run(["powershell", "-NoProfile", "-Command", ps_script], check=True)
+    subprocess.run(cmd, check=True)
 
 
 def build_unattended_script_content(cli_args: List[str], *, is_windows: bool) -> str:
