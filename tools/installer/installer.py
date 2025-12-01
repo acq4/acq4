@@ -92,13 +92,17 @@ DEPENDENCY_METADATA: Dict[str, Dict[str, Dict[str, str]]] = {
             "title": "Machine Learning Framework and Models (warning: large downloads)",
             "description": "Packages for machine learning-based analysis.",
         },
+        "docs": {
+            "title": "Documentation",
+            "description": "Packages required to build ACQ4 documentation.",
+        },
         "testing": {
             "title": "Testing",
             "description": "Packages required for running ACQ4 test suite.",
         },
-        "docs": {
-            "title": "Documentation",
-            "description": "Packages required to build ACQ4 documentation.",
+        "dev": {
+            "title": "Development",
+            "description": "Packages useful for ACQ4 development.",
         },
     },
     "packages": {

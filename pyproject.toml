@@ -77,6 +77,10 @@ testing = [
     "pytest",
     "pytest-qt",
 ]
+dev = [
+    "black",
+    "acq4[testing]",
+]
 
 [project.urls]
 Homepage = "http://www.acq4.org"
