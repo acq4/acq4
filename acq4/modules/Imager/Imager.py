@@ -1252,9 +1252,9 @@ class ImagingThread(Thread):
         info = meta.copy()
         info["time"] = start
 
-        info["deviceTranform"] = pg.SRTTransform3D(self.scannerDev.globalTransform())
-        tr = rectSystem.imageTransform()
-        info["transform"] = pg.SRTTransform3D(tr)
+        # TODO this needs to be coorx'd
+        info["deviceTransform"] = self.scannerDev.globalTransform()
+        info["transform"] = rectSystem.imageTransform()
 
         frame = ImagingFrame(pmtData, rectSystem.copy(), info)
         self.sigNewFrame.emit(frame)

@@ -1544,9 +1544,9 @@ class Geometry:
 
         self.color = config.pop("color", None)
 
+        # TODO this needs to use common code with other transform deserialization (e.g. frame.py)
         xform = config.pop("transform", {}).copy()
-        if "pos" in xform:
-            xform["offset"] = xform.pop("pos")
+        xform.setdefault("offset", xform.pop("pos", None))
         self._transform = SRT3DTransform(**self._default_transform_args(), **xform)
 
         self._children = []

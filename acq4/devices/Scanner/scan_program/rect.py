@@ -503,6 +503,7 @@ class RectScan(SystemSolver):
         """
         Return the transform that maps from image pixel coordinates to global coordinates.
         """
+        # TODO this needs to be coorx'd
         ims = self.imageShape
         acs = self.activeShape
         dx = self.colVector

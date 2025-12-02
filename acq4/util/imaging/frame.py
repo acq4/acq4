@@ -4,8 +4,16 @@ from MetaArray import MetaArray
 import pyqtgraph as pg
 from acq4.util.DataManager import FileHandle, DirHandle
 from acq4.util.imaging.background import remove_background_from_image
-from coorx import SRT3DTransform
-from pyqtgraph import SRTTransform3D, ImageItem
+from coorx import SRT3DTransform, create_transform, Transform
+from pyqtgraph import ImageItem
+
+
+def load_transform_from_file(config: dict) -> Transform:
+    if "type" in config:
+        return create_transform(**config)
+    config = config.copy()
+    config.setdefault("offset", config.pop("pos", None))
+    return SRT3DTransform(**config)
 
 
 class Frame:
@@ -36,9 +44,7 @@ class Frame:
                         info["time"] = row.axisValues(2)
                     elif data.axisName(0) == "Depth":
                         depth = row.axisValues(2)
-                        xform = info["transform"].copy()
-                        xform["offset"] = xform.pop("pos", None)
-                        xform = SRT3DTransform(xform)
+                        xform = load_transform_from_file(info["transform"])
                         pos = xform.offset
                         pos[2] = depth
                         xform.offset = pos
@@ -89,21 +95,21 @@ class Frame:
 
     def deviceTransform(self):
         """Return the transform that maps from imager device coordinates to global."""
-        return SRTTransform3D(self._info['deviceTransform'])
-    
+        return self._info['deviceTransform']
+
     def frameTransform(self):
         """Return the transform that maps from this frame's image coordinates
         to its imager device coordinates. This transform takes into account
         the camera's region and binning settings.
         """
-        return SRTTransform3D(self._info['frameTransform'])
-        
+        return self._info['frameTransform']
+
     def globalTransform(self):
         """Return the transform that maps this frame's image coordinates (row, col)
         to global coordinates (x, y, z). This is equivalent to (deviceTransform * frameTransform).
         """
-        return SRTTransform3D(self._info['transform'])
-        
+        return self._info['transform']
+
     def mapFromFrameToGlobal(self, obj):
         """Map *obj* from the frame's data coordinates to global coordinates.
         """
@@ -112,10 +118,7 @@ class Frame:
     def mapFromGlobalToFrame(self, obj):
         """Map *obj* from global coordinates to the frame's data coordinates.
         """
-        inverted, invertible = self.globalTransform().inverted()
-        if not invertible:
-            raise ValueError("Global transform is not invertible.")
-        return inverted.map(obj)
+        return self.globalTransform().inverse.map(obj)
 
     @property
     def time(self):

@@ -93,9 +93,13 @@ class Stage(Device, OptomechDevice):
         self._progressTimer.timeout.connect(self.updateProgressDialog)
 
         calibration = self.readConfigFile('calibration')
-        axisTr = calibration.get('transform', None)
-        if axisTr is not None:
-            self._axisTransform = AffineTransform(axisTr)
+        # TODO standardize transform format
+        axis_tr = calibration.get('transform', None)
+        if axis_tr is not None:
+            axis_tr = np.asarray(axis_tr)
+            axis_offset = axis_tr[:3, 3]
+            axis_matrix = axis_tr[:3, :3]
+            self._axisTransform = AffineTransform(axis_matrix, axis_offset)
 
         # set up joystick callbacks if requested
         jsdevs = set()
@@ -185,10 +189,7 @@ class Stage(Device, OptomechDevice):
 
     def _makeStageTransform(self, pos, axisTransform=None):
         """Return a stage transform (as should be returned by stageTransform)
-        and an optional inverse, given a position reported by the device.
-
-        If the inverse transform is None, then it will be automatically generated
-        on demand by calling transform.inverted().
+        given a position reported by the device.
 
         Subclasses may override this method; the default uses _axisTransform to
         map from the device position to a translation matrix. This covers only cases

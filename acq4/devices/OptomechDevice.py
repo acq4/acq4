@@ -9,7 +9,7 @@ from acq4.Interfaces import InterfaceMixin
 from acq4.util import Qt
 from acq4.util.Mutex import Mutex
 from acq4.util.geometry import Geometry
-from coorx import SRT3DTransform, Transform
+from coorx import SRT3DTransform, Transform, create_transform
 
 
 def map_through_transform(obj: tuple | list | Qt.QPointF | Qt.QVector3D | np.ndarray, tr: Transform):
@@ -377,18 +377,28 @@ class OptomechDevice(InterfaceMixin):
 
     def setDeviceTransform(self, tr):
         if isinstance(tr, dict):
-            allowed = {"pos", "scale", "angle", "axis"}
-            if len(set(tr.keys()) - allowed) > 0:
-                raise ValueError(f"Illegal args while creating a transform ({tr})")
-            tr["offset"] = tr.pop("pos", None)
-            tr = SRT3DTransform(**tr)
+            # TODO use this logic everywhere a transform dict is accepted
+            if "type" in tr:
+                tr = create_transform(**tr)
+            else:
+                allowed = {"pos", "scale", "angle", "axis"}
+                if len(set(tr.keys()) - allowed) > 0:
+                    raise ValueError(f"Illegal args while creating a transform ({tr})")
+                tr.setdefault("offset", tr.pop("pos", None))
+                if len(tr.get("offset", [])) == 2:
+                    tr["offset"] = (tr["offset"][0], tr["offset"][1], 0)
+                if len(tr.get("scale", [])) == 2:
+                    tr["scale"] = (tr["scale"][0], tr["scale"][1], 1)
+                tr = SRT3DTransform(**tr)
+        elif isinstance(tr, pg.SRTTransform):
+            tr = SRT3DTransform.from_pyqtgraph(tr)
         with self.__lock:
             self.__transform = tr
             self.invalidateCachedTransforms()
 
         self.sigTransformChanged.emit(self)
 
-    def globalTransform(self, subdev=None) -> pg.SRTTransform3D:
+    def globalTransform(self, subdev=None) -> SRT3DTransform | None:
         """
         Return the transform mapping from local device coordinates to global coordinates.
         If the resulting transform is non-affine, then None is returned and the mapTo/mapFrom
@@ -464,7 +474,7 @@ class OptomechDevice(InterfaceMixin):
     def __computeGlobalPhysicalTransform(self, subdev=None, inverse=False):
         parent = self.parentDevice()
         if parent is None:
-            parentTr = pg.SRTTransform3D()
+            parentTr = SRT3DTransform(dims=(3, 3))
         else:
             parentTr = parent.globalPhysicalTransform(subdev)
         if parentTr is None:
@@ -744,17 +754,17 @@ class DeviceTreeItemGroup(pg.ItemGroup):
         """Construct a QGraphicsItemGroup for the specified device/subdevice.
         This is a good method to extend in subclasses."""
         newGroup = Qt.QGraphicsItemGroup()
-        newGroup.setTransform(pg.SRTTransform(dev.deviceTransform(subdev)))
+        newGroup.setTransform(dev.deviceTransform(subdev).as_pyqtgraph().as2D())
         return newGroup
 
     def transformChanged(self, sender, device):
         for subdev, items in self.groups[device].items():
-            tr = pg.SRTTransform(device.deviceTransform(subdev))
+            tr = device.deviceTransform(subdev).as_pyqtgraph().as2D()
             for item in items:
                 item.setTransform(tr)
 
     def subdevTransformChanged(self, sender, device, subdev):
-        tr = pg.SRTTransform(device.deviceTransform(subdev))
+        tr = device.deviceTransform(subdev).as_pyqtgraph().as2D()
         for item in self.groups[device][subdev]:
             item.setTransform(tr)
 

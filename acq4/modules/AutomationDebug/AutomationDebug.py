@@ -874,10 +874,8 @@ class AutomationDebugWindow(Qt.QWidget):
             ]  # Start Z from the live frame's depth
 
             for i in range(len(data)):
-                mock_frame_transform = pg.SRTTransform3D(
-                    live_frame_global_transform.saveState()
-                )
-                mock_frame_transform.setScale(pixel_size, pixel_size, step_z)
+                mock_frame_transform = live_frame_global_transform.copy()
+                mock_frame_transform.scale = (pixel_size, pixel_size, step_z)
                 z_offset = current_mock_frame_global_z - live_frame_origin_global_xyz[2]
                 mock_frame_transform.translate(0, 0, z_offset)
 

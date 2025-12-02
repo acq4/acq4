@@ -390,6 +390,8 @@ class Objective(Device, OptomechDevice):
 
     def setOffset(self, pos):
         tr = self.deviceTransform()
+        if len(pos) < 3:
+            pos = (pos[0], pos[1], 0)
         tr.offset = pos
         # TODO modify in place makes set redundant
         self.setDeviceTransform(tr)
@@ -397,6 +399,8 @@ class Objective(Device, OptomechDevice):
     def setScale(self, scale):
         if not hasattr(scale, '__len__'):
             scale = (scale, scale, 1)
+        if len(scale) < 3:
+            scale = (scale[0], scale[1], 1)
 
         tr = self.deviceTransform()
         tr.scale = scale
@@ -404,7 +408,7 @@ class Objective(Device, OptomechDevice):
         self.setDeviceTransform(tr)
 
     def offset(self):
-        return self.deviceTransform().offset
+        return pg.Vector(self.deviceTransform().offset)
 
     def scale(self):
         return self.deviceTransform().scale
@@ -421,8 +425,8 @@ class Objective(Device, OptomechDevice):
 
     def __repr__(self):
         return (f"<Objective {self._scope.name()}.{self.name()} "
-                f"offset={self.offset().x():0.2g},{self.offset().y():0.2g} "
-                f"scale={self.scale().x():0.2g}>")
+                f"offset={self.offset()[0]:0.2g},{self.offset()[1]:0.2g} "
+                f"scale={self.scale()[0]:0.2g}>")
 
 
 class ScopeGUI(Qt.QWidget):
@@ -550,13 +554,13 @@ class ScopeGUI(Qt.QWidget):
                 obj = obj.toPyObject()
 
             offset = obj.offset()
-            xs.setValue(offset.x())
-            ys.setValue(offset.y())
-            zs.setValue(offset.z())
+            xs.setValue(offset[0])
+            ys.setValue(offset[1])
+            zs.setValue(offset[2])
 
             scale = obj.scale()
-            xyss.setValue(scale.x())
-            zss.setValue(scale.z())
+            xyss.setValue(scale[0])
+            zss.setValue(scale[2])
 
 
 class ScopeCameraModInterface(CameraModuleInterface):

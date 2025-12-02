@@ -168,15 +168,15 @@ class CameraInterface(CameraModuleInterface):
         ## if the camera is running, then this is taken care of in drawFrame to
         ## ensure that the image remains stationary on screen.
         if not self.cam.isRunning():
-            tr = pg.SRTTransform(self.cam.globalTransform())
+            tr = self.cam.globalTransform().as_pyqtgraph().as2D()
             self.updateTransform(tr)
 
     def imageUpdated(self, frame):
         # New image is displayed; update image transform
-        self.imageItem.setTransform(frame.frameTransform().as2D())
+        self.imageItem.setTransform(frame.frameTransform().as_pyqtgraph().as2D())
         
         # Update viewport to correct for scope movement/scaling
-        tr = pg.SRTTransform(frame.deviceTransform())
+        tr = frame.deviceTransform().as_pyqtgraph().as2D()
         self.updateTransform(tr)
 
         self.imageItemGroup.setTransform(tr)
@@ -277,8 +277,8 @@ class CameraInterface(CameraModuleInterface):
         if ps is None:
             return
 
-        m = self.cam.globalTransform()
-        self.cameraItemGroup.setTransform(pg.SRTTransform(m))
+        m = self.cam.globalTransform().as_pyqtgraph().as2D()
+        self.cameraItemGroup.setTransform(m)
 
     def setRegion(self, rgn=None):
         if rgn is None:

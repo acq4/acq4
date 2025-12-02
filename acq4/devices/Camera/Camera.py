@@ -23,7 +23,7 @@ from acq4.util.Thread import Thread
 from acq4.util.future import Future, future_wrap
 from acq4.util.imaging.frame import Frame
 from coorx import TTransform, SRT3DTransform
-from pyqtgraph import Vector, SRTTransform3D
+from pyqtgraph import Vector
 from pyqtgraph.debug import Profiler
 from .CameraInterface import CameraInterface
 from .deviceGUI import CameraDeviceGui
@@ -156,8 +156,6 @@ class Camera(DAQGeneric, OptomechDevice):
     def _makeFrameInfoUpdater(self, templateInfo):
         scope_state = self.getScopeState()
         dev_xform = scope_state["transform"].copy()
-        dev_xform["offset"] = dev_xform.pop("pos", None)
-        dev_xform = SRT3DTransform(**dev_xform)
         ps = scope_state["pixelSize"]  # size of CCD pixel
 
         def _update(frame):
@@ -176,7 +174,7 @@ class Camera(DAQGeneric, OptomechDevice):
                 "deviceTransform": dev_xform,
                 "illumination": scope_state.get("illumination", None),
                 "frameTransform": frame_xform,
-                "transform": SRTTransform3D(dev_xform * frame_xform),
+                "transform": dev_xform * frame_xform,
             }
 
             frame.addInfo(new_info)
@@ -466,10 +464,10 @@ class Camera(DAQGeneric, OptomechDevice):
             raise ValueError("mode must be either 'sensor' or 'roi'")
         bounds = tuple(map(float, bounds))
         if globalCoords:
-            start = self.mapToGlobal(bounds[:2])
-            end = self.mapToGlobal((bounds[2] + bounds[0], bounds[3] + bounds[1]))
+            start = self.mapToGlobal((bounds[0], bounds[1], 0))
+            end = self.mapToGlobal((bounds[2] + bounds[0], bounds[3] + bounds[1], 0))
             size = (end[0] - start[0], end[1] - start[1])
-            return (*start, *size)
+            return *start[:2], *size
         else:
             return bounds
 
@@ -562,10 +560,7 @@ class Camera(DAQGeneric, OptomechDevice):
     def makeFrameTransform(region, binning):
         """Make a transform that maps from image coordinates to whole-sensor coordinates,
         given the region-of-interest and binning used to acquire the image."""
-        tr = SRTTransform3D()
-        tr.translate(*region[:2])
-        tr.scale(binning[0], binning[1], 1)
-        return tr
+        return SRT3DTransform(offset=(region[0], region[1], 0), scale=(binning[0], binning[1], 1))
 
     # Proxy signals and functions for acqThread:
     ############################################
