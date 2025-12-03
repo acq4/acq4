@@ -377,7 +377,7 @@ class OptomechDevice(InterfaceMixin):
 
     def setDeviceTransform(self, tr):
         if isinstance(tr, dict):
-            # TODO use this logic everywhere a transform dict is accepted
+            # TODO use this logic everywhere a transform dict is accepted (look at frame.py)
             if "type" in tr:
                 tr = create_transform(**tr)
             else:

@@ -732,61 +732,130 @@ def test_cylinder_pathfinding_performance():
 
 
 def test_neutral_anchored_inverse_kinematics_neutral():
-    bounds, half, neutral, transform = overspecified()
+    bounds, transform = overspecified()
 
     neutral_pt = [-1, 0, 0]
-    neutral_pos = neutral_anchored_inverse_kinematics(neutral_pt, transform, bounds, neutral)
+    neutral_pos = neutral_anchored_inverse_kinematics(
+        neutral_pt, transform, bounds, [1, None, None, None]
+    )
     assert np.allclose(neutral_pos, [1, 0, 0, 0])
 
 
 def test_neutral_anchored_inverse_kinematics_in_bounds():
-    bounds, half, neutral, transform = overspecified()
+    bounds, transform = overspecified()
 
     in_bounds_pt = [-2, -2, -2]
-    in_bounds_pos = neutral_anchored_inverse_kinematics(in_bounds_pt, transform, bounds, neutral)
+    in_bounds_pos = neutral_anchored_inverse_kinematics(
+        in_bounds_pt, transform, bounds, [1, None, None, None]
+    )
     # x should be pinned at 1, d should be (2 - x) / half, z should be 2 - (d * half)
-    assert np.allclose(in_bounds_pos, [1, 2, 1, 1 / half])
+    assert np.allclose(in_bounds_pos, [1, 2, 1, 1 / HALF])
     # now a bunch of random in-bounds points
     for _ in range(100):
         rand_pos = [
-            n if n is not None else np.random.uniform(b[0], b[1]) for n, b in zip(neutral, bounds)
+            n if n is not None else np.random.uniform(b[0], b[1])
+            for n, b in zip([1, None, None, None], bounds)
         ]
         rand_pt = transform.map(rand_pos)[:3]
-        solved_pos = neutral_anchored_inverse_kinematics(rand_pt, transform, bounds, neutral)
+        solved_pos = neutral_anchored_inverse_kinematics(
+            rand_pt, transform, bounds, [1, None, None, None]
+        )
         assert np.allclose(solved_pos, rand_pos)
 
 
+def test_neutral_anchored_inverse_kinematics_with_zero_neutral():
+    bounds, transform = overspecified()
+    neutral = [0, None, None, None]
+
+    pt = [-2, -2, -2]
+    pos = neutral_anchored_inverse_kinematics(pt, transform, bounds, neutral)
+    assert np.allclose(pos, [0, 2, 0, 2 / HALF])
+
+    pt = [0, 0, 0]
+    pos = neutral_anchored_inverse_kinematics(pt, transform, bounds, neutral)
+    assert np.allclose(pos, [0, 0, 0, 0])
+
+    pt = [-5 * HALF, -5, -5 * HALF]
+    pos = neutral_anchored_inverse_kinematics(pt, transform, bounds, neutral)
+    assert np.allclose(pos, [0, 5, 0, 5])
+
+    pt = [-5, -5, -5]
+    pos = neutral_anchored_inverse_kinematics(pt, transform, bounds, neutral)
+    assert np.allclose(pos, [5 - 5 / HALF, 5, 5 - 5 / HALF, 5])
+
+    pt = [-7, -2, -2]
+    pos = neutral_anchored_inverse_kinematics(pt, transform, bounds, neutral)
+    assert np.allclose(pos, [5, 2, 0, 2 * HALF])
+
+    pt = [1, 1, 1]
+    with pytest.raises(ValueError):
+        neutral_anchored_inverse_kinematics(pt, transform, bounds, neutral)
+
+
+def test_neutral_anchored_inverse_kinematics_with_diagonal_neutral():
+    bounds, transform = overspecified()
+    neutral = [None, None, None, 1]
+
+    pt = [-2, -2, -2]
+    pos = neutral_anchored_inverse_kinematics(pt, transform, bounds, neutral)
+    assert np.allclose(pos, [2 - HALF, 2, 2 - HALF, 1])
+
+    pt = [0, 0, 0]
+    pos = neutral_anchored_inverse_kinematics(pt, transform, bounds, neutral)
+    assert np.allclose(pos, [0, 0, 0, 0])
+
+    pt = [-5 * HALF, -2, -5 * HALF]
+    pos = neutral_anchored_inverse_kinematics(pt, transform, bounds, neutral)
+    assert np.allclose(pos, [5 - HALF, 2, 5 - HALF, 1])
+
+    pt = [-5 - 5 * HALF, -3, -5 - 5 * HALF]
+    pos = neutral_anchored_inverse_kinematics(pt, transform, bounds, neutral)
+    assert np.allclose(pos, [5, 3, 5, 5])
+
+    pt = [-7, -2, -2]
+    pos = neutral_anchored_inverse_kinematics(pt, transform, bounds, neutral)
+    assert np.allclose(pos, [5, 2, 0, 2 / HALF])
+
+    pt = [1, 1, 1]
+    with pytest.raises(ValueError):
+        neutral_anchored_inverse_kinematics(pt, transform, bounds, neutral)
+
+
 def test_neutral_anchored_inverse_kinematics_extremes():
-    bounds, half, neutral, transform = overspecified()
+    bounds, transform = overspecified()
 
     origin_pt = [0, 0, 0]
-    origin_pos = neutral_anchored_inverse_kinematics(origin_pt, transform, bounds, neutral)
+    origin_pos = neutral_anchored_inverse_kinematics(
+        origin_pt, transform, bounds, [1, None, None, None]
+    )
     assert np.allclose(origin_pos, [0, 0, 0, 0])
 
-    max_pt = [-5 - 5 * half, -5, -5 - 5 * half]
-    max_pos = neutral_anchored_inverse_kinematics(max_pt, transform, bounds, neutral)
+    max_pt = [-5 - 5 * HALF, -5, -5 - 5 * HALF]
+    max_pos = neutral_anchored_inverse_kinematics(max_pt, transform, bounds, [1, None, None, None])
     assert np.allclose(max_pos, [5, 5, 5, 5])
 
 
 def test_neutral_anchored_inverse_kinematics_with_x():
-    bounds, half, neutral, transform = overspecified()
+    bounds, transform = overspecified()
 
     only_possible_with_x_pt = [-7, -2, -2]
     only_possible_with_x_pos = neutral_anchored_inverse_kinematics(
-        only_possible_with_x_pt, transform, bounds, neutral
+        only_possible_with_x_pt, transform, bounds, [1, None, None, None]
     )
-    assert np.allclose(only_possible_with_x_pos, [5, 2, 0, 2 / half])
+    assert np.allclose(only_possible_with_x_pos, [5, 2, 0, 2 / HALF])
     # and a bunch more random points across the whole space
     bounds = np.asarray(bounds)
     for _ in range(100):
         rand_pos = np.random.uniform(bounds[:, 0], bounds[:, 1])
         rand_pt = transform.map(rand_pos)[:3]
-        solved_pos = neutral_anchored_inverse_kinematics(rand_pt, transform, bounds, neutral)
+        solved_pos = neutral_anchored_inverse_kinematics(
+            rand_pt, transform, bounds, [1, None, None, None]
+        )
         assert np.allclose(solved_pos, rand_pos)
 
 
 def test_neutral_anchored_inverse_kinematics_impossible():
-    bounds, half, neutral, transform = overspecified()
+    bounds, transform = overspecified()
 
     impossible = [
         [-2, -20, -2],
@@ -798,24 +867,30 @@ def test_neutral_anchored_inverse_kinematics_impossible():
     ]
     for impossible_pt in impossible:
         with pytest.raises(ValueError):
-            neutral_anchored_inverse_kinematics(impossible_pt, transform, bounds, neutral)
+            neutral_anchored_inverse_kinematics(
+                impossible_pt, transform, bounds, [1, None, None, None]
+            )
+        with pytest.raises(ValueError):
+            neutral_anchored_inverse_kinematics(
+                impossible_pt, transform, bounds, [0, None, None, None]
+            )
 
 
 def test_greedy_axis_inverse_kinematics():
-    bounds, half, neutral, transform = overspecified()
+    bounds, transform = overspecified()
 
-    point = [-3 * half, 0, -3 * half]
+    point = [-3 * HALF, 0, -3 * HALF]
     start = [0, 0, 0, 0]
     preferred_axis_pos = greedy_axis_inverse_kinematics(point, transform, bounds, 3, start)
     assert np.allclose(preferred_axis_pos, [0, 0, 0, 3])
 
     point = [-2, 0, -4]
     pos = greedy_axis_inverse_kinematics(point, transform, bounds, 3, start)
-    assert np.allclose(pos, [0, 0, 2, 2 / half])
+    assert np.allclose(pos, [0, 0, 2, 2 / HALF])
 
 
 def test_greedy_axis_inverse_kinematics_all_axes():
-    bounds, half, neutral, transform = overspecified()
+    bounds, transform = overspecified()
     point = [-3, -3, -3]
     start = [0, 0, 0, 0]
 
@@ -826,11 +901,11 @@ def test_greedy_axis_inverse_kinematics_all_axes():
     assert np.allclose(pos, [3, 3, 3, 0])
 
     pos = greedy_axis_inverse_kinematics(point, transform, bounds, 3, start)
-    assert np.allclose(pos, [0, 3, 0, 3 / half])
+    assert np.allclose(pos, [0, 3, 0, 3 / HALF])
 
 
 def test_greedy_axis_inverse_kinematics_impossible():
-    bounds, half, neutral, transform = overspecified()
+    bounds, transform = overspecified()
     impossible = [
         [-2, -20, -2],
         [-2, -2, 10],
@@ -855,44 +930,45 @@ def test_greedy_axis_inverse_kinematics_impossible():
 
 
 def test_greedy_axis_inverse_kinematics_past_boundaries():
-    bounds, half, neutral, transform = overspecified()
+    bounds, transform = overspecified()
     start = [0, 0, 0, 0]
 
-    point = [-5 - 2 * half, 0, -2]
+    point = [-5 - 2 * HALF, 0, -2]
     pos = greedy_axis_inverse_kinematics(point, transform, bounds, 0, start)
-    assert np.allclose(pos, [5, 0, 2 - 2 * half, 2])
+    assert np.allclose(pos, [5, 0, 2 - 2 * HALF, 2])
 
-    point = [-2, 0, -5 - 2 * half]
+    point = [-2, 0, -5 - 2 * HALF]
     pos = greedy_axis_inverse_kinematics(point, transform, bounds, 2, start)
-    assert np.allclose(pos, [2 - 2 * half, 0, 5, 2])
+    assert np.allclose(pos, [2 - 2 * HALF, 0, 5, 2])
 
 
 def test_greedy_axis_inverse_kinematics_starting_point_adherence():
-    bounds, half, neutral, transform = overspecified()
+    bounds, transform = overspecified()
     start = [1, 1, 1, 1]
 
     point = [-3, 0, -3]
     pos = greedy_axis_inverse_kinematics(point, transform, bounds, 0, start)
-    assert np.allclose(pos, [3 - half, 0, 3 - half, 1])
+    assert np.allclose(pos, [3 - HALF, 0, 3 - HALF, 1])
 
     pos = greedy_axis_inverse_kinematics(point, transform, bounds, 2, start)
-    assert np.allclose(pos, [3 - half, 0, 3 - half, 1])
+    assert np.allclose(pos, [3 - HALF, 0, 3 - HALF, 1])
 
     pos = greedy_axis_inverse_kinematics(point, transform, bounds, 3, start)
-    assert np.allclose(pos, [1, 0, 1, 2 / half])
+    assert np.allclose(pos, [1, 0, 1, 2 / HALF])
+
+
+HALF = 2**0.5 / 2
 
 
 def overspecified():
     # keep the math easy and distinguishable, but still get coverage
-    half = 2**0.5 / 2
     x = [-1, 0, 0]
     y = [0, -1, 0]
     z = [0, 0, -1]
-    d = [-half, 0, -half]  # 45° in x-z plane
+    d = [-HALF, 0, -HALF]  # 45° in x-z plane
     transform = AffineTransform(np.asarray([x, y, z, d]).T, offset=np.zeros(3))
     bounds = [(0, 5)] * 4
-    neutral = [1, None, None, None]
-    return bounds, half, neutral, transform
+    return bounds, transform
 
 
 draw_n = 0

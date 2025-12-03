@@ -93,7 +93,7 @@ class Stage(Device, OptomechDevice):
         self._progressTimer.timeout.connect(self.updateProgressDialog)
 
         calibration = self.readConfigFile('calibration')
-        # TODO standardize transform format
+        # TODO standardize transform format (see frame.py and OptomechDevice)
         axis_tr = calibration.get('transform', None)
         if axis_tr is not None:
             axis_tr = np.asarray(axis_tr)

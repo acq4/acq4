@@ -2038,10 +2038,8 @@ def neutral_anchored_inverse_kinematics(
         raise ValueError("One neutral axis must be specified")
 
     origin_in_global = device_to_global.map(np.zeros(len(neutral)))
-    neutral_in_global = device_to_global.map(np.array([0 if n is None else n for n in neutral]))
-    neutral_axis_dir = neutral_in_global - origin_in_global
-    neutral_axis = Line(neutral_axis_dir, point)
-    neutral_axis_scale = np.linalg.norm(neutral_axis_dir) / abs(neutral[neutral_index])
+    neutral_in_global = device_to_global.map(np.array([0 if n is None else 1 for n in neutral]))
+    neutral_axis = Line(neutral_in_global - origin_in_global, point)
 
     # construct global_to_device transform, excluding neutral axis
     global_to_device = []
@@ -2079,7 +2077,7 @@ def neutral_anchored_inverse_kinematics(
     intersections.sort(key=lambda x: np.linalg.norm(x[1]))
     for intersect_pt, displacement in intersections:
         neutral_pos = (
-            displacement.dot(neutral_axis.direction) / neutral_axis_scale + neutral[neutral_index]
+            displacement.dot(neutral_axis.direction) + neutral[neutral_index]
         )
         candidate = _prep_device_pos(intersect_pt, neutral_pos)
         if all(bounds[i][0] <= candidate[i] <= bounds[i][1] for i in range(len(candidate))):
