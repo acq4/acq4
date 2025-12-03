@@ -779,13 +779,13 @@ def test_neutral_anchored_inverse_kinematics_with_zero_neutral():
     pos = neutral_anchored_inverse_kinematics(pt, transform, bounds, neutral)
     assert np.allclose(pos, [0, 5, 0, 5])
 
-    pt = [-5, -5, -5]
-    pos = neutral_anchored_inverse_kinematics(pt, transform, bounds, neutral)
-    assert np.allclose(pos, [5 - 5 / HALF, 5, 5 - 5 / HALF, 5])
-
     pt = [-7, -2, -2]
     pos = neutral_anchored_inverse_kinematics(pt, transform, bounds, neutral)
     assert np.allclose(pos, [5, 2, 0, 2 * HALF])
+
+    pt = [-5, -5, -5]
+    pos = neutral_anchored_inverse_kinematics(pt, transform, bounds, neutral)
+    assert np.allclose(pos, [5 - 5 * HALF, 5, 5 - 5 * HALF, 5])
 
     pt = [1, 1, 1]
     with pytest.raises(ValueError):
@@ -806,7 +806,7 @@ def test_neutral_anchored_inverse_kinematics_with_diagonal_neutral():
 
     pt = [-5 * HALF, -2, -5 * HALF]
     pos = neutral_anchored_inverse_kinematics(pt, transform, bounds, neutral)
-    assert np.allclose(pos, [5 - HALF, 2, 5 - HALF, 1])
+    assert np.allclose(pos, [4 * HALF, 2, 4 * HALF, 1])
 
     pt = [-5 - 5 * HALF, -3, -5 - 5 * HALF]
     pos = neutral_anchored_inverse_kinematics(pt, transform, bounds, neutral)

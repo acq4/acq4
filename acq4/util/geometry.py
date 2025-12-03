@@ -1995,6 +1995,7 @@ def neutral_anchored_inverse_kinematics(
     device_to_global: Transform,
     bounds: list[tuple[float, float]],
     neutral: list[float | None],
+    tol: float = 1e-12,
 ) -> np.ndarray:
     """Calculate the global_to_device kinematics for a point given a device with more dimensions than the
     space in which it operates.
@@ -2017,6 +2018,8 @@ def neutral_anchored_inverse_kinematics(
     neutral : list[float | None]
         A list containing the neutral position in device coordinates. Only one dimension can be so
         designated, with all the others set to None. E.g. [None, None, None, 0]
+    tol : float
+        Tolerance for floating point comparisons.
 
     Returns
     -------
@@ -2038,8 +2041,9 @@ def neutral_anchored_inverse_kinematics(
         raise ValueError("One neutral axis must be specified")
 
     origin_in_global = device_to_global.map(np.zeros(len(neutral)))
-    neutral_in_global = device_to_global.map(np.array([0 if n is None else 1 for n in neutral]))
-    neutral_axis = Line(neutral_in_global - origin_in_global, point)
+    neutral_in_global = device_to_global.map(np.array([0 if n is None else n for n in neutral]))
+    neutral_axis_step = device_to_global.map(np.array([0 if n is None else 1 for n in neutral])) - origin_in_global
+    neutral_axis = Line(neutral_axis_step, point)
 
     # construct global_to_device transform, excluding neutral axis
     global_to_device = []
@@ -2062,13 +2066,13 @@ def neutral_anchored_inverse_kinematics(
         nonneutral_bounds, global_to_device.inverse, "dev"
     )
 
-    if all(p.allows_point(point) for p in bound_planes_in_global):
+    if all(p.allows_point(point, tol) for p in bound_planes_in_global):
         # point is already in bounds; neutral position is fine
         return _prep_device_pos(point, neutral[neutral_index])
 
     intersections = []
     for plane in bound_planes_in_global:
-        intersect_pt = plane.intersecting_point(neutral_axis)
+        intersect_pt = plane.intersecting_point(neutral_axis, tol)
         if intersect_pt is not None:
             displacement = point - intersect_pt
             intersections.append((intersect_pt, displacement))
@@ -2076,11 +2080,12 @@ def neutral_anchored_inverse_kinematics(
     # sort boundary intersections by distance to the point
     intersections.sort(key=lambda x: np.linalg.norm(x[1]))
     for intersect_pt, displacement in intersections:
-        neutral_pos = (
-            displacement.dot(neutral_axis.direction) + neutral[neutral_index]
-        )
+        axial_dist = displacement.dot(neutral_axis.direction)
+        # map this distance back to device coordinates
+        axial_dist /= np.linalg.norm(neutral_axis_step)
+        neutral_pos = axial_dist + neutral[neutral_index]
         candidate = _prep_device_pos(intersect_pt, neutral_pos)
-        if all(bounds[i][0] <= candidate[i] <= bounds[i][1] for i in range(len(candidate))):
+        if all(bounds[i][0] - tol <= candidate[i] <= bounds[i][1] + tol for i in range(len(candidate))):
             return candidate
     raise ValueError("No valid position found within bounds")
 
