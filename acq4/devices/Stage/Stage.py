@@ -97,9 +97,7 @@ class Stage(Device, OptomechDevice):
         axis_tr = calibration.get('transform', None)
         if axis_tr is not None:
             axis_tr = np.asarray(axis_tr)
-            axis_offset = axis_tr[:3, 3]
-            axis_matrix = axis_tr[:3, :3]
-            self._axisTransform = AffineTransform(axis_matrix, axis_offset)
+            self._axisTransform = AffineTransform.from_matrix(axis_tr)
 
         # set up joystick callbacks if requested
         jsdevs = set()
@@ -472,17 +470,18 @@ class Stage(Device, OptomechDevice):
         local_pos = self.mapFromGlobal(globalPos)
         if self.nAxes <= 3:
             # we can use a simple inverse transform
-            tr = self.stageTransform().offset + pg.Vector(local_pos)
+            tr = self.stageTransform().offset + np.array(local_pos)
             return pg.Vector(self.inverseAxisTransform().map(tr))
 
         if linear:
             # move primarily along the axis most aligned to this displacement
-            primary_axis = None
+            local_direction = np.array(local_pos) - self.axisTransform().map(previousPos)
+            primary_axis = 0
             max_dot = 0
             for i in range(self.nAxes):
                 axis_vec = np.asarray(self.axisTransform().full_matrix[:3, i])
                 axis_vec = axis_vec / np.linalg.norm(axis_vec)
-                dot = abs(axis_vec.dot(np.asarray(local_pos)))
+                dot = abs(axis_vec.dot(np.asarray(local_direction)))
                 if dot > max_dot:
                     max_dot = dot
                     primary_axis = i
