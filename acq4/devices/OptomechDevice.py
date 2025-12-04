@@ -93,7 +93,9 @@ class OptomechDevice(InterfaceMixin):
         # Emitted when this device changes its current subdevice
         sigSubdeviceChanged = Qt.Signal(object, object, object)  # self, new subdev, old subdev
         # Emitted when this device or any (grand)parent changes its current subdevice
-        sigGlobalSubdeviceChanged = Qt.Signal(object, object, object, object)  # self, dev, new subdev, old subdev
+        sigGlobalSubdeviceChanged = Qt.Signal(
+            object, object, object, object
+        )  # self, dev, new subdev, old subdev
 
         # Emitted when this device changes its list of available subdevices
         sigSubdeviceListChanged = Qt.Signal(object)  # self
@@ -157,11 +159,19 @@ class OptomechDevice(InterfaceMixin):
 
         self.__lock = Mutex(recursive=True, debug=False)
 
-        self.sigTransformChanged.connect(self.__emitGlobalTransformChanged, type=Qt.Qt.DirectConnection)
-        self.sigSubdeviceTransformChanged.connect(self.__emitGlobalSubdeviceTransformChanged, type=Qt.Qt.DirectConnection)
+        self.sigTransformChanged.connect(
+            self.__emitGlobalTransformChanged, type=Qt.Qt.DirectConnection
+        )
+        self.sigSubdeviceTransformChanged.connect(
+            self.__emitGlobalSubdeviceTransformChanged, type=Qt.Qt.DirectConnection
+        )
         self.sigOpticsChanged.connect(self.__emitGlobalOpticsChanged, type=Qt.Qt.DirectConnection)
-        self.sigSubdeviceChanged.connect(self.__emitGlobalSubdeviceChanged, type=Qt.Qt.DirectConnection)
-        self.sigSubdeviceListChanged.connect(self.__emitGlobalSubdeviceListChanged, type=Qt.Qt.DirectConnection)
+        self.sigSubdeviceChanged.connect(
+            self.__emitGlobalSubdeviceChanged, type=Qt.Qt.DirectConnection
+        )
+        self.sigSubdeviceListChanged.connect(
+            self.__emitGlobalSubdeviceListChanged, type=Qt.Qt.DirectConnection
+        )
 
         if config is not None:
             if "parentDevice" in config:
@@ -177,7 +187,9 @@ class OptomechDevice(InterfaceMixin):
                 except Exception as ex:
                     if "No device named" not in ex.args[0]:
                         raise
-                    print(f"Cannot set parent device {config['parentDevice']!r}; no device by that name.")
+                    print(
+                        f"Cannot set parent device {config['parentDevice']!r}; no device by that name."
+                    )
                     print("Available devices:", dm.listDevices())
             if "transform" in config:
                 self.setDeviceTransform(config["transform"])
@@ -238,11 +250,17 @@ class OptomechDevice(InterfaceMixin):
         with self.__lock:
             # disconnect from previous parent if needed
             if self.__parent is not None:
-                self.__parent.sigGlobalTransformChanged.disconnect(self.__parentDeviceTransformChanged)
-                self.__parent.sigGlobalSubdeviceTransformChanged.disconnect(self.__parentSubdeviceTransformChanged)
+                self.__parent.sigGlobalTransformChanged.disconnect(
+                    self.__parentDeviceTransformChanged
+                )
+                self.__parent.sigGlobalSubdeviceTransformChanged.disconnect(
+                    self.__parentSubdeviceTransformChanged
+                )
                 self.__parent.sigGlobalOpticsChanged.disconnect(self.__parentOpticsChanged)
                 self.__parent.sigGlobalSubdeviceChanged.disconnect(self.__parentSubdeviceChanged)
-                self.__parent.sigGlobalSubdeviceListChanged.disconnect(self.__parentSubdeviceListChanged)
+                self.__parent.sigGlobalSubdeviceListChanged.disconnect(
+                    self.__parentSubdeviceListChanged
+                )
                 self.__parent.__children.remove(self)
 
             # look up device from its name
@@ -257,14 +275,25 @@ class OptomechDevice(InterfaceMixin):
 
             if port not in parent.ports():
                 raise ValueError(
-                    "Cannot connect to port %r on device %r; available ports are: %r" % (port, parent, parent.ports())
+                    "Cannot connect to port %r on device %r; available ports are: %r"
+                    % (port, parent, parent.ports())
                 )
 
-            parent.sigGlobalTransformChanged.connect(self.__parentDeviceTransformChanged, type=Qt.Qt.DirectConnection)
-            parent.sigGlobalSubdeviceTransformChanged.connect(self.__parentSubdeviceTransformChanged, type=Qt.Qt.DirectConnection)
-            parent.sigGlobalOpticsChanged.connect(self.__parentOpticsChanged, type=Qt.Qt.DirectConnection)
-            parent.sigGlobalSubdeviceChanged.connect(self.__parentSubdeviceChanged, type=Qt.Qt.DirectConnection)
-            parent.sigGlobalSubdeviceListChanged.connect(self.__parentSubdeviceListChanged, type=Qt.Qt.DirectConnection)
+            parent.sigGlobalTransformChanged.connect(
+                self.__parentDeviceTransformChanged, type=Qt.Qt.DirectConnection
+            )
+            parent.sigGlobalSubdeviceTransformChanged.connect(
+                self.__parentSubdeviceTransformChanged, type=Qt.Qt.DirectConnection
+            )
+            parent.sigGlobalOpticsChanged.connect(
+                self.__parentOpticsChanged, type=Qt.Qt.DirectConnection
+            )
+            parent.sigGlobalSubdeviceChanged.connect(
+                self.__parentSubdeviceChanged, type=Qt.Qt.DirectConnection
+            )
+            parent.sigGlobalSubdeviceListChanged.connect(
+                self.__parentSubdeviceListChanged, type=Qt.Qt.DirectConnection
+            )
             parent.__children.append(self)
             self.__parent = parent
             self.__parentPort = port
@@ -273,7 +302,9 @@ class OptomechDevice(InterfaceMixin):
         """Map from local coordinates to the parent device (or to global if there is no parent)"""
         tr = self.deviceTransform(subdev)
         if tr is None:
-            raise ValueError("Cannot map--device classes with no affine transform must override map methods.")
+            raise ValueError(
+                "Cannot map--device classes with no affine transform must override map methods."
+            )
         return self._mapTransform(obj, tr)
 
     def mapToGlobal(self, obj, subdev=None):
@@ -299,7 +330,9 @@ class OptomechDevice(InterfaceMixin):
         """Map *obj* from parent coordinates (or from global if there is no parent) to local coordinates."""
         tr = self.inverseDeviceTransform(subdev)
         if tr is None:
-            raise ValueError("Cannot map--device classes with no affine transform must override map methods.")
+            raise ValueError(
+                "Cannot map--device classes with no affine transform must override map methods."
+            )
         return self._mapTransform(obj, tr)
 
     def mapFromGlobal(self, obj, subdev=None):
@@ -659,7 +692,9 @@ class OptomechDevice(InterfaceMixin):
     def addSubdevice(self, subdev):
         subdev.setParentDevice(self)
         self.invalidateCachedTransforms()
-        subdev.sigTransformChanged.connect(self.__subdeviceTransformChanged, type=Qt.Qt.DirectConnection)
+        subdev.sigTransformChanged.connect(
+            self.__subdeviceTransformChanged, type=Qt.Qt.DirectConnection
+        )
         subdev.sigOpticsChanged.connect(self.__subdeviceOpticsChanged, type=Qt.Qt.DirectConnection)
         with self.__lock:
             self.__subdevices[subdev.name()] = subdev
