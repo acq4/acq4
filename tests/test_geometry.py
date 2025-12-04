@@ -781,7 +781,7 @@ def test_neutral_anchored_inverse_kinematics_with_zero_neutral():
 
     pt = [-7, -2, -2]
     pos = neutral_anchored_inverse_kinematics(pt, transform, bounds, neutral)
-    assert np.allclose(pos, [5, 2, 0, 2 * HALF])
+    assert np.allclose(pos, [5, 2, 0, 2 / HALF])
 
     pt = [-5, -5, -5]
     pos = neutral_anchored_inverse_kinematics(pt, transform, bounds, neutral)

@@ -1875,7 +1875,7 @@ class Plane:
 
     def intersecting_point(self, line: Line, tolerance=1e-9) -> np.ndarray | None:
         denom = np.dot(self.normal, line.direction)
-        if denom < tolerance:
+        if abs(denom) < tolerance:
             # parallel or even coplanar
             return None
         t = np.dot(self.normal, self.point - line.point) / denom
