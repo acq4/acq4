@@ -2061,6 +2061,13 @@ def neutral_anchored_inverse_kinematics(
         pos.insert(neutral_index, neutral_pos)
         return np.array(pos)
 
+    def clip(p):
+        return np.clip(
+            p,
+            [b[0] for b in bounds],
+            [b[1] for b in bounds],
+        )
+
     nonneutral_bounds = [b for i, b in enumerate(bounds) if i != neutral_index]
     bound_planes_in_global = limits_to_boundaries(
         nonneutral_bounds, global_to_device.inverse, "dev"
@@ -2068,7 +2075,7 @@ def neutral_anchored_inverse_kinematics(
 
     if all(p.allows_point(point, tol) for p in bound_planes_in_global):
         # point is already in bounds; neutral position is fine
-        return _prep_device_pos(point, neutral[neutral_index])
+        return clip(_prep_device_pos(point, neutral[neutral_index]))
 
     intersections = []
     for plane in bound_planes_in_global:
@@ -2086,7 +2093,8 @@ def neutral_anchored_inverse_kinematics(
         neutral_pos = axial_dist + neutral[neutral_index]
         candidate = _prep_device_pos(intersect_pt, neutral_pos)
         if all(bounds[i][0] - tol <= candidate[i] <= bounds[i][1] + tol for i in range(len(candidate))):
-            return candidate
+            return clip(candidate)
+
     raise ValueError("No valid position found within bounds")
 
 
