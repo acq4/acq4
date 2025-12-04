@@ -847,6 +847,7 @@ def test_neutral_anchored_inverse_kinematics_with_x():
     bounds = np.asarray(bounds)
     for _ in range(100):
         rand_pos = np.random.uniform(bounds[:, 0], bounds[:, 1])
+        rand_pos[0] = 1  # x is fixed at 1
         rand_pt = transform.map(rand_pos)[:3]
         solved_pos = neutral_anchored_inverse_kinematics(
             rand_pt, transform, bounds, [1, None, None, None]
