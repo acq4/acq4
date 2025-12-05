@@ -1937,8 +1937,8 @@ def greedy_axis_inverse_kinematics(
     point,
     device_to_global: Transform,
     bounds: list[tuple[float, float]],
-    axis: int,
-    starting_point: list[float],
+    starting_position: list[float],
+    axis: int | None = None,
 ) -> np.ndarray:
     """Calculate the global_to_device kinematics for a point given a device with more dimensions than the
     space in which it operates.
@@ -1957,10 +1957,11 @@ def greedy_axis_inverse_kinematics(
     bounds : list[tuple[float, float]]
         A list of (min, max) pairs for each dimension of the device in its own coordinate system.
         E.g. [(0, 20000), ...]
-    axis : int
-        The axis which should be preferred.
-    starting_point : list[float]
+    starting_position : list[float]
         The starting position in device coordinates.
+    axis : int
+        The axis which should be preferred. Defaults to the axis most aligned with the displacement
+        from device_to_global.map(starting_position) to point.
 
     Returns
     -------
@@ -1972,23 +1973,50 @@ def greedy_axis_inverse_kinematics(
     ValueError
         If any of the arguments are invalid, or if no valid position could be found.
     """
+    if np.allclose(device_to_global.map(starting_position), point):
+        bounded = np.clip(starting_position, [b[0] for b in bounds], [b[1] for b in bounds])
+        if not np.allclose(bounded, starting_position):
+            raise ValueError("Invalid starting position nevertheless maps to target point")
+        return np.array(bounded)
+    if axis is None:
+        local_direction = np.array(point) - device_to_global.map(starting_position)
+        axis = 0
+        max_dot = 0
+        for i in range(len(bounds)):
+            axis_vec = np.asarray(device_to_global.full_matrix[:3, i])
+            axis_vec = axis_vec / np.linalg.norm(axis_vec)
+            dot = abs(axis_vec.dot(np.asarray(local_direction)))
+            if dot > max_dot:
+                max_dot = dot
+                axis = i
     origin_in_global = device_to_global.map(np.zeros(len(bounds)))
-    axis_dev = np.zeros(len(bounds))
-    axis_dev[axis] = 1
-    axis_in_global = device_to_global.map(axis_dev) - origin_in_global
+    axis_step = np.zeros(len(bounds))
+    axis_step[axis] = 1
+    axis_in_global = device_to_global.map(axis_step) - origin_in_global
     axis_scale = np.linalg.norm(axis_in_global)
-    start_in_global = device_to_global.map(np.array(starting_point))
+    start_in_global = device_to_global.map(np.array(starting_position))
     displacement = np.asarray(point) - start_in_global
-    greedy_pos = (displacement.dot(axis_in_global) / axis_scale) + starting_point[axis]
-    greedy_pos = max(bounds[axis][0], min(bounds[axis][1], greedy_pos))
+    raw_greedy_pos = (displacement.dot(axis_in_global) / axis_scale) + starting_position[axis]
+    greedy_pos = max(bounds[axis][0], min(bounds[axis][1], raw_greedy_pos))
     neutral: list = [None] * len(bounds)
     neutral[axis] = greedy_pos
-    return neutral_anchored_inverse_kinematics(
-        point,
-        device_to_global,
-        bounds,
-        neutral,
-    )
+    try:
+        return neutral_anchored_inverse_kinematics(
+            point,
+            device_to_global,
+            bounds,
+            neutral,
+        )
+    except np.linalg.LinAlgError:
+        # how do we bottom out of this recursion if the destination is unreachable in the greedy direction?
+        starting_position = starting_position.copy()
+        starting_position[axis] = raw_greedy_pos
+        return greedy_axis_inverse_kinematics(
+            point,
+            device_to_global,
+            bounds,
+            starting_position,
+        )
 
 def neutral_anchored_inverse_kinematics(
     point,

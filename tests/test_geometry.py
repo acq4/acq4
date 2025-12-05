@@ -882,11 +882,11 @@ def test_greedy_axis_inverse_kinematics():
 
     point = [-3 * HALF, 0, -3 * HALF]
     start = [0, 0, 0, 0]
-    preferred_axis_pos = greedy_axis_inverse_kinematics(point, transform, bounds, 3, start)
+    preferred_axis_pos = greedy_axis_inverse_kinematics(point, transform, bounds, start, 3)
     assert np.allclose(preferred_axis_pos, [0, 0, 0, 3])
 
     point = [-2, 0, -4]
-    pos = greedy_axis_inverse_kinematics(point, transform, bounds, 3, start)
+    pos = greedy_axis_inverse_kinematics(point, transform, bounds, start, 3)
     assert np.allclose(pos, [0, 0, 2, 2 / HALF])
 
 
@@ -895,14 +895,61 @@ def test_greedy_axis_inverse_kinematics_all_axes():
     point = [-3, -3, -3]
     start = [0, 0, 0, 0]
 
-    pos = greedy_axis_inverse_kinematics(point, transform, bounds, 0, start)
+    pos = greedy_axis_inverse_kinematics(point, transform, bounds, start, 0)
     assert np.allclose(pos, [3, 3, 3, 0])
 
-    pos = greedy_axis_inverse_kinematics(point, transform, bounds, 2, start)
+    pos = greedy_axis_inverse_kinematics(point, transform, bounds, start, 2)
     assert np.allclose(pos, [3, 3, 3, 0])
 
-    pos = greedy_axis_inverse_kinematics(point, transform, bounds, 3, start)
+    pos = greedy_axis_inverse_kinematics(point, transform, bounds, start, 3)
     assert np.allclose(pos, [0, 3, 0, 3 / HALF])
+
+
+def test_greedy_axis_inverse_kinematics_along_each_axis():
+    bounds, transform = overspecified()
+    start = [0, 0, 0, 0]
+
+    point = [-5, -1, 0]
+    pos = greedy_axis_inverse_kinematics(point, transform, bounds, start, 0)
+    assert np.allclose(pos, [5, 1, 0, 0])
+
+    point = [-1, -5, -1]
+    pos = greedy_axis_inverse_kinematics(point, transform, bounds, start, 1)
+    # TODO should this recursively pick which axis to be greedy along?
+    assert np.allclose(pos, [0, 5, 0, 1 / HALF])
+
+    point = [-1, 0, -5]
+    pos = greedy_axis_inverse_kinematics(point, transform, bounds, start, 2)
+    assert np.allclose(pos, [1, 0, 5, 0])
+
+    point = [-5 * HALF, -1, -5 * HALF]
+    pos = greedy_axis_inverse_kinematics(point, transform, bounds, start, 3)
+    assert np.allclose(pos, [0, 1, 0, 5])
+
+
+def test_greedy_axis_inverse_kinematics_auto_axis():
+    bounds, transform = overspecified()
+    start = [0, 0, 0, 0]
+
+    point = [-5, -1, 0]
+    pos = greedy_axis_inverse_kinematics(point, transform, bounds, start)
+    assert np.allclose(pos, [5, 1, 0, 0])
+
+    point = [-1, -5, -1]
+    pos = greedy_axis_inverse_kinematics(point, transform, bounds, start)
+    assert np.allclose(pos, [0, 5, 0, 1 / HALF])
+
+    point = [-3, -5, -1]  # y then x
+    pos = greedy_axis_inverse_kinematics(point, transform, bounds, start)
+    assert np.allclose(pos, [3, 5, 1, 0])
+
+    point = [-1, 0, -5]
+    pos = greedy_axis_inverse_kinematics(point, transform, bounds, start)
+    assert np.allclose(pos, [1, 0, 5, 0])
+
+    point = [-5 * HALF, -1, -5 * HALF]
+    pos = greedy_axis_inverse_kinematics(point, transform, bounds, start)
+    assert np.allclose(pos, [0, 1, 0, 5])
 
 
 def test_greedy_axis_inverse_kinematics_impossible():
@@ -918,16 +965,15 @@ def test_greedy_axis_inverse_kinematics_impossible():
     start = [0, 0, 0, 0]
     for impossible_pt in impossible:
         with pytest.raises(ValueError):
-            greedy_axis_inverse_kinematics(impossible_pt, transform, bounds, 0, start)
-        with pytest.raises((ValueError, np.linalg.LinAlgError)):
-            greedy_axis_inverse_kinematics(impossible_pt, transform, bounds, 1, start)
+            greedy_axis_inverse_kinematics(impossible_pt, transform, bounds, start)
         with pytest.raises(ValueError):
-            greedy_axis_inverse_kinematics(impossible_pt, transform, bounds, 2, start)
+            greedy_axis_inverse_kinematics(impossible_pt, transform, bounds, start, 0)
         with pytest.raises(ValueError):
-            greedy_axis_inverse_kinematics(impossible_pt, transform, bounds, 3, start)
-
-    with pytest.raises((ValueError, np.linalg.LinAlgError)):
-        greedy_axis_inverse_kinematics([-1, 0, 0], transform, bounds, 1, start)
+            greedy_axis_inverse_kinematics(impossible_pt, transform, bounds, start, 1)
+        with pytest.raises(ValueError):
+            greedy_axis_inverse_kinematics(impossible_pt, transform, bounds, start, 2)
+        with pytest.raises(ValueError):
+            greedy_axis_inverse_kinematics(impossible_pt, transform, bounds, start, 3)
 
 
 def test_greedy_axis_inverse_kinematics_past_boundaries():
@@ -935,11 +981,11 @@ def test_greedy_axis_inverse_kinematics_past_boundaries():
     start = [0, 0, 0, 0]
 
     point = [-5 - 2 * HALF, 0, -2]
-    pos = greedy_axis_inverse_kinematics(point, transform, bounds, 0, start)
+    pos = greedy_axis_inverse_kinematics(point, transform, bounds, start, 0)
     assert np.allclose(pos, [5, 0, 2 - 2 * HALF, 2])
 
     point = [-2, 0, -5 - 2 * HALF]
-    pos = greedy_axis_inverse_kinematics(point, transform, bounds, 2, start)
+    pos = greedy_axis_inverse_kinematics(point, transform, bounds, start, 2)
     assert np.allclose(pos, [2 - 2 * HALF, 0, 5, 2])
 
 
@@ -948,13 +994,13 @@ def test_greedy_axis_inverse_kinematics_starting_point_adherence():
     start = [1, 1, 1, 1]
 
     point = [-3, 0, -3]
-    pos = greedy_axis_inverse_kinematics(point, transform, bounds, 0, start)
+    pos = greedy_axis_inverse_kinematics(point, transform, bounds, start, 0)
     assert np.allclose(pos, [3 - HALF, 0, 3 - HALF, 1])
 
-    pos = greedy_axis_inverse_kinematics(point, transform, bounds, 2, start)
+    pos = greedy_axis_inverse_kinematics(point, transform, bounds, start, 2)
     assert np.allclose(pos, [3 - HALF, 0, 3 - HALF, 1])
 
-    pos = greedy_axis_inverse_kinematics(point, transform, bounds, 3, start)
+    pos = greedy_axis_inverse_kinematics(point, transform, bounds, start, 3)
     assert np.allclose(pos, [1, 0, 1, 2 / HALF])
 
 

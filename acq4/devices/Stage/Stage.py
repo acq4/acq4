@@ -474,22 +474,10 @@ class Stage(Device, OptomechDevice):
             return pg.Vector(self.inverseAxisTransform().map(tr))
 
         if linear:
-            # move primarily along the axis most aligned to this displacement
-            local_direction = np.array(local_pos) - self.axisTransform().map(previousPos)
-            primary_axis = 0
-            max_dot = 0
-            for i in range(self.nAxes):
-                axis_vec = np.asarray(self.axisTransform().full_matrix[:3, i])
-                axis_vec = axis_vec / np.linalg.norm(axis_vec)
-                dot = abs(axis_vec.dot(np.asarray(local_direction)))
-                if dot > max_dot:
-                    max_dot = dot
-                    primary_axis = i
             return greedy_axis_inverse_kinematics(
                 local_pos,
                 self.axisTransform(),
                 self.getLimits(),
-                primary_axis,
                 previousPos,
             )
 
