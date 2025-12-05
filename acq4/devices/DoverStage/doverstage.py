@@ -14,7 +14,7 @@ class DoverStage(Stage):
         self.dev.set_callback(self.posChanged)
         self._lastMove = None
         Stage.__init__(self, man, config, name)
-        self.posChanged(self.dev.pos())
+        self.posChanged(self.dev.pos(refresh=True))
 
     def axes(self):
         return "x", "y", "z"
