@@ -13,7 +13,15 @@ from trimesh.voxel import VoxelGrid
 import pyqtgraph as pg
 import pyqtgraph.opengl as gl
 from acq4.util.approx import ApproxDict, ApproxSet
-from coorx import SRT3DTransform, Transform, NullTransform, TTransform, Point, AffineTransform
+from coorx import (
+    SRT3DTransform,
+    Transform,
+    NullTransform,
+    TTransform,
+    Point,
+    AffineTransform,
+    create_transform,
+)
 from pyqtgraph import debug
 from pyqtgraph.debug import Profiler
 from pyqtgraph.units import µm
@@ -1544,10 +1552,7 @@ class Geometry:
 
         self.color = config.pop("color", None)
 
-        # TODO this needs to use common code with other transform deserialization (e.g. frame.py)
-        xform = config.pop("transform", {}).copy()
-        xform.setdefault("offset", xform.pop("pos", None))
-        self._transform = SRT3DTransform(**self._default_transform_args(), **xform)
+        self._transform = load_transform_from_anything(config.pop("transform", {}))
 
         self._children = []
         for name, child_config in config.pop("children", {}).items():
@@ -1931,6 +1936,21 @@ class Plane:
 
     def __repr__(self):
         return str(self)
+
+
+def load_transform_from_anything(thing, **kwargs) -> Transform:
+    if isinstance(thing, pg.SRTTransform):
+        return SRT3DTransform.from_pyqtgraph(thing, **kwargs)
+    elif isinstance(thing, Transform):
+        return thing
+    elif isinstance(thing, list):
+        return AffineTransform.from_matrix(np.array(thing), **kwargs)
+    elif "type" in thing:
+        return create_transform(**thing, **kwargs)
+    else:  # config-style dict
+        thing = thing.copy()
+        thing.setdefault("offset", thing.pop("pos", None))
+        return SRT3DTransform(**thing, **kwargs)
 
 
 def greedy_axis_inverse_kinematics(

@@ -8,7 +8,7 @@ import pyqtgraph as pg
 from acq4.Interfaces import InterfaceMixin
 from acq4.util import Qt
 from acq4.util.Mutex import Mutex
-from acq4.util.geometry import Geometry
+from acq4.util.geometry import Geometry, load_transform_from_anything
 from coorx import SRT3DTransform, Transform, create_transform
 
 
@@ -411,22 +411,7 @@ class OptomechDevice(InterfaceMixin):
         return self.deviceTransform(subdev).inverse
 
     def setDeviceTransform(self, tr):
-        if isinstance(tr, dict):
-            # TODO use this logic everywhere a transform dict is accepted (look at frame.py)
-            if "type" in tr:
-                tr = create_transform(**tr)
-            else:
-                allowed = {"pos", "scale", "angle", "axis"}
-                if len(set(tr.keys()) - allowed) > 0:
-                    raise ValueError(f"Illegal args while creating a transform ({tr})")
-                tr.setdefault("offset", tr.pop("pos", None))
-                if len(tr.get("offset", [])) == 2:
-                    tr["offset"] = (tr["offset"][0], tr["offset"][1], 0)
-                if len(tr.get("scale", [])) == 2:
-                    tr["scale"] = (tr["scale"][0], tr["scale"][1], 1)
-                tr = SRT3DTransform(**tr)
-        elif isinstance(tr, pg.SRTTransform):
-            tr = SRT3DTransform.from_pyqtgraph(tr)
+        tr = load_transform_from_anything(tr)
         with self.__lock:
             self.__transform = tr
             self.invalidateCachedTransforms()

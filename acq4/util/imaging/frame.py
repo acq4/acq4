@@ -4,16 +4,8 @@ from MetaArray import MetaArray
 import pyqtgraph as pg
 from acq4.util.DataManager import FileHandle, DirHandle
 from acq4.util.imaging.background import remove_background_from_image
-from coorx import SRT3DTransform, create_transform, Transform
+from acq4.util.geometry import load_transform_from_anything
 from pyqtgraph import ImageItem
-
-
-def load_transform_from_file(config: dict) -> Transform:
-    if "type" in config:
-        return create_transform(**config)
-    config = config.copy()
-    config.setdefault("offset", config.pop("pos", None))
-    return SRT3DTransform(**config)
 
 
 class Frame:
@@ -44,7 +36,7 @@ class Frame:
                         info["time"] = row.axisValues(2)
                     elif data.axisName(0) == "Depth":
                         depth = row.axisValues(2)
-                        xform = load_transform_from_file(info["transform"])
+                        xform = load_transform_from_anything(info["transform"])
                         pos = xform.offset
                         pos[2] = depth
                         xform.offset = pos
