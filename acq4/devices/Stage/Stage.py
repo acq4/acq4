@@ -467,15 +467,14 @@ class Stage(Device, OptomechDevice):
             raise ValueError(
                 "Inverse mapping on 4-axis stages requires 'linear' and 'previousPos'."
             )
-        local_pos = self.mapFromGlobal(globalPos)
         if self.nAxes <= 3:
             # we can use a simple inverse transform
-            tr = self.stageTransform().offset + np.array(local_pos)
+            tr = self.stageTransform().offset + np.array(self.mapFromGlobal(globalPos))
             return pg.Vector(self.inverseAxisTransform().map(tr))
 
         if linear:
             return greedy_axis_inverse_kinematics(
-                local_pos,
+                globalPos,
                 self.axisTransform(),
                 self.getLimits(),
                 previousPos,
@@ -483,7 +482,7 @@ class Stage(Device, OptomechDevice):
 
         # otherwise, hold to a neutral position of d=0
         return neutral_anchored_inverse_kinematics(
-            local_pos,
+            globalPos,
             self.axisTransform(),
             self.getLimits(),
             [None, None, None, 0],
