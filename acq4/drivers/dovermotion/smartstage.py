@@ -49,7 +49,7 @@ class SmartStage:
 
     def pos(self, refresh=False):
         if refresh:
-            return self.control_thread.request('position').result()
+            return self.control_thread.request('position').wait()
         else:
             return self.control_thread.last_pos
 
