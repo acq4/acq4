@@ -9,7 +9,6 @@ import pyqtgraph as pg
 from acq4.drivers.sensapex import UMP, version_info
 from acq4.util import Qt
 from acq4.util import ptime
-from pyqtgraph import Transform3D, solve3DTransform
 from .Stage import Stage, MoveFuture, ManipulatorAxesCalibrationWindow, StageAxesCalibrationWindow
 
 
@@ -96,7 +95,8 @@ class Sensapex(Stage):
             self.dev.set_max_acceleration(config["maxAcceleration"])
 
         self._lastUpdate = 0
-        self._lastPos = None
+        self._lastPos = [0] * self.nAxes
+        self._lastMove: Optional[SensapexMoveFuture] = None
         self._positionUpdates = queue.Queue()
         self._positionWatcher = threading.Thread(target=self._positionWatcherTask, daemon=True)
         self._positionWatcher.start()
@@ -106,7 +106,6 @@ class Sensapex(Stage):
         # This should also verify that we have a valid device ID
         self.dev.get_pos()
 
-        self._lastMove: Optional[SensapexMoveFuture] = None
         man.sigAbortAll.connect(self.stop)
 
         # clear cached position for this device and re-read to generate an initial position update
@@ -116,7 +115,7 @@ class Sensapex(Stage):
         Sensapex.devices[self.devid] = self
 
     def axes(self):
-        return ("x", "y", "z")[:self.dev.n_axes()]
+        return ("x", "y", "z", "d")[:self.dev.n_axes()]
 
     def capabilities(self):
         """Return a structure describing the capabilities of this device"""
@@ -124,9 +123,9 @@ class Sensapex(Stage):
             return self.config["capabilities"]
         else:
             return {
-                "getPos": (True, True, True),
-                "setPos": (True, True, True),
-                "limits": (False, False, False),
+                "getPos": (True,) * self.nAxes,
+                "setPos": (True,) * self.nAxes,
+                "limits": (False,) * self.nAxes,
             }
 
     def axisTransform(self):
@@ -156,7 +155,7 @@ class Sensapex(Stage):
         """Stop the manipulator immediately.
         """
         with self.lock:
-            self.dev.stop(reason=reason)
+            self.dev.stop()
             # also stop the last move since it might be stepwise and just keep requesting more steps
             lastMove = self._lastMove
             self._lastMove = None  # prevent recursion, since lastMove.stop() will call this method again
@@ -174,7 +173,7 @@ class Sensapex(Stage):
             # using timeout=0 forces read from cache (the monitor thread ensures
             # these values are up to date)
             try:
-                pos = self.dev.get_pos(timeout=0)[:3]
+                pos = self.dev.get_pos(timeout=0)
             except TypeError:
                 # some events requesting position may still be floating around at quit time;
                 # we can ignore these errors here
@@ -236,7 +235,7 @@ class Sensapex(Stage):
         likely_miscalibration_tolerance = 200  # device coordinates in µm
         suggestion = "Does this device need to have its zero calibration run?"
         for axis, limit in enumerate(self._limits):
-            ax_name = 'xyz'[axis]
+            ax_name = 'xyzd'[axis]
             x = pos[axis]
             if x is None:
                 continue
@@ -451,9 +450,10 @@ class SensapexInterface(Qt.QWidget):
     def update(self):
         globalPos = self.dev.globalPosition()
         stagePos = self.dev.getPosition()
-        for i in self.posLabels:
-            text = pg.siFormat(globalPos[i], suffix="m", precision=5)
+        for i, v in enumerate(globalPos):
+            text = pg.siFormat(v, suffix="m", precision=5)
             self.posLabels[i][0].setText(text)
+        for i in self.posLabels:
             self.posLabels[i][1].setText(str(stagePos[i]))
 
     def goHomeClicked(self):
