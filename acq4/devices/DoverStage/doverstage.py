@@ -1,3 +1,5 @@
+import numpy as np
+
 from acq4.drivers.dovermotion.motionsynergy_client import get_client
 from ..Stage import Stage, MoveFuture
 
@@ -30,7 +32,7 @@ class DoverStage(Stage):
                 "limits": (False, False, False),
             }
 
-    def stop(self):
+    def stop(self, reason=None):
         """Stop the stage immediately."""
         return self.dev.stop()
 
@@ -53,9 +55,6 @@ class DoverStage(Stage):
         else:
             return None
 
-    # def deviceInterface(self, win):
-    #     return DoverStageInterface(self, win)
-
 
 class DoverMoveFuture(MoveFuture):
     """Provides access to a move-in-progress on a Dover stage."""
@@ -63,7 +62,7 @@ class DoverMoveFuture(MoveFuture):
     def __init__(self, dev, pos, speed):
         MoveFuture.__init__(self, dev, pos, speed)
         self.dev = dev
-        self.target = pos
+        self.target = np.asarray(pos)
         self._future = self.dev.dev.move(list(pos), self.speed * 1e6)
         self._future.set_callback(self._future_finished)
 
