@@ -210,7 +210,10 @@ class Stage(Device, OptomechDevice):
         """
         if self._axisTransform is None:
             scale = np.asarray(list(self.config.get('scale', [1] * self.nAxes)))
-            self._axisTransform = AffineTransform(matrix=np.eye(self.nAxes) * scale)
+            matrix = np.eye(self.nAxes) * scale
+            # make sure it maps to 3D regardless of input
+            matrix = matrix[:3]
+            self._axisTransform = AffineTransform(matrix=matrix)
         return self._axisTransform
 
     def setAxisTransform(self, tr):
