@@ -396,8 +396,6 @@ class OptomechDevice(InterfaceMixin):
     def globalTransform(self, subdev=None) -> SRT3DTransform | None:
         """
         Return the transform mapping from local device coordinates to global coordinates.
-        If the resulting transform is non-affine, then None is returned and the mapTo/mapFrom
-        methods must be used instead.
 
         If *subdev* is given, it must be a dictionary of {deviceName: subdevice} or
         {deviceName: subdeviceName} pairs specifying the state to compute.
@@ -408,19 +406,11 @@ class OptomechDevice(InterfaceMixin):
             self.__globalTransform = self.__computeGlobalTransform()
         return self.__globalTransform
 
-    def __computeGlobalTransform(self, subdev=None, inverse=False):
-        # subdev must be a dict
+    def __computeGlobalTransform(self, subdev: dict | None = None):
         parent = self.parentDevice()
         if parent is None:
-            parentTr = SRT3DTransform(dims=(3, 3))
-        else:
-            parentTr = parent.globalTransform(subdev)
-        deviceTr = self.deviceTransform(subdev)
-        transform = parentTr * deviceTr
-
-        if inverse:
-            return transform.inverse
-        return transform
+            return self.deviceTransform(subdev)
+        return parent.globalTransform(subdev) * self.deviceTransform(subdev)
 
     def inverseGlobalTransform(self, subdev=None):
         """
@@ -430,8 +420,9 @@ class OptomechDevice(InterfaceMixin):
 
     def physicalTransform(self, subdev=None):
         """
-        Return the transform mapping from local device coordinates to physical coordinates.
-        This is the same as deviceTransform. Override this if your device has optical transformations.
+        Return the transform mapping from local device coordinates to parent physical coordinates,
+        much the same as deviceTransform. Override this if your device can distinguish optical
+        transformations from physical ones.
         """
         return self.deviceTransform(subdev)
 
@@ -439,13 +430,13 @@ class OptomechDevice(InterfaceMixin):
         """
         See physicalTransform; this method returns the inverse.
         """
-        return self.inverseDeviceTransform(subdev)
+        return self.physicalTransform(subdev).inverse
 
     def globalPhysicalTransform(self, subdev=None):
         """
         Return the transform mapping from local device coordinates to global physical coordinates.
         This is the same as globalTransform, except that the transform is not affected by the
-        current subdevice selection.
+        optical properties of any devices in the hierarchy.
         """
         if subdev is not None:
             return self.__computeGlobalPhysicalTransform(subdev)
@@ -459,25 +450,12 @@ class OptomechDevice(InterfaceMixin):
         """
         return self.globalPhysicalTransform(subdev).inverse
 
-    def __computeGlobalPhysicalTransform(self, subdev=None, inverse=False):
+    def __computeGlobalPhysicalTransform(self, subdev=None):
         parent = self.parentDevice()
         if parent is None:
-            parentTr = SRT3DTransform(dims=(3, 3))
-        else:
-            parentTr = parent.globalPhysicalTransform(subdev)
-        if parentTr is None:
-            return None
-        deviceTr = self.physicalTransform(subdev)
-        if deviceTr is None:
-            return None
-        transform = parentTr * deviceTr
+            return self.physicalTransform(subdev)
 
-        if not inverse:
-            return transform
-        inv, invertible = transform.inverted()
-        if not invertible:
-            raise ValueError("Transform is not invertible.")
-        return inv
+        return parent.globalPhysicalTransform(subdev) * self.physicalTransform(subdev)
 
     def listOptics(self, port="default"):
         """Return a list of Optics this device adds to the optical
