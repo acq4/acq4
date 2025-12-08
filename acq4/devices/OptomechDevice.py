@@ -9,7 +9,7 @@ from acq4.Interfaces import InterfaceMixin
 from acq4.util import Qt
 from acq4.util.Mutex import Mutex
 from acq4.util.geometry import Geometry, load_transform_from_anything
-from coorx import SRT3DTransform, Transform, create_transform
+from coorx import SRT3DTransform, Transform
 
 
 def map_through_transform(
