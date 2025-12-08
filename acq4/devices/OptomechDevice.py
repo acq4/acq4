@@ -46,7 +46,8 @@ class OptomechDevice(InterfaceMixin):
     physical location.
 
     In most cases, the transformation will be in the form of an affine matrix multiplication.
-    Devices are free, however, to define an arbitrary transformation as well.
+    Devices are free, however, to define an arbitrary transformation as well using custom subclasses of
+    coorx.Transform.
 
     Devices may also have selectable sub-devices, providing a set of interchangeable transforms.
     For example, a microscope with multiple objectives may define one sub-device per objective.
@@ -161,9 +162,9 @@ class OptomechDevice(InterfaceMixin):
         # and might not be cacheable.
         # Transformation from this device to its parent (or to global if there is no parent)
         self.__transform: SRT3DTransform = SRT3DTransform(dims=(3, 3))
-        # 0 indicates the cache is invalid. None indicates the transform is non-affine,
-        self.__globalTransform: int | None | Transform = 0
-        self.__globalPhysicalTransform: int | None | Transform = 0
+        # None indicates the cache is invalid
+        self.__globalTransform: None | Transform = None
+        self.__globalPhysicalTransform: None | Transform = None
 
         # Contains {port: [list of optics]} describing the optics (usually filters) for each port
         self.__optics = {}
@@ -316,25 +317,12 @@ class OptomechDevice(InterfaceMixin):
     def mapToParentDevice(self, obj, subdev=None):
         """Map from local coordinates to the parent device (or to global if there is no parent)"""
         tr = self.deviceTransform(subdev)
-        if tr is None:
-            raise ValueError(
-                "Cannot map--device classes with no affine transform must override map methods."
-            )
         return map_through_transform(obj, tr)
 
     def mapToGlobal(self, obj, subdev=None):
         """Map *obj* from local coordinates to global."""
         tr = self.globalTransform(subdev)
-        if tr is not None:
-            return map_through_transform(obj, tr)
-        # If our transformation is nonlinear, then the local mapping step must be done separately.
-        subdev = self._subdevDict(subdev)
-        o2 = self.mapToParentDevice(obj, subdev)
-        parent = self.parentDevice()
-        if parent is None:
-            return o2
-        else:
-            return parent.mapToGlobal(o2, subdev)
+        return map_through_transform(obj, tr)
 
     def mapToDevice(self, device, obj, subdev=None):
         """Map *obj* from local coordinates to *device*'s coordinate system."""
@@ -344,25 +332,12 @@ class OptomechDevice(InterfaceMixin):
     def mapFromParentDevice(self, obj, subdev=None):
         """Map *obj* from parent coordinates (or from global if there is no parent) to local coordinates."""
         tr = self.inverseDeviceTransform(subdev)
-        if tr is None:
-            raise ValueError(
-                "Cannot map--device classes with no affine transform must override map methods."
-            )
         return map_through_transform(obj, tr)
 
     def mapFromGlobal(self, obj, subdev=None):
         """Map *obj* from global to local coordinates."""
         tr = self.inverseGlobalTransform(subdev)
-        if tr is not None:
-            return map_through_transform(obj, tr)
-
-        # If our transformation is nonlinear, then the local mapping step must be done separately.
-        raise NotImplementedError("The rest of this method has never been tested.")
-        # subdev = self._subdevDict(subdev)
-        # parent = self.parentDevice()
-        # if parent is not None:
-        #     obj = parent.mapFromGlobal(obj, subdev)
-        # return self.mapFromParentDevice(obj, subdev)
+        return map_through_transform(obj, tr)
 
     def mapGlobalToParent(self, obj, subdev=None):
         """Map *obj* from global coordinates to the parent device coordinates.
@@ -429,7 +404,7 @@ class OptomechDevice(InterfaceMixin):
         """
         if subdev is not None:
             return self.__computeGlobalTransform(subdev)
-        if self.__globalTransform == 0:
+        if self.__globalTransform is None:
             self.__globalTransform = self.__computeGlobalTransform()
         return self.__globalTransform
 
@@ -440,19 +415,12 @@ class OptomechDevice(InterfaceMixin):
             parentTr = SRT3DTransform(dims=(3, 3))
         else:
             parentTr = parent.globalTransform(subdev)
-        if parentTr is None:
-            return None
         deviceTr = self.deviceTransform(subdev)
-        if deviceTr is None:
-            return None
         transform = parentTr * deviceTr
 
-        if not inverse:
-            return transform
-        inv, invertible = transform.inverted()
-        if not invertible:
-            raise ValueError("Transform is not invertible.")
-        return inv
+        if inverse:
+            return transform.inverse
+        return transform
 
     def inverseGlobalTransform(self, subdev=None):
         """
@@ -481,7 +449,7 @@ class OptomechDevice(InterfaceMixin):
         """
         if subdev is not None:
             return self.__computeGlobalPhysicalTransform(subdev)
-        if self.__globalPhysicalTransform == 0:
+        if self.__globalPhysicalTransform is None:
             self.__globalPhysicalTransform = self.__computeGlobalPhysicalTransform()
         return self.__globalPhysicalTransform
 
@@ -607,8 +575,8 @@ class OptomechDevice(InterfaceMixin):
 
     def invalidateCachedTransforms(self, invalidateLocal=True):
         with self.__lock:
-            self.__globalTransform = 0
-            self.__globalPhysicalTransform = 0
+            self.__globalTransform = None
+            self.__globalPhysicalTransform = None
 
         # child global transforms must also be invalidated before any change signals are emitted
         for ch in self.__children:
