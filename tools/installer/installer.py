@@ -34,7 +34,6 @@ except ModuleNotFoundError:  # pragma: no cover - fallback for Python < 3.11
 ARG_INSTALL_PATH = "--install-path"
 ARG_BRANCH = "--branch"
 ARG_REPO_URL = "--repo-url"
-ARG_OPTIONAL_MODE = "--optional-mode"
 ARG_OPTIONAL_DEP = "--optional-dep"
 ARG_OPTIONAL_GROUPS = "--optional-groups"
 ARG_EDITABLE_CLONE = "--editable-clone"
@@ -43,6 +42,9 @@ ARG_CONFIG_BRANCH = "--config-branch"
 ARG_CONFIG_PATH = "--config-path"
 ARG_CONFIG_FILE = "--config-file"
 ARG_GITHUB_TOKEN = "--github-token"
+ARG_STARTUP_MODULES = "--startup-modules"
+ARG_EXIT_ON_ERROR = "--exit-on-error"
+ARG_CREATE_SHORTCUT = "--create-shortcut"
 
 RAW_GITHUB_BASE = "https://raw.githubusercontent.com/acq4/acq4/main/"
 ACQ4_REPO_URL = "https://github.com/acq4/acq4"
@@ -70,7 +72,7 @@ if errorlevel 1 (
 )
 
 cd "{acq4_path}"
-python -m acq4 -x -c "{config_file_path}"
+python -m acq4 -c "{config_file_path}"{extra_args}
 pause
 """
 
@@ -142,6 +144,18 @@ DEPENDENCY_METADATA: Dict[str, Dict[str, Dict[str, str]]] = {
             "git_url": "https://github.com/AllenInstitute/falconoptics.git",
             "description": "Falcon optics motor turret.",
         },
+        "torch": {
+            "display_name": "PyTorch",
+            "pypi_package": "torch",
+            "description": "Deep learning framework with automatic CUDA detection.",
+            "setup_handler": "handle_torch_install",
+        },
+        "torchvision": {
+            "display_name": "torchvision",
+            "pypi_package": "torchvision",
+            "description": "Computer vision models and utilities for PyTorch.",
+            "setup_handler": "handle_torch_install",
+        },
         "cellpose": {
             "display_name": "cellpose (ACQ4 fork)",
             "pypi_package": "cellpose",
@@ -196,11 +210,11 @@ DEPENDENCY_METADATA: Dict[str, Dict[str, Dict[str, str]]] = {
 }
 
 def _group_meta(key: str) -> Dict[str, str]:
-    return DEPENDENCY_METADATA.get("groups", {}).get(key, {})
+    return DEPENDENCY_METADATA["groups"].get(key, {})
 
 
 def _package_meta(spec: str) -> Dict[str, str]:
-    packages = DEPENDENCY_METADATA.get("packages", {})
+    packages = DEPENDENCY_METADATA["packages"]
     if spec in packages:
         return packages[spec]
     normalized = normalize_spec_name(spec)
@@ -282,61 +296,60 @@ def repo_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
 
-def fetch_pyproject_from_github(repo_url: str, branch: str) -> Tuple[str, bool]:
-    """Download pyproject.toml content from a GitHub repository.
+def fetch_pyproject(repo_url: str, branch: str) -> str:
+    """Fetch pyproject.toml content from a GitHub repository or local path.
 
     Parameters
     ----------
     repo_url : str
-        GitHub repository URL (e.g., "https://github.com/acq4/acq4").
+        GitHub repository URL (e.g., "https://github.com/acq4/acq4") or local file path.
     branch : str
-        Branch or tag name to fetch from.
+        Branch or tag name to fetch from (ignored for local paths).
 
     Returns
     -------
-    tuple of (str, bool)
-        A tuple containing:
-        - The pyproject.toml file content as a string
-        - A boolean indicating whether fallback to acq4/acq4:main was used
+    str
+        The pyproject.toml file content as a string.
 
     Raises
     ------
     InstallerError
-        If the download fails or the file cannot be found, even after
-        falling back to the main ACQ4 repository.
+        If the download fails or the file cannot be found.
     """
+    # Check if this is a GitHub URL
     parts = urlsplit(repo_url)
-    if parts.netloc not in {"github.com", "www.github.com"}:
-        raise InstallerError(f"Only GitHub URLs are supported for fetching pyproject.toml: {repo_url}")
+    is_github = parts.netloc in {"github.com", "www.github.com"}
 
-    path_components = parts.path.strip("/").split("/")
-    if len(path_components) < 2:
-        raise InstallerError(f"Invalid GitHub repository URL: {repo_url}")
+    if is_github:
+        # GitHub URL - download from raw.githubusercontent.com
+        path_components = parts.path.strip("/").split("/")
+        if len(path_components) < 2:
+            raise InstallerError(f"Invalid GitHub repository URL: {repo_url}")
 
-    owner, repo_name = path_components[0], path_components[1]
-    if repo_name.endswith(".git"):
-        repo_name = repo_name[:-4]
+        owner, repo_name = path_components[0], path_components[1]
+        if repo_name.endswith(".git"):
+            repo_name = repo_name[:-4]
 
-    raw_url = f"https://raw.githubusercontent.com/{owner}/{repo_name}/{branch}/pyproject.toml"
+        raw_url = f"https://raw.githubusercontent.com/{owner}/{repo_name}/{branch}/pyproject.toml"
 
-    try:
-        with urlopen(raw_url, timeout=10) as response:
-            content = response.read().decode("utf-8")
-            return content, False
-    except URLError as exc:
-        # If the fetch fails and we're not already looking at the main ACQ4 repo,
-        # fall back to fetching from github.com/acq4/acq4:main
-        is_main_acq4 = (owner.lower() == "acq4" and repo_name.lower() == "acq4" and branch.lower() == "main")
-        if not is_main_acq4:
-            fallback_url = f"https://raw.githubusercontent.com/acq4/acq4/main/pyproject.toml"
-            try:
-                with urlopen(fallback_url, timeout=10) as response:
-                    content = response.read().decode("utf-8")
-                    return content, True
-            except URLError:
-                # Fallback also failed, raise the original error
-                pass
-        raise InstallerError(f"Failed to download pyproject.toml from {raw_url}: {exc}") from exc
+        try:
+            with urlopen(raw_url, timeout=10) as response:
+                content = response.read().decode("utf-8")
+                return content
+        except URLError as exc:
+            raise InstallerError(f"Failed to download pyproject.toml from {raw_url}: {exc}") from exc
+    else:
+        # Assume local path
+        local_path = Path(repo_url).expanduser().resolve()
+        pyproject_path = local_path / "pyproject.toml"
+
+        if not pyproject_path.exists():
+            raise InstallerError(f"pyproject.toml not found at {pyproject_path}")
+
+        try:
+            return pyproject_path.read_text(encoding="utf-8")
+        except Exception as exc:
+            raise InstallerError(f"Failed to read pyproject.toml from {pyproject_path}: {exc}") from exc
 
 
 def load_pyproject_data(content: Optional[str] = None, repo_path: Optional[Path] = None) -> Dict[str, Any]:
@@ -423,11 +436,17 @@ def dependency_groups_from_pyproject(content: Optional[str] = None,
         return _DEPENDENCY_GROUPS_CACHE
 
     data = load_pyproject_data(content=content, repo_path=repo_path)
-    project = data.get("project") or {}
-    optional = project.get("optional-dependencies") or {}
+    project = data.get("project", {})
+    if not isinstance(project, dict):
+        raise InstallerError(f"pyproject.toml 'project' section must be a table, got {type(project).__name__}")
+    optional = project.get("optional-dependencies", {})
+    if not isinstance(optional, dict):
+        raise InstallerError(f"pyproject.toml 'optional-dependencies' must be a table, got {type(optional).__name__}")
     groups: List[DependencyGroup] = []
     for key, packages in optional.items():
-        pkg_list = list(packages or [])
+        if not isinstance(packages, list):
+            raise InstallerError(f"pyproject.toml optional-dependencies[{key}] must be a list, got {type(packages).__name__}")
+        pkg_list = list(packages)
         meta = _group_meta(key)
         title = meta.get("title") or _format_group_title(key)
         description = meta.get("description", "")
@@ -458,8 +477,12 @@ def project_dependencies(repo_path: Optional[Path] = None) -> List[str]:
         return _PROJECT_DEPENDENCIES_CACHE
 
     data = load_pyproject_data(repo_path=repo_path)
-    project = data.get("project") or {}
-    deps = project.get("dependencies") or []
+    project = data.get("project", {})
+    if not isinstance(project, dict):
+        raise InstallerError(f"pyproject.toml 'project' section must be a table, got {type(project).__name__}")
+    deps = project.get("dependencies", [])
+    if not isinstance(deps, list):
+        raise InstallerError(f"pyproject.toml 'dependencies' must be a list, got {type(deps).__name__}")
 
     if repo_path is None:
         _PROJECT_DEPENDENCIES_CACHE = list(deps)
@@ -475,7 +498,7 @@ def editable_dependencies() -> Dict[str, EditableDependency]:
 
 
 def _build_editable_dependency_map() -> Dict[str, EditableDependency]:
-    packages = DEPENDENCY_METADATA.get("packages", {})
+    packages = DEPENDENCY_METADATA["packages"]
     result: Dict[str, EditableDependency] = {}
     for pkg_name, meta in packages.items():
         git_url = meta.get("git_url")
@@ -553,7 +576,10 @@ class InstallerState:
     config_repo_branch: Optional[str] = None
     config_copy_path: Optional[Path] = None
     config_file: Optional[str] = None
+    startup_modules: List[str] = field(default_factory=list)
+    exit_on_error: bool = True
     create_desktop_shortcut: bool = True
+    install_notes: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -564,13 +590,79 @@ class InstallerLogEvent:
 
 class StructuredLogger:
     def __init__(self, text_fn: Optional[Callable[[str], None]] = None,
-                 event_handler: Optional[Callable[[InstallerLogEvent], None]] = None) -> None:
+                 event_handler: Optional[Callable[[InstallerLogEvent], None]] = None,
+                 log_file: Optional[Path] = None) -> None:
         self.text_fn = text_fn
         self.event_handler = event_handler
+        self.log_file = log_file
+        self._log_file_handle: Optional[Any] = None
         self._task_counter = 0
         self._command_counter = 0
         self._progress_total = 0
         self._progress_value = 0
+
+        # Open log file if provided
+        if self.log_file is not None:
+            try:
+                self.log_file.parent.mkdir(parents=True, exist_ok=True)
+                self._log_file_handle = open(self.log_file, "w", encoding="utf-8", buffering=1)  # Line buffered
+            except Exception as exc:
+                # If we can't open the log file, just continue without it
+                self._log_file_handle = None
+                if self.text_fn is not None:
+                    self.text_fn(f"Warning: Could not open log file {self.log_file}: {exc}")
+
+    def close(self) -> None:
+        """Close the log file if it's open."""
+        if self._log_file_handle is not None:
+            try:
+                self._log_file_handle.close()
+            except Exception:
+                pass
+            self._log_file_handle = None
+
+    def move_log_file(self, new_path: Path) -> None:
+        """Move the log file to a new location.
+
+        This is used to move from a temp location to the final install directory.
+
+        Parameters
+        ----------
+        new_path : Path
+            New location for the log file.
+        """
+        if self.log_file is None or self._log_file_handle is None:
+            return
+
+        try:
+            # Close the current file
+            self._log_file_handle.close()
+            self._log_file_handle = None
+
+            # Move the file to new location
+            import shutil
+            new_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(self.log_file), str(new_path))
+
+            # Update path and reopen at new location
+            self.log_file = new_path
+            self._log_file_handle = open(self.log_file, "a", encoding="utf-8", buffering=1)
+        except Exception as exc:
+            # If move fails, just continue logging to the old location or stop logging
+            self._log_file_handle = None
+            if self.text_fn is not None:
+                self.text_fn(f"Warning: Could not move log file to {new_path}: {exc}")
+
+    def _write_to_log_file(self, text: str) -> None:
+        """Write text to the log file if it's open."""
+        if self._log_file_handle is not None:
+            try:
+                self._log_file_handle.write(text)
+                if not text.endswith("\n"):
+                    self._log_file_handle.write("\n")
+                self._log_file_handle.flush()
+            except Exception:
+                pass  # Silent failure - don't let log file issues break the installation
 
     def _emit(self, kind: str, **data: Any) -> None:
         if self.event_handler is None:
@@ -585,21 +677,26 @@ class StructuredLogger:
     def message(self, text: str, task_id: Optional[int] = None, *, broadcast: bool = True) -> None:
         if self.text_fn is not None:
             self.text_fn(text)
+        self._write_to_log_file(text)
         if broadcast:
             self._emit("message", text=text, task_id=task_id)
 
     def start_task(self, title: str) -> int:
         self._task_counter += 1
         task_id = self._task_counter
+        text = f"\n=== {title} ==="
         if self.text_fn is not None:
-            self.text_fn(f"\n=== {title} ===")
+            self.text_fn(text)
+        self._write_to_log_file(text)
         self._emit("task-start", task_id=task_id, title=title)
         return task_id
 
     def finish_task(self, task_id: int, success: bool = True) -> None:
+        status = "✓ Completed" if success else "✗ Failed"
+        text = f"{status}\n"
         if self.text_fn is not None:
-            status = "✓ Completed" if success else "✗ Failed"
-            self.text_fn(f"{status}\n")
+            self.text_fn(text)
+        self._write_to_log_file(text)
         self._emit("task-complete", task_id=task_id, success=success)
         self._progress_value = min(self._progress_value + 1, self._progress_total)
         self._emit("progress", total=self._progress_total, value=self._progress_value)
@@ -607,14 +704,17 @@ class StructuredLogger:
     def start_command(self, task_id: Optional[int], display_cmd: str) -> int:
         self._command_counter += 1
         command_id = self._command_counter
+        text = f"$ {display_cmd}"
         if self.text_fn is not None:
-            self.text_fn(f"$ {display_cmd}")
+            self.text_fn(text)
+        self._write_to_log_file(text)
         self._emit("command-start", command_id=command_id, task_id=task_id, text=display_cmd)
         return command_id
 
     def command_output(self, command_id: Optional[int], text: str) -> None:
         if self.text_fn is not None:
             self.text_fn(text)
+        self._write_to_log_file(text)
         if command_id is None:
             return
         self._emit("command-output", command_id=command_id, text=text)
@@ -622,8 +722,11 @@ class StructuredLogger:
     def finish_command(self, command_id: Optional[int], success: bool) -> None:
         if command_id is None:
             return
-        if self.text_fn is not None and not success:
-            self.text_fn("Command failed")
+        if not success:
+            text = "Command failed"
+            if self.text_fn is not None:
+                self.text_fn(text)
+            self._write_to_log_file(text)
         self._emit("command-complete", command_id=command_id, success=success)
 
 def normalize_spec_name(spec: str) -> str:
@@ -759,24 +862,21 @@ def resolve_optional_selection_from_args(args: argparse.Namespace,
     list of str
         The dependency specs to install.
     """
-    mode = args.optional_mode
     raw_optional_arg = args.optional_dep
     raw_group_arg = args.optional_groups
     requested_names = _parse_cli_list(raw_optional_arg)
     requested_groups = _parse_cli_list(raw_group_arg)
     provided_optional_arg = (raw_optional_arg is not None) or (raw_group_arg is not None)
-    if mode is None:
-        mode = "list" if provided_optional_arg else "all"
-    if mode not in {"all", "none", "list"}:
-        raise InstallerError(f"Invalid optional selection mode: {mode}")
-    if mode == "all":
-        return [dep.spec for dep in options]
-    if mode == "none":
-        return []
+
+    # If no optional args provided, install all optional dependencies
     if not provided_optional_arg:
-        raise InstallerError("Optional selection mode 'list' requires --optional-dep or --optional-groups.")
+        return [dep.spec for dep in options]
+
+    # If empty list provided, install none
     if not requested_names and not requested_groups:
         return []
+
+    # Resolve the requested dependencies and groups
     alias_lookup = _optional_alias_lookup(options)
     group_lookup = _group_alias_lookup(groups)
     resolved: List[str] = []
@@ -825,7 +925,8 @@ def quote_windows_arguments(args: List[str]) -> str:
     return subprocess.list2cmdline(args)
 
 
-def create_start_bat(base_dir: Path, conda_exe: str, env_path: Path, config_file_path: Path) -> Path:
+def create_start_bat(base_dir: Path, conda_exe: str, env_path: Path, config_file_path: Path,
+                     startup_modules: Optional[List[str]] = None, exit_on_error: bool = True) -> Path:
     """Create a start_acq4.bat file in the base install directory.
 
     Parameters
@@ -838,6 +939,10 @@ def create_start_bat(base_dir: Path, conda_exe: str, env_path: Path, config_file
         Path to the conda environment.
     config_file_path : Path
         Path to the ACQ4 configuration file.
+    startup_modules : List[str], optional
+        List of module names to start with -m flags.
+    exit_on_error : bool
+        Whether to use the -x (exit on error) flag.
 
     Returns
     -------
@@ -850,11 +955,23 @@ def create_start_bat(base_dir: Path, conda_exe: str, env_path: Path, config_file
     conda_path = Path(conda_exe)
     conda_activate_bat = conda_path.parent / "activate.bat"
 
+    # Build module arguments
+    extra_args = []
+    if startup_modules:
+        extra_args.extend([f'-m "{module}"' for module in startup_modules])
+
+    # Build exit flag
+    if exit_on_error:
+        extra_args.append("-x")
+
+    extra_args = (" " + " ".join(extra_args)) if extra_args else ""
+
     bat_content = START_BAT_TEMPLATE.format(
         conda_activate_bat=str(conda_activate_bat),
         env_path=str(env_path),
         config_file_path=str(config_file_path),
         acq4_path=str(base_dir / ACQ4_SOURCE_DIRNAME),
+        extra_args=extra_args,
     )
     bat_path = base_dir / "start_acq4.bat"
     bat_path.write_text(bat_content, encoding="utf-8")
@@ -873,10 +990,10 @@ def create_desktop_shortcut_windows(bat_path: Path, base_dir: Path) -> None:
 
     Notes
     -----
-    This function creates a shortcut to the bat file and attempts to configure
-    it to disable Quick Edit mode in the console window. Quick Edit mode can
-    cause the console to pause when text is accidentally selected, which is
-    undesirable for long-running applications.
+    This function creates a shortcut to the bat file and configures the console
+    window with Quick Edit mode disabled and custom buffer/window sizes. Quick
+    Edit mode can cause the console to pause when text is accidentally selected,
+    which is undesirable for long-running applications.
     """
     desktop = Path(os.path.expanduser("~")) / "Desktop"
     desktop.mkdir(parents=True, exist_ok=True)
@@ -885,27 +1002,25 @@ def create_desktop_shortcut_windows(bat_path: Path, base_dir: Path) -> None:
 
     # Try to find the ACQ4 icon
     icon_path = base_dir / ACQ4_SOURCE_DIRNAME / "acq4" / "icons" / "acq4.ico"
-    icon_location = str(icon_path) if icon_path.exists() else ""
 
-    # PowerShell script to create shortcut and modify its properties
-    # Note: Disabling Quick Edit requires modifying the .lnk file binary directly
-    # which is not easily done via WScript.Shell. We create the shortcut here,
-    # and users can manually disable Quick Edit by right-clicking the shortcut,
-    # selecting Properties > Options > and unchecking "Quick Edit Mode" if needed.
-    ps_script = (
-        "$ws = New-Object -ComObject WScript.Shell;"
-        f"$s = $ws.CreateShortcut('{shortcut_path}');"
-        f"$s.TargetPath = '{bat_path}';"
-        "$s.Arguments = '';"
-        f"$s.WorkingDirectory = '{base_dir}';"
-    )
+    # Use create_lnk.py script to create shortcut with custom console settings
+    create_lnk_script = base_dir / ACQ4_SOURCE_DIRNAME / "tools" / "create_lnk.py"
 
-    if icon_location:
-        ps_script += f"$s.IconLocation = '{icon_location}';"
+    cmd = [
+        "python",
+        str(create_lnk_script),
+        str(shortcut_path),
+        str(bat_path),
+        "--working-dir", str(base_dir),
+        "--quickedit", "off",
+        "--window", "160x60",
+        "--buffer", "160x9999"
+    ]
 
-    ps_script += "$s.Save();"
+    if icon_path.exists():
+        cmd.extend(["--icon", str(icon_path)])
 
-    subprocess.run(["powershell", "-NoProfile", "-Command", ps_script], check=True)
+    subprocess.run(cmd, check=True)
 
 
 def build_unattended_script_content(cli_args: List[str], *, is_windows: bool) -> str:
@@ -988,17 +1103,11 @@ def register_location_cli_arguments(parser: argparse.ArgumentParser) -> None:
 def register_dependency_cli_arguments(parser: argparse.ArgumentParser) -> None:
     """Add CLI options for optional dependency selection."""
     parser.add_argument(
-        ARG_OPTIONAL_MODE,
-        choices=["all", "none", "list"],
-        help="Selection mode for optional dependencies (default: all, or list when --optional-dep is provided).",
-        default=None,
-    )
-    parser.add_argument(
         ARG_OPTIONAL_DEP,
         dest="optional_dep",
         help=(
             "Comma-separated list of optional package names to include (matches display/pip names, not specs). "
-            "Only used when --optional-mode list; pass an empty string to select none."
+            "If not provided, all optional dependencies will be installed. Pass an empty string to select none."
         ),
         default=None,
     )
@@ -1043,6 +1152,30 @@ def register_config_cli_arguments(parser: argparse.ArgumentParser) -> None:
         ARG_CONFIG_FILE,
         dest="config_file",
         help="Configuration file to use from the cloned/copied config directory.",
+    )
+
+
+def register_startup_cli_arguments(parser: argparse.ArgumentParser) -> None:
+    """Add CLI options controlling startup script behavior."""
+    parser.add_argument(
+        ARG_STARTUP_MODULES,
+        dest="startup_modules",
+        help="Comma-separated list of module names to start automatically (e.g., 'Camera,Data Manager').",
+        default=None,
+    )
+    parser.add_argument(
+        ARG_EXIT_ON_ERROR,
+        dest="exit_on_error",
+        help="Use the -x (exit on error) flag when starting ACQ4 (default: true).",
+        default=None,
+        choices=["true", "false"],
+    )
+    parser.add_argument(
+        ARG_CREATE_SHORTCUT,
+        dest="create_shortcut",
+        help="Create a desktop shortcut (Windows only, default: true).",
+        default=None,
+        choices=["true", "false"],
     )
 
 
@@ -1469,10 +1602,7 @@ class LocationPage(QtWidgets.QWizardPage):
     def apply_cli_args(self, args: argparse.Namespace) -> None:
         if args.install_path:
             raw_path = Path(str(args.install_path)).expanduser()
-            try:
-                resolved = raw_path.resolve()
-            except Exception:
-                resolved = raw_path
+            resolved = raw_path.resolve()
             self.path_edit.setText(str(resolved))
         if args.repo_url:
             self.git_repo_widget.set_repo_url(str(args.repo_url))
@@ -1554,13 +1684,6 @@ class DependenciesPage(QtWidgets.QWizardPage):
         self.clone_items: Dict[str, QtWidgets.QTreeWidgetItem] = {}
         self._populate_clone_tree()
 
-        # Desktop shortcut checkbox (Windows only)
-        self.create_shortcut_checkbox = QtWidgets.QCheckBox("Create desktop shortcut to start ACQ4")
-        self.create_shortcut_checkbox.setChecked(True)
-        if sys.platform != "win32":
-            self.create_shortcut_checkbox.setVisible(False)
-        layout.addWidget(self.create_shortcut_checkbox)
-
     def initializePage(self) -> None:
         """Fetch pyproject.toml from GitHub and populate the dependency tree."""
         if self._initialized:
@@ -1574,19 +1697,12 @@ class DependenciesPage(QtWidgets.QWizardPage):
         QtWidgets.QApplication.processEvents()
 
         try:
-            content, used_fallback = fetch_pyproject_from_github(repo_url, branch)
+            content = fetch_pyproject(repo_url, branch)
             self.groups = dependency_groups_from_pyproject(content=content)
             self.options = parse_optional_dependencies(content=content)
             self.option_lookup = {dep.spec: dep for dep in self.options}
             self._populate_tree()
-            if used_fallback:
-                self.status_label.setStyleSheet("color: #8a6d3b;")  # Warning color
-                self.status_label.setText(
-                    f"Note: pyproject.toml not found in {repo_url} ({branch}). "
-                    "Using dependency list from github.com/acq4/acq4:main instead."
-                )
-            else:
-                self.status_label.setText("")
+            self.status_label.setText("")
             self._initialized = True
 
             # Apply CLI args if they were provided before initialization
@@ -1696,12 +1812,14 @@ class DependenciesPage(QtWidgets.QWizardPage):
     def cli_arguments(self) -> List[str]:
         specs = self.selected_specs()
         args: List[str] = []
+        # If all dependencies selected, omit the flag (default behavior is "all")
         if len(specs) == len(self.options):
-            args.extend([ARG_OPTIONAL_MODE, "all"])
+            pass  # Default is to install all
         elif not specs:
-            args.extend([ARG_OPTIONAL_MODE, "none"])
+            # Empty string means install none
+            args.extend([ARG_OPTIONAL_DEP, ""])
         else:
-            args.extend([ARG_OPTIONAL_MODE, "list"])
+            # Specific list of dependencies
             cli_names: List[str] = []
             for spec in specs:
                 dep = self.option_lookup.get(spec)
@@ -2012,6 +2130,138 @@ class ConfigPage(QtWidgets.QWizardPage):
         status_label.setText("")
 
 
+class StartupPage(QtWidgets.QWizardPage):
+    """Wizard page for configuring ACQ4 startup behavior."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.setTitle("Startup Configuration")
+        layout = QtWidgets.QVBoxLayout(self)
+
+        intro_label = QtWidgets.QLabel(
+            "Configure how ACQ4 will start when launched from the startup script or desktop shortcut."
+        )
+        intro_label.setWordWrap(True)
+        layout.addWidget(intro_label)
+
+        # Startup modules section
+        modules_group = QtWidgets.QGroupBox("Auto-start Modules")
+        modules_layout = QtWidgets.QVBoxLayout(modules_group)
+
+        modules_help = QtWidgets.QLabel(
+            "Specify which modules should start automatically when ACQ4 launches. "
+            "Enter module names separated by commas (e.g., Camera, MultiPatch, Data Manager, Task Runner)."
+        )
+        modules_help.setWordWrap(True)
+        modules_layout.addWidget(modules_help)
+
+        self.modules_edit = QtWidgets.QLineEdit()
+        self.modules_edit.setPlaceholderText("e.g., Camera, MultiPatch, Data Manager, Task Runner")
+        self.modules_edit.textChanged.connect(self._update_command_preview)
+        modules_layout.addWidget(self.modules_edit)
+
+        layout.addWidget(modules_group)
+
+        # Exit on error option
+        error_group = QtWidgets.QGroupBox("Error Handling")
+        error_layout = QtWidgets.QVBoxLayout(error_group)
+
+        self.exit_on_error_checkbox = QtWidgets.QCheckBox("Exit on error (use -x flag)")
+        self.exit_on_error_checkbox.setChecked(True)
+        self.exit_on_error_checkbox.toggled.connect(self._update_command_preview)
+        error_layout.addWidget(self.exit_on_error_checkbox)
+
+        error_help = QtWidgets.QLabel(
+            "When enabled, ACQ4 will exit immediately if an error occurs during startup. "
+            "This is recommended to catch configuration issues early."
+        )
+        error_help.setWordWrap(True)
+        error_help.setStyleSheet("color: gray; font-size: 9pt;")
+        error_layout.addWidget(error_help)
+
+        layout.addWidget(error_group)
+
+        # Desktop shortcut (Windows only)
+        self.create_shortcut_checkbox = QtWidgets.QCheckBox("Create desktop shortcut to start ACQ4")
+        self.create_shortcut_checkbox.setChecked(True)
+        if sys.platform != "win32":
+            self.create_shortcut_checkbox.setVisible(False)
+        layout.addWidget(self.create_shortcut_checkbox)
+
+        # Command preview
+        preview_group = QtWidgets.QGroupBox("Startup Command Preview")
+        preview_layout = QtWidgets.QVBoxLayout(preview_group)
+
+        self.command_label = QtWidgets.QLabel()
+        self.command_label.setWordWrap(True)
+        self.command_label.setStyleSheet("font-family: monospace; background-color: #f0f0f0; padding: 8px;")
+        preview_layout.addWidget(self.command_label)
+
+        layout.addWidget(preview_group)
+
+        # Initialize command preview
+        self._update_command_preview()
+
+        layout.addStretch()
+
+    def _update_command_preview(self) -> None:
+        """Update the command preview label based on current selections."""
+        # Parse modules
+        modules_text = self.modules_edit.text().strip()
+        modules = [m.strip() for m in modules_text.split(",") if m.strip()]
+
+        # Build command
+        parts = ["python -m acq4"]
+
+        if self.exit_on_error_checkbox.isChecked():
+            parts.append("-x")
+
+        parts.append("-c <config_file>")
+
+        for module in modules:
+            parts.append(f'-m "{module}"')
+
+        command = " ".join(parts)
+        self.command_label.setText(command)
+
+    def apply_cli_args(self, args: argparse.Namespace) -> None:
+        """Apply CLI arguments to this page's widgets."""
+        if args.startup_modules is not None:
+            self.modules_edit.setText(args.startup_modules)
+
+        if args.exit_on_error is not None:
+            self.exit_on_error_checkbox.setChecked(args.exit_on_error == "true")
+
+        if args.create_shortcut is not None:
+            self.create_shortcut_checkbox.setChecked(args.create_shortcut == "true")
+
+    def cli_arguments(self) -> List[str]:
+        """Generate CLI arguments representing this page's selections."""
+        args = []
+
+        modules_text = self.modules_edit.text().strip()
+        if modules_text:
+            args.extend([ARG_STARTUP_MODULES, modules_text])
+
+        args.extend([ARG_EXIT_ON_ERROR, "true" if self.exit_on_error_checkbox.isChecked() else "false"])
+
+        if sys.platform == "win32":
+            args.extend([ARG_CREATE_SHORTCUT, "true" if self.create_shortcut_checkbox.isChecked() else "false"])
+
+        return args
+
+    def startup_modules(self) -> List[str]:
+        """Return the list of startup modules."""
+        modules_text = self.modules_edit.text().strip()
+        if not modules_text:
+            return []
+        return [m.strip() for m in modules_text.split(",") if m.strip()]
+
+    def exit_on_error(self) -> bool:
+        """Return whether exit-on-error is enabled."""
+        return self.exit_on_error_checkbox.isChecked()
+
+
 class SummaryPage(QtWidgets.QWizardPage):
     def __init__(self) -> None:
         super().__init__()
@@ -2125,6 +2375,196 @@ class SummaryPage(QtWidgets.QWizardPage):
                                               f"Script saved to {target_path}. Run it to repeat this installation.")
 
 
+class HtmlLogTreeWidget(QtWidgets.QTreeWidget):
+    """A tree widget that supports displaying HTML content using QLabel widgets.
+
+    This widget extends QTreeWidget to allow certain items to display HTML content
+    by embedding QLabel widgets. It also provides built-in support for:
+    - Copying selected items to clipboard (Ctrl+C)
+    - Selecting all items (Ctrl+A)
+    - Context menu with copy and select all options
+    """
+
+    def __init__(self, parent: Optional[QtWidgets.QWidget] = None) -> None:
+        super().__init__(parent)
+        self._setup_ui()
+
+    def _setup_ui(self) -> None:
+        """Configure the tree widget appearance and behavior."""
+        self.setHeaderHidden(True)
+        self.setUniformRowHeights(True)
+        self.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.setTextElideMode(QtCore.Qt.TextElideMode.ElideNone)
+        self.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.ExtendedSelection)
+        self.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.CustomContextMenu)
+        self.customContextMenuRequested.connect(self._show_context_menu)
+        self.setToolTip("Right-click or use Ctrl+C to copy selected log lines")
+
+        header = self.header()
+        header.setStretchLastSection(True)
+        header.setSectionResizeMode(QtWidgets.QHeaderView.ResizeMode.Stretch)
+
+    def add_item(self, text: str, parent: Optional[QtWidgets.QTreeWidgetItem] = None,
+                 is_html: bool = False, italic: bool = False,
+                 color: Optional[str] = None, font_family: Optional[str] = None,
+                 icon: Optional[QtGui.QIcon] = None, expanded: bool = False) -> QtWidgets.QTreeWidgetItem:
+        """Add a new item to the tree.
+
+        Parameters
+        ----------
+        text : str
+            Text or HTML content to display.
+        parent : QTreeWidgetItem, optional
+            Parent item. If None, adds as top-level item.
+        is_html : bool, optional
+            If True, renders text as HTML using a QLabel widget.
+        italic : bool, optional
+            If True, makes the text italic.
+        color : str, optional
+            Text color (e.g., "#555555").
+        font_family : str, optional
+            Font family (e.g., "Monospace").
+        icon : QIcon, optional
+            Icon to display next to the item.
+        expanded : bool, optional
+            If True, expands the item.
+
+        Returns
+        -------
+        QTreeWidgetItem
+            The created item.
+        """
+        # Auto-detect HTML if not explicitly specified
+        if not is_html and text:
+            is_html = "<" in text and ">" in text and any(
+                tag in text for tag in ["", "<b>", "<code>", "<pre>", "<br>", "<a "]
+            )
+
+        # Create item with empty text if HTML will be used
+        item = QtWidgets.QTreeWidgetItem(["" if is_html else text])
+
+        # Apply font styling
+        if italic or font_family:
+            font = item.font(0)
+            if italic:
+                font.setItalic(True)
+            if font_family:
+                font.setFamily(font_family)
+            item.setFont(0, font)
+
+        # Apply color
+        if color:
+            brush = QtGui.QBrush(QtGui.QColor(color))
+            item.setForeground(0, brush)
+
+        # Apply icon
+        if icon:
+            item.setIcon(0, icon)
+
+        # Set expanded state
+        item.setExpanded(expanded)
+
+        # Add to tree
+        if parent is None:
+            self.addTopLevelItem(item)
+        else:
+            parent.addChild(item)
+
+        # Handle HTML content
+        if is_html:
+            label = QtWidgets.QLabel()
+            label.setTextFormat(QtCore.Qt.TextFormat.RichText)
+            label.setText(text)
+            label.setWordWrap(True)
+            label.setOpenExternalLinks(True)
+            label.setStyleSheet("QLabel { background-color: transparent; }")
+            label.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding,
+                              QtWidgets.QSizePolicy.Policy.Minimum)
+            # Enable text interaction to allow clicking links without selecting the item
+            label.setTextInteractionFlags(
+                QtCore.Qt.TextInteractionFlag.TextBrowserInteraction |
+                QtCore.Qt.TextInteractionFlag.LinksAccessibleByMouse
+            )
+            self.setItemWidget(item, 0, label)
+
+            # Update size hints
+            if parent is None:
+                label.setFixedHeight(self.rowHeight(self.indexFromItem(item).row()))
+            else:
+                label.adjustSize()
+                item.setSizeHint(0, QtCore.QSize(label.sizeHint().width(), label.sizeHint().height()))
+
+        # Scroll to new item
+        self.scroll_to_item(item)
+
+        return item
+
+    def scroll_to_item(self, item: QtWidgets.QTreeWidgetItem) -> None:
+        """Scroll the tree to ensure the given item is visible at the bottom."""
+        index = self.indexFromItem(item)
+        self.scrollTo(index, QtWidgets.QAbstractItemView.ScrollHint.PositionAtBottom)
+
+    def _show_context_menu(self, position: QtCore.QPoint) -> None:
+        """Show context menu with copy and select all options."""
+        menu = QtWidgets.QMenu(self)
+
+        # Copy action
+        copy_action = menu.addAction("Copy Selected Lines")
+        copy_action.setShortcut(QtGui.QKeySequence.StandardKey.Copy)
+        copy_action.triggered.connect(self.copy_selected_lines)
+
+        # Select All action
+        select_all_action = menu.addAction("Select All")
+        select_all_action.setShortcut(QtGui.QKeySequence.StandardKey.SelectAll)
+        select_all_action.triggered.connect(self.selectAll)
+
+        # Only enable copy if there's a selection
+        selected_items = self.selectedItems()
+        copy_action.setEnabled(len(selected_items) > 0)
+
+        menu.exec(self.viewport().mapToGlobal(position))
+
+    def copy_selected_lines(self) -> None:
+        """Copy selected items to clipboard, preserving tree hierarchy."""
+        selected_items = self.selectedItems()
+        if not selected_items:
+            return
+
+        # Collect text from selected items, preserving tree hierarchy
+        lines: List[str] = []
+        for item in selected_items:
+            # Get the indentation level
+            level = 0
+            parent = item.parent()
+            while parent is not None:
+                level += 1
+                parent = parent.parent()
+
+            # Add indentation
+            indent = "  " * level
+            text = item.text(0)
+            lines.append(f"{indent}{text}")
+
+        # Copy to clipboard
+        clipboard = QtWidgets.QApplication.clipboard()
+        if clipboard:
+            clipboard.setText("\n".join(lines))
+
+    def keyPressEvent(self, event: QtGui.QKeyEvent) -> None:  # noqa: N802
+        """Handle keyboard shortcuts."""
+        # Ctrl+C to copy selected lines
+        if event.matches(QtGui.QKeySequence.StandardKey.Copy):
+            self.copy_selected_lines()
+            event.accept()
+            return
+        # Ctrl+A to select all
+        if event.matches(QtGui.QKeySequence.StandardKey.SelectAll):
+            self.selectAll()
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
+
 class InstallPage(QtWidgets.QWizardPage):
     def __init__(self) -> None:
         super().__init__()
@@ -2134,18 +2574,7 @@ class InstallPage(QtWidgets.QWizardPage):
         description = QtWidgets.QLabel("ACQ4 will now be installed. You can review progress and logs below.")
         description.setWordWrap(True)
         layout.addWidget(description)
-        self.log_tree = QtWidgets.QTreeWidget()
-        self.log_tree.setHeaderHidden(True)
-        self.log_tree.setUniformRowHeights(True)
-        self.log_tree.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        self.log_tree.setTextElideMode(QtCore.Qt.TextElideMode.ElideNone)
-        self.log_tree.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.ExtendedSelection)
-        self.log_tree.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.CustomContextMenu)
-        self.log_tree.customContextMenuRequested.connect(self._show_log_context_menu)
-        self.log_tree.setToolTip("Right-click or use Ctrl+C to copy selected log lines")
-        header = self.log_tree.header()
-        header.setStretchLastSection(False)
-        header.setSectionResizeMode(QtWidgets.QHeaderView.ResizeMode.ResizeToContents)
+        self.log_tree = HtmlLogTreeWidget()
         layout.addWidget(self.log_tree)
         self.progress_bar = QtWidgets.QProgressBar()
         self.progress_bar.setRange(0, 0)
@@ -2303,66 +2732,51 @@ class InstallPage(QtWidgets.QWizardPage):
         kind = event.kind
         data = event.data
         if kind == "task-start":
-            title = data.get("title", "Task")
-            task_id = data.get("task_id")
-            if task_id is None:
-                return
-            item = QtWidgets.QTreeWidgetItem([title])
-            item.setExpanded(True)
-            self.log_tree.addTopLevelItem(item)
+            title = data["title"]
+            task_id = data["task_id"]
+            item = self.log_tree.add_item(title, expanded=True)
             self._task_items[task_id] = item
-            self._scroll_to_item(item)
         elif kind == "task-complete":
-            task_id = data.get("task_id")
-            success = data.get("success", False)
+            task_id = data["task_id"]
+            success = data["success"]
             item = self._task_items.get(task_id)
             if item is None:
-                return
+                raise InstallerError(f"Task {task_id} not found in task items")
             item.setIcon(0, self._success_icon if success else self._error_icon)
-            item.setExpanded(not success)
+            # Expand failed tasks, or the Installation Summary task (which should always be shown)
+            is_summary = item.text(0) == "Installation Summary"
+            item.setExpanded(not success or is_summary)
         elif kind == "command-start":
-            command_id = data.get("command_id")
-            task_id = data.get("task_id")
-            text = data.get("text", "Command")
-            if command_id is None:
-                return
+            command_id = data["command_id"]
+            task_id = data["task_id"]
+            text = data["text"]
             parent = self._task_items.get(task_id)
             if parent is None:
-                parent = QtWidgets.QTreeWidgetItem(["Task"])
-                parent.setExpanded(True)
-                self.log_tree.addTopLevelItem(parent)
-            item = QtWidgets.QTreeWidgetItem([text])
-            item.setExpanded(True)
-            parent.addChild(item)
+                raise InstallerError(f"Parent task {task_id} not found for command {command_id}")
+            item = self.log_tree.add_item(text, parent=parent, expanded=True)
             self._command_items[command_id] = item
-            self._scroll_to_item(item)
         elif kind == "command-output":
-            command_id = data.get("command_id")
-            text = data.get("text", "")
+            command_id = data["command_id"]
+            text = data["text"]
             parent = self._command_items.get(command_id)
             if parent is None:
-                return
-            output_item = QtWidgets.QTreeWidgetItem([text])
-            font = output_item.font(0)
-            font.setFamily("Monospace")
-            output_item.setFont(0, font)
-            parent.addChild(output_item)
-            self._scroll_to_item(output_item)
+                raise InstallerError(f"Command {command_id} not found in command items")
+            self.log_tree.add_item(text, parent=parent, font_family="Monospace")
         elif kind == "command-complete":
-            command_id = data.get("command_id")
-            success = data.get("success", False)
+            command_id = data["command_id"]
+            success = data["success"]
             item = self._command_items.get(command_id)
             if item is None:
-                return
+                raise InstallerError(f"Command {command_id} not found in command items")
             item.setIcon(0, self._success_icon if success else self._error_icon)
             item.setExpanded(not success)
         elif kind == "message":
-            text = data.get("text", "")
-            task_id = data.get("task_id")
+            text = data["text"]
+            task_id = data.get("task_id")  # task_id can legitimately be None for top-level messages
             self._append_message(text, task_id)
         elif kind == "progress":
-            total = data.get("total", 0)
-            value = data.get("value", 0)
+            total = data["total"]
+            value = data["value"]
             if total <= 0:
                 self.progress_bar.setRange(0, 0)
             else:
@@ -2372,87 +2786,25 @@ class InstallPage(QtWidgets.QWizardPage):
     def _append_message(self, text: str, task_id: Optional[int]) -> None:
         if not text:
             return
-        parent = self._task_items.get(task_id)
-        if parent is None:
-            item = QtWidgets.QTreeWidgetItem([text])
-            font = item.font(0)
-            font.setItalic(True)
-            item.setFont(0, font)
-            brush = QtGui.QBrush(QtGui.QColor("#555555"))
-            item.setForeground(0, brush)
-            self.log_tree.addTopLevelItem(item)
-            self._scroll_to_item(item)
+        parent = self._task_items.get(task_id) if task_id is not None else None
+
+        # Split multi-line messages into separate items
+        # Handle both plain text newlines and HTML <br> tags
+        if "<br>" in text or "<br/>" in text or "<br />" in text:
+            # HTML with line breaks - split on <br> tags
+            lines = re.split(r'<br\s*/?>', text, flags=re.IGNORECASE)
+        elif "\n" in text:
+            # Plain text with newlines
+            lines = text.split("\n")
         else:
-            child = QtWidgets.QTreeWidgetItem([text])
-            font = child.font(0)
-            font.setItalic(True)
-            child.setFont(0, font)
-            parent.addChild(child)
-            self._scroll_to_item(child)
+            # Single line message
+            lines = [text]
 
-    def _scroll_to_item(self, item: QtWidgets.QTreeWidgetItem) -> None:
-        index = self.log_tree.indexFromItem(item)
-        self.log_tree.scrollTo(index, QtWidgets.QAbstractItemView.ScrollHint.PositionAtBottom)
-
-    def _show_log_context_menu(self, position: QtCore.QPoint) -> None:
-        """Show context menu for log tree with copy options."""
-        menu = QtWidgets.QMenu(self.log_tree)
-
-        # Copy action
-        copy_action = menu.addAction("Copy Selected Lines")
-        copy_action.setShortcut(QtGui.QKeySequence.StandardKey.Copy)
-        copy_action.triggered.connect(self._copy_selected_log_lines)
-
-        # Select All action
-        select_all_action = menu.addAction("Select All")
-        select_all_action.setShortcut(QtGui.QKeySequence.StandardKey.SelectAll)
-        select_all_action.triggered.connect(self.log_tree.selectAll)
-
-        # Only enable copy if there's a selection
-        selected_items = self.log_tree.selectedItems()
-        copy_action.setEnabled(len(selected_items) > 0)
-
-        menu.exec(self.log_tree.viewport().mapToGlobal(position))
-
-    def _copy_selected_log_lines(self) -> None:
-        """Copy selected log lines to clipboard."""
-        selected_items = self.log_tree.selectedItems()
-        if not selected_items:
-            return
-
-        # Collect text from selected items, preserving tree hierarchy
-        lines: List[str] = []
-        for item in selected_items:
-            # Get the indentation level
-            level = 0
-            parent = item.parent()
-            while parent is not None:
-                level += 1
-                parent = parent.parent()
-
-            # Add indentation
-            indent = "  " * level
-            text = item.text(0)
-            lines.append(f"{indent}{text}")
-
-        # Copy to clipboard
-        clipboard = QtWidgets.QApplication.clipboard()
-        if clipboard:
-            clipboard.setText("\n".join(lines))
-
-    def keyPressEvent(self, event: QtGui.QKeyEvent) -> None:  # noqa: N802
-        """Handle keyboard shortcuts."""
-        # Ctrl+C to copy selected lines
-        if event.matches(QtGui.QKeySequence.StandardKey.Copy):
-            self._copy_selected_log_lines()
-            event.accept()
-            return
-        # Ctrl+A to select all log lines
-        if event.matches(QtGui.QKeySequence.StandardKey.SelectAll):
-            self.log_tree.selectAll()
-            event.accept()
-            return
-        super().keyPressEvent(event)
+        # Add each line as a separate item
+        for line in lines:
+            line = line.strip()
+            if line:  # Skip empty lines
+                self.log_tree.add_item(line, parent=parent, italic=True, color="#555555")
 
     def _handle_finished(self, success: bool, detail: str) -> None:
         self._running = False
@@ -2463,10 +2815,8 @@ class InstallPage(QtWidgets.QWizardPage):
             self._completed = True
             self.completeChanged.emit()
 
-            # Add summary with post-install documentation to log
-            post_install_message = self._build_post_install_message()
-            if post_install_message:
-                self._add_summary_to_log(post_install_message)
+            # Summary is now logged automatically by InstallerExecutor
+            pass
         else:
             if cancelled:
                 QtWidgets.QMessageBox.information(self, "Installer", "Installation cancelled.")
@@ -2474,89 +2824,6 @@ class InstallPage(QtWidgets.QWizardPage):
                 QtWidgets.QMessageBox.critical(self, "Installer", detail)
             self._prompt_cleanup()
         self._perform_pending_navigation()
-
-    def _build_post_install_message(self) -> str:
-        """Build HTML message with post-install documentation for selected packages."""
-        if not self._state:
-            return ""
-
-        # Get selected optional dependencies with post-install docs
-        packages_with_docs: List[Tuple[str, str]] = []
-        selected_specs = set(self._state.selected_optional)
-
-        for dep in self._state.optional_dependencies:
-            if dep.spec in selected_specs and dep.post_install_doc:
-                display_name = dep.display_name or dep.spec
-                packages_with_docs.append((display_name, dep.post_install_doc))
-
-        if not packages_with_docs:
-            return ""
-
-        # Build HTML list
-        html_parts = ["<ul>"]
-        for name, doc in packages_with_docs:
-            html_parts.append(f"<li><b>{name}</b>: {doc}</li>")
-        html_parts.append("</ul>")
-
-        return "".join(html_parts)
-
-    def _add_summary_to_log(self, post_install_message: str) -> None:
-        """Add a Summary section to the log tree with post-install documentation."""
-        # Create top-level Summary item
-        summary_item = QtWidgets.QTreeWidgetItem(["Summary"])
-        summary_item.setIcon(0, self._success_icon)
-        self.log_tree.addTopLevelItem(summary_item)
-
-        # Create a child item to hold the QTextEdit widget
-        widget_item = QtWidgets.QTreeWidgetItem()
-        summary_item.addChild(widget_item)
-        summary_item.setExpanded(True)
-
-        # Create QTextBrowser for displaying the message with clickable links
-        text_edit = QtWidgets.QTextBrowser()
-        text_edit.setHtml(
-            "<p><b>Installation complete.</b></p>"
-            "<p>The following packages require additional 3rd-party software to be installed:</p>"
-            + post_install_message
-        )
-
-        # Make it look like embedded rich text: no border, transparent background, clickable links
-        text_edit.setFrameStyle(QtWidgets.QFrame.Shape.NoFrame)
-        text_edit.setStyleSheet("QTextBrowser { background-color: transparent; }")
-        text_edit.setOpenExternalLinks(True)
-
-        # Disable scrollbars - we'll size the widget to show all content
-        text_edit.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        text_edit.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        text_edit.setSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Expanding,
-            QtWidgets.QSizePolicy.Policy.Fixed
-        )
-
-        # Attach the widget to the tree item first
-        self.log_tree.setItemWidget(widget_item, 0, text_edit)
-
-        # Calculate proper width and height after widget is attached
-        # Get the actual column width (accounting for indentation and margins)
-        column_width = self.log_tree.columnWidth(0)
-        indent_width = self.log_tree.indentation() * 2  # Parent + child indentation
-        margins = 20  # Internal margins
-        available_width = column_width - indent_width - margins
-
-        # Set document width and calculate required height
-        doc = text_edit.document()
-        doc.setTextWidth(available_width)
-        required_height = int(doc.size().height()) + 10  # Add padding
-
-        # Set the widget size
-        text_edit.setFixedHeight(required_height)
-        text_edit.setMinimumWidth(available_width)
-
-        # Tell the tree item how tall it needs to be
-        widget_item.setSizeHint(0, QtCore.QSize(available_width, required_height))
-
-        # Scroll to the summary
-        self._scroll_to_item(summary_item)
 
     def _update_navigation(self, running: bool, success: bool) -> None:
         wizard = self.wizard()
@@ -2825,6 +3092,7 @@ class InstallWizard(QtWidgets.QWizard):
         self.location_page = LocationPage()
         self.dependencies_page = DependenciesPage(self.editable_map)
         self.config_page = ConfigPage()
+        self.startup_page = StartupPage()
         self.summary_page = SummaryPage()
         self.install_page = InstallPage()
         if self.git_page is not None:
@@ -2832,6 +3100,7 @@ class InstallWizard(QtWidgets.QWizard):
         self.addPage(self.location_page)
         self.addPage(self.dependencies_page)
         self.addPage(self.config_page)
+        self.addPage(self.startup_page)
         self.addPage(self.summary_page)
         self.addPage(self.install_page)
 
@@ -2904,12 +3173,14 @@ class InstallWizard(QtWidgets.QWizard):
         self.location_page.apply_cli_args(args)
         self.dependencies_page.apply_cli_args(args)
         self.config_page.apply_cli_args(args)
+        self.startup_page.apply_cli_args(args)
 
     def cli_arguments(self, unattended: bool = False) -> List[str]:
         args: List[str] = []
         args.extend(self.location_page.cli_arguments())
         args.extend(self.dependencies_page.cli_arguments())
         args.extend(self.config_page.cli_arguments())
+        args.extend(self.startup_page.cli_arguments())
         if unattended:
             args.insert(0, "--unattended")
         return args
@@ -2919,6 +3190,160 @@ class InstallWizard(QtWidgets.QWizard):
         width = hint.width() if hint.width() > 0 else 800
         height = hint.height() if hint.height() > 0 else 600
         self.resize(int(width * 1.5), int(height * 1.5))
+
+
+@dataclass
+class SetupHandlerResult:
+    """Result of a dependency setup handler."""
+    handled_specs: List[str]
+    summary: str
+
+
+def detect_cuda_version() -> Optional[str]:
+    """Detect CUDA version using nvidia-smi.
+
+    Returns
+    -------
+    str or None
+        CUDA version string (e.g., "12.2") if detected, None otherwise.
+    """
+    try:
+        result = subprocess.run(
+            ["nvidia-smi"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode != 0:
+            return None
+
+        # Parse "CUDA Version: X.Y" from nvidia-smi output
+        match = re.search(r"CUDA Version:\s*(\d+\.\d+)", result.stdout)
+        if match:
+            return match.group(1)
+    except (FileNotFoundError, subprocess.TimeoutExpired, Exception):
+        pass
+    return None
+
+
+def validate_pytorch_index_url(url: str) -> bool:
+    """Check if a PyTorch index URL is valid by making a HEAD request.
+
+    Parameters
+    ----------
+    url : str
+        The index URL to validate.
+
+    Returns
+    -------
+    bool
+        True if the URL is accessible, False otherwise.
+    """
+    try:
+        with urlopen(url, timeout=5) as response:
+            return response.status == 200
+    except (URLError, Exception):
+        return False
+
+
+def map_cuda_to_pytorch_version(cuda_version: str) -> Optional[str]:
+    """Map CUDA version to PyTorch CUDA version identifier.
+
+    Parameters
+    ----------
+    cuda_version : str
+        CUDA version string (e.g., "12.4").
+
+    Returns
+    -------
+    str or None
+        PyTorch CUDA identifier (e.g., "cu124") or None if parse fails.
+    """
+    try:
+        major, minor = cuda_version.split(".")[:2]
+        return f"cu{major}{minor}"
+    except (ValueError, IndexError):
+        print(f"Unable to parse CUDA version: {cuda_version}")
+        return None
+
+
+def handle_torch_install(
+    specs: List[str],
+    logger: StructuredLogger,
+    task_id: Optional[int],
+    install_callback: Callable[[List[str], Optional[str]], None],
+) -> SetupHandlerResult:
+    """Handle PyTorch installation with CUDA-aware package selection.
+
+    Parameters
+    ----------
+    specs : list of str
+        List of package specs to install (should include torch/torchvision).
+    logger : StructuredLogger
+        Logger for recording installation messages.
+    task_id : int, optional
+        Task ID for logging.
+    install_callback : callable
+        Callback function to install packages: install_callback(specs, index_url).
+
+    Returns
+    -------
+    SetupHandlerResult
+        Result containing handled specs and summary message.
+    """
+    # Filter out torch and torchvision from specs
+    torch_specs = []
+    for spec in specs:
+        normalized = normalize_spec_name(spec)
+        if normalized in ("torch", "torchvision"):
+            torch_specs.append(spec)
+
+    if not torch_specs:
+        return SetupHandlerResult(
+            handled_specs=[],
+            summary="",
+        )
+
+    logger.message("Detecting CUDA version for PyTorch installation...", task_id=task_id)
+    cuda_version = detect_cuda_version()
+
+    index_url = None
+    if cuda_version:
+        logger.message(f"Detected CUDA version: {cuda_version}", task_id=task_id)
+        pytorch_cuda = map_cuda_to_pytorch_version(cuda_version)
+
+        if pytorch_cuda:
+            index_url = f"https://download.pytorch.org/whl/{pytorch_cuda}"
+            logger.message(f"Validating PyTorch index URL: {index_url}", task_id=task_id)
+
+            if validate_pytorch_index_url(index_url):
+                logger.message(f"Using PyTorch with CUDA support ({pytorch_cuda})", task_id=task_id)
+                summary = f"PyTorch installed with CUDA {pytorch_cuda} support"
+                install_callback(torch_specs, index_url)
+                return SetupHandlerResult(
+                    handled_specs=torch_specs,
+                    summary=summary,
+                )
+            else:
+                logger.message(
+                    f"PyTorch index URL not available for CUDA {cuda_version}, falling back to CPU-only",
+                    task_id=task_id,
+                )
+        else:
+            logger.message(
+                f"CUDA {cuda_version} not supported by PyTorch, falling back to CPU-only",
+                task_id=task_id,
+            )
+    else:
+        logger.message("No CUDA detected, installing CPU-only PyTorch", task_id=task_id)
+
+    # Fall back to CPU-only installation (default PyPI)
+    summary = "PyTorch installed with CPU-only support"
+    install_callback(torch_specs, None)
+    return SetupHandlerResult(
+        handled_specs=torch_specs,
+        summary=summary,
+    )
 
 
 class InstallerExecutor:
@@ -2960,6 +3385,7 @@ class InstallerExecutor:
         tasks.append(("Prepare configuration", lambda: self._prepare_config(base_dir)))
         if os.name == "nt" and self.state.create_desktop_shortcut:
             tasks.append(("Create desktop shortcut", lambda: self._create_shortcut_if_needed(base_dir, env_dir, conda_exe)))
+        tasks.append(("Installation Summary", lambda: self._log_installation_summary(base_dir, env_dir)))
         self.logger.set_task_total(len(tasks))
         for title, fn in tasks:
             self._run_task(title, fn)
@@ -2986,6 +3412,9 @@ class InstallerExecutor:
     def _prepare_install_dir(self, base_dir: Path) -> None:
         self.logger.message(f"Preparing install directory at {base_dir}", task_id=self._active_task_id)
         ensure_directory_empty(base_dir)
+        # Move log file from temp location to install directory
+        final_log_path = base_dir / "install-log.txt"
+        self.logger.move_log_file(final_log_path)
 
     def _clone_acq4_repo(self, base_dir: Path, repo_url: str, branch: str) -> None:
         dest = base_dir / ACQ4_SOURCE_DIRNAME
@@ -3003,7 +3432,7 @@ class InstallerExecutor:
     def _create_conda_env(self, conda_exe: str, env_dir: Path, python_pkg: str) -> None:
         if env_dir.exists():
             raise InstallerError(f"Conda environment already exists at {env_dir}")
-        self.logger.message("Creating base conda environment (this can take a while)...", task_id=self._active_task_id)
+        self.logger.message("Creating base conda environment...", task_id=self._active_task_id)
         cmd = [
             conda_exe,
             "create",
@@ -3092,20 +3521,37 @@ class InstallerExecutor:
             conda_exe=conda_exe,
         )
 
-    def _install_optional_dependencies(self, conda_exe: str, env_dir: Path, specs: List[str]) -> None:
+    def _pip_install_specs(self, specs: List[str], conda_exe: str, env_dir: Path,
+                           index_url: Optional[str] = None) -> None:
+        """Install a list of package specs via pip.
+
+        Parameters
+        ----------
+        specs : list of str
+            Package specifications to install.
+        conda_exe : str
+            Path to conda executable.
+        env_dir : Path
+            Path to conda environment.
+        index_url : str, optional
+            PyPI index URL to use. Defaults to https://pypi.org/simple/
+        """
         if not specs:
-            self.logger.message("No optional dependencies selected", task_id=self._active_task_id)
             return
-        self.logger.message("Installing optional dependencies via pip...", task_id=self._active_task_id)
+
         cmd = [
             "python",
             "-u",
             "-m",
             "pip",
             "install",
-            "--index-url=https://pypi.org/simple/",
-            *specs,
         ]
+        if index_url:
+            cmd.append(f"--index-url={index_url}")
+        else:
+            cmd.append("--index-url=https://pypi.org/simple/")
+        cmd.extend(specs)
+
         env = self._pip_env()
         run_command(
             cmd,
@@ -3116,6 +3562,47 @@ class InstallerExecutor:
             conda_env=env_dir,
             conda_exe=conda_exe,
         )
+
+    def _install_optional_dependencies(self, conda_exe: str, env_dir: Path, specs: List[str]) -> None:
+        if not specs:
+            self.logger.message("No optional dependencies selected", task_id=self._active_task_id)
+            return
+
+        # Group specs by handler
+        handlers_map: Dict[str, List[str]] = {}
+        no_handler_specs: List[str] = []
+
+        for spec in specs:
+            pkg_meta = _package_meta(spec)
+            handler_name = pkg_meta.get("setup_handler")
+            if handler_name:
+                if handler_name not in handlers_map:
+                    handlers_map[handler_name] = []
+                handlers_map[handler_name].append(spec)
+            else:
+                no_handler_specs.append(spec)
+
+        # Process each handler
+        for handler_name, handler_specs in handlers_map.items():
+            handler_fn = globals().get(handler_name)
+            if not handler_fn:
+                raise InstallerError(f"Setup handler '{handler_name}' not found")
+
+            # Create install callback for this handler
+            def install_callback(specs_to_install: List[str], index_url: Optional[str]) -> None:
+                self._pip_install_specs(specs_to_install, conda_exe, env_dir, index_url)
+
+            # Call handler - it will install via callback
+            result = handler_fn(handler_specs, self.logger, self._active_task_id, install_callback)
+
+            # Store summary
+            if result.summary:
+                self.state.install_notes.append(result.summary)
+
+        # Install specs without handlers
+        if no_handler_specs:
+            self.logger.message("Installing optional dependencies via pip...", task_id=self._active_task_id)
+            self._pip_install_specs(no_handler_specs, conda_exe, env_dir)
 
     def _handle_editable_dependencies(self, conda_exe: str, env_dir: Path, base_dir: Path) -> None:
         if not self.state.editable_selection:
@@ -3178,7 +3665,7 @@ class InstallerExecutor:
             )
             repo_with_token = github_url_with_token(self.state.config_repo_url, self.state.github_token)
             run_git_command(
-                ["git", "clone", "--branch", self.state.config_repo_branch, "--single-branch", repo_with_token, str(config_dir)],
+                ["git", "clone", "--branch", self.state.config_repo_branch, repo_with_token, str(config_dir)],
                 self.logger,
                 task_id=self._active_task_id,
                 cancel_event=self.cancel_event,
@@ -3188,12 +3675,118 @@ class InstallerExecutor:
             source = self.state.config_copy_path
             if not source.exists() or not source.is_dir():
                 raise InstallerError(f"Config path {source} does not exist or is not a directory.")
-            self.logger.message(f"Copying configuration from {source}", task_id=self._active_task_id)
+            self.logger.message(f"Copying configuration from {source} to {config_dir}", task_id=self._active_task_id)
             shutil.copytree(source, config_dir)
+            self.logger.message(f"Configuration copied successfully", task_id=self._active_task_id)
         else:
-            self.logger.message("Copying default configuration", task_id=self._active_task_id)
+            self.logger.message(f"Copying default configuration to {config_dir}", task_id=self._active_task_id)
             source = base_dir / ACQ4_SOURCE_DIRNAME / "config" / "example"
             shutil.copytree(source, config_dir)
+            self.logger.message(f"Default configuration copied successfully", task_id=self._active_task_id)
+
+    def _log_installation_summary(self, base_dir: Path, env_dir: Path) -> None:
+        """Log the installation summary as regular messages."""
+        config_dir = base_dir / CONFIG_DIRNAME
+
+        # Installation paths
+        self.logger.message(f"<b>Installation directory:</b> <code>{base_dir}</code>", task_id=self._active_task_id)
+        self.logger.message(f"<b>ACQ4 source:</b> <code>{base_dir / ACQ4_SOURCE_DIRNAME}</code>", task_id=self._active_task_id)
+        self.logger.message(f"<b>Conda environment:</b> <code>{env_dir}</code>", task_id=self._active_task_id)
+
+        # Configuration
+        if self.state.config_mode == "clone":
+            config_source = f"Cloned from {self.state.config_repo_url} ({self.state.config_repo_branch})"
+        elif self.state.config_mode == "copy":
+            config_source = f"Copied from {self.state.config_copy_path}"
+        else:
+            config_source = "Default configuration"
+
+        self.logger.message(
+            f"<b>Configuration:</b> <code>{config_dir}</code><br>"
+            f"<b>Source:</b> {config_source}",
+            task_id=self._active_task_id
+        )
+
+        # Editable dependencies
+        if self.state.editable_selection:
+            dep_dir = base_dir / DEPENDENCIES_DIRNAME
+            dep_list = ", ".join(self.state.editable_selection)
+            self.logger.message(
+                f"<b>Editable dependencies:</b> <code>{dep_dir}</code><br>"
+                f"<b>Packages:</b> {dep_list}",
+                task_id=self._active_task_id
+            )
+
+        # Startup script (Windows only)
+        if os.name == "nt":
+            startup_script = base_dir / "start_acq4.bat"
+            self.logger.message(
+                f"<b>Startup script:</b> <code>{startup_script}</code>",
+                task_id=self._active_task_id
+            )
+
+        # Installation notes (e.g., PyTorch CUDA version)
+        if self.state.install_notes:
+            notes_html = "<br>".join(self.state.install_notes)
+            self.logger.message(
+                f"<b>Installation notes:</b><br>{notes_html}",
+                task_id=self._active_task_id
+            )
+
+        # How to start ACQ4
+        self.logger.message("<b>How to start ACQ4:</b>", task_id=self._active_task_id)
+        if os.name == "nt":
+            if self.state.create_desktop_shortcut:
+                shortcut_name = f"ACQ4 ({base_dir.name})"
+                self.logger.message(
+                    f"A desktop shortcut named <b>\"{shortcut_name}\"</b> has been created. "
+                    f"Double-click it to launch ACQ4.",
+                    task_id=self._active_task_id
+                )
+            else:
+                startup_script = base_dir / "start_acq4.bat"
+                self.logger.message(
+                    f"Run the startup script: <code>{startup_script}</code>",
+                    task_id=self._active_task_id
+                )
+        else:
+            # Non-Windows platforms need manual activation
+            if self.state.config_file is None:
+                raise InstallerError("Config file is required but was not set")
+            config_path = base_dir / CONFIG_DIRNAME / self.state.config_file
+            acq4_path = base_dir / ACQ4_SOURCE_DIRNAME
+            self.logger.message(
+                "Activate the conda environment and run ACQ4:"
+                f"<pre>conda activate {env_dir}\n"
+                f"python -m acq4 -c {config_path}</pre>",
+                task_id=self._active_task_id
+            )
+            self.logger.message(
+                f"Or run directly from the source directory:"
+                f"<pre>conda activate {env_dir}\n"
+                f"cd {acq4_path}\n"
+                f"python -m acq4 -c {config_path}</pre>",
+                task_id=self._active_task_id
+            )
+
+        # Post-install documentation for packages
+        packages_with_docs: List[Tuple[str, str]] = []
+        selected_specs = set(self.state.selected_optional)
+        for dep in self.state.optional_dependencies:
+            if dep.spec in selected_specs and dep.post_install_doc:
+                packages_with_docs.append((dep.display_name, dep.post_install_doc))
+
+        if packages_with_docs:
+            self.logger.message("<b>Next Steps:</b>", task_id=self._active_task_id)
+            self.logger.message(
+                "The following packages require additional 3rd-party software to be installed:",
+                task_id=self._active_task_id
+            )
+            for pkg_name, url in packages_with_docs:
+                self.logger.message(
+                    f"<b>{pkg_name}:</b> <a href=\"{url}\">{url}</a>",
+                    task_id=self._active_task_id
+                )
 
     def _create_shortcut_if_needed(self, base_dir: Path, env_dir: Path, conda_exe: str) -> None:
         if os.name != "nt":
@@ -3209,7 +3802,11 @@ class InstallerExecutor:
 
         self.logger.message("Creating start_acq4.bat launcher script", task_id=self._active_task_id)
         try:
-            bat_path = create_start_bat(base_dir, conda_exe, env_dir, config_file_path)
+            bat_path = create_start_bat(
+                base_dir, conda_exe, env_dir, config_file_path,
+                startup_modules=self.state.startup_modules,
+                exit_on_error=self.state.exit_on_error
+            )
         except Exception as e:
             self.logger.message(f"Failed to create bat file: {e}", task_id=self._active_task_id)
             return
@@ -3306,9 +3903,21 @@ class InstallerWorker(QtCore.QObject):
         self.finished.emit(success, detail)
 
     def _run_internal(self) -> None:
-        logger = StructuredLogger(text_fn=None, event_handler=self._queue_event)
+        # Use temp file initially - will be moved to install dir after it's created
+        import tempfile
+        temp_log = Path(tempfile.gettempdir()) / f"acq4-install-{os.getpid()}.log"
+        logger = StructuredLogger(text_fn=None, event_handler=self._queue_event, log_file=temp_log)
         executor = InstallerExecutor(self.state, logger, cancel_event=self._cancel_event)
-        executor.run()
+        try:
+            executor.run()
+        finally:
+            logger.close()
+            # Clean up temp file if it still exists (log should have been moved to install dir)
+            if temp_log.exists():
+                try:
+                    temp_log.unlink()
+                except Exception:
+                    pass
 
     def request_cancel(self) -> None:
         self._cancel_event.set()
@@ -3329,6 +3938,7 @@ def build_cli_parser() -> argparse.ArgumentParser:
     register_location_cli_arguments(parser)
     register_dependency_cli_arguments(parser)
     register_config_cli_arguments(parser)
+    register_startup_cli_arguments(parser)
     parser.add_argument(
         "--unattended",
         action="store_true",
@@ -3365,10 +3975,7 @@ def state_from_cli_args(args: argparse.Namespace,
     github_token = (args.github_token or "").strip() or None
 
     # Fetch pyproject.toml to get dependency information
-    content, used_fallback = fetch_pyproject_from_github(repo_value, branch_value)
-    if used_fallback:
-        print(f"Warning: pyproject.toml not found in {repo_value} ({branch_value}).")
-        print("Using dependency list from github.com/acq4/acq4:main instead.")
+    content = fetch_pyproject(repo_value, branch_value)
     dependency_groups = dependency_groups_from_pyproject(content=content)
     optional_dependencies = parse_optional_dependencies(content=content)
 
@@ -3396,10 +4003,27 @@ def state_from_cli_args(args: argparse.Namespace,
             raise InstallerError(f"Config path {config_copy_path} does not exist or is not a directory.")
     else:
         config_mode = "new"
+        # For "new" mode, default to default.cfg since that's what's in the example config
+        if not config_file:
+            config_file = "default.cfg"
 
     # Sanity check: --config-branch only makes sense with --config-repo
     if config_repo_branch and not config_repo:
         raise InstallerError("--config-branch requires --config-repo.")
+
+    # Parse startup parameters
+    startup_modules = []
+    if args.startup_modules:
+        startup_modules = [m.strip() for m in args.startup_modules.split(",") if m.strip()]
+
+    exit_on_error = True
+    if args.exit_on_error is not None:
+        exit_on_error = args.exit_on_error == "true"
+
+    create_shortcut = True
+    if args.create_shortcut is not None:
+        create_shortcut = args.create_shortcut == "true"
+
     return InstallerState(
         install_path=install_path,
         branch=branch_value,
@@ -3413,6 +4037,9 @@ def state_from_cli_args(args: argparse.Namespace,
         config_repo_branch=config_repo_branch,
         config_copy_path=config_copy_path,
         config_file=config_file,
+        startup_modules=startup_modules,
+        exit_on_error=exit_on_error,
+        create_desktop_shortcut=create_shortcut,
     )
 
 
@@ -3427,14 +4054,31 @@ def run_unattended_install(state: InstallerState) -> None:
     def log_text(message: str) -> None:
         print(message, flush=True)
 
-    logger = StructuredLogger(text_fn=log_text)
+    # Use temp file initially - will be moved to install dir after it's created
+    import tempfile
+    temp_log = Path(tempfile.gettempdir()) / f"acq4-install-{os.getpid()}.log"
+    logger = StructuredLogger(text_fn=log_text, log_file=temp_log)
     executor = InstallerExecutor(state, logger)
     try:
         executor.run()
     except Exception as exc:  # noqa: BLE001
+        logger.close()
+        # Clean up temp file if it still exists
+        if temp_log.exists():
+            try:
+                temp_log.unlink()
+            except Exception:
+                pass
         print(f"Installation failed: {exc}", file=sys.stderr)
         sys.exit(1)
     else:
+        logger.close()
+        # Clean up temp file if it still exists (log should have been moved to install dir)
+        if temp_log.exists():
+            try:
+                temp_log.unlink()
+            except Exception:
+                pass
         print("Installation complete", flush=True)
 
         # Display post-install documentation
@@ -3452,6 +4096,12 @@ def run_unattended_install(state: InstallerState) -> None:
             print("\nThe following packages require additional 3rd-party software to be installed:")
             for name, doc in packages_with_docs:
                 print(f"  - {name}: {doc}")
+
+        # Display installation notes
+        if state.install_notes:
+            print("\nInstallation notes:")
+            for note in state.install_notes:
+                print(f"  - {note}")
 
 
 def normalized_clone_names(selection: Iterable[str]) -> set[str]:
@@ -3473,6 +4123,11 @@ def resolve_selected_optional_specs(options: Iterable[DependencyOption], selecte
 
 def collect_state(wizard: InstallWizard) -> InstallerState:
     """Capture the installer wizard selections into a serializable state."""
+    config_mode = wizard.config_mode()
+    config_file = wizard.config_file()
+    # For "new" mode, default to default.cfg since that's what's in the example config
+    if config_mode == "new" and not config_file:
+        config_file = "default.cfg"
     return InstallerState(
         install_path=wizard.install_path(),
         branch=wizard.branch(),
@@ -3481,12 +4136,14 @@ def collect_state(wizard: InstallWizard) -> InstallerState:
         optional_dependencies=wizard.dependencies_page.options,
         selected_optional=wizard.selected_optional_specs(),
         editable_selection=wizard.selected_editable_keys(),
-        config_mode=wizard.config_mode(),
+        config_mode=config_mode,
         config_repo_url=wizard.config_repo(),
         config_repo_branch=wizard.config_repo_branch(),
         config_copy_path=wizard.config_copy_path(),
-        config_file=wizard.config_file(),
-        create_desktop_shortcut=wizard.dependencies_page.create_shortcut_checkbox.isChecked(),
+        config_file=config_file,
+        startup_modules=wizard.startup_page.startup_modules(),
+        exit_on_error=wizard.startup_page.exit_on_error(),
+        create_desktop_shortcut=wizard.startup_page.create_shortcut_checkbox.isChecked(),
     )
 
 
@@ -3510,9 +4167,11 @@ def main() -> None:
         return
     app = QtWidgets.QApplication(sys.argv)
     wizard = InstallWizard(editable_map, args, test_flags)
-    wizard.exec()
-    sys.exit(0)
 
+    if sys.flags.interactive == 0:
+        wizard.exec()
+        sys.exit(0)
+    
 
 if __name__ == "__main__":
     main()
