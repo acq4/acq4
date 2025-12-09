@@ -1,8 +1,6 @@
 from acq4.modules.Module import Module
 from acq4.util import Qt
-from .qt_profiler import QtEventProfiler
-from .memory_profiler import MemoryProfiler
-from .function_profiler import FunctionProfiler
+from rtprofile.profiler_tabs import ProfilerTabs
 
 
 class Profiler(Module):
@@ -26,33 +24,14 @@ class Profiler(Module):
         self.win.setWindowTitle('Profiler')
         self.win.resize(1300, 800)
 
-        # Central widget with tabs
-        central_widget = Qt.QWidget()
-        self.win.setCentralWidget(central_widget)
-        layout = Qt.QVBoxLayout(central_widget)
-
-        # Tab widget for different profiling views
-        self.tab_widget = Qt.QTabWidget()
-        layout.addWidget(self.tab_widget)
-
-        # Create profiler instances
-        self.qt_profiler = QtEventProfiler(self.win)
-        self.memory_profiler = MemoryProfiler(self.win)
-        self.function_profiler = FunctionProfiler(self.win)
-
-        # Add tabs
-        self.tab_widget.addTab(self.function_profiler.widget, "Function Profiler")
-        self.tab_widget.addTab(self.qt_profiler.widget, "Qt Event Profile")
-        self.tab_widget.addTab(self.memory_profiler.widget, "Memory Profile")
+        # Use the ProfilerTabs widget from rtprofile
+        self.profiler_tabs = ProfilerTabs()
+        self.win.setCentralWidget(self.profiler_tabs)
 
         self.win.show()
 
     def quit(self):
         """Stop all Qt profiles when the profiler module quits."""
-        # Stop all active Qt profiles
-        app = Qt.QApplication.instance()
-        if hasattr(app, 'stop_all_profiles'):
-            app.stop_all_profiles()
-
+        # The ProfilerTabs widget handles cleanup in its closeEvent
         # Call parent quit method
         super().quit()
