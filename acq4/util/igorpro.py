@@ -262,6 +262,7 @@ class IgorReqThread(threading.Thread):
                     "params": params}
                 }
         msg = [b"", json.dumps(call, cls=ACQ4JSONEncoder).encode()]
+        print("send to igor:", msg)
         return msg
 
     def parse_reply(self, reply):
