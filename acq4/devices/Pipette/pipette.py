@@ -451,8 +451,8 @@ class Pipette(Device, OptomechDevice):
 
         This method is for recalibration; it does not physically move the device.
         """
-        lpos = np.array(self.mapFromGlobal(pos))
-        self.setOffset(self.offset + lpos)
+        pos = self.mapGlobalToParent(np.array(pos))  # put the offset into our manipulator's coordinates
+        self.setOffset(pos)  # then that becomes our translation offset
 
     def setOffset(self, offset):
         self.offset = np.array(offset)
@@ -460,16 +460,17 @@ class Pipette(Device, OptomechDevice):
         self.sigCalibrationChanged.emit(self)
 
     def _updateTransform(self):
-        # matrix mapping from local to parent
         x = self.globalDirection()
         x[2] = 0
         x = x / np.linalg.norm(x)
         z = np.array([0, 0, 1])
-        y = np.cross(x, z)
+        y = np.cross(z, x)  # +y points left when looking down +x
         y = y / np.linalg.norm(y)
-        m = np.array([x, y, z]).T
-        tr = AffineTransform(m)
-        tr.offset = tr.map(self.offset)
+        tr = AffineTransform(dims=(3, 3))
+        tr.set_mapping(
+            np.asarray([[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]]),  # local
+            np.asarray([[0, 0, 0], x, y, z]) + self.offset,  # parent
+        )
         self.setDeviceTransform(tr)
 
     def _directionChanged(self):
