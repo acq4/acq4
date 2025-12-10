@@ -17,7 +17,7 @@ from acq4.modules.Camera import CameraModuleInterface
 from acq4.util import Qt, ptime
 from acq4.util.future import future_wrap, Future
 from acq4.util.target import Target
-from coorx import AffineTransform
+from coorx import AffineTransform, SRT3DTransform
 from pyqtgraph import Point, siFormat
 from .planners import PipettePathGenerator
 from .planners import defaultMotionPlanners
@@ -468,7 +468,9 @@ class Pipette(Device, OptomechDevice):
         y = np.cross(x, z)
         y = y / np.linalg.norm(y)
         m = np.array([x, y, z]).T
-        self.setDeviceTransform(AffineTransform(m, self.offset))
+        tr = AffineTransform(m)
+        tr.offset = tr.map(self.offset)
+        self.setDeviceTransform(tr)
 
     def _directionChanged(self):
         """Orientation has changed"""
