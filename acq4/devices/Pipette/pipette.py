@@ -284,8 +284,8 @@ class Pipette(Device, OptomechDevice):
                     name = cams[0]
                 else:
                     raise Exception(
-                        "Pipette requires either a single imaging device available (found %d) or 'imagingDevice' specified in its configuration."
-                        % len(cams)
+                        "Pipette requires either a single imaging device available "
+                        f"(found {len(cams)}) or 'imagingDevice' specified in its configuration."
                     )
             self._imagingDev = man.getDevice(name)
         return self._imagingDev
@@ -294,7 +294,9 @@ class Pipette(Device, OptomechDevice):
         pass
 
     def stop(self):
-        self.keepOnStepping = False  # thread safety? if a user starts a new stepwise movement simultaneous with stopping, they deserve to have to stop a second or even third time.
+        # thread safety? if a user starts a new stepwise movement simultaneous with stopping, they
+        # deserve to have to stop a second or even third time.
+        self.keepOnStepping = False
         cmp = self.currentMotionPlanner
         if cmp is not None:
             cmp.stop()
