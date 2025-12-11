@@ -10,7 +10,6 @@ from acq4.util import Qt
 from pyqtgraph import disconnect
 from pyqtgraph.parametertree import Parameter
 from . import states
-from ...util.threadrun import runInGuiThread
 
 logger = get_logger(__name__)
 
@@ -183,6 +182,9 @@ class PatchPipetteStateManager(Qt.QObject):
 
     def configureState(self, state, allowReset=True, configOverride=None):
         oldJob = self.currentJob
+        fallback = None
+        if oldJob is not None:
+            fallback = {"state": oldJob.stateName, **oldJob.config}
         self.stopJob(allowNextState=False)
         try:
             stateHandler = self.stateHandlers[state]
@@ -193,6 +195,7 @@ class PatchPipetteStateManager(Qt.QObject):
                 config.update(configOverride)
 
             job = stateHandler(self.dev, config)
+            fallback = job.nextState
             job.sigStateChanged.connect(self.jobStateChanged)
             job.sigFinished.connect(self.jobFinished)
             oldState = None if oldJob is None else oldJob.stateName
@@ -204,10 +207,10 @@ class PatchPipetteStateManager(Qt.QObject):
         except Exception:
             # in case of failure, attempt to restore previous state
             self.currentJob = None
-            if not allowReset or oldJob is None:
+            if not allowReset or fallback is None:
                 raise
             try:
-                self.configureState(oldJob.stateName, allowReset=False, configOverride=oldJob.config)
+                self.configureState(fallback["state"], allowReset=False, configOverride=fallback)
             except Exception:
                 self.dev.logger.exception("Error occurred while trying to reset state from a previous error:")
             raise
