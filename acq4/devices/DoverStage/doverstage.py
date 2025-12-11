@@ -38,10 +38,6 @@ class DoverStage(Stage):
     def _getPosition(self):
         return self.dev.pos()
 
-    def quit(self):
-        Stage.quit(self)
-        # self.dev.disable()
-
     def _move(self, pos, speed, linear, **kwds):
         speed = self._interpretSpeed(speed)
         self._lastMove = DoverMoveFuture(self, pos, speed)
