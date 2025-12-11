@@ -329,7 +329,7 @@ if __name__ == "__main__":
     if len(sys.argv) < 3:
         print("Windows .lnk Shortcut Creator")
         print()
-        print("Usage: python lnk_create.py <output.lnk> <target> [options]")
+        print("Usage: python create_lnk.py <output.lnk> <target> [options]")
         print()
         print("Options:")
         print("  --working-dir PATH      Set working directory")
@@ -341,7 +341,7 @@ if __name__ == "__main__":
         print("  --desc TEXT             Shortcut description")
         print()
         print("Example:")
-        print("  python lnk_create.py cmd_test.lnk C:\\Windows\\System32\\cmd.exe \\")
+        print("  python create_lnk.py cmd_test.lnk C:\\Windows\\System32\\cmd.exe \\")
         print("    --working-dir C:\\Users --quickedit off --window 120x30")
         sys.exit(1)
 
