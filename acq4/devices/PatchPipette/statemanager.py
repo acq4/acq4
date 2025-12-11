@@ -177,9 +177,6 @@ class PatchPipetteStateManager(Qt.QObject):
 
         Return the state that has been chosen.
         """
-        return runInGuiThread(self._stateChangeRequested, state, config)
-
-    def _stateChangeRequested(self, state, config):
         if state not in self.stateHandlers:
             raise ValueError(f"Unknown patch pipette state {state!r}")
         return self.configureState(state, configOverride=config)
