@@ -135,6 +135,8 @@ def get_smartstage_icon():
 
 
 def init_warning_msgbox():
+    if qt.QApplication.instance() is None:
+        app = qt.QApplication([])
     msgbox = qt.QMessageBox()
     msgbox.setWindowTitle("MotionSynergy Initialization")
     msgbox.setIcon(qt.QMessageBox.Warning)

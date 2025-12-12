@@ -141,13 +141,15 @@ class VimbaXCamera(Camera):
 
     def _updateParamCache(self, feature):
         # not in the mutex, because this is called from a C context that loses track its python context
+        self.logger.debug(f"Param {feature.get_name()} changed on device")
         if not self._doParamUpdates:
             return
         value = feature.get()
         dev_name = feature.get_name()
         name = _featureNameToParamName(dev_name)
-        self._paramValuesOnDev[dev_name] = value
-        self.sigParamsChanged.emit({name: value})
+        if self._paramValuesOnDev[dev_name] != value:
+            self._paramValuesOnDev[dev_name] = value
+            self.sigParamsChanged.emit({name: value})
 
     @contextlib.contextmanager
     def _noParamUpdates(self):
@@ -174,7 +176,7 @@ class VimbaXCamera(Camera):
             elif p == 'region':
                 retval[p] = self._region
             elif p == 'exposure':
-                retval[p] = self._paramValuesOnDev['ExposureTimeAbs'] / 1000
+                retval[p] = self._paramValuesOnDev['ExposureTimeAbs'] / 1e6
             else:
                 retval[p] = self._paramValuesOnDev[_paramNameToFeatureName(p)]
         return retval
@@ -231,16 +233,18 @@ class VimbaXCamera(Camera):
                     newvals = {p: v}
                     _r = True
                 elif p == 'exposure':
-                    v = v * 1000
+                    v = v * 1e6
                     if autoCorrect:
                         v = int(min(
                             max(v, self._paramProperties['exposureTimeAbs'][0][0]),
                             self._paramProperties['exposureTimeAbs'][0][1],
                         ))
+                    self.logger.debug(f"Setting exposure to {v} us")
                     self._dev.ExposureTimeAbs.set(v)
-                    newvals = {p: v / 1000}
+                    newvals = {p: v * 1e-6}
                     _r = True
                 else:
+                    self.logger.debug(f"Setting param {p} to {v}")
                     self._paramValuesOnDev[_paramNameToFeatureName(p)] = v
                     getattr(self._dev, _paramNameToFeatureName(p)).set(v)
                     # TODO autocorrect
@@ -260,7 +264,10 @@ class VimbaXCamera(Camera):
         with self._lock:
             with contextlib.suppress(queue.Empty):
                 while f := self._frameQueue.get_nowait():
-                    arr = f.as_numpy_ndarray()
+                    arr = f.as_numpy_ndarray().copy()
+                    if arr.size == 0:
+                        self.logger.warning("Warning: ignoring empty frame from camera")
+                        continue
                     frames.append({
                         'id': f.get_id(),
                         # MC: color data will blow this up

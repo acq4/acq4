@@ -259,7 +259,7 @@ class PatchPipetteState(Future):
         """While not that slow, we still want to keep the innermost loop as fast as we can."""
         if self._pressureAdjustment is None:
             self._pressureAdjustment = self._adjustPressureForDepth()
-            self._pressureAdjustment.onFinish(self._finishPressureAdjustment, inGui=True)
+            self._pressureAdjustment.onFinish(self._finishPressureAdjustment)
 
     @future_wrap(logLevel='debug')
     def _adjustPressureForDepth(self, _future):
@@ -362,7 +362,7 @@ class PatchPipetteState(Future):
     def _visualTargetTracking(self):
         cell = self._cell
         if cell is None:
-            raise RuntimeError("Cannot visually track target; no cell is assigned to this pipette device.")
+            raise ValueError("Cannot visually track target; no cell is assigned to this pipette device.")
         if not cell.isInitialized:
             cell.initializeTracker(self.dev.pipetteDevice.imagingDevice()).wait()
 
