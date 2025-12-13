@@ -62,17 +62,10 @@ WINDOWS_BOOTSTRAP_URL = RAW_GITHUB_BASE + "tools/installer/install_windows.bat"
 
 START_BAT_TEMPLATE = r"""@echo off
 REM ACQ4 Launcher
-REM This script activates the ACQ4 conda environment and starts ACQ4
-
-call "{conda_activate_bat}" "{env_path}"
-if errorlevel 1 (
-    echo Failed to activate conda environment: {env_path}
-    pause
-    exit /b 1
-)
+REM This script starts ACQ4
 
 cd "{acq4_path}"
-python -m acq4 -c "{config_file_path}"{extra_args}
+"{python_exe}" -m acq4 -c "{config_file_path}"{extra_args}
 pause
 """
 
@@ -945,11 +938,8 @@ def create_start_bat(base_dir: Path, conda_exe: str, env_path: Path, config_file
     Path
         Path to the created bat file.
     """
-    # Derive activate.bat path from conda.exe path
-    # conda_exe is typically: C:\...\Scripts\conda.exe
-    # activate.bat is at: C:\...\Scripts\activate.bat
-    conda_path = Path(conda_exe)
-    conda_activate_bat = conda_path.parent / "activate.bat"
+    # Derive python.exe path from conda environment path
+    python_exe = env_path / "python.exe"
 
     # Build module arguments
     extra_args = []
@@ -963,8 +953,7 @@ def create_start_bat(base_dir: Path, conda_exe: str, env_path: Path, config_file
     extra_args = (" " + " ".join(extra_args)) if extra_args else ""
 
     bat_content = START_BAT_TEMPLATE.format(
-        conda_activate_bat=str(conda_activate_bat),
-        env_path=str(env_path),
+        python_exe=str(python_exe),
         config_file_path=str(config_file_path),
         acq4_path=str(base_dir / ACQ4_SOURCE_DIRNAME),
         extra_args=extra_args,
