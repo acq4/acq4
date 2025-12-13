@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import argparse
-import dataclasses
-import functools
+import datetime
 import os
 import queue
 import re
@@ -2629,9 +2628,10 @@ class InstallPage(QtWidgets.QWizardPage):
         if wizard is None:
             return
         self._state = collect_state(wizard)
+        cli_args = wizard.cli_arguments(unattended=True)
         self._running = True
         self._update_navigation(running=True, success=False)
-        self._worker = InstallerWorker(self._state)
+        self._worker = InstallerWorker(self._state, cli_args=cli_args)
         self._worker.log_event.connect(self._handle_log_event)
         self._worker.finished.connect(self._handle_finished)
         self._worker_thread = threading.Thread(target=self._worker.run, daemon=True)
@@ -3335,14 +3335,101 @@ class InstallerExecutor:
     """Shared implementation that performs all installer side effects."""
 
     def __init__(self, state: InstallerState, logger: StructuredLogger,
-                 cancel_event: Optional[threading.Event] = None) -> None:
+                 cancel_event: Optional[threading.Event] = None,
+                 cli_args: Optional[List[str]] = None) -> None:
         self.state = state
         self.logger = logger
         self.cancel_event = cancel_event
+        self.cli_args = cli_args or []
         self._active_task_id: Optional[int] = None
         self._git_secrets: List[str] = [self.state.github_token] if self.state.github_token else []
 
+    def _generate_config_summary_text(self) -> str:
+        """Generate a plain text summary of configuration options."""
+        lines = []
+        lines.append("Configuration Summary:")
+        lines.append("=" * 60)
+        lines.append(f"Install directory: {self.state.install_path}")
+        lines.append(f"Repository: {self.state.repo_url}")
+        lines.append(f"Branch/tag: {self.state.branch}")
+
+        # Optional dependencies
+        optional_count = len(self.state.selected_optional)
+        lines.append(f"Optional dependencies selected: {optional_count}")
+        if self.state.selected_optional:
+            lines.append(f"  Selected specs: {', '.join(sorted(self.state.selected_optional))}")
+
+        # Editable clones
+        if self.state.editable_selection:
+            lines.append(f"Editable clones: {', '.join(sorted(self.state.editable_selection))}")
+        else:
+            lines.append("Editable clones: None")
+
+        # Config source
+        if self.state.config_mode == "clone":
+            config_source = f"clone from {self.state.config_repo_url} ({self.state.config_repo_branch})"
+        elif self.state.config_mode == "copy":
+            config_source = f"copy from {self.state.config_copy_path}"
+        else:
+            config_source = "new (default)"
+        lines.append(f"Config source: {config_source}")
+
+        if self.state.config_file:
+            lines.append(f"Config file: {self.state.config_file}")
+
+        if self.state.startup_modules:
+            lines.append(f"Startup modules: {', '.join(self.state.startup_modules)}")
+
+        if self.state.create_desktop_shortcut and os.name == "nt":
+            lines.append("Create desktop shortcut: Yes")
+
+        return "\n".join(lines)
+
+    def _write_log_header(self) -> None:
+        """Write header information to the log file."""
+        if self.logger._log_file_handle is None:
+            return
+
+        header_lines = []
+        header_lines.append("=" * 80)
+        header_lines.append("ACQ4 Installation Log")
+        header_lines.append("=" * 80)
+        header_lines.append(f"Date: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        header_lines.append("")
+
+        # Configuration summary
+        header_lines.append(self._generate_config_summary_text())
+        header_lines.append("")
+
+        # Reinstallation script (only include if cli_args are available)
+        if self.cli_args:
+            header_lines.append("=" * 60)
+            header_lines.append("Reinstallation Script (Unattended Mode):")
+            header_lines.append("=" * 60)
+            header_lines.append("To repeat this installation in unattended mode, save and run")
+            header_lines.append("the following script:")
+            header_lines.append("")
+
+            is_windows = os.name == "nt"
+            script_content = build_unattended_script_content(self.cli_args, is_windows=is_windows)
+            header_lines.append(script_content)
+            header_lines.append("")
+
+        header_lines.append("=" * 80)
+        header_lines.append("")
+
+        # Write to log file
+        header_text = "\n".join(header_lines)
+        try:
+            self.logger._log_file_handle.write(header_text + "\n")
+            self.logger._log_file_handle.flush()
+        except Exception:
+            pass  # Silent failure - don't let log file issues break the installation
+
     def run(self) -> None:
+        # Write log header with configuration summary and reinstallation script
+        self._write_log_header()
+
         base_dir = self.state.install_path
         clone_skip = normalized_clone_names(self.state.editable_selection)
         selected_optional_specs = resolve_selected_optional_specs(
@@ -3838,9 +3925,10 @@ class InstallerWorker(QtCore.QObject):
     log_event = QtCore.pyqtSignal(object)
     finished = QtCore.pyqtSignal(bool, str)
 
-    def __init__(self, state: InstallerState) -> None:
+    def __init__(self, state: InstallerState, cli_args: Optional[List[str]] = None) -> None:
         super().__init__()
         self.state = state
+        self.cli_args = cli_args
         self._cancel_event = threading.Event()
 
     def _queue_event(self, event: InstallerLogEvent) -> None:
@@ -3892,7 +3980,7 @@ class InstallerWorker(QtCore.QObject):
         import tempfile
         temp_log = Path(tempfile.gettempdir()) / f"acq4-install-{os.getpid()}.log"
         logger = StructuredLogger(text_fn=None, event_handler=self._queue_event, log_file=temp_log)
-        executor = InstallerExecutor(self.state, logger, cancel_event=self._cancel_event)
+        executor = InstallerExecutor(self.state, logger, cancel_event=self._cancel_event, cli_args=self.cli_args)
         try:
             executor.run()
         finally:
@@ -4028,13 +4116,15 @@ def state_from_cli_args(args: argparse.Namespace,
     )
 
 
-def run_unattended_install(state: InstallerState) -> None:
+def run_unattended_install(state: InstallerState, cli_args: Optional[List[str]] = None) -> None:
     """Run the installer in unattended mode using stdout logging.
 
     Parameters
     ----------
     state : InstallerState
         Fully-resolved configuration describing what to install.
+    cli_args : List[str], optional
+        CLI arguments that can reproduce this installation.
     """
     def log_text(message: str) -> None:
         print(message, flush=True)
@@ -4043,7 +4133,7 @@ def run_unattended_install(state: InstallerState) -> None:
     import tempfile
     temp_log = Path(tempfile.gettempdir()) / f"acq4-install-{os.getpid()}.log"
     logger = StructuredLogger(text_fn=log_text, log_file=temp_log)
-    executor = InstallerExecutor(state, logger)
+    executor = InstallerExecutor(state, logger, cli_args=cli_args)
     try:
         executor.run()
     except Exception as exc:  # noqa: BLE001
@@ -4148,7 +4238,7 @@ def main() -> None:
         except InstallerError as exc:
             print(f"Invalid unattended configuration: {exc}", file=sys.stderr)
             sys.exit(1)
-        run_unattended_install(state)
+        run_unattended_install(state, cli_args=sys.argv[1:])
         return
     app = QtWidgets.QApplication(sys.argv)
     wizard = InstallWizard(editable_map, args, test_flags)
