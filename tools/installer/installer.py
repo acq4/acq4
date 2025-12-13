@@ -3457,6 +3457,7 @@ class InstallerExecutor:
         tasks.append(("Prepare configuration", lambda: self._prepare_config(base_dir)))
         if os.name == "nt" and self.state.create_desktop_shortcut:
             tasks.append(("Create desktop shortcut", lambda: self._create_shortcut_if_needed(base_dir, env_dir, conda_exe)))
+        tasks.append(("Generate environment report", lambda: self._write_environment_report(base_dir, env_dir, conda_exe)))
         tasks.append(("Installation Summary", lambda: self._log_installation_summary(base_dir, env_dir)))
         self.logger.set_task_total(len(tasks))
         for title, fn in tasks:
@@ -3755,6 +3756,78 @@ class InstallerExecutor:
             source = base_dir / ACQ4_SOURCE_DIRNAME / "config" / "example"
             shutil.copytree(source, config_dir)
             self.logger.message(f"Default configuration copied successfully", task_id=self._active_task_id)
+
+    def _write_environment_report(self, base_dir: Path, env_dir: Path, conda_exe: str) -> None:
+        """Write final environment report to the log file with package versions and git commits."""
+        if self.logger._log_file_handle is None:
+            return
+
+        self.logger.message("Generating environment report...", task_id=self._active_task_id)
+
+        report_lines = []
+        report_lines.append("")
+        report_lines.append("=" * 80)
+        report_lines.append("ENVIRONMENT REPORT")
+        report_lines.append("=" * 80)
+        report_lines.append(f"Generated: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        report_lines.append("")
+
+        # Get installed packages
+        report_lines.append("-" * 80)
+        report_lines.append("INSTALLED PACKAGES")
+        report_lines.append("-" * 80)
+        result = subprocess.run(
+            [conda_exe, "list", "-p", str(env_dir)],
+            capture_output=True,
+            text=True,
+        )
+        report_lines.append(result.stdout if result.returncode == 0 else f"Error: {result.stderr}")
+        report_lines.append("")
+
+        # Get git commit hashes for cloned repositories
+        report_lines.append("-" * 80)
+        report_lines.append("GIT REPOSITORY COMMITS")
+        report_lines.append("-" * 80)
+
+        def get_git_info(repo_path: Path, name: str) -> None:
+            result = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                cwd=repo_path,
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode == 0:
+                commit_hash = result.stdout.strip()
+                report_lines.append(f"{name}: {commit_hash}")
+                report_lines.append(f"  Location: {repo_path}")
+            else:
+                report_lines.append(f"{name}: Could not get commit hash")
+
+        # ACQ4 repository
+        get_git_info(base_dir / ACQ4_SOURCE_DIRNAME, "ACQ4")
+
+        # Editable dependencies
+        if self.state.editable_selection:
+            dep_dir = base_dir / DEPENDENCIES_DIRNAME
+            for dep_key in sorted(self.state.editable_selection):
+                dep_path = dep_dir / dep_key
+                if dep_path.exists():
+                    get_git_info(dep_path, dep_key)
+
+        # Config repository (if cloned)
+        if self.state.config_mode == "clone":
+            config_dir = base_dir / CONFIG_DIRNAME
+            if config_dir.exists():
+                get_git_info(config_dir, "Config")
+
+        report_lines.append("")
+        report_lines.append("=" * 80)
+        report_lines.append("")
+
+        # Write to log file
+        report_text = "\n".join(report_lines)
+        self.logger._log_file_handle.write(report_text)
+        self.logger._log_file_handle.flush()
 
     def _log_installation_summary(self, base_dir: Path, env_dir: Path) -> None:
         """Log the installation summary as regular messages."""
