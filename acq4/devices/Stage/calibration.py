@@ -213,9 +213,9 @@ class ManipulatorAxesCalibrationWindow(Qt.QWidget):
         self.saveBtn.setText("save calibration")
 
     def _addCalibrationPoint(self, stagePos, parentPos):
-        item = Qt.QTreeWidgetItem(
-            ["%0.3g, %0.3g, %0.3g" % tuple(stagePos), "%0.3g, %0.3g, %0.3g" % tuple(parentPos), ""]
-        )
+        stage_disp = "".join([f"{v:0.3g}" for v in stagePos])
+        parent_disp = "".join([f"{v:0.3g}" for v in parentPos])
+        item = Qt.QTreeWidgetItem([stage_disp, parent_disp, ""])
         self.pointTree.addTopLevelItem(item)
         item.stagePos = stagePos
         item.parentPos = parentPos
