@@ -38,6 +38,10 @@ class DoverStage(Stage):
     def _getPosition(self):
         return self.dev.pos()
 
+    @property
+    def positionUpdatesPerSecond(self):
+        return 1 / self.dev.poll_interval
+
     def _move(self, pos, speed, linear, **kwds):
         speed = self._interpretSpeed(speed)
         self._lastMove = DoverMoveFuture(self, pos, speed)
