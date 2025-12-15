@@ -627,18 +627,16 @@ class AutomationDebugWindow(Qt.QWidget):
     def _setTopLeft(self):
         cam = self.cameraDevice
         region = cam.getParam("region")
-        bound = cam.globalTransform().map(Qt.QPointF(region[0], region[1]))
-        self._xLeftSpin.setValue(bound.x())
-        self._yTopSpin.setValue(bound.y())
+        bound = cam.globalTransform().map((region[0], region[1]))
+        self._xLeftSpin.setValue(bound[0])
+        self._yTopSpin.setValue(bound[1])
 
     def _setBottomRight(self):
         cam = self.cameraDevice
         region = cam.getParam("region")
-        bound = cam.globalTransform().map(
-            Qt.QPointF(region[0] + region[2], region[1] + region[3])
-        )
-        self._xRightSpin.setValue(bound.x())
-        self._yBottomSpin.setValue(bound.y())
+        bound = cam.globalTransform().map((region[0] + region[2], region[1] + region[3]))
+        self._xRightSpin.setValue(bound[0])
+        self._yBottomSpin.setValue(bound[1])
 
     def clearCells(self):
         self._unranked_cells = []

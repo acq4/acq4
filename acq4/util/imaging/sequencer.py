@@ -606,13 +606,13 @@ class ImageSequencerCtrl(Qt.QWidget):
     def setTopLeftClicked(self):
         cam = self._selectedImagerOrComplain()
         region = cam.getParam("region")
-        bound = cam.globalTransform().map(Qt.QPointF(region[0], region[1]))
-        self.ui.xLeftSpin.setValue(bound.x())
-        self.ui.yTopSpin.setValue(bound.y())
+        bound = cam.globalTransform().map((region[0], region[1]))
+        self.ui.xLeftSpin.setValue(bound[0])
+        self.ui.yTopSpin.setValue(bound[1])
 
     def setBottomRightClicked(self):
         cam = self._selectedImagerOrComplain()
         region = cam.getParam("region")
-        bound = cam.globalTransform().map(Qt.QPointF(region[0] + region[2], region[1] + region[3]))
-        self.ui.xRightSpin.setValue(bound.x())
-        self.ui.yBottomSpin.setValue(bound.y())
+        bound = cam.globalTransform().map((region[0] + region[2], region[1] + region[3]))
+        self.ui.xRightSpin.setValue(bound[0])
+        self.ui.yBottomSpin.setValue(bound[1])
