@@ -54,9 +54,11 @@ hardware = [
     "pydaqmx",
     "pymmcore",
     "sensapex",
+    "pythonnet",
     "pyserial",
     "pyparsing",
     "pytic",
+    "vmbpy"
     "falconoptics @ git+https://github.com/AllenInstitute/falconoptics",
     "pywin32",
 ]
