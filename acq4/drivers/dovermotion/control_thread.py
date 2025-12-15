@@ -215,8 +215,10 @@ class SmartStageControlThread:
         result = []
         for i, axis in enumerate(self.axes):
             if pos[i] is not None:
-                result.append(axis.MoveAbsolute(pos[i]))
-                check(result[-1], error_msg="Error starting axis move: ")
+                move = axis.MoveAbsolute(pos[i])
+                if move.IsCompleted:
+                    check(result[-1], error_msg="Error starting axis move: ")
+                result.append(move)
         return result
 
 class SmartStageRequestFuture:
