@@ -199,5 +199,5 @@ class Frame:
             gradient.restoreState(contrast["gradient"])
             lut = gradient.getLookupTable(256 if data.dtype == np.uint8 else 512)
         item = ImageItem(data, levels=levels, lut=lut, removable=True)
-        item.setTransform(self.globalTransform().as2D())
+        item.setTransform(self.globalTransform().as_pyqtgraph().as2D())
         return item

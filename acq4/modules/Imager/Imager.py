@@ -933,7 +933,7 @@ class Imager(Module):
 
     def imageUpdated(self, frame):
         ## New image is displayed; update image transform
-        self.imageItem.setTransform(frame.globalTransform().as2D())
+        self.imageItem.setTransform(frame.globalTransform().as_pyqtgraph().as2D())
 
     # def PMT_Run(self):
     #     """
