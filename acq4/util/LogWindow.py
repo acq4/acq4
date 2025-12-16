@@ -94,7 +94,7 @@ class ErrorDialog(Qt.QDialog):
         msgLines = []
         if entry.getMessage():
             msgLines.append(self.cleanText(entry.getMessage()))
-        if entry.exc_info:
+        elif entry.exc_info:
             msgLines.append(self.cleanText(str(entry.exc_info[1])))
 
         msg = "<br/>".join(msgLines)
