@@ -385,7 +385,7 @@ class MultiPatchWindow(Qt.QWidget):
             pip = pip.pipetteDevice
         pos = self._cammod.window().getView().mapSceneToView(ev.scenePos())
         spos = pip.scopeDevice().globalPosition()
-        pos = [pos.x(), pos.y(), spos.z()]
+        pos = [pos.x(), pos.y(), spos[2]]
         tip_future = pip.setTipOffsetIfAcceptable(pos)
         tip_future.onFinish(self._handleManualSetTip, pip, inGui=True)
 
@@ -414,7 +414,7 @@ class MultiPatchWindow(Qt.QWidget):
             pip = pip.pipetteDevice
         pos = self._cammod.window().getView().mapSceneToView(ev.scenePos())
         spos = pip.scopeDevice().globalPosition()
-        pos = [pos.x(), pos.y(), spos.z()]
+        pos = [pos.x(), pos.y(), spos[2]]
         pip.setTarget(pos)
 
         if len(self._setTargetPips) == 0:
