@@ -231,7 +231,7 @@ class Microscope(Device, OptomechDevice):
 
         This method requires a device that provides focus position feedback.
         """
-        return self.mapToGlobal(Qt.QVector3D(0, 0, 0)).z()
+        return self.mapToGlobal((0, 0, 0))[2]
 
     def setFocusDepth(self, z, speed='fast', name=None):
         """Set the z-position of the focal plane.
@@ -294,7 +294,7 @@ class Microscope(Device, OptomechDevice):
     def globalPosition(self):
         """Return the global position of the scope's center axis at the focal plane.
         """
-        return self.mapToGlobal(pg.Vector(0, 0, 0))
+        return self.mapToGlobal(np.array((0, 0, 0)))
 
     def setGlobalPosition(self, pos, speed='fast', name=None):
         """Move the microscope such that its center axis is at a specified global position.
@@ -321,8 +321,7 @@ class Microscope(Device, OptomechDevice):
         # Determine how to move the xy(z) stage to react the new center position
         gpos = self.globalPosition()
         sgpos = positionDevice.globalPosition()
-        sgpos2 = pg.Vector(sgpos) + (pg.Vector(pos) - gpos)
-        sgpos2 = [sgpos2.x(), sgpos2.y(), sgpos2.z()]
+        sgpos2 = sgpos + (pos - gpos)
         xyFuture = positionDevice.moveToGlobal(sgpos2, speed, name=f'{name} XY')
         if zFuture is None:
             return xyFuture
@@ -408,7 +407,7 @@ class Objective(Device, OptomechDevice):
         self.setDeviceTransform(tr)
 
     def offset(self):
-        return pg.Vector(self.deviceTransform().offset)
+        return self.deviceTransform().offset
 
     def scale(self):
         return self.deviceTransform().scale

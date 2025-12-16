@@ -730,7 +730,7 @@ class Pipette(Device, OptomechDevice):
 
         Note: the position in local coordinates is always [0, 0, 0].
         """
-        return self.mapToGlobal([0, 0, 0])
+        return self.mapToGlobal(np.array([0, 0, 0]))
 
     def _moveToGlobal(self, pos, speed, **kwds):
         """Move the electrode tip directly to the given position in global coordinates.

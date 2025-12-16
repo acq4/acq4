@@ -21,9 +21,9 @@ def map_through_transform(
 
     # handle special types
     if isinstance(obj, Qt.QPointF):
-        return Qt.QPointF(*tr.map([obj.x(), obj.y()]))
+        return tr.map([obj.x(), obj.y()])
     elif isinstance(obj, Qt.QVector3D):
-        return Qt.QVector3D(*tr.map([obj.x(), obj.y(), obj.z()]))
+        return tr.map([obj.x(), obj.y(), obj.z()])
     elif isinstance(obj[0], (Qt.QPointF, Qt.QVector3D)):
         return [map_through_transform(o, tr) for o in obj]
 

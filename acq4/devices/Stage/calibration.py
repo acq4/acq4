@@ -242,8 +242,8 @@ class ManipulatorAxesCalibrationWindow(Qt.QWidget):
         axStagePos = [stagePos[list(axisPoints[ax]), ax] for ax in range(self.dev.nAxes)]
         axParentPos = [parentPos[list(axisPoints[ax])] for ax in range(self.dev.nAxes)]
 
-        # find optimal linear mapping for each axis
-        transform = np.eye(self.dev.nAxes)
+        # find optimal linear mapping for each axis; nAxes -> 3D
+        transform = np.eye(self.dev.nAxes)[:3, :]
         for i in range(3):
             for j in range(self.dev.nAxes):
                 line = scipy.stats.linregress(axStagePos[j], axParentPos[j][:, i])

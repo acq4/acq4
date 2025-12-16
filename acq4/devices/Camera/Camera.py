@@ -531,7 +531,7 @@ class Camera(DAQGeneric, OptomechDevice):
 
     def getFocusDepth(self):
         """Return the z-position of the focal plane."""
-        return self.mapToGlobal(Qt.QVector3D(0, 0, 0)).z()
+        return self.mapToGlobal((0, 0, 0))[2]
 
     def setFocusDepth(self, z, speed='fast'):
         """Set the z-position of the focal plane by moving the parent focusing device."""

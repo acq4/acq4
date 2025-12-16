@@ -61,9 +61,9 @@ def enforce_linear_z_stack(frames: list[Frame], start: float, stop: float, step:
     for i in idxes:
         depth, j = depths[i]
         frame = frames[j]
-        xform = frame.globalTransform()
-        xform.setTranslate(xform.getTranslation()[0], xform.getTranslation()[1], depth)
-        frame.addInfo(transform=xform.saveState())
+        xform = frame.globalTransform().as_affine()
+        xform.offset = [xform.offset[0], xform.offset[1], depth]
+        frame.addInfo(transform=xform)
         ret_frames.append(frame)
     return ret_frames
 
@@ -414,13 +414,16 @@ def acquire_z_stack(
 
 
 def _fix_frame_transforms(frames, z_step):
+    # Set z scale such that the transform on the first frame can be used for the entire stack
+    # (which should be approximately true if the frames are about evenly spaced)
     for f in frames:
-        xform = f.globalTransform()
-        scale = xform.getScale()
-        # Set z scale such that the transform oni the first frame can be used for the entire stack
-        # (which should be approximately true if the frames are about evenly spaced)
-        xform.setScale(scale[0], scale[1], z_step)
-        f.addInfo(transform=xform.saveState())
+        # this xform will be composite, so we can't just do `.scale = ...`
+        xform = f.globalTransform().as_affine()
+        z_vector = np.array(xform.matrix[:, 2])
+        z_vector /= np.linalg.norm(z_vector)
+        z_vector *= z_step
+        xform.matrix[:, 2] = z_vector
+        f.addInfo(transform=xform)
 
 
 class ImageSequencerCtrl(Qt.QWidget):

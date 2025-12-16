@@ -23,6 +23,7 @@ from ...util.geometry import (
     limits_to_boundaries,
     greedy_axis_inverse_kinematics,
     neutral_anchored_inverse_kinematics,
+    load_transform_from_anything,
 )
 
 
@@ -93,11 +94,9 @@ class Stage(Device, OptomechDevice):
         self._progressTimer.timeout.connect(self.updateProgressDialog)
 
         calibration = self.readConfigFile('calibration')
-        # TODO standardize transform format (see frame.py and OptomechDevice)
         axis_tr = calibration.get('transform', None)
         if axis_tr is not None:
-            axis_tr = np.asarray(axis_tr)
-            self._axisTransform = AffineTransform.from_matrix(axis_tr)
+            self._axisTransform = load_transform_from_anything(axis_tr)
 
         # set up joystick callbacks if requested
         jsdevs = set()
@@ -322,7 +321,7 @@ class Stage(Device, OptomechDevice):
         the global coordinate system.
         """
         # note: the origin of the local coordinate frame is the center position of the device.
-        return self.mapToGlobal([0, 0, 0])
+        return self.mapToGlobal(np.array([0, 0, 0]))
 
     def _getPosition(self):
         """
