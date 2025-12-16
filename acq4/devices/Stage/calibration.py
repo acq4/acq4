@@ -251,9 +251,9 @@ class ManipulatorAxesCalibrationWindow(Qt.QWidget):
 
         # find optimal offset
         self.transform = AffineTransform(transform)
-        stageMappedToParent = self.transform.map(stagePos)[..., :3]
+        stageMappedToParent = self.transform.map(stagePos)
         offset = (parentPos - stageMappedToParent).mean(axis=0)
-        self.transform.translate(np.append(offset, 0))
+        self.transform.translate(offset)
 
         # self._showTransformError(parentPos, stagePos)
 
