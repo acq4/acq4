@@ -22,6 +22,7 @@ from acq4 import filetypes
 from acq4.logging_config import get_logger
 from acq4.util import Qt, advancedTypes as advancedTypes
 from acq4.util.Mutex import Mutex
+from coorx import Transform
 from pyqtgraph import SignalProxy, BusyCursor
 from pyqtgraph.configfile import readConfigFile, writeConfigFile, appendConfigFile
 
@@ -66,6 +67,18 @@ def cleanup():
     being created, such as when scanning through large data sets.
     """
     getDataManager().cleanup()
+
+
+def _serializer(obj):
+    if isinstance(obj, Transform):
+        return obj.save_state()
+    return obj
+
+
+def _deserializer(obj):
+    if isinstance(obj, dict) and 'type' in obj and obj['type'] == 'Transform':
+        return Transform.from_state(obj)
+    return obj
 
 
 class DataManager(Qt.QObject):
@@ -826,7 +839,7 @@ class DirHandle(FileHandle):
                     else:
                         raise Exception("Directory '%s' is not managed!" % (self.name()))
                 try:
-                    self._index = readConfigFile(indexFile, np=np)
+                    self._index = readConfigFile(indexFile, deserializer=_deserializer, np=np)
                     self._indexMTime = os.path.getmtime(indexFile)
                 except:
                     print("***************Error while reading index file %s!*******************" % indexFile)
@@ -835,7 +848,7 @@ class DirHandle(FileHandle):
 
     def _writeIndex(self, newIndex, lock=True):
         with self.lock:
-            writeConfigFile(newIndex, self._indexFile())
+            writeConfigFile(newIndex, self._indexFile(), serializer=_serializer)
             self._index = newIndex
             self._indexMTime = os.path.getmtime(self._indexFile())
             self._indexFileExists = True
@@ -843,7 +856,7 @@ class DirHandle(FileHandle):
     def _appendIndex(self, info):
         with self.lock:
             indexFile = self._indexFile()
-            appendConfigFile(info, indexFile)
+            appendConfigFile(info, indexFile, serializer=_serializer)
             self._indexFileExists = True
             for k in info:
                 self._index[k] = info[k]
