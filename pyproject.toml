@@ -58,7 +58,7 @@ hardware = [
     "pyserial",
     "pyparsing",
     "pytic",
-    "vmbpy"
+    "vmbpy",
     "falconoptics @ git+https://github.com/AllenInstitute/falconoptics",
     "pywin32",
 ]
