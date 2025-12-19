@@ -270,11 +270,14 @@ class VimbaXCamera(Camera):
                     if arr.size == 0:
                         self.logger.warning("Warning: ignoring empty frame from camera")
                         continue
+                    ftime = f.get_timestamp()
+                    if ftime is not None:
+                        ftime = ftime / 1e9
                     frames.append({
                         'id': f.get_id(),
                         # MC: color data will blow this up
                         'data': arr.reshape(arr.shape[:-1]).T,
-                        'time': f.get_timestamp(),
+                        'time': ftime,
                     })
                     with contextlib.suppress(ValueError):
                         # ValueErrors from "wrong queue for frame" at restart are fine
