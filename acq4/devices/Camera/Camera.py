@@ -994,7 +994,6 @@ class AcquireThread(Thread):
             self.cameraStartEvent.set()
 
             lastFrameTime = lastStopCheck = ptime.time()
-            frameInfo = {}
 
             while True:
                 now = ptime.time()
@@ -1005,7 +1004,7 @@ class AcquireThread(Thread):
                     if lastFrameId is not None:
                         drop = frames[0]["id"] - lastFrameId - 1
                         if drop > 0:
-                            print(f"WARNING: Camera dropped {drop} frames")
+                            self.dev.logger.debug(f"Camera dropped {drop} frames")
 
                     # Build meta-info for this frame(s)
                     info = camState.copy()
