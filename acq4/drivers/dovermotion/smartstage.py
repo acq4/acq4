@@ -6,8 +6,8 @@ class SmartStage:
             self,
             callback=None,
             poll_interval=0.05,
-            callback_threshold=0.01,
-            move_complete_threshold=0.5e-6,
+            callback_threshold=5e-4,  # 5e-4mm == 0.5um
+            move_complete_threshold=5e-7,  # 5e-7mm == 0.5nm
             default_acceleration=10.0,
     ):
         self.default_acceleration = default_acceleration
