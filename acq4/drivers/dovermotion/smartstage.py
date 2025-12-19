@@ -51,7 +51,7 @@ class SmartStage:
         if refresh:
             return self.control_thread.request('position').result()
         else:
-            return self.control_thread.last_pos
+            return self.control_thread.last_known_pos
 
 
 if __name__ == "__main__":

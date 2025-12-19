@@ -32,7 +32,8 @@ class SmartStageControlThread:
         # for now, axes are all the axes available. Later we may want to split these up if there are multiple devices..
         self.axes = list(self.motionsynergy.AxisList)
 
-        self.last_pos = None
+        self.last_known_pos = None
+        self.last_reported_pos = None
         self.quit_request: SmartStageRequestFuture | None = None
         self.current_move: SmartStageRequestFuture | None = None
         self.request_queue = queue.Queue()
@@ -89,15 +90,17 @@ class SmartStageControlThread:
         """
         pos = self._get_pos()
 
-        # check position and invoke change callback 
+        # check position and invoke change callback
         if self.pos_callback is not None:
-            if self.last_pos is None:
+            if self.last_reported_pos is None:
                 self.pos_callback(pos)
+                self.last_reported_pos = pos
             else:
-                diff = np.abs(pos - self.last_pos)
+                diff = np.abs(pos - self.last_reported_pos)
                 if np.any(diff > self.callback_threshold):
                     self.pos_callback(pos)
-        self.last_pos = pos
+                    self.last_reported_pos = pos
+        self.last_known_pos = pos
 
     def _check_move_status(self):
         if self.current_move is None:
