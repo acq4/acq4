@@ -141,13 +141,15 @@ class VimbaXCamera(Camera):
 
     def _updateParamCache(self, feature):
         # not in the mutex, because this is called from a C context that loses track its python context
-        self.logger.debug(f"Param {feature.get_name()} changed on device")
         if not self._doParamUpdates:
             return
         value = feature.get()
         dev_name = feature.get_name()
         name = _featureNameToParamName(dev_name)
         if self._paramValuesOnDev[dev_name] != value:
+            self.logger.debug(
+                f"Param {dev_name} changed from {self._paramValuesOnDev[dev_name]} to {value} on device"
+            )
             self._paramValuesOnDev[dev_name] = value
             self.sigParamsChanged.emit({name: value})
 
