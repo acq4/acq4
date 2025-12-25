@@ -962,7 +962,7 @@ def create_start_bat(base_dir: Path, conda_exe: str, env_path: Path, config_file
     return bat_path
 
 
-def create_desktop_shortcut_windows(bat_path: Path, base_dir: Path) -> None:
+def create_desktop_shortcut_windows(bat_path: Path, base_dir: Path, env_dir: Path) -> None:
     """Create a Windows desktop shortcut pointing to the start bat file.
 
     Parameters
@@ -971,13 +971,8 @@ def create_desktop_shortcut_windows(bat_path: Path, base_dir: Path) -> None:
         Path to the start_acq4.bat file.
     base_dir : Path
         The base installation directory (to find the icon).
-
-    Notes
-    -----
-    This function creates a shortcut to the bat file and configures the console
-    window with Quick Edit mode disabled and custom buffer/window sizes. Quick
-    Edit mode can cause the console to pause when text is accidentally selected,
-    which is undesirable for long-running applications.
+    env_dir : Path
+        Path to the conda environment (to find python.exe).
     """
     desktop = Path(os.path.expanduser("~")) / "Desktop"
     desktop.mkdir(parents=True, exist_ok=True)
@@ -989,9 +984,10 @@ def create_desktop_shortcut_windows(bat_path: Path, base_dir: Path) -> None:
 
     # Use create_lnk.py script to create shortcut with custom console settings
     create_lnk_script = base_dir / ACQ4_SOURCE_DIRNAME / "tools" / "create_lnk.py"
+    python_exe = env_dir / "python.exe"
 
     cmd = [
-        "python",
+        str(python_exe),
         str(create_lnk_script),
         str(shortcut_path),
         str(bat_path),
@@ -1004,7 +1000,9 @@ def create_desktop_shortcut_windows(bat_path: Path, base_dir: Path) -> None:
     if icon_path.exists():
         cmd.extend(["--icon", str(icon_path)])
 
-    subprocess.run(cmd, check=True)
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise RuntimeError(f"Command failed with exit code {result.returncode}\nStdout: {result.stdout}\nStderr: {result.stderr}")
 
 
 def build_unattended_script_content(cli_args: List[str], *, is_windows: bool) -> str:
@@ -3958,9 +3956,11 @@ class InstallerExecutor:
 
         self.logger.message("Creating Windows desktop shortcut", task_id=self._active_task_id)
         try:
-            create_desktop_shortcut_windows(bat_path, base_dir)
+            create_desktop_shortcut_windows(bat_path, base_dir, env_dir)
+            self.logger.message("Desktop shortcut created successfully", task_id=self._active_task_id)
         except Exception as e:
             self.logger.message(f"Failed to create desktop shortcut: {e}", task_id=self._active_task_id)
+            return
 
     def _pip_env(self) -> Dict[str, str]:
         env = os.environ.copy()
