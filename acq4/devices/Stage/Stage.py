@@ -622,7 +622,7 @@ class Stage(Device, OptomechDevice):
         if bad_axes:
             axis_names = {0: 'x', 1: 'y', 2: 'z'}
             axes = ', '.join(axis_names[axis] for axis in bad_axes)
-            stage_pos = self.mapGlobalToDevicePosition(pos)
+            stage_pos = self.mapGlobalToDevicePosition(pos, linear=False)
             possible_problem = (
                 "pipette pull consistency" if self.isManipulator else "hardware reliability"
             )
