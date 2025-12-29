@@ -8,7 +8,14 @@ from time import sleep
 import numpy as np
 
 from acq4.devices.Camera import Camera
-from vmbpy import VmbSystem, Camera as VmbCamera, VmbCameraError, VmbFeatureError, BoolFeature
+from vmbpy import (
+    VmbSystem,
+    Camera as VmbCamera,
+    VmbCameraError,
+    VmbFeatureError,
+    BoolFeature,
+    AllocationMode,
+)
 
 
 class VimbaXCamera(Camera):
@@ -286,7 +293,11 @@ class VimbaXCamera(Camera):
 
     def startCamera(self):
         with self._lock:
-            self._dev.start_streaming(lambda _, __, f: self._frameQueue.put(f), buffer_count=20)
+            self._dev.start_streaming(
+                lambda _, __, f: self._frameQueue.put(f),
+                buffer_count=20,
+                allocation_mode=AllocationMode.AllocAndAnnounceFrame,
+            )
 
     def stopCamera(self):
         with self._lock:
