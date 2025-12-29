@@ -465,9 +465,9 @@ class Stage(Device, OptomechDevice):
 
     def mapGlobalToDevicePosition(self, globalPos, linear=None, previousPos=None):
         """Given a desired global position, return the device position required."""
-        if self.nAxes > 3 and (linear is None or previousPos is None):
+        if self.nAxes > 3 and (previousPos is None and linear):
             raise ValueError(
-                "Inverse mapping on 4-axis stages requires 'linear' and 'previousPos'."
+                "Inverse mapping on 4-axis stages requires a previousPos or linear=False."
             )
         if self.nAxes <= 3:
             # we can use a simple inverse transform
@@ -619,18 +619,15 @@ class Stage(Device, OptomechDevice):
 
     def checkRangeOfMotion(self, pos, name, tolerance=500e-6):
         """Raise an exception if the specified global position is within *tolerance* of the limits of the device."""
-        if self.nAxes != 3:
-            # TODO make this 4-axis compatible
-            raise NotImplementedError("checkRangeOfMotion is only implemented for 3-axis stages.")
         pos = np.array(pos)
         bad_axes = []
         for axis in (0, 1, 2):
             try:
                 bound = pos.copy()
                 bound[axis] -= tolerance
-                self.checkLimits(self.mapGlobalToDevicePosition(bound))
+                self.checkLimits(self.mapGlobalToDevicePosition(bound, linear=False))
                 bound[axis] += 2 * tolerance
-                self.checkLimits(self.mapGlobalToDevicePosition(bound))
+                self.checkLimits(self.mapGlobalToDevicePosition(bound, linear=False))
             except ValueError:
                 bad_axes.append(axis)
         if bad_axes:
