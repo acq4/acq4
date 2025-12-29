@@ -59,7 +59,8 @@ hardware = [
     "pyparsing",
     "pytic",
     "vmbpy",
-    "falconoptics @ git+https://github.com/AllenInstitute/falconoptics",
+    # disabled: private repo
+    # "falconoptics @ git+https://github.com/AllenInstitute/falconoptics",
     "pywin32",
 ]
 analysis = [
