@@ -253,17 +253,6 @@ class Stage(Device, OptomechDevice):
             raise ValueError("Transform is not invertible.")
         return self.axisTransform().inverse
 
-    def _solveAxisTransform(self, stagePos, parentPos, localPos):
-        """Return an axis transform matrix that maps localPos to parentPos, given
-        stagePos.
-        """
-        # TODO huh? 4-axis needs something different
-        offset = (
-            pg.transformCoordinates(self.inverseBaseTransform(), parentPos, transpose=True)
-            - localPos
-        )
-        return pg.solve3DTransform(stagePos[:4], offset[:4])[:3]
-
     def posChanged(self, pos):
         """Handle device position changes by updating the device transform and
         emitting sigPositionChanged.
