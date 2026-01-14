@@ -335,6 +335,8 @@ class Camera(DAQGeneric, OptomechDevice):
         if ensureFreshFrames and running:
             if self.knownLatency is not None:
                 # if we know the latency of the camera, wait for that time
+                if not isinstance(self.knownLatency, (int, float)) or self.knownLatency <= 0:
+                    raise ValueError("withKnownLatency must be a positive number.")
                 time.sleep(self.knownLatency)
             else:
                 # otherwise, restart the camera to flush out old frames
