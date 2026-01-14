@@ -176,10 +176,17 @@ class Camera(DAQGeneric, OptomechDevice):
                 "frameTransform": frame_xform,
                 "transform": SRTTransform3D(dev_xform * frame_xform),
             }
+            if self.knownLatency is not None:
+                new_info["knownCameraLatency"] = self.knownLatency
 
             frame.addInfo(new_info)
 
         return _update
+
+    @property
+    def knownLatency(self) -> None | float:
+        """Return the known latency of this camera in seconds, or None if unknown."""
+        return self.config.get("freshFrameLatency", None)
 
     def setupCamera(self):
         """Prepare the camera at least so that get/setParams will function correctly"""
