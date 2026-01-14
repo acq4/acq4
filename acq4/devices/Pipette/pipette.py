@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextlib
 import json
 import os
+import time
 import weakref
 from typing import List
 
@@ -422,10 +423,17 @@ class Pipette(Device, OptomechDevice):
         cam: Camera = self.imagingDevice()
         with cam.ensureRunning():
             img = _future.waitFor(cam.acquireFrames(n=1, ensureFreshFrames=True)).getResult()[0]
-        img.addInfo({"tip position": self.globalPosition()})
+        img.addInfo(
+            {
+                "tip position": self.globalPosition(),
+                "axis yaw": self.yawAngle(),
+                "axis pitch": self.pitchAngle(),
+            }
+        )
+        timestamp = time.strftime("%Y%m%d-%H%M%S")
         path.writeFile(
             img.data(),
-            "manual-calibration.ma",
+            f"manual-calibration-{timestamp}.ma",
             info=img.info(),
             autoIncrement=True,
         )
