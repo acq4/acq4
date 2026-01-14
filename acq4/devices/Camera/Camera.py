@@ -322,7 +322,7 @@ class Camera(DAQGeneric, OptomechDevice):
         self.acqThread.stop(block=block)
 
     @contextmanager
-    def ensureRunning(self, ensureFreshFrames=False, withKnownLatency=None):
+    def ensureRunning(self, ensureFreshFrames=False):
         """Context manager for starting and stopping camera acquisition thread. If used
         with non-blocking frame acquisition, this will still exit the context before
         the frames are necessarily acquired.
@@ -332,13 +332,12 @@ class Camera(DAQGeneric, OptomechDevice):
                 frames = camera.acquireFrames(10).getResult()
         """
         running = self.isRunning()
-        if ensureFreshFrames:
-            if withKnownLatency is not None:
-                # if we know the latency of the camera, we can just wait for that time
-                if not isinstance(withKnownLatency, (int, float)) or withKnownLatency <= 0:
-                    raise ValueError("withKnownLatency must be a positive number.")
-                time.sleep(withKnownLatency)
-            elif running:
+        if ensureFreshFrames and running:
+            if self.knownLatency is not None:
+                # if we know the latency of the camera, wait for that time
+                time.sleep(self.knownLatency)
+            else:
+                # otherwise, restart the camera to flush out old frames
                 self.stop()
                 self.start()
         if not running:
@@ -1107,7 +1106,6 @@ class FrameAcquisitionFuture(Future):
         self._camera = camera
         self._frame_count = frameCount
         self._ensure_fresh_frames = ensureFreshFrames
-        self._known_latency = camera.config.get("freshFrameLatency", None)
         self._stop_when = None
         self._frames = []
         self._timeout = timeout
@@ -1124,11 +1122,7 @@ class FrameAcquisitionFuture(Future):
         with ExitStack() as stack:
             stack.callback(self._camera.sigNewFrame.disconnect, self._queue.put)
             if self._ensure_fresh_frames:
-                stack.enter_context(
-                    self._camera.ensureRunning(
-                        ensureFreshFrames=True, withKnownLatency=self._known_latency
-                    )
-                )
+                stack.enter_context(self._camera.ensureRunning(ensureFreshFrames=True))
             lastFrameTime = ptime.time()
             while True:
                 if self.isDone():
