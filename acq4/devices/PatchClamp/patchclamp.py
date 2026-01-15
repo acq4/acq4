@@ -134,7 +134,7 @@ class PatchClamp(Device):
     def _initTestPulse(self, params):
         self.resetTestPulseHistory()
         self._testPulseThread = TestPulseThread(self, params)
-        self._testPulseThread.sigTestPulseFinished.connect(self._testPulseFinished)
+        self._testPulseThread.sigTestPulseAnalyzed.connect(self._testPulseFinished)
         self._testPulseThread.started.connect(self.testPulseEnabledChanged)
         self._testPulseThread.finished.connect(self.testPulseEnabledChanged)
 
