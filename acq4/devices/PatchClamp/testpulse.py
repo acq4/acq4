@@ -18,7 +18,7 @@ class TestPulseThread(Thread):
     """Background thread that runs periodic test pulses on a single patch clamp channel.
     """
 
-    sigTestPulseFinished = Qt.Signal(object, object)  # device, result
+    sigTestPulseAnalyzed = Qt.Signal(object, object)  # device, result
 
     class StopRequested(Exception):
         pass
@@ -167,7 +167,7 @@ class TestPulseThread(Thread):
             # no auto bias, release before doing analysis
             tp = self._makeTpResult(task)
 
-        self.sigTestPulseFinished.emit(self._clampDev, tp)
+        self.sigTestPulseAnalyzed.emit(self._clampDev, tp)
 
     def _makeTpResult(self, task: Task) -> PatchClampTestPulse:
         mode = task.command[self._clampName]['mode']
