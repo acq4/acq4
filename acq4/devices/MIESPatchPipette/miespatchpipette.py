@@ -1,6 +1,3 @@
-from collections import OrderedDict
-
-from acq4.util import ptime
 from acq4.util.mies import MIES
 from .patchclamp import MIESPatchClamp
 from .pressure_control import MIESPressureControl
@@ -19,27 +16,16 @@ class MIESPatchPipette(PatchPipette):
         # create pressure and clamp devices
         clampName = f"{name}_clamp"
         self._mies_clamp = MIESPatchClamp(
-            deviceManager, 
-            config={'headstage': self._headstage},
-            name=clampName)
+            deviceManager, config={'headstage': self._headstage}, name=clampName
+        )
 
         pressureName = f"{name}_pressure"
         self._mies_pressure = MIESPressureControl(
-            deviceManager, 
-            config={'headstage': self._headstage},
-            name=pressureName)
+            deviceManager, config={'headstage': self._headstage}, name=pressureName
+        )
 
-        config.update({
-            'clampDevice': clampName,
-            'pressureDevice': pressureName,
-        })
-        self.clampDevice = self._mies_clamp
-        PatchPipette.__init__(self, deviceManager, config, name)
-
-        # Connect clamp device signals that parent couldn't connect during init
-        self.clampDevice.sigStateChanged.connect(self.clampStateChanged)
-        self.clampDevice.sigAutoBiasChanged.connect(self._autoBiasChanged)
-        self.clampDevice.sigTestPulseFinished.connect(self._testPulseFinished)
+        config.update({'clampDevice': clampName, 'pressureDevice': pressureName})
+        super().__init__(deviceManager, config, name)
 
     def setActive(self, active):
         self.mies.setHeadstageActive(self._headstage, active)
@@ -47,16 +33,3 @@ class MIESPatchPipette(PatchPipette):
 
     def setSelected(self):
         self.mies.selectHeadstage(self._headstage)
-
-    def clampStateChanged(self, state):
-        self.emitNewEvent('clamp_state_change', state)
-
-    def emitNewEvent(self, eventType, eventData=None):
-        newEv = OrderedDict([
-            ('device', self.name()),
-            ('event_time', ptime.time()),
-            ('event', eventType),
-        ])
-        if eventData is not None:
-            newEv.update(eventData)
-        self.sigNewEvent.emit(self, newEv)

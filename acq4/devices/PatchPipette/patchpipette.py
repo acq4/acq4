@@ -58,7 +58,6 @@ class PatchPipette(Device):
         self.clampDevice: PatchClamp | None = None
         if clampName is not None:
             self.clampDevice = deviceManager.getDevice(clampName)
-        if self.clampDevice is not None:
             self.clampDevice.sigStateChanged.connect(self.clampStateChanged)
             self.clampDevice.sigAutoBiasChanged.connect(self._autoBiasChanged)
             self.clampDevice.sigTestPulseFinished.connect(self._testPulseFinished)
