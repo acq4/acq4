@@ -103,6 +103,10 @@ class BreakInState(PatchPipetteState):
             patchrec['breakinSuccessful'] = False
             self._taskDone(interrupted=True, error=exc.args[0])
             return config['fallbackState']
+        except Exception as exc:
+            patchrec['breakinSuccessful'] = False
+            self._taskDone(interrupted=True, error=str(exc))
+            return config['fallbackState']
 
     def attemptBreakIn(self, nPulses, duration, pressure):
         start = ptime.time()
@@ -115,7 +119,7 @@ class BreakInState(PatchPipetteState):
                 while True:
                     remaining = stop - ptime.time()
                     if remaining > 0.2:
-                        self.checkBreakin()
+                        self.checkBreakIn()
                     elif remaining > 0:
                         time.sleep(remaining)
                     else:
