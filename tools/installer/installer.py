@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import argparse
-import dataclasses
-import functools
+import datetime
 import os
 import queue
 import re
@@ -62,17 +61,10 @@ WINDOWS_BOOTSTRAP_URL = RAW_GITHUB_BASE + "tools/installer/install_windows.bat"
 
 START_BAT_TEMPLATE = r"""@echo off
 REM ACQ4 Launcher
-REM This script activates the ACQ4 conda environment and starts ACQ4
-
-call "{conda_activate_bat}" "{env_path}"
-if errorlevel 1 (
-    echo Failed to activate conda environment: {env_path}
-    pause
-    exit /b 1
-)
+REM This script starts ACQ4
 
 cd "{acq4_path}"
-python -m acq4 -c "{config_file_path}"{extra_args}
+"{python_exe}" -m acq4 -c "{config_file_path}"{extra_args}
 pause
 """
 
@@ -949,11 +941,8 @@ def create_start_bat(base_dir: Path, conda_exe: str, env_path: Path, config_file
     Path
         Path to the created bat file.
     """
-    # Derive activate.bat path from conda.exe path
-    # conda_exe is typically: C:\...\Scripts\conda.exe
-    # activate.bat is at: C:\...\Scripts\activate.bat
-    conda_path = Path(conda_exe)
-    conda_activate_bat = conda_path.parent / "activate.bat"
+    # Derive python.exe path from conda environment path
+    python_exe = env_path / "python.exe"
 
     # Build module arguments
     extra_args = []
@@ -967,8 +956,7 @@ def create_start_bat(base_dir: Path, conda_exe: str, env_path: Path, config_file
     extra_args = (" " + " ".join(extra_args)) if extra_args else ""
 
     bat_content = START_BAT_TEMPLATE.format(
-        conda_activate_bat=str(conda_activate_bat),
-        env_path=str(env_path),
+        python_exe=str(python_exe),
         config_file_path=str(config_file_path),
         acq4_path=str(base_dir / ACQ4_SOURCE_DIRNAME),
         extra_args=extra_args,
@@ -978,7 +966,7 @@ def create_start_bat(base_dir: Path, conda_exe: str, env_path: Path, config_file
     return bat_path
 
 
-def create_desktop_shortcut_windows(bat_path: Path, base_dir: Path) -> None:
+def create_desktop_shortcut_windows(bat_path: Path, base_dir: Path, env_dir: Path) -> None:
     """Create a Windows desktop shortcut pointing to the start bat file.
 
     Parameters
@@ -987,13 +975,8 @@ def create_desktop_shortcut_windows(bat_path: Path, base_dir: Path) -> None:
         Path to the start_acq4.bat file.
     base_dir : Path
         The base installation directory (to find the icon).
-
-    Notes
-    -----
-    This function creates a shortcut to the bat file and configures the console
-    window with Quick Edit mode disabled and custom buffer/window sizes. Quick
-    Edit mode can cause the console to pause when text is accidentally selected,
-    which is undesirable for long-running applications.
+    env_dir : Path
+        Path to the conda environment (to find python.exe).
     """
     desktop = Path(os.path.expanduser("~")) / "Desktop"
     desktop.mkdir(parents=True, exist_ok=True)
@@ -1005,9 +988,10 @@ def create_desktop_shortcut_windows(bat_path: Path, base_dir: Path) -> None:
 
     # Use create_lnk.py script to create shortcut with custom console settings
     create_lnk_script = base_dir / ACQ4_SOURCE_DIRNAME / "tools" / "create_lnk.py"
+    python_exe = env_dir / "python.exe"
 
     cmd = [
-        "python",
+        str(python_exe),
         str(create_lnk_script),
         str(shortcut_path),
         str(bat_path),
@@ -1020,7 +1004,9 @@ def create_desktop_shortcut_windows(bat_path: Path, base_dir: Path) -> None:
     if icon_path.exists():
         cmd.extend(["--icon", str(icon_path)])
 
-    subprocess.run(cmd, check=True)
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise RuntimeError(f"Command failed with exit code {result.returncode}\nStdout: {result.stdout}\nStderr: {result.stderr}")
 
 
 def build_unattended_script_content(cli_args: List[str], *, is_windows: bool) -> str:
@@ -2644,9 +2630,10 @@ class InstallPage(QtWidgets.QWizardPage):
         if wizard is None:
             return
         self._state = collect_state(wizard)
+        cli_args = wizard.cli_arguments(unattended=True)
         self._running = True
         self._update_navigation(running=True, success=False)
-        self._worker = InstallerWorker(self._state)
+        self._worker = InstallerWorker(self._state, cli_args=cli_args)
         self._worker.log_event.connect(self._handle_log_event)
         self._worker.finished.connect(self._handle_finished)
         self._worker_thread = threading.Thread(target=self._worker.run, daemon=True)
@@ -3350,14 +3337,101 @@ class InstallerExecutor:
     """Shared implementation that performs all installer side effects."""
 
     def __init__(self, state: InstallerState, logger: StructuredLogger,
-                 cancel_event: Optional[threading.Event] = None) -> None:
+                 cancel_event: Optional[threading.Event] = None,
+                 cli_args: Optional[List[str]] = None) -> None:
         self.state = state
         self.logger = logger
         self.cancel_event = cancel_event
+        self.cli_args = cli_args or []
         self._active_task_id: Optional[int] = None
         self._git_secrets: List[str] = [self.state.github_token] if self.state.github_token else []
 
+    def _generate_config_summary_text(self) -> str:
+        """Generate a plain text summary of configuration options."""
+        lines = []
+        lines.append("Configuration Summary:")
+        lines.append("=" * 60)
+        lines.append(f"Install directory: {self.state.install_path}")
+        lines.append(f"Repository: {self.state.repo_url}")
+        lines.append(f"Branch/tag: {self.state.branch}")
+
+        # Optional dependencies
+        optional_count = len(self.state.selected_optional)
+        lines.append(f"Optional dependencies selected: {optional_count}")
+        if self.state.selected_optional:
+            lines.append(f"  Selected specs: {', '.join(sorted(self.state.selected_optional))}")
+
+        # Editable clones
+        if self.state.editable_selection:
+            lines.append(f"Editable clones: {', '.join(sorted(self.state.editable_selection))}")
+        else:
+            lines.append("Editable clones: None")
+
+        # Config source
+        if self.state.config_mode == "clone":
+            config_source = f"clone from {self.state.config_repo_url} ({self.state.config_repo_branch})"
+        elif self.state.config_mode == "copy":
+            config_source = f"copy from {self.state.config_copy_path}"
+        else:
+            config_source = "new (default)"
+        lines.append(f"Config source: {config_source}")
+
+        if self.state.config_file:
+            lines.append(f"Config file: {self.state.config_file}")
+
+        if self.state.startup_modules:
+            lines.append(f"Startup modules: {', '.join(self.state.startup_modules)}")
+
+        if self.state.create_desktop_shortcut and os.name == "nt":
+            lines.append("Create desktop shortcut: Yes")
+
+        return "\n".join(lines)
+
+    def _write_log_header(self) -> None:
+        """Write header information to the log file."""
+        if self.logger._log_file_handle is None:
+            return
+
+        header_lines = []
+        header_lines.append("=" * 80)
+        header_lines.append("ACQ4 Installation Log")
+        header_lines.append("=" * 80)
+        header_lines.append(f"Date: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        header_lines.append("")
+
+        # Configuration summary
+        header_lines.append(self._generate_config_summary_text())
+        header_lines.append("")
+
+        # Reinstallation script (only include if cli_args are available)
+        if self.cli_args:
+            header_lines.append("=" * 60)
+            header_lines.append("Reinstallation Script (Unattended Mode):")
+            header_lines.append("=" * 60)
+            header_lines.append("To repeat this installation in unattended mode, save and run")
+            header_lines.append("the following script:")
+            header_lines.append("")
+
+            is_windows = os.name == "nt"
+            script_content = build_unattended_script_content(self.cli_args, is_windows=is_windows)
+            header_lines.append(script_content)
+            header_lines.append("")
+
+        header_lines.append("=" * 80)
+        header_lines.append("")
+
+        # Write to log file
+        header_text = "\n".join(header_lines)
+        try:
+            self.logger._log_file_handle.write(header_text + "\n")
+            self.logger._log_file_handle.flush()
+        except Exception:
+            pass  # Silent failure - don't let log file issues break the installation
+
     def run(self) -> None:
+        # Write log header with configuration summary and reinstallation script
+        self._write_log_header()
+
         base_dir = self.state.install_path
         clone_skip = normalized_clone_names(self.state.editable_selection)
         selected_optional_specs = resolve_selected_optional_specs(
@@ -3385,6 +3459,7 @@ class InstallerExecutor:
         tasks.append(("Prepare configuration", lambda: self._prepare_config(base_dir)))
         if os.name == "nt" and self.state.create_desktop_shortcut:
             tasks.append(("Create desktop shortcut", lambda: self._create_shortcut_if_needed(base_dir, env_dir, conda_exe)))
+        tasks.append(("Generate environment report", lambda: self._write_environment_report(base_dir, env_dir, conda_exe)))
         tasks.append(("Installation Summary", lambda: self._log_installation_summary(base_dir, env_dir)))
         self.logger.set_task_total(len(tasks))
         for title, fn in tasks:
@@ -3684,6 +3759,78 @@ class InstallerExecutor:
             shutil.copytree(source, config_dir)
             self.logger.message(f"Default configuration copied successfully", task_id=self._active_task_id)
 
+    def _write_environment_report(self, base_dir: Path, env_dir: Path, conda_exe: str) -> None:
+        """Write final environment report to the log file with package versions and git commits."""
+        if self.logger._log_file_handle is None:
+            return
+
+        self.logger.message("Generating environment report...", task_id=self._active_task_id)
+
+        report_lines = []
+        report_lines.append("")
+        report_lines.append("=" * 80)
+        report_lines.append("ENVIRONMENT REPORT")
+        report_lines.append("=" * 80)
+        report_lines.append(f"Generated: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        report_lines.append("")
+
+        # Get installed packages
+        report_lines.append("-" * 80)
+        report_lines.append("INSTALLED PACKAGES")
+        report_lines.append("-" * 80)
+        result = subprocess.run(
+            [conda_exe, "list", "-p", str(env_dir)],
+            capture_output=True,
+            text=True,
+        )
+        report_lines.append(result.stdout if result.returncode == 0 else f"Error: {result.stderr}")
+        report_lines.append("")
+
+        # Get git commit hashes for cloned repositories
+        report_lines.append("-" * 80)
+        report_lines.append("GIT REPOSITORY COMMITS")
+        report_lines.append("-" * 80)
+
+        def get_git_info(repo_path: Path, name: str) -> None:
+            result = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                cwd=repo_path,
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode == 0:
+                commit_hash = result.stdout.strip()
+                report_lines.append(f"{name}: {commit_hash}")
+                report_lines.append(f"  Location: {repo_path}")
+            else:
+                report_lines.append(f"{name}: Could not get commit hash")
+
+        # ACQ4 repository
+        get_git_info(base_dir / ACQ4_SOURCE_DIRNAME, "ACQ4")
+
+        # Editable dependencies
+        if self.state.editable_selection:
+            dep_dir = base_dir / DEPENDENCIES_DIRNAME
+            for dep_key in sorted(self.state.editable_selection):
+                dep_path = dep_dir / dep_key
+                if dep_path.exists():
+                    get_git_info(dep_path, dep_key)
+
+        # Config repository (if cloned)
+        if self.state.config_mode == "clone":
+            config_dir = base_dir / CONFIG_DIRNAME
+            if config_dir.exists():
+                get_git_info(config_dir, "Config")
+
+        report_lines.append("")
+        report_lines.append("=" * 80)
+        report_lines.append("")
+
+        # Write to log file
+        report_text = "\n".join(report_lines)
+        self.logger._log_file_handle.write(report_text)
+        self.logger._log_file_handle.flush()
+
     def _log_installation_summary(self, base_dir: Path, env_dir: Path) -> None:
         """Log the installation summary as regular messages."""
         config_dir = base_dir / CONFIG_DIRNAME
@@ -3813,9 +3960,11 @@ class InstallerExecutor:
 
         self.logger.message("Creating Windows desktop shortcut", task_id=self._active_task_id)
         try:
-            create_desktop_shortcut_windows(bat_path, base_dir)
+            create_desktop_shortcut_windows(bat_path, base_dir, env_dir)
+            self.logger.message("Desktop shortcut created successfully", task_id=self._active_task_id)
         except Exception as e:
             self.logger.message(f"Failed to create desktop shortcut: {e}", task_id=self._active_task_id)
+            return
 
     def _pip_env(self) -> Dict[str, str]:
         env = os.environ.copy()
@@ -3853,9 +4002,10 @@ class InstallerWorker(QtCore.QObject):
     log_event = QtCore.pyqtSignal(object)
     finished = QtCore.pyqtSignal(bool, str)
 
-    def __init__(self, state: InstallerState) -> None:
+    def __init__(self, state: InstallerState, cli_args: Optional[List[str]] = None) -> None:
         super().__init__()
         self.state = state
+        self.cli_args = cli_args
         self._cancel_event = threading.Event()
 
     def _queue_event(self, event: InstallerLogEvent) -> None:
@@ -3907,7 +4057,7 @@ class InstallerWorker(QtCore.QObject):
         import tempfile
         temp_log = Path(tempfile.gettempdir()) / f"acq4-install-{os.getpid()}.log"
         logger = StructuredLogger(text_fn=None, event_handler=self._queue_event, log_file=temp_log)
-        executor = InstallerExecutor(self.state, logger, cancel_event=self._cancel_event)
+        executor = InstallerExecutor(self.state, logger, cancel_event=self._cancel_event, cli_args=self.cli_args)
         try:
             executor.run()
         finally:
@@ -4043,13 +4193,15 @@ def state_from_cli_args(args: argparse.Namespace,
     )
 
 
-def run_unattended_install(state: InstallerState) -> None:
+def run_unattended_install(state: InstallerState, cli_args: Optional[List[str]] = None) -> None:
     """Run the installer in unattended mode using stdout logging.
 
     Parameters
     ----------
     state : InstallerState
         Fully-resolved configuration describing what to install.
+    cli_args : List[str], optional
+        CLI arguments that can reproduce this installation.
     """
     def log_text(message: str) -> None:
         print(message, flush=True)
@@ -4058,7 +4210,7 @@ def run_unattended_install(state: InstallerState) -> None:
     import tempfile
     temp_log = Path(tempfile.gettempdir()) / f"acq4-install-{os.getpid()}.log"
     logger = StructuredLogger(text_fn=log_text, log_file=temp_log)
-    executor = InstallerExecutor(state, logger)
+    executor = InstallerExecutor(state, logger, cli_args=cli_args)
     try:
         executor.run()
     except Exception as exc:  # noqa: BLE001
@@ -4163,7 +4315,7 @@ def main() -> None:
         except InstallerError as exc:
             print(f"Invalid unattended configuration: {exc}", file=sys.stderr)
             sys.exit(1)
-        run_unattended_install(state)
+        run_unattended_install(state, cli_args=sys.argv[1:])
         return
     app = QtWidgets.QApplication(sys.argv)
     wizard = InstallWizard(editable_map, args, test_flags)
