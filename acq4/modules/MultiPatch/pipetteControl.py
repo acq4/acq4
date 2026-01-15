@@ -176,6 +176,8 @@ class PipetteControl(Qt.QWidget):
     def updatePlots(self):
         """Update the pipette data plots."""
         tp = self.pip.clampDevice.lastTestPulse()
+        if tp is None:
+            return
         tph = self.pip.clampDevice.testPulseHistory()
         for plt in self.plots:
             plt.newTestPulse(tp, tph)
