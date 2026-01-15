@@ -1,12 +1,10 @@
 from collections import OrderedDict
 
+from acq4.util import ptime
 from acq4.util.mies import MIES
-from .patch_clamp import MIESPatchClamp
+from .patchclamp import MIESPatchClamp
 from .pressure_control import MIESPressureControl
 from ..PatchPipette import PatchPipette
-
-from acq4.util import Qt
-from acq4.util import ptime
 
 
 class MIESPatchPipette(PatchPipette):
@@ -32,12 +30,16 @@ class MIESPatchPipette(PatchPipette):
             name=pressureName)
 
         config.update({
+            'clampDevice': clampName,
             'pressureDevice': pressureName,
         })
-        PatchPipette.__init__(self, deviceManager, config, name)
         self.clampDevice = self._mies_clamp
+        PatchPipette.__init__(self, deviceManager, config, name)
 
+        # Connect clamp device signals that parent couldn't connect during init
         self.clampDevice.sigStateChanged.connect(self.clampStateChanged)
+        self.clampDevice.sigAutoBiasChanged.connect(self._autoBiasChanged)
+        self.clampDevice.sigTestPulseFinished.connect(self._testPulseFinished)
 
     def setActive(self, active):
         self.mies.setHeadstageActive(self._headstage, active)
