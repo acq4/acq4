@@ -57,8 +57,10 @@ hardware = [
     "pyserial",
     "pyparsing",
     "pytic",
-    "falconoptics @ git+https://github.com/AllenInstitute/falconoptics",
     "pywin32",
+]
+falconoptics = [
+        "falconoptics @ git+https://github.com/AllenInstitute/falconoptics",
 ]
 analysis = [
     "pycsf @ git+https://github.com/campagnola/pycsf",
