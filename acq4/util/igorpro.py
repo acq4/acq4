@@ -8,10 +8,9 @@ import concurrent.futures
 import atexit
 import json
 import zmq
-import datetime
 import logging
 
-from acq4.util.json_encoder import ACQ4JSONEncoder
+from acq4.util.json_encoder import IgorJSONEncoder
 from acq4.util import Qt
 
 
@@ -261,11 +260,12 @@ class IgorReqThread(threading.Thread):
                     "name": cmd,
                     "params": params}
                 }
-        msg = [b"", json.dumps(call, cls=ACQ4JSONEncoder).encode()]
-        print("send to igor:", msg)
+        msg = [b"", json.dumps(call, cls=IgorJSONEncoder).encode()]
+        # print("send to igor:", msg)
         return msg
 
     def parse_reply(self, reply):
+        # print("received from igor:", reply)
         err = reply.get("errorCode", {}).get("value", None)
         if err is None:
             raise RuntimeError("Invalid response from Igor")
@@ -275,7 +275,7 @@ class IgorReqThread(threading.Thread):
 
         result = reply.get("result", {})
         if isinstance(result, list):
-            return (self._parse_return_value(r) for r in result)
+            return tuple([self._parse_return_value(r) for r in result])
         else:
             return self._parse_return_value(result)
             
