@@ -33,6 +33,8 @@ class SmartStageControlThread:
         self.axes = list(self.motionsynergy.AxisList)
 
         self.last_pos = None
+        self.last_enabled_state = None
+        self.enable_state_callbacks = []
         self.quit_request: SmartStageRequestFuture | None = None
         self.current_move: SmartStageRequestFuture | None = None
         self.request_queue = queue.Queue()
@@ -42,6 +44,10 @@ class SmartStageControlThread:
 
     def set_callback(self, cb):
         self.pos_callback = cb
+
+    def add_enabled_state_callback(self, cb):
+        if cb not in self.enable_state_callbacks:
+            self.enable_state_callbacks.append(cb)
 
     def start_thread(self):
         if self.is_running():
@@ -70,6 +76,10 @@ class SmartStageControlThread:
                 self._check_move_status()
             except MotionSynergyException:
                 logger.exception("Error checking move status")
+            try:
+                self._check_enabled_state()
+            except MotionSynergyException:
+                logger.exception("Error checking enabled state")
 
             try:
                 req = self.request_queue.get(timeout=self.poll_interval)
@@ -115,6 +125,17 @@ class SmartStageControlThread:
                 self.current_move.fail(f"Move failed: {', '.join(alerts)}")
             self.current_move = None
 
+    def _check_enabled_state(self):
+        enabled_state = self._get_enabled_state()
+        if enabled_state == self.last_enabled_state:
+            return
+        self.last_enabled_state = enabled_state
+        for cb in list(self.enable_state_callbacks):
+            try:
+                cb(enabled_state)
+            except Exception:
+                logger.exception("Error in enabled state callback")
+
     def _handle_request(self, fut: SmartStageRequestFuture):
         cmd = fut.request
         try:
@@ -133,6 +154,8 @@ class SmartStageControlThread:
                 self._handle_disable(fut)
             elif cmd == 'enable':
                 self._handle_enable(fut)
+            elif cmd == 'enabled_state':
+                fut.set_result(self._get_enabled_state())
             else:
                 raise ValueError(f'unrecognized request {cmd}')
 
@@ -179,6 +202,10 @@ class SmartStageControlThread:
             if axis.GetIsEnabled().Value is not True:
                 check(axis.Enable(), error_msg="Error enabling axis: ")
         fut.set_result(None)
+
+    def _get_enabled_state(self):
+        states = tuple(axis.GetIsEnabled().Value for axis in self.axes)
+        return states
 
     def _get_pos(self):
         results = [check(axis.GetActualPosition(), error_msg="Error getting axis position: ") for axis in self.axes]

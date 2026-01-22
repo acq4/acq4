@@ -56,7 +56,7 @@ def start_server(dll_path, log_addr):
         ms_process.client['motionSynergy'] = motionSynergy
         ms_process.client['instrumentSettings'] = instrumentSettings
 
-        ss = ms_process.client._import('acq4.drivers.dovermotion.smartstage').SmartStage(_timeout=90)
+        ss = ms_server.create_smartstage(_timeout=90)
         ms_process.client['smartstage'] = ss
     except Exception:
         ms_process.stop()
