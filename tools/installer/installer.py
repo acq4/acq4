@@ -79,32 +79,73 @@ pause
 DEPENDENCY_METADATA: Dict[str, Dict[str, Dict[str, str]]] = {
     "groups": {
         "hardware": {
-            "title": "Hardware Control / Data Acquisition",
-            "description": "Drivers and APIs for supported microscopes and controllers.",
+            "title": "Hardware support for data acquisition",
+            "children": {
+                "nidaq": {
+                    "title": "National Instruments DAQmx Devices",
+                    "description": "Dependencies for National Instruments data acquisition hardware.",
+                    "default": True,
+                },
+                "micromanager": {
+                    "title": "Micro-Manager Devices",
+                    "description": "Dependencies for Micro-Manager device integration.",
+                    "default": True,
+                },
+                "sensapex": {
+                    "title": "Sensapex Devices",
+                    "description": "Dependencies for Sensapex manipulators, stages, and pressure control.",
+                    "default": True,
+                },
+                "scientifica": {
+                    "title": "Scientifica Devices",
+                    "description": "Dependencies for Scientifica micromanipulators and stages.",
+                    "default": True,
+                },
+                "multiclamp": {
+                    "title": "Molecular Devices Multiclamp 700A/B",
+                    "description": "Dependencies for Multiclamp 700A/B amplifiers.",
+                    "default": True,
+                },
+                "falconoptics": {
+                    "title": "Falcon Optics Motor Turret",
+                    "description": "Dependencies for Falcon Optics motorized filter turrets.",
+                    "default": False,
+                },
+                "thorlabs": {
+                    "title": "Thorlabs Devices",
+                    "description": "Dependencies for Thorlabs DC4100, FW102, and MFC1.",
+                    "default": False,
+                },
+                "dovermotion": {
+                    "title": "Dover Motion Stages",
+                    "description": "Dependencies for Dover Motion motorized stages.",
+                    "default": False,
+                },
+                "vimbax": {
+                    "title": "VimbaX Cameras",
+                    "description": "Dependencies for Allied Vision VimbaX cameras.",
+                    "default": False,
+                },
+            },
         },
-        "lab": {
-            "title": "Lab Utilities",
-            "description": "Institution-specific analysis helpers and forks.",
-        },
-        "analysis": {
-            "title": "Data Analysis",
-            "description": "Packages for data analysis and visualization.",
+        "extras": {
+            "title": "Extra Functionality",
+            "default": False,
         },
         "ml-models": {
             "title": "Machine Learning Framework and Models (warning: large downloads)",
             "description": "Packages for machine learning-based analysis.",
-        },
-        "docs": {
-            "title": "Documentation",
-            "description": "Packages required to build ACQ4 documentation.",
-        },
-        "testing": {
-            "title": "Testing",
-            "description": "Packages required for running ACQ4 test suite.",
+            "default": True,
         },
         "dev": {
             "title": "Development",
             "description": "Packages useful for ACQ4 development.",
+            "default": True,
+        },
+        "docs": {
+            "title": "Documentation",
+            "description": "Packages required to build ACQ4 documentation.",
+            "default": False,
         },
     },
     "packages": {
@@ -206,12 +247,18 @@ DEPENDENCY_METADATA: Dict[str, Dict[str, Dict[str, str]]] = {
             "git_url": "https://github.com/AllenInstitute/acq4-automation.git",
             "description": "Allen Institute automation helpers for patch clamp.",
         },
+        "pycsf": {
+            "display_name": "pycsf",
+            "git_url": "https://github.com/campagnola/pycsf.git",
+            "description": "Tool for creating and managing solution recipes.",
+        },
+        "ccfviewer": {
+            "display_name": "ccfviewer",
+            "git_url": "https://github.com/campagnola/ccfviewer.git",
+            "description": "Tool for visualizing the Common Coordinate Framework.",
+        },
     },
 }
-
-def _group_meta(key: str) -> Dict[str, str]:
-    return DEPENDENCY_METADATA["groups"].get(key, {})
-
 
 def _package_meta(spec: str) -> Dict[str, str]:
     packages = DEPENDENCY_METADATA["packages"]
@@ -256,7 +303,7 @@ def github_url_with_token(url: str, token: Optional[str]) -> str:
 
 
 _PYPROJECT_DATA_CACHE: Optional[Dict[str, Any]] = None
-_DEPENDENCY_GROUPS_CACHE: Optional[List["DependencyGroup"]] = None
+_DEPENDENCY_GROUPS_CACHE: Optional[Dict[str, "DependencyGroup"]] = None
 _EDITABLE_DEPENDENCIES_CACHE: Optional[Dict[str, EditableDependency]] = None
 _PROJECT_DEPENDENCIES_CACHE: Optional[List[str]] = None
 TRISTATE_FLAG = (
@@ -316,6 +363,15 @@ def fetch_pyproject(repo_url: str, branch: str) -> str:
     InstallerError
         If the download fails or the file cannot be found.
     """
+    # First check if repo_url is a local path
+    try:
+        local_path = Path(repo_url).expanduser().resolve()
+        pyproject_path = local_path / "pyproject.toml"
+        if pyproject_path.exists():
+            return pyproject_path.read_text(encoding="utf-8")
+    except Exception:
+        pass  # Not a valid local path, try as URL
+
     # Check if this is a GitHub URL
     parts = urlsplit(repo_url)
     is_github = parts.netloc in {"github.com", "www.github.com"}
@@ -415,7 +471,7 @@ def _format_group_title(name: str) -> str:
 
 
 def dependency_groups_from_pyproject(content: Optional[str] = None,
-                                     repo_path: Optional[Path] = None) -> List[DependencyGroup]:
+                                     repo_path: Optional[Path] = None) -> Dict[str, DependencyGroup]:
     """Return dependency groups (extras) defined in pyproject.toml.
 
     Parameters
@@ -428,8 +484,8 @@ def dependency_groups_from_pyproject(content: Optional[str] = None,
 
     Returns
     -------
-    list of DependencyGroup
-        Dependency groups extracted from pyproject.toml.
+    dict of str to DependencyGroup
+        Dictionary mapping group key to DependencyGroup.
     """
     global _DEPENDENCY_GROUPS_CACHE
     if content is None and repo_path is None and _DEPENDENCY_GROUPS_CACHE is not None:
@@ -442,16 +498,17 @@ def dependency_groups_from_pyproject(content: Optional[str] = None,
     optional = project.get("optional-dependencies", {})
     if not isinstance(optional, dict):
         raise InstallerError(f"pyproject.toml 'optional-dependencies' must be a table, got {type(optional).__name__}")
-    groups: List[DependencyGroup] = []
+
+    # Create dict of groups from pyproject.toml
+    groups: Dict[str, DependencyGroup] = {}
     for key, packages in optional.items():
-        if not isinstance(packages, list):
-            raise InstallerError(f"pyproject.toml optional-dependencies[{key}] must be a list, got {type(packages).__name__}")
-        pkg_list = list(packages)
-        meta = _group_meta(key)
-        title = meta.get("title") or _format_group_title(key)
-        description = meta.get("description", "")
-        groups.append(DependencyGroup(key=key, title=title, packages=pkg_list,
-                                      optional=True, description=description))
+        groups[key] = DependencyGroup(
+            key=key,
+            title=_format_group_title(key),
+            packages=list(packages),
+            optional=True,
+            description=""
+        )
 
     if content is None and repo_path is None:
         _DEPENDENCY_GROUPS_CACHE = groups
@@ -532,6 +589,7 @@ class DependencyOption:
     cli_name: str = ""
     aliases: set[str] = field(default_factory=set)
     post_install_doc: str = ""
+    install_by_default: bool = False
 
     def __post_init__(self) -> None:
         self.normalized_name = normalize_spec_name(self.spec)
@@ -782,7 +840,7 @@ def parse_optional_dependencies(content: Optional[str] = None,
         Optional dependency descriptors extracted from pyproject.toml.
     """
     options: List[DependencyOption] = []
-    for group in dependency_groups_from_pyproject(content=content, repo_path=repo_path):
+    for group in dependency_groups_from_pyproject(content=content, repo_path=repo_path).values():
         for spec in group.packages:
             spec_value = spec.strip()
             if not spec_value:
@@ -804,6 +862,7 @@ def parse_optional_dependencies(content: Optional[str] = None,
                     cli_name=cli_source,
                     aliases={value for value in alias_values if value},
                     post_install_doc=post_install_doc,
+                    install_by_default=
                 )
             )
     return options
@@ -845,7 +904,7 @@ def _group_alias_lookup(groups: Iterable[DependencyGroup]) -> Dict[str, Dependen
 
 def resolve_optional_selection_from_args(args: argparse.Namespace,
                                          options: List[DependencyOption],
-                                         groups: List[DependencyGroup]) -> List[str]:
+                                         groups: Iterable[DependencyGroup]) -> List[str]:
     """Determine which optional dependencies should be installed.
 
     Parameters
@@ -870,7 +929,7 @@ def resolve_optional_selection_from_args(args: argparse.Namespace,
 
     # If no optional args provided, install all optional dependencies
     if not provided_optional_arg:
-        return [dep.spec for dep in options]
+        return [dep.spec for dep in options if dep.install_by_default]
 
     # If empty list provided, install none
     if not requested_names and not requested_groups:
@@ -1648,7 +1707,7 @@ class DependenciesPage(QtWidgets.QWizardPage):
         super().__init__()
         self.setTitle("Dependencies")
         self.options: List[DependencyOption] = []
-        self.groups: List[DependencyGroup] = []
+        self.groups: Dict[str, DependencyGroup] = {}
         self.editable_map = editable_map
         self.option_lookup: Dict[str, DependencyOption] = {}
         self._initialized = False
@@ -1666,7 +1725,7 @@ class DependenciesPage(QtWidgets.QWizardPage):
         self.tree.setRootIsDecorated(True)
         self.tree.setUniformRowHeights(True)
         self.tree.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.NoSelection)
-        layout.addWidget(self.tree)
+        layout.addWidget(self.tree, stretch=1)  # Give tree widget stretch factor of 1
         self.status_label = QtWidgets.QLabel("")
         layout.addWidget(self.status_label)
         clone_label = QtWidgets.QLabel(
@@ -1680,7 +1739,7 @@ class DependenciesPage(QtWidgets.QWizardPage):
         self.clone_tree.setRootIsDecorated(False)
         self.clone_tree.setUniformRowHeights(True)
         self.clone_tree.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.NoSelection)
-        layout.addWidget(self.clone_tree)
+        layout.addWidget(self.clone_tree, stretch=0)  # Clone tree doesn't stretch
         self.clone_items: Dict[str, QtWidgets.QTreeWidgetItem] = {}
         self._populate_clone_tree()
 
@@ -1716,34 +1775,67 @@ class DependenciesPage(QtWidgets.QWizardPage):
     def _populate_tree(self) -> None:
         assert self.tree is not None
         self.tree.clear()
-        for group in self.groups:
-            parent_label = _format_with_description(group.title, group.description)
-            parent = QtWidgets.QTreeWidgetItem([parent_label])
-            parent.setExpanded(True)
-            flags = parent.flags()
-            if group.optional:
-                parent_flags = flags | QtCore.Qt.ItemFlag.ItemIsUserCheckable
-                if TRISTATE_FLAG is not None:
-                    parent_flags |= TRISTATE_FLAG
-                parent.setFlags(parent_flags)
-                parent.setCheckState(0, QtCore.Qt.CheckState.Checked)
-            else:
-                parent.setFlags(flags & ~QtCore.Qt.ItemFlag.ItemIsUserCheckable)
-            for spec in group.packages:
-                item = QtWidgets.QTreeWidgetItem(parent, [spec])
-                dep = self.option_lookup.get(spec)
-                label = self._option_label(dep, spec)
-                item.setText(0, label)
-                if group.optional:
-                    child_flags = item.flags() | QtCore.Qt.ItemFlag.ItemIsUserCheckable
-                    item.setFlags(child_flags)
-                    item.setCheckState(0, QtCore.Qt.CheckState.Checked)
-                else:
-                    item.setFlags(item.flags() & ~QtCore.Qt.ItemFlag.ItemIsUserCheckable)
-                item.setData(0, QtCore.Qt.ItemDataRole.UserRole, spec)
-                self.option_items[spec] = item
-            self.tree.addTopLevelItem(parent)
+
+        # Build tree from DEPENDENCY_METADATA hierarchy
+        for group_key, group_meta in DEPENDENCY_METADATA["groups"].items():
+            item = self._create_tree_item_from_metadata(group_key, group_meta, parent=None)
+            if item is not None:
+                self.tree.addTopLevelItem(item)
+
         self.tree.expandAll()
+
+    def _create_tree_item_from_metadata(
+        self,
+        group_key: str,
+        group_meta: Dict[str, Any],
+        parent: Optional[QtWidgets.QTreeWidgetItem]
+    ) -> Optional[QtWidgets.QTreeWidgetItem]:
+        """Recursively create tree items from DEPENDENCY_METADATA structure."""
+        title = group_meta.get("title", _format_group_title(group_key))
+        description = group_meta.get("description", "")
+        label = _format_with_description(title, description)
+        default_checked = group_meta.get("default", False)
+        check_state = QtCore.Qt.CheckState.Checked if default_checked else QtCore.Qt.CheckState.Unchecked
+
+        # Create the tree item
+        if parent is None:
+            item = QtWidgets.QTreeWidgetItem([label])
+        else:
+            item = QtWidgets.QTreeWidgetItem(parent, [label])
+
+        item.setFlags(item.flags() | QtCore.Qt.ItemFlag.ItemIsUserCheckable | TRISTATE_FLAG)
+
+        # Check if this group has children in metadata
+        if "children" in group_meta:
+            # This is a parent group - recursively add children
+            for child_key, child_meta in group_meta["children"].items():
+                self._create_tree_item_from_metadata(child_key, child_meta, parent=item)
+            item.setExpanded(True)
+        else:
+            # This is a leaf group - add packages from pyproject.toml
+            group = self.groups.get(group_key)
+            if group is None or not group.packages:
+                # Group doesn't exist in pyproject.toml or has no packages
+                return None
+
+            # Add package items
+            for spec in group.packages:
+                package_item = QtWidgets.QTreeWidgetItem(item, [spec])
+                dep = self.option_lookup.get(spec)
+                package_label = self._option_label(dep, spec)
+                package_item.setText(0, package_label)
+                package_item.setFlags(package_item.flags() | QtCore.Qt.ItemFlag.ItemIsUserCheckable)
+                package_item.setCheckState(0, check_state)
+                package_item.setData(0, QtCore.Qt.ItemDataRole.UserRole, spec)
+                self.option_items[spec] = package_item
+            print("Collapsing item:", label)
+            item.setExpanded(False)
+
+
+        print("Setting item:", label, "to", check_state)
+        item.setCheckState(0, check_state)
+
+        return item
 
     def _populate_clone_tree(self) -> None:
         self.clone_tree.clear()
@@ -1793,7 +1885,7 @@ class DependenciesPage(QtWidgets.QWizardPage):
     def _apply_cli_args_internal(self, args: argparse.Namespace) -> None:
         """Apply CLI arguments to the dependency selections."""
         try:
-            selected_specs = resolve_optional_selection_from_args(args, self.options, self.groups)
+            selected_specs = resolve_optional_selection_from_args(args, self.options, self.groups.values())
         except InstallerError:
             selected_specs = [dep.spec for dep in self.options]
         selected_set = set(selected_specs)
@@ -3189,7 +3281,7 @@ class InstallWizard(QtWidgets.QWizard):
         hint = self.sizeHint()
         width = hint.width() if hint.width() > 0 else 800
         height = hint.height() if hint.height() > 0 else 600
-        self.resize(int(width * 1.5), int(height * 1.5))
+        self.resize(int(width * 1.5), int(height * 1.5) + 200)
 
 
 @dataclass
@@ -3979,7 +4071,7 @@ def state_from_cli_args(args: argparse.Namespace,
     dependency_groups = dependency_groups_from_pyproject(content=content)
     optional_dependencies = parse_optional_dependencies(content=content)
 
-    selected_optional = resolve_optional_selection_from_args(args, optional_dependencies, dependency_groups)
+    selected_optional = resolve_optional_selection_from_args(args, optional_dependencies, dependency_groups.values())
     editable_selection = resolve_editable_selection_from_args(args, editable_map)
     # Parse config arguments
     config_repo = args.config_repo
