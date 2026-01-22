@@ -48,14 +48,19 @@ def start_server(dll_path, log_addr):
         local_server="threaded",
     )
 
-    ms_server = ms_process.client._import('acq4.drivers.dovermotion.motionsynergy_api')
-    ms_server.install_tray_icon()
-    motionSynergy, instrumentSettings = ms_server.get_motionsynergyapi(dll_path)
-    ms_process.client['motionsynergy_module'] = ms_server
-    ms_process.client['motionSynergy'] = motionSynergy
-    ms_process.client['instrumentSettings'] = instrumentSettings
+    try:
+        ms_server = ms_process.client._import('acq4.drivers.dovermotion.motionsynergy_api')
+        ms_server.install_tray_icon()
+        motionSynergy, instrumentSettings = ms_server.get_motionsynergyapi(dll_path)
+        ms_process.client['motionsynergy_module'] = ms_server
+        ms_process.client['motionSynergy'] = motionSynergy
+        ms_process.client['instrumentSettings'] = instrumentSettings
 
-    ss = ms_process.client._import('acq4.drivers.dovermotion.smartstage').SmartStage(_timeout=90)
-    ms_process.client['smartstage'] = ss
+        ss = ms_process.client._import('acq4.drivers.dovermotion.smartstage').SmartStage(_timeout=90)
+        ms_process.client['smartstage'] = ss
+    except Exception:
+        ms_process.stop()
+        ms_process = None
+        raise
 
     return ms_process.client

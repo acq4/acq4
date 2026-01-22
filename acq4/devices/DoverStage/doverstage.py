@@ -11,10 +11,11 @@ class DoverStage(Stage):
         self.msapi = get_client(dll_path=config["dllPath"])
         self.dev = self.msapi['smartstage']
         self.dev.enable()
-        self.posChanged(self.dev.pos())
-        self.dev.set_callback(self.posChanged)
         self._lastMove = None
         Stage.__init__(self, man, config, name)
+        
+        self.dev.set_callback(self.posChanged)
+        self.posChanged(self.dev.pos())
 
     def axes(self):
         return "x", "y", "z"
