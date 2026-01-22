@@ -76,80 +76,93 @@ python -m acq4 -c "{config_file_path}"{extra_args}
 pause
 """
 
-DEPENDENCY_METADATA: Dict[str, Dict[str, Dict[str, str]]] = {
-    "groups": {
-        "hardware": {
-            "title": "Hardware support for data acquisition",
-            "children": {
-                "nidaq": {
-                    "title": "National Instruments DAQmx Devices",
-                    "description": "Dependencies for National Instruments data acquisition hardware.",
-                    "default": True,
-                },
-                "micromanager": {
-                    "title": "Micro-Manager Devices",
-                    "description": "Dependencies for Micro-Manager device integration.",
-                    "default": True,
-                },
-                "sensapex": {
-                    "title": "Sensapex Devices",
-                    "description": "Dependencies for Sensapex manipulators, stages, and pressure control.",
-                    "default": True,
-                },
-                "scientifica": {
-                    "title": "Scientifica Devices",
-                    "description": "Dependencies for Scientifica micromanipulators and stages.",
-                    "default": True,
-                },
-                "multiclamp": {
-                    "title": "Molecular Devices Multiclamp 700A/B",
-                    "description": "Dependencies for Multiclamp 700A/B amplifiers.",
-                    "default": True,
-                },
-                "falconoptics": {
-                    "title": "Falcon Optics Motor Turret",
-                    "description": "Dependencies for Falcon Optics motorized filter turrets.",
-                    "default": False,
-                },
-                "thorlabs": {
-                    "title": "Thorlabs Devices",
-                    "description": "Dependencies for Thorlabs DC4100, FW102, and MFC1.",
-                    "default": False,
-                },
-                "dovermotion": {
-                    "title": "Dover Motion Stages",
-                    "description": "Dependencies for Dover Motion motorized stages.",
-                    "default": False,
-                },
-                "vimbax": {
-                    "title": "VimbaX Cameras",
-                    "description": "Dependencies for Allied Vision VimbaX cameras.",
-                    "default": False,
-                },
-            },
-        },
-        "extras": {
-            "title": "Extra Functionality",
-            "default": False,
-        },
-        "ml-models": {
-            "title": "Machine Learning Framework and Models (warning: large downloads)",
-            "description": "Packages for machine learning-based analysis.",
-            "default": True,
-        },
-        "dev": {
-            "title": "Development",
-            "description": "Packages useful for ACQ4 development.",
-            "default": True,
-        },
-        "docs": {
-            "title": "Documentation",
-            "description": "Packages required to build ACQ4 documentation.",
-            "default": False,
-        },
+# Flat dependency group metadata
+# Each entry corresponds to a group in pyproject.toml [project.optional-dependencies]
+# Package lists come from pyproject.toml; this provides UI metadata only
+DEPENDENCY_METADATA: Dict[str, Dict[str, Any]] = {
+    "nidaq": {
+        "title": "National Instruments DAQmx Devices",
+        "description": "Dependencies for National Instruments data acquisition hardware.",
+        "display_path": "Hardware support for data acquisition",
+        "default": True,
     },
-    "packages": {
-        "cupy": {
+    "micromanager": {
+        "title": "Micro-Manager Devices",
+        "description": "Dependencies for Micro-Manager device integration.",
+        "display_path": "Hardware support for data acquisition",
+        "default": True,
+    },
+    "sensapex": {
+        "title": "Sensapex Devices",
+        "description": "Dependencies for Sensapex manipulators, stages, and pressure control.",
+        "display_path": "Hardware support for data acquisition",
+        "default": True,
+    },
+    "scientifica": {
+        "title": "Scientifica Devices",
+        "description": "Dependencies for Scientifica micromanipulators and stages.",
+        "display_path": "Hardware support for data acquisition",
+        "default": True,
+    },
+    "multiclamp": {
+        "title": "Molecular Devices Multiclamp 700A/B",
+        "description": "Dependencies for Multiclamp 700A/B amplifiers.",
+        "display_path": "Hardware support for data acquisition",
+        "default": True,
+    },
+    "falconoptics": {
+        "title": "Falcon Optics Motor Turret",
+        "description": "Dependencies for Falcon Optics motorized filter turrets.",
+        "display_path": "Hardware support for data acquisition",
+        "default": False,
+    },
+    "thorlabs": {
+        "title": "Thorlabs Devices",
+        "description": "Dependencies for Thorlabs DC4100, FW102, and MFC1.",
+        "display_path": "Hardware support for data acquisition",
+        "default": False,
+    },
+    "dovermotion": {
+        "title": "Dover Motion Stages",
+        "description": "Dependencies for Dover Motion motorized stages.",
+        "display_path": "Hardware support for data acquisition",
+        "default": False,
+    },
+    "vimbax": {
+        "title": "VimbaX Cameras",
+        "description": "Dependencies for Allied Vision VimbaX cameras.",
+        "display_path": "Hardware support for data acquisition",
+        "default": False,
+    },
+    "analysis": {
+        "title": "Data Analysis",
+        "description": "Packages for data analysis and visualization.",
+        "display_path": "",
+        "default": False,
+    },
+    "ml-models": {
+        "title": "Machine Learning Framework and Models (warning: large downloads)",
+        "description": "Packages for machine learning-based analysis.",
+        "display_path": "",
+        "default": True,
+    },
+    "dev": {
+        "title": "Development",
+        "description": "Packages useful for ACQ4 development.",
+        "display_path": "",
+        "default": True,
+    },
+    "docs": {
+        "title": "Documentation",
+        "description": "Packages required to build ACQ4 documentation.",
+        "display_path": "",
+        "default": False,
+    },
+}
+
+# Package-specific metadata for individual packages
+PACKAGE_METADATA: Dict[str, Dict[str, Any]] = {
+    "cupy": {
             "display_name": "CuPy",
             "pypi_package": "cupy",
             "description": "GPU acceleration for imaging workloads.",
@@ -252,16 +265,149 @@ DEPENDENCY_METADATA: Dict[str, Dict[str, Dict[str, str]]] = {
             "git_url": "https://github.com/campagnola/pycsf.git",
             "description": "Tool for creating and managing solution recipes.",
         },
-        "ccfviewer": {
-            "display_name": "ccfviewer",
-            "git_url": "https://github.com/campagnola/ccfviewer.git",
-            "description": "Tool for visualizing the Common Coordinate Framework.",
-        },
+    "ccfviewer": {
+        "display_name": "ccfviewer",
+        "git_url": "https://github.com/campagnola/ccfviewer.git",
+        "description": "Tool for visualizing the Common Coordinate Framework.",
     },
 }
 
+
+class DependencyMetadata:
+    """Central source of truth for dependency metadata.
+
+    Combines DEPENDENCY_METADATA (UI metadata) with pyproject.toml (package lists).
+    Validates that both sources are synchronized.
+    """
+
+    def __init__(self, repo_url: str, branch: str):
+        """Initialize by loading and validating pyproject.toml against DEPENDENCY_METADATA.
+
+        Parameters
+        ----------
+        repo_url : str
+            Repository URL or local path containing pyproject.toml
+        branch : str
+            Branch to fetch from (ignored for local paths)
+        """
+        self._groups: Dict[str, List[str]] = {}  # group_key -> [package_specs]
+        self._core_deps: List[str] = []
+
+        # Load and parse pyproject.toml
+        pyproject_data = self._load_pyproject(repo_url, branch)
+
+        # Extract dependencies (no defensive coding - fail fast if structure is wrong)
+        project = pyproject_data["project"]
+        self._core_deps = list(project["dependencies"])
+        optional_deps = project["optional-dependencies"]
+
+        # Validate groups match between pyproject.toml and DEPENDENCY_METADATA
+        metadata_groups = set(DEPENDENCY_METADATA.keys())
+        pyproject_groups = set(optional_deps.keys())
+
+        missing_in_metadata = pyproject_groups - metadata_groups
+        missing_in_pyproject = metadata_groups - pyproject_groups
+
+        if missing_in_metadata or missing_in_pyproject:
+            errors = []
+            if missing_in_metadata:
+                errors.append(f"Groups in pyproject.toml but missing from DEPENDENCY_METADATA: {sorted(missing_in_metadata)}")
+            if missing_in_pyproject:
+                errors.append(f"Groups in DEPENDENCY_METADATA but missing from pyproject.toml: {sorted(missing_in_pyproject)}")
+            raise InstallerError(
+                "Mismatch between pyproject.toml and DEPENDENCY_METADATA:\n" + "\n".join(errors)
+            )
+
+        # Store package lists
+        for group_key, packages in optional_deps.items():
+            self._groups[group_key] = list(packages)
+
+    def _load_pyproject(self, repo_url: str, branch: str) -> Dict[str, Any]:
+        """Load pyproject.toml from local path or download it."""
+        if tomllib is None:
+            raise InstallerError("TOML parser not available (install tomli for Python < 3.11)")
+
+        # Try repo_url as a local path first
+        try:
+            local_path = Path(repo_url).expanduser().resolve()
+            pyproject_path = local_path / "pyproject.toml"
+            if pyproject_path.exists():
+                return tomllib.loads(pyproject_path.read_text(encoding="utf-8"))
+        except Exception:
+            pass  # Not a local path, try as URL
+
+        # Download from GitHub
+        parts = urlsplit(repo_url)
+        if parts.netloc not in {"github.com", "www.github.com"}:
+            raise InstallerError(f"Only GitHub URLs or local paths are supported, got: {repo_url}")
+
+        path_parts = parts.path.strip("/").split("/")
+        if len(path_parts) < 2:
+            raise InstallerError(f"Invalid GitHub URL format: {repo_url}")
+
+        owner, repo = path_parts[0], path_parts[1]
+        if repo.endswith(".git"):
+            repo = repo[:-4]
+
+        raw_url = f"https://raw.githubusercontent.com/{owner}/{repo}/{branch}/pyproject.toml"
+        with urlopen(raw_url, timeout=30) as response:
+            return tomllib.loads(response.read().decode("utf-8"))
+
+    def all_groups(self) -> List[str]:
+        """Return list of all group keys."""
+        return list(self._groups.keys())
+
+    def group_packages(self, group_key: str) -> List[str]:
+        """Return package specs for a group."""
+        return self._groups.get(group_key, [])
+
+    def group_metadata(self, group_key: str) -> Dict[str, Any]:
+        """Return metadata dict for a group (title, description, display_path, default)."""
+        return DEPENDENCY_METADATA.get(group_key, {})
+
+    def group_title(self, group_key: str) -> str:
+        """Return display title for a group."""
+        meta = self.group_metadata(group_key)
+        return meta.get("title", group_key.replace("-", " ").replace("_", " ").title())
+
+    def group_description(self, group_key: str) -> str:
+        """Return description for a group."""
+        return self.group_metadata(group_key).get("description", "")
+
+    def group_display_path(self, group_key: str) -> str:
+        """Return display path (parent category) for a group."""
+        return self.group_metadata(group_key).get("display_path", "")
+
+    def group_default(self, group_key: str) -> bool:
+        """Return whether a group should be installed by default."""
+        return self.group_metadata(group_key).get("default", False)
+
+    def core_dependencies(self) -> List[str]:
+        """Return core (non-optional) dependencies."""
+        return self._core_deps
+
+    def package_metadata(self, spec: str) -> Dict[str, Any]:
+        """Return metadata for a specific package spec."""
+        if spec in PACKAGE_METADATA:
+            return PACKAGE_METADATA[spec]
+        # Try normalized lookup
+        normalized = normalize_spec_name(spec)
+        for candidate_pkg_name, meta in PACKAGE_METADATA.items():
+            if normalize_spec_name(candidate_pkg_name) == normalized:
+                return meta
+        return {}
+
+    def editable_packages(self) -> Dict[str, Dict[str, Any]]:
+        """Return dict of packages that can be installed as editable (have git_url)."""
+        result = {}
+        for spec, meta in PACKAGE_METADATA.items():
+            if "git_url" in meta:
+                result[spec] = meta
+        return result
+
+
 def _package_meta(spec: str) -> Dict[str, str]:
-    packages = DEPENDENCY_METADATA["packages"]
+    packages = PACKAGE_METADATA
     if spec in packages:
         return packages[spec]
     normalized = normalize_spec_name(spec)
@@ -269,34 +415,6 @@ def _package_meta(spec: str) -> Dict[str, str]:
         if normalize_spec_name(candidate_pkg_name) == normalized:
             return meta
     return {}
-
-
-def _group_default(group_key: str) -> bool:
-    """Look up the default installation status for a group from DEPENDENCY_METADATA.
-
-    Parameters
-    ----------
-    group_key : str
-        The group key to look up.
-
-    Returns
-    -------
-    bool
-        True if the group should be installed by default, False otherwise.
-    """
-    groups = DEPENDENCY_METADATA["groups"]
-
-    # Check if it's a top-level group
-    if group_key in groups:
-        return groups[group_key].get("default", False)
-
-    # Check if it's a child group
-    for parent_meta in groups.values():
-        if "children" in parent_meta:
-            if group_key in parent_meta["children"]:
-                return parent_meta["children"][group_key].get("default", False)
-
-    return False
 
 
 def _format_with_description(title: str, description: str) -> str:
@@ -330,10 +448,6 @@ def github_url_with_token(url: str, token: Optional[str]) -> str:
     return urlunsplit((scheme, netloc, parsed.path or "", parsed.query, parsed.fragment))
 
 
-_PYPROJECT_DATA_CACHE: Optional[Dict[str, Any]] = None
-_DEPENDENCY_GROUPS_CACHE: Optional[Dict[str, "DependencyGroup"]] = None
-_EDITABLE_DEPENDENCIES_CACHE: Optional[Dict[str, EditableDependency]] = None
-_PROJECT_DEPENDENCIES_CACHE: Optional[List[str]] = None
 TRISTATE_FLAG = (
     getattr(QtCore.Qt.ItemFlag, "ItemIsTristate", None)
     or getattr(QtCore.Qt.ItemFlag, "ItemIsTriState", None)
@@ -371,290 +485,14 @@ def repo_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
 
-def fetch_pyproject(repo_url: str, branch: str) -> str:
-    """Fetch pyproject.toml content from a GitHub repository or local path.
-
-    Parameters
-    ----------
-    repo_url : str
-        GitHub repository URL (e.g., "https://github.com/acq4/acq4") or local file path.
-    branch : str
-        Branch or tag name to fetch from (ignored for local paths).
-
-    Returns
-    -------
-    str
-        The pyproject.toml file content as a string.
-
-    Raises
-    ------
-    InstallerError
-        If the download fails or the file cannot be found.
-    """
-    # First check if repo_url is a local path
-    try:
-        local_path = Path(repo_url).expanduser().resolve()
-        pyproject_path = local_path / "pyproject.toml"
-        if pyproject_path.exists():
-            return pyproject_path.read_text(encoding="utf-8")
-    except Exception:
-        pass  # Not a valid local path, try as URL
-
-    # Check if this is a GitHub URL
-    parts = urlsplit(repo_url)
-    is_github = parts.netloc in {"github.com", "www.github.com"}
-
-    if is_github:
-        # GitHub URL - download from raw.githubusercontent.com
-        path_components = parts.path.strip("/").split("/")
-        if len(path_components) < 2:
-            raise InstallerError(f"Invalid GitHub repository URL: {repo_url}")
-
-        owner, repo_name = path_components[0], path_components[1]
-        if repo_name.endswith(".git"):
-            repo_name = repo_name[:-4]
-
-        raw_url = f"https://raw.githubusercontent.com/{owner}/{repo_name}/{branch}/pyproject.toml"
-
-        try:
-            with urlopen(raw_url, timeout=10) as response:
-                content = response.read().decode("utf-8")
-                return content
-        except URLError as exc:
-            raise InstallerError(f"Failed to download pyproject.toml from {raw_url}: {exc}") from exc
-    else:
-        # Assume local path
-        local_path = Path(repo_url).expanduser().resolve()
-        pyproject_path = local_path / "pyproject.toml"
-
-        if not pyproject_path.exists():
-            raise InstallerError(f"pyproject.toml not found at {pyproject_path}")
-
-        try:
-            return pyproject_path.read_text(encoding="utf-8")
-        except Exception as exc:
-            raise InstallerError(f"Failed to read pyproject.toml from {pyproject_path}: {exc}") from exc
-
-
-def load_pyproject_data(content: Optional[str] = None, repo_path: Optional[Path] = None) -> Dict[str, Any]:
-    """Parse pyproject.toml and return its contents.
-
-    Parameters
-    ----------
-    content : str, optional
-        The pyproject.toml content as a string. If provided, this is parsed directly.
-    repo_path : Path, optional
-        Path to the repository root directory. If provided, pyproject.toml is read from
-        this location. Ignored if content is provided.
-
-    Returns
-    -------
-    dict
-        Parsed pyproject.toml data.
-
-    Raises
-    ------
-    InstallerError
-        If pyproject.toml cannot be found or parsed.
-    """
-    global _PYPROJECT_DATA_CACHE
-
-    if tomllib is None:  # pragma: no cover - environment-specific
-        raise InstallerError(
-            "Parsing pyproject.toml requires Python 3.11+ or the 'tomli' package to be installed.")
-
-    if content is not None:
-        try:
-            data = tomllib.loads(content)
-            return data
-        except Exception as exc:  # noqa: BLE001
-            raise InstallerError(f"Failed to parse pyproject.toml: {exc}") from exc
-
-    if repo_path is not None:
-        path = repo_path / "pyproject.toml"
-    else:
-        if _PYPROJECT_DATA_CACHE is not None:
-            return _PYPROJECT_DATA_CACHE
-        path = repo_root() / "pyproject.toml"
-
-    if not path.exists():
-        raise InstallerError(f"pyproject.toml not found at {path}")
-
-    try:
-        data = tomllib.loads(path.read_text(encoding="utf-8"))
-    except Exception as exc:  # noqa: BLE001
-        raise InstallerError(f"Failed to parse pyproject.toml: {exc}") from exc
-
-    if repo_path is None and content is None:
-        _PYPROJECT_DATA_CACHE = data
-
-    return data
-
-
-def _format_group_title(name: str) -> str:
-    label = name.replace("_", " ").strip()
-    if not label:
-        return "Extras"
-    return label[0].upper() + label[1:]
-
-
-def dependency_groups_from_pyproject(content: Optional[str] = None,
-                                     repo_path: Optional[Path] = None) -> Dict[str, DependencyGroup]:
-    """Return dependency groups (extras) defined in pyproject.toml.
-
-    Parameters
-    ----------
-    content : str, optional
-        The pyproject.toml content as a string. If provided, parses this directly.
-    repo_path : Path, optional
-        Path to the repository root. If provided, reads pyproject.toml from this location.
-        Ignored if content is provided.
-
-    Returns
-    -------
-    dict of str to DependencyGroup
-        Dictionary mapping group key to DependencyGroup.
-    """
-    global _DEPENDENCY_GROUPS_CACHE
-    if content is None and repo_path is None and _DEPENDENCY_GROUPS_CACHE is not None:
-        return _DEPENDENCY_GROUPS_CACHE
-
-    data = load_pyproject_data(content=content, repo_path=repo_path)
-    project = data.get("project", {})
-    if not isinstance(project, dict):
-        raise InstallerError(f"pyproject.toml 'project' section must be a table, got {type(project).__name__}")
-    optional = project.get("optional-dependencies", {})
-    if not isinstance(optional, dict):
-        raise InstallerError(f"pyproject.toml 'optional-dependencies' must be a table, got {type(optional).__name__}")
-
-    # Create dict of groups from pyproject.toml
-    groups: Dict[str, DependencyGroup] = {}
-    for key, packages in optional.items():
-        groups[key] = DependencyGroup(
-            key=key,
-            title=_format_group_title(key),
-            packages=list(packages),
-            optional=True,
-            description=""
-        )
-
-    if content is None and repo_path is None:
-        _DEPENDENCY_GROUPS_CACHE = groups
-
-    return groups
-
-
-def project_dependencies(repo_path: Optional[Path] = None) -> List[str]:
-    """Return core dependencies defined in pyproject.toml.
-
-    Parameters
-    ----------
-    repo_path : Path, optional
-        Path to the repository root. If provided, reads pyproject.toml from this location.
-
-    Returns
-    -------
-    list of str
-        Core dependency specs from pyproject.toml.
-    """
-    global _PROJECT_DEPENDENCIES_CACHE
-    if repo_path is None and _PROJECT_DEPENDENCIES_CACHE is not None:
-        return _PROJECT_DEPENDENCIES_CACHE
-
-    data = load_pyproject_data(repo_path=repo_path)
-    project = data.get("project", {})
-    if not isinstance(project, dict):
-        raise InstallerError(f"pyproject.toml 'project' section must be a table, got {type(project).__name__}")
-    deps = project.get("dependencies", [])
-    if not isinstance(deps, list):
-        raise InstallerError(f"pyproject.toml 'dependencies' must be a list, got {type(deps).__name__}")
-
-    if repo_path is None:
-        _PROJECT_DEPENDENCIES_CACHE = list(deps)
-
-    return list(deps)
-
-
-def editable_dependencies() -> Dict[str, EditableDependency]:
-    global _EDITABLE_DEPENDENCIES_CACHE
-    if _EDITABLE_DEPENDENCIES_CACHE is None:
-        _EDITABLE_DEPENDENCIES_CACHE = _build_editable_dependency_map()
-    return _EDITABLE_DEPENDENCIES_CACHE
-
-
-def _build_editable_dependency_map() -> Dict[str, EditableDependency]:
-    packages = DEPENDENCY_METADATA["packages"]
-    result: Dict[str, EditableDependency] = {}
-    for pkg_name, meta in packages.items():
-        git_url = meta.get("git_url")
-        if not git_url:
-            continue
-        title = meta.get("display_name") or pkg_name
-        description = meta.get("description", "")
-        key_source = meta.get("pypi_package") or title or pkg_name
-        key = normalize_spec_name(key_source)
-        alias_values = {key_source, pkg_name, title}
-        aliases = {normalize_spec_name(value) for value in alias_values if value}
-        result[key] = EditableDependency(
-            key=key,
-            spec=pkg_name,
-            git_url=git_url,
-            display_name=title,
-            description=description,
-            aliases=aliases or {key},
-        )
-    return result
-
-
-@dataclass
-class DependencyOption:
-    spec: str
-    description: str
-    source_label: str
-    group: str = ""
-    display_name: str = ""
-    normalized_name: str = field(init=False)
-    cli_name: str = ""
-    aliases: set[str] = field(default_factory=set)
-    post_install_doc: str = ""
-    install_by_default: bool = False
-
-    def __post_init__(self) -> None:
-        self.normalized_name = normalize_spec_name(self.spec)
-        cli_normalized = normalize_spec_name(self.cli_name or self.spec)
-        normalized_aliases = {self.normalized_name, cli_normalized}
-        for alias in self.aliases:
-            normalized_aliases.add(normalize_spec_name(alias))
-        self.cli_name = cli_normalized
-        self.aliases = normalized_aliases
-
-
-@dataclass
-class DependencyGroup:
-    key: str
-    title: str
-    packages: List[str]
-    optional: bool = True
-    description: str = ""
-
-
-@dataclass
-class EditableDependency:
-    key: str
-    spec: str
-    git_url: str
-    display_name: str
-    description: str = ""
-    aliases: set[str] = field(default_factory=set)
-
-
 @dataclass
 class InstallerState:
     install_path: Path
     branch: str
     repo_url: str
     github_token: Optional[str] = None
-    optional_dependencies: List[DependencyOption] = field(default_factory=list)
+    core_dependencies: List[str] = field(default_factory=list)
+    optional_dependencies: List[str] = field(default_factory=list)
     selected_optional: List[str] = field(default_factory=list)
     editable_selection: List[str] = field(default_factory=list)
     config_mode: str = "new"
@@ -851,51 +689,6 @@ def normalize_spec_name(spec: str) -> str:
     return value.strip().lower()
 
 
-def parse_optional_dependencies(content: Optional[str] = None,
-                                repo_path: Optional[Path] = None) -> List[DependencyOption]:
-    """Return optional dependency entries defined via pyproject extras.
-
-    Parameters
-    ----------
-    content : str, optional
-        The pyproject.toml content as a string. If provided, parses this directly.
-    repo_path : Path, optional
-        Path to the repository root. If provided, reads pyproject.toml from this location.
-
-    Returns
-    -------
-    list of DependencyOption
-        Optional dependency descriptors extracted from pyproject.toml.
-    """
-    options: List[DependencyOption] = []
-    for group in dependency_groups_from_pyproject(content=content, repo_path=repo_path).values():
-        for spec in group.packages:
-            spec_value = spec.strip()
-            if not spec_value:
-                continue
-            pkg_meta = _package_meta(spec_value)
-            display_name = pkg_meta.get("display_name") or spec_value
-            description = pkg_meta.get("description", "")
-            package_name = pkg_meta.get("pypi_package")
-            cli_source = package_name or display_name or spec_value
-            alias_values = {package_name, display_name}
-            post_install_doc = pkg_meta.get("post_install_doc", "")
-            options.append(
-                DependencyOption(
-                    spec=spec_value,
-                    description=description,
-                    source_label=group.key,
-                    group=group.key,
-                    display_name=display_name,
-                    cli_name=cli_source,
-                    aliases={value for value in alias_values if value},
-                    post_install_doc=post_install_doc,
-                    install_by_default=_group_default(group.key),
-                )
-            )
-    return options
-
-
 def _parse_cli_list(raw_value: Optional[str]) -> List[str]:
     if raw_value is None:
         return []
@@ -903,46 +696,16 @@ def _parse_cli_list(raw_value: Optional[str]) -> List[str]:
     return [part for part in parts if part]
 
 
-def _optional_alias_lookup(options: Iterable[DependencyOption]) -> Dict[str, DependencyOption]:
-    lookup: Dict[str, DependencyOption] = {}
-    for dep in options:
-        for alias in dep.aliases:
-            lookup[alias] = dep
-    return lookup
-
-
-def _editable_alias_lookup(editable_map: Dict[str, EditableDependency]) -> Dict[str, EditableDependency]:
-    lookup: Dict[str, EditableDependency] = {}
-    for editable in editable_map.values():
-        for alias in editable.aliases:
-            lookup[alias] = editable
-    return lookup
-
-
-def _group_alias_lookup(groups: Iterable[DependencyGroup]) -> Dict[str, DependencyGroup]:
-    lookup: Dict[str, DependencyGroup] = {}
-    for group in groups:
-        aliases = {group.key, group.title}
-        for alias in aliases:
-            if not alias:
-                continue
-            lookup[normalize_spec_name(alias)] = group
-    return lookup
-
-
 def resolve_optional_selection_from_args(args: argparse.Namespace,
-                                         options: List[DependencyOption],
-                                         groups: Iterable[DependencyGroup]) -> List[str]:
+                                         dep_metadata: DependencyMetadata) -> List[str]:
     """Determine which optional dependencies should be installed.
 
     Parameters
     ----------
     args : argparse.Namespace
         Parsed CLI arguments containing optional selection flags.
-    options : list of DependencyOption
-        Available optional dependency descriptors.
-    groups : list of DependencyGroup
-        Optional dependency groups used for --optional-groups resolution.
+    dep_metadata : DependencyMetadata
+        Dependency metadata instance.
 
     Returns
     -------
@@ -951,57 +714,79 @@ def resolve_optional_selection_from_args(args: argparse.Namespace,
     """
     raw_optional_arg = args.optional_dep
     raw_group_arg = args.optional_groups
-    requested_names = _parse_cli_list(raw_optional_arg)
+    requested_specs = _parse_cli_list(raw_optional_arg)
     requested_groups = _parse_cli_list(raw_group_arg)
     provided_optional_arg = (raw_optional_arg is not None) or (raw_group_arg is not None)
 
-    # If no optional args provided, install all optional dependencies
+    # If no optional args provided, install defaults
     if not provided_optional_arg:
-        return [dep.spec for dep in options if dep.install_by_default]
+        result = []
+        for group_key in dep_metadata.all_groups():
+            if dep_metadata.group_default(group_key):
+                result.extend(dep_metadata.group_packages(group_key))
+        return result
 
     # If empty list provided, install none
-    if not requested_names and not requested_groups:
+    if not requested_specs and not requested_groups:
         return []
 
-    # Resolve the requested dependencies and groups
-    alias_lookup = _optional_alias_lookup(options)
-    group_lookup = _group_alias_lookup(groups)
+    # Resolve requested specs and groups
     resolved: List[str] = []
-    for name in requested_names:
-        normalized = normalize_spec_name(name)
-        dep = alias_lookup.get(normalized)
-        if dep is None:
-            raise InstallerError(f"Unknown optional dependency: {name}")
-        if dep.spec not in resolved:
-            resolved.append(dep.spec)
+
+    # Add individual specs
+    for spec_name in requested_specs:
+        found = False
+        for group_key in dep_metadata.all_groups():
+            for spec in dep_metadata.group_packages(group_key):
+                if normalize_spec_name(spec) == normalize_spec_name(spec_name):
+                    if spec not in resolved:
+                        resolved.append(spec)
+                    found = True
+                    break
+            if found:
+                break
+        if not found:
+            raise InstallerError(f"Unknown optional dependency: {spec_name}")
+
+    # Add groups
     for group_name in requested_groups:
-        normalized = normalize_spec_name(group_name)
-        group = group_lookup.get(normalized)
-        if group is None:
+        found = False
+        for group_key in dep_metadata.all_groups():
+            if normalize_spec_name(group_key) == normalize_spec_name(group_name):
+                for spec in dep_metadata.group_packages(group_key):
+                    if spec not in resolved:
+                        resolved.append(spec)
+                found = True
+                break
+        if not found:
             raise InstallerError(f"Unknown optional group: {group_name}")
-        for spec in group.packages:
-            spec_value = spec.strip()
-            if spec_value and spec_value not in resolved:
-                resolved.append(spec_value)
+
     return resolved
 
 
 def resolve_editable_selection_from_args(args: argparse.Namespace,
-                                         editable_map: Dict[str, EditableDependency]) -> List[str]:
-    """Return editable dependency keys selected via CLI arguments."""
+                                         dep_metadata: DependencyMetadata) -> List[str]:
+    """Return editable dependency specs selected via CLI arguments."""
     raw_value = args.editable_clone
     names = _parse_cli_list(raw_value)
     if not names:
         return []
-    alias_lookup = _editable_alias_lookup(editable_map)
+
+    editable_packages = dep_metadata.editable_packages()
     resolved: List[str] = []
+
     for name in names:
         normalized = normalize_spec_name(name)
-        editable = alias_lookup.get(normalized)
-        if editable is None:
+        found = False
+        for spec in editable_packages.keys():
+            if normalize_spec_name(spec) == normalized:
+                if spec not in resolved:
+                    resolved.append(spec)
+                found = True
+                break
+        if not found:
             raise InstallerError(f"Unknown editable dependency: {name}")
-        if editable.key not in resolved:
-            resolved.append(editable.key)
+
     return resolved
 
 
@@ -1731,13 +1516,10 @@ class LocationPage(QtWidgets.QWizardPage):
 
 
 class DependenciesPage(QtWidgets.QWizardPage):
-    def __init__(self, editable_map: Dict[str, EditableDependency]) -> None:
+    def __init__(self) -> None:
         super().__init__()
         self.setTitle("Dependencies")
-        self.options: List[DependencyOption] = []
-        self.groups: Dict[str, DependencyGroup] = {}
-        self.editable_map = editable_map
-        self.option_lookup: Dict[str, DependencyOption] = {}
+        self.dep_metadata: Optional[DependencyMetadata] = None
         self._initialized = False
         self._pending_cli_args: Optional[argparse.Namespace] = None
         layout = QtWidgets.QVBoxLayout(self)
@@ -1769,7 +1551,6 @@ class DependenciesPage(QtWidgets.QWizardPage):
         self.clone_tree.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.NoSelection)
         layout.addWidget(self.clone_tree, stretch=0)  # Clone tree doesn't stretch
         self.clone_items: Dict[str, QtWidgets.QTreeWidgetItem] = {}
-        self._populate_clone_tree()
 
     def initializePage(self) -> None:
         """Fetch pyproject.toml from GitHub and populate the dependency tree."""
@@ -1784,11 +1565,9 @@ class DependenciesPage(QtWidgets.QWizardPage):
         QtWidgets.QApplication.processEvents()
 
         try:
-            content = fetch_pyproject(repo_url, branch)
-            self.groups = dependency_groups_from_pyproject(content=content)
-            self.options = parse_optional_dependencies(content=content)
-            self.option_lookup = {dep.spec: dep for dep in self.options}
+            self.dep_metadata = DependencyMetadata(repo_url, branch)
             self._populate_tree()
+            self._populate_clone_tree()
             self.status_label.setText("")
             self._initialized = True
 
@@ -1802,96 +1581,89 @@ class DependenciesPage(QtWidgets.QWizardPage):
 
     def _populate_tree(self) -> None:
         assert self.tree is not None
+        assert self.dep_metadata is not None
         self.tree.clear()
+        self.option_items = {}
 
-        # Build tree from DEPENDENCY_METADATA hierarchy
-        for group_key, group_meta in DEPENDENCY_METADATA["groups"].items():
-            item = self._create_tree_item_from_metadata(group_key, group_meta, parent=None)
-            if item is not None:
-                self.tree.addTopLevelItem(item)
+        # Build parent nodes from unique display_path values
+        parent_nodes: Dict[str, QtWidgets.QTreeWidgetItem] = {}
 
-        self.tree.expandAll()
+        for group_key in self.dep_metadata.all_groups():
+            display_path = self.dep_metadata.group_display_path(group_key)
 
-    def _create_tree_item_from_metadata(
-        self,
-        group_key: str,
-        group_meta: Dict[str, Any],
-        parent: Optional[QtWidgets.QTreeWidgetItem]
-    ) -> Optional[QtWidgets.QTreeWidgetItem]:
-        """Recursively create tree items from DEPENDENCY_METADATA structure."""
-        title = group_meta.get("title", _format_group_title(group_key))
-        description = group_meta.get("description", "")
-        label = _format_with_description(title, description)
-        default_checked = group_meta.get("default", False)
-        check_state = QtCore.Qt.CheckState.Checked if default_checked else QtCore.Qt.CheckState.Unchecked
+            # Get or create parent node if needed
+            if display_path:
+                if display_path not in parent_nodes:
+                    parent_item = QtWidgets.QTreeWidgetItem([display_path])
+                    parent_item.setFlags(parent_item.flags() | QtCore.Qt.ItemFlag.ItemIsUserCheckable | TRISTATE_FLAG)
+                    parent_item.setExpanded(True)
+                    self.tree.addTopLevelItem(parent_item)
+                    parent_nodes[display_path] = parent_item
+                parent = parent_nodes[display_path]
+            else:
+                parent = self.tree.invisibleRootItem()
 
-        # Create the tree item
-        if parent is None:
-            item = QtWidgets.QTreeWidgetItem([label])
-        else:
-            item = QtWidgets.QTreeWidgetItem(parent, [label])
+            # Create group item
+            title = self.dep_metadata.group_title(group_key)
+            description = self.dep_metadata.group_description(group_key)
+            label = _format_with_description(title, description)
+            default_checked = self.dep_metadata.group_default(group_key)
+            check_state = QtCore.Qt.CheckState.Checked if default_checked else QtCore.Qt.CheckState.Unchecked
 
-        item.setFlags(item.flags() | QtCore.Qt.ItemFlag.ItemIsUserCheckable | TRISTATE_FLAG)
-
-        # Check if this group has children in metadata
-        if "children" in group_meta:
-            # This is a parent group - recursively add children
-            for child_key, child_meta in group_meta["children"].items():
-                self._create_tree_item_from_metadata(child_key, child_meta, parent=item)
-            item.setExpanded(True)
-        else:
-            # This is a leaf group - add packages from pyproject.toml
-            group = self.groups.get(group_key)
-            if group is None or not group.packages:
-                # Group doesn't exist in pyproject.toml or has no packages
-                return None
+            group_item = QtWidgets.QTreeWidgetItem(parent, [label])
+            group_item.setFlags(group_item.flags() | QtCore.Qt.ItemFlag.ItemIsUserCheckable | TRISTATE_FLAG)
+            group_item.setCheckState(0, check_state)
+            group_item.setExpanded(False)
+            parent_item.setExpanded(True)
 
             # Add package items
-            for spec in group.packages:
-                package_item = QtWidgets.QTreeWidgetItem(item, [spec])
-                dep = self.option_lookup.get(spec)
-                package_label = self._option_label(dep, spec)
-                package_item.setText(0, package_label)
+            for spec in self.dep_metadata.group_packages(group_key):
+                pkg_meta = self.dep_metadata.package_metadata(spec)
+                pkg_title = pkg_meta.get("display_name", spec)
+                pkg_desc = pkg_meta.get("description", "")
+                pkg_label = _format_with_description(pkg_title, pkg_desc)
+
+                package_item = QtWidgets.QTreeWidgetItem(group_item, [pkg_label])
                 package_item.setFlags(package_item.flags() | QtCore.Qt.ItemFlag.ItemIsUserCheckable)
                 package_item.setCheckState(0, check_state)
                 package_item.setData(0, QtCore.Qt.ItemDataRole.UserRole, spec)
                 self.option_items[spec] = package_item
-            print("Collapsing item:", label)
-            item.setExpanded(False)
-
-
-        print("Setting item:", label, "to", check_state)
-        item.setCheckState(0, check_state)
-
-        return item
 
     def _populate_clone_tree(self) -> None:
+        assert self.dep_metadata is not None
         self.clone_tree.clear()
-        for editable in self.editable_map.values():
-            label = self._editable_label(editable)
+        self.clone_items = {}
+
+        for spec, meta in self.dep_metadata.editable_packages().items():
+            title = meta.get("display_name", spec)
+            desc = meta.get("description", "")
+            label = _format_with_description(title, desc)
             item = QtWidgets.QTreeWidgetItem([label])
             item.setFlags(item.flags() | QtCore.Qt.ItemFlag.ItemIsUserCheckable)
             item.setCheckState(0, QtCore.Qt.CheckState.Unchecked)
-            item.setData(0, QtCore.Qt.ItemDataRole.UserRole, editable.key)
+            item.setData(0, QtCore.Qt.ItemDataRole.UserRole, spec)
             self.clone_tree.addTopLevelItem(item)
-            self.clone_items[editable.key] = item
-
-    def _option_label(self, dep: Optional[DependencyOption], fallback: str) -> str:
-        if dep is None:
-            return fallback
-        title = dep.display_name or dep.spec
-        return _format_with_description(title, dep.description)
-
-    def _editable_label(self, editable: EditableDependency) -> str:
-        return _format_with_description(editable.display_name or editable.key, editable.description)
+            self.clone_items[spec] = item
 
     def selected_specs(self) -> List[str]:
-        enabled: List[str] = []
-        for dep in self.options:
-            item = self.option_items.get(dep.spec)
-            if item is not None and item.checkState(0) == QtCore.Qt.CheckState.Checked:
-                enabled.append(dep.spec)
-        return enabled
+        """Collect all selected package specs from the tree, deduplicating."""
+        enabled_set: set[str] = set()
+
+        # Walk the entire tree to find all checked package items
+        def walk_item(item: QtWidgets.QTreeWidgetItem) -> None:
+            # Check if this item has a spec (package items store spec in UserRole)
+            spec = item.data(0, QtCore.Qt.ItemDataRole.UserRole)
+            if spec and item.checkState(0) == QtCore.Qt.CheckState.Checked:
+                enabled_set.add(spec)
+            # Recurse to children
+            for i in range(item.childCount()):
+                walk_item(item.child(i))
+
+        # Walk all top-level items
+        for i in range(self.tree.topLevelItemCount()):
+            walk_item(self.tree.topLevelItem(i))
+
+        return list(enabled_set)
 
     def selected_clone_keys(self) -> List[str]:
         selected: List[str] = []
@@ -1912,42 +1684,59 @@ class DependenciesPage(QtWidgets.QWizardPage):
 
     def _apply_cli_args_internal(self, args: argparse.Namespace) -> None:
         """Apply CLI arguments to the dependency selections."""
+        assert self.dep_metadata is not None
         try:
-            selected_specs = resolve_optional_selection_from_args(args, self.options, self.groups.values())
+            selected_specs = resolve_optional_selection_from_args(args, self.dep_metadata)
         except InstallerError:
-            selected_specs = [dep.spec for dep in self.options]
+            # On error, select defaults
+            selected_specs = []
+            for group_key in self.dep_metadata.all_groups():
+                if self.dep_metadata.group_default(group_key):
+                    selected_specs.extend(self.dep_metadata.group_packages(group_key))
+
         selected_set = set(selected_specs)
-        for spec, item in self.option_items.items():
-            state = QtCore.Qt.CheckState.Checked if spec in selected_set else QtCore.Qt.CheckState.Unchecked
-            item.setCheckState(0, state)
+
+        # Walk tree to set check state for all package items (including duplicates)
+        def apply_to_item(item: QtWidgets.QTreeWidgetItem) -> None:
+            spec = item.data(0, QtCore.Qt.ItemDataRole.UserRole)
+            if spec:  # This is a package item
+                state = QtCore.Qt.CheckState.Checked if spec in selected_set else QtCore.Qt.CheckState.Unchecked
+                item.setCheckState(0, state)
+            for i in range(item.childCount()):
+                apply_to_item(item.child(i))
+
+        for i in range(self.tree.topLevelItemCount()):
+            apply_to_item(self.tree.topLevelItem(i))
         try:
-            clone_keys = resolve_editable_selection_from_args(args, self.editable_map)
+            clone_specs = resolve_editable_selection_from_args(args, self.dep_metadata)
         except InstallerError:
-            clone_keys = []
-        clone_set = set(clone_keys)
-        for key, item in self.clone_items.items():
-            state = QtCore.Qt.CheckState.Checked if key in clone_set else QtCore.Qt.CheckState.Unchecked
+            clone_specs = []
+        clone_set = set(clone_specs)
+        for spec, item in self.clone_items.items():
+            state = QtCore.Qt.CheckState.Checked if spec in clone_set else QtCore.Qt.CheckState.Unchecked
             item.setCheckState(0, state)
 
     def cli_arguments(self) -> List[str]:
+        assert self.dep_metadata is not None
         specs = self.selected_specs()
         args: List[str] = []
+
+        # Count total available specs
+        total_specs = sum(len(self.dep_metadata.group_packages(g)) for g in self.dep_metadata.all_groups())
+
         # If all dependencies selected, omit the flag (default behavior is "all")
-        if len(specs) == len(self.options):
+        if len(specs) == total_specs:
             pass  # Default is to install all
         elif not specs:
             # Empty string means install none
             args.extend([ARG_OPTIONAL_DEP, ""])
         else:
             # Specific list of dependencies
-            cli_names: List[str] = []
-            for spec in specs:
-                dep = self.option_lookup.get(spec)
-                cli_names.append(dep.cli_name if dep else normalize_spec_name(spec))
-            args.extend([ARG_OPTIONAL_DEP, ",".join(cli_names)])
+            args.extend([ARG_OPTIONAL_DEP, ",".join(normalize_spec_name(s) for s in specs)])
+
         clones = self.selected_clone_keys()
         if clones:
-            args.extend([ARG_EDITABLE_CLONE, ",".join(clones)])
+            args.extend([ARG_EDITABLE_CLONE, ",".join(normalize_spec_name(s) for s in clones)])
         return args
 
 
@@ -3199,18 +2988,16 @@ def list_git_repo_files(repo_url: str, branch: str) -> List[str]:
 
 
 class InstallWizard(QtWidgets.QWizard):
-    def __init__(self, editable_map: Dict[str, EditableDependency], cli_args: argparse.Namespace,
-                 test_flags: Optional[set[str]] = None) -> None:
+    def __init__(self, cli_args: argparse.Namespace, test_flags: Optional[set[str]] = None) -> None:
         super().__init__()
         self.setWindowTitle("ACQ4 Installer")
-        self.editable_map = editable_map
         self.cli_args = cli_args
         self.test_flags = test_flags or set()
         self.setOption(QtWidgets.QWizard.WizardOption.NoBackButtonOnStartPage, True)
         git_missing = "no-git" in self.test_flags or not is_git_available()
         self.git_page = GitPage() if git_missing else None
         self.location_page = LocationPage()
-        self.dependencies_page = DependenciesPage(self.editable_map)
+        self.dependencies_page = DependenciesPage()
         self.config_page = ConfigPage()
         self.startup_page = StartupPage()
         self.summary_page = SummaryPage()
@@ -3497,7 +3284,7 @@ class InstallerExecutor:
         if self.state.editable_selection:
             tasks.append(("Clone editable dependencies", lambda: self._handle_editable_dependencies(conda_exe, env_dir, base_dir)))
         tasks.extend([
-            ("Install ACQ4 runtime dependencies", lambda: self._install_project_dependencies(conda_exe, env_dir, clone_skip, base_dir / ACQ4_SOURCE_DIRNAME)),
+            ("Install ACQ4 runtime dependencies", lambda: self._install_project_dependencies(conda_exe, env_dir, clone_skip)),
             ("Install ACQ4 package", lambda: self._install_acq4_package(conda_exe, env_dir, base_dir / ACQ4_SOURCE_DIRNAME)),
         ])
         if selected_optional_specs:
@@ -3583,8 +3370,9 @@ class InstallerExecutor:
         run_command(cmd, self.logger, task_id=self._active_task_id, cancel_event=self.cancel_event)
 
     def _install_project_dependencies(self, conda_exe: str, env_dir: Path,
-                                      skip_names: Iterable[str], repo_path: Path) -> None:
-        deps = project_dependencies(repo_path=repo_path)
+                                      skip_names: Iterable[str]) -> None:
+        # Use core dependencies from state (already validated at startup)
+        deps = self.state.core_dependencies
         skip_set = {name.lower() for name in skip_names}
         install_specs: List[str] = []
         for spec in deps:
@@ -3730,17 +3518,17 @@ class InstallerExecutor:
             return
         dep_dir = base_dir / DEPENDENCIES_DIRNAME
         dep_dir.mkdir(parents=True, exist_ok=True)
-        editable_map = editable_dependencies()
-        for key in self.state.editable_selection:
-            meta = editable_map.get(key)
-            if not meta:
-                continue
-            repo_url = meta.git_url
+
+        for spec in self.state.editable_selection:
+            meta = PACKAGE_METADATA.get(spec, {})
+            repo_url = meta.get("git_url")
             if not repo_url:
-                self.logger.message(f"Skipping clone for {key}: repo URL not configured.", task_id=self._active_task_id)
+                self.logger.message(f"Skipping clone for {spec}: repo URL not configured.", task_id=self._active_task_id)
                 continue
-            target = dep_dir / key
-            self.logger.message(f"Cloning {meta.display_name or key} to {target}", task_id=self._active_task_id)
+            display_name = meta.get("display_name", spec)
+            # Use normalized spec name for directory
+            target = dep_dir / normalize_spec_name(spec)
+            self.logger.message(f"Cloning {display_name} to {target}", task_id=self._active_task_id)
             remote = github_url_with_token(repo_url, self.state.github_token)
             cmd = ["git", "clone", remote, str(target)]
             run_git_command(
@@ -3750,7 +3538,7 @@ class InstallerExecutor:
                 cancel_event=self.cancel_event,
                 mask_values=self._git_mask_values(),
             )
-            self.logger.message(f"Installing {meta.display_name or key} in editable mode", task_id=self._active_task_id)
+            self.logger.message(f"Installing {display_name} in editable mode", task_id=self._active_task_id)
             cmd = [
                 "python",
                 "-u",
@@ -3891,10 +3679,12 @@ class InstallerExecutor:
 
         # Post-install documentation for packages
         packages_with_docs: List[Tuple[str, str]] = []
-        selected_specs = set(self.state.selected_optional)
-        for dep in self.state.optional_dependencies:
-            if dep.spec in selected_specs and dep.post_install_doc:
-                packages_with_docs.append((dep.display_name, dep.post_install_doc))
+        for spec in self.state.selected_optional:
+            pkg_meta = PACKAGE_METADATA.get(spec, {})
+            post_install_doc = pkg_meta.get("post_install_doc")
+            if post_install_doc:
+                display_name = pkg_meta.get("display_name", spec)
+                packages_with_docs.append((display_name, post_install_doc))
 
         if packages_with_docs:
             self.logger.message("<b>Next Steps:</b>", task_id=self._active_task_id)
@@ -4002,6 +3792,12 @@ class InstallerWorker(QtCore.QObject):
                 QtCore.Q_ARG(str, "Installation cancelled"),
             )
         except Exception as exc:  # noqa: BLE001
+            # Print full traceback to stderr for debugging
+            import traceback
+            print("\n=== INSTALLER ERROR ===", file=sys.stderr)
+            traceback.print_exc(file=sys.stderr)
+            print("======================\n", file=sys.stderr)
+
             QtCore.QMetaObject.invokeMethod(
                 self,
                 "_emit_finished",
@@ -4072,16 +3868,13 @@ def build_cli_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def state_from_cli_args(args: argparse.Namespace,
-                        editable_map: Dict[str, EditableDependency]) -> InstallerState:
+def state_from_cli_args(args: argparse.Namespace) -> InstallerState:
     """Build an InstallerState instance from parsed CLI arguments.
 
     Parameters
     ----------
     args : argparse.Namespace
         Parsed CLI namespace.
-    editable_map : dict
-        Editable dependency descriptors used for CLI selection resolution.
 
     Returns
     -------
@@ -4094,13 +3887,11 @@ def state_from_cli_args(args: argparse.Namespace,
     repo_value = (args.repo_url or ACQ4_REPO_URL).strip() or ACQ4_REPO_URL
     github_token = (args.github_token or "").strip() or None
 
-    # Fetch pyproject.toml to get dependency information
-    content = fetch_pyproject(repo_value, branch_value)
-    dependency_groups = dependency_groups_from_pyproject(content=content)
-    optional_dependencies = parse_optional_dependencies(content=content)
+    # Load dependency metadata
+    dep_metadata = DependencyMetadata(repo_value, branch_value)
 
-    selected_optional = resolve_optional_selection_from_args(args, optional_dependencies, dependency_groups.values())
-    editable_selection = resolve_editable_selection_from_args(args, editable_map)
+    selected_optional = resolve_optional_selection_from_args(args, dep_metadata)
+    editable_selection = resolve_editable_selection_from_args(args, dep_metadata)
     # Parse config arguments
     config_repo = args.config_repo
     config_repo_branch = args.config_branch
@@ -4144,12 +3935,19 @@ def state_from_cli_args(args: argparse.Namespace,
     if args.create_shortcut is not None:
         create_shortcut = args.create_shortcut == "true"
 
+    # Collect all optional dependencies and core dependencies
+    all_optional_deps = []
+    for group_key in dep_metadata.all_groups():
+        all_optional_deps.extend(dep_metadata.group_packages(group_key))
+    core_deps = dep_metadata.core_dependencies()
+
     return InstallerState(
         install_path=install_path,
         branch=branch_value,
         repo_url=repo_value,
         github_token=github_token,
-        optional_dependencies=optional_dependencies,
+        core_dependencies=core_deps,
+        optional_dependencies=all_optional_deps,
         selected_optional=selected_optional,
         editable_selection=editable_selection,
         config_mode=config_mode,
@@ -4203,12 +4001,13 @@ def run_unattended_install(state: InstallerState) -> None:
 
         # Display post-install documentation
         packages_with_docs: List[Tuple[str, str]] = []
-        selected_specs = set(state.selected_optional)
-        for dep in state.optional_dependencies:
-            if dep.spec in selected_specs and dep.post_install_doc:
-                display_name = dep.display_name or dep.spec
+        for spec in state.selected_optional:
+            pkg_meta = PACKAGE_METADATA.get(spec, {})
+            post_install_doc = pkg_meta.get("post_install_doc")
+            if post_install_doc:
+                display_name = pkg_meta.get("display_name", spec)
                 # Strip HTML tags for plain text output
-                plain_doc = re.sub(r'<a href=[\'"]([^\'"]+)[\'"]>([^<]+)</a>', r'\2 (\1)', dep.post_install_doc)
+                plain_doc = re.sub(r'<a href=[\'"]([^\'"]+)[\'"]>([^<]+)</a>', r'\2 (\1)', post_install_doc)
                 plain_doc = re.sub(r'<[^>]+>', '', plain_doc)
                 packages_with_docs.append((display_name, plain_doc))
 
@@ -4229,15 +4028,17 @@ def normalized_clone_names(selection: Iterable[str]) -> set[str]:
     return {item.strip().lower() for item in selection}
 
 
-def resolve_selected_optional_specs(options: Iterable[DependencyOption], selected_specs: Iterable[str],
+def resolve_selected_optional_specs(all_specs: Iterable[str], selected_specs: Iterable[str],
                                     skip_names: Iterable[str]) -> List[str]:
     """Filter selected optional specs to drop ones handled via editable clones."""
-    spec_set = set(selected_specs)
+    selected_set = set(selected_specs)
     skip = {name.lower() for name in skip_names}
     result: List[str] = []
-    for dep in options:
-        if dep.spec in spec_set and dep.normalized_name not in skip:
-            result.append(dep.spec)
+    for spec in all_specs:
+        if spec in selected_set:
+            normalized = normalize_spec_name(spec)
+            if normalized not in skip:
+                result.append(spec)
     return result
 
 
@@ -4248,12 +4049,23 @@ def collect_state(wizard: InstallWizard) -> InstallerState:
     # For "new" mode, default to default.cfg since that's what's in the example config
     if config_mode == "new" and not config_file:
         config_file = "default.cfg"
+
+    # Collect all optional dependencies and core dependencies from dep_metadata
+    dep_metadata = wizard.dependencies_page.dep_metadata
+    all_optional_deps = []
+    core_deps = []
+    if dep_metadata:
+        for group_key in dep_metadata.all_groups():
+            all_optional_deps.extend(dep_metadata.group_packages(group_key))
+        core_deps = dep_metadata.core_dependencies()
+
     return InstallerState(
         install_path=wizard.install_path(),
         branch=wizard.branch(),
         repo_url=wizard.repo_url(),
         github_token=wizard.github_token(),
-        optional_dependencies=wizard.dependencies_page.options,
+        core_dependencies=core_deps,
+        optional_dependencies=all_optional_deps,
         selected_optional=wizard.selected_optional_specs(),
         editable_selection=wizard.selected_editable_keys(),
         config_mode=config_mode,
@@ -4273,20 +4085,19 @@ def parse_test_flags(raw_flags: Optional[str]) -> set[str]:
 
 def main() -> None:
     """Entry point for the ACQ4 installer."""
-    editable_map = editable_dependencies()
     parser = build_cli_parser()
     args = parser.parse_args()
     test_flags = parse_test_flags(args.test_flags)
     if args.unattended:
         try:
-            state = state_from_cli_args(args, editable_map)
+            state = state_from_cli_args(args)
         except InstallerError as exc:
             print(f"Invalid unattended configuration: {exc}", file=sys.stderr)
             sys.exit(1)
         run_unattended_install(state)
         return
     app = QtWidgets.QApplication(sys.argv)
-    wizard = InstallWizard(editable_map, args, test_flags)
+    wizard = InstallWizard(args, test_flags)
 
     if sys.flags.interactive == 0:
         wizard.exec()
