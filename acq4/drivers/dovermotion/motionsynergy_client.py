@@ -44,7 +44,8 @@ def start_server(dll_path, log_addr):
         address=SERVER_ADDRESS,
         daemon=True,
         log_addr=log_addr,
-        log_level='INFO',
+        log_level='DEBUG',  # Process logs internally at debug level
+        log_send_level='INFO',  # .. but only sends info level and above to log server
         local_server="threaded",
     )
 

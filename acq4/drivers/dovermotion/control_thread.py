@@ -106,7 +106,10 @@ class SmartStageControlThread:
             else:
                 diff = np.abs(pos - self.last_pos)
                 if np.any(diff > self.callback_threshold):
-                    self.pos_callback(pos)
+                    try:
+                        self.pos_callback(pos)
+                    except Exception:
+                        logger.exception("Error in position callback")
         self.last_pos = pos
 
     def _check_move_status(self):
