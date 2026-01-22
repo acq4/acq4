@@ -271,6 +271,34 @@ def _package_meta(spec: str) -> Dict[str, str]:
     return {}
 
 
+def _group_default(group_key: str) -> bool:
+    """Look up the default installation status for a group from DEPENDENCY_METADATA.
+
+    Parameters
+    ----------
+    group_key : str
+        The group key to look up.
+
+    Returns
+    -------
+    bool
+        True if the group should be installed by default, False otherwise.
+    """
+    groups = DEPENDENCY_METADATA["groups"]
+
+    # Check if it's a top-level group
+    if group_key in groups:
+        return groups[group_key].get("default", False)
+
+    # Check if it's a child group
+    for parent_meta in groups.values():
+        if "children" in parent_meta:
+            if group_key in parent_meta["children"]:
+                return parent_meta["children"][group_key].get("default", False)
+
+    return False
+
+
 def _format_with_description(title: str, description: str) -> str:
     return f"{title} — {description}" if description else title
 
@@ -862,7 +890,7 @@ def parse_optional_dependencies(content: Optional[str] = None,
                     cli_name=cli_source,
                     aliases={value for value in alias_values if value},
                     post_install_doc=post_install_doc,
-                    install_by_default=
+                    install_by_default=_group_default(group.key),
                 )
             )
     return options
