@@ -23,7 +23,7 @@ class TestPulseThread(QtThread):
     """Background thread that runs periodic test pulses on a single patch clamp channel.
     """
 
-    sigTestPulseFinished = Qt.Signal(object, object)  # device, result
+    sigTestPulseAnalyzed = Qt.Signal(object, object)  # device, result
 
     class StopRequested(Exception):
         pass
@@ -198,7 +198,7 @@ class TestPulseThread(QtThread):
                     tp = self._params['postProcessing'](tp)
                 except:
                     self._clampDev.logger.exception("Error in test pulse post-processing")
-            self.sigTestPulseFinished.emit(self._clampDev, tp)
+            self.sigTestPulseAnalyzed.emit(self._clampDev, tp)
 
     def _makeTpResult(self, task: Task) -> PatchClampTestPulse:
         mode = task.command[self._clampName]['mode']
