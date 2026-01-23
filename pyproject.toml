@@ -46,19 +46,22 @@ dependencies = [
     "teleprox",
     "neuroanalysis",
     "pyqtgraph @ git+https://github.com/acq4/pyqtgraph.git@acq4_working",
+    "rtprofile",
 ]
 
 [project.optional-dependencies]
-hardware = [
-    "pydaqmx",
-    "pymmcore",
-    "sensapex",
-    "pyserial",
-    "pyparsing",
+nidaq = ["pydaqmx"]
+micromanager = ["pymmcore"]
+sensapex = ["sensapex"]
+scientifica = ["pyserial"]
+multiclamp = ["pyparsing", "pywin32"]
+falconoptics = [
     "pytic",
     "falconoptics @ git+https://github.com/AllenInstitute/falconoptics",
-    "pywin32",
 ]
+thorlabs = ["pyserial"]
+dovermotion = ["pythonnet"]
+vimbax = ["vmbpy"]
 analysis = [
     "pycsf @ git+https://github.com/campagnola/pycsf",
     "ccfviewer @ git+https://github.com/campagnola/ccfviewer",
@@ -68,18 +71,15 @@ ml-models = [
     "torchvision",
     "cellpose @ git+https://github.com/outofculture/cellpose.git@_working",
 ]
+dev = [
+    "pytest",
+    "pytest-qt",
+    "black",
+]
 docs = [
     "numpydoc>=1.1.0",
     "Sphinx>=4.1.2",
     "sphinx-rtd-theme>=0.5.2",
-]
-testing = [
-    "pytest",
-    "pytest-qt",
-]
-dev = [
-    "black",
-    "acq4[testing]",
 ]
 
 [project.urls]

@@ -195,7 +195,7 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
             try:
                 self._onError(self)
             except Exception as e:
-                self.logger.exception(f"Error in Future.onError callback: {self._onError}")
+                self.logger.exception(f"{type(e).__name__}: {e} in Future.onError callback: {self._onError}")
         self.finishedEvent.set()  # tell wait() that we're done
         self.sigFinished.emit(self)  # tell everyone else that we're done
         self._callCallbacks()
@@ -251,7 +251,7 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
                 else:
                     callback(self, *args, **kwargs)
             except Exception as e:
-                self.logger.exception(f"Error in Future callback: {callback}")
+                self.logger.exception(f"{type(e).__name}: {e} in Future callback: {callback}")
 
     def errorMessage(self):
         """Return a string description of the reason for a task failure,

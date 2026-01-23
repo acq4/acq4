@@ -8,7 +8,14 @@ from time import sleep
 import numpy as np
 
 from acq4.devices.Camera import Camera
-from vmbpy import VmbSystem, Camera as VmbCamera, VmbCameraError, VmbFeatureError, BoolFeature
+from vmbpy import (
+    VmbSystem,
+    Camera as VmbCamera,
+    VmbCameraError,
+    VmbFeatureError,
+    BoolFeature,
+    AllocationMode,
+)
 
 
 class VimbaXCamera(Camera):
@@ -146,8 +153,12 @@ class VimbaXCamera(Camera):
         value = feature.get()
         dev_name = feature.get_name()
         name = _featureNameToParamName(dev_name)
-        self._paramValuesOnDev[dev_name] = value
-        self.sigParamsChanged.emit({name: value})
+        if self._paramValuesOnDev[dev_name] != value:
+            self.logger.debug(
+                f"Param {dev_name} changed from {self._paramValuesOnDev[dev_name]} to {value} on device"
+            )
+            self._paramValuesOnDev[dev_name] = value
+            self.sigParamsChanged.emit({name: value})
 
     @contextlib.contextmanager
     def _noParamUpdates(self):
@@ -174,7 +185,7 @@ class VimbaXCamera(Camera):
             elif p == 'region':
                 retval[p] = self._region
             elif p == 'exposure':
-                retval[p] = self._paramValuesOnDev['ExposureTimeAbs'] / 1000
+                retval[p] = self._paramValuesOnDev['ExposureTimeAbs'] / 1e6
             else:
                 retval[p] = self._paramValuesOnDev[_paramNameToFeatureName(p)]
         return retval
@@ -231,16 +242,18 @@ class VimbaXCamera(Camera):
                     newvals = {p: v}
                     _r = True
                 elif p == 'exposure':
-                    v = v * 1000
+                    v = v * 1e6
                     if autoCorrect:
                         v = int(min(
                             max(v, self._paramProperties['exposureTimeAbs'][0][0]),
                             self._paramProperties['exposureTimeAbs'][0][1],
                         ))
+                    self.logger.debug(f"Setting exposure to {v} us")
                     self._dev.ExposureTimeAbs.set(v)
-                    newvals = {p: v / 1000}
+                    newvals = {p: v * 1e-6}
                     _r = True
                 else:
+                    self.logger.debug(f"Setting param {p} to {v}")
                     self._paramValuesOnDev[_paramNameToFeatureName(p)] = v
                     getattr(self._dev, _paramNameToFeatureName(p)).set(v)
                     # TODO autocorrect
@@ -260,12 +273,18 @@ class VimbaXCamera(Camera):
         with self._lock:
             with contextlib.suppress(queue.Empty):
                 while f := self._frameQueue.get_nowait():
-                    arr = f.as_numpy_ndarray()
+                    arr = f.as_numpy_ndarray().copy()
+                    if arr.size == 0:
+                        self.logger.warning("Warning: ignoring empty frame from camera")
+                        continue
+                    ftime = f.get_timestamp()
+                    if ftime is not None:
+                        ftime = ftime / 1e9
                     frames.append({
                         'id': f.get_id(),
                         # MC: color data will blow this up
                         'data': arr.reshape(arr.shape[:-1]).T,
-                        'time': f.get_timestamp(),
+                        'time': ftime,
                     })
                     with contextlib.suppress(ValueError):
                         # ValueErrors from "wrong queue for frame" at restart are fine
@@ -274,7 +293,11 @@ class VimbaXCamera(Camera):
 
     def startCamera(self):
         with self._lock:
-            self._dev.start_streaming(lambda _, __, f: self._frameQueue.put(f))
+            self._dev.start_streaming(
+                lambda _, __, f: self._frameQueue.put(f),
+                buffer_count=20,
+                allocation_mode=AllocationMode.AllocAndAnnounceFrame,
+            )
 
     def stopCamera(self):
         with self._lock:

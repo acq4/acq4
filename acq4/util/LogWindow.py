@@ -94,7 +94,7 @@ class ErrorDialog(Qt.QDialog):
         msgLines = []
         if entry.getMessage():
             msgLines.append(self.cleanText(entry.getMessage()))
-        if entry.exc_info:
+        elif entry.exc_info:
             msgLines.append(self.cleanText(str(entry.exc_info[1])))
 
         msg = "<br/>".join(msgLines)
@@ -276,15 +276,10 @@ class DocumentedLogViewer(LogViewer):
 
         # Replace the model in the proxy
         if USE_CHAINED_FILTERING:
-            # For chained filtering, we need to update the source model
-            if hasattr(self.proxy_model, 'set_source_model'):
-                self.proxy_model.set_source_model(custom_model)
-            elif hasattr(self.proxy_model, '_source_model'):
-                self.proxy_model._source_model = custom_model
-            else:
-                # Fallback: recreate proxy with new model
-                self.proxy_model = LogFilterProxyModel(custom_model)
-                self.tree.setModel(self.proxy_model.final_model)
+            # For chained filtering, use the new set_source_model method
+            self.proxy_model.set_source_model(custom_model)
+            # Update the tree view to point to the (potentially new) final model
+            self.tree.setModel(self.proxy_model.final_model)
         else:
             # For simple proxy model, just set source model
             self.proxy_model.setSourceModel(custom_model)
