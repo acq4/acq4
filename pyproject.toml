@@ -50,19 +50,18 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-hardware = [
-    "pydaqmx",
-    "pymmcore",
-    "sensapex",
-    "pythonnet",
-    "pyserial",
-    "pyparsing",
+nidaq = ["pydaqmx"]
+micromanager = ["pymmcore"]
+sensapex = ["sensapex"]
+scientifica = ["pyserial"]
+multiclamp = ["pyparsing", "pywin32"]
+falconoptics = [
     "pytic",
-    "vmbpy",
-    # disabled: private repo
-    # "falconoptics @ git+https://github.com/AllenInstitute/falconoptics",
-    "pywin32",
+    "falconoptics @ git+https://github.com/AllenInstitute/falconoptics",
 ]
+thorlabs = ["pyserial"]
+dovermotion = ["pythonnet"]
+vimbax = ["vmbpy"]
 analysis = [
     "pycsf @ git+https://github.com/campagnola/pycsf",
     "ccfviewer @ git+https://github.com/campagnola/ccfviewer",
@@ -72,17 +71,14 @@ ml-models = [
     "torchvision",
     "cellpose @ git+https://github.com/outofculture/cellpose.git@_working",
 ]
+dev = [
+    "pytest",
+    "black",
+]
 docs = [
     "numpydoc>=1.1.0",
     "Sphinx>=4.1.2",
     "sphinx-rtd-theme>=0.5.2",
-]
-testing = [
-    "pytest",
-]
-dev = [
-    "black",
-    "acq4[testing]",
 ]
 
 [project.urls]

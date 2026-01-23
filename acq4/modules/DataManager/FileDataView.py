@@ -1,6 +1,7 @@
 from typing import Optional
 
 import pyqtgraph as pg
+from MetaArray.plotting import MetaArrayPlotWidget
 from acq4.filetypes.MultiPatchLog import MultiPatchLogWidget
 from acq4.util import Qt
 from acq4.util.DataManager import FileHandle
@@ -60,7 +61,7 @@ class FileDataView(Qt.QSplitter):
 
     def displayDataAsPlot(self, data):
         self.clear()
-        w = pg.MultiPlotWidget(self)
+        w = MetaArrayPlotWidget(self)
         w.setObjectName("DataManager_multiPlotWidget")
         self.addWidget(w)
         w.plot(data)

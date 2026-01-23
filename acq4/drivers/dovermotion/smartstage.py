@@ -47,9 +47,17 @@ class SmartStage:
     def disable(self):
         return self.control_thread.request('disable')
 
+    def is_enabled(self, refresh=False):
+        if refresh:
+            return self.control_thread.request('enabled_state').wait()
+        return self.control_thread.last_enabled_state
+
+    def add_enabled_state_callback(self, cb):
+        self.control_thread.add_enabled_state_callback(cb)
+
     def pos(self, refresh=False):
         if refresh:
-            return self.control_thread.request('position').result()
+            return self.control_thread.request('position').wait()
         else:
             return self.control_thread.last_known_pos
 
@@ -75,6 +83,7 @@ if __name__ == "__main__":
 
 
     ss = SmartStage(callback=pos_cb)
+    ms_server.set_smartstage(ss)
 
 #     parser.add_argument("--port", type=int, default=60738, help="Port to listen on")
 #     parser.add_argument("--no-init", action="store_true", help="Do not initialize the MotionSynergyAPI")
