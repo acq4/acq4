@@ -32,9 +32,10 @@ class SmartStageControlThread:
         # for now, axes are all the axes available. Later we may want to split these up if there are multiple devices..
         self.axes = list(self.motionsynergy.AxisList)
 
-        self.last_pos = None
         self.last_enabled_state = None
         self.enable_state_callbacks = []
+        self.last_known_pos = None
+        self.last_reported_pos = None
         self.quit_request: SmartStageRequestFuture | None = None
         self.current_move: SmartStageRequestFuture | None = None
         self.request_queue = queue.Queue()
@@ -99,18 +100,20 @@ class SmartStageControlThread:
         """
         pos = self._get_pos()
 
-        # check position and invoke change callback 
+        # check position and invoke change callback
         if self.pos_callback is not None:
-            if self.last_pos is None:
+            if self.last_reported_pos is None:
                 self.pos_callback(pos)
+                self.last_reported_pos = pos
             else:
-                diff = np.abs(pos - self.last_pos)
+                diff = np.abs(pos - self.last_reported_pos)
                 if np.any(diff > self.callback_threshold):
                     try:
                         self.pos_callback(pos)
+                        self.last_reported_pos = pos
                     except Exception:
                         logger.exception("Error in position callback")
-        self.last_pos = pos
+        self.last_known_pos = pos
 
     def _check_move_status(self):
         if self.current_move is None:
@@ -236,14 +239,20 @@ class SmartStageControlThread:
             if np.abs(diff[i]) < self.move_complete_threshold:
                 pos[i] = None
             if pos[i] is not None:
-                check(axis.SetVelocity(speed_per_axis[i]), error_msg="Error setting axis speed: ")
-                check(axis.SetAcceleration(accel_per_axis[i]), error_msg="Error setting axis acceleration: ")
-        return [
-            axis.MoveAbsolute(pos[i])
-            for i, axis in enumerate(self.axes)
-            if pos[i] is not None
-        ]
-
+                # print(f"Setting axis {i} speed to {speed_per_axis[i]} and accel to {accel_per_axis[i]}")
+                spd = max(1e-6, speed_per_axis[i])
+                check(axis.SetVelocity(spd), error_msg="Error setting axis speed: ")
+                acc = max(.1, accel_per_axis[i])
+                check(axis.SetAcceleration(acc), error_msg="Error setting axis acceleration: ")
+        # print(f"MoveAbsolute to {pos}  speed={speed_per_axis}  accel={accel_per_axis}")
+        result = []
+        for i, axis in enumerate(self.axes):
+            if pos[i] is not None:
+                move = axis.MoveAbsolute(pos[i])
+                if move.IsCompleted:
+                    check(result[-1], error_msg="Error starting axis move: ")
+                result.append(move)
+        return result
 
 class SmartStageRequestFuture:
     """Represents a future result to be generated following a request to the control thread.

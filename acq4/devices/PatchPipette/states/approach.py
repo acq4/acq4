@@ -11,7 +11,7 @@ from acq4.util import ptime
 from acq4.util.functions import plottable_booleans
 from acq4.util.future import future_wrap
 from acq4.util.imaging.sequencer import run_image_sequence
-from ._base import PatchPipetteState, SteadyStateAnalysisBase
+from ._base import PatchPipetteState, SteadyStateAnalysisBase, exponential_decay_avg
 
 
 class ApproachAnalysis(SteadyStateAnalysisBase):
@@ -88,7 +88,7 @@ class ApproachAnalysis(SteadyStateAnalysisBase):
                 last_measurement = ret_array[i - 1]
 
             dt = start_time - last_measurement['time']
-            baseline_avg, _ = self.exponential_decay_avg(
+            baseline_avg, _ = exponential_decay_avg(
                 dt, last_measurement['baseline_avg'], resistance, self._baseline_tau
             )
             obstacle_detected = resistance > self._obstacle_threshold + baseline_avg

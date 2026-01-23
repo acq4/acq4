@@ -33,6 +33,12 @@ class MotionSynergyException(Exception):
 
 
 def check(result, error_msg=""):
+    """Check whether the result of a motionsynergy API call has an error.
+
+    Accepts Task[InstrumentResult] or InstrumentResult instances
+    If the result is a Task, then block until the result is available.
+    Returns the InstrumentResult
+    """
     if isinstance(result, System.Threading.Tasks.Task):
         result = result.Result
     if not result.Success:
@@ -143,6 +149,8 @@ def get_smartstage_icon():
 
 
 def init_warning_msgbox():
+    if qt.QApplication.instance() is None:
+        app = qt.QApplication([])
     msgbox = qt.QMessageBox()
     msgbox.setWindowTitle("MotionSynergy Initialization")
     msgbox.setIcon(qt.QMessageBox.Warning)
