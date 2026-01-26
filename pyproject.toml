@@ -47,6 +47,7 @@ dependencies = [
     "neuroanalysis",
     "pyqtgraph @ git+https://github.com/acq4/pyqtgraph.git@acq4_working",
     "rtprofile",
+    "guppy3",
 ]
 
 [project.optional-dependencies]
