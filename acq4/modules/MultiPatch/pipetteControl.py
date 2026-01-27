@@ -185,7 +185,10 @@ class PipetteControl(Qt.QWidget):
     def patchStateChanged(self, pipette):
         """Pipette's state changed, reflect that in the UI"""
         state = pipette.getState()
-        self.ui.stateText.setText(state.stateName)
+        if state is None:
+            self.ui.stateText.setText("")
+        else:
+            self.ui.stateText.setText(state.stateName)
 
     def clampHoldingChanged(self, mode, val):
         try:
