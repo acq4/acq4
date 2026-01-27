@@ -229,15 +229,14 @@ class IgorReqThread(threading.Thread):
                 try:
                     message_id = int(reply["messageID"])
                 except KeyError as ke:
-                    raise RuntimeError(f"Igor message has no ID: {reply}")
-                # print(f"IGOR RECV: {message_id} {reply}")
+                    raise RuntimeError(f"Igor message has no ID: {reply}") from ke
                 try:
                     future = self.unresolved_futures.pop(message_id)
-                except KeyError:
+                except KeyError as ke:
                     if message_id in self.resolved_ids:
-                        raise ValueError(f"Received IGOR message {message_id} multiple times.")
+                        raise ValueError(f"Received IGOR message {message_id} multiple times.") from ke
                     else:
-                        raise ValueError(f"Received unexpectd IGOR message {message_id}")
+                        raise ValueError(f"Received unexpected IGOR message {message_id}") from ke
                 self.resolved_ids.add(message_id)
 
                 if future is None:
