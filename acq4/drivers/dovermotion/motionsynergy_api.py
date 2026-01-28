@@ -165,6 +165,17 @@ def init_warning_msgbox():
         raise RuntimeError("MotionSynergy initialization cancelled by user.")
 
 
+class TrayIcon(qt.QSystemTrayIcon):
+    """Tray icon that activates menu on left mouse button"""
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.activated.connect(self.showMenuOnTrigger)
+
+    def showMenuOnTrigger(self, reason):
+        if reason == qt.QSystemTrayIcon.Trigger:
+            self.contextMenu().popup(qt.QCursor.pos())
+
+
 class SmartStageTrayIcon(qt.QObject):
     """Minimal user interface for the SmartStage background process.
     """
@@ -173,7 +184,7 @@ class SmartStageTrayIcon(qt.QObject):
     def __init__(self):
         super().__init__()
         self._toggle_enable = False
-        self.tray_icon = qt.QSystemTrayIcon(get_smartstage_icon())
+        self.tray_icon = TrayIcon(get_smartstage_icon())
 
         self.menu = qt.QMenu()
 
@@ -257,9 +268,12 @@ def install_tray_icon():
     global tray_icon
     _ensure_log_viewer()
     tray_icon = SmartStageTrayIcon()
+    # disable closing on last window closed; we quit via the tray icon instead
+    qt.QApplication.setQuitOnLastWindowClosed(False)
 
 
-def set_smartstage(ss):
+def set_tray_smartstage(ss):
+    """Set the SmartStage used by the tray icon"""
     global smartstage
     smartstage = ss
     if tray_icon is not None:
@@ -271,7 +285,7 @@ def create_smartstage(*args, **kwargs):
     from .smartstage import SmartStage
 
     ss = SmartStage(*args, **kwargs)
-    set_smartstage(ss)
+    set_tray_smartstage(ss)
     return ss
 
 

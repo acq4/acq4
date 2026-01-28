@@ -171,7 +171,7 @@ class MIESPatchClamp(PatchClamp):
     def _initTestPulse(self, params):
         self.resetTestPulseHistory()
         self._testPulseThread = MIESTestPulseThread(self, params)
-        self._testPulseThread.sigTestPulseFinished.connect(self._testPulseFinished)
+        self._testPulseThread.sigTestPulseAnalyzed.connect(self._testPulseFinished)
         self._testPulseThread.started.connect(self.testPulseEnabledChanged)
         self._testPulseThread.finished.connect(self.testPulseEnabledChanged)
     
@@ -217,8 +217,10 @@ class MIESTestPulseThread(TestPulseThread):
             try:
                 next_tp_data = self.tp_queue.get()
                 tp = self.make_test_pulse(*next_tp_data)
+                if tp is None:
+                    continue
                 tp.analysis  # run and cache analysis results
-                self.sigTestPulseFinished.emit(self._clampDev, tp)
+                self.sigTestPulseAnalyzed.emit(self._clampDev, tp)
             except Exception as exc:
                 now = time.time()
                 if now - last_error_time > 3:
