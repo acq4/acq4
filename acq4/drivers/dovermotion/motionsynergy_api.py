@@ -5,10 +5,13 @@ Clients can connect to the server process to interact with the stage. (see motio
 """
 
 import atexit
+import logging
 import os
 import sys
 
+import pyqtgraph.console as pgconsole
 import teleprox.qt as qt
+from teleprox.log.logviewer import LogViewer
 
 if is_linux := sys.platform.startswith("linux"):
     # Use Microsoft's dotnet, rather than Mono
@@ -30,6 +33,12 @@ class MotionSynergyException(Exception):
 
 
 def check(result, error_msg=""):
+    """Check whether the result of a motionsynergy API call has an error.
+
+    Accepts Task[InstrumentResult] or InstrumentResult instances
+    If the result is a Task, then block until the result is available.
+    Returns the InstrumentResult
+    """
     if isinstance(result, System.Threading.Tasks.Task):
         result = result.Result
     if not result.Success:
@@ -105,6 +114,11 @@ def initialize(run_init: bool = True, progress=None):
 
 motion_synergy = None
 instrument_settings = None
+smartstage = None
+log_viewer = None
+log_handler_installed = False
+console_window = None
+console_widget = None
 
 
 def get_motionsynergyapi(dll_file=None):
@@ -135,6 +149,8 @@ def get_smartstage_icon():
 
 
 def init_warning_msgbox():
+    if qt.QApplication.instance() is None:
+        app = qt.QApplication([])
     msgbox = qt.QMessageBox()
     msgbox.setWindowTitle("MotionSynergy Initialization")
     msgbox.setIcon(qt.QMessageBox.Warning)
@@ -149,12 +165,26 @@ def init_warning_msgbox():
         raise RuntimeError("MotionSynergy initialization cancelled by user.")
 
 
-class SmartStageTrayIcon:
+class TrayIcon(qt.QSystemTrayIcon):
+    """Tray icon that activates menu on left mouse button"""
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.activated.connect(self.showMenuOnTrigger)
+
+    def showMenuOnTrigger(self, reason):
+        if reason == qt.QSystemTrayIcon.Trigger:
+            self.contextMenu().popup(qt.QCursor.pos())
+
+
+class SmartStageTrayIcon(qt.QObject):
     """Minimal user interface for the SmartStage background process.
     """
+    enabled_changed = qt.Signal(object)
 
     def __init__(self):
-        self.tray_icon = qt.QSystemTrayIcon(get_smartstage_icon())
+        super().__init__()
+        self._toggle_enable = False
+        self.tray_icon = TrayIcon(get_smartstage_icon())
 
         self.menu = qt.QMenu()
 
@@ -162,9 +192,22 @@ class SmartStageTrayIcon:
         self.label_action.setEnabled(False)
         self.menu.addAction(self.label_action)
 
+        self.energize_action = qt.QAction("Energize motors", self.menu)
+        self.energize_action.setEnabled(False)
+        self.energize_action.triggered.connect(self._toggle_motors)
+        self.menu.addAction(self.energize_action)
+
         self.initialize_action = qt.QAction("Initialize", self.menu)
         self.initialize_action.triggered.connect(initialize)
         self.menu.addAction(self.initialize_action)
+
+        self.log_action = qt.QAction("Show Log", self.menu)
+        self.log_action.triggered.connect(self._show_log_window)
+        self.menu.addAction(self.log_action)
+
+        self.console_action = qt.QAction("Show Console", self.menu)
+        self.console_action.triggered.connect(self._show_console_window)
+        self.menu.addAction(self.console_action)
 
         self.quit_action = qt.QAction("Quit", self.menu)
         self.quit_action.triggered.connect(_quit)
@@ -173,10 +216,118 @@ class SmartStageTrayIcon:
         self.tray_icon.setContextMenu(self.menu)
         self.tray_icon.show()
 
+        self.enabled_changed.connect(self._update_enabled_state, qt.Qt.QueuedConnection)
+
+        self.set_smartstage(smartstage)
+
+    def set_smartstage(self, ss):
+        if ss is None:
+            self.energize_action.setEnabled(False)
+            return
+        self.energize_action.setEnabled(True)
+        ss.add_enabled_state_callback(self._on_enabled_state_changed)
+        self._update_enabled_state(ss.is_enabled(refresh=True))
+
+    def _toggle_motors(self):
+        if smartstage is None:
+            return
+        if self._toggle_enable:
+            smartstage.enable()
+        else:
+            smartstage.disable()
+
+    def _show_log_window(self):
+        viewer = _ensure_log_viewer()
+        viewer.show()
+        viewer.raise_()
+        viewer.activateWindow()
+
+    def _show_console_window(self):
+        win = _ensure_console_window()
+        win.show()
+        win.raise_()
+        win.activateWindow()
+
+    def _on_enabled_state_changed(self, enabled_state):
+        self.enabled_changed.emit(enabled_state)
+
+    def _update_enabled_state(self, enabled_state):
+        if all(state is False for state in enabled_state):
+            text = "Enable motors"
+            self._toggle_enable = True
+        else:
+            text = "Disable motors"
+            self._toggle_enable = False
+        self.energize_action.setText(text)
+
 
 tray_icon = None
 
 
 def install_tray_icon():
     global tray_icon
+    _ensure_log_viewer()
     tray_icon = SmartStageTrayIcon()
+    # disable closing on last window closed; we quit via the tray icon instead
+    qt.QApplication.setQuitOnLastWindowClosed(False)
+
+
+def set_tray_smartstage(ss):
+    """Set the SmartStage used by the tray icon"""
+    global smartstage
+    smartstage = ss
+    if tray_icon is not None:
+        tray_icon.set_smartstage(ss)
+    _refresh_console_namespace()
+
+
+def create_smartstage(*args, **kwargs):
+    from .smartstage import SmartStage
+
+    ss = SmartStage(*args, **kwargs)
+    set_tray_smartstage(ss)
+    return ss
+
+
+def _ensure_log_viewer():
+    global log_viewer, log_handler_installed
+    if log_viewer is None:
+        log_viewer = LogViewer(logger=None)
+    if not log_handler_installed:
+        root_logger = logging.getLogger()
+        log_viewer.handler.setLevel(logging.DEBUG)
+        root_logger.addHandler(log_viewer.handler)
+        log_handler_installed = True
+    return log_viewer
+
+
+def _refresh_console_namespace():
+    if console_widget is None:
+        return
+    namespace = console_widget.localNamespace
+    namespace["smartstage"] = smartstage
+    namespace["motion_synergy"] = motion_synergy
+    namespace["instrument_settings"] = instrument_settings
+
+
+def _ensure_console_window():
+    global console_window, console_widget
+    if console_window is None:
+        initial_text = (
+            "# Available variables:\n"
+            "#   smartstage - SmartStage instance\n"
+            "#   motion_synergy - MotionSynergyAPI object\n"
+            "#   instrument_settings - MotionSynergyAPI InstrumentSettings\n"
+        )
+        console_window = pgconsole.ConsoleWidget(
+            namespace={
+                "smartstage": smartstage,
+                "motion_synergy": motion_synergy,
+                "instrument_settings": instrument_settings,
+            },
+            text=initial_text,
+        )
+        console_window.resize(900, 600)
+    else:
+        _refresh_console_namespace()
+    return console_window

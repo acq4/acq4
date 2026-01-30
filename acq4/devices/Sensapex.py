@@ -89,6 +89,7 @@ class Sensapex(Stage):
             raise RuntimeError("nAxes support requires version >= 1.022.4 of the sensapex-py library")
         self.dev = ump.get_device(self.devid, n_axes=config.get("nAxes", None), is_stage=not config["isManipulator"])
         self._quitRequested = False
+        self._lastMove: Optional[SensapexMoveFuture] = None
 
         Stage.__init__(self, man, config, name)
 
@@ -106,7 +107,6 @@ class Sensapex(Stage):
         # This should also verify that we have a valid device ID
         self.dev.get_pos()
 
-        self._lastMove: Optional[SensapexMoveFuture] = None
         man.sigAbortAll.connect(self.stop)
 
         # clear cached position for this device and re-read to generate an initial position update

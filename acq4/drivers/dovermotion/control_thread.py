@@ -32,7 +32,10 @@ class SmartStageControlThread:
         # for now, axes are all the axes available. Later we may want to split these up if there are multiple devices..
         self.axes = list(self.motionsynergy.AxisList)
 
-        self.last_pos = None
+        self.last_enabled_state = None
+        self.enable_state_callbacks = []
+        self.last_known_pos = None
+        self.last_reported_pos = None
         self.quit_request: SmartStageRequestFuture | None = None
         self.current_move: SmartStageRequestFuture | None = None
         self.request_queue = queue.Queue()
@@ -42,6 +45,10 @@ class SmartStageControlThread:
 
     def set_callback(self, cb):
         self.pos_callback = cb
+
+    def add_enabled_state_callback(self, cb):
+        if cb not in self.enable_state_callbacks:
+            self.enable_state_callbacks.append(cb)
 
     def start_thread(self):
         if self.is_running():
@@ -70,6 +77,10 @@ class SmartStageControlThread:
                 self._check_move_status()
             except MotionSynergyException:
                 logger.exception("Error checking move status")
+            try:
+                self._check_enabled_state()
+            except MotionSynergyException:
+                logger.exception("Error checking enabled state")
 
             try:
                 req = self.request_queue.get(timeout=self.poll_interval)
@@ -89,15 +100,20 @@ class SmartStageControlThread:
         """
         pos = self._get_pos()
 
-        # check position and invoke change callback 
+        # check position and invoke change callback
         if self.pos_callback is not None:
-            if self.last_pos is None:
+            if self.last_reported_pos is None:
                 self.pos_callback(pos)
+                self.last_reported_pos = pos
             else:
-                diff = np.abs(pos - self.last_pos)
+                diff = np.abs(pos - self.last_reported_pos)
                 if np.any(diff > self.callback_threshold):
-                    self.pos_callback(pos)
-        self.last_pos = pos
+                    try:
+                        self.pos_callback(pos)
+                        self.last_reported_pos = pos
+                    except Exception:
+                        logger.exception("Error in position callback")
+        self.last_known_pos = pos
 
     def _check_move_status(self):
         if self.current_move is None:
@@ -114,6 +130,17 @@ class SmartStageControlThread:
             else:
                 self.current_move.fail(f"Move failed: {', '.join(alerts)}")
             self.current_move = None
+
+    def _check_enabled_state(self):
+        enabled_state = self._get_enabled_state()
+        if enabled_state == self.last_enabled_state:
+            return
+        self.last_enabled_state = enabled_state
+        for cb in list(self.enable_state_callbacks):
+            try:
+                cb(enabled_state)
+            except Exception:
+                logger.exception("Error in enabled state callback")
 
     def _handle_request(self, fut: SmartStageRequestFuture):
         cmd = fut.request
@@ -133,6 +160,8 @@ class SmartStageControlThread:
                 self._handle_disable(fut)
             elif cmd == 'enable':
                 self._handle_enable(fut)
+            elif cmd == 'enabled_state':
+                fut.set_result(self._get_enabled_state())
             else:
                 raise ValueError(f'unrecognized request {cmd}')
 
@@ -180,6 +209,10 @@ class SmartStageControlThread:
                 check(axis.Enable(), error_msg="Error enabling axis: ")
         fut.set_result(None)
 
+    def _get_enabled_state(self):
+        states = tuple(axis.GetIsEnabled().Value for axis in self.axes)
+        return states
+
     def _get_pos(self):
         results = [check(axis.GetActualPosition(), error_msg="Error getting axis position: ") for axis in self.axes]
         return np.array([float(result.Value) for result in results])
@@ -206,14 +239,20 @@ class SmartStageControlThread:
             if np.abs(diff[i]) < self.move_complete_threshold:
                 pos[i] = None
             if pos[i] is not None:
-                check(axis.SetVelocity(speed_per_axis[i]), error_msg="Error setting axis speed: ")
-                check(axis.SetAcceleration(accel_per_axis[i]), error_msg="Error setting axis acceleration: ")
-        return [
-            axis.MoveAbsolute(pos[i])
-            for i, axis in enumerate(self.axes)
-            if pos[i] is not None
-        ]
-
+                # print(f"Setting axis {i} speed to {speed_per_axis[i]} and accel to {accel_per_axis[i]}")
+                spd = max(1e-6, speed_per_axis[i])
+                check(axis.SetVelocity(spd), error_msg="Error setting axis speed: ")
+                acc = max(.1, accel_per_axis[i])
+                check(axis.SetAcceleration(acc), error_msg="Error setting axis acceleration: ")
+        # print(f"MoveAbsolute to {pos}  speed={speed_per_axis}  accel={accel_per_axis}")
+        result = []
+        for i, axis in enumerate(self.axes):
+            if pos[i] is not None:
+                move = axis.MoveAbsolute(pos[i])
+                if move.IsCompleted:
+                    check(result[-1], error_msg="Error starting axis move: ")
+                result.append(move)
+        return result
 
 class SmartStageRequestFuture:
     """Represents a future result to be generated following a request to the control thread.

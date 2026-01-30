@@ -6,8 +6,8 @@ class SmartStage:
             self,
             callback=None,
             poll_interval=0.05,
-            callback_threshold=0.01,
-            move_complete_threshold=0.01,
+            callback_threshold=5e-4,  # 5e-4mm == 0.5um
+            move_complete_threshold=5e-7,  # 5e-7mm == 0.5nm
             default_acceleration=10.0,
     ):
         self.default_acceleration = default_acceleration
@@ -47,11 +47,19 @@ class SmartStage:
     def disable(self):
         return self.control_thread.request('disable')
 
+    def is_enabled(self, refresh=False):
+        if refresh:
+            return self.control_thread.request('enabled_state').wait()
+        return self.control_thread.last_enabled_state
+
+    def add_enabled_state_callback(self, cb):
+        self.control_thread.add_enabled_state_callback(cb)
+
     def pos(self, refresh=False):
         if refresh:
-            return self.control_thread.request('position').result()
+            return self.control_thread.request('position').wait()
         else:
-            return self.control_thread.last_pos
+            return self.control_thread.last_known_pos
 
 
 if __name__ == "__main__":
@@ -75,6 +83,7 @@ if __name__ == "__main__":
 
 
     ss = SmartStage(callback=pos_cb)
+    ms_server.set_smartstage(ss)
 
 #     parser.add_argument("--port", type=int, default=60738, help="Port to listen on")
 #     parser.add_argument("--no-init", action="store_true", help="Do not initialize the MotionSynergyAPI")

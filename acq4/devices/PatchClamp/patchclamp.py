@@ -21,6 +21,8 @@ class PatchClamp(Device):
     * **vcHolding** (float, optional): Default voltage clamp holding potential (V)
 
     * **icHolding** (float, optional): Default current clamp holding current (A)
+
+    * **testPulse** (dict, optional): Configuration parameters for test pulse generation
     
     Signals
     -------
@@ -44,6 +46,7 @@ class PatchClamp(Device):
 
     def __init__(self, deviceManager, config, name):
         Device.__init__(self, deviceManager, config, name)
+        self.testPulseConfig = config.get('testPulse', {})
         self._lastTestPulse = None
         self._testPulseThread = None
         self._initTestPulse(config.get('testPulse', {}))
@@ -134,7 +137,7 @@ class PatchClamp(Device):
     def _initTestPulse(self, params):
         self.resetTestPulseHistory()
         self._testPulseThread = TestPulseThread(self, params)
-        self._testPulseThread.sigTestPulseFinished.connect(self._testPulseFinished)
+        self._testPulseThread.sigTestPulseAnalyzed.connect(self._testPulseFinished)
         self._testPulseThread.started.connect(self.testPulseEnabledChanged)
         self._testPulseThread.finished.connect(self.testPulseEnabledChanged)
 

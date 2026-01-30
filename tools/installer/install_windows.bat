@@ -15,8 +15,7 @@ set "RESULT=0"
 set "INSTALLER_URL=https://raw.githubusercontent.com/acq4/acq4/main/tools/installer/installer.py"
 set "INSTALLER_ENV_NAME=_acq4_installer"
 set "PYTHON_VERSION=3.12"
-set "QT_PACKAGE=pyqt6"
-set "TOML_PARSER_PACKAGE=tomli"
+set "PY_PACKAGES=pyqt6 tomli pywin32"
 set "MIN_CONDA_VERSION=4.14.0"
 set "MINICONDA_URL=https://repo.anaconda.com/miniconda/Miniconda3-latest-Windows-x86_64.exe"
 set "MINICONDA_PREFIX=%USERPROFILE%\Miniconda3"
@@ -39,6 +38,10 @@ if errorlevel 1 (
 )
 
 call :ensure_installer_env
+if errorlevel 1 (
+    echo ERROR: Failed to set up installer environment
+    exit /b 1
+)
 echo.
 echo Downloading installer script...
 call :download_installer
@@ -226,35 +229,25 @@ if defined ENV_EXISTS (
     echo Installer environment "%INSTALLER_ENV_NAME%" already exists, reusing it
 ) else (
     echo Installer environment "%INSTALLER_ENV_NAME%" does not exist, creating it now...
-    set "CREATE_LOG=%TEMP%\acq4-conda-create-%RANDOM%.log"
     set "PYTHON_SPEC=python=%PYTHON_VERSION%"
     echo Running: "%CONDA_EXE%" create -y -n "%INSTALLER_ENV_NAME%" !PYTHON_SPEC!
-    call "%CONDA_EXE%" create -y -n "%INSTALLER_ENV_NAME%" !PYTHON_SPEC! > "!CREATE_LOG!" 2>&1
-    set "CREATE_STATUS=%ERRORLEVEL%"
-    set "PYTHON_SPEC="
-    if not "!CREATE_STATUS!"=="0" (
+    echo.
+    call "%CONDA_EXE%" create -y -n "%INSTALLER_ENV_NAME%" !PYTHON_SPEC!
+    if errorlevel 1 (
+        set "CREATE_STATUS=!ERRORLEVEL!"
+        echo.
         echo ERROR: Environment creation failed with exit code !CREATE_STATUS!
-        if defined CREATE_LOG if exist "!CREATE_LOG!" (
-            findstr /C:"NoWritableEnvsDirError" "!CREATE_LOG!" >nul 2>&1 && (
-                echo Conda could not create the installer environment: no writable envs directories are configured.
-                echo Please ensure at least one entry in 'conda info --json' under envs_dirs is writable.
-            )
-            findstr /C:"NoWritablePkgsDirError" "!CREATE_LOG!" >nul 2>&1 && (
-                echo Conda could not download packages: no writable package cache directories are configured.
-            )
-            type "!CREATE_LOG!"
-            del "!CREATE_LOG!" >nul 2>&1
-        )
         exit /b !CREATE_STATUS!
     )
+    set "PYTHON_SPEC="
+    echo.
     echo Environment created successfully
-    if defined CREATE_LOG if exist "!CREATE_LOG!" del "!CREATE_LOG!" >nul 2>&1
-    set "CREATE_LOG="
 )
 
 echo Verifying Python is available in installer environment...
-call "%CONDA_EXE%" run -n "%INSTALLER_ENV_NAME%" python --version >nul 2>&1
+call "%CONDA_EXE%" run -n "%INSTALLER_ENV_NAME%" python --version
 if errorlevel 1 (
+    echo.
     echo ERROR: Python not found in installer environment "%INSTALLER_ENV_NAME%"
     echo Try running: conda env remove -n "%INSTALLER_ENV_NAME%" and then re-run this script
     exit /b 1
@@ -262,8 +255,8 @@ if errorlevel 1 (
 echo Python verified successfully
 
 echo Installing dependencies in installer environment...
-echo Running: "%CONDA_EXE%" run -n "%INSTALLER_ENV_NAME%" python -m pip install --upgrade %QT_PACKAGE% %TOML_PARSER_PACKAGE%
-call "%CONDA_EXE%" run -n "%INSTALLER_ENV_NAME%" python -m pip install --upgrade %QT_PACKAGE% %TOML_PARSER_PACKAGE% --index-url=https://pypi.org/simple/
+echo Running: "%CONDA_EXE%" run -n "%INSTALLER_ENV_NAME%" python -m pip install --upgrade %PY_PACKAGES%
+call "%CONDA_EXE%" run -n "%INSTALLER_ENV_NAME%" python -m pip install --upgrade %PY_PACKAGES% --index-url=https://pypi.org/simple/
 if errorlevel 1 (
     echo ERROR: Failed to install dependencies in installer environment
     exit /b 1
@@ -289,8 +282,9 @@ if not defined TMP_INSTALLER (
 )
 echo Temporary installer path: %TMP_INSTALLER%
 echo Downloading installer from %INSTALLER_URL%
-curl -L -o "%TMP_INSTALLER%" "%INSTALLER_URL%" >nul 2>&1
+curl -L -o "%TMP_INSTALLER%" "%INSTALLER_URL%"
 if errorlevel 1 (
+    echo.
     echo ERROR: Unable to download installer.py
     if exist "%TMP_INSTALLER%" del "%TMP_INSTALLER%" >nul 2>&1
     goto :eof

@@ -40,7 +40,7 @@ def exception_callback(*args):
             log_fn = logger.info
         elif msg_type == 'warning':
             log_fn = logger.warning
-        log_fn("Unexpected error", exc_info=args)
+        log_fn(f"Unhandled {args[0].__name__}: {args[1]}", exc_info=args)
     except Exception:
         print("Error: Exception could not be logged.")
         exceptionHandling.original_excepthook(*sys.exc_info())

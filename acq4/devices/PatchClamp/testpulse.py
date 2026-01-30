@@ -1,29 +1,26 @@
 import queue
 import time
+from threading import Thread
 from typing import Literal
 
 import numpy as np
 from MetaArray import MetaArray
+from acq4.analysis.dataModels.PatchEPhys import getBridgeBalanceCompensation
 
+from acq4.Manager import getManager, Task
 from acq4.util import Qt, ptime
-from acq4.util.Thread import Thread
+from acq4.util.Thread import Thread as QtThread
+from acq4.util.functions import downsample
 from neuroanalysis.data import TSeries, PatchClampRecording
 from neuroanalysis.stimuli import SquarePulse
 from neuroanalysis.test_pulse import PatchClampTestPulse
-
-from acq4.Manager import getManager, Task
-from acq4.analysis.dataModels.PatchEPhys import getBridgeBalanceCompensation
-from acq4.util import Qt, ptime
-from acq4.util.Thread import Thread as QtThread
-from threading import Thread
-from acq4.util.functions import downsample
 
 
 class TestPulseThread(QtThread):
     """Background thread that runs periodic test pulses on a single patch clamp channel.
     """
 
-    sigTestPulseFinished = Qt.Signal(object, object)  # device, result
+    sigTestPulseAnalyzed = Qt.Signal(object, object)  # device, result
 
     class StopRequested(Exception):
         pass
@@ -56,6 +53,7 @@ class TestPulseThread(QtThread):
             'icAverage': 4,
             '_index': 0,
         }
+        self._params.update(self._clampDev.testPulseConfig)
         self._lastTask = None
 
         self._daqName = self._clampDev.getDAQName("primary")
@@ -198,7 +196,7 @@ class TestPulseThread(QtThread):
                     tp = self._params['postProcessing'](tp)
                 except:
                     self._clampDev.logger.exception("Error in test pulse post-processing")
-            self.sigTestPulseFinished.emit(self._clampDev, tp)
+            self.sigTestPulseAnalyzed.emit(self._clampDev, tp)
 
     def _makeTpResult(self, task: Task) -> PatchClampTestPulse:
         mode = task.command[self._clampName]['mode']

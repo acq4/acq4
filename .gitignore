@@ -17,4 +17,6 @@ acq4/devices/MockClamp/models/
 .aider*
 .claude
 temp_log.json
+temp_log.json
+AGENTS.local.md
 dependencies/

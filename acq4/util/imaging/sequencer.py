@@ -352,7 +352,7 @@ def acquire_z_stack(
 
     Parameters
     ----------
-    imager: np.ndarray
+    imager: Camera
         The imager instance to use for acquisition.
     start: float
         Z position to begin the stack.
