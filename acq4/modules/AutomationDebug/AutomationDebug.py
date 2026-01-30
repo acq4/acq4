@@ -1042,9 +1042,7 @@ class AutomationDebugWindow(Qt.QWidget):
         neurons = self._unranked_cells
 
         # --- Calculate target ---
-        raise NotImplementedError("This method is not fully implemented.")
-        # TODO this is broken code; it assumes _unranked_cells is a list of (start, end) bounding boxes
-        centers = [(start + end) / 2 for start, end in np.array(neurons)]
+        centers = [cell.position.coordinates for cell in neurons]
         # TODO is this important to check? does the detection algorithm already guarantee this?
         target = next(
             (
