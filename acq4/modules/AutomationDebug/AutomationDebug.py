@@ -719,6 +719,7 @@ class AutomationDebugWindow(Qt.QWidget):
 
         pixel_size = self.cameraDevice.getPixelSize()[0]  # Used for both real and mock
         man = self.module.manager
+        segmenter = man.config.get("misc", {}).get("segmenterPath", None)
         autoencoder = man.config.get("misc", {}).get("autoencoderPath", None)
         classifier = man.config.get("misc", {}).get("classifierPath", None)
         # pixel_size is now fetched earlier
@@ -800,6 +801,7 @@ class AutomationDebugWindow(Qt.QWidget):
         result = _future.waitFor(
             detect_neurons(
                 working_stack,  # Prepared based on mock/real and single/multi
+                segmenter=segmenter,
                 autoencoder=autoencoder,
                 classifier=classifier,
                 xy_scale=pixel_size,  # Global pixel_size
