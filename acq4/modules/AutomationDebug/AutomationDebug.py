@@ -871,9 +871,8 @@ class AutomationDebugWindow(Qt.QWidget):
 
             pixel_size = self.cameraDevice.getPixelSize()[0]  # Assuming square pixels
             stack_frames = []
-            current_mock_frame_global_z = live_frame_origin_global_xyz[
-                2
-            ]  # Start Z from the live frame's depth
+            # Start Z from the live frame's depth
+            current_mock_frame_global_z = live_frame_origin_global_xyz[2]
 
             for i in range(len(data)):
                 mock_frame_transform = pg.SRTTransform3D(
