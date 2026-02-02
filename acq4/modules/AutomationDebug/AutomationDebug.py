@@ -784,7 +784,7 @@ class AutomationDebugWindow(Qt.QWidget):
             working_stack = detection_stack
             multichannel = False
 
-        result = _future.waitFor(
+        global_pos = _future.waitFor(
             detect_neurons(
                 working_stack,  # Prepared based on mock/real and single/multi
                 segmenter=segmenter,
@@ -796,21 +796,12 @@ class AutomationDebugWindow(Qt.QWidget):
             ),
             timeout=600,
         ).getResult()
-        logger.info(f"Neuron detection finished. Found {len(result)} potential neurons.")
-
-        # results are returned [z_frame, img_row, img_row]
-        # map back to global (x, y, z)
-        transform = (
-            working_stack[0][0].globalTransform()
-            if isinstance(working_stack, tuple)
-            else working_stack[0].globalTransform()
-        )
-        globalPos = [Point(transform.map([row, col, zframe]), "global") for (zframe, row, col) in result]
+        logger.info(f"Neuron detection finished. Found {len(global_pos)} potential neurons.")
 
         self._current_detection_stack = detection_stack
         self._current_classification_stack = classification_stack
-        self._unranked_cells = [Cell(r) for r in globalPos]
-        return globalPos
+        self._unranked_cells = [Cell(r) for r in global_pos]
+        return global_pos
 
     def _create_mock_stack_from_file(
         self, mock_file_path: str, base_frame: Frame, _future: Future
@@ -867,7 +858,7 @@ class AutomationDebugWindow(Qt.QWidget):
                     live_frame_global_transform.saveState()
                 )
                 # XY scale here should be unchanged
-                mock_frame_transform.setScale(pixel_size, pixel_size, step_z)
+                mock_frame_transform.setScale(pixel_size, -pixel_size, step_z)
                 z_offset = current_mock_frame_global_z - live_frame_origin_global_xyz[2]
                 mock_frame_transform.translate(0, 0, z_offset)
 
