@@ -848,7 +848,6 @@ class AutomationDebugWindow(Qt.QWidget):
                 )
                 step_z = 1 * µm
 
-            pixel_size = self.cameraDevice.getPixelSize()[0]  # Assuming square pixels
             stack_frames = []
             # Start Z from the live frame's depth
             current_mock_frame_global_z = live_frame_origin_global_xyz[2]
@@ -857,13 +856,13 @@ class AutomationDebugWindow(Qt.QWidget):
                 mock_frame_transform = pg.SRTTransform3D(
                     live_frame_global_transform.saveState()
                 )
-                # XY scale here should be unchanged
-                mock_frame_transform.setScale(pixel_size, -pixel_size, step_z)
+                scale = live_frame_global_transform.getScale()
+                mock_frame_transform.setScale(scale[0], scale[1], step_z)
                 z_offset = current_mock_frame_global_z - live_frame_origin_global_xyz[2]
                 mock_frame_transform.translate(0, 0, z_offset)
 
                 frame_info = {
-                    "pixelSize": [pixel_size, pixel_size],
+                    "pixelSize": [scale[0], scale[1]],
                     "depth": current_mock_frame_global_z,
                     "transform": mock_frame_transform.saveState(),
                 }
