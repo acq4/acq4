@@ -722,10 +722,8 @@ class AutomationDebugWindow(Qt.QWidget):
         segmenter = man.config.get("misc", {}).get("segmenterPath", None)
         autoencoder = man.config.get("misc", {}).get("autoencoderPath", None)
         classifier = man.config.get("misc", {}).get("classifierPath", None)
-        # pixel_size is now fetched earlier
-        step_z = 1 * µm  # Default, will be updated by mock or real acquisition
+        step_z = 1 * µm  # can be updated by mock metadata
         depth = self.cameraDevice.getFocusDepth()
-        detection_stack = None  # Ensure it's initialized
         classification_stack = None  # Initialize as None
 
         # This flag indicates intent for multichannel *real* acquisition or processing type
@@ -744,16 +742,9 @@ class AutomationDebugWindow(Qt.QWidget):
             if detection_stack is None:
                 raise RuntimeError("Failed to load mock detection stack.")
 
-            if classification_stack is not None and multichannel_processing_intended:
-                working_stack = (detection_stack, classification_stack)
-                multichannel = True
-            else:
-                working_stack = detection_stack
-                multichannel = False
         else:  # --- Real Acquisition ---
             start_z = depth - 20 * µm
             stop_z = depth + 20 * µm
-            # Use step_z = 1 * µm for real acquisition as previously defined
 
             if multichannel_processing_intended:
                 logger.info(
@@ -761,13 +752,14 @@ class AutomationDebugWindow(Qt.QWidget):
                     f"Classification='{classification_preset}'"
                 )
                 _future.waitFor(self.scopeDevice.loadPreset(detection_preset))
-                detection_stack = _future.waitFor(
-                    acquire_z_stack(
-                        self.cameraDevice, start_z, stop_z, step_z, slow_fallback=False
-                    ),
-                    timeout=100,
-                ).getResult()
+            detection_stack = _future.waitFor(
+                acquire_z_stack(
+                    self.cameraDevice, start_z, stop_z, step_z, slow_fallback=False
+                ),
+                timeout=100,
+            ).getResult()
 
+            if multichannel_processing_intended:
                 _future.waitFor(self.scopeDevice.loadPreset(classification_preset))
                 classification_stack = _future.waitFor(
                     acquire_z_stack(
@@ -784,19 +776,13 @@ class AutomationDebugWindow(Qt.QWidget):
                     min_length = min(len(detection_stack), len(classification_stack))
                     detection_stack = detection_stack[:min_length]
                     classification_stack = classification_stack[:min_length]
-            else:  # --- Single Channel Acquisition ---
-                detection_stack = _future.waitFor(
-                    acquire_z_stack(
-                        self.cameraDevice, start_z, stop_z, step_z
-                    )  # step_z is 1um here
-                ).getResult()
 
-            if multichannel_processing_intended:
-                working_stack = (detection_stack, classification_stack)
-                multichannel = True
-            else:
-                working_stack = detection_stack
-                multichannel = False
+        if multichannel_processing_intended and classification_stack is not None:
+            working_stack = (detection_stack, classification_stack)
+            multichannel = True
+        else:
+            working_stack = detection_stack
+            multichannel = False
 
         result = _future.waitFor(
             detect_neurons(
@@ -852,7 +838,9 @@ class AutomationDebugWindow(Qt.QWidget):
                 z_vals = z_info["values"]
                 if len(z_vals) > 1:
                     step_z = abs(z_vals[1] - z_vals[0]) * m  # Assume meters
-                    logger.info(f"Using Z step from mock file '{os.path.basename(mock_file_path)}': {step_z / µm:.2f} µm")
+                    logger.info(
+                        f"Using Z step from mock file '{os.path.basename(mock_file_path)}': {step_z / µm:.2f} µm"
+                    )
                 elif len(z_vals) == 1:
                     logger.warning(
                         f"Only one Z value in mock file '{os.path.basename(mock_file_path)}'. Assuming 1µm step.",
@@ -878,6 +866,7 @@ class AutomationDebugWindow(Qt.QWidget):
                 mock_frame_transform = pg.SRTTransform3D(
                     live_frame_global_transform.saveState()
                 )
+                # XY scale here should be unchanged
                 mock_frame_transform.setScale(pixel_size, pixel_size, step_z)
                 z_offset = current_mock_frame_global_z - live_frame_origin_global_xyz[2]
                 mock_frame_transform.translate(0, 0, z_offset)
@@ -926,10 +915,8 @@ class AutomationDebugWindow(Qt.QWidget):
             # detection_stack remains None, step_z remains default
 
         # Load classification stack if multichannel mock is enabled and path is provided
-        if (
-            self.ui.multiChannelEnableCheck.isChecked()
-            and self.ui.mockCheckBox.isChecked()
-        ):  # Redundant mockCheckBox check, but safe
+        # Redundant mockCheckBox check, but safe
+        if self.ui.multiChannelEnableCheck.isChecked() and self.ui.mockCheckBox.isChecked():
             classification_mock_path = self.ui.mockClassificationFilePath.text()
             if classification_mock_path:
                 # The base_frame and _future are passed again.
