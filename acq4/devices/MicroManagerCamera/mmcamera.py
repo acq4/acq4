@@ -82,6 +82,7 @@ class MicroManagerCamera(Camera):
         mmpath = config.get('path')
         self.mmc = micromanager.getMMCorePy(mmpath)
 
+        self._isRunning = False  # track running state manually (see isRunning())
         self._triggerProp = None  # the name of the property for setting trigger mode
         self._triggerModes = ({}, {})  # forward and reverse mappings for the names of trigger modes
         self._binningMode = None  # 'x' or 'xy' for binning strings like '1' and '1x1', respectively
@@ -115,47 +116,67 @@ class MicroManagerCamera(Camera):
 
         self._readAllParams()
 
+    def _selectCamera(self):
+        # MMCore is shared across devices; ensure we talk to the correct camera.
+        self.mmc.setCameraDevice(self.camName)
+
     def startCamera(self):
         with self.camLock:
+            self._selectCamera()
             self.mmc.startContinuousSequenceAcquisition(0)
+            self._isRunning = True
 
     def stopCamera(self):
         with self.camLock:
+            # self._selectCamera()  # MM doesn't allow starting sequence on two cameras independently, so in theory this can't be needed
             self.mmc.stopSequenceAcquisition()
             self.acqBuffer = None
+            self._isRunning = False
 
     def isRunning(self):
         # This is needed to allow calling setParam inside startCamera before the acquisition has actually begun
         # (but after the acquisition thread has started)
-        return self.mmc.isSequenceRunning()
+        with self.camLock:
+            return self._isRunning
+        
+            # note: if we have more than one camera, we can't call selectCamera while another is running
+            # so it's not possible to query isSequenceRunning() reliably.
+        #     self._selectCamera()
+        #     return self.mmc.isSequenceRunning()
 
     def _acquireFrames(self, n=1):
         if self.isRunning():
             self.stop()
         with self.camLock:
-            self.mmc.setCameraDevice(self.camName)
-            self.mmc.startSequenceAcquisition(n, 0, True)
-            frames = []
-            timeoutStart = ptime.time()
-            while self.mmc.isSequenceRunning() or self.mmc.getRemainingImageCount() > 0:
-                if self.mmc.getRemainingImageCount() > 0:
-                    timeoutStart = ptime.time()
-                    frames.append(self.mmc.popNextImage().T[np.newaxis, ...])
-                elif ptime.time() - timeoutStart > 10.0:
-                    raise TimeoutError("Timed out waiting for camera frame.")
-                else:
-                    time.sleep(0.005)
+            try:
+                self.mmc.setCameraDevice(self.camName)
+                self.mmc.startSequenceAcquisition(n, 0, True)
+                self._isRunning = True
+                frames = []
+                timeoutStart = ptime.time()
+                while self.mmc.isSequenceRunning() or self.mmc.getRemainingImageCount() > 0:
+                    if self.mmc.getRemainingImageCount() > 0:
+                        timeoutStart = ptime.time()
+                        frames.append(self.mmc.popNextImage().T[np.newaxis, ...])
+                    elif ptime.time() - timeoutStart > 10.0:
+                        raise TimeoutError("Timed out waiting for camera frame.")
+                    else:
+                        time.sleep(0.005)
+            finally:
+                self._isRunning = False
+                self.mmc.stopSequenceAcquisition()
         if len(frames) < n:
             self.logger.exception(
                 f"Fixed-frame camera acquisition ended before all frames received ({len(frames)}/{n})"
             )
-        self.mmc.stopSequenceAcquisition()
+            
         return np.concatenate(frames, axis=0)
 
     def newFrames(self):
         """Return a list of all frames acquired since the last call to newFrames."""
 
         with self.camLock:
+            # self._selectCamera()  # MM doesn't allow starting sequence on two cameras independently, so in theory this can't be needed
             nFrames = self.mmc.getRemainingImageCount()
             if nFrames == 0:
                 return []
@@ -167,6 +188,7 @@ class MicroManagerCamera(Camera):
         dt = (now - self.lastFrameTime) / nFrames
         frames = []
         with self.camLock:
+            # self._selectCamera()
             for i in range(nFrames):
                 frames.append({
                     'time': self.lastFrameTime + (dt * (i + 1)),
