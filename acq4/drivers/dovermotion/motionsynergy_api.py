@@ -183,7 +183,8 @@ class SmartStageTrayIcon(qt.QObject):
 
     def __init__(self):
         super().__init__()
-        self._toggle_enable = False
+        self.axis_actions = []
+        self.axis_toggle_enable = []
         self.tray_icon = TrayIcon(get_smartstage_icon())
 
         self.menu = qt.QMenu()
@@ -192,10 +193,20 @@ class SmartStageTrayIcon(qt.QObject):
         self.label_action.setEnabled(False)
         self.menu.addAction(self.label_action)
 
-        self.energize_action = qt.QAction("Energize motors", self.menu)
-        self.energize_action.setEnabled(False)
-        self.energize_action.triggered.connect(self._toggle_motors)
-        self.menu.addAction(self.energize_action)
+        self.menu.addSeparator()
+
+        # Axis-specific enable/disable actions will be added in set_smartstage
+        self.enable_all_action = qt.QAction("Enable all", self.menu)
+        self.enable_all_action.setEnabled(False)
+        self.enable_all_action.triggered.connect(self._enable_all_motors)
+        self.menu.addAction(self.enable_all_action)
+
+        self.disable_all_action = qt.QAction("Disable all", self.menu)
+        self.disable_all_action.setEnabled(False)
+        self.disable_all_action.triggered.connect(self._disable_all_motors)
+        self.menu.addAction(self.disable_all_action)
+
+        self.menu.addSeparator()
 
         self.initialize_action = qt.QAction("Initialize", self.menu)
         self.initialize_action.triggered.connect(initialize)
@@ -221,20 +232,56 @@ class SmartStageTrayIcon(qt.QObject):
         self.set_smartstage(smartstage)
 
     def set_smartstage(self, ss):
+        # Remove any existing axis actions
+        for action in self.axis_actions:
+            self.menu.removeAction(action)
+        self.axis_actions = []
+        self.axis_toggle_enable = []
+
         if ss is None:
-            self.energize_action.setEnabled(False)
+            self.enable_all_action.setEnabled(False)
+            self.disable_all_action.setEnabled(False)
             return
-        self.energize_action.setEnabled(True)
+
+        # Create menu items for each axis
+        axis_count = ss.axis_count()
+        axis_names = ss.axis_names()
+
+        for i in range(axis_count):
+            axis_name = axis_names[i]
+            action = qt.QAction(f"Enable {axis_name}", self.menu)
+            action.triggered.connect(lambda _, idx=i: self._toggle_axis(idx))
+            # Insert the action before the "Enable all" action
+            self.menu.insertAction(self.enable_all_action, action)
+            self.axis_actions.append(action)
+            self.axis_toggle_enable.append(True)  # Default to wanting to enable
+
+        # Add separator after axis actions if we have any
+        if axis_count > 0:
+            self.menu.insertSeparator(self.enable_all_action)
+
+        self.enable_all_action.setEnabled(True)
+        self.disable_all_action.setEnabled(True)
         ss.add_enabled_state_callback(self._on_enabled_state_changed)
         self._update_enabled_state(ss.is_enabled(refresh=True))
 
-    def _toggle_motors(self):
+    def _toggle_axis(self, axis_index):
         if smartstage is None:
             return
-        if self._toggle_enable:
-            smartstage.enable()
+        if self.axis_toggle_enable[axis_index]:
+            smartstage.enable_axis(axis_index)
         else:
-            smartstage.disable()
+            smartstage.disable_axis(axis_index)
+
+    def _enable_all_motors(self):
+        if smartstage is None:
+            return
+        smartstage.enable()
+
+    def _disable_all_motors(self):
+        if smartstage is None:
+            return
+        smartstage.disable()
 
     def _show_log_window(self):
         viewer = _ensure_log_viewer()
@@ -252,13 +299,19 @@ class SmartStageTrayIcon(qt.QObject):
         self.enabled_changed.emit(enabled_state)
 
     def _update_enabled_state(self, enabled_state):
-        if all(state is False for state in enabled_state):
-            text = "Enable motors"
-            self._toggle_enable = True
-        else:
-            text = "Disable motors"
-            self._toggle_enable = False
-        self.energize_action.setText(text)
+        if smartstage is None:
+            return
+
+        # Update each axis action based on its enabled state
+        axis_names = smartstage.axis_names()
+        for i, (action, is_enabled) in enumerate(zip(self.axis_actions, enabled_state)):
+            axis_name = axis_names[i]
+            if is_enabled:
+                action.setText(f"Disable {axis_name}")
+                self.axis_toggle_enable[i] = False
+            else:
+                action.setText(f"Enable {axis_name}")
+                self.axis_toggle_enable[i] = True
 
 
 tray_icon = None

@@ -47,6 +47,22 @@ class SmartStage:
     def disable(self):
         return self.control_thread.request('disable')
 
+    def enable_axis(self, axis_index):
+        """Enable a specific axis by index"""
+        return self.control_thread.request('enable_axis', axis_index=axis_index)
+
+    def disable_axis(self, axis_index):
+        """Disable a specific axis by index"""
+        return self.control_thread.request('disable_axis', axis_index=axis_index)
+
+    def axis_count(self):
+        """Get the number of axes"""
+        return len(self.control_thread.axes)
+
+    def axis_names(self):
+        """Get the names of all axes"""
+        return [axis.Name for axis in self.control_thread.axes]
+
     def is_enabled(self, refresh=False):
         if refresh:
             return self.control_thread.request('enabled_state').wait()
