@@ -295,8 +295,8 @@ class VimbaXCamera(Camera):
         with self._lock:
             self._dev.start_streaming(
                 lambda _, __, f: self._frameQueue.put(f),
-                buffer_count=20,
-                allocation_mode=AllocationMode.AllocAndAnnounceFrame,
+                buffer_count=200,
+                allocation_mode=AllocationMode.AnnounceFrame,
             )
 
     def stopCamera(self):
