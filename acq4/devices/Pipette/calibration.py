@@ -32,7 +32,7 @@ def findNewPipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=0.
 
         # collect background images, analyze noise
         with imager.ensureRunning():
-            bgFrames = imager.acquireFrames(10).getResult()
+            bgFrames = _future.waitFor(imager.acquireFrames(10)).getResult()
             bgFrameArray = np.stack([f.data() for f in bgFrames], axis=0)
             bgFrame = bgFrameArray.mean(axis=0)
 
@@ -55,19 +55,19 @@ def findNewPipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=0.
         centerPipPos = getPipettePositionAtTime(posEvents, centerTime)
 
         # move back to center position
-        pipette._moveToGlobal(centerPipPos, speed='fast').wait()
+        _future.waitFor(pipette._moveToGlobal(centerPipPos, speed='fast'))
 
         # todo: at this point we could compare the current image to the previously collected video
         # to see whether we made it back to the desired position (and if not, apply
         # a correction as well as remember the apparent time delay between camera images and
         # position updates)
-        compareFrame = imager.acquireFrames(1).getResult()[0].data().astype(float)
+        compareFrame = _future.waitFor(imager.acquireFrames(1)).getResult()[0].data().astype(float)
         comparisonError = ((framesArray.astype(float) - compareFrame[None, ...])**2).sum(axis=1).sum(axis=1)
         mostSimilarFrame = np.argmin(comparisonError)
         pipetteCameraDelay = frames[mostSimilarFrame].info()['time'] - frames[centerIndex].info()['time']
         correctedCenterTime = frames[centerIndex].info()['time'] - pipetteCameraDelay
         correctedCenterPipPos = getPipettePositionAtTime(posEvents, correctedCenterTime)
-        pipette._moveToGlobal(correctedCenterPipPos, speed='fast').wait()
+        _future.waitFor(pipette._moveToGlobal(correctedCenterPipPos, speed='fast'))
 
         # record from imager and pipette position while retracting pipette out of frame
         retractPos = centerPipPos - pipVector * 2e-3
@@ -108,11 +108,11 @@ def findNewPipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=0.
         centerPipPos2 = endPipPos + np.array([0, yDist, 0])
 
         # move to new center
-        pipette._moveToGlobal(centerPipPos2, speed='fast').wait()
+        _future.waitFor(pipette._moveToGlobal(centerPipPos2, speed='fast'))
 
         # autofocus
         z_range = (startDepth - 500e-6, startDepth + 500e-6, 20e-6)
-        zStack = acquire_z_stack(imager, *z_range, block=True).getResult()
+        zStack = _future.waitFor(acquire_z_stack(imager, *z_range, block=True)).getResult()
         zStackArray = np.stack([frame.data() for frame in zStack])
         zDiff = np.abs(np.diff(zStackArray.astype(float), axis=0))
         zProfile = zDiff.max(axis=2).max(axis=1)  # most-changed pixel in each frame
@@ -153,7 +153,7 @@ def findNewPipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=0.
         # targetScore = focusScore.min() + 0.1 * (focusScore.max() - focusScore.min())
         # focusIndex = np.argwhere(focusScore > targetScore)[:,0].min()
         # depth = zStack[focusIndex].mapFromFrameToGlobal([0, 0, 0])[2]
-        pipette._moveToGlobal(imager.globalCenterPosition(), 'fast').wait()
+        _future.waitFor(pipette._moveToGlobal(imager.globalCenterPosition(), 'fast'))
 
         # find tip!
         pos = pipette.tracker.findTipInFrame()
