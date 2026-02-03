@@ -955,10 +955,9 @@ class AutomationDebugWindow(Qt.QWidget):
 
         # --- Get next cell ---
         # TODO separate ranking cells from targeting cells
-        # raise NotImplementedError("This method is not fully implemented.")
         cell: Cell = self._unranked_cells.pop(0)
-        center_global = cell.position
-        pixel_size = self.cameraDevice.getPixelSize()[0]  # Get current pixel size
+        center_global = cell.position.coordinates
+        pixel_size = stack[0].info()["pixelSize"]
         z_step = abs(stack[1].depth - stack[0].depth)
 
         # --- Create and show RankingWindow ---
