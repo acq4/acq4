@@ -957,7 +957,7 @@ class AutomationDebugWindow(Qt.QWidget):
         # TODO separate ranking cells from targeting cells
         cell: Cell = self._unranked_cells.pop(0)
         center_global = cell.position.coordinates
-        pixel_size = stack[0].info()["pixelSize"]
+        pixel_size = stack[0].info()["pixelSize"][0]  # Assume square pixels
         z_step = abs(stack[1].depth - stack[0].depth)
 
         # --- Create and show RankingWindow ---
