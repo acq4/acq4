@@ -955,10 +955,9 @@ class AutomationDebugWindow(Qt.QWidget):
 
         # --- Get next cell ---
         # TODO separate ranking cells from targeting cells
-        raise NotImplementedError("This method is not fully implemented.")
-        # TODO this is broken code; it assumes _unranked_cells is a list of (start, end) bounding boxes
-        start, end = np.array(self._unranked_cells.pop(0))
-        center_global = (start + end) / 2.0
+        # raise NotImplementedError("This method is not fully implemented.")
+        cell: Cell = self._unranked_cells.pop(0)
+        center_global = cell.position
         pixel_size = self.cameraDevice.getPixelSize()[0]  # Get current pixel size
         z_step = abs(stack[1].depth - stack[0].depth)
 
