@@ -7,6 +7,13 @@ from pyqtgraph import units
 from ._base import PatchPipetteState
 
 
+class BreakInSuccessful(Exception):
+    pass
+
+class BreakInFailed(Exception):
+    pass
+
+
 class BreakInState(PatchPipetteState):
     """State using pressure pulses to rupture membrane for whole cell recording.
 
@@ -71,48 +78,64 @@ class BreakInState(PatchPipetteState):
         lastPulse = ptime.time()
         attempt = 0
 
-        while True:
-            status = self.checkBreakIn()
-            if status is True:
-                patchrec['spontaneousBreakin'] = True
-                patchrec['breakinSuccessful'] = True
-                return {"state": 'whole cell'}
-            elif status is False:
-                return
-
-            if ptime.time() - lastPulse > config['pulseInterval']:
+        try:
+            while True:
+                time_until_next = (lastPulse + config['pulseInterval']) - ptime.time()
+                if time_until_next > 0:
+                    self.sleep(time_until_next)
                 nPulses = config['nPulses'][attempt]
                 pdur = config['pulseDurations'][attempt]
                 press = config['pulsePressures'][attempt]
                 self.setState('Break in attempt %d' % attempt)
-                status = self.attemptBreakIn(nPulses, pdur, press)
-                patchrec['attemptedBreakin'] = True
-                if status is True:
-                    patchrec['breakinSuccessful'] = True
-                    patchrec['spontaneousBreakin'] = False
-                    return {"state": 'whole cell'}
-                elif status is False:
-                    patchrec['breakinSuccessful'] = False
-                    return {"state": config['fallbackState']}
-                lastPulse = ptime.time()
+                self.attemptBreakIn(nPulses, pdur, press)
                 attempt += 1
+                patchrec['attemptedBreakin'] = True
+                lastPulse = ptime.time()
 
-            if attempt >= len(config['nPulses']):
-                self._taskDone(interrupted=True, error=f'Breakin failed after {attempt} attempts')
-                patchrec['breakinSuccessful'] = False
-                return {"state": config['fallbackState']}
+                if attempt >= len(config['nPulses']):
+                    raise BreakInFailed(f'Breakin failed after {attempt} attempts')
+        except BreakInSuccessful:
+            patchrec['breakinSuccessful'] = True
+            patchrec['spontaneousBreakin'] = attempt == 0
+            return {"state": 'whole cell'}
+        except BreakInFailed as exc:
+            patchrec['breakinSuccessful'] = False
+            self._taskDone(interrupted=True, error=exc.args[0])
+            return {"state": config['fallbackState']}
+        except Exception as exc:
+            patchrec['breakinSuccessful'] = False
+            self._taskDone(interrupted=True, error=str(exc))
+            return {"state": config['fallbackState']}
 
     def attemptBreakIn(self, nPulses, duration, pressure):
-        for _ in range(nPulses):
+        start = ptime.time()
+        stop = start + duration
+        for i in range(nPulses):
             # get the next test pulse
-            status = self.checkBreakIn()
-            if status is not None:
-                return status
             self.dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
-            time.sleep(duration)
-            self.dev.pressureDevice.setPressure(source='atmosphere')
+            try:
+                # while pulse is active, monitor for break-in or stop request
+                while True:
+                    remaining = stop - ptime.time()
+                    if remaining > 0.2:
+                        self.checkBreakIn()
+                    elif remaining > 0:
+                        time.sleep(remaining)
+                    else:
+                        break
+            finally:
+                self.dev.pressureDevice.setPressure(source='atmosphere')
+            if i < nPulses - 1:
+                time.sleep(0.1)  # short delay between pulses
+            self.checkBreakIn()
 
     def checkBreakIn(self):
+        """Check the status of the break-in attempt based on the latest test pulse.
+        Also checks for stop requests.
+
+        Raises BreakInSuccessful or BreakInFailed as appropriate.
+        Returns None if the break in is still ongoing.
+        """
         while True:
             self.checkStop()
             tps = self.getTestPulses(timeout=0.2)
@@ -123,16 +146,10 @@ class BreakInState(PatchPipetteState):
         analysis = tp.analysis
         holding = analysis['baseline_current']
         if holding < self.config['holdingCurrentThreshold']:
-            self._taskDone(
-                interrupted=True,
-                error=f'Holding current {holding * 1e9:.1f}nA exceeded `holdingCurrentThreshold`.',
-            )
-            return False
+            raise BreakInFailed(f'Holding current {holding * 1e9:.1f}nA exceeded `holdingCurrentThreshold`.')
 
-        return (
-            self.config['resistanceThreshold'] is not None
-            and analysis['steady_state_resistance'] < self.config['resistanceThreshold']
-        )
+        if self.config['resistanceThreshold'] is not None and analysis['steady_state_resistance'] < self.config['resistanceThreshold']:
+            raise BreakInSuccessful()
 
     def _cleanup(self):
         dev = self.dev
