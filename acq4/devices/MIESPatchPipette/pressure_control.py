@@ -27,7 +27,7 @@ class MIESPressureControl(PressureControl):
         if pressure is not None:
             pressure = pressure / PSI_PASCAL
 
-        source, pressure = self.mies.setPressureAndSource(self._headstage, source, pressure).result(timeout=2)
+        source, pressure = self.mies.setPressureAndSource(self._headstage, source, pressure).result(timeout=5)
         self.source = source
         self.pressure = pressure * PSI_PASCAL
 
