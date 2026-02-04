@@ -1,18 +1,13 @@
 from __future__ import annotations
 
-import os
 import datetime
+import os
 from pathlib import Path
 
 import numpy as np
-import pyqtgraph as pg
+
 import pyqtgraph as pg
 from MetaArray import MetaArray
-from acq4_automation.feature_tracking.cell import Cell
-from coorx import Point
-from coorx import SRT3DTransform, TransposeTransform, TTransform
-from pyqtgraph.units import µm, m
-
 from acq4.devices.Camera import Camera
 from acq4.devices.Microscope import Microscope
 from acq4.devices.PatchPipette import PatchPipette
@@ -31,6 +26,10 @@ from acq4.util.imaging import Frame
 from acq4.util.imaging.sequencer import acquire_z_stack
 from acq4.util.target import TargetBox
 from acq4.util.threadrun import futureInGuiThread, runInGuiThread
+from acq4_automation.cell_quality_annotation_tool import open_annotation_tool_with_detections
+from acq4_automation.feature_tracking.cell import Cell
+from coorx import Point
+from pyqtgraph.units import µm, m
 from .ranking_window import RankingWindow
 from ... import getManager
 
@@ -232,8 +231,6 @@ class RankingWindow(Qt.QWidget):
         frame_shape = stack_data.shape[1:]  # (rows, cols) or (y, x)
         n_frames = stack_data.shape[0]
 
-        # Get transform info from the first frame (assuming it's consistent)
-        frame0 = self.detection_stack[0]
         # Use pixel_size passed during initialization
         if self.pixel_size is None:
             raise ValueError("Pixel size information missing.")
@@ -354,6 +351,7 @@ class AutomationDebugWindow(Qt.QWidget):
 
     def __init__(self, module: "AutomationDebug"):
         super().__init__()
+        self._annotation_tool = None
         self.ui = UiTemplate()
         self.ui.setupUi(self)
 
@@ -662,6 +660,21 @@ class AutomationDebugWindow(Qt.QWidget):
 
             logger.info(f"Cell detection complete. Found {len(neurons)} potential cells")
             self._displayBoundingBoxes(neurons)
+
+            stack = np.asarray([frame.data().T for frame in self._current_detection_stack])
+            xform = self._current_detection_stack[0].globalTransform().inverted()[0]
+            centers_ijk = [np.abs(xform.map(n)[::-1]) for n in neurons]
+
+            if self._annotation_tool is not None:
+                self._annotation_tool.close()
+            self._annotation_tool = open_annotation_tool_with_detections(
+                stack=stack,
+                cell_centers_ijk=centers_ijk,
+                xy_scale=self._current_detection_stack[0].info()["pixelSize"][0],
+                z_scale=1.0e-6,
+                preserve_order=True,  # Keep healthy-first order
+            )
+
             # from acq4_automation.object_detection import NeuronBoxViewer
             # if self._current_classification_stack is not None:
             #     data = np.array(([[s.data().T for s in self._current_detection_stack]], [[s.data().T for s in self._current_classification_stack]]))
