@@ -797,6 +797,8 @@ class AutomationDebugWindow(Qt.QWidget):
             working_stack = detection_stack
             multichannel = False
 
+        self.cameraDevice.setFocusDepth(depth)  # Restore focus
+
         global_pos = _future.waitFor(
             detect_neurons(
                 working_stack,  # Prepared based on mock/real and single/multi
