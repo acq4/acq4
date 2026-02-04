@@ -673,6 +673,7 @@ class AutomationDebugWindow(Qt.QWidget):
                 xy_scale=self._current_detection_stack[0].info()["pixelSize"][0],
                 z_scale=1.0e-6,
                 preserve_order=True,  # Keep healthy-first order
+                filter=False,  # No extra filtering
             )
 
             # from acq4_automation.object_detection import NeuronBoxViewer
@@ -808,6 +809,7 @@ class AutomationDebugWindow(Qt.QWidget):
                 xy_scale=pixel_size,  # Global pixel_size
                 z_scale=step_z,  # Actual step_z from mock or real (1um for real)
                 multichannel=multichannel,  # Actual flag for detect_neurons
+                trim_edges=True,
             ),
             timeout=600,
         ).getResult()
