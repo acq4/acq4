@@ -113,6 +113,7 @@ class Scientifica(Stage):
 
         # if user has not provided scale values, we can make a guess
         config.setdefault("scale", (1e-6, 1e-6, 1e-6))
+        self.minimumSpeed = config.get("minimumSpeed", 100e-6)
 
         baudrate = config.pop("baudrate", None)
         ctrl_version = config.pop("version", 2)
@@ -280,10 +281,21 @@ class ScientificaMoveFuture(MoveFuture):
     """Provides access to a move-in-progress on a Scientifica manipulator.
     """
     def __init__(self, dev: Scientifica, pos, speed: float, name=None, **kwds):
+        """
+        Parameters
+        ----------
+        dev : Scientifica
+            The Scientifica device to move.
+        pos : array-like
+            Target position in meters. Use None for any axis that should not be moved.
+        speed : float
+            Speed in m/s.
+        kwds : dict
+            Additional keyword arguments passed to the driver's moveTo() method.
+        """
         self._moveReq = None
 
-        minSpeed = 1e-6 * dev.driver.getParam('minSpeed')
-        if speed < minSpeed:
+        if speed < dev.minimumSpeed:
             # device _can't_ move this slow; we need to break the move into steps
             self.stepwiseThread = threading.Thread(target=self._stepwiseMove, daemon=True, name=name)
             self.doStepwise = True
@@ -316,7 +328,7 @@ class ScientificaMoveFuture(MoveFuture):
 
     def _stepwiseMove(self):
         try:
-            minSpeed = self.dev.driver.getParam('minSpeed')
+            minSpeed = self.dev.minimumSpeed
             start = np.array(self.startPos)
             stop = np.array(self.targetPos)
             dist = np.linalg.norm(stop - start)
