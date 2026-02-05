@@ -4,7 +4,7 @@ from __future__ import print_function
 import os
 import sys
 
-from acq4.util.DataManager import DataManager
+from acq4.util.DataManager import getDataManager
 from acq4.util.DirTreeWidget import DirTreeLoader
 
 d = os.path.split(os.path.abspath(__file__))[0]
@@ -16,7 +16,7 @@ from acq4.util import Qt
 
 app = Qt.QApplication([])
 
-dm = DataManager()
+dm = getDataManager()
 dh = dm.getDirHandle(d)['testDir']
 
 
