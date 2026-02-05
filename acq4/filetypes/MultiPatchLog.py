@@ -714,14 +714,10 @@ class MultiPatchLogWidget(Qt.QWidget):
                 # draw the regulator first so other sources are not obscured
                 sources = sorted(sources, key=lambda s: s[0].lower() != 'r')
                 for source in sources:
-                    mask = pressure['source'] == source
-                    this_pressure = np.full_like(time, np.nan)
-                    indices = np.where(mask)[0]
-                    mask = np.unique(
-                        np.clip(
-                            np.concatenate([indices - 1, indices, indices + 1]), 0, len(time) - 1
-                        )
+                    mask = np.convolve(
+                        pressure['source'] == source, np.ones(3, dtype=bool), mode='same'
                     )
+                    this_pressure = np.full_like(time, np.nan)
                     this_pressure[mask] = pressure['pressure'][mask]
 
                     plot.plot(
