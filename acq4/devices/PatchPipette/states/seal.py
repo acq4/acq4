@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from typing import Any
 
 import numpy as np
@@ -379,15 +380,28 @@ class SealState(PatchPipetteState):
         dev = self.dev
 
         # every few seconds, slowly scan across the pressure neighborhood to find the best pressure
-        if self._lastPressureScan is None or ptime.time() - self._lastPressureScan > self.config['pressureScanInterval']:
-            low = max(self.pressure - self.config['pressureScanRadius'], self.config['pressureLimit'])
+        if (
+            self._lastPressureScan is None
+            or ptime.time() - self._lastPressureScan > self.config['pressureScanInterval']
+        ):
+            low = max(
+                self.pressure - self.config['pressureScanRadius'], self.config['pressureLimit']
+            )
             high = min(self.pressure + self.config['pressureScanRadius'], 0)
             self.dev.pressureDevice.setPressure(source='regulator', pressure=low)
             self.processAtLeastOneTestPulse()
             start = ptime.time()
-            self.waitFor(self.dev.pressureDevice.rampPressure(target=high, duration=self.config['pressureScanDuration']))
+            self.waitForFutureOrSuccess(
+                self.dev.pressureDevice.rampPressure(
+                    target=high, duration=self.config['pressureScanDuration']
+                )
+            )
             turnaround = ptime.time()
-            self.waitFor(self.dev.pressureDevice.rampPressure(target=low, duration=self.config['pressureScanDuration']))
+            self.waitForFutureOrSuccess(
+                self.dev.pressureDevice.rampPressure(
+                    target=low, duration=self.config['pressureScanDuration']
+                )
+            )
             end = ptime.time()
             self.processAtLeastOneTestPulse()
             self.pressure = self.best_pressure(start, turnaround, end)
@@ -396,6 +410,28 @@ class SealState(PatchPipetteState):
 
         self.pressure = np.clip(self.pressure, config['pressureLimit'], 0)
         dev.pressureDevice.setPressure(source='regulator', pressure=self.pressure)
+
+    def waitForFutureOrSuccess(self, future, timeout=20):
+        """Reimplemented waitFor that also checks for success"""
+        start = time.time()
+        while True:
+            try:
+                self.checkStop()
+                self.processAtLeastOneTestPulse()
+                if self._analysis.success():
+                    future.stop(reason="seal acquired")
+                    break
+            except self.StopRequested:
+                future.stop(reason="parent task stop requested")
+                raise
+            try:
+                future.wait(0.1)
+                break
+            except self.Timeout as e:
+                if future.wasInterrupted():  # a _real_ timeout, as opposed to our 0.1s loopbeat
+                    future.wait()  # let it sing
+                if timeout is not None and time.time() - start > timeout:
+                    raise self.Timeout(f"Timed out waiting {timeout}s for {future!r}") from e
 
     def best_pressure(self, start: float, turnaround: float, end: float) -> float:
         pressures, resistances = self._trim_data_caches(start)
