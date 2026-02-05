@@ -838,7 +838,9 @@ class MovePathFuture(MoveFuture):
 
                     if self._stopRequested:
                         self._taskDone(
-                            interrupted=True, error="Move was cancelled by external request"
+                            interrupted=True,
+                            error=f"Move to {explanation} was cancelled by unknown external "
+                                  f"request.\nFull path: {self.path}",
                         )
                         return
 
