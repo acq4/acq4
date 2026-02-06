@@ -84,6 +84,7 @@ class BreakInState(PatchPipetteState):
                 time_until_next = (lastPulse + config['pulseInterval']) - ptime.time()
                 if time_until_next > 0:
                     self.sleep(time_until_next)
+                self.checkBreakIn()
                 nPulses = config['nPulses'][attempt]
                 pdur = config['pulseDurations'][attempt]
                 press = config['pulsePressures'][attempt]
