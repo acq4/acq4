@@ -703,6 +703,11 @@ class MultiPatchLogWidget(Qt.QWidget):
         if state:
             plot = self.buildPlotForUnits('Pa')
             plot.show()
+            colors = {
+                'regulator': (255, 255, 0),
+                'atmosphere': (0, 128, 255),
+                'user': (255, 0, 255),
+            }
             i = 0
             for data in self._devices.values():
                 pressure = data.get('pressure', None)
@@ -714,17 +719,16 @@ class MultiPatchLogWidget(Qt.QWidget):
                 # draw the regulator first so other sources are not obscured
                 sources = sorted(sources, key=lambda s: s[0].lower() != 'r')
                 for source in sources:
-                    mask = np.convolve(
-                        pressure['source'] == source, np.ones(3, dtype=bool), mode='same'
-                    )
+                    mask = pressure['source'] == source
                     this_pressure = np.full_like(time, np.nan)
                     this_pressure[mask] = pressure['pressure'][mask]
 
                     plot.plot(
                         time,
-                        this_pressure,
-                        pen=pg.mkPen(color=pg.intColor(i, len(sources) * len(self._devices))),
+                        this_pressure[:-1],
+                        pen=pg.mkPen(color=colors[source]),
                         name=f'Pressure: {source}',
+                        stepMode=True,
                     )
                     i += 1
         elif 'Pa' in self._plots_by_units:
