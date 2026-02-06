@@ -649,7 +649,7 @@ class MultiPatchLogWidget(Qt.QWidget):
             self._testPulseAnalysisCheckboxes.append(cb)
             self._ctrl_layout.addWidget(cb)
         self._displayPressure = Qt.QCheckBox('Pressure')
-        self._displayPressure.toggled.connect(self._togglePressurePlot)
+        self._displayPressure.toggled.connect(self._togglePressurePlots)
         self._ctrl_layout.addWidget(self._displayPressure)
         self._sealAnalysisItems = {}
         self._displaySealAnalysis = Qt.QCheckBox('Seal Analysis')
@@ -709,15 +709,38 @@ class MultiPatchLogWidget(Qt.QWidget):
                 plot.removeItem(item)
             self._plot_items_by_plot[plot] = []
 
-    def _togglePressurePlot(self, state: bool):
+    def _togglePressurePlots(self, state: bool):
         if state:
             plot = self.buildPlotForUnits('Pa')
             plot.show()
+            colors = {
+                'regulator': (255, 255, 0),
+                'atmosphere': (0, 128, 255),
+                'user': (255, 0, 255),
+            }
+            i = 0
             for data in self._devices.values():
-                pressure = data.get('pressure', np.zeros(0, dtype=[('time', float), ('pressure', float)]))
+                pressure = data.get('pressure', None)
+                if pressure is None or len(pressure) == 0:
+                    plot.plot([], [], pen=pg.mkPen((0, len(TEST_PULSE_NUMPY_DTYPE))))
+                    continue
                 time = pressure['time'] - self.startTime()
-                if len(time) > 0:
-                    plot.plot(time, pressure['pressure'], pen=pg.mkPen((0, len(TEST_PULSE_NUMPY_DTYPE))), name='Pressure')
+                sources = np.unique(pressure['source'])
+                # draw the regulator first so other sources are not obscured
+                sources = sorted(sources, key=lambda s: s[0].lower() != 'r')
+                for source in sources:
+                    mask = pressure['source'] == source
+                    this_pressure = np.full_like(time, np.nan)
+                    this_pressure[mask] = pressure['pressure'][mask]
+
+                    plot.plot(
+                        time,
+                        this_pressure[:-1],
+                        pen=pg.mkPen(color=colors[source]),
+                        name=f'Pressure: {source}',
+                        stepMode=True,
+                    )
+                    i += 1
         elif 'Pa' in self._plots_by_units:
             self._plots_by_units['Pa'].hide()
 
