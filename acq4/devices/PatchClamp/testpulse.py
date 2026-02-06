@@ -254,7 +254,10 @@ class TestPulseThread(QtThread):
         pri.recording = rec
         cmd.recording = rec
 
-        return PatchClampTestPulse(rec, stimulus=task.command[self._clampName]["stimulus"])
+        tp = PatchClampTestPulse(rec)
+        if self._params['postProcessing'] is not None:
+            tp = self._params['postProcessing'](tp)
+        return tp
 
     def createTask(self, params: dict) -> Task:
         duration = params['preDuration'] + params['pulseDuration'] + params['postDuration']
