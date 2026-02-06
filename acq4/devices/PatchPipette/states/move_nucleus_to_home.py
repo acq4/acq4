@@ -27,4 +27,8 @@ class MoveNucleusToHomeState(PatchPipetteState):
     def run(self):
         self.waitFor(self.dev.pressureDevice.rampPressure(maximum=self.config['pressureLimit']), timeout=None)
         self.waitFor(self.dev.pipetteDevice.moveTo(self.config['positionName'], 'fast'), timeout=None)
-        self.sleep(float("inf"))
+        return {
+            "state": "out",
+            "initialPressure": self.config['pressureLimit'],
+            "initialPressureSource": self.config['initialPressureSource'],
+        }
