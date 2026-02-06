@@ -106,19 +106,27 @@ class MIES(Qt.QObject):
         self.selectHeadstage(headstage)
         return float(self.getCtrlValue('setvar_DataAcq_AutoBiasV')) / 1000
     
-    def getManualPressure(self, headstage) -> float:
-        self.selectHeadstage(headstage)
-        return float(self.getCtrlValue('setvar_DataAcq_SSPressure'))
-    
+    # def getManualPressure(self, headstage) -> float:
+    #     self.selectHeadstage(headstage)
+    #     return float(self.getCtrlValue('setvar_DataAcq_SSPressure'))
+
+    def getPressureAndSource(self, headstage):
+        return self.igor('ReadPressureSourceAndPressure', self.getWindowName(), headstage).result()
+
     def setPressureAndSource(self, headstage, source, pressure):
-        if source == 'user':
-            self.selectHeadstage(headstage)
-            return self.setCtrl("check_DataACq_Pressure_User", True)
-        try:
-            source_val = {'atmosphere': 0, 'regulator': 1}[source]
-        except KeyError:
-            raise ValueError(f"Invalid pressure source '{source}'")
-        return self.igor('DoPressureManual', self.getWindowName(), headstage, source_val, pressure)
+        # if source == 'user':
+        #     self.selectHeadstage(headstage)
+        #     return self.setCtrl("check_DataACq_Pressure_User", True)
+        # try:
+        #     source_val = {'atmosphere': 0, 'regulator': 1}[source]
+        # except KeyError:
+        #     raise ValueError(f"Invalid pressure source '{source}'")
+        # return self.igor('DoPressureManual', self.getWindowName(), headstage, source_val, pressure)
+        if source is None:
+            source = ""
+        if pressure is None:
+            pressure = float('nan')
+        return self.igor('FFI_GetWithOptionToSetPressure', self.getWindowName(), headstage, source, pressure)
 
     def setHeadstageActive(self, hs, active):
         return self.setCtrl('Check_DataAcqHS_%02d' % hs, active)
