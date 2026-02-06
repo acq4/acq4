@@ -349,6 +349,8 @@ class SealState(PatchPipetteState):
             )
             end = ptime.time()
             self.processAtLeastOneTestPulse()
+            if self._analysis.success():
+                return  # already sealed during pressure scan
             self.pressure = self.best_pressure(start, turnaround, end)
             self.setState(f'scanned for pressure: {self.pressure / kPa:0.1f} kPa')
             self._lastPressureScan = end
