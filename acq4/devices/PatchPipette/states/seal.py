@@ -362,13 +362,13 @@ class SealState(PatchPipetteState):
         while True:
             try:
                 self.checkStop()
-                self.processAtLeastOneTestPulse()
-                if self._analysis.success():
-                    future.stop(reason="seal acquired")
-                    break
             except self.StopRequested:
                 future.stop(reason="parent task stop requested")
                 raise
+            self.processAtLeastOneTestPulse()
+            if self._analysis.success():
+                future.stop(reason="seal acquired")
+                break
             try:
                 future.wait(0.1)
                 break
