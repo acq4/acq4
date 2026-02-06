@@ -37,6 +37,16 @@ for info in TEST_PULSE_METAARRAY_INFO:
     info = info.copy()
     if 'units' in info:
         info['suffix'] = info['units']
+        info['siPrefix'] = True
+        info['dec'] = True
+        info['step'] = 1.0
+        info['minStep'] = {
+                'Ω': 100e3,
+                'V': 1e-3,
+                'F': 1e-12,
+                's': 1e-5,
+                'A': 1e-12,
+        }.get(info['units'], 1.0)
         del info['units']
     TEST_PULSE_PARAMETER_CONFIG.append(info)
 
