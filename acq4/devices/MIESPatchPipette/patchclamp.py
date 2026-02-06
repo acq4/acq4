@@ -180,9 +180,6 @@ class MIESPatchClamp(PatchClamp):
     
     def getParam(self, param):
         return None
-    
-    def deviceInterface(self, win):
-        return None
 
 
 class MIESTestPulseThread(TestPulseThread):
@@ -336,4 +333,8 @@ class MIESTestPulseThread(TestPulseThread):
             **extra_kwds,
         )
 
-        return PatchClampTestPulse(rec)
+        tp = PatchClampTestPulse(rec)
+        # allow for optional post-processing of the test pulse, e.g. to manually override analysis results
+        if self._params['postProcessing'] is not None:
+            tp = self._params['postProcessing'](tp)        
+        return tp
