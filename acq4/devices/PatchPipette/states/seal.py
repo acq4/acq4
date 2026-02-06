@@ -341,6 +341,8 @@ class SealState(PatchPipetteState):
                     target=high, duration=self.config['pressureScanDuration']
                 )
             )
+            if self._analysis.success():
+                return  # already sealed during pressure scan
             turnaround = ptime.time()
             self.waitForFutureOrSuccess(
                 self.dev.pressureDevice.rampPressure(
