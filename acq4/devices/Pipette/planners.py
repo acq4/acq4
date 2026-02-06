@@ -309,8 +309,7 @@ class PipetteMotionPlanner:
     For example, moving to a pipette search position involves setting the focus to a certain height, followed by
     positioning the pipette tip at that height and in the field of view.
     """
-
-    def __init__(self, pip: Pipette, position: Union[np.ndarray, str], speed: float, **kwds):
+    def __init__(self, pip: Pipette, position: Union[np.ndarray, str], speed: float | str, **kwds):
         self.pip = pip
         self.position = position
         self.speed = speed

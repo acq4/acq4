@@ -278,7 +278,7 @@ class MockClampTask(DAQGenericTask):
 
     def getResult(self):
         result = DAQGenericTask.getResult(self)
-        result._info[-1]['startTime'] = next(iter(result._info[-1][self.clampDev.getDAQName("primary")].values()))['startTime']
+        result._info[-1]['startTime'] = next(iter(result._info[-1]['DAQ'].values()))['startTime']
         result._info[-1]['ClampState'] = self.ampState
         return result
 
