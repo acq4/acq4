@@ -56,6 +56,9 @@ class DoverStage(Stage):
         else:
             return None
 
+    def quit(self):
+        self.dev.set_callback(None)
+
 
 class DoverMoveFuture(MoveFuture):
     """Provides access to a move-in-progress on a Dover stage."""

@@ -184,19 +184,27 @@ class CameraInterface(CameraModuleInterface):
     def updateTransform(self, tr):
         # update view for new transform such that sensor bounds remain stationary on screen.
         pos = tr.getTranslation()
-        
+
+        # Only the active interface is allowed to move the view
+        # This prevents multiple cameras from fighting over view control
+        isActive = self.module.activeInterface is self
+
         scale = tr.getScale()
         if scale != self.lastCameraScale:
-            anchor = self.view.mapViewToDevice(self.lastCameraPosition)
-            self.view.scaleBy(scale / self.lastCameraScale)
-            # Qt.QApplication.processEvents()
-            anchor2 = self.view.mapDeviceToView(anchor)
-            diff = pos - anchor2
+            if isActive:
+                anchor = self.view.mapViewToDevice(self.lastCameraPosition)
+                self.view.scaleBy(scale / self.lastCameraScale)
+                # Qt.QApplication.processEvents()
+                anchor2 = self.view.mapDeviceToView(anchor)
+                diff = pos - anchor2
+            else:
+                diff = pos - self.lastCameraPosition
             self.lastCameraScale = scale
         else:
             diff = pos - self.lastCameraPosition
-            
-        self.view.translateBy(diff)
+
+        if isActive:
+            self.view.translateBy(diff)
         self.lastCameraPosition = pos
         self.cameraItemGroup.setTransform(tr)
 
@@ -241,6 +249,29 @@ class CameraInterface(CameraModuleInterface):
 
     def cameraStarted(self):
         self.imagingCtrl.acquisitionStarted()
+        # Adjust view when switching from another camera
+        prevIface = self.module.activeInterface
+        if prevIface is not self and hasattr(prevIface, 'cam'):
+            prevBounds = prevIface.cam.getBoundary(globalCoords=True, mode="roi")
+            thisBounds = self.cam.getBoundary(globalCoords=True, mode="roi")
+            # Scale so this camera's FOV fills roughly the same screen area
+            scaleRatio = abs(prevBounds[2]) / abs(thisBounds[2])
+            self.view.scaleBy((scaleRatio, scaleRatio))
+            # Translate from previous ROI center to this ROI center
+            prevCenter = Point(prevBounds[0] + prevBounds[2] / 2, prevBounds[1] + prevBounds[3] / 2)
+            thisCenter = Point(thisBounds[0] + thisBounds[2] / 2, thisBounds[1] + thisBounds[3] / 2)
+            self.view.translateBy(thisCenter - prevCenter)
+            # Sync tracked state so the next updateTransform doesn't re-apply
+            tr = pg.SRTTransform(self.cam.globalTransform())
+            self.lastCameraPosition = tr.getTranslation()
+            self.lastCameraScale = tr.getScale()
+        # Make this the active interface so it controls the view
+        self.module.setActiveInterface(self)
+        # Bring this camera's image above all others
+        for iface in self.module.interfaces.values():
+            if hasattr(iface, 'imageItemGroup') and iface is not self:
+                iface.imageItemGroup.setZValue(-3)
+        self.imageItemGroup.setZValue(-2)
 
     def binningComboChanged(self, args):
         self.setBinning(*args)

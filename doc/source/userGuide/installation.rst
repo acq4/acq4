@@ -10,9 +10,11 @@ handles the installation of ACQ4 and its dependencies.
 Windows
 ~~~~~~~
 
+Install miniconda or anaconda, then run the following from an anaconda prompt:
+
 .. code-block:: bat
 
-    curl -o install_acq4.bat http://acq4.org/install_acq4.bat && install_acq4.bat && del install_acq4.bat
+    curl -o install_acq4.bat https://acq4.org/install_acq4.bat && install_acq4.bat && del install_acq4.bat
 
 Which will create a desktop shortcut to launch ACQ4.
 
@@ -21,15 +23,10 @@ Linux
 
 .. code-block:: bash
 
-    wget http://acq4.org/install_acq4.sh -O install_acq4.sh && bash install_acq4.sh && rm install_acq4.sh
+    wget https://acq4.org/install_acq4.sh -O install_acq4.sh && bash install_acq4.sh && rm install_acq4.sh
 
-After installation, you can start ACQ4 by running:
+After installation, you can start ACQ4 by running the start_acq4.sh script created in the new folder.
 
-.. code-block:: bash
-
-    cd acq4/acq4
-    conda activate ../conda_env
-    python -m acq4 -x
 
 Data Access and Analysis with ACQ4
 ----------------------------------

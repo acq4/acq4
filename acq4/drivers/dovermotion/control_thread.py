@@ -160,6 +160,10 @@ class SmartStageControlThread:
                 self._handle_disable(fut)
             elif cmd == 'enable':
                 self._handle_enable(fut)
+            elif cmd == 'disable_axis':
+                self._handle_disable_axis(fut)
+            elif cmd == 'enable_axis':
+                self._handle_enable_axis(fut)
             elif cmd == 'enabled_state':
                 fut.set_result(self._get_enabled_state())
             else:
@@ -207,6 +211,20 @@ class SmartStageControlThread:
         for axis in self.axes:
             if axis.GetIsEnabled().Value is not True:
                 check(axis.Enable(), error_msg="Error enabling axis: ")
+        fut.set_result(None)
+
+    def _handle_disable_axis(self, fut):
+        axis_index = fut.kwds['axis_index']
+        axis = self.axes[axis_index]
+        if axis.GetIsEnabled().Value is not False:
+            check(axis.Disable(), error_msg=f"Error disabling axis {axis_index}: ")
+        fut.set_result(None)
+
+    def _handle_enable_axis(self, fut):
+        axis_index = fut.kwds['axis_index']
+        axis = self.axes[axis_index]
+        if axis.GetIsEnabled().Value is not True:
+            check(axis.Enable(), error_msg=f"Error enabling axis {axis_index}: ")
         fut.set_result(None)
 
     def _get_enabled_state(self):

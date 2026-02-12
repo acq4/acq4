@@ -7,7 +7,9 @@ Clients can connect to the server process to interact with the stage. (see motio
 import atexit
 import logging
 import os
+import subprocess
 import sys
+import re
 
 import pyqtgraph.console as pgconsole
 import teleprox.qt as qt
@@ -46,7 +48,13 @@ def check(result, error_msg=""):
     return result
 
 
-def load_motionsynergyapi(dll_file=None):
+# message generated while trying to update instrument config COM port and serial mode
+# to be displayed if initialization fails
+update_error_message = None
+
+
+def load_motionsynergyapi(dll_file=None, auto_update_port=True):
+    global update_error_message
     if dll_file is not None:
         if not os.path.isfile(dll_file):
             raise FileNotFoundError(f"Motion synergy DLL file not found: {dll_file}")
@@ -55,6 +63,9 @@ def load_motionsynergyapi(dll_file=None):
         path = os.path.dirname(dll_file)
     else:
         path = None
+
+    if auto_update_port:
+        update_error_message = update_com_port(path)
 
     # Both needed to ensure all DLL files can be found
     os.environ["PATH"] = os.environ["PATH"] + ";" + path
@@ -73,6 +84,91 @@ def load_motionsynergyapi(dll_file=None):
     instrumentSettings.ConfigurationFilename = "Instrument.cfg"
 
     return motionSynergy, instrumentSettings
+
+
+def update_com_port(dll_path):
+    """Windows likes to reassign USB serial ports to different COM numbers and lose their configuration in the process.
+    
+    1. Scan available com ports to find any named "Moxa*"
+    2. Read the instrument.cfg file in dll_path/SupportFolder to get the saved COM port  (looks like hwid=COM3)
+    3. If the saved com port is not found or not a Moxa device, then update the instrument.cfg to use the only Moxa device found (if multiple, then raise an exception)
+    4. Update windows registry to set moxa to use RS-485-4W mode
+    """
+
+    # command for finding device registry keys:
+    #   > wmic path Win32_PnPEntity where "Caption like '%(COM%)'" get DeviceID
+    #     DeviceID
+    #     ACPI\PNP0501\0
+    #     MXUPORT\COM\9&1B23C7F3&0&0000
+
+    # registry settings for moxa ports:
+    #   >reg query "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Enum\MXUPORT\COM\9&1B23C7F3&0&0000\Device Parameters"
+
+    #     HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Enum\MXUPORT\COM\9&1B23C7F3&0&0000\Device Parameters
+    #     PortFlag    REG_DWORD    0x0
+    #     PortName    REG_SZ    COM7
+    #     InstanceID    REG_SZ    9&1b23c7f3&0&0000
+    #     CoInstalled    REG_DWORD    0x1
+    #     SerInterface    REG_DWORD    0x3
+
+    # SerInterface must be ser to 0x3 for RS-485-4W mode
+
+    import serial.tools.list_ports
+    # import configparser -- don't use configparser; it is bad at round-trip
+    import winreg
+
+    com_ports = list(serial.tools.list_ports.comports())
+    moxa_ports = {p.device:p for p in com_ports if p.description.lower().startswith("moxa")}
+    if len(moxa_ports) == 0:
+        return  "No Moxa COM ports found"
+    config_path = os.path.join(dll_path, "SupportFolder", "Instrument.cfg")
+    config = open(config_path, 'r').read()
+    hwid_regex = r'^\s*hwid\s*=\s*(\w+)\s*$'
+    match = re.search(hwid_regex, config, re.MULTILINE)
+    if match:
+        saved_com_port = match.group(1)
+    else:
+        return f"Cannot find saved COM port in {config_path}"
+
+    # verify configured port is a moxa device; update config if possible
+    if saved_com_port not in moxa_ports:
+        if len(moxa_ports) > 1:
+            return f"Instrument config at {config_path} has invalid COM port {saved_com_port}, but multiple Moxa COM ports found {list(moxa_ports.keys())}, cannot select automatically"
+        new_com_port = list(moxa_ports.keys())[0]
+        # config.set("SerialComms1Options", "hwid", new_com_port)
+        # with open(config_path, 'w') as configfile:
+        #     config.write(configfile)
+        # manually rewrite the config file to preserve formatting
+        new_config = re.sub(hwid_regex, f'hwid = {new_com_port}', config, flags=re.MULTILINE)
+        with open(config_path, 'w') as configfile:
+            configfile.write(new_config)
+        logging.info(f"Updated instrument config at {config_path} to use Moxa COM port {new_com_port} instead of saved port {saved_com_port}")
+        saved_com_port = new_com_port
+
+    # update registry to set SerInterface to 0x3 for RS-485-4W mode for the selected port
+    try:
+        # find device registry key
+        moxa_port = moxa_ports[saved_com_port]
+        hwid = moxa_port.hwid  # e.g. "MXUPORT\COM\9&1B23C7F3&0&0000"
+        reg_path = f"SYSTEM\\CurrentControlSet\\Enum\\{hwid}\\Device Parameters"
+        # read current SerInterface value
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, reg_path, 0, winreg.KEY_READ) as key:
+            ser_interface, reg_type = winreg.QueryValueEx(key, "SerInterface")
+        if ser_interface != 0x3:
+            # update SerInterface to 0x3
+            try:
+                output = subprocess.check_output([
+                    "powershell",
+                    "-Command",
+                    "Start-Process reg -ArgumentList ",
+                    f"'add \"HKEY_LOCAL_MACHINE\\{reg_path}\" /v SerInterface /t REG_DWORD /d 3 /f'",
+                    "-Verb RunAs"
+                ])
+            except subprocess.CalledProcessError as e:
+                return f"Error updating registry for Moxa COM port {saved_com_port}: {e}"
+            logging.info(f"Updated registry SerInterface to 0x3 for RS-485-4W mode on Moxa COM port {saved_com_port}")
+    except Exception as e:
+        return f"Error updating registry for Moxa COM port {saved_com_port}: {e}"
 
 
 def configure(motionSynergy, instrumentSettings):
@@ -107,7 +203,12 @@ def initialize(run_init: bool = True, progress=None):
 
     init_warning_msgbox()
 
-    result = check(motion_synergy.Initialize(run_init, progress), error_msg="Error initializing MotionSynergyAPI: ")
+    try:
+        result = check(motion_synergy.Initialize(run_init, progress), error_msg="Error initializing MotionSynergyAPI: ")
+    except MotionSynergyException as e:
+        if update_error_message is not None:
+            e.add_note(update_error_message)
+        raise
     initialized = True
     return result
 
@@ -183,7 +284,8 @@ class SmartStageTrayIcon(qt.QObject):
 
     def __init__(self):
         super().__init__()
-        self._toggle_enable = False
+        self.axis_actions = []
+        self.axis_toggle_enable = []
         self.tray_icon = TrayIcon(get_smartstage_icon())
 
         self.menu = qt.QMenu()
@@ -192,10 +294,20 @@ class SmartStageTrayIcon(qt.QObject):
         self.label_action.setEnabled(False)
         self.menu.addAction(self.label_action)
 
-        self.energize_action = qt.QAction("Energize motors", self.menu)
-        self.energize_action.setEnabled(False)
-        self.energize_action.triggered.connect(self._toggle_motors)
-        self.menu.addAction(self.energize_action)
+        self.menu.addSeparator()
+
+        # Axis-specific enable/disable actions will be added in set_smartstage
+        self.enable_all_action = qt.QAction("Enable all", self.menu)
+        self.enable_all_action.setEnabled(False)
+        self.enable_all_action.triggered.connect(self._enable_all_motors)
+        self.menu.addAction(self.enable_all_action)
+
+        self.disable_all_action = qt.QAction("Disable all", self.menu)
+        self.disable_all_action.setEnabled(False)
+        self.disable_all_action.triggered.connect(self._disable_all_motors)
+        self.menu.addAction(self.disable_all_action)
+
+        self.menu.addSeparator()
 
         self.initialize_action = qt.QAction("Initialize", self.menu)
         self.initialize_action.triggered.connect(initialize)
@@ -221,20 +333,56 @@ class SmartStageTrayIcon(qt.QObject):
         self.set_smartstage(smartstage)
 
     def set_smartstage(self, ss):
+        # Remove any existing axis actions
+        for action in self.axis_actions:
+            self.menu.removeAction(action)
+        self.axis_actions = []
+        self.axis_toggle_enable = []
+
         if ss is None:
-            self.energize_action.setEnabled(False)
+            self.enable_all_action.setEnabled(False)
+            self.disable_all_action.setEnabled(False)
             return
-        self.energize_action.setEnabled(True)
+
+        # Create menu items for each axis
+        axis_count = ss.axis_count()
+        axis_names = ss.axis_names()
+
+        for i in range(axis_count):
+            axis_name = axis_names[i]
+            action = qt.QAction(f"Enable {axis_name}", self.menu)
+            action.triggered.connect(lambda _, idx=i: self._toggle_axis(idx))
+            # Insert the action before the "Enable all" action
+            self.menu.insertAction(self.enable_all_action, action)
+            self.axis_actions.append(action)
+            self.axis_toggle_enable.append(True)  # Default to wanting to enable
+
+        # Add separator after axis actions if we have any
+        if axis_count > 0:
+            self.menu.insertSeparator(self.enable_all_action)
+
+        self.enable_all_action.setEnabled(True)
+        self.disable_all_action.setEnabled(True)
         ss.add_enabled_state_callback(self._on_enabled_state_changed)
         self._update_enabled_state(ss.is_enabled(refresh=True))
 
-    def _toggle_motors(self):
+    def _toggle_axis(self, axis_index):
         if smartstage is None:
             return
-        if self._toggle_enable:
-            smartstage.enable()
+        if self.axis_toggle_enable[axis_index]:
+            smartstage.enable_axis(axis_index)
         else:
-            smartstage.disable()
+            smartstage.disable_axis(axis_index)
+
+    def _enable_all_motors(self):
+        if smartstage is None:
+            return
+        smartstage.enable()
+
+    def _disable_all_motors(self):
+        if smartstage is None:
+            return
+        smartstage.disable()
 
     def _show_log_window(self):
         viewer = _ensure_log_viewer()
@@ -252,13 +400,19 @@ class SmartStageTrayIcon(qt.QObject):
         self.enabled_changed.emit(enabled_state)
 
     def _update_enabled_state(self, enabled_state):
-        if all(state is False for state in enabled_state):
-            text = "Enable motors"
-            self._toggle_enable = True
-        else:
-            text = "Disable motors"
-            self._toggle_enable = False
-        self.energize_action.setText(text)
+        if smartstage is None:
+            return
+
+        # Update each axis action based on its enabled state
+        axis_names = smartstage.axis_names()
+        for i, (action, is_enabled) in enumerate(zip(self.axis_actions, enabled_state)):
+            axis_name = axis_names[i]
+            if is_enabled:
+                action.setText(f"Disable {axis_name}")
+                self.axis_toggle_enable[i] = False
+            else:
+                action.setText(f"Enable {axis_name}")
+                self.axis_toggle_enable[i] = True
 
 
 tray_icon = None

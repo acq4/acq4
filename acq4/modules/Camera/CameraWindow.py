@@ -25,6 +25,7 @@ class CameraWindow(Qt.QMainWindow):
 
         self.interfaces = OrderedDict()  # owner: widget
         self.docks = OrderedDict()  # owner: dock
+        self.activeInterface = None  # track which interface controls the view
 
         # Start building UI
         Qt.QMainWindow.__init__(self)
@@ -128,12 +129,23 @@ class CameraWindow(Qt.QMainWindow):
 
         self.gv.scene().sigMouseMoved.connect(self.updateMouse)
 
+    def setActiveInterface(self, iface: "CameraModuleInterface"):
+        """Set which camera interface is allowed to control the view position.
+
+        This is typically called when a camera starts acquisition.
+        """
+        self.activeInterface = iface
+
     def addInterface(self, name, iface: "CameraModuleInterface"):
         """Display a new user interface in the camera module.
         """
         assert name not in self.interfaces
 
         self.interfaces[name] = iface
+
+        # Make the first interface active by default
+        if self.activeInterface is None and iface.canImage:
+            self.activeInterface = iface
         widget = iface.controlWidget()
         if widget is not None:
             dock = dockarea.Dock(name=name, widget=iface.controlWidget(), size=(10, 500))
