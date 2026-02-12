@@ -1073,7 +1073,7 @@ class Imager(Module):
 class ImagerCamModInterface(CameraModuleInterface):
     """For plugging in the 2p imager system to the camera module.
     """
-
+    canImage = True
     def __init__(self, imager, mod):
         self.imager = imager
 

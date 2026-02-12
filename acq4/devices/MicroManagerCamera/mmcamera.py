@@ -308,6 +308,11 @@ class MicroManagerCamera(Camera):
             rgn[1] = int(rgn[1] / self.getParam('binningY'))
             rgn[2] = int(rgn[2] / self.getParam('binningX'))
             rgn[3] = int(rgn[3] / self.getParam('binningY'))
+        # is this different from current ROI?
+        currentRgn = self.mmc.getROI(self.camName)
+        if tuple(rgn) == currentRgn:
+            return
+        
         self.mmc.setROI(*rgn)
 
     @lru_cache(maxsize=None)

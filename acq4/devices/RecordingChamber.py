@@ -49,6 +49,9 @@ class RecordingChamber(Device, OptomechDevice):
 
 
 class RecordingChamberCameraInterface(CameraModuleInterface):
+
+    canImage = False
+
     def __init__(self, dev, mod):
         CameraModuleInterface.__init__(self, dev, mod)
 
