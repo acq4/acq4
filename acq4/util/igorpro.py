@@ -8,10 +8,9 @@ import concurrent.futures
 import atexit
 import json
 import zmq
-import datetime
 import logging
 
-from acq4.util.json_encoder import ACQ4JSONEncoder
+from acq4.util.json_encoder import IgorJSONEncoder
 from acq4.util import Qt
 
 
@@ -229,15 +228,14 @@ class IgorReqThread(threading.Thread):
                 try:
                     message_id = int(reply["messageID"])
                 except KeyError as ke:
-                    raise RuntimeError(f"Igor message has no ID: {reply}")
-                # print(f"IGOR RECV: {message_id} {reply}")
+                    raise RuntimeError(f"Igor message has no ID: {reply}") from ke
                 try:
                     future = self.unresolved_futures.pop(message_id)
-                except KeyError:
+                except KeyError as ke:
                     if message_id in self.resolved_ids:
-                        raise ValueError(f"Received IGOR message {message_id} multiple times.")
+                        raise ValueError(f"Received IGOR message {message_id} multiple times.") from ke
                     else:
-                        raise ValueError(f"Received unexpectd IGOR message {message_id}")
+                        raise ValueError(f"Received unexpected IGOR message {message_id}") from ke
                 self.resolved_ids.add(message_id)
 
                 if future is None:
@@ -261,10 +259,12 @@ class IgorReqThread(threading.Thread):
                     "name": cmd,
                     "params": params}
                 }
-        msg = [b"", json.dumps(call, cls=ACQ4JSONEncoder).encode()]
+        msg = [b"", json.dumps(call, cls=IgorJSONEncoder).encode()]
+        # print("send to igor:", msg)
         return msg
 
     def parse_reply(self, reply):
+        # print("received from igor:", reply)
         err = reply.get("errorCode", {}).get("value", None)
         if err is None:
             raise RuntimeError("Invalid response from Igor")
@@ -274,7 +274,7 @@ class IgorReqThread(threading.Thread):
 
         result = reply.get("result", {})
         if isinstance(result, list):
-            return (self._parse_return_value(r) for r in result)
+            return tuple([self._parse_return_value(r) for r in result])
         else:
             return self._parse_return_value(result)
             
