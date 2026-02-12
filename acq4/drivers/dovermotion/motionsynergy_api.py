@@ -7,7 +7,9 @@ Clients can connect to the server process to interact with the stage. (see motio
 import atexit
 import logging
 import os
+import subprocess
 import sys
+import re
 
 import pyqtgraph.console as pgconsole
 import teleprox.qt as qt
@@ -46,7 +48,13 @@ def check(result, error_msg=""):
     return result
 
 
-def load_motionsynergyapi(dll_file=None):
+# message generated while trying to update instrument config COM port and serial mode
+# to be displayed if initialization fails
+update_error_message = None
+
+
+def load_motionsynergyapi(dll_file=None, auto_update_port=True):
+    global update_error_message
     if dll_file is not None:
         if not os.path.isfile(dll_file):
             raise FileNotFoundError(f"Motion synergy DLL file not found: {dll_file}")
@@ -55,6 +63,9 @@ def load_motionsynergyapi(dll_file=None):
         path = os.path.dirname(dll_file)
     else:
         path = None
+
+    if auto_update_port:
+        update_error_message = update_com_port(path)
 
     # Both needed to ensure all DLL files can be found
     os.environ["PATH"] = os.environ["PATH"] + ";" + path
@@ -73,6 +84,91 @@ def load_motionsynergyapi(dll_file=None):
     instrumentSettings.ConfigurationFilename = "Instrument.cfg"
 
     return motionSynergy, instrumentSettings
+
+
+def update_com_port(dll_path):
+    """Windows likes to reassign USB serial ports to different COM numbers and lose their configuration in the process.
+    
+    1. Scan available com ports to find any named "Moxa*"
+    2. Read the instrument.cfg file in dll_path/SupportFolder to get the saved COM port  (looks like hwid=COM3)
+    3. If the saved com port is not found or not a Moxa device, then update the instrument.cfg to use the only Moxa device found (if multiple, then raise an exception)
+    4. Update windows registry to set moxa to use RS-485-4W mode
+    """
+
+    # command for finding device registry keys:
+    #   > wmic path Win32_PnPEntity where "Caption like '%(COM%)'" get DeviceID
+    #     DeviceID
+    #     ACPI\PNP0501\0
+    #     MXUPORT\COM\9&1B23C7F3&0&0000
+
+    # registry settings for moxa ports:
+    #   >reg query "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Enum\MXUPORT\COM\9&1B23C7F3&0&0000\Device Parameters"
+
+    #     HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Enum\MXUPORT\COM\9&1B23C7F3&0&0000\Device Parameters
+    #     PortFlag    REG_DWORD    0x0
+    #     PortName    REG_SZ    COM7
+    #     InstanceID    REG_SZ    9&1b23c7f3&0&0000
+    #     CoInstalled    REG_DWORD    0x1
+    #     SerInterface    REG_DWORD    0x3
+
+    # SerInterface must be ser to 0x3 for RS-485-4W mode
+
+    import serial.tools.list_ports
+    # import configparser -- don't use configparser; it is bad at round-trip
+    import winreg
+
+    com_ports = list(serial.tools.list_ports.comports())
+    moxa_ports = {p.device:p for p in com_ports if p.description.lower().startswith("moxa")}
+    if len(moxa_ports) == 0:
+        return  "No Moxa COM ports found"
+    config_path = os.path.join(dll_path, "SupportFolder", "Instrument.cfg")
+    config = open(config_path, 'r').read()
+    hwid_regex = r'^\s*hwid\s*=\s*(\w+)\s*$'
+    match = re.search(hwid_regex, config, re.MULTILINE)
+    if match:
+        saved_com_port = match.group(1)
+    else:
+        return f"Cannot find saved COM port in {config_path}"
+
+    # verify configured port is a moxa device; update config if possible
+    if saved_com_port not in moxa_ports:
+        if len(moxa_ports) > 1:
+            return f"Instrument config at {config_path} has invalid COM port {saved_com_port}, but multiple Moxa COM ports found {list(moxa_ports.keys())}, cannot select automatically"
+        new_com_port = list(moxa_ports.keys())[0]
+        # config.set("SerialComms1Options", "hwid", new_com_port)
+        # with open(config_path, 'w') as configfile:
+        #     config.write(configfile)
+        # manually rewrite the config file to preserve formatting
+        new_config = re.sub(hwid_regex, f'hwid = {new_com_port}', config, flags=re.MULTILINE)
+        with open(config_path, 'w') as configfile:
+            configfile.write(new_config)
+        logging.info(f"Updated instrument config at {config_path} to use Moxa COM port {new_com_port} instead of saved port {saved_com_port}")
+        saved_com_port = new_com_port
+
+    # update registry to set SerInterface to 0x3 for RS-485-4W mode for the selected port
+    try:
+        # find device registry key
+        moxa_port = moxa_ports[saved_com_port]
+        hwid = moxa_port.hwid  # e.g. "MXUPORT\COM\9&1B23C7F3&0&0000"
+        reg_path = f"SYSTEM\\CurrentControlSet\\Enum\\{hwid}\\Device Parameters"
+        # read current SerInterface value
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, reg_path, 0, winreg.KEY_READ) as key:
+            ser_interface, reg_type = winreg.QueryValueEx(key, "SerInterface")
+        if ser_interface != 0x3:
+            # update SerInterface to 0x3
+            try:
+                output = subprocess.check_output([
+                    "powershell",
+                    "-Command",
+                    "Start-Process reg -ArgumentList ",
+                    f"'add \"HKEY_LOCAL_MACHINE\\{reg_path}\" /v SerInterface /t REG_DWORD /d 3 /f'",
+                    "-Verb RunAs"
+                ])
+            except subprocess.CalledProcessError as e:
+                return f"Error updating registry for Moxa COM port {saved_com_port}: {e}"
+            logging.info(f"Updated registry SerInterface to 0x3 for RS-485-4W mode on Moxa COM port {saved_com_port}")
+    except Exception as e:
+        return f"Error updating registry for Moxa COM port {saved_com_port}: {e}"
 
 
 def configure(motionSynergy, instrumentSettings):
@@ -107,7 +203,12 @@ def initialize(run_init: bool = True, progress=None):
 
     init_warning_msgbox()
 
-    result = check(motion_synergy.Initialize(run_init, progress), error_msg="Error initializing MotionSynergyAPI: ")
+    try:
+        result = check(motion_synergy.Initialize(run_init, progress), error_msg="Error initializing MotionSynergyAPI: ")
+    except MotionSynergyException as e:
+        if update_error_message is not None:
+            e.add_note(update_error_message)
+        raise
     initialized = True
     return result
 

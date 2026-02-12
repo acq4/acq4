@@ -57,6 +57,9 @@ class DoverStage(Stage):
     # def deviceInterface(self, win):
     #     return DoverStageInterface(self, win)
 
+    def quit(self):
+        self.dev.set_callback(None)
+
 
 class DoverMoveFuture(MoveFuture):
     """Provides access to a move-in-progress on a Dover stage."""
