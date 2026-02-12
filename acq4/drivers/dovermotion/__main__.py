@@ -23,6 +23,7 @@ args = parser.parse_args()
 
 if args.direct:
     logging.getLogger().setLevel(logging.DEBUG)
+    logging.info("Starting MotionSynergyAPI in direct mode")
     try:
         from PyQt5 import QtWidgets
     except ImportError:
