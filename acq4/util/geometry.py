@@ -1950,7 +1950,7 @@ def load_transform_from_anything(thing, **kwargs) -> Transform:
     else:  # config-style dict
         thing = thing.copy()
         thing.setdefault("offset", thing.pop("pos", None))
-        if thing["offset"] and len(thing["offset"]) == 2:
+        if thing["offset"] is not None and len(thing["offset"]) == 2:
             thing["offset"] = [thing["offset"][0], thing["offset"][1], 0]
         if len(thing.get("scale", [])) == 2:
             thing["scale"] = [thing["scale"][0], thing["scale"][1], 1]
