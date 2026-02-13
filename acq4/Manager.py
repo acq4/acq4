@@ -138,6 +138,8 @@ class Manager(Qt.QObject):
                 )
 
     def initFromCommandLine(self, args: argparse.Namespace):
+        global TEMP_LOG_FILEHANDLE
+
         self.exitOnError = args.exit_on_error
         self.disableDevs = args.disable or []
         self.disableAllDevs = args.disable_all
@@ -170,7 +172,9 @@ class Manager(Qt.QObject):
                         # we have to show it now, otherwise we'll have no windows
                         self.showGUI()
                     raise
-            setup_logging(
+            if TEMP_LOG_FILEHANDLE is not None:
+                TEMP_LOG_FILEHANDLE.close()
+            TEMP_LOG_FILEHANDLE = setup_logging(
                 TEMP_LOG, acq4_level=self._rootLogLevel, console_level=self._consoleLogLevel
             )
 
