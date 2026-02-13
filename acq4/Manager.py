@@ -32,7 +32,7 @@ from .util.HelpfulException import HelpfulException
 from .util.LogWindow import get_log_window, get_error_dialog
 
 TEMP_LOG = "temp_log.json"
-setup_logging(TEMP_LOG, gui=False, console_level=logging.DEBUG)
+TEMP_LOG_FILEHANDLE = setup_logging(TEMP_LOG, gui=False, console_level=logging.DEBUG)
 logger = get_logger()
 
 
@@ -682,6 +682,7 @@ class Manager(Qt.QObject):
                     for line in f:
                         file_handler.emit(HistoricLogRecord(**(json.loads(line))))
             finally:
+                TEMP_LOG_FILEHANDLE.close()
                 os.remove(TEMP_LOG)
             log_win = get_log_window()
             with open(self._logFile.name(), 'r') as f:
