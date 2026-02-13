@@ -2095,7 +2095,7 @@ def neutral_anchored_inverse_kinematics(
     origin_in_global = device_to_global.map(np.zeros(len(neutral)))
     neutral_in_global = device_to_global.map(np.array([0 if n is None else n for n in neutral]))
     neutral_axis_step = device_to_global.map(np.array([0 if n is None else 1 for n in neutral])) - origin_in_global
-    neutral_axis = Line(neutral_axis_step, point)
+    neutral_axis = Line(direction=neutral_axis_step, point=point)
 
     # construct global_to_device transform, excluding neutral axis
     global_to_device = []

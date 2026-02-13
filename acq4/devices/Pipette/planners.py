@@ -123,6 +123,8 @@ class PipettePathGenerator:
         # consider two possible waypoints, pick the one closer to the inner position
         pitch = self.pip.pitchRadians()
         localDirection = np.array([np.cos(pitch), 0, -np.sin(pitch)])
+        if localDirection[0] == 0 or localDirection[2] == 0:
+            raise ValueError(f"Invalid pipette pitch {pitch}; cannot compute approach waypoints.")
         waypoint1 = innerPos - localDirection * abs((diff[0] / localDirection[0]))
         waypoint2 = innerPos - localDirection * abs((diff[2] / localDirection[2]))
         dist1 = np.linalg.norm(waypoint1 - innerPos)
@@ -139,8 +141,9 @@ class PipettePathGenerator:
 
         path = path[1:]  # trim off the start position
         for globalPos, speed, linear, stepName in path:
+            if not np.isfinite(globalPos).all():
+                raise ValueError(f"Invalid position {globalPos} for step '{stepName}' in path from {globalStart} to {globalStop}")
             try:
-                assert np.isfinite(globalPos).all()
                 # what global position should we ask the stage to move to in order for the pipette tip to reach globalPos
                 manipulatorGlobalPos = self.pip._solveGlobalStagePosition(globalPos)
                 # ask the stage to check whether this position is reachable
