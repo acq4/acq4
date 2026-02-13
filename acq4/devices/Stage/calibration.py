@@ -208,7 +208,7 @@ class ManipulatorAxesCalibrationWindow(Qt.QWidget):
     def saveCalibrationToDevice(self):
         self.recalculate(raiseOnInsufficientPoints=True)
         self.calibration["transform"] = (
-            None if self.transform is None else self.transform.__getstate__())
+            None if self.transform is None else self.transform.save_state())
         self.dev.writeConfigFile(self.calibration, "calibration")
         self.saveBtn.setText("save calibration")
 
