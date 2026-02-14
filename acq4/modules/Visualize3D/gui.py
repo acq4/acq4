@@ -281,7 +281,7 @@ class VisualizerWindow(Qt.QMainWindow):
         geom = self._itemsByDevice.get(moved_device, {}).get("geometry object")
         if geom is None:
             return
-        xform = moved_device.globalPhysicalTransform * geom.transform
+        xform = moved_device.globalPhysicalTransform() * geom.transform
         self.setMeshTransform(moved_device, xform.as_pyqtgraph())
 
     def setMeshTransform(self, dev, xform):
