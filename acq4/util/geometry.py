@@ -2020,7 +2020,7 @@ def greedy_axis_inverse_kinematics(
     axis_scale = np.linalg.norm(axis_in_global)
     start_in_global = device_to_global.map(np.array(starting_position))
     displacement = np.asarray(point) - start_in_global
-    raw_greedy_pos = (displacement.dot(axis_in_global) / axis_scale) + starting_position[axis]
+    raw_greedy_pos = (displacement.dot(axis_in_global / axis_scale) / axis_scale) + starting_position[axis]
     greedy_pos = max(bounds[axis][0], min(bounds[axis][1], raw_greedy_pos))
     neutral: list = [None] * len(bounds)
     neutral[axis] = greedy_pos

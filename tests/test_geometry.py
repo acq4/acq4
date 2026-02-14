@@ -1004,7 +1004,56 @@ def test_greedy_axis_inverse_kinematics_starting_point_adherence():
     assert np.allclose(pos, [1, 0, 1, 2 / HALF])
 
 
+def test_greedy_axis_inverse_kinematics_with_scaled_axis():
+    """Greedy IK must correctly project displacement onto axes with non-unit scale.
+    When an axis maps 1 device unit to >1 global unit, the projection must divide
+    by axis_scale twice: once to normalize direction, once to convert global→device units.
+    Without the double-division, the greedy projection overshoots, causing the solver
+    to redistribute displacement away from the greedy axis into x/z.
+    """
+    bounds, transform = scaled_overspecified()
+    # d-axis is [-3*HALF, 0, -3*HALF] with ||d|| = 3
+    # So 1 device unit on d = 3 global units along that direction
+
+    # Non-zero starting position exposes the bug: the inflated greedy projection
+    # causes neutral_anchored_IK to compensate by using x/z instead of d
+    start = [0, 0, 0, 1]
+
+    # target is at device position [0, 0.5, 0, 0.5]
+    target_dev = np.array([0, 0.5, 0, 0.5])
+    point = list(transform.map(target_dev))
+    pos = greedy_axis_inverse_kinematics(point, transform, bounds, start, 3)
+    assert np.allclose(pos, target_dev), f"expected {target_dev}, got {pos}"
+
+    # target at [0.5, 0.5, 0, 0.5]
+    target_dev = np.array([0.5, 0.5, 0, 0.5])
+    point = list(transform.map(target_dev))
+    pos = greedy_axis_inverse_kinematics(point, transform, bounds, start, 3)
+    assert np.allclose(pos, target_dev), f"expected {target_dev}, got {pos}"
+
+    # target at [1, 0.5, 0, 0.5]
+    target_dev = np.array([1, 0.5, 0, 0.5])
+    point = list(transform.map(target_dev))
+    pos = greedy_axis_inverse_kinematics(point, transform, bounds, start, 3)
+    assert np.allclose(pos, target_dev), f"expected {target_dev}, got {pos}"
+
+
 HALF = 2**0.5 / 2
+
+
+def scaled_overspecified():
+    """Like overspecified(), but the diagonal axis has a non-unit scale factor (3x).
+    This makes axis_scale != 1 for axis 3, exposing projection bugs that
+    divide by axis_scale the wrong number of times.
+    """
+    scale = 3
+    x = [-1, 0, 0]
+    y = [0, -1, 0]
+    z = [0, 0, -1]
+    d = [-scale * HALF, 0, -scale * HALF]  # 45° in x-z plane, but 3x longer
+    transform = AffineTransform(np.asarray([x, y, z, d]).T, offset=np.zeros(3))
+    bounds = [(0, 5)] * 4
+    return bounds, transform
 
 
 def overspecified():
