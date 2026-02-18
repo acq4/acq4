@@ -22,32 +22,30 @@ classifiers = [
     "Topic :: Scientific/Engineering",
 ]
 dependencies = [
-    "MetaArray",
+    "coorx",
     "docstring_parser",
-    "python-json-logger",
-    "pyqt5",
+    "guppy3",
     "h5py",
     "matplotlib",
+    "MetaArray",
+    "neuroanalysis",
     "numba",
     "numpy",
-    "opencv-python-headless",
     "pandas",
     "pillow",
     "psutil",
     "pyopengl",
+    "pyqt5",
+    "pyqtgraph @ git+https://github.com/acq4/pyqtgraph.git@acq4_working",
+    "python-json-logger",
     "pyyaml",
+    "rtprofile",
     "scikit-image",
-    "scikit-learn",
     "scipy",
+    "teleprox",
     "tifffile",
     "trimesh",
     "vispy",
-    "coorx",
-    "teleprox",
-    "neuroanalysis",
-    "pyqtgraph @ git+https://github.com/acq4/pyqtgraph.git@acq4_working",
-    "rtprofile",
-    "guppy3",
 ]
 
 [project.optional-dependencies]
@@ -68,11 +66,13 @@ analysis = [
     "ccfviewer @ git+https://github.com/campagnola/ccfviewer",
 ]
 ml-models = [
-    "torch",
-    "torchvision",
     "cellpose @ git+https://github.com/outofculture/cellpose.git@_working",
     "matplotlib",
+    "opencv-contrib-python-headless",
+    "opencv-python-headless",
     "scikit-learn",
+    "torch",
+    "torchvision",
 ]
 dev = [
     "pytest",
