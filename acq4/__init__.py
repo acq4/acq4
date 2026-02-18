@@ -1,7 +1,7 @@
 import os
 import sys
 
-__version__ = '0.10.17'
+__version__ = '0.10.18'
 
 # If we are running from a git repo, generate a more descriptive version number
 from .util.gitversion import getGitVersion
