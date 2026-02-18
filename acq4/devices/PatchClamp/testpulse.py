@@ -254,7 +254,7 @@ class TestPulseThread(QtThread):
         pri.recording = rec
         cmd.recording = rec
 
-        tp = PatchClampTestPulse(rec)
+        tp = PatchClampTestPulse(rec, stimulus=task.command[self._clampName]["stimulus"])
         if self._params['postProcessing'] is not None:
             tp = self._params['postProcessing'](tp)
         return tp
