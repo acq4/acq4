@@ -1,18 +1,13 @@
 from __future__ import annotations
 
-import os
 import datetime
+import os
 from pathlib import Path
 
 import numpy as np
-import pyqtgraph as pg
+
 import pyqtgraph as pg
 from MetaArray import MetaArray
-from acq4_automation.feature_tracking.cell import Cell
-from coorx import Point
-from coorx import SRT3DTransform, TransposeTransform, TTransform
-from pyqtgraph.units import µm, m
-
 from acq4.devices.Camera import Camera
 from acq4.devices.Microscope import Microscope
 from acq4.devices.PatchPipette import PatchPipette
@@ -31,6 +26,10 @@ from acq4.util.imaging import Frame
 from acq4.util.imaging.sequencer import acquire_z_stack
 from acq4.util.target import TargetBox
 from acq4.util.threadrun import futureInGuiThread, runInGuiThread
+from acq4_automation.cell_quality_annotation_tool import open_annotation_tool_with_detections
+from acq4_automation.feature_tracking.cell import Cell
+from coorx import Point
+from pyqtgraph.units import µm, m
 from .ranking_window import RankingWindow
 from ... import getManager
 
@@ -232,8 +231,6 @@ class RankingWindow(Qt.QWidget):
         frame_shape = stack_data.shape[1:]  # (rows, cols) or (y, x)
         n_frames = stack_data.shape[0]
 
-        # Get transform info from the first frame (assuming it's consistent)
-        frame0 = self.detection_stack[0]
         # Use pixel_size passed during initialization
         if self.pixel_size is None:
             raise ValueError("Pixel size information missing.")
@@ -354,6 +351,7 @@ class AutomationDebugWindow(Qt.QWidget):
 
     def __init__(self, module: "AutomationDebug"):
         super().__init__()
+        self._annotation_tool = None
         self.ui = UiTemplate()
         self.ui.setupUi(self)
 
@@ -662,6 +660,22 @@ class AutomationDebugWindow(Qt.QWidget):
 
             logger.info(f"Cell detection complete. Found {len(neurons)} potential cells")
             self._displayBoundingBoxes(neurons)
+
+            stack = np.asarray([frame.data().T for frame in self._current_detection_stack])
+            xform = self._current_detection_stack[0].globalTransform().inverted()[0]
+            centers_ijk = [np.abs(xform.map(n)[::-1]) for n in neurons]
+
+            if self._annotation_tool is not None:
+                self._annotation_tool.close()
+            self._annotation_tool = open_annotation_tool_with_detections(
+                stack=stack,
+                cell_centers_ijk=centers_ijk,
+                xy_scale=self._current_detection_stack[0].info()["pixelSize"][0],
+                z_scale=1.0e-6,
+                preserve_order=True,  # Keep healthy-first order
+                filter=False,  # No extra filtering
+            )
+
             # from acq4_automation.object_detection import NeuronBoxViewer
             # if self._current_classification_stack is not None:
             #     data = np.array(([[s.data().T for s in self._current_detection_stack]], [[s.data().T for s in self._current_classification_stack]]))
@@ -722,10 +736,8 @@ class AutomationDebugWindow(Qt.QWidget):
         segmenter = man.config.get("misc", {}).get("segmenterPath", None)
         autoencoder = man.config.get("misc", {}).get("autoencoderPath", None)
         classifier = man.config.get("misc", {}).get("classifierPath", None)
-        # pixel_size is now fetched earlier
-        step_z = 1 * µm  # Default, will be updated by mock or real acquisition
+        step_z = 1 * µm  # can be updated by mock metadata
         depth = self.cameraDevice.getFocusDepth()
-        detection_stack = None  # Ensure it's initialized
         classification_stack = None  # Initialize as None
 
         # This flag indicates intent for multichannel *real* acquisition or processing type
@@ -744,16 +756,9 @@ class AutomationDebugWindow(Qt.QWidget):
             if detection_stack is None:
                 raise RuntimeError("Failed to load mock detection stack.")
 
-            if classification_stack is not None and multichannel_processing_intended:
-                working_stack = (detection_stack, classification_stack)
-                multichannel = True
-            else:
-                working_stack = detection_stack
-                multichannel = False
         else:  # --- Real Acquisition ---
             start_z = depth - 20 * µm
             stop_z = depth + 20 * µm
-            # Use step_z = 1 * µm for real acquisition as previously defined
 
             if multichannel_processing_intended:
                 logger.info(
@@ -761,13 +766,14 @@ class AutomationDebugWindow(Qt.QWidget):
                     f"Classification='{classification_preset}'"
                 )
                 _future.waitFor(self.scopeDevice.loadPreset(detection_preset))
-                detection_stack = _future.waitFor(
-                    acquire_z_stack(
-                        self.cameraDevice, start_z, stop_z, step_z, slow_fallback=False
-                    ),
-                    timeout=100,
-                ).getResult()
+            detection_stack = _future.waitFor(
+                acquire_z_stack(
+                    self.cameraDevice, start_z, stop_z, step_z, slow_fallback=False
+                ),
+                timeout=100,
+            ).getResult()
 
+            if multichannel_processing_intended:
                 _future.waitFor(self.scopeDevice.loadPreset(classification_preset))
                 classification_stack = _future.waitFor(
                     acquire_z_stack(
@@ -784,21 +790,17 @@ class AutomationDebugWindow(Qt.QWidget):
                     min_length = min(len(detection_stack), len(classification_stack))
                     detection_stack = detection_stack[:min_length]
                     classification_stack = classification_stack[:min_length]
-            else:  # --- Single Channel Acquisition ---
-                detection_stack = _future.waitFor(
-                    acquire_z_stack(
-                        self.cameraDevice, start_z, stop_z, step_z
-                    )  # step_z is 1um here
-                ).getResult()
 
-            if multichannel_processing_intended:
-                working_stack = (detection_stack, classification_stack)
-                multichannel = True
-            else:
-                working_stack = detection_stack
-                multichannel = False
+        if multichannel_processing_intended and classification_stack is not None:
+            working_stack = (detection_stack, classification_stack)
+            multichannel = True
+        else:
+            working_stack = detection_stack
+            multichannel = False
 
-        result = _future.waitFor(
+        self.cameraDevice.setFocusDepth(depth)  # Restore focus
+
+        global_pos = _future.waitFor(
             detect_neurons(
                 working_stack,  # Prepared based on mock/real and single/multi
                 segmenter=segmenter,
@@ -807,24 +809,16 @@ class AutomationDebugWindow(Qt.QWidget):
                 xy_scale=pixel_size,  # Global pixel_size
                 z_scale=step_z,  # Actual step_z from mock or real (1um for real)
                 multichannel=multichannel,  # Actual flag for detect_neurons
+                trim_edges=True,
             ),
             timeout=600,
         ).getResult()
-        logger.info(f"Neuron detection finished. Found {len(result)} potential neurons.")
-
-        # results are returned [z_frame, img_row, img_row]
-        # map back to global (x, y, z)
-        transform = (
-            working_stack[0][0].globalTransform()
-            if isinstance(working_stack, tuple)
-            else working_stack[0].globalTransform()
-        )
-        globalPos = [Point(transform.map([row, col, zframe]), "global") for (zframe, row, col) in result]
+        logger.info(f"Neuron detection finished. Found {len(global_pos)} potential neurons.")
 
         self._current_detection_stack = detection_stack
         self._current_classification_stack = classification_stack
-        self._unranked_cells = [Cell(r) for r in globalPos]
-        return globalPos
+        self._unranked_cells = [Cell(r) for r in global_pos]
+        return global_pos
 
     def _create_mock_stack_from_file(
         self, mock_file_path: str, base_frame: Frame, _future: Future
@@ -852,7 +846,9 @@ class AutomationDebugWindow(Qt.QWidget):
                 z_vals = z_info["values"]
                 if len(z_vals) > 1:
                     step_z = abs(z_vals[1] - z_vals[0]) * m  # Assume meters
-                    logger.info(f"Using Z step from mock file '{os.path.basename(mock_file_path)}': {step_z / µm:.2f} µm")
+                    logger.info(
+                        f"Using Z step from mock file '{os.path.basename(mock_file_path)}': {step_z / µm:.2f} µm"
+                    )
                 elif len(z_vals) == 1:
                     logger.warning(
                         f"Only one Z value in mock file '{os.path.basename(mock_file_path)}'. Assuming 1µm step.",
@@ -869,22 +865,21 @@ class AutomationDebugWindow(Qt.QWidget):
                 )
                 step_z = 1 * µm
 
-            pixel_size = self.cameraDevice.getPixelSize()[0]  # Assuming square pixels
             stack_frames = []
-            current_mock_frame_global_z = live_frame_origin_global_xyz[
-                2
-            ]  # Start Z from the live frame's depth
+            # Start Z from the live frame's depth
+            current_mock_frame_global_z = live_frame_origin_global_xyz[2]
 
             for i in range(len(data)):
                 mock_frame_transform = pg.SRTTransform3D(
                     live_frame_global_transform.saveState()
                 )
-                mock_frame_transform.setScale(pixel_size, pixel_size, step_z)
+                scale = live_frame_global_transform.getScale()
+                mock_frame_transform.setScale(scale[0], scale[1], step_z)
                 z_offset = current_mock_frame_global_z - live_frame_origin_global_xyz[2]
                 mock_frame_transform.translate(0, 0, z_offset)
 
                 frame_info = {
-                    "pixelSize": [pixel_size, pixel_size],
+                    "pixelSize": [scale[0], scale[1]],
                     "depth": current_mock_frame_global_z,
                     "transform": mock_frame_transform.saveState(),
                 }
@@ -927,10 +922,8 @@ class AutomationDebugWindow(Qt.QWidget):
             # detection_stack remains None, step_z remains default
 
         # Load classification stack if multichannel mock is enabled and path is provided
-        if (
-            self.ui.multiChannelEnableCheck.isChecked()
-            and self.ui.mockCheckBox.isChecked()
-        ):  # Redundant mockCheckBox check, but safe
+        # Redundant mockCheckBox check, but safe
+        if self.ui.multiChannelEnableCheck.isChecked() and self.ui.mockCheckBox.isChecked():
             classification_mock_path = self.ui.mockClassificationFilePath.text()
             if classification_mock_path:
                 # The base_frame and _future are passed again.
@@ -979,11 +972,9 @@ class AutomationDebugWindow(Qt.QWidget):
 
         # --- Get next cell ---
         # TODO separate ranking cells from targeting cells
-        raise NotImplementedError("This method is not fully implemented.")
-        # TODO this is broken code; it assumes _unranked_cells is a list of (start, end) bounding boxes
-        start, end = np.array(self._unranked_cells.pop(0))
-        center_global = (start + end) / 2.0
-        pixel_size = self.cameraDevice.getPixelSize()[0]  # Get current pixel size
+        cell: Cell = self._unranked_cells.pop(0)
+        center_global = cell.position.coordinates
+        pixel_size = stack[0].info()["pixelSize"][0]  # Assume square pixels
         z_step = abs(stack[1].depth - stack[0].depth)
 
         # --- Create and show RankingWindow ---
