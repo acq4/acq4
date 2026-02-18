@@ -31,3 +31,14 @@ if sys.platform.startswith("win"):
     time = winTime
 else:
     time = unixTime
+
+
+def loop(duration=None, end_time=None):
+    """Generator that yields the current time in a loop until the specified duration has elapsed or
+    end_time is reached."""
+    if duration is None and end_time is None:
+        raise ValueError("Must specify either duration or end_time")
+    if end_time is None:
+        end_time = time() + duration
+    while (now := time()) < end_time:
+        yield now
