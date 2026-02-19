@@ -573,8 +573,6 @@ class Stage(Device, OptomechDevice):
 
     def getBoundaries(self) -> List[Plane]:
         """Return the boundaries of the stage in global coordinates."""
-        if len(self.axes()) != 3:
-            raise NotImplementedError("Boundaries are only implemented for 3-axis stages.")
         limits = self.getLimits()  # min, max
         if None in [m for ax in limits for m in ax]:
             return []

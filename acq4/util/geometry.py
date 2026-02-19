@@ -2151,15 +2151,17 @@ def neutral_anchored_inverse_kinematics(
 
 
 def limits_to_boundaries(
-    limits: list[tuple[float | None, float | None]], xform: AffineTransform, name: str
+    limits: list[tuple[float | None, float | None]], local_to_global: AffineTransform, name: str
 ) -> list[Plane]:
     """
     Parameters
     ----------
     limits : list[tuple[float | None, float | None]]
-        A list of (min, max) pairs for each dimension. None can be used to indicate no limit in that direction.
-    xform : AffineTransform
-        Transform that maps from the local coordinate system of the limits to the global coordinate system.
+        A list of local (min, max) pairs for each dimension. None can be used to indicate no limit
+        in that direction.
+    local_to_global : AffineTransform
+        Transform that maps from the local coordinate system of the limits to the global coordinate
+        system. Nx3 mapping.
     name : str
         Name to use for the planes.
 
@@ -2168,21 +2170,56 @@ def limits_to_boundaries(
     list[Plane]
         A list of Planes representing the global boundaries defined by the limits.
     """
-    corners = {
-        "min": xform.map(np.array([ax[0] for ax in limits])),
-        "max": xform.map(np.array([ax[1] for ax in limits])),
-    }
-    axes = [xform.map(np.eye(3)[i]) - xform.map(np.zeros(3)) for i in range(3)]
-    normals = {
-        0: np.cross(axes[1], axes[2]),
-        1: np.cross(axes[2], axes[0]),
-        2: np.cross(axes[0], axes[1]),
-    }
-    # flip normals to point inward
-    diagonal = corners["max"] - corners["min"]
-    normals[0] = normals[0] * np.sign(np.dot(normals[0], diagonal))
-    normals[1] = normals[1] * np.sign(np.dot(normals[1], diagonal))
-    normals[2] = normals[2] * np.sign(np.dot(normals[2], diagonal))
-    return [Plane(normals[n], corners["min"], f"{name}'s min {n}") for n in normals] + [
-        Plane(-normals[n], corners["max"], f"{name}'s max {n}") for n in normals
+    # fill in with appropriate nigh-infinities
+    limits = [
+        (-1e27 if min_val is None else min_val, 1e27 if max_val is None else max_val)
+        for min_val, max_val in limits
     ]
+    global_corners = {
+        "min": local_to_global.map(np.array([ax[0] for ax in limits])),
+        "max": local_to_global.map(np.array([ax[1] for ax in limits])),
+    }
+    diagonal = global_corners["max"] - global_corners["min"]
+    ndim = local_to_global.dims[0]
+    axes = [
+        local_to_global.map(np.eye(ndim)[i]) - local_to_global.map(np.zeros(ndim))
+        for i in range(ndim)
+    ]
+    if ndim <= 3:
+        normals = [
+            np.cross(axes[1], axes[2]),
+            np.cross(axes[2], axes[0]),
+            np.cross(axes[0], axes[1]),
+        ]
+    else:
+        normals = [
+            np.cross(axes[1], axes[2]),
+            np.cross(axes[3], axes[0]),
+            np.cross(axes[0], axes[1]),
+            np.cross(axes[3], axes[1]),
+        ]
+    # flip normals to point inward
+    normals = [n * np.sign(np.dot(n, diagonal)) for n in normals]
+    planes = [
+        Plane(normals[0], global_corners["min"], f"{name}'s min x"),
+        Plane(-normals[0], global_corners["max"], f"{name}'s max x"),
+        Plane(normals[1], global_corners["min"], f"{name}'s min y"),
+        Plane(-normals[1], global_corners["max"], f"{name}'s max y"),
+        Plane(normals[2], global_corners["min"], f"{name}'s min z"),
+        Plane(-normals[2], global_corners["max"], f"{name}'s max z"),
+    ]
+
+    if ndim > 3:
+        # for 4-axis, we need two more points to define the parallel-to-diagonal planes
+        diag1 = local_to_global.map(
+            np.array([limits[0][1], limits[1][0], limits[2][0], limits[3][1]])
+        )
+        diag2 = local_to_global.map(
+            np.array([limits[0][0], limits[1][1], limits[2][0], limits[3][1]])
+        )
+        planes += [
+            Plane(normals[3], diag1, f"{name}'s bottom diag1"),
+            Plane(-normals[3], diag2, f"{name}'s top diag2"),
+        ]
+
+    return planes
