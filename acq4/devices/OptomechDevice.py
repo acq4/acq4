@@ -806,6 +806,7 @@ class OptomechDeviceVisualizerAdapter:
         self.device = dev
         self.win = win
         self.checkboxes = {}
+        self._checkbox_tree = None
         self._limits = None
         self._mesh = None
 
@@ -825,6 +826,7 @@ class OptomechDeviceVisualizerAdapter:
             self._limits = self.createBounds(bounds, False)
 
         self._checkbox_tree = self._buildCheckboxTree()
+        self.win.addControls(self._checkbox_tree)
 
     def _buildCheckboxTree(self):
         dev = self.device
@@ -939,6 +941,6 @@ class OptomechDeviceVisualizerAdapter:
             self.win.remove3DItem(self._limits)
             self._limits = None
         if self._checkbox_tree is not None:
-            self.win.removeControlWidget(self._checkbox_tree)
+            self.win.removeControls(self._checkbox_tree)
             self._checkbox_tree = None
             self.checkboxes = {}

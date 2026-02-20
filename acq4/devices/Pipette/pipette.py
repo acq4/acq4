@@ -1158,8 +1158,8 @@ class PipetteCamModInterface(CameraModuleInterface):
 
 class PipetteVisualizerAdapter(OptomechDeviceVisualizerAdapter):
     def __init__(self, dev: Pipette, win):
-        super().__init__(dev, win)
         self._obstacles = {}
+        super().__init__(dev, win)
         self._target = win.target()
         if dev.target is not None:
             self.handleTargetChanged(dev, dev.targetPosition())
