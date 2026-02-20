@@ -754,9 +754,16 @@ class MovePathFuture(MoveFuture):
         prev = dev.getPosition()
         for step in self.path:
             if step.get("globalPos") is not None:
-                step["position"] = dev.mapGlobalToDevicePosition(
-                    step.pop("globalPos"), step.get("linear", False), prev
-                )
+                try:
+                    step["position"] = dev.mapGlobalToDevicePosition(
+                        step.pop("globalPos"), step.get("linear", False), prev
+                    )
+                except Exception:
+                    win = getManager().getModule("Visualize3D").window()
+                    adapter = win.findAdapter(lambda a: a.device.parentDevice() == dev)
+                    adapter.setPathError([p["globalPos"] for p in path], step["position"])
+                    win.focus()
+                    raise
                 prev = step["position"]
         for i, step in enumerate(self.path):
             try:

@@ -344,14 +344,7 @@ class PipetteMotionPlanner:
             self.future.stop()
 
     def _move(self):
-        path = self.path()
-        try:
-            return self.pip._movePath(path, name=f"{self.pip.name()} {type(self).__name__} path")
-        except Exception:
-            mod = getManager().getModule("Visualize3D")
-            adapter = mod.window().findAdapter(lambda a: a.device == self.pip)
-            adapter.setPathError([p[0] for p in path])
-            raise
+        return self.pip._movePath(self.path(), name=f"{self.pip.name()} {type(self).__name__} path")
 
     def path(self):
         startPosGlobal = self.pip.globalPosition()
