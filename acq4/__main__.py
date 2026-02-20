@@ -1,28 +1,36 @@
 """
 Main ACQ4 invocation script
 """
-print("Loading ACQ4...")
+
+import logging
 import os
 import sys
 
-if __package__ is None:
-    import acq4  # noqa: F401
-
-    __package__ = 'acq4'
-
+from .logging_config import setup_logging
 from .util import pg_setup  # noqa: F401
 from .Manager import Manager
 from .util.debug import installExceptionHandler
 
+
 control_arg_parser = Manager.makeArgParser()
-control_arg_parser.add_argument("-profile", action="store_true", help="Run the program under the profiler")
+control_arg_parser.add_argument("--console-log-level", action="store", help="Set the console log level", default="INFO")
+control_arg_parser.add_argument("--root-log-level", action="store", help="Set the root log level", default="DEBUG")
+control_arg_parser.add_argument("--profile", action="store_true", help="Run the program under the profiler")
 control_arg_parser.add_argument("--callgraph", action="store_true", help="Run the program under the callgraph profiler")
 control_arg_parser.add_argument("--threadtrace", action="store_true", help="Run a thread tracer in the background")
 control_arg_parser.add_argument("--qt-profile", action="store_true", help="Use ProfiledQApplication to collect Qt event loop performance statistics")
-# teleprox optional port number
 control_arg_parser.add_argument("--teleprox", type=int, nargs='?', const=0, default=None,
                                 help="Run a teleprox server in the background. If no port number is specified, a random port will be used.")
 args = control_arg_parser.parse_args()
+
+console_log_level = getattr(logging, args.console_log_level.upper(), logging.INFO)
+root_log_level = getattr(logging, args.root_log_level.upper(), logging.DEBUG)
+
+if __package__ is None:
+    import acq4  # noqa: F401
+    __package__ = 'acq4'
+
+
 
 ## Enable stack trace output when a crash is detected
 from pyqtgraph.debug import enableFaulthandler
@@ -45,6 +53,13 @@ if args.qt_profile:
     print("Qt profiling enabled. Use app.print_summary_report() to view statistics.")
 else:
     app = pg.mkQApp()
+
+
+# start logging to a temporary file immediately (these records will be rewritten to the main log file once it's set up)
+setup_logging("temp_log.json", gui=True, console_level=console_log_level, root_level=root_log_level, is_temp_file=True)
+logger = logging.getLogger(__name__)
+logger.info("Loading ACQ4...")
+
 
 if args.teleprox is not None:
     from teleprox import RPCServer
