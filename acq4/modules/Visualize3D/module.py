@@ -18,17 +18,18 @@ class Visualize3D(Module):
         self.openWindow()
         self._adapters = {}
         manager.interfaceDir.sigInterfaceListChanged.connect(self.onInterfaceListChanged)
-        self.onInterfaceListChanged(self.manager.interfaceDir.typeList)
+        self.onInterfaceListChanged([self.interfaceName])
 
     @inGuiThread
     def onInterfaceListChanged(self, types: list):
-        for name in types:
-            if name not in self._adapters:
-                obj = self.manager.getInterface(self.interfaceName, name)
-                adapter = obj.visualize3DAdapter(self.win)
-                if adapter is not None:
-                    self.win.addAdapter(adapter, self.isReady)
-                    self._adapters[name] = adapter
+        if self.interfaceName in types:
+            for name in self.manager.listInterfaces(self.interfaceName):
+                if name not in self._adapters:
+                    obj = self.manager.getInterface(self.interfaceName, name)
+                    adapter = obj.visualize3DAdapter(self.win)
+                    if adapter is not None:
+                        self.win.addAdapter(adapter, self.isReady)
+                        self._adapters[name] = adapter
 
     @inGuiThread
     def openWindow(self):
