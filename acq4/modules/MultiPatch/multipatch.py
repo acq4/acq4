@@ -168,7 +168,7 @@ class MultiPatchWindow(Qt.QWidget):
 
     @_shouldSaveTipImages.setter
     def _shouldSaveTipImages(self, value):
-        self.ui.saveTipImageBtn.setChecked(True)
+        self.ui.saveTipImageBtn.setChecked(value)
 
     def _turnOffSlowBtn(self, checked):
         self.ui.slowBtn.setChecked(False)
