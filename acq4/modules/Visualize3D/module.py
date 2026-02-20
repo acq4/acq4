@@ -6,7 +6,7 @@ from .gui import VisualizerWindow
 
 
 class Visualize3D(Module):
-    moduleDisplayName = "3D Visualization"
+    moduleDisplayName = "Visualize3D"
     moduleCategory = "Utilities"
     interfaceName = "3D Visualizable"
 
