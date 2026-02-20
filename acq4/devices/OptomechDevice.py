@@ -826,6 +826,7 @@ class OptomechDeviceVisualizerAdapter:
             self._limits = self.createBounds(bounds, False)
 
         self._checkbox_tree = self._buildCheckboxTree()
+        self._checkbox_tree.itemChanged.connect(self.handleVisibilityToggle)
         self.win.addControls(self._checkbox_tree)
 
     def _buildCheckboxTree(self):
@@ -834,7 +835,6 @@ class OptomechDeviceVisualizerAdapter:
         # Create tree widget for hierarchical device display
         device_tree = Qt.QTreeWidget()
         device_tree.setMinimumWidth(250)
-        device_tree.itemChanged.connect(self.handleVisibilityToggle)
 
         # Create tree item for this device
         device_item = Qt.QTreeWidgetItem(device_tree)
