@@ -835,7 +835,7 @@ class OptomechDeviceVisualizerAdapter:
         device_tree.itemChanged.connect(self.handleVisibilityToggle)
 
         # Create tree item for this device
-        device_item = Qt.QTreeWidgetItem(self.win.deviceTree)
+        device_item = Qt.QTreeWidgetItem(device_tree)
         device_item.setText(0, dev.name())
         device_item.setFlags(device_item.flags() | Qt.Qt.ItemIsUserCheckable)
         device_item.setCheckState(0, Qt.Qt.Checked)
@@ -877,7 +877,7 @@ class OptomechDeviceVisualizerAdapter:
         self._geometry = dev.getGeometry()
         if self._geometry is not None:
             self._mesh = self._geometry.glMesh()
-            self.win.view.addItem(self._mesh)
+            self.win.add3DItem(self._mesh)
             self._mesh.setVisible(
                 self.checkboxes["geometry"].checkState(0) == Qt.Qt.Checked
                 and self.checkboxes["device"].checkState(0) == Qt.Qt.Checked
@@ -928,7 +928,7 @@ class OptomechDeviceVisualizerAdapter:
             edges.extend(edge)
         plot = gl.GLLinePlotItem(pos=np.array(edges), color=(1, 0, 0, 0.2), width=4, mode="lines")
         plot.setVisible(visible)
-        self.win.view.addItem(plot)
+        self.win.add3DItem(plot)
         return plot
 
     def clear(self):

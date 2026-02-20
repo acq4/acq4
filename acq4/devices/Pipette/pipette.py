@@ -1160,10 +1160,15 @@ class PipetteVisualizerAdapter(OptomechDeviceVisualizerAdapter):
     def __init__(self, dev: Pipette, win):
         super().__init__(dev, win)
         self._obstacles = {}
+        self._target = win.target()
+        if dev.target is not None:
+            self.handleTargetChanged(dev, dev.targetPosition())
+        # TODO obstacles and voxels
         # TODO signal connections for obstacle and voxel updates
+        # TODO tie in with prime caches?
 
-        # TODO new transform applied limits when calibration changes
-        dev.sigCalibrationChanged.connect(self.handleTransformUpdate)
+        dev.sigCalibrationChanged.connect(self.handleCalibrationUpdate)
+        dev.sigTargetChanged.connect(self.handleTargetChanged)
 
     def _buildCheckboxTree(self):
         tree = super()._buildCheckboxTree()
@@ -1177,15 +1182,22 @@ class PipetteVisualizerAdapter(OptomechDeviceVisualizerAdapter):
         path_item.setData(0, Qt.Qt.UserRole, "path")
         self.checkboxes["path"] = path_item
 
-        # TODO ooo! target
+        target_item = Qt.QTreeWidgetItem(device_item)
+        target_item.setText(0, "Target")
+        target_item.setFlags(target_item.flags() | Qt.Qt.ItemIsUserCheckable)
+        target_item.setCheckState(0, Qt.Qt.Checked)
+        target_item.setData(0, Qt.Qt.UserRole, "target")
+        self.checkboxes["target"] = target_item
 
-        # TODO we need and obstacle and voxels entry for each other device
-        for other_dev in self.optomech_devices():
+        # TODO figure all the geometry-aware stuff out
+        # obstacle_devices = [d for d in getManager().listInterfaces("OptomechDevice") if d != self.device.name()]
+        obstacle_devices = []
+        for other_dev in obstacle_devices:
             other_dev_item = Qt.QTreeWidgetItem(device_item)
-            other_dev_item.setText(0, f"{other_dev.name()} obstacles")
+            other_dev_item.setText(0, f"{other_dev} obstacles")
             other_dev_item.setFlags(other_dev_item.flags() | Qt.Qt.ItemIsUserCheckable)
             other_dev_item.setCheckState(0, Qt.Qt.Unchecked)
-            other_dev_item.setData(0, Qt.Qt.UserRole, other_dev.name())
+            other_dev_item.setData(0, Qt.Qt.UserRole, other_dev)
             device_item.addChild(other_dev_item)
 
             obst_item = Qt.QTreeWidgetItem(other_dev_item)
@@ -1200,9 +1212,60 @@ class PipetteVisualizerAdapter(OptomechDeviceVisualizerAdapter):
             voxels_item.setCheckState(0, Qt.Qt.Unchecked)
             voxels_item.setData(0, Qt.Qt.UserRole, "voxels")
 
-            self._obstacles[other_dev.name()] = (other_dev_item, obst_item, voxels_item)
+            self._obstacles[other_dev] = {
+                "device checkbox": other_dev_item,
+                "obstacle checkbox": obst_item,
+                "voxels checkbox": voxels_item,
+            }
 
         return tree
+
+    def handleVisibilityToggle(self, item: Qt.QTreeWidgetItem, column):
+        for other_dev, other_items in self._obstacles.items():
+            if item is other_items["device checkbox"]:
+                visible = item.checkState(0) == Qt.Qt.Checked and item.parent().checkState(0) == Qt.Qt.Checked
+                for ch in range(item.childCount()):
+                    child = item.child(ch)
+                    child.setDisabled(not visible)
+                    # let each child decide if it's really visible
+                    self.handleVisibilityToggle(child, column)
+                return
+            elif item in (other_items["obstacle checkbox"], other_items["voxels checkbox"]):
+                visible = (
+                    item.checkState(0) == Qt.Qt.Checked
+                    and item.parent().checkState(0) == Qt.Qt.Checked
+                    and item.parent().parent().checkState(0) == Qt.Qt.Checked
+                )
+                if item.data(0, Qt.Qt.UserRole) == "obstacle":
+                    other_items["obstacle"].setVisible(visible)
+                else:
+                    other_items["voxels"].setVisible(visible)
+                return
+
+        if item is self.checkboxes["path"]:
+            return  # TODO
+
+        if item is self.checkboxes["target"]:
+            self._target.setVisible(
+                item.checkState(0) == Qt.Qt.Checked and item.parent().checkState(0) == Qt.Qt.Checked
+            )
+            return
+
+        super().handleVisibilityToggle(item, column)
+
+    def handleCalibrationUpdate(self, dev):
+        if bounds := dev.getBoundaries():
+            if self._limits is not None:
+                self.win.remove3DItem(self._limits)
+            visible = (
+                self.checkboxes["limits"].checkState(0) == Qt.Qt.Checked
+                and self.checkboxes["device"].checkState(0) == Qt.Qt.Checked
+            )
+            self._limits = self.createBounds(bounds, visible)
+        self.handleTransformUpdate(dev, dev)
+
+    def handleTargetChanged(self, dev, pos):
+        self._target.setData(pos=np.asarray(pos))
 
     def pathSearchVisualizer(self):
         return VisualizePathSearch(self)
