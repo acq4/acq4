@@ -41,7 +41,7 @@ class InterfaceMixin(object):
 class InterfaceDirectory(Qt.QObject):
     """Class for managing a directory of interfaces, through which objects may advertise their services.
     """
-    sigInterfaceListChanged = Qt.Signal(object)
+    sigInterfaceListChanged = Qt.Signal(object)  # emitted with list of types that have changed when an interface is added or removed
     
     def __init__(self):
         Qt.QObject.__init__(self)

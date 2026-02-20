@@ -25,14 +25,12 @@ from . import __version__
 from . import devices, modules
 from .Interfaces import InterfaceDirectory
 from .devices.Device import Device, DeviceTask
-from .logging_config import get_logger, setup_logging, HistoricLogRecord
+from .logging_config import get_logger, set_log_file, setup_logging, HistoricLogRecord
 from .util import DataManager, ptime, Qt
 from .util.DataManager import DirHandle
 from .util.HelpfulException import HelpfulException
 from .util.LogWindow import get_log_window, get_error_dialog
 
-TEMP_LOG = "temp_log.json"
-TEMP_LOG_FILEHANDLE = setup_logging(TEMP_LOG, gui=False, console_level=logging.DEBUG)
 logger = get_logger()
 
 
@@ -71,8 +69,6 @@ class Manager(Qt.QObject):
         parser.add_argument("--module", "-m", help="Module name to load", action="append")
         parser.add_argument("--base-dir", "-b", help="Base directory to use")
         parser.add_argument("--storage-dir", "-s", help="Storage directory to use")
-        parser.add_argument("--log-level", action="store", help="Set the console log level", default="WARNING")
-        parser.add_argument("--root-log-level", action="store", help="Set the root log level", default="DEBUG")
         parser.add_argument("--disable", "-d", help="Disable the device specified", action="append")
         parser.add_argument("--disable-all", "-D", help="Disable all devices", action="store_true")
         parser.add_argument("--exit-on-error", "-x", help="Whether to exit immidiately on the first exception during initial Manager setup", action="store_true")
@@ -105,8 +101,6 @@ class Manager(Qt.QObject):
         self.taskLock = Mutex(Qt.QMutex.Recursive)
         self._folderTypes = None
         self._logFile = None
-        self._consoleLogLevel = logging.WARNING
-        self._rootLogLevel = logging.DEBUG
 
         try:
             if Manager.CREATED:
@@ -138,13 +132,9 @@ class Manager(Qt.QObject):
                 )
 
     def initFromCommandLine(self, args: argparse.Namespace):
-        global TEMP_LOG_FILEHANDLE
-
         self.exitOnError = args.exit_on_error
         self.disableDevs = args.disable or []
         self.disableAllDevs = args.disable_all
-        self._consoleLogLevel = getattr(logging, args.log_level.upper(), logging.WARNING)
-        self._rootLogLevel = getattr(logging, args.root_log_level.upper(), logging.DEBUG)
 
         self.configDir = os.path.dirname(args.config)
         self.readConfig(args.config)
@@ -172,11 +162,6 @@ class Manager(Qt.QObject):
                         # we have to show it now, otherwise we'll have no windows
                         self.showGUI()
                     raise
-            if TEMP_LOG_FILEHANDLE is not None:
-                TEMP_LOG_FILEHANDLE.close()
-            TEMP_LOG_FILEHANDLE = setup_logging(
-                TEMP_LOG, acq4_level=self._rootLogLevel, console_level=self._consoleLogLevel
-            )
 
         except Exception:
             if self.exitOnError:
@@ -672,29 +657,11 @@ class Manager(Qt.QObject):
         """
         Set the directory to which log messages are stored.
         """
-        was_temp = self._logFile is None
-        self._logFile = d["log.json"]
-        file_handler = setup_logging(
-            self._logFile.name(),
-            acq4_level=self._rootLogLevel,
-            console_level=self._consoleLogLevel,
-        )
+        # start a new log file in the new directory
+        # also migrates any temporary log messages to the new file
+        set_log_file(d["log.json"].name())
+
         self.sigLogDirChanged.emit(d)
-        if was_temp:
-            try:
-                with open(TEMP_LOG, 'r') as f:
-                    for line in f:
-                        file_handler.emit(HistoricLogRecord(**(json.loads(line))))
-            finally:
-                TEMP_LOG_FILEHANDLE.close()
-                os.remove(TEMP_LOG)
-            log_win = get_log_window()
-            with open(self._logFile.name(), 'r') as f:
-                for i, line in enumerate(f):
-                    log_win.new_record(HistoricLogRecord(**(json.loads(line))), sort=False)
-                    if i % 20 == 0:
-                        Qt.QApplication.processEvents()
-            log_win.ensure_chronological_sorting()
 
     def setCurrentDir(self, d):
         """
