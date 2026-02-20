@@ -327,7 +327,10 @@ class CameraModuleInterface(Qt.QObject):
         self._hasQuit = False
 
     def getDevice(self):
-        return self.dev()
+        dev = self.dev()
+        if dev is None:
+            raise RuntimeError("Device has been deleted.")
+        return dev
 
     def graphicsItems(self):
         """Return a list of all graphics items displayed by this interface.

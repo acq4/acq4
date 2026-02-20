@@ -559,6 +559,85 @@ class ScopeGUI(Qt.QWidget):
             zss.setValue(scale.z())
 
 
+class FocusSpinBox(Qt.QAbstractSpinBox):
+    """Spin box for controlling microscope focus depth.
+
+    Displays the focus depth in micrometers (µm).  When stepping up or down
+    via arrow keys, Page Up/Down, or mouse wheel the step is applied to the
+    microscope's *target* focus position (not the instantaneous position) so
+    that rapid successive steps accumulate correctly even while a move is
+    still in progress.
+    """
+
+    def __init__(self, dev, step=2e-6, parent=None):
+        super().__init__(parent)
+        self._dev = dev      # Microscope device
+        self._step = step    # Step size in metres
+        self._value = 0.0    # Current displayed value in metres
+        self.lineEdit().editingFinished.connect(self._editingFinished)
+        self._updateDisplay()
+
+    # ------------------------------------------------------------------
+    # Public API
+
+    def setValue(self, meters):
+        """Set the displayed value (metres).  Does *not* move the stage."""
+        self._value = float(meters)
+        self._updateDisplay()
+
+    def value(self):
+        """Return the current displayed value in metres."""
+        return self._value
+
+    # ------------------------------------------------------------------
+    # QAbstractSpinBox overrides
+
+    def stepBy(self, steps):
+        """Add *steps* × step-size to the microscope's *target* focus depth."""
+        fd = self._dev.focusDevice()
+        if fd is None:
+            return
+        tpos = fd.globalTargetPosition()
+        if tpos is None:
+            tpos = fd.globalPosition()
+        self._dev.setFocusDepth(tpos[2] + steps * self._step)
+
+    def stepEnabled(self):
+        return self.StepUpEnabled | self.StepDownEnabled
+
+    def validate(self, text, pos):
+        stripped = text.strip()
+        for suffix in (' µm', 'µm', ' um', 'um'):
+            if stripped.endswith(suffix):
+                stripped = stripped[: -len(suffix)].strip()
+                break
+        try:
+            float(stripped)
+            return Qt.QValidator.Acceptable, text, pos
+        except ValueError:
+            if stripped in ('', '-', '.', '-.'):
+                return Qt.QValidator.Intermediate, text, pos
+            return Qt.QValidator.Invalid, text, pos
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+
+    def _updateDisplay(self):
+        self.lineEdit().setText(f'{self._value * 1e6:.2f} µm')
+
+    def _editingFinished(self):
+        text = self.lineEdit().text().strip()
+        for suffix in (' µm', 'µm', ' um', 'um'):
+            if text.endswith(suffix):
+                text = text[: -len(suffix)].strip()
+                break
+        try:
+            self._dev.setFocusDepth(float(text) * 1e-6)
+        except ValueError:
+            pass
+        self._updateDisplay()
+
+
 class ScopeCameraModInterface(CameraModuleInterface):
     """Implements focus control user interface for use in the camera module.
     """
@@ -583,6 +662,11 @@ class ScopeCameraModInterface(CameraModuleInterface):
 
         # Add controls
 
+        # Focal plane z spinbox
+        self.layout.addWidget(Qt.QLabel('Focal plane Z:'), 3, 0)
+        self.zSpinBox = FocusSpinBox(dev, step=2e-6)
+        self.layout.addWidget(self.zSpinBox, 4, 0)
+
         self.setSurfaceBtn = Qt.QPushButton('Set Surface')
         self.setSurfaceBtn.clicked.connect(self.setSurfaceClicked)
         self.layout.addWidget(self.setSurfaceBtn, 0, 0)  # Add to our layout
@@ -593,6 +677,9 @@ class ScopeCameraModInterface(CameraModuleInterface):
 
         # Get depth label from the widget and add it to our layout
         self.layout.addWidget(self.zPositionWidget.depthLabel, 2, 0)
+
+        # add a spacer
+        self.layout.setRowStretch(5, 1)
 
         # Connect device signals
         dev.sigGlobalTransformChanged.connect(self.transformChanged)
@@ -619,6 +706,7 @@ class ScopeCameraModInterface(CameraModuleInterface):
     def transformChanged(self):
         focus = self.getDevice().getFocusDepth()
         self.zPositionWidget.setFocusDepth(focus)
+        self.zSpinBox.setValue(focus)
 
         # :MC: why does this exist? at a first glance, it behaves fine without it.
         # # Compute the target focal plane.
