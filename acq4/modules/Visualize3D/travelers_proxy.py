@@ -11,6 +11,21 @@ from coorx import TTransform
 from pyqtgraph import opengl as gl
 
 
+class MovePathException(Exception):
+    def __init__(self, message, path, failing_point):
+        super().__init__(message)
+        self.path = path
+        self.failing_point = failing_point
+
+    def offset_points(self, offset):
+        self.path = [tuple(np.asarray(p) + offset) for p in self.path]
+        self.failing_point = tuple(np.asarray(self.failing_point) + offset)
+
+    def visualize(self, adapter):
+        adapter.setPathError(self.path, self.failing_point)
+        adapter.win.focus()
+
+
 class VisualizePathSearch(Qt.QObject):
     def __init__(self, adapter):
         super().__init__()

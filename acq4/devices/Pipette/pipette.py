@@ -26,6 +26,7 @@ from .tracker import ResnetPipetteTracker
 from ..Camera import Camera
 from ..RecordingChamber import RecordingChamber
 from ...modules.Visualize3D import VisualizePathSearch
+from ...modules.Visualize3D.travelers_proxy import MovePathException
 from ...util.PromptUser import prompt
 from ...util.geometry import Plane
 from ...util.imaging.sequencer import run_image_sequence
@@ -591,7 +592,13 @@ class Pipette(Device, OptomechDevice):
             )
 
         stage = self.parentStage
-        return stage.movePath(stagePath, name=name)
+        try:
+            return stage.movePath(stagePath, name=name)
+        except MovePathException as e:
+            e.offset_points(self.offset)
+            adapter = self.dm.getModule("Visualize3D").window().findAdapter(lambda a: a.device == self)
+            e.visualize(adapter)
+            raise e
 
     def approachDepth(self):
         """Return the global depth where the electrode should move to when starting approach mode.

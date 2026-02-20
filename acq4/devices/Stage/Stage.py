@@ -16,6 +16,7 @@ from .calibration import ManipulatorAxesCalibrationWindow, StageAxesCalibrationW
 from ..Device import Device
 from ..OptomechDevice import OptomechDevice, map_through_transform
 from acq4 import getManager
+from ...modules.Visualize3D.travelers_proxy import MovePathException
 from ...util.HelpfulException import HelpfulException
 from ...util.future import Future, FutureButton
 from ...util.geometry import (
@@ -760,12 +761,10 @@ class MovePathFuture(MoveFuture):
                     step["position"] = dev.mapGlobalToDevicePosition(
                         global_pos, step.get("linear", False), prev
                     )
-                except Exception:
-                    win = getManager().getModule("Visualize3D").window()
-                    adapter = win.findAdapter(lambda a: a.device.parentDevice() == dev)
-                    adapter.setPathError(global_path, global_pos)
-                    win.focus()
-                    raise
+                except Exception as e:
+                    raise MovePathException(
+                        "Cannot map global position to device coordinates", global_path, global_pos
+                    ) from e
                 prev = step["position"]
         for i, step in enumerate(self.path):
             try:
