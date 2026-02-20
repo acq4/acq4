@@ -6,10 +6,12 @@ import numpy as np
 
 import pyqtgraph as pg
 from acq4.Interfaces import InterfaceMixin
+from acq4.modules.Visualize3D import Visualize3D
 from acq4.util import Qt
 from acq4.util.Mutex import Mutex
-from acq4.util.geometry import Geometry, load_transform_from_anything
+from acq4.util.geometry import Plane, Geometry, load_transform_from_anything
 from coorx import SRT3DTransform, Transform
+from pyqtgraph import opengl as gl
 
 
 def map_through_transform(
@@ -217,7 +219,11 @@ class OptomechDevice(InterfaceMixin):
 
         # declare that this device supports the OptomechDevice API
         self.addInterface("OptomechDevice")
-        dm.declareInterface(name, ["OptomechDevice"], self)
+        self.addInterface(Visualize3D.interfaceName)
+        dm.declareInterface(name, ["OptomechDevice", Visualize3D.interfaceName], self)
+
+    def visualize3DAdapter(self, win):
+        return OptomechDeviceVisualizerAdapter(self, win)
 
     def getGeometry(self, name=None) -> Geometry | None:
         if "geometry" in self.__config:
@@ -793,3 +799,146 @@ class DeviceTreeItemGroup(pg.ItemGroup):
         for subdev, items in self.groups[device].items():
             groups.extend(items)
         return groups
+
+
+class OptomechDeviceVisualizerAdapter:
+    def __init__(self, dev: OptomechDevice, win: "VisualizerWindow"):
+        self.device = dev
+        self.win = win
+        self.checkboxes = {}
+        self._limits = None
+        self._mesh = None
+
+        dev.sigGeometryChanged.connect(self.handleGeometryChange)
+        self._geometry = dev.getGeometry()
+        if self._geometry is None:
+            return
+
+        self._mesh = self._geometry.glMesh()
+
+        # Add geometry to the scene
+        self.win.add3DItem(self._mesh)
+        dev.sigGlobalTransformChanged.connect(self.handleTransformUpdate)
+        self.handleTransformUpdate(dev, dev)
+
+        if bounds := dev.getBoundaries():
+            self._limits = self.createBounds(bounds, False)
+
+        self._checkbox_tree = self._buildCheckboxTree()
+
+    def _buildCheckboxTree(self):
+        dev = self.device
+
+        # Create tree widget for hierarchical device display
+        device_tree = Qt.QTreeWidget()
+        device_tree.setMinimumWidth(250)
+        device_tree.itemChanged.connect(self.handleVisibilityToggle)
+
+        # Create tree item for this device
+        device_item = Qt.QTreeWidgetItem(self.win.deviceTree)
+        device_item.setText(0, dev.name())
+        device_item.setFlags(device_item.flags() | Qt.Qt.ItemIsUserCheckable)
+        device_item.setCheckState(0, Qt.Qt.Checked)
+        device_item.setData(0, Qt.Qt.UserRole, dev)
+        device_tree.addTopLevelItem(device_item)
+        self.checkboxes["device"] = device_item
+
+        # Create geometry sub-item
+        geom_item = Qt.QTreeWidgetItem(device_item)
+        geom_item.setText(0, "Geometry")
+        geom_item.setFlags(geom_item.flags() | Qt.Qt.ItemIsUserCheckable)
+        geom_item.setCheckState(0, Qt.Qt.Checked)
+        geom_item.setData(0, Qt.Qt.UserRole, "geometry")
+        self.checkboxes["geometry"] = geom_item
+
+        if self._limits is not None:
+            # Create limits sub-item if available
+            limits_item = Qt.QTreeWidgetItem(device_item)
+            limits_item.setText(0, "Range of Motion")
+            limits_item.setFlags(limits_item.flags() | Qt.Qt.ItemIsUserCheckable)
+            limits_item.setCheckState(0, Qt.Qt.Unchecked)
+            limits_item.setData(0, Qt.Qt.UserRole, "limits")
+            self.checkboxes["limits"] = limits_item
+
+        return device_tree
+
+    def handleTransformUpdate(self, moved_device: "OptomechDevice", cause_device: "OptomechDevice"):
+        geom = self._geometry
+        if geom is None:
+            return
+        xform = moved_device.globalPhysicalTransform() * geom.transform
+        self.setMeshTransform(moved_device, xform.as_pyqtgraph())
+
+    def handleGeometryChange(self, dev: "OptomechDevice"):
+        if self._mesh is not None:
+            self.win.remove3DItem(self._mesh)
+        self._mesh = None
+
+        self._geometry = dev.getGeometry()
+        if self._geometry is not None:
+            self._mesh = self._geometry.glMesh()
+            self.win.view.addItem(self._mesh)
+            self._mesh.setVisible(
+                self.checkboxes["geometry"].checkState(0) == Qt.Qt.Checked
+                and self.checkboxes["device"].checkState(0) == Qt.Qt.Checked
+            )
+            self.handleTransformUpdate(dev, dev)
+
+    def setMeshTransform(self, dev, xform):
+        self._mesh.setTransform(xform)
+
+    def handleVisibilityToggle(self, item: Qt.QTreeWidgetItem, column):
+        parent = item.parent()
+        visible = item.checkState(0) == Qt.Qt.Checked
+
+        if parent is None:
+            # A top-level checkbox
+            dev = item.data(0, Qt.Qt.UserRole)
+            if dev is not self.device:
+                return
+
+            for ch in range(item.childCount()):
+                child = item.child(ch)
+                child.setDisabled(not visible)
+                self.handleVisibilityToggle(child, column)  # let each child decide if it's really visible
+
+        else:  # This is a component item
+            dev = parent.data(0, Qt.Qt.UserRole)
+            if dev is not self.device:
+                return
+
+            visible = visible and parent.checkState(0) == Qt.Qt.Checked
+            componentType = item.data(0, Qt.Qt.UserRole)
+
+            if componentType == "geometry":
+                self._mesh.setVisible(visible)
+            elif componentType == "limits" and self._limits is not None:
+                self._limits.setVisible(visible)
+
+    def createBounds(self, bounds, visible):
+        edges = []
+        for a, b in Plane.wireframe(*bounds):
+            for bound in bounds:
+                if not (bound.allows_point(a) and bound.allows_point(b)):
+                    continue
+            if np.linalg.norm(a - b) > 0.1:
+                # being far away happens with not-quite-parallel planes; we can just pretend they're parallel
+                continue
+            edge = [a, b]
+            edges.extend(edge)
+        plot = gl.GLLinePlotItem(pos=np.array(edges), color=(1, 0, 0, 0.2), width=4, mode="lines")
+        plot.setVisible(visible)
+        self.win.view.addItem(plot)
+        return plot
+
+    def clear(self):
+        if self._mesh is not None:
+            self.win.remove3DItem(self._mesh)
+            self._mesh = None
+        if self._limits is not None:
+            self.win.remove3DItem(self._limits)
+            self._limits = None
+        if self._checkbox_tree is not None:
+            self.win.removeControlWidget(self._checkbox_tree)
+            self._checkbox_tree = None
+            self.checkboxes = {}

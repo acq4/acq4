@@ -247,7 +247,7 @@ class GeometryAwarePathGenerator(PipettePathGenerator):
             mod = man.getModule("Visualize3D")
             while not mod.isReady.wait(0.05):
                 _future.checkStop()
-            viz = mod.window().pathPlanVisualizer(self.pip)
+            viz = mod.window().findAdapter(lambda a: a.device == self.pip).pathSearchVisualizer()
             planner, from_pip_to_global = self._getPlanningContext()
             planner.make_convolved_obstacles(self.pip.getGeometry(), from_pip_to_global, viz)
             print(f"cache primed for {self.pip.name()}")
@@ -278,7 +278,8 @@ class GeometryAwarePathGenerator(PipettePathGenerator):
             explanation = WAYPOINT_TO_AVOID_SAMPLE_TEAR
             globalStop = final_waypoint
 
-        viz = getManager().getModule("Visualize3D").window().pathPlanVisualizer(self.pip)
+        win = getManager().getModule("Visualize3D").window()
+        viz = win.findAdapter(lambda a: a.device == self.pip).pathSearchVisualizer()
         planner, from_pip_to_global = self._getPlanningContext()
         try:
             path = planner.find_path(

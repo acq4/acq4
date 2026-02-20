@@ -12,7 +12,7 @@ import numpy as np
 import pyqtgraph as pg
 from acq4 import getManager
 from acq4.devices.Device import Device
-from acq4.devices.OptomechDevice import OptomechDevice
+from acq4.devices.OptomechDevice import OptomechDevice, OptomechDeviceVisualizerAdapter
 from acq4.devices.Stage import Stage, MovePathFuture
 from acq4.modules.Camera import CameraModuleInterface
 from acq4.util import Qt, ptime
@@ -25,6 +25,7 @@ from .planners import defaultMotionPlanners
 from .tracker import ResnetPipetteTracker
 from ..Camera import Camera
 from ..RecordingChamber import RecordingChamber
+from ...modules.Visualize3D import VisualizePathSearch
 from ...util.PromptUser import prompt
 from ...util.geometry import Plane
 from ...util.imaging.sequencer import run_image_sequence
@@ -310,6 +311,9 @@ class Pipette(Device, OptomechDevice):
         iface = PipetteCamModInterface(self, mod, showUi=self._opts['showCameraModuleUI'])
         self._camInterfaces[iface] = None
         return iface
+
+    def visualize3DAdapter(self, win):
+        return PipetteVisualizerAdapter(self, win)
 
     def tipOffsetIsReasonable(self, pos) -> bool:
         dist = np.linalg.norm(np.array(self.mapToGlobal((0, 0, 0))) - pos)
@@ -1150,6 +1154,58 @@ class PipetteCamModInterface(CameraModuleInterface):
 
     def aboveTargetClicked(self):
         self.getDevice().goAboveTarget(self.selectedSpeed())
+
+
+class PipetteVisualizerAdapter(OptomechDeviceVisualizerAdapter):
+    def __init__(self, dev: Pipette, win):
+        super().__init__(dev, win)
+        self._obstacles = {}
+        # TODO signal connections for obstacle and voxel updates
+
+        # TODO new transform applied limits when calibration changes
+        dev.sigCalibrationChanged.connect(self.handleTransformUpdate)
+
+    def _buildCheckboxTree(self):
+        tree = super()._buildCheckboxTree()
+        device_item = self.checkboxes["device"]
+
+        path_item = Qt.QTreeWidgetItem(device_item)
+        path_item.setText(0, "Path plan")
+        path_item.setFlags(path_item.flags() | Qt.Qt.ItemIsUserCheckable)
+        path_item.setCheckState(0, Qt.Qt.Checked)
+        path_item.setDisabled(True)
+        path_item.setData(0, Qt.Qt.UserRole, "path")
+        self.checkboxes["path"] = path_item
+
+        # TODO ooo! target
+
+        # TODO we need and obstacle and voxels entry for each other device
+        for other_dev in self.optomech_devices():
+            other_dev_item = Qt.QTreeWidgetItem(device_item)
+            other_dev_item.setText(0, f"{other_dev.name()} obstacles")
+            other_dev_item.setFlags(other_dev_item.flags() | Qt.Qt.ItemIsUserCheckable)
+            other_dev_item.setCheckState(0, Qt.Qt.Unchecked)
+            other_dev_item.setData(0, Qt.Qt.UserRole, other_dev.name())
+            device_item.addChild(other_dev_item)
+
+            obst_item = Qt.QTreeWidgetItem(other_dev_item)
+            obst_item.setText(0, "Obstacle")
+            obst_item.setFlags(obst_item.flags() | Qt.Qt.ItemIsUserCheckable)
+            obst_item.setCheckState(0, Qt.Qt.Checked)
+            obst_item.setData(0, Qt.Qt.UserRole, "obstacle")
+
+            voxels_item = Qt.QTreeWidgetItem(other_dev_item)
+            voxels_item.setText(0, "Raw Obstacle Voxels")
+            voxels_item.setFlags(voxels_item.flags() | Qt.Qt.ItemIsUserCheckable)
+            voxels_item.setCheckState(0, Qt.Qt.Unchecked)
+            voxels_item.setData(0, Qt.Qt.UserRole, "voxels")
+
+            self._obstacles[other_dev.name()] = (other_dev_item, obst_item, voxels_item)
+
+        return tree
+
+    def pathSearchVisualizer(self):
+        return VisualizePathSearch(self)
 
 
 class Axis(pg.ROI):
