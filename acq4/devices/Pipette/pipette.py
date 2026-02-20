@@ -29,6 +29,7 @@ from ...modules.Visualize3D import VisualizePathSearch
 from ...util.PromptUser import prompt
 from ...util.geometry import Plane
 from ...util.imaging.sequencer import run_image_sequence
+from ...util.threadrun import inGuiThread
 
 CamModTemplate = Qt.importTemplate('.cameraModTemplate')
 
@@ -1161,6 +1162,8 @@ class PipetteVisualizerAdapter(OptomechDeviceVisualizerAdapter):
         self._obstacles = {}
         super().__init__(dev, win)
         self._target = win.target()
+        self._path = win.path(color=[0.5, 0, 1, 1])
+        self._error = win.target(color=[1, 0.2, 0.2, 0.6])
         if dev.target is not None:
             self.handleTargetChanged(dev, dev.targetPosition())
         # TODO obstacles and voxels
@@ -1176,7 +1179,7 @@ class PipetteVisualizerAdapter(OptomechDeviceVisualizerAdapter):
         param = super()._buildControlParam()
 
         path_param = Parameter.create(name='Path plan', type='bool', value=True)
-        path_param.setOpts(enabled=False)
+        path_param.sigValueChanged.connect(self._handlePathVisible)
         param.addChild(path_param)
 
         target_param = Parameter.create(name='Target', type='bool', value=True)
@@ -1208,18 +1211,22 @@ class PipetteVisualizerAdapter(OptomechDeviceVisualizerAdapter):
     def _handleDeviceToggle(self, param, value):
         super()._handleDeviceToggle(param, value)
         self._updateTargetVisibility()
+        self._updatePathVisibility()
 
     def _handleTargetVisible(self, param, value):
         self._updateTargetVisibility()
 
+    def _handlePathVisible(self, param, value):
+        self._updatePathVisibility()
+
     def _updateTargetVisibility(self):
-        if self._param is None:
-            return
-        try:
-            target_on = self._param.child('Target').value()
-        except KeyError:
-            return
-        self._target.setVisible(self._param.value() and target_on)
+        visible = self._param.value() and self._param.child('Target').value()
+        self._target.setVisible(visible)
+
+    def _updatePathVisibility(self):
+        visible = self._param.value() and self._param.child('Path plan').value()
+        self._path.setVisible(visible)
+        self._error.setVisible(visible)
 
     def handleCalibrationUpdate(self, dev):
         if bounds := dev.getBoundaries():
@@ -1234,6 +1241,11 @@ class PipetteVisualizerAdapter(OptomechDeviceVisualizerAdapter):
 
     def pathSearchVisualizer(self):
         return VisualizePathSearch(self)
+
+    @inGuiThread
+    def setPathError(self, path, failed_at):
+        self._path.setData(pos=np.asarray(path))
+        self._error.setData(pos=np.asarray([failed_at]))
 
 
 class Axis(pg.ROI):

@@ -94,6 +94,10 @@ class PipettePathGenerator:
 
         The returned path does _not_ include the starting position.
         """
+        man = getManager()
+        mod = man.getModule("Visualize3D")
+        # grab the visualizer for visualizing errors
+        adapter = mod.window().findAdapter(lambda a: a.device == self.pip)
         explanation = explanation or MOVE_TO_DESTINATION
         globalStart = np.asarray(globalStart)
         globalStop = np.asarray(globalStop)
@@ -149,6 +153,8 @@ class PipettePathGenerator:
                 # ask the stage to check whether this position is reachable
                 self.manipulator.checkGlobalLimits(manipulatorGlobalPos, linear)
             except Exception as e:
+                adapter.setPathError([globalStart] + [p[0] for p in path], failed_at=globalPos)
+                mod.window().focus()
                 raise ValueError(
                     f"Moving {self.pip} to '{stepName}' would be beyond the limits of its manipulator: {e}"
                 ) from e
