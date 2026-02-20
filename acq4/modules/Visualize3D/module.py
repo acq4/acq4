@@ -21,8 +21,8 @@ class Visualize3D(Module):
         self.onInterfaceListChanged(self.manager.interfaceDir.typeList)
 
     @inGuiThread
-    def onInterfaceListChanged(self, types: dict):
-        for name in types.get(self.interfaceName, []):
+    def onInterfaceListChanged(self, types: list):
+        for name in types:
             if name not in self._adapters:
                 obj = self.manager.getInterface(self.interfaceName, name)
                 adapter = obj.visualize3DAdapter(self.win)
