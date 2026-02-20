@@ -10,13 +10,13 @@ class DoverStage(Stage):
     """
 
     def __init__(self, man, config: dict, name):
+        Stage.__init__(self, man, config, name)
         self.msapi = get_client(dll_path=config["dllPath"])
         self.dev = self.msapi['smartstage']
         self.dev.default_acceleration = config.get("defaultAcceleration", 50.0)
         self.dev.enable()
         self.dev.set_callback(self.posChanged)
         self._lastMove = None
-        Stage.__init__(self, man, config, name)
         self.posChanged(self.dev.pos(refresh=True))
 
     def axes(self):
