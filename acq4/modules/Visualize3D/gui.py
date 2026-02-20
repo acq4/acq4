@@ -3,6 +3,7 @@ from typing import Callable
 
 from acq4.util import Qt
 from pyqtgraph import opengl as gl
+from pyqtgraph.parametertree import Parameter, ParameterTree
 
 
 class VisualizerWindow(Qt.QMainWindow):
@@ -42,11 +43,11 @@ class VisualizerWindow(Qt.QMainWindow):
         axes.setSize(0.1, 0.1, 0.1)
         self.view.addItem(axes)
 
-        # Right side: Tree widget for device controls
-        self.controlWidget = Qt.QWidget()
-        self.controlLayout = Qt.QVBoxLayout()
-        self.controlWidget.setLayout(self.controlLayout)
-        self.splitter.addWidget(self.controlWidget)
+        # Right side: ParameterTree for all device controls
+        self._rootParam = Parameter.create(name='devices', type='group', children=[])
+        self.paramTree = ParameterTree()
+        self.paramTree.setParameters(self._rootParam, showTop=False)
+        self.splitter.addWidget(self.paramTree)
 
         # Set splitter sizes
         self.splitter.setSizes([700, 300])
@@ -54,12 +55,11 @@ class VisualizerWindow(Qt.QMainWindow):
         # Connect signals
         self.focusEvent.connect(self._focus)
 
-    def addControls(self, widget):
-        self.controlLayout.addWidget(widget)
+    def addControls(self, param: Parameter):
+        self._rootParam.addChild(param)
 
-    def removeControls(self, widget):
-        self.controlLayout.removeWidget(widget)
-        widget.setParent(None)
+    def removeControls(self, param: Parameter):
+        self._rootParam.removeChild(param)
 
     def add3DItem(self, item):
         self.view.addItem(item)

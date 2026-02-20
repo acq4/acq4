@@ -31,8 +31,8 @@ class VisualizePathSearch(Qt.QObject):
 
     @inGuiThread
     def _initGui(self):
-        can_show = self._adapter.checkboxes["path"]
-        show_path = can_show.checkState(0) == Qt.Qt.Checked and can_show.isEnabled()
+        path_param = self._adapter._param.child('Path plan')
+        show_path = path_param.value() and path_param.opts.get('enabled', True)
         self._startTarget = self._adapter.win.target(show_path)
         self._destTarget = self._adapter.win.target(show_path, color=(0, 1, 0, 1))
         self._activePath = self._adapter.win.path((0.1, 1, 0.7, 0.5), show_path)
@@ -82,16 +82,15 @@ class VisualizePathSearch(Qt.QObject):
         self._activePath.setVisible(visible)
         self._previousPath.setVisible(visible)
         self._bounds.setVisible(visible)
+        device_visible = self._adapter._param.value()
         for name, obstacle in self._obstacles.items():
-            obst_toggle = self._adapter.checkboxes["obstacle"]
-            dev_obst_visible = obst_toggle.checkState(0) == Qt.Qt.Checked
-            dev_visible = obst_toggle.parent().checkState(0) == Qt.Qt.Checked
-            obstacle.setVisible(visible and dev_visible and dev_obst_visible)
+            dev_param = self._adapter._obstacles[name]["device param"]
+            obst_visible = dev_param.child('Obstacle').value()
+            obstacle.setVisible(visible and device_visible and dev_param.value() and obst_visible)
         for name, voxels in self._voxels.items():
-            vox_toggle = self._adapter.checkboxes["voxels"]
-            dev_vox_visible = vox_toggle.checkState(0) == Qt.Qt.Checked
-            dev_visible = vox_toggle.parent().checkState(0) == Qt.Qt.Checked
-            voxels.setVisible(visible and dev_visible and dev_vox_visible)
+            dev_param = self._adapter._obstacles[name]["device param"]
+            vox_visible = dev_param.child('Raw Obstacle Voxels').value()
+            voxels.setVisible(visible and device_visible and dev_param.value() and vox_visible)
 
     def updatePath(self, path, skip=3):
         self._pathUpdates.put((path, skip))
@@ -144,21 +143,19 @@ class VisualizePathSearch(Qt.QObject):
 
     @property
     def shouldShowPath(self):
-        togglers = self._adapter.checkboxes
-        generally_visible = togglers["geometry"].parent().checkState(0) == Qt.Qt.Checked
-        return generally_visible and togglers["path"].checkState(0) == Qt.Qt.Checked
+        param = self._adapter._param
+        return param.value() and param.child('Path plan').value()
 
     @inGuiThread
     def _setInitialObstacleVisibility(self, name):
-        togglers = self._adapter.checkboxes
-        general_checkbox = togglers["geometry"].parent()
-        generally_visible = general_checkbox.checkState(0) == Qt.Qt.Checked
+        generally_visible = self._adapter._param.value()
+        dev_param = self._adapter._obstacles[name]["device param"]
 
-        obst_visible = togglers["obstacle"].checkState(0) == Qt.Qt.Checked
-        self._obstacles[name].setVisible(generally_visible and obst_visible and self.shouldShowPath)
+        obst_visible = dev_param.child('Obstacle').value()
+        self._obstacles[name].setVisible(generally_visible and dev_param.value() and obst_visible and self.shouldShowPath)
 
-        voxels_visible = togglers["voxels"].checkState(0) == Qt.Qt.Checked
-        self._voxels[name].setVisible(generally_visible and voxels_visible and self.shouldShowPath)
+        vox_visible = dev_param.child('Raw Obstacle Voxels').value()
+        self._voxels[name].setVisible(generally_visible and dev_param.value() and vox_visible and self.shouldShowPath)
 
     @inGuiThread
     def _buildVoxelVolume(self, name, vol_data):

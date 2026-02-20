@@ -18,7 +18,7 @@ from acq4.modules.Camera import CameraModuleInterface
 from acq4.util import Qt, ptime
 from acq4.util.future import future_wrap, Future
 from acq4.util.target import Target
-from coorx import AffineTransform, SRT3DTransform
+from coorx import AffineTransform
 from pyqtgraph import Point, siFormat
 from .planners import PipettePathGenerator
 from .planners import defaultMotionPlanners
@@ -1170,98 +1170,63 @@ class PipetteVisualizerAdapter(OptomechDeviceVisualizerAdapter):
         dev.sigCalibrationChanged.connect(self.handleCalibrationUpdate)
         dev.sigTargetChanged.connect(self.handleTargetChanged)
 
-    def _buildCheckboxTree(self):
-        tree = super()._buildCheckboxTree()
-        device_item = self.checkboxes["device"]
+    def _buildControlParam(self):
+        from pyqtgraph.parametertree import Parameter
 
-        path_item = Qt.QTreeWidgetItem(device_item)
-        path_item.setText(0, "Path plan")
-        path_item.setFlags(path_item.flags() | Qt.Qt.ItemIsUserCheckable)
-        path_item.setCheckState(0, Qt.Qt.Checked)
-        path_item.setDisabled(True)
-        path_item.setData(0, Qt.Qt.UserRole, "path")
-        self.checkboxes["path"] = path_item
+        param = super()._buildControlParam()
 
-        target_item = Qt.QTreeWidgetItem(device_item)
-        target_item.setText(0, "Target")
-        target_item.setFlags(target_item.flags() | Qt.Qt.ItemIsUserCheckable)
-        target_item.setCheckState(0, Qt.Qt.Checked)
-        target_item.setData(0, Qt.Qt.UserRole, "target")
-        self.checkboxes["target"] = target_item
+        path_param = Parameter.create(name='Path plan', type='bool', value=True)
+        path_param.setOpts(enabled=False)
+        param.addChild(path_param)
+
+        target_param = Parameter.create(name='Target', type='bool', value=True)
+        param.addChild(target_param)
+        target_param.sigValueChanged.connect(self._handleTargetVisible)
 
         # TODO figure all the geometry-aware stuff out
         # obstacle_devices = [d for d in getManager().listInterfaces("OptomechDevice") if d != self.device.name()]
         obstacle_devices = []
         for other_dev in obstacle_devices:
-            other_dev_item = Qt.QTreeWidgetItem(device_item)
-            other_dev_item.setText(0, f"{other_dev} obstacles")
-            other_dev_item.setFlags(other_dev_item.flags() | Qt.Qt.ItemIsUserCheckable)
-            other_dev_item.setCheckState(0, Qt.Qt.Unchecked)
-            other_dev_item.setData(0, Qt.Qt.UserRole, other_dev)
-            device_item.addChild(other_dev_item)
-
-            obst_item = Qt.QTreeWidgetItem(other_dev_item)
-            obst_item.setText(0, "Obstacle")
-            obst_item.setFlags(obst_item.flags() | Qt.Qt.ItemIsUserCheckable)
-            obst_item.setCheckState(0, Qt.Qt.Checked)
-            obst_item.setData(0, Qt.Qt.UserRole, "obstacle")
-
-            voxels_item = Qt.QTreeWidgetItem(other_dev_item)
-            voxels_item.setText(0, "Raw Obstacle Voxels")
-            voxels_item.setFlags(voxels_item.flags() | Qt.Qt.ItemIsUserCheckable)
-            voxels_item.setCheckState(0, Qt.Qt.Unchecked)
-            voxels_item.setData(0, Qt.Qt.UserRole, "voxels")
-
+            other_dev_param = Parameter.create(
+                name=f"{other_dev} obstacles",
+                type='bool',
+                value=False,
+                children=[
+                    dict(name='Obstacle', type='bool', value=True),
+                    dict(name='Raw Obstacle Voxels', type='bool', value=False),
+                ],
+            )
+            param.addChild(other_dev_param)
             self._obstacles[other_dev] = {
-                "device checkbox": other_dev_item,
-                "obstacle checkbox": obst_item,
-                "voxels checkbox": voxels_item,
+                "device param": other_dev_param,
+                "obstacle param": other_dev_param.child('Obstacle'),
+                "voxels param": other_dev_param.child('Raw Obstacle Voxels'),
             }
 
-        return tree
+        return param
 
-    def handleVisibilityToggle(self, item: Qt.QTreeWidgetItem, column):
-        for other_dev, other_items in self._obstacles.items():
-            if item is other_items["device checkbox"]:
-                visible = item.checkState(0) == Qt.Qt.Checked and item.parent().checkState(0) == Qt.Qt.Checked
-                for ch in range(item.childCount()):
-                    child = item.child(ch)
-                    child.setDisabled(not visible)
-                    # let each child decide if it's really visible
-                    self.handleVisibilityToggle(child, column)
-                return
-            elif item in (other_items["obstacle checkbox"], other_items["voxels checkbox"]):
-                visible = (
-                    item.checkState(0) == Qt.Qt.Checked
-                    and item.parent().checkState(0) == Qt.Qt.Checked
-                    and item.parent().parent().checkState(0) == Qt.Qt.Checked
-                )
-                if item.data(0, Qt.Qt.UserRole) == "obstacle":
-                    other_items["obstacle"].setVisible(visible)
-                else:
-                    other_items["voxels"].setVisible(visible)
-                return
+    def _handleDeviceToggle(self, param, value):
+        super()._handleDeviceToggle(param, value)
+        self._updateTargetVisibility()
 
-        if item is self.checkboxes["path"]:
-            return  # TODO
+    def _handleTargetVisible(self, param, value):
+        self._updateTargetVisibility()
 
-        if item is self.checkboxes["target"]:
-            self._target.setVisible(
-                item.checkState(0) == Qt.Qt.Checked and item.parent().checkState(0) == Qt.Qt.Checked
-            )
+    def _updateTargetVisibility(self):
+        if self._param is None:
             return
-
-        super().handleVisibilityToggle(item, column)
+        try:
+            target_on = self._param.child('Target').value()
+        except KeyError:
+            return
+        self._target.setVisible(self._param.value() and target_on)
 
     def handleCalibrationUpdate(self, dev):
         if bounds := dev.getBoundaries():
             if self._limits is not None:
                 self.win.remove3DItem(self._limits)
-            visible = (
-                self.checkboxes["limits"].checkState(0) == Qt.Qt.Checked
-                and self.checkboxes["device"].checkState(0) == Qt.Qt.Checked
-            )
-            self._limits = self.createBounds(bounds, visible)
+            self._limits = self.createBounds(bounds, False)
+            self._updateLimitsVisibility()
         self.handleTransformUpdate(dev, dev)
 
     def handleTargetChanged(self, dev, pos):

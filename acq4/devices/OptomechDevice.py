@@ -12,6 +12,7 @@ from acq4.util.Mutex import Mutex
 from acq4.util.geometry import Plane, Geometry, load_transform_from_anything
 from coorx import SRT3DTransform, Transform
 from pyqtgraph import opengl as gl
+from pyqtgraph.parametertree import Parameter
 
 
 def map_through_transform(
@@ -805,8 +806,7 @@ class OptomechDeviceVisualizerAdapter:
     def __init__(self, dev: OptomechDevice, win: "VisualizerWindow"):
         self.device = dev
         self.win = win
-        self.checkboxes = {}
-        self._checkbox_tree = None
+        self._param = None
         self._limits = None
         self._mesh = None
 
@@ -825,44 +825,50 @@ class OptomechDeviceVisualizerAdapter:
         if bounds := dev.getBoundaries():
             self._limits = self.createBounds(bounds, False)
 
-        self._checkbox_tree = self._buildCheckboxTree()
-        self._checkbox_tree.itemChanged.connect(self.handleVisibilityToggle)
-        self.win.addControls(self._checkbox_tree)
+        self._param = self._buildControlParam()
+        self.win.addControls(self._param)
 
-    def _buildCheckboxTree(self):
-        dev = self.device
-
-        # Create tree widget for hierarchical device display
-        device_tree = Qt.QTreeWidget()
-        device_tree.setMinimumWidth(250)
-
-        # Create tree item for this device
-        device_item = Qt.QTreeWidgetItem(device_tree)
-        device_item.setText(0, dev.name())
-        device_item.setFlags(device_item.flags() | Qt.Qt.ItemIsUserCheckable)
-        device_item.setCheckState(0, Qt.Qt.Checked)
-        device_item.setData(0, Qt.Qt.UserRole, dev)
-        device_tree.addTopLevelItem(device_item)
-        self.checkboxes["device"] = device_item
-
-        # Create geometry sub-item
-        geom_item = Qt.QTreeWidgetItem(device_item)
-        geom_item.setText(0, "Geometry")
-        geom_item.setFlags(geom_item.flags() | Qt.Qt.ItemIsUserCheckable)
-        geom_item.setCheckState(0, Qt.Qt.Checked)
-        geom_item.setData(0, Qt.Qt.UserRole, "geometry")
-        self.checkboxes["geometry"] = geom_item
-
+    def _buildControlParam(self):
+        children = [
+            dict(name='Geometry', type='bool', value=True),
+        ]
         if self._limits is not None:
-            # Create limits sub-item if available
-            limits_item = Qt.QTreeWidgetItem(device_item)
-            limits_item.setText(0, "Range of Motion")
-            limits_item.setFlags(limits_item.flags() | Qt.Qt.ItemIsUserCheckable)
-            limits_item.setCheckState(0, Qt.Qt.Unchecked)
-            limits_item.setData(0, Qt.Qt.UserRole, "limits")
-            self.checkboxes["limits"] = limits_item
+            children.append(dict(name='Range of Motion', type='bool', value=False))
 
-        return device_tree
+        param = Parameter.create(name=self.device.name(), type='bool', value=True, children=children)
+        param.sigValueChanged.connect(self._handleDeviceToggle)
+        param.child('Geometry').sigValueChanged.connect(self._handleGeometryVisible)
+        if self._limits is not None:
+            param.child('Range of Motion').sigValueChanged.connect(self._handleLimitsVisible)
+        return param
+
+    def _handleDeviceToggle(self, param, value):
+        for child in param.children():
+            child.setOpts(enabled=value)
+        self._updateMeshVisibility()
+        self._updateLimitsVisibility()
+
+    def _handleGeometryVisible(self, param, value):
+        self._updateMeshVisibility()
+
+    def _handleLimitsVisible(self, param, value):
+        self._updateLimitsVisibility()
+
+    def _updateMeshVisibility(self):
+        if self._mesh is None or self._param is None:
+            return
+        self._mesh.setVisible(
+            self._param.value() and self._param.child('Geometry').value()
+        )
+
+    def _updateLimitsVisibility(self):
+        if self._limits is None or self._param is None:
+            return
+        try:
+            limits_on = self._param.child('Range of Motion').value()
+        except KeyError:
+            return
+        self._limits.setVisible(self._param.value() and limits_on)
 
     def handleTransformUpdate(self, moved_device: "OptomechDevice", cause_device: "OptomechDevice"):
         geom = self._geometry
@@ -880,42 +886,11 @@ class OptomechDeviceVisualizerAdapter:
         if self._geometry is not None:
             self._mesh = self._geometry.glMesh()
             self.win.add3DItem(self._mesh)
-            self._mesh.setVisible(
-                self.checkboxes["geometry"].checkState(0) == Qt.Qt.Checked
-                and self.checkboxes["device"].checkState(0) == Qt.Qt.Checked
-            )
+            self._updateMeshVisibility()
             self.handleTransformUpdate(dev, dev)
 
     def setMeshTransform(self, dev, xform):
         self._mesh.setTransform(xform)
-
-    def handleVisibilityToggle(self, item: Qt.QTreeWidgetItem, column):
-        parent = item.parent()
-        visible = item.checkState(0) == Qt.Qt.Checked
-
-        if parent is None:
-            # A top-level checkbox
-            dev = item.data(0, Qt.Qt.UserRole)
-            if dev is not self.device:
-                return
-
-            for ch in range(item.childCount()):
-                child = item.child(ch)
-                child.setDisabled(not visible)
-                self.handleVisibilityToggle(child, column)  # let each child decide if it's really visible
-
-        else:  # This is a component item
-            dev = parent.data(0, Qt.Qt.UserRole)
-            if dev is not self.device:
-                return
-
-            visible = visible and parent.checkState(0) == Qt.Qt.Checked
-            componentType = item.data(0, Qt.Qt.UserRole)
-
-            if componentType == "geometry":
-                self._mesh.setVisible(visible)
-            elif componentType == "limits" and self._limits is not None:
-                self._limits.setVisible(visible)
 
     def createBounds(self, bounds, visible):
         edges = []
@@ -940,7 +915,6 @@ class OptomechDeviceVisualizerAdapter:
         if self._limits is not None:
             self.win.remove3DItem(self._limits)
             self._limits = None
-        if self._checkbox_tree is not None:
-            self.win.removeControls(self._checkbox_tree)
-            self._checkbox_tree = None
-            self.checkboxes = {}
+        if self._param is not None:
+            self.win.removeControls(self._param)
+            self._param = None
