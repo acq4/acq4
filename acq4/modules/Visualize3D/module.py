@@ -23,13 +23,19 @@ class Visualize3D(Module):
     @inGuiThread
     def onInterfaceListChanged(self, types: list):
         if self.interfaceName in types:
+            seen = set()
             for name in self.manager.listInterfaces(self.interfaceName):
+                seen.add(name)
                 if name not in self._adapters:
                     obj = self.manager.getInterface(self.interfaceName, name)
                     adapter = obj.visualize3DAdapter(self.win)
                     if adapter is not None:
                         self.win.addAdapter(adapter, self.isReady)
                         self._adapters[name] = adapter
+            for name in list(self._adapters.keys()):
+                if name not in seen:
+                    self.win.removeAdapter(self._adapters[name])
+                    del self._adapters[name]
 
     @inGuiThread
     def openWindow(self):
