@@ -1237,15 +1237,18 @@ class PipetteVisualizerAdapter(OptomechDeviceVisualizerAdapter):
         self.handleTransformUpdate(dev, dev)
 
     def handleTargetChanged(self, dev, pos):
-        self._target.setData(pos=np.asarray(pos))
+        self._target.setData(pos=np.asarray([pos]))
 
     def pathSearchVisualizer(self):
         return VisualizePathSearch(self)
 
     @inGuiThread
-    def setPathError(self, path, failed_at):
+    def setPathError(self, path, failed_at=None):
         self._path.setData(pos=np.asarray(path))
-        self._error.setData(pos=np.asarray([failed_at]))
+        if failed_at is None:
+            self._error.setData(pos=np.empty((0, 3)))
+        else:
+            self._error.setData(pos=np.asarray([failed_at]))
 
 
 class Axis(pg.ROI):
