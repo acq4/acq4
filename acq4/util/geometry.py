@@ -2172,7 +2172,7 @@ def limits_to_boundaries(
     """
     # fill in with appropriate nigh-infinities
     limits = [
-        (-1e27 if min_val is None else min_val, 1e27 if max_val is None else max_val)
+        (-1e18 if min_val is None else min_val, 1e18 if max_val is None else max_val)
         for min_val, max_val in limits
     ]
     global_corners = {
@@ -2212,10 +2212,10 @@ def limits_to_boundaries(
     if ndim > 3:
         # for 4-axis, we need two more points to define the parallel-to-diagonal planes
         diag1 = local_to_global.map(
-            np.array([limits[0][1], limits[1][0], limits[2][0], limits[3][1]])
+            np.array([limits[0][0], limits[1][0], limits[2][0], limits[3][1]])
         )
         diag2 = local_to_global.map(
-            np.array([limits[0][0], limits[1][1], limits[2][0], limits[3][1]])
+            np.array([limits[0][1], limits[1][1], limits[2][1], limits[3][0]])
         )
         planes += [
             Plane(normals[3], diag1, f"{name}'s bottom diag1"),
