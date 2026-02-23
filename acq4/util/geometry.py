@@ -2190,7 +2190,7 @@ def limits_to_boundaries(
 
     @lru_cache(maxsize=None)
     def corner(*axes):
-        return local_to_global.map(np.array([limits[ax] for ax in axes]))
+        return local_to_global.map(np.asarray([limits[i][ax] for i, ax in enumerate(axes)]))
 
     if ndim <= 3:
         diagonal = corner(0, 0, 0) - corner(1, 1, 1)
