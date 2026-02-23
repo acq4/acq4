@@ -1185,11 +1185,11 @@ class PipetteVisualizerAdapter(OptomechDeviceVisualizerAdapter):
 
         param = super()._buildControlParam()
 
-        path_param = Parameter.create(name='Path plan', type='bool', value=True)
+        path_param = Parameter.create(name='Path plan', type='bool', value=False)
         path_param.sigValueChanged.connect(self._handlePathVisible)
         param.addChild(path_param)
 
-        target_param = Parameter.create(name='Target', type='bool', value=True)
+        target_param = Parameter.create(name='Target', type='bool', value=False)
         param.addChild(target_param)
         target_param.sigValueChanged.connect(self._handleTargetVisible)
 
