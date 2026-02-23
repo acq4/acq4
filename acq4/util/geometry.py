@@ -1901,6 +1901,12 @@ class Plane:
         dot_product = np.dot(pt - self.point, self.normal)
         return abs(dot_product) < tolerance
 
+    def coplanar_with(self, other: "Plane", tolerance=1e-9) -> bool:
+        """Return whether this plane is coplanar with another, within the given tolerance."""
+        if not np.allclose(np.cross(self.normal, other.normal), 0, atol=tolerance):
+            return False
+        return abs(self.distance_to_point(other.point)) < tolerance
+
     def distance_to_point(self, pt: np.ndarray) -> bool:
         """Return the distance from the plane to a point, where positive
         directions are in the direction of the normal."""
@@ -2245,7 +2251,7 @@ def limits_to_boundaries(
         # remove any coplanar planes in case D is orthogonal to some other axis
         unique_planes = []
         for p in planes:
-            if not any(p.intersecting_line(other) is None for other in unique_planes):
+            if not any(p.coplanar_with(other) for other in unique_planes):
                 unique_planes.append(p)
         planes = unique_planes
     # flip normals to point inward
