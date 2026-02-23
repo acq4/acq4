@@ -2192,9 +2192,8 @@ def limits_to_boundaries(
     def corner(*axes):
         return local_to_global.map(np.array([limits[ax] for ax in axes]))
 
-    diagonal = corner(*(0 for _ in range(ndim))) - corner(*(1 for _ in range(ndim)))
-
     if ndim <= 3:
+        diagonal = corner(0, 0, 0) - corner(1, 1, 1)
         planes = [
             Plane.from_3_points(corner(0, 0, 0), corner(0, 1, 0), corner(0, 0, 1), f"{name}'s min x"),
             Plane.from_3_points(corner(1, 0, 0), corner(1, 1, 0), corner(1, 0, 1), f"{name}'s max x"),
@@ -2204,6 +2203,7 @@ def limits_to_boundaries(
             Plane.from_3_points(corner(0, 0, 1), corner(1, 0, 1), corner(0, 1, 1), f"{name}'s max z"),
         ]
     else:  # 4 axes
+        diagonal = corner(0, 0, 0, 0) - corner(1, 1, 1, 1)
         planes = [
             Plane.from_3_points(
                 corner(0, 0, 0, 0), corner(0, 1, 0, 0), corner(0, 0, 1, 0), f"{name}'s min x, min d"
