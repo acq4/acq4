@@ -2193,7 +2193,7 @@ def limits_to_boundaries(
         return local_to_global.map(np.asarray([limits[i][ax] for i, ax in enumerate(axes)]))
 
     if ndim <= 3:
-        diagonal = corner(0, 0, 0) - corner(1, 1, 1)
+        center = (corner(0, 0, 0) + corner(1, 1, 1)) / 2
         planes = [
             Plane.from_3_points(corner(0, 0, 0), corner(0, 1, 0), corner(0, 0, 1), f"{name}'s min x"),
             Plane.from_3_points(corner(1, 0, 0), corner(1, 1, 0), corner(1, 0, 1), f"{name}'s max x"),
@@ -2203,7 +2203,7 @@ def limits_to_boundaries(
             Plane.from_3_points(corner(0, 0, 1), corner(1, 0, 1), corner(0, 1, 1), f"{name}'s max z"),
         ]
     else:  # 4 axes
-        diagonal = corner(0, 0, 0, 0) - corner(1, 1, 1, 1)
+        center = (corner(0, 0, 0, 0) + corner(1, 1, 1, 1)) / 2
         planes = [
             Plane.from_3_points(
                 corner(0, 0, 0, 0), corner(0, 1, 0, 0), corner(0, 0, 1, 0), f"{name}'s min x, min d"
@@ -2242,8 +2242,15 @@ def limits_to_boundaries(
                 corner(1, 1, 1, 1), corner(0, 1, 1, 1), corner(1, 0, 1, 1), f"{name}'s max z, max d"
             ),
         ]
+        # remove any coplanar planes in case D is orthogonal to some other axis
+        unique_planes = []
+        for p in planes:
+            if not any(p.intersecting_line(other) is None for other in unique_planes):
+                unique_planes.append(p)
+        planes = unique_planes
     # flip normals to point inward
     for p in planes:
-        p.normal = p.normal * np.sign(p.normal.dot(diagonal))
+        if p.distance_to_point(center) < 0:
+            p.normal = -p.normal
 
     return planes
