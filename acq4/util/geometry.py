@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import itertools
-from functools import cached_property
+from functools import cached_property, lru_cache
 from threading import RLock
 from typing import List, Callable, Optional, Dict, Any, Generator, Tuple
 
@@ -1873,6 +1873,16 @@ class Plane:
             (np.array(start), np.array(end)) for start, ends in segments.items() for end in ends
         ]
 
+    @classmethod
+    def from_3_points(
+        cls, a: np.ndarray, b: np.ndarray, c: np.ndarray, name=None, tolerance=1e-9
+    ) -> "Plane":
+        """Create a plane from three points. The normal will be determined by the right-hand rule on the points."""
+        normal = np.cross(b - a, c - a)
+        if np.linalg.norm(normal) < tolerance:
+            raise ValueError("We cannot find a single plane from colinear points")
+        return cls(normal, a, name)
+
     def __init__(self, normal, point, name=None):
         self.normal = normal / np.linalg.norm(normal)
         self.point = point
@@ -2042,6 +2052,7 @@ def greedy_axis_inverse_kinematics(
             starting_position,
         )
 
+
 def neutral_anchored_inverse_kinematics(
     point,
     device_to_global: Transform,
@@ -2175,51 +2186,64 @@ def limits_to_boundaries(
         (-1e18 if min_val is None else min_val, 1e18 if max_val is None else max_val)
         for min_val, max_val in limits
     ]
-    global_corners = {
-        "min": local_to_global.map(np.array([ax[0] for ax in limits])),
-        "max": local_to_global.map(np.array([ax[1] for ax in limits])),
-    }
-    diagonal = global_corners["max"] - global_corners["min"]
-    ndim = local_to_global.dims[0]
-    axes = [
-        local_to_global.map(np.eye(ndim)[i]) - local_to_global.map(np.zeros(ndim))
-        for i in range(ndim)
-    ]
+    ndim = len(limits)
+
+    @lru_cache(maxsize=None)
+    def corner(*axes):
+        return local_to_global.map(np.array([limits[ax] for ax in axes]))
+
+    diagonal = corner(*(0 for _ in range(ndim))) - corner(*(1 for _ in range(ndim)))
+
     if ndim <= 3:
-        normals = [
-            np.cross(axes[1], axes[2]),
-            np.cross(axes[2], axes[0]),
-            np.cross(axes[0], axes[1]),
+        planes = [
+            Plane.from_3_points(corner(0, 0, 0), corner(0, 1, 0), corner(0, 0, 1), f"{name}'s min x"),
+            Plane.from_3_points(corner(1, 0, 0), corner(1, 1, 0), corner(1, 0, 1), f"{name}'s max x"),
+            Plane.from_3_points(corner(0, 0, 0), corner(1, 0, 0), corner(0, 0, 1), f"{name}'s min y"),
+            Plane.from_3_points(corner(0, 1, 0), corner(1, 1, 0), corner(0, 1, 1), f"{name}'s max y"),
+            Plane.from_3_points(corner(0, 0, 0), corner(1, 0, 0), corner(0, 1, 0), f"{name}'s min z"),
+            Plane.from_3_points(corner(0, 0, 1), corner(1, 0, 1), corner(0, 1, 1), f"{name}'s max z"),
         ]
-    else:
-        normals = [
-            np.cross(axes[1], axes[2]),
-            np.cross(axes[3], axes[0]),
-            np.cross(axes[0], axes[1]),
-            np.cross(axes[3], axes[1]),
+    else:  # 4 axes
+        planes = [
+            Plane.from_3_points(
+                corner(0, 0, 0, 0), corner(0, 1, 0, 0), corner(0, 0, 1, 0), f"{name}'s min x, min d"
+            ),
+            Plane.from_3_points(
+                corner(0, 0, 0, 0), corner(1, 0, 0, 0), corner(0, 0, 1, 0), f"{name}'s min y, min d"
+            ),
+            Plane.from_3_points(
+                corner(0, 0, 0, 0), corner(1, 0, 0, 0), corner(0, 1, 0, 0), f"{name}'s min z, min d"
+            ),
+            Plane.from_3_points(
+                corner(1, 0, 1, 0), corner(0, 0, 1, 0), corner(0, 0, 1, 1), f"{name}'s min y, diag 1"
+            ),
+            Plane.from_3_points(
+                corner(1, 0, 1, 0), corner(1, 0, 0, 0), corner(1, 0, 0, 1), f"{name}'s min y, diag 2"
+            ),
+            Plane.from_3_points(
+                corner(0, 1, 1, 0), corner(0, 0, 1, 0), corner(0, 0, 1, 1), f"{name}'s min x, diag 1"
+            ),
+            Plane.from_3_points(
+                corner(0, 1, 1, 0), corner(0, 1, 0, 0), corner(0, 1, 0, 1), f"{name}'s min x, diag 2"
+            ),
+            Plane.from_3_points(
+                corner(1, 1, 0, 0), corner(0, 1, 0, 0), corner(0, 1, 0, 1), f"{name}'s min z, diag 1"
+            ),
+            Plane.from_3_points(
+                corner(1, 1, 0, 0), corner(1, 0, 0, 0), corner(1, 0, 0, 1), f"{name}'s min z, diag 2"
+            ),
+            Plane.from_3_points(
+                corner(1, 1, 1, 1), corner(1, 0, 1, 1), corner(1, 1, 0, 1), f"{name}'s max x, max d"
+            ),
+            Plane.from_3_points(
+                corner(1, 1, 1, 1), corner(0, 1, 1, 1), corner(1, 1, 0, 1), f"{name}'s max y, max d"
+            ),
+            Plane.from_3_points(
+                corner(1, 1, 1, 1), corner(0, 1, 1, 1), corner(1, 0, 1, 1), f"{name}'s max z, max d"
+            ),
         ]
     # flip normals to point inward
-    normals = [n * np.sign(np.dot(n, diagonal)) for n in normals]
-    planes = [
-        Plane(normals[0], global_corners["min"], f"{name}'s min x"),
-        Plane(-normals[0], global_corners["max"], f"{name}'s max x"),
-        Plane(normals[1], global_corners["min"], f"{name}'s min y"),
-        Plane(-normals[1], global_corners["max"], f"{name}'s max y"),
-        Plane(normals[2], global_corners["min"], f"{name}'s min z"),
-        Plane(-normals[2], global_corners["max"], f"{name}'s max z"),
-    ]
-
-    if ndim > 3:
-        # for 4-axis, we need two more points to define the parallel-to-diagonal planes
-        diag1 = local_to_global.map(
-            np.array([limits[0][1], limits[1][0], limits[2][0], limits[3][1]])
-        )
-        diag2 = local_to_global.map(
-            np.array([limits[0][0], limits[1][0], limits[2][1], limits[3][1]])
-        )
-        planes += [
-            Plane(normals[3], diag1, f"{name}'s bottom diag1"),
-            Plane(-normals[3], diag2, f"{name}'s top diag2"),
-        ]
+    for p in planes:
+        p.normal = p.normal * np.sign(p.normal.dot(diagonal))
 
     return planes
