@@ -1252,12 +1252,15 @@ class PipetteVisualizerAdapter(OptomechDeviceVisualizerAdapter):
 
     @inGuiThread
     def setPathError(self, path, failed_at=None):
-        self._path.setData(pos=np.asarray(path))
-        if failed_at is None:
-            self._error.setData(pos=np.empty((0, 3)))
-        else:
+        self.setPath(path)
+        if failed_at is not None:
             self._error.setData(pos=np.asarray([failed_at]))
         self._param.child('Path plan').setValue(True)
+
+    @inGuiThread
+    def setPath(self, path):
+        self._path.setData(pos=np.asarray(path))
+        self._error.setData(pos=np.empty((0, 3)))
 
     def createBounds(self, bounds, visible):
         limits = self.device.parentDevice().getLimits()

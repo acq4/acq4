@@ -143,6 +143,7 @@ class PipettePathGenerator:
             slowpath = self.enforceSafeSpeed(globalStart, waypoint, speed, APPROACH_WAYPOINT, linear=True)
             path += slowpath + [(globalStop, speed, False, explanation)]
 
+        adapter.setPath(path)
         path = path[1:]  # trim off the start position
         for globalPos, speed, linear, stepName in path:
             if not np.isfinite(globalPos).all():
