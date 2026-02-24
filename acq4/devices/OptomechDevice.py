@@ -246,9 +246,6 @@ class OptomechDevice(InterfaceMixin):
     def getBoundaries(self):
         return []
 
-    def getLimits(self):
-        return []
-
     def name(self):
         return self.__name
 
