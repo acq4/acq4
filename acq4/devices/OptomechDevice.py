@@ -802,8 +802,9 @@ class DeviceTreeItemGroup(pg.ItemGroup):
         return groups
 
 
-class OptomechDeviceVisualizerAdapter:
+class OptomechDeviceVisualizerAdapter(Qt.QObject):
     def __init__(self, dev: OptomechDevice, win: "VisualizerWindow"):
+        super().__init__()
         self.device = dev
         self.win = win
         self._param = None

@@ -1166,6 +1166,8 @@ class PipetteCamModInterface(CameraModuleInterface):
 
 
 class PipetteVisualizerAdapter(OptomechDeviceVisualizerAdapter):
+    sigPathUpdate = Qt.Signal(object, bool, object)  # path, is_error, failed_at
+
     def __init__(self, dev: Pipette, win):
         self._obstacles = {}
         super().__init__(dev, win)
@@ -1180,6 +1182,7 @@ class PipetteVisualizerAdapter(OptomechDeviceVisualizerAdapter):
 
         dev.sigCalibrationChanged.connect(self.handleCalibrationUpdate)
         dev.sigTargetChanged.connect(self.handleTargetChanged)
+        self.sigPathUpdate.connect(self._handlePathUpdate)
 
     def _buildControlParam(self):
         from pyqtgraph.parametertree import Parameter
@@ -1250,17 +1253,20 @@ class PipetteVisualizerAdapter(OptomechDeviceVisualizerAdapter):
     def pathSearchVisualizer(self):
         return VisualizePathSearch(self)
 
-    @inGuiThread
     def setPathError(self, path, failed_at=None):
-        self.setPath(path)
-        if failed_at is not None:
-            self._error.setData(pos=np.asarray([failed_at]))
-        self._param.child('Path plan').setValue(True)
+        self.sigPathUpdate.emit(path, True, failed_at)
 
-    @inGuiThread
     def setPath(self, path):
+        self.sigPathUpdate.emit(path, False, None)
+
+    def _handlePathUpdate(self, path, is_error, failed_at):
         self._path.setData(pos=np.asarray(path))
-        self._error.setData(pos=np.empty((0, 3)))
+        if failed_at:
+            self._error.setData(pos=np.asarray([failed_at]))
+        else:
+            self._error.setData(pos=np.empty((0, 3)))
+        if is_error:
+            self._param.child('Path plan').setValue(True)
 
     def createBounds(self, bounds, visible):
         limits = self.device.parentDevice().getLimits()
