@@ -66,8 +66,9 @@ class VisualizePathSearch(Qt.QObject):
 
     @future_wrap
     def startPath(self, path, bounds, _future):
+        # TODO bitrot broke this. bounds needs to be limits, now, and we'll need a global transform, but that won't account for surface depth...
         if self._bounds is None:
-            self._bounds = self._adapter.createBounds(bounds, False)
+            self._bounds = self._adapter.drawBoundaries(bounds)
         self._startPath(path, bounds)
 
     @inGuiThread
