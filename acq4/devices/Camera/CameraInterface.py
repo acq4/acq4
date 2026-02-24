@@ -262,7 +262,7 @@ class CameraInterface(CameraModuleInterface):
             thisCenter = Point(thisBounds[0] + thisBounds[2] / 2, thisBounds[1] + thisBounds[3] / 2)
             self.view.translateBy(thisCenter - prevCenter)
             # Sync tracked state so the next updateTransform doesn't re-apply
-            tr = pg.SRTTransform(self.cam.globalTransform())
+            tr = self.cam.globalTransform().as_pyqtgraph().as2D()
             self.lastCameraPosition = tr.getTranslation()
             self.lastCameraScale = tr.getScale()
         # Make this the active interface so it controls the view
