@@ -1236,10 +1236,10 @@ class PipetteVisualizerAdapter(OptomechDeviceVisualizerAdapter):
         self._error.setVisible(visible)
 
     def handleCalibrationUpdate(self, dev):
-        if limits := dev.getLimits():
+        if bounds := dev.getBoundaries():
             if self._limits is not None:
                 self.win.remove3DItem(self._limits)
-            self._limits = self.drawBoundaries(limits, dev.globalTransform())
+            self._limits = self.createBounds(bounds, False)
             self._updateLimitsVisibility()
         self.handleTransformUpdate(dev, dev)
 

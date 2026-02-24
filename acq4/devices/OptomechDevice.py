@@ -822,8 +822,8 @@ class OptomechDeviceVisualizerAdapter:
         dev.sigGlobalTransformChanged.connect(self.handleTransformUpdate)
         self.handleTransformUpdate(dev, dev)
 
-        if limits := dev.getLimits():
-            self._limits = self.drawBoundaries(limits, dev.globalTransform())
+        if bounds := dev.getBoundaries():
+            self._limits = self.createBounds(bounds, False)
 
         self._param = self._buildControlParam()
         self.win.addControls(self._param)
@@ -892,21 +892,19 @@ class OptomechDeviceVisualizerAdapter:
     def setMeshTransform(self, dev, xform):
         self._mesh.setTransform(xform)
 
-    def drawBoundaries(self, limits, local_to_global):
-        edges = set()
-        ndim = len(limits)
-        vertices = list(np.ndindex(tuple([2] * ndim)))
-        vertices = [tuple(limits[i][v] for i, v in enumerate(vertex)) for vertex in vertices]
-        # find every edge between vertices that differ in exactly one coordinate
-        for v1 in vertices:
-            for v2 in vertices:
-                if sum(a != b for a, b in zip(v1, v2)) == 1:
-                    # dedup by sorting
-                    edge = tuple(sorted((v1, v2)))
-                    edges.add(edge)
-        edges = [local_to_global.map(v) for edge in edges for v in edge]
+    def createBounds(self, bounds, visible):
+        edges = []
+        for a, b in Plane.wireframe(*bounds):
+            for bound in bounds:
+                if not (bound.allows_point(a) and bound.allows_point(b)):
+                    continue
+            if np.linalg.norm(a - b) > 0.1:
+                # being far away happens with not-quite-parallel planes; we can just pretend they're parallel
+                continue
+            edge = [a, b]
+            edges.extend(edge)
         plot = gl.GLLinePlotItem(pos=np.array(edges), color=(1, 0, 0, 0.2), width=4, mode="lines")
-        plot.setVisible(False)
+        plot.setVisible(visible)
         self.win.add3DItem(plot)
         return plot
 
