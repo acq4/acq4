@@ -1288,6 +1288,7 @@ class PipetteVisualizerAdapter(OptomechDeviceVisualizerAdapter):
             self._error_pinned = True
             if self._param is not None:
                 self._param.child('Path plan').setValue(True)
+            self.win.focus()
         elif self._pinned_seq is not None:
             # Check if the pinned entry is still in history (may have fallen off)
             seqs = {entry[0] for entry in self._path_history}

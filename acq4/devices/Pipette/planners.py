@@ -143,7 +143,6 @@ class PipettePathGenerator:
             slowpath = self.enforceSafeSpeed(globalStart, waypoint, speed, APPROACH_WAYPOINT, linear=True)
             path += slowpath + [(globalStop, speed, False, explanation)]
 
-        adapter.setPath([p[0] for p in path])
         path = path[1:]  # trim off the start position
         for globalPos, speed, linear, stepName in path:
             if not np.isfinite(globalPos).all():
@@ -155,10 +154,10 @@ class PipettePathGenerator:
                 self.manipulator.checkGlobalLimits(manipulatorGlobalPos, linear)
             except Exception as e:
                 adapter.setPathError([globalStart] + [p[0] for p in path], failed_at=globalPos)
-                mod.window().focus()
                 raise ValueError(
                     f"Moving {self.pip} to '{stepName}' would be beyond the limits of its manipulator: {e}"
                 ) from e
+        adapter.setPath([globalStart] + [p[0] for p in path])
         return path
 
     def enforceSafeSpeed(self, start, stop, speed, explanation, linear):
