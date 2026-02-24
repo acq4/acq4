@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import collections
 import contextlib
 import json
 import os
@@ -1174,6 +1175,15 @@ class PipetteVisualizerAdapter(OptomechDeviceVisualizerAdapter):
         self._target = win.target()
         self._path = win.path(color=[0.5, 0, 1, 1])
         self._error = win.target(color=[1, 0.2, 0.2, 0.6])
+        # Path history: deque of (seq_id, path, is_error, failed_at) tuples
+        self._path_history = collections.deque(maxlen=10)
+        self._next_seq = 0
+        # _pinned_seq: None = follow latest; int = pinned to that seq_id
+        self._pinned_seq = None
+        # _error_pinned: True when pinned due to an error path (highest priority)
+        self._error_pinned = False
+        # Guard flag to suppress slider signals during programmatic updates
+        self._updating_slider = False
         if dev.target is not None:
             self.handleTargetChanged(dev, dev.targetPosition())
         # TODO obstacles and voxels
@@ -1189,8 +1199,16 @@ class PipetteVisualizerAdapter(OptomechDeviceVisualizerAdapter):
 
         param = super()._buildControlParam()
 
-        path_param = Parameter.create(name='Path plan', type='bool', value=False)
+        path_param = Parameter.create(
+            name='Path plan',
+            type='bool',
+            value=False,
+            children=[
+                dict(name='History', type='slider', value=0, limits=[0, 0], step=1),
+            ],
+        )
         path_param.sigValueChanged.connect(self._handlePathVisible)
+        path_param.child('History').sigValueChanged.connect(self._handleHistorySliderMoved)
         param.addChild(path_param)
 
         target_param = Parameter.create(name='Target', type='bool', value=False)
@@ -1260,13 +1278,78 @@ class PipetteVisualizerAdapter(OptomechDeviceVisualizerAdapter):
         self.sigPathUpdate.emit(path, False, None)
 
     def _handlePathUpdate(self, path, is_error, failed_at):
+        seq = self._next_seq
+        self._next_seq += 1
+        self._path_history.append((seq, path, is_error, failed_at))
+
+        if is_error:
+            # Error paths have highest priority: always pin to them
+            self._pinned_seq = seq
+            self._error_pinned = True
+            if self._param is not None:
+                self._param.child('Path plan').setValue(True)
+        elif self._pinned_seq is not None:
+            # Check if the pinned entry is still in history (may have fallen off)
+            seqs = {entry[0] for entry in self._path_history}
+            if self._pinned_seq not in seqs:
+                self._pinned_seq = None
+                self._error_pinned = False
+
+        self._syncSlider()
+
+    def _syncSlider(self):
+        """Update the history slider range and position, then render the selected path."""
+        if self._param is None:
+            return
+        n = len(self._path_history)
+        if n == 0:
+            return
+
+        slider_param = self._param.child('Path plan').child('History')
+        self._updating_slider = True
+        try:
+            slider_param.setLimits([0, n - 1])
+            if self._pinned_seq is not None:
+                seqs = [entry[0] for entry in self._path_history]
+                try:
+                    idx = seqs.index(self._pinned_seq)
+                except ValueError:
+                    idx = n - 1
+            else:
+                idx = n - 1
+            slider_param.setValue(idx)
+        finally:
+            self._updating_slider = False
+
+        idx = int(slider_param.value())
+        _, path, is_error, failed_at = self._path_history[idx]
+        self._displayPath(path, is_error, failed_at)
+
+    def _displayPath(self, path, is_error, failed_at):
+        """Render path and error marker for the given history entry."""
         self._path.setData(pos=np.asarray(path))
         if failed_at is None:
             self._error.setData(pos=np.empty((0, 3)))
         else:
             self._error.setData(pos=np.asarray([failed_at]))
-        if is_error:
-            self._param.child('Path plan').setValue(True)
+
+    def _handleHistorySliderMoved(self, param, value):
+        """Handle manual slider movement to navigate path history."""
+        if self._updating_slider:
+            return
+        n = len(self._path_history)
+        if n == 0:
+            return
+        idx = max(0, min(int(value), n - 1))
+        # Clear error pin on any manual move
+        self._error_pinned = False
+        if idx >= n - 1:
+            # At the latest position: switch back to follow-latest mode
+            self._pinned_seq = None
+        else:
+            self._pinned_seq = self._path_history[idx][0]
+        _, path, is_error, failed_at = self._path_history[idx]
+        self._displayPath(path, is_error, failed_at)
 
     def createBounds(self, bounds, visible):
         limits = self.device.parentDevice().getLimits()
