@@ -101,7 +101,7 @@ class PipettePathGenerator:
         explanation = explanation or MOVE_TO_DESTINATION
         globalStart = np.asarray(globalStart)
         globalStop = np.asarray(globalStop)
-        path = [(globalStart,)]
+        path = [(globalStart, "", False, "")]
 
         # retract first if we are doing a lateral movement inside the sample
         lateralDist = np.linalg.norm(globalStop[1:] - globalStart[1:])
@@ -143,7 +143,7 @@ class PipettePathGenerator:
             slowpath = self.enforceSafeSpeed(globalStart, waypoint, speed, APPROACH_WAYPOINT, linear=True)
             path += slowpath + [(globalStop, speed, False, explanation)]
 
-        adapter.setPath(path)
+        adapter.setPath([p[0] for p in path])
         path = path[1:]  # trim off the start position
         for globalPos, speed, linear, stepName in path:
             if not np.isfinite(globalPos).all():
