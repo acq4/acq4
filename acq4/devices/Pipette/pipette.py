@@ -1261,7 +1261,7 @@ class PipetteVisualizerAdapter(OptomechDeviceVisualizerAdapter):
     def createBounds(self, bounds, visible):
         limits = self.device.parentDevice().getLimits()
         local_to_global = (
-            TTransform(offset=self.device.offset) * self.device.parentDevice().globalTransform()
+            TTransform(offset=self.device.offset) * self.device.parentDevice().axisTransform()
         )
         edges = set()
         ndim = len(limits)
