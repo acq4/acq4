@@ -66,6 +66,7 @@ class VisualizePathSearch(Qt.QObject):
 
     @future_wrap
     def startPath(self, path, bounds, _future):
+        # TODO this is going to break with bitrot
         if self._bounds is None:
             self._bounds = self._adapter.createBounds(bounds, False)
         self._startPath(path, bounds)

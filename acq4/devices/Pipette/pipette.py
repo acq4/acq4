@@ -18,8 +18,9 @@ from acq4.modules.Camera import CameraModuleInterface
 from acq4.util import Qt, ptime
 from acq4.util.future import future_wrap, Future
 from acq4.util.target import Target
-from coorx import AffineTransform
+from coorx import AffineTransform, TTransform
 from pyqtgraph import Point, siFormat
+from pyqtgraph import opengl as gl
 from .planners import PipettePathGenerator
 from .planners import defaultMotionPlanners
 from .tracker import ResnetPipetteTracker
@@ -1256,6 +1257,28 @@ class PipetteVisualizerAdapter(OptomechDeviceVisualizerAdapter):
             self._error.setData(pos=np.empty((0, 3)))
         else:
             self._error.setData(pos=np.asarray([failed_at]))
+
+    def createBounds(self, bounds, visible):
+        limits = self.device.parentDevice().getLimits()
+        local_to_global = (
+            TTransform(offset=self.device.offset) * self.device.parentDevice().globalTransform()
+        )
+        edges = set()
+        ndim = len(limits)
+        vertices = list(np.ndindex(tuple([2] * ndim)))
+        vertices = [tuple(limits[i][v] for i, v in enumerate(vertex)) for vertex in vertices]
+        # find every edge between vertices that differ in exactly one coordinate
+        for v1 in vertices:
+            for v2 in vertices:
+                if sum(a != b for a, b in zip(v1, v2)) == 1:
+                    # dedup by sorting
+                    edge = tuple(sorted((v1, v2)))
+                    edges.add(edge)
+        edges = [local_to_global.map(v) for edge in edges for v in edge]
+        plot = gl.GLLinePlotItem(pos=np.array(edges), color=(1, 0, 0, 0.2), width=4, mode="lines")
+        plot.setVisible(False)
+        self.win.add3DItem(plot)
+        return plot
 
 
 class Axis(pg.ROI):
