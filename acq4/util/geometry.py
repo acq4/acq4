@@ -2187,6 +2187,7 @@ def limits_to_boundaries(
     list[Plane]
         A list of Planes representing the global boundaries defined by the limits.
     """
+    # TODO alternate algorithm: find all parallel planes at once, and remove the ones in the middle
     # fill in with appropriate nigh-infinities
     limits = [
         (-1e18 if min_val is None else min_val, 1e18 if max_val is None else max_val)
