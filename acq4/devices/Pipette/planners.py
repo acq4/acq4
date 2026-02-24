@@ -95,7 +95,7 @@ class PipettePathGenerator:
         The returned path does _not_ include the starting position.
         """
         man = getManager()
-        mod = man.getModule("Visualize3D")
+        mod = man.getOrLoadModule("Visualize3D")
         # grab the visualizer for visualizing errors
         adapter = mod.window().findAdapter(lambda a: a.device == self.pip)
         explanation = explanation or MOVE_TO_DESTINATION
@@ -250,7 +250,7 @@ class GeometryAwarePathGenerator(PipettePathGenerator):
             man = getManager()
             while not man.isReady.wait(0.05):
                 _future.checkStop()
-            mod = man.getModule("Visualize3D")
+            mod = man.getOrLoadModule("Visualize3D")
             while not mod.isReady.wait(0.05):
                 _future.checkStop()
             viz = mod.window().findAdapter(lambda a: a.device == self.pip).pathSearchVisualizer()
@@ -284,7 +284,7 @@ class GeometryAwarePathGenerator(PipettePathGenerator):
             explanation = WAYPOINT_TO_AVOID_SAMPLE_TEAR
             globalStop = final_waypoint
 
-        win = getManager().getModule("Visualize3D").window()
+        win = getManager().getOrLoadModule("Visualize3D").window()
         viz = win.findAdapter(lambda a: a.device == self.pip).pathSearchVisualizer()
         planner, from_pip_to_global = self._getPlanningContext()
         try:

@@ -597,7 +597,7 @@ class Pipette(Device, OptomechDevice):
             return stage.movePath(stagePath, name=name)
         except MovePathException as e:
             e.offset_points(self.offset)
-            adapter = self.dm.getModule("Visualize3D").window().findAdapter(lambda a: a.device == self)
+            adapter = self.dm.getOrLoadModule("Visualize3D").window().findAdapter(lambda a: a.device == self)
             e.visualize(adapter)
             raise e
 
