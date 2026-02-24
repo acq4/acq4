@@ -1257,6 +1257,7 @@ class PipetteVisualizerAdapter(OptomechDeviceVisualizerAdapter):
             self._error.setData(pos=np.empty((0, 3)))
         else:
             self._error.setData(pos=np.asarray([failed_at]))
+        self._param.child('Path plan').setValue(True)
 
     def createBounds(self, bounds, visible):
         limits = self.device.parentDevice().getLimits()
