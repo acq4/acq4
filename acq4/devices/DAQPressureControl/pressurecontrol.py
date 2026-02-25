@@ -116,7 +116,7 @@ class DAQPressureControl(PressureControl):
                     break
             if match:
                 return source
-        raise ValueError("Current valve states do not match any defined source")
+        return None
 
     def _setSource(self, source):
         if self._regulatorAtmosphere:
@@ -127,9 +127,9 @@ class DAQPressureControl(PressureControl):
                 return
             else:
                 self._simAtmosphereState['active'] = False
-                self.device.setChanHolding(
-                    self._pressureControlChannel(), self._simAtmosphereState['supplanted pressure']
-                )
+                expected = self._simAtmosphereState['supplanted pressure']
+                if expected is not None:
+                    self.device.setChanHolding(self._pressureControlChannel(), expected)
         for chan, val in self.sources[source].items():
             if chan == 'pressureControl':
                 continue

@@ -33,7 +33,7 @@ class MockPressureControl(PressureControl):
         self.sources = []
         for source, enable in config.get(
             'sources', {'regulator': True, 'user': True, 'atmosphere': True}
-        ):
+        ).items():
             if enable:
                 self.sources.append(source)
         if 'atmosphere' not in self.sources:
