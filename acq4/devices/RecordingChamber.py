@@ -54,7 +54,6 @@ class RecordingChamberCameraInterface(CameraModuleInterface):
 
     def __init__(self, dev, mod):
         CameraModuleInterface.__init__(self, dev, mod)
-
         x, y, z = self.dev().globalCenter()
         radius = self.dev().radius
         self.boundingEllipse = Qt.QGraphicsEllipseItem(-1, -1, 2, 2)
@@ -65,6 +64,12 @@ class RecordingChamberCameraInterface(CameraModuleInterface):
         self._name = pg.TextItem(text=dev.name(), color=pg.mkColor((255, 255, 0, 128)))
         mod.window().addItem(self._name, ignoreBounds=True)
         self._name.setPos(x + radius, y)
+        dev.sigGlobalTransformChanged.connect(self._updateGraphics)
+
+    def _updateGraphics(self, _, __):
+        center = self.dev().globalCenter()
+        self.boundingEllipse.setPos(center[0], center[1])
+        self._name.setPos(center[0] + self.dev().radius, center[1])
 
     def boundingRect(self):
         return None
