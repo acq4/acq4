@@ -7,7 +7,7 @@ from .Device import Device
 from .OptomechDevice import OptomechDevice
 
 
-class RecordingChamber(Device, OptomechDevice):
+class InteractionSite(Device, OptomechDevice):
     """Describes the location and dimensions of a circular recording chamber.
 
     Configuration options:
@@ -32,7 +32,7 @@ class RecordingChamber(Device, OptomechDevice):
 
     def cameraModuleInterface(self, mod):
         """Return an object to interact with camera module."""
-        return RecordingChamberCameraInterface(self, mod)
+        return InteractionSiteCameraInterface(self, mod)
 
     def globalCenter(self):
         return np.array(self.globalPosition())
@@ -48,7 +48,7 @@ class RecordingChamber(Device, OptomechDevice):
         return np.linalg.norm(pt - center) <= self.radius
 
 
-class RecordingChamberCameraInterface(CameraModuleInterface):
+class InteractionSiteCameraInterface(CameraModuleInterface):
 
     canImage = False
 

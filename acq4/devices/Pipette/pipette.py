@@ -22,7 +22,7 @@ from .planners import PipettePathGenerator
 from .planners import defaultMotionPlanners
 from .tracker import ResnetPipetteTracker
 from ..Camera import Camera
-from ..RecordingChamber import RecordingChamber
+from ..RecordingChamber import RegionOfInterest
 from ...util.PromptUser import prompt
 from ...util.geometry import Plane
 from ...util.imaging.sequencer import run_image_sequence
@@ -813,14 +813,14 @@ class Pipette(Device, OptomechDevice):
         self.moving = False
         self.sigMoveFinished.emit(self, self.globalPosition())
 
-    def getRecordingChambers(self) -> List[RecordingChamber]:
+    def getRecordingChambers(self) -> List[RegionOfInterest]:
         """Return a list of RecordingChamber instances that are associated with this Pipette (see
         'recordingChambers' config option).
         """
         man = getManager()
         return [man.getDevice(d) for d in self.config.get('recordingChambers', [])]
 
-    def getCleaningWell(self) -> RecordingChamber | None:
+    def getCleaningWell(self) -> RegionOfInterest | None:
         """Return the RecordingChamber instance that is associated with this Pipette for cleaning
         (see 'cleaningWell' config option).
         """
