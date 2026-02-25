@@ -196,8 +196,8 @@ class PatchPipetteStateManager(Qt.QObject):
 
             job = stateHandler(self.dev, config)
             fallback = job.nextState
-            job.sigStateChanged.connect(self.jobStateChanged)
-            job.sigFinished.connect(self.jobFinished)
+            job.sigStateChanged.connect(self.jobStateChanged, Qt.Qt.DirectConnection)  # no gui
+            job.sigFinished.connect(self.jobFinished, Qt.Qt.DirectConnection)  # no gui
             oldState = None if oldJob is None else oldJob.stateName
             self.currentJob = job
             self.dev._setState(state, oldState)  # logging / accounting

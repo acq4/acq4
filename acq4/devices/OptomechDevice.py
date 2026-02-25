@@ -6,10 +6,13 @@ import numpy as np
 
 import pyqtgraph as pg
 from acq4.Interfaces import InterfaceMixin
+from acq4.modules.Visualize3D import Visualize3D
 from acq4.util import Qt
 from acq4.util.Mutex import Mutex
-from acq4.util.geometry import Geometry, load_transform_from_anything
+from acq4.util.geometry import Plane, Geometry, load_transform_from_anything
 from coorx import SRT3DTransform, Transform
+from pyqtgraph import opengl as gl
+from pyqtgraph.parametertree import Parameter
 
 
 def map_through_transform(
@@ -217,7 +220,11 @@ class OptomechDevice(InterfaceMixin):
 
         # declare that this device supports the OptomechDevice API
         self.addInterface("OptomechDevice")
-        dm.declareInterface(name, ["OptomechDevice"], self)
+        self.addInterface(Visualize3D.interfaceName)
+        dm.declareInterface(name, ["OptomechDevice", Visualize3D.interfaceName], self)
+
+    def visualize3DAdapter(self, win):
+        return OptomechDeviceVisualizerAdapter(self, win)
 
     def getGeometry(self, name=None) -> Geometry | None:
         if "geometry" in self.__config:
@@ -793,3 +800,122 @@ class DeviceTreeItemGroup(pg.ItemGroup):
         for subdev, items in self.groups[device].items():
             groups.extend(items)
         return groups
+
+
+class OptomechDeviceVisualizerAdapter(Qt.QObject):
+    def __init__(self, dev: OptomechDevice, win: "VisualizerWindow"):
+        super().__init__()
+        self.device = dev
+        self.win = win
+        self._param = None
+        self._limits = None
+        self._mesh = None
+
+        dev.sigGeometryChanged.connect(self.handleGeometryChange)
+        self._geometry = dev.getGeometry()
+        if self._geometry is None:
+            return
+
+        self._mesh = self._geometry.glMesh()
+
+        # Add geometry to the scene
+        self.win.add3DItem(self._mesh)
+        dev.sigGlobalTransformChanged.connect(self.handleTransformUpdate)
+        self.handleTransformUpdate(dev, dev)
+
+        if bounds := dev.getBoundaries():
+            self._limits = self.createBounds(bounds, False)
+
+        self._param = self._buildControlParam()
+        self.win.addControls(self._param)
+
+    def _buildControlParam(self):
+        children = [
+            dict(name='Geometry', type='bool', value=True),
+        ]
+        if self._limits is not None:
+            children.append(dict(name='Range of Motion', type='bool', value=False))
+
+        param = Parameter.create(name=self.device.name(), type='bool', value=True, children=children)
+        param.sigValueChanged.connect(self._handleDeviceToggle)
+        param.child('Geometry').sigValueChanged.connect(self._handleGeometryVisible)
+        if self._limits is not None:
+            param.child('Range of Motion').sigValueChanged.connect(self._handleLimitsVisible)
+        return param
+
+    def _handleDeviceToggle(self, param, value):
+        for child in param.children():
+            child.setOpts(enabled=value)
+        self._updateMeshVisibility()
+        self._updateLimitsVisibility()
+
+    def _handleGeometryVisible(self, param, value):
+        self._updateMeshVisibility()
+
+    def _handleLimitsVisible(self, param, value):
+        self._updateLimitsVisibility()
+
+    def _updateMeshVisibility(self):
+        if self._mesh is None or self._param is None:
+            return
+        self._mesh.setVisible(
+            self._param.value() and self._param.child('Geometry').value()
+        )
+
+    def _updateLimitsVisibility(self):
+        if self._limits is None or self._param is None:
+            return
+        try:
+            limits_on = self._param.child('Range of Motion').value()
+        except KeyError:
+            return
+        self._limits.setVisible(self._param.value() and limits_on)
+
+    def handleTransformUpdate(self, moved_device: "OptomechDevice", cause_device: "OptomechDevice"):
+        geom = self._geometry
+        if geom is None:
+            return
+        xform = moved_device.globalPhysicalTransform() * geom.transform
+        self.setMeshTransform(moved_device, xform.as_pyqtgraph())
+
+    def handleGeometryChange(self, dev: "OptomechDevice"):
+        if self._mesh is not None:
+            self.win.remove3DItem(self._mesh)
+        self._mesh = None
+
+        self._geometry = dev.getGeometry()
+        if self._geometry is not None:
+            self._mesh = self._geometry.glMesh()
+            self.win.add3DItem(self._mesh)
+            self._updateMeshVisibility()
+            self.handleTransformUpdate(dev, dev)
+
+    def setMeshTransform(self, dev, xform):
+        self._mesh.setTransform(xform)
+
+    def createBounds(self, bounds, visible):
+        edges = []
+        for a, b in Plane.wireframe(*bounds):
+            for bound in bounds:
+                if not (bound.allows_point(a) and bound.allows_point(b)):
+                    continue
+            if np.linalg.norm(a - b) > 0.1:
+                # being far away happens with not-quite-parallel planes; we can just pretend they're parallel
+                continue
+            edge = [a, b]
+            edges.extend(edge)
+        plot = gl.GLLinePlotItem(pos=np.array(edges), color=(1, 0, 0, 0.2), width=4, mode="lines")
+        plot.setVisible(visible)
+        self.win.add3DItem(plot)
+        return plot
+
+    def clear(self):
+        if self._mesh is not None:
+            self.win.remove3DItem(self._mesh)
+            self._mesh = None
+        if self._limits is not None:
+            self.win.remove3DItem(self._limits)
+            self._limits = None
+        if self._param is not None:
+            self.win.removeControls(self._param)
+            self._param = None

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import itertools
-from functools import cached_property
+from functools import cached_property, lru_cache
 from threading import RLock
 from typing import List, Callable, Optional, Dict, Any, Generator, Tuple
 
@@ -1873,6 +1873,16 @@ class Plane:
             (np.array(start), np.array(end)) for start, ends in segments.items() for end in ends
         ]
 
+    @classmethod
+    def from_3_points(
+        cls, a: np.ndarray, b: np.ndarray, c: np.ndarray, name=None, tolerance=1e-9
+    ) -> "Plane":
+        """Create a plane from three points. The normal will be determined by the right-hand rule on the points."""
+        normal = np.cross(b - a, c - a)
+        if np.linalg.norm(normal) < tolerance:
+            raise ValueError("We cannot find a single plane from colinear points")
+        return cls(normal, a, name)
+
     def __init__(self, normal, point, name=None):
         self.normal = normal / np.linalg.norm(normal)
         self.point = point
@@ -1890,6 +1900,12 @@ class Plane:
         # If the dot product is close to zero, the point is on the plane
         dot_product = np.dot(pt - self.point, self.normal)
         return abs(dot_product) < tolerance
+
+    def coplanar_with(self, other: "Plane", tolerance=1e-9) -> bool:
+        """Return whether this plane is coplanar with another, within the given tolerance."""
+        if not np.allclose(np.cross(self.normal, other.normal), 0, atol=tolerance):
+            return False
+        return abs(self.distance_to_point(other.point)) < tolerance
 
     def distance_to_point(self, pt: np.ndarray) -> bool:
         """Return the distance from the plane to a point, where positive
@@ -2042,6 +2058,7 @@ def greedy_axis_inverse_kinematics(
             starting_position,
         )
 
+
 def neutral_anchored_inverse_kinematics(
     point,
     device_to_global: Transform,
@@ -2151,15 +2168,17 @@ def neutral_anchored_inverse_kinematics(
 
 
 def limits_to_boundaries(
-    limits: list[tuple[float | None, float | None]], xform: AffineTransform, name: str
+    limits: list[tuple[float | None, float | None]], local_to_global: AffineTransform, name: str
 ) -> list[Plane]:
     """
     Parameters
     ----------
     limits : list[tuple[float | None, float | None]]
-        A list of (min, max) pairs for each dimension. None can be used to indicate no limit in that direction.
-    xform : AffineTransform
-        Transform that maps from the local coordinate system of the limits to the global coordinate system.
+        A list of local (min, max) pairs for each dimension. None can be used to indicate no limit
+        in that direction.
+    local_to_global : AffineTransform
+        Transform that maps from the local coordinate system of the limits to the global coordinate
+        system. Nx3 mapping.
     name : str
         Name to use for the planes.
 
@@ -2168,21 +2187,77 @@ def limits_to_boundaries(
     list[Plane]
         A list of Planes representing the global boundaries defined by the limits.
     """
-    corners = {
-        "min": xform.map(np.array([ax[0] for ax in limits])),
-        "max": xform.map(np.array([ax[1] for ax in limits])),
-    }
-    axes = [xform.map(np.eye(3)[i]) - xform.map(np.zeros(3)) for i in range(3)]
-    normals = {
-        0: np.cross(axes[1], axes[2]),
-        1: np.cross(axes[2], axes[0]),
-        2: np.cross(axes[0], axes[1]),
-    }
-    # flip normals to point inward
-    diagonal = corners["max"] - corners["min"]
-    normals[0] = normals[0] * np.sign(np.dot(normals[0], diagonal))
-    normals[1] = normals[1] * np.sign(np.dot(normals[1], diagonal))
-    normals[2] = normals[2] * np.sign(np.dot(normals[2], diagonal))
-    return [Plane(normals[n], corners["min"], f"{name}'s min {n}") for n in normals] + [
-        Plane(-normals[n], corners["max"], f"{name}'s max {n}") for n in normals
+    # TODO alternate algorithm: find all parallel planes at once, and remove the ones in the middle
+    # fill in with appropriate nigh-infinities
+    limits = [
+        (-1e18 if min_val is None else min_val, 1e18 if max_val is None else max_val)
+        for min_val, max_val in limits
     ]
+    ndim = len(limits)
+
+    @lru_cache(maxsize=None)
+    def corner(*axes):
+        return local_to_global.map(np.asarray([limits[i][ax] for i, ax in enumerate(axes)]))
+
+    if ndim <= 3:
+        center = (corner(0, 0, 0) + corner(1, 1, 1)) / 2
+        planes = [
+            Plane.from_3_points(corner(0, 0, 0), corner(0, 1, 0), corner(0, 0, 1), f"{name}'s min x"),
+            Plane.from_3_points(corner(1, 0, 0), corner(1, 1, 0), corner(1, 0, 1), f"{name}'s max x"),
+            Plane.from_3_points(corner(0, 0, 0), corner(1, 0, 0), corner(0, 0, 1), f"{name}'s min y"),
+            Plane.from_3_points(corner(0, 1, 0), corner(1, 1, 0), corner(0, 1, 1), f"{name}'s max y"),
+            Plane.from_3_points(corner(0, 0, 0), corner(1, 0, 0), corner(0, 1, 0), f"{name}'s min z"),
+            Plane.from_3_points(corner(0, 0, 1), corner(1, 0, 1), corner(0, 1, 1), f"{name}'s max z"),
+        ]
+    else:  # 4 axes
+        center = (corner(0, 0, 0, 0) + corner(1, 1, 1, 1)) / 2
+        planes = [
+            Plane.from_3_points(
+                corner(0, 0, 0, 0), corner(0, 1, 0, 0), corner(0, 0, 1, 0), f"{name}'s min x, min d"
+            ),
+            Plane.from_3_points(
+                corner(0, 0, 0, 0), corner(1, 0, 0, 0), corner(0, 0, 1, 0), f"{name}'s min y, min d"
+            ),
+            Plane.from_3_points(
+                corner(0, 0, 0, 0), corner(1, 0, 0, 0), corner(0, 1, 0, 0), f"{name}'s min z, min d"
+            ),
+            Plane.from_3_points(
+                corner(1, 0, 1, 0), corner(0, 0, 1, 0), corner(0, 0, 1, 1), f"{name}'s min y, diag 1"
+            ),
+            Plane.from_3_points(
+                corner(1, 0, 1, 0), corner(1, 0, 0, 0), corner(1, 0, 0, 1), f"{name}'s min y, diag 2"
+            ),
+            Plane.from_3_points(
+                corner(0, 1, 1, 0), corner(0, 0, 1, 0), corner(0, 0, 1, 1), f"{name}'s min x, diag 1"
+            ),
+            Plane.from_3_points(
+                corner(0, 1, 1, 0), corner(0, 1, 0, 0), corner(0, 1, 0, 1), f"{name}'s min x, diag 2"
+            ),
+            Plane.from_3_points(
+                corner(1, 1, 0, 0), corner(0, 1, 0, 0), corner(0, 1, 0, 1), f"{name}'s min z, diag 1"
+            ),
+            Plane.from_3_points(
+                corner(1, 1, 0, 0), corner(1, 0, 0, 0), corner(1, 0, 0, 1), f"{name}'s min z, diag 2"
+            ),
+            Plane.from_3_points(
+                corner(1, 1, 1, 1), corner(1, 0, 1, 1), corner(1, 1, 0, 1), f"{name}'s max x, max d"
+            ),
+            Plane.from_3_points(
+                corner(1, 1, 1, 1), corner(0, 1, 1, 1), corner(1, 1, 0, 1), f"{name}'s max y, max d"
+            ),
+            Plane.from_3_points(
+                corner(1, 1, 1, 1), corner(0, 1, 1, 1), corner(1, 0, 1, 1), f"{name}'s max z, max d"
+            ),
+        ]
+        # remove any coplanar planes in case D is orthogonal to some other axis
+        unique_planes = []
+        for p in planes:
+            if not any(p.coplanar_with(other) for other in unique_planes):
+                unique_planes.append(p)
+        planes = unique_planes
+    # flip normals to point inward
+    for p in planes:
+        if p.distance_to_point(center) < 0:
+            p.normal = -p.normal
+
+    return planes

@@ -94,10 +94,14 @@ class PipettePathGenerator:
 
         The returned path does _not_ include the starting position.
         """
+        man = getManager()
+        mod = man.getOrLoadModule("Visualize3D")
+        # grab the visualizer for visualizing errors
+        adapter = mod.window().findAdapter(lambda a: a.device == self.pip)
         explanation = explanation or MOVE_TO_DESTINATION
         globalStart = np.asarray(globalStart)
         globalStop = np.asarray(globalStop)
-        path = [(globalStart,)]
+        path = [(globalStart, "", False, "")]
 
         # retract first if we are doing a lateral movement inside the sample
         lateralDist = np.linalg.norm(globalStop[1:] - globalStart[1:])
@@ -149,9 +153,11 @@ class PipettePathGenerator:
                 # ask the stage to check whether this position is reachable
                 self.manipulator.checkGlobalLimits(manipulatorGlobalPos, linear)
             except Exception as e:
+                adapter.setPathError([globalStart] + [p[0] for p in path], failed_at=globalPos)
                 raise ValueError(
                     f"Moving {self.pip} to '{stepName}' would be beyond the limits of its manipulator: {e}"
                 ) from e
+        adapter.setPath([globalStart] + [p[0] for p in path])
         return path
 
     def enforceSafeSpeed(self, start, stop, speed, explanation, linear):
@@ -244,10 +250,10 @@ class GeometryAwarePathGenerator(PipettePathGenerator):
             man = getManager()
             while not man.isReady.wait(0.05):
                 _future.checkStop()
-            mod = man.getModule("Visualize3D")
+            mod = man.getOrLoadModule("Visualize3D")
             while not mod.isReady.wait(0.05):
                 _future.checkStop()
-            viz = mod.window().pathPlanVisualizer(self.pip)
+            viz = mod.window().findAdapter(lambda a: a.device == self.pip).pathSearchVisualizer()
             planner, from_pip_to_global = self._getPlanningContext()
             planner.make_convolved_obstacles(self.pip.getGeometry(), from_pip_to_global, viz)
             print(f"cache primed for {self.pip.name()}")
@@ -278,7 +284,8 @@ class GeometryAwarePathGenerator(PipettePathGenerator):
             explanation = WAYPOINT_TO_AVOID_SAMPLE_TEAR
             globalStop = final_waypoint
 
-        viz = getManager().getModule("Visualize3D").window().pathPlanVisualizer(self.pip)
+        win = getManager().getOrLoadModule("Visualize3D").window()
+        viz = win.findAdapter(lambda a: a.device == self.pip).pathSearchVisualizer()
         planner, from_pip_to_global = self._getPlanningContext()
         try:
             path = planner.find_path(

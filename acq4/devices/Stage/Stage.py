@@ -16,6 +16,7 @@ from .calibration import ManipulatorAxesCalibrationWindow, StageAxesCalibrationW
 from ..Device import Device
 from ..OptomechDevice import OptomechDevice, map_through_transform
 from acq4 import getManager
+from ...modules.Visualize3D.travelers_proxy import MovePathException
 from ...util.HelpfulException import HelpfulException
 from ...util.future import Future, FutureButton
 from ...util.geometry import (
@@ -573,8 +574,6 @@ class Stage(Device, OptomechDevice):
 
     def getBoundaries(self) -> List[Plane]:
         """Return the boundaries of the stage in global coordinates."""
-        if len(self.axes()) != 3:
-            raise NotImplementedError("Boundaries are only implemented for 3-axis stages.")
         limits = self.getLimits()  # min, max
         if None in [m for ax in limits for m in ax]:
             return []
@@ -754,11 +753,18 @@ class MovePathFuture(MoveFuture):
         self._currentFuture = None
 
         prev = dev.getPosition()
+        global_path = [s.get("globalPos") for s in path if "globalPos" in s]
         for step in self.path:
             if step.get("globalPos") is not None:
-                step["position"] = dev.mapGlobalToDevicePosition(
-                    step.pop("globalPos"), step.get("linear", False), prev
-                )
+                global_pos = step.pop("globalPos")
+                try:
+                    step["position"] = dev.mapGlobalToDevicePosition(
+                        global_pos, step.get("linear", False), prev
+                    )
+                except Exception as e:
+                    raise MovePathException(
+                        "Cannot map global position to device coordinates", global_path, global_pos
+                    ) from e
                 prev = step["position"]
         for i, step in enumerate(self.path):
             try:

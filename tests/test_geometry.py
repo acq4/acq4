@@ -303,9 +303,11 @@ def test_grazing_paths(offset, viz=None):
     to_obst_parent_from_trav_parent = obst_to_global.inverse * trav_to_global
     conv_obst = obst.make_convolved_voxels(trav, to_obst_parent_from_trav_parent, vx)
     if viz:
-        viz.addGeometry(trav)
+        trav_mesh = trav.glMesh()
+        viz.view.addItem(trav_mesh)
         viz.setMeshTransform(trav.name, trav_to_global.as_pyqtgraph())
-        viz.addGeometry(obst)
+        obst_mesh = obst.glMesh()
+        viz.view.addItem(obst_mesh)
         viz.setMeshTransform(obst.name, obst_to_global.as_pyqtgraph())
         # viz.startPath(
         #     Point(np.array([0, 0, 0]), "trav").mapped_to("global"),

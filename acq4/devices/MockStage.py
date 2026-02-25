@@ -55,6 +55,8 @@ class MockStage(Stage):
 
     def __init__(self, dm, config, name):
         self.nAxes = config.get("nAxes", 3)
+        self._lastMove = None
+        self.stageThread = MockStageThread()
         Stage.__init__(self, dm, config, name)
         
         self._lastMove = None
@@ -83,7 +85,6 @@ class MockStage(Stage):
             Qt.QCoreApplication.instance().installEventFilter(self)
         self._quit = False
         dm.sigAbortAll.connect(self.abort)
-        self.stageThread = MockStageThread()
         self.stageThread.positionChanged.connect(self.posChanged, type=Qt.Qt.DirectConnection)
         self.stageThread.start()
         self._move(self.getPosition(), 10000, False)
