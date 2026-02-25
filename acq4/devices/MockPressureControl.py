@@ -23,10 +23,21 @@ class MockPressureControl(PressureControl):
             maximum: 50 * kPa
             minimum: -50 * kPa
             regulatorSettlingTime: 0.3 * s
+            sources:
+                regulator: True
+                user: True
     """
     def __init__(self, manager, config, name):
         super().__init__(manager, config, name)
         self.pressure = 0
+        self.sources = []
+        for source, enable in config.get(
+            'sources', {'regulator': True, 'user': True, 'atmosphere': True}
+        ):
+            if enable:
+                self.sources.append(source)
+        if 'atmosphere' not in self.sources:
+            self.sources.append('atmosphere')
 
     def _setPressure(self, p):
         self.pressure = p
