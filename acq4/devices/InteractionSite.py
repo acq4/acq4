@@ -5,16 +5,17 @@ from acq4.modules.Camera import CameraModuleInterface
 from acq4.util import Qt
 from .Device import Device
 from .OptomechDevice import OptomechDevice
+from ..util.target import color_for_diff
 
 
 class InteractionSite(Device, OptomechDevice):
-    """Describes the location and dimensions of a zone of interaction, such as a recording chamber
-    or a cleaning well.
+    """Describes the location and dimensions of a cylindrical zone of interaction, such as a
+    recording chamber, a nucleus deposition tube or a cleaning well.
 
     Configuration options:
 
     * radius: The radius of the site (m)
-    * height: The height of the site (m)
+    * height: The height of the site (m). Default 0.
     * transform: (dict) Transformation setting the position/orientation of the site.  E.g. pos
     * geometry: Optional settings for visualizing the site in the 3D visualizer. See OptomechDevice
         for details.
@@ -25,6 +26,7 @@ class InteractionSite(Device, OptomechDevice):
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
         self.radius = config["radius"]
+        self.height = config.get("height", 0)
         OptomechDevice.__init__(self, dm, config, name)
 
     def getGeometry(self, name=None):
@@ -44,12 +46,13 @@ class InteractionSite(Device, OptomechDevice):
     def globalPosition(self):
         return self.mapToGlobal([0, 0, 0])
 
-    def containsPoint(self, pt):
-        """Return True if the x,y coordinates in *pt* lie within
-        the boundary of this RecordingChamber."""
-        center = self.globalCenter()[:2]
-        pt = np.array(pt)[:2]
-        return np.linalg.norm(pt - center) <= self.radius
+    def containsPoint(self, pt, tolerance=1e-9):
+        """Return True if the x,y,z coordinates in *pt* lie within the boundaries of this site."""
+        local_pt = self.mapFromGlobal(pt)
+        return (
+            local_pt[0] ** 2 + local_pt[1] ** 2 <= self.radius ** 2 + tolerance
+            and -tolerance <= local_pt[2] <= self.height + tolerance
+        )
 
 
 class InteractionSiteCameraInterface(CameraModuleInterface):
