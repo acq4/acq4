@@ -182,7 +182,7 @@ class MultiClamp(PatchClamp):
             if time.time() - start > 10:
                 raise Exception("Timed out waiting for first update from multi clamp commander.")
         
-        print("Created MultiClamp device", self.config['channelID'])
+        self.logger.info("Created MultiClamp device %s", self.config['channelID'])
 
         ## set configured holding values
         if 'vcHolding' in self.config:

@@ -67,7 +67,7 @@ class NiDAQ(Device):
         else:
             from acq4.drivers.nidaq.nidaq import NIDAQ
         self.n = NIDAQ
-        print(f"Created NiDAQ handle, devices are {self.n.listDevices()!r}")
+        self.logger.info(f"Created NiDAQ handle, devices are {self.n.listDevices()!r}")
         self.delayedSet = Mutex.threadsafe({})
 
     def createTask(self, cmd, parentTask):
