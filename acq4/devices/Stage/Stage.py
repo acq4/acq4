@@ -464,21 +464,21 @@ class Stage(Device, OptomechDevice):
             tr = self.stageTransform().offset + np.array(self.mapFromGlobal(globalPos))
             return pg.Vector(self.inverseAxisTransform().map(tr))
 
-        if linear:
-            return greedy_axis_inverse_kinematics(
-                globalPos,
-                self.axisTransform(),
-                self.getLimits(),
-                previousPos,
-            )
-
-        # otherwise, hold to a neutral position of d=0
-        return neutral_anchored_inverse_kinematics(
+        return greedy_axis_inverse_kinematics(
             globalPos,
             self.axisTransform(),
             self.getLimits(),
-            [None, None, None, 0],
+            previousPos,
         )
+
+        # TODO this is doing bad things (e.g. Home -> Fine Search -> Above Target drives through the recording chamber)
+        # # otherwise, hold to a neutral position of d=0
+        # return neutral_anchored_inverse_kinematics(
+        #     globalPos,
+        #     self.axisTransform(),
+        #     self.getLimits(),
+        #     [None, None, None, 0],
+        # )
 
     def mapDeviceToGlobalPosition(self, pos):
         pos = map_through_transform(pos, self.axisTransform())[:3]
