@@ -8,14 +8,18 @@ from .OptomechDevice import OptomechDevice
 
 
 class InteractionSite(Device, OptomechDevice):
-    """Describes the location and dimensions of a circular recording chamber.
+    """Describes the location and dimensions of a zone of interaction, such as a recording chamber
+    or a cleaning well.
 
     Configuration options:
 
-    * radius: The radius of the recording chamber (m)
-    * height: The height of the recording chamber (m)
-    * transform: Transformation setting the position/orientation of the chamber
-        pos: x,y,z position of recording chamber
+    * radius: The radius of the site (m)
+    * height: The height of the site (m)
+    * transform: (dict) Transformation setting the position/orientation of the site.  E.g. pos
+    * geometry: Optional settings for visualizing the site in the 3D visualizer. See OptomechDevice
+        for details.
+    * parentDevice: Optional name of parent device for coordinate transforms.  E.g. a stage that
+        the site is mounted on.
     """
 
     def __init__(self, dm, config, name):
