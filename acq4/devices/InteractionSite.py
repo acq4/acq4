@@ -5,6 +5,7 @@ from acq4.modules.Camera import CameraModuleInterface
 from acq4.util import Qt
 from .Device import Device
 from .OptomechDevice import OptomechDevice
+from .Stage import Stage
 from ..util.target import color_for_diff
 
 
@@ -29,6 +30,13 @@ class InteractionSite(Device, OptomechDevice):
         self.height = config.get("height", 0)
         OptomechDevice.__init__(self, dm, config, name)
 
+        parent = self
+        while True:
+            parent = parent.parentDevice()
+            if parent is None or isinstance(parent, Stage):
+                break
+        self._parentStage: Stage = parent
+
     def getGeometry(self, name=None):
         if isinstance(self.config.get("geometry"), dict):
             defaults = {"color": (0.3, 0.3, 0.3, 0.7)}
@@ -45,6 +53,14 @@ class InteractionSite(Device, OptomechDevice):
 
     def globalPosition(self):
         return self.mapToGlobal([0, 0, 0])
+
+    def moveToGlobal(self, pos, speed, **kwds):
+        """Move the parent stage so that this site's origin arrives at *pos* in global coordinates."""
+        if self._parentStage is None:
+            raise RuntimeError(f"{self.name()} has no parent Stage device and cannot be moved.")
+        dif = np.asarray(pos) - np.asarray(self.globalPosition())
+        stage_pos = np.asarray(self._parentStage.globalPosition()) + dif
+        return self._parentStage.moveToGlobal(stage_pos, speed, **kwds)
 
     def containsPoint(self, pt, tolerance=1e-9):
         """Return True if the x,y,z coordinates in *pt* lie within the boundaries of this site."""
