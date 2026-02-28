@@ -33,19 +33,56 @@ class PipetteTracker:
             imager = man.getDevice("Camera")
         return imager
 
-    def findTipInFrame(self, **kwds):
+    def findTipInFrame(self, threshold=0.5, **kwds):
         """Automatically find the pipette tip position.
 
-        Return the offset in pipette-local coordinates.
+        Return the tip position in global coordinates.
 
-        All keyword arguments are passed to `measureTipPosition()`.
+        Parameters
+        ----------
+        threshold : float
+            Minimum confidence value required. If the detection confidence is below this
+            threshold, a RuntimeError is raised. Default is 0.5.
+        **kwds
+            All other keyword arguments are passed to `measureTipPosition()`.
+
+        Returns
+        -------
+        tipPos : array-like
+            (x, y, z) position of pipette tip in global coordinates
+
+        Raises
+        ------
+        RuntimeError
+            If the detection confidence is below threshold.
         """
         if "frame" not in kwds:
             kwds['frame'] = self.takeFrame(ensureFreshFrames=False)
-        tipPos, corr = self.measureTipPosition(**kwds)
+        tipPos, confidence = self.measureTipPosition(**kwds)
+        if confidence < threshold:
+            raise RuntimeError(f"Unable to locate pipette tip (confidence {confidence:.2f} < {threshold:.2f})")
         return tipPos
 
     def measureTipPosition(self, frame, **kwds):
+        """Measure the position of the pipette tip in global coordinates based on the provided camera frame.
+
+        This method must be implemented by subclasses to provide specific algorithms for determining the tip position.
+
+        Parameters
+        -----------
+        frame : Frame
+            A frame acquired from an imager (e.g. using tracker.takeFrame() or imager.acquireFrames(1))
+            Note that the frame must be acquired under simliar conditions to those used previously to collect a reference image set (same objective, filter, lighting, etc.).
+        **kwds : dict
+            Additional keyword arguments that may be used by specific implementations of this method.
+
+        Returns
+        -------
+        tipPos : array-like
+            (x, y, z) predicted location of pipette tip in global coordinates
+        confidence : float
+            Indicates prediction confidence. Arbitrary units, but usually values below about 0.5 will be rejected by the caller.
+        """
         raise NotImplementedError()
 
 
@@ -67,13 +104,12 @@ class ResnetPipetteTracker(PipetteTracker):
         pxSize = frame.info()["pixelSize"][0]
 
         # measure image pixel offset and z error to pipette tip
-        xyOffset, zErr, snr = self.estimateOffset(img, pipetteAngle, pxSize)
-        performance = snr * 100
+        xyOffset, zErr, confidence = self.estimateOffset(img, pipetteAngle, pxSize)
 
         # map pixel offsets back to physical coordinates
         tipPos = frame.mapFromFrameToGlobal(pg.Vector(xyOffset))
 
-        return (tipPos.x(), tipPos.y(), tipPos.z() + zErr * 1e-6), performance
+        return (tipPos.x(), tipPos.y(), tipPos.z() + zErr * 1e-6), confidence
 
     def estimateOffset(self, img, pipetteAngle, pxSize):
         from acq4_automation.object_detection import do_pipette_tip_detection
@@ -253,7 +289,7 @@ class CorrelationPipetteTracker(PipetteTracker):
             pickle.dump(self.reference, fh)
 
     def measureTipPosition(
-        self, frame, searchRegion="near_tip", padding=50e-6, threshold=0.6, pos=None, movePipette=False
+        self, frame, searchRegion="near_tip", padding=50e-6, pos=None, movePipette=False
     ):
         """Find the pipette tip location by template matching within a region surrounding the
         expected tip position.
@@ -265,12 +301,10 @@ class CorrelationPipetteTracker(PipetteTracker):
             Note that the frame must be acquired under simliar conditions to those used previously to collect
             a reference image set (same objective, filter, lighting, etc.).
         searchRegion : str
-            May be "near_tip" to search near the expected position of the pipette, or "full_frame" 
+            May be "near_tip" to search near the expected position of the pipette, or "full_frame"
             to search the entire camera field of view.
         padding : float
             Distance (m) around expected tip position to search. Applies only when searchRegion=="near_tip".
-        threshold : float
-            If the confidence of the match is less than *threshold*, then raise RuntimeError.
         pos : array-like
             Expected position of tip in global coordinates
         movePipette : bool
@@ -282,9 +316,6 @@ class CorrelationPipetteTracker(PipetteTracker):
             (x, y, z) predicted location of pipette tip in global coordinates
         confidence : float
             Indicates confidence in tipPos (arbitrary units)
-
-
-        If movePipette, then take two frames with the pipette moved away for the second frame to allow background subtraction
         """
         detector = self.detectorClass(tracker=self, pipette=self.pipette)
 
@@ -311,21 +342,22 @@ class CorrelationPipetteTracker(PipetteTracker):
         else:
             raise ValueError("searchRegion must be 'near_tip' or 'entire_frame'")
 
-        if performance < threshold:
-            raise RuntimeError("Unable to locate pipette tip (correlation %0.2f < %0.2f)" % (performance, threshold))
-
         return tipPos, performance
 
     def measureError(self, padding=50e-6, threshold=0.7, frame=None, pos=None, movePipette=False):
         """Return an (x, y, z) tuple indicating the error vector from the calibrated tip position to the
         measured (actual) tip position.
+
+        Raises RuntimeError if confidence is below threshold.
         """
         if pos is None:
             expectedTipPos = self.pipette.globalPosition()
         else:
             expectedTipPos = pos
 
-        measuredTipPos, corr = self.measureTipPosition(frame, padding, threshold, pos=pos, movePipette=movePipette)
+        measuredTipPos, confidence = self.measureTipPosition(frame, padding=padding, pos=pos, movePipette=movePipette)
+        if confidence < threshold:
+            raise RuntimeError(f"Unable to locate pipette tip (confidence {confidence:.2f} < {threshold:.2f})")
         return tuple([measuredTipPos[i] - expectedTipPos[i] for i in (0, 1, 2)])
 
     def getReference(self):
@@ -337,27 +369,6 @@ class CorrelationPipetteTracker(PipetteTracker):
                 "No reference frames found for this pipette / objective / filter combination: %s" % repr(key)
             )
 
-    def findTipInFrame(self, **kwds):
-        """Automatically calibrate the pipette tip position using template matching on a single camera frame.
-
-        Return the offset in pipette-local coordinates and the normalized cross-correlation value of the template match.
-
-        All keyword arguments are passed to `measureTipPosition()`.
-        """
-        if "frame" not in kwds:
-            kwds['frame'] = self.takeFrame(ensureFreshFrames=False)
-        
-        tipPos, corr = self.measureTipPosition(**kwds)
-
-        self.pipette.resetGlobalPosition(tipPos)
-
-        # localError = self.pipette.mapFromGlobal(tipPos)
-        # tr = self.pipette.deviceTransform()
-        # tr.translate(pg.Vector(localError))
-        # self.pipette.setDeviceTransform(tr)
-        # return localError, corr
-
-    
 
     def mapErrors(
         self,
