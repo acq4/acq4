@@ -1040,6 +1040,91 @@ def test_greedy_axis_inverse_kinematics_with_scaled_axis():
     assert np.allclose(pos, target_dev), f"expected {target_dev}, got {pos}"
 
 
+def real_4axis_manipulator():
+    """Return (bounds, transform) for a real 4-axis manipulator configuration captured from a live device.
+
+    The local-to-global transform matrix was observed in practice. This fixture is used to test the
+    IK functions under a real-world, poorly-conditioned axis configuration.
+
+    The d-axis (axis 3) is nearly a linear combination of the x (axis 0) and z (axis 2) axes in
+    global space. This means when axis 1 (y) is chosen as the greedy axis, the remaining 3x3 system
+    has a condition number ~222. This causes chaotic, position-dependent ValueError failures.
+
+    Bounds are (0, 20000) for all four axes, as configured on the real device.
+    Home device position: (918, 2074, 9195, 52)
+    """
+    M = np.array([
+        [-5.91304202e-07,  7.81460222e-07,  3.92164309e-09, -5.16792046e-07, -5.97800640e-03],
+        [ 7.88488522e-07,  5.90593159e-07, -2.28182544e-10,  6.76800749e-07, -1.13185560e-02],
+        [ 0.00000000e+00,  0.00000000e+00, -1.00288005e-06, -4.87384199e-07,  1.37251357e-02],
+        [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00,  0.00000000e+00,  1.00000000e+00],
+    ])
+    transform = AffineTransform(M[:3, :4], offset=M[:3, 4])
+    bounds = [(0, 20000)] * 4
+    return bounds, transform
+
+
+def test_greedy_ik_real_device_condition_numbers():
+    """The d-axis (axis 3) of the real device transform is nearly a linear combination of x and z,
+    making the (0, 2, 3) sub-matrix poorly conditioned (~222) when axis 1 is chosen as greedy.
+    Choosing a different greedy axis gives condition numbers near 1-4.
+    """
+    bounds, transform = real_4axis_manipulator()
+    T = transform.full_matrix[:3, :4]
+
+    expected_conditions = {
+        0: (1, 5),      # keep [1, 2, 3]: well-conditioned
+        1: (100, 300),  # keep [0, 2, 3]: poorly conditioned — this is the bug trigger
+        2: (1, 10),     # keep [0, 1, 3]: well-conditioned
+        3: (1, 5),      # keep [0, 1, 2]: well-conditioned
+    }
+    for greedy in range(4):
+        cols = [i for i in range(4) if i != greedy]
+        cond = np.linalg.cond(T[:, cols])
+        lo, hi = expected_conditions[greedy]
+        assert lo <= cond <= hi, (
+            f"Greedy axis={greedy}: condition number {cond:.1f} not in expected range [{lo}, {hi}]"
+        )
+
+
+def test_greedy_ik_real_device_nearby_positions_all_succeed():
+    """IK must succeed for all starting positions near the known bad region, not just some.
+
+    From (1133, 13788, 8840, 4352), tiny perturbations (1-20 device units, i.e. ~1-20 µm) cause
+    chaotic ValueError failures because the auto-selected greedy axis (y, condition ~222) makes the
+    boundary intersection search numerically unstable. The d-values from successful calls jump
+    unpredictably between 0.000 and 1112.949, and FAILs are scattered non-monotonically throughout.
+
+    All of these starting positions can reach home (home_dev is in-bounds and maps to home_global),
+    so ValueError is never correct here.
+    """
+    bounds, transform = real_4axis_manipulator()
+    home_dev = np.array([918, 2074, 9195, 52], dtype=float)
+    bad_start = np.array([1133, 13788, 8840, 4352], dtype=float)
+    home_global = transform.map(home_dev)[:3]
+
+    failures = []
+    for axis_idx in range(4):
+        for delta in range(-20, 21):
+            start = bad_start.copy()
+            start[axis_idx] += delta
+            if not all(bounds[i][0] <= start[i] <= bounds[i][1] for i in range(4)):
+                continue
+            try:
+                result = greedy_axis_inverse_kinematics(home_global, transform, bounds, start)
+                result_global = transform.map(result)[:3]
+                if not np.allclose(result_global, home_global, atol=1e-9):
+                    failures.append((axis_idx, delta, f"mapped to wrong global pos {result_global}"))
+            except ValueError as e:
+                failures.append((axis_idx, delta, str(e)))
+
+    assert not failures, (
+        f"{len(failures)} starting positions near bad_start failed IK to home:\n"
+        + "\n".join(f"  axis={ax} delta={d}: {msg}" for ax, d, msg in failures[:10])
+        + (f"\n  ... and {len(failures) - 10} more" if len(failures) > 10 else "")
+    )
+
+
 HALF = 2**0.5 / 2
 
 
