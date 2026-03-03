@@ -56,6 +56,8 @@ class HistoricLogRecord(logging.LogRecord):
     """
 
     def __init__(self, **kwargs):
+        if isinstance(kwargs.get('args'), list):
+            kwargs['args'] = tuple(kwargs['args'])
         super().__init__(**kwargs)
         self.created = kwargs.get('created', self.created)
         self.msecs = kwargs.get('msecs', self.msecs)
@@ -64,6 +66,13 @@ class HistoricLogRecord(logging.LogRecord):
         self.threadName = kwargs.get('threadName', self.threadName)
         self.process = kwargs.get('process', self.process)
         self.processName = kwargs.get('processName', self.processName)
+
+
+def load_historic_log_records(log_file):
+    records = []
+    for line in log_file.readlines():
+        records.append(HistoricLogRecord(**(json.loads(line))))
+    return records
 
 
 def setup_logging(
@@ -153,6 +162,12 @@ def set_log_file(log_file: str | None, is_temp_file: bool = False) -> None:
         log_file_handler.close()
         log_file_handler = None
 
+    # copy old log file to new location
+    if old_log_file is not None and old_log_file != log_file:
+        oldlog = open(old_log_file, 'rb').read()
+        with open(log_file, 'ab') as f:
+            f.write(oldlog)
+
     # Add new log file handler (all messages, JSON format)
     log_file_handler = logging.FileHandler(log_file)
     log_file_handler.setLevel(logging.DEBUG)
@@ -166,8 +181,9 @@ def set_log_file(log_file: str | None, is_temp_file: bool = False) -> None:
     log_file_handler.setFormatter(json_formatter)
     root_logger.addHandler(log_file_handler)
 
-    if old_log_file is not None and old_log_file != log_file:
-        rewrite_log_from_temp_file(old_log_file)
+    # replaced by the copy operation above
+    # if old_log_file is not None and old_log_file != log_file:
+    #     rewrite_log_from_temp_file(old_log_file)
 
 
 def rewrite_log_from_temp_file(temp_file_path: str) -> None:
