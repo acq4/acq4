@@ -242,6 +242,7 @@ class DataManager(Module):
 
         if ftype == 'Folder':
             nd = cdir.mkdir('NewFolder', autoIncrement=True)
+            nd.setInfo({})
             # item = self.model.handleIndex(nd)
             self.ui.fileTreeWidget.editItem(nd)
         else:
