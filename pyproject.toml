@@ -35,6 +35,7 @@ dependencies = [
     "pillow",
     "psutil",
     "pyopengl",
+    "pyopengl-accelerate",
     "pyqt5",
     "pyqtgraph @ git+https://github.com/acq4/pyqtgraph.git@acq4_working",
     "python-json-logger",
