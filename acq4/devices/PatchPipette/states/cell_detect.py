@@ -284,7 +284,7 @@ class CellDetectState(PatchPipetteState):
             self.adjustPressureForDepth()
             self.maybeVisuallyTrackTarget()
             if self._analysis.tip_is_broken():
-                self._taskDone(interrupted=True, error="Pipette break detected with `breakThreshold`.")
+                self.setResult(error="Pipette break detected with `breakThreshold`.")
                 self.dev.patchRecord()['detectedCell'] = False
                 return {"state": 'broken'}
             if config['autoAdvance']:
@@ -336,13 +336,12 @@ class CellDetectState(PatchPipetteState):
         return False
 
     def _transition_to_fallback(self, msg):
-        self._taskDone(interrupted=True, error=msg)
+        self.setResult(error=msg)
         self.dev.patchRecord()['detectedCell'] = False
         return {"state": self.config['fallbackState']}
 
     def _transition_to_seal(self, speed):
         self.setState(f"cell detected ({speed} criteria)")
-        self._taskDone()
         self.dev.patchRecord()['detectedCell'] = True
         return {"state": self.config['reachedEndpointState']}
 

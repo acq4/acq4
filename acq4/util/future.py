@@ -7,7 +7,7 @@ import sys
 import threading
 import time
 import traceback
-from typing import Callable, ParamSpec, Optional, overload
+from typing import Any, Callable, ParamSpec, Optional, overload
 from typing import Generic, TypeVar
 
 from acq4.logging_config import get_logger
@@ -17,6 +17,9 @@ from pyqtgraph import FeedbackButton
 FUTURE_RETVAL_TYPE = TypeVar("FUTURE_RETVAL_TYPE")
 WAITING_RETVAL_TYPE = TypeVar("WAITING_RETVAL_TYPE")
 
+class Unset:
+    pass
+UNSET = Unset()  # unique sentinel value for "not set"
 
 class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
     """Used to track the progress of an asynchronous task.
@@ -65,7 +68,7 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         self._isDone = False
         self._callbacks = []
         self._onError = onError
-        self._completionLock = threading.Lock()
+        self._completionLock = threading.RLock()
         self._wasInterrupted = False
         self._errorMessage = None
         self._excInfo = None
@@ -111,9 +114,11 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
     def executeAndSetReturn(self, func, args, kwds):
         try:
             kwds["_future"] = self
-            self._taskDone(returnValue=func(*args, **kwds))
+            self.setResult(rval=func(*args, **kwds))
         except Exception:
-            self._taskDone(interrupted=True, excInfo=sys.exc_info())
+            self.setResult(excInfo=sys.exc_info())
+        finally:
+            self._do_task_completion_jobs()
 
     def propagateStopsInto(self, future: Future):
         """Add a future to the list of futures that will be stopped if this future is stopped."""
@@ -168,29 +173,59 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
             with contextlib.suppress(self.Stopped):
                 self.wait()
 
-    def _taskDone(self, interrupted=False, error=None, state=None, excInfo=None, returnValue=None):
+    def _taskDone(self, interrupted=False, error=UNSET, excInfo=UNSET, returnValue=UNSET):
         """Called by subclasses when the task is done (regardless of the reason)"""
+        self.setResult(rval=returnValue, error=error, excInfo=excInfo, interrupted=interrupted)
+        self._do_task_completion_jobs()
+
+    def setResult(self, rval:Any=UNSET, error:str|None|Unset=UNSET, excInfo:str|None|Unset=UNSET, interrupted:bool|None|Unset=UNSET):
+        """Set result attributes on this future. 
+        This should only be called internally by the future or subclasses, or when the state of the future is handled externally.
+        
+        Parameters
+        ----------
+        rval : Any
+            The return value of the future.
+        error : str | None | Unset
+            The error message if the future encountered an error.
+        excInfo : str | None | Unset
+            The exception information if the future encountered an error.
+        interrupted : bool | None | Unset
+            Indicates whether the future was interrupted. 
+            If unspecified, it will be set to True if there was an error or exception.
+        """
         with self._completionLock:
             if self._isDone:
-                raise ValueError("_taskDone has already been called.")
-            self._isDone = True
-            if error is not None:
-                # error message may have been set earlier
+                raise ValueError("Cannot alter future after future is done.")
+        
+            if rval is not UNSET:
+                self._returnVal = rval
+            if error is not UNSET:
                 self._errorMessage = error
-            self._excInfo = excInfo
-            self._wasInterrupted = interrupted
-            if returnValue is not None:
-                self._returnVal = returnValue
-            msg = f"Future [{self._name}] finished."
-            if interrupted:
-                msg = msg + " [interrupted]"
-            if error is not None:
-                msg = msg + f" [{error}]"
-            self.log(msg)
-        # if interrupted:
-        #     self.setState(state or f"interrupted (error: {error})")
-        # else:
-        #     self.setState(state or "complete")
+            if excInfo is not UNSET:
+                self._excInfo = excInfo
+
+            if interrupted is not UNSET:
+                self._wasInterrupted = interrupted
+            elif error is not UNSET or excInfo is not UNSET:
+                self._wasInterrupted = True
+
+    def _do_task_completion_jobs(self):
+        with self._completionLock:
+            if self._isDone:
+                raise ValueError("Cannot finish future again; already done.")
+            self._isDone = True
+
+        error = self._errorMessage
+        excInfo = self._excInfo
+
+        msg = f"Future [{self._name}] finished."
+        if self._wasInterrupted:
+            msg = msg + " [interrupted]"
+        if error is not None:
+            msg = msg + f" [{error}]"
+        self.log(msg)
+
         if self._onError is not None and (error or excInfo):
             try:
                 self._onError(self)

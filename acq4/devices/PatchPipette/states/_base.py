@@ -78,10 +78,6 @@ class PatchPipetteState(Future):
     # state subclasses must set a string name
     stateName = None
 
-    # State classes may implement a run() method to be called in a background thread and it should call
-    # self.checkStop() frequently
-    run = None
-
     _parameterTreeConfig = {
         'initialPressureSource': {'type': 'list', 'default': None, 'limits': ['atmosphere', 'regulator', 'user'],
                                   'optional': True},
@@ -146,6 +142,7 @@ class PatchPipetteState(Future):
         if config is not None:
             self.config.update(config)
         self._cleanupMutex = threading.Lock()
+        self.testPulseResults = queue.Queue()
         self._cleanupFuture = None
         self._pressureAdjustment = None
         self._cell = None
@@ -156,34 +153,60 @@ class PatchPipetteState(Future):
         self.nextState = {"state": self.config.get('fallbackState', None)}
         self.dev.sigTargetChanged.connect(self._onTargetChanged)
 
+    def start(self):
+        """Start a background thread that executes this state. This should only be called by the state manager.
+        
+        When runJob completes, self.sigFinished will be emitted."""
+        self.executeInThread(self.runJob, args=(), kwds={})
+
     def initialize(self):
-        """Initialize pressure, clamp, etc. and start background thread when entering this state.
+        if self.config.get('finishPatchRecord') is True:
+            self.dev.finishPatchRecord()
+        if self.config.get('newPipette') is True:
+            self.dev.newPipette()
+
+        self.initializePressure()
+        self.initializeClamp()
+
+    def runJob(self, _future):  # _future is self
+        """Called in background thread to start the state.
+        
+        Initialize pressure, clamp, etc. and run the subclass-defined run() method if it exists.
+        If run() is not defined, then this just serves as a way to set initial parameters and then wait until the state is stopped by the state manager. 
+        If run() is defined, then it should return either None or a dict with a 'state' key specifying the next state to transition to. 
+        The state manager will handle the actual transition after run() completes.
 
         This method is called by the state manager.
         """
+        if not self.dev.active:
+            raise RuntimeError(f"Cannot initialize state {self.stateName} because device {self.dev.name()} is not active.")
+        
+        self.initialize()
+
         try:
-            if self.config.get('finishPatchRecord') is True:
-                self.dev.finishPatchRecord()
-            if self.config.get('newPipette') is True:
-                self.dev.newPipette()
+            with contextlib.ExitStack() as stack:
+                if self.config["reserveDAQ"]:
+                    daq_name = self.dev.clampDevice.getDAQName("primary")
+                    self.setState(f"{self.stateName}: waiting for {daq_name} lock")
+                    stack.enter_context(
+                        getManager().reserveDevices([daq_name], timeout=self.config["DAQReservationTimeout"]))
+                    self.setState(f"{self.stateName}: {daq_name} lock acquired")
 
-            self.initializePressure()
-            self.initializeClamp()
+                # TODO: can we use the rval of the Future for this?
+                self.nextState = self.run()
 
-            # set up test pulse monitoring
-            self.testPulseResults = queue.Queue()
+        finally:
+            # If run() called monitorTestPulse(), then we need to disconnect the signal here
+            if self.dev.clampDevice is not None:
+                disconnect(self.dev.clampDevice.sigTestPulseFinished, self.testPulseFinished)
 
-            if self.run is None:
-                # no work; just mark the task complete
-                self._taskDone(interrupted=False, error=None)
-            elif self.dev.active:
-                self._thread = threading.Thread(target=self._runJob, name=f'{self.dev.name()} {self.stateName} thread')
-                self._thread.start()
-            else:
-                self._taskDone(interrupted=True, error=f"Not starting state thread; {self.dev.name()} is not active.")
-        except Exception as e:
-            self._taskDone(interrupted=True, excInfo=sys.exc_info())
-            raise
+        return self.nextState
+
+    def run(self):
+        """Subclasses can implement this method to have code executed in a background thread after the state starts.
+        
+        The default implementation just waits until the state is stopped by the state manager."""
+        self.sleep(float('inf'))
 
     def initializePressure(self):
         """Set initial pressure based on the config keys 'initialPressureSource' and 'initialPressure'
@@ -232,7 +255,7 @@ class PatchPipetteState(Future):
     def monitorTestPulse(self):
         """Begin acquiring test pulse data in self.testPulseResults
         """
-        self.dev.clampDevice.sigTestPulseFinished.connect(self.testPulseFinished)
+        self.dev.clampDevice.sigTestPulseFinished.connect(self.testPulseFinished, Qt.Qt.DirectConnection)
 
     def processAtLeastOneTestPulse(self) -> list[PatchClampTestPulse]:
         """Wait for at least one test pulse to be processed."""
@@ -294,33 +317,6 @@ class PatchPipetteState(Future):
                 self._visualTargetTrackingFuture.stop("State cleanup")
             self._visualTargetTrackingFuture = None
         return Future.immediate()
-
-    def _runJob(self):
-        """Function invoked in background thread.
-
-        This calls the custom run() method for the state subclass and handles the possible
-        error / exit / completion states.
-        """
-        excInfo = None
-        interrupted = True
-        try:
-            with contextlib.ExitStack() as stack:
-                if self.config["reserveDAQ"]:
-                    daq_name = self.dev.clampDevice.getDAQName("primary")
-                    self.setState(f"{self.stateName}: waiting for {daq_name} lock")
-                    stack.enter_context(
-                        getManager().reserveDevices([daq_name], timeout=self.config["DAQReservationTimeout"]))
-                    self.setState(f"{self.stateName}: {daq_name} lock acquired")
-                self.nextState = self.run()
-            interrupted = self.wasInterrupted()
-        except Exception as e:
-            # state aborted due to an error
-            excInfo = sys.exc_info()
-        finally:
-            if self.dev.clampDevice is not None:
-                disconnect(self.dev.clampDevice.sigTestPulseFinished, self.testPulseFinished)
-            if not self.isDone():
-                self._taskDone(interrupted=interrupted, excInfo=excInfo)
 
     def checkStop(self):
         # extend checkStop to also see if the pipette was deactivated.
