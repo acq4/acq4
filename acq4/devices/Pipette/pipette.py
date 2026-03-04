@@ -762,6 +762,12 @@ class Pipette(Device, OptomechDevice):
         stagePos = self._solveGlobalStagePosition(pos)
         stage: Stage = self.parentStage
         try:
+            adapter = self.dm.getOrLoadModule("Visualize3D").window().findAdapter(lambda a: a.device == self)
+            if adapter is not None:
+                adapter.setPath([self.globalPosition(), pos])
+        except Exception:
+            self.logger.exception("Error visualizing pipette move path")
+        try:
             return stage.moveToGlobal(stagePos, speed, **kwds)
         except Exception as exc:
             exc.add_note(
