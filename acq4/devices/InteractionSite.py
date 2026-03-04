@@ -48,9 +48,6 @@ class InteractionSite(Device, OptomechDevice):
         """Return an object to interact with camera module."""
         return InteractionSiteCameraInterface(self, mod)
 
-    def globalCenter(self):
-        return np.array(self.globalPosition())
-
     def globalPosition(self):
         return self.mapToGlobal([0, 0, 0])
 
@@ -75,24 +72,38 @@ class InteractionSiteCameraInterface(CameraModuleInterface):
 
     canImage = False
 
-    def __init__(self, dev, mod):
-        CameraModuleInterface.__init__(self, dev, mod)
-        x, y, z = self.dev().globalCenter()
+    def __init__(self, dev, win):
+        CameraModuleInterface.__init__(self, dev, win)
+        x, y, z = self.dev().globalPosition()
         radius = self.dev().radius
         self.boundingEllipse = Qt.QGraphicsEllipseItem(-1, -1, 2, 2)
-        self.boundingEllipse.setPen(pg.mkPen("y"))
         self.boundingEllipse.setScale(radius)
-        mod.window().addItem(self.boundingEllipse, ignoreBounds=True)
+        win.addItem(self.boundingEllipse, ignoreBounds=True)
         self.boundingEllipse.setPos(x, y)
-        self._name = pg.TextItem(text=dev.name(), color=pg.mkColor((255, 255, 0, 128)))
-        mod.window().addItem(self._name, ignoreBounds=True)
+        self._name = pg.TextItem(text=dev.name())
+        win.addItem(self._name, ignoreBounds=True)
         self._name.setPos(x + radius, y)
+        win.sigFocusPositionChanged.connect(self._handleFocusChange)
         dev.sigGlobalTransformChanged.connect(self._updateGraphics)
+        self._updateGraphics(None, None)
 
     def _updateGraphics(self, _, __):
-        center = self.dev().globalCenter()
+        center = self.dev().globalPosition()
         self.boundingEllipse.setPos(center[0], center[1])
         self._name.setPos(center[0] + self.dev().radius, center[1])
+        self._handleFocusChange()
+
+    def _handleFocusChange(self):
+        center = self.dev().globalPosition()
+        focus = self.win().globalCenterOfFocus()
+        diff = 0
+        if focus is not None:
+            if focus[2] < center[2]:
+                diff = focus[2] - center[2]
+            elif focus[2] > center[2] + self.dev().height:
+                diff = focus[2] - (center[2] + self.dev().height)
+        self.boundingEllipse.setPen(pg.mkPen(color_for_diff(diff)))
+        self._name.setColor(color_for_diff(diff))
 
     def boundingRect(self):
         return None
