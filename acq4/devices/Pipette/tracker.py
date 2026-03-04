@@ -137,7 +137,7 @@ class CorrelationPipetteTracker(PipetteTracker):
         backPos2 = np.array([-tipLength * np.cos(angle - da), -tipLength * np.sin(angle - da)])
 
         # convert to image coordinates
-        tr = frame.globalTransform().inverted()[0]
+        tr = frame.globalTransform().inverse
         originImgPos = tr.map(pg.Vector([0, 0]))
         backImgPos1 = tr.map(pg.Vector(backPos1)) - originImgPos
         backImgPos2 = tr.map(pg.Vector(backPos2)) - originImgPos
@@ -459,9 +459,9 @@ class CorrelationPipetteTracker(PipetteTracker):
 
                         if show:
                             imv.setImage(frame.data())
-                            p1 = frame.globalTransform().inverted()[0].map(pg.Vector(lastPos))
-                            p2 = frame.globalTransform().inverted()[0].map(pg.Vector(lastPos + err[tuple(ind)]))
-                            p3 = frame.globalTransform().inverted()[0].map(pg.Vector(reportedPos))
+                            p1 = frame.globalTransform().inverse.map(pg.Vector(lastPos))
+                            p2 = frame.globalTransform().inverse.map(pg.Vector(lastPos + err[tuple(ind)]))
+                            p3 = frame.globalTransform().inverse.map(pg.Vector(reportedPos))
                             mark1.setPos(p1.x(), p1.y())
                             mark2.setPos(p2.x(), p2.y())
                             mark3.setPos(p3.x(), p3.y())

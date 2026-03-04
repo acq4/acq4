@@ -660,7 +660,7 @@ class AutomationDebugWindow(Qt.QWidget):
             self._displayBoundingBoxes(neurons)
 
             stack = np.asarray([frame.data().T for frame in self._current_detection_stack])
-            xform = self._current_detection_stack[0].globalTransform().inverted()[0]
+            xform = self._current_detection_stack[0].globalTransform().inverse
             centers_ijk = [np.abs(xform.map(n)[::-1]) for n in neurons]
 
             if self._annotation_tool is not None:

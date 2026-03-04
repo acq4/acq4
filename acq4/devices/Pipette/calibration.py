@@ -180,7 +180,7 @@ def findNewPipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=0.
 
 def frame_pipette_direction(frame, pipVector):
     """Return the direction a pipette points in image coordinates for a frame"""
-    frame_tr = frame.globalTransform().inverted()[0]
+    frame_tr = frame.globalTransform().inverse
     imgVector = frame_tr.map(pipVector) - frame_tr.map([0, 0, 0])
     imgVector /= np.linalg.norm(imgVector)
     return imgVector
