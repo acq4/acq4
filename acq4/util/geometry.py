@@ -1973,6 +1973,195 @@ def load_transform_from_anything(thing, **kwargs) -> Transform:
         return SRT3DTransform(**thing, **kwargs)
 
 
+def minimum_displacement_inverse_kinematics(
+    point,
+    device_to_global: Transform,
+    bounds: list[tuple[float, float]],
+    starting_position: list[float],
+) -> np.ndarray:
+    """Find the device position that maps to `point` with minimum displacement from `starting_position`.
+
+    For devices with more axes than global dimensions (e.g., a 4-axis manipulator in 3D space),
+    the set of valid device positions forms an affine subspace (the null space of the transform).
+    This function finds the member of that family closest to `starting_position` in Euclidean
+    device-coordinate distance, clipped to the nearest feasible point within bounds.
+
+    Unlike `greedy_axis_inverse_kinematics`, this approach never amplifies small global movements
+    into large device movements: the solution is optimal by construction.
+
+    Parameters
+    ----------
+    point : array-like
+        Target point in global coordinates.
+    device_to_global : Transform
+        Mapping from device coordinates to global. May have more input dimensions than output.
+    bounds : list[tuple[float, float]]
+        A list of (min, max) pairs for each device axis.
+    starting_position : list[float]
+        Current device position; the returned position minimizes distance to this.
+
+    Returns
+    -------
+    position : np.ndarray
+        Device position minimizing |pos - starting_position|² subject to the transform and bounds.
+
+    Raises
+    ------
+    ValueError
+        If the transform is degenerate, the target is unreachable, or no valid position within
+        bounds exists.
+    NotImplementedError
+        If the null-space dimension is greater than 1 (i.e., more than 4 axes in 3D space).
+    """
+    n = len(bounds)
+    point = np.asarray(point, dtype=float)
+    starting_position = np.asarray(starting_position, dtype=float)
+
+    T = device_to_global.full_matrix[:3, :n]
+
+    # Unconstrained minimum-displacement solution: project residual displacement through
+    # the right pseudoinverse T† = Tᵀ (T Tᵀ)⁻¹, which distributes the required global
+    # motion across all device axes in the least-squares sense.
+    global_displacement = point - device_to_global.map(starting_position)
+    try:
+        TTT_inv = np.linalg.inv(T @ T.T)
+    except np.linalg.LinAlgError as e:
+        raise ValueError("Transform is degenerate; cannot compute inverse kinematics") from e
+    pos_unconstrained = starting_position + T.T @ TTT_inv @ global_displacement
+
+    null_dim = n - 3  # assuming T has rank 3
+
+    if null_dim <= 0:
+        # Fully determined: no free parameter, just verify bounds
+        pos = np.clip(pos_unconstrained, [b[0] for b in bounds], [b[1] for b in bounds])
+        if not np.allclose(device_to_global.map(pos), point):
+            raise ValueError("No valid position within bounds")
+        return pos
+
+    if null_dim > 1:
+        raise NotImplementedError(
+            f"minimum_displacement_inverse_kinematics does not yet support null spaces "
+            f"of dimension > 1 (got {null_dim} for a {n}-axis device)"
+        )
+
+    # 1D null space: parameterize as pos_unconstrained + t * null_vec.
+    # Find null_vec via SVD: right singular vectors corresponding to near-zero singular values.
+    _, _, Vt = np.linalg.svd(T)
+    null_vec = Vt[3]  # last row of Vt for a 3×4 matrix with rank 3
+
+    # Find the feasible interval [t_lo, t_hi] for t.
+    t_lo, t_hi = -np.inf, np.inf
+    for i, (lo, hi) in enumerate(bounds):
+        nv = null_vec[i]
+        pu = pos_unconstrained[i]
+        if abs(nv) < 1e-12:
+            if pu < lo - 1e-9 or pu > hi + 1e-9:
+                raise ValueError(
+                    f"No valid position within bounds (axis {i}: unconstrained value "
+                    f"{pu:.4g} is outside [{lo}, {hi}] and null space cannot correct it)"
+                )
+        elif nv > 0:
+            t_lo = max(t_lo, (lo - pu) / nv)
+            t_hi = min(t_hi, (hi - pu) / nv)
+        else:
+            t_lo = max(t_lo, (hi - pu) / nv)
+            t_hi = min(t_hi, (lo - pu) / nv)
+
+    if t_lo > t_hi + 1e-9:
+        raise ValueError("No valid position within bounds")
+
+    # t=0 is the unconstrained optimum; clip to feasible interval.
+    t_opt = float(np.clip(0.0, t_lo, t_hi))
+    return pos_unconstrained + t_opt * null_vec
+
+
+def sequential_projection_inverse_kinematics(
+    point,
+    device_to_global: Transform,
+    bounds: list[tuple[float, float]],
+    starting_position: list[float],
+    max_passes: int = 1,
+    rel_tol: float = 1e-2,
+) -> np.ndarray:
+    """Naive sequential projection IK: process axes in ranked order, absorbing as much residual
+    as possible at each step.
+
+    At each step the current residual displacement is projected onto one axis and that axis moves
+    to absorb it (clipped to bounds). Axes are ordered by decreasing alignment with the residual
+    at the start of each pass.
+
+    Limitation: because the axes are not orthogonal (D partially overlaps X and Z), moving one
+    axis changes what the others need to do, but earlier axes are never revisited within a pass.
+    A single pass therefore does not guarantee an exact solution. With max_passes > 1 this
+    becomes iterative coordinate descent and converges, but multiple passes defeat the point of
+    "sequential" so the single-pass result is the intended comparison target.
+
+    Parameters
+    ----------
+    point : array-like
+        Target point in global coordinates.
+    device_to_global : Transform
+        Mapping from device coordinates to global.
+    bounds : list[tuple[float, float]]
+        A list of (min, max) pairs for each device axis.
+    starting_position : list[float]
+        Current device position.
+    max_passes : int
+        Number of sequential passes over all axes (default 1). Increasing this converges to the
+        exact solution at the cost of losing the single-pass character.
+    rel_tol : float
+        Maximum acceptable residual as a fraction of the total displacement magnitude (default
+        1e-2, i.e. 1%). A single pass typically achieves ~0.1-0.5% residual for non-orthogonal
+        axes, so the default accepts that; set lower to require more passes.
+
+    Returns
+    -------
+    position : np.ndarray
+        Best device position found; may not map exactly to `point` for max_passes=1.
+
+    Raises
+    ------
+    ValueError
+        If the relative residual after all passes exceeds rel_tol.
+    """
+    n = len(bounds)
+    point = np.asarray(point, dtype=float)
+    starting_position = np.asarray(starting_position, dtype=float)
+
+    T = device_to_global.full_matrix[:3, :n]
+    col_norms = np.array([np.linalg.norm(T[:, i]) for i in range(n)])
+
+    pos = starting_position.copy().astype(float)
+    remaining = point - device_to_global.map(pos)
+    total_displacement = np.linalg.norm(remaining)
+
+    for _ in range(max_passes):
+        if np.linalg.norm(remaining) < 1e-15:
+            break
+        # Re-rank at the start of each pass by alignment with current residual.
+        dots = np.array([abs(T[:, i].dot(remaining) / col_norms[i]) for i in range(n)])
+        axis_order = np.argsort(dots)[::-1]
+
+        for i in axis_order:
+            if np.linalg.norm(remaining) < 1e-15:
+                break
+            # Project residual onto this axis and move accordingly.
+            step_device = remaining.dot(T[:, i]) / col_norms[i] ** 2
+            new_pos_i = float(np.clip(pos[i] + step_device, bounds[i][0], bounds[i][1]))
+            actual_step = new_pos_i - pos[i]
+            pos[i] = new_pos_i
+            remaining -= actual_step * T[:, i]
+
+    residual_mag = np.linalg.norm(remaining)
+    rel_residual = residual_mag / max(total_displacement, 1e-30)
+    if rel_residual > rel_tol:
+        raise ValueError(
+            f"Sequential projection did not reach target after {max_passes} pass(es) "
+            f"(relative residual = {rel_residual:.2e}, tolerance = {rel_tol:.2e})"
+        )
+    return pos
+
+
 def greedy_axis_inverse_kinematics(
     point,
     device_to_global: Transform,
@@ -2058,6 +2247,9 @@ def greedy_axis_inverse_kinematics(
                 device_to_global,
                 bounds,
                 neutral,
+                # Only enforce the condition check during auto-selection; explicit-axis callers
+                # are responsible for their choice, and the LinAlgError path handles their fallback.
+                max_condition=100.0 if axis is None else np.inf,
             )
         except np.linalg.LinAlgError:
             if axis is not None:
@@ -2088,6 +2280,7 @@ def neutral_anchored_inverse_kinematics(
     bounds: list[tuple[float, float]],
     neutral: list[float | None],
     tol: float = 1e-12,
+    max_condition: float = 100.0,
 ) -> np.ndarray:
     """Calculate the global_to_device kinematics for a point given a device with more dimensions than the
     space in which it operates.
@@ -2112,6 +2305,10 @@ def neutral_anchored_inverse_kinematics(
         designated, with all the others set to None. E.g. [None, None, None, 0]
     tol : float
         Tolerance for floating point comparisons.
+    max_condition : float
+        Maximum acceptable condition number for the remaining sub-matrix. If the non-neutral axes
+        form a near-singular system (condition number above this threshold), a ValueError is raised
+        rather than returning an unreliable result.
 
     Returns
     -------
@@ -2121,7 +2318,8 @@ def neutral_anchored_inverse_kinematics(
     Raises
     ------
     ValueError
-        If any of the arguments are invalid, or if no valid position could be found.
+        If any of the arguments are invalid, if the remaining sub-system is ill-conditioned
+        (condition number > max_condition), or if no valid position could be found.
     """
     neutral_index = None
     for i, n in enumerate(neutral):
@@ -2146,7 +2344,14 @@ def neutral_anchored_inverse_kinematics(
         dev_axis[i] = 1
         global_axis = device_to_global.map(dev_axis) - origin_in_global
         global_to_device.append(global_axis)
-    global_to_device = AffineTransform(np.asarray(global_to_device).T, neutral_in_global).inverse
+    sub_matrix = np.asarray(global_to_device).T
+    cond = np.linalg.cond(sub_matrix)
+    if cond > max_condition:
+        raise ValueError(
+            f"Remaining sub-system is ill-conditioned (condition number={cond:.1f} > {max_condition}); "
+            f"the greedy axis choice produces unreliable results"
+        )
+    global_to_device = AffineTransform(sub_matrix, neutral_in_global).inverse
 
     def _prep_device_pos(pt, neutral_pos) -> np.ndarray:
         pos = global_to_device.map(pt).tolist()
