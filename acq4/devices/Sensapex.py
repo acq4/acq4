@@ -294,7 +294,6 @@ class SensapexMoveFuture(MoveFuture):
         self._taskDone(
             interrupted=moveReq.interrupted,
             error=self._generateErrorMessage(),
-            state=None,
             excInfo=None,
         )
 
