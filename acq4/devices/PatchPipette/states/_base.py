@@ -255,7 +255,7 @@ class PatchPipetteState(Future):
     def monitorTestPulse(self):
         """Begin acquiring test pulse data in self.testPulseResults
         """
-        self.dev.clampDevice.sigTestPulseFinished.connect(self.testPulseFinished)
+        self.dev.clampDevice.sigTestPulseFinished.connect(self.testPulseFinished, Qt.Qt.DirectConnection)
 
     def processAtLeastOneTestPulse(self) -> list[PatchClampTestPulse]:
         """Wait for at least one test pulse to be processed."""

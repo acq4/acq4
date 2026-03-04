@@ -131,11 +131,14 @@ class BreakInState(PatchPipetteState):
         Raises BreakInSuccessful or BreakInFailed as appropriate.
         Returns None if the break in is still ongoing.
         """
+        start = ptime.time()
         while True:
             self.checkStop()
             tps = self.getTestPulses(timeout=0.2)
             if len(tps) > 0:
                 break
+            if ptime.time() - start > 10:
+                raise BreakInFailed('No test pulse received for 10 seconds during break-in attempt.')
         tp = tps[-1]
 
         analysis = tp.analysis
