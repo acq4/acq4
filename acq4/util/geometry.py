@@ -2025,15 +2025,17 @@ def greedy_axis_inverse_kinematics(
     displacement = np.asarray(point) - start_in_global
 
     if axis is None:
-        # rank all axes by alignment with the displacement direction; try them in order
-        col_norms = [
-            np.linalg.norm(device_to_global.full_matrix[:3, i]) for i in range(len(bounds))
-        ]
-        dots = [
-            abs(device_to_global.full_matrix[:3, i].dot(displacement) / col_norms[i])
+        # Rank axes by (alignment with displacement) / (condition number of remaining system).
+        # This avoids choosing an axis whose remaining sub-system is near-singular, which would
+        # cause the boundary intersection search to produce wildly wrong solutions for other axes.
+        T = device_to_global.full_matrix[:3, :len(bounds)]
+        col_norms = [np.linalg.norm(T[:, i]) for i in range(len(bounds))]
+        dots = [abs(T[:, i].dot(displacement) / col_norms[i]) for i in range(len(bounds))]
+        remaining_conds = [
+            np.linalg.cond(T[:, [j for j in range(len(bounds)) if j != i]])
             for i in range(len(bounds))
         ]
-        axes_to_try = sorted(range(len(bounds)), key=lambda i: dots[i], reverse=True)
+        axes_to_try = sorted(range(len(bounds)), key=lambda i: dots[i] / remaining_conds[i], reverse=True)
     else:
         axes_to_try = [axis]
 
