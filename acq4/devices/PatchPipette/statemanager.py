@@ -243,7 +243,7 @@ class PatchPipetteStateManager(Qt.QObject):
             except job.Stopped:
                 pass
             except Exception:
-                self.dev.logger.exception(f"{self.dev.name()} failed in state {job.stateName}:")
+                self.dev.logger.exception(f"{self.dev.name()} failed in state {job.stateName}")
             self.jobFinished(job, allowNextState=allowNextState)
 
     def jobStateChanged(self, job, state):
