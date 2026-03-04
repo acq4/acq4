@@ -1,5 +1,4 @@
 import contextlib
-import json
 import os
 import time
 from datetime import datetime
@@ -12,7 +11,7 @@ from acq4.util.StatusBar import StatusBar
 from pyqtgraph import FileDialog
 from teleprox.log.logviewer import LogViewer
 from . import FileAnalysisView
-from ...logging_config import get_logger, HistoricLogRecord
+from ...logging_config import get_logger, load_historic_log_records
 from ...util.HelpfulException import HelpfulException
 
 logger = get_logger(__name__)
@@ -59,13 +58,6 @@ def load_log_records_legacy(log_file):
             records.append(r)
         except Exception:
             logger.exception(f"Error making log record from {log_file.name()}:{name}")
-    return records
-
-
-def load_log_records(log_file):
-    records = []
-    for line in log_file.readlines():
-        records.append(HistoricLogRecord(**(json.loads(line))))
     return records
 
 
@@ -242,6 +234,7 @@ class DataManager(Module):
 
         if ftype == 'Folder':
             nd = cdir.mkdir('NewFolder', autoIncrement=True)
+            nd.setInfo({})
             # item = self.model.handleIndex(nd)
             self.ui.fileTreeWidget.editItem(nd)
         else:
@@ -317,7 +310,7 @@ class DataManager(Module):
             if log_file is None:
                 self.ui.logWidget.set_records()
             elif log_file.shortName().lower() == 'log.json':
-                self.ui.logWidget.set_records(*load_log_records(log_file))
+                self.ui.logWidget.set_records(*load_historic_log_records(log_file))
             elif log_file.shortName().lower() == 'log.txt':
                 self.ui.logWidget.set_records(*load_log_records_legacy(log_file))
             else:

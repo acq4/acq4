@@ -2013,50 +2013,71 @@ def greedy_axis_inverse_kinematics(
     ValueError
         If any of the arguments are invalid, or if no valid position could be found.
     """
-    if np.allclose(device_to_global.map(starting_position), point):
+    origin_in_global = device_to_global.map(np.zeros(len(bounds)))
+    start_in_global = device_to_global.map(np.array(starting_position))
+
+    if np.allclose(start_in_global, point):
         bounded = np.clip(starting_position, [b[0] for b in bounds], [b[1] for b in bounds])
         if not np.allclose(bounded, starting_position):
             raise ValueError("Invalid starting position nevertheless maps to target point")
         return np.array(bounded)
-    if axis is None:
-        local_direction = np.array(point) - device_to_global.map(starting_position)
-        axis = 0
-        max_dot = 0
-        for i in range(len(bounds)):
-            axis_vec = np.asarray(device_to_global.full_matrix[:3, i])
-            axis_vec = axis_vec / np.linalg.norm(axis_vec)
-            dot = abs(axis_vec.dot(np.asarray(local_direction)))
-            if dot > max_dot:
-                max_dot = dot
-                axis = i
-    origin_in_global = device_to_global.map(np.zeros(len(bounds)))
-    axis_step = np.zeros(len(bounds))
-    axis_step[axis] = 1
-    axis_in_global = device_to_global.map(axis_step) - origin_in_global
-    axis_scale = np.linalg.norm(axis_in_global)
-    start_in_global = device_to_global.map(np.array(starting_position))
+
     displacement = np.asarray(point) - start_in_global
-    raw_greedy_pos = (displacement.dot(axis_in_global / axis_scale) / axis_scale) + starting_position[axis]
-    greedy_pos = max(bounds[axis][0], min(bounds[axis][1], raw_greedy_pos))
-    neutral: list = [None] * len(bounds)
-    neutral[axis] = greedy_pos
-    try:
-        return neutral_anchored_inverse_kinematics(
-            point,
-            device_to_global,
-            bounds,
-            neutral,
+
+    if axis is None:
+        # rank all axes by alignment with the displacement direction; try them in order
+        col_norms = [
+            np.linalg.norm(device_to_global.full_matrix[:3, i]) for i in range(len(bounds))
+        ]
+        dots = [
+            abs(device_to_global.full_matrix[:3, i].dot(displacement) / col_norms[i])
+            for i in range(len(bounds))
+        ]
+        axes_to_try = sorted(range(len(bounds)), key=lambda i: dots[i], reverse=True)
+    else:
+        axes_to_try = [axis]
+
+    last_error: Exception = ValueError("No valid position found within bounds")
+    for candidate_axis in axes_to_try:
+        axis_step = np.zeros(len(bounds))
+        axis_step[candidate_axis] = 1
+        axis_in_global = device_to_global.map(axis_step) - origin_in_global
+        axis_scale = np.linalg.norm(axis_in_global)
+        raw_greedy_pos = (
+            displacement.dot(axis_in_global / axis_scale) / axis_scale
+            + starting_position[candidate_axis]
         )
-    except np.linalg.LinAlgError:
-        # how do we bottom out of this recursion if the destination is unreachable in the greedy direction?
-        starting_position = starting_position.copy()
-        starting_position[axis] = raw_greedy_pos
-        return greedy_axis_inverse_kinematics(
-            point,
-            device_to_global,
-            bounds,
-            starting_position,
-        )
+        greedy_pos = np.clip(raw_greedy_pos, bounds[candidate_axis][0], bounds[candidate_axis][1])
+        neutral: list = [None] * len(bounds)
+        neutral[candidate_axis] = greedy_pos
+        try:
+            return neutral_anchored_inverse_kinematics(
+                point,
+                device_to_global,
+                bounds,
+                neutral,
+            )
+        except np.linalg.LinAlgError:
+            if axis is not None:
+                # The requested axis produced a singular system; retry with auto-selection
+                # using the unclamped greedy projection as the new starting point
+                fallback = list(starting_position)
+                fallback[candidate_axis] = raw_greedy_pos
+                return greedy_axis_inverse_kinematics(
+                    point,
+                    device_to_global,
+                    bounds,
+                    fallback,
+                )
+            last_error = ValueError(
+                f"No valid position found within bounds (axis {candidate_axis} produced a singular system)"
+            )
+            continue
+        except ValueError as e:
+            last_error = e
+            continue
+
+    raise last_error
 
 
 def neutral_anchored_inverse_kinematics(
