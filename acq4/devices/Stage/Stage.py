@@ -25,6 +25,7 @@ from ...util.geometry import (
     greedy_axis_inverse_kinematics,
     neutral_anchored_inverse_kinematics,
     load_transform_from_anything,
+    minimum_displacement_inverse_kinematics,
 )
 
 
@@ -464,11 +465,8 @@ class Stage(Device, OptomechDevice):
             tr = self.stageTransform().offset + np.array(self.mapFromGlobal(globalPos))
             return pg.Vector(self.inverseAxisTransform().map(tr))
 
-        return greedy_axis_inverse_kinematics(
-            globalPos,
-            self.axisTransform(),
-            self.getLimits(),
-            previousPos,
+        return minimum_displacement_inverse_kinematics(
+            globalPos, self.axisTransform(), self.getLimits(), previousPos
         )
 
         # TODO this is doing bad things (e.g. Home -> Fine Search -> Above Target drives through the recording chamber)
