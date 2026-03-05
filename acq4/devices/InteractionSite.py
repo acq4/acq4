@@ -1,6 +1,7 @@
 import numpy as np
 
 import pyqtgraph as pg
+from acq4 import getManager
 from acq4.modules.Camera import CameraModuleInterface
 from acq4.util import Qt
 from .Device import Device
@@ -30,7 +31,7 @@ class InteractionSite(Device, OptomechDevice):
         self.radius = config["radius"]
         self.height = config.get("height", 0)
         OptomechDevice.__init__(self, dm, config, name)
-        self._positions = self.readConfigFile("saved_positions")
+        self.positions = self.readConfigFile("saved_positions")
         parent = self
         while True:
             parent = parent.parentDevice()
@@ -48,6 +49,10 @@ class InteractionSite(Device, OptomechDevice):
     def cameraModuleInterface(self, mod):
         """Return an object to interact with camera module."""
         return InteractionSiteCameraInterface(self, mod)
+
+    def deviceInterface(self, win):
+        """Return a widget with a UI to put in the device rack."""
+        return InteractionSiteDeviceGui(self, win)
 
     def globalPosition(self):
         return self.mapToGlobal([0, 0, 0])
@@ -69,37 +74,139 @@ class InteractionSite(Device, OptomechDevice):
         )
 
     def saveInteractPosition(self, other):
-        self._positions.setdefault(other.name(), {})
-        self._positions[other.name()]['interact local'] = self.mapFromGlobal(other.globalPosition())
-        self._positions[other.name()]['site global'] = self.globalPosition()
-        self.writeConfigFile(self._positions, "saved_positions")
+        self.positions.setdefault(other.name(), {})
+        self.positions[other.name()]['interact local'] = self.mapFromGlobal(other.globalPosition())
+        self.positions[other.name()]['site global'] = self.globalPosition()
+        self.writeConfigFile(self.positions, "saved_positions")
 
     def saveApproachPosition(self, other):
-        self._positions.setdefault(other.name(), {})
-        self._positions[other.name()]['approach local'] = self.mapFromGlobal(other.globalPosition())
-        self._positions[other.name()]['site global'] = self.globalPosition()
-        self.writeConfigFile(self._positions, "saved_positions")
+        self.positions.setdefault(other.name(), {})
+        self.positions[other.name()]['approach local'] = self.mapFromGlobal(other.globalPosition())
+        self.positions[other.name()]['site global'] = self.globalPosition()
+        self.writeConfigFile(self.positions, "saved_positions")
 
     @future_wrap
     def moveToInteract(self, other, speed='fast', _future=None):
-        if other.name() not in self._positions:
+        if other.name() not in self.positions:
             raise RuntimeError(f"No positions saved for {other.name()} at {self.name()}")
-        if 'interact local' not in self._positions[other.name()]:
+        pos_config = self.positions[other.name()]
+        if 'interact local' not in pos_config:
             raise RuntimeError(f"No interact position saved for {other.name()} at {self.name()}")
-        if 'site global' not in self._positions[other.name()]:
+        if 'site global' not in pos_config:
             raise RuntimeError(f"No site global position saved for {other.name()} at {self.name()}")
-        if 'approach local' not in self._positions[other.name()]:
+        if 'approach local' not in pos_config:
             raise RuntimeError(f"No approach position saved for {other.name()} at {self.name()}")
         if self._parentStage is not None:
             # TODO this will still need a real motion planner
             # TODO we'll maybe also need to make sure the other devices are out of the way...
-            _future.waitFor(self.moveToGlobal(self._positions[other.name()]['site global'], speed=speed))
-        approach_local = self._positions[other.name()]['approach local']
+            _future.waitFor(self.moveToGlobal(pos_config['site global'], speed=speed))
+        approach_local = pos_config['approach local']
         approach_global = self.mapToGlobal(approach_local)
         _future.waitFor(other.moveToGlobal(approach_global, speed=speed))
-        interact_local = self._positions[other.name()]['interact local']
+        interact_local = pos_config['interact local']
         interact_global = self.mapToGlobal(interact_local)
         _future.waitFor(other.moveToGlobal(interact_global, speed=speed))
+
+
+def _fmt_pos(pos):
+    """Format a 3-element position as a string of mm values."""
+    if pos is None:
+        return "—"
+    return "(%0.3f, %0.3f, %0.3f) mm" % tuple(p * 1e3 for p in pos[:3])
+
+
+class InteractionSiteDeviceGui(Qt.QWidget):
+    """Device rack widget for InteractionSite: pipette selector, save buttons, position display."""
+
+    def __init__(self, dev, win):
+        Qt.QWidget.__init__(self)
+        self.dev = dev
+        self.win = win
+
+        layout = Qt.QGridLayout()
+        self.setLayout(layout)
+        row = 0
+
+        self.calibrateBtn = Qt.QPushButton("Calibrate site position")
+        self.calibrateBtn.clicked.connect(self._calibratePosition)
+        layout.addWidget(self.calibrateBtn, row, 1)
+        row += 1
+
+        # Pipette-specific positions
+        layout.addWidget(Qt.QLabel("Pipette:"), row, 0)
+        self.pipetteCombo = Qt.QComboBox()
+        layout.addWidget(self.pipetteCombo, row, 0)
+
+        self.saveApproachBtn = Qt.QPushButton("Save approach position")
+        self.saveApproachBtn.clicked.connect(self._saveApproach)
+        layout.addWidget(self.saveApproachBtn, row, 1)
+
+        self.saveInteractBtn = Qt.QPushButton("Save interact position")
+        self.saveInteractBtn.clicked.connect(self._saveInteract)
+        layout.addWidget(self.saveInteractBtn, row, 2)
+        row += 1
+
+        # Position display labels
+        layout.addWidget(Qt.QLabel("Global center:"), row, 0)
+        self.globalCenterLabel = Qt.QLabel("—")
+        layout.addWidget(self.globalCenterLabel, row, 1)
+        row += 1
+
+        layout.addWidget(Qt.QLabel("Approach (local):"), row, 0)
+        self.approachLabel = Qt.QLabel("—")
+        layout.addWidget(self.approachLabel, row, 1)
+        row += 1
+
+        layout.addWidget(Qt.QLabel("Interact (local):"), row, 0)
+        self.interactLabel = Qt.QLabel("—")
+        layout.addWidget(self.interactLabel, row, 1)
+        row += 1
+
+        self._populatePipettes()
+        self.pipetteCombo.currentIndexChanged.connect(self._updatePositionLabels)
+        self.dev.sigGlobalTransformChanged.connect(self._updatePositionLabels)
+
+    def _populatePipettes(self):
+        from .Pipette.pipette import Pipette
+        man = getManager()
+        pipettes = [name for name in man.listDevices() if isinstance(man.getDevice(name), Pipette)]
+        has_pipettes = bool(pipettes)
+        for name in pipettes:
+            self.pipetteCombo.addItem(name)
+        self.pipetteCombo.setEnabled(has_pipettes)
+        self.saveApproachBtn.setEnabled(has_pipettes)
+        self.saveInteractBtn.setEnabled(has_pipettes)
+        self._updatePositionLabels()
+
+    def _calibratePosition(self):
+        pass  # TODO ask for click in the camera module like with pipette's "Set Tip"
+
+    def _selectedPipette(self):
+        name = self.pipetteCombo.currentText()
+        if not name:
+            return None
+        return getManager().getDevice(name)
+
+    def _saveApproach(self):
+        pip = self._selectedPipette()
+        if pip is not None:
+            self.dev.saveApproachPosition(pip)
+            self._updatePositionLabels()
+
+    def _saveInteract(self):
+        pip = self._selectedPipette()
+        if pip is not None:
+            self.dev.saveInteractPosition(pip)
+            self._updatePositionLabels()
+
+    def _updatePositionLabels(self):
+        positions = {}
+        pip = self._selectedPipette()
+        if pip is not None and pip.name() in self.dev.positions:
+            positions = self.dev.positions[pip.name()]
+        self.globalCenterLabel.setText(_fmt_pos(positions.get('site global')))
+        self.approachLabel.setText(_fmt_pos(positions.get('approach local')))
+        self.interactLabel.setText(_fmt_pos(positions.get('interact local')))
 
 
 class InteractionSiteCameraInterface(CameraModuleInterface):
