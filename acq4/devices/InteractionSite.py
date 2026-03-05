@@ -90,9 +90,10 @@ class InteractionSite(Device, OptomechDevice):
             raise RuntimeError(f"No site global position saved for {other.name()} at {self.name()}")
         if 'approach local' not in self._positions[other.name()]:
             raise RuntimeError(f"No approach position saved for {other.name()} at {self.name()}")
-        # TODO this will still need a real motion planner
-        # TODO we'll maybe also need to make sure the other devices are out of the way...
-        _future.waitFor(self.moveToGlobal(self._positions[other.name()]['site global'], speed=speed))
+        if self._parentStage is not None:
+            # TODO this will still need a real motion planner
+            # TODO we'll maybe also need to make sure the other devices are out of the way...
+            _future.waitFor(self.moveToGlobal(self._positions[other.name()]['site global'], speed=speed))
         approach_local = self._positions[other.name()]['approach local']
         approach_global = self.mapToGlobal(approach_local)
         _future.waitFor(other.moveToGlobal(approach_global, speed=speed))
