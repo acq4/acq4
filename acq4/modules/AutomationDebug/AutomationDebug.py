@@ -28,7 +28,7 @@ from acq4.util.target import TargetBox
 from acq4.util.threadrun import futureInGuiThread, runInGuiThread
 from acq4_automation.cell_quality_annotation_tool import open_annotation_tool_with_detections
 from acq4_automation.feature_tracking.cell import Cell
-from coorx import Point
+from coorx import Point, AffineTransform
 from pyqtgraph.units import µm, m
 from .ranking_window import RankingWindow
 from ... import getManager
@@ -868,14 +868,15 @@ class AutomationDebugWindow(Qt.QWidget):
             current_mock_frame_global_z = live_frame_origin_global_xyz[2]
 
             for i in range(len(data)):
-                mock_frame_transform = live_frame_global_transform.copy()
-                scale = mock_frame_transform.scale
-                mock_frame_transform.scale = (scale[0], scale[1], step_z)
+                mock_frame_transform = live_frame_global_transform.full_matrix
+                px_size = (mock_frame_transform[0, 0], mock_frame_transform[1, 1])
+                mock_frame_transform[2, 2] = step_z
+                mock_frame_transform = AffineTransform.from_matrix(mock_frame_transform)
                 z_offset = current_mock_frame_global_z - live_frame_origin_global_xyz[2]
                 mock_frame_transform.translate(0, 0, z_offset)
 
                 frame_info = {
-                    "pixelSize": [scale[0], scale[1]],
+                    "pixelSize": px_size,
                     "depth": current_mock_frame_global_z,
                     "transform": mock_frame_transform.saveState(),
                 }
