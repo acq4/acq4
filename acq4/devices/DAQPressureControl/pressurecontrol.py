@@ -130,7 +130,9 @@ class DAQPressureControl(PressureControl):
         self.source = source
         if self._regulatorAtmosphere:
             if source == 'atmosphere' and not self._simAtmosphereState['active']:
-                self._simAtmosphereState['supplanted pressure'] = self.getPressure()
+                self._simAtmosphereState['supplanted pressure'] = self.device.getChanHolding(
+                    self._pressureControlChannel()
+                )
                 self._setSource('regulator')
                 self._simAtmosphereState['active'] = True
                 self.device.setChanHolding(self._pressureControlChannel('regulator'), 0)
