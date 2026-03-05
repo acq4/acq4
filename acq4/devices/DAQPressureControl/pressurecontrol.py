@@ -143,7 +143,7 @@ class DAQPressureControl(PressureControl):
                 expected = self._simAtmosphereState['supplanted pressure']
                 if expected is not None:
                     self.device.setChanHolding(self._pressureControlChannel(), expected)
-        for chan, val in self._source_configs[source].items():
+        for chan, val in self._source_configs.get(source, {}).items():
             if chan == 'pressureControl':
                 continue
             # set valve states for the new source
