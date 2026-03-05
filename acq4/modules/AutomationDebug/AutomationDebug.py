@@ -871,9 +871,9 @@ class AutomationDebugWindow(Qt.QWidget):
                 mock_frame_transform = live_frame_global_transform.full_matrix
                 px_size = (mock_frame_transform[0, 0], mock_frame_transform[1, 1])
                 mock_frame_transform[2, 2] = step_z
-                mock_frame_transform = AffineTransform.from_matrix(mock_frame_transform)
                 z_offset = current_mock_frame_global_z - live_frame_origin_global_xyz[2]
-                mock_frame_transform.translate(0, 0, z_offset)
+                mock_frame_transform[2, 3] = z_offset
+                mock_frame_transform = AffineTransform.from_matrix(mock_frame_transform)
 
                 frame_info = {
                     "pixelSize": px_size,
