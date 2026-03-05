@@ -6,6 +6,7 @@ from acq4.util import Qt
 from .Device import Device
 from .OptomechDevice import OptomechDevice
 from .Stage import Stage
+from ..util.future import future_wrap
 from ..util.target import color_for_diff
 
 
@@ -29,13 +30,13 @@ class InteractionSite(Device, OptomechDevice):
         self.radius = config["radius"]
         self.height = config.get("height", 0)
         OptomechDevice.__init__(self, dm, config, name)
-
+        self._positions = self.readConfigFile("saved_positions")
         parent = self
         while True:
             parent = parent.parentDevice()
             if parent is None or isinstance(parent, Stage):
                 break
-        self._parentStage: Stage = parent
+        self._parentStage: Stage | None = parent
 
     def getGeometry(self, name=None):
         if isinstance(self.config.get("geometry"), dict):
@@ -66,6 +67,38 @@ class InteractionSite(Device, OptomechDevice):
             local_pt[0] ** 2 + local_pt[1] ** 2 <= self.radius ** 2 + tolerance
             and -tolerance <= local_pt[2] <= self.height + tolerance
         )
+
+    def saveInteractPosition(self, other):
+        self._positions.setdefault(other.name(), {})
+        self._positions[other.name()]['interact local'] = self.mapFromGlobal(other.globalPosition())
+        self._positions[other.name()]['site global'] = self.globalPosition()
+        self.writeConfigFile(self._positions, "saved_positions")
+
+    def saveApproachPosition(self, other):
+        self._positions.setdefault(other.name(), {})
+        self._positions[other.name()]['approach local'] = self.mapFromGlobal(other.globalPosition())
+        self._positions[other.name()]['site global'] = self.globalPosition()
+        self.writeConfigFile(self._positions, "saved_positions")
+
+    @future_wrap
+    def moveToInteract(self, other, speed='fast', _future=None):
+        if other.name() not in self._positions:
+            raise RuntimeError(f"No positions saved for {other.name()} at {self.name()}")
+        if 'interact local' not in self._positions[other.name()]:
+            raise RuntimeError(f"No interact position saved for {other.name()} at {self.name()}")
+        if 'site global' not in self._positions[other.name()]:
+            raise RuntimeError(f"No site global position saved for {other.name()} at {self.name()}")
+        if 'approach local' not in self._positions[other.name()]:
+            raise RuntimeError(f"No approach position saved for {other.name()} at {self.name()}")
+        # TODO this will still need a real motion planner
+        # TODO we'll maybe also need to make sure the other devices are out of the way...
+        _future.waitFor(self.moveToGlobal(self._positions[other.name()]['site global'], speed=speed))
+        approach_local = self._positions[other.name()]['approach local']
+        approach_global = self.mapToGlobal(approach_local)
+        _future.waitFor(other.moveToGlobal(approach_global, speed=speed))
+        interact_local = self._positions[other.name()]['interact local']
+        interact_global = self.mapToGlobal(interact_local)
+        _future.waitFor(other.moveToGlobal(interact_global, speed=speed))
 
 
 class InteractionSiteCameraInterface(CameraModuleInterface):
