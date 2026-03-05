@@ -134,10 +134,9 @@ class DAQPressureControl(PressureControl):
                 self._simAtmosphereState['supplanted pressure'] = self.device.getChanHolding(
                     self._pressureControlChannel()
                 )
-                self._setSource('regulator')
                 self._simAtmosphereState['active'] = True
                 self.device.setChanHolding(self._pressureControlChannel('regulator'), 0)
-                return
+                source = 'regulator'  # for setting valve states below
             elif source != 'atmosphere' and self._simAtmosphereState['active']:
                 self._simAtmosphereState['active'] = False
                 expected = self._simAtmosphereState['supplanted pressure']
