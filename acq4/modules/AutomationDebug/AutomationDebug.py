@@ -878,7 +878,7 @@ class AutomationDebugWindow(Qt.QWidget):
                 frame_info = {
                     "pixelSize": px_size,
                     "depth": current_mock_frame_global_z,
-                    "transform": mock_frame_transform.saveState(),
+                    "transform": mock_frame_transform.save_state(),
                 }
                 if "device" in base_frame.info():
                     frame_info["device"] = base_frame.info()["device"]
