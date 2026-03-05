@@ -76,16 +76,18 @@ class DAQPressureControl(PressureControl):
 
         daqDev = config['daqDevice']
         self.device = manager.getDevice(daqDev)
-        self.sources = config['sources']
-        if len(self.sources) == 0:
+        self._source_configs = config['sources']
+        if len(self._source_configs) == 0:
             raise ValueError("At least one pressure source must be defined in configuration")
-        self._regulatorAtmosphere = 'atmosphere' not in self.sources
+        if 'user' not in self._source_configs:
+            self.sources = ('regulator', 'atmosphere')
+        self._regulatorAtmosphere = 'atmosphere' not in self._source_configs
         self._simAtmosphereState = {'active': False, 'supplanted pressure': None}
         self.source = self.guessSource()
 
     def isValidForPatchPipettes(self):
         # only allow use with patch pipettes if regulator control is available (for fine pressure control)
-        return 'regulator' in self.sources and 'pressureControl' in self.sources['regulator']
+        return 'regulator' in self._source_configs and 'pressureControl' in self._source_configs['regulator']
 
     def _setPressure(self, p):
         self._simAtmosphereState['supplanted pressure'] = p
@@ -98,7 +100,7 @@ class DAQPressureControl(PressureControl):
     def _pressureControlChannel(self, source=None) -> str:
         if source is None:
             source = self.source
-        return self.sources[source]['pressureControl']
+        return self._source_configs[source]['pressureControl']
 
     def getPressure(self):
         if self._regulatorAtmosphere and self._simAtmosphereState['active']:
@@ -112,7 +114,7 @@ class DAQPressureControl(PressureControl):
 
     def guessSource(self):
         # try to infer current source from channel state
-        for source, chans in self.sources.items():
+        for source, chans in self._source_configs.items():
             match = True
             for chan, val in chans.items():
                 if chan == 'pressureControl':
@@ -122,7 +124,7 @@ class DAQPressureControl(PressureControl):
                     break
             if match:
                 return source
-        return self.sources.keys()[0]  # default to first source
+        return self._source_configs.keys()[0]  # default to first source
 
     def _setSource(self, source):
         self.source = source
@@ -138,7 +140,7 @@ class DAQPressureControl(PressureControl):
                 expected = self._simAtmosphereState['supplanted pressure']
                 if expected is not None:
                     self.device.setChanHolding(self._pressureControlChannel(), expected)
-        for chan, val in self.sources[source].items():
+        for chan, val in self._source_configs[source].items():
             if chan == 'pressureControl':
                 continue
             # set valve states for the new source
