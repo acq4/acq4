@@ -28,7 +28,7 @@ from acq4.util.target import TargetBox
 from acq4.util.threadrun import futureInGuiThread, runInGuiThread
 from acq4_automation.cell_quality_annotation_tool import open_annotation_tool_with_detections
 from acq4_automation.feature_tracking.cell import Cell
-from coorx import Point, AffineTransform
+from coorx import Point, AffineTransform, SRT3DTransform
 from pyqtgraph.units import µm, m
 from .ranking_window import RankingWindow
 from ... import getManager
@@ -874,11 +874,14 @@ class AutomationDebugWindow(Qt.QWidget):
                 z_offset = current_mock_frame_global_z - live_frame_origin_global_xyz[2]
                 mock_frame_transform[2, 3] = z_offset
                 mock_frame_transform = AffineTransform.from_matrix(mock_frame_transform)
+                srt = SRT3DTransform(dims=(3, 3))
+                srt.set_from_affine(mock_frame_transform)
+                mock_frame_transform = srt
 
                 frame_info = {
                     "pixelSize": px_size,
                     "depth": current_mock_frame_global_z,
-                    "transform": mock_frame_transform.save_state(),
+                    "transform": mock_frame_transform,
                 }
                 if "device" in base_frame.info():
                     frame_info["device"] = base_frame.info()["device"]
