@@ -18,7 +18,7 @@ class InteractionSite(Device, OptomechDevice):
     Configuration options:
 
     * radius: The radius of the site (m)
-    * height: The height of the site (m). Default 0.
+    * height: The height of the site (m)
     * transform: (dict) Transformation setting the position/orientation of the site.  E.g. pos
     * geometry: Optional settings for visualizing the site in the 3D visualizer. See OptomechDevice
         for details.
@@ -29,7 +29,9 @@ class InteractionSite(Device, OptomechDevice):
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
         self.radius = config["radius"]
-        self.height = config.get("height", 0)
+        self.height = config.get("height")
+        if self.height is None:
+            raise ValueError(f"{self.name()} must have a height specified in config")
         OptomechDevice.__init__(self, dm, config, name)
         if tuple(self.globalPosition()) != (0, 0, 0):
             raise ValueError(f"{self.name()} cannot have a cfg-set global pos; only rotations allowed")
@@ -48,6 +50,13 @@ class InteractionSite(Device, OptomechDevice):
             defaults = {"color": (0.3, 0.3, 0.3, 0.7)}
             defaults.update(self.config["geometry"])
             self.config["geometry"] = defaults
+        else:
+            self.config["geometry"] = {
+                "color": (0.3, 0.3, 0.3, 0.7),
+                "type": "cylinder",
+                "radius": self.radius,
+                "height": self.height,
+            }
         return super().getGeometry(name)
 
     def setOffset(self, offset):
@@ -98,6 +107,13 @@ class InteractionSite(Device, OptomechDevice):
 
     def saveApproachPosition(self, other):
         self.positions.setdefault(other.name(), {})
+        interact_pos = self.positions[other.name()].get('interact local')
+        if interact_pos is not None:
+            interact_global = self.mapToGlobal(interact_pos)
+            self.setOffset(other.globalPosition())
+            self.positions[other.name()]['interact local'] = self.mapFromGlobal(interact_global)
+        else:
+            self.setOffset(other.globalPosition())
         self.positions[other.name()]['approach local'] = self.mapFromGlobal(other.globalPosition())
         self.positions[other.name()]['site global'] = self.globalPosition()
         self.writeConfigFile(self.positions, "saved_positions")
@@ -113,12 +129,12 @@ class InteractionSite(Device, OptomechDevice):
             raise RuntimeError(f"No site global position saved for {other.name()} at {self.name()}")
         if 'approach local' not in pos_config:
             raise RuntimeError(f"No approach position saved for {other.name()} at {self.name()}")
-        approach_local = pos_config['approach local']
-        approach_global = self.mapToGlobal(approach_local)
         if self._parentStage is not None:
             # TODO this will still need a real motion planner
             # TODO we'll maybe also need to make sure the other devices are out of the way...
-            _future.waitFor(self.moveToGlobal(approach_global, speed=speed))
+            _future.waitFor(self.moveToGlobal(pos_config['site global'], speed=speed))
+        approach_local = pos_config['approach local']
+        approach_global = self.mapToGlobal(approach_local)
         _future.waitFor(other._moveToGlobal(approach_global, speed=speed))
         interact_local = pos_config['interact local']
         interact_global = self.mapToGlobal(interact_local)
@@ -142,18 +158,13 @@ class InteractionSiteDeviceGui(Qt.QWidget):
         self.setLayout(layout)
         row = 0
 
-        layout.addWidget(Qt.QLabel("Pipette:"), row, 0)
         self.pipetteCombo = Qt.QComboBox()
         layout.addWidget(self.pipetteCombo, row, 0)
 
-        self.setPositionBtn = Qt.QPushButton("Set site position from pipette")
-        self.setPositionBtn.clicked.connect(self._setPosition)
-        layout.addWidget(self.setPositionBtn, row, 1)
-        row += 1
-
         self.saveApproachBtn = Qt.QPushButton("Save approach position")
         self.saveApproachBtn.clicked.connect(self._saveApproach)
-        layout.addWidget(self.saveApproachBtn, row, 0)
+        layout.addWidget(self.saveApproachBtn, row, 1)
+        row += 1
 
         self.saveInteractBtn = Qt.QPushButton("Save interact position")
         self.saveInteractBtn.clicked.connect(self._saveInteract)
@@ -177,8 +188,10 @@ class InteractionSiteDeviceGui(Qt.QWidget):
         row += 1
 
         layout.addWidget(Qt.QLabel("( for testing )"), row, 0)
-        self.saveInteractBtn = FutureButton(self._doInteractForTest, "Do test interact!", stoppable=True)
-        layout.addWidget(self.saveInteractBtn, row, 1)
+        self.doInteractBtn = FutureButton(
+            self._doInteractForTest, "Do test interact!", stoppable=True
+        )
+        layout.addWidget(self.doInteractBtn, row, 1)
 
         self._populatePipettes()
         self.pipetteCombo.currentIndexChanged.connect(self._updatePositionLabels)
@@ -193,6 +206,7 @@ class InteractionSiteDeviceGui(Qt.QWidget):
         self.pipetteCombo.setEnabled(has_pipettes)
         self.saveApproachBtn.setEnabled(has_pipettes)
         self.saveInteractBtn.setEnabled(has_pipettes)
+        self.doInteractBtn.setEnabled(has_pipettes)
         self._updatePositionLabels()
 
     def _selectedPipette(self):
@@ -200,13 +214,6 @@ class InteractionSiteDeviceGui(Qt.QWidget):
         if not name:
             return None
         return getManager().getDevice(name)
-
-    def _setPosition(self):
-        pip = self._selectedPipette()
-        if pip is None:
-            return
-        pos = pip.globalPosition()
-        self.dev.setOffset(pos)
 
     def _saveApproach(self):
         pip = self._selectedPipette()
