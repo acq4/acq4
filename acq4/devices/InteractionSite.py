@@ -7,7 +7,7 @@ from acq4.util import Qt
 from .Device import Device
 from .OptomechDevice import OptomechDevice
 from .Stage import Stage
-from ..util.future import future_wrap
+from ..util.future import future_wrap, FutureButton, Future
 from ..util.target import color_for_diff
 
 
@@ -31,6 +31,8 @@ class InteractionSite(Device, OptomechDevice):
         self.radius = config["radius"]
         self.height = config.get("height", 0)
         OptomechDevice.__init__(self, dm, config, name)
+        if tuple(self.globalPosition()) != (0, 0, 0):
+            raise ValueError(f"{self.name()} cannot have a cfg-set global pos; only rotations allowed")
         self.positions = self.readConfigFile("saved_positions")
         parent = self
         while True:
@@ -38,6 +40,8 @@ class InteractionSite(Device, OptomechDevice):
             if parent is None or isinstance(parent, Stage):
                 break
         self._parentStage: Stage | None = parent
+        self.offset = self.positions.get(self.name(), {}).get("offset", [0, 0, 0])
+        self.setOffset(self.offset)
 
     def getGeometry(self, name=None):
         if isinstance(self.config.get("geometry"), dict):
@@ -45,6 +49,19 @@ class InteractionSite(Device, OptomechDevice):
             defaults.update(self.config["geometry"])
             self.config["geometry"] = defaults
         return super().getGeometry(name)
+
+    def setOffset(self, offset):
+        """Set the offset of the site from its configured position, and save to config."""
+        self.offset = offset
+        self.positions.setdefault(self.name(), {})
+        self.positions[self.name()]['offset'] = offset
+        self.writeConfigFile(self.positions, "saved_positions")
+        # TODO change this to be compatible with coorx after merging axis-of-diagonevil
+        tr = pg.SRTTransform3D(self.deviceTransform())
+        tr.setTranslate(*offset)
+        self.setDeviceTransform(tr)
+
+        self.sigTransformChanged.emit(self)
 
     def cameraModuleInterface(self, mod):
         """Return an object to interact with camera module."""
@@ -96,16 +113,16 @@ class InteractionSite(Device, OptomechDevice):
             raise RuntimeError(f"No site global position saved for {other.name()} at {self.name()}")
         if 'approach local' not in pos_config:
             raise RuntimeError(f"No approach position saved for {other.name()} at {self.name()}")
+        approach_local = pos_config['approach local']
+        approach_global = self.mapToGlobal(approach_local)
         if self._parentStage is not None:
             # TODO this will still need a real motion planner
             # TODO we'll maybe also need to make sure the other devices are out of the way...
-            _future.waitFor(self.moveToGlobal(pos_config['site global'], speed=speed))
-        approach_local = pos_config['approach local']
-        approach_global = self.mapToGlobal(approach_local)
-        _future.waitFor(other.moveToGlobal(approach_global, speed=speed))
+            _future.waitFor(self.moveToGlobal(approach_global, speed=speed))
+        _future.waitFor(other._moveToGlobal(approach_global, speed=speed))
         interact_local = pos_config['interact local']
         interact_global = self.mapToGlobal(interact_local)
-        _future.waitFor(other.moveToGlobal(interact_global, speed=speed))
+        _future.waitFor(other._moveToGlobal(interact_global, speed=speed))
 
 
 def _fmt_pos(pos):
@@ -116,8 +133,6 @@ def _fmt_pos(pos):
 
 
 class InteractionSiteDeviceGui(Qt.QWidget):
-    """Device rack widget for InteractionSite: pipette selector, save buttons, position display."""
-
     def __init__(self, dev, win):
         Qt.QWidget.__init__(self)
         self.dev = dev
@@ -127,44 +142,46 @@ class InteractionSiteDeviceGui(Qt.QWidget):
         self.setLayout(layout)
         row = 0
 
-        self.calibrateBtn = Qt.QPushButton("Calibrate site position")
-        self.calibrateBtn.clicked.connect(self._calibratePosition)
-        layout.addWidget(self.calibrateBtn, row, 1)
-        row += 1
-
-        # Pipette-specific positions
         layout.addWidget(Qt.QLabel("Pipette:"), row, 0)
         self.pipetteCombo = Qt.QComboBox()
         layout.addWidget(self.pipetteCombo, row, 0)
 
+        self.setPositionBtn = Qt.QPushButton("Set site position from pipette")
+        self.setPositionBtn.clicked.connect(self._setPosition)
+        layout.addWidget(self.setPositionBtn, row, 1)
+        row += 1
+
         self.saveApproachBtn = Qt.QPushButton("Save approach position")
         self.saveApproachBtn.clicked.connect(self._saveApproach)
-        layout.addWidget(self.saveApproachBtn, row, 1)
+        layout.addWidget(self.saveApproachBtn, row, 0)
 
         self.saveInteractBtn = Qt.QPushButton("Save interact position")
         self.saveInteractBtn.clicked.connect(self._saveInteract)
-        layout.addWidget(self.saveInteractBtn, row, 2)
+        layout.addWidget(self.saveInteractBtn, row, 1)
         row += 1
 
-        # Position display labels
-        layout.addWidget(Qt.QLabel("Global center:"), row, 0)
+        # Position displays
+        layout.addWidget(Qt.QLabel("Global site position:"), row, 0)
         self.globalCenterLabel = Qt.QLabel("—")
         layout.addWidget(self.globalCenterLabel, row, 1)
         row += 1
 
-        layout.addWidget(Qt.QLabel("Approach (local):"), row, 0)
+        layout.addWidget(Qt.QLabel("Approach (relative):"), row, 0)
         self.approachLabel = Qt.QLabel("—")
         layout.addWidget(self.approachLabel, row, 1)
         row += 1
 
-        layout.addWidget(Qt.QLabel("Interact (local):"), row, 0)
+        layout.addWidget(Qt.QLabel("Interact (relative):"), row, 0)
         self.interactLabel = Qt.QLabel("—")
         layout.addWidget(self.interactLabel, row, 1)
         row += 1
 
+        layout.addWidget(Qt.QLabel("( for testing )"), row, 0)
+        self.saveInteractBtn = FutureButton(self._doInteractForTest, "Do test interact!", stoppable=True)
+        layout.addWidget(self.saveInteractBtn, row, 1)
+
         self._populatePipettes()
         self.pipetteCombo.currentIndexChanged.connect(self._updatePositionLabels)
-        self.dev.sigGlobalTransformChanged.connect(self._updatePositionLabels)
 
     def _populatePipettes(self):
         from .Pipette.pipette import Pipette
@@ -178,14 +195,18 @@ class InteractionSiteDeviceGui(Qt.QWidget):
         self.saveInteractBtn.setEnabled(has_pipettes)
         self._updatePositionLabels()
 
-    def _calibratePosition(self):
-        pass  # TODO ask for click in the camera module like with pipette's "Set Tip"
-
     def _selectedPipette(self):
         name = self.pipetteCombo.currentText()
         if not name:
             return None
         return getManager().getDevice(name)
+
+    def _setPosition(self):
+        pip = self._selectedPipette()
+        if pip is None:
+            return
+        pos = pip.globalPosition()
+        self.dev.setOffset(pos)
 
     def _saveApproach(self):
         pip = self._selectedPipette()
@@ -198,6 +219,12 @@ class InteractionSiteDeviceGui(Qt.QWidget):
         if pip is not None:
             self.dev.saveInteractPosition(pip)
             self._updatePositionLabels()
+
+    def _doInteractForTest(self):
+        pip = self._selectedPipette()
+        if pip is not None:
+            return self.dev.moveToInteract(pip, speed='slow')
+        return Future.immediate()
 
     def _updatePositionLabels(self):
         positions = {}
