@@ -33,7 +33,7 @@ class InteractionSite(Device, OptomechDevice):
         if self.height is None:
             raise ValueError(f"{self.name()} must have a height specified in config")
         OptomechDevice.__init__(self, dm, config, name)
-        if tuple(self.globalPosition()) != (0, 0, 0):
+        if tuple(self.deviceTransform().offset) != (0, 0, 0):
             raise ValueError(f"{self.name()} cannot have a cfg-set global pos; only rotations allowed")
         self.positions = self.readConfigFile("saved_positions")
         parent = self
