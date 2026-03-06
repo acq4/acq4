@@ -3,6 +3,8 @@ import time
 import numpy as np
 from MetaArray import MetaArray
 
+from coorx import SRT3DTransform
+
 from acq4 import Manager
 from acq4.logging_config import get_logger
 from acq4.util import Qt

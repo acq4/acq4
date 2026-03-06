@@ -665,7 +665,7 @@ class Pipette(Device, OptomechDevice):
         depth = self.globalPosition()[2]
         appDepth = self.approachDepth()
         if depth < appDepth:
-            return self.advance(appDepth, speed=speed)
+            return self.advance(appDepth, speed=speed, name='retract from surface')
         return Future.immediate()
 
     @future_wrap

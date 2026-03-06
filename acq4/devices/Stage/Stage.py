@@ -121,7 +121,7 @@ class Stage(Device, OptomechDevice):
                     self._jsButtons.add((js, button))
         for jsdev in jsdevs:
             jsdev.sigStateChanged.connect(self.joystickChanged)
-
+        dm.sigAbortAll.connect(lambda: self.stop(reason="Received abort request from Manager"))
         dm.declareInterface(name, ['stage'], self)
 
     def quit(self):
@@ -465,9 +465,11 @@ class Stage(Device, OptomechDevice):
             tr = self.stageTransform().offset + np.array(self.mapFromGlobal(globalPos))
             return pg.Vector(self.inverseAxisTransform().map(tr))
 
-        return minimum_displacement_inverse_kinematics(
+        ik_pos = minimum_displacement_inverse_kinematics(
             globalPos, self.axisTransform(), self.getLimits(), previousPos
         )
+        self.checkLimits(ik_pos)
+        return ik_pos
 
         # TODO this is doing bad things (e.g. Home -> Fine Search -> Above Target drives through the recording chamber)
         # # otherwise, hold to a neutral position of d=0

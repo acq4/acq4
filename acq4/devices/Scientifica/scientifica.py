@@ -136,7 +136,6 @@ class Scientifica(Stage):
             self.driver.setBaudrate(baudrate)
 
         self._lastMove: Optional[ScientificaMoveFuture] = None
-        man.sigAbortAll.connect(self.abort)
 
         super().__init__(man, config, name)
 

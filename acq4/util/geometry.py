@@ -2072,7 +2072,17 @@ def minimum_displacement_inverse_kinematics(
 
     # t=0 is the unconstrained optimum; clip to feasible interval.
     t_opt = float(np.clip(0.0, t_lo, t_hi))
-    return pos_unconstrained + t_opt * null_vec
+    pos_constrained = pos_unconstrained + t_opt * null_vec
+
+    # apply limits in device coordinate space to avoid fp errors
+    pos_clipped = np.clip(pos_constrained, np.array(bounds)[:,0], np.array(bounds)[:,1])
+
+    # check final answer
+    final_global = device_to_global.map(pos_clipped)
+    if np.linalg.norm(final_global - point) > 0.1e-6:
+        raise ValueError(f"IK solver generated bad solution (target position: {point} found position: {final_global}  device pos: {pos_constrained})")
+
+    return pos_clipped
 
 
 def sequential_projection_inverse_kinematics(

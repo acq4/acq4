@@ -1,3 +1,5 @@
+from typing import Any
+
 import numpy as np
 from MetaArray import MetaArray
 
@@ -153,9 +155,7 @@ class Frame:
         value you must also supply as *valuesForAppend*.
         """
         data = self.getImage()
-        info = self.info()
-        if callable(info.get('backgroundInfo')):
-            info['backgroundInfo'] = info['backgroundInfo'](dh)
+        info = self.serializableInfo(dh)
 
         if not filename.endswith('.ma'):
             return dh.writeFile(data, filename, info, fileType="ImageFile", autoIncrement=autoIncrement)
@@ -169,6 +169,12 @@ class Frame:
             autoIncrement=autoIncrement,
             **self._metaArrayWriteKwargs,
         )
+
+    def serializableInfo(self, dh: DirHandle) -> Any:
+        info = self.info()
+        if callable(info.get('backgroundInfo')):
+            info['backgroundInfo'] = info['backgroundInfo'](dh)
+        return info
 
     def loadLinkedFiles(self, dh):
         """Load linked files from the same directory as the main file."""

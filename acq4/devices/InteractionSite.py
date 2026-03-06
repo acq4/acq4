@@ -43,7 +43,7 @@ class InteractionSite(Device, OptomechDevice):
                 break
         self._parentStage: Stage | None = parent
         self.offset = self.positions.get(self.name(), {}).get("offset", [0, 0, 0])
-        self.setOffset(self.offset)
+        self.setOffset(np.array(self.offset))
 
     def getGeometry(self, name=None):
         if isinstance(self.config.get("geometry"), dict):
@@ -59,15 +59,18 @@ class InteractionSite(Device, OptomechDevice):
             }
         return super().getGeometry(name)
 
+    def setLocalOrigin(self, global_pos):
+        """Set the device's local coordinate origin, given the provided global_pos, and save to config.
+        """
+        self.setOffset(self.mapGlobalToParent(global_pos))
+
     def setOffset(self, offset):
-        """Set the offset of the site from its configured position, and save to config."""
-        self.offset = offset
+        """Set the offset of this device's local origin to its parent's local origin."""
         self.positions.setdefault(self.name(), {})
         self.positions[self.name()]['offset'] = offset
         self.writeConfigFile(self.positions, "saved_positions")
-        offset = self.mapGlobalToParent(offset)
         tr = self.deviceTransform()
-        tr.offset = offset
+        tr.offset = offset  # transform maps from local to parent; offset is the parent-local position of our local origin
         self.setDeviceTransform(tr)
 
         self.sigTransformChanged.emit(self)
@@ -114,10 +117,10 @@ class InteractionSite(Device, OptomechDevice):
         interact_pos = self.positions[other.name()].get('interact local')
         if interact_pos is not None:
             interact_global = self.mapToGlobal(interact_pos)
-            self.setOffset(other.globalPosition())
+            self.setLocalOrigin(other.globalPosition())
             self.positions[other.name()]['interact local'] = self.mapFromGlobal(interact_global)
         else:
-            self.setOffset(other.globalPosition())
+            self.setLocalOrigin(other.globalPosition())
         self.positions[other.name()]['approach local'] = self.mapFromGlobal(other.globalPosition())
         self.positions[other.name()]['site global'] = self.globalPosition()
         self.writeConfigFile(self.positions, "saved_positions")
@@ -143,6 +146,12 @@ class InteractionSite(Device, OptomechDevice):
         interact_local = pos_config['interact local']
         interact_global = self.mapToGlobal(interact_local)
         _future.waitFor(other._moveToGlobal(interact_global, speed=speed))
+
+    def moveToApproach(self, other, speed='fast'):
+        if other.name() not in self.positions:
+            raise RuntimeError(f"No positions saved for {other.name()} at {self.name()}")
+        pos_config = self.positions[other.name()]
+        return other._moveToGlobal(self.mapToGlobal(pos_config['approach local']), speed=speed)
 
 
 def _fmt_pos(pos):
@@ -191,11 +200,11 @@ class InteractionSiteDeviceGui(Qt.QWidget):
         layout.addWidget(self.interactLabel, row, 1)
         row += 1
 
-        layout.addWidget(Qt.QLabel("( for testing )"), row, 0)
-        self.doInteractBtn = FutureButton(
-            self._doInteractForTest, "Do test interact!", stoppable=True
-        )
-        layout.addWidget(self.doInteractBtn, row, 1)
+        # layout.addWidget(Qt.QLabel("( for testing )"), row, 0)
+        # self.doInteractBtn = FutureButton(
+        #     self._doInteractForTest, "Do test interact!", stoppable=True
+        # )
+        # layout.addWidget(self.doInteractBtn, row, 1)
 
         self._populatePipettes()
         self.pipetteCombo.currentIndexChanged.connect(self._updatePositionLabels)
@@ -210,7 +219,7 @@ class InteractionSiteDeviceGui(Qt.QWidget):
         self.pipetteCombo.setEnabled(has_pipettes)
         self.saveApproachBtn.setEnabled(has_pipettes)
         self.saveInteractBtn.setEnabled(has_pipettes)
-        self.doInteractBtn.setEnabled(has_pipettes)
+        # self.doInteractBtn.setEnabled(has_pipettes)
         self._updatePositionLabels()
 
     def _selectedPipette(self):
@@ -234,7 +243,7 @@ class InteractionSiteDeviceGui(Qt.QWidget):
     def _doInteractForTest(self):
         pip = self._selectedPipette()
         if pip is not None:
-            return self.dev.moveToInteract(pip, speed='slow')
+            return self.dev.moveToInteract(pip, speed='fast')
         return Future.immediate()
 
     def _updatePositionLabels(self):
