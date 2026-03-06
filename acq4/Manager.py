@@ -598,7 +598,11 @@ class Manager(Qt.QObject):
         try:
             sh = Qt.QShortcut(Qt.QKeySequence(keys), win)
             sh.setContext(Qt.Qt.ApplicationShortcut)
-            sh.activated.connect(lambda *args: win.raise_())
+            def raiseWindow(*rargs):
+                win.setWindowState(win.windowState() & ~Qt.QtCore.Qt.WindowMinimized)
+                win.raise_()
+                win.activateWindow()
+            sh.activated.connect(raiseWindow)
         except:
             if self.exitOnError:
                 raise
