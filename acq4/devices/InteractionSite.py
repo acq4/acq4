@@ -101,12 +101,16 @@ class InteractionSite(Device, OptomechDevice):
 
     def saveInteractPosition(self, other):
         self.positions.setdefault(other.name(), {})
+        if len([p for p in self.positions if p != self.name()]) > 1:
+            raise RuntimeError("Only one device can be saved for each interaction site")
         self.positions[other.name()]['interact local'] = self.mapFromGlobal(other.globalPosition())
         self.positions[other.name()]['site global'] = self.globalPosition()
         self.writeConfigFile(self.positions, "saved_positions")
 
     def saveApproachPosition(self, other):
         self.positions.setdefault(other.name(), {})
+        if len([p for p in self.positions if p != self.name()]) > 1:
+            raise RuntimeError("Only one device can be saved for each interaction site")
         interact_pos = self.positions[other.name()].get('interact local')
         if interact_pos is not None:
             interact_global = self.mapToGlobal(interact_pos)
@@ -132,10 +136,10 @@ class InteractionSite(Device, OptomechDevice):
         if self._parentStage is not None:
             # TODO this will still need a real motion planner
             # TODO we'll maybe also need to make sure the other devices are out of the way...
-            _future.waitFor(self.moveToGlobal(pos_config['site global'], speed=speed))
+            _future.waitFor(self.moveToGlobal(pos_config['site global'], speed=speed), timeout=120)
         approach_local = pos_config['approach local']
         approach_global = self.mapToGlobal(approach_local)
-        _future.waitFor(other._moveToGlobal(approach_global, speed=speed))
+        _future.waitFor(other._moveToGlobal(approach_global, speed=speed), timeout=120)
         interact_local = pos_config['interact local']
         interact_global = self.mapToGlobal(interact_local)
         _future.waitFor(other._moveToGlobal(interact_global, speed=speed))
