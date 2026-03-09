@@ -28,7 +28,10 @@ def enforce_linear_z_stack(frames: list[Frame], start: float, stop: float, step:
         raise ValueError("Z stack step size must be non-zero.")
     start, stop = sorted((start, stop))
     step = abs(step)
-    depths = sorted([(f.depth, i) for i, f in enumerate(frames)])
+    depths = [(f.depth, i) for i, f in enumerate(frames)]
+    if depths[0][0] > depths[-1][0]:
+        depths.reverse()  # make sure order-preserving sorts by depth work correctly even if input is reversed
+    depths = sorted(depths, key=lambda x: x[0])  # sort by depth, just in case input isn't monotonic
     if (stop - start) % step != 0:
         expected_depths = np.arange(start, stop, step)
     else:
