@@ -221,10 +221,10 @@ class Microscope(Device, OptomechDevice):
     def _lightChanged(self, light, name):
         self.sigLightChanged.emit(self, name)
 
-    def cameraModuleInterface(self, mod):
+    def cameraModuleInterface(self, win):
         """Return an object to interact with camera module.
         """
-        return ScopeCameraModInterface(self, mod)
+        return ScopeCameraModInterface(self, win)
 
     def getFocusDepth(self):
         """Return the z-position of the focal plane.
@@ -646,15 +646,15 @@ class ScopeCameraModInterface(CameraModuleInterface):
     """
     canImage = False
 
-    def __init__(self, dev, mod):
-        CameraModuleInterface.__init__(self, dev, mod)
+    def __init__(self, dev, win):
+        CameraModuleInterface.__init__(self, dev, win)
 
         self.ctrl = Qt.QWidget()
         self.layout = Qt.QGridLayout()
         self.layout.setContentsMargins(0, 0, 0, 0)
         self.ctrl.setLayout(self.layout)
 
-        self.plot = mod.window().getDepthView()
+        self.plot = win.getDepthView()
 
         # Create Z-position widget
         self.zPositionWidget = ZPositionWidget(self.plot)

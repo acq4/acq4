@@ -1,6 +1,7 @@
 import os.path
 import weakref
 from collections import OrderedDict
+from typing import Iterable
 
 import numpy as np
 
@@ -18,6 +19,7 @@ class CameraWindow(Qt.QMainWindow):
 
     sigInterfaceAdded = Qt.Signal(object, object)
     sigInterfaceRemoved = Qt.Signal(object, object)
+    sigFocusPositionChanged = Qt.Signal()  # emitted when the active imaging device's focus position changes
 
     def __init__(self, module):
         self.hasQuit = False
@@ -134,7 +136,34 @@ class CameraWindow(Qt.QMainWindow):
 
         This is typically called when a camera starts acquisition.
         """
+        if self.activeInterface is not None:
+            try:
+                self.activeInterface.getDevice().sigGlobalTransformChanged.disconnect(self._onActiveFocusChanged)
+            except (RuntimeError, TypeError):
+                pass
         self.activeInterface = iface
+        if iface is not None:
+            iface.getDevice().sigGlobalTransformChanged.connect(self._onActiveFocusChanged)
+
+    def _onActiveFocusChanged(self, device=None, changed_device=None):
+        self.sigFocusPositionChanged.emit()
+
+    def getActiveImagingDevice(self):
+        """Return the device of the currently active imaging interface, or None."""
+        if self.activeInterface is None:
+            return None
+        return self.activeInterface.getDevice()
+
+    def globalCenterOfFocus(self, region='sensor'):
+        """Return the global coordinates of the center of focus for the currently active imaging device.
+
+        The optional *region* argument can be used to specify which region's center to return; by
+        default this is 'sensor', but it could instead be 'roi'.
+        """
+        dev = self.getActiveImagingDevice()
+        if dev is None:
+            return None
+        return dev.globalCenterPosition(region)
 
     def addInterface(self, name, iface: "CameraModuleInterface"):
         """Display a new user interface in the camera module.
@@ -145,7 +174,7 @@ class CameraWindow(Qt.QMainWindow):
 
         # Make the first interface active by default
         if self.activeInterface is None and iface.canImage:
-            self.activeInterface = iface
+            self.setActiveInterface(iface)
         widget = iface.controlWidget()
         if widget is not None:
             dock = dockarea.Dock(name=name, widget=iface.controlWidget(), size=(10, 500))
@@ -320,9 +349,9 @@ class CameraModuleInterface(Qt.QObject):
     # indicates this is an interface to an imaging device.
     canImage = True
 
-    def __init__(self, dev, mod):
+    def __init__(self, dev, win):
         Qt.QObject.__init__(self)
-        self.mod = weakref.ref(mod)
+        self.win = weakref.ref(win)
         self.dev = weakref.ref(dev)
         self._hasQuit = False
 
@@ -332,7 +361,7 @@ class CameraModuleInterface(Qt.QObject):
             raise RuntimeError("Device has been deleted.")
         return dev
 
-    def graphicsItems(self):
+    def graphicsItems(self) -> Iterable[pg.GraphicsItem]:
         """Return a list of all graphics items displayed by this interface.
         """
         raise NotImplementedError()
@@ -377,7 +406,9 @@ class CameraModuleInterface(Qt.QObject):
             scene = item.scene()
             if scene is not None:
                 scene.removeItem(item)
-        self.mod().window()._removeInterface(self)
+        win = self.win()
+        if win is not None:
+            win._removeInterface(self)
 
 
 class PlotROI(pg.ROI):

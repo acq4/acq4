@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import numpy as np
+
 from acq4.util.future import future_wrap
 from pyqtgraph import units
 from ._base import PatchPipetteState
@@ -52,28 +54,68 @@ class CleanState(PatchPipetteState):
 
         self.setState('cleaning')
 
-        for stage in ('clean', 'rinse'):
-            self.checkStop()
+        # for stage in ('clean', 'rinse'):
+        #     self.checkStop()
+        #
+        #     sequence = config[f'{stage}Sequence']
+        #     if isinstance(sequence, str):
+        #         sequence = eval(sequence, units.__dict__)
+        #     if len(sequence) == 0:
+        #         continue
+        #
+        #
+        #
+        #     self.waitFor(pip.moveTo(stage, "fast"), timeout=30)
+        #
+        #     if dev.sonicatorDevice is not None:
+        #         self.sonication = dev.sonicatorDevice.doProtocol(config['sonicationProtocol'])
+        #
+        #     for pressure, delay in sequence:
+        #         dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
+        #         self.sleep(delay)
+        #
+        #     if self.sonication is not None and not self.sonication.isDone():
+        #         self.waitFor(self.sonication)
 
-            sequence = config[f'{stage}Sequence']
-            if isinstance(sequence, str):
-                sequence = eval(sequence, units.__dict__)
-            if len(sequence) == 0:
-                continue
+        sequence = config['cleanSequence']
+        if isinstance(sequence, str):
+            sequence = eval(sequence, units.__dict__)
+        assert len(sequence) > 0
 
-            self.waitFor(pip.moveTo(stage, "fast"), timeout=30)
+        scope = pip.imagingDevice().scopeDev
+        start_pos = scope.globalPosition()
+        waypoints = [
+            np.array([start_pos[0], start_pos[1], 30e-3]),
+            np.array([-90e-3, 20e-3, 30e-3]),
+        ]
+        for wp in waypoints:
+            self.waitFor(scope.setGlobalPosition(wp, 20e-3))
 
-            if dev.sonicatorDevice is not None:
-                self.sonication = dev.sonicatorDevice.doProtocol(config['sonicationProtocol'])
+        cw = pip.getCleaningWell()
+        self.waitFor(pip.retractFromSurface('fast'))
+        self.waitFor(pip._moveToGlobal([0, 0, 10e-3], 'fast', name='safe position before cleaning well'))
+        self.waitFor(cw.moveToInteract(pip), timeout=60)
 
-            for pressure, delay in sequence:
-                dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
-                self.sleep(delay)
+        if dev.sonicatorDevice is not None:
+            self.sonication = dev.sonicatorDevice.doProtocol(config['sonicationProtocol'])
 
-            if self.sonication is not None and not self.sonication.isDone():
-                self.waitFor(self.sonication)
+        for pressure, delay in sequence:
+            dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
+            self.sleep(delay)
 
-        self.waitFor(pip.moveTo('home', 'fast'))
+        if self.sonication is not None and not self.sonication.isDone():
+            self.waitFor(self.sonication)
+
+        self.waitFor(cw.moveToApproach(pip))
+
+        dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
+
+        # self.waitFor(pip.moveTo('home', 'fast'))  # motion planning doesn't work so well from here
+        self.waitFor(pip.parentStage.goHome('fast'))
+        waypoints = waypoints[::-1] + [start_pos]
+        for wp in waypoints:
+            self.waitFor(scope.setGlobalPosition(wp, 20e-3))
+
         dev.pipetteRecord()['cleanCount'] += 1
         dev.setTipClean(True)
         self.currentFuture = None
@@ -101,9 +143,9 @@ class CleanState(PatchPipetteState):
         except Exception:
             dev.logger.exception("Error resetting pressure after clean")
 
-        try:
-            _future.waitFor(dev.pipetteDevice.moveTo('home', 'fast'))
-        except Exception:
-            dev.logger.exception("Error resetting pipette position after clean")
+        # try:
+        #     _future.waitFor(dev.pipetteDevice.moveTo('home', 'fast'))
+        # except Exception:
+        #     dev.logger.exception("Error resetting pipette position after clean")
 
         _future.waitFor(super()._cleanup(), timeout=None)

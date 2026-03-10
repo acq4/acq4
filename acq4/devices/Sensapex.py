@@ -107,8 +107,6 @@ class Sensapex(Stage):
         # This should also verify that we have a valid device ID
         self.dev.get_pos()
 
-        man.sigAbortAll.connect(self.stop)
-
         # clear cached position for this device and re-read to generate an initial position update
         self.getPosition(refresh=True)
 

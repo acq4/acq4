@@ -28,7 +28,9 @@ def enforce_linear_z_stack(frames: list[Frame], start: float, stop: float, step:
         raise ValueError("Z stack step size must be non-zero.")
     start, stop = sorted((start, stop))
     step = abs(step)
-    depths = sorted([(f.depth, i) for i, f in enumerate(frames)])
+    depths = [(f.depth, i) for i, f in enumerate(frames)]
+    if depths[0][0] > depths[-1][0]:
+        depths.reverse()
     if (stop - start) % step != 0:
         expected_depths = np.arange(start, stop, step)
     else:
@@ -47,6 +49,8 @@ def enforce_linear_z_stack(frames: list[Frame], start: float, stop: float, step:
     depths = [first] + [d for d in depths if is_significant(d)] + [last]
     if len(depths) < len(expected_depths):
         raise ValueError("Insufficient frames to have one frame per step (after pruning nigh identical frames).")
+    if not np.all(np.diff([d[0] for d in depths]) >= 0):
+        raise ValueError("Frames are not monotonic by depth. Cannot enforce linear stack.")
 
     # get the closest frame for each expected depth using the Hungarian algorithm
     interpolated_depths = np.linspace(start, stop, len(depths))
