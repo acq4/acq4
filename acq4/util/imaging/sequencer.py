@@ -475,6 +475,8 @@ class ImageSequencerCtrl(Qt.QWidget):
         self.ui.deviceCombo.clear()
         items.extend(k for k, v in self.mod().interfaces.items() if v.canImage)
         self.ui.deviceCombo.setItems(items)
+        if len(items) == 2:  # only one real device plus the placeholder
+            self.ui.deviceCombo.setCurrentIndex(1)
 
     def selectedImager(self):
         if self.ui.deviceCombo.currentIndex() < 1:

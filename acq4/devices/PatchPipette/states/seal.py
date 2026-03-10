@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 import time
 from typing import Any
 
@@ -7,6 +8,7 @@ import numpy as np
 
 from acq4.util import ptime
 import pyqtgraph as pg
+from acq4.util.debug import log_and_ignore_exception
 from acq4.util.functions import plottable_booleans
 from neuroanalysis.data import TSeries
 from pyqtgraph.units import kPa
@@ -276,6 +278,7 @@ class SealState(PatchPipetteState):
         self.pressure = config['startingPressure']
         self._lastPressureScan = None
         self._pressures = [[], []]
+        self._pressures_lock = threading.Lock()
         self._resistances = [np.zeros(0), np.zeros(0)]
 
     def initialize(self):
@@ -284,8 +287,9 @@ class SealState(PatchPipetteState):
         super().initialize()
 
     def _handlePressureChanged(self, dev, source, pressure):
-        self._pressures[0].append(ptime.time())
-        self._pressures[1].append(pressure)
+        with self._pressures_lock:
+            self._pressures[0].append(ptime.time())
+            self._pressures[1].append(pressure)
 
     def processAtLeastOneTestPulse(self):
         tps = super().processAtLeastOneTestPulse()
@@ -458,14 +462,18 @@ class SealState(PatchPipetteState):
         return np.clip(best, self.config['pressureLimit'], 0)
 
     def _trim_data_caches(self, start):
-        pressures = TSeries(np.array(self._pressures[1]), time_values=np.array(self._pressures[0]))
-        pressures = pressures.time_slice(start, pressures.t_end)
-        self._pressures = [pressures.time_values.tolist(), pressures.data.tolist()]
+        with self._pressures_lock:
+            pressures = TSeries(np.array(self._pressures[1]), time_values=np.array(self._pressures[0]))
+            pressures = pressures.time_slice(start, pressures.t_end)
+            self._pressures = [pressures.time_values.tolist(), pressures.data.tolist()]
         resistances = TSeries(self._resistances[1], time_values=self._resistances[0])
         resistances = resistances.time_slice(start, resistances.t_end)
         self._resistances = [resistances.time_values, resistances.data]
         return pressures, resistances
 
     def _cleanup(self):
-        self.dev.pressureDevice.setPressure(source='atmosphere')
+        with log_and_ignore_exception(Exception, "Error during pressure state cleanup"):
+            self.dev.pressureDevice.setPressure(source='atmosphere')
+        with log_and_ignore_exception(Exception, "Error during pressure signal disconnect"):
+            self.dev.pressureDevice.sigPressureChanged.disconnect(self._handlePressureChanged)
         return super()._cleanup()
