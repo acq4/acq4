@@ -140,20 +140,12 @@ def _set_focus_depth(
 def _stepped_z_stack(imager, start, end, step, future) -> list[Frame]:
     direction = np.sign(end - start)
     step = direction * abs(step)
-    frames_fut = imager.acquireFrames()
-    _set_focus_depth(
-        imager, start, direction, speed="fast", hysteresis_correction=False, future=future
-    )
+    frames = []
     with imager.ensureRunning(ensureFreshFrames=True):
         for z in np.arange(start, end + step, step):
-            future.waitFor(imager.acquireFrames(1))
-            _set_focus_depth(
-                imager, z, direction, speed="slow", hysteresis_correction=False, future=future
-            )
-        future.waitFor(imager.acquireFrames(1))
-    frames_fut.stop()
-    future.waitFor(frames_fut)
-    return frames_fut.getResult()
+            _set_focus_depth(imager, z, direction, speed="slow", future=future)
+            frames.append(future.waitFor(imager.acquireFrames(1)).getResult()[0])
+    return frames
 
 
 def _hold_imager_focus(idev, hold):
