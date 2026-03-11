@@ -116,10 +116,10 @@ def _set_focus_depth(
     timeout = max(10, 3 * abs(dz) / speed)
 
     # Avoid hysteresis:
-    if hysteresis_correction and direction > 0 and dz > 0:
+    if hysteresis_correction and direction < 0 and dz > 0:
         # stack goes downward
         move = imager.setFocusDepth(depth + 20e-6, speed)
-    elif hysteresis_correction and direction < 0 and dz < 0:
+    elif hysteresis_correction and direction > 0 and dz < 0:
         # stack goes upward
         move = imager.setFocusDepth(depth - 20e-6, speed)
     else:
@@ -138,15 +138,18 @@ def _set_focus_depth(
 
 
 def _stepped_z_stack(imager, start, end, step, future) -> list[Frame]:
-    sign = np.sign(end - start)
-    direction = sign * -1
-    step = sign * abs(step)
+    direction = np.sign(end - start)
+    step = direction * abs(step)
     frames_fut = imager.acquireFrames()
-    _set_focus_depth(imager, start, direction, speed="fast", future=future)
+    _set_focus_depth(
+        imager, start, direction, speed="fast", hysteresis_correction=False, future=future
+    )
     with imager.ensureRunning(ensureFreshFrames=True):
         for z in np.arange(start, end + step, step):
             future.waitFor(imager.acquireFrames(1))
-            _set_focus_depth(imager, z, direction, speed="slow", future=future)
+            _set_focus_depth(
+                imager, z, direction, speed="slow", hysteresis_correction=False, future=future
+            )
         future.waitFor(imager.acquireFrames(1))
     frames_fut.stop()
     future.waitFor(frames_fut)
@@ -380,7 +383,7 @@ def acquire_z_stack(
         Future wrapped around the acquired frames, with corrected z positions.
     """
     # TODO think about strobing the lighting for clearer images
-    direction = start - stop
+    direction = stop - start
     _set_focus_depth(imager, start, direction, "fast", hysteresis_correction, _future)
     stage = imager.scopeDev.getFocusDevice()
     exposure = imager.getParam('exposure')
@@ -400,7 +403,7 @@ def acquire_z_stack(
                 frames_fut = imager.acquireFrames()
                 try:
                     _future.waitFor(imager.acquireFrames(1))  # just to be sure the camera's recording
-                    _set_focus_depth(imager, stop, direction, speed, hysteresis_correction, _future)
+                    _set_focus_depth(imager, stop, direction, speed, hysteresis_correction=False, future=_future)
                     _future.waitFor(imager.acquireFrames(1))  # just to be sure the camera caught up
                 finally:
                     frames_fut.stop()
