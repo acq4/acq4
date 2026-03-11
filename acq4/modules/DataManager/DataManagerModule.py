@@ -276,15 +276,16 @@ class DataManager(Module):
 
     def fileSelectionChanged(self):
         # print "file selection changed"
-        if self.selFile is not None:
+        sel_file = self.selFile
+        if sel_file is not None:
             with contextlib.suppress(TypeError):
-                self.selFile.sigChanged.disconnect(self.selectedFileAltered)
+                sel_file.sigChanged.disconnect(self.selectedFileAltered)
         fh = self.selectedFile()
         self.manager.currentFile = fh  ## Make this really easy to pick up from an interactive prompt.
         self.loadFile(fh)
         self.selFile = fh
         if fh is not None:
-            self.selFile.sigChanged.connect(self.selectedFileAltered)
+            fh.sigChanged.connect(self.selectedFileAltered)
 
     def loadFile(self, fh):
         if fh is None:
@@ -320,9 +321,10 @@ class DataManager(Module):
             self.ui.dataViewWidget.setCurrentFile(fh)
 
     def selectedFileAltered(self, name, change, args):
-        if change in ['parent', 'renamed', 'moved'] and self.selFile is not None:
-            self.ui.fileTreeWidget.select(self.selFile)  ## re-select file if it has moved.
-            self.ui.fileNameLabel.setText(self.selFile.name(relativeTo=self.baseDir))
+        sel_file = self.selFile
+        if change in ['parent', 'renamed', 'moved'] and sel_file is not None:
+            self.ui.fileTreeWidget.select(sel_file)  # re-select file if it has moved.
+            self.ui.fileNameLabel.setText(sel_file.name(relativeTo=self.baseDir))
 
     def quit(self):
         ## Silly: needed to prevent lockup on some systems.
