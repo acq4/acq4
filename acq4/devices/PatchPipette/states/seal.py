@@ -6,7 +6,7 @@ from typing import Any
 
 import numpy as np
 
-from acq4.util import ptime
+from acq4.util import ptime, Qt
 import pyqtgraph as pg
 from acq4.util.debug import log_and_ignore_exception
 from acq4.util.functions import plottable_booleans
@@ -283,7 +283,7 @@ class SealState(PatchPipetteState):
 
     def initialize(self):
         self.dev.setTipClean(False)
-        self.dev.pressureDevice.sigPressureChanged.connect(self._handlePressureChanged)
+        self.dev.pressureDevice.sigPressureChanged.connect(self._handlePressureChanged, Qt.Qt.DirectConnection)
         super().initialize()
 
     def _handlePressureChanged(self, dev, source, pressure):
