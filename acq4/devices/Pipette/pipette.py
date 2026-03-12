@@ -425,16 +425,16 @@ class Pipette(Device, OptomechDevice):
         path = self.dm.configFileName(path)
         path = self.dm.dirHandle(path, create=True)
 
+        pip_info = {
+            "tip position": self.globalPosition(),
+            "axis yaw": self.yawAngle(),
+            "axis pitch": self.pitchAngle(),
+        }
+
         cam: Camera = self.imagingDevice()
         with cam.ensureRunning():
             img = _future.waitFor(cam.acquireFrames(n=1, ensureFreshFrames=True)).getResult()[0]
-        img.addInfo(
-            {
-                "tip position": self.globalPosition(),
-                "axis yaw": self.yawAngle(),
-                "axis pitch": self.pitchAngle(),
-            }
-        )
+        img.addInfo(pip_info)
         timestamp = time.strftime("%Y%m%d-%H%M%S")
         path.writeFile(
             img.data(),
@@ -445,8 +445,8 @@ class Pipette(Device, OptomechDevice):
         if stack:
             depth = cam.getFocusDepth()
             is_below_surface = depth <= self.scopeDevice().getSurfaceDepth()
-            scan_dist = np.random.randint(2, 40 if is_below_surface else 100) * 1e-6
-            step = scan_dist / 2
+            scan_dist = (2 + (np.random.random()**2) * (100 if is_below_surface else 100)) * 1e-6
+            step = max(1e-6, scan_dist / 4)
             try:
                 seq_future = run_image_sequence(
                     cam, z_stack=(depth - scan_dist, depth + scan_dist, step), storage_dir=path
@@ -457,7 +457,7 @@ class Pipette(Device, OptomechDevice):
             fh = seq_future.imagesSavedIn
             info = {
                 **fh.info(),
-                "tip position": self.globalPosition(),
+                **pip_info,
             }
             fh.setInfo(info)
 
