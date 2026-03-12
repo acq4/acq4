@@ -30,7 +30,9 @@ if __package__ is None:
     import acq4  # noqa: F401
     __package__ = 'acq4'
 
-
+sys.stdin.reconfigure(encoding='utf-8')
+sys.stdout.reconfigure(encoding='utf-8')
+sys.stderr.reconfigure(encoding='utf-8')
 
 ## Enable stack trace output when a crash is detected
 from pyqtgraph.debug import enableFaulthandler
