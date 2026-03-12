@@ -155,6 +155,8 @@ class ApproachState(PatchPipetteState):
     cellfiePipetteClearance : float
         Minimum distance (m) between target and pipette tip in which to allow the z-stack to be
         taken (default 100 µm)
+    recalibratePipette : bool
+        Whether to recalibrate the pipette position during approach (default True)
     pipetteRecalibrateDistance : float
         Distance between pipette and target at which to pause and recalibrate the pipette offset
         (default 75 µm)
@@ -191,6 +193,7 @@ class ApproachState(PatchPipetteState):
         "sidestepLateralDistance": {"default": 10e-6, "type": "float", "suffix": "m"},
         "sidestepBackupDistance": {"default": 10e-6, "type": "float", "suffix": "m"},
         "sidestepPassDistance": {"default": 20e-6, "type": "float", "suffix": "m"},
+        "recalibratePipette": {"default": True, "type": "bool"},
         "pipetteRecalibrateDistance": {"default": 75e-6, "type": "float", "suffix": "m"},
         "pipetteRecalibrationMaxChange": {"default": 15e-6, "type": "float", "suffix": "m"},
         "nextState": {"type": "str", "default": "cell detect"},
@@ -251,6 +254,9 @@ class ApproachState(PatchPipetteState):
                     self.setState('Move finished; next state')
                     break
 
+        if self.config['recalibratePipette']:
+            self.recalibratePipette()
+
         return {"state": self.config["nextState"]}
 
     def processAtLeastOneTestPulse(self):
@@ -279,43 +285,45 @@ class ApproachState(PatchPipetteState):
         )
 
     def maybeRecalibratePipette(self):
-        if self._pipetteRecalibrated:
+        if self._pipetteRecalibrated or not self.config['recalibratePipette']:
             return
         if self._distanceToTarget() < self.config["pipetteRecalibrateDistance"]:
-            if self._moveFuture is not None:
-                # should restart on next main loop
-                self._moveFuture.stop(
-                    "Make sure the pipette is where we expect it to be", wait=True
-                )
-                self._moveFuture = None
+            self.recalibratePipette()
+            self._pipetteRecalibrated = True
 
-            pip = self.dev.pipetteDevice
-            imgr = self.dev.imagingDevice()
-            manager = getManager()
-            with manager.reserveDevices(
+    def recalibratePipette(self):
+        if self._moveFuture is not None:
+            # should restart on next main loop
+            self._moveFuture.stop(
+                "Make sure the pipette is where we expect it to be", wait=True
+            )
+            self._moveFuture = None
+
+        pip = self.dev.pipetteDevice
+        imgr = self.dev.imagingDevice()
+        manager = getManager()
+        with manager.reserveDevices(
                 [pip, imgr, imgr.scopeDev.positionDevice(), imgr.scopeDev.focusDevice()],
                 timeout=30.0,
-            ):
-                self.sleep(1.0)
-                initial_pos = pos = np.array(pip.globalPosition())
-                self.waitFor(self.dev.imagingDevice().moveCenterToGlobal(pos, "fast"))
-                self.setState(f"First recalibrate position (starting at {pos})")
-                self.sleep(1.0)
-                pos = pip.tracker.findTipInFrame()
-                self.waitFor(self.dev.imagingDevice().moveCenterToGlobal(pos, "fast"))
-                self.setState(f"Second recalibrate position (found tip at {pos})")
-                self.sleep(1.0)
-                pos = pip.tracker.findTipInFrame()
-                dist = np.linalg.norm(initial_pos - pos)
-                if dist < self.config["pipetteRecalibrationMaxChange"]:
-                    pip.resetGlobalPosition(pos)
-                    self.setState(f"Recalibrate finished (found tip again at {pos})")
-                else:
-                    self.setState(
-                        f"cancel pipette position update; prediction is too far away ({dist*1e6}µm)"
-                    )
-
-            self._pipetteRecalibrated = True
+        ):
+            self.sleep(1.0)
+            initial_pos = pos = np.array(pip.globalPosition())
+            self.waitFor(self.dev.imagingDevice().moveCenterToGlobal(pos, "fast"))
+            self.setState(f"First recalibrate position (starting at {pos})")
+            self.sleep(1.0)
+            pos = pip.tracker.findTipInFrame()
+            self.waitFor(self.dev.imagingDevice().moveCenterToGlobal(pos, "fast"))
+            self.setState(f"Second recalibrate position (found tip at {pos})")
+            self.sleep(1.0)
+            pos = pip.tracker.findTipInFrame()
+            dist = np.linalg.norm(initial_pos - pos)
+            if dist < self.config["pipetteRecalibrationMaxChange"]:
+                pip.resetGlobalPosition(pos)
+                self.setState(f"Recalibrate finished (found tip again at {pos})")
+            else:
+                self.setState(
+                    f"cancel pipette position update; prediction is too far away ({dist * 1e6}µm)"
+                )
 
     @future_wrap
     def _move(self, _future):
