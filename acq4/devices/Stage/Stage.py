@@ -209,7 +209,7 @@ class Stage(Device, OptomechDevice):
         factors.
         """
         if self._axisTransform is None:
-            scale = np.asarray(list(self.config.get('scale', [1] * self.nAxes)))
+            scale = self.getAxisScale()
             matrix = np.eye(self.nAxes) * scale
             # make sure it maps to 3D regardless of input
             matrix = matrix[:3]
@@ -221,6 +221,9 @@ class Stage(Device, OptomechDevice):
         self._calculatedXAxisOrientation = None
         self._updateTransform()
         self.sigOrientationChanged.emit(self)
+
+    def getAxisScale(self):
+        return np.asarray(list(self.config.get('scale', [1] * self.nAxes)))
 
     @functools.lru_cache
     # TODO this needs to be invalidated when the axis transform changes
@@ -423,9 +426,7 @@ class Stage(Device, OptomechDevice):
         ortho = np.array(axis_xform.map(deltas)) - np.array(axis_xform.map(np.zeros(len(deltas))))
 
         # Divide away the scale; we only wanted the orientation
-        scale = self.config.get('scale', None)
-        if scale is not None:
-            ortho /= np.array(scale)
+        ortho /= self.getAxisScale()
 
         # Add changes to current position
         target = pos + ortho

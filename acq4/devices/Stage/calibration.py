@@ -248,6 +248,8 @@ class ManipulatorAxesCalibrationWindow(Qt.QWidget):
             for j in range(self.dev.nAxes):
                 line = scipy.stats.linregress(axStagePos[j], axParentPos[j][:, i])
                 transform[i, j] = line.slope
+        scale = self.dev.getAxisScale()
+        transform = (transform / np.linalg.norm(transform, axis=0) * scale)
 
         # find optimal offset
         self.transform = AffineTransform(transform)
