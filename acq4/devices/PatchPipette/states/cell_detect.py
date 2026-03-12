@@ -105,6 +105,7 @@ class CellDetectAnalysis(SteadyStateAnalysisBase):
             cell_detected_fast = resistance > self._cell_threshold_fast + baseline_avg
             cell_detected_slow = resistance > self._cell_threshold_slow + baseline_avg
             self._last_n_slow_detections.append(cell_detected_slow)
+            # TODO this threshold needs to be based on bath resistance, which might not be what we have at the start of this state
             tip_is_broken = resistance < baseline_avg + self._break_threshold
 
             ret_array[i] = (
