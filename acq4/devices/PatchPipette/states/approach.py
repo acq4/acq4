@@ -419,10 +419,10 @@ class ApproachState(PatchPipetteState):
         self.waitFor(pip._moveToGlobal(pos - sidestep, speed=speed))
 
     def _cleanup(self):
-        if self._moveFuture is not None and not self._moveFuture.isDone():
-            try:
+        try:
+            if self._moveFuture is not None and not self._moveFuture.isDone():
                 self._moveFuture.stop("State finished", wait=True)
-            except Exception:
-                self.dev.logger.exception("Error stopping pipette advance during cleanup")
+        except Exception:
+            self.dev.logger.exception("Error stopping pipette advance during cleanup")
 
         return super()._cleanup()
