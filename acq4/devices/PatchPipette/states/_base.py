@@ -383,12 +383,13 @@ class PatchPipetteState(Future):
 
     def _pausePipetteForExtendedTracking(self, cell):
         self._pauseMovement = True
-        cell.sigTrackingMultipleFramesFinish.connect(self._resumePipetteAfterExtendedTracking)
         cell.sigTrackingMultipleFramesStart.disconnect(self._pausePipetteForExtendedTracking)
+        cell.sigTrackingMultipleFramesFinish.connect(self._resumePipetteAfterExtendedTracking)
 
     def _resumePipetteAfterExtendedTracking(self, cell):
         self._pauseMovement = False
         cell.sigTrackingMultipleFramesFinish.disconnect(self._resumePipetteAfterExtendedTracking)
+        cell.sigTrackingMultipleFramesStart.connect(self._pausePipetteForExtendedTracking)
 
     def _waitForMoveWhileTargetChanges(self, position_fn, speed, continuous, future, interval=None, step=None):
         move_fut = None
