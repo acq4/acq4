@@ -282,6 +282,67 @@ def listWave(params, period, values=None, phase=0.0, start=0.0, stop=None, base=
     #d[start:stop] = saw
     return d
 
+def pwm(params, wave, pwm_period, base=0.0):
+    """Convert a 0-1 amplitude wave to a PWM signal.
+
+    Within each PWM period, the output is 1.0 for the first (duty * cycleTime)
+    samples and base for the remainder, where duty is the mean of the input
+    wave over that cycle (clamped to [0, 1]).
+
+    Example (advanced mode)::
+
+        pwm(sineWave(sine_period, amplitude=0.5) + 0.5, pwm_period=1e-3)
+
+    Parameters
+    ----------
+    wave : array-like
+        Input waveform with values in [0, 1] representing instantaneous duty
+        cycle.  Must be a numpy array of length nPts (i.e. the direct output
+        of another waveform function).
+    pwm_period : float
+        Duration of each PWM switching cycle in seconds.
+    base : float
+        Output value during the "off" portion of each cycle (default 0.0).
+    """
+    rate = params['rate']
+    nPts = params['nPts']
+    params['message'] = ""
+
+    if not hasattr(wave, '__len__'):
+        raise Exception("wave argument must be an array (e.g. the result of sineWave(), squareWave(), etc.)")
+    wave = numpy.asarray(wave, dtype=float)
+    if wave.ndim != 1:
+        raise Exception("wave argument must be a 1-dimensional array")
+    if len(wave) != nPts:
+        raise Exception("wave argument length (%d) must match nPts (%d)" % (len(wave), nPts))
+
+    if not isNum(pwm_period) or pwm_period <= 0:
+        raise Exception("pwm_period argument must be a number > 0")
+
+    cycleTime = int(pwm_period * rate)
+    if cycleTime < 2:
+        params['message'] += "WARNING: pwm_period is too short for sample rate (< 2 samples per cycle)\n"
+        return wave.copy()
+
+    if cycleTime < 10:
+        params['message'] += "Warning: pwm_period is less than 10 samples per cycle\n"
+
+    d = numpy.empty(nPts)
+    d[:] = base
+
+    n_cycles = int(numpy.ceil(nPts / float(cycleTime)))
+    for i in range(n_cycles):
+        start = i * cycleTime
+        end = min(start + cycleTime, nPts)
+        duty = float(numpy.clip(numpy.mean(wave[start:end]), 0.0, 1.0))
+        pulse_end = start + int(round(duty * cycleTime))
+        pulse_end = min(pulse_end, end)
+        if pulse_end > start:
+            d[start:pulse_end] = 1.0
+
+    return d
+
+
 def noise(params, mean, sigma, start=0.0, stop=None):
     rate = params['rate']
     nPts = params['nPts']
