@@ -442,8 +442,10 @@ class FutureWrapper:
     @overload
     def __call__(
         self,
+        func: None = None,
+        *,
         logLevel: str,
-    ) -> FutureWrapper:
+    ) -> "FutureWrapper":
         ...
 
     def __call__(self, func=None, *, logLevel=None):
