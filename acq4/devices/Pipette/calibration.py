@@ -24,8 +24,9 @@ def findNewPipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=0.
         center = imager.globalCenterPosition(mode='roi')
         pipVector = pipette.globalDirection()
         pipY = np.cross(pipVector, [0, 0, 1])
-        searchPos1 = center + pipVector * 1e-3 + pipY * 1e-3
-        searchPos2 = center + pipVector * 1e-3 - pipY * 1e-3
+        pipY /= np.linalg.norm(pipY)
+        searchPos1 = center + pipVector * 1.5e-3 + pipY * 2e-3
+        searchPos2 = center + pipVector * 1.5e-3 - pipY * 2e-3
         # using a planner avoids possible collisions with the objective
         planner = PipetteMotionPlanner(pipette, searchPos1, speed='fast')
         _future.waitFor(planner.move())
