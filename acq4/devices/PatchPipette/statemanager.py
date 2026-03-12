@@ -159,6 +159,7 @@ class PatchPipetteStateManager(Qt.QObject):
     def setProfile(self, profile: str):
         """Set the current patch profile."""
         self._profile = profile
+        self.logger.debug(f"Profile set to {profile}")
         self.sigProfileChanged.emit(self, profile)
 
     def getState(self):
@@ -239,6 +240,7 @@ class PatchPipetteStateManager(Qt.QObject):
     def stopJob(self, allowNextState=True):
         job = self.currentJob
         if job is not None:
+            self.logger.debug(f"Stopping job {job.stateName}; allowNextState={allowNextState}")
             # disconnect; we'll call jobFinished directly
             disconnect(job.sigFinished, self.jobFinished)
             job.stop()
@@ -256,6 +258,7 @@ class PatchPipetteStateManager(Qt.QObject):
         self.dev.emitNewEvent("state_event", {'state': job.stateName, 'info': state})
 
     def jobFinished(self, job, allowNextState=True):
+        self.logger.debug(f"Job {job.stateName} finished; allowNextState={allowNextState}")
         try:
             job.cleanup().wait()
         except Exception:
