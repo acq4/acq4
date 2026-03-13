@@ -307,7 +307,7 @@ class PatchPipetteState(Future):
         """Called after job completes, whether it failed or succeeded. Ask `self.wasInterrupted()` to see if the
         state was stopped early. Return a Future that completes when cleanup is done.
         """
-        disconnect(self.dev.pipetteDevice.sigTargetChanged, self._onTargetChanged)
+        disconnect(self.dev.sigTargetChanged, self._onTargetChanged)
         with log_and_ignore_exception(Exception, "Error disabling visual target tracking"):
             if self._cell is not None:
                 self._cell.enableTracking(False)
@@ -349,6 +349,9 @@ class PatchPipetteState(Future):
         if self.closeEnoughToTargetToDetectCell():
             if self._visualTargetTrackingFuture is not None:
                 self._cell.enableTracking(False)
+                self._visualTargetTrackingFuture.stop(
+                    "Close enough to target to detect cell, stopping visual tracking"
+                )
                 self._visualTargetTrackingFuture = None
             return
         if self._visualTargetTrackingFuture is None:
