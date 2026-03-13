@@ -143,7 +143,7 @@ class MicroManagerStage(Stage):
                 'limits': (False, False, False),
             }
 
-    def stop(self):
+    def stop(self, reason=None):
         """Stop the manipulator.
 
         If the manipulator is currently in use elsewhere, this method blocks until it becomes available.

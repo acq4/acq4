@@ -141,7 +141,7 @@ class ThorlabsMFC1(Stage):
         self.dev.set_encoder(0)
         self._getPosition()
 
-    def stop(self):
+    def stop(self, reason=None):
         self.dev.stop()
 
     def setHolding(self, hold):
