@@ -659,6 +659,10 @@ class AutomationDebugWindow(Qt.QWidget):
             logger.info(f"Cell detection complete. Found {len(neurons)} potential cells")
             self._displayBoundingBoxes(neurons)
 
+            if self._current_detection_stack is None:
+                logger.info("No detection stack available, skipping annotation tool launch.")
+                return
+
             stack = np.asarray([frame.data().T for frame in self._current_detection_stack])
             frame_to_global = self._current_detection_stack[0].globalTransform().inverse
             centers_ijk = [np.abs(frame_to_global.map(n)[::-1]) for n in neurons]
@@ -710,11 +714,7 @@ class AutomationDebugWindow(Qt.QWidget):
         points[:, 2] *= 20e-6
         points[:, 1] *= frame.shape[0]
         points[:, 0] *= frame.shape[1]
-        boxes = []
-        for pt in points:
-            center = frame.mapFromFrameToGlobal(pt)
-            boxes.append((center - 20e-6, center + 20e-6))
-        return boxes
+        return [frame.mapFromFrameToGlobal(pt) for pt in points]
 
     @future_wrap
     def _detectNeuronsZStack(
