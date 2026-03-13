@@ -419,10 +419,11 @@ def _fix_frame_transforms(frames, z_step):
     for f in frames:
         # this xform will be composite, so we can't just do `.scale = ...`
         xform = f.globalTransform().as_affine()
-        z_vector = np.array(xform.matrix[:, 2])
-        z_vector /= np.linalg.norm(z_vector)
-        z_vector *= z_step
-        xform.matrix[:, 2] = z_vector
+        m = xform.matrix  # get a copy to modify
+        z_vector = m[:, 2]
+        z_vector = z_vector / np.linalg.norm(z_vector) * z_step
+        m[:, 2] = z_vector
+        xform.matrix = m  # use the setter so the change is stored
         f.addInfo(transform=xform)
 
 
