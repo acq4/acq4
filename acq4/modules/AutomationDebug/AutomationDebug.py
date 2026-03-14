@@ -766,7 +766,7 @@ class AutomationDebugWindow(Qt.QWidget):
                 _future.waitFor(self.scopeDevice.loadPreset(detection_preset))
             detection_stack = _future.waitFor(
                 acquire_z_stack(
-                    self.cameraDevice, start_z, stop_z, step_z, slow_fallback=False
+                    self.cameraDevice, start_z, stop_z, step_z, slow_fallback=False, name="neuron detection stack"
                 ),
                 timeout=100,
             ).getResult()
@@ -775,7 +775,7 @@ class AutomationDebugWindow(Qt.QWidget):
                 _future.waitFor(self.scopeDevice.loadPreset(classification_preset))
                 classification_stack = _future.waitFor(
                     acquire_z_stack(
-                        self.cameraDevice, start_z, stop_z, step_z, slow_fallback=False
+                        self.cameraDevice, start_z, stop_z, step_z, slow_fallback=False, name="neuron classification stack"
                     ),
                     timeout=100,
                 ).getResult()
