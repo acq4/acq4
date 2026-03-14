@@ -151,13 +151,18 @@ class PatchPipette(Device):
 
     def focusOnTip(self, speed, raiseErrors=False):
         imdev = self.imagingDevice()
-        fut = imdev.moveCenterToGlobal(self.pipetteDevice.globalPosition(), speed=speed)
+        fut = imdev.moveCenterToGlobal(
+            self.pipetteDevice.globalPosition(), speed=speed, name=f"Focus on {self.name()} tip"
+        )
         if raiseErrors:
             fut.raiseErrors("Error while focusing on pipette tip: {error}")
+        return fut
 
     def focusOnTarget(self, speed, raiseErrors=False):
         imdev = self.imagingDevice()
-        fut = imdev.moveCenterToGlobal(self.pipetteDevice.targetPosition(), speed=speed)
+        fut = imdev.moveCenterToGlobal(
+            self.pipetteDevice.targetPosition(), speed=speed, name=f"Focus on {self.name()} target"
+        )
         if raiseErrors:
             fut.raiseErrors("Error while focusing on pipette target: {error}")
         return fut

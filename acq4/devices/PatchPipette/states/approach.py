@@ -281,6 +281,7 @@ class ApproachState(PatchPipetteState):
                 self.dev.imagingDevice(),
                 z_stack=(start, end, config["cellfieStep"]),
                 storage_dir=save_in,
+                name="cellfie",
             )
         )
 
@@ -308,18 +309,22 @@ class ApproachState(PatchPipetteState):
         ):
             self.sleep(1.0)
             initial_pos = pos = np.array(pip.globalPosition())
-            self.waitFor(self.dev.imagingDevice().moveCenterToGlobal(pos, "fast"))
-            self.setState(f"First recalibrate position (starting at {pos})")
+            self.waitFor(self.dev.focusOnTip("fast"))
+            self.setState(f"First tip finding (starting at {pos})")
             self.sleep(1.0)
             pos = pip.tracker.findTipInFrame()
-            self.waitFor(self.dev.imagingDevice().moveCenterToGlobal(pos, "fast"))
-            self.setState(f"Second recalibrate position (found tip at {pos})")
+            self.waitFor(
+                self.dev.imagingDevice().moveCenterToGlobal(
+                    pos, "fast", name=f"verify {self.dev.name()} tip estimate"
+                )
+            )
+            self.setState(f"Second tip find (found tip at {pos})")
             self.sleep(1.0)
             pos = pip.tracker.findTipInFrame()
             dist = np.linalg.norm(initial_pos - pos)
             if dist < self.config["pipetteRecalibrationMaxChange"]:
                 pip.resetGlobalPosition(pos)
-                self.setState(f"Recalibrate finished (found tip again at {pos})")
+                self.setState(f"pipette tip found at {pos}")
             else:
                 self.setState(
                     f"cancel pipette position update; prediction is too far away ({dist * 1e6}µm)"

@@ -158,7 +158,7 @@ class MockStage(Stage):
         
         self.startMoving(vec[:self.nAxes])
 
-    def stop(self):
+    def stop(self, reason=None):
         with self.lock:
             self.abort()
     

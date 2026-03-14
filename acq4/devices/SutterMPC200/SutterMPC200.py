@@ -98,7 +98,7 @@ class SutterMPC200(Stage):
                 'limits': (False, False, False),
             }
 
-    def stop(self):
+    def stop(self, reason=None):
         """Stop _any_ moving drives on the MPC200.
         """
         self.dev.stop()

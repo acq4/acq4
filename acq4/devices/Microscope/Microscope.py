@@ -258,20 +258,20 @@ class Microscope(Device, OptomechDevice):
             name = cameras[0]
         return self.dm.getDevice(name)
 
-    def getZStack(self, imager: "Device", z_range, block=False) -> Future[list[Frame]]:
+    def getZStack(self, imager: "Device", z_range, block=False, name="z stack") -> Future[list[Frame]]:
         """Acquire a z-stack of images using the given imager.
 
         The z-stack is returned as frames.
         """
         from acq4.util.imaging.sequencer import acquire_z_stack
 
-        return acquire_z_stack(imager, *z_range, block=block)
+        return acquire_z_stack(imager, *z_range, block=block, name=name)
 
     @future_wrap
     def findSurfaceDepth(self, imager: "Device", searchDistance=200*µm, searchStep=5*µm, _future: Future = None) -> float:
         """Set the surface of the sample based on how focused the images are."""
         z_range = (self.getSurfaceDepth() + searchDistance, self.getSurfaceDepth() - searchDistance, searchStep)
-        z_stack: list[Frame] = _future.waitFor(self.getZStack(imager, z_range)).getResult()
+        z_stack: list[Frame] = _future.waitFor(self.getZStack(imager, z_range, name="finding surface")).getResult()
         threshold = self.config.get('surfaceDetectionPercentileThreshold', 96)
         if (idx := find_surface(z_stack, threshold)) is not None:
             depth = z_stack[idx].mapFromFrameToGlobal([0, 0, 0])[2]

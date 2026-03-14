@@ -675,14 +675,14 @@ class OptomechDevice(InterfaceMixin):
         """Return the Z position of this device's origin, mapped to the global coordinate system."""
         return self.mapToGlobal([0, 0, 0])[2]
 
-    def setFocusDepth(self, depth, speed="slow"):
+    def setFocusDepth(self, depth, speed="slow", name=None):
         """Set microscope focus such that this device's origin is moved to the specified global Z position."""
         dev = self.getFocusDevice()
         if dev is None:
             raise ValueError(f"Device {dev} is not connected to a focus controller.")
         dz = depth - self.getFocusDepth()
         dpos = dev.globalPosition()
-        return dev.moveToGlobal([dpos[0], dpos[1], dpos[2] + dz], speed)
+        return dev.moveToGlobal([dpos[0], dpos[1], dpos[2] + dz], speed, name=name)
 
     def getFocusDevice(self):
         """Return the device that provides focus capabilities for this device."""

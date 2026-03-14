@@ -449,7 +449,10 @@ class Pipette(Device, OptomechDevice):
             step = max(1e-6, scan_dist / 4)
             try:
                 seq_future = run_image_sequence(
-                    cam, z_stack=(depth - scan_dist, depth + scan_dist, step), storage_dir=path
+                    cam,
+                    z_stack=(depth - scan_dist, depth + scan_dist, step),
+                    storage_dir=path,
+                    name="manual calibration stack",
                 )
                 _future.waitFor(seq_future)
             finally:

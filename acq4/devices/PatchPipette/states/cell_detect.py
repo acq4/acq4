@@ -2,20 +2,16 @@ from __future__ import annotations
 
 from collections import deque
 from threading import Lock
-import time
 from typing import Any, Iterable
 
-from acq4.Manager import getManager
 import numpy as np
-import pyqtgraph as pg
 
+import pyqtgraph as pg
 from acq4.util import ptime
 from acq4.util.debug import log_and_ignore_exception
 from acq4.util.functions import plottable_booleans
 from acq4.util.future import future_wrap
-from ._base import PatchPipetteState, SteadyStateAnalysisBase
 from pyqtgraph.units import µm
-from acq4.util.imaging.sequencer import run_image_sequence
 from ._base import PatchPipetteState, SteadyStateAnalysisBase, exponential_decay_avg
 
 

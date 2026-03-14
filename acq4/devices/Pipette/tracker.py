@@ -263,13 +263,17 @@ class CorrelationPipetteTracker(PipetteTracker):
             zStep = zRange / 30
 
         # collect pipette stack
-        frames = acquire_z_stack(imager, zStart, zEnd, zStep, block=True).getResult()
+        frames = acquire_z_stack(
+            imager, zStart, zEnd, zStep, block=True, name="pipette reference stack"
+        ).getResult()
         pxSize = frames[0].info()["pixelSize"]
         frames = np.stack([f.data()[minImgPos[0]:maxImgPos[0], minImgPos[1]:maxImgPos[1]] for f in frames], axis=0).astype(float)
 
         # collect background stack
         _future.waitFor(self.pipette._moveToLocal([-tipLength * 3, 0, 0], "slow"))
-        bg_frames = acquire_z_stack(imager, zStart, zEnd, zStep, block=True).getResult()
+        bg_frames = acquire_z_stack(
+            imager, zStart, zEnd, zStep, block=True, name="background for subtracting"
+        ).getResult()
         bg_frames = np.stack([f.data()[minImgPos[0]:maxImgPos[0], minImgPos[1]:maxImgPos[1]] for f in bg_frames], axis=0).astype(float)
 
         # return pipette to original position
@@ -372,7 +376,6 @@ class CorrelationPipetteTracker(PipetteTracker):
             raise Exception(
                 "No reference frames found for this pipette / objective / filter combination: %s" % repr(key)
             )
-
 
     def mapErrors(
         self,

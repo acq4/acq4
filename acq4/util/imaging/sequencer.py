@@ -105,6 +105,7 @@ def _set_focus_depth(
     direction: float,
     speed: Union[float, str],
     hysteresis_correction: bool = True,
+    name: str | None = None,
     future: Optional[Future] = None,
 ):
     if depth is None:
@@ -118,32 +119,32 @@ def _set_focus_depth(
     # Avoid hysteresis:
     if hysteresis_correction and direction < 0 and dz > 0:
         # stack goes downward
-        move = imager.setFocusDepth(depth + 20e-6, speed)
+        move = imager.setFocusDepth(depth + 20e-6, speed, name=f"{name} hysteresis correction")
     elif hysteresis_correction and direction > 0 and dz < 0:
         # stack goes upward
-        move = imager.setFocusDepth(depth - 20e-6, speed)
+        move = imager.setFocusDepth(depth - 20e-6, speed, name=f"{name} hysteresis correction")
     else:
-        move = imager.setFocusDepth(depth, speed)
+        move = imager.setFocusDepth(depth, speed, name=f"redundant {name}")
 
     if future is not None:
         future.waitFor(move, timeout=timeout)
     else:
         move.wait(timeout=timeout)
 
-    move = imager.setFocusDepth(depth, speed)  # maybe redundant
+    move = imager.setFocusDepth(depth, speed, name=name)  # maybe redundant
     if future is not None:
         future.waitFor(move, timeout=timeout)
     else:
         move.wait(timeout=timeout)
 
 
-def _stepped_z_stack(imager, start, end, step, future) -> list[Frame]:
+def _stepped_z_stack(imager, start, end, step, name, future) -> list[Frame]:
     direction = np.sign(end - start)
     step = direction * abs(step)
     frames = []
     with imager.ensureRunning(ensureFreshFrames=True):
         for z in np.arange(start, end + step, step):
-            _set_focus_depth(imager, z, direction, speed="slow", future=future)
+            _set_focus_depth(imager, z, direction, speed="slow", name=f"{name} step", future=future)
             frames.append(future.waitFor(imager.acquireFrames(1)).getResult()[0])
     return frames
 
@@ -230,6 +231,7 @@ def run_image_sequence(
     z_stack: "tuple[float, float, float] | None" = None,
     mosaic: "tuple[float, float, float, float, float] | None" = None,
     storage_dir: "DirHandle | None" = None,
+    name: str | None = None,
     _future: Future = None,
 ) -> "Frame | list[Frame | list[Frame | list[Frame]]]":
     _hold_imager_focus(imager, True)
@@ -266,10 +268,10 @@ def run_image_sequence(
                 if i >= count:
                     break
                 start = ptime.time()
-                for move in movements_to_cover_region(imager, mosaic):
+                for move in movements_to_cover_region(imager, mosaic, name):
                     _future.waitFor(move)
                     if z_stack:
-                        stack = acquire_z_stack(imager, *z_stack, block=True, checkStopThrough=_future).getResult()
+                        stack = acquire_z_stack(imager, *z_stack, block=True, name=name, checkStopThrough=_future).getResult()
                         handle_new_frames(stack, i)
                     else:  # single frame
                         frame = _future.waitFor(imager.acquireFrames(1, ensureFreshFrames=True)).getResult()[0]
@@ -285,7 +287,7 @@ def run_image_sequence(
 
 
 def movements_to_cover_region(
-    imager, region: "tuple[float, float, float, float, float] | None"
+    imager, region: "tuple[float, float, float, float, float] | None", name: str = "mosaic"
 ) -> Generator[Future, None, None]:
     """
     Generate a sequence of snaking movements to cover the region. `region` is a tuple containing the `left`, `top`,
@@ -297,7 +299,7 @@ def movements_to_cover_region(
         return
 
     for pos in positions_to_cover_region(region, imager.globalCenterPosition(), imager.getBoundary(mode="roi")):
-        yield imager.moveCenterToGlobal(pos, "fast")
+        yield imager.moveCenterToGlobal(pos, "fast", name=name)
 
 
 def positions_to_cover_region(region, imager_center, imager_region) -> Generator[tuple, None, None]:
@@ -346,6 +348,7 @@ def acquire_z_stack(
     slow_fallback=True,
     device_reservation_timeout=10.0,
     max_dz_per_frame=5e-6,  # m
+    name: str | None = "z stack",
     _future: Future = None,
 ) -> list[Frame]:
     """Acquire a Z stack from the given imager.
@@ -376,7 +379,7 @@ def acquire_z_stack(
     """
     # TODO think about strobing the lighting for clearer images
     direction = stop - start
-    _set_focus_depth(imager, start, direction, "fast", hysteresis_correction, _future)
+    _set_focus_depth(imager, start, direction, "fast", hysteresis_correction, f"{name} start", _future)
     stage = imager.scopeDev.getFocusDevice()
     exposure = imager.getParam('exposure')
     # todo estimate the depth of field of the objective from its numerical aperture and wavelength
@@ -387,14 +390,14 @@ def acquire_z_stack(
     man = Manager.getManager()
     if dz_per_frame > max_dz_per_frame:
         with man.reserveDevices(imager.devicesToReserve(), timeout=device_reservation_timeout):
-            frames = _stepped_z_stack(imager, start, stop, step, _future)
+            frames = _stepped_z_stack(imager, start, stop, step, name, _future)
     else:
         with man.reserveDevices(imager.devicesToReserve(), timeout=device_reservation_timeout):
             with imager.ensureRunning(ensureFreshFrames=True):
                 frames_fut = imager.acquireFrames()
                 try:
                     _future.waitFor(imager.acquireFrames(1))  # just to be sure the camera's recording
-                    _set_focus_depth(imager, stop, direction, speed, hysteresis_correction=False, future=_future)
+                    _set_focus_depth(imager, stop, direction, speed, hysteresis_correction=False, name=f"{name} stop", future=_future)
                     _future.waitFor(imager.acquireFrames(1))  # just to be sure the camera caught up
                 finally:
                     frames_fut.stop()
@@ -406,7 +409,7 @@ def acquire_z_stack(
                 raise
             imager.logger.info("Failed to fast-acquire linear z stack. Retrying with stepwise movement.")
             with man.reserveDevices(imager.devicesToReserve(), timeout=device_reservation_timeout):
-                frames = _stepped_z_stack(imager, start, stop, step, _future)
+                frames = _stepped_z_stack(imager, start, stop, step, name, _future)
     _fix_frame_transforms(frames, step)
     return frames
 
@@ -417,10 +420,11 @@ def _fix_frame_transforms(frames, z_step):
     for f in frames:
         # this xform will be composite, so we can't just do `.scale = ...`
         xform = f.globalTransform().as_affine()
-        z_vector = np.array(xform.matrix[:, 2])
-        z_vector /= np.linalg.norm(z_vector)
-        z_vector *= z_step
-        xform.matrix[:, 2] = z_vector
+        m = xform.matrix  # get a copy to modify
+        z_vector = m[:, 2]
+        z_vector = z_vector / np.linalg.norm(z_vector) * z_step
+        m[:, 2] = z_vector
+        xform.matrix = m  # use the setter so the change is stored
         f.addInfo(transform=xform)
 
 

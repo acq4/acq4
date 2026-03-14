@@ -61,7 +61,7 @@ class NewScaleMPM(Stage):
                 "limits": (False, False, False),
             }
 
-    def stop(self):
+    def stop(self, reason=None):
         """Stop the manipulator immediately.
         """
         with self.lock:
