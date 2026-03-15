@@ -832,6 +832,7 @@ class OptomechDeviceVisualizerAdapter(Qt.QObject):
     def _buildControlParam(self):
         children = [
             dict(name='Geometry', type='bool', value=True),
+            dict(name='Center View', type='action'),
         ]
         if self._limits is not None:
             children.append(dict(name='Range of Motion', type='bool', value=False))
@@ -839,9 +840,14 @@ class OptomechDeviceVisualizerAdapter(Qt.QObject):
         param = Parameter.create(name=self.device.name(), type='bool', value=True, children=children)
         param.sigValueChanged.connect(self._handleDeviceToggle)
         param.child('Geometry').sigValueChanged.connect(self._handleGeometryVisible)
+        param.child('Center View').sigActivated.connect(self._handleCenterView)
         if self._limits is not None:
             param.child('Range of Motion').sigValueChanged.connect(self._handleLimitsVisible)
         return param
+
+    def _handleCenterView(self):
+        pos = self.device.globalPhysicalTransform().as_pyqtgraph().map(Qt.QVector3D(0, 0, 0))
+        self.win.centerOnPosition(pos)
 
     def _handleDeviceToggle(self, param, value):
         for child in param.children():
