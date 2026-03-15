@@ -223,8 +223,8 @@ class Sensapex(Stage):
             linear = True
         if self._force_nonlinear_movement:
             linear = False
+        speed = self._interpretSpeed(speed)
         with self.lock:
-            speed = self._interpretSpeed(speed)
             self._lastMove = SensapexMoveFuture(self, pos, speed, linear, name=name, **kwds)
             return self._lastMove
 
@@ -279,18 +279,68 @@ class SensapexMoveFuture(MoveFuture):
             self._taskDone(interrupted=False)
             return
 
+        self._moveReq = None
         if self.speed >= 1e-6:
-            self._moveReq = self.dev.dev.goto_pos(pos, self.speed * 1e6, simultaneous=linear, linear=linear)
-            self._monitorThread = threading.Thread(target=self._watchForFinish, daemon=True, name=f"{name} sensapex monitor")
+            if self.dev.nAxes == 4:
+                # we have to break up the movement because D is always separate from Z
+                self._monitorThread = threading.Thread(
+                    target=self._4AxisMove, daemon=True, name=f"{name} sensapex 4-axis move"
+                )
+            else:
+                self._moveReq = self.dev.dev.goto_pos(
+                    pos, self.speed * 1e6, simultaneous=linear, linear=linear
+                )
+                self._monitorThread = threading.Thread(
+                    target=self._watchForFinish, daemon=True, name=f"{name} sensapex monitor"
+                )
         else:
             # uMp has trouble with very slow speeds, so we do this manually by looping over small steps
-            self._moveReq = None
-            self._monitorThread = threading.Thread(target=self._stepwiseMove, daemon=True, name=f"{name} sensapex stepwise move")
+            self._monitorThread = threading.Thread(
+                target=self._stepwiseMove, daemon=True, name=f"{name} sensapex stepwise move"
+            )
         self._monitorThread.start()
+
+    def _4AxisMove(self):
+        # for advancing forward in D, move in XYZ first. otherwise, retract first in D.
+        pos = list(self.targetPos)
+        start = list(self.startPos)
+        if pos[3] < start[3]:
+            # move XYZ first
+            waypoint = pos[:3] + start[3]
+        else:
+            waypoint = start[:3] + pos[3]
+
+        self._moveReq = self.dev.dev.goto_pos(
+            waypoint, self.speed * 1e6, simultaneous=self._linear, linear=self._linear
+        )
+        if not self._waitFor(self._moveReq):
+            self._taskDone(
+                interrupted=self._moveReq.interrupted,
+                error=self._generateErrorMessage(),
+                excInfo=None,
+            )
+        self._moveReq = self.dev.dev.goto_pos(
+            pos, self.speed * 1e6, simultaneous=self._linear, linear=self._linear
+        )
+        self._waitFor(self._moveReq)
+        self._taskDone(
+            interrupted=self._moveReq.interrupted,
+            error=self._generateErrorMessage(),
+            excInfo=None,
+        )
+
+    def _waitFor(self, moveReq):
+        """Wait for a sensapex MoveRequest, while watching for our own stop signal. Return whether
+        the move completed successfully."""
+        while not moveReq.finished_event.wait(0.2):
+            if self._stopRequested:
+                moveReq.interrupt(reason=self._errorMessage)
+                return False
+        return not moveReq.interrupted
 
     def _watchForFinish(self):
         moveReq = self._moveReq
-        moveReq.finished_event.wait()
+        self._waitFor(moveReq)
         self._taskDone(
             interrupted=moveReq.interrupted,
             error=self._generateErrorMessage(),
@@ -321,13 +371,10 @@ class SensapexMoveFuture(MoveFuture):
             # request the next step and wait
             lastTarget = currentTarget
             self._moveReq = self.dev.dev.goto_pos(currentTarget, speed=1.0, simultaneous=True, linear=True)
-            while not self._moveReq.finished_event.wait(0.2):
-                if self._stopRequested:
-                    self._moveReq.interrupt(reason=self._errorMessage)
-                if self._moveReq.interrupted:
-                    break
+            if not self._waitFor(self._moveReq):
+                break
 
-            if fractionComplete == 1.0 or self._moveReq.interrupted:
+            if fractionComplete == 1.0:
                 break
 
         self._taskDone(
