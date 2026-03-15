@@ -1,6 +1,7 @@
 import os
 from typing import Callable
 
+import pyqtgraph as pg
 from acq4.util import Qt
 from pyqtgraph import opengl as gl
 from pyqtgraph.parametertree import Parameter, ParameterTree
@@ -78,6 +79,10 @@ class VisualizerWindow(Qt.QMainWindow):
         path.setVisible(visible)
         self.view.addItem(path)
         return path
+
+    def centerOnPosition(self, pos):
+        """Center the 3D camera on the given (x, y, z) position."""
+        self.view.setCameraPosition(pos=pg.Vector(pos.x(), pos.y(), pos.z()))
 
     def focus(self):
         self.focusEvent.emit()
