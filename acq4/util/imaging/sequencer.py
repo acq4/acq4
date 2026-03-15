@@ -111,12 +111,16 @@ def _set_focus_depth(
     timeout = max(10, 3 * abs(dz) / speed)
 
     # Avoid hysteresis:
+    hysteresis_correction_distance = imager.getFocusDevice().hysteresisCorrection
+    if hysteresis_correction_distance == 0:
+        hysteresis_correction = False
+
     if hysteresis_correction and direction > 0 and dz > 0:
         # stack goes downward
-        move = imager.setFocusDepth(depth + 20e-6, speed)
+        move = imager.setFocusDepth(depth + hysteresis_correction_distance, speed, name=f"{name} hysteresis correction")
     elif hysteresis_correction and direction < 0 and dz < 0:
         # stack goes upward
-        move = imager.setFocusDepth(depth - 20e-6, speed)
+        move = imager.setFocusDepth(depth - hysteresis_correction_distance, speed, name=f"{name} hysteresis correction")
     else:
         move = imager.setFocusDepth(depth, speed)
 

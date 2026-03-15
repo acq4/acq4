@@ -31,6 +31,9 @@ from ...util.geometry import (
 class Stage(Device, OptomechDevice):
     """Base class for mechanical stages with motorized control and/or position feedback.
 
+    Typically this device class is not used directly; instead use a subclass specific to 
+    the hardware in use.
+
     This is an optomechanical device that modifies its own transform based on position or orientation
     information received from a position control device. The transform is calculated as::
 
@@ -43,11 +46,14 @@ class Stage(Device, OptomechDevice):
 
         isManipulator : bool
             Default False. Whether this mechanical device is to be used as an e.g. pipette manipulator, rather than
-            as a stage.
+            as a microscope stage.
         fastSpeed : float
             Speed (m/s) to use when a movement is requested with speed='fast'
         slowSpeed : float
             Speed (m/s) to use when a movement is requested with speed='slow'
+        hysteresisCorrection : float
+            Distance (m) to overshoot when approaching a position to correct for hysteresis.
+            Default is 20e-6 (20 µm). Set to 0 to disable the correction step entirely.
     """
 
     sigPositionChanged = Qt.Signal(object, object, object)  # self, new position, old position
@@ -85,6 +91,7 @@ class Stage(Device, OptomechDevice):
         self._defaultSpeed = 'fast'
         self.setFastSpeed(config.get('fastSpeed', 1e-3))
         self.setSlowSpeed(config.get('slowSpeed', 10e-6))
+        self.hysteresisCorrection = config.get('hysteresisCorrection', 20e-6)
 
         self._limits = [(None, None)] * self.nAxes
         if 'limits' in config:
