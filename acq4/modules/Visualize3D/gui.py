@@ -80,9 +80,9 @@ class VisualizerWindow(Qt.QMainWindow):
         self.view.addItem(path)
         return path
 
-    def centerOnPosition(self, pos):
+    def centerOnPosition(self, pos: tuple[float, float, float]) -> None:
         """Center the 3D camera on the given (x, y, z) position."""
-        self.view.setCameraPosition(pos=pg.Vector(pos.x(), pos.y(), pos.z()))
+        self.view.setCameraPosition(pos=pg.Vector(*pos))
 
     def focus(self):
         self.focusEvent.emit()
