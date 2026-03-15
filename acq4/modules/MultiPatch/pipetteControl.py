@@ -4,6 +4,7 @@ import re
 import pyqtgraph as pg
 from acq4.devices.PatchPipette import PatchPipette
 from acq4.util import Qt
+from acq4.util.ui.pipetteEventLog import PipetteEventLog
 from neuroanalysis.data import TSeries
 from neuroanalysis.test_pulse import PatchClampTestPulse
 
@@ -116,6 +117,17 @@ class PipetteControl(Qt.QWidget):
                 self.stateMenu.addAction(state, self.stateActionClicked)
 
         self._pc1 = MousePressCatch(self.ui.stateText, self.stateTextClicked)
+
+        # Event log: added to the bottom of the clamp widget's internal layout,
+        # so it sits under the Clamp/Holding/auto controls within the pipette's rows.
+        self._eventLog = PipetteEventLog()
+        self._eventLog.setMaximumHeight(160)
+        self.ui.widget_6.layout().addWidget(self._eventLog, 4, 0, 2, 7)
+
+        if isinstance(pipette, PatchPipette):
+            self.pip.sigNewEvent.connect(self._pipetteEventLogged)
+            for ev in pipette.eventLog():
+                self._eventLog.addEvent(ev['event_time'], ev['event'], ev)
 
         self.plots = [
             PlotWidget(mode='test pulse'), 
@@ -326,6 +338,14 @@ class PipetteControl(Qt.QWidget):
             self.ui.autoBiasTargetSpin.setEnabled(True)
 
         self._updateActiveHoldingUi()
+
+    def _pipetteEventLogged(self, pip, event):
+        if event['event'] == 'new_patch_attempt':
+            self._eventLog.clear()
+        self._eventLog.addEvent(event['event_time'], event['event'], event)
+
+    def clearEventLog(self):
+        self._eventLog.clear()
 
     def newPipetteRequested(self):
         self.ui.newPipetteBtn.setStyleSheet("QPushButton {border: 2px solid #F00;}")
