@@ -616,6 +616,8 @@ class MultiPatchWindow(Qt.QWidget):
         for pip in self.selectedPipettes():
             if pip.clampDevice is not None:
                 pip.clampDevice.resetTestPulseHistory()
+        for ctrl in self.pipCtrls:
+            ctrl.clearEventLog()
 
     def writeRecords(self, recs):
         for rec in recs:

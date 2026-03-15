@@ -2,6 +2,16 @@ from __future__ import annotations
 
 from collections import OrderedDict
 
+# Event types stored in the in-memory event log and shown in the UI.
+LOG_EVENT_TYPES = frozenset({
+    'state_change',
+    'new_pipette',
+    'pipette_calibrated',
+    'move_requested',
+    'new_patch_attempt',
+    'tip_clean_changed',
+})
+
 import numpy as np
 from neuroanalysis.test_pulse import PatchClampTestPulse
 
@@ -79,6 +89,9 @@ class PatchPipette(Device):
         # key measurements made during patch process and lifetime of pipette
         self._patchRecord = None
         self._pipetteRecord = None
+
+        # in-memory log of semantically meaningful events; cleared on newPatchAttempt()
+        self._logEvents = []
 
         self.pressureDevice: PressureControl | None = None
         if 'pressureDevice' in config:
@@ -194,10 +207,11 @@ class PatchPipette(Device):
         return self._pipetteRecord
 
     def newPatchAttempt(self):
-        """Ready to begin a new patch attempt; reset TP history and patch record."""
+        """Ready to begin a new patch attempt; reset TP history, patch record, and event log."""
         self.finishPatchRecord()
         if self.clampDevice:
             self.clampDevice.resetTestPulseHistory()
+        self._logEvents.clear()
         self.emitNewEvent('new_patch_attempt', {})
 
     def _resetPatchRecord(self):
@@ -360,15 +374,12 @@ class PatchPipette(Device):
         self.emitNewEvent('move_start', {'position': tuple(pos)})
 
     def _pipetteMoveRequested(self, pip, pos, speed, opts):
+        event = {'position': tuple(pos), 'speed': speed, 'opts': repr(opts)}
+        if 'name' in opts:
+            event['name'] = opts['name']
         self.emitNewEvent(
             'move_requested',
-            OrderedDict(
-                [
-                    ('position', tuple(pos)),
-                    ('speed', speed),
-                    ('opts', repr(opts)),
-                ]
-            ),
+            event,
         )
 
     def _pipetteMoveFinished(self, pip, pos):
@@ -391,6 +402,10 @@ class PatchPipette(Device):
             data = {'full_test_pulse': result, **data}  # copy it so we don't modify the original
         self.emitNewEvent('test_pulse', data)
 
+    def eventLog(self) -> list:
+        """Return the in-memory list of semantically meaningful events since the last newPatchAttempt()."""
+        return list(self._logEvents)
+
     def emitNewEvent(self, eventType, eventData=None):
         newEv = OrderedDict(
             [
@@ -401,4 +416,6 @@ class PatchPipette(Device):
         )
         if eventData is not None:
             newEv.update(eventData)
+        if eventType in LOG_EVENT_TYPES:
+            self._logEvents.append(dict(newEv))
         self.sigNewEvent.emit(self, newEv)
