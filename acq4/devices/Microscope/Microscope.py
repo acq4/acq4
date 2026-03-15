@@ -268,18 +268,27 @@ class Microscope(Device, OptomechDevice):
         return acquire_z_stack(imager, *z_range, block=block, name=name)
 
     @future_wrap
-    def findSurfaceDepth(self, imager: "Device", searchDistance=200*µm, searchStep=5*µm, _future: Future = None) -> float:
+    def findSurfaceDepth(
+        self, imager: "Device", searchDistance=200 * µm, searchStep=5 * µm, returnStack=False, _future: Future = None
+    ) -> float | tuple[float, list[Frame]]:
         """Set the surface of the sample based on how focused the images are."""
-        z_range = (self.getSurfaceDepth() + searchDistance, self.getSurfaceDepth() - searchDistance, searchStep)
-        z_stack: list[Frame] = _future.waitFor(self.getZStack(imager, z_range, name="finding surface")).getResult()
+        z_range = (
+            self.getSurfaceDepth() + searchDistance,
+            self.getSurfaceDepth() - searchDistance,
+            searchStep,
+        )
+        z_stack: list[Frame] = _future.waitFor(
+            self.getZStack(imager, z_range, name="finding surface")
+        ).getResult()
         threshold = self.config.get('surfaceDetectionPercentileThreshold', 96)
         if (idx := find_surface(z_stack, threshold)) is not None:
             depth = z_stack[idx].mapFromFrameToGlobal([0, 0, 0])[2]
             self.setSurfaceDepth(depth)
             _future.waitFor(self.setFocusDepth(depth))
+            if returnStack:
+                return depth, z_stack
             return depth
-        else:
-            raise ValueError("Could not find surface")
+        raise ValueError("Could not find surface")
 
     def getSurfaceDepth(self) -> Number:
         """Return the z-position of the sample surface as marked by the user.

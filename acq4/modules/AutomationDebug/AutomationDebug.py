@@ -755,21 +755,24 @@ class AutomationDebugWindow(Qt.QWidget):
                 raise RuntimeError("Failed to load mock detection stack.")
 
         else:  # --- Real Acquisition ---
-            start_z = depth - 20 * µm
-            stop_z = depth + 20 * µm
-
             if multichannel_processing_intended:
                 logger.info(
                     f"Starting multichannel Z-stack acquisition: Detection='{detection_preset}', "
                     f"Classification='{classification_preset}'"
                 )
                 _future.waitFor(self.scopeDevice.loadPreset(detection_preset))
-            detection_stack = _future.waitFor(
-                acquire_z_stack(
-                    self.cameraDevice, start_z, stop_z, step_z, slow_fallback=False, name="neuron detection stack"
-                ),
-                timeout=100,
+
+            surface, detection_stack = _future.waitFor(
+                self.scopeDevice.findSurfaceDepth(searchStep=step_z, returnStack=True)
             ).getResult()
+
+            start_z = surface - 50 * µm
+            stop_z = surface - 90 * µm
+
+            depths = np.asarray([f.depth for f in detection_stack])
+            start_i = np.argmin(np.abs(depths - start_z))
+            stop_i = np.argmin(np.abs(depths - stop_z))
+            detection_stack = detection_stack[start_i:stop_i + 1]
 
             if multichannel_processing_intended:
                 _future.waitFor(self.scopeDevice.loadPreset(classification_preset))
