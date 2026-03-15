@@ -304,9 +304,9 @@ class SensapexMoveFuture(MoveFuture):
         start = list(self.startPos)
         if pos[3] < start[3]:
             # move XYZ first
-            waypoint = pos[:3] + start[3]
+            waypoint = pos[:3] + start[3:]
         else:
-            waypoint = start[:3] + pos[3]
+            waypoint = start[:3] + pos[3:]
 
         self._moveReq = self.dev.dev.goto_pos(
             waypoint, self.speed * 1e6, simultaneous=self._linear, linear=self._linear
