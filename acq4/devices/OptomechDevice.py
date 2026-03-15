@@ -845,8 +845,8 @@ class OptomechDeviceVisualizerAdapter(Qt.QObject):
             param.child('Range of Motion').sigValueChanged.connect(self._handleLimitsVisible)
         return param
 
-    def _handleCenterView(self):
-        pos = self.device.globalPhysicalTransform().as_pyqtgraph().map(Qt.QVector3D(0, 0, 0))
+    def _handleCenterView(self) -> None:
+        pos = self.device.globalPhysicalTransform().map((0, 0, 0))
         self.win.centerOnPosition(pos)
 
     def _handleDeviceToggle(self, param, value):
