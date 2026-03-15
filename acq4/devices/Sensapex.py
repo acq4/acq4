@@ -317,6 +317,7 @@ class SensapexMoveFuture(MoveFuture):
                 error=self._generateErrorMessage(),
                 excInfo=None,
             )
+            return
         self._moveReq = self.dev.dev.goto_pos(
             pos, self.speed * 1e6, simultaneous=self._linear, linear=self._linear
         )
