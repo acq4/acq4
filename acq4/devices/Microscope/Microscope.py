@@ -666,11 +666,8 @@ class ScopeCameraModInterface(CameraModuleInterface):
         self.plot = win.getDepthView()
 
         # Create Z-position widget
-        self.zPositionWidget = ZPositionWidget(self.plot)
-        self.movableFocusLine = self.plot.addLine(
-            y=0, pen='y', markers=[('<|>', 0.5, 10)], movable=True
-        )
-        self.movableFocusLine.sigPositionChangeFinished.connect(self.focusChangedFromWidget)
+        self.zPositionWidget = ZPositionWidget(self.plot, movable=True)
+        self.zPositionWidget.sigTargetChangeRequested.connect(self.focusChangedFromWidget)
 
         # Ideally, the sample orientation, height, and anatomical identity would be contained
         # in a Sample or Slice object elsewhere...
@@ -723,25 +720,29 @@ class ScopeCameraModInterface(CameraModuleInterface):
         self.zPositionWidget.setFocusDepth(focus)
         self.zSpinBox.setValue(focus)
 
-        # Compute the target focal plane.
-        # This is a little tricky because the objective might have an offset+scale relative
-        # to the focus device.
-        fd = self.getDevice().focusDevice()
-        if fd is None:
-            return
-        fpos = fd.globalPosition()
-        tpos = fd.globalTargetPosition()
-        if tpos is None:
-            tpos = fpos
-        dif = tpos[2] - fpos[2]
-        self.zPositionWidget.setTargetDepth(focus + dif)
-        with pg.SignalBlock(self.movableFocusLine.sigPositionChangeFinished, self.focusChangedFromWidget):
-            self.movableFocusLine.setValue(focus + dif)
+        # :MC: why does this exist? at a first glance, it behaves fine without it.
+        # # Compute the target focal plane.
+        # # This is a little tricky because the objective might have an offset+scale relative
+        # # to the focus device.
+        # fd = self.getDevice().focusDevice()
+        # if fd is None:
+        #     return
+        # fpos = fd.globalPosition()
+        # tpos = fd.globalTargetPosition()
+        # if tpos is None:
+        #     tpos = fpos
+        # dif = tpos[2] - fpos[2]
+        # self.zPositionWidget.setTargetDepth(focus + dif)
+        # with pg.SignalBlock(self.movableFocusLine.sigPositionChangeFinished, self.focusChangedFromWidget):
+        #     self.movableFocusLine.setValue(focus + dif)
 
     def focusChangedFromWidget(self, depth):
         """Handle focus changes from the Z-position widget."""
-        depth = self.movableFocusLine.value()
-        self.getDevice().setFocusDepth(depth)
+        mfut = self.getDevice().setFocusDepth(depth)
+        mfut.sigFinished.connect(self._handleRefocusFinished)
+
+    def _handleRefocusFinished(self):
+        self.zPositionWidget.setMovingToTarget(False)
 
     def controlWidget(self):
         return self.ctrl

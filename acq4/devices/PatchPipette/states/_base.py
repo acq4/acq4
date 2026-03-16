@@ -180,7 +180,7 @@ class PatchPipetteState(Future):
         """
         if not self.dev.active:
             raise RuntimeError(f"Cannot initialize state {self.stateName} because device {self.dev.name()} is not active.")
-        
+
         self.initialize()
 
         try:
@@ -404,8 +404,8 @@ class PatchPipetteState(Future):
                         move_fut = None
                     future.sleep(0.1)
                     continue
+                pos = position_fn()
                 if move_fut is None:
-                    pos = position_fn()
                     if continuous:
                         move_fut = self.dev.pipetteDevice._moveToGlobal(pos, speed=speed)
                     else:
@@ -415,10 +415,21 @@ class PatchPipetteState(Future):
                             interval=interval,
                             step=step,
                         )
-                if self._targetHasChanged:
-                    self._targetHasChanged = False
-                    move_fut.stop("Target changed", wait=True)
-                    move_fut = None
+                else:
+                    # update the move if the destination is significantly different, as
+                    # measured by degrees relative to our direction
+                    direction_to_pos = (pos - self.dev.pipetteDevice.globalPosition())
+                    direction_to_pos /= np.linalg.norm(direction_to_pos)
+                    direction_of_motion = self.dev.pipetteDevice.globalDirection()
+
+                    cos_theta = np.dot(direction_to_pos, direction_of_motion) / (
+                        np.linalg.norm(direction_to_pos) * np.linalg.norm(direction_of_motion)
+                    )
+                    theta = np.arccos(np.clip(cos_theta, -1, 1))  # clip to avoid float errors
+                    theta = np.degrees(theta)
+                    if theta > 2:
+                        move_fut.stop("Target changed", wait=True)
+                        move_fut = None
                 future.sleep(0.1)
         except Exception:
             if move_fut is not None and not move_fut.isDone():
