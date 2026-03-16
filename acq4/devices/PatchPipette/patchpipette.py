@@ -4,6 +4,7 @@ from collections import OrderedDict
 
 # Event types stored in the in-memory event log and shown in the UI.
 LOG_EVENT_TYPES = frozenset({
+    'state_event',
     'state_change',
     'new_pipette',
     'pipette_calibrated',

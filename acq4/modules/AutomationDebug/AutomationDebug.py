@@ -757,8 +757,8 @@ class AutomationDebugWindow(Qt.QWidget):
         else:  # --- Real Acquisition ---
             surface = _future.waitFor(self.scopeDevice.findSurfaceDepth(self.cameraDevice)).getResult()
 
-            start_z = surface - 50 * µm
-            stop_z = surface - 90 * µm
+            start_z = surface - 20 * µm
+            stop_z = surface - 60 * µm
 
             if multichannel_processing_intended:
                 logger.info(
