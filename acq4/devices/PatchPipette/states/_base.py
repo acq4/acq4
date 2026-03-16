@@ -404,8 +404,8 @@ class PatchPipetteState(Future):
                         move_fut = None
                     future.sleep(0.1)
                     continue
+                pos = position_fn()
                 if move_fut is None:
-                    pos = position_fn()
                     if continuous:
                         move_fut = self.dev.pipetteDevice._moveToGlobal(pos, speed=speed)
                     else:
@@ -415,16 +415,15 @@ class PatchPipetteState(Future):
                             interval=interval,
                             step=step,
                         )
-                if self._targetHasChanged:
-                    self._targetHasChanged = False
-                    # only update the move if the new target is significantly different, as
+                else:
+                    # update the move if the destination is significantly different, as
                     # measured by degrees relative to our direction
-                    direction_to_target = (pos - self.dev.pipetteDevice.globalPosition())
-                    direction_to_target /= np.linalg.norm(direction_to_target)
+                    direction_to_pos = (pos - self.dev.pipetteDevice.globalPosition())
+                    direction_to_pos /= np.linalg.norm(direction_to_pos)
                     direction_of_motion = self.dev.pipetteDevice.globalDirection()
 
-                    cos_theta = np.dot(direction_to_target, direction_of_motion) / (
-                        np.linalg.norm(direction_to_target) * np.linalg.norm(direction_of_motion)
+                    cos_theta = np.dot(direction_to_pos, direction_of_motion) / (
+                        np.linalg.norm(direction_to_pos) * np.linalg.norm(direction_of_motion)
                     )
                     theta = np.arccos(np.clip(cos_theta, -1, 1))  # clip to avoid float errors
                     theta = np.degrees(theta)
