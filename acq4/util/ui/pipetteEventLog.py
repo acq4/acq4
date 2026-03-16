@@ -9,6 +9,8 @@ def format_event(event_type: str, event_data: dict) -> str:
     """Return a short human-readable string for a log event."""
     if event_type == 'state_change':
         return f"\u2192 {event_data.get('state', '?')}"
+    elif event_type == 'state_event':
+        return event_data['info']
     elif event_type == 'new_pipette':
         return "new pipette"
     elif event_type == 'pipette_calibrated':
