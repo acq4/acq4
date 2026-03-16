@@ -212,7 +212,8 @@ class MockMoveFuture(MoveFuture):
         self.dev.stageThread.setTarget(self, pos, speed)
 
     def mockFinish(self):
-        self._taskDone()
+        if not self.isDone():
+            self._taskDone()
 
     def mockInterrupt(self):
         self._taskDone(interrupted=True, error='Move interrupted')
