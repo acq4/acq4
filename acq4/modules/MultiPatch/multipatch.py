@@ -1,6 +1,8 @@
 import json
 import os
 import re
+
+import numpy as np
 from collections import OrderedDict
 from typing import List
 
@@ -274,14 +276,22 @@ class MultiPatchWindow(Qt.QWidget):
         return MultiFuture(futures, name="Move pipettes above target")
 
     @future_wrap
-    def _autoFindTip(self, _future):
+    def _autoFindTip(self, _future, max_reps=10):
         work_to_do = self.selectedPipettes()
         while work_to_do:
             patchpip = work_to_do.pop(0)
             pip = patchpip.pipetteDevice if isinstance(patchpip, PatchPipette) else patchpip
-            pos = pip.tracker.findTipInFrame()
-            _future.waitFor(pip.setTipOffsetIfAcceptable(pos), timeout=None).getResult()
-            _future.checkStop()
+            last_pos = None
+            for _ in range(max_reps):
+                pos = pip.tracker.findTipInFrame()
+                _future.checkStop()
+                converged = last_pos is not None and np.linalg.norm(np.array(pos) - np.array(last_pos)) < 3e-6
+                last_pos = pos
+                if converged:
+                    break
+                _future.waitFor(pip.focusTip(), timeout=None).getResult()
+                _future.checkStop()
+            _future.waitFor(pip.setTipOffsetIfAcceptable(last_pos), timeout=None).getResult()
 
     def _cellDetect(self):
         return self._setAllSelectedPipettesToState('cell detect')
