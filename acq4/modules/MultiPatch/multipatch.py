@@ -289,7 +289,7 @@ class MultiPatchWindow(Qt.QWidget):
                 if converged:
                     break
                 _future.waitFor(pip.focusTip())
-            _future.waitFor(pip.setTipOffsetIfAcceptable(last_pos))
+            _future.waitFor(pip.setTipOffsetIfAcceptable(last_pos), timeout=None)
 
     def _cellDetect(self):
         return self._setAllSelectedPipettesToState('cell detect')
