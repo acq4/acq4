@@ -420,13 +420,14 @@ class PatchPipetteState(Future):
                     # measured by degrees relative to our direction
                     direction_to_pos = (pos - self.dev.pipetteDevice.globalPosition())
                     direction_to_pos /= np.linalg.norm(direction_to_pos)
-                    direction_of_motion = self.dev.pipetteDevice.globalDirection()
+                    direction_of_motion = move_fut.targetPos - self.dev.pipetteDevice.globalPosition()
 
                     cos_theta = np.dot(direction_to_pos, direction_of_motion) / (
                         np.linalg.norm(direction_to_pos) * np.linalg.norm(direction_of_motion)
                     )
                     theta = np.arccos(np.clip(cos_theta, -1, 1))  # clip to avoid float errors
                     theta = np.degrees(theta)
+                    self.logger.info(f"Target changed by {theta:.1f} degrees ({direction_to_pos} vs {direction_of_motion})")
                     if theta > 2:
                         move_fut.stop("Target changed", wait=True)
                         move_fut = None
