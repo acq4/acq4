@@ -784,23 +784,22 @@ class Manager(Qt.QObject):
             with pg.ProgressDialog("Shutting down..", 0, lm + ld, cancelText=None, wait=0) as dlg:
                 self.documentation.quit()
 
-                logger.debug("Requesting all modules shut down..")
-                logger.info("Shutting Down.")
+                logger.info("Requesting all modules shut down..")
                 while len(self.modules) > 0:  ## Modules may disappear from self.modules as we ask them to quit
                     m = list(self.modules.keys())[0]
-                    logger.debug(f"    {m}")
+                    logger.info(f"    Closing {m}")
 
                     self.unloadModule(m)
                     dlg.setValue(lm - len(self.modules))
 
-                logger.debug("Requesting all devices shut down..")
+                logger.info("Requesting all devices shut down..")
                 devs = Device._deviceCreationOrder[::-1]
                 for d in devs:  # shut down in reverse order
                     d = d()
                     if d is None:
                         # device was already deleted
                         continue
-                    logger.debug(f"    {d}")
+                    logger.info(f"    Closing {d}")
                     try:
                         d.quit()
                     except:
@@ -808,10 +807,10 @@ class Manager(Qt.QObject):
 
                     dlg.setValue(lm + ld - len(devs))
 
-                logger.debug("Closing windows..")
+                logger.info("Closing windows..")
                 Qt.QApplication.instance().closeAllWindows()
                 Qt.QApplication.instance().processEvents()
-            logger.debug("\n    ciao.")
+            logger.info("\n    ciao.")
         Qt.QApplication.quit()
 
 
