@@ -37,6 +37,7 @@ class PatchPipetteStateManager(Qt.QObject):
                 states.ApproachState,
                 states.CellDetectState,
                 states.SealState,
+                states.ContactCellState,
                 states.CellAttachedState,
                 states.BreakInState,
                 states.WholeCellState,
