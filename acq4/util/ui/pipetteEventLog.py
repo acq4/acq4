@@ -83,10 +83,14 @@ class PipetteEventLog(Qt.QWidget):
         if self._live_mode:
             self._list.scrollToBottom()
 
-    def clear(self):
-        """Remove all events and reset the start time reference."""
+    def clear(self, start_time: float = None):
+        """Remove all events and reset the start time reference.
+
+        start_time -- if provided, pin t=0 to this value rather than waiting
+                      for the first event to set it.
+        """
         self._events.clear()
-        self._start_time = None
+        self._start_time = start_time
         self._list.clear()
 
     def setTime(self, time: float):
