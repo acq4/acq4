@@ -321,7 +321,7 @@ class SensapexMoveFuture(MoveFuture):
         self._moveReq = self.dev.dev.goto_pos(
             pos, self.speed * 1e6, simultaneous=self._linear, linear=self._linear
         )
-    self._waitFor(self._moveReq)
+        self._waitFor(self._moveReq)
         self._taskDone(
             interrupted=self._moveReq.interrupted,
             error=self._generateErrorMessage(),
