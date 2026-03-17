@@ -1098,14 +1098,14 @@ class AutomationDebugWindow(Qt.QWidget):
             try:
                 if not ppip.isTipClean():
                     cleaning = ppip.setState("clean")
-                cell = self._autopatchFindCell(_future)
-                _future.setState("Autopatch: cell found")
                 if cleaning is not None:
                     _future.setState("Autopatch: cleaning pipette")
                     _future.waitFor(cleaning, timeout=600)
                     cleaning = None
+                cell = self._autopatchFindCell(_future)
+                _future.setState("Autopatch: cell found")
                 ppip.setState("bath")
-                ppip.clampDevice.resetTestPulseHistory()
+                ppip.newPatchAttempt()
                 _future.setState("Autopatch: go above target")
                 _future.waitFor(ppip.pipetteDevice.goAboveTarget("fast"))
                 _future.setState("Autopatch: finding pipette tip")
@@ -1118,7 +1118,7 @@ class AutomationDebugWindow(Qt.QWidget):
                     _future.setState("Autopatch: patch cell")
                     logger.warning("Autopatch: Start cell patching")
                     state = self._autopatchCellPatch(cell, _future)
-                except Exception as exc:
+                except Exception:
                     logger.exception("Autopatch: Exception during cell patching")
                     raise
 
@@ -1132,8 +1132,8 @@ class AutomationDebugWindow(Qt.QWidget):
                 _future.setState("Autopatch: Taking cell images")
                 self.scopeDevice.loadPreset('GFP')
                 _future.sleep(5)
-                self.scopeDevice.loadPreset('tdTomato')
-                _future.sleep(5)
+                # self.scopeDevice.loadPreset('tdTomato')
+                # _future.sleep(5)
                 self.scopeDevice.loadPreset('brightfield')
 
                 _future.setState("Autopatch: resealing")
@@ -1156,32 +1156,27 @@ class AutomationDebugWindow(Qt.QWidget):
                 continue
 
     def _autopatchCellPatch(self, cell, _future):
-        try:
-            ppip = self.patchPipetteDevice
-            ppip.setState("cell detect")
-            detect_finished = False
-            while True:
-                if (state := ppip.getState().stateName) != "cell detect":
-                    if not detect_finished:
-                        cell.enableTracking(False)
-                        self.cameraDevice.moveCenterToGlobal(cell.position, "fast")
-                        detect_finished = True
-                if state in ("whole cell", "bath", "broken", "fouled"):
-                    _future.setState(f"Exiting patch loop - ended in state {state}")
-                    break
-                _future.sleep(0.1)
-            return state
-        finally:
-            cell.enableTracking(False)
-            pg.disconnect(cell.sigPositionChanged, self._updatePipetteTarget)
+        ppip = self.patchPipetteDevice
+        ppip.setState("approach")
+        detect_finished = False
+        while True:
+            if (state := ppip.getState().stateName) not in ("approach", "cell detect", "contact cell"):
+                if not detect_finished:
+                    self.cameraDevice.moveCenterToGlobal(cell.position, "fast")
+                    detect_finished = True
+            if state in ("whole cell", "bath", "broken", "fouled"):
+                _future.setState(f"Exiting patch loop - ended in state {state}")
+                break
+            _future.sleep(0.1)
+        return state
 
     def _autopatchFindCell(self, _future):
         if not self._unranked_cells:
             _future.setState("Autopatch: searching for cells")
-            surf = _future.waitFor(
-                self.cameraDevice.scopeDev.findSurfaceDepth(self.cameraDevice)
-            ).getResult()
-            _future.waitFor(self.cameraDevice.setFocusDepth(surf - 60e-6, "fast"))
+            # surf = _future.waitFor(
+            #     self.cameraDevice.scopeDev.findSurfaceDepth(self.cameraDevice)
+            # ).getResult()
+            # _future.waitFor(self.cameraDevice.setFocusDepth(surf - 60e-6, "fast"))
             z_stack = self._detectNeuronsZStack()
             z_stack.sigFinished.connect(self._handleDetectResults)
             _future.waitFor(z_stack, timeout=600)
@@ -1191,7 +1186,8 @@ class AutomationDebugWindow(Qt.QWidget):
         self._ranked_cells.append(cell)
         self.patchPipetteDevice.setCell(cell)
         self._cell = cell
-        cell.sigPositionChanged.connect(self._updatePipetteTarget)
+        # cell.sigPositionChanged.connect(self._updatePipetteTarget)
+
         # stack = self._current_classification_stack or self._current_detection_stack
         # if (pos - margin) not in stack or (pos + margin) not in stack:
         # stack = None
