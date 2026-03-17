@@ -1098,12 +1098,12 @@ class AutomationDebugWindow(Qt.QWidget):
             try:
                 if not ppip.isTipClean():
                     cleaning = ppip.setState("clean")
-                cell = self._autopatchFindCell(_future)
-                _future.setState("Autopatch: cell found")
                 if cleaning is not None:
                     _future.setState("Autopatch: cleaning pipette")
                     _future.waitFor(cleaning, timeout=600)
                     cleaning = None
+                cell = self._autopatchFindCell(_future)
+                _future.setState("Autopatch: cell found")
                 ppip.setState("bath")
                 ppip.clampDevice.resetTestPulseHistory()
                 _future.setState("Autopatch: go above target")
