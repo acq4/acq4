@@ -2,6 +2,7 @@ import numpy as np
 import re
 
 import pyqtgraph as pg
+from acq4.util import ptime
 from acq4.devices.PatchPipette import PatchPipette
 from acq4.util import Qt
 from acq4.util.ui.pipetteEventLog import PipetteEventLog
@@ -127,6 +128,8 @@ class PipetteControl(Qt.QWidget):
         if isinstance(pipette, PatchPipette):
             self.pip.sigNewEvent.connect(self._pipetteEventLogged)
             for ev in pipette.eventLog():
+                if ev['event'] == 'new_patch_attempt':
+                    self._eventLog.clear(start_time=ev['event_time'])
                 self._eventLog.addEvent(ev['event_time'], ev['event'], ev)
 
         self.plots = [
@@ -341,11 +344,11 @@ class PipetteControl(Qt.QWidget):
 
     def _pipetteEventLogged(self, pip, event):
         if event['event'] == 'new_patch_attempt':
-            self._eventLog.clear()
+            self._eventLog.clear(start_time=event['event_time'])
         self._eventLog.addEvent(event['event_time'], event['event'], event)
 
     def clearEventLog(self):
-        self._eventLog.clear()
+        self._eventLog.clear(start_time=ptime.time())
 
     def newPipetteRequested(self):
         self.ui.newPipetteBtn.setStyleSheet("QPushButton {border: 2px solid #F00;}")
