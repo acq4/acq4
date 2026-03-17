@@ -179,7 +179,17 @@ class CameraInterface(CameraModuleInterface):
         self.updateTransform(tr)
 
         self.imageItemGroup.setTransform(tr)
-            
+
+
+    def setActive(self, active: bool):
+        """Called by the camera module when this interface is set to be the active imaging interface.
+
+        When active, the interface is allowed to control the view position.
+        """
+        super().setActive(active)
+        # self.frameDisplay.contrastCtrl.zoomToImage()
+        self.view.autoRange(items=[self.roi])
+
     def updateTransform(self, tr):
         # update view for new transform such that sensor bounds remain stationary on screen.
         pos = tr.getTranslation()
@@ -193,7 +203,6 @@ class CameraInterface(CameraModuleInterface):
             if isActive:
                 anchor = self.view.mapViewToDevice(self.lastCameraPosition)
                 self.view.scaleBy(scale / self.lastCameraScale)
-                # Qt.QApplication.processEvents()
                 anchor2 = self.view.mapDeviceToView(anchor)
                 diff = pos - anchor2
             else:
