@@ -284,14 +284,12 @@ class MultiPatchWindow(Qt.QWidget):
             last_pos = None
             for _ in range(max_reps):
                 pos = pip.tracker.findTipInFrame()
-                _future.checkStop()
                 converged = last_pos is not None and np.linalg.norm(np.array(pos) - np.array(last_pos)) < 3e-6
                 last_pos = pos
                 if converged:
                     break
-                _future.waitFor(pip.focusTip(), timeout=None).getResult()
-                _future.checkStop()
-            _future.waitFor(pip.setTipOffsetIfAcceptable(last_pos), timeout=None).getResult()
+                _future.waitFor(pip.focusTip())
+            _future.waitFor(pip.setTipOffsetIfAcceptable(last_pos), timeout=None)
 
     def _cellDetect(self):
         return self._setAllSelectedPipettesToState('cell detect')
