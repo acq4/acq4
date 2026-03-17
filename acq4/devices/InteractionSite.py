@@ -4,10 +4,11 @@ import pyqtgraph as pg
 from acq4 import getManager
 from acq4.modules.Camera import CameraModuleInterface
 from acq4.util import Qt
+from coorx import AffineTransform
 from .Device import Device
 from .OptomechDevice import OptomechDevice
 from .Stage import Stage
-from ..util.future import future_wrap, FutureButton, Future
+from ..util.future import future_wrap, Future
 from ..util.target import color_for_diff
 
 
@@ -34,7 +35,9 @@ class InteractionSite(Device, OptomechDevice):
             raise ValueError(f"{self.name()} must have a height specified in config")
         OptomechDevice.__init__(self, dm, config, name)
         if tuple(self.deviceTransform().offset) != (0, 0, 0):
-            raise ValueError(f"{self.name()} cannot have a cfg-set global pos; only rotations allowed")
+            raise ValueError(
+                f"{self.name()} cannot have a cfg-set global pos; only rotations allowed"
+            )
         self.positions = self.readConfigFile("saved_positions")
         parent = self
         while True:
@@ -42,8 +45,10 @@ class InteractionSite(Device, OptomechDevice):
             if parent is None or isinstance(parent, Stage):
                 break
         self._parentStage: Stage | None = parent
-        self.offset = self.positions.get(self.name(), {}).get("offset", [0, 0, 0])
-        self.setOffset(np.array(self.offset))
+        offset = self.positions.get(self.name(), {}).get("offset", [0, 0, 0])
+        self.setOffset(np.asarray(offset))
+        angle, axis = self.positions.get(self.name(), {}).get("rotation", [0, [0, 0, 1]])
+        self.setRotation(angle, axis)
 
     def getGeometry(self, name=None):
         if isinstance(self.config.get("geometry"), dict):
@@ -60,18 +65,28 @@ class InteractionSite(Device, OptomechDevice):
         return super().getGeometry(name)
 
     def setLocalOrigin(self, global_pos):
-        """Set the device's local coordinate origin, given the provided global_pos, and save to config.
-        """
+        """Set the device's local coordinate origin, given the provided global_pos, and save to config."""
         self.setOffset(self.mapGlobalToParent(global_pos))
 
     def setOffset(self, offset):
-        """Set the offset of this device's local origin to its parent's local origin."""
+        """Set the offset of the site from its configured position, and save to config."""
+        tr = self.deviceTransform()
+        tr.offset = offset
+        self.setDeviceTransform(tr)
         self.positions.setdefault(self.name(), {})
         self.positions[self.name()]['offset'] = offset
         self.writeConfigFile(self.positions, "saved_positions")
+
+        self.sigTransformChanged.emit(self)
+
+    def setRotation(self, angle, axis):
+        """Set the rotation of the site from its configured position, and save to config."""
         tr = self.deviceTransform()
-        tr.offset = offset  # transform maps from local to parent; offset is the parent-local position of our local origin
+        tr.rotation = (angle, axis)
         self.setDeviceTransform(tr)
+        self.positions.setdefault(self.name(), {})
+        self.positions[self.name()]['rotation'] = [angle, axis]
+        self.writeConfigFile(self.positions, "saved_positions")
 
         self.sigTransformChanged.emit(self)
 
@@ -98,7 +113,7 @@ class InteractionSite(Device, OptomechDevice):
         """Return True if the x,y,z coordinates in *pt* lie within the boundaries of this site."""
         local_pt = self.mapFromGlobal(pt)
         return (
-            local_pt[0] ** 2 + local_pt[1] ** 2 <= self.radius ** 2 + tolerance
+            local_pt[0] ** 2 + local_pt[1] ** 2 <= self.radius**2 + tolerance
             and -tolerance <= local_pt[2] <= self.height + tolerance
         )
 
@@ -106,23 +121,44 @@ class InteractionSite(Device, OptomechDevice):
         self.positions.setdefault(other.name(), {})
         if len([p for p in self.positions if p != self.name()]) > 1:
             raise RuntimeError("Only one device can be saved for each interaction site")
+        self._inferAngleTrig(self.globalPosition(), other.globalPosition())
         self.positions[other.name()]['interact local'] = self.mapFromGlobal(other.globalPosition())
-        self.positions[other.name()]['site global'] = self.globalPosition()
         self.writeConfigFile(self.positions, "saved_positions")
 
     def saveApproachPosition(self, other):
         self.positions.setdefault(other.name(), {})
         if len([p for p in self.positions if p != self.name()]) > 1:
             raise RuntimeError("Only one device can be saved for each interaction site")
-        interact_pos = self.positions[other.name()].get('interact local')
-        if interact_pos is not None:
-            interact_global = self.mapToGlobal(interact_pos)
-            self.setLocalOrigin(other.globalPosition())
-            self.positions[other.name()]['interact local'] = self.mapFromGlobal(interact_global)
-        else:
-            self.setLocalOrigin(other.globalPosition())
+        self.setLocalOrigin(other.globalPosition())
         self.positions[other.name()]['approach local'] = self.mapFromGlobal(other.globalPosition())
         self.positions[other.name()]['site global'] = self.globalPosition()
+        self.writeConfigFile(self.positions, "saved_positions")
+
+    def _inferAngle(self, a, b):
+        """Given two global points, infer the rotation of the site that would be needed to align
+        its local "down" direction with the direction from a to b."""
+        canonical = np.array([0.0, 0.0, -1.0])  # "down" into the well
+        direction = np.array(b) - np.array(a)
+        direction = direction / np.linalg.norm(direction)
+
+        dot = np.clip(np.dot(canonical, direction), -1.0, 1.0)
+        angle = np.arccos(dot)
+
+        cross = np.cross(direction, canonical)
+        cross_len = np.linalg.norm(cross)
+
+        if cross_len < 1e-9:
+            # Parallel or anti-parallel
+            axis = np.array([1.0, 0.0, 0.0])
+            # angle is already 0 or π from arccos
+        else:
+            axis = cross / cross_len
+
+        tr = self.deviceTransform()
+        tr.rotation = (np.degrees(angle), axis)
+        self.setDeviceTransform(tr)
+        self.positions.setdefault(self.name(), {})
+        self.positions[self.name()]['rotation'] = [np.degrees(angle), axis]
         self.writeConfigFile(self.positions, "saved_positions")
 
     @future_wrap
@@ -211,6 +247,7 @@ class InteractionSiteDeviceGui(Qt.QWidget):
 
     def _populatePipettes(self):
         from .Pipette.pipette import Pipette
+
         man = getManager()
         pipettes = [name for name in man.listDevices() if isinstance(man.getDevice(name), Pipette)]
         has_pipettes = bool(pipettes)
