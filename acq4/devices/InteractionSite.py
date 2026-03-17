@@ -54,9 +54,7 @@ class InteractionSite(Device, OptomechDevice):
             if other_name == self.name():
                 continue
             if 'site global' in pos_config and 'interact global' in pos_config:
-                site_global = pos_config['site global']
-                interact_global = self.mapToGlobal(pos_config['interact global'])
-                self._inferAngle(site_global, interact_global)
+                self._inferAngle(pos_config['site global'], pos_config['interact global'])
                 return
 
     def getGeometry(self, name=None):
@@ -170,9 +168,6 @@ class InteractionSite(Device, OptomechDevice):
         tr = self.deviceTransform()
         tr.rotation = (np.degrees(angle), axis)
         self.setDeviceTransform(tr)
-        self.positions.setdefault(self.name(), {})
-        self.positions[self.name()]['rotation'] = [np.degrees(angle), axis]
-        self.writeConfigFile(self.positions, "saved_positions")
 
     @future_wrap
     def moveToInteract(self, other, speed='fast', _future=None):
