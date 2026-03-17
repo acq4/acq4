@@ -102,16 +102,17 @@ class Camera(DAQGeneric, OptomechDevice):
                 )
                 break
 
-        self.transformChanged()
-        if self.scopeDev is not None:
-            self.objectiveChanged()
-            self._lightChanged()
 
         self.setupCamera()
         self.sensorSize = self.getParam("sensorSize")
         tr = TTransform(offset=(-self.sensorSize[0] * 0.5, -self.sensorSize[1] * 0.5, 0))
         self.setDeviceTransform(self.deviceTransform() * tr)
         self._frameInfoUpdater = None
+
+        self.transformChanged()
+        if self.scopeDev is not None:
+            self.objectiveChanged()
+            self._lightChanged()
 
         self.acqThread = AcquireThread(self)
         self.acqThread.finished.connect(self.acqThreadFinished, type=Qt.Qt.DirectConnection)
