@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import numpy as np
+from pyqtgraph.units import µm, MΩ
 
 from acq4.util.debug import log_and_ignore_exception
 from ._base import PatchPipetteState
 from .cell_detect import CellDetectAnalysis
-from pyqtgraph.units import µm
+from acq4 import getManager
 
 
 class ContactCellState(PatchPipetteState):
@@ -46,6 +47,8 @@ class ContactCellState(PatchPipetteState):
         Number of test pulses to integrate for slow change detection (default 3)
     breakThreshold : float
         Threshold for change in resistance (Ohm) to detect broken pipette (default -1 MOhm)
+    pipetteRecalibrationMaxChange : float
+        Maximum allowed change in pipette position during recalibration before rejecting update (default 5 µm)
     """
 
     stateName = 'contact cell'
@@ -63,10 +66,12 @@ class ContactCellState(PatchPipetteState):
         'maxTravelWithoutContact': {'default': 15 * µm, 'type': 'float', 'suffix': 'm'},
         'moveSpeed': {'default': 5 * µm, 'type': 'float', 'suffix': 'm/s'},
         'baselineResistanceTau': {'default': 20, 'type': 'float', 'suffix': 's'},
-        'fastDetectionThreshold': {'default': 1e6, 'type': 'float', 'suffix': 'Ω'},
-        'slowDetectionThreshold': {'default': 0.2e6, 'type': 'float', 'suffix': 'Ω'},
+        'fastDetectionThreshold': {'default': 1*MΩ, 'type': 'float', 'suffix': 'Ω'},
+        'slowDetectionThreshold': {'default': 0.2*MΩ, 'type': 'float', 'suffix': 'Ω'},
         'slowDetectionSteps': {'default': 3, 'type': 'int'},
-        'breakThreshold': {'default': -1e6, 'type': 'float', 'suffix': 'Ω'},
+        'breakThreshold': {'default': -1*MΩ, 'type': 'float', 'suffix': 'Ω'},
+        "nextState": {"type": "str", "default": "seal"},
+        "pipetteRecalibrationMaxChange": {"type": "float", "default": 5 * µm, "suffix": "m"},
     }
 
     def __init__(self, *args, **kwds):
@@ -135,7 +140,7 @@ class ContactCellState(PatchPipetteState):
                 if depth_past_contact >= config['depthPastContact']:
                     self._disableVisualTracking()
                     self.setState("reached target depth past contact")
-                    return {"state": 'seal'}
+                    return {"state": config['nextState']}
 
             # Check if we've traveled too far without contact
             current_z = pip.globalPosition()[2]
@@ -144,7 +149,7 @@ class ContactCellState(PatchPipetteState):
                 self._disableVisualTracking()
                 self.setState("max travel reached without contact, attempting seal")
                 self.dev.patchRecord()['detectedCell'] = False
-                return {"state": 'seal'}
+                return {"state": config['nextState']}
 
             # Get target xy from visual tracking (if available), keep stepping down in z
             target_xy = self._getTrackedTargetXY()
@@ -215,3 +220,31 @@ class ContactCellState(PatchPipetteState):
         with log_and_ignore_exception(Exception, "Error disabling visual tracking"):
             self._disableVisualTracking()
         return super()._cleanup()
+
+    def recalibratePipette(self):
+        pip = self.dev.pipetteDevice
+        imgr = self.dev.imagingDevice()
+        manager = getManager()
+        with manager.reserveDevices(
+                [pip, imgr, imgr.scopeDev.positionDevice(), imgr.scopeDev.focusDevice()],
+                timeout=30.0,
+        ):
+            initial_pos = pos = np.array(pip.globalPosition())
+            self.setState(f"Check pipette tip..")
+            self.waitFor(self.dev.focusOnTip("fast"))
+            try:
+                pos = pip.tracker.findTipInFrame()
+            except RuntimeError as exc:
+                # failed to locate pipette tip
+                self.logger.warning("Failed to recalibrate pipette tip", exc_info=True)
+                return False
+            
+            dist = np.linalg.norm(initial_pos - pos)
+            if dist < self.config["pipetteRecalibrationMaxChange"]:
+                pip.resetGlobalPosition(pos)
+                self.setState(f"pipette tip found at {pos}")
+            else:
+                self.setState(
+                    f"cancel pipette position update; prediction is too far away ({dist * 1e6}µm)"
+                )
+            return True
