@@ -134,7 +134,7 @@ class DAQSonicator(Sonicator):
         daq_name = self._daq.getDAQName("command")
         daq_dev_name = self._daq.config["channels"]["command"]["channel"].split("/")[1]  # e.g. "Dev1"
         daq = self.dm.getDevice(daq_name)
-        sample_rate = daq.n.GetDevAOMaxRate(daq_dev_name)
+        sample_rate = int(daq.n.GetDevAOMaxRate(daq_dev_name))
         duration = protocol.total_global_end_time
         wave = protocol.eval(n_pts=duration * sample_rate, sample_rate=sample_rate).data
         slew_rate = calculate_slew_rate(wave, 1 / sample_rate)
