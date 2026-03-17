@@ -311,11 +311,25 @@ class ApproachState(PatchPipetteState):
             self.waitFor(self.dev.imagingDevice().moveCenterToGlobal(pos, "fast"))
             self.setState(f"First recalibrate position (starting at {pos})")
             self.sleep(1.0)
-            pos = pip.tracker.findTipInFrame()
-            self.waitFor(self.dev.imagingDevice().moveCenterToGlobal(pos, "fast"))
-            self.setState(f"Second recalibrate position (found tip at {pos})")
+            try:
+                pos = pip.tracker.findTipInFrame()
+            except RuntimeError as exc:
+                # failed to locate pipette tip
+                self.logger.warning("Failed to recalibrate pipette tip", exc_info=True)
+                return False
+            self.waitFor(
+                self.dev.imagingDevice().moveCenterToGlobal(
+                    pos, "fast", name=f"verify {self.dev.name()} tip estimate"
+                )
+            )
+            self.setState(f"Second tip find (found tip at {pos})")
             self.sleep(1.0)
-            pos = pip.tracker.findTipInFrame()
+            try:
+                pos = pip.tracker.findTipInFrame()
+            except RuntimeError as exc:
+                # failed to locate pipette tip
+                self.logger.warning("Failed to recalibrate pipette tip", exc_info=True)
+                return False
             dist = np.linalg.norm(initial_pos - pos)
             if dist < self.config["pipetteRecalibrationMaxChange"]:
                 pip.resetGlobalPosition(pos)
@@ -324,6 +338,7 @@ class ApproachState(PatchPipetteState):
                 self.setState(
                     f"cancel pipette position update; prediction is too far away ({dist * 1e6}µm)"
                 )
+            return True
 
     @future_wrap
     def _move(self, _future):
