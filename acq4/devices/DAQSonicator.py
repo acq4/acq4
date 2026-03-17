@@ -131,8 +131,8 @@ class DAQSonicator(Sonicator):
             protocol = load_stimulus(json.loads(protocol))
         else:
             protocol = load_stimulus(protocol)
-        daq_name = self._daq.getDAQName("command")  # e.g. "/Dev1/ao0"
-        daq_dev_name = daq_name.split("/")[0]  # e.g. "Dev1"
+        daq_name = self._daq.getDAQName("command")
+        daq_dev_name = self._daq.config["channels"]["command"]["channel"].split("/")[1]  # e.g. "Dev1"
         daq = self.dm.getDevice(daq_name)
         sample_rate = daq.n.GetDevAOMaxRate(daq_dev_name)
         duration = protocol.total_global_end_time
