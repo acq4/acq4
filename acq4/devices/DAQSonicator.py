@@ -131,16 +131,16 @@ class DAQSonicator(Sonicator):
             protocol = load_stimulus(json.loads(protocol))
         else:
             protocol = load_stimulus(protocol)
-        # daq: NiDAQ = self.dm.getDevice(daq_name)
-        # sample_rate = daq.n.GetDevAIMaxSingleChanRate(self._daq...)  # this doesn't work
-        sample_rate = 1_000_000
+        daq_name = self._daq.getDAQName("command")  # e.g. "/Dev1/ao0"
+        daq_dev_name = daq_name.split("/")[0]  # e.g. "Dev1"
+        daq = self.dm.getDevice(daq_name)
+        sample_rate = daq.n.GetDevAOMaxRate(daq_dev_name)
         duration = protocol.total_global_end_time
         wave = protocol.eval(n_pts=duration * sample_rate, sample_rate=sample_rate).data
         slew_rate = calculate_slew_rate(wave, 1 / sample_rate)
         if slew_rate > self._maxSlewRate:
             raise ValueError(f"Waveform slew rate {slew_rate} V/s exceeds max slew rate {self._maxSlewRate} V/s")
         numPts = len(wave)
-        daq_name = self._daq.getDAQName("command")
         cmd = {
             "protocol": {"duration": duration},
             daq_name: {
