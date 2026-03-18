@@ -103,11 +103,11 @@ class BreakInState(PatchPipetteState):
             return {"state": 'whole cell'}
 
     def attemptBreakIn(self, nPulses, duration, pressure):
-        start = ptime.time()
-        stop = start + duration
         for i in range(nPulses):
             # get the next test pulse
             self.dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
+            start = ptime.time()
+            stop = start + duration
             try:
                 # while pulse is active, monitor for break-in or stop request
                 while True:

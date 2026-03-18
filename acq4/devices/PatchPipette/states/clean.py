@@ -43,6 +43,7 @@ class CleanState(PatchPipetteState):
     def __init__(self, *args, **kwds):
         self.sonication = None
         self.moveFuture = None
+        self._moves_to_undo = []
         super().__init__(*args, **kwds)
 
     def run(self):
