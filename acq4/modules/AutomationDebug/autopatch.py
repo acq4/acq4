@@ -6,6 +6,7 @@ from acq4.devices.PatchPipette import PatchPipette
 from acq4.logging_config import get_logger
 from acq4.util.future import future_wrap
 from acq4.util.threadrun import runInGuiThread
+from acq4.util.imaging.sequencer import run_image_sequence
 from ..TaskRunner import TaskRunner
 
 if TYPE_CHECKING:
@@ -72,23 +73,32 @@ class Autopatcher:
 
                 _future.setState("Autopatch: Taking cell images")
                 win.scopeDevice.loadPreset('GFP')
-                _future.sleep(5)
+                self._saveStack("patched GFP cellfie", _future)
                 # win.scopeDevice.loadPreset('tdTomato')
-                # _future.sleep(5)
+                # self._saveStack("patched tdTomato cellfie", _future)
                 win.scopeDevice.loadPreset('brightfield')
 
                 _future.setState("Autopatch: resealing")
                 _future.waitFor(ppip.setState("reseal"), timeout=None)
-                _future.sleep(5)  # pose with nucleus
+                self._saveStack("resealed nucleus", _future)
+
+                # start nucleus collection
+                homeFut = ppip.setState("home with nucleus")
 
                 # check on the resealed cell
-                homeFut = ppip.pipette.goHome()
                 win.scopeDevice.loadPreset('GFP')
                 _future.waitFor(
-                    win.cameraDevice.moveCenterToGlobal(cell.position, "fast")
+                    win.cameraDevice.moveCenterToGlobal(cell.position, "fast", name="center on resealed cell")
                 )
-                _future.sleep(5)  # pose with nucleus
+                self._saveStack("GFP cell without nucleus", _future)
                 _future.waitFor(homeFut)
+
+                # collect the nucleus
+                _future.waitFor(ppip.setState("collect"))
+                _future.waitFor(ppip.pipetteDevice.goAboveTarget("fast"))
+                self._saveStack("post-collection", _future)
+
+                _future.waitFor(ppip.pipette.goHome())
 
             except (_future.StopRequested, _future.Stopped):
                 raise
@@ -106,7 +116,7 @@ class Autopatcher:
         while True:
             if (state := ppip.getState().stateName) not in ("approach", "cell detect", "contact cell"):
                 if not detect_finished:
-                    win.cameraDevice.moveCenterToGlobal(cell.position, "fast")
+                    win.cameraDevice.moveCenterToGlobal(cell.position, "fast", name="center on cell during patching")
                     detect_finished = True
             if state in ("whole cell", "bath", "broken", "fouled"):
                 _future.setState(f"Exiting patch loop - ended in state {state}")
@@ -173,3 +183,17 @@ class Autopatcher:
             timeout=max(30, expected_duration * 20),
         )
         logger.warning("Autopatch: Task runner sequence completed.")
+
+    def _saveStack(self, name, future):
+        start = self.dev.pipetteDevice.targetPosition()[2] - (20e-6 / 2)
+        end = start + 20e-6
+        save_in = self.dev.dm.getCurrentDir().getDir(f"{name} stack", create=True)
+        future.waitFor(
+            run_image_sequence(
+                self.dev.imagingDevice(),
+                z_stack=(start, end, 1e-6),
+                storage_dir=save_in,
+                name="cellfie",
+            )
+        )
+        future.sleep(5)  # pose for the user

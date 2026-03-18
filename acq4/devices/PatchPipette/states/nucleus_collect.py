@@ -47,12 +47,17 @@ class NucleusCollectState(PatchPipetteState):
         self.setState('nucleus collection')
 
         # move to top of collection tube
-        self.startPos = pip.globalPosition()
-        self.collectionPos = pip.loadPosition('collect')
-        # self.approachPos = self.collectionPos - pip.globalDirection() * config['approachDistance']
+        # TODO delete this kludge stuff
+        well = pip.getNucleusDepositionWell()
+        self.waitFor(well.moveToInteract(pip))
 
-        # self.waitFor([pip._moveToGlobal(self.approachPos, speed='fast')])
-        self.waitFor(pip._moveToGlobal(self.collectionPos, speed='fast', name='move to collection position'), timeout=None)
+        # TODO restore and integrate with interaction sites
+        # self.startPos = pip.globalPosition()
+        # self.collectionPos = pip.loadPosition('collect')
+        # # self.approachPos = self.collectionPos - pip.globalDirection() * config['approachDistance']
+        #
+        # # self.waitFor([pip._moveToGlobal(self.approachPos, speed='fast')])
+        # self.waitFor(pip._moveToGlobal(self.collectionPos, speed='fast', name='move to collection position'), timeout=None)
 
         if dev.sonicatorDevice is not None:
             self.sonication = dev.sonicatorDevice.doProtocol(config['sonicationProtocol'])
@@ -69,6 +74,7 @@ class NucleusCollectState(PatchPipetteState):
             self.waitFor(self.sonication)
 
         dev.pipetteRecord()['expelled_nucleus'] = True
+        self.waitFor(well._unwindKludgePath())  # TODO delete
         return {"state": 'out'}
 
     def resetPosition(self, _future=None):

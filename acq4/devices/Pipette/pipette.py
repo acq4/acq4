@@ -855,6 +855,24 @@ class Pipette(Device, OptomechDevice):
             return None
         return self.dm.getDevice(name)
 
+    def getNucleusDepositionWell(self) -> InteractionSite | None:
+        """Return the RecordingChamber instance that is associated with this Pipette for nucleus expulsion
+        (see 'nucleusExpulsionWell' config option).
+        """
+        name = self.config.get('nucleusExpulsionWell', None)
+        if name is None:
+            return None
+        return self.dm.getDevice(name)
+
+    def getElectrodeSolutionWell(self) -> InteractionSite | None:
+        """Return the RecordingChamber instance that is associated with this Pipette for electrode solution
+        (see 'electrodeSolutionWell' config option).
+        """
+        name = self.config.get('electrodeSolutionWell', None)
+        if name is None:
+            return None
+        return self.dm.getDevice(name)
+
     def startRecording(self):
         """Return an object that records all motion updates from this pipette"""
         return PipetteRecorder(self)
