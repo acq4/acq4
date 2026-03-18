@@ -223,7 +223,7 @@ class ApproachState(PatchPipetteState):
         self.direction_unit = self._calc_direction()
 
     def run(self):
-        self.dev.newCell()
+        # self.dev.newCell()
         pip = self.dev.pipetteDevice
         target = pip.targetPosition()
         surface = pip.scopeDevice().getSurfaceDepth()
@@ -261,8 +261,8 @@ class ApproachState(PatchPipetteState):
                     self.setState('Move finished; next state')
                     break
 
-        if self.config['recalibratePipette']:
-            self.recalibratePipette()
+        # if self.config['recalibratePipette']:
+        #     self.recalibratePipette()
 
         return {"state": self.config["nextState"]}
 
@@ -307,14 +307,15 @@ class ApproachState(PatchPipetteState):
             self._moveFuture = None
 
         pip = self.dev.pipetteDevice
-        tip_fut = self.waitFor(
-            pip.iterativelyFindTip(
-                max_allowed_offset=self.config["pipetteRecalibrationMaxChange"],
-                go_to_tip_first=True,
+        try:
+            tip_fut = self.waitFor(
+                pip.iterativelyFindTip(
+                    max_allowed_offset=self.config["pipetteRecalibrationMaxChange"],
+                    go_to_tip_first=True,
+                )
             )
-        )
-        if tip_fut.wasInterrupted():
-            self.setState(f"failed pipette position update: {tip_fut.errorMessage()}")
+        except Exception as e:
+            self.setState(f"failed pipette position update: {e}")
 
     @future_wrap
     def _move(self, _future):
