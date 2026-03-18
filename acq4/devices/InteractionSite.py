@@ -118,6 +118,12 @@ class InteractionSite(Device, OptomechDevice):
 
     def containsPoint(self, pt, tolerance=1e-9):
         """Return True if the x,y,z coordinates in *pt* lie within the boundaries of this site."""
+        for _, pos_config in self.positions.items():
+            if 'site global' in pos_config and 'interact global' in pos_config:
+                if np.linalg.norm(np.array(pos_config['site global']) - np.array(pt)) < tolerance:
+                    return True
+                if np.linalg.norm(np.array(pos_config['interact global']) - np.array(pt)) < tolerance:
+                    return True
         local_pt = self.mapFromGlobal(pt)
         return (
             local_pt[0] ** 2 + local_pt[1] ** 2 <= self.radius**2 + tolerance
