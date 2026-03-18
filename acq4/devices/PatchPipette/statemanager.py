@@ -270,7 +270,7 @@ class PatchPipetteStateManager(Qt.QObject):
             if job.nextState.get("state") is not None:
                 config = job.nextState
                 state = config.pop("state")
-                self.requestStateChange(state, config)
+                self.requestStateChange(state, **config)
             else:
                 self.logger.debug(f"No next state specified by {job.stateName}")
 
