@@ -81,11 +81,11 @@ class Autopatcher:
                     self._autopatchRunTaskRunner(_future)
 
                     _future.setState("Autopatch: Taking cell images")
-                    win.scopeDevice.loadPreset('GFP')
+                    _future.waitFor(win.scopeDevice.loadPreset('GFP'))
                     self._saveStack("patched GFP cellfie", _future)
                     # win.scopeDevice.loadPreset('tdTomato')
                     # self._saveStack("patched tdTomato cellfie", _future)
-                    win.scopeDevice.loadPreset('brightfield')
+                    _future.waitFor(win.scopeDevice.loadPreset('brightfield'))
 
                     # TODO too slow for today's demo
                     # _future.setState("Autopatch: resealing")
