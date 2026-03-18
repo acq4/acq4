@@ -152,7 +152,7 @@ class DAQSonicator(Sonicator):
             },
         }
         task = self.dm.createTask(cmd)
-        task.reserveDevices()
+        task.reserveDevices(reserver="DAQSonicator")
         try:
             if "disable" in self.config:
                 self._daq.setChannelValue("disable", 0)
@@ -171,6 +171,13 @@ class DAQSonicator(Sonicator):
             task.stop()
             if "disable" in self.config:
                 self._daq.setChannelValue("disable", 1)
+
+    def _protocolDuration(self, protocol: str | dict) -> float:
+        if isinstance(protocol, str):
+            protocol = load_stimulus(json.loads(protocol))
+        else:
+            protocol = load_stimulus(protocol)
+        return protocol.total_global_end_time
 
     def calcVoltage(self, frequency: float) -> float:
         """
