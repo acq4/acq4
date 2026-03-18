@@ -26,8 +26,14 @@ class Autopatcher:
         win = self._window
         win.sigWorking.emit(win.ui.autopatchDemoBtn)
         ppip: PatchPipette = win.patchPipetteDevice
+        man = win.module.manager
+        multipatch_win = man.getModule('MultiPatch').win
+        demo_dir = man.getCurrentDir().mkdir('AutopatchDemo', autoIncrement=True)
         cleaning = None
         while True:
+            cell_dir = demo_dir.mkdir('cell', autoIncrement=True)
+            cell_dir.setInfo({'dirType': 'Cell'})
+            man.setCurrentDir(cell_dir)
             try:
                 if not ppip.isTipClean():
                     cleaning = ppip.setState("clean")
@@ -39,6 +45,7 @@ class Autopatcher:
                 _future.setState("Autopatch: cell found")
                 ppip.setState("bath")
                 ppip.newPatchAttempt()
+                runInGuiThread(multipatch_win.recordToggled, True)
                 _future.setState("Autopatch: go above target")
                 _future.waitFor(ppip.pipetteDevice.goAboveTarget("fast"))
                 _future.setState("Autopatch: finding pipette tip")
@@ -59,6 +66,7 @@ class Autopatcher:
                 if state != "whole cell":
                     logger.warning("Autopatch: Next cell!")
                     continue
+                cell_dir.setInfo({'important': True})
                 _future.setState("Autopatch: Whole cell; running task")
                 self._autopatchRunTaskRunner(_future)
 
@@ -81,6 +89,7 @@ class Autopatcher:
                 )
                 _future.sleep(5)  # pose with nucleus
                 _future.waitFor(homeFut)
+                runInGuiThread(multipatch_win.recordToggled, False)
 
             except (_future.StopRequested, _future.Stopped):
                 raise
