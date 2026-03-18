@@ -63,6 +63,7 @@ class AutomationDebugWindow(Qt.QWidget):
 
         # --- UI wiring ---
         self.ui.clearBtn.clicked.connect(self._detector.clearCells)
+        self.ui.showRoisBtn.toggled.connect(self._toggleCellRois)
         self.ui.zStackDetectBtn.setOpts(
             future_producer=self._detector._detectNeuronsZStack, stoppable=True
         )
@@ -180,6 +181,10 @@ class AutomationDebugWindow(Qt.QWidget):
         self.ui.classificationPresetCombo.clear()
         self.ui.detectionPresetCombo.addItems(presets)
         self.ui.classificationPresetCombo.addItems(presets)
+
+    def _toggleCellRois(self, visible: bool):
+        for box in self._previousBoxWidgets:
+            box.setVisible(visible)
 
     def _setWorkingState(self, working: bool | Qt.QPushButton):
         if working:

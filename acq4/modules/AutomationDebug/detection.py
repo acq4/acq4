@@ -212,9 +212,11 @@ class CellDetector:
         win = self._window
         cam_win: CameraWindow = win.module.manager.getModule("Camera").window()
         self.clearBoundingBoxes()  # Clear previous boxes visually and state
+        rois_visible = win.ui.showRoisBtn.isChecked()
         for neuron in neurons:
             start, end = np.array(neuron) - 10e-6, np.array(neuron) + 10e-6
             box = TargetBox(start, end)
+            box.setVisible(rois_visible)
             cam_win.addItem(box)
             # TODO: Re-evaluate if this connection is still needed or causes issues
             win.scopeDevice.sigGlobalTransformChanged.connect(box.noticeFocusChange)
