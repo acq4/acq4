@@ -28,11 +28,12 @@ class Autopatcher:
         win.sigWorking.emit(win.ui.autopatchDemoBtn)
         ppip: PatchPipette = win.patchPipetteDevice
         man = win.module.manager
-        multipatch_win = man.getModule('MultiPatch').win
-        demo_dir = man.getCurrentDir().mkdir('AutopatchDemo', autoIncrement=True)
+        multipatch_win = runInGuiThread(man.getModule, 'MultiPatch').win
+        man.getCurrentDir().mkdir('AutopatchDemo', autoIncrement=True)
         while True:
-            cell_dir = demo_dir.mkdir('cell', autoIncrement=True)
-            man.setCurrentDir(cell_dir)
+            folder_selector = man.getModule("Data Manager").ui.newFolderList
+            runInGuiThread(folder_selector.setCurrentIndex(5))
+            cell_dir = man.getCurrentDir()
             try:
                 if not ppip.isTipClean():
                     _future.setState("Autopatch: cleaning pipette")
@@ -114,12 +115,13 @@ class Autopatcher:
                 logger.exception("Error during protocol:")
                 continue
             finally:
+                man.setCurrentDir(cell_dir.parent())
                 runInGuiThread(multipatch_win.recordToggled, False)
 
     def _autopatchCellPatch(self, cell, _future):
         win = self._window
         ppip = win.patchPipetteDevice
-        ppip.setState("approach")
+        ppip.setState("approach", startANewCell=False)
         detect_finished = False
         while True:
             if (state := ppip.getState().stateName) not in ("approach", "cell detect", "contact cell"):
