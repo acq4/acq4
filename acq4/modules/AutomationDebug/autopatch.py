@@ -46,6 +46,7 @@ class Autopatcher:
                     if not ppip.isTipClean():
                         _future.setState("Pipette still not clean after clean state; quitting demo")
                         return
+                    ppip.setState("bath")
                     _future.waitFor(win.scopeDevice.moveDip())
 
                 cell = self._autopatchFindCell(_future)
@@ -53,7 +54,6 @@ class Autopatcher:
                     _future.setState("No cells found; quitting demo")
                     return
                 _future.setState("Autopatch: cell found")
-                ppip.setState("bath")
                 ppip.newPatchAttempt()
                 runInGuiThread(multipatch_win.recordToggled, True)
                 _future.setState("Autopatch: go above target")
