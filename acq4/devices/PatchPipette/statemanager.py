@@ -173,7 +173,7 @@ class PatchPipetteStateManager(Qt.QObject):
         """
         pass
 
-    def requestStateChange(self, state, config=None):
+    def requestStateChange(self, state, **config):
         """Pipette has requested a state change; either accept and configure the new
         state or reject the new state.
 
