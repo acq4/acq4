@@ -31,6 +31,7 @@ class InteractionSite(Device, OptomechDevice):
         Device.__init__(self, dm, config, name)
         self.radius = config["radius"]
         self.height = config.get("height")
+        self._approach_stage_path = None  # TODO destroy this
         if self.height is None:
             raise ValueError(f"{self.name()} must have a height specified in config")
         OptomechDevice.__init__(self, dm, config, name)
@@ -182,22 +183,66 @@ class InteractionSite(Device, OptomechDevice):
         pos_config = self.positions[other.name()]
         if 'interact global' not in pos_config:
             raise RuntimeError(f"No interact position saved for {other.name()} at {self.name()}")
-        if 'site global' not in pos_config:
-            raise RuntimeError(f"No site global position saved for {other.name()} at {self.name()}")
-        if self._parentStage is not None:
-            # TODO this will still need a real motion planner
-            # TODO we'll maybe also need to make sure the other devices are out of the way...
-            _future.waitFor(self.moveToGlobal(pos_config['site global'], speed=speed), timeout=120)
-        approach_global = pos_config['site global']
-        _future.waitFor(other._moveToGlobal(approach_global, speed=speed), timeout=120)
+        _future.waitFor(self.moveToApproach(other, speed))
         interact_global = pos_config['interact global']
-        _future.waitFor(other._moveToGlobal(interact_global, speed=speed))
+        _future.waitFor(other._moveToGlobal(interact_global, speed=speed, name=f"move to interact with {self.name()}"))
 
-    def moveToApproach(self, other, speed='fast'):
+    @future_wrap
+    def moveToApproach(self, other, speed='fast', _future=None):
         if other.name() not in self.positions:
             raise RuntimeError(f"No positions saved for {other.name()} at {self.name()}")
         pos_config = self.positions[other.name()]
-        return other._moveToGlobal(pos_config['site global'], speed=speed)
+        if 'site global' not in pos_config:
+            raise RuntimeError(f"No site global position saved for {other.name()} at {self.name()}")
+
+        # TODO this will still need a real motion planner
+        # if self._parentStage is not None:
+        #     # TODO we'll maybe also need to make sure the other devices are out of the way...
+        #     _future.waitFor(self.moveToGlobal(pos_config['site global'], speed=speed), timeout=120)
+
+        scope = other.imagingDevice().scopeDev
+        start_pos = scope.globalPosition()
+        approach_global = pos_config['site global']
+        if np.linalg.norm(np.array(start_pos) - np.array(approach_global)) > 50e-3:
+            stage_path = [
+                np.array([start_pos[0], start_pos[1], 30e-3]),
+                np.array([-90e-3, 20e-3, 30e-3]),
+            ]
+            for wp in stage_path:
+                _future.waitFor(
+                    scope.setGlobalPosition(
+                        wp, 20e-3, name=f"move {self.name()} into interaction position"
+                    )
+                )
+            self._approach_stage_path = stage_path
+
+            self_move = self.moveToGlobal(
+                approach_global, speed=speed, name="move to interaction position"
+            )
+            _future.waitFor(other.retractFromSurface('fast'))
+            _future.waitFor(
+                other._moveToGlobal(
+                    [0, 0, 10e-3], 'fast', name=f"safe position before {self.name()}"
+                )
+            )
+            _future.waitFor(self_move)
+
+        _future.waitFor(
+            other._moveToGlobal(
+                approach_global, speed=speed, name=f"move to {self.name()} approach"
+            )
+        )
+
+    @future_wrap
+    def _unwindKludgePath(self, _future):
+        if self._approach_stage_path is not None:
+            for wp in reversed(self._approach_stage_path):
+                _future.waitFor(
+                    self._parentStage.moveToGlobal(
+                        wp, 20e-3, name=f"move {self.name()} out of interaction position"
+                    )
+                )
+            self._approach_stage_path = None
 
 
 def _fmt_pos(pos):
