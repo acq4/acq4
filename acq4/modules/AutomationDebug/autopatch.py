@@ -87,20 +87,21 @@ class Autopatcher:
                     # self._saveStack("patched tdTomato cellfie", _future)
                     win.scopeDevice.loadPreset('brightfield')
 
-                    _future.setState("Autopatch: resealing")
-                    _future.waitFor(ppip.setState("reseal"), timeout=None)
-                    self._saveStack("resealed nucleus", _future)
-
-                    # start nucleus collection
-                    homeFut = ppip.setState("home with nucleus")
-
-                    # check on the resealed cell
-                    win.scopeDevice.loadPreset('GFP')
-                    _future.waitFor(
-                        win.cameraDevice.moveCenterToGlobal(cell.position, "fast", name="center on resealed cell")
-                    )
-                    self._saveStack("GFP cell without nucleus", _future)
-                    _future.waitFor(homeFut)
+                    # TODO too slow for today's demo
+                    # _future.setState("Autopatch: resealing")
+                    # _future.waitFor(ppip.setState("reseal"), timeout=None)
+                    # self._saveStack("resealed nucleus", _future)
+                    #
+                    # # start nucleus collection
+                    # homeFut = ppip.setState("home with nucleus")
+                    #
+                    # # check on the resealed cell
+                    # win.scopeDevice.loadPreset('GFP')
+                    # _future.waitFor(
+                    #     win.cameraDevice.moveCenterToGlobal(cell.position, "fast", name="center on resealed cell")
+                    # )
+                    # self._saveStack("GFP cell without nucleus", _future)
+                    # _future.waitFor(homeFut)
 
                     # collect the nucleus
                     # TODO once we have motion planning
