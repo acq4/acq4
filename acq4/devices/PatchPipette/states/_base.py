@@ -377,12 +377,9 @@ class PatchPipetteState(Future):
         if not hasattr(self.dev, '_trackingVisualizers'):
             self.dev._trackingVisualizers = []
         disconnect(self._cell.sigPositionChanged, self.dev.pipetteDevice.setTarget)
-        if future.wasStopped():
-            return
-        visualizer = LiveTrackerVisualizer(self._cell._tracker)
-        self.dev._trackingVisualizers.append(visualizer)
-        # TODO clean these up eventually or we'll leak memory
-        visualizer.show()
+        disconnect(self._cell.sigTrackingMultipleFramesStart, self._pausePipetteForExtendedTracking)
+        disconnect(self._cell.sigTrackingMultipleFramesFinish, self._resumePipetteAfterExtendedTracking)
+
 
     def _pausePipetteForExtendedTracking(self, cell):
         self._pauseMovement = True
