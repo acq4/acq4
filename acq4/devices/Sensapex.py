@@ -48,6 +48,9 @@ class Sensapex(Stage):
     * **slowSpeed** (float, optional): Slow movement speed in m/s
     
     * **fastSpeed** (float, optional): Fast movement speed in m/s
+
+    * **retryThreshold** (float, optional): Distance threshold (meters) for determining whether a 
+      move successfully reached its target (default: 0.4 um)
     
     Note: Connection parameters (address, group, debug settings, etc.) use global 
     defaults from the 'drivers/sensapex' configuration section when not specified per-device.
@@ -86,6 +89,7 @@ class Sensapex(Stage):
         # create handle to this manipulator
         if "nAxes" in config and version_info < (1, 22, 4):
             raise RuntimeError("nAxes support requires version >= 1.022.4 of the sensapex-py library")
+        ump.set_retry_threshold(config.get("retryThreshold", 0.4e-6) * 1e6)  # convert from m to um
         self.dev = ump.get_device(self.devid, n_axes=config.get("nAxes", None), is_stage=not config["isManipulator"])
         self._quitRequested = False
         self._lastMove: Optional[SensapexMoveFuture] = None
