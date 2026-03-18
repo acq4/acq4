@@ -679,6 +679,7 @@ class Pipette(Device, OptomechDevice):
         speed: float = 10e-6,
         interval: float = 5,
         step: float = 1e-6,
+        name: str | None = None,
         _future=None,
     ):
         """Retract/advance in small steps, allowing for manual user movements.
@@ -712,7 +713,7 @@ class Pipette(Device, OptomechDevice):
                 break  # overshot
             distance = np.linalg.norm(direction)
             next_pos = pos + step * direction / distance
-            _future.waitFor(self._moveToGlobal(next_pos, speed=speed, linear=True))
+            _future.waitFor(self._moveToGlobal(next_pos, speed=speed, linear=True, name=name))
             if distance <= step:
                 break
             _future.sleep(interval)
@@ -735,7 +736,7 @@ class Pipette(Device, OptomechDevice):
 
         pos = np.array(self.globalPosition())
         prev_dir = random_wiggle_direction()
-        for _ in range(repetitions):
+        for step_i in range(repetitions):
             with contextlib.ExitStack() as stack:
                 if extra is not None:
                     stack.enter_context(extra())
@@ -743,9 +744,9 @@ class Pipette(Device, OptomechDevice):
                 while ptime.time() - start < duration:
                     while np.dot(direction := random_wiggle_direction(), prev_dir) > 0:
                         pass  # ensure different direction from previous
-                    _future.waitFor(self._moveToGlobal(pos=pos + radius * direction, speed=speed))
+                    _future.waitFor(self._moveToGlobal(pos=pos + radius * direction, speed=speed, name=f"wiggle step {step_i}"))
                     prev_dir = direction
-                _future.waitFor(self._moveToGlobal(pos=pos, speed=speed))
+                _future.waitFor(self._moveToGlobal(pos=pos, speed=speed, name=f"wiggle return {step_i}"))
 
     def globalPosition(self):
         """Return the position of the electrode tip in global coordinates.
@@ -754,7 +755,7 @@ class Pipette(Device, OptomechDevice):
         """
         return self.mapToGlobal(np.array([0, 0, 0]))
 
-    def _moveToGlobal(self, pos, speed, **kwds):
+    def _moveToGlobal(self, pos, speed, name=None, **kwds):
         """Move the electrode tip directly to the given position in global coordinates.
         WARNING: This method does _not_ implement any motion planning.
         """
@@ -768,10 +769,10 @@ class Pipette(Device, OptomechDevice):
         except Exception:
             self.logger.exception("Error visualizing pipette move path")
         try:
-            return stage.moveToGlobal(stagePos, speed, **kwds)
+            return stage.moveToGlobal(stagePos, speed, name=name, **kwds)
         except Exception as exc:
             exc.add_note(
-                f"Moving {self} to global position {pos!r} (name={kwds.get('name', None)})"
+                f"Moving {self} to global position {pos!r} (name={name})"
             )
             raise exc
 
@@ -787,11 +788,11 @@ class Pipette(Device, OptomechDevice):
         dif = np.asarray(pos) - np.asarray(self.parentStage.globalPosition())
         return np.asarray(self.globalPosition()) + dif
 
-    def _moveToLocal(self, pos, speed, linear=False):
+    def _moveToLocal(self, pos, speed, linear=False, **kwds):
         """Move the electrode tip directly to the given position in local coordinates.
         WARNING: This method does _not_ implement any motion planning.
         """
-        return self._moveToGlobal(self.mapToGlobal(pos), speed, linear=linear)
+        return self._moveToGlobal(self.mapToGlobal(pos), speed, linear=linear, **kwds)
 
     def setTarget(self, target):
         self.target = np.array(target)
@@ -809,7 +810,7 @@ class Pipette(Device, OptomechDevice):
 
     def focusTip(self, speed='fast', raiseErrors=False):
         pos = self.globalPosition()
-        future = self.scopeDevice().setGlobalPosition(
+        future = self.imagingDevice().moveCenterToGlobal(
             pos, speed=speed, name=f"focus on {self.name()}"
         )
         if raiseErrors:
@@ -818,7 +819,7 @@ class Pipette(Device, OptomechDevice):
 
     def focusTarget(self, speed='fast', raiseErrors=False):
         pos = self.targetPosition()
-        future = self.scopeDevice().setGlobalPosition(
+        future = self.imagingDevice().moveCenterToGlobal(
             pos, speed=speed, name=f"focus on target for {self.name()}"
         )
         if raiseErrors:
@@ -857,6 +858,69 @@ class Pipette(Device, OptomechDevice):
     def startRecording(self):
         """Return an object that records all motion updates from this pipette"""
         return PipetteRecorder(self)
+
+    @future_wrap
+    def iterativelyFindTip(self, max_reps=10, found_threshold=3e-6, delay_after_move=0.2, 
+                           max_allowed_offset=None, delay_after_update=0, reserve_devices=True,
+                           go_to_tip_first=False, _future=None):
+        """Iteratively refine the tip position by finding the tip in frame and focusing, until convergence.
+        
+        Returns if convergence is reached (tip position changes less than *found_threshold* between iterations) or after *max_reps* iterations.
+        Otherwise, raises an exception.
+
+        Parameters
+        ----------
+        max_reps : int
+            Maximum number of iterations to perform.
+            If exceeded before convergence, TimeoutError is raised.
+        found_threshold : float
+            Distance threshold (meters) for convergence.
+        delay_after_move : float
+            Time to wait (seconds) after each move before finding the tip again.
+        max_allowed_offset : float
+            Maximum allowed tip offset distance (meters).
+            If exceeded, ValueError is raised.
+        delay_after_update : float
+            Time to wait (seconds) after updating the tip position before the next iteration.
+            Default is 0; this is used to allow visual confirmation of the update before moving on.
+        reserve_devices : bool
+            If True, then devices will be reserved for the duration of this method.
+        go_to_tip_first : bool
+            If True, then the pipette will first move to the current tip position before starting the
+            iterative process.
+        """
+        imgr = self.imagingDevice()
+        manager = getManager()
+
+        with contextlib.ExitStack() as stack:
+            if reserve_devices:
+                stack.enter_context(manager.reserveDevices([self] + imgr.devicesToReserve(), timeout=30.0))
+            try:
+                last_pos = None
+                start_pos = self.globalPosition()
+                if go_to_tip_first:
+                    _future.waitFor(self.focusTip())
+                    _future.sleep(delay_after_move)
+                for _ in range(max_reps):
+                    pos = self.tracker.findTipInFrame()
+                    _future.waitFor(self.setTipOffsetIfAcceptable(pos), timeout=None)
+                    converged = last_pos is not None and np.linalg.norm(np.array(pos) - np.array(last_pos)) < found_threshold
+                    _future.sleep(delay_after_update)
+                    if converged:
+                        diff = np.linalg.norm(np.array(pos) - np.array(start_pos))
+                        if max_allowed_offset is not None and diff > max_allowed_offset:
+                            raise ValueError(f"Tip offset exceeded maximum allowed distance: {diff} > {max_allowed_offset}")
+                        return
+
+                    last_pos = pos
+                    _future.waitFor(self.focusTip())
+                    _future.sleep(delay_after_move)
+                raise TimeoutError(f"Iterative tip finding did not converge after {max_reps} iterations.")
+            except Exception as exc:
+                # reset position to start if we fail, to avoid leaving the pipette in a bad position
+                self.setTipOffset(start_pos)
+                raise exc
+        
 
     def findNewPipette(self):
         from acq4.devices.Pipette.calibration import findNewPipette
@@ -926,7 +990,7 @@ class PipetteCamModInterface(CameraModuleInterface):
 
     canImage = False
 
-    def __init__(self, dev: "Pipette", win, showUi=True):
+    def __init__(self, dev: Pipette, win, showUi=True):
         CameraModuleInterface.__init__(self, dev, win)
         self._haveTarget = False
         self._showUi = showUi
@@ -975,7 +1039,7 @@ class PipetteCamModInterface(CameraModuleInterface):
         self.ui.setOrientationBtn.setEnabled(False)
         win.getView().scene().sigMouseClicked.connect(self.sceneMouseClicked)
         dev.sigGlobalTransformChanged.connect(self.transformChanged)
-        dev.scopeDevice().sigGlobalTransformChanged.connect(self.focusChanged)
+        dev.imagingDevice().sigGlobalTransformChanged.connect(self.focusChanged)
         dev.sigTargetChanged.connect(self.targetChanged)
         self.calibrateAxis.sigRegionChangeFinished.connect(self.calibrateAxisChanged)
         self.calibrateAxis.sigRegionChanged.connect(self.calibrateAxisChanging)
@@ -1021,7 +1085,7 @@ class PipetteCamModInterface(CameraModuleInterface):
 
         elif self.ui.setTargetBtn.isChecked():
             pos = self.win().getView().mapSceneToView(ev.scenePos())
-            z = self.getDevice().scopeDevice().getFocusDepth()
+            z = self.getDevice().imagingDevice().getFocusDepth()
             self.setTargetPos(pos, z)
             self.target.setFocusDepth(z)
 
@@ -1041,7 +1105,7 @@ class PipetteCamModInterface(CameraModuleInterface):
         self.focusChanged()
 
     def targetDragged(self):
-        z = self.getDevice().scopeDevice().getFocusDepth()
+        z = self.getDevice().imagingDevice().getFocusDepth()
         self.setTargetPos(self.target.pos(), z)
         self.target.setFocusDepth(z)
 
@@ -1089,7 +1153,7 @@ class PipetteCamModInterface(CameraModuleInterface):
             tdepth = self.dev().targetPosition()[2]
         except RuntimeError:
             return
-        fdepth = self.dev().scopeDevice().getFocusDepth()
+        fdepth = self.dev().imagingDevice().getFocusDepth()
         self.target.setFocusDepth(fdepth)
 
     def calibrateAxisChanging(self):
@@ -1104,7 +1168,7 @@ class PipetteCamModInterface(CameraModuleInterface):
         angle = self.calibrateAxis.angle()
         size = self.calibrateAxis.size()
         dev = self.getDevice()
-        z = dev.scopeDevice().getFocusDepth()
+        z = dev.imagingDevice().getFocusDepth()
 
         # first orient the parent stage
         dev.setCalibratedOrientation(yaw=angle)

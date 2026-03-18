@@ -394,8 +394,16 @@ class PatchPipetteState(Future):
         cell.sigTrackingMultipleFramesFinish.disconnect(self._resumePipetteAfterExtendedTracking)
         cell.sigTrackingMultipleFramesStart.connect(self._pausePipetteForExtendedTracking)
 
-    def _waitForMoveWhileTargetChanges(self, position_fn, speed, continuous, future, interval=None, step=None):
+    def _waitForMoveWhileTargetChanges(self, position_fn, speed, continuous, future, interval=None, step=None, move_restart_threshold=3.0):
+        """Wait for a move to complete while also monitoring for changes in the target position.
+
+        When the target position updates, the move will be updated as well to track the new target.
+        However if the current motion is near enough to the direction of the new target, then we delay updating
+        the move to avoid frequent interruptions.
+        """
         move_fut = None
+        restart_move = False
+        last_destination = None
         try:
             while move_fut is None or not move_fut.isDone():
                 if self._pauseMovement:
@@ -404,34 +412,42 @@ class PatchPipetteState(Future):
                         move_fut = None
                     future.sleep(0.1)
                     continue
-                pos = position_fn()
-                if move_fut is None:
+                current_target_pos = position_fn()
+                if move_fut is None or restart_move or last_destination is None:
+                    restart_move = False
                     if continuous:
-                        move_fut = self.dev.pipetteDevice._moveToGlobal(pos, speed=speed)
+                        move_fut = self.dev.pipetteDevice._moveToGlobal(current_target_pos, speed=speed, name="Update move towards target")
                     else:
                         move_fut = self.dev.pipetteDevice.stepwiseAdvance(
-                            target=pos,
+                            target=current_target_pos,
                             speed=speed,
                             interval=interval,
                             step=step,
+                            name="Update stepwise move towards target",
                         )
+                    self.setState(f"Moving towards target at {current_target_pos}")
+                    last_destination = current_target_pos
                 else:
+                    restart_move = False
                     # update the move if the destination is significantly different, as
                     # measured by degrees relative to our direction
-                    direction_to_pos = (pos - self.dev.pipetteDevice.globalPosition())
-                    direction_to_pos /= np.linalg.norm(direction_to_pos)
-                    direction_of_motion = move_fut.targetPos - self.dev.pipetteDevice.globalPosition()
+                    current_tip_pos = self.dev.pipetteDevice.globalPosition()
+                    direction_to_target = current_target_pos - current_tip_pos
+                    direction_of_motion = last_destination - current_tip_pos
+                    if np.any(current_target_pos != last_destination):
+                        cos_theta = np.dot(direction_to_target, direction_of_motion) / (
+                            np.linalg.norm(direction_to_target) * np.linalg.norm(direction_of_motion)
+                        )
+                        theta = np.arccos(np.clip(cos_theta, -1, 1))  # clip to avoid float errors
+                        theta = np.degrees(theta)
 
-                    cos_theta = np.dot(direction_to_pos, direction_of_motion) / (
-                        np.linalg.norm(direction_to_pos) * np.linalg.norm(direction_of_motion)
-                    )
-                    theta = np.arccos(np.clip(cos_theta, -1, 1))  # clip to avoid float errors
-                    theta = np.degrees(theta)
-                    self.logger.info(f"Target changed by {theta:.1f} degrees ({direction_to_pos} vs {direction_of_motion})")
-                    if theta > 2:
-                        move_fut.stop("Target changed", wait=True)
-                        move_fut = None
-                future.sleep(0.1)
+                        restart_move = theta > move_restart_threshold
+                        self.logger.debug(
+                            f"Target direction differs from current path by {theta:.1f}° "
+                            f"{'>' if restart_move else '<'} {move_restart_threshold}°; "
+                            f"{'update path' if restart_move else 'keep current path'}")
+                if not restart_move:
+                    future.sleep(0.1)
         except Exception:
             if move_fut is not None and not move_fut.isDone():
                 move_fut.stop("Error while moving", wait=True)

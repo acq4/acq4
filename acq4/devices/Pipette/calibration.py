@@ -1,11 +1,192 @@
 import numpy as np
 import scipy.interpolate
 
+import pyqtgraph as pg
 from acq4.devices.Camera import Camera
+from acq4.util import Qt
 from acq4.util.future import future_wrap
 from acq4.util.imaging.sequencer import acquire_z_stack
 from .pipette import Pipette
 from .planners import PipetteMotionPlanner
+
+
+_z_stack_detection_window = None
+
+
+class ZStackDetectionWidget(Qt.QWidget):
+    """Widget showing a z-stack with per-frame ML pipette detection results.
+
+    The ROI plot at the bottom shows predicted z-offset (red, left axis) and
+    confidence (green, right axis) vs frame index. Dragging the timeline
+    updates a crosshair on the image to the predicted tip position.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Z-Stack Pipette Detection")
+        self.resize(900, 700)
+
+        layout = Qt.QVBoxLayout(self)
+        self.imageView = pg.ImageView()
+        layout.addWidget(self.imageView)
+
+        from pyqtgraph.graphicsItems.TargetItem import TargetItem
+        self._target = TargetItem(size=20, movable=False, pen=pg.mkPen('r', width=2))
+        self.imageView.getView().addItem(self._target)
+        self._target.setVisible(False)
+
+        self._image_positions = None
+        self._z_curve = None
+        self._conf_curve = None
+        self._conf_vb = None
+
+        self.imageView.sigTimeChanged.connect(self._on_time_changed)
+
+    def setData(self, frames, image_positions, z_um, confidences):
+        """Update the widget with new detection results.
+
+        Parameters
+        ----------
+        frames : list of Frame
+        image_positions : ndarray, shape (n, 2)
+            Per-frame tip position in image pixel coordinates.
+        z_um : ndarray, shape (n,)
+            Per-frame predicted z offset from focal plane in µm.
+        confidences : ndarray, shape (n,)
+            Per-frame detection confidence (0-1).
+        """
+        self._image_positions = image_positions
+
+        stack = np.stack([f.data() for f in frames], axis=0)
+        self.imageView.setImage(stack)
+
+        roi_plot = self.imageView.ui.roiPlot
+        if self._z_curve is not None:
+            roi_plot.removeItem(self._z_curve)
+        if self._conf_curve is not None and self._conf_vb is not None:
+            self._conf_vb.removeItem(self._conf_curve)
+
+        x = np.arange(len(z_um))
+        self._z_curve = roi_plot.plot(x, z_um, pen=pg.mkPen('r', width=2))
+        roi_plot.setLabel('left', 'predicted z', units='µm')
+        roi_plot.setLabel('bottom', 'frame index')
+        roi_plot.showAxis('left')
+
+        if self._conf_vb is None:
+            self._conf_vb = pg.ViewBox()
+            roi_plot.scene().addItem(self._conf_vb)
+            roi_plot.showAxis('right')
+            roi_plot.getAxis('right').linkToView(self._conf_vb)
+            roi_plot.getAxis('right').setLabel('confidence')
+            self._conf_vb.setXLink(roi_plot)
+            roi_plot.getViewBox().sigResized.connect(self._update_conf_vb_geometry)
+
+        self._conf_vb.clear()
+        self._conf_curve = pg.PlotDataItem(x, confidences, pen=pg.mkPen('g', width=2))
+        self._conf_vb.addItem(self._conf_curve)
+        self._conf_vb.setRange(yRange=[0, 1])
+        self._update_conf_vb_geometry()
+
+        self._target.setVisible(True)
+        self._on_time_changed(0, 0)
+        self.show()
+        self.raise_()
+
+    def _update_conf_vb_geometry(self):
+        if self._conf_vb is not None:
+            roi_plot = self.imageView.ui.roiPlot
+            self._conf_vb.setGeometry(roi_plot.getViewBox().sceneBoundingRect())
+            self._conf_vb.linkedViewChanged(roi_plot.getViewBox(), self._conf_vb.XAxis)
+
+    def _on_time_changed(self, ind, time):
+        if self._image_positions is None:
+            return
+        idx = max(0, min(int(round(ind)), len(self._image_positions) - 1))
+        pos = self._image_positions[idx]
+        # image_pos_rc axes match frame.data() axis order: pos[0] → axis-0 (x in pg), pos[1] → axis-1 (y in pg)
+        self._target.setPos(float(pos[0]), float(pos[1]))
+
+
+def scan_pipette_z_stack(pipette, imager=None, z_range=50e-6, z_step=5e-6, show=False):
+    """Acquire a z-stack and run ML pipette detection on every frame.
+
+    Parameters
+    ----------
+    pipette : Pipette
+        Pipette device whose tip will be detected in each frame.
+    imager : Camera, optional
+        Imaging device to use. Defaults to ``pipette.imagingDevice()``.
+    z_range : float, optional
+        Distance above and below current focus depth to scan in meters. Default ±50 µm.
+    z_step : float
+        Distance between planes in meters. Default 5 µm.
+    show : bool
+        If True, display the stack and detection results in a
+        ``ZStackDetectionWidget`` (created once and reused on subsequent calls).
+
+    Returns
+    -------
+    frames : list of Frame
+    global_positions : ndarray, shape (n, 3)
+        Predicted global (x, y, z) tip position per frame.
+    z_predictions_um : ndarray, shape (n,)
+        Predicted z offset of tip from focal plane in µm per frame.
+    confidences : ndarray, shape (n,)
+        Detection confidence (0–1) per frame.
+    """
+    from acq4_automation.object_detection import do_pipette_tip_detection
+
+    if imager is None:
+        imager = pipette.imagingDevice()
+
+    current_z = imager.getFocusDepth()
+    z_start = current_z - z_range
+    z_end = current_z + z_range
+
+    frames = acquire_z_stack(
+        imager, z_start, z_end, z_step, block=True, name="ML pipette detection stack"
+    ).getResult()
+
+    pipette_dir = pipette.globalDirection()
+    global_positions = []
+    z_predictions_um = []
+    confidences = []
+    image_positions = []
+
+    for frame in frames:
+        img = frame.data()
+        image_dir = np.array(
+            frame.mapFromGlobalToFrame(pipette_dir) - frame.mapFromGlobalToFrame([0, 0, 0])
+        )[:2]
+        image_dir = image_dir / np.linalg.norm(image_dir)
+        pipette_angle = np.arctan2(-image_dir[0], image_dir[1]) * 180 / np.pi
+        px_size = frame.info()["pixelSize"][0]
+
+        image_pos_rc, z_um, confidence, _ = do_pipette_tip_detection(img, pipette_angle, px_size, show=False)
+
+        tip_pos = frame.mapFromFrameToGlobal(pg.Vector(image_pos_rc))
+        global_positions.append((tip_pos.x(), tip_pos.y(), tip_pos.z() + z_um * 1e-6))
+        z_predictions_um.append(float(z_um))
+        confidences.append(float(confidence))
+        image_positions.append([float(image_pos_rc[0]), float(image_pos_rc[1])])
+
+    global_positions = np.array(global_positions)
+    z_predictions_um = np.array(z_predictions_um)
+    confidences = np.array(confidences)
+    image_positions = np.array(image_positions)
+
+    if show:
+        from acq4.util.threadrun import runInGuiThread
+        runInGuiThread(_show_z_stack_detection_widget, frames, image_positions, z_predictions_um, confidences)
+
+    return frames, global_positions, z_predictions_um, confidences
+
+
+def _show_z_stack_detection_widget(frames, image_positions, z_um, confidences):
+    global _z_stack_detection_window
+    if _z_stack_detection_window is None or not _z_stack_detection_window.isVisible():
+        _z_stack_detection_window = ZStackDetectionWidget()
+    _z_stack_detection_window.setData(frames, image_positions, z_um, confidences)
 
 
 @future_wrap
@@ -123,19 +304,6 @@ def findNewPipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=0.
         zIndex = np.argwhere(zProfile > zThreshold)[0, 0]
 
 
-        # # Find pipette tip by doing ML prediction on many frames
-        # # do pipette detection on the nearest 10 frames
-        # predictionFrames = zStack[np.clip(zIndex-5, 0, None):np.clip(zIndex+5, None, len(zStack))]
-        # posPredictions = np.array([pipette.tracker.measureTipPosition(f)[0] for f in predictionFrames])
-        # # use median as best guess
-        # likelyZPosition = np.median(posPredictions[:, 2])
-        # # use xy prediction from frame that is closest to predicted z
-        # frameDepths = [f.depth for f in predictionFrames]
-        # xyIndex = np.searchsorted(frameDepths, likelyZPosition)
-        # globalPos = posPredictions[xyIndex].copy()
-        # globalPos[2] = likelyZPosition
-
-
         # find tip by looking for most-in-focusest point of largest object, in the direction of the tip
         tipFrame = zStack[zIndex]
         tipImg = zDiff[zIndex]
@@ -164,17 +332,12 @@ def findNewPipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=0.
         # this is our best guess as to the global position of the pipette tip
         globalPos = tipFrame.mapFromFrameToGlobal([tippestPixel[0], tippestPixel[1], 0])
 
-        # loop a few times:
-        # reset pipette offset, focus on tip, check again
-        checkedPositions = []
-        for i in range(3):
-            pipette.resetGlobalPosition(globalPos)
-            _future.waitFor(pipette._moveToGlobal(imager.globalCenterPosition(), 'fast'))
-            checkedPositions.append(globalPos)
-            # find tip!
-            globalPos = pipette.tracker.findTipInFrame()
+        # do initial coarse registration: reset offset to detected position, center in frame
+        pipette.resetGlobalPosition(globalPos)
+        _future.waitFor(pipette._moveToGlobal(imager.globalCenterPosition(), 'fast'))
 
-        success = _future.waitFor(pipette.setNewPipetteTipOffsetIfAcceptable(globalPos), timeout=None).getResult()
+        # iteratively refine tip position until convergence
+        _future.waitFor(pipette.iterativelyFindTip(30), timeout=None)
     finally:
         _future.l = locals().copy()
 
@@ -232,7 +395,7 @@ def watchMovingPipette(pipette: Pipette, imager: Camera, pos, speed, _future):
             imgFuture = imager.acquireFrames()
             pipRecorder = pipette.startRecording()
             pipFuture = pipette._moveToGlobal(pos, speed=speed)
-            _future.waitFor(pipFuture)
+            _future.waitFor(pipFuture, timeout=40)  # for some reason one of these moves takes a long time to finish..
         finally:
             if pipRecorder is not None:
                 pipRecorder.stop()
