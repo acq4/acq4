@@ -493,7 +493,7 @@ class AutomatedStageCalibration(object):
         # decide whether to move the stage
         finished = self._frame_index >= self._steps_per_axis * 2
         if not finished:
-            self._move = self._stage.move(self.positions[self.index], "slow")
+            self._move = self._stage.move(self.positions[self.index], "slow", name='calibration step')
 
         self._offsets[axis_index, step_index] = self._calculate_offset(axis_index, step_index)
 

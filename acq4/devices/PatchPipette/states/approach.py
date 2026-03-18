@@ -385,7 +385,7 @@ class ApproachState(PatchPipetteState):
             retract_pos = init_pos
         else:
             retract_pos = init_pos - self.config["sidestepBackupDistance"] * direction
-            self.waitFor(pip._moveToGlobal(retract_pos, speed=speed))
+            self.waitFor(pip._moveToGlobal(retract_pos, speed=speed, name='obstacle avoidance retract'))
 
         start_time = ptime.time()
         while self._analysis.obstacle_detected():
@@ -396,20 +396,20 @@ class ApproachState(PatchPipetteState):
         # pick a sidestep point orthogonal to the pipette direction on the xy plane
         sidestep = self.config["sidestepLateralDistance"] * self.sidestepDirection(direction)
         sidestep_pos = retract_pos + sidestep
-        self.waitFor(pip._moveToGlobal(sidestep_pos, speed=speed))
+        self.waitFor(pip._moveToGlobal(sidestep_pos, speed=speed, name='obstacle avoidance sidestep'))
 
         go_past_pos = sidestep_pos + self.config["sidestepPassDistance"] * direction
-        move = pip._moveToGlobal(go_past_pos, speed=speed)
+        move = pip._moveToGlobal(go_past_pos, speed=speed, name='obstacle avoidance pass')
         while not move.isDone():
             self.processAtLeastOneTestPulse()
             if self._analysis.obstacle_detected():
                 move.stop("Obstacle detected while sidestepping")
-                self.waitFor(pip._moveToGlobal(retract_pos, speed=speed))
+                self.waitFor(pip._moveToGlobal(retract_pos, speed=speed, name='obstacle avoidance retract after detection'))
                 return self.avoidObstacle(already_retracted=True)
             self.checkStop()
         self.waitFor(move)
         pos = np.array(pip.globalPosition())
-        self.waitFor(pip._moveToGlobal(pos - sidestep, speed=speed))
+        self.waitFor(pip._moveToGlobal(pos - sidestep, speed=speed, name='obstacle avoidance return to path'))
 
     def _cleanup(self):
         try:

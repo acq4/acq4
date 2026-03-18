@@ -309,7 +309,7 @@ class CellDetectState(PatchPipetteState):
         dist = np.linalg.norm(dif)
         if dist > poke:
             goto = pos + dif * (poke / dist)
-            _future.waitFor(pip._moveToGlobal(goto, self.config['detectionSpeed']))
+            _future.waitFor(pip._moveToGlobal(goto, self.config['detectionSpeed'], name='poke cell'))
 
     def processAtLeastOneTestPulse(self):
         tps = super().processAtLeastOneTestPulse()
@@ -427,7 +427,7 @@ class CellDetectState(PatchPipetteState):
         if config['preTargetReposition']:
             _future.waitFor(
                 self.dev.pipetteDevice._moveToGlobal(
-                    self.preTargetPosition(), speed=config['detectionSpeed']
+                    self.preTargetPosition(), speed=config['detectionSpeed'], name='pre-target reposition'
                 )
             )
         self.setState("moving to final search endpoint")
@@ -457,7 +457,7 @@ class CellDetectState(PatchPipetteState):
         for _ in range(count):
             self.setState("pre-target wiggle")
             retract_pos = dev.pipetteDevice.globalPosition() - wiggle_step
-            future.waitFor(dev.pipetteDevice._moveToGlobal(retract_pos, speed=speed), timeout=None)
+            future.waitFor(dev.pipetteDevice._moveToGlobal(retract_pos, speed=speed, name='pre-target wiggle retract'), timeout=None)
             with self._wiggleLock:  # used to prevent cell detect
                 self.waitFor(
                     dev.pipetteDevice.wiggle(
@@ -470,7 +470,7 @@ class CellDetectState(PatchPipetteState):
                     timeout=None,
                 )
             step_pos = dev.pipetteDevice.globalPosition() + wiggle_step
-            future.waitFor(dev.pipetteDevice._moveToGlobal(step_pos, speed=speed), timeout=None)
+            future.waitFor(dev.pipetteDevice._moveToGlobal(step_pos, speed=speed, name='pre-target wiggle advance'), timeout=None)
         self._hasWiggled = True
 
     def _searchAround(self, future):
@@ -490,7 +490,7 @@ class CellDetectState(PatchPipetteState):
         ) * radius
         for rel_pos in steps:
             pos = rel_pos + self.dev.pipetteDevice.targetPosition()
-            future.waitFor(self.dev.pipetteDevice._moveToGlobal(pos, speed))
+            future.waitFor(self.dev.pipetteDevice._moveToGlobal(pos, speed, name='search around target'))
             future.sleep(1)
 
     def _cleanup(self):

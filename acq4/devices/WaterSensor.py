@@ -110,7 +110,7 @@ class WaterSensor(Device):
             try:
                 self._detect()
             except Exception as e:
-                self.logger.error(f"Error during water detection check: {e}")
+                self.logger.warning(f"Error during water detection check: {e}", exc_info=True)
             time.sleep(self.interval)
 
     def waterDetected(self, refresh=False):

@@ -1,7 +1,7 @@
-# -*- coding: utf-8 -*-
 from __future__ import annotations
 
 import os
+import threading
 import traceback
 from contextlib import contextmanager
 from typing import Optional
@@ -31,7 +31,10 @@ class Device(InterfaceMixin, Qt.QObject):  # QObject calls super, which is disas
         # thread (eg, due to calling processEvents() while waiting for the task to complete). We
         # don't have a good solution for this problem at present..
         self._lock_ = Mutex(Qt.QMutex.Recursive)
-        self._lock_tb_ = None
+
+        # stack of (reserver_name, traceback_str) entries — one per recursive acquisition
+        self._lock_stack_: list[tuple[str, str]] = []
+
         self.dm = deviceManager
         self.dm.declareInterface(name, ['device'], self)
         self.config = config
@@ -92,47 +95,60 @@ class Device(InterfaceMixin, Qt.QObject):  # QObject calls super, which is disas
         return self.dm.appendConfigFile(data, fileName)
 
     @contextmanager
-    def reserved(self):
-        self.reserve()
+    def reserved(self, reserver: str):
+        self.reserve(reserver=reserver)
         try:
             yield
         finally:
             self.release()
 
-    def reserve(self, block=True, timeout=20):
+    def reserve(self, block=True, timeout=20, reserver : str|None=None, check_other_locks=True):
         """Reserve this device globally.
 
         This lock allows subsystems to request exclusive access to the device. If
         mutiple devices need to be locked simultaneously, then it is strongly
         recommended to use Manager.reserveDevices() instead in order to avoid deadlocks.
         """
-        # print("Device %s attempting lock.." % self.name())
-        lock_tb = ''.join(traceback.format_stack()[:-1])
+        if reserver is None:
+            raise ValueError("Must provide a reserver name when reserving a device")
+
+        devices_held_by_this_thread = get_devices_held_by_thread()
+        if check_other_locks:
+            # Check for potential deadlocks and print warnings if we might be causing one.
+            if len(devices_held_by_this_thread) > 0 and self.name() not in devices_held_by_this_thread:
+                self.logger.warning(
+                    f"Thread {threading.current_thread().name} is reserving device {self.name()} "
+                    f"while already holding locks for {list(devices_held_by_this_thread.keys())}. This may lead to deadlocks. "
+                )
+
         if block:
             l = self._lock_.tryLock(int(timeout*1000))
             if not l:
-                print(f"Timeout waiting for device lock for {self.name()}")
-                print("  Device is currently locked from:")
-                print(self._lock_tb_)
-                raise TimeoutError(
-                    f"Timed out waiting for device lock for {self.name()}\n  Locking traceback:\n{self._lock_tb_}")
+                locked_by = self._lock_stack_[-1] if self._lock_stack_ else ("unknown", "(unknown)")
+                exc = TimeoutError(
+                    f"Timed out waiting for device lock for {self.name()}\n  Locked by: {locked_by[0]}\n")
+                exc.add_note(f"Traceback where lock is currently held:\n{locked_by[1]}")
+                raise exc
         else:
             l = self._lock_.tryLock()
             if not l:
-                # print("Device %s lock failed." % self.name())
                 return False
-                # print "  Device is currently locked from:"
-                # print self._lock_tb_
-                # raise Exception("Could not acquire lock", 1)  ## 1 indicates failed non-blocking attempt
-        self._lock_tb_ = lock_tb
+        
+        lock_tb = ''.join(traceback.format_stack()[:-1])
+        self._lock_stack_.append((reserver, lock_tb))
+        devices_held_by_this_thread.setdefault(self.name(), 0)
+        devices_held_by_this_thread[self.name()] += 1
         # print("Device %s lock ok" % self.name())
         return True
 
     def release(self):
         try:
-            self._lock_tb_ = None
             self._lock_.unlock()
-            # print("Device %s unlocked" % self.name())
+            self._lock_stack_.pop()
+            devices_held_by_this_thread = get_devices_held_by_thread()
+            devices_held_by_this_thread[self.name()] -= 1
+            if devices_held_by_this_thread[self.name()] == 0:
+                del devices_held_by_this_thread[self.name()]
         except:
             self.logger.exception(f"Failed to release device lock for {self.name()}")
 
@@ -143,7 +159,6 @@ class Device(InterfaceMixin, Qt.QObject):  # QObject calls super, which is disas
         ----------
         daq : str
             The name of the DAQ device to be synchronized with.
-
         Returns
         -------
         channels : dict
@@ -422,3 +437,81 @@ class TaskGui(Qt.QWidget):
 
     def quit(self):
         self.disable()
+
+
+# Global dict holding {thread_id: {device_name: lock_count}} for all threads. 
+# Used to track which devices are currently held by each thread, for deadlock warning purposes.
+thread_device_locks = {}
+
+def get_devices_held_by_thread(thread_id=None) -> dict:
+    """Return the current thread's {device_name: lock_count} dict."""
+    global thread_device_locks
+    if thread_id is None:
+        thread_id = threading.get_ident()
+    return thread_device_locks.setdefault(thread_id, {})
+
+
+class DeviceLocker(object):
+    def __init__(self, manager, devices, timeout=10.0, reserver: str = None):
+        if reserver is None:
+            raise ValueError("reserver name is required when reserving devices")
+        if not isinstance(devices, (list, tuple)):
+            raise TypeError("devices must be a list or tuple of device names or Device instances")
+
+        devices = [manager.getDevice(d) if isinstance(d, str) else d for d in devices]
+        # make sure we lock devices in a predictable order; this is what prevents deadlocks
+        self.devices = sorted(devices, key=lambda d: d.name())
+        self.locked = []
+        self.timeout = timeout
+        self.reserver = reserver
+        self.lockErr = None
+
+    def tryLock(self, timeout=None):
+        # if devices are already reserved in this thread, then print a warning
+        # if we are trying to reserve new devices that are not already reserved
+        thread_locks = frozenset(get_devices_held_by_thread().keys())
+        if len(thread_locks) > 0:
+            devs_not_already_held = set(dev.name() for dev in self.devices) - thread_locks
+            if len(devs_not_already_held) > 0:
+                logger = get_logger(f'acq4.devices.Device.DeviceLocker')
+                logger.warning(
+                    f"Thread {threading.current_thread().name} is reserving device {list(devs_not_already_held)} "
+                    f"while already holding locks for {list(thread_locks)}. This may lead to deadlocks. "
+                )
+
+        # Try locking all devices in order
+        try:
+            for device in self.devices:
+                devLocked = device.reserve(block=True, timeout=timeout, reserver=self.reserver, check_other_locks=False)
+                if not devLocked:
+                    self.lockErr = "Timed out waiting for %s" % device.name()
+                    self.unlock()
+                    return False
+                self.locked.append(device)
+
+            return True
+        except Exception:
+            self.unlock()
+            raise
+
+    def lock(self):
+        locked = self.tryLock(timeout=self.timeout)
+        if not locked:
+            self.unlock()
+            raise RuntimeError("Failed to lock devices: %s" % self.lockErr)
+
+    def unlock(self):
+        for device in self.locked:
+            try:
+                device.release()
+            except:
+                pass
+        self.locked = []
+
+    def __enter__(self):
+        self.lock()
+        return self
+
+    def __exit__(self, *args):
+        self.unlock()
+

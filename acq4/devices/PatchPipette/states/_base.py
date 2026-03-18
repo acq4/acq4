@@ -189,7 +189,11 @@ class PatchPipetteState(Future):
                     daq_name = self.dev.clampDevice.getDAQName("primary")
                     self.setState(f"{self.stateName}: waiting for {daq_name} lock")
                     stack.enter_context(
-                        getManager().reserveDevices([daq_name], timeout=self.config["DAQReservationTimeout"]))
+                        getManager().reserveDevices(
+                            [daq_name],
+                            timeout=self.config["DAQReservationTimeout"],
+                            reserver=f"PatchPipette.{self.stateName}",
+                        ))
                     self.setState(f"{self.stateName}: {daq_name} lock acquired")
 
                 # TODO: can we use the rval of the Future for this?
@@ -313,6 +317,7 @@ class PatchPipetteState(Future):
                 self._cell.enableTracking(False)
         with log_and_ignore_exception(Exception, "Error stopping visual target tracking"):
             if self._visualTargetTrackingFuture is not None:
+                print(f"====== Stopping tracking from {self} cleanup")
                 self._cell.enableTracking(False)
                 self._visualTargetTrackingFuture.stop("State cleanup")
             self._visualTargetTrackingFuture = None
@@ -365,6 +370,7 @@ class PatchPipetteState(Future):
         if not cell.isInitialized:
             cell.initializeTracker(self.dev.pipetteDevice.imagingDevice()).wait()
 
+        print(f"====== Starting visual tracking from {self} _visualTargetTracking")
         cell.enableTracking(True)
         cell.sigTrackingMultipleFramesStart.connect(self._pausePipetteForExtendedTracking)
         cell.sigPositionChanged.connect(self.dev.pipetteDevice.setTarget)

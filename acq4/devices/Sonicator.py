@@ -67,10 +67,13 @@ class Sonicator(Device):
             status = protocol
             protocol = self.protocols[protocol]
         self.sigSonicationChanged.emit(status)
-        _future.waitFor(self._doProtocol(protocol))
+        _future.waitFor(self._doProtocol(protocol), timeout=self._protocolDuration(protocol)*1.3)
         self._onProtocolFinished()
 
     def _doProtocol(self, protocol: object) -> Future:
+        raise NotImplementedError()
+
+    def _protocolDuration(self, protocol: object) -> float:
         raise NotImplementedError()
 
     def _onProtocolFinished(self):

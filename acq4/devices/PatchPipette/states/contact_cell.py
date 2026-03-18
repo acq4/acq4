@@ -106,7 +106,7 @@ class ContactCellState(PatchPipetteState):
         initial_pos = target.copy()
         initial_pos[2] += config['initialApproachHeight']
         self.setState("moving to initial approach position")
-        self._moveFuture = pip._moveToGlobal(initial_pos, speed=config['moveSpeed'])
+        self._moveFuture = pip._moveToGlobal(initial_pos, speed=config['moveSpeed'], name='move to initial approach position')
         self.waitFor(self._moveFuture)
         self._moveFuture = None
 
@@ -160,7 +160,7 @@ class ContactCellState(PatchPipetteState):
                 current_pos[2] - config['stepSize'],
             ])
 
-            self._moveFuture = pip._moveToGlobal(next_pos, speed=config['moveSpeed'])
+            self._moveFuture = pip._moveToGlobal(next_pos, speed=config['moveSpeed'], name='contact cell descent step')
             self.waitFor(self._moveFuture)
             self._moveFuture = None
 

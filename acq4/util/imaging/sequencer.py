@@ -266,7 +266,7 @@ def run_image_sequence(
                 ret_fh = fh
 
     # record
-    with man.reserveDevices(imager.devicesToReserve()):
+    with man.reserveDevices(imager.devicesToReserve(), reserver="run_image_sequence"):
         try:
             for i in itertools.count():
                 if i >= count:
@@ -393,10 +393,10 @@ def acquire_z_stack(
     dz_per_frame = speed * exposure
     man = Manager.getManager()
     if dz_per_frame > max_dz_per_frame:
-        with man.reserveDevices(imager.devicesToReserve(), timeout=device_reservation_timeout):
+        with man.reserveDevices(imager.devicesToReserve(), timeout=device_reservation_timeout, reserver="acquire_z_stack"):
             frames = _stepped_z_stack(imager, start, stop, step, name, _future)
     else:
-        with man.reserveDevices(imager.devicesToReserve(), timeout=device_reservation_timeout):
+        with man.reserveDevices(imager.devicesToReserve(), timeout=device_reservation_timeout, reserver="acquire_z_stack"):
             with imager.ensureRunning(ensureFreshFrames=True):
                 frames_fut = imager.acquireFrames()
                 try:
@@ -412,7 +412,7 @@ def acquire_z_stack(
             if not slow_fallback:
                 raise
             imager.logger.info("Failed to fast-acquire linear z stack. Retrying with stepwise movement.")
-            with man.reserveDevices(imager.devicesToReserve(), timeout=device_reservation_timeout):
+            with man.reserveDevices(imager.devicesToReserve(), timeout=device_reservation_timeout, reserver="acquire_z_stack"):
                 frames = _stepped_z_stack(imager, start, stop, step, name, _future)
     _fix_frame_transforms(frames, step)
     return frames
