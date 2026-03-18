@@ -37,7 +37,7 @@ class PipetteTracker:
             imager = man.getDevice("Camera")
         return imager
 
-    def findTipInFrame(self, **kwds):
+    def findTipInFrame(self, threshold=0.15, **kwds):
         """Automatically find the pipette tip position.
 
         Return the offset in pipette-local coordinates.
@@ -81,7 +81,7 @@ class ResnetPipetteTracker(PipetteTracker):
 
     def estimateOffset(self, img, pipetteAngle, pxSize):
         from acq4_automation.object_detection import do_pipette_tip_detection
-        self.result = do_pipette_tip_detection(img, pipetteAngle, pxSize, show=False)
+        self.result = do_pipette_tip_detection(img, pipetteAngle, pxSize, show=True)
         return self.result[:3]
 
 

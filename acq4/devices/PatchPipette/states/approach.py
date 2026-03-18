@@ -300,45 +300,14 @@ class ApproachState(PatchPipetteState):
             self._moveFuture = None
 
         pip = self.dev.pipetteDevice
-        imgr = self.dev.imagingDevice()
-        manager = getManager()
-        with manager.reserveDevices(
-                [pip, imgr, imgr.scopeDev.positionDevice(), imgr.scopeDev.focusDevice()],
-                timeout=30.0,
-        ):
-            self.sleep(1.0)
-            initial_pos = pos = np.array(pip.globalPosition())
-            self.waitFor(self.dev.imagingDevice().moveCenterToGlobal(pos, "fast"))
-            self.setState(f"First recalibrate position (starting at {pos})")
-            self.sleep(1.0)
-            try:
-                pos = pip.tracker.findTipInFrame()
-            except RuntimeError as exc:
-                # failed to locate pipette tip
-                self.logger.warning("Failed to recalibrate pipette tip", exc_info=True)
-                return False
-            self.waitFor(
-                self.dev.imagingDevice().moveCenterToGlobal(
-                    pos, "fast", name=f"verify {self.dev.name()} tip estimate"
-                )
+        tip_fut = self.waitFor(
+            pip.iterativelyFindTip(
+                max_allowed_offset=self.config["pipetteRecalibrationMaxChange"],
+                go_to_tip_first=True,
             )
-            self.setState(f"Second tip find (found tip at {pos})")
-            self.sleep(1.0)
-            try:
-                pos = pip.tracker.findTipInFrame()
-            except RuntimeError as exc:
-                # failed to locate pipette tip
-                self.logger.warning("Failed to recalibrate pipette tip", exc_info=True)
-                return False
-            dist = np.linalg.norm(initial_pos - pos)
-            if dist < self.config["pipetteRecalibrationMaxChange"]:
-                pip.resetGlobalPosition(pos)
-                self.setState(f"Recalibrate finished (found tip again at {pos})")
-            else:
-                self.setState(
-                    f"cancel pipette position update; prediction is too far away ({dist * 1e6}µm)"
-                )
-            return True
+        )
+        if tip_fut.wasInterrupted():
+            self.setState(f"failed pipette position update: {tip_fut.errorMessage()}")
 
     @future_wrap
     def _move(self, _future):

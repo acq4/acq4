@@ -152,7 +152,7 @@ class ContactCellState(PatchPipetteState):
                 return {"state": config['nextState']}
 
             # Get target xy from visual tracking (if available), keep stepping down in z
-            target_xy = self._getTrackedTargetXY()
+            target_xy = pip.targetPosition()[:2]
             current_pos = np.array(pip.globalPosition())
             next_pos = np.array([
                 target_xy[0],
@@ -192,27 +192,6 @@ class ContactCellState(PatchPipetteState):
             self._cell.enableTracking(False)
             self._cell = None
 
-    def _getTrackedTargetXY(self) -> np.ndarray:
-        """Get the current tracked target x,y position.
-
-        If tracking has failed or is unavailable, returns the pipette's current x,y position.
-        """
-        pip = self.dev.pipetteDevice
-        current_pos = np.array(pip.globalPosition())
-
-        cell = getattr(self, '_cell', None)
-        if cell is None:
-            return current_pos[:2]
-
-        try:
-            cell_pos = cell.position
-            if cell_pos is not None:
-                return np.array(cell_pos)[:2]
-        except Exception:
-            pass
-
-        return current_pos[:2]
-
     def _cleanup(self):
         if self._moveFuture is not None and not self._moveFuture.isDone():
             with log_and_ignore_exception(Exception, "Error stopping move during cleanup"):
@@ -223,28 +202,13 @@ class ContactCellState(PatchPipetteState):
 
     def recalibratePipette(self):
         pip = self.dev.pipetteDevice
-        imgr = self.dev.imagingDevice()
-        manager = getManager()
-        with manager.reserveDevices(
-                [pip, imgr, imgr.scopeDev.positionDevice(), imgr.scopeDev.focusDevice()],
-                timeout=30.0,
-        ):
-            initial_pos = pos = np.array(pip.globalPosition())
-            self.setState(f"Check pipette tip..")
-            self.waitFor(self.dev.focusOnTip("fast"))
-            try:
-                pos = pip.tracker.findTipInFrame()
-            except RuntimeError as exc:
-                # failed to locate pipette tip
-                self.logger.warning("Failed to recalibrate pipette tip", exc_info=True)
-                return False
-            
-            dist = np.linalg.norm(initial_pos - pos)
-            if dist < self.config["pipetteRecalibrationMaxChange"]:
-                pip.resetGlobalPosition(pos)
-                self.setState(f"pipette tip found at {pos}")
-            else:
-                self.setState(
-                    f"cancel pipette position update; prediction is too far away ({dist * 1e6}µm)"
-                )
-            return True
+        self.setState(f"Check pipette tip..")
+        tip_fut = self.waitFor(
+            pip.iterativelyFindTip(
+                max_allowed_offset=self.config["pipetteRecalibrationMaxChange"],
+                go_to_tip_first=True,
+            )
+        )
+
+        if tip_fut.wasInterrupted():
+            self.setState(f"failed pipette position update: {tip_fut.errorMessage()}")
