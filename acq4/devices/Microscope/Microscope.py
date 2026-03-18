@@ -356,6 +356,26 @@ class Microscope(Device, OptomechDevice):
                     p = p.parentDevice()
         return self._focusDevice
 
+    def moveDip(self, speed='fast'):
+        """Move to the dip height configured for the current objective."""
+        obj = self.getObjective()
+        if obj is None:
+            raise RuntimeError("No objective selected")
+        z = obj.getDipHeight()
+        if z is None:
+            raise RuntimeError(f"No dip height set for objective '{obj.name()}'")
+        return self.setFocusDepth(z, speed=speed)
+
+    def moveLift(self, speed='fast'):
+        """Move to the lift height configured for the current objective."""
+        obj = self.getObjective()
+        if obj is None:
+            raise RuntimeError("No objective selected")
+        z = obj.getLiftHeight()
+        if z is None:
+            raise RuntimeError(f"No lift height set for objective '{obj.name()}'")
+        return self.setFocusDepth(z, speed=speed)
+
     def positionDevice(self):
         if self._positionDevice is None:
             p = self
@@ -381,6 +401,32 @@ class Objective(Device, OptomechDevice):
             self.setOffset(config['offset'])
         if 'scale' in config:
             self.setScale(config['scale'])
+
+        heights = self.readConfigFile('heights')
+        self._dipHeight = heights.get('dipHeight', None)
+        self._liftHeight = heights.get('liftHeight', None)
+
+    def getDipHeight(self):
+        return self._dipHeight
+
+    def setDipHeight(self, z):
+        self._dipHeight = float(z)
+        self._saveHeights()
+
+    def getLiftHeight(self):
+        return self._liftHeight
+
+    def setLiftHeight(self, z):
+        self._liftHeight = float(z)
+        self._saveHeights()
+
+    def _saveHeights(self):
+        heights = {}
+        if self._dipHeight is not None:
+            heights['dipHeight'] = self._dipHeight
+        if self._liftHeight is not None:
+            heights['liftHeight'] = self._liftHeight
+        self.writeConfigFile(heights, 'heights')
 
     def getGeometry(self, name=None):
         return None
@@ -452,6 +498,7 @@ class ScopeGUI(Qt.QWidget):
         self.objList = self.dev._allObjectives()
         self.switchN = len(self.objList)
         self.objWidgets = {}
+        self.dipLiftButtons = {}  # {slot_key: (setDipBtn, goDipBtn, setLiftBtn, goLiftBtn)}
         self.blockSpinChange = False
         for row, obj in enumerate(self.objList, start=1):
             ## For each objective, create a set of widgets for selecting and updating.
@@ -467,7 +514,7 @@ class ScopeGUI(Qt.QWidget):
             xs.index = ys.index = zs.index = xyss.index = zss.index = obj  ## used to determine which row has changed
             widgets = (r, c, xs, ys, zs, xyss, zss)
             for col, w in enumerate(widgets):
-                self.ui.objectiveLayout.addWidget(w, row, col)
+                self.ui.objectiveLayout.addWidget(w, row * 2 - 1, col)
             self.objWidgets[obj] = widgets
 
             for o in self.objList[obj].values():
@@ -487,6 +534,24 @@ class ScopeGUI(Qt.QWidget):
             xyss.sigValueChanged.connect(self.scaleSpinChanged)
             zss.sigValueChanged.connect(self.scaleSpinChanged)
 
+            # Dip / lift position buttons
+            setDipBtn = Qt.QPushButton('Set Dip')
+            goDipBtn = Qt.QPushButton('Dip!')
+            setLiftBtn = Qt.QPushButton('Set Lift')
+            goLiftBtn = Qt.QPushButton('Lift!')
+
+            for col, btn in enumerate((setDipBtn, goDipBtn, setLiftBtn, goLiftBtn), start=2):
+                self.ui.objectiveLayout.addWidget(btn, row * 2, col)
+            self.dipLiftButtons[obj] = (setDipBtn, goDipBtn, setLiftBtn, goLiftBtn)
+
+            # Use default-argument capture to bind obj at definition time
+            setDipBtn.clicked.connect(lambda checked, o=obj: self._setDipHeight(o))
+            goDipBtn.clicked.connect(lambda checked, o=obj: self._goDipHeight(o))
+            setLiftBtn.clicked.connect(lambda checked, o=obj: self._setLiftHeight(o))
+            goLiftBtn.clicked.connect(lambda checked, o=obj: self._goLiftHeight(o))
+
+            self._updateDipLiftButtons(obj)
+
         for preset, preset_conf in dev.presets.items():
             btn = Qt.QPushButton(preset)
             btn.setObjectName(preset)
@@ -499,6 +564,40 @@ class ScopeGUI(Qt.QWidget):
                 key = hotkey["key"]
                 hotkey_dev.addKeyCallback(key, dev.handlePresetHotkey, (preset,))
         self.updateSpins()
+
+    def _currentObjectiveForSlot(self, slot):
+        """Return the Objective currently selected in the combo for the given slot."""
+        combo = self.objWidgets[slot][1]
+        return combo.currentData()
+
+    def _setDipHeight(self, slot):
+        obj = self._currentObjectiveForSlot(slot)
+        obj.setDipHeight(self.dev.getFocusDepth())
+        self._updateDipLiftButtons(slot)
+
+    def _goDipHeight(self, slot):
+        obj = self._currentObjectiveForSlot(slot)
+        z = obj.getDipHeight()
+        if z is not None:
+            self.dev.setFocusDepth(z)
+
+    def _setLiftHeight(self, slot):
+        obj = self._currentObjectiveForSlot(slot)
+        obj.setLiftHeight(self.dev.getFocusDepth())
+        self._updateDipLiftButtons(slot)
+
+    def _goLiftHeight(self, slot):
+        obj = self._currentObjectiveForSlot(slot)
+        z = obj.getLiftHeight()
+        if z is not None:
+            self.dev.setFocusDepth(z)
+
+    def _updateDipLiftButtons(self, slot):
+        """Enable/disable Go buttons based on whether heights have been set."""
+        obj = self._currentObjectiveForSlot(slot)
+        (setDipBtn, goDipBtn, setLiftBtn, goLiftBtn) = self.dipLiftButtons[slot]
+        goDipBtn.setEnabled(obj.getDipHeight() is not None)
+        goLiftBtn.setEnabled(obj.getLiftHeight() is not None)
 
     def loadPreset(self):
         btn = self.sender()
@@ -525,6 +624,11 @@ class ScopeGUI(Qt.QWidget):
             self.updateSpins()
         finally:
             self.blockSpinChange = False
+        # Refresh dip/lift button state for this slot
+        for slot, widgets in self.objWidgets.items():
+            if widgets[1] is combo:
+                self._updateDipLiftButtons(slot)
+                break
 
     def offsetSpinChanged(self, spin):
         if self.blockSpinChange:
