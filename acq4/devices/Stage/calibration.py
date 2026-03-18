@@ -1,3 +1,5 @@
+# Calibration windows and utilities for Stage and Manipulator devices.
+# Includes manual point collection, automated axis calibration, and transform fitting.
 from itertools import combinations
 
 import numpy as np
@@ -72,6 +74,17 @@ class StageAxesCalibrationWindow(Qt.QWidget):
         pass  # TODO
 
 
+def _find_pipette_for_manipulator(manipulator):
+    """Return the first Pipette device whose parent stage is *manipulator*, or None."""
+    from acq4.devices.Pipette import Pipette
+    manager = getManager()
+    for name in manager.listDevices():
+        dev = manager.getDevice(name)
+        if isinstance(dev, Pipette) and dev.parentStage is manipulator:
+            return dev
+    return None
+
+
 class ManipulatorAxesCalibrationWindow(Qt.QWidget):
     def __init__(self, device: Stage):
         self.dev = device
@@ -111,11 +124,15 @@ class ManipulatorAxesCalibrationWindow(Qt.QWidget):
         self.removePointBtn.setEnabled(False)
         self.btnPanelLayout.addWidget(self.removePointBtn)
 
+        self.autoCollectBtn = Qt.QPushButton("auto collect")
+        self.btnPanelLayout.addWidget(self.autoCollectBtn)
+
         self.saveBtn = Qt.QPushButton("save calibration")
         self.btnPanelLayout.addWidget(self.saveBtn)
 
         self.addPointBtn.toggled.connect(self.addPointToggled)
         self.removePointBtn.clicked.connect(self.removePointClicked)
+        self.autoCollectBtn.clicked.connect(self.autoCollectClicked)
         self.saveBtn.clicked.connect(self.saveClicked)
 
         # TODO eventually: more controls
@@ -197,6 +214,38 @@ class ManipulatorAxesCalibrationWindow(Qt.QWidget):
 
     def saveClicked(self):
         self.saveCalibrationToDevice()
+
+    def autoCollectClicked(self):
+        from acq4.devices.Pipette.calibration import calibrate_manipulator_axes
+        pipette = _find_pipette_for_manipulator(self.dev)
+        if pipette is None:
+            Qt.QMessageBox.critical(self, "Auto Collect Failed", f"No Pipette device found with {self.dev.name()} as its parent manipulator.")
+            return
+        if pipette.config.get('yaw') == 'auto':
+            Qt.QMessageBox.critical(self, "Auto Collect Failed", f"{pipette.name()} has yaw='auto', which depends on the axis calibration being collected. Configure an explicit yaw angle first.")
+            return
+        self.autoCollectBtn.setEnabled(False)
+        self.autoCollectBtn.setText("collecting...")
+        future = calibrate_manipulator_axes(pipette)
+        future.onFinish(self._autoCollectFinished)
+
+    def _autoCollectFinished(self, future):
+        from acq4.util.threadrun import runInGuiThread
+        runInGuiThread(self._applyAutoCollectResult, future)
+
+    def _applyAutoCollectResult(self, future):
+        self.autoCollectBtn.setEnabled(True)
+        self.autoCollectBtn.setText("auto collect")
+        try:
+            points = future.getResult()
+        except Exception:
+            self.dev.logger.exception("Auto collect calibration failed")
+            return
+        for device_pos, parent_pos in points:
+            self.calibration["points"].append((device_pos, parent_pos))
+            self._addCalibrationPoint(device_pos, parent_pos)
+        self.recalculate()
+        self.saveBtn.setText("*save calibration*")
 
     def loadCalibrationFromDevice(self):
         self.calibration = self.dev.readConfigFile("calibration")
