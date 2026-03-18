@@ -248,3 +248,95 @@ def getPipettePositionAtTime(events, time):
     pipTimes = [ev['event_time'] for ev in events]
     pipIndex = np.searchsorted(pipTimes, time, 'left')
     return events[pipIndex]['position']
+
+
+@future_wrap
+def calibrate_manipulator_axes(
+    pipette: Pipette,
+    n_steps: int = 10,
+    step_size: float = 50e-6,
+    z_search_range: float = 100e-6,
+    _future=None,
+):
+    """Automatically collect axis calibration data for a manipulator using the pipette tip finder.
+
+    Moves the manipulator along each axis in incremental steps, using ML-based z-stack detection
+    to locate the tip after each move. Returns calibration points suitable for use with
+    ManipulatorAxesCalibrationWindow.
+
+    Pre-conditions:
+      - Pipette tip is in focus and visible in the camera frame.
+      - Manipulator scale (meters per device unit) is correctly configured.
+      - Stage and focus device are calibrated.
+
+    Parameters
+    ----------
+    pipette : Pipette
+        The pipette device whose manipulator axes are being calibrated.
+    n_steps : int
+        Number of steps to take per axis. Total points collected per axis = n_steps + 1.
+    step_size : float
+        Distance to move per step, in meters. Should be small enough that the tip stays
+        within the camera field of view (50 µm is a typical starting value).
+    z_search_range : float
+        Half-range of the z-scan used to locate the tip after each move, in meters.
+        Should be at least as large as the expected z displacement per step.
+
+    Returns
+    -------
+    list of (device_pos, parent_pos) pairs
+        Each pair contains the raw device position and the corresponding tip position in
+        the parent device coordinate system. Pass these directly to
+        ManipulatorAxesCalibrationWindow as calibration points.
+    """
+    # Movement and position queries go to the parent manipulator (a Stage); the pipette
+    # itself is only used for tip detection and focus control.
+    manipulator = pipette.parentStage
+    imager = pipette.imagingDevice()
+    scale = manipulator.getAxisScale()  # meters per device unit, shape (nAxes,)
+    parent_dev = manipulator.parentDevice()
+
+    calibration_points = []
+
+    # Accurately locate the tip before starting the sweep.
+    _future.waitFor(pipette.iterativelyFindTip(10))
+
+    for axis in range(manipulator.nAxes):
+        axis_start_pos = list(manipulator.getPosition())
+
+        # Record the initial point; tip is already accurately located from iterativelyFindTip.
+        device_pos = list(manipulator.getPosition())
+        global_pos = list(pipette.globalPosition())
+        parent_pos = list(parent_dev.mapFromGlobal(global_pos)) if parent_dev is not None else global_pos
+        calibration_points.append((device_pos, parent_pos))
+
+        for step_idx in range(1, n_steps + 1):
+            # Move along this axis to the next absolute position.
+            target_pos = list(axis_start_pos)
+            target_pos[axis] = axis_start_pos[axis] + step_idx * (step_size / scale[axis])
+            _future.waitFor(manipulator.move(target_pos, 'slow'))
+
+            # Locate the tip via z-stack scan; this handles unknown axis orientation by
+            # searching a range of focal depths around the current focus.
+            _, global_positions, _, confidences = scan_pipette_z_stack(
+                pipette, imager, z_range=z_search_range
+            )
+            best = int(np.argmax(confidences))
+            detected_pos = global_positions[best]
+
+            # Update the tip position without the normal validation prompt, since
+            # we expect the tip to have moved during calibration.
+            pipette.resetGlobalPosition(detected_pos)
+            _future.waitFor(pipette.focusTip())
+
+            device_pos = list(manipulator.getPosition())
+            global_pos = list(pipette.globalPosition())
+            parent_pos = list(parent_dev.mapFromGlobal(global_pos)) if parent_dev is not None else global_pos
+            calibration_points.append((device_pos, parent_pos))
+
+        # Return to the starting position before sweeping the next axis.
+        _future.waitFor(manipulator.move(axis_start_pos, 'slow'))
+        # Re-locate tip at start before recording the first point of the next axis.
+        _future.waitFor(pipette.iterativelyFindTip(10))
+
+    return calibration_points
