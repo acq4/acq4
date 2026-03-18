@@ -304,7 +304,7 @@ class SensapexMoveFuture(MoveFuture):
         # for advancing forward in D, move in XYZ first. otherwise, retract first in D.
         pos = list(self.targetPos)
         start = list(self.startPos)
-        if pos[3] < start[3]:
+        if pos[3] > start[3]:
             # move XYZ first
             waypoint = pos[:3] + start[3:]
         else:
