@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from acq4.devices.PatchPipette import PatchPipette
 from acq4.logging_config import get_logger
-from acq4.util.future import Future, future_wrap
+from acq4.util.future import future_wrap
 from acq4.util.threadrun import runInGuiThread
+from ..TaskRunner import TaskRunner
 
 if TYPE_CHECKING:
     from .AutomationDebug import AutomationDebugWindow
@@ -41,7 +43,7 @@ class Autopatcher:
                 _future.waitFor(ppip.pipetteDevice.goAboveTarget("fast"))
                 _future.setState("Autopatch: finding pipette tip")
                 ppip.clampDevice.autoPipetteOffset()
-                self._autopatchFindPipetteTip(_future)
+                _future.waitFor(win.pipetteDevice.iterativelyFindTip())
                 _future.setState("Autopatch: go approach")
                 _future.waitFor(ppip.pipetteDevice.goApproach("fast"))
                 cell.enableTracking()
@@ -136,20 +138,6 @@ class Autopatcher:
             return self._autopatchFindCell(_future)
         logger.info(f"Autopatch: Cell found at {cell.position}")
         return cell
-
-    def _autopatchFindPipetteTip(self, _future):
-        win = self._window
-        if win._mockDemo:
-            logger.info("Autopatch: Mock pipette tip detection")
-            return
-        pip = win.pipetteDevice
-        pos = pip.tracker.findTipInFrame()
-        _future.waitFor(win.cameraDevice.moveCenterToGlobal(pos, "fast"))
-        pos = pip.tracker.findTipInFrame()
-        _future.waitFor(win.cameraDevice.moveCenterToGlobal(pos, "fast"))
-        pos = pip.tracker.findTipInFrame()
-        pip.resetGlobalPosition(pos)
-        logger.info(f"Autopatch: Tip found at {pos}")
 
     def _autopatchRunTaskRunner(self, _future):
         win = self._window
