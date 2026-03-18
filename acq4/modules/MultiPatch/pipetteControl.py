@@ -122,7 +122,6 @@ class PipetteControl(Qt.QWidget):
         # Event log: added to the bottom of the clamp widget's internal layout,
         # so it sits under the Clamp/Holding/auto controls within the pipette's rows.
         self._eventLog = PipetteEventLog()
-        self._eventLog.setMaximumHeight(160)
         self.ui.widget_6.layout().addWidget(self._eventLog, 4, 0, 2, 7)
 
         if isinstance(pipette, PatchPipette):
@@ -133,12 +132,11 @@ class PipetteControl(Qt.QWidget):
                 self._eventLog.addEvent(ev['event_time'], ev['event'], ev)
 
         self.plots = [
-            PlotWidget(mode='test pulse'), 
+            PlotWidget(mode='test pulse'),
             PlotWidget(mode='ss resistance')
         ]
         for i, plt in enumerate(self.plots):
             plt.plot.setObjectName(f"MultiPatch_{pipette.name()}_plot{i+1}")
-            self.ui.plotLayout.addWidget(plt)
             plt.sigModeChanged.connect(self.plotModeChanged)
 
         if isinstance(self.pip, PatchPipette):

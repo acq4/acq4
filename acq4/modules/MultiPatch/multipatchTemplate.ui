@@ -13,277 +13,403 @@
   <property name="windowTitle">
    <string>Form</string>
   </property>
-  <layout class="QGridLayout" name="gridLayout">
-   <item row="0" column="0">
-    <widget class="QLabel" name="label">
-     <property name="text">
-      <string>Profile:</string>
+  <layout class="QVBoxLayout" name="verticalLayout">
+   <property name="spacing">
+    <number>0</number>
+   </property>
+   <property name="leftMargin">
+    <number>0</number>
+   </property>
+   <property name="topMargin">
+    <number>0</number>
+   </property>
+   <property name="rightMargin">
+    <number>0</number>
+   </property>
+   <property name="bottomMargin">
+    <number>0</number>
+   </property>
+   <item>
+    <widget class="QSplitter" name="splitter">
+     <property name="orientation">
+      <enum>Qt::Horizontal</enum>
      </property>
-    </widget>
-   </item>
-   <item row="0" column="1">
-    <widget class="QComboBox" name="profileCombo"/>
-   </item>
-   <item row="0" column="2">
-    <widget class="QPushButton" name="editProfileBtn">
-     <property name="text">
-      <string>Edit Profiles</string>
-     </property>
-    </widget>
-   </item>
-   <item row="0" column="3" rowspan="4">
-    <widget class="QWidget" name="matrixWidget" native="true">
-     <property name="sizePolicy">
-      <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
-       <horstretch>0</horstretch>
-       <verstretch>0</verstretch>
-      </sizepolicy>
-     </property>
-     <layout class="QGridLayout" name="matrixLayout">
-      <property name="leftMargin">
-       <number>0</number>
+     <widget class="QWidget" name="leftPanel" native="true">
+      <layout class="QVBoxLayout" name="leftLayout">
+       <property name="spacing">
+        <number>2</number>
+       </property>
+       <property name="leftMargin">
+        <number>2</number>
+       </property>
+       <property name="topMargin">
+        <number>2</number>
+       </property>
+       <property name="rightMargin">
+        <number>2</number>
+       </property>
+       <property name="bottomMargin">
+        <number>2</number>
+       </property>
+       <item>
+        <widget class="QWidget" name="profileRow" native="true">
+         <layout class="QHBoxLayout" name="profileLayout">
+          <property name="spacing">
+           <number>2</number>
+          </property>
+          <property name="leftMargin">
+           <number>0</number>
+          </property>
+          <property name="topMargin">
+           <number>0</number>
+          </property>
+          <property name="rightMargin">
+           <number>0</number>
+          </property>
+          <property name="bottomMargin">
+           <number>0</number>
+          </property>
+          <item>
+           <widget class="QLabel" name="label">
+            <property name="text">
+             <string>Profile:</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QComboBox" name="profileCombo"/>
+          </item>
+          <item>
+           <widget class="QPushButton" name="editProfileBtn">
+            <property name="text">
+             <string>Edit Profiles</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <widget class="QGroupBox" name="selectedGroupBox">
+         <property name="title">
+          <string>Selected: </string>
+         </property>
+         <layout class="QGridLayout" name="gridLayout_2">
+          <item row="1" column="0">
+           <widget class="QPushButton" name="setTargetBtn">
+            <property name="text">
+             <string>Set target</string>
+            </property>
+            <property name="checkable">
+             <bool>true</bool>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="1">
+           <widget class="FutureButton" name="coarseSearchBtn">
+            <property name="text">
+             <string>Coarse Search</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="2">
+           <widget class="QPushButton" name="setTipBtn">
+            <property name="text">
+             <string>Set tip</string>
+            </property>
+            <property name="checkable">
+             <bool>true</bool>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="0">
+           <widget class="FutureButton" name="aboveTargetBtn">
+            <property name="text">
+             <string>Above target</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="1">
+           <widget class="FutureButton" name="fineSearchBtn">
+            <property name="text">
+             <string>Fine Search</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="2">
+           <widget class="FutureButton" name="autoFindTipBtn">
+            <property name="text">
+             <string>Auto-find tip</string>
+            </property>
+           </widget>
+          </item>
+          <item row="3" column="0">
+           <widget class="FutureButton" name="approachBtn">
+            <property name="text">
+             <string>Approach</string>
+            </property>
+           </widget>
+          </item>
+          <item row="3" column="1">
+           <widget class="FutureButton" name="homeBtn">
+            <property name="text">
+             <string>Home</string>
+            </property>
+           </widget>
+          </item>
+          <item row="3" column="2">
+           <widget class="FutureButton" name="toTargetBtn">
+            <property name="text">
+             <string>To target</string>
+            </property>
+           </widget>
+          </item>
+          <item row="4" column="0">
+           <widget class="QPushButton" name="slowBtn">
+            <property name="text">
+             <string>Slow</string>
+            </property>
+            <property name="checkable">
+             <bool>true</bool>
+            </property>
+           </widget>
+          </item>
+          <item row="4" column="1">
+           <widget class="FutureButton" name="nucleusHomeBtn">
+            <property name="text">
+             <string>Home with Nucleus</string>
+            </property>
+           </widget>
+          </item>
+          <item row="4" column="2">
+           <widget class="QPushButton" name="fastBtn">
+            <property name="text">
+             <string>Fast</string>
+            </property>
+            <property name="checkable">
+             <bool>true</bool>
+            </property>
+           </widget>
+          </item>
+          <item row="5" column="0">
+           <spacer name="verticalSpacer_2">
+            <property name="orientation">
+             <enum>Qt::Vertical</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>20</width>
+              <height>40</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+          <item row="6" column="0">
+           <widget class="FutureButton" name="sealBtn">
+            <property name="text">
+             <string>Seal</string>
+            </property>
+           </widget>
+          </item>
+          <item row="6" column="1">
+           <widget class="FutureButton" name="breakInBtn">
+            <property name="text">
+             <string>Break In</string>
+            </property>
+           </widget>
+          </item>
+          <item row="6" column="2">
+           <widget class="FutureButton" name="cellDetectBtn">
+            <property name="text">
+             <string>Cell Detect</string>
+            </property>
+           </widget>
+          </item>
+          <item row="7" column="0">
+           <widget class="FutureButton" name="reSealBtn">
+            <property name="text">
+             <string>ReSeal</string>
+            </property>
+           </widget>
+          </item>
+          <item row="7" column="1">
+           <widget class="FutureButton" name="collectBtn">
+            <property name="text">
+             <string>Collect</string>
+            </property>
+           </widget>
+          </item>
+          <item row="7" column="2">
+           <widget class="FutureButton" name="cleanBtn">
+            <property name="text">
+             <string>Clean</string>
+            </property>
+           </widget>
+          </item>
+          <item row="8" column="0">
+           <widget class="FutureButton" name="reSealNoNuzzleBtn">
+            <property name="text">
+             <string>ReSeal No Nuzzle</string>
+            </property>
+           </widget>
+          </item>
+          <item row="9" column="0">
+           <spacer name="verticalSpacer">
+            <property name="orientation">
+             <enum>Qt::Vertical</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>20</width>
+              <height>40</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <widget class="QWidget" name="recordRow" native="true">
+         <layout class="QHBoxLayout" name="recordLayout">
+          <property name="spacing">
+           <number>2</number>
+          </property>
+          <property name="leftMargin">
+           <number>0</number>
+          </property>
+          <property name="topMargin">
+           <number>0</number>
+          </property>
+          <property name="rightMargin">
+           <number>0</number>
+          </property>
+          <property name="bottomMargin">
+           <number>0</number>
+          </property>
+          <item>
+           <widget class="QPushButton" name="recordBtn">
+            <property name="text">
+             <string>Record</string>
+            </property>
+            <property name="checkable">
+             <bool>true</bool>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="recordTestPulsesBtn">
+            <property name="text">
+             <string>Full Test Pulses</string>
+            </property>
+            <property name="checkable">
+             <bool>true</bool>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="resetBtn">
+            <property name="text">
+             <string>Reset History</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <widget class="QWidget" name="tipRow" native="true">
+         <layout class="QHBoxLayout" name="tipLayout">
+          <property name="spacing">
+           <number>2</number>
+          </property>
+          <property name="leftMargin">
+           <number>0</number>
+          </property>
+          <property name="topMargin">
+           <number>0</number>
+          </property>
+          <property name="rightMargin">
+           <number>0</number>
+          </property>
+          <property name="bottomMargin">
+           <number>0</number>
+          </property>
+          <item>
+           <widget class="QPushButton" name="saveTipImageBtn">
+            <property name="text">
+             <string>Save Tip Image</string>
+            </property>
+            <property name="checkable">
+             <bool>true</bool>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="hideMarkersBtn">
+            <property name="text">
+             <string>Hide Markers</string>
+            </property>
+            <property name="checkable">
+             <bool>true</bool>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+     <widget class="QWidget" name="matrixWidget" native="true">
+      <property name="sizePolicy">
+       <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+        <horstretch>0</horstretch>
+        <verstretch>0</verstretch>
+       </sizepolicy>
       </property>
-      <property name="topMargin">
-       <number>0</number>
+      <layout class="QGridLayout" name="matrixLayout">
+       <property name="leftMargin">
+        <number>0</number>
+       </property>
+       <property name="topMargin">
+        <number>0</number>
+       </property>
+       <property name="rightMargin">
+        <number>0</number>
+       </property>
+       <property name="bottomMargin">
+        <number>0</number>
+       </property>
+       <property name="spacing">
+        <number>0</number>
+       </property>
+      </layout>
+     </widget>
+     <widget class="QWidget" name="plotsWidget" native="true">
+      <property name="sizePolicy">
+       <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+        <horstretch>0</horstretch>
+        <verstretch>0</verstretch>
+       </sizepolicy>
       </property>
-      <property name="rightMargin">
-       <number>0</number>
-      </property>
-      <property name="bottomMargin">
-       <number>0</number>
-      </property>
-      <property name="spacing">
-       <number>0</number>
-      </property>
-     </layout>
-    </widget>
-   </item>
-   <item row="1" column="0" colspan="3">
-    <widget class="QGroupBox" name="selectedGroupBox">
-     <property name="title">
-      <string>Selected: </string>
-     </property>
-     <layout class="QGridLayout" name="gridLayout_2">
-      <item row="1" column="0">
-       <widget class="QPushButton" name="setTargetBtn">
-        <property name="text">
-         <string>Set target</string>
-        </property>
-        <property name="checkable">
-         <bool>true</bool>
-        </property>
-       </widget>
-      </item>
-      <item row="1" column="1">
-       <widget class="FutureButton" name="coarseSearchBtn">
-        <property name="text">
-         <string>Coarse Search</string>
-        </property>
-       </widget>
-      </item>
-      <item row="1" column="2">
-       <widget class="QPushButton" name="setTipBtn">
-        <property name="text">
-         <string>Set tip</string>
-        </property>
-        <property name="checkable">
-         <bool>true</bool>
-        </property>
-       </widget>
-      </item>
-      <item row="2" column="0">
-       <widget class="FutureButton" name="aboveTargetBtn">
-        <property name="text">
-         <string>Above target</string>
-        </property>
-       </widget>
-      </item>
-      <item row="2" column="1">
-       <widget class="FutureButton" name="fineSearchBtn">
-        <property name="text">
-         <string>Fine Search</string>
-        </property>
-       </widget>
-      </item>
-      <item row="2" column="2">
-       <widget class="FutureButton" name="autoFindTipBtn">
-        <property name="text">
-         <string>Auto-find tip</string>
-        </property>
-       </widget>
-      </item>
-      <item row="3" column="0">
-       <widget class="FutureButton" name="approachBtn">
-        <property name="text">
-         <string>Approach</string>
-        </property>
-       </widget>
-      </item>
-      <item row="3" column="1">
-       <widget class="FutureButton" name="homeBtn">
-        <property name="text">
-         <string>Home</string>
-        </property>
-       </widget>
-      </item>
-      <item row="3" column="2">
-       <widget class="FutureButton" name="toTargetBtn">
-        <property name="text">
-         <string>To target</string>
-        </property>
-       </widget>
-      </item>
-      <item row="4" column="0">
-       <widget class="QPushButton" name="slowBtn">
-        <property name="text">
-         <string>Slow</string>
-        </property>
-        <property name="checkable">
-         <bool>true</bool>
-        </property>
-       </widget>
-      </item>
-      <item row="4" column="1">
-       <widget class="FutureButton" name="nucleusHomeBtn">
-        <property name="text">
-         <string>Home with Nucleus</string>
-        </property>
-       </widget>
-      </item>
-      <item row="4" column="2">
-       <widget class="QPushButton" name="fastBtn">
-        <property name="text">
-         <string>Fast</string>
-        </property>
-        <property name="checkable">
-         <bool>true</bool>
-        </property>
-       </widget>
-      </item>
-      <item row="5" column="0">
-       <spacer name="verticalSpacer_2">
-        <property name="orientation">
-         <enum>Qt::Vertical</enum>
-        </property>
-        <property name="sizeHint" stdset="0">
-         <size>
-          <width>20</width>
-          <height>40</height>
-         </size>
-        </property>
-       </spacer>
-      </item>
-      <item row="6" column="0">
-       <widget class="FutureButton" name="sealBtn">
-        <property name="text">
-         <string>Seal</string>
-        </property>
-       </widget>
-      </item>
-      <item row="6" column="1">
-       <widget class="FutureButton" name="breakInBtn">
-        <property name="text">
-         <string>Break In</string>
-        </property>
-       </widget>
-      </item>
-      <item row="6" column="2">
-       <widget class="FutureButton" name="cellDetectBtn">
-        <property name="text">
-         <string>Cell Detect</string>
-        </property>
-       </widget>
-      </item>
-      <item row="7" column="0">
-       <widget class="FutureButton" name="reSealBtn">
-        <property name="text">
-         <string>ReSeal</string>
-        </property>
-       </widget>
-      </item>
-      <item row="7" column="1">
-       <widget class="FutureButton" name="collectBtn">
-        <property name="text">
-         <string>Collect</string>
-        </property>
-       </widget>
-      </item>
-      <item row="7" column="2">
-       <widget class="FutureButton" name="cleanBtn">
-        <property name="text">
-         <string>Clean</string>
-        </property>
-       </widget>
-      </item>
-      <item row="8" column="0">
-       <widget class="FutureButton" name="reSealNoNuzzleBtn">
-        <property name="text">
-         <string>ReSeal No Nuzzle</string>
-        </property>
-       </widget>
-      </item>
-      <item row="9" column="0">
-       <spacer name="verticalSpacer">
-        <property name="orientation">
-         <enum>Qt::Vertical</enum>
-        </property>
-        <property name="sizeHint" stdset="0">
-         <size>
-          <width>20</width>
-          <height>40</height>
-         </size>
-        </property>
-       </spacer>
-      </item>
-     </layout>
-    </widget>
-   </item>
-   <item row="2" column="2">
-    <widget class="QPushButton" name="resetBtn">
-     <property name="text">
-      <string>Reset History</string>
-     </property>
-    </widget>
-   </item>
-   <item row="3" column="0">
-    <widget class="QPushButton" name="saveTipImageBtn">
-     <property name="text">
-      <string>Save Tip Image</string>
-     </property>
-     <property name="checkable">
-      <bool>true</bool>
-     </property>
-    </widget>
-   </item>
-
-   <item row="3" column="1" colspan="2">
-    <widget class="QPushButton" name="hideMarkersBtn">
-     <property name="text">
-      <string>Hide Markers</string>
-     </property>
-     <property name="checkable">
-      <bool>true</bool>
-     </property>
-    </widget>
-   </item>
-   <item row="2" column="0">
-    <widget class="QPushButton" name="recordBtn">
-     <property name="text">
-      <string>Record</string>
-     </property>
-     <property name="checkable">
-      <bool>true</bool>
-     </property>
-    </widget>
-   </item>
-   <item row="2" column="1">
-    <widget class="QPushButton" name="recordTestPulsesBtn">
-     <property name="text">
-      <string>Full Test Pulses</string>
-     </property>
-     <property name="checkable">
-      <bool>true</bool>
-     </property>
+      <layout class="QVBoxLayout" name="plotsLayout">
+       <property name="spacing">
+        <number>0</number>
+       </property>
+       <property name="leftMargin">
+        <number>0</number>
+       </property>
+       <property name="topMargin">
+        <number>0</number>
+       </property>
+       <property name="rightMargin">
+        <number>0</number>
+       </property>
+       <property name="bottomMargin">
+        <number>0</number>
+       </property>
+      </layout>
+     </widget>
     </widget>
    </item>
   </layout>

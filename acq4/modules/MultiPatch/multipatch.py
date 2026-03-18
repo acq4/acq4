@@ -96,6 +96,15 @@ class MultiPatchWindow(Qt.QWidget):
                 pip.mockpatch = MockPatch(pip)
                 self.ui.matrixLayout.addWidget(pip.mockpatch.widget, i, 1)
 
+            # Add this pipette's plots to the right panel
+            plotContainer = Qt.QWidget()
+            plotContainerLayout = Qt.QHBoxLayout(plotContainer)
+            plotContainerLayout.setContentsMargins(0, 0, 0, 0)
+            plotContainerLayout.setSpacing(0)
+            for plt in ctrl.plots:
+                plotContainerLayout.addWidget(plt)
+            self.ui.plotsLayout.addWidget(plotContainer)
+
             pip.sigActiveChanged.connect(self.pipetteActiveChanged)
             ctrl.sigSelectChanged.connect(self.pipetteSelectChanged)
             ctrl.sigLockChanged.connect(self.pipetteLockChanged)
@@ -181,6 +190,7 @@ class MultiPatchWindow(Qt.QWidget):
         geom = self.geometry()
         config = {
             'geometry': [geom.x(), geom.y(), geom.width(), geom.height()],
+            'splitterSizes': self.ui.splitter.sizes(),
             'plotModes': self.pipCtrls[0].getPlotModes(),
             "plots": {
                 (ctrl.pip.name(), plot.mode): plot.plot.saveState()
@@ -195,6 +205,8 @@ class MultiPatchWindow(Qt.QWidget):
         if 'geometry' in config:
             geom = Qt.QRect(*config['geometry'])
             self.setGeometry(geom)
+        if 'splitterSizes' in config:
+            self.ui.splitter.setSizes(config['splitterSizes'])
         if 'plotModes' in config:
             self.setPlotModes(config['plotModes'])
         if "plots" in config:
