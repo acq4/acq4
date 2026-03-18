@@ -107,6 +107,7 @@ class Device(InterfaceMixin, Qt.QObject):  # QObject calls super, which is disas
         recommended to use Manager.reserveDevices() instead in order to avoid deadlocks.
         """
         # print("Device %s attempting lock.." % self.name())
+        lock_tb = ''.join(traceback.format_stack()[:-1])
         if block:
             l = self._lock_.tryLock(int(timeout*1000))
             if not l:
@@ -123,15 +124,15 @@ class Device(InterfaceMixin, Qt.QObject):  # QObject calls super, which is disas
                 # print "  Device is currently locked from:"
                 # print self._lock_tb_
                 # raise Exception("Could not acquire lock", 1)  ## 1 indicates failed non-blocking attempt
-        self._lock_tb_ = ''.join(traceback.format_stack()[:-1])
+        self._lock_tb_ = lock_tb
         # print("Device %s lock ok" % self.name())
         return True
 
     def release(self):
         try:
+            self._lock_tb_ = None
             self._lock_.unlock()
             # print("Device %s unlocked" % self.name())
-            self._lock_tb_ = None
         except:
             self.logger.exception(f"Failed to release device lock for {self.name()}")
 
