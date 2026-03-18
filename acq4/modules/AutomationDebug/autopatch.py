@@ -31,7 +31,7 @@ class Autopatcher:
         multipatch_win = runInGuiThread(man.getModule, 'MultiPatch').win
         man.getCurrentDir().mkdir('AutopatchDemo', autoIncrement=True)
         while True:
-            folder_selector = man.getModule("Data Manager").ui.newFolderList
+            folder_selector = runInGuiThread(man.getModule, "Data Manager").ui.newFolderList
             runInGuiThread(folder_selector.setCurrentIndex(5))
             cell_dir = man.getCurrentDir()
             try:
@@ -55,7 +55,7 @@ class Autopatcher:
                     return
                 _future.setState("Autopatch: cell found")
                 ppip.newPatchAttempt()
-                runInGuiThread(multipatch_win.recordToggled, True)
+                runInGuiThread(multipatch_win.ui.recordBtn.setChecked, True)
                 _future.setState("Autopatch: go above target")
                 _future.waitFor(ppip.pipetteDevice.goAboveTarget("fast"))
                 _future.setState("Autopatch: finding pipette tip")
@@ -117,7 +117,7 @@ class Autopatcher:
                 continue
             finally:
                 man.setCurrentDir(cell_dir.parent())
-                runInGuiThread(multipatch_win.recordToggled, False)
+                runInGuiThread(multipatch_win.ui.recordBtn.setChecked, False)
 
     def _autopatchCellPatch(self, cell, _future):
         win = self._window
