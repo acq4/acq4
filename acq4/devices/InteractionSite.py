@@ -181,17 +181,17 @@ class InteractionSite(Device, OptomechDevice):
         if self._parentStage is not None:
             # TODO this will still need a real motion planner
             # TODO we'll maybe also need to make sure the other devices are out of the way...
-            _future.waitFor(self.moveToGlobal(pos_config['site global'], speed=speed), timeout=120)
+            _future.waitFor(self.moveToGlobal(pos_config['site global'], speed=speed, name=f'move {self.name()} to interact site'), timeout=120)
         approach_global = pos_config['site global']
-        _future.waitFor(other._moveToGlobal(approach_global, speed=speed), timeout=120)
+        _future.waitFor(other._moveToGlobal(approach_global, speed=speed, name=f'move {other.name()} to approach position'), timeout=120)
         interact_global = pos_config['interact global']
-        _future.waitFor(other._moveToGlobal(interact_global, speed=speed))
+        _future.waitFor(other._moveToGlobal(interact_global, speed=speed, name=f'move {other.name()} to interact position'))
 
     def moveToApproach(self, other, speed='fast'):
         if other.name() not in self.positions:
             raise RuntimeError(f"No positions saved for {other.name()} at {self.name()}")
         pos_config = self.positions[other.name()]
-        return other._moveToGlobal(pos_config['site global'], speed=speed)
+        return other._moveToGlobal(pos_config['site global'], speed=speed, name=f'move {other.name()} to approach position')
 
 
 def _fmt_pos(pos):

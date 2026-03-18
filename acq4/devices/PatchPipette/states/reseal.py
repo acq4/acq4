@@ -459,6 +459,7 @@ class ResealState(PatchPipetteState):
                         speed=self.config['maxRetractionSpeed'],
                         interval=config['retractionStepInterval'],
                         step=1e-6,
+                        name='reseal tear recovery',
                     )
             elif self.isTorn():
                 if retraction_future and not retraction_future.isDone():
@@ -478,6 +479,7 @@ class ResealState(PatchPipetteState):
                     speed=config['maxRetractionSpeed'],
                     interval=config['retractionStepInterval'],
                     step=1e-6,
+                    name='reseal retraction',
                 )
 
             self.sleep(0.2)
@@ -513,7 +515,7 @@ class ResealState(PatchPipetteState):
         # move out of the tissue more quickly
         pip = self.dev.pipetteDevice
         surface = pip.scopeDevice().getSurfaceDepth()
-        return pip.advance(surface, speed=self.config['postSuccessRetractionSpeed'])
+        return pip.advance(surface, speed=self.config['postSuccessRetractionSpeed'], name='retract from tissue after reseal')
 
     def retractionDistance(self):
         return np.linalg.norm(

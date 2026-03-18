@@ -52,7 +52,7 @@ class NucleusCollectState(PatchPipetteState):
         # self.approachPos = self.collectionPos - pip.globalDirection() * config['approachDistance']
 
         # self.waitFor([pip._moveToGlobal(self.approachPos, speed='fast')])
-        self.waitFor(pip._moveToGlobal(self.collectionPos, speed='fast'), timeout=None)
+        self.waitFor(pip._moveToGlobal(self.collectionPos, speed='fast', name='move to collection position'), timeout=None)
 
         if dev.sonicatorDevice is not None:
             self.sonication = dev.sonicatorDevice.doProtocol(config['sonicationProtocol'])
@@ -75,7 +75,7 @@ class NucleusCollectState(PatchPipetteState):
         pip = self.dev.pipetteDevice
         if self.isDone():
             # self.waitFor([pip._moveToGlobal(self.approachPos, speed='fast')])
-            _future.waitFor(pip._moveToGlobal(self.startPos, speed='fast'), timeout=None)
+            _future.waitFor(pip._moveToGlobal(self.startPos, speed='fast', name='return to start position'), timeout=None)
 
     @future_wrap
     def _cleanup(self, _future):

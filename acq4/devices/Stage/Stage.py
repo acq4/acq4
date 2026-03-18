@@ -407,7 +407,7 @@ class Stage(Device, OptomechDevice):
 
         return mfut
 
-    def step(self, deltas: Tuple[float, ...], speed: str | float) -> MoveFuture:
+    def step(self, deltas: Tuple[float, ...], speed: str | float, name: str | None = None) -> MoveFuture:
         """Step method to move device by specified deltas along device axes.
 
         Args:
@@ -443,7 +443,7 @@ class Stage(Device, OptomechDevice):
         target_global = self.inverseBaseTransform().map(target)
 
         # Perform the move
-        return self.move(target_global, speed=speed)
+        return self.move(target_global, speed=speed, name=name)
 
     def checkMove(self, position, speed=None, progress=None, linear=None, **kwds):
         """Raise an exception if arguments are invalid for move()"""
@@ -651,7 +651,7 @@ class Stage(Device, OptomechDevice):
         homePos = self.homePosition()
         if homePos is None:
             raise RuntimeError(f"No home position set for {self.name()}")
-        return self.moveToGlobal(homePos, speed=speed)
+        return self.moveToGlobal(homePos, speed=speed, name='go home')
 
     def setHomePosition(self):
         """Set the home position in global coordinates."""

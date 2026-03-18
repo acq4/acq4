@@ -33,7 +33,7 @@ class SmartStageControlThread:
         self.axes = list(self.motionsynergy.AxisList)
 
         self.last_enabled_state = None
-        self.enable_state_callbacks = []
+        self.enable_state_callback = None
         self.last_known_pos = None
         self.last_reported_pos = None
         self.quit_request: SmartStageRequestFuture | None = None
@@ -46,9 +46,9 @@ class SmartStageControlThread:
     def set_callback(self, cb):
         self.pos_callback = cb
 
-    def add_enabled_state_callback(self, cb):
-        if cb not in self.enable_state_callbacks:
-            self.enable_state_callbacks.append(cb)
+    def set_enabled_callback(self, cb):
+        # if cb not in self.enable_state_callbacks:
+        self.enable_state_callback = cb
 
     def start_thread(self):
         if self.is_running():
@@ -136,10 +136,10 @@ class SmartStageControlThread:
         if enabled_state == self.last_enabled_state:
             return
         self.last_enabled_state = enabled_state
-        for cb in list(self.enable_state_callbacks):
+        if self.enable_state_callback is not None:
             try:
-                cb(enabled_state)
-            except Exception:
+                self.enable_state_callback(enabled_state)
+            except Exception as exc:
                 logger.exception("Error in enabled state callback")
 
     def _handle_request(self, fut: SmartStageRequestFuture):

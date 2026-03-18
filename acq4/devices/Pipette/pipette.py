@@ -894,7 +894,7 @@ class Pipette(Device, OptomechDevice):
 
         with contextlib.ExitStack() as stack:
             if reserve_devices:
-                stack.enter_context(manager.reserveDevices([self] + imgr.devicesToReserve(), timeout=30.0))
+                stack.enter_context(manager.reserveDevices([self] + imgr.devicesToReserve(), timeout=30.0, reserver="Pipette.refineTipPosition"))
             try:
                 last_pos = None
                 start_pos = self.globalPosition()

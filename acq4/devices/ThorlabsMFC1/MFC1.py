@@ -127,7 +127,7 @@ class ThorlabsMFC1(Stage):
         if dz == 0:
             return
         target = self.dev.target_position() * self.scale[2] + dz
-        self.moveTo([0, 0, target], 'fast')
+        self.move([0, 0, target], 'fast', name='ROE z adjust')
 
     def deviceInterface(self, win):
         return MFC1StageInterface(self, win)

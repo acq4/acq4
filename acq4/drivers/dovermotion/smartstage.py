@@ -68,8 +68,8 @@ class SmartStage:
             return self.control_thread.request('enabled_state').wait()
         return self.control_thread.last_enabled_state
 
-    def add_enabled_state_callback(self, cb):
-        self.control_thread.add_enabled_state_callback(cb)
+    def set_enabled_callback(self, cb):
+        self.control_thread.set_enabled_callback(cb)
 
     def pos(self, refresh=False):
         if refresh:
