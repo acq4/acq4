@@ -117,7 +117,9 @@ def setup_logging(
     set_log_file(log_file, is_temp_file=is_temp_file)
 
     # Add console handler (prints to stderr, WARNING and above)
-    console_handler = logging.StreamHandler(sys.stderr)
+    # Use UTF-8 with 'replace' errors to avoid UnicodeEncodeError on Windows consoles (cp1252)
+    stderr_utf8 = open(sys.stderr.fileno(), mode='w', encoding='utf-8', errors='replace', closefd=False)
+    console_handler = logging.StreamHandler(stderr_utf8)
     console_handler.setLevel(console_level)
     console_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     console_handler.setFormatter(console_formatter)

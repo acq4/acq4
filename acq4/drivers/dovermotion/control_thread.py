@@ -126,9 +126,11 @@ class SmartStageControlThread:
             ]
 
             if len(alerts) == 0:
+                logger.debug(f"Move {self.current_move.label} completed successfully.")
                 self.current_move.set_result(None)
             else:
-                self.current_move.fail(f"Move failed: {', '.join(alerts)}")
+                logger.warning(f"Move {self.current_move.label} failed: {', '.join(alerts)}")
+                self.current_move.fail(f"Move {self.current_move.label} failed: {', '.join(alerts)}")
             self.current_move = None
 
     def _check_enabled_state(self):
@@ -174,7 +176,8 @@ class SmartStageControlThread:
 
     def _handle_move(self, fut):
         if self.current_move is not None:
-            self._stop(reason='Interrupted by another move request.')
+            self._stop(reason=f'Move {self.current_move.label} interrupted by new move request {fut.label}.')
+        logger.debug(f"Starting move {fut.label} to pos={fut.kwds['pos']} speed={fut.kwds['speed']}.")
         fut.tasks = self._move(
             pos=fut.kwds['pos'],
             speed=fut.kwds['speed'],
@@ -196,7 +199,7 @@ class SmartStageControlThread:
     def _handle_cancel(self, fut):
         move_req = fut.kwds['move_req']
         if move_req is self.current_move and not move_req.done():
-            self._stop(f"Request to {move_req.request} was cancelled")
+            self._stop(f"Move {move_req.label} was cancelled.")
         fut.set_result(None)
 
     def _handle_disable(self, fut):
@@ -282,6 +285,7 @@ class SmartStageRequestFuture:
     def __init__(self, ctrl_thread, req, kwds):
         self.thread: SmartStageControlThread = ctrl_thread
         self.request = req
+        self.name = kwds.pop('name', None)
         self.kwds = kwds
         self._callback = None
         self._cb_lock = threading.Lock()
@@ -290,6 +294,16 @@ class SmartStageRequestFuture:
         self.exc_info = None
         self.error = None
         self.tasks = []
+
+    @property
+    def label(self):
+        """Human-readable identifier for this request, for use in log messages."""
+        if self.name:
+            return f"'{self.name}'"
+        if self.request == 'move':
+            pos = self.kwds.get('pos')
+            return f"move(pos={pos})"
+        return f"{self.request}"
 
     def done(self):
         """Return True if the request has finished."""
@@ -325,10 +339,10 @@ class SmartStageRequestFuture:
         If the request fails, then raise an exception with more information.
         """
         if not self._done.wait(timeout=timeout):
-            raise TimeoutError(f'Timeout waiting for {self.request} to complete')
+            raise TimeoutError(f'Timeout waiting for {self.label} to complete')
         elif self.exc_info is not None:
             raise self.FutureError(
-                f"An error occurred during the request to {self.request}"
+                f"An error occurred during {self.label}"
             ) from self.exc_info[1]
         elif self.error is not None:
             raise self.FutureError(self.error)

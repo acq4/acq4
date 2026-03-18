@@ -10,6 +10,23 @@ from .plugin import PLUGIN_DIR, PLUGIN_UUID, auto_install_plugin, is_bridge_runn
 import websocket
 
 
+class _ButtonRegistration:
+    """A button registered with the StreamDock device.
+
+    Created by :meth:`StreamDock.add_button`. The ``context`` attribute is
+    ``None`` until VSD Craft sends a ``willAppear`` event for an available key,
+    at which point StreamDock assigns this button to that context and pushes the
+    title to the hardware.
+    """
+
+    def __init__(self, title, on_press, on_release=None, on_appear=None):
+        self.title = title
+        self.on_press = on_press
+        self.on_release = on_release
+        self.on_appear = on_appear
+        self.context = None  # filled in when willAppear fires
+
+
 class StreamDock(Device):
     """
     VSDInside Stream Dock device for acq4.
@@ -80,6 +97,22 @@ class StreamDock(Device):
         self._ws_thread = None
         self._lock = threading.Lock()
         self._handoff_timeout = config.get('installTimeout', 30)
+
+        # --- Button registration -----------------------------------------
+        self._button_lock = threading.Lock()
+        self._buttons = []           # _ButtonRegistration list, in registration order
+        self._context_map = {}       # context str -> _ButtonRegistration
+        self._unmatched_contexts = []  # contexts with no button yet (FIFO)
+        self._configured_interfaces = set()  # interface names already configured
+
+        # Discover existing stream_dock implementers and watch for new ones.
+        # The connection to the signal must be made on the main thread (here in
+        # __init__) before any devices that might declare 'stream_dock' finish
+        # their own __init__.
+        self.dm.interfaceDir.sigInterfaceListChanged.connect(
+            self._on_interface_list_changed
+        )
+        self._on_interface_list_changed(['stream_dock'])
 
         # --- Auto-install bridge plugin into Stream Dock ----------------
         if config.get('autoInstall', True):
@@ -205,8 +238,30 @@ class StreamDock(Device):
             print(msg)
             self.logger.info(msg)
             self.sigButtonEvent.emit(data)
+            # Dispatch to any registered button handler for this context.
+            with self._button_lock:
+                button = self._context_map.get(context)
+            if button is not None:
+                if event == 'keyDown' and button.on_press is not None:
+                    button.on_press()
+                elif event == 'keyUp' and button.on_release is not None:
+                    button.on_release()
+        elif event in ('willAppear', 'willDisappear'):
+            payload = data.get('payload', {})
+            coordinates = payload.get('coordinates', {})
+            msg = (
+                f"[StreamDock] {event}: context={context!r}  "
+                f"coordinates={coordinates}  full_payload={payload}"
+            )
+            print(msg)
+            self.logger.info(msg)
+            controller = payload.get('controller', 'Keypad')
+            if event == 'willAppear':
+                self._assign_context(context, controller)
+            else:
+                self._unassign_context(context)
         else:
-            self.logger.debug(f"[StreamDock] Event: {event!r}")
+            self.logger.debug(f"[StreamDock] Unhandled event: {event!r}")
 
     def _on_error(self, ws, error):
         msg = f"[StreamDock] WebSocket error: {error}"
@@ -217,6 +272,116 @@ class StreamDock(Device):
         msg = f"[StreamDock] Connection closed (code={close_status_code}, msg={close_msg!r})"
         print(msg)
         self.logger.info(msg)
+
+    # ------------------------------------------------------------------
+    # Button registration
+    # ------------------------------------------------------------------
+
+    def add_button(self, title: str, on_press=None, on_release=None, on_appear=None) -> _ButtonRegistration:
+        """Register a button with the Stream Dock.
+
+        The button will be assigned to the next available key context in the
+        order that ``willAppear`` events arrive from VSD Craft (i.e. in profile
+        layout order).  If a context is already waiting (``willAppear`` arrived
+        before this call), the button is assigned immediately.
+
+        Parameters
+        ----------
+        title:
+            Label displayed on the key.
+        on_press:
+            Callable invoked with no arguments on ``keyDown``.
+        on_release:
+            Callable invoked with no arguments on ``keyUp``.
+
+        Returns
+        -------
+        _ButtonRegistration
+            The registration object; its ``context`` attribute is set once a
+            key context has been assigned.
+        """
+        button = _ButtonRegistration(title, on_press, on_release, on_appear)
+        context = None
+        with self._button_lock:
+            self._buttons.append(button)
+            if self._unmatched_contexts:
+                context = self._unmatched_contexts.pop(0)
+                button.context = context
+                self._context_map[context] = button
+        if context is not None:
+            self.setTitle(context, title)
+        self.logger.info(
+            f"[StreamDock] Registered button {title!r} (context={context!r})"
+        )
+        return button
+
+    def _on_interface_list_changed(self, types):
+        """Qt slot: called when the interface directory changes."""
+        if 'stream_dock' not in types:
+            return
+        for name in self.dm.listInterfaces('stream_dock'):
+            if name in self._configured_interfaces:
+                continue
+            self._configured_interfaces.add(name)
+            obj = self.dm.getInterface('stream_dock', name)
+            try:
+                obj.configure_dock(self)
+                self.logger.info(
+                    f"[StreamDock] Configured stream_dock interface: {name!r}"
+                )
+            except Exception:
+                self.logger.exception(
+                    f"[StreamDock] Error calling configure_dock on {name!r}"
+                )
+
+    def _assign_context(self, context: str, controller: str = 'Keypad'):
+        """Map an arriving willAppear context to the next unassigned button.
+
+        Only ``Keypad`` contexts are matched to registered buttons.  Knob,
+        SecondaryScreen, and other controller contexts are silently ignored so
+        that their ``willAppear`` events do not consume button slots.
+        """
+        if controller != 'Keypad':
+            self.logger.debug(
+                f"[StreamDock] Ignoring willAppear for controller={controller!r} "
+                f"context={context!r}"
+            )
+            return
+        button = None
+        with self._button_lock:
+            if context in self._context_map:
+                return  # already known
+            for btn in self._buttons:
+                if btn.context is None:
+                    btn.context = context
+                    self._context_map[context] = btn
+                    button = btn
+                    break
+            else:
+                # No waiting button; remember the context for the next add_button call.
+                self._unmatched_contexts.append(context)
+        if button is not None:
+            self.setTitle(context, button.title)
+            if button.on_appear is not None:
+                button.on_appear(context)
+            self.logger.info(
+                f"[StreamDock] Assigned context {context!r} -> button {button.title!r}"
+            )
+        else:
+            self.logger.debug(
+                f"[StreamDock] Queued unmatched context {context!r}"
+            )
+
+    def _unassign_context(self, context: str):
+        """Release a context when willDisappear fires."""
+        with self._button_lock:
+            button = self._context_map.pop(context, None)
+            if button is not None:
+                button.context = None
+                self.logger.info(
+                    f"[StreamDock] Released context {context!r} "
+                    f"(button {button.title!r})"
+                )
 
     # ------------------------------------------------------------------
     # Display update methods
@@ -236,11 +401,13 @@ class StreamDock(Device):
             0 = hardware + software (default), 1 = hardware only,
             2 = software only.
         """
-        self._send({
+        payload = {
             'event': 'setTitle',
             'context': context,
             'payload': {'title': title, 'target': target},
-        })
+        }
+        print(f"[StreamDock] setTitle: context={context!r} title={title!r}")
+        self._send(payload)
 
     def setImage(self, context: str, image: str, target: int = 0):
         """Update the image shown on a Stream Dock key.

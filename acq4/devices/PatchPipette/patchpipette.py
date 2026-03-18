@@ -80,12 +80,13 @@ class PatchPipette(Device):
         # current state variables
         self.active = False
         self.broken = False
-        self.clean = False
+        self.clean = True
         self.calibrated = False
         self.waitingForSwap = False
         self._lastPos = None
         self._emitTestPulseData = False
         self.cell = None
+        self.previousCells = []
 
         # key measurements made during patch process and lifetime of pipette
         self._patchRecord = None
@@ -256,6 +257,7 @@ class PatchPipette(Device):
         return self._patchRecord
 
     def setCell(self, cell, target=True):
+        self.closeCell()
         self.cell = cell
         if target:
             self.pipetteDevice.setTarget(cell.position.mapped_to('global').coordinates)
@@ -263,12 +265,18 @@ class PatchPipette(Device):
     def newCell(self):
         try:
             from acq4_automation.feature_tracking.cell import Cell
-
+            self.closeCell()
             self.cell = Cell(Point(self.pipetteDevice.targetPosition(), 'global'))
         except ImportError:
             self.logger.exception(
                 "Cell-based features are unavailable without the acq4_automation package",
             )
+
+    def closeCell(self):
+        if self.cell is not None:
+            self.cell.enableTracking(False)
+            self.previousCells.append(self.cell)
+            self.cell = None
 
     def finishPatchRecord(self):
         if self._patchRecord is None:

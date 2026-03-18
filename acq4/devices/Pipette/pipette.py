@@ -878,7 +878,7 @@ class Pipette(Device, OptomechDevice):
         return PipetteRecorder(self)
 
     @future_wrap
-    def iterativelyFindTip(self, max_reps=10, found_threshold=3e-6, delay_after_move=0.2, 
+    def iterativelyFindTip(self, max_reps=10, found_threshold=3e-6, delay_after_move=0.4, 
                            max_allowed_offset=None, delay_after_update=0, reserve_devices=True,
                            go_to_tip_first=False, _future=None):
         """Iteratively refine the tip position by finding the tip in frame and focusing, until convergence.

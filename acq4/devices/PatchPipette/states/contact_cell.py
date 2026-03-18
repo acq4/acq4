@@ -72,6 +72,8 @@ class ContactCellState(PatchPipetteState):
         'breakThreshold': {'default': -1*MΩ, 'type': 'float', 'suffix': 'Ω'},
         "nextState": {"type": "str", "default": "seal"},
         "pipetteRecalibrationMaxChange": {"type": "float", "default": 5 * µm, "suffix": "m"},
+        "visualTargetTracking": {"default": True, "type": "bool"},
+        "minDetectionDistance": {'default': -1, 'type': 'float', 'suffix': 'm'},
     }
 
     def __init__(self, *args, **kwds):
@@ -99,7 +101,7 @@ class ContactCellState(PatchPipetteState):
         self.monitorTestPulse()
 
         # 3. Enable visual target tracking
-        self._enableVisualTracking()
+        self.maybeVisuallyTrackTarget()
 
         # 4. Move to target position + 7 µm in z
         target = np.array(pip.targetPosition())
@@ -111,6 +113,7 @@ class ContactCellState(PatchPipetteState):
         self._moveFuture = None
 
         self._startZ = pip.globalPosition()[2]
+        iterations = 0
 
         # 5. Main descent loop
         self.setState("descending toward cell")
@@ -120,7 +123,6 @@ class ContactCellState(PatchPipetteState):
             # Process test pulses and check for broken tip
             self.processAtLeastOneTestPulse()
             if self._analysis.tip_is_broken():
-                self._disableVisualTracking()
                 self.dev.patchRecord()['detectedCell'] = False
                 return {"state": 'broken', "error": "Pipette break detected"}
 
@@ -138,7 +140,6 @@ class ContactCellState(PatchPipetteState):
                 current_z = pip.globalPosition()[2]
                 depth_past_contact = self._contactDepth - current_z
                 if depth_past_contact >= config['depthPastContact']:
-                    self._disableVisualTracking()
                     self.setState("reached target depth past contact")
                     return {"state": config['nextState']}
 
@@ -146,18 +147,17 @@ class ContactCellState(PatchPipetteState):
             current_z = pip.globalPosition()[2]
             total_descent = self._startZ - current_z
             if total_descent >= config['maxTravelWithoutContact']:
-                self._disableVisualTracking()
-                self.setState("max travel reached without contact, attempting seal")
+                self.setState("max travel reached without contact, giving up")
                 self.dev.patchRecord()['detectedCell'] = False
-                return {"state": config['nextState']}
+                return {"state": config['fallbackState']}
 
             # Get target xy from visual tracking (if available), keep stepping down in z
             target_xy = pip.targetPosition()[:2]
-            current_pos = np.array(pip.globalPosition())
+            iterations += 1
             next_pos = np.array([
                 target_xy[0],
                 target_xy[1],
-                current_pos[2] - config['stepSize'],
+                self._startZ - iterations * config['stepSize'],
             ])
 
             self._moveFuture = pip._moveToGlobal(next_pos, speed=config['moveSpeed'], name='contact cell descent step')
@@ -176,39 +176,39 @@ class ContactCellState(PatchPipetteState):
         """Check if cell membrane has been detected via resistance change."""
         return self._analysis.cell_detected_fast() or self._analysis.cell_detected_slow()
 
-    def _enableVisualTracking(self):
-        """Enable visual tracking of the cell."""
-        cell = self.dev.cell
-        if cell is None:
-            return
-        if not cell.isInitialized:
-            cell.initializeTracker(self.dev.pipetteDevice.imagingDevice()).wait()
-        self._cell = cell
-        cell.enableTracking(True)
+    # def _enableVisualTracking(self):
+    #     """Enable visual tracking of the cell."""
+    #     cell = self.dev.cell
+    #     if cell is None:
+    #         return
+    #     if not cell.isInitialized:
+    #         cell.initializeTracker(self.dev.pipetteDevice.imagingDevice()).wait()
+    #     self._cell = cell
+    #     cell.enableTracking(True)
 
-    def _disableVisualTracking(self):
-        """Disable visual tracking of the cell."""
-        if self._cell is not None:
-            self._cell.enableTracking(False)
-            self._cell = None
+    # def _disableVisualTracking(self):
+    #     """Disable visual tracking of the cell."""
+    #     if self._cell is not None:
+    #         self._cell.enableTracking(False)
+    #         self._cell = None
 
     def _cleanup(self):
         if self._moveFuture is not None and not self._moveFuture.isDone():
             with log_and_ignore_exception(Exception, "Error stopping move during cleanup"):
                 self._moveFuture.stop()
-        with log_and_ignore_exception(Exception, "Error disabling visual tracking"):
-            self._disableVisualTracking()
+        # with log_and_ignore_exception(Exception, "Error disabling visual tracking"):
+        #     self._disableVisualTracking()
         return super()._cleanup()
 
     def recalibratePipette(self):
         pip = self.dev.pipetteDevice
         self.setState(f"Check pipette tip..")
-        tip_fut = self.waitFor(
-            pip.iterativelyFindTip(
-                max_allowed_offset=self.config["pipetteRecalibrationMaxChange"],
-                go_to_tip_first=True,
+        try:
+            tip_fut = self.waitFor(
+                pip.iterativelyFindTip(
+                    max_allowed_offset=self.config["pipetteRecalibrationMaxChange"],
+                    go_to_tip_first=True,
+                )
             )
-        )
-
-        if tip_fut.wasInterrupted():
-            self.setState(f"failed pipette position update: {tip_fut.errorMessage()}")
+        except Exception as e:
+            self.setState(f"failed pipette position update: {e}")
