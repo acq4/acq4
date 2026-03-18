@@ -108,6 +108,7 @@ class Autopatcher:
                 # self._saveStack("post-collection", _future)
 
                 _future.waitFor(ppip.pipette.goHome())
+                ppip.setState("bath")
 
             except (_future.StopRequested, _future.Stopped):
                 raise
