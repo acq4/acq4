@@ -38,6 +38,7 @@ class Autopatcher:
                 if not ppip.isTipClean():
                     _future.setState("Autopatch: cleaning pipette")
                     _future.waitFor(ppip.setState("clean"), timeout=600)
+                _future.waitFor(win.scopeDevice.moveDip())
                 cell = self._autopatchFindCell(_future)
                 _future.setState("Autopatch: cell found")
                 ppip.setState("bath")
