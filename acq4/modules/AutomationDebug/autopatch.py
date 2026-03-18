@@ -94,9 +94,10 @@ class Autopatcher:
                 _future.waitFor(homeFut)
 
                 # collect the nucleus
-                _future.waitFor(ppip.setState("collect"))
-                _future.waitFor(ppip.pipetteDevice.goAboveTarget("fast"))
-                self._saveStack("post-collection", _future)
+                # TODO once we have motion planning
+                # _future.waitFor(ppip.setState("collect"))
+                # _future.waitFor(ppip.pipetteDevice.goAboveTarget("fast"))
+                # self._saveStack("post-collection", _future)
 
                 _future.waitFor(ppip.pipette.goHome())
 

@@ -82,7 +82,18 @@ class CleanState(PatchPipetteState):
             sequence = eval(sequence, units.__dict__)
         assert len(sequence) > 0
 
+        scope = pip.imagingDevice().scopeDev
+        start_pos = scope.globalPosition()
+        waypoints = [
+            np.array([start_pos[0], start_pos[1], 30e-3]),
+            np.array([-90e-3, 20e-3, 30e-3]),
+        ]
+        for wp in waypoints:
+            self.waitFor(scope.setGlobalPosition(wp, 20e-3))
+
         cw = pip.getCleaningWell()
+        self.waitFor(pip.retractFromSurface('fast'))
+        self.waitFor(pip._moveToGlobal([0, 0, 10e-3], 'fast', name='safe position before cleaning well'))
         self.waitFor(cw.moveToInteract(pip), timeout=60)
 
         if dev.sonicatorDevice is not None:
@@ -101,7 +112,30 @@ class CleanState(PatchPipetteState):
 
         # self.waitFor(pip.moveTo('home', 'fast'))  # motion planning doesn't work so well from here
         self.waitFor(pip.parentStage.goHome('fast'))
-        self.waitFor(cw._unwindKludgePath(pip))
+        waypoints = waypoints[::-1] + [start_pos]
+        for wp in waypoints:
+            self.waitFor(scope.setGlobalPosition(wp, 20e-3))
+
+        # TODO this could have worked...
+        # cw = pip.getCleaningWell()
+        # self.waitFor(cw.moveToInteract(pip), timeout=60)
+        #
+        # if dev.sonicatorDevice is not None:
+        #     self.sonication = dev.sonicatorDevice.doProtocol(config['sonicationProtocol'])
+        #
+        # for pressure, delay in sequence:
+        #     dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
+        #     self.sleep(delay)
+        #
+        # if self.sonication is not None and not self.sonication.isDone():
+        #     self.waitFor(self.sonication)
+        #
+        # self.waitFor(cw.moveToApproach(pip))
+        #
+        # dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
+        #
+        # self.waitFor(pip.parentStage.goHome('fast'))
+        # self.waitFor(cw._unwindKludgePath(pip))
 
         dev.pipetteRecord()['cleanCount'] += 1
         dev.setTipClean(True)

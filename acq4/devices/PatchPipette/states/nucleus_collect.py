@@ -47,17 +47,12 @@ class NucleusCollectState(PatchPipetteState):
         self.setState('nucleus collection')
 
         # move to top of collection tube
-        # TODO delete this kludge stuff
-        well = pip.getNucleusDepositionWell()
-        self.waitFor(well.moveToInteract(pip))
+        self.startPos = pip.globalPosition()
+        self.collectionPos = pip.loadPosition('collect')
+        # self.approachPos = self.collectionPos - pip.globalDirection() * config['approachDistance']
 
-        # TODO restore and integrate with interaction sites
-        # self.startPos = pip.globalPosition()
-        # self.collectionPos = pip.loadPosition('collect')
-        # # self.approachPos = self.collectionPos - pip.globalDirection() * config['approachDistance']
-        #
-        # # self.waitFor([pip._moveToGlobal(self.approachPos, speed='fast')])
-        # self.waitFor(pip._moveToGlobal(self.collectionPos, speed='fast', name='move to collection position'), timeout=None)
+        # self.waitFor([pip._moveToGlobal(self.approachPos, speed='fast')])
+        self.waitFor(pip._moveToGlobal(self.collectionPos, speed='fast'), timeout=None)
 
         if dev.sonicatorDevice is not None:
             self.sonication = dev.sonicatorDevice.doProtocol(config['sonicationProtocol'])
@@ -74,8 +69,29 @@ class NucleusCollectState(PatchPipetteState):
             self.waitFor(self.sonication)
 
         dev.pipetteRecord()['expelled_nucleus'] = True
-        self.waitFor(well._unwindKludgePath(pip))  # TODO delete
         return {"state": 'out'}
+
+        # # current version using InteractionSite moveToInteract/unwindKludgePath:
+        # well = pip.getNucleusDepositionWell()
+        # self.waitFor(well.moveToInteract(pip))
+        #
+        # if dev.sonicatorDevice is not None:
+        #     self.sonication = dev.sonicatorDevice.doProtocol(config['sonicationProtocol'])
+        #
+        # sequence = config['pressureSequence']
+        # if isinstance(sequence, str):
+        #     sequence = eval(sequence, units.__dict__)
+        #
+        # for pressure, delay in sequence:
+        #     dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
+        #     self.sleep(delay)
+        #
+        # if self.sonication is not None and not self.sonication.isDone():
+        #     self.waitFor(self.sonication)
+        #
+        # dev.pipetteRecord()['expelled_nucleus'] = True
+        # self.waitFor(well._unwindKludgePath(pip))
+        # return {"state": 'out'}
 
     def resetPosition(self, _future=None):
         pip = self.dev.pipetteDevice
