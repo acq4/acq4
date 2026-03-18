@@ -155,7 +155,7 @@ class TestPulseThread(QtThread):
             task = self._lastTask
 
         # if clamp mode changed while we were fiddling around, then abort.
-        task.reserveDevices()
+        task.reserveDevices(reserver="TestPulse")
         try:
             if self._clampDev.getMode() != currentMode:
                 task.releaseDevices()
