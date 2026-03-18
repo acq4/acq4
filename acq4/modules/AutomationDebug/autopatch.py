@@ -34,7 +34,7 @@ class Autopatcher:
         man.setCurrentDir(demo_dir)
         try:
             while True:
-                runInGuiThread(folder_selector.setCurrentIndex(5))
+                runInGuiThread(folder_selector.setCurrentIndex, 5)
                 cell_dir = man.getCurrentDir()
                 try:
                     if not ppip.isTipClean():
