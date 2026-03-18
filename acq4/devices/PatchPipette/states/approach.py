@@ -223,9 +223,15 @@ class ApproachState(PatchPipetteState):
         self.direction_unit = self._calc_direction()
 
     def run(self):
-        # self.dev.newCell()
+        pip = self.dev.pipetteDevice
+        target = pip.targetPosition()
+        surface = pip.scopeDevice().getSurfaceDepth()
+        if target[2] > surface:
+            raise ValueError(
+                f"Cannot approach a target depth {target[2] * 1e6:0.2f}µm that is above the surface {surface * 1e6:0.2f}µm."
+            )
         # move to approach position + auto pipette offset
-        self.waitFor(self.dev.pipetteDevice.goApproach("fast"))
+        self.waitFor(pip.goApproach("fast"))
         self.dev.clampDevice.autoPipetteOffset()
         self.dev.clampDevice.resetTestPulseHistory()
         self._maybeTakeACellfie()
