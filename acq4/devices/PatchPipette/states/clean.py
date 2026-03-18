@@ -101,7 +101,7 @@ class CleanState(PatchPipetteState):
 
         # self.waitFor(pip.moveTo('home', 'fast'))  # motion planning doesn't work so well from here
         self.waitFor(pip.parentStage.goHome('fast'))
-        self.waitFor(cw._unwindKludgePath)
+        self.waitFor(cw._unwindKludgePath())
 
         dev.pipetteRecord()['cleanCount'] += 1
         dev.setTipClean(True)

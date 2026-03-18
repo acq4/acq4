@@ -203,7 +203,7 @@ class InteractionSite(Device, OptomechDevice):
         scope = other.imagingDevice().scopeDev
         start_pos = scope.globalPosition()
         approach_global = pos_config['site global']
-        if np.linalg.norm(np.array(start_pos) - np.array(approach_global)) > 50e-3:
+        if np.linalg.norm(np.array(start_pos) - np.array(approach_global)) > 50e-6:
             stage_path = [
                 np.array([start_pos[0], start_pos[1], 30e-3]),
                 np.array([-90e-3, 20e-3, 30e-3]),
@@ -214,7 +214,7 @@ class InteractionSite(Device, OptomechDevice):
                         wp, 20e-3, name=f"move {self.name()} into interaction position"
                     )
                 )
-            self._approach_stage_path = stage_path
+            self._approach_stage_path = [start_pos] + stage_path
 
             self_move = self.moveToGlobal(
                 approach_global, speed=speed, name="move to interaction position"
