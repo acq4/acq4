@@ -74,7 +74,7 @@ class NucleusCollectState(PatchPipetteState):
             self.waitFor(self.sonication)
 
         dev.pipetteRecord()['expelled_nucleus'] = True
-        self.waitFor(well._unwindKludgePath())  # TODO delete
+        self.waitFor(well._unwindKludgePath(pip))  # TODO delete
         return {"state": 'out'}
 
     def resetPosition(self, _future=None):

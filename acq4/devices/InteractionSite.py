@@ -234,8 +234,9 @@ class InteractionSite(Device, OptomechDevice):
         )
 
     @future_wrap
-    def _unwindKludgePath(self, _future):
+    def _unwindKludgePath(self, other, _future):
         if self._approach_stage_path is not None:
+            _future.waitFor(self.moveToApproach(other, speed='fast'))
             for wp in reversed(self._approach_stage_path):
                 _future.waitFor(
                     self._parentStage.moveToGlobal(
