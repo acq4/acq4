@@ -32,7 +32,6 @@ class Autopatcher:
         demo_dir = man.getCurrentDir().mkdir('AutopatchDemo', autoIncrement=True)
         while True:
             cell_dir = demo_dir.mkdir('cell', autoIncrement=True)
-            cell_dir.setInfo({'dirType': 'Cell'})
             man.setCurrentDir(cell_dir)
             try:
                 if not ppip.isTipClean():
@@ -49,6 +48,9 @@ class Autopatcher:
                     _future.waitFor(win.scopeDevice.moveDip())
 
                 cell = self._autopatchFindCell(_future)
+                if cell is None:
+                    _future.setState("No cells found; quitting demo")
+                    return
                 _future.setState("Autopatch: cell found")
                 ppip.setState("bath")
                 ppip.newPatchAttempt()
@@ -60,7 +62,6 @@ class Autopatcher:
                 _future.waitFor(win.pipetteDevice.iterativelyFindTip())
                 _future.setState("Autopatch: go approach")
                 _future.waitFor(ppip.pipetteDevice.goApproach("fast"))
-                cell.enableTracking()
                 try:
                     _future.setState("Autopatch: patch cell")
                     logger.warning("Autopatch: Start cell patching")
@@ -135,6 +136,7 @@ class Autopatcher:
         win = self._window
         if not win._unranked_cells:
             _future.setState("Autopatch: searching for cells")
+            return None
             # surf = _future.waitFor(
             #     win.cameraDevice.scopeDev.findSurfaceDepth(win.cameraDevice)
             # ).getResult()
@@ -192,12 +194,13 @@ class Autopatcher:
         logger.warning("Autopatch: Task runner sequence completed.")
 
     def _saveStack(self, name, future):
-        start = self.dev.pipetteDevice.targetPosition()[2] - (20e-6 / 2)
+        ppip = self._window.patchPipetteDevice
+        start = ppip.pipetteDevice.targetPosition()[2] - (20e-6 / 2)
         end = start + 20e-6
-        save_in = self.dev.dm.getCurrentDir().getDir(f"{name} stack", create=True)
+        save_in = ppip.dm.getCurrentDir().getDir(f"{name} stack", create=True)
         future.waitFor(
             run_image_sequence(
-                self.dev.imagingDevice(),
+                ppip.imagingDevice(),
                 z_stack=(start, end, 1e-6),
                 storage_dir=save_in,
                 name="cellfie",
