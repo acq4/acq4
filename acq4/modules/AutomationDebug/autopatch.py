@@ -37,8 +37,17 @@ class Autopatcher:
             try:
                 if not ppip.isTipClean():
                     _future.setState("Autopatch: cleaning pipette")
-                    _future.waitFor(ppip.setState("clean"), timeout=600)
-                _future.waitFor(win.scopeDevice.moveDip())
+                    try:
+                        _future.waitFor(ppip.setState("clean"), timeout=600)
+                    except Exception:
+                        _future.setState("Clean is unsafe to undo; quitting demo")
+                        logger.exception("Error during pipette clean - quitting autopatch demo")
+                        return
+                    if not ppip.isTipClean():
+                        _future.setState("Pipette still not clean after clean state; quitting demo")
+                        return
+                    _future.waitFor(win.scopeDevice.moveDip())
+
                 cell = self._autopatchFindCell(_future)
                 _future.setState("Autopatch: cell found")
                 ppip.setState("bath")

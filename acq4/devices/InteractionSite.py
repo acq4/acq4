@@ -180,28 +180,27 @@ class InteractionSite(Device, OptomechDevice):
         if other.name() not in self.positions:
             raise RuntimeError(f"No positions saved for {other.name()} at {self.name()}")
         pos_config = self.positions[other.name()]
-        if 'interact local' not in pos_config:
-            raise RuntimeError(f"No interact position saved for {other.name()} at {self.name()}")
         if 'site global' not in pos_config:
             raise RuntimeError(f"No site global position saved for {other.name()} at {self.name()}")
-        if 'approach local' not in pos_config:
-            raise RuntimeError(f"No approach position saved for {other.name()} at {self.name()}")
-        if self._parentStage is not None:
-            # TODO this will still need a real motion planner
-            # TODO we'll maybe also need to make sure the other devices are out of the way...
-            _future.waitFor(self.moveToGlobal(pos_config['site global'], speed=speed), timeout=120)
-        approach_local = pos_config['approach local']
-        approach_global = self.mapToGlobal(approach_local)
-        _future.waitFor(other._moveToGlobal(approach_global, speed=speed), timeout=120)
-        interact_local = pos_config['interact local']
-        interact_global = self.mapToGlobal(interact_local)
+        if 'interact global' not in pos_config:
+            raise RuntimeError(f"No interact position saved for {other.name()} at {self.name()}")
+        approach_pos = pos_config['site global']
+        # TODO this will still need a real motion planner
+        # TODO we'll maybe also need to make sure the other devices are out of the way...
+        _future.waitFor(self.moveToGlobal(approach_pos, speed=speed), timeout=120)
+        _future.waitFor(other._moveToGlobal(approach_pos, speed=speed), timeout=120)
+        interact_global = pos_config['interact global']
         _future.waitFor(other._moveToGlobal(interact_global, speed=speed))
 
-    def moveToApproach(self, other, speed='fast'):
+    @future_wrap
+    def moveToApproach(self, other, speed='fast', _future=None):
         if other.name() not in self.positions:
             raise RuntimeError(f"No positions saved for {other.name()} at {self.name()}")
         pos_config = self.positions[other.name()]
-        return other._moveToGlobal(self.mapToGlobal(pos_config['approach local']), speed=speed)
+        if 'site global' not in pos_config:
+            raise RuntimeError(f"No site global position saved for {other.name()} at {self.name()}")
+        _future.waitFor(self.moveToGlobal(pos_config['site global'], speed=speed), timeout=120)
+        _future.waitFor(other._moveToGlobal(pos_config['site global'], speed=speed), timeout=120)
 
     # @future_wrap
     # def moveToInteract(self, other, speed='fast', _future=None):
