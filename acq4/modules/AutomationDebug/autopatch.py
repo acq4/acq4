@@ -30,18 +30,14 @@ class Autopatcher:
         man = win.module.manager
         multipatch_win = man.getModule('MultiPatch').win
         demo_dir = man.getCurrentDir().mkdir('AutopatchDemo', autoIncrement=True)
-        cleaning = None
         while True:
             cell_dir = demo_dir.mkdir('cell', autoIncrement=True)
             cell_dir.setInfo({'dirType': 'Cell'})
             man.setCurrentDir(cell_dir)
             try:
                 if not ppip.isTipClean():
-                    cleaning = ppip.setState("clean")
-                if cleaning is not None:
                     _future.setState("Autopatch: cleaning pipette")
-                    _future.waitFor(cleaning, timeout=600)
-                    cleaning = None
+                    _future.waitFor(ppip.setState("clean"), timeout=600)
                 cell = self._autopatchFindCell(_future)
                 _future.setState("Autopatch: cell found")
                 ppip.setState("bath")
