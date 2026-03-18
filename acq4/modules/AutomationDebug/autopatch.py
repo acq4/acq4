@@ -109,7 +109,7 @@ class Autopatcher:
                     # _future.waitFor(ppip.pipetteDevice.goAboveTarget("fast"))
                     # self._saveStack("post-collection", _future)
 
-                    _future.waitFor(ppip.pipette.goHome())
+                    _future.waitFor(ppip.pipetteDevice.goHome())
                     ppip.setState("bath")
 
                 except (_future.StopRequested, _future.Stopped):
