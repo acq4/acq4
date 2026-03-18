@@ -1,7 +1,33 @@
+import base64
+import struct
+import zlib
+
 import numpy as np
 
 from acq4.drivers.dovermotion.motionsynergy_client import get_client
 from ..Stage import Stage, MoveFuture
+
+
+def _make_color_image(r, g, b, size=72):
+    """Return a solid-color PNG as a base64 data URI for Stream Dock buttons."""
+    def _chunk(tag, data):
+        c = tag + data
+        return struct.pack('>I', len(data)) + c + struct.pack('>I', zlib.crc32(c) & 0xffffffff)
+
+    ihdr = struct.pack('>IIBBBBB', size, size, 8, 2, 0, 0, 0)
+    row = b'\x00' + bytes([r, g, b] * size)
+    idat = zlib.compress(row * size)
+    png = (
+        b'\x89PNG\r\n\x1a\n'
+        + _chunk(b'IHDR', ihdr)
+        + _chunk(b'IDAT', idat)
+        + _chunk(b'IEND', b'')
+    )
+    return 'data:image/png;base64,' + base64.b64encode(png).decode('ascii')
+
+
+_AXIS_ENABLED_IMG = _make_color_image(40, 167, 69)   # green
+_AXIS_DISABLED_IMG = _make_color_image(180, 30, 30)  # red
 
 
 class DoverStage(Stage):
@@ -18,6 +44,7 @@ class DoverStage(Stage):
         self.dev.set_callback(self.posChanged)
         self._lastMove = None
         self.posChanged(self.dev.pos(refresh=True))
+        man.declareInterface(name, ['stream_dock'], self)
 
     def axes(self):
         return "x", "y", "z"
@@ -55,6 +82,45 @@ class DoverStage(Stage):
             return self._lastMove.target
         else:
             return None
+
+    def configure_dock(self, stream_dock_device):
+        """Register Stream Dock toggle buttons for enabling / disabling each axis.
+
+        One button per axis (X, Y, Z).  The button background is green when the
+        axis is enabled and red when it is disabled.
+        """
+        buttons = []
+        for i, axis_name in enumerate(self.axes()):
+            def make_on_appear(i):
+                def on_appear(context):
+                    enabled = self.dev.is_enabled()
+                    img = _AXIS_ENABLED_IMG if (enabled is not None and enabled[i]) else _AXIS_DISABLED_IMG
+                    stream_dock_device.setImage(context, img)
+                return on_appear
+
+            btn = stream_dock_device.add_button(
+                axis_name.upper(),
+                on_press=lambda i=i: self._toggle_axis(i),
+                on_appear=make_on_appear(i),
+            )
+            buttons.append(btn)
+
+        def _update_colors(enabled_state):
+            for i, btn in enumerate(buttons):
+                if btn.context is not None:
+                    img = _AXIS_ENABLED_IMG if enabled_state[i] else _AXIS_DISABLED_IMG
+                    stream_dock_device.setImage(btn.context, img)
+
+
+        # self.dev.set_enabled_callback(_update_colors)
+
+    def _toggle_axis(self, axis_index):
+        """Toggle the enabled state of a single axis."""
+        enabled = self.dev.is_enabled()
+        if enabled is not None and enabled[axis_index]:
+            self.dev.disable_axis(axis_index)
+        else:
+            self.dev.enable_axis(axis_index)
 
     def quit(self):
         self.dev.set_callback(None)
