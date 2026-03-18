@@ -89,13 +89,14 @@ class Autopatcher:
                 )
                 _future.sleep(5)  # pose with nucleus
                 _future.waitFor(homeFut)
-                runInGuiThread(multipatch_win.recordToggled, False)
 
             except (_future.StopRequested, _future.Stopped):
                 raise
             except Exception:
                 logger.exception("Error during protocol:")
                 continue
+            finally:
+                runInGuiThread(multipatch_win.recordToggled, False)
 
     def _autopatchCellPatch(self, cell, _future):
         win = self._window
