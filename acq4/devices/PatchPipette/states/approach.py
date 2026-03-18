@@ -230,6 +230,11 @@ class ApproachState(PatchPipetteState):
         self.dev.clampDevice.resetTestPulseHistory()
         self._maybeTakeACellfie()
         if self.config["autoAdvance"]:
+            pip = self.dev.pipetteDevice
+            target = pip.targetPosition()
+            surface = pip.scopeDevice.getSurfaceDepth()
+            if target[2] > surface:
+                raise ValueError(f"Cannot approach a target depth {target[2]} that is above the surface {surface}.")
             self.monitorTestPulse()
             while True:
                 self.checkStop()
