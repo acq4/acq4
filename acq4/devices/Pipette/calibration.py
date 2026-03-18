@@ -24,11 +24,18 @@ class ZStackDetectionWidget(Qt.QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Z-Stack Pipette Detection")
-        self.resize(900, 700)
+        self.resize(1200, 700)
 
         layout = Qt.QVBoxLayout(self)
+        image_row = Qt.QHBoxLayout()
+        layout.addLayout(image_row)
+
         self.imageView = pg.ImageView()
-        layout.addWidget(self.imageView)
+        image_row.addWidget(self.imageView)
+
+        self.heatmapView = pg.ImageView()
+        self.heatmapView.setWindowTitle("Heatmap")
+        image_row.addWidget(self.heatmapView)
 
         from pyqtgraph.graphicsItems.TargetItem import TargetItem
         self._target = TargetItem(size=20, movable=False, pen=pg.mkPen('r', width=2))
@@ -36,13 +43,14 @@ class ZStackDetectionWidget(Qt.QWidget):
         self._target.setVisible(False)
 
         self._image_positions = None
+        self._heatmaps = None
         self._z_curve = None
         self._conf_curve = None
         self._conf_vb = None
 
         self.imageView.sigTimeChanged.connect(self._on_time_changed)
 
-    def setData(self, frames, image_positions, z_um, confidences):
+    def setData(self, frames, image_positions, z_um, confidences, heatmaps=None):
         """Update the widget with new detection results.
 
         Parameters
@@ -54,11 +62,22 @@ class ZStackDetectionWidget(Qt.QWidget):
             Per-frame predicted z offset from focal plane in µm.
         confidences : ndarray, shape (n,)
             Per-frame detection confidence (0-1).
+        heatmaps : list of ndarray or None
+            Per-frame heatmap arrays from the detection model.
         """
         self._image_positions = image_positions
+        self._heatmaps = heatmaps
 
         stack = np.stack([f.data() for f in frames], axis=0)
         self.imageView.setImage(stack)
+
+        if heatmaps is not None:
+            valid = [h for h in heatmaps if h is not None]
+            if valid:
+                # heatmaps from detect_pipette_once are shape (1, H, W); squeeze batch dim
+                hm_stack = np.stack([np.squeeze(h) for h in heatmaps], axis=0)
+                self.heatmapView.setImage(hm_stack)
+                self.heatmapView.setColorMap(pg.colormap.get('viridis'))
 
         roi_plot = self.imageView.ui.roiPlot
         if self._z_curve is not None:
@@ -105,6 +124,8 @@ class ZStackDetectionWidget(Qt.QWidget):
         pos = self._image_positions[idx]
         # image_pos_rc axes match frame.data() axis order: pos[0] → axis-0 (x in pg), pos[1] → axis-1 (y in pg)
         self._target.setPos(float(pos[0]), float(pos[1]))
+        if self._heatmaps is not None:
+            self.heatmapView.setCurrentIndex(idx)
 
 
 def scan_pipette_z_stack(pipette, imager=None, z_range=50e-6, z_step=5e-6, show=False):
@@ -152,6 +173,7 @@ def scan_pipette_z_stack(pipette, imager=None, z_range=50e-6, z_step=5e-6, show=
     z_predictions_um = []
     confidences = []
     image_positions = []
+    heatmaps = []
 
     for frame in frames:
         img = frame.data()
@@ -162,13 +184,15 @@ def scan_pipette_z_stack(pipette, imager=None, z_range=50e-6, z_step=5e-6, show=
         pipette_angle = np.arctan2(-image_dir[0], image_dir[1]) * 180 / np.pi
         px_size = frame.info()["pixelSize"][0]
 
-        image_pos_rc, z_um, confidence, _ = do_pipette_tip_detection(img, pipette_angle, px_size, show=False)
+        image_pos_rc, z_um, confidence, _locals = do_pipette_tip_detection(img, pipette_angle, px_size, show=False, return_heatmap=True)
+        heatmap = _locals.get('cropped_heatmap')
 
         tip_pos = frame.mapFromFrameToGlobal(pg.Vector(image_pos_rc))
         global_positions.append((tip_pos.x(), tip_pos.y(), tip_pos.z() + z_um * 1e-6))
         z_predictions_um.append(float(z_um))
         confidences.append(float(confidence))
         image_positions.append([float(image_pos_rc[0]), float(image_pos_rc[1])])
+        heatmaps.append(heatmap)
 
     global_positions = np.array(global_positions)
     z_predictions_um = np.array(z_predictions_um)
@@ -177,16 +201,16 @@ def scan_pipette_z_stack(pipette, imager=None, z_range=50e-6, z_step=5e-6, show=
 
     if show:
         from acq4.util.threadrun import runInGuiThread
-        runInGuiThread(_show_z_stack_detection_widget, frames, image_positions, z_predictions_um, confidences)
+        runInGuiThread(_show_z_stack_detection_widget, frames, image_positions, z_predictions_um, confidences, heatmaps)
 
     return frames, global_positions, z_predictions_um, confidences
 
 
-def _show_z_stack_detection_widget(frames, image_positions, z_um, confidences):
+def _show_z_stack_detection_widget(frames, image_positions, z_um, confidences, heatmaps=None):
     global _z_stack_detection_window
     if _z_stack_detection_window is None or not _z_stack_detection_window.isVisible():
         _z_stack_detection_window = ZStackDetectionWidget()
-    _z_stack_detection_window.setData(frames, image_positions, z_um, confidences)
+    _z_stack_detection_window.setData(frames, image_positions, z_um, confidences, heatmaps)
 
 
 @future_wrap
