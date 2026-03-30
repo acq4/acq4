@@ -499,8 +499,10 @@ class WebcamCamera(Camera):
                 self._openCapture()
 
     def stopCamera(self):
-        # Keep capture open between starts/stops for faster restarts.
-        pass
+        with self.camLock:
+            if self._capture is not None:
+                self._capture.release()
+                self._capture = None
 
     def newFrames(self):
         frames = [self.frameQueue.get() for _ in range(self.frameQueue.qsize())]
