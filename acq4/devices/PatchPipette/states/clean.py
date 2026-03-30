@@ -33,11 +33,13 @@ class CleanState(PatchPipetteState):
         'initialTestPulseEnable': False,
         'fallbackState': 'out',
         'finishPatchRecord': True,
+        'nextState': 'out',
     }
     _parameterTreeConfig = {
         'cleanSequence': {'type': 'str', 'default': "[(-35e3, 1.0), (100e3, 1.0)] * 5"},  # TODO
         'rinseSequence': {'type': 'str', 'default': "[(-35e3, 3.0), (100e3, 10.0)]"},  # TODO
         'sonicationProtocol': {'type': 'str', 'default': 'clean'},
+        'nextState': {'type': 'str', 'default': 'out'},
     }
 
     def __init__(self, *args, **kwds):
@@ -142,7 +144,7 @@ class CleanState(PatchPipetteState):
         dev.setTipClean(True)
         self.currentFuture = None
         dev.newPatchAttempt()
-        return {"state": 'out'}
+        return {"state": config['nextState']}
 
     def resetPosition(self, parent_future):
         # todo we need to handle this somehow for both path generators
