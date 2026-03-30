@@ -16,6 +16,7 @@ from acq4.devices.Pipette.planners import (
 from acq4.logging_config import get_logger
 from acq4.modules.Module import Module
 from acq4.util import Qt
+import pyqtgraph as pg
 from acq4.util.future import Future, future_wrap
 from pyqtgraph.units import µm
 from .autopatch import Autopatcher
@@ -39,6 +40,17 @@ class AutomationDebugWindow(Qt.QWidget):
         self._annotation_tool = None
         self.ui = UiTemplate()
         self.ui.setupUi(self)
+
+        # Add z-stack depth spinboxes to the Cell Detection group box
+        _zstack_depth_layout = Qt.QHBoxLayout()
+        _zstack_depth_layout.addWidget(Qt.QLabel("Start depth:"))
+        self.ui.zStackStartDepthSpin = pg.SpinBox(value=20e-6, suffix='m', siPrefix=True, step=5e-6)
+        _zstack_depth_layout.addWidget(self.ui.zStackStartDepthSpin)
+        _zstack_depth_layout.addWidget(Qt.QLabel("Stop depth:"))
+        self.ui.zStackStopDepthSpin = pg.SpinBox(value=60e-6, suffix='m', siPrefix=True, step=5e-6)
+        _zstack_depth_layout.addWidget(self.ui.zStackStopDepthSpin)
+        _zstack_depth_layout.addStretch()
+        self.ui.groupBox.layout().addLayout(_zstack_depth_layout, 5, 0, 1, 4)
 
         self.sigWorking.connect(self._setWorkingState)
         self.failedCalibrations = []

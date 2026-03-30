@@ -103,8 +103,8 @@ class CellDetector:
         else:  # --- Real Acquisition ---
             surface = _future.waitFor(win.scopeDevice.findSurfaceDepth(win.cameraDevice)).getResult()
 
-            start_z = surface - 20 * µm
-            stop_z = surface - 60 * µm
+            start_z = surface - win.ui.zStackStartDepthSpin.value()
+            stop_z = surface - win.ui.zStackStopDepthSpin.value()
 
             if multichannel_processing_intended:
                 logger.info(
