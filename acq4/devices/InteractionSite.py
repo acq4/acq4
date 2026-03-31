@@ -4,7 +4,6 @@ import pyqtgraph as pg
 from acq4 import getManager
 from acq4.modules.Camera import CameraModuleInterface
 from acq4.util import Qt
-from coorx import AffineTransform
 from .Device import Device
 from .OptomechDevice import OptomechDevice
 from .Stage import Stage
