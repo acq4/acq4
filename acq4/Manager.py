@@ -24,15 +24,13 @@ from pyqtgraph.util.mutex import Mutex
 from . import __version__
 from . import devices, modules
 from .Interfaces import InterfaceDirectory
-from .devices.Device import Device, DeviceTask
-from .logging_config import get_logger, setup_logging, HistoricLogRecord
+from .devices.Device import Device, DeviceTask, DeviceLocker
+from .logging_config import get_logger, set_log_file, setup_logging, HistoricLogRecord
 from .util import DataManager, ptime, Qt
 from .util.DataManager import DirHandle
 from .util.HelpfulException import HelpfulException
 from .util.LogWindow import get_log_window, get_error_dialog
 
-TEMP_LOG = "temp_log.json"
-setup_logging(TEMP_LOG, gui=False, console_level=logging.DEBUG)
 logger = get_logger()
 
 
@@ -71,8 +69,6 @@ class Manager(Qt.QObject):
         parser.add_argument("--module", "-m", help="Module name to load", action="append")
         parser.add_argument("--base-dir", "-b", help="Base directory to use")
         parser.add_argument("--storage-dir", "-s", help="Storage directory to use")
-        parser.add_argument("--log-level", action="store", help="Set the console log level", default="WARNING")
-        parser.add_argument("--root-log-level", action="store", help="Set the root log level", default="DEBUG")
         parser.add_argument("--disable", "-d", help="Disable the device specified", action="append")
         parser.add_argument("--disable-all", "-D", help="Disable all devices", action="store_true")
         parser.add_argument("--exit-on-error", "-x", help="Whether to exit immidiately on the first exception during initial Manager setup", action="store_true")
@@ -105,8 +101,6 @@ class Manager(Qt.QObject):
         self.taskLock = Mutex(Qt.QMutex.Recursive)
         self._folderTypes = None
         self._logFile = None
-        self._consoleLogLevel = logging.WARNING
-        self._rootLogLevel = logging.DEBUG
 
         try:
             if Manager.CREATED:
@@ -141,8 +135,6 @@ class Manager(Qt.QObject):
         self.exitOnError = args.exit_on_error
         self.disableDevs = args.disable or []
         self.disableAllDevs = args.disable_all
-        self._consoleLogLevel = getattr(logging, args.log_level.upper(), logging.WARNING)
-        self._rootLogLevel = getattr(logging, args.root_log_level.upper(), logging.DEBUG)
 
         self.configDir = os.path.dirname(args.config)
         self.readConfig(args.config)
@@ -170,9 +162,6 @@ class Manager(Qt.QObject):
                         # we have to show it now, otherwise we'll have no windows
                         self.showGUI()
                     raise
-            setup_logging(
-                TEMP_LOG, acq4_level=self._rootLogLevel, console_level=self._consoleLogLevel
-            )
 
         except Exception:
             if self.exitOnError:
@@ -452,18 +441,28 @@ class Manager(Qt.QObject):
         """
         return self.listInterfaces('device')
 
-    def reserveDevices(self, devices, timeout=10.0):
+    def reserveDevices(self, devices, timeout=10.0, reserver: str = None):
         """Return a DeviceLocker that can be used to reserve multiple devices simultaneously::
 
-            with manager.reserveDevices(['Camera', 'Clamp1', 'Stage']):
+            with manager.reserveDevices(['Camera', 'Clamp1', 'Stage'], reserver='MySubsystem'):
                 # .. do stuff
 
+        Parameters
+        ----------
+        reserver : str
+            Name identifying the caller reserving these devices. Required for deadlock diagnostics.
         """
-        devices = [self.getDevice(d) if isinstance(d, str) else d for d in devices]
-        return DeviceLocker(self, devices, timeout=timeout)
+        return DeviceLocker(self, devices, timeout=timeout, reserver=reserver)
+
+    def getOrLoadModule(self, name):
+        if name in self.modules:
+            return self.getModule(name)
+        if name in self.definedModules:
+            return self.loadDefinedModule(name)
+        return self.loadModule(name)
 
     def loadModule(self, moduleClassName, name=None, config=None, forceReload=False, importMod=None, execPath=None):
-        """Create a new instance of an user interface module.
+        """Create a new instance of a user interface module.
 
         Parameters
         ----------
@@ -602,7 +601,11 @@ class Manager(Qt.QObject):
         try:
             sh = Qt.QShortcut(Qt.QKeySequence(keys), win)
             sh.setContext(Qt.Qt.ApplicationShortcut)
-            sh.activated.connect(lambda *args: win.raise_())
+            def raiseWindow(*rargs):
+                win.setWindowState(win.windowState() & ~Qt.QtCore.Qt.WindowMinimized)
+                win.raise_()
+                win.activateWindow()
+            sh.activated.connect(raiseWindow)
         except:
             if self.exitOnError:
                 raise
@@ -668,28 +671,11 @@ class Manager(Qt.QObject):
         """
         Set the directory to which log messages are stored.
         """
-        was_temp = self._logFile is None
-        self._logFile = d["log.json"]
-        file_handler = setup_logging(
-            self._logFile.name(),
-            acq4_level=self._rootLogLevel,
-            console_level=self._consoleLogLevel,
-        )
+        # start a new log file in the new directory
+        # also migrates any temporary log messages to the new file
+        set_log_file(d["log.json"].name())
+
         self.sigLogDirChanged.emit(d)
-        if was_temp:
-            try:
-                with open(TEMP_LOG, 'r') as f:
-                    for line in f:
-                        file_handler.emit(HistoricLogRecord(**(json.loads(line))))
-            finally:
-                os.remove(TEMP_LOG)
-            log_win = get_log_window()
-            with open(self._logFile.name(), 'r') as f:
-                for i, line in enumerate(f):
-                    log_win.new_record(HistoricLogRecord(**(json.loads(line))), sort=False)
-                    if i % 20 == 0:
-                        Qt.QApplication.processEvents()
-            log_win.ensure_chronological_sorting()
 
     def setCurrentDir(self, d):
         """
@@ -812,23 +798,22 @@ class Manager(Qt.QObject):
             with pg.ProgressDialog("Shutting down..", 0, lm + ld, cancelText=None, wait=0) as dlg:
                 self.documentation.quit()
 
-                logger.debug("Requesting all modules shut down..")
-                logger.info("Shutting Down.")
+                logger.info("Requesting all modules shut down..")
                 while len(self.modules) > 0:  ## Modules may disappear from self.modules as we ask them to quit
                     m = list(self.modules.keys())[0]
-                    logger.debug(f"    {m}")
+                    logger.info(f"    Closing {m}")
 
                     self.unloadModule(m)
                     dlg.setValue(lm - len(self.modules))
 
-                logger.debug("Requesting all devices shut down..")
+                logger.info("Requesting all devices shut down..")
                 devs = Device._deviceCreationOrder[::-1]
                 for d in devs:  # shut down in reverse order
                     d = d()
                     if d is None:
                         # device was already deleted
                         continue
-                    logger.debug(f"    {d}")
+                    logger.info(f"    Closing {d}")
                     try:
                         d.quit()
                     except:
@@ -836,10 +821,10 @@ class Manager(Qt.QObject):
 
                     dlg.setValue(lm + ld - len(devs))
 
-                logger.debug("Closing windows..")
+                logger.info("Closing windows..")
                 Qt.QApplication.instance().closeAllWindows()
                 Qt.QApplication.instance().processEvents()
-            logger.debug("\n    ciao.")
+            logger.info("\n    ciao.")
         Qt.QApplication.quit()
 
 
@@ -848,51 +833,6 @@ def getManager() -> Manager:
     if Manager.single is None:
         raise RuntimeError("No manager created yet")
     return Manager.single
-
-
-class DeviceLocker(object):
-    def __init__(self, manager, devices, timeout=10.0):
-        # make sure we lock devices in a predictable order; this is what prevents deadlocks
-        self.devices = sorted(devices, key=lambda d: d.name())
-        self.locked = []
-        self.timeout = timeout
-        self.lockErr = None
-
-    def tryLock(self, timeout=None):
-        try:
-            for device in self.devices:
-                devLocked = device.reserve(block=True, timeout=timeout)
-                if not devLocked:
-                    self.lockErr = "Timed out waiting for %s" % device.name()
-                    self.unlock()
-                    return False
-                self.locked.append(device)
-
-            return True
-        except Exception:
-            self.unlock()
-            raise
-
-    def lock(self):
-        locked = self.tryLock(timeout=self.timeout)
-        if not locked:
-            self.unlock()
-            raise RuntimeError("Failed to lock devices: %s" % self.lockErr)
-
-    def unlock(self):
-        for device in self.locked:
-            try:
-                device.release()
-            except:
-                pass
-        self.locked = []
-
-    def __enter__(self):
-        self.lock()
-        return self
-
-    def __exit__(self, *args):
-        self.unlock()
 
 
 class Task:
@@ -1011,7 +951,7 @@ class Task:
             try:
 
                 ## Reserve all hardware
-                self.reserveDevices()
+                self.reserveDevices(reserver=f"Task[{self.id}].execute")
 
                 prof.mark('reserve')
 
@@ -1199,10 +1139,12 @@ class Task:
             self.stop()
             return self.result
 
-    def reserveDevices(self):
+    def reserveDevices(self, reserver: str = None):
+        if reserver is None:
+            reserver = f"Task[{self.id}]"
         if self.deviceLock is None:
             try:
-                self.deviceLock = self.dm.reserveDevices(list(self.tasks.keys()))
+                self.deviceLock = self.dm.reserveDevices(list(self.tasks.keys()), reserver=reserver)
                 self.deviceLock.lock()
             except Exception:
                 self.deviceLock = None
