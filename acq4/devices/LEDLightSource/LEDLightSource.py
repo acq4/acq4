@@ -25,19 +25,36 @@ class LEDLightSource(LightSource):
     * **transform** (dict, optional): Spatial transform relative to parent device
     
     Example configuration::
-    
+
+        # First, define a DAQGeneric device with digital output channels for controlling the LEDs:
+        # (this tells ACQ4 which DAQ lines are used to access the LEDs)
+        LEDChannels:
+            driver: 'DAQGeneric'
+            channels:
+                Blue:
+                    device: 'DAQ'  # note that DAQ must have been defined previously; see the NiDAQ device
+                    channel: '/Dev1/port0/line2'
+                    type: 'do'
+                Green:
+                    device: 'DAQ'
+                    channel: '/Dev1/port0/line3'
+                    type: 'do'
+
+        # Then define the LED light source device, referencing the DAQ channels:
+        # (this tells ACQ4 about the LEDs themselves)
         LEDArray:
             driver: 'LEDLightSource'
-            parentDevice: 'Microscope'
+            parentDevice: 'Microscope'  # optionally, specify that these LEDs are attached to a microscope device
             sources:
                 Blue:
-                    channel: ['DAQ', '/Dev1/port0/line0']
-                    wavelength: 470e-9
-                    onValue: 5.0
+                    channel: ['LEDChannels', 'Blue']
+                    wavelength: 470 * nm
+                    onValue: 1  # digital output is 1 when LED is on
                 Green:
-                    channel: ['DAQ', '/Dev1/port0/line1'] 
-                    wavelength: 525e-9
-                    onValue: 3.3
+                    channel: ['LEDChannels', 'Green']
+                    wavelength: 525 * nm
+                    onValue: 1  # digital output is 1 when LED is on
+
     """
 
     def __init__(self, dm, config, name):
