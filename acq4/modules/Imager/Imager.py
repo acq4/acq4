@@ -1074,12 +1074,13 @@ class ImagerCamModInterface(CameraModuleInterface):
     """For plugging in the 2p imager system to the camera module.
     """
     canImage = True
-    def __init__(self, imager, mod):
+
+    def __init__(self, imager, win):
         self.imager = imager
 
-        CameraModuleInterface.__init__(self, imager, mod)
+        CameraModuleInterface.__init__(self, imager, win)
 
-        mod.window().addItem(imager.imageItem, z=10)
+        win.addItem(imager.imageItem, z=10)
 
         self.imager.imagingThread.sigNewFrame.connect(self.newFrame)
 

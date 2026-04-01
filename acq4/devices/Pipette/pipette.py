@@ -22,7 +22,7 @@ from .planners import PipettePathGenerator
 from .planners import defaultMotionPlanners
 from .tracker import ResnetPipetteTracker
 from ..Camera import Camera
-from ..RecordingChamber import RecordingChamber
+from ..InteractionSite import InteractionSite
 from ...util.PromptUser import prompt
 from ...util.geometry import Plane
 from ...util.imaging.sequencer import run_image_sequence
@@ -302,8 +302,8 @@ class Pipette(Device, OptomechDevice):
         """Return a widget with a UI to put in the device rack"""
         return PipetteDeviceGui(self, win)
 
-    def cameraModuleInterface(self, mod):
-        iface = PipetteCamModInterface(self, mod, showUi=self._opts['showCameraModuleUI'])
+    def cameraModuleInterface(self, win):
+        iface = PipetteCamModInterface(self, win, showUi=self._opts['showCameraModuleUI'])
         self._camInterfaces[iface] = None
         return iface
 
@@ -813,14 +813,14 @@ class Pipette(Device, OptomechDevice):
         self.moving = False
         self.sigMoveFinished.emit(self, self.globalPosition())
 
-    def getRecordingChambers(self) -> List[RecordingChamber]:
+    def getRecordingChambers(self) -> List[InteractionSite]:
         """Return a list of RecordingChamber instances that are associated with this Pipette (see
         'recordingChambers' config option).
         """
         man = getManager()
         return [man.getDevice(d) for d in self.config.get('recordingChambers', [])]
 
-    def getCleaningWell(self) -> RecordingChamber | None:
+    def getCleaningWell(self) -> InteractionSite | None:
         """Return the RecordingChamber instance that is associated with this Pipette for cleaning
         (see 'cleaningWell' config option).
         """
@@ -901,8 +901,8 @@ class PipetteCamModInterface(CameraModuleInterface):
 
     canImage = False
 
-    def __init__(self, dev: "Pipette", mod, showUi=True):
-        CameraModuleInterface.__init__(self, dev, mod)
+    def __init__(self, dev: "Pipette", win, showUi=True):
+        CameraModuleInterface.__init__(self, dev, win)
         self._haveTarget = False
         self._showUi = showUi
 
@@ -912,16 +912,16 @@ class PipetteCamModInterface(CameraModuleInterface):
 
         self.calibrateAxis = Axis([0, 0], 0, inverty=False)
         self.calibrateAxis.setZValue(5000)
-        mod.addItem(self.calibrateAxis)
+        win.addItem(self.calibrateAxis)
         self.calibrateAxis.setVisible(False)
 
         self.centerArrow = pg.ArrowItem()
         self.centerArrow.setZValue(5000)
-        mod.addItem(self.centerArrow)
+        win.addItem(self.centerArrow)
 
         self.target = Target()
         self.target.setZValue(5000)
-        mod.addItem(self.target)
+        win.addItem(self.target)
         self.target.setVisible(False)
 
         # decide how / whether to add a label for the target
@@ -940,15 +940,15 @@ class PipetteCamModInterface(CameraModuleInterface):
             self._updateTargetLabel()
 
         self.depthTarget = Target(movable=False)
-        mod.getDepthView().addItem(self.depthTarget)
+        win.getDepthView().addItem(self.depthTarget)
         self.depthTarget.setVisible(False)
 
         self.depthArrow = pg.ArrowItem(angle=180 - dev.yawAngle())
-        mod.getDepthView().addItem(self.depthArrow)
+        win.getDepthView().addItem(self.depthArrow)
 
         # self.ui.setOrientationBtn.toggled.connect(self.setOrientationToggled)
         self.ui.setOrientationBtn.setEnabled(False)
-        mod.window().getView().scene().sigMouseClicked.connect(self.sceneMouseClicked)
+        win.getView().scene().sigMouseClicked.connect(self.sceneMouseClicked)
         dev.sigGlobalTransformChanged.connect(self.transformChanged)
         dev.scopeDevice().sigGlobalTransformChanged.connect(self.focusChanged)
         dev.sigTargetChanged.connect(self.targetChanged)
@@ -991,11 +991,11 @@ class PipetteCamModInterface(CameraModuleInterface):
 
         if self.ui.setCenterBtn.isChecked():
             self.ui.setCenterBtn.setChecked(False)
-            pos = self.mod().getView().mapSceneToView(ev.scenePos())
+            pos = self.win().getView().mapSceneToView(ev.scenePos())
             self.calibrateAxis.setPos(pos)
 
         elif self.ui.setTargetBtn.isChecked():
-            pos = self.mod().getView().mapSceneToView(ev.scenePos())
+            pos = self.win().getView().mapSceneToView(ev.scenePos())
             z = self.getDevice().scopeDevice().getFocusDepth()
             self.setTargetPos(pos, z)
             self.target.setFocusDepth(z)
