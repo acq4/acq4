@@ -16,7 +16,7 @@ log_file_handler: logging.FileHandler | None = None
 def __reload__(old):
     global log_server, log_handlers
     log_server = old.get('log_server', None)
-    log_handlers = old.get('_handlers', [])
+    log_handlers = old.get('log_handlers', [])
 
 
 class StringAwareJsonFormatter(JsonFormatter):

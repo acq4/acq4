@@ -3,8 +3,6 @@ import atexit
 import contextlib
 import gc
 import getpass
-import json
-import logging
 import os
 import socket
 import sys
@@ -12,12 +10,10 @@ import threading
 import time
 import weakref
 from collections import OrderedDict
-from datetime import datetime
-
-from MetaArray import MetaArray
 
 import pyqtgraph as pg
 import pyqtgraph.reload as reload
+from MetaArray import MetaArray
 from pyqtgraph import configfile
 from pyqtgraph.debug import Profiler
 from pyqtgraph.util.mutex import Mutex
@@ -25,7 +21,7 @@ from . import __version__
 from . import devices, modules
 from .Interfaces import InterfaceDirectory
 from .devices.Device import Device, DeviceTask
-from .logging_config import get_logger, set_log_file, setup_logging, HistoricLogRecord
+from .logging_config import get_logger, set_log_file
 from .util import DataManager, ptime, Qt
 from .util.DataManager import DirHandle
 from .util.HelpfulException import HelpfulException
