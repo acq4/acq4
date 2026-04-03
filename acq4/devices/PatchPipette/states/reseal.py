@@ -442,7 +442,11 @@ class ResealState(PatchPipetteState):
                 and ptime.time() - start_time > config['resealTimeout']
             ):
                 self.setResult(interrupted=True, error="Took longer than `resealTimeout` attempting to reseal.")
-                return {"state": config['fallbackState']}
+                return {
+                    "state": config['fallbackState'],
+                    "initialPressure": config['initialPressure'],
+                    "initialPressureSource": config['initialPressureSource'],
+                }
 
             self.processAtLeastOneTestPulse()
 
@@ -466,7 +470,12 @@ class ResealState(PatchPipetteState):
                     retraction_future.stop()
                 self.setState("tissue is torn beyond repair")
                 self.setResult(error="Tissue is torn beyond repair (via `tornDetectionThreshold`).")
-                return {"state": config['fallbackState']}
+                return {
+                    "state": config['fallbackState'],
+                    "initialPressure": config['initialPressure'],
+                    "initialPressureSource": config['initialPressureSource'],
+                }
+
             elif retraction_future is None or retraction_future.wasInterrupted():
                 if retraction_future is not None:
                     retraction_future.logErrors("Reseal retraction error")
