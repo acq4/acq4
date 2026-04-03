@@ -155,9 +155,14 @@ class PatchPipetteState(Future):
 
     def start(self):
         """Start a background thread that executes this state. This should only be called by the state manager.
-        
+
         When runJob completes, self.sigFinished will be emitted."""
         self.executeInThread(self.runJob, args=(), kwds={})
+
+    def setResult(self, *args, **kwargs):
+        if 'error' in kwargs:
+            self.setState(f"{self.stateName} failed: {kwargs['error']}")
+        super().setResult(*args, **kwargs)
 
     def initialize(self):
         if self.config.get('finishPatchRecord') is True:
@@ -170,10 +175,10 @@ class PatchPipetteState(Future):
 
     def runJob(self, _future):  # _future is self
         """Called in background thread to start the state.
-        
+
         Initialize pressure, clamp, etc. and run the subclass-defined run() method if it exists.
-        If run() is not defined, then this just serves as a way to set initial parameters and then wait until the state is stopped by the state manager. 
-        If run() is defined, then it should return either None or a dict with a 'state' key specifying the next state to transition to. 
+        If run() is not defined, then this just serves as a way to set initial parameters and then wait until the state is stopped by the state manager.
+        If run() is defined, then it should return either None or a dict with a 'state' key specifying the next state to transition to.
         The state manager will handle the actual transition after run() completes.
 
         This method is called by the state manager.
@@ -208,7 +213,7 @@ class PatchPipetteState(Future):
 
     def run(self):
         """Subclasses can implement this method to have code executed in a background thread after the state starts.
-        
+
         The default implementation just waits until the state is stopped by the state manager."""
         self.sleep(float('inf'))
 
