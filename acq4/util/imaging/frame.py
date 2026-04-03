@@ -49,7 +49,9 @@ class Frame:
                 return frames
             else:
                 data = data.asarray()
-        frame = cls(data, fh.info().deepcopy())
+        info = fh.info().deepcopy()
+        info["transform"] = load_transform_from_anything(info["transform"])
+        frame = cls(data, info)
         frame.loadLinkedFiles(fh.parent())
         return frame
 
