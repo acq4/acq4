@@ -120,7 +120,7 @@ def _set_focus_depth(
     hysteresis_correction_distance = imager.getFocusDevice().hysteresisCorrection
     if hysteresis_correction_distance == 0:
         hysteresis_correction = False
-        
+
     if hysteresis_correction and direction < 0 and dz > 0:
         # stack goes downward
         move = imager.setFocusDepth(depth + hysteresis_correction_distance, speed, name=f"{name} hysteresis correction")
