@@ -37,7 +37,11 @@ class Autopatcher:
                 runInGuiThread(folder_selector.setCurrentIndex, 5)
                 cell_dir = man.getCurrentDir()
                 try:
-                    if not ppip.isTipClean():
+                    if ppip.isTipClean():
+                        _future.setState("Quick clean")
+                        _future.waitFor(ppip.pipetteDevice.goAboveTarget("fast"))
+                        _future.waitFor(ppip.sonicationDevice.doProtocol("quick clean"))
+                    else:
                         _future.setState("Autopatch: cleaning pipette")
                         try:
                             _future.waitFor(ppip.setState("clean", nextState="bath"), timeout=600)
