@@ -2075,6 +2075,146 @@ def minimum_displacement_inverse_kinematics(
     return pos_unconstrained + t_opt * null_vec
 
 
+def primary_axis_inverse_kinematics(
+    point,
+    device_to_global: Transform,
+    bounds: list[tuple[float, float]],
+    starting_position: list[float],
+    primary_axis: int | None = None,
+) -> np.ndarray:
+    """Find the device position at `point` that maximizes movement in `primary_axis`.
+
+    Uses the same null-space framework as `minimum_displacement_inverse_kinematics` for
+    correctness and bound-safety, but selects the null-space parameter to maximize primary-axis
+    contribution rather than minimizing total displacement.
+
+    This is useful for hardware where certain axis pairs cannot move simultaneously. By
+    concentrating movement into the primary axis, the resulting position requires fewer
+    simultaneous axis movements.
+
+    Parameters
+    ----------
+    point : array-like
+        Target point in global coordinates.
+    device_to_global : Transform
+        Mapping from device coordinates to global. May have more input dimensions than output.
+    bounds : list[tuple[float, float]]
+        A list of (min, max) pairs for each device axis.
+    starting_position : list[float]
+        Current device position.
+    primary_axis : int or None
+        Axis index to maximize movement on. If None, the axis most aligned with the global
+        displacement is selected automatically.
+
+    Returns
+    -------
+    position : np.ndarray
+        Device position that maps to `point`, with maximum contribution from `primary_axis`.
+
+    Raises
+    ------
+    ValueError
+        If the transform is degenerate, the target is unreachable, or no valid position
+        within bounds exists.
+    NotImplementedError
+        If the null-space dimension is greater than 1.
+    """
+    n = len(bounds)
+    point = np.asarray(point, dtype=float)
+    starting_position = np.asarray(starting_position, dtype=float)
+
+    T = device_to_global.full_matrix[:3, :n]
+
+    global_displacement = point - device_to_global.map(starting_position)
+    try:
+        TTT_inv = np.linalg.inv(T @ T.T)
+    except np.linalg.LinAlgError as e:
+        raise ValueError("Transform is degenerate; cannot compute inverse kinematics") from e
+    pos_unconstrained = starting_position + T.T @ TTT_inv @ global_displacement
+
+    null_dim = n - 3  # assuming T has rank 3
+
+    if null_dim <= 0:
+        pos = np.clip(pos_unconstrained, [b[0] for b in bounds], [b[1] for b in bounds])
+        if not np.allclose(device_to_global.map(pos), point):
+            raise ValueError("No valid position within bounds")
+        return pos
+
+    if null_dim > 1:
+        raise NotImplementedError(
+            f"primary_axis_inverse_kinematics does not yet support null spaces "
+            f"of dimension > 1 (got {null_dim} for a {n}-axis device)"
+        )
+
+    # Auto-select primary axis as the one most aligned with the global displacement
+    if primary_axis is None:
+        col_norms = np.array([np.linalg.norm(T[:, i]) for i in range(n)])
+        dots = np.array([
+            abs(T[:, i].dot(global_displacement) / col_norms[i]) if col_norms[i] > 1e-12 else 0.0
+            for i in range(n)
+        ])
+        primary_axis = int(np.argmax(dots))
+
+    # 1D null space: parameterize as pos_unconstrained + t * null_vec
+    _, _, Vt = np.linalg.svd(T)
+    null_vec = Vt[3]  # last row of Vt for a 3×4 matrix with rank 3
+
+    # Find the feasible interval [t_lo, t_hi] for t
+    t_lo, t_hi = -np.inf, np.inf
+    for i, (lo, hi) in enumerate(bounds):
+        nv = null_vec[i]
+        pu = pos_unconstrained[i]
+        if abs(nv) < 1e-12:
+            if pu < lo - 1e-9 or pu > hi + 1e-9:
+                raise ValueError(
+                    f"No valid position within bounds (axis {i}: unconstrained value "
+                    f"{pu:.4g} is outside [{lo}, {hi}] and null space cannot correct it)"
+                )
+        elif nv > 0:
+            t_lo = max(t_lo, (lo - pu) / nv)
+            t_hi = min(t_hi, (hi - pu) / nv)
+        else:
+            t_lo = max(t_lo, (hi - pu) / nv)
+            t_hi = min(t_hi, (lo - pu) / nv)
+
+    if t_lo > t_hi + 1e-9:
+        raise ValueError("No valid position within bounds")
+
+    # Choose t to maximize primary axis movement within [t_lo, t_hi].
+    # The primary axis displacement at t is:
+    #   delta(t) = (pos_unconstrained[primary_axis] - starting_position[primary_axis])
+    #              + t * null_vec[primary_axis]
+    # This is linear in t, so the maximum |delta(t)| is at one endpoint of the feasible interval.
+    # Push t in the direction that increases |delta|, matching the natural direction of movement.
+    # Fall back to minimum displacement (t=0) when the null vector has no primary axis component
+    # or when no primary axis movement is needed.
+    nv_primary = null_vec[primary_axis]
+    delta_primary = pos_unconstrained[primary_axis] - starting_position[primary_axis]
+
+    if abs(nv_primary) < 1e-12 or abs(delta_primary) < 1e-12:
+        # Null vector doesn't influence primary axis, or no movement needed there;
+        # fall back to minimum displacement
+        t_opt = float(np.clip(0.0, t_lo, t_hi))
+    elif delta_primary * nv_primary >= 0:
+        # Increasing t amplifies primary axis movement; push to upper bound
+        t_opt = float(t_hi)
+    else:
+        # Decreasing t amplifies primary axis movement; push to lower bound
+        t_opt = float(t_lo)
+
+    pos_constrained = pos_unconstrained + t_opt * null_vec
+    pos_clipped = np.clip(pos_constrained, np.array(bounds)[:, 0], np.array(bounds)[:, 1])
+
+    final_global = device_to_global.map(pos_clipped)
+    if np.linalg.norm(final_global - point) > 0.1e-6:
+        raise ValueError(
+            f"IK solver generated bad solution (target position: {point} found position: "
+            f"{final_global}  device pos: {pos_constrained})"
+        )
+
+    return pos_clipped
+
+
 def sequential_projection_inverse_kinematics(
     point,
     device_to_global: Transform,

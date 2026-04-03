@@ -8,6 +8,7 @@ from typing import Tuple, List
 import numpy as np
 
 import pyqtgraph as pg
+from acq4 import getManager
 from acq4.util import Qt, ptime
 from acq4.util.Mutex import Mutex
 from coorx import AffineTransform, TTransform
@@ -15,17 +16,14 @@ from pyqtgraph import siFormat
 from .calibration import ManipulatorAxesCalibrationWindow, StageAxesCalibrationWindow
 from ..Device import Device
 from ..OptomechDevice import OptomechDevice, map_through_transform
-from acq4 import getManager
 from ...modules.Visualize3D.travelers_proxy import MovePathException
 from ...util.HelpfulException import HelpfulException
 from ...util.future import Future, FutureButton
 from ...util.geometry import (
     Plane,
     limits_to_boundaries,
-    greedy_axis_inverse_kinematics,
-    neutral_anchored_inverse_kinematics,
     load_transform_from_anything,
-    minimum_displacement_inverse_kinematics,
+    primary_axis_inverse_kinematics,
 )
 
 
@@ -473,18 +471,9 @@ class Stage(Device, OptomechDevice):
             tr = self.stageTransform().offset + np.array(self.mapFromGlobal(globalPos))
             return pg.Vector(self.inverseAxisTransform().map(tr))
 
-        return minimum_displacement_inverse_kinematics(
+        return primary_axis_inverse_kinematics(
             globalPos, self.axisTransform(), self.getLimits(), previousPos
         )
-
-        # TODO this is doing bad things (e.g. Home -> Fine Search -> Above Target drives through the recording chamber)
-        # # otherwise, hold to a neutral position of d=0
-        # return neutral_anchored_inverse_kinematics(
-        #     globalPos,
-        #     self.axisTransform(),
-        #     self.getLimits(),
-        #     [None, None, None, 0],
-        # )
 
     def mapDeviceToGlobalPosition(self, pos):
         pos = map_through_transform(pos, self.axisTransform())[:3]
