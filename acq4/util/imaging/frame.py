@@ -34,11 +34,12 @@ class Frame:
                 frames = []
                 for row in data:
                     info = fh.info().deepcopy()
+                    info["transform"] = load_transform_from_anything(info["transform"])
                     if data.axisName(0) == "Time":
                         info["time"] = row.axisValues(2)
                     elif data.axisName(0) == "Depth":
                         depth = row.axisValues(2)
-                        xform = load_transform_from_anything(info["transform"])
+                        xform = info["transform"]
                         pos = xform.offset
                         pos[2] = depth
                         xform.offset = pos
@@ -59,7 +60,7 @@ class Frame:
         """Return raw imaging data.
         """
         return self._data
-    
+
     def info(self):
         """Return the meta info dict for this frame.
         """
@@ -68,7 +69,7 @@ class Frame:
     @property
     def shape(self):
         return self._data.shape
-    
+
     @property
     def ndim(self):
         return self._data.ndim
