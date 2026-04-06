@@ -96,11 +96,15 @@ class BreakInState(PatchPipetteState):
                 lastPulse = ptime.time()
 
                 if attempt >= len(config['nPulses']):
-                    raise BreakInFailed(f'Breakin failed after {attempt} attempts')
+                    raise BreakInFailed(f'Breakin attempted {attempt} times without success')
         except BreakInSuccessful:
             patchrec['breakinSuccessful'] = True
             patchrec['spontaneousBreakin'] = attempt == 0
             return {"state": 'whole cell'}
+        except BreakInFailed as exc:
+            patchrec['breakinSuccessful'] = False
+            self.setState(str(exc))
+            return {"state": self.config['fallbackState']}
 
     def attemptBreakIn(self, nPulses, duration, pressure):
         start = ptime.time()
