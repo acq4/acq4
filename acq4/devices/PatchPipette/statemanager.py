@@ -196,7 +196,9 @@ class PatchPipetteStateManager(Qt.QObject):
 
             self.logger.debug(f"Configuring next state {state} with config: {config}")
             job = stateHandler(self.dev, config)
-        finally:
+        except Exception:
+            raise
+        else:
             self.logger.debug(f"Stopping previous state {oldJob.stateName if oldJob else None}")
             self.stopJob(allowNextState=False)
 
