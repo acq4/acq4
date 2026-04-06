@@ -235,14 +235,14 @@ class ApproachState(PatchPipetteState):
                 self.maybeRecalibratePipette()
                 self.maybeVisuallyTrackTarget()
                 if self._analysis.tip_is_broken():
-                    self._taskDone(interrupted=True, error="Pipette broken")
+                    self.setResult(interrupted=True, error="Pipette broken")
                     self.dev.patchRecord()["detectedCell"] = False
                     return {"state": "broken"}
                 if self.obstacleDetected():
                     try:
                         self.avoidObstacle()
                     except TimeoutError:
-                        self._taskDone(interrupted=True, error="Fouled by obstacle")
+                        self.setResult(interrupted=True, error="Fouled by obstacle")
                         return {"state": "fouled"}
                 if self._moveFuture is None:
                     self._moveFuture = self._move()
