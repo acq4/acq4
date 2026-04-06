@@ -23,7 +23,7 @@ from ...util.geometry import (
     Plane,
     limits_to_boundaries,
     load_transform_from_anything,
-    primary_axis_inverse_kinematics,
+    minimum_displacement_inverse_kinematics,
 )
 
 
@@ -471,7 +471,7 @@ class Stage(Device, OptomechDevice):
             tr = self.stageTransform().offset + np.array(self.mapFromGlobal(globalPos))
             return pg.Vector(self.inverseAxisTransform().map(tr))
 
-        return primary_axis_inverse_kinematics(
+        return minimum_displacement_inverse_kinematics(
             globalPos, self.axisTransform(), self.getLimits(), previousPos
         )
 
