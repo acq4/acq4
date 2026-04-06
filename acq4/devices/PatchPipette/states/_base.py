@@ -159,6 +159,11 @@ class PatchPipetteState(Future):
         When runJob completes, self.sigFinished will be emitted."""
         self.executeInThread(self.runJob, args=(), kwds={})
 
+    def setResult(self, *args, **kwargs):
+        if 'error' in kwargs:
+            self.setState(f"{self.stateName} failed: {kwargs['error']}")
+        super().setResult(*args, **kwargs)
+
     def initialize(self):
         if self.config.get('finishPatchRecord') is True:
             self.dev.finishPatchRecord()
