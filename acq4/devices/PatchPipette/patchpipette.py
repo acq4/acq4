@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import OrderedDict
+from threading import RLock
 
 # Event types stored in the in-memory event log and shown in the UI.
 LOG_EVENT_TYPES = frozenset({
@@ -93,6 +94,7 @@ class PatchPipette(Device):
 
         # in-memory log of semantically meaningful events; cleared on newPatchAttempt()
         self._logEvents = []
+        self._logLock = RLock()
 
         self.pressureDevice: PressureControl | None = None
         if 'pressureDevice' in config:
@@ -203,7 +205,8 @@ class PatchPipette(Device):
         self.finishPatchRecord()
         if self.clampDevice:
             self.clampDevice.resetTestPulseHistory()
-        self._logEvents.clear()
+        with self._logLock:
+            self._logEvents.clear()
         self.emitNewEvent('new_patch_attempt', {})
 
     def _resetPatchRecord(self):
@@ -409,5 +412,6 @@ class PatchPipette(Device):
         if eventData is not None:
             newEv.update(eventData)
         if eventType in LOG_EVENT_TYPES:
-            self._logEvents.append(dict(newEv))
+            with self._logLock:
+                self._logEvents.append(dict(newEv))
         self.sigNewEvent.emit(self, newEv)
