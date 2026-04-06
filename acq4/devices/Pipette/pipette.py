@@ -567,7 +567,7 @@ class Pipette(Device, OptomechDevice):
         WARNING: This method does _not_ implement any motion planning.
         """
 
-        self.sigMoveRequested.emit(self, path[-1][0], None, {'path': path})
+        self.sigMoveRequested.emit(self, path[-1][0], None, {'path': path, 'name': name})
         stagePath = []
         for pos, speed, linear, explanation in path:
             stagePos = self._solveGlobalStagePosition(pos)

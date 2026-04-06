@@ -315,11 +315,15 @@ class PipetteMotionPlanner:
         self.position = position
         self.speed = speed
         self.kwds = kwds
+        self.name = kwds.get("name", self._default_name())
 
         self.future = None
 
         # wrap safePath for convenience
         self.safePath = self.pip.pathGenerator.safePath
+
+    def _default_name(self):
+        return "move"
 
     def move(self):
         """Move the pipette to the requested named position and return a Future"""
@@ -334,7 +338,7 @@ class PipetteMotionPlanner:
             self.future.stop()
 
     def _move(self):
-        return self.pip._movePath(self.path(), name=f"{self.pip.name()} {type(self).__name__} path")
+        return self.pip._movePath(self.path(), name=f"{self.pip.name()} {self.name} path")
 
     def path(self):
         startPosGlobal = self.pip.globalPosition()
@@ -348,6 +352,9 @@ class PipetteMotionPlanner:
 class SavedPositionMotionPlanner(PipetteMotionPlanner):
     """Move to a saved position"""
 
+    def _default_name(self):
+        return f"move to {self.position}"
+
     def path(self):
         startPosGlobal = self.pip.globalPosition()
         endPosGlobal = self.pip.loadPosition(self.position)
@@ -355,6 +362,9 @@ class SavedPositionMotionPlanner(PipetteMotionPlanner):
 
 
 class CleanMotionPlanner(SavedPositionMotionPlanner):
+    def _default_name(self):
+        return f"move to {self.position}ing well"
+
     def path(self):
         if isinstance(self.pip.pathGenerator, GeometryAwarePathGenerator):
             return super().path()
@@ -396,6 +406,9 @@ class CleanMotionPlanner(SavedPositionMotionPlanner):
 class HomeMotionPlanner(PipetteMotionPlanner):
     """Extract pipette tip diagonally, then move to home position."""
 
+    def _default_name(self):
+        return "move to home"
+
     def path(self):
         manipulator = self.pip.parentDevice()
         manipulatorHome = manipulator.homePosition()
@@ -421,6 +434,9 @@ class SearchMotionPlanner(PipetteMotionPlanner):
     Negative values move the pipette past the center of the microscope to improve the
     probability of seeing the tip immediately.
     """
+
+    def _default_name(self):
+        return "search"
 
     @future_wrap
     def _move(self, _future):
@@ -459,6 +475,9 @@ class SearchMotionPlanner(PipetteMotionPlanner):
 
 
 class ApproachMotionPlanner(PipetteMotionPlanner):
+    def _default_name(self):
+        return "approach target"
+
     def path(self):
         pip = self.pip
         approachDepth = pip.approachDepth()
@@ -467,6 +486,9 @@ class ApproachMotionPlanner(PipetteMotionPlanner):
 
 
 class TargetMotionPlanner(PipetteMotionPlanner):
+    def _default_name(self):
+        return "move to target"
+
     def path(self):
         start = self.pip.globalPosition()
         stop = self.pip.targetPosition()
@@ -480,6 +502,9 @@ class AboveTargetMotionPlanner(PipetteMotionPlanner):
     This position is used to recalibrate the pipette immediately before going to approach or to confirm
     nucleus extraction.
     """
+
+    def _default_name(self):
+        return "move above target"
 
     @future_wrap
     def _move(self, _future):
