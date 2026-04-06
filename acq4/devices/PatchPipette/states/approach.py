@@ -155,6 +155,8 @@ class ApproachState(PatchPipetteState):
     cellfiePipetteClearance : float
         Minimum distance (m) between target and pipette tip in which to allow the z-stack to be
         taken (default 100 µm)
+    recalibratePipette : bool
+        Whether to recalibrate the pipette position during approach (default True)
     pipetteRecalibrateDistance : float
         Distance between pipette and target at which to pause and recalibrate the pipette offset
         (default 75 µm)
@@ -191,8 +193,10 @@ class ApproachState(PatchPipetteState):
         "sidestepLateralDistance": {"default": 10e-6, "type": "float", "suffix": "m"},
         "sidestepBackupDistance": {"default": 10e-6, "type": "float", "suffix": "m"},
         "sidestepPassDistance": {"default": 20e-6, "type": "float", "suffix": "m"},
+        "recalibratePipette": {"default": True, "type": "bool"},
         "pipetteRecalibrateDistance": {"default": 75e-6, "type": "float", "suffix": "m"},
         "pipetteRecalibrationMaxChange": {"default": 15e-6, "type": "float", "suffix": "m"},
+        "startANewCell": {"default": True, "type": "bool"},
         "nextState": {"type": "str", "default": "cell detect"},
     }
 
@@ -220,9 +224,17 @@ class ApproachState(PatchPipetteState):
         self.direction_unit = self._calc_direction()
 
     def run(self):
-        self.dev.newCell()
+        if self.config["startANewCell"]:
+            self.dev.newCell()
+        pip = self.dev.pipetteDevice
+        target = pip.targetPosition()
+        surface = pip.scopeDevice().getSurfaceDepth()
+        if target[2] > surface:
+            raise ValueError(
+                f"Cannot approach a target depth {target[2] * 1e6:0.2f}µm that is above the surface {surface * 1e6:0.2f}µm."
+            )
         # move to approach position + auto pipette offset
-        self.waitFor(self.dev.pipetteDevice.goApproach("fast"))
+        self.waitFor(pip.goApproach("fast"))
         self.dev.clampDevice.autoPipetteOffset()
         self.dev.clampDevice.resetTestPulseHistory()
         self._maybeTakeACellfie()
@@ -235,14 +247,14 @@ class ApproachState(PatchPipetteState):
                 self.maybeRecalibratePipette()
                 self.maybeVisuallyTrackTarget()
                 if self._analysis.tip_is_broken():
-                    self._taskDone(interrupted=True, error="Pipette broken")
+                    self.setResult(interrupted=True, error="Pipette broken")
                     self.dev.patchRecord()["detectedCell"] = False
                     return {"state": "broken"}
                 if self.obstacleDetected():
                     try:
                         self.avoidObstacle()
                     except TimeoutError:
-                        self._taskDone(interrupted=True, error="Fouled by obstacle")
+                        self.setResult(interrupted=True, error="Fouled by obstacle")
                         return {"state": "fouled"}
                 if self._moveFuture is None:
                     self._moveFuture = self._move()
@@ -250,6 +262,9 @@ class ApproachState(PatchPipetteState):
                     self._moveFuture.wait()  # check for errors
                     self.setState('Move finished; next state')
                     break
+
+        # if self.config['recalibratePipette']:
+        #     self.recalibratePipette()
 
         return {"state": self.config["nextState"]}
 
@@ -279,43 +294,30 @@ class ApproachState(PatchPipetteState):
         )
 
     def maybeRecalibratePipette(self):
-        if self._pipetteRecalibrated:
+        if self._pipetteRecalibrated or not self.config['recalibratePipette']:
             return
         if self._distanceToTarget() < self.config["pipetteRecalibrateDistance"]:
-            if self._moveFuture is not None:
-                # should restart on next main loop
-                self._moveFuture.stop(
-                    "Make sure the pipette is where we expect it to be", wait=True
-                )
-                self._moveFuture = None
-
-            pip = self.dev.pipetteDevice
-            imgr = self.dev.imagingDevice()
-            manager = getManager()
-            with manager.reserveDevices(
-                [pip, imgr, imgr.scopeDev.positionDevice(), imgr.scopeDev.focusDevice()],
-                timeout=30.0,
-            ):
-                self.sleep(1.0)
-                initial_pos = pos = np.array(pip.globalPosition())
-                self.waitFor(self.dev.imagingDevice().moveCenterToGlobal(pos, "fast"))
-                self.setState(f"First recalibrate position (starting at {pos})")
-                self.sleep(1.0)
-                pos = pip.tracker.findTipInFrame()
-                self.waitFor(self.dev.imagingDevice().moveCenterToGlobal(pos, "fast"))
-                self.setState(f"Second recalibrate position (found tip at {pos})")
-                self.sleep(1.0)
-                pos = pip.tracker.findTipInFrame()
-                dist = np.linalg.norm(initial_pos - pos)
-                if dist < self.config["pipetteRecalibrationMaxChange"]:
-                    pip.resetGlobalPosition(pos)
-                    self.setState(f"Recalibrate finished (found tip again at {pos})")
-                else:
-                    self.setState(
-                        f"cancel pipette position update; prediction is too far away ({dist*1e6}µm)"
-                    )
-
+            self.recalibratePipette()
             self._pipetteRecalibrated = True
+
+    def recalibratePipette(self):
+        if self._moveFuture is not None:
+            # should restart on next main loop
+            self._moveFuture.stop(
+                "Make sure the pipette is where we expect it to be", wait=True
+            )
+            self._moveFuture = None
+
+        pip = self.dev.pipetteDevice
+        try:
+            tip_fut = self.waitFor(
+                pip.iterativelyFindTip(
+                    max_allowed_offset=self.config["pipetteRecalibrationMaxChange"],
+                    go_to_tip_first=True,
+                )
+            )
+        except Exception as e:
+            self.setState(f"failed pipette position update: {e}")
 
     @future_wrap
     def _move(self, _future):
@@ -419,10 +421,10 @@ class ApproachState(PatchPipetteState):
         self.waitFor(pip._moveToGlobal(pos - sidestep, speed=speed))
 
     def _cleanup(self):
-        if self._moveFuture is not None and not self._moveFuture.isDone():
-            try:
+        try:
+            if self._moveFuture is not None and not self._moveFuture.isDone():
                 self._moveFuture.stop("State finished", wait=True)
-            except Exception:
-                self.dev.logger.exception("Error stopping pipette advance during cleanup")
+        except Exception:
+            self.dev.logger.exception("Error stopping pipette advance during cleanup")
 
         return super()._cleanup()

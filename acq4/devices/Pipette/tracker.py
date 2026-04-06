@@ -37,7 +37,7 @@ class PipetteTracker:
             imager = man.getDevice("Camera")
         return imager
 
-    def findTipInFrame(self, **kwds):
+    def findTipInFrame(self, threshold=0.15, **kwds):
         """Automatically find the pipette tip position.
 
         Return the offset in pipette-local coordinates.

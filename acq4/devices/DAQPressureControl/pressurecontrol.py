@@ -6,26 +6,26 @@ from ..PressureControl import PressureControl
 class DAQPressureControl(PressureControl):
     """
     Pressure control device using DAQ analog/digital channels.
-    
+
     Controls pressure using a combination of analog output for regulator pressure
     and digital outputs for valve switching between pressure sources.
-    
+
     Configuration options:
-    
+
     * **daqDevice** (str, required): Name of DAQGeneric device controlling valves and regulator
-    
+
     * **sources** (dict, required): Valve configurations for each pressure source
         - Key: Source name ('regulator', 'atmosphere', 'user')
         - Value: Dict mapping valve channel names to states (0/1)
-    
+
     Standard PressureControl configuration options (see PressureControl base class):
-    
+
     * **maximum** (float, optional): Maximum pressure limit in Pa
-    
+
     * **minimum** (float, optional): Minimum pressure limit in Pa
-    
+
     * **regulatorSettlingTime** (float, optional): Time for pressure to settle
-    
+
     The configuration for these devices might look like::
 
     PressureChannels:
