@@ -337,7 +337,7 @@ class SealState(PatchPipetteState):
 
                 if self._analysis.failure() or dt > config['autoSealTimeout']:
                     self._patchrec['sealSuccessful'] = False
-                    self._taskDone(interrupted=True, error=f"Seal took longer than `autoSealTimeout` ({dt:f}s)")
+                    self.setResult(interrupted=True, error=f"Seal took longer than `autoSealTimeout` ({dt:f}s)")
                     next_state = {"state": config["fallbackState"]}
                     if holdingSet:
                         next_state["initialVCHolding"] = None
@@ -360,7 +360,6 @@ class SealState(PatchPipetteState):
 
         dev.clampDevice.autoCapComp()
 
-        self._taskDone()
         self._patchrec['sealSuccessful'] = True
         return {"state": 'cell attached'}
 
