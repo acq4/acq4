@@ -878,11 +878,11 @@ class Pipette(Device, OptomechDevice):
         return PipetteRecorder(self)
 
     @future_wrap
-    def iterativelyFindTip(self, max_reps=10, found_threshold=3e-6, delay_after_move=0.4, 
+    def iterativelyFindTip(self, max_reps=10, found_threshold=3e-6, delay_after_move=0.2,
                            max_allowed_offset=None, delay_after_update=0, reserve_devices=True,
                            go_to_tip_first=False, _future=None):
         """Iteratively refine the tip position by finding the tip in frame and focusing, until convergence.
-        
+
         Returns if convergence is reached (tip position changes less than *found_threshold* between iterations) or after *max_reps* iterations.
         Otherwise, raises an exception.
 
@@ -938,7 +938,7 @@ class Pipette(Device, OptomechDevice):
                 # reset position to start if we fail, to avoid leaving the pipette in a bad position
                 self.setTipOffset(start_pos)
                 raise exc
-        
+
 
     def findNewPipette(self):
         from acq4.devices.Pipette.calibration import findNewPipette

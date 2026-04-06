@@ -146,7 +146,7 @@ class ContactCellState(PatchPipetteState):
             # Check if we've traveled too far without contact
             current_z = pip.globalPosition()[2]
             total_descent = self._startZ - current_z
-            if total_descent >= config['maxTravelWithoutContact']:
+            if total_descent >= config['maxTravelWithoutContact'] and self._contactDepth is None:
                 self.setState("max travel reached without contact, giving up")
                 self.dev.patchRecord()['detectedCell'] = False
                 return {"state": config['fallbackState']}
