@@ -226,13 +226,13 @@ class Stage(Device, OptomechDevice):
         self._axisTransform = tr
         self._calculatedXAxisOrientation = None
         self._updateTransform()
+        self.calculatedAxisOrientation.cache_clear()
         self.sigOrientationChanged.emit(self)
 
     def getAxisScale(self):
         return np.asarray(list(self.config.get('scale', [1] * self.nAxes)))
 
     @functools.lru_cache
-    # TODO this needs to be invalidated when the axis transform changes
     def calculatedAxisOrientation(self, axis: str):
         """Return the pitch and yaw of a stage axis.
 
