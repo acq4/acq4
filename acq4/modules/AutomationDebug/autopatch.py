@@ -32,16 +32,14 @@ class Autopatcher:
         multipatch_win = runInGuiThread(man.getModule, 'MultiPatch').win
         demo_dir = man.getCurrentDir().mkdir('AutopatchDemo', autoIncrement=True)
         man.setCurrentDir(demo_dir)
+        _future.waitFor(win.cameraDevice.scopeDev.findSurfaceDepth(win.cameraDevice)).getResult()
         try:
             while True:
                 runInGuiThread(folder_selector.setCurrentIndex, 5)
                 cell_dir = man.getCurrentDir()
                 try:
-                    if ppip.isTipClean():
-                        _future.setState("Quick clean")
-                        _future.waitFor(ppip.pipetteDevice.goAboveTarget("fast"))
-                        _future.waitFor(ppip.sonicationDevice.doProtocol("quick clean"))
-                    else:
+                    started_clean = ppip.isTipClean()
+                    if not started_clean:
                         _future.setState("Autopatch: cleaning pipette")
                         try:
                             _future.waitFor(ppip.setState("clean", nextState="bath"), timeout=600)
@@ -66,6 +64,10 @@ class Autopatcher:
                     _future.setState("Autopatch: finding pipette tip")
                     ppip.clampDevice.autoPipetteOffset()
                     _future.waitFor(win.pipetteDevice.iterativelyFindTip())
+                    if started_clean:
+                        _future.setState("Quick clean")
+                        _future.waitFor(ppip.sonicationDevice.doProtocol("quick clean"))
+
                     _future.setState("Autopatch: go approach")
                     _future.waitFor(ppip.pipetteDevice.goApproach("fast"))
                     try:
