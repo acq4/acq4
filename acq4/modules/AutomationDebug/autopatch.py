@@ -66,7 +66,7 @@ class Autopatcher:
                     _future.waitFor(win.pipetteDevice.iterativelyFindTip())
                     if started_clean:
                         _future.setState("Quick clean")
-                        _future.waitFor(ppip.sonicationDevice.doProtocol("quick clean"))
+                        _future.waitFor(ppip.sonicatorDevice.doProtocol("quick clean"))
 
                     _future.setState("Autopatch: go approach")
                     _future.waitFor(ppip.pipetteDevice.goApproach("fast"))
