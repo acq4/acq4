@@ -16,7 +16,7 @@ class MockFrame:
         return SRT3DTransform(offset=(0, 0, self.depth))
 
     def addInfo(self, transform):
-        self.depth = transform['pos'][2]
+        self.depth = transform.as_affine().offset[2]
 
     def __repr__(self):
         return f"<MockFrame depth={self.depth}>"
