@@ -69,6 +69,7 @@ class DataManager(Module):
 
     def __init__(self, manager, name, config):
         Module.__init__(self, manager, name, config)
+        self.baseDir = None
         self.dm = getDataManager()
         self.win = Window()
         mp = os.path.dirname(__file__)
@@ -119,7 +120,7 @@ class DataManager(Module):
 
     def updateNewFolderList(self):
         self.ui.newFolderList.clear()
-        conf = self.manager._folderTypesConfig()
+        conf = self.manager.folderTypesConfig()
         self.ui.newFolderList.clear()
         self.ui.newFolderList.addItems(['New...', 'Folder'] + list(conf.keys()))
 
@@ -221,24 +222,27 @@ class DataManager(Module):
         else:
             return None
 
-    def newFolder(self):
-        if self.ui.newFolderList.currentIndex() < 1:
-            return
+    def folderTypes(self) -> list[str]:
+        """Return the list of user-configured folder type names."""
+        return list(self.manager.folderTypesConfig().keys())
 
-        ftype = str(self.ui.newFolderList.currentText())
-        self.ui.newFolderList.setCurrentIndex(0)
+    def createNewFolder(self, folder_type: str) -> DirHandle:
+        """Create a new folder of the given type under the current directory.
 
+        For typed folders the parent is chosen by walking up the tree to avoid
+        nesting a folder inside one of the same type.  The new directory becomes
+        the current directory.
+        """
         cdir = self.manager.getCurrentDir()
         if not cdir.isManaged():
             cdir.createIndex()
 
-        if ftype == 'Folder':
+        if folder_type == 'Folder':
             nd = cdir.mkdir('NewFolder', autoIncrement=True)
             nd.setInfo({})
-            # item = self.model.handleIndex(nd)
             self.ui.fileTreeWidget.editItem(nd)
         else:
-            spec = self.manager._folderTypesConfig()[ftype]
+            spec = self.manager.folderTypesConfig()[folder_type]
             name = time.strftime(spec['name'])
 
             ## Determine where to put the new directory
@@ -249,20 +253,18 @@ class DataManager(Module):
                     if not checkDir.isManaged():
                         break
                     inf = checkDir.info()
-                    if 'dirType' in inf and inf['dirType'] == ftype:
+                    if 'dirType' in inf and inf['dirType'] == folder_type:
                         parent = checkDir.parent()
                         break
-                    # else:
-                    # print "dir no match:", spec, inf
                     checkDir = checkDir.parent()
-            except:
+            except Exception:
                 logger.exception("Error while deciding where to put new folder (using currentDir by default)")
 
             ## make
             nd = parent.mkdir(name, autoIncrement=True)
 
             ## Add meta-info
-            info = {'dirType': ftype}
+            info = {'dirType': folder_type}
             if spec.get('experimentalUnit', False):
                 info['expUnit'] = True
             nd.setInfo(info)
@@ -273,6 +275,16 @@ class DataManager(Module):
 
         logger.info(f"Created new folder: {nd.name(relativeTo=self.baseDir)}")
         self.manager.setCurrentDir(nd)
+        return nd
+
+    def newFolder(self):
+        if self.ui.newFolderList.currentIndex() < 1:
+            return
+
+        ftype = str(self.ui.newFolderList.currentText())
+        self.ui.newFolderList.setCurrentIndex(0)
+
+        self.createNewFolder(ftype)
 
     def fileSelectionChanged(self):
         # print "file selection changed"

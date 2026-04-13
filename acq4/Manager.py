@@ -772,7 +772,7 @@ class Manager(Qt.QObject):
             if 'dirType' in info:
                 # infoKeys.remove('dirType')
                 dt = info['dirType']
-                folderTypesConfig = self._folderTypesConfig()
+                folderTypesConfig = self.folderTypesConfig()
                 if dt in folderTypesConfig:
                     fields = folderTypesConfig[dt]['info']
 
@@ -783,7 +783,7 @@ class Manager(Qt.QObject):
 
         return fields
 
-    def _folderTypesConfig(self):
+    def folderTypesConfig(self):
         return self._folderTypes
 
     def showDocumentation(self, label=None):

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from acq4.devices.PatchPipette import PatchPipette
 from acq4.logging_config import get_logger
@@ -8,6 +8,8 @@ from acq4.util.future import future_wrap
 from acq4.util.threadrun import runInGuiThread
 from acq4.util.imaging.sequencer import run_image_sequence
 from ..TaskRunner import TaskRunner
+from ...Manager import Manager
+from ...util.DataManager import DirHandle
 
 if TYPE_CHECKING:
     from .AutomationDebug import AutomationDebugWindow
@@ -28,15 +30,14 @@ class Autopatcher:
         win.sigWorking.emit(win.ui.autopatchDemoBtn)
         ppip: PatchPipette = win.patchPipetteDevice
         man = win.module.manager
-        folder_selector = runInGuiThread(man.getModule, "Data Manager").ui.newFolderList
+        data_manager = runInGuiThread(man.getModule, "Data Manager")
         multipatch_win = runInGuiThread(man.getModule, 'MultiPatch').win
-        demo_dir = man.getCurrentDir().mkdir('AutopatchDemo', autoIncrement=True)
+        demo_dir = self._makeValidDemoDir()
         man.setCurrentDir(demo_dir)
         _future.waitFor(win.cameraDevice.scopeDev.findSurfaceDepth(win.cameraDevice)).getResult()
         try:
             while True:
-                runInGuiThread(folder_selector.setCurrentIndex, 5)
-                cell_dir = man.getCurrentDir()
+                cell_dir = runInGuiThread(data_manager.createNewFolder, "Cell")
                 try:
                     started_clean = ppip.isTipClean()
                     if not started_clean:
@@ -128,6 +129,14 @@ class Autopatcher:
                     runInGuiThread(multipatch_win.ui.recordBtn.setChecked, False)
         finally:
             man.setCurrentDir(demo_dir.parent())
+
+    def _makeValidDemoDir(self) -> DirHandle:
+        man = self._window.module.manager
+        parent = man.getCurrentDir()
+        inappropriate_parents = ("autopatchdemo", "cell")
+        while any(name in parent.name().lower() for name in inappropriate_parents):
+            parent = parent.parent()
+        return parent.mkdir('AutopatchDemo', autoIncrement=True)
 
     def _autopatchCellPatch(self, cell, _future):
         win = self._window
