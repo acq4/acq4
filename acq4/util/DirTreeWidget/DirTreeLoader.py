@@ -43,13 +43,13 @@ class DirTreeLoader(Qt.QWidget):
             self.setCurrentFile(None)
     
     def new(self):
-        raise Exception("Function must be reimplemented in subclass.")
+        raise NotImplementedError("Function must be reimplemented in subclass.")
     
     def saveClicked(self):
         self.save(self.currentFile)
         
     def save(self, fileHandle):
-        raise Exception("Function must be reimplemented in subclass.")
+        raise NotImplementedError("Function must be reimplemented in subclass.")
     
     def loadClicked(self, item=None, column=0):
         if item == None or isinstance(item, bool):
@@ -62,7 +62,7 @@ class DirTreeLoader(Qt.QWidget):
             self.setCurrentFile(fh)
 
     def load(self, handle):
-        raise Exception("Function must be reimplemented in subclass.")
+        raise NotImplementedError("Function must be reimplemented in subclass.")
     
     def saveAsClicked(self):
         ## Decide on new file name
