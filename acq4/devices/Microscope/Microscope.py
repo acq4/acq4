@@ -15,6 +15,7 @@ from acq4.util.future import Future, MultiFuture, future_wrap, FutureButton
 from acq4.util.imaging import Frame
 from acq4.util.surface import find_surface
 from acq4.util.ui.ZPositionWidget import ZPositionWidget
+from coorx import TTransform
 from pyqtgraph.units import µm
 
 Ui_Form = Qt.importTemplate('.deviceTemplate')
@@ -195,7 +196,7 @@ class Microscope(Device, OptomechDevice):
         return iface
 
     def physicalTransform(self, subdev=None):
-        tr = pg.SRTTransform3D({"pos": pg.SRTTransform3D(self.deviceTransform()).getTranslation()})
+        tr = TTransform(offset=self.deviceTransform().offset)
         dev = self.getSubdevice(subdev)
         if dev is None:
             return tr
@@ -230,7 +231,7 @@ class Microscope(Device, OptomechDevice):
 
         This method requires a device that provides focus position feedback.
         """
-        return self.mapToGlobal(Qt.QVector3D(0, 0, 0)).z()
+        return self.mapToGlobal((0, 0, 0))[2]
 
     def setFocusDepth(self, z, speed='fast', name=None):
         """Set the z-position of the focal plane.
@@ -293,7 +294,7 @@ class Microscope(Device, OptomechDevice):
     def globalPosition(self):
         """Return the global position of the scope's center axis at the focal plane.
         """
-        return self.mapToGlobal(pg.Vector(0, 0, 0))
+        return self.mapToGlobal(np.array((0, 0, 0)))
 
     def setGlobalPosition(self, pos, speed='fast', name=None):
         """Move the microscope such that its center axis is at a specified global position.
@@ -320,8 +321,7 @@ class Microscope(Device, OptomechDevice):
         # Determine how to move the xy(z) stage to react the new center position
         gpos = self.globalPosition()
         sgpos = positionDevice.globalPosition()
-        sgpos2 = pg.Vector(sgpos) + (pg.Vector(pos) - gpos)
-        sgpos2 = [sgpos2.x(), sgpos2.y(), sgpos2.z()]
+        sgpos2 = sgpos + (pos - gpos)
         xyFuture = positionDevice.moveToGlobal(sgpos2, speed, name=f'{name} XY')
         if zFuture is None:
             return xyFuture
@@ -379,11 +379,8 @@ class Objective(Device, OptomechDevice):
     def getGeometryForMicroscope(self, name):
         return super().getGeometry(name)
 
-    def deviceTransform(self, subdev=None):
-        return pg.SRTTransform3D(super().deviceTransform(subdev))
-
     def physicalTransform(self, subdev=None):
-        tr = pg.SRTTransform3D(dict(pos=self.offset()))
+        tr = TTransform(offset=self.offset())
         dev = self.getSubdevice(subdev)
         if dev is None:
             return tr
@@ -392,22 +389,28 @@ class Objective(Device, OptomechDevice):
 
     def setOffset(self, pos):
         tr = self.deviceTransform()
-        tr.setTranslate(pos)
+        if len(pos) < 3:
+            pos = (pos[0], pos[1], 0)
+        tr.offset = pos
+        # TODO modify in place makes set redundant
         self.setDeviceTransform(tr)
 
     def setScale(self, scale):
         if not hasattr(scale, '__len__'):
             scale = (scale, scale, 1)
+        if len(scale) < 3:
+            scale = (scale[0], scale[1], 1)
 
         tr = self.deviceTransform()
-        tr.setScale(scale)
+        tr.scale = scale
+        # TODO modify in place makes set redundant
         self.setDeviceTransform(tr)
 
     def offset(self):
-        return self.deviceTransform().getTranslation()
+        return self.deviceTransform().offset
 
     def scale(self):
-        return self.deviceTransform().getScale()
+        return self.deviceTransform().scale
 
     def key(self):
         return self._key
@@ -421,8 +424,8 @@ class Objective(Device, OptomechDevice):
 
     def __repr__(self):
         return (f"<Objective {self._scope.name()}.{self.name()} "
-                f"offset={self.offset().x():0.2g},{self.offset().y():0.2g} "
-                f"scale={self.scale().x():0.2g}>")
+                f"offset={self.offset()[0]:0.2g},{self.offset()[1]:0.2g} "
+                f"scale={self.scale()[0]:0.2g}>")
 
 
 class ScopeGUI(Qt.QWidget):
@@ -550,13 +553,13 @@ class ScopeGUI(Qt.QWidget):
                 obj = obj.toPyObject()
 
             offset = obj.offset()
-            xs.setValue(offset.x())
-            ys.setValue(offset.y())
-            zs.setValue(offset.z())
+            xs.setValue(offset[0])
+            ys.setValue(offset[1])
+            zs.setValue(offset[2])
 
             scale = obj.scale()
-            xyss.setValue(scale.x())
-            zss.setValue(scale.z())
+            xyss.setValue(scale[0])
+            zss.setValue(scale[2])
 
 
 class ScopeCameraModInterface(CameraModuleInterface):

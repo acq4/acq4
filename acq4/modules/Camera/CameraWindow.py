@@ -287,7 +287,7 @@ class CameraWindow(Qt.QMainWindow):
         # if the camera is running, then this is taken care of in drawFrame to
         # ensure that the image remains stationary on screen.
         if not self.cam.isRunning():
-            tr = pg.SRTTransform(self.cam.globalTransform())
+            tr = self.cam.globalTransform().as_pyqtgraph().as2D()
             self.updateTransform(tr)
 
     def updateTransform(self, tr):

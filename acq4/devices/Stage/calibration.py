@@ -1,3 +1,7 @@
+# Calibration windows and utilities for Stage and Manipulator devices.
+# Includes manual point collection, automated axis calibration, and transform fitting.
+from itertools import combinations
+
 import numpy as np
 import scipy.optimize
 import scipy.stats
@@ -8,6 +12,7 @@ from acq4.devices.Stage import Stage
 from acq4.util import Qt, ptime
 from acq4.util.HelpfulException import HelpfulException
 from acq4.util.target import Target
+from coorx import AffineTransform
 
 
 class StageAxesCalibrationWindow(Qt.QWidget):
@@ -69,6 +74,17 @@ class StageAxesCalibrationWindow(Qt.QWidget):
         pass  # TODO
 
 
+def _find_pipette_for_manipulator(manipulator):
+    """Return the first Pipette device whose parent stage is *manipulator*, or None."""
+    from acq4.devices.Pipette import Pipette
+    manager = getManager()
+    for name in manager.listDevices():
+        dev = manager.getDevice(name)
+        if isinstance(dev, Pipette) and dev.parentStage is manipulator:
+            return dev
+    return None
+
+
 class ManipulatorAxesCalibrationWindow(Qt.QWidget):
     def __init__(self, device: Stage):
         self.dev = device
@@ -108,11 +124,15 @@ class ManipulatorAxesCalibrationWindow(Qt.QWidget):
         self.removePointBtn.setEnabled(False)
         self.btnPanelLayout.addWidget(self.removePointBtn)
 
+        self.autoCollectBtn = Qt.QPushButton("auto collect")
+        self.btnPanelLayout.addWidget(self.autoCollectBtn)
+
         self.saveBtn = Qt.QPushButton("save calibration")
         self.btnPanelLayout.addWidget(self.saveBtn)
 
         self.addPointBtn.toggled.connect(self.addPointToggled)
         self.removePointBtn.clicked.connect(self.removePointClicked)
+        self.autoCollectBtn.clicked.connect(self.autoCollectClicked)
         self.saveBtn.clicked.connect(self.saveClicked)
 
         # TODO eventually: more controls
@@ -195,6 +215,38 @@ class ManipulatorAxesCalibrationWindow(Qt.QWidget):
     def saveClicked(self):
         self.saveCalibrationToDevice()
 
+    def autoCollectClicked(self):
+        from acq4.devices.Pipette.calibration import calibrate_manipulator_axes
+        pipette = _find_pipette_for_manipulator(self.dev)
+        if pipette is None:
+            Qt.QMessageBox.critical(self, "Auto Collect Failed", f"No Pipette device found with {self.dev.name()} as its parent manipulator.")
+            return
+        if pipette.config.get('yaw') == 'auto':
+            Qt.QMessageBox.critical(self, "Auto Collect Failed", f"{pipette.name()} has yaw='auto', which depends on the axis calibration being collected. Configure an explicit yaw angle first.")
+            return
+        self.autoCollectBtn.setEnabled(False)
+        self.autoCollectBtn.setText("collecting...")
+        future = calibrate_manipulator_axes(pipette)
+        future.onFinish(self._autoCollectFinished)
+
+    def _autoCollectFinished(self, future):
+        from acq4.util.threadrun import runInGuiThread
+        runInGuiThread(self._applyAutoCollectResult, future)
+
+    def _applyAutoCollectResult(self, future):
+        self.autoCollectBtn.setEnabled(True)
+        self.autoCollectBtn.setText("auto collect")
+        try:
+            points = future.getResult()
+        except Exception:
+            self.dev.logger.exception("Auto collect calibration failed")
+            return
+        for device_pos, parent_pos in points:
+            self.calibration["points"].append((device_pos, parent_pos))
+            self._addCalibrationPoint(device_pos, parent_pos)
+        self.recalculate()
+        self.saveBtn.setText("*save calibration*")
+
     def loadCalibrationFromDevice(self):
         self.calibration = self.dev.readConfigFile("calibration")
         self.calibration.setdefault("points", [])
@@ -205,15 +257,14 @@ class ManipulatorAxesCalibrationWindow(Qt.QWidget):
     def saveCalibrationToDevice(self):
         self.recalculate(raiseOnInsufficientPoints=True)
         self.calibration["transform"] = (
-            None if self.transform is None else [list(row) for row in self.transform.matrix()]
-        )
+            None if self.transform is None else self.transform.save_state())
         self.dev.writeConfigFile(self.calibration, "calibration")
         self.saveBtn.setText("save calibration")
 
     def _addCalibrationPoint(self, stagePos, parentPos):
-        item = Qt.QTreeWidgetItem(
-            ["%0.3g, %0.3g, %0.3g" % tuple(stagePos), "%0.3g, %0.3g, %0.3g" % tuple(parentPos), ""]
-        )
+        stage_disp = ", ".join([f"{v:0.6g}" for v in stagePos])
+        parent_disp = ", ".join([f"{v:0.6g}" for v in parentPos])
+        item = Qt.QTreeWidgetItem([stage_disp, parent_disp, ""])
         self.pointTree.addTopLevelItem(item)
         item.stagePos = stagePos
         item.parentPos = parentPos
@@ -233,35 +284,42 @@ class ManipulatorAxesCalibrationWindow(Qt.QWidget):
         if not self._hasSufficientPoints(axisPoints):
             self._clearCalibration()
             if raiseOnInsufficientPoints:
-                raise Exception("Could not find colinear points along all 3 axes")
+                raise ValueError(f"Could not find colinear points along all {self.dev.nAxes} axes")
             else:
                 return
 
-        axStagePos = [stagePos[list(axisPoints[ax]), ax] for ax in (0, 1, 2)]
-        axParentPos = [parentPos[list(axisPoints[ax])] for ax in (0, 1, 2)]
+        axStagePos = [stagePos[list(axisPoints[ax]), ax] for ax in range(self.dev.nAxes)]
+        axParentPos = [parentPos[list(axisPoints[ax])] for ax in range(self.dev.nAxes)]
 
-        # find optimal linear mapping for each axis
-        m = np.eye(4)
-        for i in (0, 1, 2):
-            for j in (0, 1, 2):
+        # find optimal linear mapping for each axis; nAxes -> 3D
+        transform = np.eye(self.dev.nAxes)[:3, :]
+        for i in range(3):
+            for j in range(self.dev.nAxes):
                 line = scipy.stats.linregress(axStagePos[j], axParentPos[j][:, i])
-                m[i, j] = line.slope
-
-        transform = pg.Transform3D(m)
+                transform[i, j] = line.slope
+        scale = self.dev.getAxisScale()
+        transform = (transform / np.linalg.norm(transform, axis=0) * scale)
 
         # find optimal offset
-        offset = (parentPos - pg.transformCoordinates(transform, stagePos, transpose=True)).mean(axis=0)
-        m[:3, 3] = offset
-        self.transform = pg.Transform3D(m)
+        self.transform = AffineTransform(transform)
+        stageMappedToParent = self.transform.map(stagePos)
+        offset = (parentPos - stageMappedToParent).mean(axis=0)
+        self.transform.translate(offset)
 
+        # self._showTransformError(parentPos, stagePos)
+
+        # send new transform to device
+        self.dev.setAxisTransform(self.transform)
+
+    def _showTransformError(self, parentPos: np.ndarray, stagePos: np.ndarray):
         # measure and display errors for each point
         def mapPoint(axisTr, _stage_pos, localPos):
             # given a stage position and axis transform, map from localPos to parent coordinate system
             if isinstance(axisTr, np.ndarray):
-                ident = np.eye(4)
-                ident[:3] = axisTr.reshape(3, 4)
+                ident = np.eye(self.dev.nAxes + 1)
+                ident[:self.dev.nAxes] = axisTr.reshape(self.dev.nAxes, self.dev.nAxes + 1)
                 axisTr = pg.Transform3D(ident)
-            st = self.dev._makeStageTransform(_stage_pos, axisTr)[0]
+            st = self.dev._makeStageTransform(_stage_pos, axisTr)
             tr = pg.Transform3D(self.dev.baseTransform() * st)
             return tr.map(localPos)
 
@@ -273,22 +331,18 @@ class ManipulatorAxesCalibrationWindow(Qt.QWidget):
         for i in range(len(self.calibration["points"])):
             item = self.pointTree.topLevelItem(i)
             dist = np.linalg.norm(error[i])
-            item.setText(2, "%0.2f um  (%0.3g, %0.3g, %0.3g)" % (1e6 * dist, error[i][0], error[i][1], error[i][2]))
-
-        # send new transform to device
-        self.dev.setAxisTransform(self.transform)
+            item.setText(2, f"{1e6 * dist:0.2f} um  ({error[i][0]:0.3g}, {error[i][1]:0.3g}, {error[i][2]:0.3g})")
 
     def _unzippedCalibrationPoints(self):
         npts = len(self.calibration["points"])
-        stagePos = np.empty((npts, 3))
+        stagePos = np.empty((npts, self.dev.nAxes))
         parentPos = np.empty((npts, 3))
         for i, pt in enumerate(self.calibration["points"]):
             stagePos[i] = pt[0]
             parentPos[i] = pt[1]
         return parentPos, stagePos
 
-    @staticmethod
-    def _groupPointsByAxis(points):
+    def _groupPointsByAxis(self, points):
         def changeAxis(p1, p2):
             # Which single axis has changed between 2 points?
             diff = np.abs(p2 - p1)
@@ -299,7 +353,7 @@ class ManipulatorAxesCalibrationWindow(Qt.QWidget):
             else:
                 return None
 
-        axisPoints = [set(), set(), set()]
+        axisPoints = [set() for _ in range(self.dev.nAxes)]
         for i in range(1, len(points)):
             currentAxis = changeAxis(points[i - 1], points[i])
             if currentAxis is None:
@@ -321,9 +375,9 @@ class ManipulatorAxesCalibrationWindow(Qt.QWidget):
             axisPoints[axis] = contig_groups[idx_at_longest]
         return axisPoints
 
-    @staticmethod
-    def _hasSufficientPoints(axisPoints):
-        return all(len(axisPoints[ax]) > 2 for ax in (0, 1, 2))
+    def _hasSufficientPoints(self, axisPoints):
+        return self.dev.nAxes == len(axisPoints) and all(
+            len(axisPoints[ax]) > 2 for ax in range(self.dev.nAxes))
 
     def _clearCalibration(self):
         for i in range(len(self.calibration["points"])):
@@ -357,6 +411,66 @@ class ManipulatorAxesCalibrationWindow(Qt.QWidget):
             target = self.pointTree.topLevelItem(i).target
             if target is not None:
                 target.show()
+
+
+def find_colinear_points(points, p1, p2, tolerance):
+    """Find all points that are within tolerance of the line defined by p1 and p2."""
+    # Line direction vector
+    direction = p2 - p1
+    direction = direction / np.linalg.norm(direction)
+
+    colinear = []
+    for i, point in enumerate(points):
+        # Vector from p1 to current point
+        v = point - p1
+
+        # Projection onto line direction
+        proj_length = np.dot(v, direction)
+        projection = proj_length * direction
+
+        # Perpendicular distance to line
+        perpendicular = v - projection
+        distance = np.linalg.norm(perpendicular)
+
+        if distance <= tolerance:
+            colinear.append(i)
+
+    return colinear
+
+
+def group_points_by_colinearity(points, min_points=4, tolerance=1e-6):
+    """
+    Find ALL groups of colinear points, allowing overlaps.
+    Returns groups sorted by size (largest first).
+    """
+    points = np.array(points)
+    n = len(points)
+
+    if n < min_points:
+        return []
+
+    groups = []
+    seen_groups = set()  # To avoid duplicates
+
+    # Try all pairs of points
+    for i, j in combinations(range(n), 2):
+        p1, p2 = points[i], points[j]
+
+        if np.allclose(p1, p2, atol=tolerance):
+            continue
+
+        colinear_indices = find_colinear_points(points, p1, p2, tolerance)
+
+        if len(colinear_indices) >= min_points:
+            # Convert to frozenset for hashable comparison
+            group_set = frozenset(colinear_indices)
+            if group_set not in seen_groups:
+                seen_groups.add(group_set)
+                groups.append(sorted(colinear_indices))
+
+    # Sort by group size, largest first
+    groups.sort(key=len, reverse=True)
+    return groups
 
 
 class AutomatedStageCalibration(object):
