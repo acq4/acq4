@@ -223,6 +223,7 @@ class ResealState(PatchPipetteState):
         'slurpPressure': {'type': 'float', 'default': -10e3, 'suffix': 'Pa'},
         'slurpRetractionSpeed': {'type': 'float', 'default': 10e-6, 'suffix': 'm/s'},
         'slurpDuration': {'type': 'float', 'default': 10, 'suffix': 's'},
+        'slurpStopThreshold': {'type': 'float', 'default': 10e-6, 'suffix': 'Ω'},
         'slurpHeight': {'type': 'float', 'default': 50e-6, 'suffix': 'm'},
     }
 
@@ -391,10 +392,25 @@ class ResealState(PatchPipetteState):
         self.setState("slurping in nucleus")
         dev.pressureDevice.setPressure(source='regulator', pressure=config['slurpPressure'])
         self._moveFuture = dev.pipetteDevice.goAboveTarget(config['slurpRetractionSpeed'])
-        self.sleep(config['slurpDuration'])
+        slurp_start = ptime.time()
+        final_pressure = config['initialPressure']
+        while True:
+            tps = self.processAtLeastOneTestPulse()
+            resistance = tps[-1].analysis['steady_state_resistance']
+            if resistance < config['slurpStopResistance']:
+                self.setState(f'Slurp complete; resistance {resistance} dropped below threshold {config['slurpStopThreshold']}') 
+                final_pressure = 0
+                break
+            now = ptime.time()
+            if now > slurp_start + config['slurpDuration']:
+                self.setState(f'Slurp complete; max duration {config['slurpDuration']} elapsed.')
+                break
+
+        dev.pressureDevice.setPressure(source='regulator', pressure=final_pressure)
         self.waitFor(self._moveFuture, timeout=90)
         dev.pipetteDevice.focusTip()
-        dev.pressureDevice.setPressure(source='regulator', pressure=config['initialPressure'])
+
+        # sleep here forever -- hold the nucleus until an external request to change state
         self.sleep(np.inf)
 
     def _retractFromTissue(self):
