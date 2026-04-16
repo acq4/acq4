@@ -182,6 +182,8 @@ class ResealState(PatchPipetteState):
         Speed in m/s to move pipette during nucleus slurping (default is 10 µm / s)
     slurpDuration : float
         Duration (seconds) to apply suction when trying to get the nucleus into the pipette (default is 10s)
+    slurpStopThreshold : float
+        Resistance (Ohms) threshold to stop slurping, indicating the nucleus is in the pipette (default is 20 MOhm)
     slurpHeight : float
         Height (meters) above the surface to conduct nucleus slurping and visual check (default is 50 µm)
     """
@@ -223,7 +225,7 @@ class ResealState(PatchPipetteState):
         'slurpPressure': {'type': 'float', 'default': -10e3, 'suffix': 'Pa'},
         'slurpRetractionSpeed': {'type': 'float', 'default': 10e-6, 'suffix': 'm/s'},
         'slurpDuration': {'type': 'float', 'default': 10, 'suffix': 's'},
-        'slurpStopThreshold': {'type': 'float', 'default': 10e-6, 'suffix': 'Ω'},
+        'slurpStopThreshold': {'type': 'float', 'default': 20e6, 'suffix': 'Ω'},
         'slurpHeight': {'type': 'float', 'default': 50e-6, 'suffix': 'm'},
     }
 
@@ -397,7 +399,7 @@ class ResealState(PatchPipetteState):
         while True:
             tps = self.processAtLeastOneTestPulse()
             resistance = tps[-1].analysis['steady_state_resistance']
-            if resistance < config['slurpStopResistance']:
+            if resistance < config['slurpStopThreshold']:
                 self.setState(f'Slurp complete; resistance {resistance} dropped below threshold {config['slurpStopThreshold']}') 
                 final_pressure = 0
                 break
