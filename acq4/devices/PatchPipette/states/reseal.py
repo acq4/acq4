@@ -178,8 +178,6 @@ class ResealState(PatchPipetteState):
         Speed in m/s to move pipette after successful reseal (default is 6 µm / s)
     slurpPressure : float
         Pressure (Pa) to apply when trying to get the nucleus into the pipette (default is -10 kPa)
-    slurpRetractionSpeed : float
-        Speed in m/s to move pipette during nucleus slurping (default is 10 µm / s)
     slurpDuration : float
         Duration (seconds) to apply suction when trying to get the nucleus into the pipette (default is 10s)
     slurpStopThreshold : float
@@ -223,7 +221,6 @@ class ResealState(PatchPipetteState):
         'tearDetectionThreshold': {'type': 'float', 'default': -0.00128},
         'tornDetectionThreshold': {'type': 'float', 'default': 0.5},
         'slurpPressure': {'type': 'float', 'default': -10e3, 'suffix': 'Pa'},
-        'slurpRetractionSpeed': {'type': 'float', 'default': 10e-6, 'suffix': 'm/s'},
         'slurpDuration': {'type': 'float', 'default': 10, 'suffix': 's'},
         'slurpStopThreshold': {'type': 'float', 'default': 20e6, 'suffix': 'Ω'},
         'slurpHeight': {'type': 'float', 'default': 50e-6, 'suffix': 'm'},
@@ -387,13 +384,18 @@ class ResealState(PatchPipetteState):
 
             self.sleep(0.2)
 
+        self.setState("retracting pipette from surface")
         self.cleanup()
         self._moveFuture = self._retractFromTissue()
         self.waitFor(self._moveFuture)
 
+        self.setState("go above target before slurp")
+        self._moveFuture = dev.pipetteDevice.goAboveTarget(speed=100e-6)
+        self.waitFor(self._moveFuture, timeout=90)
+        dev.pipetteDevice.focusTip()
+
         self.setState("slurping in nucleus")
         dev.pressureDevice.setPressure(source='regulator', pressure=config['slurpPressure'])
-        self._moveFuture = dev.pipetteDevice.goAboveTarget(config['slurpRetractionSpeed'])
         slurp_start = ptime.time()
         final_pressure = config['initialPressure']
         while True:
@@ -409,8 +411,6 @@ class ResealState(PatchPipetteState):
                 break
 
         dev.pressureDevice.setPressure(source='regulator', pressure=final_pressure)
-        self.waitFor(self._moveFuture, timeout=90)
-        dev.pipetteDevice.focusTip()
 
         # sleep here forever -- hold the nucleus until an external request to change state
         self.sleep(np.inf)
