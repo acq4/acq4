@@ -759,6 +759,7 @@ class Pipette(Device, OptomechDevice):
         """Move the electrode tip directly to the given position in global coordinates.
         WARNING: This method does _not_ implement any motion planning.
         """
+        kwds['name'] = name
         self.sigMoveRequested.emit(self, pos, speed, kwds)
         stagePos = self._solveGlobalStagePosition(pos)
         stage: Stage = self.parentStage
@@ -769,7 +770,7 @@ class Pipette(Device, OptomechDevice):
         except Exception:
             self.logger.exception("Error visualizing pipette move path")
         try:
-            return stage.moveToGlobal(stagePos, speed, name=name, **kwds)
+            return stage.moveToGlobal(stagePos, speed, **kwds)
         except Exception as exc:
             exc.add_note(
                 f"Moving {self} to global position {pos!r} (name={name})"
