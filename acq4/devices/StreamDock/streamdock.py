@@ -211,7 +211,6 @@ class StreamDock(Device):
 
     def _on_open(self, ws):
         msg = f"[StreamDock] Connected on port {self._port}"
-        print(msg)
         self.logger.info(msg)
         ws.send(json.dumps({
             'event': self._register_event,
@@ -235,7 +234,6 @@ class StreamDock(Device):
                 f"[StreamDock] User interaction: event={event!r}  "
                 f"context={context!r}  coordinates={coordinates}"
             )
-            print(msg)
             self.logger.info(msg)
             self.sigButtonEvent.emit(data)
             # Dispatch to any registered button handler for this context.
@@ -253,7 +251,6 @@ class StreamDock(Device):
                 f"[StreamDock] {event}: context={context!r}  "
                 f"coordinates={coordinates}  full_payload={payload}"
             )
-            print(msg)
             self.logger.info(msg)
             controller = payload.get('controller', 'Keypad')
             if event == 'willAppear':
@@ -265,12 +262,10 @@ class StreamDock(Device):
 
     def _on_error(self, ws, error):
         msg = f"[StreamDock] WebSocket error: {error}"
-        print(msg)
         self.logger.error(msg)
 
     def _on_close(self, ws, close_status_code, close_msg):
         msg = f"[StreamDock] Connection closed (code={close_status_code}, msg={close_msg!r})"
-        print(msg)
         self.logger.info(msg)
 
     # ------------------------------------------------------------------
@@ -406,7 +401,7 @@ class StreamDock(Device):
             'context': context,
             'payload': {'title': title, 'target': target},
         }
-        print(f"[StreamDock] setTitle: context={context!r} title={title!r}")
+        self.logger.debug(f"[StreamDock] setTitle: context={context!r} title={title!r}")
         self._send(payload)
 
     def setImage(self, context: str, image: str, target: int = 0):

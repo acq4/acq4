@@ -114,7 +114,7 @@ class DoverStage(Stage):
                     img = _AXIS_ENABLED_IMG if enabled_state[i] else _AXIS_DISABLED_IMG
                     stream_dock_device.setImage(btn.context, img)
 
-        # self.dev.set_enabled_callback(_update_colors)
+        # self.dev.add_enabled_state_callback(_update_colors)
 
     def _toggle_axis(self, axis_index):
         """Toggle the enabled state of a single axis."""
