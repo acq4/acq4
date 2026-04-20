@@ -1,5 +1,7 @@
+import contextlib
+import json
 import logging
-import logging.handlers
+import os
 import sys
 
 from pythonjsonlogger.json import JsonFormatter
@@ -8,12 +10,13 @@ from acq4.util.LogWindow import get_log_window, get_error_dialog
 from teleprox.log import LogServer
 
 log_server: LogServer | None = None
-_handlers = []
+log_handlers = []
+log_file_handler: logging.FileHandler | None = None
 
 def __reload__(old):
-    global log_server, _handlers
+    global log_server, log_handlers
     log_server = old.get('log_server', None)
-    _handlers = old.get('_handlers', [])
+    log_handlers = old.get('_handlers', [])
 
 
 class StringAwareJsonFormatter(JsonFormatter):
@@ -64,11 +67,13 @@ class HistoricLogRecord(logging.LogRecord):
 
 
 def setup_logging(
-    log_file_path: str = "app.log",
+    log_file: str,
     gui: bool = True,
+    root_level: int = logging.DEBUG,
     acq4_level: int = logging.DEBUG,
     console_level: int = logging.WARNING,
-) -> logging.FileHandler:
+    is_temp_file: bool = False,
+):
     """
     Sets log levels and then creates or refreshes log handlers for a file, the console,
     and optionally the primary Log window and error popup. It also starts a teleprox
@@ -76,64 +81,128 @@ def setup_logging(
 
     Parameters
     ----------
-    log_file_path: Path to the log file
+    log_file: str
+        Path to the log file
     gui: Whether to connect to GUI log window and error dialog
     acq4_level: 'acq4' logger level
     console_level: Console handler level
-
-    Returns
-    -------
-    The file handler (in case you want to fill the file in with old log records)
+    is_temp_file: If True, this log file is temporary and should be migrated to the main log file later.
     """
     global log_server
+    global log_file_handler
 
+    # clear out old handlers
     root_logger = logging.getLogger()
-    for handler in _handlers:
+    for handler in log_handlers:
         root_logger.removeHandler(handler)
-    _handlers.clear()
+        with contextlib.suppress(Exception):
+            handler.close()
+    log_handlers.clear()
 
+    # set logging levels
     acq4_logger = logging.getLogger("acq4")
     acq4_logger.setLevel(acq4_level)
+    root_logger.setLevel(root_level)
 
-    # 1. Console handler (stderr, WARNING and above)
+    # set up new file handler
+    set_log_file(log_file, is_temp_file=is_temp_file)
+
+    # Add console handler (prints to stderr, WARNING and above)
     console_handler = logging.StreamHandler(sys.stderr)
     console_handler.setLevel(console_level)
     console_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     console_handler.setFormatter(console_formatter)
     root_logger.addHandler(console_handler)
-    _handlers.append(console_handler)
+    log_handlers.append(console_handler)
 
-    # 2. File handler (all messages, JSON format)
-    file_handler = logging.FileHandler(log_file_path)
-    file_handler.setLevel(logging.DEBUG)
+    # Start teleprox log server (receive log records from other processes)
+    if log_server is None:
+        log_server = LogServer(acq4_logger)
+
+    # GUI Log Window handler (all messages)
+    if gui:
+        log_window = get_log_window()
+        log_window.handler.setLevel(logging.DEBUG)
+        root_logger.addHandler(log_window.handler)
+        log_handlers.append(log_window.handler)
+
+        # GUI error dialog handler (ERROR and above)
+        error_dialog = get_error_dialog()
+        error_dialog.handler.setLevel(logging.ERROR)
+        root_logger.addHandler(error_dialog.handler)
+        log_handlers.append(error_dialog.handler)
+
+
+def set_log_file(log_file: str | None, is_temp_file: bool = False) -> None:
+    """Set the log file path for the file handler. 
+    If a file handler already exists, it will be closed and removed before creating a new one.
+    
+    If the previous log file was a temporary file created during early initialization, 
+    its contents will be read and rewritten to the new log file handler to preserve all log records.
+    """
+    global log_file_handler
+
+    root_logger = logging.getLogger()
+
+    # remove old handler if it exists
+    old_log_file = None
+    if log_file_handler is not None:
+        if log_file_handler.is_temp_file:
+            old_log_file = log_file_handler.baseFilename
+        root_logger.removeHandler(log_file_handler)
+        log_file_handler.close()
+        log_file_handler = None
+
+    # Add new log file handler (all messages, JSON format)
+    log_file_handler = logging.FileHandler(log_file)
+    log_file_handler.setLevel(logging.DEBUG)
+    log_file_handler.is_temp_file = is_temp_file
     json_formatter = StringAwareJsonFormatter(
         reserved_attrs=[],  # Include all the fields
         rename_fields={"levelno": "level"},
         json_ensure_ascii=False,
         exc_info_as_array=True,
     )
-    file_handler.setFormatter(json_formatter)
-    root_logger.addHandler(file_handler)
-    _handlers.append(file_handler)
+    log_file_handler.setFormatter(json_formatter)
+    root_logger.addHandler(log_file_handler)
 
-    # 3. Teleprox
-    if log_server is None:
-        log_server = LogServer(acq4_logger)
+    if old_log_file is not None and old_log_file != log_file:
+        rewrite_log_from_temp_file(old_log_file)
 
-    # 4. GUI Log Window handler (all messages)
-    if gui:
-        log_window = get_log_window()
-        log_window.handler.setLevel(logging.DEBUG)
-        root_logger.addHandler(log_window.handler)
-        _handlers.append(log_window.handler)
 
-        # 5. GUI error dialog handler (ERROR and above)
-        error_dialog = get_error_dialog()
-        error_dialog.handler.setLevel(logging.ERROR)
-        root_logger.addHandler(error_dialog.handler)
-        _handlers.append(error_dialog.handler)
+def rewrite_log_from_temp_file(temp_file_path: str) -> None:
+    """Read the temporary log file created during early initialization and rewrite its contents to the current log file handler, 
+    preserving all record attributes. 
+    This should be called after the main logging configuration is set up and a new log file handler is created."""
+    logger = logging.getLogger()
 
-    return file_handler
+    if log_file_handler is None:
+        raise RuntimeError("Log file handler is not set up. Cannot rewrite log from temp file.")
+    try:
+        with open(temp_file_path, 'r') as f:
+            for line_num, line in enumerate(f, start=1):
+                if not line.strip():
+                    continue  # skip blank lines
+                try:
+                    record = json.loads(line)
+                except json.JSONDecodeError as exc:
+                    preview = line[:200].replace('\r', '\\r').replace('\n', '\\n')
+                    logger.warning(
+                        f"Skipping corrupted temporary log entry in {temp_file_path!r} at line {line_num}: "
+                        f"{preview!r}\nError was: {exc}"
+                    )
+                else:
+                    log_file_handler.emit(HistoricLogRecord(**record))
+    finally:
+        os.remove(temp_file_path)
+        
+    # log_win = get_log_window()
+    # with open(self._logFile.name(), 'r') as f:
+    #     for i, line in enumerate(f):
+    #         log_win.new_record(HistoricLogRecord(**(json.loads(line))), sort=False)
+    #         if i % 20 == 0:
+    #             Qt.QApplication.processEvents()
+    # log_win.ensure_chronological_sorting()
 
 
 def get_logger(name: str = "acq4") -> logging.Logger:
