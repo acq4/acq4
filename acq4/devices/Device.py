@@ -118,7 +118,8 @@ class Device(InterfaceMixin, Qt.QObject):  # QObject calls super, which is disas
             if len(devices_held_by_this_thread) > 0 and self.name() not in devices_held_by_this_thread:
                 self.logger.warning(
                     f"Thread {threading.current_thread().name} is reserving device {self.name()} "
-                    f"while already holding locks for {list(devices_held_by_this_thread.keys())}. This may lead to deadlocks. "
+                    f"while already holding locks for {list(devices_held_by_this_thread.keys())}. "
+                    f"This may lead to deadlocks. "
                 )
 
         if block:
@@ -439,16 +440,15 @@ class TaskGui(Qt.QWidget):
         self.disable()
 
 
-# Global dict holding {thread_id: {device_name: lock_count}} for all threads. 
+# Thread-local storage for {device_name: lock_count} per thread.
 # Used to track which devices are currently held by each thread, for deadlock warning purposes.
-thread_device_locks = {}
+_thread_local = threading.local()
 
-def get_devices_held_by_thread(thread_id=None) -> dict:
+def get_devices_held_by_thread() -> dict:
     """Return the current thread's {device_name: lock_count} dict."""
-    global thread_device_locks
-    if thread_id is None:
-        thread_id = threading.get_ident()
-    return thread_device_locks.setdefault(thread_id, {})
+    if not hasattr(_thread_local, 'device_locks'):
+        _thread_local.device_locks = {}
+    return _thread_local.device_locks
 
 
 class DeviceLocker(object):
