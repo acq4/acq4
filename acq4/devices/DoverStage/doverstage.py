@@ -41,9 +41,9 @@ class DoverStage(Stage):
         self.dev = self.msapi['smartstage']
         self.dev.default_acceleration = config.get("defaultAcceleration", 50.0)
         self.dev.enable()
-        self.dev.set_callback(self.posChanged)
         self._lastMove = None
         self.posChanged(self.dev.pos(refresh=True))
+        self.dev.set_callback(self.posChanged)
         man.declareInterface(name, ['stream_dock'], self)
 
     def axes(self):
@@ -83,6 +83,9 @@ class DoverStage(Stage):
         else:
             return None
 
+    # def deviceInterface(self, win):
+    #     return DoverStageInterface(self, win)
+
     def configure_dock(self, stream_dock_device):
         """Register Stream Dock toggle buttons for enabling / disabling each axis.
 
@@ -111,8 +114,7 @@ class DoverStage(Stage):
                     img = _AXIS_ENABLED_IMG if enabled_state[i] else _AXIS_DISABLED_IMG
                     stream_dock_device.setImage(btn.context, img)
 
-
-        # self.dev.set_enabled_callback(_update_colors)
+        # self.dev.add_enabled_state_callback(_update_colors)
 
     def _toggle_axis(self, axis_index):
         """Toggle the enabled state of a single axis."""
