@@ -333,7 +333,7 @@ class DeviceTask(object):
     def abort(self):
         self.stop(abort=True)
 
-    
+
 class TaskGui(Qt.QWidget):
     
     sigSequenceChanged = Qt.Signal(object)
@@ -482,13 +482,16 @@ class DeviceLocker(object):
         # Try locking all devices in order
         try:
             for device in self.devices:
-                devLocked = device.reserve(block=True, timeout=timeout, reserver=self.reserver, check_other_locks=False)
-                if not devLocked:
-                    self.lockErr = "Timed out waiting for %s" % device.name()
-                    self.unlock()
-                    return False
+                if timeout is None:
+                    reserved = device.reserve(block=False, reserver=self.reserver, check_other_locks=False)
+                    if not reserved:
+                        self.lockErr = f"Device {device.name()} is already reserved"
+                        self.unlock()
+                        return False
+                else:
+                    # will raise TimeoutError if lock fails
+                    device.reserve(block=True, timeout=timeout, reserver=self.reserver, check_other_locks=False)
                 self.locked.append(device)
-
             return True
         except Exception:
             self.unlock()
@@ -514,4 +517,3 @@ class DeviceLocker(object):
 
     def __exit__(self, *args):
         self.unlock()
-
