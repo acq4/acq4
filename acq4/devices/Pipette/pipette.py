@@ -801,6 +801,7 @@ class Pipette(Device, OptomechDevice):
         self.sigTargetChanged.emit(self, self.target)
 
     def targetPosition(self):
+        """Return the target position in global coordinates."""
         if self.target is None:
             raise RuntimeError(f"No target defined for {self.name()}")
         return self.target

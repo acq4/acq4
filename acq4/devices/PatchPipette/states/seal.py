@@ -177,6 +177,8 @@ class SealState(PatchPipetteState):
 
     Parameters
     ----------
+    focusOnCell : bool
+        Whether to focus the microscope on the target at the beginning of the seal state. Default True.
     pressureMode : str
         'auto' enables automatic pressure control during sealing;
         'user' simply switches to user control for sealing.
@@ -240,6 +242,7 @@ class SealState(PatchPipetteState):
         'fallbackState': 'fouled',
     }
     _parameterTreeConfig = {
+        'focusOnCell': {'type': 'bool', 'default': True},
         'pressureMode': {'type': 'str', 'default': 'user', 'limits': ['auto', 'user']},
         'startingPressure': {'type': 'float', 'default': -3e3, 'suffix': 'Pa'},
         'holdingThreshold': {'type': 'float', 'default': 100e6, 'suffix': 'Ω'},
@@ -319,6 +322,8 @@ class SealState(PatchPipetteState):
         startTime = ptime.time()
         self.setState(f'beginning seal (mode: {config["pressureMode"] !r})')
         self.setInitialPressure()
+        if config['focusOnCell']:
+            self.waitFor(dev.focusOnTarget('slow'))
 
         self._patchrec['attemptedSeal'] = True
 

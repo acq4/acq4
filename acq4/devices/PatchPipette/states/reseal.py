@@ -255,6 +255,8 @@ class ResealState(PatchPipetteState):
         Duration (seconds) to wait after successful reseal before transitioning to the slurp (default is 5s)
     postSuccessRetractionSpeed : float
         Speed in m/s to move pipette after successful reseal (default is 6 µm / s)
+    focusFollowsTip : bool
+        Whether to focus the microscope on the pipette tip after successful reseal and retraction (default is True)
     slurpPressure : float
         Pressure (Pa) to apply when trying to get the nucleus into the pipette (default is -10 kPa)
     slurpRetractionSpeed : float
@@ -300,6 +302,7 @@ class ResealState(PatchPipetteState):
         'stretchDetectionThreshold': {'type': 'float', 'default': 0.005, 'suffix': '%', 'siPrefix': False},
         'tearDetectionThreshold': {'type': 'float', 'default': -0.00128, 'suffix': '%', 'siPrefix': False},
         'tornDetectionThreshold': {'type': 'float', 'default': 0.5, 'suffix': '%', 'siPrefix': False},
+        'focusFollowsTip': {'type': 'bool', 'default': True},
         'slurpPressure': {'type': 'float', 'default': -10e3, 'suffix': 'Pa'},
         'slurpRetractionSpeed': {'type': 'float', 'default': 10e-6, 'suffix': 'm/s'},
         'slurpDuration': {'type': 'float', 'default': 10, 'suffix': 's'},
@@ -491,6 +494,13 @@ class ResealState(PatchPipetteState):
                     name='reseal retraction',
                 )
 
+            if (
+                config['focusFollowsTip']
+                and 5e-6 >= np.linalg.norm(
+                    dev.imagingDevice().globalCenterPosition() - dev.pipetteDevice.globalPosition()
+                )
+            ):
+                self.waitFor(dev.focusOnTip('slow'))
             self.sleep(0.2)
 
         if self._moveFuture is not None:
