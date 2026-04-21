@@ -118,7 +118,8 @@ class Device(InterfaceMixin, Qt.QObject):  # QObject calls super, which is disas
             if len(devices_held_by_this_thread) > 0 and self.name() not in devices_held_by_this_thread:
                 self.logger.warning(
                     f"Thread {threading.current_thread().name} is reserving device {self.name()} "
-                    f"while already holding locks for {list(devices_held_by_this_thread.keys())}. This may lead to deadlocks. "
+                    f"while already holding locks for {list(devices_held_by_this_thread.keys())}. "
+                    f"This may lead to deadlocks. "
                 )
 
         if block:
@@ -133,7 +134,7 @@ class Device(InterfaceMixin, Qt.QObject):  # QObject calls super, which is disas
             l = self._lock_.tryLock()
             if not l:
                 return False
-        
+
         lock_tb = ''.join(traceback.format_stack()[:-1])
         self._lock_stack_.append((reserver, lock_tb))
         devices_held_by_this_thread.setdefault(self.name(), 0)
@@ -332,7 +333,7 @@ class DeviceTask(object):
     def abort(self):
         self.stop(abort=True)
 
-    
+
 class TaskGui(Qt.QWidget):
     
     sigSequenceChanged = Qt.Signal(object)
@@ -439,16 +440,15 @@ class TaskGui(Qt.QWidget):
         self.disable()
 
 
-# Global dict holding {thread_id: {device_name: lock_count}} for all threads. 
+# Thread-local storage for {device_name: lock_count} per thread.
 # Used to track which devices are currently held by each thread, for deadlock warning purposes.
-thread_device_locks = {}
+_thread_local = threading.local()
 
-def get_devices_held_by_thread(thread_id=None) -> dict:
+def get_devices_held_by_thread() -> dict:
     """Return the current thread's {device_name: lock_count} dict."""
-    global thread_device_locks
-    if thread_id is None:
-        thread_id = threading.get_ident()
-    return thread_device_locks.setdefault(thread_id, {})
+    if not hasattr(_thread_local, 'device_locks'):
+        _thread_local.device_locks = {}
+    return _thread_local.device_locks
 
 
 class DeviceLocker(object):
@@ -482,13 +482,16 @@ class DeviceLocker(object):
         # Try locking all devices in order
         try:
             for device in self.devices:
-                devLocked = device.reserve(block=True, timeout=timeout, reserver=self.reserver, check_other_locks=False)
-                if not devLocked:
-                    self.lockErr = "Timed out waiting for %s" % device.name()
-                    self.unlock()
-                    return False
+                if timeout is None:
+                    reserved = device.reserve(block=False, reserver=self.reserver, check_other_locks=False)
+                    if not reserved:
+                        self.lockErr = f"Device {device.name()} is already reserved"
+                        self.unlock()
+                        return False
+                else:
+                    # will raise TimeoutError if lock fails
+                    device.reserve(block=True, timeout=timeout, reserver=self.reserver, check_other_locks=False)
                 self.locked.append(device)
-
             return True
         except Exception:
             self.unlock()
@@ -514,4 +517,3 @@ class DeviceLocker(object):
 
     def __exit__(self, *args):
         self.unlock()
-
