@@ -3,6 +3,8 @@ import time
 import numpy as np
 from MetaArray import MetaArray
 
+from coorx import SRT3DTransform
+
 from acq4 import Manager
 from acq4.logging_config import get_logger
 from acq4.util import Qt
@@ -165,7 +167,6 @@ class RecordThread(Thread):
                     self.currentFrameNum = 0
                 continue
 
-            data = frame['frame'].getImage()
             info = frame['frame'].info()
             dh = frame['dir']
             stack = frame['stack']
@@ -183,21 +184,22 @@ class RecordThread(Thread):
 
             else:
                 # Store frame to current (or new) stack
-                recFrames.append((data, info))
+                recFrames.append(frame['frame'])
                 self.lastFrameTime = info['time']
 
         if len(recFrames) > 0:
             self.writeFrames(recFrames, dh)
             self.currentFrameNum += len(recFrames)
 
-    def writeFrames(self, frames, dh):
+    def writeFrames(self, frames: list['Frame'], dh):
         newRec = self.currentStack is None
 
+        times = [f.info()['time'] for f in frames]
         if newRec:
-            self.startFrameTime = frames[0][1]['time']
+            self.startFrameTime = times[0]
 
-        times = [f[1]['time'] for f in frames]
-        translations = np.array([f[1]['transform'].getTranslation() for f in frames])
+        transforms = [f.info()['transform'] for f in frames]
+        translations = np.array([SRT3DTransform.from_affine(tr.as_affine()).offset for tr in transforms])
         arrayInfo = [
             {
                 'name': 'Time',
@@ -208,12 +210,12 @@ class RecordThread(Thread):
             {'name': 'X'},
             {'name': 'Y'},
         ]
-        imgs = [f[0][np.newaxis, ...] for f in frames]
+        imgs = [f.getImage()[np.newaxis, ...] for f in frames]
 
         data = MetaArray(np.concatenate(imgs, axis=0), info=arrayInfo)
         if newRec:
             self.currentStack = dh.writeFile(
-                data, 'video', autoIncrement=True, info=frames[0][1], appendAxis='Time', appendKeys=['translation']
+                data, 'video', autoIncrement=True, info=frames[0].serializableInfo(dh), appendAxis='Time', appendKeys=['translation']
             )
         else:
             data.write(self.currentStack.name(), appendAxis='Time', appendKeys=['translation'])
