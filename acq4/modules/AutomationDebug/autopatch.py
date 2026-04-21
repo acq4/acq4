@@ -146,7 +146,11 @@ class Autopatcher:
         while True:
             if (state := ppip.getState().stateName) not in ("approach", "cell detect", "contact cell"):
                 if not detect_finished:
-                    win.cameraDevice.moveCenterToGlobal(cell.position, "fast", name="center on cell during patching")
+                    _future.waitFor(
+                        win.cameraDevice.moveCenterToGlobal(
+                            cell.position, "fast", name="center on cell during patching"
+                        )
+                    )
                     detect_finished = True
             if state in ("whole cell", "bath", "broken", "fouled"):
                 _future.setState(f"Exiting patch loop - ended in state {state}")
