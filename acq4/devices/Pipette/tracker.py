@@ -3,6 +3,7 @@ import time
 
 import numpy as np
 import scipy
+import scipy.ndimage as ndi
 
 import pyqtgraph as pg
 from acq4.Manager import getManager
@@ -98,12 +99,7 @@ class ResnetPipetteTracker(PipetteTracker):
         img = frame.data()
 
         # find pipette direction in image
-        pipetteDir = self.pipette.globalDirection()
-        imageDir = np.array(frame.mapFromGlobalToFrame(pipetteDir) - frame.mapFromGlobalToFrame([0, 0, 0]))[:2]
-        imageDir = imageDir / np.linalg.norm(imageDir)
-
-        # Calculate angle of pipette relative to pointing right (positive across columns)
-        pipetteAngle = np.arctan2(-imageDir[0], imageDir[1]) * 180 / np.pi
+        pipetteAngle = self.pipetteAngleFromFrame(frame)
 
         pxSize = frame.info()["pixelSize"][0]
 
@@ -115,10 +111,134 @@ class ResnetPipetteTracker(PipetteTracker):
 
         return (tipPos.x(), tipPos.y(), tipPos.z() + zErr * 1e-6), confidence
 
+    def pipetteAngleFromFrame(self, frame):
+        """Calculate the angle of the pipette in the image frame, in degrees CCW from pointing right."""
+        pipetteDir = self.pipette.globalDirection()
+        imageDir = np.array(frame.mapFromGlobalToFrame(pipetteDir) - frame.mapFromGlobalToFrame([0, 0, 0]))[:2]
+        imageDir = imageDir / np.linalg.norm(imageDir)
+        pipetteAngle = np.arctan2(-imageDir[0], imageDir[1]) * 180 / np.pi
+        return pipetteAngle
+
     def estimateOffset(self, img, pipetteAngle, pxSize):
         from acq4_automation.object_detection import do_pipette_tip_detection
         self.result = do_pipette_tip_detection(img, pipetteAngle, pxSize, show=False)
         return self.result[:3]
+
+    def estimatePositionFromStack(
+        self,
+        z_range: float = 15e-6,
+        z_step: float = 1e-6,
+        confidence_threshold: float = 0.97,
+        xy_stability_threshold_px: float = 3.0,
+        stability_filter_size: int = 5,
+    ) -> tuple[float, float, float] | None:
+        """Find the global pipette tip position by scanning a z-stack and detecting the tip in each frame.
+
+        Takes a z-stack centered on the current estimated tip position, runs ML-based pipette
+        detection on every frame, and returns the global (x, y, z) position of the tip based
+        on the first frame where both confidence is high and the detected XY position is stable.
+
+        Assumes the pipette tip is already close (within ~10 µm) to its current estimated position.
+
+        Parameters
+        ----------
+        z_range : float
+            Half-range of the z-stack in meters (stack spans tip_z ± z_range). Default 15 µm.
+        z_step : float
+            Step size between z-stack frames in meters. Default 1 µm.
+        confidence_threshold : float
+            Minimum model confidence to accept a frame. Default 0.97.
+        xy_stability_threshold_px : float
+            Maximum allowed distance (pixels) from median position to consider XY stable. Default 3 px.
+        stability_filter_size : int
+            Size of median filter applied to confidence and stability masks. Default 5 frames.
+
+        Returns
+        -------
+        (x, y, z) global position of the tip in meters, or None if detection failed.
+        """
+        from acq4_automation.object_detection import do_pipette_tip_detection
+        pipette = self.pipette
+        imager = self._getImager()
+
+        tip_pos = pipette.globalPosition()
+        z_center = tip_pos[2]
+
+        # Scan from above the tip downward (+Z is up in global coords, so z_center+z_range is shallower).
+        # enforce_linear_z_stack always returns frames sorted low-z to high-z (deep to shallow).
+        frames = acquire_z_stack(
+            imager,
+            start=z_center + z_range,
+            stop=z_center - z_range,
+            step=z_step,
+        ).getResult()
+
+        px_size = frames[0].info()['pixelSize'][0]
+
+        # Compute pipette angle in image frame: angle is measured CCW from pointing right
+        pipette_angle = self.pipetteAngleFromFrame(frames[0])
+
+        # Linearize z positions: the stage reports z in bursts so many consecutive frames share
+        # the same z value. Fit a line to recover evenly-spaced depths.
+        z_raw = np.array([f.depth for f in frames])
+        z_fit = np.poly1d(np.polyfit(np.arange(len(z_raw)), z_raw, 1))
+        z_positions = z_fit(np.arange(len(z_raw)))
+
+        # Run detection on every frame. Frames where the focal plane is below the tip
+        # (low z, deep) will have low confidence and unstable XY. Confidence rises when
+        # the focal plane reaches the tip and remains high for shallower frames that show
+        # the shaft — but the tip itself is only directly imaged at the lowest accepted z.
+        confidences = []
+        detection_results = []
+        rows = []
+        cols = []
+        for frame in frames:
+            img = frame.data()
+            result = do_pipette_tip_detection(
+                img, pipette_angle, px_size, show=False
+            )
+            detection_results.append(result)
+            pos_rc, _z_um, confidence, _extras = result
+            confidences.append(float(confidence))
+            rows.append(float(pos_rc[0]))
+            cols.append(float(pos_rc[1]))
+
+        confidences = np.array(confidences)
+        rows = np.array(rows)
+        cols = np.array(cols)
+
+        # XY stability: large frame-to-frame jumps indicate the tip is not yet in focus.
+        # Median-filter the positions first to get a robust reference, then measure deviation.
+        med_rows = ndi.median_filter(rows, size=stability_filter_size, mode='nearest')
+        med_cols = ndi.median_filter(cols, size=stability_filter_size, mode='nearest')
+        distances = np.sqrt((rows - med_rows) ** 2 + (cols - med_cols) ** 2)
+        filt_distances = ndi.median_filter(distances, size=stability_filter_size, mode='nearest')
+
+        # Build acceptance mask, then median-filter it to reject isolated spurious frames.
+        good_confidence = confidences > confidence_threshold
+        stable_xy = filt_distances < xy_stability_threshold_px
+        accepted = ndi.median_filter(
+            (good_confidence & stable_xy).astype(float),
+            size=stability_filter_size,
+            mode='nearest',
+        ) > 0.5
+
+        accepted_indices = np.where(accepted)[0]
+        if len(accepted_indices) == 0:
+            return None
+
+        # The tip is the deepest focusable part of the pipette. Because frames are sorted
+        # deep-to-shallow (low z first), accepted_indices[0] is the deepest accepted frame —
+        # the one where the focal plane first reaches the tip level. Higher accepted frames
+        # show the shaft above the tip and should not be used for z.
+        best_idx = accepted_indices[0]
+        best_frame = frames[best_idx]
+
+        # Use the median-filtered XY position (more robust than the single-frame detection).
+        tip_pixel = np.array([med_rows[best_idx], med_cols[best_idx]])
+        tip_global = best_frame.mapFromFrameToGlobal(tip_pixel)
+
+        return float(tip_global.x()), float(tip_global.y()), float(z_positions[best_idx])
 
 
 class CorrelationPipetteTracker(PipetteTracker):
