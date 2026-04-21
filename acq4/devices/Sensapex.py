@@ -44,7 +44,9 @@ class Sensapex(Stage):
       (auto-detected from deviceId if not specified)
     
     * **maxAcceleration** (float, optional): Maximum acceleration limit
-    
+
+    * **maxAttempts** (int, optional): Maximum number of retry attempts for moves (default: 10)
+
     * **slowSpeed** (float, optional): Slow movement speed in m/s
     
     * **fastSpeed** (float, optional): Fast movement speed in m/s
@@ -95,6 +97,7 @@ class Sensapex(Stage):
         # create handle to this manipulator
         self.dev = ump.get_device(self.devid, n_axes=config.get("nAxes", None), is_stage=not config["isManipulator"])
         self._quitRequested = False
+        self._maxAttempts = config.get("maxAttempts", 10)
         self._lastMove: Optional[SensapexMoveFuture] = None
 
         Stage.__init__(self, man, config, name)
@@ -224,6 +227,7 @@ class Sensapex(Stage):
             UMP.get_ump().close()
 
     def _move(self, pos, speed, linear, name=None, **kwds):
+        kwds.setdefault("max_attempts", self._maxAttempts)
         if self._force_linear_movement:
             linear = True
         if self._force_nonlinear_movement:
@@ -264,7 +268,7 @@ class Sensapex(Stage):
 class SensapexMoveFuture(MoveFuture):
     """Provides access to a move-in-progress on a Sensapex manipulator.
     """
-    def __init__(self, dev, pos, speed, linear, name=None):
+    def __init__(self, dev, pos, speed, linear, name=None, max_attempts=None):
         MoveFuture.__init__(self, dev, pos, speed, name=name)
 
         # limit the speed so that no move is expected to take less than 200 ms
@@ -274,6 +278,7 @@ class SensapexMoveFuture(MoveFuture):
         if speed > 10e-6:
             self.speed = min(speed, distance / minimumMoveTime)
 
+        self.max_attempts = max_attempts
         self._linear = linear
         self._interrupted = False
         self._errorMsg = None
@@ -293,7 +298,7 @@ class SensapexMoveFuture(MoveFuture):
                 )
             else:
                 self._moveReq = self.dev.dev.goto_pos(
-                    pos, self.speed * 1e6, simultaneous=linear, linear=linear
+                    pos, self.speed * 1e6, simultaneous=linear, linear=linear, max_attempts=self.max_attempts
                 )
                 self._monitorThread = threading.Thread(
                     target=self._watchForFinish, daemon=True, name=f"{name} sensapex monitor"
@@ -316,7 +321,7 @@ class SensapexMoveFuture(MoveFuture):
             waypoint = start[:3] + pos[3:]
 
         self._moveReq = self.dev.dev.goto_pos(
-            waypoint, self.speed * 1e6, simultaneous=self._linear, linear=self._linear
+            waypoint, self.speed * 1e6, simultaneous=self._linear, linear=self._linear, max_attempts=self.max_attempts
         )
         if not self._waitFor(self._moveReq):
             self._taskDone(
@@ -326,7 +331,7 @@ class SensapexMoveFuture(MoveFuture):
             )
             return
         self._moveReq = self.dev.dev.goto_pos(
-            pos, self.speed * 1e6, simultaneous=self._linear, linear=self._linear
+            pos, self.speed * 1e6, simultaneous=self._linear, linear=self._linear, max_attempts=self.max_attempts
         )
         self._waitFor(self._moveReq)
         self._taskDone(
@@ -375,7 +380,9 @@ class SensapexMoveFuture(MoveFuture):
 
             # request the next step and wait
             lastTarget = currentTarget
-            self._moveReq = self.dev.dev.goto_pos(currentTarget, speed=1.0, simultaneous=True, linear=True)
+            self._moveReq = self.dev.dev.goto_pos(
+                currentTarget, speed=1.0, simultaneous=True, linear=True, max_attempts=self.max_attempts
+            )
             if not self._waitFor(self._moveReq):
                 break
 
