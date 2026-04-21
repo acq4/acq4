@@ -88,11 +88,11 @@ class CleanState(PatchPipetteState):
         scope = pip.imagingDevice().scopeDev
         start_pos = scope.globalPosition()
         waypoints = [
-            np.array([start_pos[0], start_pos[1], 30e-3]),
-            np.array([-90e-3, 20e-3, 30e-3]),
+            (np.array([start_pos[0], start_pos[1], 30e-3]), "initial pos +3cm up"),
+            (np.array([-90e-3, 20e-3, 30e-3]), "waaay out of the way"),
         ]
-        for wp in waypoints:
-            self.waitFor(scope.setGlobalPosition(wp, 20e-3))
+        for wp, name in waypoints:
+            self.waitFor(scope.setGlobalPosition(wp, 20e-3, name=name))
 
         cw = pip.getCleaningWell()
         self.waitFor(pip.retractFromSurface('fast'))
@@ -115,9 +115,9 @@ class CleanState(PatchPipetteState):
 
         # self.waitFor(pip.moveTo('home', 'fast'))  # motion planning doesn't work so well from here
         self.waitFor(pip.parentStage.goHome('fast'))
-        waypoints = waypoints[::-1] + [start_pos]
-        for wp in waypoints:
-            self.waitFor(scope.setGlobalPosition(wp, 20e-3))
+        waypoints = waypoints[::-1] + [(start_pos, "initial pos")]
+        for wp, name in waypoints:
+            self.waitFor(scope.setGlobalPosition(wp, 20e-3, name=name))
 
         # TODO this could have worked...
         # cw = pip.getCleaningWell()
