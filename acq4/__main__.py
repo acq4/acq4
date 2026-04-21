@@ -14,7 +14,7 @@ from .util.debug import installExceptionHandler
 
 control_arg_parser = Manager.makeArgParser()
 control_arg_parser.add_argument("--console-log-level", action="store", help="Set the console log level", default="INFO")
-control_arg_parser.add_argument("--root-log-level", action="store", help="Set the root log level", default="DEBUG")
+control_arg_parser.add_argument("--root-log-level", action="store", help="Set the root log level", default="WARNING")
 control_arg_parser.add_argument("--profile", action="store_true", help="Run the program under the profiler")
 control_arg_parser.add_argument("--callgraph", action="store_true", help="Run the program under the callgraph profiler")
 control_arg_parser.add_argument("--threadtrace", action="store_true", help="Run a thread tracer in the background")
