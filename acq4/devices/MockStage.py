@@ -206,8 +206,6 @@ class MockMoveFuture(MoveFuture):
     """Provides access to a move-in-progress on a mock manipulator.
     """
     def __init__(self, dev, pos, speed, name=None):
-        if name is None:
-            name = f'{dev.name()} move'
         MoveFuture.__init__(self, dev, pos, speed, name=name)
         self.targetPos = pos
 

@@ -293,8 +293,6 @@ class MicroManagerMoveFuture(MoveFuture):
     """
 
     def __init__(self, dev, pos, speed, userSpeed, moveXY=True, moveZ=True, name=None):
-        if name is None:
-            name = f'{dev.name()} move'
         MoveFuture.__init__(self, dev, pos, speed, name=name)
         self._interrupted = False
         self._errorMSg = None

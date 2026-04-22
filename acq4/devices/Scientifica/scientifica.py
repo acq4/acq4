@@ -250,8 +250,6 @@ class Scientifica(Stage):
             if self._lastMove is not None and not self._lastMove.isDone():
                 self.stop()
             speed = self._interpretSpeed(speed)
-            if name is None:
-                name = f"{self.name()} move"
 
             self._lastMove = ScientificaMoveFuture(self, pos, speed, name=name, **kwds)
             return self._lastMove

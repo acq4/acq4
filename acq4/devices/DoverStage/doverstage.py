@@ -73,9 +73,7 @@ class DoverStage(Stage):
 
     def _move(self, pos, speed, linear, name=None, **kwds):
         speed = self._interpretSpeed(speed)
-        if name is None:
-            name = f"{self.name()} move"
-        self._lastMove = DoverMoveFuture(self, pos, speed, name)
+        self._lastMove = DoverMoveFuture(self, pos, speed, name=name)
         return self._lastMove
 
     def targetPosition(self):
@@ -133,11 +131,11 @@ class DoverStage(Stage):
 class DoverMoveFuture(MoveFuture):
     """Provides access to a move-in-progress on a Dover stage."""
 
-    def __init__(self, dev, pos, speed, name):
-        MoveFuture.__init__(self, dev, pos, speed, name)
+    def __init__(self, dev, pos, speed, name=None):
+        MoveFuture.__init__(self, dev, pos, speed, name=name)
         self.dev = dev
         self.target = np.asarray(pos)
-        self._future = self.dev.dev.move(list(pos), self.speed * 1e3, name=name)
+        self._future = self.dev.dev.move(list(pos), self.speed * 1e3, name=self.name)
         self._future.set_callback(self._future_finished)
 
     def _future_finished(self, req_fut):

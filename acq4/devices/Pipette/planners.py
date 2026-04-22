@@ -450,7 +450,8 @@ class SearchMotionPlanner(PipetteMotionPlanner):
 
     @future_wrap
     def _move(self, _future):
-        _future.name = f"{self.pip.name()} {self.name}"
+        base = f"{self.pip.name()} {self.name}"
+        _future.name = base
         pip = self.pip
         speed = self.speed
         distance = self.kwds.get("distance", 0)
@@ -468,7 +469,7 @@ class SearchMotionPlanner(PipetteMotionPlanner):
         # move scope such that camera will be focused at searchDepth
         if focusDepth < searchDepth:
             scopeFocus = scope.getFocusDepth()
-            fut = scope.setFocusDepth(scopeFocus + searchDepth - focusDepth, name=f"set focus for {self.pip.name()} {self.name}")
+            fut = scope.setFocusDepth(scopeFocus + searchDepth - focusDepth, name=f"{base}: focus above surface")
             # wait for objective to lift before starting pipette motion
             _future.waitFor(fut)
 
@@ -481,7 +482,7 @@ class SearchMotionPlanner(PipetteMotionPlanner):
 
         path = self.safePath(pip.globalPosition(), globalTarget, speed)
 
-        _future.waitFor(pip._movePath(path, name=f"{self.pip.name()} {self.name}"))
+        _future.waitFor(pip._movePath(path, name=f"{base}: pipette path"))
 
 
 class ApproachMotionPlanner(PipetteMotionPlanner):
@@ -518,15 +519,16 @@ class AboveTargetMotionPlanner(PipetteMotionPlanner):
 
     @future_wrap
     def _move(self, _future):
-        _future.name = f"{self.pip.name()} {self.name}"
+        base = f"{self.pip.name()} {self.name}"
+        _future.name = base
         pip = self.pip
         speed = self.speed
         scope = pip.scopeDevice()
         waypoint1, waypoint2 = self.aboveTargetPath()
 
         path = self.safePath(pip.globalPosition(), waypoint1, speed, APPROACH_TO_CORRECT_FOR_HYSTERESIS)
-        _future.waitFor(pip._movePath(path + [(waypoint2, "fast", True, "Above target")], name=f"{pip.name()} {self.name}"))
-        move_scope = scope.setGlobalPosition(waypoint2, name=f"move scope for {self.pip.name()} {self.name}")
+        _future.waitFor(pip._movePath(path + [(waypoint2, "fast", True, "Above target")], name=f"{base}: pipette path"))
+        move_scope = scope.setGlobalPosition(waypoint2, name=f"{base}: scope recenter")
         _future.waitFor(move_scope)  # TODO act simultaneously once we can handle motion planning around moving objects
 
     def aboveTargetPath(self):
@@ -565,7 +567,8 @@ class IdleMotionPlanner(PipetteMotionPlanner):
 
     @future_wrap
     def _move(self, _future):
-        _future.name = f"{self.pip.name()} {self.name}"
+        base = f"{self.pip.name()} {self.name}"
+        _future.name = base
         pip = self.pip
         speed = self.speed
 
@@ -580,14 +583,14 @@ class IdleMotionPlanner(PipetteMotionPlanner):
         # If the tip is below idle depth, bring it up along the axis of the electrode.
         pos = pip.globalPosition()
         if pos[2] < idleDepth:
-            pip.advance(idleDepth, speed, name=f"{pip.name()} {self.name} advance")
+            pip.advance(idleDepth, speed, name=f"{base}: ascend to idle depth")
 
         # From here, move directly to idle position
         angle = pip.yawRadians()
         ds = pip._opts["idleDistance"]  # move to 7 mm from center
         globalIdlePos = -ds * np.cos(angle), -ds * np.sin(angle), idleDepth
 
-        _future.waitFor(pip._moveToGlobal(globalIdlePos, speed, name=f"{pip.name()} {self.name}"))
+        _future.waitFor(pip._moveToGlobal(globalIdlePos, speed, name=f"{base}: move to edge"))
 
 
 def defaultMotionPlanners() -> dict[str, type[PipetteMotionPlanner]]:
