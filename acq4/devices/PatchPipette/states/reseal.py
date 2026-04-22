@@ -257,10 +257,10 @@ class ResealState(PatchPipetteState):
         Speed in m/s to move pipette after successful reseal (default is 6 µm / s)
     slurpPressure : float
         Pressure (Pa) to apply when trying to get the nucleus into the pipette (default is -10 kPa)
-    slurpRetractionSpeed : float
-        Speed in m/s to move pipette during nucleus slurping (default is 10 µm / s)
     slurpDuration : float
         Duration (seconds) to apply suction when trying to get the nucleus into the pipette (default is 10s)
+    slurpStopThreshold : float
+        Resistance (Ohms) threshold to stop slurping, indicating the nucleus is in the pipette (default is 20 MOhm)
     slurpHeight : float
         Height (meters) above the surface to conduct nucleus slurping and visual check (default is 50 µm)
     """
@@ -301,8 +301,8 @@ class ResealState(PatchPipetteState):
         'tearDetectionThreshold': {'type': 'float', 'default': -0.00128, 'suffix': '%', 'siPrefix': False},
         'tornDetectionThreshold': {'type': 'float', 'default': 0.5, 'suffix': '%', 'siPrefix': False},
         'slurpPressure': {'type': 'float', 'default': -10e3, 'suffix': 'Pa'},
-        'slurpRetractionSpeed': {'type': 'float', 'default': 10e-6, 'suffix': 'm/s'},
         'slurpDuration': {'type': 'float', 'default': 10, 'suffix': 's'},
+        'slurpStopThreshold': {'type': 'float', 'default': 20e6, 'suffix': 'Ω'},
         'slurpHeight': {'type': 'float', 'default': 50e-6, 'suffix': 'm'},
     }
 
@@ -484,16 +484,34 @@ class ResealState(PatchPipetteState):
 
         if self._moveFuture is not None:
             self._moveFuture.stop(wait=True)
+        self.setState("retracting pipette from surface")
         self._moveFuture = self._retractFromTissue()
         self.waitFor(self._moveFuture)
 
+        self.setState("go above target before slurp")
+        self._moveFuture = dev.pipetteDevice.goAboveTarget(speed=100e-6)
+        self.waitFor(self._moveFuture, timeout=90)
+        self.waitFor(dev.pipetteDevice.focusTip())
+
         self.setState("slurping in nucleus")
         dev.pressureDevice.setPressure(source='regulator', pressure=config['slurpPressure'])
-        self._moveFuture = dev.pipetteDevice.goAboveTarget(config['slurpRetractionSpeed'])
-        self.sleep(config['slurpDuration'])
-        self.waitFor(self._moveFuture, timeout=90)
-        dev.pipetteDevice.focusTip()
-        dev.pressureDevice.setPressure(source='regulator', pressure=config['initialPressure'])
+        slurp_start = ptime.time()
+        final_pressure = config['initialPressure']
+        while True:
+            tps = self.processAtLeastOneTestPulse()
+            resistance = tps[-1].analysis['steady_state_resistance']
+            if resistance < config['slurpStopThreshold']:
+                self.setState(
+                    f"Slurp complete; resistance {resistance} dropped below threshold {config['slurpStopThreshold']}"
+                )
+                final_pressure = 0
+                break
+            now = ptime.time()
+            if now > slurp_start + config['slurpDuration']:
+                self.setState(f"Slurp complete; max duration {config['slurpDuration']} elapsed.")
+                break
+
+        dev.pressureDevice.setPressure(source='regulator', pressure=final_pressure)
         return {"state": "outside out"}
 
     def _sanityChecks(self):
