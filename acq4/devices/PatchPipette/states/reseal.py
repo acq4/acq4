@@ -511,7 +511,7 @@ class ResealState(PatchPipetteState):
 
         self.setState("go above target before slurp")
         self._moveFuture = dev.pipetteDevice.goAboveTarget(speed=100e-6)
-        self.waitFor(self._moveFuture, timeout=90)
+        self.waitFor(self._moveFuture, timeout=120)
         self.waitFor(dev.pipetteDevice.focusTip())
 
         self.setState("slurping in nucleus")
