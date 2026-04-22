@@ -151,7 +151,7 @@ class PipettePathGenerator:
                 # what global position should we ask the stage to move to in order for the pipette tip to reach globalPos
                 manipulatorGlobalPos = self.pip._solveGlobalStagePosition(globalPos)
                 # ask the stage to check whether this position is reachable
-                self.manipulator.checkGlobalLimits(manipulatorGlobalPos, linear)
+                self.manipulator.checkGlobalLimits(manipulatorGlobalPos)
             except Exception as e:
                 adapter.setPathError([globalStart] + [p[0] for p in path], failed_at=globalPos)
                 raise ValueError(
@@ -256,7 +256,7 @@ class GeometryAwarePathGenerator(PipettePathGenerator):
             viz = mod.window().findAdapter(lambda a: a.device == self.pip).pathSearchVisualizer()
             planner, from_pip_to_global = self._getPlanningContext()
             planner.make_convolved_obstacles(self.pip.getGeometry(), from_pip_to_global, viz)
-            print(f"cache primed for {self.pip.name()}")
+            self.pip.logger.info("Finished priming path finding cache")
         except RuntimeError:
             self.pip.logger.exception("Blew up while attempting to prime path finding cache")
 

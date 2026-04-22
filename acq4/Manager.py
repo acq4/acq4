@@ -3,8 +3,6 @@ import atexit
 import contextlib
 import gc
 import getpass
-import json
-import logging
 import os
 import socket
 import sys
@@ -12,20 +10,19 @@ import threading
 import time
 import weakref
 from collections import OrderedDict
-from datetime import datetime
-
-from MetaArray import MetaArray
 
 import pyqtgraph as pg
 import pyqtgraph.reload as reload
+from MetaArray import MetaArray
 from pyqtgraph import configfile
 from pyqtgraph.debug import Profiler
 from pyqtgraph.util.mutex import Mutex
 from . import __version__
-from . import devices, modules
+from . import modules
 from .Interfaces import InterfaceDirectory
+from .devices import getDeviceClass
 from .devices.Device import Device, DeviceTask, DeviceLocker
-from .logging_config import get_logger, set_log_file, setup_logging, HistoricLogRecord
+from .logging_config import get_logger, set_log_file
 from .util import DataManager, ptime, Qt
 from .util.DataManager import DirHandle
 from .util.HelpfulException import HelpfulException
@@ -84,7 +81,6 @@ class Manager(Qt.QObject):
 
     def __init__(self):
         self.moduleLock = Mutex(recursive=True)  ## used for keeping some basic methods thread-safe
-        # self.devices = OrderedDict()  # all currently loaded devices
         self.isReady = threading.Event()
         self.modules = OrderedDict()  # all currently running modules
         self.devices = OrderedDict()  # all devices loaded via Manager
@@ -422,7 +418,7 @@ class Manager(Qt.QObject):
         device : Device instance
             The instantiated device object
         """
-        devclass = devices.getDeviceClass(devClassName)
+        devclass = getDeviceClass(devClassName)
         dev = devclass(self, conf, name)
         self.devices[name] = dev  # just to prevent device being collected
         return dev
@@ -444,11 +440,15 @@ class Manager(Qt.QObject):
     def reserveDevices(self, devices, timeout=10.0, reserver: str = None):
         """Return a DeviceLocker that can be used to reserve multiple devices simultaneously::
 
-            with manager.reserveDevices(['Camera', 'Clamp1', 'Stage'], reserver='MySubsystem'):
+            with manager.reserveDevices([camera, clamp1, stage], reserver='MySubsystem'):
                 # .. do stuff
 
         Parameters
         ----------
+        devices : list of Device
+            The devices to be reserved
+        timeout : float
+            The amount of time to wait for the devices to become available before raising a TimeoutError
         reserver : str
             Name identifying the caller reserving these devices. Required for deadlock diagnostics.
         """
