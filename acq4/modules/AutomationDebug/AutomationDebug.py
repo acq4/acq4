@@ -275,7 +275,7 @@ class AutomationDebugWindow(Qt.QWidget):
             )
             depth = depth_fut.getResult() - 50 * µm  # Target below surface
             _future.checkStop()
-            self.cameraDevice.setFocusDepth(depth)  # Set focus depth
+            self.cameraDevice.setFocusDepth(depth, name=f"{self.cameraDevice.name()} focus below surface for autoTarget")  # Set focus depth
 
             _future.waitFor(
                 self._detector._detectNeuronsZStack(), timeout=600

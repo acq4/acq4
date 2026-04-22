@@ -52,7 +52,7 @@ class NucleusCollectState(PatchPipetteState):
         # self.approachPos = self.collectionPos - pip.globalDirection() * config['approachDistance']
 
         # self.waitFor([pip._moveToGlobal(self.approachPos, speed='fast')])
-        self.waitFor(pip._moveToGlobal(self.collectionPos, speed='fast'), timeout=None)
+        self.waitFor(pip._moveToGlobal(self.collectionPos, speed='fast', name=f"{pip.name()} move to nucleus collection position"), timeout=None)
 
         if dev.sonicatorDevice is not None:
             self.sonication = dev.sonicatorDevice.doProtocol(config['sonicationProtocol'])

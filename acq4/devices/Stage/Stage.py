@@ -707,6 +707,8 @@ class MoveFuture(Future):
     """Used to track the progress of a requested move operation."""
 
     def __init__(self, dev: Stage, pos, speed, name=None):
+        if name is None:
+            name = f"{dev.name()} move"
         Future.__init__(self, name=name)
         self.startTime = ptime.time()
         self.dev = dev
@@ -844,7 +846,7 @@ class MovePathFuture(MoveFuture):
             step['position'] = fwdPath[i]['position']
             step['explanation'] = f"undo {step.get('explanation')}"
             revPath.append(step)
-        return self.dev.movePath(revPath)
+        return self.dev.movePath(revPath, name=f"undo {self.name}")
 
 
 class StageInterface(Qt.QWidget):

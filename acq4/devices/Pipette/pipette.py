@@ -456,7 +456,7 @@ class Pipette(Device, OptomechDevice):
                 )
                 _future.waitFor(seq_future)
             finally:
-                _future.waitFor(cam.setFocusDepth(depth))
+                _future.waitFor(cam.setFocusDepth(depth, name=f"{cam.name()} restore focus after {self.name()} manual calibration stack"))
             fh = seq_future.imagesSavedIn
             info = {
                 **fh.info(),

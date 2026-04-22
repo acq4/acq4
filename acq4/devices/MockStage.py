@@ -103,7 +103,7 @@ class MockStage(Stage):
     def axes(self):
         return ['x', 'y', 'z', 'd'][:self.nAxes]
 
-    def _move(self, pos, speed, linear, **kwds):
+    def _move(self, pos, speed, linear, name=None, **kwds):
         """Called by base stage class when the user requests to move to an
         absolute or relative position.
         """
@@ -111,7 +111,7 @@ class MockStage(Stage):
             self._interruptMove()
             pos = self._toAbsolutePosition(pos)
             speed = self._interpretSpeed(speed)
-            self._lastMove = MockMoveFuture(self, pos, speed)
+            self._lastMove = MockMoveFuture(self, pos, speed, name=name)
             return self._lastMove
 
     def _interpretSpeed(self, speed):
@@ -205,8 +205,8 @@ class MockStage(Stage):
 class MockMoveFuture(MoveFuture):
     """Provides access to a move-in-progress on a mock manipulator.
     """
-    def __init__(self, dev, pos, speed):
-        MoveFuture.__init__(self, dev, pos, speed, name=f'{dev.name()}_move')
+    def __init__(self, dev, pos, speed, name=None):
+        MoveFuture.__init__(self, dev, pos, speed, name=name)
         self.targetPos = pos
 
         self.dev.stageThread.setTarget(self, pos, speed)
