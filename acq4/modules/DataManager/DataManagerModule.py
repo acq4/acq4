@@ -140,6 +140,8 @@ class DataManager(Module):
 
     def setLogDir(self):
         d = self.selectedFile()
+        if d is None:
+            raise ValueError("Select a directory first to set as log directory")
         if not isinstance(d, DirHandle):
             d = d.parent()
         self.manager.setLogDir(d)
