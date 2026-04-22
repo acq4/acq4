@@ -151,7 +151,7 @@ class PipettePathGenerator:
                 # what global position should we ask the stage to move to in order for the pipette tip to reach globalPos
                 manipulatorGlobalPos = self.pip._solveGlobalStagePosition(globalPos)
                 # ask the stage to check whether this position is reachable
-                self.manipulator.checkGlobalLimits(manipulatorGlobalPos)
+                self.manipulator.checkGlobalLimits(manipulatorGlobalPos, linear)
             except Exception as e:
                 adapter.setPathError([globalStart] + [p[0] for p in path], failed_at=globalPos)
                 raise ValueError(
