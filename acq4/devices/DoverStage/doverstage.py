@@ -71,9 +71,11 @@ class DoverStage(Stage):
     def positionUpdatesPerSecond(self):
         return 1 / self.dev.control_thread.poll_interval
 
-    def _move(self, pos, speed, linear, **kwds):
+    def _move(self, pos, speed, linear, name=None, **kwds):
         speed = self._interpretSpeed(speed)
-        self._lastMove = DoverMoveFuture(self, pos, speed, kwds.get("name", "unnamed move"))
+        if name is None:
+            name = f"{self.name()} move"
+        self._lastMove = DoverMoveFuture(self, pos, speed, name)
         return self._lastMove
 
     def targetPosition(self):

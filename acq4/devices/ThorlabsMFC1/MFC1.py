@@ -96,14 +96,14 @@ class ThorlabsMFC1(Stage):
             self.posChanged([0, 0, pos])
         return [0, 0, pos]
 
-    def _move(self, pos, speed, linear, **kwds):
+    def _move(self, pos, speed, linear, name=None, **kwds):
         pos = self._toAbsolutePosition(pos)
         limits = self.getLimits()[2]
         if limits[0] is not None:
             pos[2] = max(pos[2], limits[0])
         if limits[1] is not None:
             pos[2] = min(pos[2], limits[1])
-        return MFC1MoveFuture(self, pos, speed)
+        return MFC1MoveFuture(self, pos, speed, name=name)
 
     @property
     def positionUpdatesPerSecond(self):
@@ -216,8 +216,10 @@ class MFC1StageInterface(StageInterface):
 class MFC1MoveFuture(MoveFuture):
     """Provides access to a move-in-progress on an MPC200 drive.
     """
-    def __init__(self, dev, pos, speed):
-        MoveFuture.__init__(self, dev, pos, speed)
+    def __init__(self, dev, pos, speed, name=None):
+        if name is None:
+            name = f'{dev.name()} move'
+        MoveFuture.__init__(self, dev, pos, speed, name=name)
         self.startPos = dev.getPosition()
         self.stopPos = pos
         self._moveStatus = {'status': None}

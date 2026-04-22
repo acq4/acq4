@@ -250,6 +250,8 @@ class Scientifica(Stage):
             if self._lastMove is not None and not self._lastMove.isDone():
                 self.stop()
             speed = self._interpretSpeed(speed)
+            if name is None:
+                name = f"{self.name()} move"
 
             self._lastMove = ScientificaMoveFuture(self, pos, speed, name=name, **kwds)
             return self._lastMove
@@ -300,7 +302,7 @@ class ScientificaMoveFuture(MoveFuture):
             self.doStepwise = True
             currentPos = dev.getPosition()
             targetPos = [currentPos[i] if pos[i] is None else pos[i] for i in range(len(pos))]
-            super().__init__(dev, targetPos, speed)
+            super().__init__(dev, targetPos, speed, name=name)
             self.stepwiseThread.start()
         else:
             self._moveReq = dev.driver.moveTo(np.array(pos), speed / 1e-6, name=name, **kwds)
@@ -340,7 +342,7 @@ class ScientificaMoveFuture(MoveFuture):
                 now = ptime.time()
                 fracComplete = min(1, (now - startTime) / duration)
                 step = start + (stop-start) * fracComplete
-                self.f = self.dev.driver.moveTo(step, speed=minSpeed)
+                self.f = self.dev.driver.moveTo(step, speed=minSpeed, name=f"{self.dev.name()} stepwise substep")
                 self.f.wait()
                 if fracComplete == 1:
                     self._taskDone()
@@ -502,7 +504,7 @@ class ScientificaGUI(StageInterface):
                         diff += self._zeroAxis(axis)
 
             self.dev.logger.info(f"Auto-zeroed {self.dev.name()} by {diff}")
-            move_future = self.dev.moveToGlobal(globalStartPos + diff, "fast")
+            move_future = self.dev.moveToGlobal(globalStartPos + diff, "fast", name=f"{self.dev.name()} return to start after auto-zero")
             slippedAxes = np.abs(diff) > 50e-6
             if np.any(slippedAxes):
                 msg = f"Detected axis slip on {self.dev.name()}:"
@@ -531,7 +533,7 @@ class ScientificaGUI(StageInterface):
         else:
             dest = [None, None, None]
             dest[axis] = pos[axis]
-        f = self.dev._move(dest, "fast", False, attempts_allowed=1)
+        f = self.dev._move(dest, "fast", False, attempts_allowed=1, name=f"{self.dev.name()} auto-zero axis {axis}")
         while not f.isDone():
             _future.sleep(0.1)
 

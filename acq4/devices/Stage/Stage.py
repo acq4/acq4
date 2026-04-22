@@ -844,7 +844,7 @@ class MovePathFuture(MoveFuture):
             step['position'] = fwdPath[i]['position']
             step['explanation'] = f"undo {step.get('explanation')}"
             revPath.append(step)
-        return self.dev.movePath(revPath)
+        return self.dev.movePath(revPath, name=f"undo {self.name}")
 
 
 class StageInterface(Qt.QWidget):

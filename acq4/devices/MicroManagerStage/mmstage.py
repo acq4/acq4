@@ -216,7 +216,7 @@ class MicroManagerStage(Stage):
         self.monitor.stop()
         Stage.quit(self)
 
-    def _move(self, pos, speed, linear, **kwds):
+    def _move(self, pos, speed, linear, name=None, **kwds):
         with self.lock:
             if self._lastMove is not None and not self._lastMove.isDone():
                 self.stop()
@@ -227,7 +227,7 @@ class MicroManagerStage(Stage):
 
             speed = self._interpretSpeed(speed)
 
-            self._lastMove = MicroManagerMoveFuture(self, pos, speed, self.userSpeed, moveXY=moveXY, moveZ=moveZ)
+            self._lastMove = MicroManagerMoveFuture(self, pos, speed, self.userSpeed, moveXY=moveXY, moveZ=moveZ, name=name)
             return self._lastMove
 
     def deviceInterface(self, win):
@@ -292,8 +292,10 @@ class MicroManagerMoveFuture(MoveFuture):
     """Provides access to a move-in-progress on a micromanager stage.
     """
 
-    def __init__(self, dev, pos, speed, userSpeed, moveXY=True, moveZ=True):
-        MoveFuture.__init__(self, dev, pos, speed, name=f'{dev.name()}_move')
+    def __init__(self, dev, pos, speed, userSpeed, moveXY=True, moveZ=True, name=None):
+        if name is None:
+            name = f'{dev.name()} move'
+        MoveFuture.__init__(self, dev, pos, speed, name=name)
         self._interrupted = False
         self._errorMSg = None
         self._finished = False

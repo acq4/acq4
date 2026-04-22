@@ -568,7 +568,7 @@ class CorrelationPipetteTracker(PipetteTracker):
                         offsets.append(offset)
 
                         # move manipulator
-                        mfut = self.pipette._moveToGlobal(pos + offset, speed)
+                        mfut = self.pipette._moveToGlobal(pos + offset, speed, name=f"{self.pipette.name()} tracker calibration step {i}")
 
                         # move camera
                         if moveStageXY:
@@ -576,7 +576,7 @@ class CorrelationPipetteTracker(PipetteTracker):
                         else:
                             cpos = imager.globalCenterPosition("roi")
                             cpos[2] = pos[2]
-                        ffut = imager.moveCenterToGlobal(cpos, speed, center="roi")
+                        ffut = imager.moveCenterToGlobal(cpos, speed, center="roi", name=f"{imager.name()} center on {self.pipette.name()} for tracker calibration step {i}")
                     if i > 0:
                         ind = inds[order[i - 1]]
 
@@ -613,7 +613,7 @@ class CorrelationPipetteTracker(PipetteTracker):
 
                     # step back to actual target position
                     try:
-                        self.pipette._moveToGlobal(pos, speed).wait(updates=True)
+                        self.pipette._moveToGlobal(pos, speed, name=f"{self.pipette.name()} tracker calibration return to target").wait(updates=True)
                     except RuntimeError as exc:
                         misses += 1
                         logger.exception("Manipulator missed target:")
@@ -626,8 +626,8 @@ class CorrelationPipetteTracker(PipetteTracker):
                     if dlg.wasCanceled():
                         return None
         finally:
-            self.pipette._moveToGlobal(start, "fast")
-            self.pipette.scopeDevice().setFocusDepth(start[2], "fast")
+            self.pipette._moveToGlobal(start, "fast", name=f"{self.pipette.name()} tracker calibration return to start")
+            self.pipette.scopeDevice().setFocusDepth(start[2], "fast", name=f"{self.pipette.scopeDevice().name()} tracker calibration return focus to start")
 
         self.errorMap = {
             "err": err,

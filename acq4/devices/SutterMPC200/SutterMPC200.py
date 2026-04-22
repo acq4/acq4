@@ -151,7 +151,7 @@ class SutterMPC200(Stage):
     def positionUpdatesPerSecond(self):
         return 1.0 / SutterMPC200._monitor.minInterval
 
-    def _move(self, pos, speed, linear, **kwds):
+    def _move(self, pos, speed, linear, name=None, **kwds):
         # convert speed to values accepted by MPC200
         if speed == 'slow':
             speed = self.slowSpeed
@@ -162,8 +162,8 @@ class SutterMPC200(Stage):
                 speed = 'fast'
         else:
             speed = self._getClosestSpeed(speed)
-        
-        self._lastMove = MPC200MoveFuture(self, pos, speed)
+
+        self._lastMove = MPC200MoveFuture(self, pos, speed, name=name)
         return self._lastMove
 
     def _getClosestSpeed(self, speed):
@@ -290,8 +290,10 @@ class MonitorThread(Thread):
 class MPC200MoveFuture(MoveFuture):
     """Provides access to a move-in-progress on an MPC200 drive.
     """
-    def __init__(self, dev, pos, speed):
-        MoveFuture.__init__(self, dev, pos, speed)
+    def __init__(self, dev, pos, speed, name=None):
+        if name is None:
+            name = f'{dev.name()} move'
+        MoveFuture.__init__(self, dev, pos, speed, name=name)
         
         # because of MPC200 idiosyncracies, we must coordinate with the monitor
         # thread to do a move.

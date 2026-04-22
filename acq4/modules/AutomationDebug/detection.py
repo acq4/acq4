@@ -145,7 +145,7 @@ class CellDetector:
             working_stack = detection_stack
             multichannel = False
 
-        win.cameraDevice.setFocusDepth(depth)  # Restore focus
+        win.cameraDevice.setFocusDepth(depth, name=f"{win.cameraDevice.name()} restore focus after detection z-stack")  # Restore focus
 
         global_pos = _future.waitFor(
             detect_neurons(

@@ -223,7 +223,7 @@ def findNewPipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=0.
         # focus 2mm above surface
         surfaceZ = scopeDevice.getSurfaceDepth()
         startDepth = surfaceZ + 2e-3
-        _future.waitFor(imager.setFocusDepth(startDepth))
+        _future.waitFor(imager.setFocusDepth(startDepth, name=f"{imager.name()} focus above surface for {pipette.name()} auto-calibrate"))
 
         # move pipette to search position
         center = imager.globalCenterPosition(mode='roi')
@@ -233,7 +233,7 @@ def findNewPipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=0.
         searchPos1 = center + pipVector * 1.5e-3 + pipY * 2e-3
         searchPos2 = center + pipVector * 1.5e-3 - pipY * 2e-3
         # using a planner avoids possible collisions with the objective
-        planner = PipetteMotionPlanner(pipette, searchPos1, speed='fast')
+        planner = PipetteMotionPlanner(pipette, searchPos1, speed='fast', name=f"{pipette.name()} auto-calibrate search")
         _future.waitFor(planner.move())
 
         # collect background images, analyze noise
@@ -261,7 +261,7 @@ def findNewPipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=0.
         centerPipPos = getPipettePositionAtTime(posEvents, centerTime)
 
         # move back to center position
-        _future.waitFor(pipette._moveToGlobal(centerPipPos, speed='fast'))
+        _future.waitFor(pipette._moveToGlobal(centerPipPos, speed='fast', name=f"{pipette.name()} auto-calibrate return to center"))
 
         # todo: at this point we could compare the current image to the previously collected video
         # to see whether we made it back to the desired position (and if not, apply
@@ -273,7 +273,7 @@ def findNewPipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=0.
         pipetteCameraDelay = frames[mostSimilarFrame].info()['time'] - frames[centerIndex].info()['time']
         correctedCenterTime = frames[centerIndex].info()['time'] - pipetteCameraDelay
         correctedCenterPipPos = getPipettePositionAtTime(posEvents, correctedCenterTime)
-        _future.waitFor(pipette._moveToGlobal(correctedCenterPipPos, speed='fast'))
+        _future.waitFor(pipette._moveToGlobal(correctedCenterPipPos, speed='fast', name=f"{pipette.name()} auto-calibrate corrected center"))
 
         # record from imager and pipette position while retracting pipette out of frame
         retractPos = centerPipPos - pipVector * 2e-3
@@ -314,7 +314,7 @@ def findNewPipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=0.
         centerPipPos2 = endPipPos + np.array([0, yDist, 0])
 
         # move to new center
-        _future.waitFor(pipette._moveToGlobal(centerPipPos2, speed='fast'))
+        _future.waitFor(pipette._moveToGlobal(centerPipPos2, speed='fast', name=f"{pipette.name()} auto-calibrate move to new center"))
 
         # autofocus
         z_range = (startDepth - 500e-6, startDepth + 500e-6, 20e-6)
@@ -358,7 +358,7 @@ def findNewPipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=0.
 
         # do initial coarse registration: reset offset to detected position, center in frame
         pipette.resetGlobalPosition(globalPos)
-        _future.waitFor(pipette._moveToGlobal(imager.globalCenterPosition(), 'fast'))
+        _future.waitFor(pipette._moveToGlobal(imager.globalCenterPosition(), 'fast', name=f"{pipette.name()} auto-calibrate coarse center"))
 
         # iteratively refine tip position until convergence
         _future.waitFor(pipette.iterativelyFindTip(30), timeout=None)
@@ -418,7 +418,7 @@ def watchMovingPipette(pipette: Pipette, imager: Camera, pos, speed, _future):
         try:
             imgFuture = imager.acquireFrames()
             pipRecorder = pipette.startRecording()
-            pipFuture = pipette._moveToGlobal(pos, speed=speed)
+            pipFuture = pipette._moveToGlobal(pos, speed=speed, name=f"{pipette.name()} watchMovingPipette")
             _future.waitFor(pipFuture, timeout=40)  # for some reason one of these moves takes a long time to finish..
         finally:
             if pipRecorder is not None:
@@ -502,7 +502,7 @@ def calibrate_manipulator_axes(
             # Move along this axis to the next absolute position.
             target_pos = list(axis_start_pos)
             target_pos[axis] = axis_start_pos[axis] + step_idx * (step_size / scale[axis])
-            _future.waitFor(manipulator.move(target_pos, 'slow'))
+            _future.waitFor(manipulator.move(target_pos, 'slow', name=f"{manipulator.name()} calibrate axis {axis} step {step_idx}"))
 
             # Locate the tip via z-stack scan; this handles unknown axis orientation by
             # searching a range of focal depths around the current focus.
@@ -523,7 +523,7 @@ def calibrate_manipulator_axes(
             calibration_points.append((device_pos, parent_pos))
 
         # Return to the starting position before sweeping the next axis.
-        _future.waitFor(manipulator.move(axis_start_pos, 'slow'))
+        _future.waitFor(manipulator.move(axis_start_pos, 'slow', name=f"{manipulator.name()} calibrate axis {axis} return"))
         # Re-locate tip at start before recording the first point of the next axis.
         _future.waitFor(pipette.iterativelyFindTip(10))
 

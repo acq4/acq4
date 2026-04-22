@@ -233,6 +233,8 @@ class Sensapex(Stage):
         if self._force_nonlinear_movement:
             linear = False
         speed = self._interpretSpeed(speed)
+        if name is None:
+            name = f"{self.name()} move"
         with self.lock:
             self._lastMove = SensapexMoveFuture(self, pos, speed, linear, name=name, **kwds)
             return self._lastMove
