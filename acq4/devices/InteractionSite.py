@@ -249,12 +249,11 @@ class InteractionSite(Device, OptomechDevice):
     #             )
     #         self._approach_stage_path = None
 
-    def moveToApproach(self, other, speed='fast'):
-        if other.name() not in self.positions:
-            raise RuntimeError(f"No positions saved for {other.name()} at {self.name()}")
-        pos_config = self.positions[other.name()]
-        return other._moveToGlobal(pos_config['site global'], speed=speed)
-
+    # def moveToApproach(self, other, speed='fast'):
+    #     if other.name() not in self.positions:
+    #         raise RuntimeError(f"No positions saved for {other.name()} at {self.name()}")
+    #     pos_config = self.positions[other.name()]
+    #     return other._moveToGlobal(pos_config['site global'], speed=speed)
 
 
 def _fmt_pos(pos):
