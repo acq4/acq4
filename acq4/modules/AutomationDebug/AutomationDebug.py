@@ -150,6 +150,7 @@ class AutomationDebugWindow(Qt.QWidget):
         self.ui.autopatchDemoBtn.sigFinished.connect(
             self._autopatcher._handleAutopatchDemoFinish
         )
+        self.ui.reuseLastCellBtn.clicked.connect(self._reuseLastCell)
 
         self.show()
         planner = self.module.config.get("motionPlanner", "Objective radius only")
@@ -306,6 +307,17 @@ class AutomationDebugWindow(Qt.QWidget):
         self._previousTargets.append(target)
         self.pipetteDevice.setTarget(target)  # TODO setCellTarget
         logger.info(f"Setting pipette target to {target}")
+
+    def _reuseLastCell(self):
+        if self._cell is None:
+            return
+        cell = self._cell
+        self._cell = None
+        if cell in self._ranked_cells:
+            self._ranked_cells.remove(cell)
+        self._unranked_cells.insert(0, cell)
+        self.ui.reuseLastCellBtn.setEnabled(False)
+        logger.info(f"Re-queued last cell at front of unranked list: {cell}")
 
     def _handleAutoFinish(self, fut: Future):
         self.sigWorking.emit(False)

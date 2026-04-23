@@ -22,7 +22,9 @@ class Autopatcher:
         self._window = window
 
     def _handleAutopatchDemoFinish(self, fut):
-        self._window.sigWorking.emit(False)
+        win = self._window
+        win.sigWorking.emit(False)
+        win.ui.reuseLastCellBtn.setEnabled(win._cell is not None)
 
     @future_wrap
     def _autopatchDemo(self, _future):
