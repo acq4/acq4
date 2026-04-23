@@ -250,11 +250,11 @@ class PatchPipetteStateManager(Qt.QObject):
             try:
                 job.wait(timeout=10)
             except job.Timeout:
-                self.logger.exception(f"Timed out waiting for job {job} to complete")
+                self.logger.warning(f"Timed out waiting for job {job} to complete", exc_info=True)
             except job.Stopped:
                 pass
             except Exception:
-                self.logger.exception(f"{self.dev.name()} failed in state {job.stateName}")
+                self.logger.warning(f"{self.dev.name()} failed in state {job.stateName}", exc_info=True)
             self.jobFinished(job, allowNextState=allowNextState)
 
     def jobStateChanged(self, job, state):

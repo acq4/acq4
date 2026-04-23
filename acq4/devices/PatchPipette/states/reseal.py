@@ -465,7 +465,7 @@ class ResealState(PatchPipetteState):
                         depth=self._targetPosition[2],
                         speed=self.config['maxRetractionSpeed'],
                         interval=config['retractionStepInterval'],
-                        step=1e-6,
+                        step=1.1e-6,
                         name='reseal tear recovery',
                     )
             elif self.isTorn():
@@ -490,7 +490,7 @@ class ResealState(PatchPipetteState):
                     depth=dev.pipetteDevice.approachDepth(),
                     speed=config['maxRetractionSpeed'],
                     interval=config['retractionStepInterval'],
-                    step=1e-6,
+                    step=1.1e-6,
                     name='reseal retraction',
                 )
 

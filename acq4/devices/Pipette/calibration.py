@@ -203,7 +203,7 @@ def scan_pipette_z_stack(pipette, imager=None, z_range=50e-6, z_step=5e-6, show=
         from acq4.util.threadrun import runInGuiThread
         runInGuiThread(_show_z_stack_detection_widget, frames, image_positions, z_predictions_um, confidences, heatmaps)
 
-    return frames, global_positions, z_predictions_um, confidences
+    return frames, global_positions, z_predictions_um, confidences, heatmaps
 
 
 def _show_z_stack_detection_widget(frames, image_positions, z_um, confidences, heatmaps=None):
@@ -230,8 +230,8 @@ def findNewPipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=0.
         pipVector = pipette.globalDirection()
         pipY = np.cross(pipVector, [0, 0, 1])
         pipY /= np.linalg.norm(pipY)
-        searchPos1 = center + pipVector * 1.5e-3 + pipY * 2e-3
-        searchPos2 = center + pipVector * 1.5e-3 - pipY * 2e-3
+        searchPos1 = center + pipVector * 1e-3 + pipY * 1e-3
+        searchPos2 = center + pipVector * 1e-3 - pipY * 1e-3
         # using a planner avoids possible collisions with the objective
         planner = PipetteMotionPlanner(pipette, searchPos1, speed='fast', name=f"{pipette.name()} auto-calibrate search")
         _future.waitFor(planner.move())

@@ -102,7 +102,7 @@ class Frame:
         return self._info['frameTransform']
 
     def globalTransform(self):
-        """Return the transform that maps this frame's image coordinates (row, col)
+        """Return the transform that maps this frame's image coordinates (row, col, frame)
         to global coordinates (x, y, z). This is equivalent to (deviceTransform * frameTransform).
         """
         return self._info['transform']

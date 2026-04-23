@@ -249,7 +249,7 @@ class SealState(PatchPipetteState):
         'holdingPotential': {'type': 'float', 'default': -70e-3, 'suffix': 'V'},
         'sealThreshold': {'type': 'float', 'default': 1e9, 'suffix': 'Ω'},
         'breakInThreshold': {'type': 'float', 'default': 10e-12, 'suffix': 'F'},
-        'failureResistanceThreshold': {'type': 'float', 'default': 100e6, 'suffix': 'Ω'},
+        'failureResistanceThreshold': {'type': 'float', 'default': 50e6, 'suffix': 'Ω'},
         'failureDRDTThreshold': {'type': 'float', 'default': 1e6, 'suffix': 'Ω/s'},
         'autoSealTimeout': {'type': 'float', 'default': 30.0, 'suffix': 's'},
         'pressureLimit': {'type': 'float', 'default': -3e3, 'suffix': 'Pa'},
