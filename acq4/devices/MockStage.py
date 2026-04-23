@@ -178,7 +178,7 @@ class MockStage(Stage):
         return 1.0 / self.stageThread.interval
 
     def _getPosition(self):
-        return self.stageThread.getPosition()
+        return self.stageThread.getPosition()[:self.nAxes]
 
     def startMoving(self, vel):
         """Begin moving the stage at a continuous velocity.
