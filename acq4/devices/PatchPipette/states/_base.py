@@ -145,8 +145,6 @@ class PatchPipetteState(Future):
         self.testPulseResults = queue.Queue()
         self._cleanupFuture = None
         self._pressureAdjustment = None
-        self._cell = None
-        self._visualTargetTrackingFuture = None
         self._pauseMovement = False
         # indicates state that should be transitioned to next, if any.
         # This is usually set by the return value of run(), and must be invoked by the state manager.
@@ -318,14 +316,8 @@ class PatchPipetteState(Future):
         """
         disconnect(self.dev.sigTargetChanged, self._onTargetChanged)
         with log_and_ignore_exception(Exception, "Error disabling visual target tracking"):
-            if self._cell is not None:
-                self._cell.enableTracking(False)
-        with log_and_ignore_exception(Exception, "Error stopping visual target tracking"):
-            if self._visualTargetTrackingFuture is not None:
-                print(f"====== Stopping tracking from {self} cleanup")
-                self._cell.enableTracking(False)
-                self._visualTargetTrackingFuture.stop("State cleanup")
-            self._visualTargetTrackingFuture = None
+            if self.dev.cell is not None:
+                self.stopVisualTargetTracking('cleaning up state')
         return Future.immediate()
 
     def checkStop(self):
@@ -353,44 +345,42 @@ class PatchPipetteState(Future):
     def aboveSurface(self, pos=None):
         return self.depthBelowSurface(pos) < 0
 
-    def maybeVisuallyTrackTarget(self):
+    def maybeVisuallyTrackTarget(self, allow_refresh_reference=True):
         if not self.config["visualTargetTracking"]:
             return
         if self.closeEnoughToTargetToDetectCell():
-            if self._visualTargetTrackingFuture is not None:
-                self._cell.enableTracking(False)
-                self._visualTargetTrackingFuture.stop(
-                    "Close enough to target to detect cell, stopping visual tracking"
-                )
-                self._visualTargetTrackingFuture = None
+            self.stopVisualTargetTracking(reason="Close enough to target to detect cell, stopping visual tracking")
             return
-        if self._visualTargetTrackingFuture is None:
-            self._cell = self.dev.cell
-            self._visualTargetTrackingFuture = self._visualTargetTracking()
+        if not self.dev.cell.isTracking():
+            self.startVisualTargetTracking(allow_refresh_reference)
 
-    def _visualTargetTracking(self):
-        cell = self._cell
+    def stopVisualTargetTracking(self, reason):
+        fut = self.dev.cell._trackingFuture
+        if fut is not None:
+            self.dev.cell.enableTracking(False, reason=reason)
+            self.waitFor(fut)
+
+    def startVisualTargetTracking(self, allow_refresh_reference=True):
+        cell = self.dev.cell
+        cell.allow_refresh_reference = allow_refresh_reference
         if cell is None:
             raise ValueError("Cannot visually track target; no cell is assigned to this pipette device.")
         if not cell.isInitialized:
             cell.initializeTracker(self.dev.pipetteDevice.imagingDevice()).wait()
 
-        print(f"====== Starting visual tracking from {self} _visualTargetTracking")
         cell.enableTracking(True)
         cell.sigTrackingMultipleFramesStart.connect(self._pausePipetteForExtendedTracking)
         cell.sigPositionChanged.connect(self.dev.pipetteDevice.setTarget)
         cell._trackingFuture.sigFinished.connect(self._visualTargetTrackingFinished)
-        return cell._trackingFuture
 
     def _visualTargetTrackingFinished(self, future):
         from acq4_automation.feature_tracking.visualization import LiveTrackerVisualizer
 
         if not hasattr(self.dev, '_trackingVisualizers'):
             self.dev._trackingVisualizers = []
-        disconnect(self._cell.sigPositionChanged, self.dev.pipetteDevice.setTarget)
-        disconnect(self._cell.sigTrackingMultipleFramesStart, self._pausePipetteForExtendedTracking)
-        disconnect(self._cell.sigTrackingMultipleFramesFinish, self._resumePipetteAfterExtendedTracking)
-
+        disconnect(self.dev.cell.sigPositionChanged, self.dev.pipetteDevice.setTarget)
+        disconnect(self.dev.cell.sigTrackingMultipleFramesStart, self._pausePipetteForExtendedTracking)
+        disconnect(self.dev.cell.sigTrackingMultipleFramesFinish, self._resumePipetteAfterExtendedTracking)
 
     def _pausePipetteForExtendedTracking(self, cell):
         self._pauseMovement = True

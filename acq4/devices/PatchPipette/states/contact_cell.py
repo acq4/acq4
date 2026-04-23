@@ -101,7 +101,7 @@ class ContactCellState(PatchPipetteState):
         self.monitorTestPulse()
 
         # 3. Enable visual target tracking
-        self.maybeVisuallyTrackTarget()
+        self.startVisualTargetTracking(allow_refresh_reference=True)
 
         # 4. Move to target position + 7 µm in z
         target = np.array(pip.targetPosition())
@@ -111,6 +111,8 @@ class ContactCellState(PatchPipetteState):
         self._moveFuture = pip._moveToGlobal(initial_pos, speed=config['moveSpeed'], name='move to initial approach position')
         self.waitFor(self._moveFuture)
         self._moveFuture = None
+
+        self.findPipetteTip(zstack=True)
 
         self._startZ = pip.globalPosition()[2]
         iterations = 0
@@ -200,15 +202,26 @@ class ContactCellState(PatchPipetteState):
         #     self._disableVisualTracking()
         return super()._cleanup()
 
-    def recalibratePipette(self):
+    def findPipetteTip(self, zstack=True):
         pip = self.dev.pipetteDevice
         self.setState(f"Check pipette tip..")
         try:
-            tip_fut = self.waitFor(
-                pip.iterativelyFindTip(
-                    max_allowed_offset=self.config["pipetteRecalibrationMaxChange"],
-                    go_to_tip_first=True,
+            if zstack:
+                self.stopVisualTargetTracking('pause tracking for pipette recalibration')
+                try:
+                    pos, analysis = self.waitFor(
+                        pip.findTipInStack(maxOffsetDistance=20e-6)
+                    )
+                    pip.setTipOffset(pos)
+                finally:
+                    self.startVisualTargetTracking()
+            else:
+                tip_fut = self.waitFor(
+                    pip.iterativelyFindTip(
+                        max_allowed_offset=self.config["pipetteRecalibrationMaxChange"],
+                        go_to_tip_first=True,
+                        focus_above=2e-6,
+                    )
                 )
-            )
         except Exception as e:
             self.setState(f"failed pipette position update: {e}")

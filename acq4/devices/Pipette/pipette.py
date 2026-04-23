@@ -882,7 +882,7 @@ class Pipette(Device, OptomechDevice):
     @future_wrap
     def iterativelyFindTip(self, max_reps=10, found_threshold=3e-6, delay_after_move=0.4, 
                            max_allowed_offset=None, delay_after_update=0, reserve_devices=True,
-                           go_to_tip_first=False, _future=None):
+                           go_to_tip_first=False, stack_mode=False, focus_above=0, _future=None):
         """Iteratively refine the tip position by finding the tip in frame and focusing, until convergence.
         
         Returns if convergence is reached (tip position changes less than *found_threshold* between iterations) or after *max_reps* iterations.
@@ -919,10 +919,19 @@ class Pipette(Device, OptomechDevice):
                 last_pos = None
                 start_pos = self.globalPosition()
                 if go_to_tip_first:
-                    _future.waitFor(self.focusTip())
+                    _future.waitFor(self.focusAboveTip(focus_above))
                     _future.sleep(delay_after_move)
+
+                if stack_mode:
+                    pos = self._findTipViaZStack()
+                    _future.waitFor(self.setTipOffsetIfAcceptable(pos), timeout=None)
+                    return
+                
                 for _ in range(max_reps):
                     pos = self.tracker.findTipInFrame()
+                    heatmap = getattr(self.tracker, 'last_heatmap', None)
+                    if heatmap is not None and heatmap.max() < 2 * heatmap.std():
+                        pos = self._findTipViaZStack()
                     _future.waitFor(self.setTipOffsetIfAcceptable(pos), timeout=None)
                     converged = last_pos is not None and np.linalg.norm(np.array(pos) - np.array(last_pos)) < found_threshold
                     _future.sleep(delay_after_update)
@@ -933,14 +942,74 @@ class Pipette(Device, OptomechDevice):
                         return
 
                     last_pos = pos
-                    _future.waitFor(self.focusTip())
+                    _future.waitFor(self.focusAboveTip(focus_above))
                     _future.sleep(delay_after_move)
                 raise TimeoutError(f"Iterative tip finding did not converge after {max_reps} iterations.")
             except Exception as exc:
                 # reset position to start if we fail, to avoid leaving the pipette in a bad position
                 self.setTipOffset(start_pos)
                 raise exc
-        
+
+    @future_wrap
+    def findTipInStack(self, *, _future:Future, maxOffsetDistance=20e-6):
+        startPos = self.globalPosition()
+        fut = self.tracker.estimatePositionFromStack()
+        _future.waitFor(fut)
+        pos, analysis = fut.getResult()
+        dist = np.linalg.norm(np.array(pos) - np.array(startPos))
+        if dist > maxOffsetDistance:
+            raise ValueError(f"Tip offset exceeded maximum allowed distance: {dist} > {maxOffsetDistance}")
+        self.setTipOffset(pos)
+        return pos, analysis
+
+    def focusAboveTip(self, distance, speed='slow'):
+        pos = self.globalPosition() + np.array([0, 0, distance])
+        future = self.imagingDevice().moveCenterToGlobal(
+            pos, speed=speed, name=f"focus on {self.name()}"
+        )
+        return future
+
+    def _findTipViaZStack(self):
+        """Fallback tip-finding method using a z-stack when the single-frame heatmap is ambiguous.
+
+        Acquires a 20 µm z-stack around the current tip position, discards frames whose heatmap
+        peak is less than 2× the heatmap standard deviation, then fits a line to the remaining
+        (frame_z, z_prediction_um) pairs and returns the global position from the frame whose
+        focus depth is closest to the crossing point where z_prediction_um = 0.
+        """
+        from acq4.devices.Pipette.calibration import scan_pipette_z_stack
+
+        frames, global_positions, z_predictions_um, confidences, heatmaps = scan_pipette_z_stack(
+            self, z_range=10e-6, z_step=2e-6
+        )
+
+        # Compute the focus-plane z for each frame from the global position and z prediction.
+        frame_zs = global_positions[:, 2] - z_predictions_um * 1e-6
+
+        # Discard frames where heatmap peak < 2 * heatmap stdev.
+        keep = []
+        for i, hm in enumerate(heatmaps):
+            if hm is not None and hm.max() >= 2 * hm.std():
+                keep.append(i)
+
+        if len(keep) < 2:
+            raise RuntimeError("Z-stack fallback: not enough high-quality frames to estimate tip position.")
+
+        fz = frame_zs[keep]
+        zp = z_predictions_um[keep]
+
+        # Linear regression: z_prediction_um = slope * frame_z + intercept.
+        # Solve for frame_z where z_prediction_um = 0.
+        coeffs = np.polyfit(fz, zp, 1)
+        slope, intercept = coeffs
+        if abs(slope) < 1e-12:
+            raise RuntimeError("Z-stack fallback: degenerate regression slope, cannot estimate tip crossing.")
+        z_cross = -intercept / slope
+
+        # Return the global position from the kept frame whose focus depth is closest to z_cross.
+        dists = np.abs(fz - z_cross)
+        best = keep[int(np.argmin(dists))]
+        return tuple(global_positions[best])
 
     def findNewPipette(self):
         from acq4.devices.Pipette.calibration import findNewPipette
