@@ -67,9 +67,7 @@ class Stage(Device, OptomechDevice):
         self._lastMove = None
         # total device transform will be composed of a base transform (defined in the config)
         # and a dynamic translation provided by the hardware.
-        self._baseTransform = self.deviceTransform()
-
-        m = self._baseTransform
+        m = self._baseTransform = self.deviceTransform()
         angle, axis = m.rotation
         scale = m.scale
         if tuple(scale) != (1, 1, 1) or angle != 0:
