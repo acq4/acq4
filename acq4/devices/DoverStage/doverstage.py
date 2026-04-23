@@ -78,10 +78,10 @@ class DoverStage(Stage):
 
     def targetPosition(self):
         """Return the target position of the last move command."""
-        if self._lastMove is not None:
-            return self._lastMove.target
+        if self._lastMove is None or self._lastMove.isDone():
+            return self.getPosition()
         else:
-            return None
+            return self._lastMove.target
 
     # def deviceInterface(self, win):
     #     return DoverStageInterface(self, win)
