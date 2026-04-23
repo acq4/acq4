@@ -212,13 +212,6 @@ class Sensapex(Stage):
                 self.posChanged(pos)
                 time.sleep(updateInterval)
 
-    def targetPosition(self):
-        with self.lock:
-            if self._lastMove is None or self._lastMove.isDone():
-                return self.getPosition()
-            else:
-                return self._lastMove.targetPos
-
     def quit(self):
         self._quitRequested = True
         super().quit()

@@ -205,13 +205,6 @@ class MicroManagerStage(Stage):
 
         return pos
 
-    def targetPosition(self):
-        with self.lock:
-            if self._lastMove is None or self._lastMove.isDone():
-                return self.getPosition()
-            else:
-                return self._lastMove.targetPos
-
     def quit(self):
         self.monitor.stop()
         Stage.quit(self)

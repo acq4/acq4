@@ -180,13 +180,6 @@ class MockStage(Stage):
     def _getPosition(self):
         return self.stageThread.getPosition()
 
-    def targetPosition(self):
-        with self.lock:
-            if self._lastMove is None or self._lastMove.isDone():
-                return self.getPosition()
-            else:
-                return self._lastMove.targetPos
-
     def startMoving(self, vel):
         """Begin moving the stage at a continuous velocity.
         """

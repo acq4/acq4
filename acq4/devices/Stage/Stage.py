@@ -64,6 +64,7 @@ class Stage(Device, OptomechDevice):
         Device.__init__(self, dm, config, name)
         OptomechDevice.__init__(self, dm, config, name)
 
+        self._lastMove = None
         # total device transform will be composed of a base transform (defined in the config)
         # and a dynamic translation provided by the hardware.
         self._baseTransform = self.deviceTransform()
@@ -329,10 +330,11 @@ class Stage(Device, OptomechDevice):
         raise NotImplementedError()
 
     def targetPosition(self):
-        """If the stage is moving, return the target position. Otherwise return
-        the current position.
-        """
-        raise NotImplementedError()
+        """Return the target position of the last move command."""
+        if self.isMoving():
+            return self._lastMove.targetPos
+        else:
+            return self.getPosition()
 
     def globalTargetPosition(self):
         """Returns the target position mapped to the global coordinate system.
@@ -370,8 +372,7 @@ class Stage(Device, OptomechDevice):
         self._defaultSpeed = speed
 
     def isMoving(self):
-        """Return True if the device is currently moving."""
-        raise NotImplementedError()
+        return self._lastMove is not None and not self._lastMove.isDone()
 
     def move(self, position, speed=None, progress=False, linear=False, **kwds) -> MoveFuture:
         """Move the device to a new position.
@@ -397,6 +398,7 @@ class Stage(Device, OptomechDevice):
         self.checkMove(position, speed=speed, progress=progress, linear=linear, **kwds)
 
         mfut = self._move(position, speed=speed, linear=linear, **kwds)
+        self._lastMove = mfut
 
         if progress:
             self._progressDialog = Qt.QProgressDialog(f"{self.name()} moving...", None, 0, 100)

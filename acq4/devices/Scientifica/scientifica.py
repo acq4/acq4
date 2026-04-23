@@ -234,13 +234,6 @@ class Scientifica(Stage):
     def _stageReportedPositionChange(self, nextPos):
         self._positionChanged(nextPos)
 
-    def targetPosition(self):
-        with self.lock:
-            if self._lastMove is None or self._lastMove.isDone():
-                return self.getPosition()
-            else:
-                return self._lastMove.targetPos
-
     def quit(self):
         self.driver.close()
         Stage.quit(self)

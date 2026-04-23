@@ -136,12 +136,6 @@ class SutterMPC200(Stage):
         pos = [pos[i] * self.scale[i] for i in (0, 1, 2)]
         return pos
 
-    def targetPosition(self):
-        if self._lastMove is None or self._lastMove.isDone():
-            return self.getPosition()
-        else:
-            return self._lastMove.targetPos
-
     def quit(self):
         SutterMPC200._monitor.stop()  # only one thread for all
         # self._monitor.stop()  # this was never set to anything but None

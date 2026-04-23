@@ -76,13 +76,6 @@ class DoverStage(Stage):
         self._lastMove = DoverMoveFuture(self, pos, speed, name=name)
         return self._lastMove
 
-    def targetPosition(self):
-        """Return the target position of the last move command."""
-        if self._lastMove is None or self._lastMove.isDone():
-            return self.getPosition()
-        else:
-            return self._lastMove.target
-
     # def deviceInterface(self, win):
     #     return DoverStageInterface(self, win)
 
@@ -133,8 +126,6 @@ class DoverMoveFuture(MoveFuture):
 
     def __init__(self, dev, pos, speed, name=None):
         MoveFuture.__init__(self, dev, pos, speed, name=name)
-        self.dev = dev
-        self.target = np.asarray(pos)
         self._future = self.dev.dev.move(list(pos), self.speed * 1e3, name=self.name)
         self._future.set_callback(self._future_finished)
 

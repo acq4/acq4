@@ -110,6 +110,7 @@ class ThorlabsMFC1(Stage):
         return 1 / self._monitor.minInterval
 
     def targetPosition(self):
+        # TODO this may be buggy with the new depth control spinbox
         return [0, 0, self.dev.target_position() * self.scale[2]]
 
     def quit(self):
