@@ -41,7 +41,7 @@ class CellDetector:
             self._window.ui.rankingSaveDirEdit.setText(path)
 
     @future_wrap
-    def _addCellFromTarget(self, _future):
+    def _addCellFromTarget(self, name=None, _future=None):
         target = Point(self._window.pipetteDevice.targetPosition(), "global")
         cell = self._window.patchPipetteDevice.cell
         if cell is None or cell.position != target:
@@ -52,7 +52,7 @@ class CellDetector:
         _future.waitFor(futureInGuiThread(self._displayBoundingBoxes, boxPositions))
 
     @future_wrap
-    def _testUI(self, _future):
+    def _testUI(self, name=None, _future=None):
         with self._window.cameraDevice.ensureRunning():
             frame = _future.waitFor(self._window.cameraDevice.acquireFrames(1)).getResult()[0]
         points = np.random.random((20, 3))
@@ -63,7 +63,7 @@ class CellDetector:
 
     @future_wrap
     def _detectNeuronsZStack(
-        self, _future: Future
+        self, name=None, _future: Future = None
     ) -> tuple[list, list[Frame] | None, list[Frame] | None] | list:
         """Acquires Z-stack(s) and runs neuron detection. Returns (bboxes, detection_stack, classification_stack)."""
         from acq4_automation.object_detection import detect_neurons
@@ -102,7 +102,7 @@ class CellDetector:
                 raise RuntimeError("Failed to load mock detection stack.")
 
         else:  # --- Real Acquisition ---
-            surface = _future.waitFor(win.scopeDevice.findSurfaceDepth(win.cameraDevice)).getResult()
+            surface = win.scopeDevice.findSurfaceDepth(win.cameraDevice)
 
             start_z = surface - win.ui.zStackStartDepthSpin.value()
             stop_z = surface - win.ui.zStackStopDepthSpin.value()
@@ -112,22 +112,16 @@ class CellDetector:
                     f"Starting multichannel Z-stack acquisition: Detection='{detection_preset}', "
                     f"Classification='{classification_preset}'"
                 )
-                _future.waitFor(win.scopeDevice.loadPreset(detection_preset))
-            detection_stack = _future.waitFor(
-                acquire_z_stack(
-                    win.cameraDevice, start_z, stop_z, step_z, slow_fallback=False, name="neuron detection stack"
-                ),
-                timeout=100,
-            ).getResult()
+                win.scopeDevice.loadPreset(detection_preset)
+            detection_stack = acquire_z_stack(
+                win.cameraDevice, start_z, stop_z, step_z, slow_fallback=False, name="neuron detection stack"
+            )
 
             if multichannel_processing_intended:
-                _future.waitFor(win.scopeDevice.loadPreset(classification_preset))
-                classification_stack = _future.waitFor(
-                    acquire_z_stack(
-                        win.cameraDevice, start_z, stop_z, step_z, slow_fallback=False, name="neuron classification stack"
-                    ),
-                    timeout=100,
-                ).getResult()
+                win.scopeDevice.loadPreset(classification_preset)
+                classification_stack = acquire_z_stack(
+                    win.cameraDevice, start_z, stop_z, step_z, slow_fallback=False, name="neuron classification stack"
+                )
 
                 if len(detection_stack) != len(classification_stack):
                     logger.warning(

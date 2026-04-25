@@ -410,7 +410,7 @@ class SealState(PatchPipetteState):
             start = ptime.time()
             self.waitForFutureOrSuccess(
                 self.dev.pressureDevice.rampPressure(
-                    target=high, duration=self.config['pressureScanDuration']
+                    target=high, duration=self.config['pressureScanDuration'], _sync="async"
                 )
             )
             if self._analysis.success():
@@ -418,7 +418,7 @@ class SealState(PatchPipetteState):
             turnaround = ptime.time()
             self.waitForFutureOrSuccess(
                 self.dev.pressureDevice.rampPressure(
-                    target=low, duration=self.config['pressureScanDuration']
+                    target=low, duration=self.config['pressureScanDuration'], _sync="async"
                 )
             )
             end = ptime.time()

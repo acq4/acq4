@@ -142,7 +142,7 @@ class DAQSonicator(Sonicator):
         )
 
     @future_wrap
-    def _doProtocol(self, protocol: str | dict, _future):
+    def _doProtocol(self, protocol: str | dict, name=None, _future=None):
         if isinstance(protocol, str):
             protocol = load_stimulus(json.loads(protocol))
         else:

@@ -250,7 +250,7 @@ class Camera(DAQGeneric, OptomechDevice):
         return Future.immediate()
 
     def presetHotkeyPressed(self, dev, changes, presetName):
-        self.loadPreset(presetName)
+        self.loadPreset(presetName, _sync="async")
 
     def newFrames(self):
         """Returns a list of all new frames that have arrived since the last call. The list looks like:
@@ -366,7 +366,7 @@ class Camera(DAQGeneric, OptomechDevice):
 
     @future_wrap
     def driverSupportedFixedFrameAcquisition(
-        self, n: int = 1, _future: Future = None
+        self, n: int = 1, name=None, _future: Future = None
     ) -> list[Frame]:
         """Ask the camera driver to acquire a specific number of frames and return a Future.
 
@@ -405,10 +405,10 @@ class Camera(DAQGeneric, OptomechDevice):
         DAQGeneric.quit(self)
 
     @future_wrap
-    def getEstimatedFrameRate(self, _future: Future):
+    def getEstimatedFrameRate(self, name=None, _future: Future = None):
         """Return the estimated frame rate of the camera."""
         with self.ensureRunning():
-            return _future.waitFor(self.acqThread.getEstimatedFrameRate()).getResult()
+            return self.acqThread.getEstimatedFrameRate()
 
     # @ftrace
     def createTask(self, cmd, parentTask):
@@ -708,7 +708,7 @@ class CameraTask(DAQGenericTask):
         # arm recording
         self.stopRecording = False
         if self.fixedFrameCount is not None:
-            self._future = self.dev.driverSupportedFixedFrameAcquisition(n=self.fixedFrameCount)
+            self._future = self.dev.driverSupportedFixedFrameAcquisition(n=self.fixedFrameCount, _sync="async")
         elif not self.dev.isRunning():
             self.dev.start(block=True)
 
@@ -1067,7 +1067,7 @@ class AcquireThread(Thread):
             self.sigShowMessage.emit("ERROR starting acquisition (see console output)")
 
     @future_wrap
-    def getEstimatedFrameRate(self, _future: Future = None):
+    def getEstimatedFrameRate(self, name=None, _future: Future = None):
         """Return the estimated frame rate of the camera."""
         if not self.isRunning():
             raise RuntimeError("Cannot get frame rate while camera is not running.")

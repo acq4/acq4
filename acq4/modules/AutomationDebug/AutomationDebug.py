@@ -77,13 +77,13 @@ class AutomationDebugWindow(Qt.QWidget):
         self.ui.clearBtn.clicked.connect(self._detector.clearCells)
         self.ui.showRoisBtn.toggled.connect(self._toggleCellRois)
         self.ui.zStackDetectBtn.setOpts(
-            future_producer=self._detector._detectNeuronsZStack, stoppable=True
+            future_producer=lambda: self._detector._detectNeuronsZStack(_sync="async"), stoppable=True
         )
         self.ui.zStackDetectBtn.sigFinished.connect(self._detector._handleDetectResults)
-        self.ui.testUIBtn.setOpts(future_producer=self._detector._testUI, stoppable=True)
+        self.ui.testUIBtn.setOpts(future_producer=lambda: self._detector._testUI(_sync="async"), stoppable=True)
         self.ui.testUIBtn.sigFinished.connect(self._detector._handleDetectResults)
         self.ui.addCellFromTargetBtn.setOpts(
-            future_producer=self._detector._addCellFromTarget, stoppable=True
+            future_producer=lambda: self._detector._addCellFromTarget(_sync="async"), stoppable=True
         )
 
         self.ui.motionPlannerSelector.currentIndexChanged.connect(
@@ -103,7 +103,7 @@ class AutomationDebugWindow(Qt.QWidget):
             self._mock_handler._selectMockClassificationFile
         )
 
-        self.ui.autoTargetBtn.setOpts(future_producer=self._autoTarget, stoppable=True)
+        self.ui.autoTargetBtn.setOpts(future_producer=lambda: self._autoTarget(_sync="async"), stoppable=True)
         self.ui.autoTargetBtn.sigFinished.connect(self._handleAutoFinish)
 
         self._motionPlanners = {}
@@ -115,7 +115,7 @@ class AutomationDebugWindow(Qt.QWidget):
                 self.ui.cameraSelector.addItem(name)
 
         self.ui.trackFeaturesBtn.setOpts(
-            future_producer=self._feature_tracker.doFeatureTracking,
+            future_producer=lambda: self._feature_tracker.doFeatureTracking(_sync="async"),
             processing="Stop tracking",
             stoppable=True,
         )
@@ -128,7 +128,7 @@ class AutomationDebugWindow(Qt.QWidget):
         self.ui.visualizeTrackingBtn.setEnabled(True)
 
         self.ui.testPipetteBtn.setOpts(
-            future_producer=self._feature_tracker.doPipetteCalibrationTest,
+            future_producer=lambda: self._feature_tracker.doPipetteCalibrationTest(_sync="async"),
             stoppable=True,
             processing="Interrupt pipette\ncalibration test",
         )
@@ -145,7 +145,7 @@ class AutomationDebugWindow(Qt.QWidget):
 
         self.ui.autopatchDemoBtn.setToolTip("Patch a cell! Repeat! REPEAT!")
         self.ui.autopatchDemoBtn.setOpts(
-            future_producer=self._autopatcher._autopatchDemo, stoppable=True
+            future_producer=lambda: self._autopatcher._autopatchDemo(_sync="async"), stoppable=True
         )
         self.ui.autopatchDemoBtn.sigFinished.connect(
             self._autopatcher._handleAutopatchDemoFinish
@@ -257,7 +257,7 @@ class AutomationDebugWindow(Qt.QWidget):
         self._yBottomSpin.setValue(bound[1])
 
     @future_wrap
-    def _autoTarget(self, _future):
+    def _autoTarget(self, name=None, _future=None):
         self.sigWorking.emit(self.ui.autoTargetBtn)
         # If _unranked_cells is populated, use it. Otherwise, run detection.
         if not self._unranked_cells:
@@ -269,18 +269,15 @@ class AutomationDebugWindow(Qt.QWidget):
                 )
             )
             # TODO don't know why this hangs when using waitFor, but it does
-            depth_fut = self.scopeDevice.findSurfaceDepth(
+            depth = self.scopeDevice.findSurfaceDepth(
                 self.cameraDevice,
                 searchDistance=50 * µm,
-                searchStep=15 * µm,  # , block=True, checkStopThrough=_future
-            )
-            depth = depth_fut.getResult() - 50 * µm  # Target below surface
+                searchStep=15 * µm,
+            ) - 50 * µm  # Target below surface
             _future.checkStop()
             self.cameraDevice.setFocusDepth(depth, name=f"{self.cameraDevice.name()} focus below surface for autoTarget")  # Set focus depth
 
-            _future.waitFor(
-                self._detector._detectNeuronsZStack(), timeout=600
-            )  # Side-effect: populates _unranked_cells
+            self._detector._detectNeuronsZStack()  # Side-effect: populates _unranked_cells
         if not self._unranked_cells:
             raise RuntimeError(
                 "Neuron detection ran, but no cells found for autoTarget."

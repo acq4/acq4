@@ -97,10 +97,10 @@ class CleanState(PatchPipetteState):
         cw = pip.getCleaningWell()
         self.waitFor(pip.retractFromSurface('fast'))
         self.waitFor(pip._moveToGlobal([0, 0, 10e-3], 'fast', name='safe position before cleaning well'))
-        self.waitFor(cw.moveToInteract(pip), timeout=60)
+        self.waitFor(cw.moveToInteract(pip, _sync="async"), timeout=60)
 
         if dev.sonicatorDevice is not None:
-            self.sonication = dev.sonicatorDevice.doProtocol(config['sonicationProtocol'])
+            self.sonication = dev.sonicatorDevice.doProtocol(config['sonicationProtocol'], _sync="async")
 
         for pressure, delay in sequence:
             dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
@@ -109,7 +109,7 @@ class CleanState(PatchPipetteState):
         if self.sonication is not None and not self.sonication.isDone():
             self.waitFor(self.sonication)
 
-        self.waitFor(cw.moveToApproach(pip))
+        self.waitFor(cw.moveToApproach(pip, _sync="async"))
 
         dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
 
@@ -154,7 +154,7 @@ class CleanState(PatchPipetteState):
             parent_future.waitFor(fut, timeout=None)
 
     @future_wrap
-    def _cleanup(self, _future):
+    def _cleanup(self, name=None, _future=None):
         dev = self.dev
         try:
             if self.sonication is not None and not self.sonication.isDone():
@@ -172,4 +172,4 @@ class CleanState(PatchPipetteState):
         # except Exception:
         #     dev.logger.exception("Error resetting pipette position after clean")
 
-        _future.waitFor(super()._cleanup(), timeout=None)
+        super()._cleanup()

@@ -165,8 +165,8 @@ def scan_pipette_z_stack(pipette, imager=None, z_range=50e-6, z_step=5e-6, show=
     z_end = current_z + z_range
 
     frames = acquire_z_stack(
-        imager, z_start, z_end, z_step, block=True, name="ML pipette detection stack"
-    ).getResult()
+        imager, z_start, z_end, z_step, name="ML pipette detection stack"
+    )
 
     pipette_dir = pipette.globalDirection()
     global_positions = []
@@ -214,7 +214,7 @@ def _show_z_stack_detection_widget(frames, image_positions, z_um, confidences, h
 
 
 @future_wrap
-def findNewPipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=0.4e-3, _future=None):
+def findNewPipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=0.4e-3, name=None, _future=None):
     """
     Find the tip of a new pipette by moving it across the objective while recording from the imager.
     """
@@ -318,7 +318,7 @@ def findNewPipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=0.
 
         # autofocus
         z_range = (startDepth - 500e-6, startDepth + 500e-6, 20e-6)
-        zStack = _future.waitFor(acquire_z_stack(imager, *z_range, block=True, max_dz_per_frame=np.inf, name="finding pipette depth")).getResult()
+        zStack = acquire_z_stack(imager, *z_range, max_dz_per_frame=np.inf, name="finding pipette depth")
         zStackArray = np.stack([frame.data() for frame in zStack])
         zDiff = np.abs(np.diff(zStackArray.astype(float), axis=0))
         zProfile = zDiff.max(axis=2).max(axis=1)  # most-changed pixel in each frame
@@ -361,7 +361,7 @@ def findNewPipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=0.
         _future.waitFor(pipette._moveToGlobal(imager.globalCenterPosition(), 'fast', name=f"{pipette.name()} auto-calibrate coarse center"))
 
         # iteratively refine tip position until convergence
-        _future.waitFor(pipette.iterativelyFindTip(30), timeout=None)
+        pipette.iterativelyFindTip(30)
     finally:
         _future.l = locals().copy()
 
@@ -444,6 +444,7 @@ def calibrate_manipulator_axes(
     n_steps: int = 10,
     step_size: float = 50e-6,
     z_search_range: float = 100e-6,
+    name=None,
     _future=None,
 ):
     """Automatically collect axis calibration data for a manipulator using the pipette tip finder.
@@ -487,7 +488,7 @@ def calibrate_manipulator_axes(
     calibration_points = []
 
     # Accurately locate the tip before starting the sweep.
-    _future.waitFor(pipette.iterativelyFindTip(10))
+    pipette.iterativelyFindTip(10)
 
     for axis in range(manipulator.nAxes):
         axis_start_pos = list(manipulator.getPosition())
@@ -525,6 +526,6 @@ def calibrate_manipulator_axes(
         # Return to the starting position before sweeping the next axis.
         _future.waitFor(manipulator.move(axis_start_pos, 'slow', name=f"{manipulator.name()} calibrate axis {axis} return"))
         # Re-locate tip at start before recording the first point of the next axis.
-        _future.waitFor(pipette.iterativelyFindTip(10))
+        pipette.iterativelyFindTip(10)
 
     return calibration_points

@@ -208,6 +208,7 @@ class ContactCellState(PatchPipetteState):
                 pip.iterativelyFindTip(
                     max_allowed_offset=self.config["pipetteRecalibrationMaxChange"],
                     go_to_tip_first=True,
+                    _sync="async",
                 )
             )
         except Exception as e:

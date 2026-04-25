@@ -99,11 +99,11 @@ class CameraCalibrator(Module):
         self.calibrateBtn.setText("Calibrating...")
         
         # Start the threaded calibration
-        future = self._runCalibration(camera, lightSource, sourceName)
+        future = self._runCalibration(camera, lightSource, sourceName, _sync="async")
         future.sigFinished.connect(self._calibrationFinished)
         
     @future_wrap
-    def _runCalibration(self, camera, lightSource, sourceName, _future=None):
+    def _runCalibration(self, camera, lightSource, sourceName, name=None, _future=None):
         """Run the calibration sequence in a thread."""
         
         try:

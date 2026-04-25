@@ -405,7 +405,7 @@ class CellDetectState(PatchPipetteState):
         return endpoint
 
     @future_wrap
-    def _move(self, _future):
+    def _move(self, name=None, _future=None):
         """Move pipette along search path."""
         self.setState("pipette advance")
         config = self.config
@@ -466,6 +466,7 @@ class CellDetectState(PatchPipetteState):
                         repetitions=1,
                         duration=config['preTargetWiggleDuration'],
                         pipette_direction=self.direction_unit,
+                        _sync="async",
                     ),
                     timeout=None,
                 )

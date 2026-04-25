@@ -290,11 +290,11 @@ class PatchPipetteState(Future):
     def adjustPressureForDepth(self):
         """While not that slow, we still want to keep the innermost loop as fast as we can."""
         if self._pressureAdjustment is None:
-            self._pressureAdjustment = self._adjustPressureForDepth()
+            self._pressureAdjustment = self._adjustPressureForDepth(_sync="async")
             self._pressureAdjustment.onFinish(self._finishPressureAdjustment)
 
     @future_wrap(logLevel='debug')
-    def _adjustPressureForDepth(self, _future):
+    def _adjustPressureForDepth(self, name=None, _future=None):
         depth = self.depthBelowSurface()
         if depth < 0:  # above surface
             pressure = self.config["aboveSurfacePressure"]
@@ -309,7 +309,10 @@ class PatchPipetteState(Future):
     def cleanup(self) -> Future:
         with self._cleanupMutex:
             if self._cleanupFuture is None:
-                self._cleanupFuture = self._cleanup()
+                if hasattr(self._cleanup, '__wrapped__'):
+                    self._cleanupFuture = self._cleanup(_sync="async")
+                else:
+                    self._cleanupFuture = self._cleanup()
             return self._cleanupFuture
 
     def _cleanup(self) -> Future:
@@ -432,6 +435,7 @@ class PatchPipetteState(Future):
                             interval=interval,
                             step=step,
                             name="Update stepwise move towards target",
+                            _sync="async",
                         )
                     self.setState(f"Moving towards target at {current_target_pos}")
                     last_destination = current_target_pos

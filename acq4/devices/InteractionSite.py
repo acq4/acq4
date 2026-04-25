@@ -176,7 +176,7 @@ class InteractionSite(Device, OptomechDevice):
         self.setDeviceTransform(tr)
 
     @future_wrap
-    def moveToInteract(self, other, speed='fast', _future=None):
+    def moveToInteract(self, other, speed='fast', name=None, _future=None):
         if other.name() not in self.positions:
             raise RuntimeError(f"No positions saved for {other.name()} at {self.name()}")
         pos_config = self.positions[other.name()]
@@ -193,7 +193,7 @@ class InteractionSite(Device, OptomechDevice):
         _future.waitFor(other._moveToGlobal(interact_global, speed=speed, name=f"move {other.name()} to interact with {self.name()}"))
 
     @future_wrap
-    def moveToApproach(self, other, speed='fast', _future=None):
+    def moveToApproach(self, other, speed='fast', name=None, _future=None):
         if other.name() not in self.positions:
             raise RuntimeError(f"No positions saved for {other.name()} at {self.name()}")
         pos_config = self.positions[other.name()]

@@ -457,10 +457,10 @@ class ScientificaGUI(StageInterface):
             self.sigBusyMoving.emit(False)
             return Future.immediate(error="User requested stop", stopped=True)
 
-        return self._doAutoZero(axis)
+        return self._doAutoZero(axis, _sync="async")
 
     @future_wrap
-    def _doAutoZero(self, axis: int = None, _future: Future = None) -> None:
+    def _doAutoZero(self, axis: int = None, name=None, _future: Future = None) -> None:
         self._savedLimits = self.dev.getLimits()
         try:
             diff = np.zeros(3)  # keep track of offset changes

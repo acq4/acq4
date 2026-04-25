@@ -94,7 +94,7 @@ class MockSonicator(Sonicator):
         self.audio_thread.start()
 
     @future_wrap
-    def sonicate(self, frequency, duration, lock=True, _future=None):
+    def sonicate(self, frequency, duration, lock=True, name=None, _future=None):
         if lock:
             self.actionLock.acquire()
         try:

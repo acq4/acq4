@@ -9,6 +9,7 @@ from PyQt5.QtWidgets import QApplication
 
 from acq4.util.future import Future, FutureButton, MultiFuture, MultiException
 from acq4.util.future import future_wrap
+from acq4.util.future import current_future, task_stack
 
 app = QApplication([])
 
@@ -18,7 +19,8 @@ class TestFutureButton(unittest.TestCase):
         self._future = Future.immediate("success")
         self.future_producer = MagicMock(return_value=self._future)
         self.button = FutureButton(
-            self.future_producer, "Test Button", stoppable=True, success="Completed", failure="Failed"
+            self.future_producer, "Test Button", stoppable=True, success="Completed", failure="Failed",
+            raiseOnError=False,
         )
 
     def test_button_initial_state(self):
@@ -41,7 +43,7 @@ class TestFutureButton(unittest.TestCase):
         @future_wrap
         def task(_future=None):
             raise ValueError("error")
-        self.future_producer.return_value = task()
+        self.future_producer.return_value = task(_sync="async")
         self.button.click()
         QApplication.processEvents()
         self.assertEqual("Failed", self.button.text())
@@ -51,7 +53,7 @@ class TestFutureButton(unittest.TestCase):
         def so_sleepy(_future):
             _future.sleep(1e6, interval=0)
 
-        f = so_sleepy()
+        f = so_sleepy(_sync="async")
         self.future_producer.return_value = f
         self.button.click()
         QApplication.processEvents()
@@ -110,7 +112,7 @@ class TestFuture(unittest.TestCase):
         def on_error(f):
             nonlocal called
             called = True
-        fut = boom(onFutureError=on_error)
+        fut = boom(_sync="async", onFutureError=on_error)
         with contextlib.suppress(ValueError):
             fut.wait()
         self.assertTrue(called)
@@ -125,7 +127,7 @@ class TestFuture(unittest.TestCase):
         def on_error(f):
             nonlocal called
             called = True
-        fut = boom(onFutureError=on_error)
+        fut = boom(_sync="async", onFutureError=on_error)
         fut.wait()
         self.assertFalse(called)
 
@@ -147,7 +149,7 @@ class TestFuture(unittest.TestCase):
         def task(_future=None):
             return "wrapped"
 
-        fut = task()
+        fut = task(_sync="async")
         fut.wait()
         self.assertTrue(fut.isDone())
         self.assertEqual(fut.getResult(), "wrapped")
@@ -856,8 +858,8 @@ class TestFutureCreationStackTraces(unittest.TestCase):
             raise TypeError(f"Wrapped function failed with {arg1}")
         
         def call_wrapped_function():
-            return wrapped_failing_function("test_arg")
-        
+            return wrapped_failing_function("test_arg", _sync="async")
+
         fut = call_wrapped_function()
         
         with self.assertRaises(TypeError) as cm:
@@ -981,6 +983,217 @@ class TestFutureCreationStackTraces(unittest.TestCase):
         
         # Should include the calling function
         self.assertIn("create_future_and_check", stack_names)
+
+
+class TestTaskStack(unittest.TestCase):
+    def test_get_returns_empty_tuple_by_default(self):
+        self.assertEqual(task_stack.get(), ())
+
+    def test_full_stack_returns_empty_string_when_empty(self):
+        self.assertEqual(task_stack.full_stack(), "")
+
+    def test_push_appends_name_and_restores(self):
+        with task_stack.push("foo"):
+            self.assertEqual(task_stack.get(), ("foo",))
+        self.assertEqual(task_stack.get(), ())
+
+    def test_nested_push_builds_chain(self):
+        with task_stack.push("a"):
+            with task_stack.push("b"):
+                self.assertEqual(task_stack.get(), ("a", "b"))
+                self.assertEqual(task_stack.full_stack(), "a > b")
+            self.assertEqual(task_stack.get(), ("a",))
+        self.assertEqual(task_stack.get(), ())
+
+    def test_push_full_replaces_chain_and_restores(self):
+        with task_stack.push("outer"):
+            with task_stack.push_full(("a", "b")):
+                self.assertEqual(task_stack.get(), ("a", "b"))
+            self.assertEqual(task_stack.get(), ("outer",))
+
+    def test_push_in_thread_does_not_affect_parent(self):
+        """Thread gets its own copy of the stack and does not bleed into the parent."""
+        results = {}
+
+        def thread_fn():
+            with task_stack.push("thread_name"):
+                results["in_thread"] = task_stack.get()
+
+        t = threading.Thread(target=thread_fn)
+        t.start()
+        t.join()
+
+        results["in_parent"] = task_stack.get()
+        self.assertEqual(results["in_thread"], ("thread_name",))
+        self.assertEqual(results["in_parent"], ())
+
+    def test_full_stack_with_single_entry(self):
+        with task_stack.push("only"):
+            self.assertEqual(task_stack.full_stack(), "only")
+
+
+class TestCurrentFuture(unittest.TestCase):
+    def test_current_future_is_none_by_default(self):
+        self.assertIsNone(current_future.get(None))
+
+    def test_current_future_set_during_execute_and_set_return(self):
+        captured = {}
+
+        def task(_future):
+            captured["during"] = current_future.get(None)
+            return "ok"
+
+        fut = Future(name="cf_test")
+        fut.executeInThread(task, (), {})
+        fut.wait()
+        self.assertIs(captured["during"], fut)
+
+    def test_current_future_restored_after_future_completes(self):
+        def task(_future):
+            return "ok"
+
+        fut = Future(name="cf_restore_test")
+        fut.executeInThread(task, (), {})
+        fut.wait()
+        # After execution the thread is gone; confirm parent thread is still None
+        self.assertIsNone(current_future.get(None))
+
+    def test_task_stack_pushed_during_execute_and_set_return(self):
+        captured = {}
+
+        def task(_future):
+            captured["stack"] = task_stack.get()
+            return "ok"
+
+        fut = Future(name="my_task")
+        fut.executeInThread(task, (), {})
+        fut.wait()
+        self.assertIn("my_task", captured["stack"])
+
+    def test_task_stack_popped_after_future_completes(self):
+        """Stack in the executing thread is clean after the future finishes."""
+        captured = {}
+
+        def task(_future):
+            return "ok"
+
+        finished = threading.Event()
+
+        def thread_fn():
+            fut = Future(name="pop_test")
+            fut.executeAndSetReturn(task, (), {})
+            captured["after"] = task_stack.get()
+            finished.set()
+
+        t = threading.Thread(target=thread_fn)
+        t.start()
+        finished.wait(timeout=2)
+        self.assertEqual(captured["after"], ())
+
+
+class TestFutureWrapExecutionModel(unittest.TestCase):
+    """Tests for the blocking-by-default / _sync='async' execution model."""
+
+    def test_default_call_returns_value(self):
+        @future_wrap
+        def task(name=None, _future=None):
+            return 42
+
+        result = task()
+        self.assertEqual(result, 42)
+
+    def test_default_call_propagates_exception(self):
+        @future_wrap
+        def boom(name=None, _future=None):
+            raise ValueError("kaboom")
+
+        with self.assertRaises(ValueError, msg="kaboom"):
+            boom()
+
+    def test_default_call_sets_current_future(self):
+        captured = {}
+
+        @future_wrap
+        def task(name=None, _future=None):
+            captured["fut"] = current_future.get()
+
+        task()
+        self.assertIsNotNone(captured["fut"])
+        self.assertIsInstance(captured["fut"], Future)
+
+    def test_default_call_pushes_task_stack(self):
+        captured = {}
+
+        @future_wrap
+        def task(name=None, _future=None):
+            captured["stack"] = task_stack.get()
+
+        task(name="my_task")
+        self.assertIn("my_task", captured["stack"])
+
+    def test_async_returns_future(self):
+        @future_wrap
+        def task(name=None, _future=None):
+            return "done"
+
+        fut = task(_sync="async")
+        self.assertIsInstance(fut, Future)
+        self.assertEqual(fut.getResult(), "done")
+
+    def test_name_kwarg_used_as_future_name(self):
+        captured = {}
+
+        @future_wrap
+        def task(name=None, _future=None):
+            captured["name"] = current_future.get().name
+
+        task(name="special_name")
+        self.assertEqual(captured["name"], "special_name")
+
+    def test_name_kwarg_passed_through_to_function(self):
+        captured = {}
+
+        @future_wrap
+        def task(name=None, _future=None):
+            captured["name"] = name
+
+        task(name="passed_through")
+        self.assertEqual(captured["name"], "passed_through")
+
+    def test_nested_default_calls_build_task_stack(self):
+        outer_stack = {}
+        inner_stack = {}
+
+        @future_wrap
+        def inner(name=None, _future=None):
+            inner_stack["stack"] = task_stack.get()
+
+        @future_wrap
+        def outer(name=None, _future=None):
+            outer_stack["stack"] = task_stack.get()
+            inner(name="inner")
+
+        outer(name="outer")
+        self.assertEqual(outer_stack["stack"], ("outer",))
+        self.assertEqual(inner_stack["stack"], ("outer", "inner"))
+
+    def test_async_call_inherits_parent_task_stack(self):
+        inner_stack = {}
+        done = threading.Event()
+
+        @future_wrap
+        def inner(name=None, _future=None):
+            inner_stack["stack"] = task_stack.get()
+            done.set()
+
+        @future_wrap
+        def outer(name=None, _future=None):
+            fut = inner(name="inner", _sync="async")
+            _future.waitFor(fut)
+
+        outer(name="outer")
+        done.wait(timeout=2)
+        self.assertEqual(inner_stack["stack"], ("outer", "inner"))
 
 
 if __name__ == "__main__":

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import contextvars
 import functools
 import inspect
 import sys
@@ -13,6 +14,49 @@ from typing import Generic, TypeVar
 from acq4.logging_config import get_logger
 from acq4.util import Qt, ptime
 from pyqtgraph import FeedbackButton
+
+# ContextVar tracking the innermost running Future on the current thread.
+current_future: contextvars.ContextVar["Future | None"] = contextvars.ContextVar(
+    "current_future", default=None
+)
+
+
+class TaskStack:
+    """Wraps a ContextVar[tuple[str, ...]] to track a chain of named task scopes."""
+
+    def __init__(self):
+        self._var: contextvars.ContextVar[tuple[str, ...]] = contextvars.ContextVar(
+            "task_stack", default=()
+        )
+
+    @contextlib.contextmanager
+    def push(self, name: str):
+        """Context manager that appends *name* to the current chain and restores on exit."""
+        token = self._var.set(self._var.get() + (name,))
+        try:
+            yield
+        finally:
+            self._var.reset(token)
+
+    @contextlib.contextmanager
+    def push_full(self, chain: tuple[str, ...]):
+        """Context manager that replaces the entire stack with *chain* and restores on exit."""
+        token = self._var.set(chain)
+        try:
+            yield
+        finally:
+            self._var.reset(token)
+
+    def get(self) -> tuple[str, ...]:
+        """Return the current task chain."""
+        return self._var.get()
+
+    def full_stack(self) -> str:
+        """Return the current chain joined by ' > ', or '' if empty."""
+        return " > ".join(self._var.get())
+
+
+task_stack = TaskStack()
 
 FUTURE_RETVAL_TYPE = TypeVar("FUTURE_RETVAL_TYPE")
 WAITING_RETVAL_TYPE = TypeVar("WAITING_RETVAL_TYPE")
@@ -107,18 +151,28 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
 
         The function should call _taskDone() when finished (or raise an exception).
         """
-        self._executingThread = threading.Thread(target=self.executeAndSetReturn, args=(func, args, kwds), daemon=True,
-                                                 name=f"execute thread for {repr(self)}")
+        # Capture the caller's full context so the thread inherits task_stack and other
+        # ContextVars. Python's threading.Thread does not copy ContextVars automatically.
+        ctx = contextvars.copy_context()
+        self._executingThread = threading.Thread(
+            target=ctx.run,
+            args=(self.executeAndSetReturn, func, args, kwds),
+            daemon=True,
+            name=f"execute thread for {repr(self)}",
+        )
         self._executingThread.start()
 
     def executeAndSetReturn(self, func, args, kwds):
-        try:
-            kwds["_future"] = self
-            self.setResult(rval=func(*args, **kwds))
-        except Exception:
-            self.setResult(excInfo=sys.exc_info())
-        finally:
-            self._do_task_completion_jobs()
+        cf_token = current_future.set(self)
+        with task_stack.push(self._name):
+            try:
+                kwds["_future"] = self
+                self.setResult(rval=func(*args, **kwds))
+            except Exception:
+                self.setResult(excInfo=sys.exc_info())
+            finally:
+                current_future.reset(cf_token)
+                self._do_task_completion_jobs()
 
     def propagateStopsInto(self, future: Future):
         """Add a future to the list of futures that will be stopped if this future is stopped."""
@@ -334,9 +388,27 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
             raise RuntimeError(msg)
 
     def enhanceException(self, exc):
-        exc.future_creation_stack = self._creationStack
-        exc.future_creation_thread = self._creationThread
-        return exc
+        """Wrap an exception with Future creation stack and execution context in its str()."""
+        creation_frames = "".join(traceback.format_list(self._creationStack))
+        parts = [f"{type(exc).__name__}: {exc}"]
+        parts.append(f"\n--- Future creation context ---\n{creation_frames}")
+
+        if self._excInfo is not None and self._excInfo[2] is not None:
+            exec_tb = "".join(traceback.format_tb(self._excInfo[2]))
+            exec_thread = self._executingThread
+            if exec_thread is not None and exec_thread != self._creationThread:
+                thread_name = exec_thread.name
+                parts.append(f"\n--- Thread boundary: {thread_name} ---\n{exec_tb}")
+            else:
+                parts.append(f"\n--- Execution context ---\n{exec_tb}")
+
+        enhanced_msg = "".join(parts)
+        try:
+            enhanced = type(exc)(enhanced_msg)
+        except Exception:
+            enhanced = RuntimeError(enhanced_msg)
+        enhanced.__cause__ = exc
+        return enhanced
 
     def _wait(self, duration):
         """Default sleep implementation used by wait(); may be overridden to return early."""
@@ -449,19 +521,18 @@ class FutureWrapper:
         ...
 
     def __call__(self, func=None, *, logLevel=None):
-        """Decorator to execute a function in a Thread wrapped in a future. The function must take a Future
-        named "_future" as a keyword argument. This Future can be variously used to checkStop() the
-        function, wait for other futures, and will be returned by the decorated function call. The function
-        can still be called with `block=True` to prevent threaded execution, if device locking is a concern.
+        """Decorator to wrap a function so it runs inside a Future with context tracking.
+
+        The function must accept a `_future` keyword argument and may accept a `name` argument.
         Usage:
             @future_wrap
-            def myFunc(arg1, arg2, _future=None):
-                ...
+            def myFunc(arg1, arg2, name=None, _future=None):
                 _future.checkStop()
-                _future.waitFor(someOtherFuture)
                 ...
-            result = myFunc(arg1, arg2).getResult()
-            threadless_result = myFunc(arg1, arg2, block=True).getResult()
+
+            result = myFunc(arg1, arg2)                  # blocks, returns result value
+            fut = myFunc(arg1, arg2, _sync="async")      # returns Future immediately
+            result = fut.getResult()
         """
         if logLevel is not None:
             if func is not None:
@@ -469,19 +540,19 @@ class FutureWrapper:
             return FutureWrapper(logLevel)
 
         @functools.wraps(func)
-        def wrapper(*args: WRAPPED_FN_PARAMS.args, **kwds: WRAPPED_FN_PARAMS.kwargs) -> Future[WRAPPED_FN_RETVAL_TYPE]:
-            frame = inspect.currentframe().f_back
-            name = f"(wrapped {func.__qualname__} from {frame.f_code.co_filename}:{frame.f_lineno})"
+        def wrapper(*args: WRAPPED_FN_PARAMS.args, **kwds: WRAPPED_FN_PARAMS.kwargs):
+            name = kwds.get("name") or func.__qualname__
             future = Future(onError=kwds.pop("onFutureError", None), name=name, logLevel=self.logLevel)
-            if kwds.pop("block", False):
-                kwds["_future"] = future
+            _sync = kwds.pop("_sync", None)
+            if _sync == "async":
+                future.executeInThread(func, args, kwds)
+                return future
+            else:
+                # Default: run inline (blocking), return the result value directly.
                 if parent := kwds.pop("checkStopThrough", None):
                     parent.propagateStopsInto(future)
                 future.executeAndSetReturn(func, args, kwds)
-                future.wait()
-            else:
-                future.executeInThread(func, args, kwds)
-            return future
+                return future.getResult()
 
         return wrapper
 
@@ -490,11 +561,13 @@ future_wrap = FutureWrapper()
 
 
 class MultiException(Exception):
-    def __init__(self, message, exceptions):
+    def __init__(self, message, exceptions=None):
         super().__init__(message)
-        self._exceptions = exceptions
+        self._exceptions = exceptions or []
 
     def __str__(self):
+        if not self._exceptions:
+            return super().__str__()
         return f"Oh no! A wild herd ({len(self._exceptions)}) of exceptions appeared!\n" + "\n".join(
             f"Exception #{i}: {e}" for i, e in enumerate(self._exceptions, 1)
         )

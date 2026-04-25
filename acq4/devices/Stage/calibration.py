@@ -226,7 +226,7 @@ class ManipulatorAxesCalibrationWindow(Qt.QWidget):
             return
         self.autoCollectBtn.setEnabled(False)
         self.autoCollectBtn.setText("collecting...")
-        future = calibrate_manipulator_axes(pipette)
+        future = calibrate_manipulator_axes(pipette, _sync="async")
         future.onFinish(self._autoCollectFinished)
 
     def _autoCollectFinished(self, future):

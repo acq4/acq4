@@ -8,6 +8,8 @@ import time
 
 import numpy as np
 
+from acq4.util.future import task_stack
+
 logger = logging.getLogger(__name__)
 
 
@@ -94,22 +96,23 @@ class ScientificaControlThread:
         return fut
 
     def _handle_request(self, fut: ScientificaRequestFuture):
-        cmd = fut.request
-        try:
-            if cmd == 'stop':
-                self._handle_stop(fut)
-                fut.set_result(None)
-            elif cmd == 'move':
-                self._handle_move(fut)
-            elif cmd == 'quit':
-                self.quit_request = fut
-            elif cmd == 'cancel':
-                self._handle_cancel(fut)
-            else:
-                raise ValueError(f'unrecognized request {cmd}')
+        with task_stack.push_full(fut.caller_stack):
+            cmd = fut.request
+            try:
+                if cmd == 'stop':
+                    self._handle_stop(fut)
+                    fut.set_result(None)
+                elif cmd == 'move':
+                    self._handle_move(fut)
+                elif cmd == 'quit':
+                    self.quit_request = fut
+                elif cmd == 'cancel':
+                    self._handle_cancel(fut)
+                else:
+                    raise ValueError(f'unrecognized request {cmd}')
 
-        except Exception:
-            fut.set_exc_info(sys.exc_info())
+            except Exception:
+                fut.set_exc_info(sys.exc_info())
 
     def _handle_move(self, fut):
         if self.current_move is not None and fut is not self.current_move:
@@ -257,6 +260,7 @@ class ScientificaRequestFuture:
         self.exc_info = None
         self.error = None
         self.n_attempts = 0
+        self.caller_stack = task_stack.get()  # snapshot of caller's task chain at submission time
 
     def done(self):
         """Return True if the request has finished."""

@@ -215,7 +215,7 @@ class PipettePathGenerator:
 class GeometryAwarePathGenerator(PipettePathGenerator):
     def __init__(self, pip: Pipette):
         super().__init__(pip)
-        self._cachePrimer = self._primeCaches()
+        self._cachePrimer = self._primeCaches(_sync="async")
         self._cachePrimer.raiseErrors("error priming path planning caches")
 
     def _getPlanningContext(self):
@@ -245,7 +245,7 @@ class GeometryAwarePathGenerator(PipettePathGenerator):
         return planner, from_pip_to_global
 
     @future_wrap
-    def _primeCaches(self, _future):
+    def _primeCaches(self, name=None, _future=None):
         try:
             man = getManager()
             while not man.isReady.wait(0.05):
@@ -340,7 +340,10 @@ class PipetteMotionPlanner:
         if self.future is not None:
             self.stop()
 
-        self.future = self._move()
+        if hasattr(self._move, '__wrapped__'):
+            self.future = self._move(_sync="async")
+        else:
+            self.future = self._move()
         return self.future
 
     def stop(self):
@@ -449,7 +452,7 @@ class SearchMotionPlanner(PipetteMotionPlanner):
         return "move to search"
 
     @future_wrap
-    def _move(self, _future):
+    def _move(self, name=None, _future=None):
         base = f"{self.pip.name()} {self.name}"
         _future.name = base
         pip = self.pip
@@ -518,7 +521,7 @@ class AboveTargetMotionPlanner(PipetteMotionPlanner):
         return "move above target"
 
     @future_wrap
-    def _move(self, _future):
+    def _move(self, name=None, _future=None):
         base = f"{self.pip.name()} {self.name}"
         _future.name = base
         pip = self.pip
@@ -566,7 +569,7 @@ class IdleMotionPlanner(PipetteMotionPlanner):
         return "move to idle"
 
     @future_wrap
-    def _move(self, _future):
+    def _move(self, name=None, _future=None):
         base = f"{self.pip.name()} {self.name}"
         _future.name = base
         pip = self.pip
