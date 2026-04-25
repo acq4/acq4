@@ -329,7 +329,7 @@ class ResealState(PatchPipetteState):
                 source='regulator', pressure=self.config['nuzzleInitialPressure']
             )
             self._pressureFuture = self.dev.pressureDevice.rampPressure(
-                target=self.config['nuzzlePressureLimit'], duration=self.config['nuzzleDuration']
+                target=self.config['nuzzlePressureLimit'], duration=self.config['nuzzleDuration'], _sync="async"
             )
             yield
             self.waitFor(self._pressureFuture)
@@ -341,12 +341,13 @@ class ResealState(PatchPipetteState):
                 duration=self.config['nuzzleDuration'],
                 repetitions=self.config['nuzzleRepetitions'],
                 extra=pressure_ramp,
+                _sync="async",
             ),
             timeout=None,
         )
 
     @future_wrap
-    def startRollingResistanceThresholds(self, _future: Future):
+    def startRollingResistanceThresholds(self, name=None, _future: Future = None):
         """Start a rolling average of the resistance to detect stretching and tearing. Load the first 20s of data."""
         self.monitorTestPulse()
         start = ptime.time()
@@ -428,7 +429,7 @@ class ResealState(PatchPipetteState):
         self._sanityChecks()
         config = self.config
         dev = self.dev
-        baseline_future = self.startRollingResistanceThresholds()
+        baseline_future = self.startRollingResistanceThresholds(_sync="async")
         if config['extractNucleus'] is True:
             self.nuzzle()
         self.checkStop()
@@ -467,6 +468,7 @@ class ResealState(PatchPipetteState):
                         interval=config['retractionStepInterval'],
                         step=1e-6,
                         name='reseal tear recovery',
+                        _sync="async",
                     )
             elif self.isTorn():
                 if retraction_future and not retraction_future.isDone():
@@ -492,6 +494,7 @@ class ResealState(PatchPipetteState):
                     interval=config['retractionStepInterval'],
                     step=1e-6,
                     name='reseal retraction',
+                    _sync="async",
                 )
 
             if (

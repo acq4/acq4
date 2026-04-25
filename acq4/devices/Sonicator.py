@@ -50,17 +50,15 @@ class Sonicator(Device):
         if not askUser:
             return False
         print(f"{well} {well.containsPoint(pos, tolerance=5e-6)} {pos} {lower_bound}")
-        response = _future.waitFor(
-            prompt(
-                "Sonication Safety Warning",
-                "Sonication may be unsafe at the current pipette position. Proceed?",
-                ["Yes", "No"],
-            )
-        ).getResult()
+        response = prompt(
+            "Sonication Safety Warning",
+            "Sonication may be unsafe at the current pipette position. Proceed?",
+            ["Yes", "No"],
+        )
         return response == "Yes"
 
     @future_wrap
-    def doProtocol(self, protocol: str | object, _future):
+    def doProtocol(self, protocol: str | object, name=None, _future=None):
         if not self.safeToSonicate(_future):
             self.logger.info("Sonication deemed unsafe. Aborting.")
             return
@@ -144,7 +142,7 @@ class SonicatorGUI(Qt.QWidget):
         """Run the specified protocol and update UI accordingly"""
         protocol = self.sender().objectName()
         self.updateButtonStates(True, protocol)
-        return self.dev.doProtocol(protocol)
+        return self.dev.doProtocol(protocol, _sync="async")
 
     def onProtocolFinished(self):
         """Called when a protocol completes"""

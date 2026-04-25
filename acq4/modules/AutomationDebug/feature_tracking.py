@@ -21,7 +21,7 @@ class FeatureTracker:
         self._window = window
 
     @future_wrap
-    def doPipetteCalibrationTest(self, _future):
+    def doPipetteCalibrationTest(self, name=None, _future=None):
         win = self._window
         win.sigWorking.emit(win.ui.testPipetteBtn)
         camera = win.cameraDevice
@@ -32,7 +32,7 @@ class FeatureTracker:
         pipette.moveTo("home", "fast")
         while True:
             try:
-                _future.waitFor(findNewPipette(pipette, camera, camera.scopeDev))
+                findNewPipette(pipette, camera, camera.scopeDev)
                 error = np.linalg.norm(pipette.globalPosition() - true_tip_position)
                 win.sigLogMessage.emit(
                     f"Calibration complete: {error * 1e6:.2g}µm error"
@@ -48,7 +48,7 @@ class FeatureTracker:
                 break
 
     @future_wrap
-    def doFeatureTracking(self, _future: Future):
+    def doFeatureTracking(self, name=None, _future: Future = None):
         win = self._window
         win.sigWorking.emit(win.ui.trackFeaturesBtn)
         pipette = win.pipetteDevice

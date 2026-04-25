@@ -171,7 +171,7 @@ class ResnetPipetteTracker(PipetteTracker):
             start=z_center + z_range,
             stop=z_center - z_range,
             step=z_step,
-        ).getResult()
+        )
 
         px_size = frames[0].info()['pixelSize'][0]
 
@@ -356,7 +356,7 @@ class CorrelationPipetteTracker(PipetteTracker):
 
     @future_wrap
     def takeReferenceFrames(
-        self, zRange=None, zStep=None, imager=None, tipLength=None, _future: Future = None
+        self, zRange=None, zStep=None, imager=None, tipLength=None, name=None, _future: Future = None
     ):
         """Collect a series of images of the pipette tip at various focal depths.
 
@@ -384,16 +384,16 @@ class CorrelationPipetteTracker(PipetteTracker):
 
         # collect pipette stack
         frames = acquire_z_stack(
-            imager, zStart, zEnd, zStep, block=True, name="pipette reference stack"
-        ).getResult()
+            imager, zStart, zEnd, zStep, name="pipette reference stack"
+        )
         pxSize = frames[0].info()["pixelSize"]
         frames = np.stack([f.data()[minImgPos[0]:maxImgPos[0], minImgPos[1]:maxImgPos[1]] for f in frames], axis=0).astype(float)
 
         # collect background stack
         _future.waitFor(self.pipette._moveToLocal([-tipLength * 3, 0, 0], "slow"))
         bg_frames = acquire_z_stack(
-            imager, zStart, zEnd, zStep, block=True, name="background for subtracting"
-        ).getResult()
+            imager, zStart, zEnd, zStep, name="background for subtracting"
+        )
         bg_frames = np.stack([f.data()[minImgPos[0]:maxImgPos[0], minImgPos[1]:maxImgPos[1]] for f in bg_frames], axis=0).astype(float)
 
         # return pipette to original position

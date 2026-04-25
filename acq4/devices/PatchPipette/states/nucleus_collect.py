@@ -55,7 +55,7 @@ class NucleusCollectState(PatchPipetteState):
         self.waitFor(pip._moveToGlobal(self.collectionPos, speed='fast', name=f"{pip.name()} move to nucleus collection position"), timeout=None)
 
         if dev.sonicatorDevice is not None:
-            self.sonication = dev.sonicatorDevice.doProtocol(config['sonicationProtocol'])
+            self.sonication = dev.sonicatorDevice.doProtocol(config['sonicationProtocol'], _sync="async")
 
         sequence = config['pressureSequence']
         if isinstance(sequence, str):
@@ -100,7 +100,7 @@ class NucleusCollectState(PatchPipetteState):
             _future.waitFor(pip._moveToGlobal(self.startPos, speed='fast', name='return to start position'), timeout=None)
 
     @future_wrap
-    def _cleanup(self, _future):
+    def _cleanup(self, name=None, _future=None):
         try:
             if self.sonication is not None and not self.sonication.isDone():
                 self.sonication.stop("parent task is cleaning up before sonication finished")
@@ -117,4 +117,4 @@ class NucleusCollectState(PatchPipetteState):
         except Exception:
             self.dev.logger.exception("Error resetting pipette position after collection")
 
-        _future.waitFor(super()._cleanup(), timeout=None)
+        super()._cleanup()

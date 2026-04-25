@@ -130,7 +130,7 @@ class MultiPatchWindow(Qt.QWidget):
         self.ui.coarseSearchBtn.setOpts(future_producer=self._coarseSearch, **common_opts)
         self.ui.fineSearchBtn.setOpts(future_producer=self._fineSearch, **common_opts)
         self.ui.aboveTargetBtn.setOpts(future_producer=self._aboveTarget, **common_opts)
-        self.ui.autoFindTipBtn.setOpts(future_producer=self._autoFindTip, **common_opts)
+        self.ui.autoFindTipBtn.setOpts(future_producer=lambda: self._autoFindTip(_sync="async"), **common_opts)
         self.ui.cellDetectBtn.setOpts(future_producer=self._cellDetect, raiseOnError=False, **common_opts)
         self.ui.breakInBtn.setOpts(future_producer=self._breakIn, raiseOnError=False, **common_opts)
         self.ui.toTargetBtn.setOpts(future_producer=self._toTarget, **common_opts)
@@ -287,12 +287,12 @@ class MultiPatchWindow(Qt.QWidget):
         return MultiFuture(futures, name="Move pipettes above target")
 
     @future_wrap
-    def _autoFindTip(self, max_reps=10, _future=None):
+    def _autoFindTip(self, max_reps=10, name=None, _future=None):
         work_to_do = self.selectedPipettes()
         while work_to_do:
             patchpip = work_to_do.pop(0)
             pip = patchpip.pipetteDevice if isinstance(patchpip, PatchPipette) else patchpip
-            _future.waitFor(pip.iterativelyFindTip(max_reps=max_reps), timeout=None)
+            pip.iterativelyFindTip(max_reps=max_reps)
 
     def _cellDetect(self):
         return self._setAllSelectedPipettesToState('cell detect')
@@ -397,7 +397,7 @@ class MultiPatchWindow(Qt.QWidget):
         pos = self._cammod.window().getView().mapSceneToView(ev.scenePos())
         spos = pip.scopeDevice().globalPosition()
         pos = [pos.x(), pos.y(), spos[2]]
-        tip_future = pip.setTipOffsetIfAcceptable(pos)
+        tip_future = pip.setTipOffsetIfAcceptable(pos, _sync="async")
         tip_future.onFinish(self._handleManualSetTip, pip, inGui=True)
 
     def _handleManualSetTip(self, future, pip):
@@ -408,7 +408,8 @@ class MultiPatchWindow(Qt.QWidget):
 
         if self._shouldSaveTipImages:
             pip.saveManualTipPosition(
-                stack=self.module.config.get("useStacksForSavedTipImages", True)
+                stack=self.module.config.get("useStacksForSavedTipImages", True),
+                _sync="async",
             ).raiseErrors("Failed to save tip images")
 
         if len(self._pipsToSetTips) == 0:

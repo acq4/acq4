@@ -291,6 +291,7 @@ class ApproachState(PatchPipetteState):
                 z_stack=(start, end, config["cellfieStep"]),
                 storage_dir=save_in,
                 name="cellfie",
+                _sync="async",
             )
         )
 
@@ -315,13 +316,14 @@ class ApproachState(PatchPipetteState):
                 pip.iterativelyFindTip(
                     max_allowed_offset=self.config["pipetteRecalibrationMaxChange"],
                     go_to_tip_first=True,
+                    _sync="async",
                 )
             )
         except Exception as e:
             self.setState(f"failed pipette position update: {e}")
 
     @future_wrap
-    def _move(self, _future):
+    def _move(self, name=None, _future=None):
         config = self.config
         if self.aboveSurface():
             self.setState("move to surface")

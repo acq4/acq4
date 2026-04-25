@@ -40,6 +40,7 @@ class PressureControl(Device):
         minimum: Optional[float] = None,
         rate: Optional[float] = None,
         duration: Optional[float] = None,
+        name=None,
         _future: Optional[Future] = None,
     ) -> None:
         if target is None and maximum is None and minimum is None:

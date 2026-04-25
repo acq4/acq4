@@ -27,7 +27,7 @@ class Autopatcher:
         win.ui.reuseLastCellBtn.setEnabled(win._cell is not None)
 
     @future_wrap
-    def _autopatchDemo(self, _future):
+    def _autopatchDemo(self, name=None, _future=None):
         win = self._window
         win.sigWorking.emit(win.ui.autopatchDemoBtn)
         ppip: PatchPipette = win.patchPipetteDevice
@@ -36,7 +36,7 @@ class Autopatcher:
         multipatch_win = runInGuiThread(man.getModule, 'MultiPatch').win
         demo_dir = self._makeValidDemoDir()
         man.setCurrentDir(demo_dir)
-        _future.waitFor(win.cameraDevice.scopeDev.findSurfaceDepth(win.cameraDevice)).getResult()
+        win.cameraDevice.scopeDev.findSurfaceDepth(win.cameraDevice)
         try:
             while True:
                 cell_dir = runInGuiThread(data_manager.createNewFolder, "Cell")
@@ -66,10 +66,10 @@ class Autopatcher:
                     _future.waitFor(ppip.pipetteDevice.goAboveTarget("fast"))
                     _future.setState("Autopatch: finding pipette tip")
                     ppip.clampDevice.autoPipetteOffset()
-                    _future.waitFor(win.pipetteDevice.iterativelyFindTip())
+                    win.pipetteDevice.iterativelyFindTip()
                     if started_clean:
                         _future.setState("Quick clean")
-                        _future.waitFor(ppip.sonicatorDevice.doProtocol("quick clean"))
+                        ppip.sonicatorDevice.doProtocol("quick clean")
 
                     _future.setState("Autopatch: go approach")
                     _future.waitFor(ppip.pipetteDevice.goApproach("fast"))
@@ -90,11 +90,11 @@ class Autopatcher:
                     self._autopatchRunTaskRunner(_future)
 
                     _future.setState("Autopatch: Taking cell images")
-                    _future.waitFor(win.scopeDevice.loadPreset('GFP'))
+                    win.scopeDevice.loadPreset('GFP')
                     self._saveStack("patched GFP cellfie", _future)
                     # win.scopeDevice.loadPreset('tdTomato')
                     # self._saveStack("patched tdTomato cellfie", _future)
-                    _future.waitFor(win.scopeDevice.loadPreset('brightfield'))
+                    win.scopeDevice.loadPreset('brightfield')
 
                     # TODO too slow for today's demo
                     # _future.setState("Autopatch: resealing")
@@ -169,7 +169,7 @@ class Autopatcher:
             #     win.cameraDevice.scopeDev.findSurfaceDepth(win.cameraDevice)
             # ).getResult()
             # _future.waitFor(win.cameraDevice.setFocusDepth(surf - 60e-6, "fast"))
-            z_stack = win._detector._detectNeuronsZStack()
+            z_stack = win._detector._detectNeuronsZStack(_sync="async")
             z_stack.sigFinished.connect(win._detector._handleDetectResults)
             _future.waitFor(z_stack, timeout=600)
 

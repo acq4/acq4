@@ -6,7 +6,7 @@ from acq4.util.threadrun import runInGuiThread
 
 
 @future_wrap
-def prompt(title, text, choices, extra_text=None, parent=None, _future=None):
+def prompt(title, text, choices, extra_text=None, parent=None, name=None, _future=None):
     """
     Prompt the user with a choice.
 

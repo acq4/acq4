@@ -330,21 +330,18 @@ class Pipette(Device, OptomechDevice):
         return True
 
     @future_wrap
-    def setTipOffsetIfAcceptable(self, pos, _future=None):
+    def setTipOffsetIfAcceptable(self, pos, name=None, _future=None):
         if self.tipOffsetIsReasonable(pos):
             self.resetGlobalPosition(pos)
         else:
             dist = np.linalg.norm(np.array(self.mapToGlobal((0, 0, 0))) - pos)
             dist = siFormat(dist, suffix='m', precision=3)
-            button_text = _future.waitFor(
-                prompt(
-                    title="Pipette displacement detected",
-                    text=f"The tip offset for {self.name()} is {dist} off from its initial value.",
-                    extra_text="Do you want to use it, discard it or override all historic offsets?",
-                    choices=["Use", "Discard", "Override"],
-                ),
-                timeout=None,
-            ).getResult()
+            button_text = prompt(
+                title="Pipette displacement detected",
+                text=f"The tip offset for {self.name()} is {dist} off from its initial value.",
+                extra_text="Do you want to use it, discard it or override all historic offsets?",
+                choices=["Use", "Discard", "Override"],
+            )
             if button_text == "Use":
                 self.recordTipOffsetInHistory(pos)
             elif button_text == "Discard":
@@ -356,21 +353,18 @@ class Pipette(Device, OptomechDevice):
         return True
 
     @future_wrap
-    def setNewPipetteTipOffsetIfAcceptable(self, pos, _future=None):
+    def setNewPipetteTipOffsetIfAcceptable(self, pos, name=None, _future=None):
         """Returns whether the tip position was saved. Otherwise, the user requested a re-do."""
         if self.newPipetteTipOffsetIsReasonable(pos):
             self.recordTipOffsetInHistory(pos)
         else:
-            button_text = _future.waitFor(
-                prompt(
-                    title="Initial tip offset outlier",
-                    text=f"The tip offset for {self.name()} is outside of its normal range.",
-                    extra_text="Do you want to include this outlier, discard the value, override all historic "
-                    "offsets, or only use this as a temporary offset?",
-                    choices=["Include", "Discard", "Override", "Temporary"],
-                ),
-                timeout=None,
-            ).getResult()
+            button_text = prompt(
+                title="Initial tip offset outlier",
+                text=f"The tip offset for {self.name()} is outside of its normal range.",
+                extra_text="Do you want to include this outlier, discard the value, override all historic "
+                "offsets, or only use this as a temporary offset?",
+                choices=["Include", "Discard", "Override", "Temporary"],
+            )
             if button_text == "Include":
                 self.recordTipOffsetInHistory(pos)
             elif button_text == "Discard":
@@ -420,7 +414,7 @@ class Pipette(Device, OptomechDevice):
             return self.offset
 
     @future_wrap
-    def saveManualTipPosition(self, stack=True, _future=None):
+    def saveManualTipPosition(self, stack=True, name=None, _future=None):
         path = os.path.join(self.configPath(), "manual-calibrations")
         path = self.dm.configFileName(path)
         path = self.dm.dirHandle(path, create=True)
@@ -453,6 +447,7 @@ class Pipette(Device, OptomechDevice):
                     z_stack=(depth - scan_dist, depth + scan_dist, step),
                     storage_dir=path,
                     name="manual calibration stack",
+                    _sync="async",
                 )
                 _future.waitFor(seq_future)
             finally:
@@ -720,7 +715,7 @@ class Pipette(Device, OptomechDevice):
 
     @future_wrap
     def wiggle(
-        self, speed, radius, repetitions, duration, pipette_direction=None, extra=None, _future=None
+        self, speed, radius, repetitions, duration, pipette_direction=None, extra=None, name=None, _future=None
     ):
         if pipette_direction is None:
             pipette_direction = self.globalDirection()
@@ -880,9 +875,9 @@ class Pipette(Device, OptomechDevice):
         return PipetteRecorder(self)
 
     @future_wrap
-    def iterativelyFindTip(self, max_reps=10, found_threshold=3e-6, delay_after_move=0.4, 
+    def iterativelyFindTip(self, max_reps=10, found_threshold=3e-6, delay_after_move=0.4,
                            max_allowed_offset=None, delay_after_update=0, reserve_devices=True,
-                           go_to_tip_first=False, _future=None):
+                           go_to_tip_first=False, name=None, _future=None):
         """Iteratively refine the tip position by finding the tip in frame and focusing, until convergence.
         
         Returns if convergence is reached (tip position changes less than *found_threshold* between iterations) or after *max_reps* iterations.
@@ -923,7 +918,7 @@ class Pipette(Device, OptomechDevice):
                     _future.sleep(delay_after_move)
                 for _ in range(max_reps):
                     pos = self.tracker.findTipInFrame()
-                    _future.waitFor(self.setTipOffsetIfAcceptable(pos), timeout=None)
+                    self.setTipOffsetIfAcceptable(pos)
                     converged = last_pos is not None and np.linalg.norm(np.array(pos) - np.array(last_pos)) < found_threshold
                     _future.sleep(delay_after_update)
                     if converged:
@@ -945,7 +940,7 @@ class Pipette(Device, OptomechDevice):
     def findNewPipette(self):
         from acq4.devices.Pipette.calibration import findNewPipette
 
-        future = findNewPipette(self, self.imagingDevice(), self.scopeDevice())
+        future = findNewPipette(self, self.imagingDevice(), self.scopeDevice(), _sync="async")
         self._last_calibration_future = future  # keep for easy debugging of calibration algorithm
         return future
 
@@ -1238,7 +1233,7 @@ class PipetteCamModInterface(CameraModuleInterface):
     def autoCalibrateClicked(self):
         pip = self.getDevice()
         pos = pip.tracker.findTipInFrame()
-        tip_future = pip.setTipOffsetIfAcceptable(pos)
+        tip_future = pip.setTipOffsetIfAcceptable(pos, _sync="async")
         tip_future.onFinish(self._handleTipPositionSet)
 
     def _handleTipPositionSet(self, future):
@@ -1250,7 +1245,7 @@ class PipetteCamModInterface(CameraModuleInterface):
         dev = self.getDevice()
         zrange = dev.config.get('referenceZRange', None)
         zstep = dev.config.get('referenceZStep', None)
-        dev.tracker.takeReferenceFrames(zRange=zrange, zStep=zstep)
+        dev.tracker.takeReferenceFrames(zRange=zrange, zStep=zstep, _sync="async")
 
     def aboveTargetClicked(self):
         self.getDevice().goAboveTarget(self.selectedSpeed())

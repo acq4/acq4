@@ -275,7 +275,7 @@ def run_image_sequence(
                 for move in movements_to_cover_region(imager, mosaic, name):
                     _future.waitFor(move)
                     if z_stack:
-                        stack = acquire_z_stack(imager, *z_stack, block=True, name=name, checkStopThrough=_future).getResult()
+                        stack = acquire_z_stack(imager, *z_stack, name=name, checkStopThrough=_future)
                         handle_new_frames(stack, i)
                     else:  # single frame
                         frame = _future.waitFor(imager.acquireFrames(1, ensureFreshFrames=True)).getResult()[0]
@@ -554,7 +554,7 @@ class ImageSequencerCtrl(Qt.QWidget):
             dh.setInfo(dhinfo)
             prot["storage_dir"] = dh
             self.setRunning(True)
-            self._future = run_image_sequence(**prot)
+            self._future = run_image_sequence(**prot, _sync="async")
             self._future.onFinish(self.threadStopped, inGui=True)
             self._future.sigStateChanged.connect(self.threadMessage)
         except Exception:

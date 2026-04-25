@@ -8,6 +8,7 @@ import threading
 import numpy as np
 
 from .motionsynergy_api import get_motionsynergyapi, initialize, check, MotionSynergyException
+from acq4.util.future import task_stack
 
 logger = logging.getLogger(__name__)
 
@@ -145,34 +146,35 @@ class SmartStageControlThread:
                 logger.exception("Error in enabled state callback")
 
     def _handle_request(self, fut: SmartStageRequestFuture):
-        cmd = fut.request
-        try:
-            if cmd == 'stop':
-                self._handle_stop()
-                fut.set_result(None)
-            elif cmd == 'position':
-                fut.set_result(self._get_pos())
-            elif cmd == 'move':
-                self._handle_move(fut)
-            elif cmd == 'quit':
-                self.quit_request = fut
-            elif cmd == 'cancel':
-                self._handle_cancel(fut)
-            elif cmd == 'disable':
-                self._handle_disable(fut)
-            elif cmd == 'enable':
-                self._handle_enable(fut)
-            elif cmd == 'disable_axis':
-                self._handle_disable_axis(fut)
-            elif cmd == 'enable_axis':
-                self._handle_enable_axis(fut)
-            elif cmd == 'enabled_state':
-                fut.set_result(self._get_enabled_state())
-            else:
-                raise ValueError(f'unrecognized request {cmd}')
+        with task_stack.push_full(fut.caller_stack):
+            cmd = fut.request
+            try:
+                if cmd == 'stop':
+                    self._handle_stop()
+                    fut.set_result(None)
+                elif cmd == 'position':
+                    fut.set_result(self._get_pos())
+                elif cmd == 'move':
+                    self._handle_move(fut)
+                elif cmd == 'quit':
+                    self.quit_request = fut
+                elif cmd == 'cancel':
+                    self._handle_cancel(fut)
+                elif cmd == 'disable':
+                    self._handle_disable(fut)
+                elif cmd == 'enable':
+                    self._handle_enable(fut)
+                elif cmd == 'disable_axis':
+                    self._handle_disable_axis(fut)
+                elif cmd == 'enable_axis':
+                    self._handle_enable_axis(fut)
+                elif cmd == 'enabled_state':
+                    fut.set_result(self._get_enabled_state())
+                else:
+                    raise ValueError(f'unrecognized request {cmd}')
 
-        except Exception:
-            fut.set_exc_info(sys.exc_info())
+            except Exception:
+                fut.set_exc_info(sys.exc_info())
 
     def _handle_move(self, fut):
         if self.current_move is not None:
@@ -294,6 +296,7 @@ class SmartStageRequestFuture:
         self.exc_info = None
         self.error = None
         self.tasks = []
+        self.caller_stack = task_stack.get()  # snapshot of caller's task chain at submission time
 
     @property
     def label(self):
