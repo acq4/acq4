@@ -448,17 +448,14 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
             err = self.errorMessage()
             original_exc = self.exceptionRaised()
 
-            if err is None:
-                if not self._stopRequested and original_exc is not None:
-                    raise self.enhanceException(original_exc)
-                msg = f"Task {self} did not complete (no extra message)."
-            else:
-                msg = f"Task {self} did not complete: {err}"
-
             if self._stopRequested:
+                msg = f"Task {self} did not complete: {err}" if err else f"Task {self} stopped."
                 raise self.Stopped(msg)
             elif original_exc is not None:
-                raise RuntimeError(msg) from self.enhanceException(original_exc)
+                if self._excInfo is not None:
+                    raise original_exc.with_traceback(self._excInfo[2])
+                raise original_exc
+            msg = f"Task {self} did not complete: {err}" if err else f"Task {self} did not complete."
             raise RuntimeError(msg)
 
         return self._returnVal
