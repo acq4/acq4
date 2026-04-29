@@ -59,7 +59,7 @@ class SensapexObjectiveChanger(Device):
         self._pos_poller.start()
 
     def setLensPosition(self, pos):
-        if self._lensChangeFuture is None or self._lensChangeFuture.isDone():
+        if self._lensChangeFuture is None or self._lensChangeFuture.is_done:
             self._lensChangeFuture = ObjectiveChangeFuture(self, pos)
         return self._lensChangeFuture
 
@@ -136,4 +136,4 @@ class ObjectiveChangeFuture(Future):
         Future.stop(self)
 
     def percentDone(self):
-        return 100 if self.isDone() else 0
+        return 100 if self.is_done else 0

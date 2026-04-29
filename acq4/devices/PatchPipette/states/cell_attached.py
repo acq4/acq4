@@ -68,7 +68,7 @@ class CellAttachedState(PatchPipetteState):
             if delay is not None and ptime.time() - startTime > delay:
                 return {"state": 'break in'}
 
-            self.checkStop()
+            self.check_stop()
 
             tps = self.getTestPulses(timeout=0.2)
             if len(tps) == 0:

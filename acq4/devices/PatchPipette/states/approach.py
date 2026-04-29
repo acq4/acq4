@@ -234,14 +234,14 @@ class ApproachState(PatchPipetteState):
                 f"Cannot approach a target depth {target[2] * 1e6:0.2f}µm that is above the surface {surface * 1e6:0.2f}µm."
             )
         # move to approach position + auto pipette offset
-        self.waitFor(pip.goApproach("fast"))
+        self.wait_for(pip.goApproach("fast"))
         self.dev.clampDevice.autoPipetteOffset()
         self.dev.clampDevice.resetTestPulseHistory()
         self._maybeTakeACellfie()
         if self.config["autoAdvance"]:
             self.monitorTestPulse()
             while True:
-                self.checkStop()
+                self.check_stop()
                 self.processAtLeastOneTestPulse()
                 self.adjustPressureForDepth()
                 self.maybeRecalibratePipette()
@@ -258,9 +258,9 @@ class ApproachState(PatchPipetteState):
                         return {"state": "fouled"}
                 if self._moveFuture is None:
                     self._moveFuture = self._move()
-                if self._moveFuture.isDone():
+                if self._moveFuture.is_done:
                     self._moveFuture.wait()  # check for errors
-                    self.setState('Move finished; next state')
+                    self.set_state('Move finished; next state')
                     break
 
         # if self.config['recalibratePipette']:
@@ -280,12 +280,12 @@ class ApproachState(PatchPipetteState):
             or self._distanceToTarget() <= config["cellfiePipetteClearance"]
         ):
             return
-        self.setState("approach: taking initial z-stack")
-        self.waitFor(self.dev.focusOnTarget("fast"))
+        self.set_state("approach: taking initial z-stack")
+        self.wait_for(self.dev.focusOnTarget("fast"))
         start = self.dev.pipetteDevice.targetPosition()[2] - (config["cellfieHeight"] / 2)
         end = start + config["cellfieHeight"]
         save_in = self.dev.dm.getCurrentDir().getDir("cell detect initial z stack", create=True)
-        self.waitFor(
+        self.wait_for(
             Future(run_image_sequence, (self.dev.imagingDevice(),), {
                 'z_stack': (start, end, config["cellfieStep"]),
                 'storage_dir': save_in,
@@ -310,23 +310,23 @@ class ApproachState(PatchPipetteState):
 
         pip = self.dev.pipetteDevice
         try:
-            tip_fut = self.waitFor(
+            tip_fut = self.wait_for(
                 Future(pip.iterativelyFindTip, (), {
                     'max_allowed_offset': self.config["pipetteRecalibrationMaxChange"],
                     'go_to_tip_first': True,
                 })
             )
         except Exception as e:
-            self.setState(f"failed pipette position update: {e}")
+            self.set_state(f"failed pipette position update: {e}")
 
     def _move(self):
         config = self.config
         if self.aboveSurface():
-            self.setState("move to surface")
+            self.set_state("move to surface")
             self._waitForMoveWhileTargetChanges(
                 self.surfaceIntersectionPosition, config['aboveSurfaceSpeed'], True
             )
-        self.setState(f'move to endpoint: {self.endpoint()}')
+        self.set_state(f'move to endpoint: {self.endpoint()}')
         self._waitForMoveWhileTargetChanges(
             position_fn=self.endpoint,
             speed=config['belowSurfaceSpeed'],
@@ -378,7 +378,7 @@ class ApproachState(PatchPipetteState):
         )
 
     def avoidObstacle(self, already_retracted=False):
-        self.setState("avoiding obstacle" + (" (recursively)" if already_retracted else ""))
+        self.set_state("avoiding obstacle" + (" (recursively)" if already_retracted else ""))
         if self._moveFuture is not None:
             self._moveFuture.stop("Obstacle detected", wait=True)
             self._moveFuture = None
@@ -392,7 +392,7 @@ class ApproachState(PatchPipetteState):
             retract_pos = init_pos
         else:
             retract_pos = init_pos - self.config["sidestepBackupDistance"] * direction
-            self.waitFor(pip._moveToGlobal(retract_pos, speed=speed, name='obstacle avoidance retract'))
+            self.wait_for(pip._moveToGlobal(retract_pos, speed=speed, name='obstacle avoidance retract'))
 
         start_time = ptime.time()
         while self._analysis.obstacle_detected():
@@ -403,24 +403,24 @@ class ApproachState(PatchPipetteState):
         # pick a sidestep point orthogonal to the pipette direction on the xy plane
         sidestep = self.config["sidestepLateralDistance"] * self.sidestepDirection(direction)
         sidestep_pos = retract_pos + sidestep
-        self.waitFor(pip._moveToGlobal(sidestep_pos, speed=speed, name='obstacle avoidance sidestep'))
+        self.wait_for(pip._moveToGlobal(sidestep_pos, speed=speed, name='obstacle avoidance sidestep'))
 
         go_past_pos = sidestep_pos + self.config["sidestepPassDistance"] * direction
         move = pip._moveToGlobal(go_past_pos, speed=speed, name='obstacle avoidance pass')
-        while not move.isDone():
+        while not move.is_done:
             self.processAtLeastOneTestPulse()
             if self._analysis.obstacle_detected():
                 move.stop("Obstacle detected while sidestepping")
-                self.waitFor(pip._moveToGlobal(retract_pos, speed=speed, name='obstacle avoidance retract after detection'))
+                self.wait_for(pip._moveToGlobal(retract_pos, speed=speed, name='obstacle avoidance retract after detection'))
                 return self.avoidObstacle(already_retracted=True)
-            self.checkStop()
-        self.waitFor(move)
+            self.check_stop()
+        self.wait_for(move)
         pos = np.array(pip.globalPosition())
-        self.waitFor(pip._moveToGlobal(pos - sidestep, speed=speed, name='obstacle avoidance return to path'))
+        self.wait_for(pip._moveToGlobal(pos - sidestep, speed=speed, name='obstacle avoidance return to path'))
 
     def _cleanup(self):
         try:
-            if self._moveFuture is not None and not self._moveFuture.isDone():
+            if self._moveFuture is not None and not self._moveFuture.is_done:
                 self._moveFuture.stop("State finished", wait=True)
         except Exception:
             self.dev.logger.exception("Error stopping pipette advance during cleanup")

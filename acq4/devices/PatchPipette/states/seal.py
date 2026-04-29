@@ -7,7 +7,7 @@ from typing import Any
 import numpy as np
 
 from acq4.util import ptime, Qt
-from acq4.util.future import Future
+from acq4.util.future import Future, sleep
 import pyqtgraph as pg
 from acq4.util.debug import log_and_ignore_exception
 from acq4.util.functions import plottable_booleans
@@ -321,19 +321,19 @@ class SealState(PatchPipetteState):
         self.processAtLeastOneTestPulse()
 
         startTime = ptime.time()
-        self.setState(f'beginning seal (mode: {config["pressureMode"] !r})')
+        self.set_state(f'beginning seal (mode: {config["pressureMode"] !r})')
         self.setInitialPressure()
         if config['focusOnCell']:
-            self.waitFor(dev.focusOnTarget('slow'))
+            self.wait_for(dev.focusOnTarget('slow'))
 
         self._patchrec['attemptedSeal'] = True
 
         while True:
-            self.checkStop()
+            self.check_stop()
             self.processAtLeastOneTestPulse()
 
             if not holdingSet and self._analysis.hold():
-                self.setState(f'enable holding potential {config["holdingPotential"] * 1000:0.1f} mV')
+                self.set_state(f'enable holding potential {config["holdingPotential"] * 1000:0.1f} mV')
                 dev.clampDevice.setHolding(mode="VC", value=config['holdingPotential'])
                 holdingSet = True
 
@@ -366,7 +366,7 @@ class SealState(PatchPipetteState):
                 self.updatePressure()
 
         # Success!
-        self.setState('gigaohm seal detected')
+        self.set_state('gigaohm seal detected')
 
         # delay for a short period, possibly applying pressure to allow seal to stabilize
         if config['delayAfterSeal'] > 0:
@@ -374,7 +374,7 @@ class SealState(PatchPipetteState):
                 dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
             else:
                 dev.pressureDevice.setPressure(source='regulator', pressure=config['afterSealPressure'])
-            self.sleep(config['delayAfterSeal'])
+            sleep(config['delayAfterSeal'])
 
         dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
 
@@ -427,7 +427,7 @@ class SealState(PatchPipetteState):
             if self._analysis.success():
                 return  # already sealed during pressure scan
             self.pressure = self.best_pressure(start, turnaround, end)
-            self.setState(f'scanned for pressure: {self.pressure / kPa:0.1f} kPa')
+            self.set_state(f'scanned for pressure: {self.pressure / kPa:0.1f} kPa')
             self._lastPressureScan = end
 
         self.pressure = np.clip(self.pressure, config['pressureLimit'], 0)
@@ -438,7 +438,7 @@ class SealState(PatchPipetteState):
         start = time.time()
         while True:
             try:
-                self.checkStop()
+                self.check_stop()
             except self.StopRequested:
                 future.stop(reason="parent task stop requested")
                 raise
@@ -450,7 +450,7 @@ class SealState(PatchPipetteState):
                 future.wait(0.1)
                 break
             except self.Timeout as e:
-                if future.wasInterrupted():  # a _real_ timeout, as opposed to our 0.1s loopbeat
+                if future.was_interrupted:  # a _real_ timeout, as opposed to our 0.1s loopbeat
                     future.wait()  # let it sing
                 if timeout is not None and time.time() - start > timeout:
                     raise self.Timeout(f"Timed out waiting {timeout}s for {future!r}") from e
@@ -461,7 +461,7 @@ class SealState(PatchPipetteState):
         resist_forward = resistances.time_slice(start, turnaround)
         resist_backward = resistances.time_slice(turnaround, end)
         if len(resist_forward) < 2 or len(resist_backward) < 2:
-            self.setState('insufficient resistance data for pressure scan')
+            self.set_state('insufficient resistance data for pressure scan')
             return self.pressure
         best_forwards = find_optimal_pressure(
             pressures.time_slice(start, turnaround),

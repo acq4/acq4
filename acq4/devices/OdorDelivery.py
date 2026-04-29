@@ -425,7 +425,7 @@ class OdorTask(DeviceTask):
             self.dev.setChannelValue(chan, 1 if chan == first_chan else 0)
 
     def isDone(self):
-        return self._future is not None and self._future.isDone()
+        return self._future is not None and self._future.is_done
 
     def getResult(self):
         cmd = self._cmd.copy()
@@ -454,7 +454,7 @@ class OdorFuture(Future):
         self._thread.start()
 
     def percentDone(self):
-        if self.isDone():
+        if self.is_done:
             return 100
         return 100 * self._time_elapsed / self._duration
 

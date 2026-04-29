@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from acq4.util import ptime
+from acq4.util.future import sleep
 from ._base import PatchPipetteState
 
 
@@ -24,7 +25,7 @@ class WholeCellState(PatchPipetteState):
 
         while True:
             # TODO: monitor for cell loss
-            self.sleep(0.1)
+            sleep(0.1)
 
     def _cleanup(self):
         patchrec = self.dev.patchRecord()

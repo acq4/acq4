@@ -167,7 +167,7 @@ class MockStage(Stage):
         self.stageThread.stop()
         
     def _interruptMove(self):
-        if self._lastMove is not None and not self._lastMove.isDone():
+        if self._lastMove is not None and not self._lastMove.is_done:
             self._lastMove.mockInterrupt()
 
     def setUserSpeed(self, v):
@@ -205,7 +205,7 @@ class MockMoveFuture(MoveFuture):
         self.dev.stageThread.setTarget(self, pos, speed)
 
     def mockFinish(self):
-        if not self.isDone():
+        if not self.is_done:
             self._taskDone()
 
     def mockInterrupt(self):

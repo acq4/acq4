@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from acq4.util.future import Future
+from acq4.util.future import Future, sleep
 from pyqtgraph import units
 from ._base import PatchPipetteState
 
@@ -55,7 +55,7 @@ class CleanState(PatchPipetteState):
         dev = self.dev
         pip = dev.pipetteDevice
 
-        self.setState('cleaning')
+        self.set_state('cleaning')
 
         # for stage in ('clean', 'rinse'):
         #     self.checkStop()
@@ -68,7 +68,7 @@ class CleanState(PatchPipetteState):
         #
         #
         #
-        #     self.waitFor(pip.moveTo(stage, "fast"), timeout=30)
+        #     self.wait_for(pip.moveTo(stage, "fast"), timeout=30)
         #
         #     if dev.sonicatorDevice is not None:
         #         self.sonication = dev.sonicatorDevice.doProtocol(config['sonicationProtocol'])
@@ -78,7 +78,7 @@ class CleanState(PatchPipetteState):
         #         self.sleep(delay)
         #
         #     if self.sonication is not None and not self.sonication.isDone():
-        #         self.waitFor(self.sonication)
+        #         self.wait_for(self.sonication)
 
         sequence = config['cleanSequence']
         if isinstance(sequence, str):
@@ -92,36 +92,36 @@ class CleanState(PatchPipetteState):
             (np.array([-90e-3, 20e-3, 30e-3]), "waaay out of the way"),
         ]
         for wp, name in waypoints:
-            self.waitFor(scope.setGlobalPosition(wp, 20e-3, name=name))
+            self.wait_for(scope.setGlobalPosition(wp, 20e-3, name=name))
 
         cw = pip.getCleaningWell()
         pip.retractFromSurface('fast')
         pip._moveToGlobal([0, 0, 10e-3], 'fast', name='safe position before cleaning well')
-        self.waitFor(Future(cw.moveToInteract, (pip,)), timeout=60)
+        self.wait_for(Future(cw.moveToInteract, (pip,)), timeout=60)
 
         if dev.sonicatorDevice is not None:
             self.sonication = Future(dev.sonicatorDevice.doProtocol, (config['sonicationProtocol'],))
 
         for pressure, delay in sequence:
             dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
-            self.sleep(delay)
+            sleep(delay)
 
-        if self.sonication is not None and not self.sonication.isDone():
-            self.waitFor(self.sonication)
+        if self.sonication is not None and not self.sonication.is_done:
+            self.wait_for(self.sonication)
 
-        self.waitFor(Future(cw.moveToApproach, (pip,)))
+        self.wait_for(Future(cw.moveToApproach, (pip,)))
 
         dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
 
-        # self.waitFor(pip.moveTo('home', 'fast'))  # motion planning doesn't work so well from here
-        self.waitFor(pip.parentStage.goHome('fast'))
+        # self.wait_for(pip.moveTo('home', 'fast'))  # motion planning doesn't work so well from here
+        self.wait_for(pip.parentStage.goHome('fast'))
         waypoints = waypoints[::-1] + [(start_pos, "initial pos")]
         for wp, name in waypoints:
-            self.waitFor(scope.setGlobalPosition(wp, 20e-3, name=name))
+            self.wait_for(scope.setGlobalPosition(wp, 20e-3, name=name))
 
         # TODO this could have worked...
         # cw = pip.getCleaningWell()
-        # self.waitFor(cw.moveToInteract(pip), timeout=60)
+        # self.wait_for(cw.moveToInteract(pip), timeout=60)
         #
         # if dev.sonicatorDevice is not None:
         #     self.sonication = dev.sonicatorDevice.doProtocol(config['sonicationProtocol'])
@@ -131,14 +131,14 @@ class CleanState(PatchPipetteState):
         #     self.sleep(delay)
         #
         # if self.sonication is not None and not self.sonication.isDone():
-        #     self.waitFor(self.sonication)
+        #     self.wait_for(self.sonication)
         #
-        # self.waitFor(cw.moveToApproach(pip))
+        # self.wait_for(cw.moveToApproach(pip))
         #
         # dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
         #
-        # self.waitFor(pip.parentStage.goHome('fast'))
-        # self.waitFor(cw._unwindKludgePath(pip))
+        # self.wait_for(pip.parentStage.goHome('fast'))
+        # self.wait_for(cw._unwindKludgePath(pip))
 
         dev.pipetteRecord()['cleanCount'] += 1
         dev.setTipClean(True)
@@ -151,12 +151,12 @@ class CleanState(PatchPipetteState):
         if self.moveFuture is not None:
             fut = self.moveFuture.undo()
             self.moveFuture = None
-            parent_future.waitFor(fut, timeout=None)
+            parent_future.wait_for(fut, timeout=None)
 
     def _cleanup(self):
         dev = self.dev
         try:
-            if self.sonication is not None and not self.sonication.isDone():
+            if self.sonication is not None and not self.sonication.is_done:
                 self.sonication.stop("parent task is cleaning up before sonication finished")
         except Exception:
             dev.logger.exception("Error stopping sonication")

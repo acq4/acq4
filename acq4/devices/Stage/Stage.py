@@ -370,7 +370,7 @@ class Stage(Device, OptomechDevice):
         self._defaultSpeed = speed
 
     def isMoving(self):
-        return self._lastMove is not None and not self._lastMove.isDone()
+        return self._lastMove is not None and not self._lastMove.is_done
 
     def move(self, position, speed=None, progress=False, linear=False, **kwds) -> MoveFuture:
         """Move the device to a new position.
@@ -724,7 +724,7 @@ class MoveFuture(Future):
         the percent complete. Devices that do not provide position updates while
         moving should reimplement this method.
         """
-        if self.isDone():
+        if self.is_done:
             return 100
         s = np.array(self.startPos)
         t = np.array(self.targetPos)
@@ -738,7 +738,7 @@ class MoveFuture(Future):
     def stop(self, reason="stop requested", wait=False):
         """Stop the move in progress."""
         with self._isStopCallable as can_call_stop:
-            if can_call_stop and not self.isDone():
+            if can_call_stop and not self.is_done:
                 self.dev.stop()
                 super().stop(reason=reason, wait=wait)
 
@@ -800,7 +800,7 @@ class MovePathFuture(MoveFuture):
                     )
                     fut._pathStep = i
                     self._currentFuture = fut
-                    while not fut.isDone():
+                    while not fut.is_done:
                         with contextlib.suppress(fut.Timeout):
                             fut.wait(timeout=0.1)  # raises Timeout
                             self.currentStep = i + 1
@@ -816,10 +816,10 @@ class MovePathFuture(MoveFuture):
                         )
                         return
 
-                    if fut.wasInterrupted():
+                    if fut.was_interrupted:
                         self._taskDone(
                             interrupted=True,
-                            error=f"Path step {i + 1:d}/{len(self.path):d}: {fut.errorMessage()}",
+                            error=f"Path step {i + 1:d}/{len(self.path):d}: {fut.error_message}",
                             excInfo=fut._excInfo,
                         )
                         return
@@ -834,7 +834,7 @@ class MovePathFuture(MoveFuture):
                     )
                     return
         finally:
-            if not self.isDone():
+            if not self.is_done:
                 self._taskDone()  # success!
 
     def undo(self):

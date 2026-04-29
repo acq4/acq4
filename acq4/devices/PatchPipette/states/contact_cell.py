@@ -4,7 +4,7 @@ import numpy as np
 from pyqtgraph.units import µm, MΩ
 
 from acq4.util.debug import log_and_ignore_exception
-from acq4.util.future import Future
+from acq4.util.future import Future, sleep
 from ._base import PatchPipetteState
 from .cell_detect import CellDetectAnalysis
 from acq4 import getManager
@@ -108,18 +108,18 @@ class ContactCellState(PatchPipetteState):
         target = np.array(pip.targetPosition())
         initial_pos = target.copy()
         initial_pos[2] += config['initialApproachHeight']
-        self.setState("moving to initial approach position")
+        self.set_state("moving to initial approach position")
         self._moveFuture = pip._moveToGlobal(initial_pos, speed=config['moveSpeed'], name='move to initial approach position')
-        self.waitFor(self._moveFuture)
+        self.wait_for(self._moveFuture)
         self._moveFuture = None
 
         self._startZ = pip.globalPosition()[2]
         iterations = 0
 
         # 5. Main descent loop
-        self.setState("descending toward cell")
+        self.set_state("descending toward cell")
         while True:
-            self.checkStop()
+            self.check_stop()
 
             # Process test pulses and check for broken tip
             self.processAtLeastOneTestPulse()
@@ -132,7 +132,7 @@ class ContactCellState(PatchPipetteState):
                 if self._contactDepth is None:
                     current_z = pip.globalPosition()[2]
                     self._contactDepth = current_z
-                    self.setState("cell contact detected, continuing descent")
+                    self.set_state("cell contact detected, continuing descent")
                     self.dev.patchRecord()['detectedCell'] = True
                     self.dev.patchRecord()['contactDepth'] = current_z
 
@@ -141,14 +141,14 @@ class ContactCellState(PatchPipetteState):
                 current_z = pip.globalPosition()[2]
                 depth_past_contact = self._contactDepth - current_z
                 if depth_past_contact >= config['depthPastContact']:
-                    self.setState("reached target depth past contact")
+                    self.set_state("reached target depth past contact")
                     return {"state": config['nextState']}
 
             # Check if we've traveled too far without contact
             current_z = pip.globalPosition()[2]
             total_descent = self._startZ - current_z
             if total_descent >= config['maxTravelWithoutContact']:
-                self.setState("max travel reached without contact, giving up")
+                self.set_state("max travel reached without contact, giving up")
                 self.dev.patchRecord()['detectedCell'] = False
                 return {"state": config['fallbackState']}
 
@@ -162,11 +162,11 @@ class ContactCellState(PatchPipetteState):
             ])
 
             self._moveFuture = pip._moveToGlobal(next_pos, speed=config['moveSpeed'], name='contact cell descent step')
-            self.waitFor(self._moveFuture)
+            self.wait_for(self._moveFuture)
             self._moveFuture = None
 
             # Wait between iterations
-            self.sleep(config['stepInterval'])
+            sleep(config['stepInterval'])
 
     def processAtLeastOneTestPulse(self):
         tps = super().processAtLeastOneTestPulse()
@@ -194,7 +194,7 @@ class ContactCellState(PatchPipetteState):
     #         self._cell = None
 
     def _cleanup(self):
-        if self._moveFuture is not None and not self._moveFuture.isDone():
+        if self._moveFuture is not None and not self._moveFuture.is_done:
             with log_and_ignore_exception(Exception, "Error stopping move during cleanup"):
                 self._moveFuture.stop()
         # with log_and_ignore_exception(Exception, "Error disabling visual tracking"):
@@ -203,13 +203,13 @@ class ContactCellState(PatchPipetteState):
 
     def recalibratePipette(self):
         pip = self.dev.pipetteDevice
-        self.setState(f"Check pipette tip..")
+        self.set_state(f"Check pipette tip..")
         try:
-            tip_fut = self.waitFor(
+            tip_fut = self.wait_for(
                 Future(pip.iterativelyFindTip, (), {
                     'max_allowed_offset': self.config["pipetteRecalibrationMaxChange"],
                     'go_to_tip_first': True,
                 })
             )
         except Exception as e:
-            self.setState(f"failed pipette position update: {e}")
+            self.set_state(f"failed pipette position update: {e}")

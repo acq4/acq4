@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import time
-
 from acq4.util import ptime
 from acq4.util.future import sleep
 from pyqtgraph import units
@@ -86,12 +84,12 @@ class BreakInState(PatchPipetteState):
             while True:
                 time_until_next = (lastPulse + config['pulseInterval']) - ptime.time()
                 if time_until_next > 0:
-                    self.sleep(time_until_next)
+                    sleep(time_until_next)
                 self.checkBreakIn()
                 nPulses = config['nPulses'][attempt]
                 pdur = config['pulseDurations'][attempt]
                 press = config['pulsePressures'][attempt]
-                self.setState('Break in attempt %d' % attempt)
+                self.set_state('Break in attempt %d' % attempt)
                 self.attemptBreakIn(nPulses, pdur, press)
                 attempt += 1
                 lastPulse = ptime.time()
@@ -104,7 +102,7 @@ class BreakInState(PatchPipetteState):
             return {"state": 'whole cell'}
         except BreakInFailed as exc:
             patchrec['breakinSuccessful'] = False
-            self.setState(str(exc))
+            self.set_state(str(exc))
             return {"state": self.config['fallbackState']}
 
     def attemptBreakIn(self, nPulses, duration, pressure):
@@ -138,7 +136,7 @@ class BreakInState(PatchPipetteState):
         """
         start = ptime.time()
         while True:
-            self.checkStop()
+            self.check_stop()
             tps = self.getTestPulses(timeout=0.2)
             if len(tps) > 0:
                 break

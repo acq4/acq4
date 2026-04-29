@@ -161,7 +161,7 @@ class PatchPipetteState(Future):
 
     def setResult(self, *args, **kwargs):
         if 'error' in kwargs:
-            self.setState(f"{self.stateName} failed: {kwargs['error']}")
+            self.set_state(f"{self.stateName} failed: {kwargs['error']}")
         super().setResult(*args, **kwargs)
 
     def initialize(self):
@@ -192,14 +192,14 @@ class PatchPipetteState(Future):
             with contextlib.ExitStack() as stack:
                 if self.config["reserveDAQ"]:
                     daq_name = self.dev.clampDevice.getDAQName("primary")
-                    self.setState(f"{self.stateName}: waiting for {daq_name} lock")
+                    self.set_state(f"{self.stateName}: waiting for {daq_name} lock")
                     stack.enter_context(
                         getManager().reserveDevices(
                             [daq_name],
                             timeout=self.config["DAQReservationTimeout"],
                             reserver=f"PatchPipette.{self.stateName}",
                         ))
-                    self.setState(f"{self.stateName}: {daq_name} lock acquired")
+                    self.set_state(f"{self.stateName}: {daq_name} lock acquired")
 
                 # TODO: can we use the rval of the Future for this?
                 self.nextState = self.run()
@@ -269,7 +269,7 @@ class PatchPipetteState(Future):
     def processAtLeastOneTestPulse(self) -> list[PatchClampTestPulse]:
         """Wait for at least one test pulse to be processed."""
         while not (tps := self.getTestPulses(timeout=0.2)):
-            self.checkStop()
+            self.check_stop()
         return tps
 
     def testPulseFinished(self, clamp, result):
@@ -291,7 +291,7 @@ class PatchPipetteState(Future):
         """While not that slow, we still want to keep the innermost loop as fast as we can."""
         if self._pressureAdjustment is None:
             self._pressureAdjustment = Future(self._adjustPressureForDepth)
-            self._pressureAdjustment.onFinish(self._finishPressureAdjustment)
+            self._pressureAdjustment.on_finish(self._finishPressureAdjustment)
 
     def _adjustPressureForDepth(self):
         depth = self.depthBelowSurface()
@@ -326,11 +326,11 @@ class PatchPipetteState(Future):
                 self._visualTargetTrackingFuture.stop("State cleanup")
             self._visualTargetTrackingFuture = None
 
-    def checkStop(self):
-        # extend checkStop to also see if the pipette was deactivated.
+    def check_stop(self):
+        # extend check_stop to also see if the pipette was deactivated.
         if self.dev.active is False:
             raise self.StopRequested("Stop state because device is not 'active'")
-        Future.checkStop(self)
+        Future.check_stop(self)
 
     def __repr__(self):
         return f'<{type(self).__name__} "{self.stateName}">'
@@ -411,7 +411,7 @@ class PatchPipetteState(Future):
         restart_move = False
         last_destination = None
         try:
-            while move_fut is None or not move_fut.isDone():
+            while move_fut is None or not move_fut.is_done:
                 if self._pauseMovement:
                     if move_fut is not None:
                         move_fut.stop("Paused", wait=True)
@@ -430,7 +430,7 @@ class PatchPipetteState(Future):
                             {"target": current_target_pos, "speed": speed, "interval": interval, "step": step},
                             name="Update stepwise move towards target",
                         )
-                    self.setState(f"Moving towards target at {current_target_pos}")
+                    self.set_state(f"Moving towards target at {current_target_pos}")
                     last_destination = current_target_pos
                 else:
                     restart_move = False
@@ -454,7 +454,7 @@ class PatchPipetteState(Future):
                 if not restart_move:
                     sleep(0.1)
         except Exception:
-            if move_fut is not None and not move_fut.isDone():
+            if move_fut is not None and not move_fut.is_done:
                 move_fut.stop("Error while moving", wait=True)
             raise
 

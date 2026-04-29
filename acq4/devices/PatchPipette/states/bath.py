@@ -50,7 +50,7 @@ class BathState(PatchPipetteState):
         bathResistances = []
 
         while True:
-            self.checkStop()
+            self.check_stop()
 
             # pull in all new test pulses (hopefully only one since the last time we checked)
             tps = self.getTestPulses(timeout=0.2)
@@ -74,7 +74,7 @@ class BathState(PatchPipetteState):
             if initialResistance is None:
                 if len(bathResistances) > 8:
                     initialResistance = np.median(bathResistances)
-                    self.setState(f"initial resistance measured: {initialResistance * 1e-6:0.2f} MOhm")
+                    self.set_state(f"initial resistance measured: {initialResistance * 1e-6:0.2f} MOhm")
 
                     # record initial resistance
                     patchrec = dev.patchRecord()
@@ -88,14 +88,14 @@ class BathState(PatchPipetteState):
                     continue
 
             if config['breakThreshold'] is not None and (ssr < initialResistance + config['breakThreshold']):
-                self.setState(f"Pipette break detected using `breakThreshold`; {ssr * 1e-6:0.2f}MOhm < {(initialResistance + config['breakThreshold']) * 1e-6:0.2f}MOhm")
+                self.set_state(f"Pipette break detected using `breakThreshold`; {ssr * 1e-6:0.2f}MOhm < {(initialResistance + config['breakThreshold']) * 1e-6:0.2f}MOhm")
                 self.setResult(
                     error=f"Pipette break detected using `breakThreshold`; {ssr * 1e-6:0.2f}MOhm < {(initialResistance + config['breakThreshold']) * 1e-6:0.2f}MOhm",
                 )
                 return {"state": 'broken'}
 
             if config['clogThreshold'] is not None and (ssr > initialResistance + config['clogThreshold']):
-                self.setState('clogged pipette detected')
+                self.set_state('clogged pipette detected')
                 self.setResult(
                     error=f"Pipette clog detected using `clogThreshold`; {ssr * 1e-6:0.2f}MOhm > {(initialResistance + config['clogThreshold']) * 1e-6:0.2f}MOhm",
                 )

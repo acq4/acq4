@@ -715,7 +715,7 @@ class CameraTask(DAQGenericTask):
 
     def isDone(self):
         # If camera stopped, then probably there was a problem and we are finished.
-        return self._future.isDone() or self._stopTime is not None or not self.dev.isRunning()
+        return self._future.is_done or self._stopTime is not None or not self.dev.isRunning()
 
     def stop(self, abort=False):
         """Warning: this won't stop everything and you'll also need to call *getResult* within the
@@ -742,13 +742,13 @@ class CameraTask(DAQGenericTask):
     def getResult(self):
         if self.resultObj is None:
             daqResult = DAQGenericTask.getResult(self)
-            while time.time() - self._stopTime < 1 and not self._future.isDone():
+            while time.time() - self._stopTime < 1 and not self._future.is_done:
                 # Wait up to 1 second for all frames to arrive from camera thread before returning results.
                 # In some cases, acquisition thread can get bogged down and we may need to wait for it
                 # to catch up.
                 time.sleep(0.05)
             self._future.stop()  # TODO this could error for fixedFrameCount!=None
-            self.resultObj = CameraTaskResult(self, self._future.getResult(timeout=1), daqResult)
+            self.resultObj = CameraTaskResult(self, self._future.get_result(timeout=1), daqResult)
             if self._dev_needs_restart or not self._dev_was_running:
                 self.dev.stop(block=True)
                 if self._dev_was_running:
@@ -1121,7 +1121,7 @@ class FrameAcquisitionFuture(Future):
                 stack.enter_context(self._camera.ensureRunning(ensureFreshFrames=True))
             lastFrameTime = ptime.time()
             while True:
-                if self.isDone():
+                if self.is_done:
                     break
                 try:
                     frame = self._queue.get_nowait()
@@ -1158,7 +1158,7 @@ class FrameAcquisitionFuture(Future):
         if (
             timeout is None
             and self._frame_count is None
-            and not self.isDone()
+            and not self.is_done
             and not self._stopRequested
         ):
             raise ValueError(

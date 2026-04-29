@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from acq4.util import ptime
+from acq4.util.future import sleep
 from ._base import PatchPipetteState
 
 
@@ -25,16 +26,16 @@ class BlowoutState(PatchPipetteState):
 
         fut = self.dev.pipetteDevice.retractFromSurface()
         if fut is not None:
-            self.waitFor(fut, timeout=None)
+            self.wait_for(fut, timeout=None)
 
         self.dev.pressureDevice.setPressure(source='regulator', pressure=config['blowoutPressure'])
-        self.sleep(config['blowoutDuration'])
+        sleep(config['blowoutDuration'])
         self.dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
 
         # wait until we have a test pulse that ran after blowout was finished.
         start = ptime.time()
         while True:
-            self.checkStop()
+            self.check_stop()
             tps = self.getTestPulses(timeout=0.2)
             if len(tps) == 0 or tps[-1].start_time < start:
                 continue

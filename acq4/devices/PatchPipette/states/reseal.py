@@ -8,7 +8,7 @@ import pyqtgraph as pg
 from acq4.util import ptime
 from acq4.util.debug import log_and_ignore_exception
 from acq4.util.functions import plottable_booleans
-from acq4.util.future import Future, check_stop
+from acq4.util.future import Future, check_stop, sleep
 from ._base import PatchPipetteState, SteadyStateAnalysisBase, exponential_decay_avg
 
 
@@ -321,7 +321,7 @@ class ResealState(PatchPipetteState):
 
     def nuzzle(self):
         """Wiggle the pipette around inside the cell to clear space for a nucleus to be extracted."""
-        self.setState("nuzzling")
+        self.set_state("nuzzling")
 
         @contextlib.contextmanager
         def pressure_ramp():
@@ -332,9 +332,9 @@ class ResealState(PatchPipetteState):
                 'target': self.config['nuzzlePressureLimit'], 'duration': self.config['nuzzleDuration']
             })
             yield
-            self.waitFor(self._pressureFuture)
+            self.wait_for(self._pressureFuture)
 
-        self.waitFor(
+        self.wait_for(
             Future(self.dev.pipetteDevice.wiggle, (), {
                 'speed': self.config['nuzzleSpeed'],
                 'radius': self.config['nuzzleLateralWiggleRadius'],
@@ -385,7 +385,7 @@ class ResealState(PatchPipetteState):
     def isRetractionSuccessful(self):
         distance = self.retractionDistance()
         if distance > self.config['retractionSuccessDistance']:
-            self.setState("retraction distance sufficient for success")
+            self.set_state("retraction distance sufficient for success")
             return True
 
         success = (
@@ -402,7 +402,7 @@ class ResealState(PatchPipetteState):
         elif ptime.time() - (self._firstSuccessTime or 0) < self.config['resealSuccessDuration']:
             success = False
         else:  # sustained success!
-            self.setState("resistance sufficient for success")
+            self.set_state("resistance sufficient for success")
         return success
 
     def processAtLeastOneTestPulse(self):
@@ -430,9 +430,9 @@ class ResealState(PatchPipetteState):
         baseline_future = Future(self.startRollingResistanceThresholds)
         if config['extractNucleus'] is True:
             self.nuzzle()
-        self.checkStop()
-        self.setState("measuring baseline resistance")
-        self.waitFor(baseline_future, timeout=2 * self.config['repairTau'])
+        self.check_stop()
+        self.set_state("measuring baseline resistance")
+        self.wait_for(baseline_future, timeout=2 * self.config['repairTau'])
         dev.pressureDevice.setPressure(source='regulator', pressure=config['retractionPressure'])
 
         start_time = ptime.time()  # getting the nucleus and baseline measurements doesn't count
@@ -453,12 +453,12 @@ class ResealState(PatchPipetteState):
             self.processAtLeastOneTestPulse()
 
             if self.isStretching():
-                if retraction_future and not retraction_future.isDone():
-                    self.setState("handling stretch")
+                if retraction_future and not retraction_future.is_done:
+                    self.set_state("handling stretch")
                     retraction_future.stop()
             elif self.isTearing():
-                if retraction_future and not retraction_future.isDone():
-                    self.setState("handling tear")
+                if retraction_future and not retraction_future.is_done:
+                    self.set_state("handling tear")
                     retraction_future.stop()
                     self._moveFuture = recovery_future = Future(dev.pipetteDevice.stepwiseAdvance, (), {
                         'depth': self._targetPosition[2],
@@ -468,9 +468,9 @@ class ResealState(PatchPipetteState):
                         'name': 'reseal tear recovery',
                     })
             elif self.isTorn():
-                if retraction_future and not retraction_future.isDone():
+                if retraction_future and not retraction_future.is_done:
                     retraction_future.stop()
-                self.setState("tissue is torn beyond repair")
+                self.set_state("tissue is torn beyond repair")
                 self.setResult(error="Tissue is torn beyond repair (via `tornDetectionThreshold`).")
                 return {
                     "state": config['fallbackState'],
@@ -478,13 +478,13 @@ class ResealState(PatchPipetteState):
                     "initialPressureSource": config['initialPressureSource'],
                 }
 
-            elif retraction_future is None or retraction_future.wasInterrupted():
+            elif retraction_future is None or retraction_future.was_interrupted:
                 if retraction_future is not None:
-                    retraction_future.logErrors("Reseal retraction error")
+                    retraction_future.log_errors("Reseal retraction error")
                 if recovery_future is not None:
                     recovery_future.stop(wait=True)
-                    recovery_future.logErrors("Reseal recovery error")
-                self.setState("retracting")
+                    recovery_future.log_errors("Reseal recovery error")
+                self.set_state("retracting")
                 self._moveFuture = retraction_future = Future(dev.pipetteDevice.stepwiseAdvance, (), {
                     'depth': dev.pipetteDevice.approachDepth(),
                     'speed': config['maxRetractionSpeed'],
@@ -499,21 +499,21 @@ class ResealState(PatchPipetteState):
                     dev.imagingDevice().globalCenterPosition() - dev.pipetteDevice.globalPosition()
                 )
             ):
-                self.waitFor(dev.focusOnTip('slow'))
-            self.sleep(0.2)
+                self.wait_for(dev.focusOnTip('slow'))
+            sleep(0.2)
 
         if self._moveFuture is not None:
             self._moveFuture.stop(wait=True)
-        self.setState("retracting pipette from surface")
+        self.set_state("retracting pipette from surface")
         self._moveFuture = self._retractFromTissue()
-        self.waitFor(self._moveFuture)
+        self.wait_for(self._moveFuture)
 
-        self.setState("go above target before slurp")
+        self.set_state("go above target before slurp")
         self._moveFuture = dev.pipetteDevice.goAboveTarget(speed=100e-6)
-        self.waitFor(self._moveFuture, timeout=120)
-        self.waitFor(dev.pipetteDevice.focusTip())
+        self.wait_for(self._moveFuture, timeout=120)
+        self.wait_for(dev.pipetteDevice.focusTip())
 
-        self.setState("slurping in nucleus")
+        self.set_state("slurping in nucleus")
         dev.pressureDevice.setPressure(source='regulator', pressure=config['slurpPressure'])
         slurp_start = ptime.time()
         final_pressure = config['initialPressure']
@@ -521,14 +521,14 @@ class ResealState(PatchPipetteState):
             tps = self.processAtLeastOneTestPulse()
             resistance = tps[-1].analysis['steady_state_resistance']
             if resistance < config['slurpStopThreshold']:
-                self.setState(
+                self.set_state(
                     f"Slurp complete; resistance {resistance} dropped below threshold {config['slurpStopThreshold']}"
                 )
                 final_pressure = 0
                 break
             now = ptime.time()
             if now > slurp_start + config['slurpDuration']:
-                self.setState(f"Slurp complete; max duration {config['slurpDuration']} elapsed.")
+                self.set_state(f"Slurp complete; max duration {config['slurpDuration']} elapsed.")
                 break
 
         dev.pressureDevice.setPressure(source='regulator', pressure=final_pressure)

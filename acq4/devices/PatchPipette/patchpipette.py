@@ -170,7 +170,7 @@ class PatchPipette(Device):
             self.pipetteDevice.globalPosition(), speed=speed, name=f"Focus on {self.name()} tip"
         )
         if raiseErrors:
-            fut.raiseErrors("Error while focusing on pipette tip: {error}")
+            fut.raise_errors("Error while focusing on pipette tip: {error}")
         return fut
 
     def focusOnTarget(self, speed, raiseErrors=False):
@@ -179,7 +179,7 @@ class PatchPipette(Device):
             self.pipetteDevice.targetPosition(), speed=speed, name=f"Focus on {self.name()} target"
         )
         if raiseErrors:
-            fut.raiseErrors("Error while focusing on pipette target: {error}")
+            fut.raise_errors("Error while focusing on pipette target: {error}")
         return fut
 
     def newPipette(self):

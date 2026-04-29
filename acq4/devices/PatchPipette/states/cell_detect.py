@@ -276,7 +276,7 @@ class CellDetectState(PatchPipetteState):
                     self._moveFuture.stop("cell detected", wait=True)
                     self._moveFuture = None
                 return self._transition_to_seal(detectedThresholdSpeed)
-            self.checkStop()
+            self.check_stop()
             self.processAtLeastOneTestPulse()
             self.adjustPressureForDepth()
             self.maybeVisuallyTrackTarget()
@@ -287,8 +287,8 @@ class CellDetectState(PatchPipetteState):
             if config['autoAdvance']:
                 if self._moveFuture is None:
                     self._moveFuture = self._move()
-                if self._moveFuture.isDone():
-                    self._moveFuture.logErrors("Error during move")
+                if self._moveFuture.is_done:
+                    self._moveFuture.log_errors("Error during move")
                     self._moveFuture = None
                     if self._reachedEndpoint:
                         return self._transition_to_fallback(
@@ -338,7 +338,7 @@ class CellDetectState(PatchPipetteState):
         return {"state": self.config['fallbackState']}
 
     def _transition_to_seal(self, speed):
-        self.setState(f"cell detected ({speed} criteria)")
+        self.set_state(f"cell detected ({speed} criteria)")
         self.dev.patchRecord()['detectedCell'] = True
         return {"state": self.config['reachedEndpointState']}
 
@@ -406,7 +406,7 @@ class CellDetectState(PatchPipetteState):
 
     def _move(self):
         """Move pipette along search path."""
-        self.setState("pipette advance")
+        self.set_state("pipette advance")
         config = self.config
         if self.aboveSurface():
             self._waitForMoveWhileTargetChanges(
@@ -414,19 +414,19 @@ class CellDetectState(PatchPipetteState):
                 config['aboveSurfaceSpeed'],
                 True,
             )
-            self.setState("moved to surface")
+            self.set_state("moved to surface")
         if not self.closeEnoughToTargetToDetectCell():
             self._waitForMoveWhileTargetChanges(
                 self.fastTravelEndpoint, config['belowSurfaceSpeed'], True
             )
-            self.setState("moved to detection area")
+            self.set_state("moved to detection area")
         if config['preTargetWiggle']:
             self._wiggle(self.finalSearchEndpoint())
         if config['preTargetReposition']:
             self.dev.pipetteDevice._moveToGlobal(
                 self.preTargetPosition(), speed=config['detectionSpeed'], name='pre-target reposition'
             )
-        self.setState("moving to final search endpoint")
+        self.set_state("moving to final search endpoint")
         self._waitForMoveWhileTargetChanges(
             position_fn=self.finalSearchEndpoint,
             speed=config['detectionSpeed'],
@@ -450,11 +450,11 @@ class CellDetectState(PatchPipetteState):
         count = int(distance / config['preTargetWiggleStep'])
         wiggle_step = self.direction_unit * config['preTargetWiggleStep']
         for _ in range(count):
-            self.setState("pre-target wiggle")
+            self.set_state("pre-target wiggle")
             retract_pos = dev.pipetteDevice.globalPosition() - wiggle_step
             dev.pipetteDevice._moveToGlobal(retract_pos, speed=speed, name='pre-target wiggle retract')
             with self._wiggleLock:  # used to prevent cell detect
-                self.waitFor(
+                self.wait_for(
                     Future(dev.pipetteDevice.wiggle, (), {
                         'speed': config['preTargetWiggleSpeed'],
                         'radius': config['preTargetWiggleRadius'],
@@ -470,7 +470,7 @@ class CellDetectState(PatchPipetteState):
 
     def _searchAround(self):
         """Slowly describe a circle on a vertical plane perpendicular to the yaw of the pipette."""
-        self.setState("searching around target")
+        self.set_state("searching around target")
         radius = self.config['searchAroundAtTargetRadius']
         speed = self.config['detectionSpeed']
         vertical = np.array((0, 0, 1))
@@ -489,7 +489,7 @@ class CellDetectState(PatchPipetteState):
             sleep(1)
 
     def _cleanup(self):
-        if self._moveFuture is not None and not self._moveFuture.isDone():
+        if self._moveFuture is not None and not self._moveFuture.is_done:
             with log_and_ignore_exception(Exception, "Error stopping move during cleanup"):
                 self._moveFuture.stop()
         with log_and_ignore_exception(Exception, "Error storing target position"):

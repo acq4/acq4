@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from acq4.util.future import Future
+from acq4.util.future import Future, sleep
 from pyqtgraph import units
 from ._base import PatchPipetteState
 
@@ -44,14 +44,14 @@ class NucleusCollectState(PatchPipetteState):
         dev = self.dev
         pip = dev.pipetteDevice
 
-        self.setState('nucleus collection')
+        self.set_state('nucleus collection')
 
         # move to top of collection tube
         self.startPos = pip.globalPosition()
         self.collectionPos = pip.loadPosition('collect')
         # self.approachPos = self.collectionPos - pip.globalDirection() * config['approachDistance']
 
-        # self.waitFor([pip._moveToGlobal(self.approachPos, speed='fast')])
+        # self.wait_for([pip._moveToGlobal(self.approachPos, speed='fast')])
         pip._moveToGlobal(self.collectionPos, speed='fast', name=f"{pip.name()} move to nucleus collection position")
 
         if dev.sonicatorDevice is not None:
@@ -63,17 +63,17 @@ class NucleusCollectState(PatchPipetteState):
 
         for pressure, delay in sequence:
             dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
-            self.sleep(delay)
+            sleep(delay)
 
-        if self.sonication is not None and not self.sonication.isDone():
-            self.waitFor(self.sonication)
+        if self.sonication is not None and not self.sonication.is_done:
+            self.wait_for(self.sonication)
 
         dev.pipetteRecord()['expelled_nucleus'] = True
         return {"state": 'out'}
 
         # # current version using InteractionSite moveToInteract/unwindKludgePath:
         # well = pip.getNucleusDepositionWell()
-        # self.waitFor(well.moveToInteract(pip))
+        # self.wait_for(well.moveToInteract(pip))
         #
         # if dev.sonicatorDevice is not None:
         #     self.sonication = dev.sonicatorDevice.doProtocol(config['sonicationProtocol'])
@@ -87,20 +87,20 @@ class NucleusCollectState(PatchPipetteState):
         #     self.sleep(delay)
         #
         # if self.sonication is not None and not self.sonication.isDone():
-        #     self.waitFor(self.sonication)
+        #     self.wait_for(self.sonication)
         #
         # dev.pipetteRecord()['expelled_nucleus'] = True
-        # self.waitFor(well._unwindKludgePath(pip))
+        # self.wait_for(well._unwindKludgePath(pip))
         # return {"state": 'out'}
 
     def resetPosition(self):
         pip = self.dev.pipetteDevice
-        if self.isDone():
+        if self.is_done:
             pip._moveToGlobal(self.startPos, speed='fast', name='return to start position')
 
     def _cleanup(self):
         try:
-            if self.sonication is not None and not self.sonication.isDone():
+            if self.sonication is not None and not self.sonication.is_done:
                 self.sonication.stop("parent task is cleaning up before sonication finished")
         except Exception:
             self.dev.logger.exception("Error stopping sonication")
