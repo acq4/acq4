@@ -330,7 +330,7 @@ class Camera(DAQGeneric, OptomechDevice):
 
         Usage::
             with camera.ensureRunning():
-                frames = camera.acquireFrames(10).getResult()
+                frames = camera.acquireFrames(10).get_result()
         """
         running = self.isRunning()
         if ensureFreshFrames and running:

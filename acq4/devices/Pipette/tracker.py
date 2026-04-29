@@ -28,7 +28,7 @@ class PipetteTracker:
         """
         imager = self._getImager(imager)
         with imager.ensureRunning(ensureFreshFrames=True):
-            return imager.acquireFrames(1).getResult()[0]
+            return imager.acquireFrames(1).get_result()[0]
 
     def _getImager(self, imager=None):
         if imager is None:

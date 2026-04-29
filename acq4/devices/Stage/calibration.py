@@ -228,7 +228,7 @@ class ManipulatorAxesCalibrationWindow(Qt.QWidget):
         self.autoCollectBtn.setText("collecting...")
         from acq4.util.future import Future
         future = Future(calibrate_manipulator_axes, (pipette,))
-        future.onFinish(self._autoCollectFinished)
+        future.on_finish(self._autoCollectFinished)
 
     def _autoCollectFinished(self, future):
         from acq4.util.threadrun import runInGuiThread
@@ -238,7 +238,7 @@ class ManipulatorAxesCalibrationWindow(Qt.QWidget):
         self.autoCollectBtn.setEnabled(True)
         self.autoCollectBtn.setText("auto collect")
         try:
-            points = future.getResult()
+            points = future.get_result()
         except Exception:
             self.dev.logger.exception("Auto collect calibration failed")
             return
@@ -514,7 +514,7 @@ class AutomatedStageCalibration(object):
 
     def handleNewFrame(self, frame):
         try:
-            if self._move is not None and not self._move.isDone():
+            if self._move is not None and not self._move.is_done:
                 # stage is still moving; ignore frame
                 return
 

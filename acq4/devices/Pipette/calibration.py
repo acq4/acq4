@@ -236,7 +236,7 @@ def findNewPipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=0.
 
         # collect background images, analyze noise
         with imager.ensureRunning():
-            bgFrames = imager.acquireFrames(10).getResult()
+            bgFrames = imager.acquireFrames(10).get_result()
             bgFrameArray = np.stack([f.data() for f in bgFrames], axis=0)
             bgFrame = bgFrameArray.mean(axis=0)
 
@@ -265,7 +265,7 @@ def findNewPipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=0.
         # to see whether we made it back to the desired position (and if not, apply
         # a correction as well as remember the apparent time delay between camera images and
         # position updates)
-        compareFrame = imager.acquireFrames(1).getResult()[0].data().astype(float)
+        compareFrame = imager.acquireFrames(1).get_result()[0].data().astype(float)
         comparisonError = ((framesArray.astype(float) - compareFrame[None, ...])**2).sum(axis=1).sum(axis=1)
         mostSimilarFrame = np.argmin(comparisonError)
         pipetteCameraDelay = frames[mostSimilarFrame].info()['time'] - frames[centerIndex].info()['time']
@@ -427,7 +427,7 @@ def watchMovingPipette(pipette: Pipette, imager: Camera, pos, speed):
     # return only position change events
     events = [ev for ev in pipRecorder.events if ev['event'] == 'position_change']
 
-    return imgFuture.getResult(), events
+    return imgFuture.get_result(), events
 
 
 def getPipettePositionAtTime(events, time):

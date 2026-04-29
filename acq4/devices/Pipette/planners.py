@@ -216,7 +216,7 @@ class GeometryAwarePathGenerator(PipettePathGenerator):
     def __init__(self, pip: Pipette):
         super().__init__(pip)
         self._cachePrimer = Future(self._primeCaches)
-        self._cachePrimer.raiseErrors("error priming path planning caches")
+        self._cachePrimer.raise_errors("error priming path planning caches")
 
     def _getPlanningContext(self):
         man = getManager()

@@ -143,7 +143,7 @@ def _stepped_z_stack(imager, start, end, step, name, future=None) -> list[Frame]
     with imager.ensureRunning(ensureFreshFrames=True):
         for z in np.arange(start, end + step, step):
             _set_focus_depth(imager, z, direction, speed="slow", name=f"{name} step")
-            frames.append(imager.acquireFrames(1).getResult()[0])
+            frames.append(imager.acquireFrames(1).get_result()[0])
     return frames
 
 
@@ -270,7 +270,7 @@ def run_image_sequence(
                         stack = acquire_z_stack(imager, *z_stack, name=name)
                         handle_new_frames(stack, i)
                     else:  # single frame
-                        frame = imager.acquireFrames(1, ensureFreshFrames=True).getResult()[0]
+                        frame = imager.acquireFrames(1, ensureFreshFrames=True).get_result()[0]
                         handle_new_frames(frame, i)
                     check_stop()
                 sleep(interval - (ptime.time() - start))
@@ -396,7 +396,7 @@ def acquire_z_stack(
                     imager.acquireFrames(1).wait()  # just to be sure the camera caught up
                 finally:
                     frames_fut.stop()
-        frames = frames_fut.getResult(timeout=10)
+        frames = frames_fut.get_result(timeout=10)
         try:
             frames = enforce_linear_z_stack(frames, start, stop, step)
         except ValueError:
@@ -546,7 +546,7 @@ class ImageSequencerCtrl(Qt.QWidget):
             prot["storage_dir"] = dh
             self.setRunning(True)
             self._future = Future(run_image_sequence, (), prot)
-            self._future.onFinish(self.threadStopped, inGui=True)
+            self._future.on_finish(self.threadStopped, inGui=True)
             self._future.sigStateChanged.connect(self.threadMessage)
         except Exception:
             self.threadStopped(self._future)

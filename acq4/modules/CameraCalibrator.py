@@ -123,7 +123,7 @@ class CameraCalibrator(Module):
                 frameAcquisition.stop()
                 
                 # Get the acquired frames
-                frames = frameAcquisition.getResult()
+                frames = frameAcquisition.get_result()
             
             return {'frames': frames, 'activationTime': activationTime}
             
@@ -143,7 +143,7 @@ class CameraCalibrator(Module):
         self.calibrateBtn.setText("Calibrate Latency")
         
         try:
-            result = future.getResult()
+            result = future.get_result()
             self._displayFrames(result['frames'], result['activationTime'])
             
         except Exception as e:

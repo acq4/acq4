@@ -1335,7 +1335,7 @@ class GeometryMotionPlanner:
             obstacles.append((obst_volume, to_global_from_obst, obst.name))
             if visualizer is not None:
                 from acq4.util.future import Future
-                Future(visualizer.addObstacle, (obst.name, obst_volume, to_global_from_obst)).raiseErrors(
+                Future(visualizer.addObstacle, (obst.name, obst_volume, to_global_from_obst)).raise_errors(
                     "obstacle failed to render"
                 )
         return obstacles
