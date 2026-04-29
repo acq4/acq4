@@ -67,9 +67,13 @@ task_stack = TaskStack()
 FUTURE_RETVAL_TYPE = TypeVar("FUTURE_RETVAL_TYPE")
 WAITING_RETVAL_TYPE = TypeVar("WAITING_RETVAL_TYPE")
 
+
 class Unset:
     pass
+
+
 UNSET = Unset()  # unique sentinel value for "not set"
+
 
 class FutureSignals(Qt.QObject):
     """Companion QObject that holds Qt signals for a Future.
@@ -104,7 +108,12 @@ class Future(Generic[FUTURE_RETVAL_TYPE]):
         fut = cls(name=name, logLevel=None)
         if stopped:
             fut.stop(reason=error)
-        fut._taskDone(returnValue=result, error=error, interrupted=(error or excInfo) is not None, excInfo=excInfo)
+        fut._taskDone(
+            returnValue=result,
+            error=error,
+            interrupted=(error or excInfo) is not None,
+            excInfo=excInfo,
+        )
         return fut
 
     @staticmethod
@@ -115,8 +124,18 @@ class Future(Generic[FUTURE_RETVAL_TYPE]):
             frame = frame.f_back  # walk up the stack
         return f"(unnamed from {frame.f_code.co_filename}:{frame.f_lineno})"
 
-    def __init__(self, fn=None, args=(), kwargs=None, *, onError=None, name=None, logLevel='debug',
-                 detach=False, on_finish=None):
+    def __init__(
+        self,
+        fn=None,
+        args=(),
+        kwargs=None,
+        *,
+        onError=None,
+        name=None,
+        logLevel='debug',
+        detach=False,
+        on_finish=None,
+    ):
         self.startTime = ptime.time()
         self._name = self.nameFromStack() if name is None else name
         self.logger = get_logger(f"{__name__}.{self._name}")
@@ -143,7 +162,6 @@ class Future(Generic[FUTURE_RETVAL_TYPE]):
 
         self.log(f"Future [{self._name}] created")
 
-        # v2-style: fn provided → auto-start, register with parent, wire finish callback
         if fn is not None:
             if name is None:
                 self._name = getattr(fn, '__qualname__', repr(fn))
@@ -152,7 +170,7 @@ class Future(Generic[FUTURE_RETVAL_TYPE]):
             parent = current_future()
             if parent is not None and not detach:
                 parent._stopsToPropagate.append(self)
-            self._executeInThread_v2(fn, tuple(args), dict(kwargs or {}))
+            self._executeInThread(fn, tuple(args), dict(kwargs or {}))
 
     # -- Qt signal proxy -------------------------------------------------------
 
@@ -184,8 +202,6 @@ class Future(Generic[FUTURE_RETVAL_TYPE]):
         else:
             self._stop_requested.clear()
 
-    # -- v2 API surface -------------------------------------------------------
-
     @property
     def is_done(self) -> bool:
         return self._isDone
@@ -196,15 +212,17 @@ class Future(Generic[FUTURE_RETVAL_TYPE]):
 
     @property
     def _done(self) -> threading.Event:
-        """v2 compat: threading.Event that is set when the future finishes."""
+        """Alias for finishedEvent; set when the future finishes."""
         return self.finishedEvent
 
     def add_finish_callback(self, fn) -> None:
         """Call fn(result, exception) when done. Calls immediately if already done."""
+
         def _wrap(future):
             exc = future.exceptionRaised()
             result = future._returnVal
             fn(result, exc)
+
         self.onFinish(_wrap)
 
     def detach(self) -> None:
@@ -213,18 +231,18 @@ class Future(Generic[FUTURE_RETVAL_TYPE]):
         if parent is not None and self in parent._stopsToPropagate:
             parent._stopsToPropagate.remove(self)
 
-    def _executeInThread_v2(self, func, args, kwargs):
-        """Start func in a thread without injecting _future into kwargs."""
+    def _executeInThread(self, func, args, kwargs):
+        """Start func in a background thread, propagating the current context."""
         ctx = contextvars.copy_context()
         self._executingThread = threading.Thread(
             target=ctx.run,
-            args=(self._executeAndSetReturn_v2, func, args, kwargs),
+            args=(self._executeAndSetReturn, func, args, kwargs),
             daemon=True,
             name=f"execute thread for {repr(self)}",
         )
         self._executingThread.start()
 
-    def _executeAndSetReturn_v2(self, func, args, kwargs):
+    def _executeAndSetReturn(self, func, args, kwargs):
         cf_token = _current_future_var.set(self)
         with task_stack.push(self._name):
             try:
@@ -287,7 +305,7 @@ class Future(Generic[FUTURE_RETVAL_TYPE]):
 
         Must be reimplemented in subclasses.
         """
-        raise NotImplementedError("method must be reimplmented in subclass")
+        raise NotImplementedError("method must be reimplemented in subclass")
 
     def stop(self, reason: str | None = "task stop requested", wait=False):
         """Stop the task (nicely).
@@ -314,10 +332,16 @@ class Future(Generic[FUTURE_RETVAL_TYPE]):
         self.setResult(rval=returnValue, error=error, excInfo=excInfo, interrupted=interrupted)
         self._do_task_completion_jobs()
 
-    def setResult(self, rval:Any=UNSET, error:str|None|Unset=UNSET, excInfo:str|None|Unset=UNSET, interrupted:bool|None|Unset=UNSET):
-        """Set result attributes on this future. 
+    def setResult(
+        self,
+        rval: Any = UNSET,
+        error: str | None | Unset = UNSET,
+        excInfo: str | None | Unset = UNSET,
+        interrupted: bool | None | Unset = UNSET,
+    ):
+        """Set result attributes on this future.
         This should only be called internally by the future or subclasses, or when the state of the future is handled externally.
-        
+
         Parameters
         ----------
         rval : Any
@@ -327,13 +351,13 @@ class Future(Generic[FUTURE_RETVAL_TYPE]):
         excInfo : str | None | Unset
             The exception information if the future encountered an error.
         interrupted : bool | None | Unset
-            Indicates whether the future was interrupted. 
+            Indicates whether the future was interrupted.
             If unspecified, it will be set to True if there was an error or exception.
         """
         with self._completionLock:
             if self._isDone:
                 raise ValueError("Cannot alter future after future is done.")
-        
+
             if rval is not UNSET:
                 self._returnVal = rval
             if error is not UNSET:
@@ -366,7 +390,9 @@ class Future(Generic[FUTURE_RETVAL_TYPE]):
             try:
                 self._onError(self)
             except Exception as e:
-                self.logger.exception(f"{type(e).__name__}: {e} in Future.onError callback: {self._onError}")
+                self.logger.exception(
+                    f"{type(e).__name__}: {e} in Future.onError callback: {self._onError}"
+                )
         self.finishedEvent.set()  # tell wait() that we're done
         self.sigFinished.emit(self)  # tell everyone else that we're done
         self._callCallbacks()
@@ -463,7 +489,9 @@ class Future(Generic[FUTURE_RETVAL_TYPE]):
                 if self._excInfo is not None:
                     raise original_exc.with_traceback(self._excInfo[2])
                 raise original_exc
-            msg = f"Task {self} did not complete: {err}" if err else f"Task {self} did not complete."
+            msg = (
+                f"Task {self} did not complete: {err}" if err else f"Task {self} did not complete."
+            )
             raise RuntimeError(msg)
 
         return self._returnVal
@@ -518,7 +546,9 @@ class Future(Generic[FUTURE_RETVAL_TYPE]):
             time.sleep(max(0.0, min(interval, stop - now)))
             self.checkStop()
 
-    def waitFor(self, future: Future[WAITING_RETVAL_TYPE], timeout=20.0) -> Future[WAITING_RETVAL_TYPE]:
+    def waitFor(
+        self, future: Future[WAITING_RETVAL_TYPE], timeout=20.0
+    ) -> Future[WAITING_RETVAL_TYPE]:
         """Wait for another future to complete while also checking for stop requests on self."""
         start = time.time()
         while True:
@@ -556,9 +586,14 @@ class Future(Generic[FUTURE_RETVAL_TYPE]):
             return
         originalFrame = sys._getframe().f_back
         monitorFn = functools.partial(
-            self._monitorErrors, message=message, pollInterval=pollInterval, originalFrame=originalFrame
+            self._monitorErrors,
+            message=message,
+            pollInterval=pollInterval,
+            originalFrame=originalFrame,
         )
-        self._errorMonitorThread = threading.Thread(target=monitorFn, daemon=True, name=f"error monitor for {self}")
+        self._errorMonitorThread = threading.Thread(
+            target=monitorFn, daemon=True, name=f"error monitor for {self}"
+        )
         self._errorMonitorThread.start()
 
     def _monitorErrors(self, message, pollInterval, originalFrame):
@@ -571,14 +606,14 @@ class Future(Generic[FUTURE_RETVAL_TYPE]):
                 stack = None
 
             try:
-                formattedMsg = message.format(stack=stack, error=traceback.format_exception_only(type(exc), exc))
+                formattedMsg = message.format(
+                    stack=stack, error=traceback.format_exception_only(type(exc), exc)
+                )
             except Exception as exc2:
                 formattedMsg = f"{message} [additional error formatting error message: {exc2}]"
             raise RuntimeError(formattedMsg) from exc
 
 
-# ---------------------------------------------------------------------------
-# v2 module-level primitives
 # ---------------------------------------------------------------------------
 
 # Module-level Stopped alias — matches Future.Stopped for catch-compatibility.
@@ -709,8 +744,9 @@ class MultiException(Exception):
     def __str__(self):
         if not self._exceptions:
             return super().__str__()
-        return f"Oh no! A wild herd ({len(self._exceptions)}) of exceptions appeared!\n" + "\n".join(
-            f"Exception #{i}: {e}" for i, e in enumerate(self._exceptions, 1)
+        return (
+            f"Oh no! A wild herd ({len(self._exceptions)}) of exceptions appeared!\n"
+            + "\n".join(f"Exception #{i}: {e}" for i, e in enumerate(self._exceptions, 1))
         )
 
 
@@ -787,15 +823,15 @@ class FutureButton(FeedbackButton):
     sigStateChanged = Qt.Signal(object, object)  # future, state
 
     def __init__(
-            self,
-            fn: Optional[Callable] = None,
-            *args,
-            stoppable: bool = False,
-            success=None,
-            failure=None,
-            raiseOnError: bool = True,
-            processing=None,
-            showStatus: bool = True,
+        self,
+        fn: Optional[Callable] = None,
+        *args,
+        stoppable: bool = False,
+        success=None,
+        failure=None,
+        raiseOnError: bool = True,
+        processing=None,
+        showStatus: bool = True,
     ):
         """Create a new FutureButton.
 
@@ -830,7 +866,13 @@ class FutureButton(FeedbackButton):
 
     def setOpts(self, **kwds):
         allowed_args = {
-            "fn", "stoppable", "success", "failure", "processing", "showStatus", "raiseOnError",
+            "fn",
+            "stoppable",
+            "success",
+            "failure",
+            "processing",
+            "showStatus",
+            "raiseOnError",
         }
         for k, v in kwds.items():
             if k not in allowed_args:
@@ -840,7 +882,9 @@ class FutureButton(FeedbackButton):
     def processing(self, message="Processing..", tip="", processEvents=True):
         """Displays specified message on button to let user know the action is in progress. Threadsafe."""
         # This had to be reimplemented to allow stoppable buttons to remain enabled.
-        isGuiThread = Qt.QtCore.QThread.currentThread() == Qt.QtCore.QCoreApplication.instance().thread()
+        isGuiThread = (
+            Qt.QtCore.QThread.currentThread() == Qt.QtCore.QCoreApplication.instance().thread()
+        )
         if isGuiThread:
             self.setEnabled(self._stoppable)
             self.setText(message, temporary=True)
@@ -854,7 +898,10 @@ class FutureButton(FeedbackButton):
 
     def _controlTheFuture(self):
         if self._future is None:
-            self.processing(self._processing or (f"Cancel {self.text()}" if self._stoppable else "Processing..."))
+            self.processing(
+                self._processing
+                or (f"Cancel {self.text()}" if self._stoppable else "Processing...")
+            )
             try:
                 future = self._future = Future(self._fn)
             except Exception:
