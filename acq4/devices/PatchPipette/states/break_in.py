@@ -3,6 +3,7 @@ from __future__ import annotations
 import time
 
 from acq4.util import ptime
+from acq4.util.future import sleep
 from pyqtgraph import units
 from ._base import PatchPipetteState
 
@@ -119,13 +120,13 @@ class BreakInState(PatchPipetteState):
                     if remaining > 0.2:
                         self.checkBreakIn()
                     elif remaining > 0:
-                        time.sleep(remaining)
+                        sleep(remaining)
                     else:
                         break
             finally:
                 self.dev.pressureDevice.setPressure(source='atmosphere')
             if i < nPulses - 1:
-                time.sleep(0.1)  # short delay between pulses
+                sleep(0.1)  # short delay between pulses
             self.checkBreakIn()
 
     def checkBreakIn(self):

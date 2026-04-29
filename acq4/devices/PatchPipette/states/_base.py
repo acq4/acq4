@@ -157,7 +157,7 @@ class PatchPipetteState(Future):
         """Start a background thread that executes this state. This should only be called by the state manager.
 
         When runJob completes, self.sigFinished will be emitted."""
-        self.executeInThread(self.runJob, args=(), kwds={})
+        self._executeInThread_v2(self.runJob, (), {})
 
     def setResult(self, *args, **kwargs):
         if 'error' in kwargs:
@@ -173,7 +173,7 @@ class PatchPipetteState(Future):
         self.initializePressure()
         self.initializeClamp()
 
-    def runJob(self, _future):  # _future is self
+    def runJob(self):
         """Called in background thread to start the state.
 
         Initialize pressure, clamp, etc. and run the subclass-defined run() method if it exists.

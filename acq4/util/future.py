@@ -9,7 +9,7 @@ import sys
 import threading
 import time
 import traceback
-from typing import Any, Callable, ParamSpec, Optional, overload
+from typing import Any, Callable, Optional
 from typing import Generic, TypeVar
 
 from acq4.logging_config import get_logger
@@ -255,34 +255,6 @@ class Future(Generic[FUTURE_RETVAL_TYPE]):
 
     def __repr__(self):
         return f"<{self.__class__.__name__} {self._name}>"
-
-    def executeInThread(self, func, args, kwds):
-        """Execute the specified function in a separate thread.
-
-        The function should call _taskDone() when finished (or raise an exception).
-        """
-        # Capture the caller's full context so the thread inherits task_stack and other
-        # ContextVars. Python's threading.Thread does not copy ContextVars automatically.
-        ctx = contextvars.copy_context()
-        self._executingThread = threading.Thread(
-            target=ctx.run,
-            args=(self.executeAndSetReturn, func, args, kwds),
-            daemon=True,
-            name=f"execute thread for {repr(self)}",
-        )
-        self._executingThread.start()
-
-    def executeAndSetReturn(self, func, args, kwds):
-        cf_token = _current_future_var.set(self)
-        with task_stack.push(self._name):
-            try:
-                kwds["_future"] = self
-                self.setResult(rval=func(*args, **kwds))
-            except Exception:
-                self.setResult(excInfo=sys.exc_info())
-            finally:
-                _current_future_var.reset(cf_token)
-                self._do_task_completion_jobs()
 
     def propagateStopsInto(self, future: Future):
         """Add a future to the list of futures that will be stopped if this future is stopped."""
@@ -727,72 +699,6 @@ class Event:
             wait_for = poll if remaining is None else min(poll, remaining)
             if self._event.wait(wait_for):
                 return True
-
-
-# ---------------------------------------------------------------------------
-
-WRAPPED_FN_PARAMS = ParamSpec("WRAPPED_FN_PARAMS")
-WRAPPED_FN_RETVAL_TYPE = TypeVar("WRAPPED_FN_RETVAL_TYPE")
-
-
-class FutureWrapper:
-    def __init__(self, logLevel='debug'):
-        self.logLevel = logLevel
-
-    @overload
-    def __call__(
-        self,
-        func: Callable[WRAPPED_FN_PARAMS, WRAPPED_FN_RETVAL_TYPE],
-    ) -> Callable[WRAPPED_FN_PARAMS, Future[WRAPPED_FN_RETVAL_TYPE]]:
-        ...
-
-    @overload
-    def __call__(
-        self,
-        func: None = None,
-        *,
-        logLevel: str,
-    ) -> "FutureWrapper":
-        ...
-
-    def __call__(self, func=None, *, logLevel=None):
-        """Decorator to wrap a function so it runs inside a Future with context tracking.
-
-        The function must accept a `_future` keyword argument and may accept a `name` argument.
-        Usage:
-            @future_wrap
-            def myFunc(arg1, arg2, name=None, _future=None):
-                _future.checkStop()
-                ...
-
-            result = myFunc(arg1, arg2)                  # blocks, returns result value
-            fut = myFunc(arg1, arg2, _sync="async")      # returns Future immediately
-            result = fut.getResult()
-        """
-        if logLevel is not None:
-            if func is not None:
-                raise ValueError(f"Cannot have func {func} and logLevel {logLevel}")
-            return FutureWrapper(logLevel)
-
-        @functools.wraps(func)
-        def wrapper(*args: WRAPPED_FN_PARAMS.args, **kwds: WRAPPED_FN_PARAMS.kwargs):
-            name = kwds.get("name") or func.__qualname__
-            future = Future(onError=kwds.pop("onFutureError", None), name=name, logLevel=self.logLevel)
-            _sync = kwds.pop("_sync", None)
-            if _sync == "async":
-                future.executeInThread(func, args, kwds)
-                return future
-            else:
-                # Default: run inline (blocking), return the result value directly.
-                if parent := kwds.pop("checkStopThrough", None):
-                    parent.propagateStopsInto(future)
-                future.executeAndSetReturn(func, args, kwds)
-                return future.getResult()
-
-        return wrapper
-
-
-future_wrap = FutureWrapper()
 
 
 class MultiException(Exception):
