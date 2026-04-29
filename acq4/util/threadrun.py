@@ -47,10 +47,12 @@ def inGuiThread(func):
     return run_func_in_gui_thread
 
 
-class ThreadCallFuture(Future):
+class ThreadCallFuture(Qt.QObject, Future):
+    """Future that marshals a function call into a target Qt thread."""
     sigRequestCall = Qt.Signal()
 
     def __init__(self, thread, func, *args, **kwds):
+        Qt.QObject.__init__(self)
         Future.__init__(self, name="ThreadCallFuture")
         self.func = func
         self.args = args
