@@ -71,14 +71,21 @@ class Unset:
     pass
 UNSET = Unset()  # unique sentinel value for "not set"
 
-class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
+class FutureSignals(Qt.QObject):
+    """Companion QObject that holds Qt signals for a Future.
+
+    Created lazily the first time signals are accessed on a Future instance.
+    """
+
+    sigFinished = Qt.Signal(object)
+    sigStateChanged = Qt.Signal(object, object)
+
+
+class Future(Generic[FUTURE_RETVAL_TYPE]):
     """Used to track the progress of an asynchronous task.
 
     The simplest subclasses reimplement percentDone() and call _taskDone() when finished.
     """
-
-    sigFinished = Qt.Signal(object)  # self
-    sigStateChanged = Qt.Signal(object, object)  # self, state
 
     class StopRequested(Exception):
         """Raised by checkStop if stop() has been invoked."""
@@ -110,8 +117,6 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
 
     def __init__(self, fn=None, args=(), kwargs=None, *, onError=None, name=None, logLevel='debug',
                  detach=False, on_finish=None):
-        Qt.QObject.__init__(self)
-
         self.startTime = ptime.time()
         self._name = self.nameFromStack() if name is None else name
         self.logger = get_logger(f"{__name__}.{self._name}")
@@ -123,7 +128,8 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         self._wasInterrupted = False
         self._errorMessage = None
         self._excInfo = None
-        self._stopRequested = False
+        self._stop_requested = threading.Event()
+        self._signals: Optional["FutureSignals"] = None
         self._state = "starting"
         self._errorMonitorThread = None
         self._executingThread = None
@@ -147,6 +153,36 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
             if parent is not None and not detach:
                 parent._stopsToPropagate.append(self)
             self._executeInThread_v2(fn, tuple(args), dict(kwargs or {}))
+
+    # -- Qt signal proxy -------------------------------------------------------
+
+    @property
+    def signals(self) -> "FutureSignals":
+        """Lazily-created QObject companion providing sigFinished and sigStateChanged."""
+        if self._signals is None:
+            with self._completionLock:
+                if self._signals is None:
+                    self._signals = FutureSignals()
+        return self._signals
+
+    @property
+    def sigFinished(self):
+        return self.signals.sigFinished
+
+    @property
+    def sigStateChanged(self):
+        return self.signals.sigStateChanged
+
+    @property
+    def _stopRequested(self) -> bool:
+        return self._stop_requested.is_set()
+
+    @_stopRequested.setter
+    def _stopRequested(self, value: bool):
+        if value:
+            self._stop_requested.set()
+        else:
+            self._stop_requested.clear()
 
     # -- v2 API surface -------------------------------------------------------
 
@@ -588,12 +624,11 @@ def sleep(seconds: float, *, interval: float = 0.05) -> None:
         return
     deadline = time.monotonic() + seconds
     while True:
-        if fut._stopRequested:
-            raise Stopped()
         remaining = deadline - time.monotonic()
         if remaining <= 0:
             return
-        time.sleep(min(interval, remaining))
+        if fut._stop_requested.wait(timeout=min(interval, remaining)):
+            raise Stopped()
 
 
 def check_stop() -> None:
@@ -602,7 +637,7 @@ def check_stop() -> None:
     Use in tight polling loops where a sleep would be inappropriate.
     """
     fut = current_future()
-    if fut is not None and fut._stopRequested:
+    if fut is not None and fut._stop_requested.is_set():
         raise Stopped()
 
 
