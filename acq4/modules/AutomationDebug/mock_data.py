@@ -8,7 +8,6 @@ from MetaArray import MetaArray
 
 from acq4.logging_config import get_logger
 from acq4.util import Qt
-from acq4.util.future import Future
 from acq4.util.imaging import Frame
 from coorx import AffineTransform, SRT3DTransform
 from pyqtgraph.units import µm, m
@@ -42,7 +41,7 @@ class MockDataHandler:
             self._window.ui.mockClassificationFilePath.setText(filePath)
 
     def _create_mock_stack_from_file(
-        self, mock_file_path: str, base_frame: Frame, _future: Future
+        self, mock_file_path: str, base_frame: Frame
     ) -> tuple[list[Frame] | None, float | None]:
         """
         Loads a MetaArray file and converts it into a list of Frame objects.
@@ -118,7 +117,7 @@ class MockDataHandler:
             return None, None
 
     def _mockNeuronStacks(
-        self, _future: Future
+        self,
     ) -> tuple[list[Frame] | None, list[Frame] | None, float]:
         win = self._window
         logger.info("Using mock Z-stack file(s) for detection.")
@@ -129,15 +128,13 @@ class MockDataHandler:
         step_z = 1 * µm
 
         with win.cameraDevice.ensureRunning():
-            base_frame = _future.waitFor(
-                win.cameraDevice.acquireFrames(1)
-            ).getResult()[0]
+            base_frame = win.cameraDevice.acquireFrames(1).wait().getResult()[0]
 
         # Load detection stack
         detection_mock_path = win.ui.mockFilePath.text()
         if detection_mock_path:
             detection_stack, det_step_z = self._create_mock_stack_from_file(
-                detection_mock_path, base_frame, _future
+                detection_mock_path, base_frame
             )
             if det_step_z is not None:
                 step_z = det_step_z
@@ -150,12 +147,11 @@ class MockDataHandler:
         if win.ui.multiChannelEnableCheck.isChecked() and win.ui.mockCheckBox.isChecked():
             classification_mock_path = win.ui.mockClassificationFilePath.text()
             if classification_mock_path:
-                # The base_frame and _future are passed again.
                 # The step_z from the classification mock file will be returned by _create_mock_stack_from_file.
                 # We prioritize step_z from the detection stack if both are loaded.
                 # Or, one could enforce consistency or average, but for now, just log if different.
                 classification_stack, class_step_z = self._create_mock_stack_from_file(
-                    classification_mock_path, base_frame, _future
+                    classification_mock_path, base_frame
                 )
                 if (
                     class_step_z is not None
