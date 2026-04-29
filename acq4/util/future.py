@@ -278,34 +278,38 @@ class Future(Generic[FUTURE_RETVAL_TYPE]):
         """Add a future to the list of futures that will be stopped if this future is stopped."""
         self._stopsToPropagate.append(future)
 
+    propagate_stops_into = propagateStopsInto
+
     def getResult(self, **kwds) -> FUTURE_RETVAL_TYPE:
-        self.wait(**kwds)
-        return self._returnVal
+        return self.wait(**kwds)
+
+    def get_result(self, **kwds) -> FUTURE_RETVAL_TYPE:
+        return self.wait(**kwds)
 
     def currentState(self):
-        """Return the current state of this future.
+        """Return the current state string of this future."""
+        return self._state
 
-        The state can be any string used to indicate the progress this future is making in its task.
-        """
+    def current_state(self):
         return self._state
 
     def setState(self, state):
-        """Set the current state of this future.
-
-        The state can be any string used to indicate the progress this future is making in its task.
-        """
+        """Set the current state string of this future."""
         if state == self._state:
             return
         self.log(f"Future [{self._name}] state changed: {state}")
         self._state = state
         self.sigStateChanged.emit(self, state)
 
-    def percentDone(self):
-        """Return the percent of the task that has completed.
+    def set_state(self, state):
+        return self.setState(state)
 
-        Must be reimplemented in subclasses.
-        """
+    def percentDone(self):
+        """Return the percent of the task completed. Must be reimplemented in subclasses."""
         raise NotImplementedError("method must be reimplemented in subclass")
+
+    def percent_done(self):
+        return self.percentDone()
 
     def stop(self, reason: str | None = "task stop requested", wait=False):
         """Stop the task (nicely).
@@ -401,6 +405,10 @@ class Future(Generic[FUTURE_RETVAL_TYPE]):
         """Return True if the task was interrupted before completing (due to an error or a stop request)."""
         return self._wasInterrupted
 
+    @property
+    def was_interrupted(self) -> bool:
+        return self._wasInterrupted
+
     def wasStopped(self):
         """Return True if the task was stopped."""
         return self._stopRequested
@@ -412,13 +420,22 @@ class Future(Generic[FUTURE_RETVAL_TYPE]):
             except Exception:
                 self.logger.exception(message)
 
+    def log_errors(self, message=""):
+        return self.logErrors(message)
+
     def exceptionRaised(self):
+        return self._excInfo[1] if self._excInfo is not None else None
+
+    def exception_raised(self):
         return self._excInfo[1] if self._excInfo is not None else None
 
     def isDone(self):
         """Return True if the task has completed successfully or was interrupted."""
         with self._completionLock:
             return self._isDone
+
+    def on_finish(self, callback, *args, inGui: bool = False, **kwargs):
+        return self.onFinish(callback, *args, inGui=inGui, **kwargs)
 
     def onFinish(self, callback, *args, inGui: bool = False, **kwargs):
         """Make sure the callback is called when the future is finished, including if the future is already done."""
@@ -454,6 +471,10 @@ class Future(Generic[FUTURE_RETVAL_TYPE]):
         """Return a string description of the reason for a task failure,
         or None if there was no failure (or if the reason is unknown).
         """
+        return self._errorMessage
+
+    @property
+    def error_message(self) -> str | None:
         return self._errorMessage
 
     def wait(self, timeout=None, updates=False, pollInterval=0.1):
@@ -524,15 +545,14 @@ class Future(Generic[FUTURE_RETVAL_TYPE]):
         self.finishedEvent.wait(timeout=duration)
 
     def checkStop(self):
-        """Raise self.StopRequested if self.stop() has been called.
-
-        This may be used by subclasses to periodically check for stop requests.
-
-        The optional *delay* argument causes this method to sleep while periodically
-        checking for a stop request.
-        """
+        """Raise self.StopRequested if self.stop() has been called."""
         if self._stopRequested:
             raise self.StopRequested()
+
+    def check_stop(self):
+        """Raise Stopped if stop() has been called on this future."""
+        if self._stopRequested:
+            raise self.Stopped()
 
     def sleep(self, duration, interval=0.2):
         """Sleep for the specified duration (in seconds) while checking for stop requests."""
@@ -545,6 +565,11 @@ class Future(Generic[FUTURE_RETVAL_TYPE]):
 
             time.sleep(max(0.0, min(interval, stop - now)))
             self.checkStop()
+
+    def wait_for(
+        self, future: "Future[WAITING_RETVAL_TYPE]", timeout=20.0
+    ) -> "Future[WAITING_RETVAL_TYPE]":
+        return self.waitFor(future, timeout=timeout)
 
     def waitFor(
         self, future: Future[WAITING_RETVAL_TYPE], timeout=20.0
@@ -566,6 +591,9 @@ class Future(Generic[FUTURE_RETVAL_TYPE]):
                 if timeout is not None and time.time() - start > timeout:
                     raise self.Timeout(f"Timed out waiting {timeout}s for {future!r}") from e
         return future
+
+    def raise_errors(self, message, poll_interval=1.0):
+        return self.raiseErrors(message, pollInterval=poll_interval)
 
     def raiseErrors(self, message, pollInterval=1.0):
         """Monitor this future for errors and raise if any occur.
@@ -805,10 +833,16 @@ class MultiFuture(Future):
         return "; ".join(error_messages) if error_messages else None
 
     def getResult(self):
-        return [f.getResult() for f in self.futures]
+        return [f.get_result() for f in self.futures]
+
+    def get_result(self):
+        return [f.get_result() for f in self.futures]
 
     def currentState(self):
         return "; ".join([str(f.currentState()) or "" for f in self.futures])
+
+    def current_state(self):
+        return self.currentState()
 
 
 class FutureButton(FeedbackButton):
