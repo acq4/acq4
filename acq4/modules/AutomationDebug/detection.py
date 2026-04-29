@@ -52,7 +52,7 @@ class CellDetector:
 
     def _testUI(self):
         with self._window.cameraDevice.ensureRunning():
-            frame = self._window.cameraDevice.acquireFrames(1).getResult()[0]
+            frame = self._window.cameraDevice.acquireFrames(1).get_result()[0]
         points = np.random.random((20, 3))
         points[:, 2] *= 20e-6
         points[:, 1] *= frame.shape[0]
@@ -158,10 +158,10 @@ class CellDetector:
         """Handles results from _detectNeuronsZStack or _testUI."""
         win = self._window
         try:
-            if future.wasInterrupted():
+            if future.was_interrupted:
                 logger.info("Cell detection failed.")
                 return
-            neurons = future.getResult()
+            neurons = future.get_result()
 
             logger.info(f"Cell detection complete. Found {len(neurons)} potential cells")
             self._displayBoundingBoxes(neurons)

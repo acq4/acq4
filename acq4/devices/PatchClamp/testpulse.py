@@ -3,6 +3,8 @@ import time
 from threading import Thread
 from typing import Literal
 
+from acq4.util.future import sleep
+
 import numpy as np
 from MetaArray import MetaArray
 from acq4.analysis.dataModels.PatchEPhys import getBridgeBalanceCompensation
@@ -126,7 +128,7 @@ class TestPulseThread(QtThread):
                     now = ptime.time()
                     if now >= nextRun:
                         break
-                    time.sleep(min(0.03, nextRun-now))
+                    sleep(min(0.03, nextRun-now))
                     self.checkStop()
             except self.StopRequested:
                 break

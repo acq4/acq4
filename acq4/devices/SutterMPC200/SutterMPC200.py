@@ -4,6 +4,7 @@ from acq4.drivers.SutterMPC200 import SutterMPC200 as MPC200_Driver
 from acq4.util import Qt, ptime
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
+from acq4.util.future import sleep
 from pyqtgraph import debug
 
 from ..Stage import Stage, MoveFuture
@@ -275,10 +276,10 @@ class MonitorThread(Thread):
                         with self.lock:
                             self._moveStatus[mid] = (start, True)
 
-                time.sleep(interval)
+                sleep(interval)
             except:
                 self.dev.logger.exception('Error in MPC200 monitor thread:')
-                time.sleep(maxInterval)
+                sleep(maxInterval)
                 
 
 class MPC200MoveFuture(MoveFuture):

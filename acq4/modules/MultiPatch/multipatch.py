@@ -397,10 +397,10 @@ class MultiPatchWindow(Qt.QWidget):
         spos = pip.scopeDevice().globalPosition()
         pos = [pos.x(), pos.y(), spos[2]]
         tip_future = Future(pip.setTipOffsetIfAcceptable, (pos,))
-        tip_future.onFinish(self._handleManualSetTip, pip, inGui=True)
+        tip_future.on_finish(self._handleManualSetTip, pip, inGui=True)
 
     def _handleManualSetTip(self, future, pip):
-        success = future.getResult()
+        success = future.get_result()
         if not success:
             self._pipsToSetTips.insert(0, pip)
             return
@@ -410,7 +410,7 @@ class MultiPatchWindow(Qt.QWidget):
                 pip.saveManualTipPosition,
                 (),
                 dict(stack=self.module.config.get("useStacksForSavedTipImages", True)),
-            ).raiseErrors("Failed to save tip images")
+            ).raise_errors("Failed to save tip images")
 
         if len(self._pipsToSetTips) == 0:
             self.ui.setTipBtn.setChecked(False)

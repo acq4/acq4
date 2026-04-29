@@ -240,7 +240,7 @@ class Scientifica(Stage):
 
     def _move(self, pos, speed, linear, name=None, **kwds):
         with self.lock:
-            if self._lastMove is not None and not self._lastMove.isDone():
+            if self._lastMove is not None and not self._lastMove.is_done:
                 self.stop()
             speed = self._interpretSpeed(speed)
 
@@ -524,12 +524,12 @@ class ScientificaGUI(StageInterface):
             dest = [None, None, None]
             dest[axis] = pos[axis]
         f = self.dev._move(dest, "fast", False, attempts_allowed=1, name=f"{self.dev.name()} auto-zero axis {axis}")
-        while not f.isDone():
+        while not f.is_done:
             sleep(0.1)
 
         # raise errors not related to missing the target
-        missed = f.wasInterrupted() and 'Stopped moving before reaching target' in f.errorMessage()
-        if f.wasInterrupted() and not missed:
+        missed = f.was_interrupted and 'Stopped moving before reaching target' in f.error_message
+        if f.was_interrupted and not missed:
             f.wait()
 
         return not missed

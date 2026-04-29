@@ -5,6 +5,7 @@ from pyqtgraph import debug
 
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
+from acq4.util.future import sleep
 from acq4.util.micromanager import getMMCorePy
 from ..Stage import Stage, MoveFuture, StageInterface
 
@@ -211,7 +212,7 @@ class MicroManagerStage(Stage):
 
     def _move(self, pos, speed, linear, name=None, **kwds):
         with self.lock:
-            if self._lastMove is not None and not self._lastMove.isDone():
+            if self._lastMove is not None and not self._lastMove.is_done:
                 self.stop()
 
             # Decide which axes to move
@@ -275,10 +276,10 @@ class MonitorThread(Thread):
                 else:
                     interval = min(maxInterval, interval * 2)
 
-                time.sleep(interval)
+                sleep(interval)
             except Exception:
                 self.dev.logger.exception('Error in MicromanagerStage monitor thread:')
-                time.sleep(maxInterval)
+                sleep(maxInterval)
 
 
 class MicroManagerMoveFuture(MoveFuture):

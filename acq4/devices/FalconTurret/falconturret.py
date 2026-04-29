@@ -1,5 +1,6 @@
-import logging, threading, time
+import logging, threading
 from acq4.util import Qt
+from acq4.util.future import sleep
 import falconoptics
 from ..FilterWheel.filterwheel import FilterWheel, FilterWheelFuture, FilterWheelDevGui
 
@@ -65,8 +66,8 @@ class FalconTurret(FilterWheel):
 
     def _setInitialPos(self):
         # used to wait on the initial home move and then switch to initial slot
-        while not self._initialFuture.isDone():
-            time.sleep(0.1)
+        while not self._initialFuture.is_done:
+            sleep(0.1)
         self.setPosition(self._initialSlot)
 
     def getPositionCount(self):

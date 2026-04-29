@@ -238,7 +238,7 @@ class Pipette(Device, OptomechDevice):
         self.currentMotionPlanner = plannerClass(self, position, speed, **kwds)
         future = self.currentMotionPlanner.move()
         if raiseErrors is not False:
-            future.raiseErrors(
+            future.raise_errors(
                 message=f"Move to {position} position failed ({{error}}); requested from:\n{{stack}}"
             )
 
@@ -424,7 +424,7 @@ class Pipette(Device, OptomechDevice):
 
         cam: Camera = self.imagingDevice()
         with cam.ensureRunning():
-            img = cam.acquireFrames(n=1, ensureFreshFrames=True).getResult()[0]
+            img = cam.acquireFrames(n=1, ensureFreshFrames=True).get_result()[0]
         img.addInfo(pip_info)
         timestamp = time.strftime("%Y%m%d-%H%M%S")
         path.writeFile(
@@ -805,7 +805,7 @@ class Pipette(Device, OptomechDevice):
             pos, speed=speed, name=f"focus on {self.name()}"
         )
         if raiseErrors:
-            future.raiseErrors("Focus on pipette tip failed ({error}); requested from:\n{stack})")
+            future.raise_errors("Focus on pipette tip failed ({error}); requested from:\n{stack})")
         return future
 
     def focusTarget(self, speed='fast', raiseErrors=False):
@@ -814,7 +814,7 @@ class Pipette(Device, OptomechDevice):
             pos, speed=speed, name=f"focus on target for {self.name()}"
         )
         if raiseErrors:
-            future.raiseErrors(
+            future.raise_errors(
                 "Focus on pipette target failed ({error}); requested from:\n{stack})"
             )
         return future
@@ -1227,10 +1227,10 @@ class PipetteCamModInterface(CameraModuleInterface):
         pip = self.getDevice()
         pos = pip.tracker.findTipInFrame()
         tip_future = Future(pip.setTipOffsetIfAcceptable, (pos,))
-        tip_future.onFinish(self._handleTipPositionSet)
+        tip_future.on_finish(self._handleTipPositionSet)
 
     def _handleTipPositionSet(self, future):
-        success = future.getResult()
+        success = future.get_result()
         if not success:
             return self.autoCalibrateClicked()
 

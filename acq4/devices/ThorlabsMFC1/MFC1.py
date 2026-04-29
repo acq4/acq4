@@ -1,9 +1,8 @@
-import time
-
 from acq4.drivers.ThorlabsMFC1 import MFC1 as MFC1_Driver
 from acq4.util import Qt
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
+from acq4.util.future import sleep
 from pyqtgraph import debug
 from ..Stage import Stage, StageInterface, MoveFuture
 
@@ -187,10 +186,10 @@ class MonitorThread(Thread):
                     interval = min(maxInterval, interval*2)
                 lastPos = pos
 
-                time.sleep(interval)
+                sleep(interval)
             except:
                 self.dev.logger.exception('Error in MFC1 monitor thread:')
-                time.sleep(maxInterval)
+                sleep(maxInterval)
 
 
 class MFC1StageInterface(StageInterface):

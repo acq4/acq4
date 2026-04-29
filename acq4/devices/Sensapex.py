@@ -3,6 +3,8 @@ import threading
 import time
 from typing import Optional
 
+from acq4.util.future import sleep
+
 import numpy as np
 
 import pyqtgraph as pg
@@ -210,7 +212,7 @@ class Sensapex(Stage):
             # do not report changes < 100 nm
             if self._lastPos is None or dif > 0.1:
                 self.posChanged(pos)
-                time.sleep(updateInterval)
+                sleep(updateInterval)
 
     def quit(self):
         self._quitRequested = True
