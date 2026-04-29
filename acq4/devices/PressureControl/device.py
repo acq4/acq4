@@ -88,7 +88,7 @@ class PressureControl(Device):
             self.pressure = pressure
         if source == 'regulator':
             if pressure is not None:
-                time.sleep(self.regulatorSettlingTime)  # let pressure settle before switching valves
+                sleep(self.regulatorSettlingTime)  # let pressure settle before switching valves
             self._setSource(source)
             self.source = source
 

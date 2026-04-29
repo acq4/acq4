@@ -35,7 +35,12 @@ class PatchPipetteDeviceGui(Qt.QWidget):
         self.layout.addLayout(self.positionBtnLayout, row, 0)
 
     def doClean(self):
-        return self.dev.setState("clean")
+        from acq4.util.future import current_future
+        state = self.dev.setState("clean")
+        fut = current_future()
+        if fut is not None:
+            fut._stopsToPropagate.append(state)
+        state.wait()
 
     def setPositionClicked(self):
         btn = self.sender()

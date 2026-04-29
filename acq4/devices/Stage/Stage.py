@@ -961,7 +961,7 @@ class StageInterface(Qt.QWidget):
         self.dev.setLimits(**{self.dev.axes()[axis]: tuple(limit)})
 
     def goHomeClicked(self):
-        return self.dev.goHome()
+        self.dev.goHome().wait()
 
     def setHomeClicked(self):
         self.dev.setHomePosition()

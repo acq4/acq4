@@ -8,7 +8,7 @@ import scipy.ndimage as ndi
 import pyqtgraph as pg
 from acq4.Manager import getManager
 from acq4.util import Qt
-from acq4.util.future import Future
+from acq4.util.future import Future, sleep
 from acq4.util.image_registration import imageTemplateMatch
 from acq4.util.imaging.sequencer import acquire_z_stack
 from .pipette_detection import TemplateMatchPipetteDetector
@@ -617,7 +617,7 @@ class CorrelationPipetteTracker(PipetteTracker):
                         misses += 1
                         logger.exception("Manipulator missed target:")
 
-                    time.sleep(0.2)
+                    sleep(0.2)
 
                     frame = self.takeFrame()
                     reportedPos = self.pipette.globalPosition()

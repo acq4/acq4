@@ -354,5 +354,54 @@ class TestEvent(unittest.TestCase):
         self.assertTrue(ev.wait(timeout=0.1))
 
 
+class TestFutureButton(unittest.TestCase):
+    """Tests for the redesigned FutureButton that wraps fn in Future(fn) on click."""
+
+    def _make_button(self, fn, **kwargs):
+        from acq4.util.future import FutureButton
+        return FutureButton(fn, "Test Button", raiseOnError=False, **kwargs)
+
+    def test_click_runs_fn_in_background(self):
+        ran = threading.Event()
+        btn = self._make_button(lambda: ran.set())
+        btn.click()
+        QApplication.processEvents()
+        self.assertTrue(ran.wait(timeout=2))
+
+    def test_success_message_shown_on_completion(self):
+        btn = self._make_button(lambda: None, success="Done!")
+        btn.click()
+        QApplication.processEvents()
+        import time; time.sleep(0.1)
+        QApplication.processEvents()
+        self.assertEqual(btn.text(), "Done!")
+
+    def test_failure_message_shown_on_exception(self):
+        def boom():
+            raise ValueError("oops")
+        btn = self._make_button(boom, failure="Oops!")
+        btn.click()
+        QApplication.processEvents()
+        import time; time.sleep(0.1)
+        QApplication.processEvents()
+        self.assertEqual(btn.text(), "Oops!")
+
+    def test_stop_resets_button(self):
+        from acq4.util.future import sleep
+        started = threading.Event()
+        def task():
+            started.set()
+            sleep(60)
+        btn = self._make_button(task, stoppable=True)
+        btn.click()
+        QApplication.processEvents()
+        started.wait(timeout=2)
+        btn.click()  # second click stops it
+        QApplication.processEvents()
+        import time; time.sleep(0.2)
+        QApplication.processEvents()
+        self.assertEqual(btn.text(), "Test Button")
+
+
 if __name__ == "__main__":
     unittest.main()

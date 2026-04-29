@@ -838,14 +838,19 @@ class MultiFuture(Future):
 
 
 class FutureButton(FeedbackButton):
-    """A button that starts a Future when clicked and displays feedback based on the Future's state."""
+    """A button that starts a Future when clicked and displays feedback based on the Future's state.
+
+    Pass a zero-arg callable as the first argument. FutureButton wraps it in Future(fn) on click,
+    so the callable runs in a background thread. The callable should do its work synchronously —
+    use sleep() and check_stop() for cooperative cancellation.
+    """
 
     sigFinished = Qt.Signal(object)  # future
     sigStateChanged = Qt.Signal(object, object)  # future, state
 
     def __init__(
             self,
-            future_producer: Optional[Callable[[ParamSpec], Future]] = None,
+            fn: Optional[Callable] = None,
             *args,
             stoppable: bool = False,
             success=None,
@@ -858,24 +863,24 @@ class FutureButton(FeedbackButton):
 
         Parameters
         ----------
-        future_producer : Callable[[], Future]
-            A function that takes no arguments and returns a Future instance.
+        fn : Callable[[], Any]
+            Zero-arg callable that does the work. Runs in a background thread via Future(fn).
         *args
             Arguments to pass to FeedbackButton.__init__.
         stoppable : bool
-            If True, the Future can be stopped by clicking the button while it is in progress.
+            If True, clicking the button while work is in progress stops the Future.
         success : str | None
-            The message to display when the Future completes successfully. If None, the default message is "Success".
+            Message shown on success. Defaults to "Success".
         failure : str | None
-            The message to display when the Future fails. If None, the default message is the error message from the Future.
+            Message shown on failure. Defaults to the Future's error message.
         raiseOnError : bool
-            If True, the Future will raise an exception if the future has one to be raised. Default is True.
+            If True, re-raises any exception from the future. Default is True.
         processing : str | None
-            The message to display while the Future is in progress. If None, the default message is "Processing...".
+            Message shown while work is in progress. Defaults to "Processing...".
         """
         super().__init__(*args)
         self._future = None
-        self._future_producer = future_producer
+        self._fn = fn
         self._stoppable = stoppable
         self._userRequestedStop = False
         self._success = success
@@ -887,7 +892,7 @@ class FutureButton(FeedbackButton):
 
     def setOpts(self, **kwds):
         allowed_args = [
-            "future_producer",
+            "fn",
             "stoppable",
             "success",
             "failure",
@@ -919,7 +924,7 @@ class FutureButton(FeedbackButton):
         if self._future is None:
             self.processing(self._processing or (f"Cancel {self.text()}" if self._stoppable else "Processing..."))
             try:
-                future = self._future = self._future_producer()
+                future = self._future = Future(self._fn)
             except Exception:
                 self.failure("Error!")
                 raise
@@ -939,7 +944,7 @@ class FutureButton(FeedbackButton):
         elif self._userRequestedStop:
             self._userRequestedStop = False
             self.reset()
-        elif future.wasStopped():
+        elif future.is_stopped:
             self.reset()
         else:
             self.failure(self._failure or (future.errorMessage() or "Failed!")[:40])
