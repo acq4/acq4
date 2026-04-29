@@ -77,13 +77,13 @@ class AutomationDebugWindow(Qt.QWidget):
         self.ui.clearBtn.clicked.connect(self._detector.clearCells)
         self.ui.showRoisBtn.toggled.connect(self._toggleCellRois)
         self.ui.zStackDetectBtn.setOpts(
-            future_producer=lambda: Future(self._detector._detectNeuronsZStack), stoppable=True
+            fn=self._detector._detectNeuronsZStack, stoppable=True
         )
         self.ui.zStackDetectBtn.sigFinished.connect(self._detector._handleDetectResults)
-        self.ui.testUIBtn.setOpts(future_producer=lambda: Future(self._detector._testUI), stoppable=True)
+        self.ui.testUIBtn.setOpts(fn=self._detector._testUI, stoppable=True)
         self.ui.testUIBtn.sigFinished.connect(self._detector._handleDetectResults)
         self.ui.addCellFromTargetBtn.setOpts(
-            future_producer=lambda: Future(self._detector._addCellFromTarget), stoppable=True
+            fn=self._detector._addCellFromTarget, stoppable=True
         )
 
         self.ui.motionPlannerSelector.currentIndexChanged.connect(
@@ -103,7 +103,7 @@ class AutomationDebugWindow(Qt.QWidget):
             self._mock_handler._selectMockClassificationFile
         )
 
-        self.ui.autoTargetBtn.setOpts(future_producer=lambda: Future(self._autoTarget), stoppable=True)
+        self.ui.autoTargetBtn.setOpts(fn=self._autoTarget, stoppable=True)
         self.ui.autoTargetBtn.sigFinished.connect(self._handleAutoFinish)
 
         self._motionPlanners = {}
@@ -115,7 +115,7 @@ class AutomationDebugWindow(Qt.QWidget):
                 self.ui.cameraSelector.addItem(name)
 
         self.ui.trackFeaturesBtn.setOpts(
-            future_producer=lambda: Future(self._feature_tracker.doFeatureTracking),
+            fn=self._feature_tracker.doFeatureTracking,
             processing="Stop tracking",
             stoppable=True,
         )
@@ -128,7 +128,7 @@ class AutomationDebugWindow(Qt.QWidget):
         self.ui.visualizeTrackingBtn.setEnabled(True)
 
         self.ui.testPipetteBtn.setOpts(
-            future_producer=lambda: Future(self._feature_tracker.doPipetteCalibrationTest),
+            fn=self._feature_tracker.doPipetteCalibrationTest,
             stoppable=True,
             processing="Interrupt pipette\ncalibration test",
         )
@@ -145,7 +145,7 @@ class AutomationDebugWindow(Qt.QWidget):
 
         self.ui.autopatchDemoBtn.setToolTip("Patch a cell! Repeat! REPEAT!")
         self.ui.autopatchDemoBtn.setOpts(
-            future_producer=lambda: Future(self._autopatcher._autopatchDemo), stoppable=True
+            fn=self._autopatcher._autopatchDemo, stoppable=True
         )
         self.ui.autopatchDemoBtn.sigFinished.connect(
             self._autopatcher._handleAutopatchDemoFinish

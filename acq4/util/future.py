@@ -891,15 +891,9 @@ class FutureButton(FeedbackButton):
         self.clicked.connect(self._controlTheFuture)
 
     def setOpts(self, **kwds):
-        allowed_args = [
-            "fn",
-            "stoppable",
-            "success",
-            "failure",
-            "processing",
-            "showStatus",
-            "raiseOnError",
-        ]
+        allowed_args = {
+            "fn", "stoppable", "success", "failure", "processing", "showStatus", "raiseOnError",
+        }
         for k, v in kwds.items():
             if k not in allowed_args:
                 raise NameError(f"Unknown option {k}")

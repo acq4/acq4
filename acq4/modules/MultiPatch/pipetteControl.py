@@ -107,8 +107,8 @@ class PipetteControl(Qt.QWidget):
         self.ui.icHoldingSpin.valueChanged.connect(self.icHoldingSpinChanged)
         self.ui.autoBiasTargetSpin.valueChanged.connect(self.autoBiasSpinChanged)
 
-        self.ui.newPipetteBtn.setOpts(future_producer=self.newPipetteClicked, stoppable=True)
-        self.ui.cancelBtn.setOpts(future_producer=lambda: Future(self._cancelClicked))
+        self.ui.newPipetteBtn.setOpts(fn=self.newPipetteClicked, stoppable=True)
+        self.ui.cancelBtn.setOpts(fn=self._cancelClicked)
         self.ui.fouledCheck.stateChanged.connect(self.fouledCheckChanged)
         self.ui.brokenCheck.stateChanged.connect(self.brokenCheckChanged)
 
@@ -353,7 +353,7 @@ class PipetteControl(Qt.QWidget):
 
     def newPipetteClicked(self):
         self.ui.newPipetteBtn.setStyleSheet("")
-        return self.pip.newPipette()
+        self.pip.newPipette().wait()
 
     def _cancelClicked(self):
         self.pip.getState().stop("user requested cancel", wait=True)

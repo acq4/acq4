@@ -125,21 +125,21 @@ class MultiPatchWindow(Qt.QWidget):
 
         common_opts = dict(stoppable=True, failure="FAILED!", showStatus=False)
 
-        self.ui.homeBtn.setOpts(future_producer=self._moveHome, **common_opts)
-        self.ui.nucleusHomeBtn.setOpts(future_producer=self._nucleusHome, raiseOnError=False, **common_opts)
-        self.ui.coarseSearchBtn.setOpts(future_producer=self._coarseSearch, **common_opts)
-        self.ui.fineSearchBtn.setOpts(future_producer=self._fineSearch, **common_opts)
-        self.ui.aboveTargetBtn.setOpts(future_producer=self._aboveTarget, **common_opts)
-        self.ui.autoFindTipBtn.setOpts(future_producer=lambda: Future(self._autoFindTip), **common_opts)
-        self.ui.cellDetectBtn.setOpts(future_producer=self._cellDetect, raiseOnError=False, **common_opts)
-        self.ui.breakInBtn.setOpts(future_producer=self._breakIn, raiseOnError=False, **common_opts)
-        self.ui.toTargetBtn.setOpts(future_producer=self._toTarget, **common_opts)
-        self.ui.sealBtn.setOpts(future_producer=self._seal, raiseOnError=False, **common_opts)
-        self.ui.reSealBtn.setOpts(future_producer=self._reSeal, raiseOnError=False, **common_opts)
-        self.ui.reSealNoNuzzleBtn.setOpts(future_producer=self._reSealNoNuzzle, raiseOnError=False, **common_opts)
-        self.ui.approachBtn.setOpts(future_producer=self._approach, raiseOnError=False, **common_opts)
-        self.ui.cleanBtn.setOpts(future_producer=self._clean, raiseOnError=False, **common_opts)
-        self.ui.collectBtn.setOpts(future_producer=self._collect, raiseOnError=False, **common_opts)
+        self.ui.homeBtn.setOpts(fn=self._moveHome, **common_opts)
+        self.ui.nucleusHomeBtn.setOpts(fn=self._nucleusHome, raiseOnError=False, **common_opts)
+        self.ui.coarseSearchBtn.setOpts(fn=self._coarseSearch, **common_opts)
+        self.ui.fineSearchBtn.setOpts(fn=self._fineSearch, **common_opts)
+        self.ui.aboveTargetBtn.setOpts(fn=self._aboveTarget, **common_opts)
+        self.ui.autoFindTipBtn.setOpts(fn=self._autoFindTip, **common_opts)
+        self.ui.cellDetectBtn.setOpts(fn=self._cellDetect, raiseOnError=False, **common_opts)
+        self.ui.breakInBtn.setOpts(fn=self._breakIn, raiseOnError=False, **common_opts)
+        self.ui.toTargetBtn.setOpts(fn=self._toTarget, **common_opts)
+        self.ui.sealBtn.setOpts(fn=self._seal, raiseOnError=False, **common_opts)
+        self.ui.reSealBtn.setOpts(fn=self._reSeal, raiseOnError=False, **common_opts)
+        self.ui.reSealNoNuzzleBtn.setOpts(fn=self._reSealNoNuzzle, raiseOnError=False, **common_opts)
+        self.ui.approachBtn.setOpts(fn=self._approach, raiseOnError=False, **common_opts)
+        self.ui.cleanBtn.setOpts(fn=self._clean, raiseOnError=False, **common_opts)
+        self.ui.collectBtn.setOpts(fn=self._collect, raiseOnError=False, **common_opts)
 
         self.ui.profileCombo.currentIndexChanged.connect(self.profileComboChanged)
         self.ui.editProfileBtn.clicked.connect(self.openProfileEditor)
@@ -249,11 +249,11 @@ class MultiPatchWindow(Qt.QWidget):
         self.saveConfig()
 
     def _setAllSelectedPipettesToState(self, state, **config):
-        return MultiFuture([
+        MultiFuture([
             pip.setState(state, **config)
             for pip in self.selectedPipettes()
             if isinstance(pip, PatchPipette)
-        ], name=f"Set pipettes state to {state}")
+        ], name=f"Set pipettes state to {state}").wait()
 
     def _moveHome(self):
         futures = []
@@ -263,20 +263,20 @@ class MultiPatchWindow(Qt.QWidget):
                 pip.setState('out')
                 pip = pip.pipetteDevice
             futures.append(pip.goHome(speed))
-        return MultiFuture(futures, name="Move pipettes home")
+        MultiFuture(futures, name="Move pipettes home").wait()
 
     def _nucleusHome(self):
-        return self._setAllSelectedPipettesToState('home with nucleus')
+        self._setAllSelectedPipettesToState('home with nucleus')
 
     def _coarseSearch(self):
-        return self.moveSearch(self.module.config.get('coarseSearchDistance', 400e-6))
+        self.moveSearch(self.module.config.get('coarseSearchDistance', 400e-6))
 
     def _fineSearch(self):
         if len(self.selectedPipettes()) == 1:
             distance = 0
         else:
             distance = self.module.config.get('fineSearchDistance', 50e-6)
-        return self.moveSearch(distance)
+        self.moveSearch(distance)
 
     def _aboveTarget(self):
         futures = []
@@ -284,7 +284,7 @@ class MultiPatchWindow(Qt.QWidget):
         for pip in self.selectedPipettes():
             pip.setState('bath')
             futures.append(pip.pipetteDevice.goAboveTarget(speed))
-        return MultiFuture(futures, name="Move pipettes above target")
+        MultiFuture(futures, name="Move pipettes above target").wait()
 
     def _autoFindTip(self, max_reps=10):
         work_to_do = self.selectedPipettes()
@@ -294,28 +294,28 @@ class MultiPatchWindow(Qt.QWidget):
             pip.iterativelyFindTip(max_reps=max_reps)
 
     def _cellDetect(self):
-        return self._setAllSelectedPipettesToState('cell detect')
+        self._setAllSelectedPipettesToState('cell detect')
 
     def _breakIn(self):
-        return self._setAllSelectedPipettesToState('break in')
+        self._setAllSelectedPipettesToState('break in')
 
     def _toTarget(self):
         speed = self.selectedSpeed(default='fast')
-        return MultiFuture([
+        MultiFuture([
             (
                 pip.pipetteDevice if isinstance(pip, PatchPipette) else pip
             ).goTarget(speed)
             for pip in self.selectedPipettes()
-        ], name="Move pipettes to target")
+        ], name="Move pipettes to target").wait()
 
     def _seal(self):
-        return self._setAllSelectedPipettesToState('seal')
+        self._setAllSelectedPipettesToState('seal')
 
     def _reSeal(self):
-        return self._setAllSelectedPipettesToState('reseal')
+        self._setAllSelectedPipettesToState('reseal')
 
     def _reSealNoNuzzle(self):
-        return self._setAllSelectedPipettesToState('reseal', extractNucleus=False)
+        self._setAllSelectedPipettesToState('reseal', extractNucleus=False)
 
     def _approach(self):
         futures = []
@@ -324,13 +324,13 @@ class MultiPatchWindow(Qt.QWidget):
                 futures.append(pip.setState('approach'))
             else:
                 futures.append(pip.goApproach(self.selectedSpeed(default='fast')))
-        return MultiFuture(futures, name="Move pipettes to approach")
+        MultiFuture(futures, name="Move pipettes to approach").wait()
 
     def _clean(self):
-        return self._setAllSelectedPipettesToState('clean')
+        self._setAllSelectedPipettesToState('clean')
 
     def _collect(self):
-        return self._setAllSelectedPipettesToState('collect')
+        self._setAllSelectedPipettesToState('collect')
 
     def selectedSpeed(self, default):
         if self.ui.fastBtn.isChecked():
@@ -351,7 +351,7 @@ class MultiPatchWindow(Qt.QWidget):
                 pip.setState('bath')
                 pip = pip.pipetteDevice
             futures.append(pip.goSearch(speed, distance=distance))
-        return MultiFuture(futures, name="Move pipettes to search")
+        MultiFuture(futures, name="Move pipettes to search").wait()
 
     def setTipToggled(self, b):
         cammod = getManager().getModule('Camera')
