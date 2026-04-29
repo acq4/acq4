@@ -30,6 +30,7 @@ def get_client(dll_path):
                 dll_path=dll_path,
                 log_addr=log_server.address,
             )
+        ms_client._import('acq4.util.future').setup_teleprox_context_propagation()
     if not ms_client["smartstage"].control_thread.is_running():
         ms_client["smartstage"].control_thread.start_thread()
     return ms_client

@@ -130,6 +130,10 @@ def setup_logging(
     if log_server is None:
         log_server = LogServer(acq4_logger)
 
+    # Register task_stack propagation hooks with teleprox.
+    from acq4.util.future import setup_teleprox_context_propagation
+    setup_teleprox_context_propagation()
+
     # GUI Log Window handler (all messages)
     if gui:
         log_window = get_log_window()
@@ -181,6 +185,9 @@ def set_log_file(log_file: str | None, is_temp_file: bool = False) -> None:
         exc_info_as_array=True,
     )
     log_file_handler.setFormatter(json_formatter)
+    # Inject task_stack into every record written to the log file.
+    from acq4.util.future import _TaskStackFilter
+    log_file_handler.addFilter(_TaskStackFilter())
     root_logger.addHandler(log_file_handler)
 
     # replaced by the copy operation above

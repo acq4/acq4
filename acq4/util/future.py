@@ -4,6 +4,7 @@ import contextlib
 import contextvars
 import functools
 import inspect
+import logging
 import sys
 import threading
 import time
@@ -747,3 +748,68 @@ class FutureButton(FeedbackButton):
         if self._showStatus:
             self.setText(state, temporary=True)
         self.sigStateChanged.emit(future, state)
+
+
+class _TaskStackFilter(logging.Filter):
+    """Injects the current task_stack as a string attribute on each log record."""
+
+    def filter(self, record):
+        record.task_stack = task_stack.full_stack()
+        return True
+
+
+def setup_teleprox_context_propagation():
+    """Wire acq4's task_stack into teleprox RPC calls and log records.
+
+    Registers a call-opts provider so every outgoing call_obj includes the
+    current task_stack, and a call-context hook so every incoming call_obj
+    restores task_stack for the duration of that call.  Also adds a log
+    filter to the process-global LogSender (if one exists) so that log
+    records forwarded to the main process carry the task_stack string.
+
+    Safe to call multiple times; provider/hook registration is idempotent
+    and the filter is only added once.
+    """
+    try:
+        import teleprox.client as tc
+        import teleprox.server as ts
+    except ImportError:
+        return
+
+    def _provide_call_opts():
+        stack = task_stack.get()
+        return {'_acq4_task_stack': stack} if stack else None
+
+    tc.set_call_opts_provider(_provide_call_opts)
+
+    @contextlib.contextmanager
+    def _call_context_hook(opts):
+        stack = opts.get('_acq4_task_stack')
+        if stack:
+            with task_stack.push_full(tuple(stack)):
+                yield
+        else:
+            yield
+
+    ts.set_call_context_hook(_call_context_hook)
+
+    _maybe_add_logsender_filter()
+
+
+def _maybe_add_logsender_filter():
+    """Add _TaskStackFilter to the process LogSender if present and not already added."""
+    try:
+        from teleprox.log.remote import sender
+    except ImportError:
+        return
+    if sender is not None and not any(isinstance(f, _TaskStackFilter) for f in sender.filters):
+        sender.addFilter(_TaskStackFilter())
+
+
+# Auto-setup when this module is imported in any process that has teleprox.
+# Remote processes call this path; the main process also calls setup_teleprox_context_propagation()
+# explicitly from setup_logging() after the log file handler exists.
+try:
+    setup_teleprox_context_propagation()
+except Exception:
+    pass
