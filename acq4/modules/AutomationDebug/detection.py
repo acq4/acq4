@@ -142,11 +142,11 @@ class CellDetector:
             autoencoder=autoencoder,
             classifier=classifier,
             resnet_classifier=resnet_classifier,
-            xy_scale=pixel_size,  # Global pixel_size
+            xy_scale=pixel_size,  # Global pixel_scale
             z_scale=step_z,  # Actual step_z from mock or real (1um for real)
             multichannel=multichannel,  # Actual flag for detect_neurons
             trim_edges=True,
-        ).wait(timeout=600).getResult()
+        )
         logger.info(f"Neuron detection finished. Found {len(global_pos)} potential neurons.")
 
         win._current_detection_stack = detection_stack

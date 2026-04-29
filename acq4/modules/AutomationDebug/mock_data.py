@@ -128,7 +128,7 @@ class MockDataHandler:
         step_z = 1 * µm
 
         with win.cameraDevice.ensureRunning():
-            base_frame = win.cameraDevice.acquireFrames(1).wait().getResult()[0]
+            base_frame = win.cameraDevice.acquireFrames(1).getResult()[0]
 
         # Load detection stack
         detection_mock_path = win.ui.mockFilePath.text()
