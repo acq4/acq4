@@ -11,7 +11,7 @@ from acq4.modules.Camera import CameraModuleInterface
 from acq4.util import Qt
 from acq4.util.Mutex import Mutex
 from acq4.util.acq4_typing import Number
-from acq4.util.future import Future, MultiFuture, future_wrap, FutureButton
+from acq4.util.future import Future, MultiFuture, FutureButton
 from acq4.util.imaging import Frame
 from acq4.util.surface import find_surface
 from acq4.util.ui.ZPositionWidget import ZPositionWidget
@@ -170,8 +170,7 @@ class Microscope(Device, OptomechDevice):
         with self.lock:
             return list(self.selectedObjectives.values())
 
-    @future_wrap
-    def loadPreset(self, name, _future=None):
+    def loadPreset(self, name):
         conf = self.presets[name]
         for dev_name, state in conf.items():
             if dev_name == "objective":
@@ -184,7 +183,7 @@ class Microscope(Device, OptomechDevice):
     def handlePresetHotkey(self, kb_dev, changes, name):
         key, pressed = changes.get('keys', [])[0]
         if pressed:
-            self.loadPreset(name, _sync="async")
+            Future(self.loadPreset, (name,))
 
     def deviceInterface(self, win):
         iface = ScopeGUI(self, win)
@@ -263,9 +262,8 @@ class Microscope(Device, OptomechDevice):
 
         return acquire_z_stack(imager, *z_range, name=name)
 
-    @future_wrap
     def findSurfaceDepth(
-        self, imager: "Device", searchDistance=200 * µm, searchStep=5 * µm, returnStack=False, name=None, _future: Future = None
+        self, imager: "Device", searchDistance=200 * µm, searchStep=5 * µm, returnStack=False
     ) -> float | tuple[float, list[Frame]]:
         """Set the surface of the sample based on how focused the images are."""
         z_range = (
@@ -278,7 +276,7 @@ class Microscope(Device, OptomechDevice):
         if (idx := find_surface(z_stack, threshold)) is not None:
             depth = z_stack[idx].mapFromFrameToGlobal([0, 0, 0])[2]
             self.setSurfaceDepth(depth)
-            _future.waitFor(self.setFocusDepth(depth, name=f"{self.name()} focus to detected surface"))
+            self.setFocusDepth(depth, name=f"{self.name()} focus to detected surface").wait()
             if returnStack:
                 return depth, z_stack
             return depth
@@ -596,7 +594,7 @@ class ScopeGUI(Qt.QWidget):
     def loadPreset(self):
         btn = self.sender()
         name = btn.objectName()
-        self.dev.loadPreset(name, _sync="async")
+        Future(self.dev.loadPreset, (name,))
 
     def objectiveChanged(self, obj):
         ## Microscope says new objective has been selected; update selection radio
@@ -808,7 +806,7 @@ class ScopeCameraModInterface(CameraModuleInterface):
         self.transformChanged()
 
     def findSurface(self):
-        return self.getDevice().findSurfaceDepth(self.getDevice().getDefaultImager(), _sync="async")
+        return Future(self.getDevice().findSurfaceDepth, (self.getDevice().getDefaultImager(),))
 
     def surfaceDepthChanged(self, depth):
         self.zPositionWidget.setSurfaceDepth(depth)

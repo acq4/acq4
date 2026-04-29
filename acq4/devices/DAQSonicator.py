@@ -6,7 +6,7 @@ import numpy as np
 
 from acq4.devices.DAQGeneric import DAQGeneric
 from acq4.devices.Sonicator import Sonicator
-from acq4.util.future import future_wrap
+from acq4.util.future import sleep
 from neuroanalysis.stimuli import load_stimulus
 from pyqtgraph.units import nF, A
 
@@ -141,8 +141,7 @@ class DAQSonicator(Sonicator):
             name=f"__sonicator{self.name()}DAQ",
         )
 
-    @future_wrap
-    def _doProtocol(self, protocol: str | dict, name=None, _future=None):
+    def _doProtocol(self, protocol: str | dict):
         if isinstance(protocol, str):
             protocol = load_stimulus(json.loads(protocol))
         else:
@@ -176,7 +175,7 @@ class DAQSonicator(Sonicator):
                 raise RuntimeError("Overload detected. Please check the sonicator device.")
             task.execute(block=False, processEvents=False)
             while not task.isDone():
-                _future.sleep(0.1)
+                sleep(0.1)
             if "overload" in self.config and self._daq.getChannelValue("overload"):
                 raise RuntimeError("Overload detected. Command likely required too much power.")
         except Exception:

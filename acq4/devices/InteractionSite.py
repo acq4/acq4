@@ -7,7 +7,7 @@ from acq4.util import Qt
 from .Device import Device
 from .OptomechDevice import OptomechDevice
 from .Stage import Stage
-from ..util.future import future_wrap, Future
+from ..util.future import Future
 from ..util.target import color_for_diff
 
 
@@ -175,8 +175,7 @@ class InteractionSite(Device, OptomechDevice):
         tr.rotation = (np.degrees(angle), axis)
         self.setDeviceTransform(tr)
 
-    @future_wrap
-    def moveToInteract(self, other, speed='fast', name=None, _future=None):
+    def moveToInteract(self, other, speed='fast'):
         if other.name() not in self.positions:
             raise RuntimeError(f"No positions saved for {other.name()} at {self.name()}")
         pos_config = self.positions[other.name()]
@@ -187,20 +186,19 @@ class InteractionSite(Device, OptomechDevice):
         approach_pos = pos_config['site global']
         # TODO this will still need a real motion planner
         # TODO we'll maybe also need to make sure the other devices are out of the way...
-        _future.waitFor(self.moveToGlobal(approach_pos, speed=speed, name=f"move {self.name()} to approach {other.name()}"), timeout=120)
-        _future.waitFor(other._moveToGlobal(approach_pos, speed=speed, name=f"move {other.name()} to approach {self.name()}"), timeout=120)
+        self.moveToGlobal(approach_pos, speed=speed, name=f"move {self.name()} to approach {other.name()}").wait(timeout=120)
+        other._moveToGlobal(approach_pos, speed=speed, name=f"move {other.name()} to approach {self.name()}").wait(timeout=120)
         interact_global = pos_config['interact global']
-        _future.waitFor(other._moveToGlobal(interact_global, speed=speed, name=f"move {other.name()} to interact with {self.name()}"))
+        other._moveToGlobal(interact_global, speed=speed, name=f"move {other.name()} to interact with {self.name()}").wait()
 
-    @future_wrap
-    def moveToApproach(self, other, speed='fast', name=None, _future=None):
+    def moveToApproach(self, other, speed='fast'):
         if other.name() not in self.positions:
             raise RuntimeError(f"No positions saved for {other.name()} at {self.name()}")
         pos_config = self.positions[other.name()]
         if 'site global' not in pos_config:
             raise RuntimeError(f"No site global position saved for {other.name()} at {self.name()}")
-        _future.waitFor(self.moveToGlobal(pos_config['site global'], speed=speed, name=f"move {self.name()} to approach {other.name()}"), timeout=120)
-        _future.waitFor(other._moveToGlobal(pos_config['site global'], speed=speed, name=f"move {other.name()} to approach {self.name()}"), timeout=120)
+        self.moveToGlobal(pos_config['site global'], speed=speed, name=f"move {self.name()} to approach {other.name()}").wait(timeout=120)
+        other._moveToGlobal(pos_config['site global'], speed=speed, name=f"move {other.name()} to approach {self.name()}").wait(timeout=120)
 
     # @future_wrap
     # def moveToInteract(self, other, speed='fast', _future=None):

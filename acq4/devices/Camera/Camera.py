@@ -20,7 +20,7 @@ from acq4.util import Qt
 from acq4.util.Mutex import Mutex
 from acq4.util.Mutex import RecursiveMutex
 from acq4.util.Thread import Thread
-from acq4.util.future import Future, future_wrap
+from acq4.util.future import Future, check_stop
 from acq4.util.imaging.frame import Frame
 from coorx import TTransform, SRT3DTransform
 from pyqtgraph import Vector
@@ -250,7 +250,7 @@ class Camera(DAQGeneric, OptomechDevice):
         return Future.immediate()
 
     def presetHotkeyPressed(self, dev, changes, presetName):
-        self.loadPreset(presetName, _sync="async")
+        Future(self.loadPreset, (presetName,))
 
     def newFrames(self):
         """Returns a list of all new frames that have arrived since the last call. The list looks like:
@@ -364,9 +364,8 @@ class Camera(DAQGeneric, OptomechDevice):
             raise ValueError("ensureFreshFrames=True is not compatible with n=None")
         return FrameAcquisitionFuture(self, n, ensureFreshFrames=ensureFreshFrames)
 
-    @future_wrap
     def driverSupportedFixedFrameAcquisition(
-        self, n: int = 1, name=None, _future: Future = None
+        self, n: int = 1
     ) -> list[Frame]:
         """Ask the camera driver to acquire a specific number of frames and return a Future.
 
@@ -404,8 +403,7 @@ class Camera(DAQGeneric, OptomechDevice):
                 raise TimeoutError("Timed out waiting for frame processing thread to stop")
         DAQGeneric.quit(self)
 
-    @future_wrap
-    def getEstimatedFrameRate(self, name=None, _future: Future = None):
+    def getEstimatedFrameRate(self):
         """Return the estimated frame rate of the camera."""
         with self.ensureRunning():
             return self.acqThread.getEstimatedFrameRate()
@@ -708,7 +706,7 @@ class CameraTask(DAQGenericTask):
         # arm recording
         self.stopRecording = False
         if self.fixedFrameCount is not None:
-            self._future = self.dev.driverSupportedFixedFrameAcquisition(n=self.fixedFrameCount, _sync="async")
+            self._future = Future(self.dev.driverSupportedFixedFrameAcquisition, (self.fixedFrameCount,))
         elif not self.dev.isRunning():
             self.dev.start(block=True)
 
@@ -1066,14 +1064,13 @@ class AcquireThread(Thread):
                 pass
             self.sigShowMessage.emit("ERROR starting acquisition (see console output)")
 
-    @future_wrap
-    def getEstimatedFrameRate(self, name=None, _future: Future = None):
+    def getEstimatedFrameRate(self):
         """Return the estimated frame rate of the camera."""
         if not self.isRunning():
             raise RuntimeError("Cannot get frame rate while camera is not running.")
         while len(self._recentFPS) < self._recentFPS.maxlen:
             time.sleep(0.01)
-            _future.checkStop()
+            check_stop()
         return np.mean(self._recentFPS)
 
     def stop(self, block=False):

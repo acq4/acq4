@@ -8,7 +8,7 @@ import scipy.ndimage as ndi
 import pyqtgraph as pg
 from acq4.Manager import getManager
 from acq4.util import Qt
-from acq4.util.future import Future, future_wrap
+from acq4.util.future import Future
 from acq4.util.image_registration import imageTemplateMatch
 from acq4.util.imaging.sequencer import acquire_z_stack
 from .pipette_detection import TemplateMatchPipetteDetector
@@ -354,9 +354,8 @@ class CorrelationPipetteTracker(PipetteTracker):
         # currently just returns the length of 100 pixels in the frame
         return frame.info()["pixelSize"][0] * 100
 
-    @future_wrap
     def takeReferenceFrames(
-        self, zRange=None, zStep=None, imager=None, tipLength=None, name=None, _future: Future = None
+        self, zRange=None, zStep=None, imager=None, tipLength=None
     ):
         """Collect a series of images of the pipette tip at various focal depths.
 
@@ -390,7 +389,7 @@ class CorrelationPipetteTracker(PipetteTracker):
         frames = np.stack([f.data()[minImgPos[0]:maxImgPos[0], minImgPos[1]:maxImgPos[1]] for f in frames], axis=0).astype(float)
 
         # collect background stack
-        _future.waitFor(self.pipette._moveToLocal([-tipLength * 3, 0, 0], "slow"))
+        self.pipette._moveToLocal([-tipLength * 3, 0, 0], "slow").wait()
         bg_frames = acquire_z_stack(
             imager, zStart, zEnd, zStep, name="background for subtracting"
         )

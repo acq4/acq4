@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Any
 
 from acq4.devices.PatchPipette import PatchPipette
 from acq4.logging_config import get_logger
-from acq4.util.future import future_wrap
+from acq4.util.future import Future, Stopped, sleep
 from acq4.util.threadrun import runInGuiThread
 from acq4.util.imaging.sequencer import run_image_sequence
 from ..TaskRunner import TaskRunner
@@ -26,8 +26,7 @@ class Autopatcher:
         win.sigWorking.emit(False)
         win.ui.reuseLastCellBtn.setEnabled(win._cell is not None)
 
-    @future_wrap
-    def _autopatchDemo(self, name=None, _future=None):
+    def _autopatchDemo(self):
         win = self._window
         win.sigWorking.emit(win.ui.autopatchDemoBtn)
         ppip: PatchPipette = win.patchPipetteDevice
@@ -43,40 +42,39 @@ class Autopatcher:
                 try:
                     started_clean = ppip.isTipClean()
                     if not started_clean:
-                        _future.setState("Autopatch: cleaning pipette")
+                        logger.debug("Autopatch: cleaning pipette")
                         try:
-                            _future.waitFor(ppip.setState("clean", nextState="bath"), timeout=600)
+                            ppip.setState("clean", nextState="bath").wait(timeout=600)
                         except Exception:
-                            _future.setState("Clean is unsafe to undo; quitting demo")
                             logger.exception("Error during pipette clean - quitting autopatch demo")
                             return
                         if not ppip.isTipClean():
-                            _future.setState("Pipette still not clean after clean state; quitting demo")
+                            logger.debug("Pipette still not clean after clean state; quitting demo")
                             return
-                        _future.waitFor(win.scopeDevice.moveDip())
+                        win.scopeDevice.moveDip().wait()
 
-                    cell = self._autopatchFindCell(_future)
+                    cell = self._autopatchFindCell()
                     if cell is None:
-                        _future.setState("No cells found; quitting demo")
+                        logger.debug("No cells found; quitting demo")
                         return
-                    _future.setState("Autopatch: cell found")
+                    logger.debug("Autopatch: cell found")
                     ppip.newPatchAttempt()
                     runInGuiThread(multipatch_win.ui.recordBtn.setChecked, True)
-                    _future.setState("Autopatch: go above target")
-                    _future.waitFor(ppip.pipetteDevice.goAboveTarget("fast"))
-                    _future.setState("Autopatch: finding pipette tip")
+                    logger.debug("Autopatch: go above target")
+                    ppip.pipetteDevice.goAboveTarget("fast").wait()
+                    logger.debug("Autopatch: finding pipette tip")
                     ppip.clampDevice.autoPipetteOffset()
                     win.pipetteDevice.iterativelyFindTip()
                     if started_clean:
-                        _future.setState("Quick clean")
+                        logger.debug("Quick clean")
                         ppip.sonicatorDevice.doProtocol("quick clean")
 
-                    _future.setState("Autopatch: go approach")
-                    _future.waitFor(ppip.pipetteDevice.goApproach("fast"))
+                    logger.debug("Autopatch: go approach")
+                    ppip.pipetteDevice.goApproach("fast").wait()
                     try:
-                        _future.setState("Autopatch: patch cell")
+                        logger.debug("Autopatch: patch cell")
                         logger.warning("Autopatch: Start cell patching")
-                        state = self._autopatchCellPatch(cell, _future)
+                        state = self._autopatchCellPatch(cell)
                     except Exception:
                         logger.exception("Autopatch: Exception during cell patching")
                         raise
@@ -86,42 +84,40 @@ class Autopatcher:
                         logger.warning("Autopatch: Next cell!")
                         continue
                     cell_dir.setInfo({'important': True})
-                    _future.setState("Autopatch: Whole cell; running task")
-                    self._autopatchRunTaskRunner(_future)
+                    logger.debug("Autopatch: Whole cell; running task")
+                    self._autopatchRunTaskRunner()
 
-                    _future.setState("Autopatch: Taking cell images")
+                    logger.debug("Autopatch: Taking cell images")
                     win.scopeDevice.loadPreset('GFP')
-                    self._saveStack("patched GFP cellfie", _future)
+                    self._saveStack("patched GFP cellfie")
                     # win.scopeDevice.loadPreset('tdTomato')
-                    # self._saveStack("patched tdTomato cellfie", _future)
+                    # self._saveStack("patched tdTomato cellfie")
                     win.scopeDevice.loadPreset('brightfield')
 
                     # TODO too slow for today's demo
-                    # _future.setState("Autopatch: resealing")
-                    # _future.waitFor(ppip.setState("reseal"), timeout=None)
-                    # self._saveStack("resealed nucleus", _future)
+                    # logger.debug("Autopatch: resealing")
+                    # ppip.setState("reseal").wait(timeout=None)
+                    # self._saveStack("resealed nucleus")
                     #
                     # # start nucleus collection
                     # homeFut = ppip.setState("home with nucleus")
                     #
                     # # check on the resealed cell
                     # win.scopeDevice.loadPreset('GFP')
-                    # _future.waitFor(
-                    #     win.cameraDevice.moveCenterToGlobal(cell.position, "fast", name="center on resealed cell")
-                    # )
-                    # self._saveStack("GFP cell without nucleus", _future)
-                    # _future.waitFor(homeFut)
+                    # win.cameraDevice.moveCenterToGlobal(cell.position, "fast", name="center on resealed cell").wait()
+                    # self._saveStack("GFP cell without nucleus")
+                    # homeFut.wait()
 
                     # collect the nucleus
                     # TODO once we have motion planning
-                    # _future.waitFor(ppip.setState("collect"))
-                    # _future.waitFor(ppip.pipetteDevice.goAboveTarget("fast"))
-                    # self._saveStack("post-collection", _future)
+                    # ppip.setState("collect").wait()
+                    # ppip.pipetteDevice.goAboveTarget("fast").wait()
+                    # self._saveStack("post-collection")
 
-                    _future.waitFor(ppip.pipetteDevice.goHome())
+                    ppip.pipetteDevice.goHome().wait()
                     ppip.setState("bath")
 
-                except (_future.StopRequested, _future.Stopped):
+                except Stopped:
                     raise
                 except Exception:
                     logger.exception("Error during protocol:")
@@ -140,7 +136,7 @@ class Autopatcher:
             parent = parent.parent()
         return parent.mkdir('AutopatchDemo', autoIncrement=True)
 
-    def _autopatchCellPatch(self, cell, _future):
+    def _autopatchCellPatch(self, cell):
         win = self._window
         ppip = win.patchPipetteDevice
         ppip.setState("approach", startANewCell=False)
@@ -148,32 +144,28 @@ class Autopatcher:
         while True:
             if (state := ppip.getState().stateName) not in ("approach", "cell detect", "contact cell"):
                 if not detect_finished:
-                    _future.waitFor(
-                        win.cameraDevice.moveCenterToGlobal(
-                            cell.position, "fast", name="center on cell during patching"
-                        )
-                    )
+                    win.cameraDevice.moveCenterToGlobal(
+                        cell.position, "fast", name="center on cell during patching"
+                    ).wait()
                     detect_finished = True
             if state in ("whole cell", "bath", "broken", "fouled"):
-                _future.setState(f"Exiting patch loop - ended in state {state}")
+                logger.debug(f"Exiting patch loop - ended in state {state}")
                 break
-            _future.sleep(0.1)
+            sleep(0.1)
         return state
 
-    def _autopatchFindCell(self, _future):
+    def _autopatchFindCell(self):
         win = self._window
         if not win._unranked_cells:
-            _future.setState("Autopatch: searching for cells")
+            logger.debug("Autopatch: searching for cells")
             return None
-            # surf = _future.waitFor(
-            #     win.cameraDevice.scopeDev.findSurfaceDepth(win.cameraDevice)
-            # ).getResult()
-            # _future.waitFor(win.cameraDevice.setFocusDepth(surf - 60e-6, "fast"))
-            z_stack = win._detector._detectNeuronsZStack(_sync="async")
+            # surf = win.cameraDevice.scopeDev.findSurfaceDepth(win.cameraDevice)
+            # win.cameraDevice.setFocusDepth(surf - 60e-6, "fast").wait()
+            z_stack = Future(win._detector._detectNeuronsZStack)
             z_stack.sigFinished.connect(win._detector._handleDetectResults)
-            _future.waitFor(z_stack, timeout=600)
+            z_stack.wait(timeout=600)
 
-        _future.setState("Autopatch: checking selected cell")
+        logger.debug("Autopatch: checking selected cell")
         cell = win._unranked_cells.pop(0)
         win._ranked_cells.append(cell)
         win.patchPipetteDevice.setCell(cell)
@@ -184,19 +176,19 @@ class Autopatcher:
         # if (pos - margin) not in stack or (pos + margin) not in stack:
         # stack = None
         try:
-            _future.waitFor(cell.initializeTracker(win.cameraDevice))
-        except _future.StopRequested:
+            cell.initializeTracker(win.cameraDevice).wait()
+        except Stopped:
             raise
         except ValueError as e:
             if win._mockDemo:
                 logger.info(f"Autopatch: Mocking cell despite {e}")
                 return cell
             logger.info(f"Cell moved too much? {e}\nRetrying")
-            return self._autopatchFindCell(_future)
+            return self._autopatchFindCell()
         logger.info(f"Autopatch: Cell found at {cell.position}")
         return cell
 
-    def _autopatchRunTaskRunner(self, _future):
+    def _autopatchRunTaskRunner(self):
         win = self._window
         man = win.module.manager
         ppip = win.patchPipetteDevice
@@ -214,24 +206,19 @@ class Autopatcher:
         expected_duration = (
             taskrunner.sequenceInfo["period"] * taskrunner.sequenceInfo["totalParams"]
         )
-        _future.waitFor(
-            # runInGuiThread(taskrunner.runSequence, store=True, storeDirHandle=self.dh), timeout=expected_duration
-            runInGuiThread(taskrunner.runSequence, store=False),
+        runInGuiThread(taskrunner.runSequence, store=False).wait(
             timeout=max(30, expected_duration * 20),
         )
         logger.warning("Autopatch: Task runner sequence completed.")
 
-    def _saveStack(self, name, future):
+    def _saveStack(self, name):
         ppip = self._window.patchPipetteDevice
         start = ppip.pipetteDevice.targetPosition()[2] - (20e-6 / 2)
         end = start + 20e-6
         save_in = ppip.dm.getCurrentDir().getDir(f"{name} stack", create=True)
-        future.waitFor(
-            run_image_sequence(
-                ppip.imagingDevice(),
-                z_stack=(start, end, 1e-6),
-                storage_dir=save_in,
-                name="cellfie",
-            )
-        )
-        future.sleep(5)  # pose for the user
+        Future(
+            run_image_sequence,
+            (ppip.imagingDevice(),),
+            dict(z_stack=(start, end, 1e-6), storage_dir=save_in, name="cellfie"),
+        ).wait()
+        sleep(5)  # pose for the user

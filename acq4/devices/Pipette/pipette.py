@@ -16,7 +16,7 @@ from acq4.devices.OptomechDevice import OptomechDevice
 from acq4.devices.Stage import Stage, MovePathFuture
 from acq4.modules.Camera import CameraModuleInterface
 from acq4.util import Qt, ptime
-from acq4.util.future import future_wrap, Future
+from acq4.util.future import Future, sleep, check_stop
 from acq4.util.target import Target
 from coorx import AffineTransform
 from pyqtgraph import Point, siFormat
@@ -329,8 +329,7 @@ class Pipette(Device, OptomechDevice):
                 return False
         return True
 
-    @future_wrap
-    def setTipOffsetIfAcceptable(self, pos, name=None, _future=None):
+    def setTipOffsetIfAcceptable(self, pos):
         if self.tipOffsetIsReasonable(pos):
             self.resetGlobalPosition(pos)
         else:
@@ -352,8 +351,7 @@ class Pipette(Device, OptomechDevice):
                 raise AssertionError("Unknown button clicked")
         return True
 
-    @future_wrap
-    def setNewPipetteTipOffsetIfAcceptable(self, pos, name=None, _future=None):
+    def setNewPipetteTipOffsetIfAcceptable(self, pos):
         """Returns whether the tip position was saved. Otherwise, the user requested a re-do."""
         if self.newPipetteTipOffsetIsReasonable(pos):
             self.recordTipOffsetInHistory(pos)
@@ -413,8 +411,7 @@ class Pipette(Device, OptomechDevice):
         else:
             return self.offset
 
-    @future_wrap
-    def saveManualTipPosition(self, stack=True, name=None, _future=None):
+    def saveManualTipPosition(self, stack=True):
         path = os.path.join(self.configPath(), "manual-calibrations")
         path = self.dm.configFileName(path)
         path = self.dm.dirHandle(path, create=True)
@@ -427,7 +424,7 @@ class Pipette(Device, OptomechDevice):
 
         cam: Camera = self.imagingDevice()
         with cam.ensureRunning():
-            img = _future.waitFor(cam.acquireFrames(n=1, ensureFreshFrames=True)).getResult()[0]
+            img = cam.acquireFrames(n=1, ensureFreshFrames=True).getResult()[0]
         img.addInfo(pip_info)
         timestamp = time.strftime("%Y%m%d-%H%M%S")
         path.writeFile(
@@ -441,17 +438,19 @@ class Pipette(Device, OptomechDevice):
             is_below_surface = depth <= self.scopeDevice().getSurfaceDepth()
             scan_dist = (2 + (np.random.random()**2) * (100 if is_below_surface else 100)) * 1e-6
             step = max(1e-6, scan_dist / 4)
-            try:
-                seq_future = run_image_sequence(
-                    cam,
+            seq_future = Future(
+                run_image_sequence,
+                (cam,),
+                dict(
                     z_stack=(depth - scan_dist, depth + scan_dist, step),
                     storage_dir=path,
                     name="manual calibration stack",
-                    _sync="async",
-                )
-                _future.waitFor(seq_future)
+                ),
+            )
+            try:
+                seq_future.wait()
             finally:
-                _future.waitFor(cam.setFocusDepth(depth, name=f"{cam.name()} restore focus after {self.name()} manual calibration stack"))
+                cam.setFocusDepth(depth, name=f"{cam.name()} restore focus after {self.name()} manual calibration stack").wait()
             fh = seq_future.imagesSavedIn
             info = {
                 **fh.info(),
@@ -666,7 +665,6 @@ class Pipette(Device, OptomechDevice):
             return self.advance(appDepth, speed=speed, name='retract from surface')
         return Future.immediate()
 
-    @future_wrap
     def stepwiseAdvance(
         self,
         depth: float | None = None,
@@ -674,8 +672,6 @@ class Pipette(Device, OptomechDevice):
         speed: float = 10e-6,
         interval: float = 5,
         step: float = 1e-6,
-        name: str | None = None,
-        _future=None,
     ):
         """Retract/advance in small steps, allowing for manual user movements.
 
@@ -708,14 +704,13 @@ class Pipette(Device, OptomechDevice):
                 break  # overshot
             distance = np.linalg.norm(direction)
             next_pos = pos + step * direction / distance
-            _future.waitFor(self._moveToGlobal(next_pos, speed=speed, linear=True, name=name))
+            self._moveToGlobal(next_pos, speed=speed, linear=True, name=None).wait()
             if distance <= step:
                 break
-            _future.sleep(interval)
+            sleep(interval)
 
-    @future_wrap
     def wiggle(
-        self, speed, radius, repetitions, duration, pipette_direction=None, extra=None, name=None, _future=None
+        self, speed, radius, repetitions, duration, pipette_direction=None, extra=None
     ):
         if pipette_direction is None:
             pipette_direction = self.globalDirection()
@@ -739,9 +734,9 @@ class Pipette(Device, OptomechDevice):
                 while ptime.time() - start < duration:
                     while np.dot(direction := random_wiggle_direction(), prev_dir) > 0:
                         pass  # ensure different direction from previous
-                    _future.waitFor(self._moveToGlobal(pos=pos + radius * direction, speed=speed, name=f"wiggle step {step_i}"))
+                    self._moveToGlobal(pos=pos + radius * direction, speed=speed, name=f"wiggle step {step_i}").wait()
                     prev_dir = direction
-                _future.waitFor(self._moveToGlobal(pos=pos, speed=speed, name=f"wiggle return {step_i}"))
+                self._moveToGlobal(pos=pos, speed=speed, name=f"wiggle return {step_i}").wait()
 
     def globalPosition(self):
         """Return the position of the electrode tip in global coordinates.
@@ -874,10 +869,9 @@ class Pipette(Device, OptomechDevice):
         """Return an object that records all motion updates from this pipette"""
         return PipetteRecorder(self)
 
-    @future_wrap
     def iterativelyFindTip(self, max_reps=10, found_threshold=3e-6, delay_after_move=0.4,
                            max_allowed_offset=None, delay_after_update=0, reserve_devices=True,
-                           go_to_tip_first=False, name=None, _future=None):
+                           go_to_tip_first=False):
         """Iteratively refine the tip position by finding the tip in frame and focusing, until convergence.
         
         Returns if convergence is reached (tip position changes less than *found_threshold* between iterations) or after *max_reps* iterations.
@@ -914,13 +908,13 @@ class Pipette(Device, OptomechDevice):
                 last_pos = None
                 start_pos = self.globalPosition()
                 if go_to_tip_first:
-                    _future.waitFor(self.focusTip())
-                    _future.sleep(delay_after_move)
+                    self.focusTip().wait()
+                    sleep(delay_after_move)
                 for _ in range(max_reps):
                     pos = self.tracker.findTipInFrame()
                     self.setTipOffsetIfAcceptable(pos)
                     converged = last_pos is not None and np.linalg.norm(np.array(pos) - np.array(last_pos)) < found_threshold
-                    _future.sleep(delay_after_update)
+                    sleep(delay_after_update)
                     if converged:
                         diff = np.linalg.norm(np.array(pos) - np.array(start_pos))
                         if max_allowed_offset is not None and diff > max_allowed_offset:
@@ -928,8 +922,8 @@ class Pipette(Device, OptomechDevice):
                         return
 
                     last_pos = pos
-                    _future.waitFor(self.focusTip())
-                    _future.sleep(delay_after_move)
+                    self.focusTip().wait()
+                    sleep(delay_after_move)
                 raise TimeoutError(f"Iterative tip finding did not converge after {max_reps} iterations.")
             except Exception as exc:
                 # reset position to start if we fail, to avoid leaving the pipette in a bad position
@@ -940,7 +934,7 @@ class Pipette(Device, OptomechDevice):
     def findNewPipette(self):
         from acq4.devices.Pipette.calibration import findNewPipette
 
-        future = findNewPipette(self, self.imagingDevice(), self.scopeDevice(), _sync="async")
+        future = Future(findNewPipette, (self, self.imagingDevice(), self.scopeDevice()))
         self._last_calibration_future = future  # keep for easy debugging of calibration algorithm
         return future
 
@@ -1233,7 +1227,7 @@ class PipetteCamModInterface(CameraModuleInterface):
     def autoCalibrateClicked(self):
         pip = self.getDevice()
         pos = pip.tracker.findTipInFrame()
-        tip_future = pip.setTipOffsetIfAcceptable(pos, _sync="async")
+        tip_future = Future(pip.setTipOffsetIfAcceptable, (pos,))
         tip_future.onFinish(self._handleTipPositionSet)
 
     def _handleTipPositionSet(self, future):
@@ -1245,7 +1239,7 @@ class PipetteCamModInterface(CameraModuleInterface):
         dev = self.getDevice()
         zrange = dev.config.get('referenceZRange', None)
         zstep = dev.config.get('referenceZStep', None)
-        dev.tracker.takeReferenceFrames(zRange=zrange, zStep=zstep, _sync="async")
+        Future(dev.tracker.takeReferenceFrames, (), dict(zRange=zrange, zStep=zstep))
 
     def aboveTargetClicked(self):
         self.getDevice().goAboveTarget(self.selectedSpeed())

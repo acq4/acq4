@@ -16,7 +16,7 @@ from neuroanalysis.test_pulse_stack import H5BackedTestPulseStack
 from .mockPatch import MockPatch
 from .pipetteControl import PipetteControl
 from ...devices.PatchPipette.statemanager import PatchPipetteStateManager
-from ...util.future import MultiFuture, future_wrap
+from ...util.future import MultiFuture, Future
 from ...util.json_encoder import ACQ4JSONEncoder
 
 Ui_MultiPatch = Qt.importTemplate('.multipatchTemplate')
@@ -130,7 +130,7 @@ class MultiPatchWindow(Qt.QWidget):
         self.ui.coarseSearchBtn.setOpts(future_producer=self._coarseSearch, **common_opts)
         self.ui.fineSearchBtn.setOpts(future_producer=self._fineSearch, **common_opts)
         self.ui.aboveTargetBtn.setOpts(future_producer=self._aboveTarget, **common_opts)
-        self.ui.autoFindTipBtn.setOpts(future_producer=lambda: self._autoFindTip(_sync="async"), **common_opts)
+        self.ui.autoFindTipBtn.setOpts(future_producer=lambda: Future(self._autoFindTip), **common_opts)
         self.ui.cellDetectBtn.setOpts(future_producer=self._cellDetect, raiseOnError=False, **common_opts)
         self.ui.breakInBtn.setOpts(future_producer=self._breakIn, raiseOnError=False, **common_opts)
         self.ui.toTargetBtn.setOpts(future_producer=self._toTarget, **common_opts)
@@ -286,8 +286,7 @@ class MultiPatchWindow(Qt.QWidget):
             futures.append(pip.pipetteDevice.goAboveTarget(speed))
         return MultiFuture(futures, name="Move pipettes above target")
 
-    @future_wrap
-    def _autoFindTip(self, max_reps=10, name=None, _future=None):
+    def _autoFindTip(self, max_reps=10):
         work_to_do = self.selectedPipettes()
         while work_to_do:
             patchpip = work_to_do.pop(0)
@@ -397,7 +396,7 @@ class MultiPatchWindow(Qt.QWidget):
         pos = self._cammod.window().getView().mapSceneToView(ev.scenePos())
         spos = pip.scopeDevice().globalPosition()
         pos = [pos.x(), pos.y(), spos[2]]
-        tip_future = pip.setTipOffsetIfAcceptable(pos, _sync="async")
+        tip_future = Future(pip.setTipOffsetIfAcceptable, (pos,))
         tip_future.onFinish(self._handleManualSetTip, pip, inGui=True)
 
     def _handleManualSetTip(self, future, pip):
@@ -407,9 +406,10 @@ class MultiPatchWindow(Qt.QWidget):
             return
 
         if self._shouldSaveTipImages:
-            pip.saveManualTipPosition(
-                stack=self.module.config.get("useStacksForSavedTipImages", True),
-                _sync="async",
+            Future(
+                pip.saveManualTipPosition,
+                (),
+                dict(stack=self.module.config.get("useStacksForSavedTipImages", True)),
             ).raiseErrors("Failed to save tip images")
 
         if len(self._pipsToSetTips) == 0:

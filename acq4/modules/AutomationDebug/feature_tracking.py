@@ -6,7 +6,7 @@ import numpy as np
 
 from acq4.devices.Pipette.calibration import findNewPipette
 from acq4.logging_config import get_logger
-from acq4.util.future import Future, future_wrap
+from acq4.util.future import Future, Stopped, sleep
 from acq4_automation.feature_tracking.cell import Cell
 from coorx import Point
 
@@ -20,8 +20,7 @@ class FeatureTracker:
     def __init__(self, window: AutomationDebugWindow):
         self._window = window
 
-    @future_wrap
-    def doPipetteCalibrationTest(self, name=None, _future=None):
+    def doPipetteCalibrationTest(self):
         win = self._window
         win.sigWorking.emit(win.ui.testPipetteBtn)
         camera = win.cameraDevice
@@ -43,24 +42,23 @@ class FeatureTracker:
                     win.sigLogMessage.emit(
                         f'....so bad. Why? Check man.getModule("AutomationDebug").failedCalibrations[{i}]'
                     )
-            except Future.Stopped:
+            except Stopped:
                 win.sigLogMessage.emit("Calibration interrupted by user request")
                 break
 
-    @future_wrap
-    def doFeatureTracking(self, name=None, _future: Future = None):
+    def doFeatureTracking(self):
         win = self._window
         win.sigWorking.emit(win.ui.trackFeaturesBtn)
         pipette = win.pipetteDevice
         target = Point(pipette.targetPosition(), "global")
         cell = win._cell = Cell(target)
-        _future.waitFor(cell.initializeTracker(win.cameraDevice))
+        cell.initializeTracker(win.cameraDevice).wait()
         cell.enableTracking()
         cell.sigPositionChanged.connect(self._updatePipetteTarget)
         win.sigWorking.emit(win.ui.trackFeaturesBtn)
         try:
             while cell.isTracking():
-                _future.sleep(1)
+                sleep(1)
         except Exception:
             cell.enableTracking(False)
             cell.sigPositionChanged.disconnect(self._updatePipetteTarget)

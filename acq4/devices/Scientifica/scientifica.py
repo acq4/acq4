@@ -11,7 +11,7 @@ from acq4.util import ptime
 from acq4.devices.Stage import Stage, MoveFuture, StageInterface
 from acq4.drivers.Scientifica import Scientifica as ScientificaDriver
 from acq4.util import Qt
-from acq4.util.future import future_wrap, Future, FutureButton
+from acq4.util.future import Future, FutureButton, sleep
 from acq4.util.threadrun import runInGuiThread
 from pyqtgraph import SpinBox, siFormat
 
@@ -457,10 +457,9 @@ class ScientificaGUI(StageInterface):
             self.sigBusyMoving.emit(False)
             return Future.immediate(error="User requested stop", stopped=True)
 
-        return self._doAutoZero(axis, _sync="async")
+        return Future(self._doAutoZero, (axis,))
 
-    @future_wrap
-    def _doAutoZero(self, axis: int = None, name=None, _future: Future = None) -> None:
+    def _doAutoZero(self, axis: int = None) -> None:
         self._savedLimits = self.dev.getLimits()
         try:
             diff = np.zeros(3)  # keep track of offset changes
@@ -472,7 +471,7 @@ class ScientificaGUI(StageInterface):
             if axis is not None and far_away[axis] is None:
                 raise Exception(f"Requested auto zero for axis {'XYZ'[axis]}, but autoZeroDirection is disabled for this axis in the configuration.")
 
-            self._moveAndWait(far_away, axis, _future)
+            self._moveAndWait(far_away, axis)
             diff += self._zeroAxis(axis)
 
             # This part is a pain: if the approach switch is enabled on the control cube, then it's possible for the
@@ -489,9 +488,9 @@ class ScientificaGUI(StageInterface):
                         currentPos = self.dev.getPosition()
                         currentPos[otherAxis] += 300 * dir
                         # small step to move z (x) away from its limit switch
-                        self._moveAndWait(currentPos, otherAxis, _future)
+                        self._moveAndWait(currentPos, otherAxis)
                         # far step to get x (z) to its limit switch
-                        self._moveAndWait(far_away, axis, _future)
+                        self._moveAndWait(far_away, axis)
                         diff += self._zeroAxis(axis)
 
             self.dev.logger.info(f"Auto-zeroed {self.dev.name()} by {diff}")
@@ -504,14 +503,14 @@ class ScientificaGUI(StageInterface):
                         axis = 'XYZ'[ax]
                         msg = f"{msg} {axis}={siFormat(diff[ax], suffix='m')}"
                 runInGuiThread(Qt.QMessageBox.warning, self, "Large slippage detected", msg, Qt.QMessageBox.Ok)
-            _future.waitFor(move_future)
+            move_future.wait()
         finally:
             self.sigBusyMoving.emit(False)
             self.dev.stop()
             self.dev.setLimits(*self._savedLimits)
 
-    def _moveAndWait(self, pos, axis, _future):
-        """Move to pos and wait for the move to complete. 
+    def _moveAndWait(self, pos, axis):
+        """Move to pos and wait for the move to complete.
         If axis is None, move all three axes to the specified position.
         If axis is 0,1,2, move only the specified axis to pos[axis].
 
@@ -526,7 +525,7 @@ class ScientificaGUI(StageInterface):
             dest[axis] = pos[axis]
         f = self.dev._move(dest, "fast", False, attempts_allowed=1, name=f"{self.dev.name()} auto-zero axis {axis}")
         while not f.isDone():
-            _future.sleep(0.1)
+            sleep(0.1)
 
         # raise errors not related to missing the target
         missed = f.wasInterrupted() and 'Stopped moving before reaching target' in f.errorMessage()

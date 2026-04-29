@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Union
 
 import pyqtgraph as pg
-from acq4.util.future import future_wrap
+from acq4.util.future import Future, check_stop, sleep
 from coorx import SRT3DTransform
 from ... import getManager
 from ...util.geometry import GeometryMotionPlanner, Plane
@@ -215,7 +215,7 @@ class PipettePathGenerator:
 class GeometryAwarePathGenerator(PipettePathGenerator):
     def __init__(self, pip: Pipette):
         super().__init__(pip)
-        self._cachePrimer = self._primeCaches(_sync="async")
+        self._cachePrimer = Future(self._primeCaches)
         self._cachePrimer.raiseErrors("error priming path planning caches")
 
     def _getPlanningContext(self):
@@ -244,15 +244,14 @@ class GeometryAwarePathGenerator(PipettePathGenerator):
         )
         return planner, from_pip_to_global
 
-    @future_wrap
-    def _primeCaches(self, name=None, _future=None):
+    def _primeCaches(self):
         try:
             man = getManager()
             while not man.isReady.wait(0.05):
-                _future.checkStop()
+                check_stop()
             mod = man.getOrLoadModule("Visualize3D")
             while not mod.isReady.wait(0.05):
-                _future.checkStop()
+                check_stop()
             viz = mod.window().findAdapter(lambda a: a.device == self.pip).pathSearchVisualizer()
             planner, from_pip_to_global = self._getPlanningContext()
             planner.make_convolved_obstacles(self.pip.getGeometry(), from_pip_to_global, viz)
@@ -340,10 +339,7 @@ class PipetteMotionPlanner:
         if self.future is not None:
             self.stop()
 
-        if hasattr(self._move, '__wrapped__'):
-            self.future = self._move(_sync="async")
-        else:
-            self.future = self._move()
+        self.future = self._move()
         return self.future
 
     def stop(self):
@@ -451,10 +447,11 @@ class SearchMotionPlanner(PipetteMotionPlanner):
     def _default_name(self):
         return "move to search"
 
-    @future_wrap
-    def _move(self, name=None, _future=None):
+    def _move(self):
+        return Future(self._doMove)
+
+    def _doMove(self):
         base = f"{self.pip.name()} {self.name}"
-        _future.name = base
         pip = self.pip
         speed = self.speed
         distance = self.kwds.get("distance", 0)
@@ -474,7 +471,7 @@ class SearchMotionPlanner(PipetteMotionPlanner):
             scopeFocus = scope.getFocusDepth()
             fut = scope.setFocusDepth(scopeFocus + searchDepth - focusDepth, name=f"{base}: focus above surface")
             # wait for objective to lift before starting pipette motion
-            _future.waitFor(fut)
+            fut.wait()
 
         # Here's where we want the pipette tip in global coordinates:
         globalCenter = cam.globalCenterPosition("roi")
@@ -485,7 +482,7 @@ class SearchMotionPlanner(PipetteMotionPlanner):
 
         path = self.safePath(pip.globalPosition(), globalTarget, speed)
 
-        _future.waitFor(pip._movePath(path, name=f"{base}: pipette path"))
+        pip._movePath(path, name=f"{base}: pipette path").wait()
 
 
 class ApproachMotionPlanner(PipetteMotionPlanner):
@@ -520,19 +517,20 @@ class AboveTargetMotionPlanner(PipetteMotionPlanner):
     def _default_name(self):
         return "move above target"
 
-    @future_wrap
-    def _move(self, name=None, _future=None):
+    def _move(self):
+        return Future(self._doMove)
+
+    def _doMove(self):
         base = f"{self.pip.name()} {self.name}"
-        _future.name = base
         pip = self.pip
         speed = self.speed
         scope = pip.scopeDevice()
         waypoint1, waypoint2 = self.aboveTargetPath()
 
         path = self.safePath(pip.globalPosition(), waypoint1, speed, APPROACH_TO_CORRECT_FOR_HYSTERESIS)
-        _future.waitFor(pip._movePath(path + [(waypoint2, "fast", True, "Above target")], name=f"{base}: pipette path"))
+        pip._movePath(path + [(waypoint2, "fast", True, "Above target")], name=f"{base}: pipette path").wait()
         move_scope = scope.setGlobalPosition(waypoint2, name=f"{base}: scope recenter")
-        _future.waitFor(move_scope)  # TODO act simultaneously once we can handle motion planning around moving objects
+        move_scope.wait()  # TODO act simultaneously once we can handle motion planning around moving objects
 
     def aboveTargetPath(self):
         """Return the path to the "above target" recalibration position.
@@ -568,10 +566,11 @@ class IdleMotionPlanner(PipetteMotionPlanner):
     def _default_name(self):
         return "move to idle"
 
-    @future_wrap
-    def _move(self, name=None, _future=None):
+    def _move(self):
+        return Future(self._doMove)
+
+    def _doMove(self):
         base = f"{self.pip.name()} {self.name}"
-        _future.name = base
         pip = self.pip
         speed = self.speed
 
@@ -593,7 +592,7 @@ class IdleMotionPlanner(PipetteMotionPlanner):
         ds = pip._opts["idleDistance"]  # move to 7 mm from center
         globalIdlePos = -ds * np.cos(angle), -ds * np.sin(angle), idleDepth
 
-        _future.waitFor(pip._moveToGlobal(globalIdlePos, speed, name=f"{base}: move to edge"))
+        pip._moveToGlobal(globalIdlePos, speed, name=f"{base}: move to edge").wait()
 
 
 def defaultMotionPlanners() -> dict[str, type[PipetteMotionPlanner]]:

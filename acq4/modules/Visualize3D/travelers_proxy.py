@@ -5,7 +5,6 @@ from threading import Thread
 import numpy as np
 
 from acq4.util import Qt
-from acq4.util.future import future_wrap
 from acq4.util.threadrun import inGuiThread, runInGuiThread
 from coorx import TTransform
 from pyqtgraph import opengl as gl
@@ -64,8 +63,7 @@ class VisualizePathSearch(Qt.QObject):
         self._previousPath.setVisible(False)
         self._previousPath.setData(pos=[])
 
-    @future_wrap
-    def startPath(self, path, bounds, name=None, _future=None):
+    def startPath(self, path, bounds):
         # TODO this is going to break with bitrot
         if self._bounds is None:
             self._bounds = self._adapter.createBounds(bounds, False)
@@ -132,8 +130,7 @@ class VisualizePathSearch(Qt.QObject):
         self._previousPath.setData(pos=prev)
         self._activePath.setData(pos=np.array(path + path[:-1][::-1]))  # it needs to walk back to the origin
 
-    @future_wrap
-    def addObstacle(self, name, obstacle, to_global, _future=None):
+    def addObstacle(self, name, obstacle, to_global):
         if name not in self._obstacles:
             self._buildObstacleMesh(name, *obstacle.surface_mesh)
         cs_name = obstacle.transform.systems[0].name

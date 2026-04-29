@@ -9,7 +9,7 @@ import pyqtgraph as pg
 from acq4.modules.Module import Module
 from acq4.util import Qt
 from acq4.util.InterfaceCombo import InterfaceCombo
-from acq4.util.future import future_wrap
+from acq4.util.future import Future
 
 
 class CameraCalibrator(Module):
@@ -99,11 +99,10 @@ class CameraCalibrator(Module):
         self.calibrateBtn.setText("Calibrating...")
         
         # Start the threaded calibration
-        future = self._runCalibration(camera, lightSource, sourceName, _sync="async")
+        future = Future(self._runCalibration, (camera, lightSource, sourceName))
         future.sigFinished.connect(self._calibrationFinished)
         
-    @future_wrap
-    def _runCalibration(self, camera, lightSource, sourceName, name=None, _future=None):
+    def _runCalibration(self, camera, lightSource, sourceName):
         """Run the calibration sequence in a thread."""
         
         try:

@@ -8,7 +8,7 @@ import numpy as np
 from acq4.logging_config import get_logger
 from acq4.modules.Camera import CameraWindow
 from acq4.util import Qt
-from acq4.util.future import Future, future_wrap
+from acq4.util.future import Future
 from acq4.util.imaging.sequencer import acquire_z_stack
 from acq4.util.target import TargetBox
 from acq4.util.threadrun import futureInGuiThread, runInGuiThread
@@ -40,30 +40,27 @@ class CellDetector:
         if path:
             self._window.ui.rankingSaveDirEdit.setText(path)
 
-    @future_wrap
-    def _addCellFromTarget(self, name=None, _future=None):
+    def _addCellFromTarget(self):
         target = Point(self._window.pipetteDevice.targetPosition(), "global")
         cell = self._window.patchPipetteDevice.cell
         if cell is None or cell.position != target:
             cell = Cell(target)
-            _future.waitFor(cell.initializeTracker(self._window.cameraDevice))
+            cell.initializeTracker(self._window.cameraDevice).wait()
         self._window._unranked_cells.append(cell)
         boxPositions = [c.position for c in self._window._unranked_cells]
-        _future.waitFor(futureInGuiThread(self._displayBoundingBoxes, boxPositions))
+        futureInGuiThread(self._displayBoundingBoxes, boxPositions).wait()
 
-    @future_wrap
-    def _testUI(self, name=None, _future=None):
+    def _testUI(self):
         with self._window.cameraDevice.ensureRunning():
-            frame = _future.waitFor(self._window.cameraDevice.acquireFrames(1)).getResult()[0]
+            frame = self._window.cameraDevice.acquireFrames(1).getResult()[0]
         points = np.random.random((20, 3))
         points[:, 2] *= 20e-6
         points[:, 1] *= frame.shape[0]
         points[:, 0] *= frame.shape[1]
         return [frame.mapFromFrameToGlobal(pt) for pt in points]
 
-    @future_wrap
     def _detectNeuronsZStack(
-        self, name=None, _future: Future = None
+        self,
     ) -> tuple[list, list[Frame] | None, list[Frame] | None] | list:
         """Acquires Z-stack(s) and runs neuron detection. Returns (bboxes, detection_stack, classification_stack)."""
         from acq4_automation.object_detection import detect_neurons
@@ -95,9 +92,7 @@ class CellDetector:
         )
 
         if win.ui.mockCheckBox.isChecked():
-            detection_stack, classification_stack, step_z = win._mock_handler._mockNeuronStacks(
-                _future
-            )
+            detection_stack, classification_stack, step_z = win._mock_handler._mockNeuronStacks()
             if detection_stack is None:
                 raise RuntimeError("Failed to load mock detection stack.")
 
@@ -141,20 +136,17 @@ class CellDetector:
 
         win.cameraDevice.setFocusDepth(depth, name=f"{win.cameraDevice.name()} restore focus after detection z-stack")  # Restore focus
 
-        global_pos = _future.waitFor(
-            detect_neurons(
-                working_stack,  # Prepared based on mock/real and single/multi
-                segmenter=segmenter,
-                autoencoder=autoencoder,
-                classifier=classifier,
-                resnet_classifier=resnet_classifier,
-                xy_scale=pixel_size,  # Global pixel_size
-                z_scale=step_z,  # Actual step_z from mock or real (1um for real)
-                multichannel=multichannel,  # Actual flag for detect_neurons
-                trim_edges=True,
-            ),
-            timeout=600,
-        ).getResult()
+        global_pos = detect_neurons(
+            working_stack,  # Prepared based on mock/real and single/multi
+            segmenter=segmenter,
+            autoencoder=autoencoder,
+            classifier=classifier,
+            resnet_classifier=resnet_classifier,
+            xy_scale=pixel_size,  # Global pixel_size
+            z_scale=step_z,  # Actual step_z from mock or real (1um for real)
+            multichannel=multichannel,  # Actual flag for detect_neurons
+            trim_edges=True,
+        ).wait(timeout=600).getResult()
         logger.info(f"Neuron detection finished. Found {len(global_pos)} potential neurons.")
 
         win._current_detection_stack = detection_stack

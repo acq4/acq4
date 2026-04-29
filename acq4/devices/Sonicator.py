@@ -6,7 +6,7 @@ from functools import cached_property
 from acq4.devices.Device import Device
 from acq4.util import Qt
 from acq4.util.PromptUser import prompt
-from acq4.util.future import Future, FutureButton, future_wrap
+from acq4.util.future import Future, FutureButton
 
 
 class Sonicator(Device):
@@ -36,7 +36,7 @@ class Sonicator(Device):
         super().__init__(deviceManager, config, name)
         self.protocols = config.get("protocols", {})
 
-    def safeToSonicate(self, _future: Future = None, askUser=True) -> bool:
+    def safeToSonicate(self, askUser=True) -> bool:
         return True  # TODO unbroke this
         pos = self.patchPipetteDevice.pipetteDevice.globalPosition()
         well = self.patchPipetteDevice.pipetteDevice.getCleaningWell()
@@ -57,9 +57,8 @@ class Sonicator(Device):
         )
         return response == "Yes"
 
-    @future_wrap
-    def doProtocol(self, protocol: str | object, name=None, _future=None):
-        if not self.safeToSonicate(_future):
+    def doProtocol(self, protocol: str | object):
+        if not self.safeToSonicate():
             self.logger.info("Sonication deemed unsafe. Aborting.")
             return
         status = "Running"
@@ -67,7 +66,7 @@ class Sonicator(Device):
             status = protocol
             protocol = self.protocols[protocol]
         self.sigSonicationChanged.emit(status)
-        _future.waitFor(self._doProtocol(protocol), timeout=self._protocolDuration(protocol)*1.3)
+        Future(self._doProtocol, (protocol,)).wait(timeout=self._protocolDuration(protocol)*1.3)
         self._onProtocolFinished()
 
     def _doProtocol(self, protocol: object) -> Future:
@@ -142,7 +141,7 @@ class SonicatorGUI(Qt.QWidget):
         """Run the specified protocol and update UI accordingly"""
         protocol = self.sender().objectName()
         self.updateButtonStates(True, protocol)
-        return self.dev.doProtocol(protocol, _sync="async")
+        return Future(self.dev.doProtocol, (protocol,))
 
     def onProtocolFinished(self):
         """Called when a protocol completes"""
