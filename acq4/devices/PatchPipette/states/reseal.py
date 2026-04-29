@@ -8,7 +8,7 @@ import pyqtgraph as pg
 from acq4.util import ptime
 from acq4.util.debug import log_and_ignore_exception
 from acq4.util.functions import plottable_booleans
-from acq4.util.future import Future, future_wrap
+from acq4.util.future import Future, check_stop
 from ._base import PatchPipetteState, SteadyStateAnalysisBase, exponential_decay_avg
 
 
@@ -328,31 +328,29 @@ class ResealState(PatchPipetteState):
             self.dev.pressureDevice.setPressure(
                 source='regulator', pressure=self.config['nuzzleInitialPressure']
             )
-            self._pressureFuture = self.dev.pressureDevice.rampPressure(
-                target=self.config['nuzzlePressureLimit'], duration=self.config['nuzzleDuration'], _sync="async"
-            )
+            self._pressureFuture = Future(self.dev.pressureDevice.rampPressure, (), {
+                'target': self.config['nuzzlePressureLimit'], 'duration': self.config['nuzzleDuration']
+            })
             yield
             self.waitFor(self._pressureFuture)
 
         self.waitFor(
-            self.dev.pipetteDevice.wiggle(
-                speed=self.config['nuzzleSpeed'],
-                radius=self.config['nuzzleLateralWiggleRadius'],
-                duration=self.config['nuzzleDuration'],
-                repetitions=self.config['nuzzleRepetitions'],
-                extra=pressure_ramp,
-                _sync="async",
-            ),
+            Future(self.dev.pipetteDevice.wiggle, (), {
+                'speed': self.config['nuzzleSpeed'],
+                'radius': self.config['nuzzleLateralWiggleRadius'],
+                'duration': self.config['nuzzleDuration'],
+                'repetitions': self.config['nuzzleRepetitions'],
+                'extra': pressure_ramp,
+            }),
             timeout=None,
         )
 
-    @future_wrap
-    def startRollingResistanceThresholds(self, name=None, _future: Future = None):
+    def startRollingResistanceThresholds(self):
         """Start a rolling average of the resistance to detect stretching and tearing. Load the first 20s of data."""
         self.monitorTestPulse()
         start = ptime.time()
         while ptime.time() - start < self.config['repairTau']:
-            _future.checkStop()
+            check_stop()
             self.processAtLeastOneTestPulse()
 
     def isStretching(self) -> bool:
@@ -429,7 +427,7 @@ class ResealState(PatchPipetteState):
         self._sanityChecks()
         config = self.config
         dev = self.dev
-        baseline_future = self.startRollingResistanceThresholds(_sync="async")
+        baseline_future = Future(self.startRollingResistanceThresholds)
         if config['extractNucleus'] is True:
             self.nuzzle()
         self.checkStop()
@@ -462,14 +460,13 @@ class ResealState(PatchPipetteState):
                 if retraction_future and not retraction_future.isDone():
                     self.setState("handling tear")
                     retraction_future.stop()
-                    self._moveFuture = recovery_future = dev.pipetteDevice.stepwiseAdvance(
-                        depth=self._targetPosition[2],
-                        speed=self.config['maxRetractionSpeed'],
-                        interval=config['retractionStepInterval'],
-                        step=1e-6,
-                        name='reseal tear recovery',
-                        _sync="async",
-                    )
+                    self._moveFuture = recovery_future = Future(dev.pipetteDevice.stepwiseAdvance, (), {
+                        'depth': self._targetPosition[2],
+                        'speed': self.config['maxRetractionSpeed'],
+                        'interval': config['retractionStepInterval'],
+                        'step': 1e-6,
+                        'name': 'reseal tear recovery',
+                    })
             elif self.isTorn():
                 if retraction_future and not retraction_future.isDone():
                     retraction_future.stop()
@@ -488,14 +485,13 @@ class ResealState(PatchPipetteState):
                     recovery_future.stop(wait=True)
                     recovery_future.logErrors("Reseal recovery error")
                 self.setState("retracting")
-                self._moveFuture = retraction_future = dev.pipetteDevice.stepwiseAdvance(
-                    depth=dev.pipetteDevice.approachDepth(),
-                    speed=config['maxRetractionSpeed'],
-                    interval=config['retractionStepInterval'],
-                    step=1e-6,
-                    name='reseal retraction',
-                    _sync="async",
-                )
+                self._moveFuture = retraction_future = Future(dev.pipetteDevice.stepwiseAdvance, (), {
+                    'depth': dev.pipetteDevice.approachDepth(),
+                    'speed': config['maxRetractionSpeed'],
+                    'interval': config['retractionStepInterval'],
+                    'step': 1e-6,
+                    'name': 'reseal retraction',
+                })
 
             if (
                 config['focusFollowsTip']

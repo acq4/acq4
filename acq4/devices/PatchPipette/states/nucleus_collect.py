@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from acq4.util.future import future_wrap
+from acq4.util.future import Future
 from pyqtgraph import units
 from ._base import PatchPipetteState
 
@@ -52,10 +52,10 @@ class NucleusCollectState(PatchPipetteState):
         # self.approachPos = self.collectionPos - pip.globalDirection() * config['approachDistance']
 
         # self.waitFor([pip._moveToGlobal(self.approachPos, speed='fast')])
-        self.waitFor(pip._moveToGlobal(self.collectionPos, speed='fast', name=f"{pip.name()} move to nucleus collection position"), timeout=None)
+        pip._moveToGlobal(self.collectionPos, speed='fast', name=f"{pip.name()} move to nucleus collection position")
 
         if dev.sonicatorDevice is not None:
-            self.sonication = dev.sonicatorDevice.doProtocol(config['sonicationProtocol'], _sync="async")
+            self.sonication = Future(dev.sonicatorDevice.doProtocol, (config['sonicationProtocol'],))
 
         sequence = config['pressureSequence']
         if isinstance(sequence, str):
@@ -93,14 +93,12 @@ class NucleusCollectState(PatchPipetteState):
         # self.waitFor(well._unwindKludgePath(pip))
         # return {"state": 'out'}
 
-    def resetPosition(self, _future=None):
+    def resetPosition(self):
         pip = self.dev.pipetteDevice
         if self.isDone():
-            # self.waitFor([pip._moveToGlobal(self.approachPos, speed='fast')])
-            _future.waitFor(pip._moveToGlobal(self.startPos, speed='fast', name='return to start position'), timeout=None)
+            pip._moveToGlobal(self.startPos, speed='fast', name='return to start position')
 
-    @future_wrap
-    def _cleanup(self, name=None, _future=None):
+    def _cleanup(self):
         try:
             if self.sonication is not None and not self.sonication.isDone():
                 self.sonication.stop("parent task is cleaning up before sonication finished")
@@ -113,7 +111,7 @@ class NucleusCollectState(PatchPipetteState):
             self.dev.logger.exception("Error resetting pressure after collection")
 
         try:
-            self.resetPosition(_future)
+            self.resetPosition()
         except Exception:
             self.dev.logger.exception("Error resetting pipette position after collection")
 

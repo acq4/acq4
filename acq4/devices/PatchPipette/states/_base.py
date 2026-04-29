@@ -12,7 +12,7 @@ import numpy as np
 from acq4 import getManager
 from acq4.util import Qt
 from acq4.util.debug import log_and_ignore_exception
-from acq4.util.future import Future, future_wrap
+from acq4.util.future import Future, sleep
 from neuroanalysis.test_pulse import PatchClampTestPulse
 from pyqtgraph import disconnect
 from pyqtgraph.units import µm
@@ -290,11 +290,10 @@ class PatchPipetteState(Future):
     def adjustPressureForDepth(self):
         """While not that slow, we still want to keep the innermost loop as fast as we can."""
         if self._pressureAdjustment is None:
-            self._pressureAdjustment = self._adjustPressureForDepth(_sync="async")
+            self._pressureAdjustment = Future(self._adjustPressureForDepth)
             self._pressureAdjustment.onFinish(self._finishPressureAdjustment)
 
-    @future_wrap(logLevel='debug')
-    def _adjustPressureForDepth(self, name=None, _future=None):
+    def _adjustPressureForDepth(self):
         depth = self.depthBelowSurface()
         if depth < 0:  # above surface
             pressure = self.config["aboveSurfacePressure"]
@@ -309,15 +308,12 @@ class PatchPipetteState(Future):
     def cleanup(self) -> Future:
         with self._cleanupMutex:
             if self._cleanupFuture is None:
-                if hasattr(self._cleanup, '__wrapped__'):
-                    self._cleanupFuture = self._cleanup(_sync="async")
-                else:
-                    self._cleanupFuture = self._cleanup()
+                self._cleanupFuture = Future(self._cleanup)
             return self._cleanupFuture
 
-    def _cleanup(self) -> Future:
+    def _cleanup(self):
         """Called after job completes, whether it failed or succeeded. Ask `self.wasInterrupted()` to see if the
-        state was stopped early. Return a Future that completes when cleanup is done.
+        state was stopped early.
         """
         disconnect(self.dev.sigTargetChanged, self._onTargetChanged)
         with log_and_ignore_exception(Exception, "Error disabling visual target tracking"):
@@ -329,7 +325,6 @@ class PatchPipetteState(Future):
                 self._cell.enableTracking(False)
                 self._visualTargetTrackingFuture.stop("State cleanup")
             self._visualTargetTrackingFuture = None
-        return Future.immediate()
 
     def checkStop(self):
         # extend checkStop to also see if the pipette was deactivated.
@@ -405,7 +400,7 @@ class PatchPipetteState(Future):
         cell.sigTrackingMultipleFramesFinish.disconnect(self._resumePipetteAfterExtendedTracking)
         cell.sigTrackingMultipleFramesStart.connect(self._pausePipetteForExtendedTracking)
 
-    def _waitForMoveWhileTargetChanges(self, position_fn, speed, continuous, future, interval=None, step=None, move_restart_threshold=3.0):
+    def _waitForMoveWhileTargetChanges(self, position_fn, speed, continuous, interval=None, step=None, move_restart_threshold=3.0):
         """Wait for a move to complete while also monitoring for changes in the target position.
 
         When the target position updates, the move will be updated as well to track the new target.
@@ -421,7 +416,7 @@ class PatchPipetteState(Future):
                     if move_fut is not None:
                         move_fut.stop("Paused", wait=True)
                         move_fut = None
-                    future.sleep(0.1)
+                    sleep(0.1)
                     continue
                 current_target_pos = position_fn()
                 if move_fut is None or restart_move or last_destination is None:
@@ -429,13 +424,11 @@ class PatchPipetteState(Future):
                     if continuous:
                         move_fut = self.dev.pipetteDevice._moveToGlobal(current_target_pos, speed=speed, name="Update move towards target")
                     else:
-                        move_fut = self.dev.pipetteDevice.stepwiseAdvance(
-                            target=current_target_pos,
-                            speed=speed,
-                            interval=interval,
-                            step=step,
+                        move_fut = Future(
+                            self.dev.pipetteDevice.stepwiseAdvance,
+                            (),
+                            {"target": current_target_pos, "speed": speed, "interval": interval, "step": step},
                             name="Update stepwise move towards target",
-                            _sync="async",
                         )
                     self.setState(f"Moving towards target at {current_target_pos}")
                     last_destination = current_target_pos
@@ -459,7 +452,7 @@ class PatchPipetteState(Future):
                             f"{'>' if restart_move else '<'} {move_restart_threshold}°; "
                             f"{'update path' if restart_move else 'keep current path'}")
                 if not restart_move:
-                    future.sleep(0.1)
+                    sleep(0.1)
         except Exception:
             if move_fut is not None and not move_fut.isDone():
                 move_fut.stop("Error while moving", wait=True)

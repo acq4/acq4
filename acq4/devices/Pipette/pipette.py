@@ -657,13 +657,12 @@ class Pipette(Device, OptomechDevice):
         pos = self.positionAtDepth(depth)
         return self._moveToGlobal(pos, speed, name=name)
 
-    def retractFromSurface(self, speed='slow') -> Future:
+    def retractFromSurface(self, speed='slow'):
         """Retract the pipette along its axis until it is above the slice surface."""
         depth = self.globalPosition()[2]
         appDepth = self.approachDepth()
         if depth < appDepth:
-            return self.advance(appDepth, speed=speed, name='retract from surface')
-        return Future.immediate()
+            self.advance(appDepth, speed=speed, name='retract from surface')
 
     def stepwiseAdvance(
         self,

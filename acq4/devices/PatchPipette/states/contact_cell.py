@@ -4,6 +4,7 @@ import numpy as np
 from pyqtgraph.units import µm, MΩ
 
 from acq4.util.debug import log_and_ignore_exception
+from acq4.util.future import Future
 from ._base import PatchPipetteState
 from .cell_detect import CellDetectAnalysis
 from acq4 import getManager
@@ -205,11 +206,10 @@ class ContactCellState(PatchPipetteState):
         self.setState(f"Check pipette tip..")
         try:
             tip_fut = self.waitFor(
-                pip.iterativelyFindTip(
-                    max_allowed_offset=self.config["pipetteRecalibrationMaxChange"],
-                    go_to_tip_first=True,
-                    _sync="async",
-                )
+                Future(pip.iterativelyFindTip, (), {
+                    'max_allowed_offset': self.config["pipetteRecalibrationMaxChange"],
+                    'go_to_tip_first': True,
+                })
             )
         except Exception as e:
             self.setState(f"failed pipette position update: {e}")

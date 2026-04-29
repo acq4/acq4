@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from acq4.util.future import future_wrap
+from acq4.util.future import Future
 from pyqtgraph import units
 from ._base import PatchPipetteState
 
@@ -95,12 +95,12 @@ class CleanState(PatchPipetteState):
             self.waitFor(scope.setGlobalPosition(wp, 20e-3, name=name))
 
         cw = pip.getCleaningWell()
-        self.waitFor(pip.retractFromSurface('fast'))
-        self.waitFor(pip._moveToGlobal([0, 0, 10e-3], 'fast', name='safe position before cleaning well'))
-        self.waitFor(cw.moveToInteract(pip, _sync="async"), timeout=60)
+        pip.retractFromSurface('fast')
+        pip._moveToGlobal([0, 0, 10e-3], 'fast', name='safe position before cleaning well')
+        self.waitFor(Future(cw.moveToInteract, (pip,)), timeout=60)
 
         if dev.sonicatorDevice is not None:
-            self.sonication = dev.sonicatorDevice.doProtocol(config['sonicationProtocol'], _sync="async")
+            self.sonication = Future(dev.sonicatorDevice.doProtocol, (config['sonicationProtocol'],))
 
         for pressure, delay in sequence:
             dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
@@ -109,7 +109,7 @@ class CleanState(PatchPipetteState):
         if self.sonication is not None and not self.sonication.isDone():
             self.waitFor(self.sonication)
 
-        self.waitFor(cw.moveToApproach(pip, _sync="async"))
+        self.waitFor(Future(cw.moveToApproach, (pip,)))
 
         dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
 
@@ -153,8 +153,7 @@ class CleanState(PatchPipetteState):
             self.moveFuture = None
             parent_future.waitFor(fut, timeout=None)
 
-    @future_wrap
-    def _cleanup(self, name=None, _future=None):
+    def _cleanup(self):
         dev = self.dev
         try:
             if self.sonication is not None and not self.sonication.isDone():
@@ -166,10 +165,5 @@ class CleanState(PatchPipetteState):
             dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
         except Exception:
             dev.logger.exception("Error resetting pressure after clean")
-
-        # try:
-        #     _future.waitFor(dev.pipetteDevice.moveTo('home', 'fast'))
-        # except Exception:
-        #     dev.logger.exception("Error resetting pipette position after clean")
 
         super()._cleanup()

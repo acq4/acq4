@@ -7,6 +7,7 @@ from typing import Any
 import numpy as np
 
 from acq4.util import ptime, Qt
+from acq4.util.future import Future
 import pyqtgraph as pg
 from acq4.util.debug import log_and_ignore_exception
 from acq4.util.functions import plottable_booleans
@@ -409,17 +410,17 @@ class SealState(PatchPipetteState):
             self.processAtLeastOneTestPulse()
             start = ptime.time()
             self.waitForFutureOrSuccess(
-                self.dev.pressureDevice.rampPressure(
-                    target=high, duration=self.config['pressureScanDuration'], _sync="async"
-                )
+                Future(self.dev.pressureDevice.rampPressure, (), {
+                    'target': high, 'duration': self.config['pressureScanDuration']
+                })
             )
             if self._analysis.success():
                 return  # already sealed during pressure scan
             turnaround = ptime.time()
             self.waitForFutureOrSuccess(
-                self.dev.pressureDevice.rampPressure(
-                    target=low, duration=self.config['pressureScanDuration'], _sync="async"
-                )
+                Future(self.dev.pressureDevice.rampPressure, (), {
+                    'target': low, 'duration': self.config['pressureScanDuration']
+                })
             )
             end = ptime.time()
             self.processAtLeastOneTestPulse()

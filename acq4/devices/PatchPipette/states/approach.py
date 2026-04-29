@@ -9,7 +9,7 @@ import pyqtgraph as pg
 from acq4 import getManager
 from acq4.util import ptime
 from acq4.util.functions import plottable_booleans
-from acq4.util.future import future_wrap
+from acq4.util.future import Future
 from acq4.util.imaging.sequencer import run_image_sequence
 from ._base import PatchPipetteState, SteadyStateAnalysisBase, exponential_decay_avg
 
@@ -286,13 +286,11 @@ class ApproachState(PatchPipetteState):
         end = start + config["cellfieHeight"]
         save_in = self.dev.dm.getCurrentDir().getDir("cell detect initial z stack", create=True)
         self.waitFor(
-            run_image_sequence(
-                self.dev.imagingDevice(),
-                z_stack=(start, end, config["cellfieStep"]),
-                storage_dir=save_in,
-                name="cellfie",
-                _sync="async",
-            )
+            Future(run_image_sequence, (self.dev.imagingDevice(),), {
+                'z_stack': (start, end, config["cellfieStep"]),
+                'storage_dir': save_in,
+                'name': "cellfie",
+            })
         )
 
     def maybeRecalibratePipette(self):
@@ -313,29 +311,26 @@ class ApproachState(PatchPipetteState):
         pip = self.dev.pipetteDevice
         try:
             tip_fut = self.waitFor(
-                pip.iterativelyFindTip(
-                    max_allowed_offset=self.config["pipetteRecalibrationMaxChange"],
-                    go_to_tip_first=True,
-                    _sync="async",
-                )
+                Future(pip.iterativelyFindTip, (), {
+                    'max_allowed_offset': self.config["pipetteRecalibrationMaxChange"],
+                    'go_to_tip_first': True,
+                })
             )
         except Exception as e:
             self.setState(f"failed pipette position update: {e}")
 
-    @future_wrap
-    def _move(self, name=None, _future=None):
+    def _move(self):
         config = self.config
         if self.aboveSurface():
             self.setState("move to surface")
             self._waitForMoveWhileTargetChanges(
-                self.surfaceIntersectionPosition, config['aboveSurfaceSpeed'], True, _future
+                self.surfaceIntersectionPosition, config['aboveSurfaceSpeed'], True
             )
         self.setState(f'move to endpoint: {self.endpoint()}')
         self._waitForMoveWhileTargetChanges(
             position_fn=self.endpoint,
             speed=config['belowSurfaceSpeed'],
             continuous=config["advanceContinuous"],
-            future=_future,
             interval=config['advanceStepInterval'],
             step=config['advanceStepDistance'],
         )

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from acq4.util.future import Future
 from ._base import PatchPipetteState
 
 
@@ -25,7 +26,7 @@ class MoveNucleusToHomeState(PatchPipetteState):
     }
 
     def run(self):
-        self.waitFor(self.dev.pressureDevice.rampPressure(maximum=self.config['pressureLimit'], _sync="async"), timeout=None)
+        self.waitFor(Future(self.dev.pressureDevice.rampPressure, (), {'maximum': self.config['pressureLimit']}), timeout=None)
         self.waitFor(self.dev.pipetteDevice.moveTo(self.config['positionName'], 'fast'), timeout=None)
         return {
             "state": "out",
