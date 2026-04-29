@@ -17,9 +17,14 @@ from acq4.util import Qt, ptime
 from pyqtgraph import FeedbackButton
 
 # ContextVar tracking the innermost running Future on the current thread.
-current_future: contextvars.ContextVar["Future | None"] = contextvars.ContextVar(
+_current_future_var: contextvars.ContextVar["Future | None"] = contextvars.ContextVar(
     "current_future", default=None
 )
+
+
+def current_future() -> "Future | None":
+    """Return the Future currently executing on this thread, or None."""
+    return _current_future_var.get()
 
 
 class TaskStack:
@@ -81,7 +86,7 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
     class Stopped(Exception):
         """Raised by futures that were politely stopped."""
 
-    class Timeout(Exception):
+    class Timeout(TimeoutError):
         """Raised by wait() if the timeout period elapses."""
 
     @classmethod
@@ -103,7 +108,8 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
             frame = frame.f_back  # walk up the stack
         return f"(unnamed from {frame.f_code.co_filename}:{frame.f_lineno})"
 
-    def __init__(self, onError=None, name=None, logLevel='debug'):
+    def __init__(self, fn=None, args=(), kwargs=None, *, onError=None, name=None, logLevel='debug',
+                 detach=False, on_finish=None):
         Qt.QObject.__init__(self)
 
         self.startTime = ptime.time()
@@ -130,6 +136,73 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         self._creationThread = threading.current_thread()
 
         self.log(f"Future [{self._name}] created")
+
+        # v2-style: fn provided → auto-start, register with parent, wire finish callback
+        if fn is not None:
+            if name is None:
+                self._name = getattr(fn, '__qualname__', repr(fn))
+            if on_finish is not None:
+                self.add_finish_callback(on_finish)
+            parent = current_future()
+            if parent is not None and not detach:
+                parent._stopsToPropagate.append(self)
+            self._executeInThread_v2(fn, tuple(args), dict(kwargs or {}))
+
+    # -- v2 API surface -------------------------------------------------------
+
+    @property
+    def is_done(self) -> bool:
+        return self._isDone
+
+    @property
+    def is_stopped(self) -> bool:
+        return self._stopRequested
+
+    @property
+    def _done(self) -> threading.Event:
+        """v2 compat: threading.Event that is set when the future finishes."""
+        return self.finishedEvent
+
+    def add_finish_callback(self, fn) -> None:
+        """Call fn(result, exception) when done. Calls immediately if already done."""
+        def _wrap(future):
+            exc = future.exceptionRaised()
+            result = future._returnVal
+            fn(result, exc)
+        self.onFinish(_wrap)
+
+    def detach(self) -> None:
+        """Detach from the parent future — parent stop will no longer cascade here."""
+        parent = current_future()
+        if parent is not None and self in parent._stopsToPropagate:
+            parent._stopsToPropagate.remove(self)
+
+    def _executeInThread_v2(self, func, args, kwargs):
+        """Start func in a thread without injecting _future into kwargs."""
+        ctx = contextvars.copy_context()
+        self._executingThread = threading.Thread(
+            target=ctx.run,
+            args=(self._executeAndSetReturn_v2, func, args, kwargs),
+            daemon=True,
+            name=f"execute thread for {repr(self)}",
+        )
+        self._executingThread.start()
+
+    def _executeAndSetReturn_v2(self, func, args, kwargs):
+        cf_token = _current_future_var.set(self)
+        with task_stack.push(self._name):
+            try:
+                self.setResult(rval=func(*args, **kwargs))
+            except Stopped:
+                self._stopRequested = True
+                self.setResult(error="stopped", interrupted=True)
+            except Exception:
+                self.setResult(excInfo=sys.exc_info())
+            finally:
+                _current_future_var.reset(cf_token)
+                self._do_task_completion_jobs()
+
+    # -------------------------------------------------------------------------
 
     def log(self, message):
         if self.logLevel is not None:
@@ -164,7 +237,7 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         self._executingThread.start()
 
     def executeAndSetReturn(self, func, args, kwds):
-        cf_token = current_future.set(self)
+        cf_token = _current_future_var.set(self)
         with task_stack.push(self._name):
             try:
                 kwds["_future"] = self
@@ -172,7 +245,7 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
             except Exception:
                 self.setResult(excInfo=sys.exc_info())
             finally:
-                current_future.reset(cf_token)
+                _current_future_var.reset(cf_token)
                 self._do_task_completion_jobs()
 
     def propagateStopsInto(self, future: Future):
@@ -388,6 +461,8 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
                 raise RuntimeError(msg) from self.enhanceException(original_exc)
             raise RuntimeError(msg)
 
+        return self._returnVal
+
     def enhanceException(self, exc):
         """Wrap an exception with Future creation stack and execution context in its str()."""
         creation_frames = "".join(traceback.format_list(self._creationStack))
@@ -496,6 +571,133 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
                 formattedMsg = f"{message} [additional error formatting error message: {exc2}]"
             raise RuntimeError(formattedMsg) from exc
 
+
+# ---------------------------------------------------------------------------
+# v2 module-level primitives
+# ---------------------------------------------------------------------------
+
+# Module-level Stopped alias — matches Future.Stopped for catch-compatibility.
+Stopped = Future.Stopped
+
+
+def sleep(seconds: float, *, interval: float = 0.05) -> None:
+    """Drop-in replacement for time.sleep. Raises Stopped if the current future is stopped.
+
+    Safe to call outside any future — behaves like time.sleep.
+    """
+    fut = current_future()
+    if fut is None:
+        time.sleep(seconds)
+        return
+    deadline = time.monotonic() + seconds
+    while True:
+        if fut._stopRequested:
+            raise Stopped()
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return
+        time.sleep(min(interval, remaining))
+
+
+def check_stop() -> None:
+    """Raise Stopped if the current future has been stopped. Equivalent to sleep(0).
+
+    Use in tight polling loops where a sleep would be inappropriate.
+    """
+    fut = current_future()
+    if fut is not None and fut._stopRequested:
+        raise Stopped()
+
+
+import queue as _queue
+
+
+class Queue:
+    """Drop-in replacement for queue.Queue with stop-aware get().
+
+    get() raises Stopped if the current future is stopped while waiting.
+    """
+
+    def __init__(self, maxsize: int = 0) -> None:
+        self._q = _queue.Queue(maxsize)
+
+    def put(self, item, block=True, timeout=None):
+        self._q.put(item, block=block, timeout=timeout)
+
+    def put_nowait(self, item):
+        self._q.put_nowait(item)
+
+    def get(self, block=True, timeout=None):
+        fut = current_future()
+        if fut is None or not block:
+            return self._q.get(block=block, timeout=timeout)
+        deadline = None if timeout is None else time.monotonic() + timeout
+        poll = 0.05
+        while True:
+            if fut._stopRequested:
+                raise Stopped()
+            remaining = None if deadline is None else max(0.0, deadline - time.monotonic())
+            if remaining == 0.0:
+                raise _queue.Empty()
+            wait_for = poll if remaining is None else min(poll, remaining)
+            try:
+                return self._q.get(timeout=wait_for)
+            except _queue.Empty:
+                if remaining is not None and time.monotonic() >= deadline:
+                    raise
+
+    def get_nowait(self):
+        return self._q.get_nowait()
+
+    def empty(self):
+        return self._q.empty()
+
+    def qsize(self):
+        return self._q.qsize()
+
+    def task_done(self):
+        self._q.task_done()
+
+    def join(self):
+        self._q.join()
+
+
+class Event:
+    """Drop-in replacement for threading.Event with stop-aware wait().
+
+    wait() raises Stopped if the current future is stopped while waiting.
+    """
+
+    def __init__(self) -> None:
+        self._event = threading.Event()
+
+    def set(self):
+        self._event.set()
+
+    def clear(self):
+        self._event.clear()
+
+    def is_set(self):
+        return self._event.is_set()
+
+    def wait(self, timeout=None):
+        fut = current_future()
+        if fut is None:
+            return self._event.wait(timeout=timeout)
+        deadline = None if timeout is None else time.monotonic() + timeout
+        poll = 0.05
+        while True:
+            if fut._stopRequested:
+                raise Stopped()
+            remaining = None if deadline is None else max(0.0, deadline - time.monotonic())
+            if remaining == 0.0:
+                return self._event.is_set()
+            wait_for = poll if remaining is None else min(poll, remaining)
+            if self._event.wait(wait_for):
+                return True
+
+
+# ---------------------------------------------------------------------------
 
 WRAPPED_FN_PARAMS = ParamSpec("WRAPPED_FN_PARAMS")
 WRAPPED_FN_RETVAL_TYPE = TypeVar("WRAPPED_FN_RETVAL_TYPE")
