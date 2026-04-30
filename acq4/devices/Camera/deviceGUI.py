@@ -57,7 +57,17 @@ class CameraDeviceGui(Qt.QWidget):
 
         self.paramSet.sigTreeStateChanged.connect(self.stateChanged)
         self.dev.sigParamsChanged.connect(self.paramsChanged)
-            
+
+        self.fieldCurvatureBtn = Qt.QPushButton("Calibrate Field Curvature")
+        self.fieldCurvatureBtn.clicked.connect(self._openFieldCurvatureCalibration)
+        self.layout.addWidget(self.fieldCurvatureBtn)
+        self._fieldCurvatureWindow = None
+
+    def _openFieldCurvatureCalibration(self):
+        from .calibration import FieldCurvatureCalibrationWindow
+        self._fieldCurvatureWindow = FieldCurvatureCalibrationWindow(self.dev)
+        self._fieldCurvatureWindow.show()
+
     def stateChanged(self, param, changes):
         # called when state is changed by user
         vals = collections.OrderedDict()
