@@ -146,9 +146,9 @@ class Stage(Device, OptomechDevice):
         """Return a structure describing the capabilities of this device::
 
             {
-                'getPos': (x, y, z, d),      # bool: whether each axis can be read from the device
-                'setPos': (x, y, z, d),      # bool: whether each axis can be set on the device
-                'limits': (x, y, z, d),      # bool: whether limits can be set for each axis
+                'getPos': (axes...),      # bool: whether each axis can be read from the device
+                'setPos': (axes...),      # bool: whether each axis can be set on the device
+                'limits': (axes...),      # bool: whether limits can be set for each axis
             }
 
         The axes described in the above data structure correspond to the mechanical
