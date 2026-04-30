@@ -460,11 +460,17 @@ class Stage(Device, OptomechDevice):
         """Must be reimplemented by subclasses and return a MoveFuture instance."""
         raise NotImplementedError()
 
-    def mapGlobalToDevicePosition(self, globalPos, linear=None, previousPos=None):
-        """Given a desired global position, return the device position required."""
-        if self.nAxes > 3 and (previousPos is None and linear):
+    def mapGlobalToDevicePosition(self, globalPos, previousPos=None):
+        """Given a desired global position, return the device position required.
+        Arguments:
+            globalPos: 3-element array-like specifying the desired position in global coordinates
+            previousPos: Optional n-element array-like specifying the previous position of the device in device
+                coordinates. This is required for inverse kinematics calculations for 4-axis stages.
+        """
+
+        if self.nAxes > 3 and previousPos is None:
             raise ValueError(
-                "Inverse mapping on 4-axis stages requires a previousPos or linear=False."
+                "Inverse mapping on 4-axis stages requires a previousPos"
             )
         if self.nAxes <= 3:
             # we can use a simple inverse transform
@@ -484,7 +490,7 @@ class Stage(Device, OptomechDevice):
     def moveToGlobal(self, pos, speed, progress=False, linear=False, name=None):
         """Move the stage to a position expressed in the global coordinate frame."""
         return self.move(
-            position=self.mapGlobalToDevicePosition(pos, linear, self.getPosition()),
+            position=self.mapGlobalToDevicePosition(pos, self.getPosition()),
             speed=speed,
             progress=progress,
             linear=linear,
@@ -583,7 +589,7 @@ class Stage(Device, OptomechDevice):
 
     def checkGlobalLimits(self, globalPos, linear):
         """Raise an exception if *globalPos* (in global coordinates) is outside the configured limits"""
-        stagePos = self.mapGlobalToDevicePosition(globalPos, linear, self.getPosition())
+        stagePos = self.mapGlobalToDevicePosition(globalPos, self.getPosition())
         self.checkLimits(stagePos)
 
     def checkLimits(self, stagePos):
@@ -610,15 +616,15 @@ class Stage(Device, OptomechDevice):
             try:
                 bound = pos.copy()
                 bound[axis] -= tolerance
-                self.checkLimits(self.mapGlobalToDevicePosition(bound, linear=False))
+                self.checkLimits(self.mapGlobalToDevicePosition(bound))
                 bound[axis] += 2 * tolerance
-                self.checkLimits(self.mapGlobalToDevicePosition(bound, linear=False))
+                self.checkLimits(self.mapGlobalToDevicePosition(bound))
             except ValueError:
                 bad_axes.append(axis)
         if bad_axes:
             axis_names = {0: 'x', 1: 'y', 2: 'z'}
             axes = ', '.join(axis_names[axis] for axis in bad_axes)
-            stage_pos = self.mapGlobalToDevicePosition(pos, linear=False)
+            stage_pos = self.mapGlobalToDevicePosition(pos)
             possible_problem = (
                 "pipette pull consistency" if self.isManipulator else "hardware reliability"
             )
@@ -757,9 +763,7 @@ class MovePathFuture(MoveFuture):
             if step.get("globalPos") is not None:
                 global_pos = step.pop("globalPos")
                 try:
-                    step["position"] = dev.mapGlobalToDevicePosition(
-                        global_pos, step.get("linear", False), prev
-                    )
+                    step["position"] = dev.mapGlobalToDevicePosition(global_pos, prev)
                 except Exception as e:
                     raise MovePathException(
                         "Cannot map global position to device coordinates", global_path, global_pos
