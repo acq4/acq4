@@ -413,66 +413,6 @@ class ManipulatorAxesCalibrationWindow(Qt.QWidget):
                 target.show()
 
 
-def find_colinear_points(points, p1, p2, tolerance):
-    """Find all points that are within tolerance of the line defined by p1 and p2."""
-    # Line direction vector
-    direction = p2 - p1
-    direction = direction / np.linalg.norm(direction)
-
-    colinear = []
-    for i, point in enumerate(points):
-        # Vector from p1 to current point
-        v = point - p1
-
-        # Projection onto line direction
-        proj_length = np.dot(v, direction)
-        projection = proj_length * direction
-
-        # Perpendicular distance to line
-        perpendicular = v - projection
-        distance = np.linalg.norm(perpendicular)
-
-        if distance <= tolerance:
-            colinear.append(i)
-
-    return colinear
-
-
-def group_points_by_colinearity(points, min_points=4, tolerance=1e-6):
-    """
-    Find ALL groups of colinear points, allowing overlaps.
-    Returns groups sorted by size (largest first).
-    """
-    points = np.array(points)
-    n = len(points)
-
-    if n < min_points:
-        return []
-
-    groups = []
-    seen_groups = set()  # To avoid duplicates
-
-    # Try all pairs of points
-    for i, j in combinations(range(n), 2):
-        p1, p2 = points[i], points[j]
-
-        if np.allclose(p1, p2, atol=tolerance):
-            continue
-
-        colinear_indices = find_colinear_points(points, p1, p2, tolerance)
-
-        if len(colinear_indices) >= min_points:
-            # Convert to frozenset for hashable comparison
-            group_set = frozenset(colinear_indices)
-            if group_set not in seen_groups:
-                seen_groups.add(group_set)
-                groups.append(sorted(colinear_indices))
-
-    # Sort by group size, largest first
-    groups.sort(key=len, reverse=True)
-    return groups
-
-
 class AutomatedStageCalibration(object):
     sigFinished = Qt.Signal()
 
