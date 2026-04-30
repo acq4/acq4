@@ -9,7 +9,7 @@ from acq4.Interfaces import InterfaceMixin
 from acq4.modules.Visualize3D import Visualize3D
 from acq4.util import Qt
 from acq4.util.Mutex import Mutex
-from acq4.util.geometry import Plane, Geometry, load_transform_from_anything
+from acq4.util.geometry import Plane, Geometry, load_transform
 from coorx import SRT3DTransform, Transform
 from pyqtgraph import opengl as gl
 from pyqtgraph.parametertree import Parameter
@@ -393,7 +393,7 @@ class OptomechDevice(InterfaceMixin):
         return self.deviceTransform(subdev).inverse
 
     def setDeviceTransform(self, tr):
-        tr = load_transform_from_anything(tr)
+        tr = load_transform(tr)
         with self.__lock:
             self.__transform = tr
             self.invalidateCachedTransforms()

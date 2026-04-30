@@ -22,7 +22,7 @@ from ...util.future import Future, FutureButton
 from ...util.geometry import (
     Plane,
     limits_to_boundaries,
-    load_transform_from_anything,
+    load_transform,
     minimum_displacement_inverse_kinematics,
 )
 
@@ -102,7 +102,7 @@ class Stage(Device, OptomechDevice):
         calibration = self.readConfigFile('calibration')
         axis_tr = calibration.get('transform', None)
         if axis_tr is not None:
-            self._axisTransform = load_transform_from_anything(axis_tr)
+            self._axisTransform = load_transform(axis_tr)
 
         # set up joystick callbacks if requested
         jsdevs = set()

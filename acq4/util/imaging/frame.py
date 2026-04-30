@@ -6,7 +6,7 @@ from MetaArray import MetaArray
 import pyqtgraph as pg
 from acq4.util.DataManager import FileHandle, DirHandle
 from acq4.util.imaging.background import remove_background_from_image
-from acq4.util.geometry import load_transform_from_anything
+from acq4.util.geometry import load_transform
 from pyqtgraph import ImageItem
 
 
@@ -34,7 +34,7 @@ class Frame:
                 frames = []
                 for row in data:
                     info = fh.info().deepcopy()
-                    info["transform"] = load_transform_from_anything(info["transform"])
+                    info["transform"] = load_transform(info["transform"])
                     if data.axisName(0) == "Time":
                         info["time"] = row.axisValues(2)
                     elif data.axisName(0) == "Depth":
@@ -51,7 +51,7 @@ class Frame:
             else:
                 data = data.asarray()
         info = fh.info().deepcopy()
-        info["transform"] = load_transform_from_anything(info["transform"])
+        info["transform"] = load_transform(info["transform"])
         frame = cls(data, info)
         frame.loadLinkedFiles(fh.parent())
         return frame
