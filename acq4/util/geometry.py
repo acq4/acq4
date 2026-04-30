@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import itertools
-from functools import cached_property
+from functools import cached_property, lru_cache
 from threading import RLock
 from typing import List, Callable, Optional, Dict, Any, Generator, Tuple
 
@@ -13,7 +13,15 @@ from trimesh.voxel import VoxelGrid
 import pyqtgraph as pg
 import pyqtgraph.opengl as gl
 from acq4.util.approx import ApproxDict, ApproxSet
-from coorx import SRT3DTransform, Transform, NullTransform, TTransform, Point, AffineTransform
+from coorx import (
+    SRT3DTransform,
+    Transform,
+    NullTransform,
+    TTransform,
+    Point,
+    AffineTransform,
+    create_transform,
+)
 from pyqtgraph import debug
 from pyqtgraph.debug import Profiler
 from pyqtgraph.units import µm
@@ -1544,10 +1552,7 @@ class Geometry:
 
         self.color = config.pop("color", None)
 
-        xform = config.pop("transform", {}).copy()
-        if "pos" in xform:
-            xform["offset"] = xform.pop("pos")
-        self._transform = SRT3DTransform(**self._default_transform_args(), **xform)
+        self._transform = load_transform_from_anything(config.pop("transform", {}))
 
         self._children = []
         for name, child_config in config.pop("children", {}).items():
@@ -1868,25 +1873,39 @@ class Plane:
             (np.array(start), np.array(end)) for start, ends in segments.items() for end in ends
         ]
 
+    @classmethod
+    def from_3_points(
+        cls, a: np.ndarray, b: np.ndarray, c: np.ndarray, name=None, tolerance=1e-9
+    ) -> "Plane":
+        """Create a plane from three points. The normal will be determined by the right-hand rule on the points."""
+        normal = np.cross(b - a, c - a)
+        if np.linalg.norm(normal) < tolerance:
+            raise ValueError("We cannot find a single plane from colinear points")
+        return cls(normal, a, name)
+
     def __init__(self, normal, point, name=None):
         self.normal = normal / np.linalg.norm(normal)
         self.point = point
         self.name = name
 
-    def line_intersects(self, start: np.ndarray, end: np.ndarray) -> bool:
-        if self.contains_point(start) or self.contains_point(end):
-            return False
-        diff = end - start
-        denom = np.dot(self.normal, diff)
-        if denom == 0:
-            return False
-        t = np.dot(self.normal, self.point - start) / denom
-        return 0 <= t <= 1
+    def intersecting_point(self, line: Line, tolerance=1e-9) -> np.ndarray | None:
+        denom = np.dot(self.normal, line.direction)
+        if abs(denom) < tolerance:
+            # parallel or even coplanar
+            return None
+        t = np.dot(self.normal, self.point - line.point) / denom
+        return line.point + t * line.direction
 
     def contains_point(self, pt: np.ndarray, tolerance: float = 1e-9) -> bool:
         # If the dot product is close to zero, the point is on the plane
         dot_product = np.dot(pt - self.point, self.normal)
         return abs(dot_product) < tolerance
+
+    def coplanar_with(self, other: "Plane", tolerance=1e-9) -> bool:
+        """Return whether this plane is coplanar with another, within the given tolerance."""
+        if not np.allclose(np.cross(self.normal, other.normal), 0, atol=tolerance):
+            return False
+        return abs(self.distance_to_point(other.point)) < tolerance
 
     def distance_to_point(self, pt: np.ndarray) -> bool:
         """Return the distance from the plane to a point, where positive
@@ -1933,3 +1952,680 @@ class Plane:
 
     def __repr__(self):
         return str(self)
+
+
+def load_transform_from_anything(thing, **kwargs) -> Transform:
+    if isinstance(thing, pg.SRTTransform):
+        return SRT3DTransform.from_pyqtgraph(thing, **kwargs)
+    elif isinstance(thing, Transform):
+        return thing
+    elif isinstance(thing, list):
+        return AffineTransform.from_matrix(np.array(thing), **kwargs)
+    elif "type" in thing:
+        return create_transform(**thing, **kwargs)
+    else:  # config-style dict
+        thing = thing.copy()
+        thing.setdefault("offset", thing.pop("pos", None))
+        if thing["offset"] is not None and len(thing["offset"]) == 2:
+            thing["offset"] = [thing["offset"][0], thing["offset"][1], 0]
+        if len(thing.get("scale", [])) == 2:
+            thing["scale"] = [thing["scale"][0], thing["scale"][1], 1]
+        return SRT3DTransform(**thing, **kwargs)
+
+
+def minimum_displacement_inverse_kinematics(
+    point,
+    device_to_global: Transform,
+    bounds: list[tuple[float, float]],
+    starting_position: list[float],
+) -> np.ndarray:
+    """Find the device position that maps to `point` with minimum displacement from `starting_position`.
+
+    For devices with more axes than global dimensions (e.g., a 4-axis manipulator in 3D space),
+    the set of valid device positions forms an affine subspace (the null space of the transform).
+    This function finds the member of that family closest to `starting_position` in Euclidean
+    device-coordinate distance, clipped to the nearest feasible point within bounds.
+
+    Unlike `greedy_axis_inverse_kinematics`, this approach never amplifies small global movements
+    into large device movements: the solution is optimal by construction.
+
+    Parameters
+    ----------
+    point : array-like
+        Target point in global coordinates.
+    device_to_global : Transform
+        Mapping from device coordinates to global. May have more input dimensions than output.
+    bounds : list[tuple[float, float]]
+        A list of (min, max) pairs for each device axis.
+    starting_position : list[float]
+        Current device position; the returned position minimizes distance to this.
+
+    Returns
+    -------
+    position : np.ndarray
+        Device position minimizing |pos - starting_position|² subject to the transform and bounds.
+
+    Raises
+    ------
+    ValueError
+        If the transform is degenerate, the target is unreachable, or no valid position within
+        bounds exists.
+    NotImplementedError
+        If the null-space dimension is greater than 1 (i.e., more than 4 axes in 3D space).
+    """
+    n = len(bounds)
+    point = np.asarray(point, dtype=float)
+    starting_position = np.asarray(starting_position, dtype=float)
+
+    T = device_to_global.full_matrix[:3, :n]
+
+    # Unconstrained minimum-displacement solution: project residual displacement through
+    # the right pseudoinverse T† = Tᵀ (T Tᵀ)⁻¹, which distributes the required global
+    # motion across all device axes in the least-squares sense.
+    global_displacement = point - device_to_global.map(starting_position)
+    try:
+        TTT_inv = np.linalg.inv(T @ T.T)
+    except np.linalg.LinAlgError as e:
+        raise ValueError("Transform is degenerate; cannot compute inverse kinematics") from e
+    pos_unconstrained = starting_position + T.T @ TTT_inv @ global_displacement
+
+    null_dim = n - 3  # assuming T has rank 3
+
+    if null_dim <= 0:
+        # Fully determined: no free parameter, just verify bounds
+        pos = np.clip(pos_unconstrained, [b[0] for b in bounds], [b[1] for b in bounds])
+        if not np.allclose(device_to_global.map(pos), point):
+            raise ValueError("No valid position within bounds")
+        return pos
+
+    if null_dim > 1:
+        raise NotImplementedError(
+            f"minimum_displacement_inverse_kinematics does not yet support null spaces "
+            f"of dimension > 1 (got {null_dim} for a {n}-axis device)"
+        )
+
+    # 1D null space: parameterize as pos_unconstrained + t * null_vec.
+    # Find null_vec via SVD: right singular vectors corresponding to near-zero singular values.
+    _, _, Vt = np.linalg.svd(T)
+    null_vec = Vt[3]  # last row of Vt for a 3×4 matrix with rank 3
+
+    # Find the feasible interval [t_lo, t_hi] for t.
+    t_lo, t_hi = -np.inf, np.inf
+    for i, (lo, hi) in enumerate(bounds):
+        nv = null_vec[i]
+        pu = pos_unconstrained[i]
+        if abs(nv) < 1e-12:
+            if pu < lo - 1e-9 or pu > hi + 1e-9:
+                raise ValueError(
+                    f"No valid position within bounds (axis {i}: unconstrained value "
+                    f"{pu:.4g} is outside [{lo}, {hi}] and null space cannot correct it)"
+                )
+        elif nv > 0:
+            t_lo = max(t_lo, (lo - pu) / nv)
+            t_hi = min(t_hi, (hi - pu) / nv)
+        else:
+            t_lo = max(t_lo, (hi - pu) / nv)
+            t_hi = min(t_hi, (lo - pu) / nv)
+
+    if t_lo > t_hi + 1e-9:
+        raise ValueError("No valid position within bounds")
+
+    # t=0 is the unconstrained optimum; clip to feasible interval.
+    t_opt = float(np.clip(0.0, t_lo, t_hi))
+    return pos_unconstrained + t_opt * null_vec
+
+
+def primary_axis_inverse_kinematics(
+    point,
+    device_to_global: Transform,
+    bounds: list[tuple[float, float]],
+    starting_position: list[float],
+    primary_axis: int | None = None,
+) -> np.ndarray:
+    """Find the device position at `point` that maximizes movement in `primary_axis`.
+
+    Uses the same null-space framework as `minimum_displacement_inverse_kinematics` for
+    correctness and bound-safety, but selects the null-space parameter to maximize primary-axis
+    contribution rather than minimizing total displacement.
+
+    This is useful for hardware where certain axis pairs cannot move simultaneously. By
+    concentrating movement into the primary axis, the resulting position requires fewer
+    simultaneous axis movements.
+
+    Parameters
+    ----------
+    point : array-like
+        Target point in global coordinates.
+    device_to_global : Transform
+        Mapping from device coordinates to global. May have more input dimensions than output.
+    bounds : list[tuple[float, float]]
+        A list of (min, max) pairs for each device axis.
+    starting_position : list[float]
+        Current device position.
+    primary_axis : int or None
+        Axis index to maximize movement on. If None, the axis most aligned with the global
+        displacement is selected automatically.
+
+    Returns
+    -------
+    position : np.ndarray
+        Device position that maps to `point`, with maximum contribution from `primary_axis`.
+
+    Raises
+    ------
+    ValueError
+        If the transform is degenerate, the target is unreachable, or no valid position
+        within bounds exists.
+    NotImplementedError
+        If the null-space dimension is greater than 1.
+    """
+    n = len(bounds)
+    point = np.asarray(point, dtype=float)
+    starting_position = np.asarray(starting_position, dtype=float)
+
+    T = device_to_global.full_matrix[:3, :n]
+
+    global_displacement = point - device_to_global.map(starting_position)
+    try:
+        TTT_inv = np.linalg.inv(T @ T.T)
+    except np.linalg.LinAlgError as e:
+        raise ValueError("Transform is degenerate; cannot compute inverse kinematics") from e
+    pos_unconstrained = starting_position + T.T @ TTT_inv @ global_displacement
+
+    null_dim = n - 3  # assuming T has rank 3
+
+    if null_dim <= 0:
+        pos = np.clip(pos_unconstrained, [b[0] for b in bounds], [b[1] for b in bounds])
+        if not np.allclose(device_to_global.map(pos), point):
+            raise ValueError("No valid position within bounds")
+        return pos
+
+    if null_dim > 1:
+        raise NotImplementedError(
+            f"primary_axis_inverse_kinematics does not yet support null spaces "
+            f"of dimension > 1 (got {null_dim} for a {n}-axis device)"
+        )
+
+    # Auto-select primary axis as the one most aligned with the global displacement
+    if primary_axis is None:
+        col_norms = np.array([np.linalg.norm(T[:, i]) for i in range(n)])
+        dots = np.array([
+            abs(T[:, i].dot(global_displacement) / col_norms[i]) if col_norms[i] > 1e-12 else 0.0
+            for i in range(n)
+        ])
+        primary_axis = int(np.argmax(dots))
+
+    # 1D null space: parameterize as pos_unconstrained + t * null_vec
+    _, _, Vt = np.linalg.svd(T)
+    null_vec = Vt[3]  # last row of Vt for a 3×4 matrix with rank 3
+
+    # Find the feasible interval [t_lo, t_hi] for t
+    t_lo, t_hi = -np.inf, np.inf
+    for i, (lo, hi) in enumerate(bounds):
+        nv = null_vec[i]
+        pu = pos_unconstrained[i]
+        if abs(nv) < 1e-12:
+            if pu < lo - 1e-9 or pu > hi + 1e-9:
+                raise ValueError(
+                    f"No valid position within bounds (axis {i}: unconstrained value "
+                    f"{pu:.4g} is outside [{lo}, {hi}] and null space cannot correct it)"
+                )
+        elif nv > 0:
+            t_lo = max(t_lo, (lo - pu) / nv)
+            t_hi = min(t_hi, (hi - pu) / nv)
+        else:
+            t_lo = max(t_lo, (hi - pu) / nv)
+            t_hi = min(t_hi, (lo - pu) / nv)
+
+    if t_lo > t_hi + 1e-9:
+        raise ValueError("No valid position within bounds")
+
+    # Choose t to maximize primary axis movement within [t_lo, t_hi].
+    # The primary axis displacement at t is:
+    #   delta(t) = (pos_unconstrained[primary_axis] - starting_position[primary_axis])
+    #              + t * null_vec[primary_axis]
+    # This is linear in t, so the maximum |delta(t)| is at one endpoint of the feasible interval.
+    # Push t in the direction that increases |delta|, matching the natural direction of movement.
+    # Fall back to minimum displacement (t=0) when the null vector has no primary axis component
+    # or when no primary axis movement is needed.
+    nv_primary = null_vec[primary_axis]
+    delta_primary = pos_unconstrained[primary_axis] - starting_position[primary_axis]
+
+    if abs(nv_primary) < 1e-12 or abs(delta_primary) < 1e-12:
+        # Null vector doesn't influence primary axis, or no movement needed there;
+        # fall back to minimum displacement
+        t_opt = float(np.clip(0.0, t_lo, t_hi))
+    elif delta_primary * nv_primary >= 0:
+        # Increasing t amplifies primary axis movement; push to upper bound
+        t_opt = float(t_hi)
+    else:
+        # Decreasing t amplifies primary axis movement; push to lower bound
+        t_opt = float(t_lo)
+
+    pos_constrained = pos_unconstrained + t_opt * null_vec
+    pos_clipped = np.clip(pos_constrained, np.array(bounds)[:, 0], np.array(bounds)[:, 1])
+
+    final_global = device_to_global.map(pos_clipped)
+    if np.linalg.norm(final_global - point) > 0.1e-6:
+        raise ValueError(
+            f"IK solver generated bad solution (target position: {point} found position: "
+            f"{final_global}  device pos: {pos_constrained})"
+        )
+
+    return pos_clipped
+
+
+def sequential_projection_inverse_kinematics(
+    point,
+    device_to_global: Transform,
+    bounds: list[tuple[float, float]],
+    starting_position: list[float],
+    max_passes: int = 1,
+    rel_tol: float = 1e-2,
+) -> np.ndarray:
+    """Naive sequential projection IK: process axes in ranked order, absorbing as much residual
+    as possible at each step.
+
+    At each step the current residual displacement is projected onto one axis and that axis moves
+    to absorb it (clipped to bounds). Axes are ordered by decreasing alignment with the residual
+    at the start of each pass.
+
+    Limitation: because the axes are not orthogonal (D partially overlaps X and Z), moving one
+    axis changes what the others need to do, but earlier axes are never revisited within a pass.
+    A single pass therefore does not guarantee an exact solution. With max_passes > 1 this
+    becomes iterative coordinate descent and converges, but multiple passes defeat the point of
+    "sequential" so the single-pass result is the intended comparison target.
+
+    Parameters
+    ----------
+    point : array-like
+        Target point in global coordinates.
+    device_to_global : Transform
+        Mapping from device coordinates to global.
+    bounds : list[tuple[float, float]]
+        A list of (min, max) pairs for each device axis.
+    starting_position : list[float]
+        Current device position.
+    max_passes : int
+        Number of sequential passes over all axes (default 1). Increasing this converges to the
+        exact solution at the cost of losing the single-pass character.
+    rel_tol : float
+        Maximum acceptable residual as a fraction of the total displacement magnitude (default
+        1e-2, i.e. 1%). A single pass typically achieves ~0.1-0.5% residual for non-orthogonal
+        axes, so the default accepts that; set lower to require more passes.
+
+    Returns
+    -------
+    position : np.ndarray
+        Best device position found; may not map exactly to `point` for max_passes=1.
+
+    Raises
+    ------
+    ValueError
+        If the relative residual after all passes exceeds rel_tol.
+    """
+    n = len(bounds)
+    point = np.asarray(point, dtype=float)
+    starting_position = np.asarray(starting_position, dtype=float)
+
+    T = device_to_global.full_matrix[:3, :n]
+    col_norms = np.array([np.linalg.norm(T[:, i]) for i in range(n)])
+
+    pos = starting_position.copy().astype(float)
+    remaining = point - device_to_global.map(pos)
+    total_displacement = np.linalg.norm(remaining)
+
+    for _ in range(max_passes):
+        if np.linalg.norm(remaining) < 1e-15:
+            break
+        # Re-rank at the start of each pass by alignment with current residual.
+        dots = np.array([abs(T[:, i].dot(remaining) / col_norms[i]) for i in range(n)])
+        axis_order = np.argsort(dots)[::-1]
+
+        for i in axis_order:
+            if np.linalg.norm(remaining) < 1e-15:
+                break
+            # Project residual onto this axis and move accordingly.
+            step_device = remaining.dot(T[:, i]) / col_norms[i] ** 2
+            new_pos_i = float(np.clip(pos[i] + step_device, bounds[i][0], bounds[i][1]))
+            actual_step = new_pos_i - pos[i]
+            pos[i] = new_pos_i
+            remaining -= actual_step * T[:, i]
+
+    residual_mag = np.linalg.norm(remaining)
+    rel_residual = residual_mag / max(total_displacement, 1e-30)
+    if rel_residual > rel_tol:
+        raise ValueError(
+            f"Sequential projection did not reach target after {max_passes} pass(es) "
+            f"(relative residual = {rel_residual:.2e}, tolerance = {rel_tol:.2e})"
+        )
+    return pos
+
+
+def greedy_axis_inverse_kinematics(
+    point,
+    device_to_global: Transform,
+    bounds: list[tuple[float, float]],
+    starting_position: list[float],
+    axis: int | None = None,
+) -> np.ndarray:
+    """Calculate the global_to_device kinematics for a point given a device with more dimensions than the
+    space in which it operates.
+
+    Strategy
+    ---------
+    Set the greedy axis to as close to point as possible, starting at the starting_point. Then
+    solve for the other axes.
+
+    Parameters
+    ----------
+    point : Mappable
+        Target point in global coordinates
+    device_to_global : Transform
+        Mapping from device coordinates to global. Assumed not to be invertible.
+    bounds : list[tuple[float, float]]
+        A list of (min, max) pairs for each dimension of the device in its own coordinate system.
+        E.g. [(0, 20000), ...]
+    starting_position : list[float]
+        The starting position in device coordinates.
+    axis : int
+        The axis which should be preferred. Defaults to the axis most aligned with the displacement
+        from device_to_global.map(starting_position) to point.
+
+    Returns
+    -------
+    position : np.ndarray
+        The calculated position in the device coordinate system.
+
+    Raises
+    ------
+    ValueError
+        If any of the arguments are invalid, or if no valid position could be found.
+    """
+    origin_in_global = device_to_global.map(np.zeros(len(bounds)))
+    start_in_global = device_to_global.map(np.array(starting_position))
+
+    if np.allclose(start_in_global, point):
+        bounded = np.clip(starting_position, [b[0] for b in bounds], [b[1] for b in bounds])
+        if not np.allclose(bounded, starting_position):
+            raise ValueError("Invalid starting position nevertheless maps to target point")
+        return np.array(bounded)
+
+    displacement = np.asarray(point) - start_in_global
+
+    if axis is None:
+        # Rank axes by (alignment with displacement) / (condition number of remaining system).
+        # This avoids choosing an axis whose remaining sub-system is near-singular, which would
+        # cause the boundary intersection search to produce wildly wrong solutions for other axes.
+        T = device_to_global.full_matrix[:3, :len(bounds)]
+        col_norms = [np.linalg.norm(T[:, i]) for i in range(len(bounds))]
+        dots = [abs(T[:, i].dot(displacement) / col_norms[i]) for i in range(len(bounds))]
+        remaining_conds = [
+            np.linalg.cond(T[:, [j for j in range(len(bounds)) if j != i]])
+            for i in range(len(bounds))
+        ]
+        axes_to_try = sorted(range(len(bounds)), key=lambda i: dots[i] / remaining_conds[i], reverse=True)
+    else:
+        axes_to_try = [axis]
+
+    last_error: Exception = ValueError("No valid position found within bounds")
+    for candidate_axis in axes_to_try:
+        axis_step = np.zeros(len(bounds))
+        axis_step[candidate_axis] = 1
+        axis_in_global = device_to_global.map(axis_step) - origin_in_global
+        axis_scale = np.linalg.norm(axis_in_global)
+        raw_greedy_pos = (
+            displacement.dot(axis_in_global / axis_scale) / axis_scale
+            + starting_position[candidate_axis]
+        )
+        greedy_pos = np.clip(raw_greedy_pos, bounds[candidate_axis][0], bounds[candidate_axis][1])
+        neutral: list = [None] * len(bounds)
+        neutral[candidate_axis] = greedy_pos
+        try:
+            return neutral_anchored_inverse_kinematics(
+                point,
+                device_to_global,
+                bounds,
+                neutral,
+                # Only enforce the condition check during auto-selection; explicit-axis callers
+                # are responsible for their choice, and the LinAlgError path handles their fallback.
+                max_condition=100.0 if axis is None else np.inf,
+            )
+        except np.linalg.LinAlgError:
+            if axis is not None:
+                # The requested axis produced a singular system; retry with auto-selection
+                # using the unclamped greedy projection as the new starting point
+                fallback = list(starting_position)
+                fallback[candidate_axis] = raw_greedy_pos
+                return greedy_axis_inverse_kinematics(
+                    point,
+                    device_to_global,
+                    bounds,
+                    fallback,
+                )
+            last_error = ValueError(
+                f"No valid position found within bounds (axis {candidate_axis} produced a singular system)"
+            )
+            continue
+        except ValueError as e:
+            last_error = e
+            continue
+
+    raise last_error
+
+
+def neutral_anchored_inverse_kinematics(
+    point,
+    device_to_global: Transform,
+    bounds: list[tuple[float, float]],
+    neutral: list[float | None],
+    tol: float = 1e-12,
+    max_condition: float = 100.0,
+) -> np.ndarray:
+    """Calculate the global_to_device kinematics for a point given a device with more dimensions than the
+    space in which it operates.
+
+    Strategy
+    ---------
+    Calculate the bounding planes in the neutral position. If the point is inside, we're done.
+    Otherwise, draw a neutral_axis parallel to the neutral axis through the point and find the
+    distance to bounding planes.
+
+    Parameters
+    ----------
+    point : Mappable
+        Target point in global coordinates
+    device_to_global : Transform
+        Mapping from device coordinates to global. Assumed not to be invertible.
+    bounds : list[tuple[float, float]]
+        A list of (min, max) pairs for each dimension of the device in its own coordinate system.
+        E.g. [(0, 20000), ...]
+    neutral : list[float | None]
+        A list containing the neutral position in device coordinates. Only one dimension can be so
+        designated, with all the others set to None. E.g. [None, None, None, 0]
+    tol : float
+        Tolerance for floating point comparisons.
+    max_condition : float
+        Maximum acceptable condition number for the remaining sub-matrix. If the non-neutral axes
+        form a near-singular system (condition number above this threshold), a ValueError is raised
+        rather than returning an unreliable result.
+
+    Returns
+    -------
+    position : np.ndarray
+        The calculated position in the device coordinate system.
+
+    Raises
+    ------
+    ValueError
+        If any of the arguments are invalid, if the remaining sub-system is ill-conditioned
+        (condition number > max_condition), or if no valid position could be found.
+    """
+    neutral_index = None
+    for i, n in enumerate(neutral):
+        if n is not None:
+            if neutral_index is not None:
+                raise ValueError("Only one neutral axis can be specified")
+            neutral_index = i
+    if neutral_index is None:
+        raise ValueError("One neutral axis must be specified")
+
+    origin_in_global = device_to_global.map(np.zeros(len(neutral)))
+    neutral_in_global = device_to_global.map(np.array([0 if n is None else n for n in neutral]))
+    neutral_axis_step = device_to_global.map(np.array([0 if n is None else 1 for n in neutral])) - origin_in_global
+    neutral_axis = Line(direction=neutral_axis_step, point=point)
+
+    # construct global_to_device transform, excluding neutral axis
+    global_to_device = []
+    for i in range(len(neutral)):
+        if i == neutral_index:
+            continue
+        dev_axis = np.zeros(len(neutral))
+        dev_axis[i] = 1
+        global_axis = device_to_global.map(dev_axis) - origin_in_global
+        global_to_device.append(global_axis)
+    sub_matrix = np.asarray(global_to_device).T
+    cond = np.linalg.cond(sub_matrix)
+    if cond > max_condition:
+        raise ValueError(
+            f"Remaining sub-system is ill-conditioned (condition number={cond:.1f} > {max_condition}); "
+            f"the greedy axis choice produces unreliable results"
+        )
+    global_to_device = AffineTransform(sub_matrix, neutral_in_global).inverse
+
+    def _prep_device_pos(pt, neutral_pos) -> np.ndarray:
+        pos = global_to_device.map(pt).tolist()
+        pos.insert(neutral_index, neutral_pos)
+        return np.array(pos)
+
+    def clip(p):
+        return np.clip(
+            p,
+            [b[0] for b in bounds],
+            [b[1] for b in bounds],
+        )
+
+    nonneutral_bounds = [b for i, b in enumerate(bounds) if i != neutral_index]
+    bound_planes_in_global = limits_to_boundaries(
+        nonneutral_bounds, global_to_device.inverse, "dev"
+    )
+
+    if all(p.allows_point(point, tol) for p in bound_planes_in_global):
+        # point is already in bounds; neutral position is fine
+        return clip(_prep_device_pos(point, neutral[neutral_index]))
+
+    intersections = []
+    for plane in bound_planes_in_global:
+        intersect_pt = plane.intersecting_point(neutral_axis, tol)
+        if intersect_pt is not None:
+            displacement = point - intersect_pt
+            intersections.append((intersect_pt, displacement))
+
+    # sort boundary intersections by distance to the point
+    intersections.sort(key=lambda x: np.linalg.norm(x[1]))
+    for intersect_pt, displacement in intersections:
+        axial_dist = displacement.dot(neutral_axis.direction)
+        # map this distance back to device coordinates
+        axial_dist /= np.linalg.norm(neutral_axis_step)
+        neutral_pos = axial_dist + neutral[neutral_index]
+        candidate = _prep_device_pos(intersect_pt, neutral_pos)
+        if all(bounds[i][0] - tol <= candidate[i] <= bounds[i][1] + tol for i in range(len(candidate))):
+            return clip(candidate)
+
+    raise ValueError("No valid position found within bounds")
+
+
+def limits_to_boundaries(
+    limits: list[tuple[float | None, float | None]], local_to_global: AffineTransform, name: str
+) -> list[Plane]:
+    """
+    Parameters
+    ----------
+    limits : list[tuple[float | None, float | None]]
+        A list of local (min, max) pairs for each dimension. None can be used to indicate no limit
+        in that direction.
+    local_to_global : AffineTransform
+        Transform that maps from the local coordinate system of the limits to the global coordinate
+        system. Nx3 mapping.
+    name : str
+        Name to use for the planes.
+
+    Returns
+    -------
+    list[Plane]
+        A list of Planes representing the global boundaries defined by the limits.
+    """
+    # TODO alternate algorithm: find all parallel planes at once, and remove the ones in the middle
+    # fill in with appropriate nigh-infinities
+    limits = [
+        (-1e18 if min_val is None else min_val, 1e18 if max_val is None else max_val)
+        for min_val, max_val in limits
+    ]
+    ndim = len(limits)
+
+    @lru_cache(maxsize=None)
+    def corner(*axes):
+        return local_to_global.map(np.asarray([limits[i][ax] for i, ax in enumerate(axes)]))
+
+    if ndim <= 3:
+        center = (corner(0, 0, 0) + corner(1, 1, 1)) / 2
+        planes = [
+            Plane.from_3_points(corner(0, 0, 0), corner(0, 1, 0), corner(0, 0, 1), f"{name}'s min x"),
+            Plane.from_3_points(corner(1, 0, 0), corner(1, 1, 0), corner(1, 0, 1), f"{name}'s max x"),
+            Plane.from_3_points(corner(0, 0, 0), corner(1, 0, 0), corner(0, 0, 1), f"{name}'s min y"),
+            Plane.from_3_points(corner(0, 1, 0), corner(1, 1, 0), corner(0, 1, 1), f"{name}'s max y"),
+            Plane.from_3_points(corner(0, 0, 0), corner(1, 0, 0), corner(0, 1, 0), f"{name}'s min z"),
+            Plane.from_3_points(corner(0, 0, 1), corner(1, 0, 1), corner(0, 1, 1), f"{name}'s max z"),
+        ]
+    else:  # 4 axes
+        center = (corner(0, 0, 0, 0) + corner(1, 1, 1, 1)) / 2
+        planes = [
+            Plane.from_3_points(
+                corner(0, 0, 0, 0), corner(0, 1, 0, 0), corner(0, 0, 1, 0), f"{name}'s min x, min d"
+            ),
+            Plane.from_3_points(
+                corner(0, 0, 0, 0), corner(1, 0, 0, 0), corner(0, 0, 1, 0), f"{name}'s min y, min d"
+            ),
+            Plane.from_3_points(
+                corner(0, 0, 0, 0), corner(1, 0, 0, 0), corner(0, 1, 0, 0), f"{name}'s min z, min d"
+            ),
+            Plane.from_3_points(
+                corner(1, 0, 1, 0), corner(0, 0, 1, 0), corner(0, 0, 1, 1), f"{name}'s min y, diag 1"
+            ),
+            Plane.from_3_points(
+                corner(1, 0, 1, 0), corner(1, 0, 0, 0), corner(1, 0, 0, 1), f"{name}'s min y, diag 2"
+            ),
+            Plane.from_3_points(
+                corner(0, 1, 1, 0), corner(0, 0, 1, 0), corner(0, 0, 1, 1), f"{name}'s min x, diag 1"
+            ),
+            Plane.from_3_points(
+                corner(0, 1, 1, 0), corner(0, 1, 0, 0), corner(0, 1, 0, 1), f"{name}'s min x, diag 2"
+            ),
+            Plane.from_3_points(
+                corner(1, 1, 0, 0), corner(0, 1, 0, 0), corner(0, 1, 0, 1), f"{name}'s min z, diag 1"
+            ),
+            Plane.from_3_points(
+                corner(1, 1, 0, 0), corner(1, 0, 0, 0), corner(1, 0, 0, 1), f"{name}'s min z, diag 2"
+            ),
+            Plane.from_3_points(
+                corner(1, 1, 1, 1), corner(1, 0, 1, 1), corner(1, 1, 0, 1), f"{name}'s max x, max d"
+            ),
+            Plane.from_3_points(
+                corner(1, 1, 1, 1), corner(0, 1, 1, 1), corner(1, 1, 0, 1), f"{name}'s max y, max d"
+            ),
+            Plane.from_3_points(
+                corner(1, 1, 1, 1), corner(0, 1, 1, 1), corner(1, 0, 1, 1), f"{name}'s max z, max d"
+            ),
+        ]
+        # remove any coplanar planes in case D is orthogonal to some other axis
+        unique_planes = []
+        for p in planes:
+            if not any(p.coplanar_with(other) for other in unique_planes):
+                unique_planes.append(p)
+        planes = unique_planes
+    # flip normals to point inward
+    for p in planes:
+        if p.distance_to_point(center) < 0:
+            p.normal = -p.normal
+
+    return planes

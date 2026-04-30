@@ -11,12 +11,27 @@ from coorx import TTransform
 from pyqtgraph import opengl as gl
 
 
-class VisualizePathPlan(Qt.QObject):
-    def __init__(self, window, traveler: "OptomechDevice"):
+class MovePathException(Exception):
+    def __init__(self, message, path, failing_point):
+        super().__init__(message)
+        self.path = path
+        self.failing_point = failing_point
+
+    def offset_points(self, offset):
+        self.path = [tuple(np.asarray(p) + offset) for p in self.path]
+        self.failing_point = tuple(np.asarray(self.failing_point) + offset)
+
+    def visualize(self, adapter):
+        adapter.setPathError(self.path, self.failing_point)
+        adapter.win.focus()
+
+
+class VisualizePathSearch(Qt.QObject):
+    def __init__(self, adapter):
         super().__init__()
         self.moveToThread(Qt.QApplication.instance().thread())
-        self._window = window
-        self._traveler = traveler
+        self._adapter = adapter
+        self._traveler = adapter.device
 
         self._initGui()
 
@@ -31,11 +46,12 @@ class VisualizePathPlan(Qt.QObject):
 
     @inGuiThread
     def _initGui(self):
-        show_path = self._window.ensurePathTogglerExists(self._traveler)
-        self._startTarget = self._window.target(show_path)
-        self._destTarget = self._window.target(show_path, color=(0, 1, 0, 1))
-        self._activePath = self._window.path((0.1, 1, 0.7, 0.5), show_path)
-        self._previousPath = self._window.path((1, 0.7, 0, 0.01), show_path)
+        path_param = self._adapter._param.child('Path plan')
+        show_path = path_param.value() and path_param.opts.get('enabled', True)
+        self._startTarget = self._adapter.win.target(show_path)
+        self._destTarget = self._adapter.win.target(show_path, color=(0, 1, 0, 1))
+        self._activePath = self._adapter.win.path((0.1, 1, 0.7, 0.5), show_path)
+        self._previousPath = self._adapter.win.path((1, 0.7, 0, 0.01), show_path)
 
     @inGuiThread
     def reset(self):
@@ -50,8 +66,9 @@ class VisualizePathPlan(Qt.QObject):
 
     @future_wrap
     def startPath(self, path, bounds, _future):
+        # TODO this is going to break with bitrot
         if self._bounds is None:
-            self._bounds = self._window.createBounds(bounds, False)
+            self._bounds = self._adapter.createBounds(bounds, False)
         self._startPath(path, bounds)
 
     @inGuiThread
@@ -69,7 +86,7 @@ class VisualizePathPlan(Qt.QObject):
         self._appendPath(path)
 
     def focus(self):
-        self._window.focus()
+        self._adapter.win.focus()
 
     def endPath(self, path):
         self.updatePath(path, skip=1)
@@ -81,16 +98,15 @@ class VisualizePathPlan(Qt.QObject):
         self._activePath.setVisible(visible)
         self._previousPath.setVisible(visible)
         self._bounds.setVisible(visible)
+        device_visible = self._adapter._param.value()
         for name, obstacle in self._obstacles.items():
-            obst_toggle = self._window.getDeviceCheckboxes(name)["obstacle"]
-            dev_obst_visible = obst_toggle.checkState(0) == Qt.Qt.Checked
-            dev_visible = obst_toggle.parent().checkState(0) == Qt.Qt.Checked
-            obstacle.setVisible(visible and dev_visible and dev_obst_visible)
+            dev_param = self._adapter._obstacles[name]["device param"]
+            obst_visible = dev_param.child('Obstacle').value()
+            obstacle.setVisible(visible and device_visible and dev_param.value() and obst_visible)
         for name, voxels in self._voxels.items():
-            vox_toggle = self._window.getDeviceCheckboxes(name)["voxels"]
-            dev_vox_visible = vox_toggle.checkState(0) == Qt.Qt.Checked
-            dev_visible = vox_toggle.parent().checkState(0) == Qt.Qt.Checked
-            voxels.setVisible(visible and dev_visible and dev_vox_visible)
+            dev_param = self._adapter._obstacles[name]["device param"]
+            vox_visible = dev_param.child('Raw Obstacle Voxels').value()
+            voxels.setVisible(visible and device_visible and dev_param.value() and vox_visible)
 
     def updatePath(self, path, skip=3):
         self._pathUpdates.put((path, skip))
@@ -100,7 +116,7 @@ class VisualizePathPlan(Qt.QObject):
         while not self._stopThread:
             path, skip = self._pathUpdates.get()
             n_updates += 1
-            if self._window.testing or n_updates % skip == 0:
+            if n_updates % skip == 0:
                 self._appendPath(path)
                 time.sleep(0.05)
 
@@ -143,26 +159,24 @@ class VisualizePathPlan(Qt.QObject):
 
     @property
     def shouldShowPath(self):
-        togglers = self._window.getDeviceCheckboxes(self._traveler.name())
-        generally_visible = togglers["geometry"].parent().checkState(0) == Qt.Qt.Checked
-        return generally_visible and togglers["path"].checkState(0) == Qt.Qt.Checked
+        param = self._adapter._param
+        return param.value() and param.child('Path plan').value()
 
     @inGuiThread
     def _setInitialObstacleVisibility(self, name):
-        togglers = self._window.getDeviceCheckboxes(name)
-        general_checkbox = togglers["geometry"].parent()
-        generally_visible = general_checkbox.checkState(0) == Qt.Qt.Checked
+        generally_visible = self._adapter._param.value()
+        dev_param = self._adapter._obstacles[name]["device param"]
 
-        obst_visible = togglers["obstacle"].checkState(0) == Qt.Qt.Checked
-        self._obstacles[name].setVisible(generally_visible and obst_visible and self.shouldShowPath)
+        obst_visible = dev_param.child('Obstacle').value()
+        self._obstacles[name].setVisible(generally_visible and dev_param.value() and obst_visible and self.shouldShowPath)
 
-        voxels_visible = togglers["voxels"].checkState(0) == Qt.Qt.Checked
-        self._voxels[name].setVisible(generally_visible and voxels_visible and self.shouldShowPath)
+        vox_visible = dev_param.child('Raw Obstacle Voxels').value()
+        self._voxels[name].setVisible(generally_visible and dev_param.value() and vox_visible and self.shouldShowPath)
 
     @inGuiThread
     def _buildVoxelVolume(self, name, vol_data):
         self._voxels[name] = gl.GLVolumeItem(vol_data, sliceDensity=10, smooth=False, glOptions="additive")
-        self._window.view.addItem(self._voxels[name])
+        self._adapter.win.view.addItem(self._voxels[name])
 
     @inGuiThread
     def _buildObstacleMesh(self, name, verts, faces):
@@ -170,19 +184,19 @@ class VisualizePathPlan(Qt.QObject):
         self._obstacles[name] = gl.GLMeshItem(
             meshdata=mesh_data, smooth=True, color=(0.1, 0.1, 0.3, 0.25), shader="balloon", glOptions="additive"
         )
-        self._window.view.addItem(self._obstacles[name])
+        self._adapter.win.view.addItem(self._obstacles[name])
 
     @inGuiThread
     def removeDevice(self, dev):
         for name, obst in self._obstacles.items():
             if dev.name() in name:
-                self._window.view.removeItem(obst)
+                self._adapter.win.view.removeItem(obst)
                 obst.deleteLater()
                 del self._obstacles[name]
                 break
         for name, voxels in self._voxels.items():
             if dev.name() in name:
-                self._window.view.removeItem(voxels)
+                self._adapter.win.view.removeItem(voxels)
                 voxels.deleteLater()
                 del self._voxels[name]
                 break
@@ -197,19 +211,19 @@ class VisualizePathPlan(Qt.QObject):
     @inGuiThread
     def safelyDestroy(self):
         self._stopThread = True
-        self._window.view.removeItem(self._startTarget)
+        self._adapter.win.view.removeItem(self._startTarget)
         self._startTarget.deleteLater()
-        self._window.view.removeItem(self._destTarget)
+        self._adapter.win.view.removeItem(self._destTarget)
         self._destTarget.deleteLater()
-        self._window.view.removeItem(self._activePath)
+        self._adapter.win.view.removeItem(self._activePath)
         self._activePath.deleteLater()
-        self._window.view.removeItem(self._previousPath)
+        self._adapter.win.view.removeItem(self._previousPath)
         self._previousPath.deleteLater()
-        self._window.view.removeItem(self._bounds)
+        self._adapter.win.view.removeItem(self._bounds)
         self._bounds.deleteLater()
         for obst in self._obstacles.values():
-            self._window.view.removeItem(obst)
+            self._adapter.win.view.removeItem(obst)
         self._obstacles = None
         for voxels in self._voxels.values():
-            self._window.view.removeItem(voxels)
+            self._adapter.win.view.removeItem(voxels)
         self._voxels = None

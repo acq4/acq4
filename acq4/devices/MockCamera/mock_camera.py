@@ -136,7 +136,7 @@ class MockCamera(Camera):
     def getBackground(self):
         if self.background is None:
             w, h = self.params["sensorSize"]
-            tr = self.globalTransform()
+            tr = self.globalTransform().as_pyqtgraph()
 
             if isinstance(self.bgData, dict):
                 # select data based on objective
@@ -209,14 +209,11 @@ class MockCamera(Camera):
 
     def pixelVectors(self):
         tr = self.globalTransform()
-        origin = tr.map(pg.Point(0, 0))
-        x = tr.map(pg.Point(1, 0)) - origin
-        y = tr.map(pg.Point(0, 1)) - origin
-        origin = np.array([origin.x(), origin.y()])
-        x = np.array([x.x(), x.y()])
-        y = np.array([y.x(), y.y()])
+        origin = tr.map(np.asarray((0, 0, 0)))
+        x = tr.map(np.asarray((1, 0, 0))) - origin
+        y = tr.map(np.asarray((0, 1, 0))) - origin
 
-        return x, y
+        return x[:2], y[:2]
 
     def _acquireFrames(self, n: int):
         self.startCamera()
@@ -278,16 +275,16 @@ class MockCamera(Camera):
         px = (self.pixelVectors()[0] ** 2).sum() ** 0.5
 
         # Generate transform that maps grom global coordinates to image coordinates
-        cameraTr = pg.SRTTransform3D(self.inverseGlobalTransform())
+        cameraTr = self.inverseGlobalTransform()
         # note we use binning=(1,1) here because the image is downsampled later.
-        frameTr = self.makeFrameTransform(region, [1, 1]).inverted()[0]
-        tr = pg.SRTTransform(frameTr * cameraTr)
+        frameTr = self.makeFrameTransform(region, [1, 1]).inverse
+        tr = frameTr * cameraTr
 
         for cell in self.cells:
             w = cell["size"] / px
-            pos = pg.Point(cell["x"], cell["y"])
+            pos = (cell["x"], cell["y"], 0)
             imgPos = tr.map(pos)
-            start = (int(imgPos.x()), int(imgPos.y()))
+            start = (int(imgPos[0]), int(imgPos[1]))
             stop = (int(start[0] + w), int(start[1] + w))
             val = cell["intensity"] * cell["value"] * self.getParam("exposure")
             data[max(0, start[0]) : max(0, stop[0]), max(0, start[1]) : max(0, stop[1])] += val

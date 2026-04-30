@@ -38,7 +38,7 @@ class RecordingChamber(Device, OptomechDevice):
         return np.array(self.globalPosition())
 
     def globalPosition(self):
-        return self.mapToGlobal([0, 0, 0])
+        return self.mapToGlobal(np.array([0, 0, 0]))
 
     def containsPoint(self, pt):
         """Return True if the x,y coordinates in *pt* lie within
