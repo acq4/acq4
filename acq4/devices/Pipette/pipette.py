@@ -26,7 +26,7 @@ from .planners import PipettePathGenerator
 from .planners import defaultMotionPlanners
 from .tracker import ResnetPipetteTracker
 from ..Camera import Camera
-from ..RecordingChamber import RecordingChamber
+from ..InteractionSite import InteractionSite
 from ...modules.Visualize3D import VisualizePathSearch
 from ...modules.Visualize3D.travelers_proxy import MovePathException
 from ...util.PromptUser import prompt
@@ -311,8 +311,8 @@ class Pipette(Device, OptomechDevice):
         """Return a widget with a UI to put in the device rack"""
         return PipetteDeviceGui(self, win)
 
-    def cameraModuleInterface(self, mod):
-        iface = PipetteCamModInterface(self, mod, showUi=self._opts['showCameraModuleUI'])
+    def cameraModuleInterface(self, win):
+        iface = PipetteCamModInterface(self, win, showUi=self._opts['showCameraModuleUI'])
         self._camInterfaces[iface] = None
         return iface
 
@@ -839,14 +839,14 @@ class Pipette(Device, OptomechDevice):
         self.moving = False
         self.sigMoveFinished.emit(self, self.globalPosition())
 
-    def getRecordingChambers(self) -> List[RecordingChamber]:
+    def getRecordingChambers(self) -> List[InteractionSite]:
         """Return a list of RecordingChamber instances that are associated with this Pipette (see
         'recordingChambers' config option).
         """
         man = getManager()
         return [man.getDevice(d) for d in self.config.get('recordingChambers', [])]
 
-    def getCleaningWell(self) -> RecordingChamber | None:
+    def getCleaningWell(self) -> InteractionSite | None:
         """Return the RecordingChamber instance that is associated with this Pipette for cleaning
         (see 'cleaningWell' config option).
         """
@@ -860,11 +860,11 @@ class Pipette(Device, OptomechDevice):
         return PipetteRecorder(self)
 
     @future_wrap
-    def iterativelyFindTip(self, max_reps=10, found_threshold=3e-6, delay_after_move=0.2, 
+    def iterativelyFindTip(self, max_reps=10, found_threshold=3e-6, delay_after_move=0.2,
                            max_allowed_offset=None, delay_after_update=0, reserve_devices=True,
                            go_to_tip_first=False, _future=None):
         """Iteratively refine the tip position by finding the tip in frame and focusing, until convergence.
-        
+
         Returns if convergence is reached (tip position changes less than *found_threshold* between iterations) or after *max_reps* iterations.
         Otherwise, raises an exception.
 
@@ -920,7 +920,7 @@ class Pipette(Device, OptomechDevice):
                 # reset position to start if we fail, to avoid leaving the pipette in a bad position
                 self.setTipOffset(start_pos)
                 raise exc
-        
+
 
     def findNewPipette(self):
         from acq4.devices.Pipette.calibration import findNewPipette
@@ -990,7 +990,7 @@ class PipetteCamModInterface(CameraModuleInterface):
 
     canImage = False
 
-    def __init__(self, dev: Pipette, win, showUi=True):
+    def __init__(self, dev: "Pipette", win, showUi=True):
         CameraModuleInterface.__init__(self, dev, win)
         self._haveTarget = False
         self._showUi = showUi

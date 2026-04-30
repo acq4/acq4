@@ -438,8 +438,8 @@ class Camera(DAQGeneric, OptomechDevice):
     def deviceInterface(self, win):
         return CameraDeviceGui(self, win)
 
-    def cameraModuleInterface(self, mod):
-        return CameraInterface(self, mod)
+    def cameraModuleInterface(self, win):
+        return CameraInterface(self, win)
 
     # Scope interface functions below
 
