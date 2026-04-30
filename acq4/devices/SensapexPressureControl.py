@@ -76,6 +76,9 @@ class SensapexPressureControl(PressureControl):
         self._pollThread.daemon = True
         self._pollThread.start()
 
+    def isValidForPatchPipettes(self):
+        return True
+
     def _poll(self):
         while True:
             try:

@@ -23,7 +23,7 @@ class ImagingModule(AnalysisModule):
         self.splitter.addWidget(self.ptree)
         self.imageView = pg.ImageView()
         self.splitter.addWidget(self.imageView)
-        
+
         self.params = Parameter.create(name='imager', type='group', children=[
             dict(name='scanner', type='interface', interfaceTypes=['scanner']),
             dict(name='detectors', type='group', addText="Add detector.."),
@@ -227,6 +227,7 @@ class ImagingModule(AnalysisModule):
             result['image'] = imageData
 
             # compute global transform
+            # TODO this needs to be coorx'd
             tr = rs.imageTransform()
             st = Qt.QTransform()
             st.scale(self.params['downsample'], 1)

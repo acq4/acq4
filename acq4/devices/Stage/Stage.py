@@ -8,21 +8,30 @@ from typing import Tuple, List
 import numpy as np
 
 import pyqtgraph as pg
+from acq4 import getManager
 from acq4.util import Qt, ptime
 from acq4.util.Mutex import Mutex
-from coorx import AffineTransform
+from coorx import AffineTransform, TTransform
 from pyqtgraph import siFormat
 from .calibration import ManipulatorAxesCalibrationWindow, StageAxesCalibrationWindow
 from ..Device import Device
-from ..OptomechDevice import OptomechDevice
-from ... import getManager
+from ..OptomechDevice import OptomechDevice, map_through_transform
+from ...modules.Visualize3D.travelers_proxy import MovePathException
 from ...util.HelpfulException import HelpfulException
 from ...util.future import Future, FutureButton
-from ...util.geometry import Plane
+from ...util.geometry import (
+    Plane,
+    limits_to_boundaries,
+    load_transform_from_anything,
+    minimum_displacement_inverse_kinematics,
+)
 
 
 class Stage(Device, OptomechDevice):
     """Base class for mechanical stages with motorized control and/or position feedback.
+
+    Typically this device class is not used directly; instead use a subclass specific to 
+    the hardware in use.
 
     This is an optomechanical device that modifies its own transform based on position or orientation
     information received from a position control device. The transform is calculated as::
@@ -36,11 +45,14 @@ class Stage(Device, OptomechDevice):
 
         isManipulator : bool
             Default False. Whether this mechanical device is to be used as an e.g. pipette manipulator, rather than
-            as a stage.
+            as a microscope stage.
         fastSpeed : float
             Speed (m/s) to use when a movement is requested with speed='fast'
         slowSpeed : float
             Speed (m/s) to use when a movement is requested with speed='slow'
+        hysteresisCorrection : float
+            Distance (m) to overshoot when approaching a position to correct for hysteresis.
+            Default is 20e-6 (20 µm). Set to 0 to disable the correction step entirely.
     """
 
     sigPositionChanged = Qt.Signal(object, object, object)  # self, new position, old position
@@ -54,35 +66,33 @@ class Stage(Device, OptomechDevice):
 
         # total device transform will be composed of a base transform (defined in the config)
         # and a dynamic translation provided by the hardware.
-        self._baseTransform = self.deviceTransform() * 1  # *1 makes a copy
-        self._inverseBaseTransform = None
+        self._baseTransform = self.deviceTransform()
 
-        m = pg.SRTTransform3D(self._baseTransform)
-        angle, axis = m.getRotation()
-        scale = m.getScale()
+        m = self._baseTransform
+        angle, axis = m.rotation
+        scale = m.scale
         if tuple(scale) != (1, 1, 1) or angle != 0:
             raise ValueError("Stage transform must be only translation.")
 
-        self._stageTransform = Qt.QMatrix4x4()
-        self._inverseStageTransform = Qt.QMatrix4x4()
+        self._stageTransform = AffineTransform(dims=(3, 3))
         self.isManipulator = config.get("isManipulator", False)
 
         self.lock = Mutex(Qt.QMutex.Recursive)
 
-        nAxes = len(self.axes())
-        self._lastPos = [0] * nAxes
+        self.nAxes = len(self.axes())
+        self._lastPos = [0] * self.nAxes
 
         # default implementation just uses this matrix to
         # convert from device position to translation vector
         self._axisTransform = None
-        self._inverseAxisTransform = None
         self._calculatedXAxisOrientation = None
 
         self._defaultSpeed = 'fast'
         self.setFastSpeed(config.get('fastSpeed', 1e-3))
         self.setSlowSpeed(config.get('slowSpeed', 10e-6))
+        self.hysteresisCorrection = config.get('hysteresisCorrection', 20e-6)
 
-        self._limits = [(None, None)] * nAxes
+        self._limits = [(None, None)] * self.nAxes
         if 'limits' in config:
             self.setLimits(**config['limits'])
 
@@ -91,9 +101,9 @@ class Stage(Device, OptomechDevice):
         self._progressTimer.timeout.connect(self.updateProgressDialog)
 
         calibration = self.readConfigFile('calibration')
-        axisTr = calibration.get('transform', None)
-        if axisTr is not None:
-            self._axisTransform = pg.Transform3D(axisTr)
+        axis_tr = calibration.get('transform', None)
+        if axis_tr is not None:
+            self._axisTransform = load_transform_from_anything(axis_tr)
 
         # set up joystick callbacks if requested
         jsdevs = set()
@@ -137,16 +147,16 @@ class Stage(Device, OptomechDevice):
         """Return a structure describing the capabilities of this device::
 
             {
-                'getPos': (x, y, z),      # bool: whether each axis can be read from the device
-                'setPos': (x, y, z),      # bool: whether each axis can be set on the device
-                'limits': (x, y, z),      # bool: whether limits can be set for each axis
+                'getPos': (x, y, z, d),      # bool: whether each axis can be read from the device
+                'setPos': (x, y, z, d),      # bool: whether each axis can be set on the device
+                'limits': (x, y, z, d),      # bool: whether limits can be set for each axis
             }
 
         The axes described in the above data structure correspond to the mechanical
         actuators on the device; they do not necessarily correspond to the axes in the
         global coordinate system or the local coordinate system of the device.
 
-        Subclasses must reimplement this method.
+        Subclasses must reimplement this method. Only nAxes values are required.
         """
         # todo: add other capability flags like resolution, speed, closed-loop, etc?
         raise NotImplementedError
@@ -176,72 +186,51 @@ class Stage(Device, OptomechDevice):
         """Return the transform that implements the translation/rotation generated
         by the current hardware state.
         """
-        return pg.SRTTransform3D(self._stageTransform)
+        return self._stageTransform
 
     def inverseStageTransform(self):
-        if self._inverseStageTransform is None:
-            inv, invertible = self.stageTransform().inverted()
-            if not invertible:
-                raise Exception("Transform is not invertible.")
-            self._inverseStageTransform = inv
-        return pg.SRTTransform3D(self._inverseStageTransform)
+        return self.stageTransform().inverse
 
     def _makeStageTransform(self, pos, axisTransform=None):
         """Return a stage transform (as should be returned by stageTransform)
-        and an optional inverse, given a position reported by the device.
-
-        If the inverse transform is None, then it will be automatically generated
-        on demand by calling transform.inverted().
+        given a position reported by the device.
 
         Subclasses may override this method; the default uses _axisTransform to
-        map from the device position to a 3D translation matrix. This covers only cases
+        map from the device position to a translation matrix. This covers only cases
         where the stage axes perform linear translations. For rotation or nonlinear
         movement, this method must be reimplemented.
         """
-        tr = pg.SRTTransform3D()
         if axisTransform is None:
             axisTransform = self.axisTransform()
-        offset = pg.Vector(axisTransform.map(pg.Vector(pos)))
-        tr.translate(offset)
+        offset = map_through_transform(pos, axisTransform)[:3]
+        return TTransform(offset=offset, dims=(3, 3))
 
-        inv = pg.SRTTransform3D()
-        inv.translate(-offset)
-
-        return tr, inv
-
-    def _solveStageTransform(self, posChange):
-        """Given a desired change of local origin, return the device position required.
-
-        The default implementation simply inverts _axisTransform to generate this solution;
-        devices with more complex kinematics need to reimplement this method.
-        """
-        tr = self.stageTransform().getTranslation() + pg.Vector(posChange)
-        return pg.Vector(self.inverseAxisTransform().map(tr))
-
-    def axisTransform(self) -> pg.Transform3D:
+    def axisTransform(self) -> AffineTransform:
         """Transformation matrix with columns that point in the direction that each manipulator axis moves.
 
         This transform gives the relationship between the coordinates reported by the device and real world coordinates.
-        It assumes a 3-axis, linear stage, where the axes are not necessarily orthogonal to each other.
+        It assumes a linear stage, where the axes are not necessarily orthogonal to each other.
 
         This matrix is usually derived from calibration points. Before calibration, it provides only scale
         factors.
         """
         if self._axisTransform is None:
-            self._axisTransform = pg.Transform3D()
-            self._inverseAxisTransform = pg.Transform3D()
-            scale = self.config.get('scale', None)
-            if scale is not None:
-                self._axisTransform.scale(*scale)
-                self._inverseAxisTransform.scale(*[1.0 / x for x in scale])
-        return pg.Transform3D(self._axisTransform)
+            scale = self.getAxisScale()
+            matrix = np.eye(self.nAxes) * scale
+            # make sure it maps to 3D regardless of input
+            matrix = matrix[:3]
+            self._axisTransform = AffineTransform(matrix=matrix)
+        return self._axisTransform
 
     def setAxisTransform(self, tr):
         self._axisTransform = tr
-        self._inverseAxisTransform = None
         self._calculatedXAxisOrientation = None
         self._updateTransform()
+        self.calculatedAxisOrientation.cache_clear()
         self.sigOrientationChanged.emit(self)
+
+    def getAxisScale(self):
+        return np.asarray(list(self.config.get('scale', [1] * self.nAxes)))
 
     @functools.lru_cache
     def calculatedAxisOrientation(self, axis: str):
@@ -252,9 +241,9 @@ class Stage(Device, OptomechDevice):
 
         The *axis* argument specifies which axis to return, one of '+x', '-x', '+y', '-y', '+z', or '-z'.
         """
-        assert axis in {'+x', '-x', '+y', '-y', '+z', '-z'}
-        m = self.axisTransform().matrix()
-        axis_index = {'x': 0, 'y': 1, 'z': 2}[axis[1]]
+        assert axis in {'+x', '-x', '+y', '-y', '+z', '-z', '+d', '-d'}
+        m = self.axisTransform().full_matrix
+        axis_index = {'x': 0, 'y': 1, 'z': 2, 'd': 3}[axis[1]]
         axis_sign = 1 if axis[0] == '+' else -1
         selected_axis = pg.Vector(axis_sign * m[:3, axis_index])
         globalz = pg.Vector([0, 0, 1])
@@ -270,22 +259,9 @@ class Stage(Device, OptomechDevice):
     #     return math.atan2(-a[2, 0], math.sqrt(a[2, 1] ** 2 + a[2, 2] ** 2)) * 180 / math.pi
 
     def inverseAxisTransform(self):
-        if self._inverseAxisTransform is None:
-            inv, invertible = self.axisTransform().inverted()
-            if not invertible:
-                raise Exception("Transform is not invertible.")
-            self._inverseAxisTransform = inv
-        return pg.QtGui.QMatrix4x4(self._inverseAxisTransform)
-
-    def _solveAxisTransform(self, stagePos, parentPos, localPos):
-        """Return an axis transform matrix that maps localPos to parentPos, given
-        stagePos.
-        """
-        offset = (
-            pg.transformCoordinates(self.inverseBaseTransform(), parentPos, transpose=True)
-            - localPos
-        )
-        return pg.solve3DTransform(stagePos[:4], offset[:4])[:3]
+        if self.nAxes > 3:
+            raise ValueError("Transform is not invertible.")
+        return self.axisTransform().inverse
 
     def posChanged(self, pos):
         """Handle device position changes by updating the device transform and
@@ -296,23 +272,18 @@ class Stage(Device, OptomechDevice):
         with self.lock:
             lastPos = self._lastPos
             self._lastPos = pos
-            self._stageTransform, self._inverseStageTransform = self._makeStageTransform(pos)
+            self._stageTransform = self._makeStageTransform(pos)
             self._updateTransform()
 
         self.sigPositionChanged.emit(self, pos, lastPos)
 
     def baseTransform(self):
         """Return the base transform for this Stage."""
-        return pg.Transform3D(self._baseTransform)
+        return self._baseTransform
 
     def inverseBaseTransform(self):
         """Return the inverse of the base transform for this Stage."""
-        if self._inverseBaseTransform is None:
-            inv, invertible = self.baseTransform().inverted()
-            if not invertible:
-                raise Exception("Transform is not invertible.")
-            self._inverseBaseTransform = inv
-        return pg.Transform3D(self._inverseBaseTransform)
+        return self._baseTransform.inverse
 
     def setBaseTransform(self, tr):
         """Set the base transform of the stage.
@@ -320,8 +291,7 @@ class Stage(Device, OptomechDevice):
         This sets the starting position and orientation of the stage before the
         hardware-reported stage position is taken into account.
         """
-        self._baseTransform = tr * 1  # *1 makes a copy
-        self._inverseBaseTransform = None
+        self._baseTransform = tr
         self._updateTransform()
 
     def _updateTransform(self):
@@ -350,7 +320,7 @@ class Stage(Device, OptomechDevice):
         the global coordinate system.
         """
         # note: the origin of the local coordinate frame is the center position of the device.
-        return self.mapToGlobal([0, 0, 0])
+        return self.mapToGlobal(np.array([0, 0, 0]))
 
     def _getPosition(self):
         """
@@ -373,11 +343,11 @@ class Stage(Device, OptomechDevice):
         target = self.targetPosition()
         if target is None:
             return None
-        tr = self.baseTransform() * self._makeStageTransform(target)[0]
+        tr = self.baseTransform() * self._makeStageTransform(target)
         pd = self.parentDevice()
         if pd is not None:
             tr = pd.globalTransform() * tr
-        return self._mapTransform([0, 0, 0], tr)
+        return map_through_transform([0, 0, 0], tr)
 
     def getState(self):
         with self.lock:
@@ -456,17 +426,13 @@ class Stage(Device, OptomechDevice):
         # TODO hardware-specific implementations?
         # TODO throw this away
         pos = np.array(self.getPosition())
-
-        axis_xform = np.array(self.axisTransform().copyDataTo()).reshape((4, 4))
-        axis_xform = AffineTransform(matrix=axis_xform[:3, :3], offset=axis_xform[:3, 3])
+        axis_xform = self.axisTransform()
 
         # Map deltas through axis transform to get ortholinear coordinate changes
         ortho = np.array(axis_xform.map(deltas)) - np.array(axis_xform.map(np.zeros(len(deltas))))
 
         # Divide away the scale; we only wanted the orientation
-        scale = self.config.get('scale', None)
-        if scale is not None:
-            ortho /= np.array(scale)
+        ortho /= self.getAxisScale()
 
         # Add changes to current position
         target = pos + ortho
@@ -494,14 +460,29 @@ class Stage(Device, OptomechDevice):
         """Must be reimplemented by subclasses and return a MoveFuture instance."""
         raise NotImplementedError()
 
-    def mapGlobalToDevicePosition(self, pos):
-        localPos = self.mapFromGlobal(pos)
-        return self._solveStageTransform(localPos)
+    def mapGlobalToDevicePosition(self, globalPos, linear=None, previousPos=None):
+        """Given a desired global position, return the device position required."""
+        if self.nAxes > 3 and (previousPos is None and linear):
+            raise ValueError(
+                "Inverse mapping on 4-axis stages requires a previousPos or linear=False."
+            )
+        if self.nAxes <= 3:
+            # we can use a simple inverse transform
+            tr = self.stageTransform().offset + np.array(self.mapFromGlobal(globalPos))
+            return pg.Vector(self.inverseAxisTransform().map(tr))
+
+        return minimum_displacement_inverse_kinematics(
+            globalPos, self.axisTransform(), self.getLimits(), previousPos
+        )
+
+    def mapDeviceToGlobalPosition(self, pos):
+        pos = map_through_transform(pos, self.axisTransform())[:3]
+        return self.mapToGlobal(pos)
 
     def moveToGlobal(self, pos, speed, progress=False, linear=False, name=None):
         """Move the stage to a position expressed in the global coordinate frame."""
         return self.move(
-            position=self.mapGlobalToDevicePosition(pos),
+            position=self.mapGlobalToDevicePosition(pos, linear, self.getPosition()),
             speed=speed,
             progress=progress,
             linear=linear,
@@ -560,16 +541,16 @@ class Stage(Device, OptomechDevice):
                 )
         return manager.getDevice(camName)
 
-    def setLimits(self, x=None, y=None, z=None):
+    def setLimits(self, x=None, y=None, z=None, d=None):
         """Set the (min, max) position limits to enforce for each axis.
 
-        Accepts keyword arguments 'x', 'y', 'z'; each supplied argument must be
+        Accepts keyword arguments 'x', 'y', 'z', 'd'; each supplied argument must be
         a (min, max) tuple where either value may be None to disable the limit.
 
         Note that some devices do not support limits.
         """
         changed = []
-        for axis, limit in enumerate((x, y, z)):
+        for axis, limit in enumerate((x, y, z, d)):
             if limit is None:
                 continue
             assert len(limit) == 2
@@ -588,45 +569,25 @@ class Stage(Device, OptomechDevice):
 
     def getBoundaries(self) -> List[Plane]:
         """Return the boundaries of the stage in global coordinates."""
-        if len(self.axes()) != 3:
-            raise NotImplementedError("Boundaries are only implemented for 3-axis stages.")
         limits = self.getLimits()  # min, max
         if None in [m for ax in limits for m in ax]:
             return []
         # TODO do we need to use _baseTransform, too?
-        xform = np.array(self.axisTransform().copyDataTo()).reshape(4, 4)
-        xform = AffineTransform(matrix=xform[:3, :3], offset=xform[:3, 3])
-        corners = {
-            "min": xform.map(np.array([ax[0] for ax in limits])),
-            "max": xform.map(np.array([ax[1] for ax in limits])),
-        }
-        axes = [xform.map(np.eye(3)[i]) - xform.map(np.zeros(3)) for i in range(3)]
-        normals = {
-            "z": np.cross(axes[0], axes[1]),
-            "y": np.cross(axes[2], axes[0]),
-            "x": np.cross(axes[1], axes[2]),
-        }
-        # flip normals to point inward
-        diagonal = corners["max"] - corners["min"]
-        normals["x"] = normals["x"] * np.sign(np.dot(normals["x"], diagonal))
-        normals["y"] = normals["y"] * np.sign(np.dot(normals["y"], diagonal))
-        normals["z"] = normals["z"] * np.sign(np.dot(normals["z"], diagonal))
-        return [Plane(normals[n], corners["min"], f"{self.name()}'s min {n}") for n in normals] + [
-            Plane(-normals[n], corners["max"], f"{self.name()}'s max {n}") for n in normals
-        ]
+        xform = self.axisTransform()
+        return limits_to_boundaries(limits, xform, self.name())
 
     def _setHardwareLimits(self, axis: int, limit: tuple):
         raise NotImplementedError("Must be implemented in subclass.")
 
-    def checkGlobalLimits(self, globalPos):
+    def checkGlobalLimits(self, globalPos, linear):
         """Raise an exception if *globalPos* (in global coordinates) is outside the configured limits"""
-        stagePos = self.mapGlobalToDevicePosition(globalPos)
+        stagePos = self.mapGlobalToDevicePosition(globalPos, linear, self.getPosition())
         self.checkLimits(stagePos)
 
     def checkLimits(self, stagePos):
         """Raise an exception if *stagePos* (in stage coordinates) is outside the configured limits"""
         for axis, limit in enumerate(self._limits):
-            ax_name = 'xyz'[axis]
+            ax_name = 'xyzd'[axis]
             x = stagePos[axis]
             if x is None:
                 continue
@@ -647,15 +608,15 @@ class Stage(Device, OptomechDevice):
             try:
                 bound = pos.copy()
                 bound[axis] -= tolerance
-                self.checkLimits(self.mapGlobalToDevicePosition(bound))
+                self.checkLimits(self.mapGlobalToDevicePosition(bound, linear=False))
                 bound[axis] += 2 * tolerance
-                self.checkLimits(self.mapGlobalToDevicePosition(bound))
+                self.checkLimits(self.mapGlobalToDevicePosition(bound, linear=False))
             except ValueError:
                 bad_axes.append(axis)
         if bad_axes:
             axis_names = {0: 'x', 1: 'y', 2: 'z'}
             axes = ', '.join(axis_names[axis] for axis in bad_axes)
-            stage_pos = self.mapGlobalToDevicePosition(pos)
+            stage_pos = self.mapGlobalToDevicePosition(pos, linear=False)
             possible_problem = (
                 "pipette pull consistency" if self.isManipulator else "hardware reliability"
             )
@@ -679,19 +640,17 @@ class Stage(Device, OptomechDevice):
             raise RuntimeError(f"No home position set for {self.name()}")
         return self.moveToGlobal(homePos, speed=speed)
 
-    def setHomePosition(self, pos=None):
+    def setHomePosition(self):
         """Set the home position in global coordinates."""
-        self.setStoredLocation('home', pos)
+        self.setStoredLocation('home')
 
     def getStoredLocation(self, name):
         return self.readConfigFile('stored_locations').get(name, None)
 
-    def setStoredLocation(self, name: str, pos=None):
-        if pos is None:
-            pos = self.globalPosition()
-        self.checkLimits(self.mapGlobalToDevicePosition(pos))
+    def setStoredLocation(self, name: str):
+        self.checkLimits(self.getPosition())
         locations = self.readConfigFile('stored_locations')
-        locations[name] = list(pos)
+        locations[name] = list(self.globalPosition())
         self.writeConfigFile(locations, 'stored_locations')
 
     def clearStoredLocation(self, name):
@@ -788,20 +747,29 @@ class MovePathFuture(MoveFuture):
         self.currentStep = 0
         self._currentFuture = None
 
+        prev = dev.getPosition()
+        global_path = [s.get("globalPos") for s in path if "globalPos" in s]
         for step in self.path:
             if step.get("globalPos") is not None:
-                step["position"] = dev.mapGlobalToDevicePosition(step.pop("globalPos"))
+                global_pos = step.pop("globalPos")
+                try:
+                    step["position"] = dev.mapGlobalToDevicePosition(
+                        global_pos, step.get("linear", False), prev
+                    )
+                except Exception as e:
+                    raise MovePathException(
+                        "Cannot map global position to device coordinates", global_path, global_pos
+                    ) from e
+                prev = step["position"]
         for i, step in enumerate(self.path):
             try:
-                self.dev.checkMove(**step)
+                dev.checkMove(**step)
             except Exception as exc:
                 raise Exception(
                     f"Cannot move {dev.name()} to path step {i}/{len(self.path)}: {step}"
                 ) from exc
 
-        self._moveThread = threading.Thread(
-            target=self._movePath, name=f'{self.dev.name()} : {name}'
-        )
+        self._moveThread = threading.Thread(target=self._movePath, name=f'{dev.name()} : {name}')
         self._moveThread.start()
 
     def percentDone(self):
@@ -908,8 +876,8 @@ class StageInterface(Qt.QWidget):
             if cap['getPos'][axis]:
                 axLabel = Qt.QLabel(axisName)
                 axLabel.setMaximumWidth(15)
-                globalPosLabel = Qt.QLabel('0')
-                stagePosLabel = Qt.QLabel('0')
+                globalPosLabel = Qt.QLabel('')
+                stagePosLabel = Qt.QLabel('')
                 self.posLabels[axis] = (globalPosLabel, stagePosLabel)
                 widgets = [axLabel, globalPosLabel, stagePosLabel]
                 if cap['limits'][axis]:
@@ -956,10 +924,11 @@ class StageInterface(Qt.QWidget):
     def update(self):
         globalPos = self.dev.globalPosition()
         stagePos = self.dev.getPosition()
-        for i in self.posLabels:
-            text = pg.siFormat(globalPos[i], suffix='m', precision=5)
+        for i, v in enumerate(globalPos):
+            text = pg.siFormat(v, suffix='m', precision=5)
             self.posLabels[i][0].setText(text)
-            self.posLabels[i][1].setText(str(stagePos[i]))
+        for i, v in enumerate(stagePos):
+            self.posLabels[i][1].setText(str(v))
 
     def updateLimits(self):
         limits = self.dev.getLimits()
@@ -1001,15 +970,3 @@ class StageInterface(Qt.QWidget):
                 self.calibrateWindow = StageAxesCalibrationWindow(self.dev)
         self.calibrateWindow.show()
         self.calibrateWindow.raise_()
-
-
-class StageHold(object):
-    def __init__(self, stage):
-        self.stage = stage
-
-    def __enter__(self):
-        self.stage.setHolding(True)
-        return self
-
-    def __exit__(self, *args):
-        self.stage.setHolding(False)
