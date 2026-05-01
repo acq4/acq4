@@ -739,7 +739,12 @@ class FocusSpinBox(Qt.QAbstractSpinBox):
     # Internal helpers
 
     def _updateDisplay(self):
-        self.lineEdit().setText(f'{self._value * 1e6:.2f} µm')
+        le = self.lineEdit()
+        le.blockSignals(True)
+        try:
+            le.setText(f'{self._value * 1e6:.2f} µm')
+        finally:
+            le.blockSignals(False)
 
     def _editingFinished(self):
         text = self.lineEdit().text().strip()
