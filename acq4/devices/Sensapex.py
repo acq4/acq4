@@ -9,7 +9,6 @@ import pyqtgraph as pg
 from acq4.drivers.sensapex import UMP, version_info
 from acq4.util import Qt
 from acq4.util import ptime
-from pyqtgraph import Transform3D, solve3DTransform
 from .Stage import Stage, MoveFuture, ManipulatorAxesCalibrationWindow, StageAxesCalibrationWindow
 
 
@@ -49,6 +48,11 @@ class Sensapex(Stage):
     * **slowSpeed** (float, optional): Slow movement speed in m/s
     
     * **fastSpeed** (float, optional): Fast movement speed in m/s
+
+    * **retryThreshold** (float, optional): Distance threshold (meters) for determining whether a 
+      move successfully reached its target (default: 0.4 um)
+
+    * **failThreshold** (float, optional): Distance threshold (meters) for determining whether a move is considered a failure and should be retried (default: 1 um)
     
     Note: Connection parameters (address, group, debug settings, etc.) use global 
     defaults from the 'drivers/sensapex' configuration section when not specified per-device.
@@ -70,9 +74,9 @@ class Sensapex(Stage):
     def __init__(self, man, config: dict, name):
         self.devid = config.get("deviceId")
         config.setdefault("isManipulator", self.devid < 20)
-        self.scale = config.pop("scale", (1e-6, 1e-6, 1e-6))
-        self.xPitch = config.pop("xPitch", 0)  # angle of x-axis. 0=parallel to xy plane, 90=pointing downward
-        self.maxMoveError = config.pop("maxError", 1e-6)
+        config.setdefault("scale", (1e-6, 1e-6, 1e-6))
+        config.setdefault("xPitch", 0)  # angle of x-axis. 0=parallel to xy plane, 90=pointing downward
+        self.maxMoveError = config.get("maxError", 1e-6)
         if "linearMovementRule" in config:
             self._force_linear_movement = config["linearMovementRule"] == "linear"
             self._force_nonlinear_movement = config["linearMovementRule"] == "nonlinear"
@@ -84,9 +88,11 @@ class Sensapex(Stage):
         address = None if address is None else address.encode()
         group = config.pop("group", None)
         ump = UMP.get_ump(address=address, group=group, handle_atexit=False)
-        # create handle to this manipulator
         if "nAxes" in config and version_info < (1, 22, 4):
             raise RuntimeError("nAxes support requires version >= 1.022.4 of the sensapex-py library")
+        ump.set_retry_threshold(config.get("retryThreshold", 0.1e-6) * 1e6)  # convert from m to um
+        ump.set_fail_threshold(config.get("failThreshold", 1e-6) * 1e6)  # convert from m to um
+        # create handle to this manipulator
         self.dev = ump.get_device(self.devid, n_axes=config.get("nAxes", None), is_stage=not config["isManipulator"])
         self._quitRequested = False
         self._lastMove: Optional[SensapexMoveFuture] = None
@@ -97,7 +103,8 @@ class Sensapex(Stage):
             self.dev.set_max_acceleration(config["maxAcceleration"])
 
         self._lastUpdate = 0
-        self._lastPos = None
+        self._lastPos = [0] * self.nAxes
+        self._lastMove: Optional[SensapexMoveFuture] = None
         self._positionUpdates = queue.Queue()
         self._positionWatcher = threading.Thread(target=self._positionWatcherTask, daemon=True)
         self._positionWatcher.start()
@@ -116,7 +123,7 @@ class Sensapex(Stage):
         Sensapex.devices[self.devid] = self
 
     def axes(self):
-        return ("x", "y", "z")[:self.dev.n_axes()]
+        return ("x", "y", "z", "d")[:self.dev.n_axes()]
 
     def capabilities(self):
         """Return a structure describing the capabilities of this device"""
@@ -124,39 +131,40 @@ class Sensapex(Stage):
             return self.config["capabilities"]
         else:
             return {
-                "getPos": (True, True, True),
-                "setPos": (True, True, True),
-                "limits": (False, False, False),
+                "getPos": (True,) * self.nAxes,
+                "setPos": (True,) * self.nAxes,
+                "limits": (False,) * self.nAxes,
             }
 
-    def axisTransform(self):
-        if self._axisTransform is None:
-            # sensapex manipulators do not have orthogonal axes, so we set up a 3D transform to compensate:
-            a = self.xPitch * np.pi / 180.0
-            s = self.scale
-            pts1 = np.array([  # unit vector in sensapex space
-                [0, 0, 0],
-                [1, 0, 0],
-                [0, 1, 0],
-                [0, 0, 1],
-            ])
-            pts2 = np.array([  # corresponding vector in global space
-                [0, 0, 0],
-                [s[0] * np.cos(a), 0, -s[0] * np.sin(a)],
-                [0, s[1], 0],
-                [0, 0, s[2]],
-            ])
-            tr = solve3DTransform(pts1, pts2)
-            tr[3, 3] = 1
-            self._axisTransform = Transform3D(tr)
-            self._inverseAxisTransform = None
-        return self._axisTransform
+    # TODO what do we do about a default axis transform?
+    # def axisTransform(self):
+    #     if self._axisTransform is None:
+    #         # sensapex manipulators do not have orthogonal axes, so we set up a 3D transform to compensate:
+    #         a = self.xPitch * np.pi / 180.0
+    #         s = self.scale
+    #         pts1 = np.array([  # unit vector in sensapex space
+    #             [0, 0, 0],
+    #             [1, 0, 0],
+    #             [0, 1, 0],
+    #             [0, 0, 1],
+    #         ])
+    #         pts2 = np.array([  # corresponding vector in global space
+    #             [0, 0, 0],
+    #             [s[0] * np.cos(a), 0, -s[0] * np.sin(a)],
+    #             [0, s[1], 0],
+    #             [0, 0, s[2]],
+    #         ])
+    #         tr = solve3DTransform(pts1, pts2)
+    #         tr[3, 3] = 1
+    #         self._axisTransform = Transform3D(tr)
+    #         self._inverseAxisTransform = None
+    #     return self._axisTransform
 
     def stop(self, reason=None):
         """Stop the manipulator immediately.
         """
         with self.lock:
-            self.dev.stop(reason=reason)
+            self.dev.stop()
             # also stop the last move since it might be stepwise and just keep requesting more steps
             lastMove = self._lastMove
             self._lastMove = None  # prevent recursion, since lastMove.stop() will call this method again
@@ -174,7 +182,7 @@ class Sensapex(Stage):
             # using timeout=0 forces read from cache (the monitor thread ensures
             # these values are up to date)
             try:
-                pos = self.dev.get_pos(timeout=0)[:3]
+                pos = self.dev.get_pos(timeout=0)
             except TypeError:
                 # some events requesting position may still be floating around at quit time;
                 # we can ignore these errors here
@@ -222,8 +230,8 @@ class Sensapex(Stage):
             linear = True
         if self._force_nonlinear_movement:
             linear = False
+        speed = self._interpretSpeed(speed)
         with self.lock:
-            speed = self._interpretSpeed(speed)
             self._lastMove = SensapexMoveFuture(self, pos, speed, linear, name=name, **kwds)
             return self._lastMove
 
@@ -236,7 +244,7 @@ class Sensapex(Stage):
         likely_miscalibration_tolerance = 200  # device coordinates in µm
         suggestion = "Does this device need to have its zero calibration run?"
         for axis, limit in enumerate(self._limits):
-            ax_name = 'xyz'[axis]
+            ax_name = 'xyzd'[axis]
             x = pos[axis]
             if x is None:
                 continue
@@ -278,18 +286,69 @@ class SensapexMoveFuture(MoveFuture):
             self._taskDone(interrupted=False)
             return
 
+        self._moveReq = None
         if self.speed >= 1e-6:
-            self._moveReq = self.dev.dev.goto_pos(pos, self.speed * 1e6, simultaneous=linear, linear=linear)
-            self._monitorThread = threading.Thread(target=self._watchForFinish, daemon=True, name=f"{name} sensapex monitor")
+            if self.dev.nAxes == 4:
+                # we have to break up the movement because D is always separate from Z
+                self._monitorThread = threading.Thread(
+                    target=self._4AxisMove, daemon=True, name=f"{name} sensapex 4-axis move"
+                )
+            else:
+                self._moveReq = self.dev.dev.goto_pos(
+                    pos, self.speed * 1e6, simultaneous=linear, linear=linear
+                )
+                self._monitorThread = threading.Thread(
+                    target=self._watchForFinish, daemon=True, name=f"{name} sensapex monitor"
+                )
         else:
             # uMp has trouble with very slow speeds, so we do this manually by looping over small steps
-            self._moveReq = None
-            self._monitorThread = threading.Thread(target=self._stepwiseMove, daemon=True, name=f"{name} sensapex stepwise move")
+            self._monitorThread = threading.Thread(
+                target=self._stepwiseMove, daemon=True, name=f"{name} sensapex stepwise move"
+            )
         self._monitorThread.start()
+
+    def _4AxisMove(self):
+        # for advancing forward in D, move in XYZ first. otherwise, retract first in D.
+        pos = list(self.targetPos)
+        start = list(self.startPos)
+        if pos[3] > start[3]:
+            # move XYZ first
+            waypoint = pos[:3] + start[3:]
+        else:
+            waypoint = start[:3] + pos[3:]
+
+        self._moveReq = self.dev.dev.goto_pos(
+            waypoint, self.speed * 1e6, simultaneous=self._linear, linear=self._linear
+        )
+        if not self._waitFor(self._moveReq):
+            self._taskDone(
+                interrupted=self._moveReq.interrupted,
+                error=self._generateErrorMessage(),
+                excInfo=None,
+            )
+            return
+        self._moveReq = self.dev.dev.goto_pos(
+            pos, self.speed * 1e6, simultaneous=self._linear, linear=self._linear
+        )
+        self._waitFor(self._moveReq)
+        self._taskDone(
+            interrupted=self._moveReq.interrupted,
+            error=self._generateErrorMessage(),
+            excInfo=None,
+        )
+
+    def _waitFor(self, moveReq):
+        """Wait for a sensapex MoveRequest, while watching for our own stop signal. Return whether
+        the move completed successfully."""
+        while not moveReq.finished_event.wait(0.2):
+            if self._stopRequested:
+                moveReq.interrupt(reason=self._errorMessage)
+                return False
+        return not moveReq.interrupted
 
     def _watchForFinish(self):
         moveReq = self._moveReq
-        moveReq.finished_event.wait()
+        self._waitFor(moveReq)
         self._taskDone(
             interrupted=moveReq.interrupted,
             error=self._generateErrorMessage(),
@@ -319,13 +378,10 @@ class SensapexMoveFuture(MoveFuture):
             # request the next step and wait
             lastTarget = currentTarget
             self._moveReq = self.dev.dev.goto_pos(currentTarget, speed=1.0, simultaneous=True, linear=True)
-            while not self._moveReq.finished_event.wait(0.2):
-                if self._stopRequested:
-                    self._moveReq.interrupt(reason=self._errorMessage)
-                if self._moveReq.interrupted:
-                    break
+            if not self._waitFor(self._moveReq):
+                break
 
-            if fractionComplete == 1.0 or self._moveReq.interrupted:
+            if fractionComplete == 1.0:
                 break
 
         self._taskDone(
@@ -450,9 +506,10 @@ class SensapexInterface(Qt.QWidget):
     def update(self):
         globalPos = self.dev.globalPosition()
         stagePos = self.dev.getPosition()
-        for i in self.posLabels:
-            text = pg.siFormat(globalPos[i], suffix="m", precision=5)
+        for i, v in enumerate(globalPos):
+            text = pg.siFormat(v, suffix="m", precision=5)
             self.posLabels[i][0].setText(text)
+        for i in self.posLabels:
             self.posLabels[i][1].setText(str(stagePos[i]))
 
     def goHomeClicked(self):
