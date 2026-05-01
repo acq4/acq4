@@ -14,17 +14,6 @@ LOG_EVENT_TYPES = frozenset({
     'tip_clean_changed',
 })
 
-# Event types stored in the in-memory event log and shown in the UI.
-LOG_EVENT_TYPES = frozenset({
-    'state_event',
-    'state_change',
-    'new_pipette',
-    'pipette_calibrated',
-    'move_requested',
-    'new_patch_attempt',
-    'tip_clean_changed',
-})
-
 import numpy as np
 from neuroanalysis.test_pulse import PatchClampTestPulse
 
