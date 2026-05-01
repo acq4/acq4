@@ -23,12 +23,11 @@ class CameraInterface(CameraModuleInterface):
     """
     sigNewFrame = Qt.Signal(object, object)  # self, frame
 
-    def __init__(self, camera, module):
-        CameraModuleInterface.__init__(self, camera, module)
+    def __init__(self, camera, window):
+        CameraModuleInterface.__init__(self, camera, window)
 
         camera.sigNewFrame.connect(self.handleNewFrame)
-        self.module = module
-        self.view = module.getView()
+        self.view = window.getView()
         self.hasQuit = False
         self.boundaryItems = {}
 
@@ -91,7 +90,7 @@ class CameraInterface(CameraModuleInterface):
 
         # Set up microscope objective borders
         self.borders = CameraItemGroup(self.cam)
-        self.module.addItem(self.borders)
+        self.win().addItem(self.borders)
         self.borders.setZValue(-1)
         
         self.cam.sigGlobalTransformChanged.connect(self.globalTransformChanged)
@@ -168,15 +167,15 @@ class CameraInterface(CameraModuleInterface):
         ## if the camera is running, then this is taken care of in drawFrame to
         ## ensure that the image remains stationary on screen.
         if not self.cam.isRunning():
-            tr = pg.SRTTransform(self.cam.globalTransform())
+            tr = self.cam.globalTransform().as_pyqtgraph().as2D()
             self.updateTransform(tr)
 
     def imageUpdated(self, frame):
         # New image is displayed; update image transform
-        self.imageItem.setTransform(frame.frameTransform().as2D())
+        self.imageItem.setTransform(frame.frameTransform().as_pyqtgraph().as2D())
         
         # Update viewport to correct for scope movement/scaling
-        tr = pg.SRTTransform(frame.deviceTransform())
+        tr = frame.deviceTransform().as_pyqtgraph().as2D()
         self.updateTransform(tr)
 
         self.imageItemGroup.setTransform(tr)
@@ -187,7 +186,7 @@ class CameraInterface(CameraModuleInterface):
 
         # Only the active interface is allowed to move the view
         # This prevents multiple cameras from fighting over view control
-        isActive = self.module.activeInterface is self
+        isActive = self.win().activeInterface is self
 
         scale = tr.getScale()
         if scale != self.lastCameraScale:
@@ -250,7 +249,7 @@ class CameraInterface(CameraModuleInterface):
     def cameraStarted(self):
         self.imagingCtrl.acquisitionStarted()
         # Adjust view when switching from another camera
-        prevIface = self.module.activeInterface
+        prevIface = self.win().activeInterface
         if prevIface is not self and hasattr(prevIface, 'cam'):
             prevBounds = prevIface.cam.getBoundary(globalCoords=True, mode="roi")
             thisBounds = self.cam.getBoundary(globalCoords=True, mode="roi")
@@ -262,13 +261,13 @@ class CameraInterface(CameraModuleInterface):
             thisCenter = Point(thisBounds[0] + thisBounds[2] / 2, thisBounds[1] + thisBounds[3] / 2)
             self.view.translateBy(thisCenter - prevCenter)
             # Sync tracked state so the next updateTransform doesn't re-apply
-            tr = pg.SRTTransform(self.cam.globalTransform())
+            tr = self.cam.globalTransform().as_pyqtgraph().as2D()
             self.lastCameraPosition = tr.getTranslation()
             self.lastCameraScale = tr.getScale()
         # Make this the active interface so it controls the view
-        self.module.setActiveInterface(self)
+        self.win().setActiveInterface(self)
         # Bring this camera's image above all others
-        for iface in self.module.interfaces.values():
+        for iface in self.win().interfaces.values():
             if hasattr(iface, 'imageItemGroup') and iface is not self:
                 iface.imageItemGroup.setZValue(-3)
         self.imageItemGroup.setZValue(-2)
@@ -308,8 +307,8 @@ class CameraInterface(CameraModuleInterface):
         if ps is None:
             return
 
-        m = self.cam.globalTransform()
-        self.cameraItemGroup.setTransform(pg.SRTTransform(m))
+        m = self.cam.globalTransform().as_pyqtgraph().as2D()
+        self.cameraItemGroup.setTransform(m)
 
     def setRegion(self, rgn=None):
         if rgn is None:
@@ -366,7 +365,7 @@ class CameraInterface(CameraModuleInterface):
         self.cam.logger.debug("Camera stopped acquisition.")
 
     def showMessage(self, msg, delay=2000):
-        self.module.showMessage(msg, delay)
+        self.win().showMessage(msg, delay)
 
     def getImageItem(self):
         return self.imageItem
