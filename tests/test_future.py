@@ -300,11 +300,14 @@ class TestFuture(unittest.TestCase):
     def test_future_getResult_raises_if_stopped(self):
         fut = Future()
         fut.stop("user requested stop")
+        assert fut.errorMessage() == "user requested stop"
         # Simulate task acknowledging stop
         fut._taskDone(interrupted=True) # error message is already set by stop()
+        assert fut.errorMessage() == "user requested stop"
 
         with self.assertRaises(Future.Stopped) as cm:
             fut.getResult()
+        assert fut.errorMessage() == "user requested stop"
         self.assertIn(r"did not complete: user requested stop", str(cm.exception))
 
     def test_future_double_taskDone_call(self):
@@ -313,7 +316,7 @@ class TestFuture(unittest.TestCase):
         self.assertTrue(fut.isDone())
         with self.assertRaises(ValueError) as cm:
             fut._taskDone(returnValue="second call")
-        self.assertEqual(str(cm.exception), "_taskDone has already been called.")
+        self.assertEqual(str(cm.exception), "Cannot alter future after future is done.")
 
     def test_future_state_changes_and_signals(self):
         fut = Future()

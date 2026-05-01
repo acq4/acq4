@@ -40,7 +40,7 @@ class Sonicator(Device):
         return True  # TODO unbroke this
         pos = self.patchPipetteDevice.pipetteDevice.globalPosition()
         well = self.patchPipetteDevice.pipetteDevice.getCleaningWell()
-        if well and well.containsPoint(pos):
+        if well and well.containsPoint(pos, tolerance=5e-6):
             return True
         lower_bound = self.config.get("unsafeSonicationBelow")
         if lower_bound is not None:

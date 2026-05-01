@@ -40,10 +40,10 @@ class DoverStage(Stage):
         self.dev = self.msapi['smartstage']
         self.dev.default_acceleration = config.get("defaultAcceleration", 50.0)
         self.dev.enable()
+        self.dev.set_callback(self.posChanged)
         self._lastMove = None
         Stage.__init__(self, man, config, name)
         self.posChanged(self.dev.pos(refresh=True))
-        self.dev.set_callback(self.posChanged)
         man.declareInterface(name, ['stream_dock'], self)
 
     def axes(self):
@@ -60,7 +60,7 @@ class DoverStage(Stage):
                 "limits": (False, False, False),
             }
 
-    def stop(self):
+    def stop(self, reason=None):
         """Stop the stage immediately."""
         return self.dev.stop()
 
@@ -82,9 +82,6 @@ class DoverStage(Stage):
             return self._lastMove.target
         else:
             return None
-
-    # def deviceInterface(self, win):
-    #     return DoverStageInterface(self, win)
 
     def configure_dock(self, stream_dock_device):
         """Register Stream Dock toggle buttons for enabling / disabling each axis.
@@ -134,7 +131,7 @@ class DoverMoveFuture(MoveFuture):
     def __init__(self, dev, pos, speed):
         MoveFuture.__init__(self, dev, pos, speed)
         self.dev = dev
-        self.target = pos
+        self.target = np.asarray(pos)
         self._future = self.dev.dev.move(list(pos), self.speed * 1e3)
         self._future.set_callback(self._future_finished)
 

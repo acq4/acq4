@@ -933,7 +933,7 @@ class Imager(Module):
 
     def imageUpdated(self, frame):
         ## New image is displayed; update image transform
-        self.imageItem.setTransform(frame.globalTransform().as2D())
+        self.imageItem.setTransform(frame.globalTransform().as_pyqtgraph().as2D())
 
     # def PMT_Run(self):
     #     """
@@ -1074,12 +1074,13 @@ class ImagerCamModInterface(CameraModuleInterface):
     """For plugging in the 2p imager system to the camera module.
     """
     canImage = True
-    def __init__(self, imager, mod):
+
+    def __init__(self, imager, win):
         self.imager = imager
 
-        CameraModuleInterface.__init__(self, imager, mod)
+        CameraModuleInterface.__init__(self, imager, win)
 
-        mod.window().addItem(imager.imageItem, z=10)
+        win.addItem(imager.imageItem, z=10)
 
         self.imager.imagingThread.sigNewFrame.connect(self.newFrame)
 
@@ -1252,9 +1253,9 @@ class ImagingThread(Thread):
         info = meta.copy()
         info["time"] = start
 
-        info["deviceTranform"] = pg.SRTTransform3D(self.scannerDev.globalTransform())
-        tr = rectSystem.imageTransform()
-        info["transform"] = pg.SRTTransform3D(tr)
+        # TODO this needs to be coorx'd
+        info["deviceTransform"] = self.scannerDev.globalTransform()
+        info["transform"] = rectSystem.imageTransform()
 
         frame = ImagingFrame(pmtData, rectSystem.copy(), info)
         self.sigNewFrame.emit(frame)

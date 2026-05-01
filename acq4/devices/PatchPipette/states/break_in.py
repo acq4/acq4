@@ -78,6 +78,9 @@ class BreakInState(PatchPipetteState):
         lastPulse = ptime.time()
         attempt = 0
 
+        patchrec['attemptedBreakin'] = True
+        patchrec['breakinSuccessful'] = False
+
         try:
             while True:
                 time_until_next = (lastPulse + config['pulseInterval']) - ptime.time()
@@ -90,30 +93,25 @@ class BreakInState(PatchPipetteState):
                 self.setState('Break in attempt %d' % attempt)
                 self.attemptBreakIn(nPulses, pdur, press)
                 attempt += 1
-                patchrec['attemptedBreakin'] = True
                 lastPulse = ptime.time()
 
                 if attempt >= len(config['nPulses']):
-                    raise BreakInFailed(f'Breakin failed after {attempt} attempts')
+                    raise BreakInFailed(f'Breakin attempted {attempt} times without success')
         except BreakInSuccessful:
             patchrec['breakinSuccessful'] = True
             patchrec['spontaneousBreakin'] = attempt == 0
             return {"state": 'whole cell'}
         except BreakInFailed as exc:
             patchrec['breakinSuccessful'] = False
-            self._taskDone(interrupted=True, error=exc.args[0])
-            return {"state": config['fallbackState']}
-        except Exception as exc:
-            patchrec['breakinSuccessful'] = False
-            self._taskDone(interrupted=True, error=str(exc))
-            return {"state": config['fallbackState']}
+            self.setState(str(exc))
+            return {"state": self.config['fallbackState']}
 
     def attemptBreakIn(self, nPulses, duration, pressure):
-        start = ptime.time()
-        stop = start + duration
         for i in range(nPulses):
             # get the next test pulse
             self.dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
+            start = ptime.time()
+            stop = start + duration
             try:
                 # while pulse is active, monitor for break-in or stop request
                 while True:
@@ -137,11 +135,14 @@ class BreakInState(PatchPipetteState):
         Raises BreakInSuccessful or BreakInFailed as appropriate.
         Returns None if the break in is still ongoing.
         """
+        start = ptime.time()
         while True:
             self.checkStop()
             tps = self.getTestPulses(timeout=0.2)
             if len(tps) > 0:
                 break
+            if ptime.time() - start > 10:
+                raise BreakInFailed('No test pulse received for 10 seconds during break-in attempt.')
         tp = tps[-1]
 
         analysis = tp.analysis
