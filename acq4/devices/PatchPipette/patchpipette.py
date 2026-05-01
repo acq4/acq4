@@ -3,6 +3,21 @@ from __future__ import annotations
 from collections import OrderedDict
 from threading import RLock
 
+import numpy as np
+
+from acq4.devices.PatchClamp.patchclamp import PatchClamp
+from acq4.util import Qt
+from acq4.util import ptime
+from coorx import Point
+from neuroanalysis.test_pulse import PatchClampTestPulse
+from .devgui import PatchPipetteDeviceGui
+from .statemanager import PatchPipetteStateManager
+from ..Camera import Camera
+from ..Device import Device
+from ..Pipette import Pipette
+from ..PressureControl import PressureControl
+from ..Sonicator import Sonicator
+
 # Event types stored in the in-memory event log and shown in the UI.
 LOG_EVENT_TYPES = frozenset({
     'state_event',
@@ -13,21 +28,6 @@ LOG_EVENT_TYPES = frozenset({
     'new_patch_attempt',
     'tip_clean_changed',
 })
-
-import numpy as np
-from neuroanalysis.test_pulse import PatchClampTestPulse
-
-from acq4.devices.PatchClamp.patchclamp import PatchClamp
-from acq4.util import Qt
-from acq4.util import ptime
-from coorx import Point
-from .devgui import PatchPipetteDeviceGui
-from .statemanager import PatchPipetteStateManager
-from ..Camera import Camera
-from ..Device import Device
-from ..Pipette import Pipette
-from ..PressureControl import PressureControl
-from ..Sonicator import Sonicator
 
 
 class PatchPipette(Device):
