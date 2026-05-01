@@ -365,7 +365,11 @@ class PatchPipetteState(Future):
         fut = self.dev.cell._trackingFuture
         if fut is not None:
             self.dev.cell.enableTracking(False, reason=reason)
-            self.waitFor(fut)
+            # wait on future until it stops
+            try:
+                self.waitFor(fut)
+            except fut.Stopped:
+                pass
 
     def startVisualTargetTracking(self, allow_refresh_reference=True):
         cell = self.dev.cell
