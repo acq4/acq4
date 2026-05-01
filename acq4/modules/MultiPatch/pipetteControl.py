@@ -2,8 +2,10 @@ import numpy as np
 import re
 
 import pyqtgraph as pg
+from acq4.util import ptime
 from acq4.devices.PatchPipette import PatchPipette
 from acq4.util import Qt
+from acq4.util.ui.pipetteEventLog import PipetteEventLog
 from neuroanalysis.data import TSeries
 from neuroanalysis.test_pulse import PatchClampTestPulse
 
@@ -117,13 +119,24 @@ class PipetteControl(Qt.QWidget):
 
         self._pc1 = MousePressCatch(self.ui.stateText, self.stateTextClicked)
 
+        # Event log: added to the bottom of the clamp widget's internal layout,
+        # so it sits under the Clamp/Holding/auto controls within the pipette's rows.
+        self._eventLog = PipetteEventLog()
+        self.ui.widget_6.layout().addWidget(self._eventLog, 4, 0, 2, 7)
+
+        if isinstance(pipette, PatchPipette):
+            self.pip.sigNewEvent.connect(self._pipetteEventLogged)
+            for ev in pipette.eventLog():
+                if ev['event'] == 'new_patch_attempt':
+                    self._eventLog.clear(start_time=ev['event_time'])
+                self._eventLog.addEvent(ev['event_time'], ev['event'], ev)
+
         self.plots = [
-            PlotWidget(mode='test pulse'), 
+            PlotWidget(mode='test pulse'),
             PlotWidget(mode='ss resistance')
         ]
         for i, plt in enumerate(self.plots):
             plt.plot.setObjectName(f"MultiPatch_{pipette.name()}_plot{i+1}")
-            self.ui.plotLayout.addWidget(plt)
             plt.sigModeChanged.connect(self.plotModeChanged)
 
         if isinstance(self.pip, PatchPipette):
@@ -326,6 +339,14 @@ class PipetteControl(Qt.QWidget):
             self.ui.autoBiasTargetSpin.setEnabled(True)
 
         self._updateActiveHoldingUi()
+
+    def _pipetteEventLogged(self, pip, event):
+        if event['event'] == 'new_patch_attempt':
+            self._eventLog.clear(start_time=event['event_time'])
+        self._eventLog.addEvent(event['event_time'], event['event'], event)
+
+    def clearEventLog(self):
+        self._eventLog.clear(start_time=ptime.time())
 
     def newPipetteRequested(self):
         self.ui.newPipetteBtn.setStyleSheet("QPushButton {border: 2px solid #F00;}")
