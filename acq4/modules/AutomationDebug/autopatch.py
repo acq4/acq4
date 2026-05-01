@@ -24,7 +24,7 @@ class Autopatcher:
     def _handleAutopatchDemoFinish(self, fut):
         win = self._window
         win.sigWorking.emit(False)
-        win.ui.reuseLastCellBtn.setEnabled(win._cell is not None)
+        win.ui.reuseLastCellBtn.setEnabled(win._cell is not None or bool(win._ranked_cells))
 
     @future_wrap
     def _autopatchDemo(self, _future):

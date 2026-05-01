@@ -370,7 +370,7 @@
       <item>
        <widget class="QPushButton" name="reuseLastCellBtn">
         <property name="text">
-         <string>Reuse Last Cell</string>
+         <string>Reuse All Cells</string>
         </property>
         <property name="enabled">
          <bool>false</bool>
