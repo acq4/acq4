@@ -325,7 +325,6 @@ class DirTreeWidget(Qt.QTreeWidget):
                 self.clearTree(child)
                 handle = self.handle(child)
                 self.unwatch(handle)
-                #del self.handles[child]
                 del self.items[handle]
             root.removeChild(child)
 

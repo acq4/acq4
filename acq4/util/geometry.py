@@ -1552,7 +1552,7 @@ class Geometry:
 
         self.color = config.pop("color", None)
 
-        self._transform = load_transform_from_anything(config.pop("transform", {}))
+        self._transform = load_transform(config.pop("transform", {}))
 
         self._children = []
         for name, child_config in config.pop("children", {}).items():
@@ -1954,7 +1954,7 @@ class Plane:
         return str(self)
 
 
-def load_transform_from_anything(thing, **kwargs) -> Transform:
+def load_transform(thing, **kwargs) -> Transform:
     if isinstance(thing, pg.SRTTransform):
         return SRT3DTransform.from_pyqtgraph(thing, **kwargs)
     elif isinstance(thing, Transform):

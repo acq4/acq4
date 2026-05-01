@@ -165,7 +165,7 @@ class Sensapex(Stage):
         """Stop the manipulator immediately.
         """
         with self.lock:
-            self.dev.stop()
+            self.dev.stop(reason)
             # also stop the last move since it might be stepwise and just keep requesting more steps
             lastMove = self._lastMove
             self._lastMove = None  # prevent recursion, since lastMove.stop() will call this method again

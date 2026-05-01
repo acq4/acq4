@@ -76,9 +76,6 @@ class DoverStage(Stage):
         self._lastMove = DoverMoveFuture(self, pos, speed, name=name)
         return self._lastMove
 
-    # def deviceInterface(self, win):
-    #     return DoverStageInterface(self, win)
-
     def configure_dock(self, stream_dock_device):
         """Register Stream Dock toggle buttons for enabling / disabling each axis.
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import collections
 import contextlib
 import json
 import os
@@ -12,23 +13,25 @@ import numpy as np
 import pyqtgraph as pg
 from acq4 import getManager
 from acq4.devices.Device import Device
-from acq4.devices.OptomechDevice import OptomechDevice
+from acq4.devices.OptomechDevice import OptomechDevice, OptomechDeviceVisualizerAdapter
 from acq4.devices.Stage import Stage, MovePathFuture
 from acq4.modules.Camera import CameraModuleInterface
 from acq4.util import Qt, ptime
 from acq4.util.future import future_wrap, Future
 from acq4.util.target import Target
-from coorx import AffineTransform
+from coorx import AffineTransform, TTransform
 from pyqtgraph import Point, siFormat
+from pyqtgraph import opengl as gl
 from .planners import PipettePathGenerator
 from .planners import defaultMotionPlanners
 from .tracker import ResnetPipetteTracker
 from ..Camera import Camera
-from ...modules.Visualize3D.travelers_proxy import MovePathException
 from ..InteractionSite import InteractionSite
+from ...modules.Visualize3D.travelers_proxy import MovePathException
 from ...util.PromptUser import prompt
 from ...util.geometry import Plane
 from ...util.imaging.sequencer import run_image_sequence
+from ...util.threadrun import inGuiThread
 
 CamModTemplate = Qt.importTemplate('.cameraModTemplate')
 
@@ -313,7 +316,7 @@ class Pipette(Device, OptomechDevice):
         return iface
 
     def visualize3DAdapter(self, win):
-        from .visualization import PipetteVisualizerAdapter
+        from acq4.devices.Pipette.visualization import PipetteVisualizerAdapter
         return PipetteVisualizerAdapter(self, win)
 
     def tipOffsetIsReasonable(self, pos) -> bool:
@@ -880,11 +883,11 @@ class Pipette(Device, OptomechDevice):
         return PipetteRecorder(self)
 
     @future_wrap
-    def iterativelyFindTip(self, max_reps=10, found_threshold=3e-6, delay_after_move=0.4, 
+    def iterativelyFindTip(self, max_reps=10, found_threshold=3e-6, delay_after_move=0.4,
                            max_allowed_offset=None, delay_after_update=0, reserve_devices=True,
                            go_to_tip_first=False, stack_mode=False, focus_above=0, _future=None):
         """Iteratively refine the tip position by finding the tip in frame and focusing, until convergence.
-        
+
         Returns if convergence is reached (tip position changes less than *found_threshold* between iterations) or after *max_reps* iterations.
         Otherwise, raises an exception.
 
@@ -1079,7 +1082,7 @@ class PipetteCamModInterface(CameraModuleInterface):
 
     canImage = False
 
-    def __init__(self, dev: Pipette, win, showUi=True):
+    def __init__(self, dev: "Pipette", win, showUi=True):
         CameraModuleInterface.__init__(self, dev, win)
         self._haveTarget = False
         self._showUi = showUi
