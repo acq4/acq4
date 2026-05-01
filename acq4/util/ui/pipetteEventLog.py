@@ -10,7 +10,7 @@ def format_event(event_type: str, event_data: dict) -> str:
     if event_type == 'state_change':
         return f"\u2192 {event_data.get('state', '?')}"
     elif event_type == 'state_event':
-        return event_data['info']
+        return event_data.get('info', event_type)
     elif event_type == 'new_pipette':
         return "new pipette"
     elif event_type == 'pipette_calibrated':

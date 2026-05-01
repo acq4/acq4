@@ -348,7 +348,7 @@ class PipetteMotionPlanner:
             self.future.stop()
 
     def _move(self):
-        return self.pip._movePath(self.path(), name=f"{self.pip.name()} {self.name}")
+        return self.pip._movePath(self.path(), name=f"{self.pip.name()} {self.name} path")
 
     def path(self):
         startPosGlobal = self.pip.globalPosition()
