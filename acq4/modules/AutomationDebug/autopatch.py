@@ -33,7 +33,6 @@ class Autopatcher:
         ppip: PatchPipette = win.patchPipetteDevice
         man = win.module.manager
         data_manager = runInGuiThread(man.getModule, "Data Manager")
-        folder_selector = runInGuiThread(man.getModule, "Data Manager").ui.newFolderList
         multipatch_win = runInGuiThread(man.getModule, 'MultiPatch').win
         demo_dir = self._makeValidDemoDir()
         man.setCurrentDir(demo_dir)
