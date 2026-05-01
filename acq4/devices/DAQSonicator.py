@@ -218,13 +218,6 @@ class DAQSonicator(Sonicator):
             protocol2['items'] = [self._cleanProtocol(item) for item in protocol2['items'].values()]
         return protocol2
 
-    def _protocolDuration(self, protocol: str | dict) -> float:
-        if isinstance(protocol, str):
-            protocol = load_stimulus(json.loads(protocol))
-        else:
-            protocol = load_stimulus(protocol)
-        return protocol.total_global_end_time
-
     def calcVoltage(self, frequency: float) -> float:
         """
         Calculate a safe voltage amplitude for the PA3CKW piezo chip at any frequency.
