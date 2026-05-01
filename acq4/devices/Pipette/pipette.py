@@ -959,6 +959,8 @@ class Pipette(Device, OptomechDevice):
         fut = self.tracker.estimatePositionFromStack()
         _future.waitFor(fut)
         pos, analysis = fut.getResult()
+        if pos is None:
+            raise RuntimeError(f"Pipette tip search failed")
         dist = np.linalg.norm(np.array(pos) - np.array(startPos))
         if dist > maxOffsetDistance:
             raise ValueError(f"Tip offset exceeded maximum allowed distance: {dist} > {maxOffsetDistance}")
