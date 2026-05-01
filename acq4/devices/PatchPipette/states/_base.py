@@ -160,6 +160,13 @@ class PatchPipetteState(Future):
     def setResult(self, *args, **kwargs):
         if 'error' in kwargs:
             self.setState(f"{self.stateName} failed: {kwargs['error']}")
+        if 'excInfo' in kwargs and kwargs['excInfo'] is not None:
+            exc_type, exc_value, _ = kwargs['excInfo']
+            if issubclass(exc_type, Future.StopRequested):
+                self.dev.logger.debug(f"{self.stateName} stopped: {exc_value}")
+            else:
+                self.setState(f"Exception in {self.stateName}: {exc_type.__name__}: {exc_value}")
+                self.dev.logger.error(f"Exception in {self.stateName}:", exc_info=kwargs['excInfo'])
         super().setResult(*args, **kwargs)
 
     def initialize(self):
