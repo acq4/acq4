@@ -2,11 +2,8 @@
 """
 import os
 import sys
-import weakref
 
 import pyqtgraph as pg
-
-from acq4.util import ptime
 
 # make one large namespace containing everything; pyqtgraph handles translation
 # between different Qt versions
@@ -17,6 +14,10 @@ for mod in [pg.Qt, pg.Qt.QtGui, pg.Qt.QtCore, pg.Qt.QtTest, pg.Qt.QtWidgets]:
         if k.startswith('__'):
             ns.pop(k)
     globals().update(ns)
+
+if not hasattr(pg.Qt.QtCore, 'Signal'):
+    Signal = pg.Qt.pyqtSignal
+    Slot = pg.Qt.pyqtSlot
 
 # signal disconnect with exception handling
 # allows (calling disconnect even if no connection currently exists)
@@ -185,3 +186,22 @@ class FlowLayout(pg.QtWidgets.QLayout):
             line_height = max(line_height, item.sizeHint().height())
 
         return y + line_height - rect.y()
+
+
+def signalEmitter(*signal_args):
+    """Create and return a simple QObject that contains a signal with the given arguments. Note that
+    your code must keep a reference to the returned object in order for the signal to remain valid, and
+    that moveToThread will need to be implemented if you want your object to move between threads."""
+    class Emitter(QObject):
+        signal = Signal(*signal_args)
+
+        def emit(self, *args):
+            self.signal.emit(*args)
+
+        def connect(self, *args):
+            self.signal.connect(*args)
+
+        def disconnect(self, *args):
+            self.signal.disconnect(*args)
+
+    return Emitter()

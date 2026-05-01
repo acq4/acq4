@@ -61,6 +61,7 @@ class PatchPipetteStateManager(Qt.QObject):
     def __init__(self, dev):
         Qt.QObject.__init__(self)
         self.dev = dev
+        self.logger = get_logger(f"{dev.name()}.StateManager")
         self.dev.sigStateChanged.connect(self.stateChanged)
         self.dev.sigActiveChanged.connect(self.activeChanged)
         self.currentJob = None
@@ -185,7 +186,6 @@ class PatchPipetteStateManager(Qt.QObject):
         fallback = None
         if oldJob is not None:
             fallback = {"state": oldJob.stateName, **oldJob.config}
-        self.stopJob(allowNextState=False)
         try:
             stateHandler = self.stateHandlers[state]
 
@@ -194,25 +194,33 @@ class PatchPipetteStateManager(Qt.QObject):
             if configOverride is not None:
                 config.update(configOverride)
 
+            self.logger.debug(f"Configuring next state {state} with config: {config}")
             job = stateHandler(self.dev, config)
+        except Exception:
+            raise
+        else:
+            self.logger.debug(f"Stopping previous state {oldJob.stateName if oldJob else None}")
+            self.stopJob(allowNextState=False)
+
+        try:
             fallback = job.nextState
             job.sigStateChanged.connect(self.jobStateChanged)
             job.sigFinished.connect(self.jobFinished)
             oldState = None if oldJob is None else oldJob.stateName
             self.currentJob = job
             self.dev._setState(state, oldState)  # logging / accounting
-            job.initialize()
+            job.start()
             self.sigStateChanged.emit(self, job)
             return job
         except Exception:
-            # in case of failure, attempt to restore previous state
+            # in case of failure, go to fallback state
             self.currentJob = None
             if not allowReset or fallback is None:
                 raise
             try:
                 self.configureState(fallback["state"], allowReset=False, configOverride=fallback)
             except Exception:
-                self.dev.logger.exception("Error occurred while trying to reset state from a previous error:")
+                self.logger.exception("Error occurred while trying to reset state from a previous error:")
             raise
 
     def activeChanged(self, pip, active):
@@ -239,11 +247,11 @@ class PatchPipetteStateManager(Qt.QObject):
             try:
                 job.wait(timeout=10)
             except job.Timeout:
-                self.dev.logger.exception(f"Timed out waiting for job {job} to complete")
+                self.logger.exception(f"Timed out waiting for job {job} to complete")
             except job.Stopped:
                 pass
             except Exception:
-                self.dev.logger.exception(f"{self.dev.name()} failed in state {job.stateName}:")
+                self.logger.exception(f"{self.dev.name()} failed in state {job.stateName}:")
             self.jobFinished(job, allowNextState=allowNextState)
 
     def jobStateChanged(self, job, state):
@@ -253,13 +261,16 @@ class PatchPipetteStateManager(Qt.QObject):
         try:
             job.cleanup().wait()
         except Exception:
-            self.dev.logger.exception(f"Error during {job.stateName} cleanup:")
+            self.logger.exception(f"Error during {job.stateName} cleanup:")
         disconnect(job.sigStateChanged, self.jobStateChanged)
         disconnect(job.sigFinished, self.jobFinished)
-        if allowNextState and job.nextState.get("state") is not None:
-            config = job.nextState
-            state = config.pop("state")
-            self.requestStateChange(state, config)
+        if allowNextState:
+            if job.nextState.get("state") is not None:
+                config = job.nextState
+                state = config.pop("state")
+                self.requestStateChange(state, config)
+            else:
+                self.logger.debug(f"No next state specified by {job.stateName}")
 
 
 class ProfileParameter(Parameter):

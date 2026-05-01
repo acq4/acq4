@@ -147,6 +147,8 @@ class DataManager(Module):
 
     def setLogDir(self):
         d = self.selectedFile()
+        if d is None:
+            raise ValueError("Select a directory first to set as log directory")
         if not isinstance(d, DirHandle):
             d = d.parent()
         self.manager.setLogDir(d)
@@ -242,6 +244,7 @@ class DataManager(Module):
 
         if ftype == 'Folder':
             nd = cdir.mkdir('NewFolder', autoIncrement=True)
+            nd.setInfo({})
             # item = self.model.handleIndex(nd)
             self.ui.fileTreeWidget.editItem(nd)
         else:
