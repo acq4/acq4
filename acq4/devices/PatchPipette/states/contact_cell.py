@@ -31,6 +31,8 @@ class ContactCellState(PatchPipetteState):
         Time (s) to wait between steps (default 2 s)
     initialApproachHeight : float
         Height (m) above target to start approach (default 7 µm)
+    findPipette : bool
+        if True, visually update the pipette tip location after moving to approach position and before descending towards cell
     depthPastContact : float
         Distance (m) to travel past initial contact before transitioning to seal (default 3 µm)
     maxTravelWithoutContact : float
@@ -62,6 +64,7 @@ class ContactCellState(PatchPipetteState):
         'stepSize': {'default': 1 * µm, 'type': 'float', 'suffix': 'm'},
         'stepInterval': {'default': 2.0, 'type': 'float', 'suffix': 's'},
         'initialApproachHeight': {'default': 7 * µm, 'type': 'float', 'suffix': 'm'},
+        'findPipette': {'default': False, 'type': 'bool'},
         'depthPastContact': {'default': 3 * µm, 'type': 'float', 'suffix': 'm'},
         'maxTravelWithoutContact': {'default': 15 * µm, 'type': 'float', 'suffix': 'm'},
         'moveSpeed': {'default': 5 * µm, 'type': 'float', 'suffix': 'm/s'},
@@ -112,7 +115,8 @@ class ContactCellState(PatchPipetteState):
         self.waitFor(self._moveFuture)
         self._moveFuture = None
 
-        self.findPipetteTip(zstack=True)
+        if config['findPipette']:
+            self.findPipetteTip(zstack=True)
 
         self._startZ = pip.globalPosition()[2]
         iterations = 0
@@ -209,10 +213,9 @@ class ContactCellState(PatchPipetteState):
             if zstack:
                 self.stopVisualTargetTracking('pause tracking for pipette recalibration')
                 try:
-                    pos, analysis = self.waitFor(
-                        pip.findTipInStack(maxOffsetDistance=20e-6)
+                    self.waitFor(
+                        pip.findTipInStack(maxOffsetDistance=5e-6)
                     )
-                    pip.setTipOffset(pos)
                 finally:
                     self.startVisualTargetTracking()
             else:
@@ -224,4 +227,5 @@ class ContactCellState(PatchPipetteState):
                     )
                 )
         except Exception as e:
+            self.logger.exception(e)
             self.setState(f"failed pipette position update: {e}")
