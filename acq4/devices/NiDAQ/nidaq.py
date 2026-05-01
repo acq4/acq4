@@ -19,7 +19,8 @@ class NiDAQ(Device):
     * **mock** (bool, optional): If True, use mock DAQ instead of real hardware. Default: False
     
     * **device** (str, optional): Specific DAQ device name to use (e.g., 'Dev1'). If not specified,
-      uses any available device
+      uses any available device. This allows multiple NiDAQ devices to be used simultaneously by 
+      different users (as long as the underlying hardware supports this).
     
     * **defaultAIMode** (str, optional): Default input mode for analog input channels
         - 'rse': Referenced single-ended (default)
@@ -67,7 +68,7 @@ class NiDAQ(Device):
         else:
             from acq4.drivers.nidaq.nidaq import NIDAQ
         self.n = NIDAQ
-        print(f"Created NiDAQ handle, devices are {self.n.listDevices()!r}")
+        self.logger.info(f"Created NiDAQ handle, devices are {self.n.listDevices()!r}")
         self.delayedSet = Mutex.threadsafe({})
 
     def createTask(self, cmd, parentTask):
@@ -86,7 +87,7 @@ class NiDAQ(Device):
         if ignoreLock:
             res = True
         else:
-            res = self.reserve(block=block)
+            res = self.reserve(block=block, reserver="NiDAQ.setChannelValue")
 
         self.verifyChannelBelongs(chan)
 
@@ -135,7 +136,7 @@ class NiDAQ(Device):
             mode = self.config.get('defaultAIMode', None)
 
         self.verifyChannelBelongs(chan)
-        res = self.reserve(block=block)
+        res = self.reserve(block=block, reserver="NiDAQ.getChannelValue")
         if not res:  ## False means non-blocking lock attempt failed.
             return False
         try:

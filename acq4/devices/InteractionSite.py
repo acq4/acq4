@@ -30,6 +30,7 @@ class InteractionSite(Device, OptomechDevice):
         Device.__init__(self, dm, config, name)
         self.radius = config["radius"]
         self.height = config.get("height")
+        # self._approach_stage_path = None  # used by current moveToApproach/_unwindKludgePath
         if self.height is None:
             raise ValueError(f"{self.name()} must have a height specified in config")
         OptomechDevice.__init__(self, dm, config, name)
@@ -105,13 +106,13 @@ class InteractionSite(Device, OptomechDevice):
         return InteractionSiteDeviceGui(self, win)
 
     def globalPosition(self):
-        return self.mapToGlobal([0, 0, 0])
+        return self.mapToGlobal(np.asarray([0, 0, 0]))
 
     def moveToGlobal(self, pos, speed, **kwds):
         """Move the parent stage so that this site's origin arrives at *pos* in global coordinates."""
         if self._parentStage is None:
             raise RuntimeError(f"{self.name()} has no parent Stage device and cannot be moved.")
-        dif = np.asarray(pos) - np.asarray(self.globalPosition())
+        dif = np.asarray(pos) - self.globalPosition()
         stage_pos = np.asarray(self._parentStage.globalPosition()) + dif
         return self._parentStage.moveToGlobal(stage_pos, speed, **kwds)
 
@@ -179,25 +180,80 @@ class InteractionSite(Device, OptomechDevice):
         if other.name() not in self.positions:
             raise RuntimeError(f"No positions saved for {other.name()} at {self.name()}")
         pos_config = self.positions[other.name()]
-        if 'interact global' not in pos_config:
-            raise RuntimeError(f"No interact position saved for {other.name()} at {self.name()}")
         if 'site global' not in pos_config:
             raise RuntimeError(f"No site global position saved for {other.name()} at {self.name()}")
-        if self._parentStage is not None:
-            # TODO this will still need a real motion planner
-            # TODO we'll maybe also need to make sure the other devices are out of the way...
-            _future.waitFor(self.moveToGlobal(pos_config['site global'], speed=speed), timeout=120)
-        approach_global = pos_config['site global']
-        _future.waitFor(other._moveToGlobal(approach_global, speed=speed), timeout=120)
+        if 'interact global' not in pos_config:
+            raise RuntimeError(f"No interact position saved for {other.name()} at {self.name()}")
+        approach_pos = pos_config['site global']
+        # TODO this will still need a real motion planner
+        # TODO we'll maybe also need to make sure the other devices are out of the way...
+        _future.waitFor(self.moveToGlobal(approach_pos, speed=speed, name=f"move {self.name()} to approach {other.name()}"), timeout=120)
+        _future.waitFor(other._moveToGlobal(approach_pos, speed=speed, name=f"move {other.name()} to approach {self.name()}"), timeout=120)
         interact_global = pos_config['interact global']
-        _future.waitFor(other._moveToGlobal(interact_global, speed=speed))
+        _future.waitFor(other._moveToGlobal(interact_global, speed=speed, name=f"move {other.name()} to interact with {self.name()}"))
 
-    def moveToApproach(self, other, speed='fast'):
+    @future_wrap
+    def moveToApproach(self, other, speed='fast', _future=None):
         if other.name() not in self.positions:
             raise RuntimeError(f"No positions saved for {other.name()} at {self.name()}")
         pos_config = self.positions[other.name()]
-        return other._moveToGlobal(pos_config['site global'], speed=speed)
+        if 'site global' not in pos_config:
+            raise RuntimeError(f"No site global position saved for {other.name()} at {self.name()}")
+        _future.waitFor(self.moveToGlobal(pos_config['site global'], speed=speed, name=f"move {self.name()} to approach {other.name()}"), timeout=120)
+        _future.waitFor(other._moveToGlobal(pos_config['site global'], speed=speed, name=f"move {other.name()} to approach {self.name()}"), timeout=120)
 
+    # @future_wrap
+    # def moveToInteract(self, other, speed='fast', _future=None):
+    #     if other.name() not in self.positions:
+    #         raise RuntimeError(f"No positions saved for {other.name()} at {self.name()}")
+    #     pos_config = self.positions[other.name()]
+    #     if 'interact global' not in pos_config:
+    #         raise RuntimeError(f"No interact position saved for {other.name()} at {self.name()}")
+    #     _future.waitFor(self.moveToApproach(other, speed))
+    #     interact_global = pos_config['interact global']
+    #     _future.waitFor(other._moveToGlobal(interact_global, speed=speed, name=f"move to interact with {self.name()}"))
+
+    # @future_wrap
+    # def moveToApproach(self, other, speed='fast', _future=None):
+    #     if other.name() not in self.positions:
+    #         raise RuntimeError(f"No positions saved for {other.name()} at {self.name()}")
+    #     pos_config = self.positions[other.name()]
+    #     if 'site global' not in pos_config:
+    #         raise RuntimeError(f"No site global position saved for {other.name()} at {self.name()}")
+    #     scope = other.imagingDevice().scopeDev
+    #     start_pos = scope.globalPosition()
+    #     approach_global = pos_config['site global']
+    #     if np.linalg.norm(np.array(start_pos) - np.array(approach_global)) > 50e-6:
+    #         stage_path = [
+    #             np.array([start_pos[0], start_pos[1], 30e-3]),
+    #             np.array([-90e-3, 20e-3, 30e-3]),
+    #         ]
+    #         for wp in stage_path:
+    #             _future.waitFor(
+    #                 scope.setGlobalPosition(wp, 20e-3, name=f"move {self.name()} into interaction position")
+    #             )
+    #         self._approach_stage_path = [start_pos] + stage_path
+    #         self_move = self.moveToGlobal(approach_global, speed=speed, name="move to interaction position")
+    #         _future.waitFor(other.retractFromSurface('fast'))
+    #         _future.waitFor(other._moveToGlobal([0, 0, 10e-3], 'fast', name=f"safe position before {self.name()}"))
+    #         _future.waitFor(self_move)
+    #     _future.waitFor(other._moveToGlobal(approach_global, speed=speed, name=f"move to {self.name()} approach"))
+
+    # @future_wrap
+    # def _unwindKludgePath(self, other, _future):
+    #     if self._approach_stage_path is not None:
+    #         _future.waitFor(self.moveToApproach(other, speed='fast'))
+    #         for wp in reversed(self._approach_stage_path):
+    #             _future.waitFor(
+    #                 self._parentStage.moveToGlobal(wp, 20e-3, name=f"move {self.name()} out of interaction position")
+    #             )
+    #         self._approach_stage_path = None
+
+    # def moveToApproach(self, other, speed='fast'):
+    #     if other.name() not in self.positions:
+    #         raise RuntimeError(f"No positions saved for {other.name()} at {self.name()}")
+    #     pos_config = self.positions[other.name()]
+    #     return other._moveToGlobal(pos_config['site global'], speed=speed)
 
 
 def _fmt_pos(pos):
@@ -241,11 +297,11 @@ class InteractionSiteDeviceGui(Qt.QWidget):
         layout.addWidget(self.interactLabel, row, 1)
         row += 1
 
-        layout.addWidget(Qt.QLabel("( for testing )"), row, 0)
-        self.doInteractBtn = FutureButton(
-            self._doInteractForTest, "Do test interact!", stoppable=True
-        )
-        layout.addWidget(self.doInteractBtn, row, 1)
+        # layout.addWidget(Qt.QLabel("( for testing )"), row, 0)
+        # self.doInteractBtn = FutureButton(
+        #     self._doInteractForTest, "Do test interact!", stoppable=True
+        # )
+        # layout.addWidget(self.doInteractBtn, row, 1)
 
         self._populatePipettes()
         self.pipetteCombo.currentIndexChanged.connect(self._updatePositionLabels)
@@ -261,7 +317,7 @@ class InteractionSiteDeviceGui(Qt.QWidget):
         self.pipetteCombo.setEnabled(has_pipettes)
         self.saveApproachBtn.setEnabled(has_pipettes)
         self.saveInteractBtn.setEnabled(has_pipettes)
-        self.doInteractBtn.setEnabled(has_pipettes)
+        # self.doInteractBtn.setEnabled(has_pipettes)
         self._updatePositionLabels()
 
     def _selectedPipette(self):
@@ -285,7 +341,7 @@ class InteractionSiteDeviceGui(Qt.QWidget):
     def _doInteractForTest(self):
         pip = self._selectedPipette()
         if pip is not None:
-            return self.dev.moveToInteract(pip, speed='slow')
+            return self.dev.moveToInteract(pip, speed='fast')
         return Future.immediate()
 
     def _updatePositionLabels(self):

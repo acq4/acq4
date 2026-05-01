@@ -155,7 +155,7 @@ class TestPulseThread(QtThread):
             task = self._lastTask
 
         # if clamp mode changed while we were fiddling around, then abort.
-        task.reserveDevices()
+        task.reserveDevices(reserver="TestPulse")
         try:
             if self._clampDev.getMode() != currentMode:
                 task.releaseDevices()
@@ -254,7 +254,7 @@ class TestPulseThread(QtThread):
         pri.recording = rec
         cmd.recording = rec
 
-        tp = PatchClampTestPulse(rec, stimulus=task.command[self._clampName]["stimulus"])
+        tp = PatchClampTestPulse(rec, stimulus=task.command[self._clampName]['stimulus'])
         if self._params['postProcessing'] is not None:
             tp = self._params['postProcessing'](tp)
         return tp

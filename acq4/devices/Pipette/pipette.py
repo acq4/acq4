@@ -27,7 +27,6 @@ from .planners import defaultMotionPlanners
 from .tracker import ResnetPipetteTracker
 from ..Camera import Camera
 from ..InteractionSite import InteractionSite
-from ...modules.Visualize3D import VisualizePathSearch
 from ...modules.Visualize3D.travelers_proxy import MovePathException
 from ...util.PromptUser import prompt
 from ...util.geometry import Plane
@@ -317,6 +316,7 @@ class Pipette(Device, OptomechDevice):
         return iface
 
     def visualize3DAdapter(self, win):
+        from acq4.devices.Pipette.visualization import PipetteVisualizerAdapter
         return PipetteVisualizerAdapter(self, win)
 
     def tipOffsetIsReasonable(self, pos) -> bool:
@@ -428,16 +428,16 @@ class Pipette(Device, OptomechDevice):
         path = self.dm.configFileName(path)
         path = self.dm.dirHandle(path, create=True)
 
+        pip_info = {
+            "tip position": self.globalPosition(),
+            "axis yaw": self.yawAngle(),
+            "axis pitch": self.pitchAngle(),
+        }
+
         cam: Camera = self.imagingDevice()
         with cam.ensureRunning():
             img = _future.waitFor(cam.acquireFrames(n=1, ensureFreshFrames=True)).getResult()[0]
-        img.addInfo(
-            {
-                "tip position": self.globalPosition(),
-                "axis yaw": self.yawAngle(),
-                "axis pitch": self.pitchAngle(),
-            }
-        )
+        img.addInfo(pip_info)
         timestamp = time.strftime("%Y%m%d-%H%M%S")
         path.writeFile(
             img.data(),
@@ -448,19 +448,22 @@ class Pipette(Device, OptomechDevice):
         if stack:
             depth = cam.getFocusDepth()
             is_below_surface = depth <= self.scopeDevice().getSurfaceDepth()
-            scan_dist = np.random.randint(2, 40 if is_below_surface else 100) * 1e-6
-            step = scan_dist / 2
+            scan_dist = (2 + (np.random.random()**2) * (100 if is_below_surface else 100)) * 1e-6
+            step = max(1e-6, scan_dist / 4)
             try:
                 seq_future = run_image_sequence(
-                    cam, z_stack=(depth - scan_dist, depth + scan_dist, step), storage_dir=path
+                    cam,
+                    z_stack=(depth - scan_dist, depth + scan_dist, step),
+                    storage_dir=path,
+                    name="manual calibration stack",
                 )
                 _future.waitFor(seq_future)
             finally:
-                _future.waitFor(cam.setFocusDepth(depth))
+                _future.waitFor(cam.setFocusDepth(depth, name=f"{cam.name()} restore focus after {self.name()} manual calibration stack"))
             fh = seq_future.imagesSavedIn
             info = {
                 **fh.info(),
-                "tip position": self.globalPosition(),
+                **pip_info,
             }
             fh.setInfo(info)
 
@@ -580,7 +583,7 @@ class Pipette(Device, OptomechDevice):
         WARNING: This method does _not_ implement any motion planning.
         """
 
-        self.sigMoveRequested.emit(self, path[-1][0], None, {'path': path})
+        self.sigMoveRequested.emit(self, path[-1][0], None, {'path': path, 'name': name})
         stagePath = []
         for pos, speed, linear, explanation in path:
             stagePos = self._solveGlobalStagePosition(pos)
@@ -668,7 +671,7 @@ class Pipette(Device, OptomechDevice):
         depth = self.globalPosition()[2]
         appDepth = self.approachDepth()
         if depth < appDepth:
-            return self.advance(appDepth, speed=speed)
+            return self.advance(appDepth, speed=speed, name='retract from surface')
         return Future.immediate()
 
     @future_wrap
@@ -759,6 +762,7 @@ class Pipette(Device, OptomechDevice):
         """Move the electrode tip directly to the given position in global coordinates.
         WARNING: This method does _not_ implement any motion planning.
         """
+        kwds['name'] = name
         self.sigMoveRequested.emit(self, pos, speed, kwds)
         stagePos = self._solveGlobalStagePosition(pos)
         stage: Stage = self.parentStage
@@ -769,7 +773,7 @@ class Pipette(Device, OptomechDevice):
         except Exception:
             self.logger.exception("Error visualizing pipette move path")
         try:
-            return stage.moveToGlobal(stagePos, speed, name=name, **kwds)
+            return stage.moveToGlobal(stagePos, speed, **kwds)
         except Exception as exc:
             exc.add_note(
                 f"Moving {self} to global position {pos!r} (name={name})"
@@ -800,6 +804,7 @@ class Pipette(Device, OptomechDevice):
         self.sigTargetChanged.emit(self, self.target)
 
     def targetPosition(self):
+        """Return the target position in global coordinates."""
         if self.target is None:
             raise RuntimeError(f"No target defined for {self.name()}")
         return self.target
@@ -855,14 +860,32 @@ class Pipette(Device, OptomechDevice):
             return None
         return self.dm.getDevice(name)
 
+    def getNucleusDepositionWell(self) -> InteractionSite | None:
+        """Return the RecordingChamber instance that is associated with this Pipette for nucleus expulsion
+        (see 'nucleusExpulsionWell' config option).
+        """
+        name = self.config.get('nucleusExpulsionWell', None)
+        if name is None:
+            return None
+        return self.dm.getDevice(name)
+
+    def getElectrodeSolutionWell(self) -> InteractionSite | None:
+        """Return the RecordingChamber instance that is associated with this Pipette for electrode solution
+        (see 'electrodeSolutionWell' config option).
+        """
+        name = self.config.get('electrodeSolutionWell', None)
+        if name is None:
+            return None
+        return self.dm.getDevice(name)
+
     def startRecording(self):
         """Return an object that records all motion updates from this pipette"""
         return PipetteRecorder(self)
 
     @future_wrap
-    def iterativelyFindTip(self, max_reps=10, found_threshold=3e-6, delay_after_move=0.2,
+    def iterativelyFindTip(self, max_reps=10, found_threshold=3e-6, delay_after_move=0.4,
                            max_allowed_offset=None, delay_after_update=0, reserve_devices=True,
-                           go_to_tip_first=False, _future=None):
+                           go_to_tip_first=False, stack_mode=False, focus_above=0, _future=None):
         """Iteratively refine the tip position by finding the tip in frame and focusing, until convergence.
 
         Returns if convergence is reached (tip position changes less than *found_threshold* between iterations) or after *max_reps* iterations.
@@ -894,15 +917,24 @@ class Pipette(Device, OptomechDevice):
 
         with contextlib.ExitStack() as stack:
             if reserve_devices:
-                stack.enter_context(manager.reserveDevices([self] + imgr.devicesToReserve(), timeout=30.0))
+                stack.enter_context(manager.reserveDevices([self] + imgr.devicesToReserve(), timeout=30.0, reserver="Pipette.refineTipPosition"))
             try:
                 last_pos = None
                 start_pos = self.globalPosition()
                 if go_to_tip_first:
-                    _future.waitFor(self.focusTip())
+                    _future.waitFor(self.focusAboveTip(focus_above))
                     _future.sleep(delay_after_move)
+
+                if stack_mode:
+                    pos = self._findTipViaZStack()
+                    _future.waitFor(self.setTipOffsetIfAcceptable(pos), timeout=None)
+                    return
+                
                 for _ in range(max_reps):
                     pos = self.tracker.findTipInFrame()
+                    heatmap = getattr(self.tracker, 'last_heatmap', None)
+                    if heatmap is not None and heatmap.max() < 2 * heatmap.std():
+                        pos = self._findTipViaZStack()
                     _future.waitFor(self.setTipOffsetIfAcceptable(pos), timeout=None)
                     converged = last_pos is not None and np.linalg.norm(np.array(pos) - np.array(last_pos)) < found_threshold
                     _future.sleep(delay_after_update)
@@ -913,7 +945,7 @@ class Pipette(Device, OptomechDevice):
                         return
 
                     last_pos = pos
-                    _future.waitFor(self.focusTip())
+                    _future.waitFor(self.focusAboveTip(focus_above))
                     _future.sleep(delay_after_move)
                 raise TimeoutError(f"Iterative tip finding did not converge after {max_reps} iterations.")
             except Exception as exc:
@@ -921,6 +953,68 @@ class Pipette(Device, OptomechDevice):
                 self.setTipOffset(start_pos)
                 raise exc
 
+    @future_wrap
+    def findTipInStack(self, *, _future:Future, maxOffsetDistance=20e-6):
+        startPos = self.globalPosition()
+        fut = self.tracker.estimatePositionFromStack()
+        _future.waitFor(fut)
+        pos, analysis = fut.getResult()
+        if pos is None:
+            raise RuntimeError(f"Pipette tip search failed")
+        dist = np.linalg.norm(np.array(pos) - np.array(startPos))
+        if dist > maxOffsetDistance:
+            raise ValueError(f"Tip offset exceeded maximum allowed distance: {dist} > {maxOffsetDistance}")
+        self.setTipOffset(pos)
+        return pos, analysis
+
+    def focusAboveTip(self, distance, speed='slow'):
+        pos = self.globalPosition() + np.array([0, 0, distance])
+        future = self.imagingDevice().moveCenterToGlobal(
+            pos, speed=speed, name=f"focus on {self.name()}"
+        )
+        return future
+
+    def _findTipViaZStack(self):
+        """Fallback tip-finding method using a z-stack when the single-frame heatmap is ambiguous.
+
+        Acquires a 20 µm z-stack around the current tip position, discards frames whose heatmap
+        peak is less than 2× the heatmap standard deviation, then fits a line to the remaining
+        (frame_z, z_prediction_um) pairs and returns the global position from the frame whose
+        focus depth is closest to the crossing point where z_prediction_um = 0.
+        """
+        from acq4.devices.Pipette.calibration import scan_pipette_z_stack
+
+        frames, global_positions, z_predictions_um, confidences, heatmaps = scan_pipette_z_stack(
+            self, z_range=10e-6, z_step=2e-6
+        )
+
+        # Compute the focus-plane z for each frame from the global position and z prediction.
+        frame_zs = global_positions[:, 2] - z_predictions_um * 1e-6
+
+        # Discard frames where heatmap peak < 2 * heatmap stdev.
+        keep = []
+        for i, hm in enumerate(heatmaps):
+            if hm is not None and hm.max() >= 2 * hm.std():
+                keep.append(i)
+
+        if len(keep) < 2:
+            raise RuntimeError("Z-stack fallback: not enough high-quality frames to estimate tip position.")
+
+        fz = frame_zs[keep]
+        zp = z_predictions_um[keep]
+
+        # Linear regression: z_prediction_um = slope * frame_z + intercept.
+        # Solve for frame_z where z_prediction_um = 0.
+        coeffs = np.polyfit(fz, zp, 1)
+        slope, intercept = coeffs
+        if abs(slope) < 1e-12:
+            raise RuntimeError("Z-stack fallback: degenerate regression slope, cannot estimate tip crossing.")
+        z_cross = -intercept / slope
+
+        # Return the global position from the kept frame whose focus depth is closest to z_cross.
+        dists = np.abs(fz - z_cross)
+        best = keep[int(np.argmin(dists))]
+        return tuple(global_positions[best])
 
     def findNewPipette(self):
         from acq4.devices.Pipette.calibration import findNewPipette
@@ -1234,215 +1328,6 @@ class PipetteCamModInterface(CameraModuleInterface):
 
     def aboveTargetClicked(self):
         self.getDevice().goAboveTarget(self.selectedSpeed())
-
-
-class PipetteVisualizerAdapter(OptomechDeviceVisualizerAdapter):
-    sigPathUpdate = Qt.Signal(object, bool, object)  # path, is_error, failed_at
-
-    def __init__(self, dev: Pipette, win):
-        self._obstacles = {}
-        super().__init__(dev, win)
-        self._target = win.target()
-        self._path = win.path(color=[0.5, 0, 1, 1])
-        self._error = win.target(color=[1, 0.2, 0.2, 0.6])
-        # Path history: deque of (seq_id, path, is_error, failed_at) tuples
-        self._path_history = collections.deque(maxlen=10)
-        self._next_seq = 0
-        # _pinned_seq: None = follow latest; int = pinned to that seq_id
-        self._pinned_seq = None
-        # _error_pinned: True when pinned due to an error path (highest priority)
-        self._error_pinned = False
-        # Guard flag to suppress slider signals during programmatic updates
-        self._updating_slider = False
-        if dev.target is not None:
-            self.handleTargetChanged(dev, dev.targetPosition())
-        # TODO obstacles and voxels
-        # TODO signal connections for obstacle and voxel updates
-        # TODO tie in with prime caches?
-
-        dev.sigCalibrationChanged.connect(self.handleCalibrationUpdate)
-        dev.sigTargetChanged.connect(self.handleTargetChanged)
-        self.sigPathUpdate.connect(self._handlePathUpdate)
-
-    def _buildControlParam(self):
-        from pyqtgraph.parametertree import Parameter
-
-        param = super()._buildControlParam()
-
-        path_param = Parameter.create(
-            name='Path plan',
-            type='bool',
-            value=False,
-            children=[
-                dict(name='History', type='slider', value=0, limits=[0, 0], step=1),
-            ],
-        )
-        path_param.sigValueChanged.connect(self._handlePathVisible)
-        path_param.child('History').sigValueChanged.connect(self._handleHistorySliderMoved)
-        param.addChild(path_param)
-
-        target_param = Parameter.create(name='Target', type='bool', value=False)
-        param.addChild(target_param)
-        target_param.sigValueChanged.connect(self._handleTargetVisible)
-
-        # TODO figure all the geometry-aware stuff out
-        # obstacle_devices = [d for d in getManager().listInterfaces("OptomechDevice") if d != self.device.name()]
-        obstacle_devices = []
-        for other_dev in obstacle_devices:
-            other_dev_param = Parameter.create(
-                name=f"{other_dev} obstacles",
-                type='bool',
-                value=False,
-                children=[
-                    dict(name='Obstacle', type='bool', value=True),
-                    dict(name='Raw Obstacle Voxels', type='bool', value=False),
-                ],
-            )
-            param.addChild(other_dev_param)
-            self._obstacles[other_dev] = {
-                "device param": other_dev_param,
-                "obstacle param": other_dev_param.child('Obstacle'),
-                "voxels param": other_dev_param.child('Raw Obstacle Voxels'),
-            }
-
-        return param
-
-    def _handleDeviceToggle(self, param, value):
-        super()._handleDeviceToggle(param, value)
-        self._updateTargetVisibility()
-        self._updatePathVisibility()
-
-    def _handleTargetVisible(self, param, value):
-        self._updateTargetVisibility()
-
-    def _handlePathVisible(self, param, value):
-        self._updatePathVisibility()
-
-    def _updateTargetVisibility(self):
-        visible = self._param.value() and self._param.child('Target').value()
-        self._target.setVisible(visible)
-
-    def _updatePathVisibility(self):
-        visible = self._param.value() and self._param.child('Path plan').value()
-        self._path.setVisible(visible)
-        self._error.setVisible(visible)
-
-    def handleCalibrationUpdate(self, dev):
-        if bounds := dev.getBoundaries():
-            if self._limits is not None:
-                self.win.remove3DItem(self._limits)
-            self._limits = self.createBounds(bounds, False)
-            self._updateLimitsVisibility()
-        self.handleTransformUpdate(dev, dev)
-
-    def handleTargetChanged(self, dev, pos):
-        self._target.setData(pos=np.asarray([pos]))
-
-    def pathSearchVisualizer(self):
-        return VisualizePathSearch(self)
-
-    def setPathError(self, path, failed_at=None):
-        self.sigPathUpdate.emit(path, True, failed_at)
-
-    def setPath(self, path):
-        self.sigPathUpdate.emit(path, False, None)
-
-    def _handlePathUpdate(self, path, is_error, failed_at):
-        seq = self._next_seq
-        self._next_seq += 1
-        self._path_history.append((seq, path, is_error, failed_at))
-
-        if is_error:
-            # Error paths have highest priority: always pin to them
-            self._pinned_seq = seq
-            self._error_pinned = True
-            if self._param is not None:
-                self._param.child('Path plan').setValue(True)
-            self.win.focus()
-        elif self._pinned_seq is not None:
-            # Check if the pinned entry is still in history (may have fallen off)
-            seqs = {entry[0] for entry in self._path_history}
-            if self._pinned_seq not in seqs:
-                self._pinned_seq = None
-                self._error_pinned = False
-
-        self._syncSlider()
-
-    def _syncSlider(self):
-        """Update the history slider range and position, then render the selected path."""
-        if self._param is None:
-            return
-        n = len(self._path_history)
-        if n == 0:
-            return
-
-        slider_param = self._param.child('Path plan').child('History')
-        self._updating_slider = True
-        try:
-            slider_param.setLimits([0, n - 1])
-            if self._pinned_seq is not None:
-                seqs = [entry[0] for entry in self._path_history]
-                try:
-                    idx = seqs.index(self._pinned_seq)
-                except ValueError:
-                    idx = n - 1
-            else:
-                idx = n - 1
-            slider_param.setValue(idx)
-        finally:
-            self._updating_slider = False
-
-        idx = int(slider_param.value())
-        _, path, is_error, failed_at = self._path_history[idx]
-        self._displayPath(path, is_error, failed_at)
-
-    def _displayPath(self, path, is_error, failed_at):
-        """Render path and error marker for the given history entry."""
-        self._path.setData(pos=np.asarray(path))
-        if failed_at is None:
-            self._error.setData(pos=np.empty((0, 3)))
-        else:
-            self._error.setData(pos=np.asarray([failed_at]))
-
-    def _handleHistorySliderMoved(self, param, value):
-        """Handle manual slider movement to navigate path history."""
-        if self._updating_slider:
-            return
-        n = len(self._path_history)
-        if n == 0:
-            return
-        idx = max(0, min(int(value), n - 1))
-        # Clear error pin on any manual move
-        self._error_pinned = False
-        if idx >= n - 1:
-            # At the latest position: switch back to follow-latest mode
-            self._pinned_seq = None
-        else:
-            self._pinned_seq = self._path_history[idx][0]
-        _, path, is_error, failed_at = self._path_history[idx]
-        self._displayPath(path, is_error, failed_at)
-
-    def createBounds(self, bounds, visible):
-        limits = self.device.parentDevice().getLimits()
-        local_to_global = (
-            TTransform(offset=self.device.offset) * self.device.parentDevice().axisTransform()
-        )
-        edges = set()
-        ndim = len(limits)
-        vertices = list(np.ndindex(tuple([2] * ndim)))
-        vertices = [tuple(limits[i][v] for i, v in enumerate(vertex)) for vertex in vertices]
-        # find every edge between vertices that differ in exactly one coordinate
-        for v1 in vertices:
-            for v2 in vertices:
-                if sum(a != b for a, b in zip(v1, v2)) == 1:
-                    # dedup by sorting
-                    edge = tuple(sorted((v1, v2)))
-                    edges.add(edge)
-        edges = [local_to_global.map(v) for edge in edges for v in edge]
-        plot = gl.GLLinePlotItem(pos=np.array(edges), color=(1, 0, 0, 0.2), width=4, mode="lines")
-        plot.setVisible(False)
-        self.win.add3DItem(plot)
-        return plot
 
 
 class Axis(pg.ROI):

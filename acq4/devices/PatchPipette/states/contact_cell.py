@@ -31,6 +31,8 @@ class ContactCellState(PatchPipetteState):
         Time (s) to wait between steps (default 2 s)
     initialApproachHeight : float
         Height (m) above target to start approach (default 7 µm)
+    findPipette : bool
+        if True, visually update the pipette tip location after moving to approach position and before descending towards cell
     depthPastContact : float
         Distance (m) to travel past initial contact before transitioning to seal (default 3 µm)
     maxTravelWithoutContact : float
@@ -62,6 +64,7 @@ class ContactCellState(PatchPipetteState):
         'stepSize': {'default': 1 * µm, 'type': 'float', 'suffix': 'm'},
         'stepInterval': {'default': 2.0, 'type': 'float', 'suffix': 's'},
         'initialApproachHeight': {'default': 7 * µm, 'type': 'float', 'suffix': 'm'},
+        'findPipette': {'default': False, 'type': 'bool'},
         'depthPastContact': {'default': 3 * µm, 'type': 'float', 'suffix': 'm'},
         'maxTravelWithoutContact': {'default': 15 * µm, 'type': 'float', 'suffix': 'm'},
         'moveSpeed': {'default': 5 * µm, 'type': 'float', 'suffix': 'm/s'},
@@ -101,16 +104,19 @@ class ContactCellState(PatchPipetteState):
         self.monitorTestPulse()
 
         # 3. Enable visual target tracking
-        self.maybeVisuallyTrackTarget()
+        self.startVisualTargetTracking(allow_refresh_reference=True)
 
         # 4. Move to target position + 7 µm in z
         target = np.array(pip.targetPosition())
         initial_pos = target.copy()
         initial_pos[2] += config['initialApproachHeight']
         self.setState("moving to initial approach position")
-        self._moveFuture = pip._moveToGlobal(initial_pos, speed=config['moveSpeed'])
+        self._moveFuture = pip._moveToGlobal(initial_pos, speed=config['moveSpeed'], name='move to initial approach position')
         self.waitFor(self._moveFuture)
         self._moveFuture = None
+
+        if config['findPipette']:
+            self.findPipetteTip(zstack=True)
 
         self._startZ = pip.globalPosition()[2]
         iterations = 0
@@ -146,7 +152,7 @@ class ContactCellState(PatchPipetteState):
             # Check if we've traveled too far without contact
             current_z = pip.globalPosition()[2]
             total_descent = self._startZ - current_z
-            if total_descent >= config['maxTravelWithoutContact'] and self._contactDepth is None:
+            if total_descent >= config['maxTravelWithoutContact']:
                 self.setState("max travel reached without contact, giving up")
                 self.dev.patchRecord()['detectedCell'] = False
                 return {"state": config['fallbackState']}
@@ -160,7 +166,7 @@ class ContactCellState(PatchPipetteState):
                 self._startZ - iterations * config['stepSize'],
             ])
 
-            self._moveFuture = pip._moveToGlobal(next_pos, speed=config['moveSpeed'])
+            self._moveFuture = pip._moveToGlobal(next_pos, speed=config['moveSpeed'], name='contact cell descent step')
             self.waitFor(self._moveFuture)
             self._moveFuture = None
 
@@ -200,15 +206,26 @@ class ContactCellState(PatchPipetteState):
         #     self._disableVisualTracking()
         return super()._cleanup()
 
-    def recalibratePipette(self):
+    def findPipetteTip(self, zstack=True):
         pip = self.dev.pipetteDevice
         self.setState(f"Check pipette tip..")
         try:
-            tip_fut = self.waitFor(
-                pip.iterativelyFindTip(
-                    max_allowed_offset=self.config["pipetteRecalibrationMaxChange"],
-                    go_to_tip_first=True,
+            if zstack:
+                self.stopVisualTargetTracking('pause tracking for pipette recalibration')
+                try:
+                    self.waitFor(
+                        pip.findTipInStack(maxOffsetDistance=5e-6)
+                    )
+                finally:
+                    self.startVisualTargetTracking()
+            else:
+                tip_fut = self.waitFor(
+                    pip.iterativelyFindTip(
+                        max_allowed_offset=self.config["pipetteRecalibrationMaxChange"],
+                        go_to_tip_first=True,
+                        focus_above=2e-6,
+                    )
                 )
-            )
         except Exception as e:
+            self.logger.exception(e)
             self.setState(f"failed pipette position update: {e}")

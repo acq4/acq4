@@ -1,5 +1,4 @@
 import contextlib
-import json
 import os
 import time
 from datetime import datetime
@@ -12,7 +11,7 @@ from acq4.util.StatusBar import StatusBar
 from pyqtgraph import FileDialog
 from teleprox.log.logviewer import LogViewer
 from . import FileAnalysisView
-from ...logging_config import get_logger, HistoricLogRecord
+from ...logging_config import get_logger, load_historic_log_records
 from ...util.HelpfulException import HelpfulException
 
 logger = get_logger(__name__)
@@ -62,13 +61,6 @@ def load_log_records_legacy(log_file):
     return records
 
 
-def load_log_records(log_file):
-    records = []
-    for line in log_file.readlines():
-        records.append(HistoricLogRecord(**(json.loads(line))))
-    return records
-
-
 class DataManager(Module):
     moduleDisplayName = "Data Manager"
     moduleCategory = "Acquisition"
@@ -77,6 +69,7 @@ class DataManager(Module):
 
     def __init__(self, manager, name, config):
         Module.__init__(self, manager, name, config)
+        self.baseDir = None
         self.dm = getDataManager()
         self.win = Window()
         mp = os.path.dirname(__file__)
@@ -127,7 +120,7 @@ class DataManager(Module):
 
     def updateNewFolderList(self):
         self.ui.newFolderList.clear()
-        conf = self.manager._folderTypesConfig()
+        conf = self.manager.folderTypesConfig()
         self.ui.newFolderList.clear()
         self.ui.newFolderList.addItems(['New...', 'Folder'] + list(conf.keys()))
 
@@ -231,24 +224,27 @@ class DataManager(Module):
         else:
             return None
 
-    def newFolder(self):
-        if self.ui.newFolderList.currentIndex() < 1:
-            return
+    def folderTypes(self) -> list[str]:
+        """Return the list of user-configured folder type names."""
+        return list(self.manager.folderTypesConfig().keys())
 
-        ftype = str(self.ui.newFolderList.currentText())
-        self.ui.newFolderList.setCurrentIndex(0)
+    def createNewFolder(self, folder_type: str) -> DirHandle:
+        """Create a new folder of the given type under the current directory.
 
+        For typed folders the parent is chosen by walking up the tree to avoid
+        nesting a folder inside one of the same type.  The new directory becomes
+        the current directory.
+        """
         cdir = self.manager.getCurrentDir()
         if not cdir.isManaged():
             cdir.createIndex()
 
-        if ftype == 'Folder':
+        if folder_type == 'Folder':
             nd = cdir.mkdir('NewFolder', autoIncrement=True)
             nd.setInfo({})
-            # item = self.model.handleIndex(nd)
             self.ui.fileTreeWidget.editItem(nd)
         else:
-            spec = self.manager._folderTypesConfig()[ftype]
+            spec = self.manager.folderTypesConfig()[folder_type]
             name = time.strftime(spec['name'])
 
             ## Determine where to put the new directory
@@ -259,20 +255,18 @@ class DataManager(Module):
                     if not checkDir.isManaged():
                         break
                     inf = checkDir.info()
-                    if 'dirType' in inf and inf['dirType'] == ftype:
+                    if 'dirType' in inf and inf['dirType'] == folder_type:
                         parent = checkDir.parent()
                         break
-                    # else:
-                    # print "dir no match:", spec, inf
                     checkDir = checkDir.parent()
-            except:
+            except Exception:
                 logger.exception("Error while deciding where to put new folder (using currentDir by default)")
 
             ## make
             nd = parent.mkdir(name, autoIncrement=True)
 
             ## Add meta-info
-            info = {'dirType': ftype}
+            info = {'dirType': folder_type}
             if spec.get('experimentalUnit', False):
                 info['expUnit'] = True
             nd.setInfo(info)
@@ -283,18 +277,29 @@ class DataManager(Module):
 
         logger.info(f"Created new folder: {nd.name(relativeTo=self.baseDir)}")
         self.manager.setCurrentDir(nd)
+        return nd
+
+    def newFolder(self):
+        if self.ui.newFolderList.currentIndex() < 1:
+            return
+
+        ftype = str(self.ui.newFolderList.currentText())
+        self.ui.newFolderList.setCurrentIndex(0)
+
+        self.createNewFolder(ftype)
 
     def fileSelectionChanged(self):
         # print "file selection changed"
-        if self.selFile is not None:
+        sel_file = self.selFile
+        if sel_file is not None:
             with contextlib.suppress(TypeError):
-                self.selFile.sigChanged.disconnect(self.selectedFileAltered)
+                sel_file.sigChanged.disconnect(self.selectedFileAltered)
         fh = self.selectedFile()
         self.manager.currentFile = fh  ## Make this really easy to pick up from an interactive prompt.
         self.loadFile(fh)
         self.selFile = fh
         if fh is not None:
-            self.selFile.sigChanged.connect(self.selectedFileAltered)
+            fh.sigChanged.connect(self.selectedFileAltered)
 
     def loadFile(self, fh):
         if fh is None:
@@ -320,7 +325,7 @@ class DataManager(Module):
             if log_file is None:
                 self.ui.logWidget.set_records()
             elif log_file.shortName().lower() == 'log.json':
-                self.ui.logWidget.set_records(*load_log_records(log_file))
+                self.ui.logWidget.set_records(*load_historic_log_records(log_file))
             elif log_file.shortName().lower() == 'log.txt':
                 self.ui.logWidget.set_records(*load_log_records_legacy(log_file))
             else:
@@ -330,9 +335,10 @@ class DataManager(Module):
             self.ui.dataViewWidget.setCurrentFile(fh)
 
     def selectedFileAltered(self, name, change, args):
-        if change in ['parent', 'renamed', 'moved'] and self.selFile is not None:
-            self.ui.fileTreeWidget.select(self.selFile)  ## re-select file if it has moved.
-            self.ui.fileNameLabel.setText(self.selFile.name(relativeTo=self.baseDir))
+        sel_file = self.selFile
+        if change in ['parent', 'renamed', 'moved'] and sel_file is not None:
+            self.ui.fileTreeWidget.select(sel_file)  # re-select file if it has moved.
+            self.ui.fileNameLabel.setText(sel_file.name(relativeTo=self.baseDir))
 
     def quit(self):
         ## Silly: needed to prevent lockup on some systems.

@@ -9,28 +9,32 @@ import acq4.util.functions as fn
 import acq4.util.ptime as ptime
 import pyqtgraph as pg
 from acq4.devices.Camera import Camera, CameraTask
+from acq4.devices.Camera.deviceGUI import CameraDeviceGui
 from acq4.util import Qt
 from acq4.util.Mutex import Mutex
 
 WIDTH = 512
 HEIGHT = 512
 
+_ZSTACK_CONFIG_FILE = "zstack_images"
+
 
 class MockCamera(Camera):
+    sigZStackChanged = Qt.Signal(object)  # emits objective name (str)
+
     def __init__(self, manager, config, name):
         self.ringSize = 100
         self.frameId = 0
         self.noise = np.random.normal(size=10000000, loc=100, scale=10)  # pre-generate noise for use in images
 
+        # Track which objectives have config-file-locked z-stacks (no UI editing allowed)
+        self._configLockedImages = set(config.get("images", {}).keys())
+
         if "images" in config:
             self.bgData = {}
             self.bgInfo = {}
             for obj, filename in config["images"].items():
-                file = manager.fileHandle(filename)
-                ma = file.read()
-                self.bgData[obj] = ma.asarray()
-                self.bgInfo[obj] = file.info().deepcopy()
-                self.bgInfo[obj]["depths"] = ma.xvals(0)
+                self._loadZStack(obj, filename, manager=manager)
         else:
             self.bgData = mandelbrot(width=WIDTH * 5, maxIter=60).astype(np.float32)
             self.bgInfo = None
@@ -114,6 +118,121 @@ class MockCamera(Camera):
         cells["decayTau"] = np.random.uniform(size=cells.shape, low=15e-3, high=500e-3)
         self.cells = cells
 
+        # Load user-set z-stacks saved from a previous session, for objectives not already
+        # locked by the device config.
+        self._loadSavedZStacks()
+
+    def _loadZStack(self, obj_name, filepath, manager=None):
+        """Load a z-stack MetaArray file for the given objective.
+
+        Stores the pixel data and z-depth axis into bgData/bgInfo, sorted ascending by depth.
+        Uses the acq4 DataManager/FileHandle machinery when available.
+        """
+        if manager is None:
+            manager = self.dm
+        try:
+            fh = manager.fileHandle(filepath)
+            ma = fh.read()
+        except Exception:
+            # Fall back to direct load if the path is outside the manager root
+            from acq4.util.DataManager import getHandle
+            fh = getHandle(filepath)
+            ma = fh.read()
+
+        data = ma.asarray()
+
+        # Two on-disk formats: 'Depth' axis stores z directly in xvals(0); 'Time' axis
+        # (recorded as a time-series z-stack) stores per-frame global positions separately.
+        axis0_info = ma.infoCopy()[0]
+        if axis0_info.get("name") == "Depth":
+            depths = ma.xvals(0)
+        elif "globalPosition" in axis0_info:
+            depths = axis0_info["globalPosition"][:, 2]
+        else:
+            raise ValueError(f"Cannot determine z-positions from MetaArray in '{filepath}'")
+
+        # Sort z-axis ascending so searchsorted works correctly
+        order = np.argsort(depths)
+        depths = depths[order]
+        data = data[order]
+
+        if not isinstance(self.bgData, dict):
+            # First time converting from Mandelbrot to dict mode
+            self.bgData = {}
+            self.bgInfo = {}
+
+        self.bgData[obj_name] = data
+        self.bgInfo[obj_name] = {
+            "depths": depths,
+            "filename": str(filepath),
+            "config_locked": obj_name in self._configLockedImages,
+        }
+        self.background = None
+
+    def clearZStack(self, obj_name):
+        """Remove the user-set z-stack for the given objective and save the change."""
+        if obj_name in self._configLockedImages:
+            raise ValueError(f"Cannot clear config-locked z-stack for objective '{obj_name}'")
+        if isinstance(self.bgData, dict):
+            self.bgData.pop(obj_name, None)
+            self.bgInfo.pop(obj_name, None)
+        self.background = None
+        self._saveZStacks()
+        self.sigZStackChanged.emit(obj_name)
+
+    def loadZStack(self, obj_name, filepath):
+        """Load a z-stack from filepath for the given objective, then persist and signal."""
+        self._loadZStack(obj_name, filepath)
+        self._saveZStacks()
+        self.sigZStackChanged.emit(obj_name)
+
+    def _saveZStacks(self):
+        """Write user-set z-stack filenames to the device config file."""
+        if not isinstance(self.bgInfo, dict):
+            return
+        user_stacks = {
+            obj: info["filename"]
+            for obj, info in self.bgInfo.items()
+            if not info.get("config_locked", False)
+        }
+        self.writeConfigFile(user_stacks, _ZSTACK_CONFIG_FILE)
+
+    def _loadSavedZStacks(self):
+        """Load user-set z-stacks from the device config file, skipping config-locked objectives."""
+        try:
+            saved = self.readConfigFile(_ZSTACK_CONFIG_FILE)
+        except Exception:
+            return
+        if not isinstance(saved, dict):
+            return
+        for obj_name, filepath in saved.items():
+            if obj_name in self._configLockedImages:
+                continue
+            try:
+                self._loadZStack(obj_name, filepath)
+            except Exception as exc:
+                print(f"MockCamera: could not load saved z-stack for '{obj_name}' ({filepath}): {exc}")
+
+    def listObjectivesForUI(self):
+        """Return an ordered list of objective names for UI display.
+
+        Includes config-locked objectives first, then any UI-set or scope-available objectives.
+        """
+        names = list(self._configLockedImages)
+
+        if isinstance(self.bgInfo, dict):
+            for k in self.bgInfo:
+                if k not in names:
+                    names.append(k)
+
+        if self.scopeDev is not None:
+            for obj in self.scopeDev.listObjectives():
+                n = obj.name()
+                if n not in names:
+                    names.append(n)
+
+        return names
+
     def setupCamera(self):
         pass
 
@@ -139,53 +258,12 @@ class MockCamera(Camera):
             tr = self.globalTransform().as_pyqtgraph()
 
             if isinstance(self.bgData, dict):
-                # select data based on objective
                 obj = self.getObjective()
-                data = self.bgData[obj]
-                info = self.bgInfo[obj]
-                px = info["pixelSize"]
-                pz = info["depths"][1] - info["depths"][0]
-
-                m = Qt.QMatrix4x4()
-                pos = info["transform"]["pos"]
-                m.scale(1 / px[0], 1 / px[1], 1 / pz)
-                m.translate(-pos[0], -pos[1], -info["depths"][0])
-
-                tr2 = m * tr
-                origin = tr2.map(pg.Vector(0, 0, 0))
-                # print(origin)
-                origin = [int(origin.x()), int(origin.y()), origin.z()]
-
-                # slice data
-                camRect = Qt.QRect(origin[0], origin[1], w, h)
-                dataRect = Qt.QRect(0, 0, data.shape[1], data.shape[2])
-                overlap = camRect.intersected(dataRect)
-                tl = overlap.topLeft() - camRect.topLeft()
-
-                z = origin[2]
-                z1 = np.floor(z)
-                z2 = np.ceil(z)
-                s = (z - z1) / (z2 - z1)
-                z1 = int(np.clip(z1, 0, data.shape[0] - 1))
-                z2 = int(np.clip(z2, 0, data.shape[0] - 1))
-                src1 = data[
-                    z1,
-                    overlap.left() : overlap.left() + overlap.width(),
-                    overlap.top() : overlap.top() + overlap.height(),
-                ]
-                src2 = data[
-                    z2,
-                    overlap.left() : overlap.left() + overlap.width(),
-                    overlap.top() : overlap.top() + overlap.height(),
-                ]
-                src = src1 * (1 - s) + src2 * s
-
-                bg = np.empty((w, h), dtype=data.dtype)
-                bg[:] = 100
-                bg[tl.x() : tl.x() + overlap.width(), tl.y() : tl.y() + overlap.height()] = src
-                self.background = bg
-                # vectors = ([1, 0, 0], [0, 1, 0])
-                # self.background = pg.affineSlice(data, (w,h), origin, vectors, (1, 2, 0), order=1)
+                if obj is not None and obj in self.bgData:
+                    self.background = self._getZStackBackground(obj, w, h, tr)
+                else:
+                    # No z-stack for this objective: black
+                    self.background = np.zeros((w, h), dtype=np.uint16)
             else:
                 tr = pg.SRTTransform(tr)
                 m = Qt.QTransform()
@@ -206,6 +284,46 @@ class MockCamera(Camera):
                 self.background = pg.affineSlice(self.bgData, (w, h), origin, vectors, (0, 1), order=1)
 
         return self.background
+
+    def _getZStackBackground(self, obj, w, h, tr):
+        """Return a (w, h) background image for the given objective using z-only matching.
+
+        Returns a black image when z falls outside the stack's depth range.
+        """
+        data = self.bgData[obj]     # shape (nz, bw, bh), depths sorted ascending
+        depths = self.bgInfo[obj]["depths"]
+
+        # Extract world-space z from the global transform
+        origin = tr.map(pg.Vector(0, 0, 0))
+        z = origin.z()
+
+        z_min = depths[0]
+        z_max = depths[-1]
+        if z < z_min or z > z_max:
+            return np.zeros((w, h), dtype=data.dtype)
+
+        # Interpolate between the two nearest z slices
+        z1_idx = int(np.clip(np.searchsorted(depths, z, side="right") - 1, 0, len(depths) - 2))
+        z2_idx = z1_idx + 1
+        dz = depths[z2_idx] - depths[z1_idx]
+        s = 0.0 if dz == 0 else float(np.clip((z - depths[z1_idx]) / dz, 0.0, 1.0))
+
+        slice_img = data[z1_idx].astype(np.float32) * (1.0 - s) + data[z2_idx].astype(np.float32) * s
+
+        # Center-crop (or center-pad) the z-slice to the sensor size
+        bw, bh = data.shape[1], data.shape[2]
+        src_x = max(0, (bw - w) // 2)
+        src_y = max(0, (bh - h) // 2)
+        dst_x = max(0, (w - bw) // 2)
+        dst_y = max(0, (h - bh) // 2)
+        copy_w = min(w, bw)
+        copy_h = min(h, bh)
+
+        bg = np.zeros((w, h), dtype=data.dtype)
+        bg[dst_x : dst_x + copy_w, dst_y : dst_y + copy_h] = slice_img[
+            src_x : src_x + copy_w, src_y : src_y + copy_h
+        ].astype(data.dtype)
+        return bg
 
     def pixelVectors(self):
         tr = self.globalTransform()
@@ -349,6 +467,121 @@ class MockCamera(Camera):
     def createTask(self, cmd, parentTask):
         with self.lock:
             return MockCameraTask(self, cmd, parentTask)
+
+    def deviceInterface(self, win):
+        return MockCameraDeviceGui(self, win)
+
+
+class MockCameraDeviceGui(CameraDeviceGui):
+    """Camera device GUI for MockCamera, extending the standard camera controls with
+    per-objective z-stack file selection, z-range display, and clear controls.
+    """
+
+    def __init__(self, dev, win):
+        CameraDeviceGui.__init__(self, dev, win)
+
+        self._objWidgets = {}  # obj_name -> dict of widgets
+
+        zstackSection = Qt.QWidget()
+        sectionLayout = Qt.QVBoxLayout()
+        sectionLayout.setContentsMargins(4, 4, 4, 4)
+        zstackSection.setLayout(sectionLayout)
+
+        headerLabel = Qt.QLabel("<b>Z-Stack Images</b>")
+        sectionLayout.addWidget(headerLabel)
+
+        objectives = dev.listObjectivesForUI()
+        if not objectives:
+            sectionLayout.addWidget(Qt.QLabel("(no objectives configured)"))
+        else:
+            for obj_name in objectives:
+                group = self._buildObjectiveGroup(obj_name)
+                sectionLayout.addWidget(group)
+
+        self.layout.addWidget(zstackSection)
+        dev.sigZStackChanged.connect(self._onZStackChanged)
+
+    def _buildObjectiveGroup(self, obj_name):
+        """Build and return a QGroupBox for one objective's z-stack controls."""
+        config_locked = obj_name in self.dev._configLockedImages
+
+        group = Qt.QGroupBox(obj_name)
+        layout = Qt.QVBoxLayout()
+        layout.setContentsMargins(6, 6, 6, 6)
+        group.setLayout(layout)
+
+        # Z-range label
+        rangeLabel = Qt.QLabel()
+        layout.addWidget(rangeLabel)
+
+        widgets = {"rangeLabel": rangeLabel}
+
+        if not config_locked:
+            btnRow = Qt.QWidget()
+            btnLayout = Qt.QHBoxLayout()
+            btnLayout.setContentsMargins(0, 0, 0, 0)
+            btnRow.setLayout(btnLayout)
+
+            loadBtn = Qt.QPushButton("Load z-stack...")
+            clearBtn = Qt.QPushButton("Clear")
+            btnLayout.addWidget(loadBtn)
+            btnLayout.addWidget(clearBtn)
+            btnLayout.addStretch()
+            layout.addWidget(btnRow)
+
+            loadBtn.clicked.connect(lambda checked, n=obj_name: self._onLoadClicked(n))
+            clearBtn.clicked.connect(lambda checked, n=obj_name: self._onClearClicked(n))
+
+            widgets["loadBtn"] = loadBtn
+            widgets["clearBtn"] = clearBtn
+
+        self._objWidgets[obj_name] = widgets
+        self._updateObjectiveUI(obj_name)
+        return group
+
+    def _updateObjectiveUI(self, obj_name):
+        """Refresh the z-range label and button visibility for one objective."""
+        widgets = self._objWidgets.get(obj_name)
+        if widgets is None:
+            return
+
+        bgInfo = self.dev.bgInfo
+        if isinstance(bgInfo, dict) and obj_name in bgInfo:
+            depths = bgInfo[obj_name]["depths"]
+            z_min_um = depths[0] * 1e6
+            z_max_um = depths[-1] * 1e6
+            fname = bgInfo[obj_name].get("filename", "")
+            import os
+            short_name = os.path.basename(fname)
+            widgets["rangeLabel"].setText(
+                f"<small>{short_name}</small><br>Z range: {z_min_um:.1f} – {z_max_um:.1f} µm"
+            )
+            if "clearBtn" in widgets:
+                widgets["clearBtn"].setEnabled(True)
+        else:
+            widgets["rangeLabel"].setText("No z-stack loaded")
+            if "clearBtn" in widgets:
+                widgets["clearBtn"].setEnabled(False)
+
+    def _onLoadClicked(self, obj_name):
+        path, _ = Qt.QFileDialog.getOpenFileName(
+            self,
+            f"Select z-stack for {obj_name}",
+            "",
+            "MetaArray files (*.ma)",
+        )
+        if not path:
+            return
+        try:
+            self.dev.loadZStack(obj_name, path)
+        except Exception as exc:
+            Qt.QMessageBox.warning(self, "Load failed", str(exc))
+
+    def _onClearClicked(self, obj_name):
+        self.dev.clearZStack(obj_name)
+
+    def _onZStackChanged(self, obj_name):
+        self._updateObjectiveUI(obj_name)
 
 
 class MockCameraTask(CameraTask):

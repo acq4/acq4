@@ -258,28 +258,37 @@ class Microscope(Device, OptomechDevice):
             name = cameras[0]
         return self.dm.getDevice(name)
 
-    def getZStack(self, imager: "Device", z_range, block=False) -> Future[list[Frame]]:
+    def getZStack(self, imager: "Device", z_range, block=False, name="z stack") -> Future[list[Frame]]:
         """Acquire a z-stack of images using the given imager.
 
         The z-stack is returned as frames.
         """
         from acq4.util.imaging.sequencer import acquire_z_stack
 
-        return acquire_z_stack(imager, *z_range, block=block)
+        return acquire_z_stack(imager, *z_range, block=block, name=name)
 
     @future_wrap
-    def findSurfaceDepth(self, imager: "Device", searchDistance=200*µm, searchStep=5*µm, _future: Future = None) -> float:
+    def findSurfaceDepth(
+        self, imager: "Device", searchDistance=200 * µm, searchStep=5 * µm, returnStack=False, _future: Future = None
+    ) -> float | tuple[float, list[Frame]]:
         """Set the surface of the sample based on how focused the images are."""
-        z_range = (self.getSurfaceDepth() + searchDistance, self.getSurfaceDepth() - searchDistance, searchStep)
-        z_stack: list[Frame] = _future.waitFor(self.getZStack(imager, z_range)).getResult()
+        z_range = (
+            self.getSurfaceDepth() + searchDistance,
+            self.getSurfaceDepth() - searchDistance,
+            searchStep,
+        )
+        z_stack: list[Frame] = _future.waitFor(
+            self.getZStack(imager, z_range, name="finding surface")
+        ).getResult()
         threshold = self.config.get('surfaceDetectionPercentileThreshold', 96)
         if (idx := find_surface(z_stack, threshold)) is not None:
             depth = z_stack[idx].mapFromFrameToGlobal([0, 0, 0])[2]
             self.setSurfaceDepth(depth)
-            _future.waitFor(self.setFocusDepth(depth))
+            _future.waitFor(self.setFocusDepth(depth, name=f"{self.name()} focus to detected surface"))
+            if returnStack:
+                return depth, z_stack
             return depth
-        else:
-            raise ValueError("Could not find surface")
+        raise ValueError("Could not find surface")
 
     def getSurfaceDepth(self) -> Number:
         """Return the z-position of the sample surface as marked by the user.
@@ -347,6 +356,26 @@ class Microscope(Device, OptomechDevice):
                     p = p.parentDevice()
         return self._focusDevice
 
+    def moveDip(self, speed='fast'):
+        """Move to the dip height configured for the current objective."""
+        obj = self.getObjective()
+        if obj is None:
+            raise RuntimeError("No objective selected")
+        z = obj.getDipHeight()
+        if z is None:
+            raise RuntimeError(f"No dip height set for objective '{obj.name()}'")
+        return self.setFocusDepth(z, speed=speed, name=f"{self.name()} move to dip height")
+
+    def moveLift(self, speed='fast'):
+        """Move to the lift height configured for the current objective."""
+        obj = self.getObjective()
+        if obj is None:
+            raise RuntimeError("No objective selected")
+        z = obj.getLiftHeight()
+        if z is None:
+            raise RuntimeError(f"No lift height set for objective '{obj.name()}'")
+        return self.setFocusDepth(z, speed=speed, name=f"{self.name()} move to lift height")
+
     def positionDevice(self):
         if self._positionDevice is None:
             p = self
@@ -372,6 +401,32 @@ class Objective(Device, OptomechDevice):
             self.setOffset(config['offset'])
         if 'scale' in config:
             self.setScale(config['scale'])
+
+        heights = self.readConfigFile('heights')
+        self._dipHeight = heights.get('dipHeight', None)
+        self._liftHeight = heights.get('liftHeight', None)
+
+    def getDipHeight(self):
+        return self._dipHeight
+
+    def setDipHeight(self, z):
+        self._dipHeight = float(z)
+        self._saveHeights()
+
+    def getLiftHeight(self):
+        return self._liftHeight
+
+    def setLiftHeight(self, z):
+        self._liftHeight = float(z)
+        self._saveHeights()
+
+    def _saveHeights(self):
+        heights = {}
+        if self._dipHeight is not None:
+            heights['dipHeight'] = self._dipHeight
+        if self._liftHeight is not None:
+            heights['liftHeight'] = self._liftHeight
+        self.writeConfigFile(heights, 'heights')
 
     def getGeometry(self, name=None):
         return None
@@ -443,6 +498,7 @@ class ScopeGUI(Qt.QWidget):
         self.objList = self.dev._allObjectives()
         self.switchN = len(self.objList)
         self.objWidgets = {}
+        self.dipLiftButtons = {}  # {slot_key: (setDipBtn, goDipBtn, setLiftBtn, goLiftBtn)}
         self.blockSpinChange = False
         for row, obj in enumerate(self.objList, start=1):
             ## For each objective, create a set of widgets for selecting and updating.
@@ -458,7 +514,7 @@ class ScopeGUI(Qt.QWidget):
             xs.index = ys.index = zs.index = xyss.index = zss.index = obj  ## used to determine which row has changed
             widgets = (r, c, xs, ys, zs, xyss, zss)
             for col, w in enumerate(widgets):
-                self.ui.objectiveLayout.addWidget(w, row, col)
+                self.ui.objectiveLayout.addWidget(w, row * 2 - 1, col)
             self.objWidgets[obj] = widgets
 
             for o in self.objList[obj].values():
@@ -478,6 +534,24 @@ class ScopeGUI(Qt.QWidget):
             xyss.sigValueChanged.connect(self.scaleSpinChanged)
             zss.sigValueChanged.connect(self.scaleSpinChanged)
 
+            # Dip / lift position buttons
+            setDipBtn = Qt.QPushButton('Set Dip')
+            goDipBtn = Qt.QPushButton('Dip!')
+            setLiftBtn = Qt.QPushButton('Set Lift')
+            goLiftBtn = Qt.QPushButton('Lift!')
+
+            for col, btn in enumerate((setDipBtn, goDipBtn, setLiftBtn, goLiftBtn), start=2):
+                self.ui.objectiveLayout.addWidget(btn, row * 2, col)
+            self.dipLiftButtons[obj] = (setDipBtn, goDipBtn, setLiftBtn, goLiftBtn)
+
+            # Use default-argument capture to bind obj at definition time
+            setDipBtn.clicked.connect(lambda checked, o=obj: self._setDipHeight(o))
+            goDipBtn.clicked.connect(lambda checked, o=obj: self._goDipHeight(o))
+            setLiftBtn.clicked.connect(lambda checked, o=obj: self._setLiftHeight(o))
+            goLiftBtn.clicked.connect(lambda checked, o=obj: self._goLiftHeight(o))
+
+            self._updateDipLiftButtons(obj)
+
         for preset, preset_conf in dev.presets.items():
             btn = Qt.QPushButton(preset)
             btn.setObjectName(preset)
@@ -490,6 +564,40 @@ class ScopeGUI(Qt.QWidget):
                 key = hotkey["key"]
                 hotkey_dev.addKeyCallback(key, dev.handlePresetHotkey, (preset,))
         self.updateSpins()
+
+    def _currentObjectiveForSlot(self, slot):
+        """Return the Objective currently selected in the combo for the given slot."""
+        combo = self.objWidgets[slot][1]
+        return combo.currentData()
+
+    def _setDipHeight(self, slot):
+        obj = self._currentObjectiveForSlot(slot)
+        obj.setDipHeight(self.dev.getFocusDepth())
+        self._updateDipLiftButtons(slot)
+
+    def _goDipHeight(self, slot):
+        obj = self._currentObjectiveForSlot(slot)
+        z = obj.getDipHeight()
+        if z is not None:
+            self.dev.setFocusDepth(z, name=f"{self.dev.name()} go to dip height")
+
+    def _setLiftHeight(self, slot):
+        obj = self._currentObjectiveForSlot(slot)
+        obj.setLiftHeight(self.dev.getFocusDepth())
+        self._updateDipLiftButtons(slot)
+
+    def _goLiftHeight(self, slot):
+        obj = self._currentObjectiveForSlot(slot)
+        z = obj.getLiftHeight()
+        if z is not None:
+            self.dev.setFocusDepth(z, name=f"{self.dev.name()} go to lift height")
+
+    def _updateDipLiftButtons(self, slot):
+        """Enable/disable Go buttons based on whether heights have been set."""
+        obj = self._currentObjectiveForSlot(slot)
+        (setDipBtn, goDipBtn, setLiftBtn, goLiftBtn) = self.dipLiftButtons[slot]
+        goDipBtn.setEnabled(obj.getDipHeight() is not None)
+        goLiftBtn.setEnabled(obj.getLiftHeight() is not None)
 
     def loadPreset(self):
         btn = self.sender()
@@ -516,6 +624,11 @@ class ScopeGUI(Qt.QWidget):
             self.updateSpins()
         finally:
             self.blockSpinChange = False
+        # Refresh dip/lift button state for this slot
+        for slot, widgets in self.objWidgets.items():
+            if widgets[1] is combo:
+                self._updateDipLiftButtons(slot)
+                break
 
     def offsetSpinChanged(self, spin):
         if self.blockSpinChange:
@@ -562,6 +675,90 @@ class ScopeGUI(Qt.QWidget):
             zss.setValue(scale[2])
 
 
+class FocusSpinBox(Qt.QAbstractSpinBox):
+    """Spin box for controlling microscope focus depth.
+
+    Displays the focus depth in micrometers (µm).  When stepping up or down
+    via arrow keys, Page Up/Down, or mouse wheel the step is applied to the
+    microscope's *target* focus position (not the instantaneous position) so
+    that rapid successive steps accumulate correctly even while a move is
+    still in progress.
+    """
+
+    def __init__(self, dev, step=2e-6, parent=None):
+        super().__init__(parent)
+        self._dev = dev      # Microscope device
+        self._step = step    # Step size in metres
+        self._value = 0.0    # Current displayed value in metres
+        self.lineEdit().editingFinished.connect(self._editingFinished)
+        self._updateDisplay()
+
+    # ------------------------------------------------------------------
+    # Public API
+
+    def setValue(self, meters):
+        """Set the displayed value (metres).  Does *not* move the stage."""
+        self._value = float(meters)
+        self._updateDisplay()
+
+    def value(self):
+        """Return the current displayed value in metres."""
+        return self._value
+
+    # ------------------------------------------------------------------
+    # QAbstractSpinBox overrides
+
+    def stepBy(self, steps):
+        """Add *steps* × step-size to the microscope's *target* focus depth."""
+        fd = self._dev.focusDevice()
+        if fd is None:
+            return
+        tpos = fd.globalTargetPosition()
+        if tpos is None:
+            tpos = fd.globalPosition()
+        self._dev.setFocusDepth(tpos[2] + steps * self._step, name=f"{self._dev.name()} spinbox step")
+
+    def stepEnabled(self):
+        return self.StepUpEnabled | self.StepDownEnabled
+
+    def validate(self, text, pos):
+        stripped = text.strip()
+        for suffix in (' µm', 'µm', ' um', 'um'):
+            if stripped.endswith(suffix):
+                stripped = stripped[: -len(suffix)].strip()
+                break
+        try:
+            float(stripped)
+            return Qt.QValidator.Acceptable, text, pos
+        except ValueError:
+            if stripped in ('', '-', '.', '-.'):
+                return Qt.QValidator.Intermediate, text, pos
+            return Qt.QValidator.Invalid, text, pos
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+
+    def _updateDisplay(self):
+        le = self.lineEdit()
+        le.blockSignals(True)
+        try:
+            le.setText(f'{self._value * 1e6:.2f} µm')
+        finally:
+            le.blockSignals(False)
+
+    def _editingFinished(self):
+        text = self.lineEdit().text().strip()
+        for suffix in (' µm', 'µm', ' um', 'um'):
+            if text.endswith(suffix):
+                text = text[: -len(suffix)].strip()
+                break
+        try:
+            self._dev.setFocusDepth(float(text) * 1e-6, name=f"{self._dev.name()} spinbox set")
+        except ValueError:
+            pass
+        self._updateDisplay()
+
+
 class ScopeCameraModInterface(CameraModuleInterface):
     """Implements focus control user interface for use in the camera module.
     """
@@ -578,16 +775,18 @@ class ScopeCameraModInterface(CameraModuleInterface):
         self.plot = win.getDepthView()
 
         # Create Z-position widget
-        self.zPositionWidget = ZPositionWidget(self.plot)
-        self.movableFocusLine = self.plot.addLine(
-            y=0, pen='y', markers=[('<|>', 0.5, 10)], movable=True
-        )
-        self.movableFocusLine.sigPositionChangeFinished.connect(self.focusChangedFromWidget)
+        self.zPositionWidget = ZPositionWidget(self.plot, movable=True)
+        self.zPositionWidget.sigTargetChangeRequested.connect(self.focusChangedFromWidget)
 
         # Ideally, the sample orientation, height, and anatomical identity would be contained
         # in a Sample or Slice object elsewhere...
 
         # Add controls
+
+        # Focal plane z spinbox
+        self.layout.addWidget(Qt.QLabel('Focal plane Z:'), 3, 0)
+        self.zSpinBox = FocusSpinBox(dev, step=2e-6)
+        self.layout.addWidget(self.zSpinBox, 4, 0)
 
         self.setSurfaceBtn = Qt.QPushButton('Set Surface')
         self.setSurfaceBtn.clicked.connect(self.setSurfaceClicked)
@@ -599,6 +798,9 @@ class ScopeCameraModInterface(CameraModuleInterface):
 
         # Get depth label from the widget and add it to our layout
         self.layout.addWidget(self.zPositionWidget.depthLabel, 2, 0)
+
+        # add a spacer
+        self.layout.setRowStretch(5, 1)
 
         # Connect device signals
         dev.sigGlobalTransformChanged.connect(self.transformChanged)
@@ -625,26 +827,31 @@ class ScopeCameraModInterface(CameraModuleInterface):
     def transformChanged(self):
         focus = self.getDevice().getFocusDepth()
         self.zPositionWidget.setFocusDepth(focus)
+        self.zSpinBox.setValue(focus)
 
-        # Compute the target focal plane.
-        # This is a little tricky because the objective might have an offset+scale relative
-        # to the focus device.
-        fd = self.getDevice().focusDevice()
-        if fd is None:
-            return
-        fpos = fd.globalPosition()
-        tpos = fd.globalTargetPosition()
-        if tpos is None:
-            tpos = fpos
-        dif = tpos[2] - fpos[2]
-        self.zPositionWidget.setTargetDepth(focus + dif)
-        with pg.SignalBlock(self.movableFocusLine.sigPositionChangeFinished, self.focusChangedFromWidget):
-            self.movableFocusLine.setValue(focus + dif)
+        # :MC: why does this exist? at a first glance, it behaves fine without it.
+        # # Compute the target focal plane.
+        # # This is a little tricky because the objective might have an offset+scale relative
+        # # to the focus device.
+        # fd = self.getDevice().focusDevice()
+        # if fd is None:
+        #     return
+        # fpos = fd.globalPosition()
+        # tpos = fd.globalTargetPosition()
+        # if tpos is None:
+        #     tpos = fpos
+        # dif = tpos[2] - fpos[2]
+        # self.zPositionWidget.setTargetDepth(focus + dif)
+        # with pg.SignalBlock(self.movableFocusLine.sigPositionChangeFinished, self.focusChangedFromWidget):
+        #     self.movableFocusLine.setValue(focus + dif)
 
     def focusChangedFromWidget(self, depth):
         """Handle focus changes from the Z-position widget."""
-        depth = self.movableFocusLine.value()
-        self.getDevice().setFocusDepth(depth)
+        mfut = self.getDevice().setFocusDepth(depth, name=f"{self.getDevice().name()} focus from Z-widget")
+        mfut.sigFinished.connect(self._handleRefocusFinished)
+
+    def _handleRefocusFinished(self):
+        self.zPositionWidget.setMovingToTarget(False)
 
     def controlWidget(self):
         return self.ctrl

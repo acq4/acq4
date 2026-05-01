@@ -102,16 +102,17 @@ class Camera(DAQGeneric, OptomechDevice):
                 )
                 break
 
-        self.transformChanged()
-        if self.scopeDev is not None:
-            self.objectiveChanged()
-            self._lightChanged()
 
         self.setupCamera()
         self.sensorSize = self.getParam("sensorSize")
         tr = TTransform(offset=(-self.sensorSize[0] * 0.5, -self.sensorSize[1] * 0.5, 0))
         self.setDeviceTransform(self.deviceTransform() * tr)
         self._frameInfoUpdater = None
+
+        self.transformChanged()
+        if self.scopeDev is not None:
+            self.objectiveChanged()
+            self._lightChanged()
 
         self.acqThread = AcquireThread(self)
         self.acqThread.finished.connect(self.acqThreadFinished, type=Qt.Qt.DirectConnection)
@@ -525,7 +526,7 @@ class Camera(DAQGeneric, OptomechDevice):
 
         return self.mapToGlobal(center)
 
-    def moveCenterToGlobal(self, position, speed, center="roi"):
+    def moveCenterToGlobal(self, position, speed, center="roi", name=None):
         """Move this camera's stage such that its center is focused on a given global position.
 
         The center to focus may be either the 'sensor' or the 'roi'.
@@ -535,18 +536,18 @@ class Camera(DAQGeneric, OptomechDevice):
         scopeCenter = np.array(pg.Vector(scope.globalPosition()))
 
         scopePos = scopeCenter + np.array(position) - camCenter
-        return scope.setGlobalPosition(scopePos, speed=speed)
+        return scope.setGlobalPosition(scopePos, speed=speed, name=name)
 
     def getFocusDepth(self):
         """Return the z-position of the focal plane."""
         return self.mapToGlobal((0, 0, 0))[2]
 
-    def setFocusDepth(self, z, speed='fast'):
+    def setFocusDepth(self, z, speed='fast', name=None):
         """Set the z-position of the focal plane by moving the parent focusing device."""
         # this is how much the focal plane needs to move (in the global frame)
         dif = z - self.getFocusDepth()
         scopez = self.scopeDev.getFocusDepth() + dif
-        return self.scopeDev.setFocusDepth(scopez, speed)
+        return self.scopeDev.setFocusDepth(scopez, speed, name)
 
     def objectiveChanged(self, obj=None):
         if obj is None:

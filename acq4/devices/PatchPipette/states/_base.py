@@ -145,8 +145,6 @@ class PatchPipetteState(Future):
         self.testPulseResults = queue.Queue()
         self._cleanupFuture = None
         self._pressureAdjustment = None
-        self._cell = None
-        self._visualTargetTrackingFuture = None
         self._pauseMovement = False
         # indicates state that should be transitioned to next, if any.
         # This is usually set by the return value of run(), and must be invoked by the state manager.
@@ -155,13 +153,20 @@ class PatchPipetteState(Future):
 
     def start(self):
         """Start a background thread that executes this state. This should only be called by the state manager.
-        
+
         When runJob completes, self.sigFinished will be emitted."""
         self.executeInThread(self.runJob, args=(), kwds={})
 
     def setResult(self, *args, **kwargs):
         if 'error' in kwargs:
             self.setState(f"{self.stateName} failed: {kwargs['error']}")
+        if 'excInfo' in kwargs and kwargs['excInfo'] is not None:
+            exc_type, exc_value, _ = kwargs['excInfo']
+            if issubclass(exc_type, Future.StopRequested):
+                self.dev.logger.debug(f"{self.stateName} stopped: {exc_value}")
+            else:
+                self.setState(f"Exception in {self.stateName}: {exc_type.__name__}: {exc_value}")
+                self.dev.logger.error(f"Exception in {self.stateName}:", exc_info=kwargs['excInfo'])
         super().setResult(*args, **kwargs)
 
     def initialize(self):
@@ -175,10 +180,10 @@ class PatchPipetteState(Future):
 
     def runJob(self, _future):  # _future is self
         """Called in background thread to start the state.
-        
+
         Initialize pressure, clamp, etc. and run the subclass-defined run() method if it exists.
-        If run() is not defined, then this just serves as a way to set initial parameters and then wait until the state is stopped by the state manager. 
-        If run() is defined, then it should return either None or a dict with a 'state' key specifying the next state to transition to. 
+        If run() is not defined, then this just serves as a way to set initial parameters and then wait until the state is stopped by the state manager.
+        If run() is defined, then it should return either None or a dict with a 'state' key specifying the next state to transition to.
         The state manager will handle the actual transition after run() completes.
 
         This method is called by the state manager.
@@ -194,7 +199,11 @@ class PatchPipetteState(Future):
                     daq_name = self.dev.clampDevice.getDAQName("primary")
                     self.setState(f"{self.stateName}: waiting for {daq_name} lock")
                     stack.enter_context(
-                        getManager().reserveDevices([daq_name], timeout=self.config["DAQReservationTimeout"]))
+                        getManager().reserveDevices(
+                            [daq_name],
+                            timeout=self.config["DAQReservationTimeout"],
+                            reserver=f"PatchPipette.{self.stateName}",
+                        ))
                     self.setState(f"{self.stateName}: {daq_name} lock acquired")
 
                 # TODO: can we use the rval of the Future for this?
@@ -209,7 +218,7 @@ class PatchPipetteState(Future):
 
     def run(self):
         """Subclasses can implement this method to have code executed in a background thread after the state starts.
-        
+
         The default implementation just waits until the state is stopped by the state manager."""
         self.sleep(float('inf'))
 
@@ -314,13 +323,8 @@ class PatchPipetteState(Future):
         """
         disconnect(self.dev.sigTargetChanged, self._onTargetChanged)
         with log_and_ignore_exception(Exception, "Error disabling visual target tracking"):
-            if self._cell is not None:
-                self._cell.enableTracking(False)
-        with log_and_ignore_exception(Exception, "Error stopping visual target tracking"):
-            if self._visualTargetTrackingFuture is not None:
-                self._cell.enableTracking(False)
-                self._visualTargetTrackingFuture.stop("State cleanup")
-            self._visualTargetTrackingFuture = None
+            if self.dev.cell is not None:
+                self.stopVisualTargetTracking('cleaning up state')
         return Future.immediate()
 
     def checkStop(self):
@@ -348,23 +352,28 @@ class PatchPipetteState(Future):
     def aboveSurface(self, pos=None):
         return self.depthBelowSurface(pos) < 0
 
-    def maybeVisuallyTrackTarget(self):
+    def maybeVisuallyTrackTarget(self, allow_refresh_reference=True):
         if not self.config["visualTargetTracking"]:
             return
         if self.closeEnoughToTargetToDetectCell():
-            if self._visualTargetTrackingFuture is not None:
-                self._cell.enableTracking(False)
-                self._visualTargetTrackingFuture.stop(
-                    "Close enough to target to detect cell, stopping visual tracking"
-                )
-                self._visualTargetTrackingFuture = None
+            self.stopVisualTargetTracking(reason="Close enough to target to detect cell, stopping visual tracking")
             return
-        if self._visualTargetTrackingFuture is None:
-            self._cell = self.dev.cell
-            self._visualTargetTrackingFuture = self._visualTargetTracking()
+        if not self.dev.cell.isTracking():
+            self.startVisualTargetTracking(allow_refresh_reference)
 
-    def _visualTargetTracking(self):
-        cell = self._cell
+    def stopVisualTargetTracking(self, reason):
+        fut = self.dev.cell._trackingFuture
+        if fut is not None:
+            self.dev.cell.enableTracking(False, reason=reason)
+            # wait on future until it stops
+            try:
+                self.waitFor(fut)
+            except fut.Stopped:
+                pass
+
+    def startVisualTargetTracking(self, allow_refresh_reference=True):
+        cell = self.dev.cell
+        cell.allow_refresh_reference = allow_refresh_reference
         if cell is None:
             raise ValueError("Cannot visually track target; no cell is assigned to this pipette device.")
         if not cell.isInitialized:
@@ -374,17 +383,15 @@ class PatchPipetteState(Future):
         cell.sigTrackingMultipleFramesStart.connect(self._pausePipetteForExtendedTracking)
         cell.sigPositionChanged.connect(self.dev.pipetteDevice.setTarget)
         cell._trackingFuture.sigFinished.connect(self._visualTargetTrackingFinished)
-        return cell._trackingFuture
 
     def _visualTargetTrackingFinished(self, future):
         from acq4_automation.feature_tracking.visualization import LiveTrackerVisualizer
 
         if not hasattr(self.dev, '_trackingVisualizers'):
             self.dev._trackingVisualizers = []
-        disconnect(self._cell.sigPositionChanged, self.dev.pipetteDevice.setTarget)
-        disconnect(self._cell.sigTrackingMultipleFramesStart, self._pausePipetteForExtendedTracking)
-        disconnect(self._cell.sigTrackingMultipleFramesFinish, self._resumePipetteAfterExtendedTracking)
-
+        disconnect(self.dev.cell.sigPositionChanged, self.dev.pipetteDevice.setTarget)
+        disconnect(self.dev.cell.sigTrackingMultipleFramesStart, self._pausePipetteForExtendedTracking)
+        disconnect(self.dev.cell.sigTrackingMultipleFramesFinish, self._resumePipetteAfterExtendedTracking)
 
     def _pausePipetteForExtendedTracking(self, cell):
         self._pauseMovement = True

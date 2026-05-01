@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import numpy as np
+
 from acq4.util.future import future_wrap
 from pyqtgraph import units
 from ._base import PatchPipetteState
@@ -31,16 +33,19 @@ class CleanState(PatchPipetteState):
         'initialTestPulseEnable': False,
         'fallbackState': 'out',
         'finishPatchRecord': True,
+        'nextState': 'out',
     }
     _parameterTreeConfig = {
         'cleanSequence': {'type': 'str', 'default': "[(-35e3, 1.0), (100e3, 1.0)] * 5"},  # TODO
         'rinseSequence': {'type': 'str', 'default': "[(-35e3, 3.0), (100e3, 10.0)]"},  # TODO
         'sonicationProtocol': {'type': 'str', 'default': 'clean'},
+        'nextState': {'type': 'str', 'default': 'out'},
     }
 
     def __init__(self, *args, **kwds):
         self.sonication = None
         self.moveFuture = None
+        self._moves_to_undo = []
         super().__init__(*args, **kwds)
 
     def run(self):
@@ -52,33 +57,94 @@ class CleanState(PatchPipetteState):
 
         self.setState('cleaning')
 
-        for stage in ('clean', 'rinse'):
-            self.checkStop()
+        # for stage in ('clean', 'rinse'):
+        #     self.checkStop()
+        #
+        #     sequence = config[f'{stage}Sequence']
+        #     if isinstance(sequence, str):
+        #         sequence = eval(sequence, units.__dict__)
+        #     if len(sequence) == 0:
+        #         continue
+        #
+        #
+        #
+        #     self.waitFor(pip.moveTo(stage, "fast"), timeout=30)
+        #
+        #     if dev.sonicatorDevice is not None:
+        #         self.sonication = dev.sonicatorDevice.doProtocol(config['sonicationProtocol'])
+        #
+        #     for pressure, delay in sequence:
+        #         dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
+        #         self.sleep(delay)
+        #
+        #     if self.sonication is not None and not self.sonication.isDone():
+        #         self.waitFor(self.sonication)
 
-            sequence = config[f'{stage}Sequence']
-            if isinstance(sequence, str):
-                sequence = eval(sequence, units.__dict__)
-            if len(sequence) == 0:
-                continue
+        sequence = config['cleanSequence']
+        if isinstance(sequence, str):
+            sequence = eval(sequence, units.__dict__)
+        assert len(sequence) > 0
 
-            self.waitFor(pip.moveTo(stage, "fast"), timeout=30)
+        scope = pip.imagingDevice().scopeDev
+        start_pos = scope.globalPosition()
+        waypoints = [
+            (np.array([start_pos[0], start_pos[1], 30e-3]), "initial pos +3cm up"),
+            (np.array([-90e-3, 20e-3, 30e-3]), "waaay out of the way"),
+        ]
+        for wp, name in waypoints:
+            self.waitFor(scope.setGlobalPosition(wp, 20e-3, name=name))
 
-            if dev.sonicatorDevice is not None:
-                self.sonication = dev.sonicatorDevice.doProtocol(config['sonicationProtocol'])
+        cw = pip.getCleaningWell()
+        self.waitFor(pip.retractFromSurface('fast'))
+        self.waitFor(pip._moveToGlobal([0, 0, 10e-3], 'fast', name='safe position before cleaning well'))
+        self.waitFor(cw.moveToInteract(pip), timeout=60)
 
-            for pressure, delay in sequence:
-                dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
-                self.sleep(delay)
+        if dev.sonicatorDevice is not None:
+            self.sonication = dev.sonicatorDevice.doProtocol(config['sonicationProtocol'])
 
-            if self.sonication is not None and not self.sonication.isDone():
-                self.waitFor(self.sonication)
+        for pressure, delay in sequence:
+            dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
+            self.sleep(delay)
 
-        self.waitFor(pip.moveTo('home', 'fast'))
+        if self.sonication is not None and not self.sonication.isDone():
+            self.waitFor(self.sonication)
+
+        self.waitFor(cw.moveToApproach(pip))
+
+        dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
+
+        # self.waitFor(pip.moveTo('home', 'fast'))  # motion planning doesn't work so well from here
+        self.waitFor(pip.parentStage.goHome('fast'))
+        waypoints = waypoints[::-1] + [(start_pos, "initial pos")]
+        for wp, name in waypoints:
+            self.waitFor(scope.setGlobalPosition(wp, 20e-3, name=name))
+
+        # TODO this could have worked...
+        # cw = pip.getCleaningWell()
+        # self.waitFor(cw.moveToInteract(pip), timeout=60)
+        #
+        # if dev.sonicatorDevice is not None:
+        #     self.sonication = dev.sonicatorDevice.doProtocol(config['sonicationProtocol'])
+        #
+        # for pressure, delay in sequence:
+        #     dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
+        #     self.sleep(delay)
+        #
+        # if self.sonication is not None and not self.sonication.isDone():
+        #     self.waitFor(self.sonication)
+        #
+        # self.waitFor(cw.moveToApproach(pip))
+        #
+        # dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
+        #
+        # self.waitFor(pip.parentStage.goHome('fast'))
+        # self.waitFor(cw._unwindKludgePath(pip))
+
         dev.pipetteRecord()['cleanCount'] += 1
         dev.setTipClean(True)
         self.currentFuture = None
         dev.newPatchAttempt()
-        return {"state": 'out'}
+        return {"state": config['nextState']}
 
     def resetPosition(self, parent_future):
         # todo we need to handle this somehow for both path generators
@@ -101,9 +167,9 @@ class CleanState(PatchPipetteState):
         except Exception:
             dev.logger.exception("Error resetting pressure after clean")
 
-        try:
-            _future.waitFor(dev.pipetteDevice.moveTo('home', 'fast'))
-        except Exception:
-            dev.logger.exception("Error resetting pipette position after clean")
+        # try:
+        #     _future.waitFor(dev.pipetteDevice.moveTo('home', 'fast'))
+        # except Exception:
+        #     dev.logger.exception("Error resetting pipette position after clean")
 
         _future.waitFor(super()._cleanup(), timeout=None)

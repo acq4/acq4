@@ -37,6 +37,7 @@ class PatchPipetteStateManager(Qt.QObject):
                 states.ApproachState,
                 states.CellDetectState,
                 states.SealState,
+                states.ContactCellState,
                 states.CellAttachedState,
                 states.BreakInState,
                 states.WholeCellState,
@@ -159,6 +160,7 @@ class PatchPipetteStateManager(Qt.QObject):
     def setProfile(self, profile: str):
         """Set the current patch profile."""
         self._profile = profile
+        self.logger.debug(f"Profile set to {profile}")
         self.sigProfileChanged.emit(self, profile)
 
     def getState(self):
@@ -171,7 +173,7 @@ class PatchPipetteStateManager(Qt.QObject):
         """
         pass
 
-    def requestStateChange(self, state, config=None):
+    def requestStateChange(self, state, **config):
         """Pipette has requested a state change; either accept and configure the new
         state or reject the new state.
 
@@ -241,23 +243,25 @@ class PatchPipetteStateManager(Qt.QObject):
     def stopJob(self, allowNextState=True):
         job = self.currentJob
         if job is not None:
+            self.logger.debug(f"Stopping job {job.stateName}; allowNextState={allowNextState}")
             # disconnect; we'll call jobFinished directly
             disconnect(job.sigFinished, self.jobFinished)
             job.stop()
             try:
                 job.wait(timeout=10)
             except job.Timeout:
-                self.logger.exception(f"Timed out waiting for job {job} to complete")
+                self.logger.warning(f"Timed out waiting for job {job} to complete", exc_info=True)
             except job.Stopped:
                 pass
             except Exception:
-                self.logger.exception(f"{self.dev.name()} failed in state {job.stateName}:")
+                self.logger.warning(f"{self.dev.name()} failed in state {job.stateName}", exc_info=True)
             self.jobFinished(job, allowNextState=allowNextState)
 
     def jobStateChanged(self, job, state):
         self.dev.emitNewEvent("state_event", {'state': job.stateName, 'info': state})
 
     def jobFinished(self, job, allowNextState=True):
+        self.logger.debug(f"Job {job.stateName} finished; allowNextState={allowNextState}")
         try:
             job.cleanup().wait()
         except Exception:
@@ -268,7 +272,7 @@ class PatchPipetteStateManager(Qt.QObject):
             if job.nextState.get("state") is not None:
                 config = job.nextState
                 state = config.pop("state")
-                self.requestStateChange(state, config)
+                self.requestStateChange(state, **config)
             else:
                 self.logger.debug(f"No next state specified by {job.stateName}")
 

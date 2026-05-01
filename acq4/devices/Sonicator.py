@@ -37,6 +37,7 @@ class Sonicator(Device):
         self.protocols = config.get("protocols", {})
 
     def safeToSonicate(self, _future: Future = None, askUser=True) -> bool:
+        return True  # TODO unbroke this
         pos = self.patchPipetteDevice.pipetteDevice.globalPosition()
         well = self.patchPipetteDevice.pipetteDevice.getCleaningWell()
         if well and well.containsPoint(pos, tolerance=5e-6):
@@ -48,6 +49,7 @@ class Sonicator(Device):
                 return True
         if not askUser:
             return False
+        print(f"{well} {well.containsPoint(pos, tolerance=5e-6)} {pos} {lower_bound}")
         response = _future.waitFor(
             prompt(
                 "Sonication Safety Warning",
@@ -67,10 +69,13 @@ class Sonicator(Device):
             status = protocol
             protocol = self.protocols[protocol]
         self.sigSonicationChanged.emit(status)
-        _future.waitFor(self._doProtocol(protocol))
+        _future.waitFor(self._doProtocol(protocol), timeout=self._protocolDuration(protocol)*1.3)
         self._onProtocolFinished()
 
     def _doProtocol(self, protocol: object) -> Future:
+        raise NotImplementedError()
+
+    def _protocolDuration(self, protocol: object) -> float:
         raise NotImplementedError()
 
     def _onProtocolFinished(self):

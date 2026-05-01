@@ -9,13 +9,12 @@ import h5py
 import numpy as np
 
 import pyqtgraph as pg
-from pyqtgraph.units import GΩ, MΩ
 from acq4.filetypes.FileType import FileType
 from acq4.util import Qt
-from acq4.util.functions import plottable_booleans
 from acq4.util.target import Target
 from neuroanalysis.test_pulse import PatchClampTestPulse
 from neuroanalysis.test_pulse_stack import H5BackedTestPulseStack
+from pyqtgraph.units import GΩ, MΩ
 
 TEST_PULSE_METAARRAY_INFO = [
     {'name': 'event_time', 'type': 'float', 'units': 's'},
@@ -208,6 +207,8 @@ class MultiPatchLogData(object):
             self.process(filename)
 
     def process(self, filename) -> None:
+        from acq4.devices.PatchPipette.patchpipette import LOG_EVENT_TYPES
+
         def possible_uses_for_type(event_type: str) -> list[str]:
             uses = ['event']
             if event_type in {'pipette_transform_changed', 'move_start', 'move_stop'}:
@@ -225,6 +226,8 @@ class MultiPatchLogData(object):
             #     uses.append('move_request')
             if event_type in {'test_pulse'}:
                 uses += ['test_pulse', 'full_test_pulse']
+            if event_type in LOG_EVENT_TYPES:
+                uses.append('log_events')
             return uses
 
         with open(filename, 'rb') as fh:
@@ -324,6 +327,8 @@ class MultiPatchLogData(object):
                 dtype=TEST_PULSE_NUMPY_DTYPE,
             ),
             'full_test_pulse': list(range(count_for_use('full_test_pulse'))),
+            # unified timeline of semantically meaningful events across all event types
+            'log_events': list(range(count_for_use('log_events'))),
         }
 
     @staticmethod
@@ -349,6 +354,8 @@ class MultiPatchLogData(object):
             return tuple(event[info['name']] for info in TEST_PULSE_METAARRAY_INFO)
         if use == 'full_test_pulse':
             return event.get('full_test_pulse')
+        if use == 'log_events':
+            return event_time, event['event'], dict(event)
 
 
 class MultiPatchLog(FileType):
@@ -522,8 +529,19 @@ class MultiPatchLogWidget(Qt.QWidget):
         self._frames = []
         self._current_time = 0
         self._pinned_image_z = -10000
+        main_layout = Qt.QVBoxLayout()
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        self.setLayout(main_layout)
+        self._splitter = Qt.QSplitter(Qt.Qt.Vertical)
+        main_layout.addWidget(self._splitter)
+
+        # Top widget: plots + controls side by side
+        top_widget = Qt.QWidget()
         layout = Qt.QGridLayout()
-        self.setLayout(layout)
+        layout.setContentsMargins(0, 0, 0, 0)
+        top_widget.setLayout(layout)
+        self._splitter.addWidget(top_widget)
+
         self._plots_widget = pg.GraphicsLayoutWidget()
         self._plots_widget.setObjectName("MultiPatchLog_plotsWidget")
         self._widgets.append(self._plots_widget)
@@ -539,12 +557,21 @@ class MultiPatchLogWidget(Qt.QWidget):
         self._devices = {}
         self._full_test_pulse_stacks = {}
         self._time_sliders = []
-        ctrl_widget = Qt.QWidget(self)
+        ctrl_widget = Qt.QWidget(top_widget)
         ctrl_widget.setMaximumWidth(200)
         self._ctrl_layout = Qt.QVBoxLayout()
         ctrl_widget.setLayout(self._ctrl_layout)
         self._buildCtrlUi()
         layout.addWidget(ctrl_widget, 0, 1)
+
+        # Event log: shows merged semantically meaningful events; synced to time slider
+        from acq4.util.ui.pipetteEventLog import PipetteEventLog
+
+        self._eventLogWidget = PipetteEventLog()
+        self._eventLogWidget.sigTimeSelected.connect(self._eventLogTimeSelected)
+        self._splitter.addWidget(self._eventLogWidget)
+        self._splitter.setStretchFactor(0, 3)
+        self._splitter.setStretchFactor(1, 1)
 
         # Add Z-position display
         self._addZPositionDisplay()
@@ -950,6 +977,12 @@ class MultiPatchLogWidget(Qt.QWidget):
                 img.hide()
         self._displayTestPulseDataAtTime(time)
         self._updateZPositionDisplay(time)
+        self._eventLogWidget.setTime(time)
+
+    def _eventLogTimeSelected(self, rel_time: float):
+        """Move all time sliders to the selected log entry's time."""
+        for slider in self._time_sliders:
+            slider.setValue(rel_time)
 
     def _isStageDevice(self, dev_name: str) -> bool:
         """Determine if a device is likely a stage/microscope device based on its name."""
@@ -1056,7 +1089,23 @@ class MultiPatchLogWidget(Qt.QWidget):
         for plot in self._plots_by_units.values():
             plot.setXRange(0, self.endTime() - self.startTime())
             break  # they should be x-linked
+
+        self._populateEventLog()
         self.setTime(0)
+
+    def _populateEventLog(self):
+        """Merge log_events from all devices, sort by time, and populate the event log widget."""
+        self._eventLogWidget.clear()
+        start = self.startTime()
+        all_events = []
+        for data in self._devices.values():
+            for entry in data.get('log_events', []):
+                if isinstance(entry, tuple) and len(entry) == 3:
+                    abs_time, event_type, event_data = entry
+                    all_events.append((abs_time, event_type, event_data))
+        all_events.sort(key=lambda e: e[0])
+        for abs_time, event_type, event_data in all_events:
+            self._eventLogWidget.addEvent(abs_time - start, event_type, event_data)
 
     def _makeStateRegion(self, start, end, brush, label) -> PipetteStateRegion:
         region = PipetteStateRegion([start, end], movable=False, brush=brush)

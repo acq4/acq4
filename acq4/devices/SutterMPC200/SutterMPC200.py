@@ -98,7 +98,7 @@ class SutterMPC200(Stage):
                 'limits': (False, False, False),
             }
 
-    def stop(self):
+    def stop(self, reason=None):
         """Stop _any_ moving drives on the MPC200.
         """
         self.dev.stop()
@@ -136,12 +136,6 @@ class SutterMPC200(Stage):
         pos = [pos[i] * self.scale[i] for i in (0, 1, 2)]
         return pos
 
-    def targetPosition(self):
-        if self._lastMove is None or self._lastMove.isDone():
-            return self.getPosition()
-        else:
-            return self._lastMove.targetPos
-
     def quit(self):
         SutterMPC200._monitor.stop()  # only one thread for all
         # self._monitor.stop()  # this was never set to anything but None
@@ -151,7 +145,7 @@ class SutterMPC200(Stage):
     def positionUpdatesPerSecond(self):
         return 1.0 / SutterMPC200._monitor.minInterval
 
-    def _move(self, pos, speed, linear, **kwds):
+    def _move(self, pos, speed, linear, name=None, **kwds):
         # convert speed to values accepted by MPC200
         if speed == 'slow':
             speed = self.slowSpeed
@@ -162,8 +156,8 @@ class SutterMPC200(Stage):
                 speed = 'fast'
         else:
             speed = self._getClosestSpeed(speed)
-        
-        self._lastMove = MPC200MoveFuture(self, pos, speed)
+
+        self._lastMove = MPC200MoveFuture(self, pos, speed, name=name)
         return self._lastMove
 
     def _getClosestSpeed(self, speed):
@@ -290,8 +284,8 @@ class MonitorThread(Thread):
 class MPC200MoveFuture(MoveFuture):
     """Provides access to a move-in-progress on an MPC200 drive.
     """
-    def __init__(self, dev, pos, speed):
-        MoveFuture.__init__(self, dev, pos, speed)
+    def __init__(self, dev, pos, speed, name=None):
+        MoveFuture.__init__(self, dev, pos, speed, name=name)
         
         # because of MPC200 idiosyncracies, we must coordinate with the monitor
         # thread to do a move.

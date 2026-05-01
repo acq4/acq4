@@ -24,11 +24,18 @@ class ZStackDetectionWidget(Qt.QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Z-Stack Pipette Detection")
-        self.resize(900, 700)
+        self.resize(1200, 700)
 
         layout = Qt.QVBoxLayout(self)
+        image_row = Qt.QHBoxLayout()
+        layout.addLayout(image_row)
+
         self.imageView = pg.ImageView()
-        layout.addWidget(self.imageView)
+        image_row.addWidget(self.imageView)
+
+        self.heatmapView = pg.ImageView()
+        self.heatmapView.setWindowTitle("Heatmap")
+        image_row.addWidget(self.heatmapView)
 
         from pyqtgraph.graphicsItems.TargetItem import TargetItem
         self._target = TargetItem(size=20, movable=False, pen=pg.mkPen('r', width=2))
@@ -36,13 +43,14 @@ class ZStackDetectionWidget(Qt.QWidget):
         self._target.setVisible(False)
 
         self._image_positions = None
+        self._heatmaps = None
         self._z_curve = None
         self._conf_curve = None
         self._conf_vb = None
 
         self.imageView.sigTimeChanged.connect(self._on_time_changed)
 
-    def setData(self, frames, image_positions, z_um, confidences):
+    def setData(self, frames, image_positions, z_um, confidences, heatmaps=None):
         """Update the widget with new detection results.
 
         Parameters
@@ -54,11 +62,22 @@ class ZStackDetectionWidget(Qt.QWidget):
             Per-frame predicted z offset from focal plane in µm.
         confidences : ndarray, shape (n,)
             Per-frame detection confidence (0-1).
+        heatmaps : list of ndarray or None
+            Per-frame heatmap arrays from the detection model.
         """
         self._image_positions = image_positions
+        self._heatmaps = heatmaps
 
         stack = np.stack([f.data() for f in frames], axis=0)
         self.imageView.setImage(stack)
+
+        if heatmaps is not None:
+            valid = [h for h in heatmaps if h is not None]
+            if valid:
+                # heatmaps from detect_pipette_once are shape (1, H, W); squeeze batch dim
+                hm_stack = np.stack([np.squeeze(h) for h in heatmaps], axis=0)
+                self.heatmapView.setImage(hm_stack)
+                self.heatmapView.setColorMap(pg.colormap.get('viridis'))
 
         roi_plot = self.imageView.ui.roiPlot
         if self._z_curve is not None:
@@ -105,6 +124,8 @@ class ZStackDetectionWidget(Qt.QWidget):
         pos = self._image_positions[idx]
         # image_pos_rc axes match frame.data() axis order: pos[0] → axis-0 (x in pg), pos[1] → axis-1 (y in pg)
         self._target.setPos(float(pos[0]), float(pos[1]))
+        if self._heatmaps is not None:
+            self.heatmapView.setCurrentIndex(idx)
 
 
 def scan_pipette_z_stack(pipette, imager=None, z_range=50e-6, z_step=5e-6, show=False):
@@ -152,6 +173,7 @@ def scan_pipette_z_stack(pipette, imager=None, z_range=50e-6, z_step=5e-6, show=
     z_predictions_um = []
     confidences = []
     image_positions = []
+    heatmaps = []
 
     for frame in frames:
         img = frame.data()
@@ -162,13 +184,15 @@ def scan_pipette_z_stack(pipette, imager=None, z_range=50e-6, z_step=5e-6, show=
         pipette_angle = np.arctan2(-image_dir[0], image_dir[1]) * 180 / np.pi
         px_size = frame.info()["pixelSize"][0]
 
-        image_pos_rc, z_um, confidence, _ = do_pipette_tip_detection(img, pipette_angle, px_size, show=False)
+        image_pos_rc, z_um, confidence, _locals = do_pipette_tip_detection(img, pipette_angle, px_size, show=False, return_heatmap=True)
+        heatmap = _locals.get('cropped_heatmap')
 
         tip_pos = frame.mapFromFrameToGlobal(pg.Vector(image_pos_rc))
         global_positions.append((tip_pos.x(), tip_pos.y(), tip_pos.z() + z_um * 1e-6))
         z_predictions_um.append(float(z_um))
         confidences.append(float(confidence))
         image_positions.append([float(image_pos_rc[0]), float(image_pos_rc[1])])
+        heatmaps.append(heatmap)
 
     global_positions = np.array(global_positions)
     z_predictions_um = np.array(z_predictions_um)
@@ -177,16 +201,16 @@ def scan_pipette_z_stack(pipette, imager=None, z_range=50e-6, z_step=5e-6, show=
 
     if show:
         from acq4.util.threadrun import runInGuiThread
-        runInGuiThread(_show_z_stack_detection_widget, frames, image_positions, z_predictions_um, confidences)
+        runInGuiThread(_show_z_stack_detection_widget, frames, image_positions, z_predictions_um, confidences, heatmaps)
 
-    return frames, global_positions, z_predictions_um, confidences
+    return frames, global_positions, z_predictions_um, confidences, heatmaps
 
 
-def _show_z_stack_detection_widget(frames, image_positions, z_um, confidences):
+def _show_z_stack_detection_widget(frames, image_positions, z_um, confidences, heatmaps=None):
     global _z_stack_detection_window
     if _z_stack_detection_window is None or not _z_stack_detection_window.isVisible():
         _z_stack_detection_window = ZStackDetectionWidget()
-    _z_stack_detection_window.setData(frames, image_positions, z_um, confidences)
+    _z_stack_detection_window.setData(frames, image_positions, z_um, confidences, heatmaps)
 
 
 @future_wrap
@@ -199,16 +223,17 @@ def findNewPipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=0.
         # focus 2mm above surface
         surfaceZ = scopeDevice.getSurfaceDepth()
         startDepth = surfaceZ + 2e-3
-        _future.waitFor(imager.setFocusDepth(startDepth))
+        _future.waitFor(imager.setFocusDepth(startDepth, name=f"{imager.name()} focus above surface for {pipette.name()} auto-calibrate"))
 
         # move pipette to search position
         center = imager.globalCenterPosition(mode='roi')
         pipVector = pipette.globalDirection()
         pipY = np.cross(pipVector, [0, 0, 1])
+        pipY /= np.linalg.norm(pipY)
         searchPos1 = center + pipVector * 1e-3 + pipY * 1e-3
         searchPos2 = center + pipVector * 1e-3 - pipY * 1e-3
         # using a planner avoids possible collisions with the objective
-        planner = PipetteMotionPlanner(pipette, searchPos1, speed='fast')
+        planner = PipetteMotionPlanner(pipette, searchPos1, speed='fast', name=f"{pipette.name()} auto-calibrate search")
         _future.waitFor(planner.move())
 
         # collect background images, analyze noise
@@ -236,7 +261,7 @@ def findNewPipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=0.
         centerPipPos = getPipettePositionAtTime(posEvents, centerTime)
 
         # move back to center position
-        _future.waitFor(pipette._moveToGlobal(centerPipPos, speed='fast'))
+        _future.waitFor(pipette._moveToGlobal(centerPipPos, speed='fast', name=f"{pipette.name()} auto-calibrate return to center"))
 
         # todo: at this point we could compare the current image to the previously collected video
         # to see whether we made it back to the desired position (and if not, apply
@@ -248,7 +273,7 @@ def findNewPipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=0.
         pipetteCameraDelay = frames[mostSimilarFrame].info()['time'] - frames[centerIndex].info()['time']
         correctedCenterTime = frames[centerIndex].info()['time'] - pipetteCameraDelay
         correctedCenterPipPos = getPipettePositionAtTime(posEvents, correctedCenterTime)
-        _future.waitFor(pipette._moveToGlobal(correctedCenterPipPos, speed='fast'))
+        _future.waitFor(pipette._moveToGlobal(correctedCenterPipPos, speed='fast', name=f"{pipette.name()} auto-calibrate corrected center"))
 
         # record from imager and pipette position while retracting pipette out of frame
         retractPos = centerPipPos - pipVector * 2e-3
@@ -289,11 +314,11 @@ def findNewPipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=0.
         centerPipPos2 = endPipPos + np.array([0, yDist, 0])
 
         # move to new center
-        _future.waitFor(pipette._moveToGlobal(centerPipPos2, speed='fast'))
+        _future.waitFor(pipette._moveToGlobal(centerPipPos2, speed='fast', name=f"{pipette.name()} auto-calibrate move to new center"))
 
         # autofocus
         z_range = (startDepth - 500e-6, startDepth + 500e-6, 20e-6)
-        zStack = _future.waitFor(acquire_z_stack(imager, *z_range, block=True, max_dz_per_frame=np.inf)).getResult()
+        zStack = _future.waitFor(acquire_z_stack(imager, *z_range, block=True, max_dz_per_frame=np.inf, name="finding pipette depth")).getResult()
         zStackArray = np.stack([frame.data() for frame in zStack])
         zDiff = np.abs(np.diff(zStackArray.astype(float), axis=0))
         zProfile = zDiff.max(axis=2).max(axis=1)  # most-changed pixel in each frame
@@ -333,7 +358,7 @@ def findNewPipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=0.
 
         # do initial coarse registration: reset offset to detected position, center in frame
         pipette.resetGlobalPosition(globalPos)
-        _future.waitFor(pipette._moveToGlobal(imager.globalCenterPosition(), 'fast'))
+        _future.waitFor(pipette._moveToGlobal(imager.globalCenterPosition(), 'fast', name=f"{pipette.name()} auto-calibrate coarse center"))
 
         # iteratively refine tip position until convergence
         _future.waitFor(pipette.iterativelyFindTip(30), timeout=None)
@@ -393,7 +418,7 @@ def watchMovingPipette(pipette: Pipette, imager: Camera, pos, speed, _future):
         try:
             imgFuture = imager.acquireFrames()
             pipRecorder = pipette.startRecording()
-            pipFuture = pipette._moveToGlobal(pos, speed=speed)
+            pipFuture = pipette._moveToGlobal(pos, speed=speed, name=f"{pipette.name()} watchMovingPipette")
             _future.waitFor(pipFuture, timeout=40)  # for some reason one of these moves takes a long time to finish..
         finally:
             if pipRecorder is not None:
@@ -477,7 +502,7 @@ def calibrate_manipulator_axes(
             # Move along this axis to the next absolute position.
             target_pos = list(axis_start_pos)
             target_pos[axis] = axis_start_pos[axis] + step_idx * (step_size / scale[axis])
-            _future.waitFor(manipulator.move(target_pos, 'slow'))
+            _future.waitFor(manipulator.move(target_pos, 'slow', name=f"{manipulator.name()} calibrate axis {axis} step {step_idx}"))
 
             # Locate the tip via z-stack scan; this handles unknown axis orientation by
             # searching a range of focal depths around the current focus.
@@ -498,7 +523,7 @@ def calibrate_manipulator_axes(
             calibration_points.append((device_pos, parent_pos))
 
         # Return to the starting position before sweeping the next axis.
-        _future.waitFor(manipulator.move(axis_start_pos, 'slow'))
+        _future.waitFor(manipulator.move(axis_start_pos, 'slow', name=f"{manipulator.name()} calibrate axis {axis} return"))
         # Re-locate tip at start before recording the first point of the next axis.
         _future.waitFor(pipette.iterativelyFindTip(10))
 

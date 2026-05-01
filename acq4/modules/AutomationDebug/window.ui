@@ -77,6 +77,19 @@
           </property>
          </widget>
         </item>
+        <item>
+         <widget class="QPushButton" name="showRoisBtn">
+          <property name="text">
+           <string>Show Cell ROIs</string>
+          </property>
+          <property name="checkable">
+           <bool>true</bool>
+          </property>
+          <property name="checked">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
        </layout>
       </item>
       <item row="1" column="0" colspan="4">
@@ -346,11 +359,24 @@
      <property name="title">
       <string>Autopatch Demo</string>
      </property>
-     <layout class="QVBoxLayout" name="gridLayout_6">
+     <layout class="QHBoxLayout" name="gridLayout_6">
       <item>
        <widget class="FutureButton" name="autopatchDemoBtn">
         <property name="text">
          <string>Run Autopatch Demo</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="reuseLastCellBtn">
+        <property name="text">
+         <string>Reuse All Cells</string>
+        </property>
+        <property name="enabled">
+         <bool>false</bool>
+        </property>
+        <property name="toolTip">
+         <string>Re-queue the last cell worked on so the next demo run starts with it</string>
         </property>
        </widget>
       </item>

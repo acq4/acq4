@@ -255,6 +255,8 @@ class ResealState(PatchPipetteState):
         Duration (seconds) to wait after successful reseal before transitioning to the slurp (default is 5s)
     postSuccessRetractionSpeed : float
         Speed in m/s to move pipette after successful reseal (default is 6 µm / s)
+    focusFollowsTip : bool
+        Whether to focus the microscope on the pipette tip after successful reseal and retraction (default is True)
     slurpPressure : float
         Pressure (Pa) to apply when trying to get the nucleus into the pipette (default is -10 kPa)
     slurpDuration : float
@@ -300,6 +302,7 @@ class ResealState(PatchPipetteState):
         'stretchDetectionThreshold': {'type': 'float', 'default': 0.005, 'suffix': '%', 'siPrefix': False},
         'tearDetectionThreshold': {'type': 'float', 'default': -0.00128, 'suffix': '%', 'siPrefix': False},
         'tornDetectionThreshold': {'type': 'float', 'default': 0.5, 'suffix': '%', 'siPrefix': False},
+        'focusFollowsTip': {'type': 'bool', 'default': True},
         'slurpPressure': {'type': 'float', 'default': -10e3, 'suffix': 'Pa'},
         'slurpDuration': {'type': 'float', 'default': 10, 'suffix': 's'},
         'slurpStopThreshold': {'type': 'float', 'default': 20e6, 'suffix': 'Ω'},
@@ -442,7 +445,11 @@ class ResealState(PatchPipetteState):
                 and ptime.time() - start_time > config['resealTimeout']
             ):
                 self.setResult(interrupted=True, error="Took longer than `resealTimeout` attempting to reseal.")
-                return {"state": config['fallbackState']}
+                return {
+                    "state": config['fallbackState'],
+                    "initialPressure": config['initialPressure'],
+                    "initialPressureSource": config['initialPressureSource'],
+                }
 
             self.processAtLeastOneTestPulse()
 
@@ -458,14 +465,20 @@ class ResealState(PatchPipetteState):
                         depth=self._targetPosition[2],
                         speed=self.config['maxRetractionSpeed'],
                         interval=config['retractionStepInterval'],
-                        step=1e-6,
+                        step=1.1e-6,
+                        name='reseal tear recovery',
                     )
             elif self.isTorn():
                 if retraction_future and not retraction_future.isDone():
                     retraction_future.stop()
                 self.setState("tissue is torn beyond repair")
                 self.setResult(error="Tissue is torn beyond repair (via `tornDetectionThreshold`).")
-                return {"state": config['fallbackState']}
+                return {
+                    "state": config['fallbackState'],
+                    "initialPressure": config['initialPressure'],
+                    "initialPressureSource": config['initialPressureSource'],
+                }
+
             elif retraction_future is None or retraction_future.wasInterrupted():
                 if retraction_future is not None:
                     retraction_future.logErrors("Reseal retraction error")
@@ -477,9 +490,17 @@ class ResealState(PatchPipetteState):
                     depth=dev.pipetteDevice.approachDepth(),
                     speed=config['maxRetractionSpeed'],
                     interval=config['retractionStepInterval'],
-                    step=1e-6,
+                    step=1.1e-6,
+                    name='reseal retraction',
                 )
 
+            if (
+                config['focusFollowsTip']
+                and 5e-6 >= np.linalg.norm(
+                    dev.imagingDevice().globalCenterPosition() - dev.pipetteDevice.globalPosition()
+                )
+            ):
+                self.waitFor(dev.focusOnTip('slow'))
             self.sleep(0.2)
 
         if self._moveFuture is not None:
@@ -490,7 +511,7 @@ class ResealState(PatchPipetteState):
 
         self.setState("go above target before slurp")
         self._moveFuture = dev.pipetteDevice.goAboveTarget(speed=100e-6)
-        self.waitFor(self._moveFuture, timeout=90)
+        self.waitFor(self._moveFuture, timeout=120)
         self.waitFor(dev.pipetteDevice.focusTip())
 
         self.setState("slurping in nucleus")
@@ -531,7 +552,7 @@ class ResealState(PatchPipetteState):
         # move out of the tissue more quickly
         pip = self.dev.pipetteDevice
         surface = pip.scopeDevice().getSurfaceDepth()
-        return pip.advance(surface, speed=self.config['postSuccessRetractionSpeed'])
+        return pip.advance(surface, speed=self.config['postSuccessRetractionSpeed'], name='retract from tissue after reseal')
 
     def retractionDistance(self):
         return np.linalg.norm(

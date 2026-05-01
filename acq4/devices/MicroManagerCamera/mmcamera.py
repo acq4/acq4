@@ -202,8 +202,14 @@ class MicroManagerCamera(Camera):
         return frames
 
     def quit(self):
-        self.mmc.stopSequenceAcquisition()
-        self.mmc.unloadDevice(self.camName)
+        try:
+            self.mmc.stopSequenceAcquisition()
+        except Exception:
+            pass
+        try:
+            self.mmc.unloadDevice(self.camName)
+        except Exception:
+            self.logger.warning(f"Error unloading MicroManager camera device '{self.camName}' during quit. {micromanager.versionWarning()}", exc_info=True)
 
     def _readAllParams(self):
         # these are parameters expected for all cameras
@@ -303,6 +309,9 @@ class MicroManagerCamera(Camera):
         ]
 
     def setROI(self, rgn):
+        if self.config['mmDeviceName'] == 'OpenCVGrabber':
+            return  # OpenCVGrabber does not support setting ROI; ignore the request
+        
         if self._useBinnedPixelsForROI:
             rgn[0] = int(rgn[0] / self.getParam('binningX'))
             rgn[1] = int(rgn[1] / self.getParam('binningY'))

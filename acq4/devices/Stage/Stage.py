@@ -22,7 +22,7 @@ from ...util.future import Future, FutureButton
 from ...util.geometry import (
     Plane,
     limits_to_boundaries,
-    load_transform_from_anything,
+    load_transform,
     minimum_displacement_inverse_kinematics,
 )
 
@@ -30,7 +30,7 @@ from ...util.geometry import (
 class Stage(Device, OptomechDevice):
     """Base class for mechanical stages with motorized control and/or position feedback.
 
-    Typically this device class is not used directly; instead use a subclass specific to 
+    Typically this device class is not used directly; instead use a subclass specific to
     the hardware in use.
 
     This is an optomechanical device that modifies its own transform based on position or orientation
@@ -64,11 +64,10 @@ class Stage(Device, OptomechDevice):
         Device.__init__(self, dm, config, name)
         OptomechDevice.__init__(self, dm, config, name)
 
+        self._lastMove = None
         # total device transform will be composed of a base transform (defined in the config)
         # and a dynamic translation provided by the hardware.
-        self._baseTransform = self.deviceTransform()
-
-        m = self._baseTransform
+        m = self._baseTransform = self.deviceTransform()
         angle, axis = m.rotation
         scale = m.scale
         if tuple(scale) != (1, 1, 1) or angle != 0:
@@ -103,7 +102,7 @@ class Stage(Device, OptomechDevice):
         calibration = self.readConfigFile('calibration')
         axis_tr = calibration.get('transform', None)
         if axis_tr is not None:
-            self._axisTransform = load_transform_from_anything(axis_tr)
+            self._axisTransform = load_transform(axis_tr)
 
         # set up joystick callbacks if requested
         jsdevs = set()
@@ -126,7 +125,7 @@ class Stage(Device, OptomechDevice):
                     self._jsButtons.add((js, button))
         for jsdev in jsdevs:
             jsdev.sigStateChanged.connect(self.joystickChanged)
-
+        dm.sigAbortAll.connect(lambda: self.stop(reason="Received abort request from Manager"))
         dm.declareInterface(name, ['stage'], self)
 
     def quit(self):
@@ -147,9 +146,9 @@ class Stage(Device, OptomechDevice):
         """Return a structure describing the capabilities of this device::
 
             {
-                'getPos': (x, y, z, d),      # bool: whether each axis can be read from the device
-                'setPos': (x, y, z, d),      # bool: whether each axis can be set on the device
-                'limits': (x, y, z, d),      # bool: whether limits can be set for each axis
+                'getPos': (axes...),      # bool: whether each axis can be read from the device
+                'setPos': (axes...),      # bool: whether each axis can be set on the device
+                'limits': (axes...),      # bool: whether limits can be set for each axis
             }
 
         The axes described in the above data structure correspond to the mechanical
@@ -329,10 +328,11 @@ class Stage(Device, OptomechDevice):
         raise NotImplementedError()
 
     def targetPosition(self):
-        """If the stage is moving, return the target position. Otherwise return
-        the current position.
-        """
-        raise NotImplementedError()
+        """Return the target position of the last move command."""
+        if self.isMoving():
+            return self._lastMove.targetPos
+        else:
+            return self.getPosition()
 
     def globalTargetPosition(self):
         """Returns the target position mapped to the global coordinate system.
@@ -370,8 +370,7 @@ class Stage(Device, OptomechDevice):
         self._defaultSpeed = speed
 
     def isMoving(self):
-        """Return True if the device is currently moving."""
-        raise NotImplementedError()
+        return self._lastMove is not None and not self._lastMove.isDone()
 
     def move(self, position, speed=None, progress=False, linear=False, **kwds) -> MoveFuture:
         """Move the device to a new position.
@@ -397,6 +396,7 @@ class Stage(Device, OptomechDevice):
         self.checkMove(position, speed=speed, progress=progress, linear=linear, **kwds)
 
         mfut = self._move(position, speed=speed, linear=linear, **kwds)
+        self._lastMove = mfut
 
         if progress:
             self._progressDialog = Qt.QProgressDialog(f"{self.name()} moving...", None, 0, 100)
@@ -405,7 +405,7 @@ class Stage(Device, OptomechDevice):
 
         return mfut
 
-    def step(self, deltas: Tuple[float, ...], speed: str | float) -> MoveFuture:
+    def step(self, deltas: Tuple[float, ...], speed: str | float, name: str | None = None) -> MoveFuture:
         """Step method to move device by specified deltas along device axes.
 
         Args:
@@ -441,7 +441,7 @@ class Stage(Device, OptomechDevice):
         target_global = self.inverseBaseTransform().map(target)
 
         # Perform the move
-        return self.move(target_global, speed=speed)
+        return self.move(target_global, speed=speed, name=name)
 
     def checkMove(self, position, speed=None, progress=None, linear=None, **kwds):
         """Raise an exception if arguments are invalid for move()"""
@@ -460,20 +460,28 @@ class Stage(Device, OptomechDevice):
         """Must be reimplemented by subclasses and return a MoveFuture instance."""
         raise NotImplementedError()
 
-    def mapGlobalToDevicePosition(self, globalPos, linear=None, previousPos=None):
-        """Given a desired global position, return the device position required."""
-        if self.nAxes > 3 and (previousPos is None and linear):
+    def mapGlobalToDevicePosition(self, globalPos, previousPos=None):
+        """Given a desired global position, return the device position required.
+        Arguments:
+            globalPos: 3-element array-like specifying the desired position in global coordinates
+            previousPos: Optional n-element array-like specifying the previous position of the device in device
+                coordinates. This is required for inverse kinematics calculations for 4-axis stages.
+        """
+
+        if self.nAxes > 3 and previousPos is None:
             raise ValueError(
-                "Inverse mapping on 4-axis stages requires a previousPos or linear=False."
+                "Inverse mapping on 4-axis stages requires a previousPos"
             )
         if self.nAxes <= 3:
             # we can use a simple inverse transform
             tr = self.stageTransform().offset + np.array(self.mapFromGlobal(globalPos))
             return pg.Vector(self.inverseAxisTransform().map(tr))
 
-        return minimum_displacement_inverse_kinematics(
+        ik_pos = minimum_displacement_inverse_kinematics(
             globalPos, self.axisTransform(), self.getLimits(), previousPos
         )
+        self.checkLimits(ik_pos)
+        return ik_pos
 
     def mapDeviceToGlobalPosition(self, pos):
         pos = map_through_transform(pos, self.axisTransform())[:3]
@@ -482,7 +490,7 @@ class Stage(Device, OptomechDevice):
     def moveToGlobal(self, pos, speed, progress=False, linear=False, name=None):
         """Move the stage to a position expressed in the global coordinate frame."""
         return self.move(
-            position=self.mapGlobalToDevicePosition(pos, linear, self.getPosition()),
+            position=self.mapGlobalToDevicePosition(pos, self.getPosition()),
             speed=speed,
             progress=progress,
             linear=linear,
@@ -581,7 +589,7 @@ class Stage(Device, OptomechDevice):
 
     def checkGlobalLimits(self, globalPos, linear):
         """Raise an exception if *globalPos* (in global coordinates) is outside the configured limits"""
-        stagePos = self.mapGlobalToDevicePosition(globalPos, linear, self.getPosition())
+        stagePos = self.mapGlobalToDevicePosition(globalPos, self.getPosition())
         self.checkLimits(stagePos)
 
     def checkLimits(self, stagePos):
@@ -608,15 +616,15 @@ class Stage(Device, OptomechDevice):
             try:
                 bound = pos.copy()
                 bound[axis] -= tolerance
-                self.checkLimits(self.mapGlobalToDevicePosition(bound, linear=False))
+                self.checkLimits(self.mapGlobalToDevicePosition(bound))
                 bound[axis] += 2 * tolerance
-                self.checkLimits(self.mapGlobalToDevicePosition(bound, linear=False))
+                self.checkLimits(self.mapGlobalToDevicePosition(bound))
             except ValueError:
                 bad_axes.append(axis)
         if bad_axes:
             axis_names = {0: 'x', 1: 'y', 2: 'z'}
             axes = ', '.join(axis_names[axis] for axis in bad_axes)
-            stage_pos = self.mapGlobalToDevicePosition(pos, linear=False)
+            stage_pos = self.mapGlobalToDevicePosition(pos)
             possible_problem = (
                 "pipette pull consistency" if self.isManipulator else "hardware reliability"
             )
@@ -638,7 +646,7 @@ class Stage(Device, OptomechDevice):
         homePos = self.homePosition()
         if homePos is None:
             raise RuntimeError(f"No home position set for {self.name()}")
-        return self.moveToGlobal(homePos, speed=speed)
+        return self.moveToGlobal(homePos, speed=speed, name='go home')
 
     def setHomePosition(self):
         """Set the home position in global coordinates."""
@@ -705,6 +713,8 @@ class MoveFuture(Future):
     """Used to track the progress of a requested move operation."""
 
     def __init__(self, dev: Stage, pos, speed, name=None):
+        if name is None:
+            name = f"{dev.name()} move"
         Future.__init__(self, name=name)
         self.startTime = ptime.time()
         self.dev = dev
@@ -753,9 +763,7 @@ class MovePathFuture(MoveFuture):
             if step.get("globalPos") is not None:
                 global_pos = step.pop("globalPos")
                 try:
-                    step["position"] = dev.mapGlobalToDevicePosition(
-                        global_pos, step.get("linear", False), prev
-                    )
+                    step["position"] = dev.mapGlobalToDevicePosition(global_pos, prev)
                 except Exception as e:
                     raise MovePathException(
                         "Cannot map global position to device coordinates", global_path, global_pos
@@ -842,7 +850,7 @@ class MovePathFuture(MoveFuture):
             step['position'] = fwdPath[i]['position']
             step['explanation'] = f"undo {step.get('explanation')}"
             revPath.append(step)
-        return self.dev.movePath(revPath)
+        return self.dev.movePath(revPath, name=f"undo {self.name}")
 
 
 class StageInterface(Qt.QWidget):

@@ -61,7 +61,7 @@ class NewScaleMPM(Stage):
                 "limits": (False, False, False),
             }
 
-    def stop(self):
+    def stop(self, reason=None):
         """Stop the manipulator immediately.
         """
         with self.lock:
@@ -97,10 +97,10 @@ class NewScaleMPM(Stage):
         Stage.quit(self)
         self.dev.close()
 
-    def _move(self, pos, speed, linear, **kwds):
+    def _move(self, pos, speed, linear, name=None, **kwds):
         with self.lock:
             speed = self._interpretSpeed(speed)
-            self._lastMove = NewScaleMoveFuture(self, pos, speed, linear)
+            self._lastMove = NewScaleMoveFuture(self, pos, speed, linear, name=name)
             return self._lastMove
 
     def monitor(self):
@@ -113,8 +113,8 @@ class NewScaleMPM(Stage):
 
 
 class NewScaleMoveFuture(MoveFuture):
-    def __init__(self, dev, pos, speed, linear):
-        MoveFuture.__init__(self, dev, pos, speed, name=f"{dev.name} move")
+    def __init__(self, dev, pos, speed, linear, name=None):
+        MoveFuture.__init__(self, dev, pos, speed, name=name)
 
         self._linear = linear
         self._interrupted = False

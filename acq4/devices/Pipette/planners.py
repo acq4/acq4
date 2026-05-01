@@ -256,7 +256,7 @@ class GeometryAwarePathGenerator(PipettePathGenerator):
             viz = mod.window().findAdapter(lambda a: a.device == self.pip).pathSearchVisualizer()
             planner, from_pip_to_global = self._getPlanningContext()
             planner.make_convolved_obstacles(self.pip.getGeometry(), from_pip_to_global, viz)
-            print(f"cache primed for {self.pip.name()}")
+            self.pip.logger.info("Finished priming path finding cache")
         except RuntimeError:
             self.pip.logger.exception("Blew up while attempting to prime path finding cache")
 
@@ -325,11 +325,15 @@ class PipetteMotionPlanner:
         self.position = position
         self.speed = speed
         self.kwds = kwds
+        self.name = kwds.get("name", self._default_name())
 
         self.future = None
 
         # wrap safePath for convenience
         self.safePath = self.pip.pathGenerator.safePath
+
+    def _default_name(self):
+        return "move"
 
     def move(self):
         """Move the pipette to the requested named position and return a Future"""
@@ -344,7 +348,7 @@ class PipetteMotionPlanner:
             self.future.stop()
 
     def _move(self):
-        return self.pip._movePath(self.path(), name=f"{self.pip.name()} {type(self).__name__} path")
+        return self.pip._movePath(self.path(), name=f"{self.pip.name()} {self.name} path")
 
     def path(self):
         startPosGlobal = self.pip.globalPosition()
@@ -358,6 +362,9 @@ class PipetteMotionPlanner:
 class SavedPositionMotionPlanner(PipetteMotionPlanner):
     """Move to a saved position"""
 
+    def _default_name(self):
+        return f"move to {self.position}"
+
     def path(self):
         startPosGlobal = self.pip.globalPosition()
         endPosGlobal = self.pip.loadPosition(self.position)
@@ -365,6 +372,9 @@ class SavedPositionMotionPlanner(PipetteMotionPlanner):
 
 
 class CleanMotionPlanner(SavedPositionMotionPlanner):
+    def _default_name(self):
+        return f"move to {self.position}ing well"
+
     def path(self):
         if isinstance(self.pip.pathGenerator, GeometryAwarePathGenerator):
             return super().path()
@@ -406,6 +416,9 @@ class CleanMotionPlanner(SavedPositionMotionPlanner):
 class HomeMotionPlanner(PipetteMotionPlanner):
     """Extract pipette tip diagonally, then move to home position."""
 
+    def _default_name(self):
+        return "move to home"
+
     def path(self):
         manipulator = self.pip.parentDevice()
         manipulatorHome = manipulator.homePosition()
@@ -432,9 +445,13 @@ class SearchMotionPlanner(PipetteMotionPlanner):
     probability of seeing the tip immediately.
     """
 
+    def _default_name(self):
+        return "move to search"
+
     @future_wrap
     def _move(self, _future):
-        _future.name = f"{self.pip.name()} search"
+        base = f"{self.pip.name()} {self.name}"
+        _future.name = base
         pip = self.pip
         speed = self.speed
         distance = self.kwds.get("distance", 0)
@@ -452,7 +469,7 @@ class SearchMotionPlanner(PipetteMotionPlanner):
         # move scope such that camera will be focused at searchDepth
         if focusDepth < searchDepth:
             scopeFocus = scope.getFocusDepth()
-            fut = scope.setFocusDepth(scopeFocus + searchDepth - focusDepth, name=f"set focus for {self.pip.name()} search")
+            fut = scope.setFocusDepth(scopeFocus + searchDepth - focusDepth, name=f"{base}: focus above surface")
             # wait for objective to lift before starting pipette motion
             _future.waitFor(fut)
 
@@ -465,10 +482,13 @@ class SearchMotionPlanner(PipetteMotionPlanner):
 
         path = self.safePath(pip.globalPosition(), globalTarget, speed)
 
-        _future.waitFor(pip._movePath(path, name=f"{self.pip.name()} search path"))
+        _future.waitFor(pip._movePath(path, name=f"{base}: pipette path"))
 
 
 class ApproachMotionPlanner(PipetteMotionPlanner):
+    def _default_name(self):
+        return "approach target"
+
     def path(self):
         pip = self.pip
         approachDepth = pip.approachDepth()
@@ -477,6 +497,9 @@ class ApproachMotionPlanner(PipetteMotionPlanner):
 
 
 class TargetMotionPlanner(PipetteMotionPlanner):
+    def _default_name(self):
+        return "move to target"
+
     def path(self):
         start = self.pip.globalPosition()
         stop = self.pip.targetPosition()
@@ -491,16 +514,21 @@ class AboveTargetMotionPlanner(PipetteMotionPlanner):
     nucleus extraction.
     """
 
+    def _default_name(self):
+        return "move above target"
+
     @future_wrap
     def _move(self, _future):
+        base = f"{self.pip.name()} {self.name}"
+        _future.name = base
         pip = self.pip
         speed = self.speed
         scope = pip.scopeDevice()
         waypoint1, waypoint2 = self.aboveTargetPath()
 
         path = self.safePath(pip.globalPosition(), waypoint1, speed, APPROACH_TO_CORRECT_FOR_HYSTERESIS)
-        _future.waitFor(pip._movePath(path + [(waypoint2, "fast", True, "Above target")]))
-        move_scope = scope.setGlobalPosition(waypoint2, name=f"move scope for {self.pip.name()} above target")
+        _future.waitFor(pip._movePath(path + [(waypoint2, "fast", True, "Above target")], name=f"{base}: pipette path"))
+        move_scope = scope.setGlobalPosition(waypoint2, name=f"{base}: scope recenter")
         _future.waitFor(move_scope)  # TODO act simultaneously once we can handle motion planning around moving objects
 
     def aboveTargetPath(self):
@@ -534,8 +562,13 @@ class IdleMotionPlanner(PipetteMotionPlanner):
     chamber.
     """
 
+    def _default_name(self):
+        return "move to idle"
+
     @future_wrap
     def _move(self, _future):
+        base = f"{self.pip.name()} {self.name}"
+        _future.name = base
         pip = self.pip
         speed = self.speed
 
@@ -550,14 +583,14 @@ class IdleMotionPlanner(PipetteMotionPlanner):
         # If the tip is below idle depth, bring it up along the axis of the electrode.
         pos = pip.globalPosition()
         if pos[2] < idleDepth:
-            pip.advance(idleDepth, speed)
+            pip.advance(idleDepth, speed, name=f"{base}: ascend to idle depth")
 
         # From here, move directly to idle position
         angle = pip.yawRadians()
         ds = pip._opts["idleDistance"]  # move to 7 mm from center
         globalIdlePos = -ds * np.cos(angle), -ds * np.sin(angle), idleDepth
 
-        _future.waitFor(pip._moveToGlobal(globalIdlePos, speed, name=f"{pip.name()} idle"))
+        _future.waitFor(pip._moveToGlobal(globalIdlePos, speed, name=f"{base}: move to edge"))
 
 
 def defaultMotionPlanners() -> dict[str, type[PipetteMotionPlanner]]:

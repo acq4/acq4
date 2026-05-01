@@ -182,7 +182,7 @@ class MultiClamp(PatchClamp):
             if time.time() - start > 10:
                 raise Exception("Timed out waiting for first update from multi clamp commander.")
         
-        print("Created MultiClamp device", self.config['channelID'])
+        self.logger.info("Created MultiClamp device %s", self.config['channelID'])
 
         ## set configured holding values
         if 'vcHolding' in self.config:
@@ -304,7 +304,7 @@ class MultiClamp(PatchClamp):
         It is important to have this because the amplifier's holding values cannot be changed
         before switching modes.
         """
-        with self.dm.reserveDevices([self, self.config['commandChannel']['device']]):
+        with self.dm.reserveDevices([self, self.config['commandChannel']['device']], reserver="MultiClamp.setHolding"):
             currentMode = self.mc.getMode()
             if mode is None:  ## If no mode is specified, use the current mode
                 mode = currentMode
@@ -345,15 +345,15 @@ class MultiClamp(PatchClamp):
             daqDev.setChannelValue(chan, holding*scale, block=False)
 
     def autoPipetteOffset(self):
-        with self.dm.reserveDevices([self]):
+        with self.dm.reserveDevices([self], reserver="MultiClamp.autoPipetteOffset"):
             self.mc.autoPipetteOffset()
-        
+
     def autoBridgeBalance(self):
-        with self.dm.reserveDevices([self]):
+        with self.dm.reserveDevices([self], reserver="MultiClamp.autoBridgeBalance"):
             self.mc.autoBridgeBal()
 
     def autoCapComp(self):
-        with self.dm.reserveDevices([self]):
+        with self.dm.reserveDevices([self], reserver="MultiClamp.autoCapComp"):
             self.mc.autoFastComp()
             self.mc.autoSlowComp()
 
@@ -373,7 +373,7 @@ class MultiClamp(PatchClamp):
         for param in self.mode_dependent_params:
             self._paramCache.pop(param, None)
 
-        with self.dm.reserveDevices([self, self.config['commandChannel']['device']]):
+        with self.dm.reserveDevices([self, self.config['commandChannel']['device']], reserver="MultiClamp.setMode"):
             mcMode = self.mc.getMode()
             if mcMode == mode:  ## Mode is already correct
                 return
