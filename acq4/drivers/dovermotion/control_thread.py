@@ -366,7 +366,10 @@ class SmartStageRequestFuture:
             cb = self._callback
             self._callback = None
         if cb is not None:
-            cb(self)
+            try:
+                cb(self)
+            except Exception:
+                logger.exception(f"Error invoking callback for {self}")
 
     @property
     def target_pos(self):
