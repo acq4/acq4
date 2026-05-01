@@ -505,7 +505,12 @@ class WebcamCamera(Camera):
                 self._capture = None
 
     def newFrames(self):
-        frames = [self.frameQueue.get() for _ in range(self.frameQueue.qsize())]
+        frames = []
+        while True:
+            try:
+                frames.append(self.frameQueue.get_nowait())
+            except queue.Empty:
+                break
         return frames
 
     def _acquisitionLoop(self):
