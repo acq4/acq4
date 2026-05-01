@@ -78,10 +78,6 @@ class PatchPipetteState(Future):
     # state subclasses must set a string name
     stateName = None
 
-    # State classes may implement a run() method to be called in a background thread and it should call
-    # self.checkStop() frequently
-    run = None
-
     _parameterTreeConfig = {
         'initialPressureSource': {'type': 'list', 'default': None, 'limits': ['atmosphere', 'regulator', 'user'],
                                   'optional': True},
@@ -146,6 +142,7 @@ class PatchPipetteState(Future):
         if config is not None:
             self.config.update(config)
         self._cleanupMutex = threading.Lock()
+        self.testPulseResults = queue.Queue()
         self._cleanupFuture = None
         self._pressureAdjustment = None
         self._cell = None
@@ -156,34 +153,65 @@ class PatchPipetteState(Future):
         self.nextState = {"state": self.config.get('fallbackState', None)}
         self.dev.sigTargetChanged.connect(self._onTargetChanged)
 
+    def start(self):
+        """Start a background thread that executes this state. This should only be called by the state manager.
+        
+        When runJob completes, self.sigFinished will be emitted."""
+        self.executeInThread(self.runJob, args=(), kwds={})
+
+    def setResult(self, *args, **kwargs):
+        if 'error' in kwargs:
+            self.setState(f"{self.stateName} failed: {kwargs['error']}")
+        super().setResult(*args, **kwargs)
+
     def initialize(self):
-        """Initialize pressure, clamp, etc. and start background thread when entering this state.
+        if self.config.get('finishPatchRecord') is True:
+            self.dev.finishPatchRecord()
+        if self.config.get('newPipette') is True:
+            self.dev.newPipette()
+
+        self.initializePressure()
+        self.initializeClamp()
+
+    def runJob(self, _future):  # _future is self
+        """Called in background thread to start the state.
+        
+        Initialize pressure, clamp, etc. and run the subclass-defined run() method if it exists.
+        If run() is not defined, then this just serves as a way to set initial parameters and then wait until the state is stopped by the state manager. 
+        If run() is defined, then it should return either None or a dict with a 'state' key specifying the next state to transition to. 
+        The state manager will handle the actual transition after run() completes.
 
         This method is called by the state manager.
         """
+        if not self.dev.active:
+            raise RuntimeError(f"Cannot initialize state {self.stateName} because device {self.dev.name()} is not active.")
+
+        self.initialize()
+
         try:
-            if self.config.get('finishPatchRecord') is True:
-                self.dev.finishPatchRecord()
-            if self.config.get('newPipette') is True:
-                self.dev.newPipette()
+            with contextlib.ExitStack() as stack:
+                if self.config["reserveDAQ"]:
+                    daq_name = self.dev.clampDevice.getDAQName("primary")
+                    self.setState(f"{self.stateName}: waiting for {daq_name} lock")
+                    stack.enter_context(
+                        getManager().reserveDevices([daq_name], timeout=self.config["DAQReservationTimeout"]))
+                    self.setState(f"{self.stateName}: {daq_name} lock acquired")
 
-            self.initializePressure()
-            self.initializeClamp()
+                # TODO: can we use the rval of the Future for this?
+                self.nextState = self.run()
 
-            # set up test pulse monitoring
-            self.testPulseResults = queue.Queue()
+        finally:
+            # If run() called monitorTestPulse(), then we need to disconnect the signal here
+            if self.dev.clampDevice is not None:
+                disconnect(self.dev.clampDevice.sigTestPulseFinished, self.testPulseFinished)
 
-            if self.run is None:
-                # no work; just mark the task complete
-                self._taskDone(interrupted=False, error=None)
-            elif self.dev.active:
-                self._thread = threading.Thread(target=self._runJob, name=f'{self.dev.name()} {self.stateName} thread')
-                self._thread.start()
-            else:
-                self._taskDone(interrupted=True, error=f"Not starting state thread; {self.dev.name()} is not active.")
-        except Exception as e:
-            self._taskDone(interrupted=True, excInfo=sys.exc_info())
-            raise
+        return self.nextState
+
+    def run(self):
+        """Subclasses can implement this method to have code executed in a background thread after the state starts.
+        
+        The default implementation just waits until the state is stopped by the state manager."""
+        self.sleep(float('inf'))
 
     def initializePressure(self):
         """Set initial pressure based on the config keys 'initialPressureSource' and 'initialPressure'
@@ -232,7 +260,7 @@ class PatchPipetteState(Future):
     def monitorTestPulse(self):
         """Begin acquiring test pulse data in self.testPulseResults
         """
-        self.dev.clampDevice.sigTestPulseFinished.connect(self.testPulseFinished)
+        self.dev.clampDevice.sigTestPulseFinished.connect(self.testPulseFinished, Qt.Qt.DirectConnection)
 
     def processAtLeastOneTestPulse(self) -> list[PatchClampTestPulse]:
         """Wait for at least one test pulse to be processed."""
@@ -284,7 +312,7 @@ class PatchPipetteState(Future):
         """Called after job completes, whether it failed or succeeded. Ask `self.wasInterrupted()` to see if the
         state was stopped early. Return a Future that completes when cleanup is done.
         """
-        disconnect(self.dev.pipetteDevice.sigTargetChanged, self._onTargetChanged)
+        disconnect(self.dev.sigTargetChanged, self._onTargetChanged)
         with log_and_ignore_exception(Exception, "Error disabling visual target tracking"):
             if self._cell is not None:
                 self._cell.enableTracking(False)
@@ -294,33 +322,6 @@ class PatchPipetteState(Future):
                 self._visualTargetTrackingFuture.stop("State cleanup")
             self._visualTargetTrackingFuture = None
         return Future.immediate()
-
-    def _runJob(self):
-        """Function invoked in background thread.
-
-        This calls the custom run() method for the state subclass and handles the possible
-        error / exit / completion states.
-        """
-        excInfo = None
-        interrupted = True
-        try:
-            with contextlib.ExitStack() as stack:
-                if self.config["reserveDAQ"]:
-                    daq_name = self.dev.clampDevice.getDAQName("primary")
-                    self.setState(f"{self.stateName}: waiting for {daq_name} lock")
-                    stack.enter_context(
-                        getManager().reserveDevices([daq_name], timeout=self.config["DAQReservationTimeout"]))
-                    self.setState(f"{self.stateName}: {daq_name} lock acquired")
-                self.nextState = self.run()
-            interrupted = self.wasInterrupted()
-        except Exception as e:
-            # state aborted due to an error
-            excInfo = sys.exc_info()
-        finally:
-            if self.dev.clampDevice is not None:
-                disconnect(self.dev.clampDevice.sigTestPulseFinished, self.testPulseFinished)
-            if not self.isDone():
-                self._taskDone(interrupted=interrupted, excInfo=excInfo)
 
     def checkStop(self):
         # extend checkStop to also see if the pipette was deactivated.
@@ -353,6 +354,9 @@ class PatchPipetteState(Future):
         if self.closeEnoughToTargetToDetectCell():
             if self._visualTargetTrackingFuture is not None:
                 self._cell.enableTracking(False)
+                self._visualTargetTrackingFuture.stop(
+                    "Close enough to target to detect cell, stopping visual tracking"
+                )
                 self._visualTargetTrackingFuture = None
             return
         if self._visualTargetTrackingFuture is None:
@@ -378,24 +382,30 @@ class PatchPipetteState(Future):
         if not hasattr(self.dev, '_trackingVisualizers'):
             self.dev._trackingVisualizers = []
         disconnect(self._cell.sigPositionChanged, self.dev.pipetteDevice.setTarget)
-        if future.wasStopped():
-            return
-        visualizer = LiveTrackerVisualizer(self._cell._tracker)
-        self.dev._trackingVisualizers.append(visualizer)
-        # TODO clean these up eventually or we'll leak memory
-        visualizer.show()
+        disconnect(self._cell.sigTrackingMultipleFramesStart, self._pausePipetteForExtendedTracking)
+        disconnect(self._cell.sigTrackingMultipleFramesFinish, self._resumePipetteAfterExtendedTracking)
+
 
     def _pausePipetteForExtendedTracking(self, cell):
         self._pauseMovement = True
-        cell.sigTrackingMultipleFramesFinish.connect(self._resumePipetteAfterExtendedTracking)
         cell.sigTrackingMultipleFramesStart.disconnect(self._pausePipetteForExtendedTracking)
+        cell.sigTrackingMultipleFramesFinish.connect(self._resumePipetteAfterExtendedTracking)
 
     def _resumePipetteAfterExtendedTracking(self, cell):
         self._pauseMovement = False
         cell.sigTrackingMultipleFramesFinish.disconnect(self._resumePipetteAfterExtendedTracking)
+        cell.sigTrackingMultipleFramesStart.connect(self._pausePipetteForExtendedTracking)
 
-    def _waitForMoveWhileTargetChanges(self, position_fn, speed, continuous, future, interval=None, step=None):
+    def _waitForMoveWhileTargetChanges(self, position_fn, speed, continuous, future, interval=None, step=None, move_restart_threshold=3.0):
+        """Wait for a move to complete while also monitoring for changes in the target position.
+
+        When the target position updates, the move will be updated as well to track the new target.
+        However if the current motion is near enough to the direction of the new target, then we delay updating
+        the move to avoid frequent interruptions.
+        """
         move_fut = None
+        restart_move = False
+        last_destination = None
         try:
             while move_fut is None or not move_fut.isDone():
                 if self._pauseMovement:
@@ -404,22 +414,42 @@ class PatchPipetteState(Future):
                         move_fut = None
                     future.sleep(0.1)
                     continue
-                if move_fut is None:
-                    pos = position_fn()
+                current_target_pos = position_fn()
+                if move_fut is None or restart_move or last_destination is None:
+                    restart_move = False
                     if continuous:
-                        move_fut = self.dev.pipetteDevice._moveToGlobal(pos, speed=speed)
+                        move_fut = self.dev.pipetteDevice._moveToGlobal(current_target_pos, speed=speed, name="Update move towards target")
                     else:
                         move_fut = self.dev.pipetteDevice.stepwiseAdvance(
-                            target=pos,
+                            target=current_target_pos,
                             speed=speed,
                             interval=interval,
                             step=step,
+                            name="Update stepwise move towards target",
                         )
-                if self._targetHasChanged:
-                    self._targetHasChanged = False
-                    move_fut.stop("Target changed", wait=True)
-                    move_fut = None
-                future.sleep(0.1)
+                    self.setState(f"Moving towards target at {current_target_pos}")
+                    last_destination = current_target_pos
+                else:
+                    restart_move = False
+                    # update the move if the destination is significantly different, as
+                    # measured by degrees relative to our direction
+                    current_tip_pos = self.dev.pipetteDevice.globalPosition()
+                    direction_to_target = current_target_pos - current_tip_pos
+                    direction_of_motion = last_destination - current_tip_pos
+                    if np.any(current_target_pos != last_destination):
+                        cos_theta = np.dot(direction_to_target, direction_of_motion) / (
+                            np.linalg.norm(direction_to_target) * np.linalg.norm(direction_of_motion)
+                        )
+                        theta = np.arccos(np.clip(cos_theta, -1, 1))  # clip to avoid float errors
+                        theta = np.degrees(theta)
+
+                        restart_move = theta > move_restart_threshold
+                        self.logger.debug(
+                            f"Target direction differs from current path by {theta:.1f}° "
+                            f"{'>' if restart_move else '<'} {move_restart_threshold}°; "
+                            f"{'update path' if restart_move else 'keep current path'}")
+                if not restart_move:
+                    future.sleep(0.1)
         except Exception:
             if move_fut is not None and not move_fut.isDone():
                 move_fut.stop("Error while moving", wait=True)

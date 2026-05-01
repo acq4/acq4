@@ -83,6 +83,10 @@ class PatchPipette(Device):
         self.pressureDevice: PressureControl | None = None
         if 'pressureDevice' in config:
             self.pressureDevice = deviceManager.getDevice(config['pressureDevice'])
+            if not self.pressureDevice.isValidForPatchPipettes():
+                raise ValueError(
+                    f"Pressure device {self.pressureDevice.name()} is not valid for use with patch pipettes"
+                )
             self.pressureDevice.sigPressureChanged.connect(self.pressureChanged)
         self.userPressure = False
 

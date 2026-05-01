@@ -96,7 +96,23 @@ class DAQSonicator(Sonicator):
                     amplitude: 3
             expel:
                 type: "Stimulus"
-                items: [{"type": "Chirp", "args": {"start_time": 0, "description": "frequency chirp", "units": null, "duration": 10, "start_frequency": 135000, "end_frequency": 154000, "amplitude": 1, "phase": 0, "offset": 0}, "items": []}, {"type": "Chirp", "args": {"start_time": 10, "duration": 10, "start_frequency": 154000, "end_frequency": 135000, "amplitude": 1}}]}
+                items: 
+                    chirp1:
+                        type: "Chirp"
+                        args: 
+                            start_time: 0
+                            duration: 10
+                            start_frequency: 135000
+                            end_frequency: 154000
+                            amplitude: 1
+                    chirp2:
+                        type: "Chirp"
+                        args:
+                            start_time: 10
+                            duration: 10
+                            start_frequency: 154000
+                            end_frequency: 135000
+                            amplitude: 1
 
     """
 
@@ -126,11 +142,11 @@ class DAQSonicator(Sonicator):
         )
 
     @future_wrap
-    def _doProtocol(self, protocol: str | dict, _future):
+    def _doProtocol(self, protocol: str | dict, _future):        
         if isinstance(protocol, str):
             protocol = load_stimulus(json.loads(protocol))
         else:
-            protocol = load_stimulus(protocol)
+            protocol = load_stimulus(self._cleanProtocol(protocol))
         # daq: NiDAQ = self.dm.getDevice(daq_name)
         # sample_rate = daq.n.GetDevAIMaxSingleChanRate(self._daq...)  # this doesn't work
         sample_rate = 1_000_000
@@ -171,6 +187,29 @@ class DAQSonicator(Sonicator):
             task.stop()
             if "disable" in self.config:
                 self._daq.setChannelValue("disable", 1)
+
+    def _cleanProtocol(self, protocol):
+        """Modify a protocol loaded from config file to conform to neuroanalysis.stimuli format.
+
+        Needed because the config format only supports lists as a data type if they are expressed in a single line.
+        For convenience, we allow reexpression as dict:
+
+            # how config files support list values
+            type: "Stimulus"
+            items: [ item1, item2, item3, ... ]
+
+            # how we support reexpression as dict
+            type: "Stimulus"
+            items: 
+                key1: item1
+                key2: item2
+                key3: item3
+                ...
+        """
+        protocol2 = protocol.copy()
+        if 'items' in protocol2 and isinstance(protocol2['items'], dict):
+            protocol2['items'] = [self._cleanProtocol(item) for item in protocol2['items'].values()]
+        return protocol2
 
     def calcVoltage(self, frequency: float) -> float:
         """

@@ -128,6 +128,8 @@ class Manager(Qt.QObject):
                 )
 
     def initFromCommandLine(self, args: argparse.Namespace):
+        global TEMP_LOG_FILEHANDLE
+
         self.exitOnError = args.exit_on_error
         self.disableDevs = args.disable or []
         self.disableAllDevs = args.disable_all
@@ -447,8 +449,15 @@ class Manager(Qt.QObject):
         devices = [self.getDevice(d) if isinstance(d, str) else d for d in devices]
         return DeviceLocker(self, devices, timeout=timeout)
 
+    def getOrLoadModule(self, name):
+        if name in self.modules:
+            return self.getModule(name)
+        if name in self.definedModules:
+            return self.loadDefinedModule(name)
+        return self.loadModule(name)
+
     def loadModule(self, moduleClassName, name=None, config=None, forceReload=False, importMod=None, execPath=None):
-        """Create a new instance of an user interface module.
+        """Create a new instance of a user interface module.
 
         Parameters
         ----------

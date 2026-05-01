@@ -61,9 +61,9 @@ def enforce_linear_z_stack(frames: list[Frame], start: float, stop: float, step:
     for i in idxes:
         depth, j = depths[i]
         frame = frames[j]
-        xform = frame.globalTransform()
-        xform.setTranslate(xform.getTranslation()[0], xform.getTranslation()[1], depth)
-        frame.addInfo(transform=xform.saveState())
+        xform = frame.globalTransform().as_affine()
+        xform.offset = [xform.offset[0], xform.offset[1], depth]
+        frame.addInfo(transform=xform)
         ret_frames.append(frame)
     return ret_frames
 
@@ -111,12 +111,16 @@ def _set_focus_depth(
     timeout = max(10, 3 * abs(dz) / speed)
 
     # Avoid hysteresis:
+    hysteresis_correction_distance = imager.getFocusDevice().hysteresisCorrection
+    if hysteresis_correction_distance == 0:
+        hysteresis_correction = False
+
     if hysteresis_correction and direction > 0 and dz > 0:
         # stack goes downward
-        move = imager.setFocusDepth(depth + 20e-6, speed)
+        move = imager.setFocusDepth(depth + hysteresis_correction_distance, speed, name=f"{name} hysteresis correction")
     elif hysteresis_correction and direction < 0 and dz < 0:
         # stack goes upward
-        move = imager.setFocusDepth(depth - 20e-6, speed)
+        move = imager.setFocusDepth(depth - hysteresis_correction_distance, speed, name=f"{name} hysteresis correction")
     else:
         move = imager.setFocusDepth(depth, speed)
 
@@ -414,13 +418,16 @@ def acquire_z_stack(
 
 
 def _fix_frame_transforms(frames, z_step):
+    # Set z scale such that the transform on the first frame can be used for the entire stack
+    # (which should be approximately true if the frames are about evenly spaced)
     for f in frames:
-        xform = f.globalTransform()
-        scale = xform.getScale()
-        # Set z scale such that the transform oni the first frame can be used for the entire stack
-        # (which should be approximately true if the frames are about evenly spaced)
-        xform.setScale(scale[0], scale[1], z_step)
-        f.addInfo(transform=xform.saveState())
+        # this xform will be composite, so we can't just do `.scale = ...`
+        xform = f.globalTransform().as_affine()
+        z_vector = np.array(xform.matrix[:, 2])
+        z_vector /= np.linalg.norm(z_vector)
+        z_vector *= z_step
+        xform.matrix[:, 2] = z_vector
+        f.addInfo(transform=xform)
 
 
 class ImageSequencerCtrl(Qt.QWidget):
@@ -606,13 +613,13 @@ class ImageSequencerCtrl(Qt.QWidget):
     def setTopLeftClicked(self):
         cam = self._selectedImagerOrComplain()
         region = cam.getParam("region")
-        bound = cam.globalTransform().map(Qt.QPointF(region[0], region[1]))
-        self.ui.xLeftSpin.setValue(bound.x())
-        self.ui.yTopSpin.setValue(bound.y())
+        bound = cam.globalTransform().map((region[0], region[1], 0))
+        self.ui.xLeftSpin.setValue(bound[0])
+        self.ui.yTopSpin.setValue(bound[1])
 
     def setBottomRightClicked(self):
         cam = self._selectedImagerOrComplain()
         region = cam.getParam("region")
-        bound = cam.globalTransform().map(Qt.QPointF(region[0] + region[2], region[1] + region[3]))
-        self.ui.xRightSpin.setValue(bound.x())
-        self.ui.yBottomSpin.setValue(bound.y())
+        bound = cam.globalTransform().map((region[0] + region[2], region[1] + region[3], 0))
+        self.ui.xRightSpin.setValue(bound[0])
+        self.ui.yBottomSpin.setValue(bound[1])

@@ -194,8 +194,9 @@ class LightSourceDevGui(Qt.QWidget):
         slider = self.sender()
         self.dev.setSourceBrightness(slider.objectName(), value / slider.maximum())
 
-    def _updateValuesToMatchDev(self):
-        for name in self.dev.sourceConfigs:
+    def _updateValuesToMatchDev(self, dev=None, source=None):
+        names = [source] if source is not None else list(self.dev.sourceConfigs)
+        for name in names:
             button = self.sourceActivationButtons[name]
             with SignalBlock(button.clicked, self.dev.setSourceActiveFromNamedButton):
                 button.setChecked(self.dev.sourceActive(name))

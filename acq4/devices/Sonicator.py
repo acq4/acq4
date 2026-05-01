@@ -39,7 +39,7 @@ class Sonicator(Device):
     def safeToSonicate(self, _future: Future = None, askUser=True) -> bool:
         pos = self.patchPipetteDevice.pipetteDevice.globalPosition()
         well = self.patchPipetteDevice.pipetteDevice.getCleaningWell()
-        if well and well.containsPoint(pos):
+        if well and well.containsPoint(pos, tolerance=5e-6):
             return True
         lower_bound = self.config.get("unsafeSonicationBelow")
         if lower_bound is not None:

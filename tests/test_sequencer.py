@@ -3,6 +3,7 @@ import numpy as np
 import pyqtgraph as pg
 
 from acq4.util.imaging.sequencer import enforce_linear_z_stack, calculate_hysteresis
+from coorx import SRT3DTransform
 
 
 class MockFrame:
@@ -12,10 +13,10 @@ class MockFrame:
         self._data = np.ones((10, 10), dtype=np.uint8) * 10 * seed
 
     def globalTransform(self):
-        return pg.SRTTransform3D(dict(pos=(0, 0, self.depth)))
+        return SRT3DTransform(offset=(0, 0, self.depth))
 
     def addInfo(self, transform):
-        self.depth = transform['pos'][2]
+        self.depth = transform.as_affine().offset[2]
 
     def __repr__(self):
         return f"<MockFrame depth={self.depth}>"

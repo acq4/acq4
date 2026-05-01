@@ -76,6 +76,7 @@ ml-models = [
 ]
 dev = [
     "pytest",
+    "pytest-qt",
     "black",
 ]
 docs = [
@@ -87,7 +88,7 @@ docs = [
 [project.urls]
 Homepage = "http://www.acq4.org"
 Repository = "https://github.com/acq4/acq4"
-Documentation = "http://www.acq4.org"
+Documentation = "https://acq4.readthedocs.io/en/latest/"
 
 [tool.setuptools]
 packages = { find = { include = ["acq4*"] } }
