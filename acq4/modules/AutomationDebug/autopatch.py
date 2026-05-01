@@ -62,14 +62,37 @@ class Autopatcher:
                     _future.setState("Autopatch: cell found")
                     ppip.newPatchAttempt()
                     runInGuiThread(multipatch_win.ui.recordBtn.setChecked, True)
-                    _future.setState("Autopatch: go above target")
-                    _future.waitFor(ppip.pipetteDevice.goAboveTarget("fast"))
+                    _future.setState("Autopatch: go home before find surface")
+                    _future.waitFor(ppip.pipetteDevice.goHome("fast"))
+
+                    _future.setState("Autopatch: find surface above target")
+                    _future.waitFor(win.cameraDevice.scopeDev.findSurfaceDepth(win.cameraDevice)).getResult()
+
                     _future.setState("Autopatch: finding pipette tip")
+                    _future.waitFor(ppip.pipetteDevice.goAboveTarget("fast"))
                     ppip.clampDevice.autoPipetteOffset()
                     _future.waitFor(win.pipetteDevice.iterativelyFindTip())
-                    if started_clean:
-                        _future.setState("Quick clean")
-                        _future.waitFor(ppip.sonicatorDevice.doProtocol("quick clean"))
+
+                    # move 50 um up for sonication
+                    pip_pos = ppip.pipetteDevice.globalPosition()
+                    next_pos = [pip_pos[0], pip_pos[1], pip_pos[2] + 50e-6]
+                    f1 = win.cameraDevice.moveCenterToGlobal(
+                        next_pos, "fast", name="move focus to watch sonication"
+                    )
+                    f2 = ppip.pipetteDevice._moveToGlobal(
+                        next_pos, 'fast', name="move pipette farther from slice for sonication"
+                    )
+                    _future.waitFor(f1)
+                    _future.waitFor(f2)
+
+                    _future.setState("Quick clean")
+                    start_pressure = ppip.pressureDevice.getPressure()
+                    ppip.pressureDevice.setPressure(source='regulator', pressure=50e3)
+                    _future.waitFor(ppip.sonicatorDevice.doProtocol("quick clean"))
+                    _future.setState("Autopatch: expel ACSF after sonication")
+                    _future.sleep(4)
+                    ppip.pressureDevice.setPressure(source='regulator', pressure=start_pressure)
+
 
                     _future.setState("Autopatch: go approach")
                     _future.waitFor(ppip.pipetteDevice.goApproach("fast"))
@@ -95,8 +118,8 @@ class Autopatcher:
                     # win.scopeDevice.loadPreset('tdTomato')
                     # self._saveStack("patched tdTomato cellfie", _future)
                     _future.waitFor(win.scopeDevice.loadPreset('brightfield'))
+                    _future.waitFor(ppip.pipetteDevice.focusTarget('slow'))
 
-                    # TODO too slow for today's demo
                     # _future.setState("Autopatch: resealing")
                     # _future.waitFor(ppip.setState("reseal"), timeout=None)
                     # self._saveStack("resealed nucleus", _future)
@@ -104,12 +127,13 @@ class Autopatcher:
                     # # start nucleus collection
                     # homeFut = ppip.setState("home with nucleus")
                     #
-                    # # check on the resealed cell
+                    # check on the resealed cell
                     # win.scopeDevice.loadPreset('GFP')
-                    # _future.waitFor(
-                    #     win.cameraDevice.moveCenterToGlobal(cell.position, "fast", name="center on resealed cell")
-                    # )
-                    # self._saveStack("GFP cell without nucleus", _future)
+                    _future.waitFor(
+                        win.cameraDevice.moveCenterToGlobal(cell.position, "fast", name="center on resealed cell")
+                    )
+                    self._saveStack("cell without nucleus", _future)
+                    _future.waitFor(ppip.pipetteDevice.focusTip('slow'))
                     # _future.waitFor(homeFut)
 
                     # collect the nucleus
@@ -144,16 +168,18 @@ class Autopatcher:
         win = self._window
         ppip = win.patchPipetteDevice
         ppip.setState("approach", startANewCell=False)
-        detect_finished = False
+        # detect_finished = False
         while True:
-            if (state := ppip.getState().stateName) not in ("approach", "cell detect", "contact cell"):
-                if not detect_finished:
-                    _future.waitFor(
-                        win.cameraDevice.moveCenterToGlobal(
-                            cell.position, "fast", name="center on cell during patching"
-                        )
-                    )
-                    detect_finished = True
+            state = ppip.getState().stateName
+            # remove? seal state already has this (and this is colliding with seal's move)
+            # if state not in ("approach", "cell detect", "contact cell", "seal", "cell attached", "break in"):
+            #     if not detect_finished:
+            #         _future.waitFor(
+            #             win.cameraDevice.moveCenterToGlobal(
+            #                 cell.position, "fast", name="center on cell during patching"
+            #             )
+            #         )
+            #         detect_finished = True
             if state in ("whole cell", "bath", "broken", "fouled"):
                 _future.setState(f"Exiting patch loop - ended in state {state}")
                 break
@@ -216,7 +242,7 @@ class Autopatcher:
         )
         _future.waitFor(
             # runInGuiThread(taskrunner.runSequence, store=True, storeDirHandle=self.dh), timeout=expected_duration
-            runInGuiThread(taskrunner.runSequence, store=False),
+            runInGuiThread(taskrunner.runSequence, store=True),
             timeout=max(30, expected_duration * 20),
         )
         logger.warning("Autopatch: Task runner sequence completed.")
