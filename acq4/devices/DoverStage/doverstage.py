@@ -117,6 +117,44 @@ class DoverStage(Stage):
         else:
             self.dev.enable_axis(axis_index)
 
+    def configure_dock(self, stream_dock_device):
+        """Register Stream Dock toggle buttons for enabling / disabling each axis.
+
+        One button per axis (X, Y, Z).  The button background is green when the
+        axis is enabled and red when it is disabled.
+        """
+        buttons = []
+        for i, axis_name in enumerate(self.axes()):
+            def make_on_appear(i):
+                def on_appear(context):
+                    enabled = self.dev.is_enabled()
+                    img = _AXIS_ENABLED_IMG if (enabled is not None and enabled[i]) else _AXIS_DISABLED_IMG
+                    stream_dock_device.setImage(context, img)
+                return on_appear
+
+            btn = stream_dock_device.add_button(
+                axis_name.upper(),
+                on_press=lambda i=i: self._toggle_axis(i),
+                on_appear=make_on_appear(i),
+            )
+            buttons.append(btn)
+
+        def _update_colors(enabled_state):
+            for i, btn in enumerate(buttons):
+                if btn.context is not None:
+                    img = _AXIS_ENABLED_IMG if enabled_state[i] else _AXIS_DISABLED_IMG
+                    stream_dock_device.setImage(btn.context, img)
+
+        # self.dev.add_enabled_state_callback(_update_colors)
+
+    def _toggle_axis(self, axis_index):
+        """Toggle the enabled state of a single axis."""
+        enabled = self.dev.is_enabled()
+        if enabled is not None and enabled[axis_index]:
+            self.dev.disable_axis(axis_index)
+        else:
+            self.dev.enable_axis(axis_index)
+
     def quit(self):
         self.dev.set_callback(None)
 
