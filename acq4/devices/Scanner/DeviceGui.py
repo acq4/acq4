@@ -222,7 +222,7 @@ class ScannerDeviceGui(Qt.QWidget):
                 someFrame = cameraResult[0]
             else:
                 someFrame = cameraResult.frames()[0]
-            frameTransform = pg.SRTTransform(someFrame.globalTransform())
+            frameTransform = someFrame.globalTransform().as_pyqtgraph().as2D()
             pixelSize = someFrame.info()['pixelSize'][0]
             spotAmplitude = fit[0]
             spotWidth = abs(fit[3] * pixelSize)

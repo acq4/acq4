@@ -5,9 +5,18 @@ import pytest
 
 from acq4.modules.Visualize3D import VisualizerWindow
 from acq4.util import Qt
-from acq4.util.geometry import Geometry, Volume, Plane, Line, point_in_bounds
+from acq4.util.geometry import (
+    Geometry,
+    Volume,
+    Plane,
+    Line,
+    point_in_bounds,
+    neutral_anchored_inverse_kinematics,
+    greedy_axis_inverse_kinematics,
+    primary_axis_inverse_kinematics,
+)
 from acq4.util.geometry import GeometryMotionPlanner
-from coorx import NullTransform, TTransform, SRT3DTransform, Transform
+from coorx import NullTransform, TTransform, SRT3DTransform, Transform, AffineTransform
 from coorx import Point
 
 
@@ -295,9 +304,11 @@ def test_grazing_paths(offset, viz=None):
     to_obst_parent_from_trav_parent = obst_to_global.inverse * trav_to_global
     conv_obst = obst.make_convolved_voxels(trav, to_obst_parent_from_trav_parent, vx)
     if viz:
-        viz.addGeometry(trav)
+        trav_mesh = trav.glMesh()
+        viz.view.addItem(trav_mesh)
         viz.setMeshTransform(trav.name, trav_to_global.as_pyqtgraph())
-        viz.addGeometry(obst)
+        obst_mesh = obst.glMesh()
+        viz.view.addItem(obst_mesh)
         viz.setMeshTransform(obst.name, obst_to_global.as_pyqtgraph())
         # viz.startPath(
         #     Point(np.array([0, 0, 0]), "trav").mapped_to("global"),
@@ -723,6 +734,423 @@ def test_cylinder_pathfinding_performance():
     return avg_time, avg_path_length, path
 
 
+def test_neutral_anchored_inverse_kinematics_neutral():
+    bounds, transform = overspecified()
+
+    neutral_pt = [-1, 0, 0]
+    neutral_pos = neutral_anchored_inverse_kinematics(
+        neutral_pt, transform, bounds, [1, None, None, None]
+    )
+    assert np.allclose(neutral_pos, [1, 0, 0, 0])
+
+
+def test_neutral_anchored_inverse_kinematics_in_bounds():
+    bounds, transform = overspecified()
+
+    in_bounds_pt = [-2, -2, -2]
+    in_bounds_pos = neutral_anchored_inverse_kinematics(
+        in_bounds_pt, transform, bounds, [1, None, None, None]
+    )
+    # x should be pinned at 1, d should be (2 - x) / half, z should be 2 - (d * half)
+    assert np.allclose(in_bounds_pos, [1, 2, 1, 1 / HALF])
+    # now a bunch of random in-bounds points
+    for _ in range(100):
+        rand_pos = [
+            n if n is not None else np.random.uniform(b[0], b[1])
+            for n, b in zip([1, None, None, None], bounds)
+        ]
+        rand_pt = transform.map(rand_pos)[:3]
+        solved_pos = neutral_anchored_inverse_kinematics(
+            rand_pt, transform, bounds, [1, None, None, None]
+        )
+        assert np.allclose(solved_pos, rand_pos)
+
+
+def test_neutral_anchored_inverse_kinematics_with_zero_neutral():
+    bounds, transform = overspecified()
+    neutral = [0, None, None, None]
+
+    pt = [-2, -2, -2]
+    pos = neutral_anchored_inverse_kinematics(pt, transform, bounds, neutral)
+    assert np.allclose(pos, [0, 2, 0, 2 / HALF])
+
+    pt = [0, 0, 0]
+    pos = neutral_anchored_inverse_kinematics(pt, transform, bounds, neutral)
+    assert np.allclose(pos, [0, 0, 0, 0])
+
+    pt = [-5 * HALF, -5, -5 * HALF]
+    pos = neutral_anchored_inverse_kinematics(pt, transform, bounds, neutral)
+    assert np.allclose(pos, [0, 5, 0, 5])
+
+    pt = [-7, -2, -2]
+    pos = neutral_anchored_inverse_kinematics(pt, transform, bounds, neutral)
+    assert np.allclose(pos, [5, 2, 0, 2 / HALF])
+
+    pt = [-5, -5, -5]
+    pos = neutral_anchored_inverse_kinematics(pt, transform, bounds, neutral)
+    assert np.allclose(pos, [5 - 5 * HALF, 5, 5 - 5 * HALF, 5])
+
+    pt = [1, 1, 1]
+    with pytest.raises(ValueError):
+        neutral_anchored_inverse_kinematics(pt, transform, bounds, neutral)
+
+
+def test_neutral_anchored_inverse_kinematics_with_diagonal_neutral():
+    bounds, transform = overspecified()
+    neutral = [None, None, None, 1]
+
+    pt = [-2, -2, -2]
+    pos = neutral_anchored_inverse_kinematics(pt, transform, bounds, neutral)
+    assert np.allclose(pos, [2 - HALF, 2, 2 - HALF, 1])
+
+    pt = [0, 0, 0]
+    pos = neutral_anchored_inverse_kinematics(pt, transform, bounds, neutral)
+    assert np.allclose(pos, [0, 0, 0, 0])
+
+    pt = [-5 * HALF, -2, -5 * HALF]
+    pos = neutral_anchored_inverse_kinematics(pt, transform, bounds, neutral)
+    assert np.allclose(pos, [4 * HALF, 2, 4 * HALF, 1])
+
+    pt = [-5 - 5 * HALF, -3, -5 - 5 * HALF]
+    pos = neutral_anchored_inverse_kinematics(pt, transform, bounds, neutral)
+    assert np.allclose(pos, [5, 3, 5, 5])
+
+    pt = [-7, -2, -2]
+    pos = neutral_anchored_inverse_kinematics(pt, transform, bounds, neutral)
+    assert np.allclose(pos, [5, 2, 0, 2 / HALF])
+
+    pt = [1, 1, 1]
+    with pytest.raises(ValueError):
+        neutral_anchored_inverse_kinematics(pt, transform, bounds, neutral)
+
+
+def test_neutral_anchored_inverse_kinematics_extremes():
+    bounds, transform = overspecified()
+
+    origin_pt = [0, 0, 0]
+    origin_pos = neutral_anchored_inverse_kinematics(
+        origin_pt, transform, bounds, [1, None, None, None]
+    )
+    assert np.allclose(origin_pos, [0, 0, 0, 0])
+
+    max_pt = [-5 - 5 * HALF, -5, -5 - 5 * HALF]
+    max_pos = neutral_anchored_inverse_kinematics(max_pt, transform, bounds, [1, None, None, None])
+    assert np.allclose(max_pos, [5, 5, 5, 5])
+
+
+def test_neutral_anchored_inverse_kinematics_with_x():
+    bounds, transform = overspecified()
+
+    only_possible_with_x_pt = [-7, -2, -2]
+    only_possible_with_x_pos = neutral_anchored_inverse_kinematics(
+        only_possible_with_x_pt, transform, bounds, [1, None, None, None]
+    )
+    assert np.allclose(only_possible_with_x_pos, [5, 2, 0, 2 / HALF])
+    # and a bunch more random points across the whole space
+    bounds = np.asarray(bounds)
+    for _ in range(100):
+        rand_pos = np.random.uniform(bounds[:, 0], bounds[:, 1])
+        rand_pos[0] = 1  # x is fixed at 1
+        rand_pt = transform.map(rand_pos)[:3]
+        solved_pos = neutral_anchored_inverse_kinematics(
+            rand_pt, transform, bounds, [1, None, None, None]
+        )
+        assert np.allclose(solved_pos, rand_pos)
+
+
+def test_neutral_anchored_inverse_kinematics_impossible():
+    bounds, transform = overspecified()
+
+    impossible = [
+        [-2, -20, -2],
+        [-2, -2, 10],
+        [10, -2, -2],
+        [-20, -2, -2],
+        [-2, -2, -20],
+        [0, 1, 0],
+    ]
+    for impossible_pt in impossible:
+        with pytest.raises(ValueError):
+            neutral_anchored_inverse_kinematics(
+                impossible_pt, transform, bounds, [1, None, None, None]
+            )
+        with pytest.raises(ValueError):
+            neutral_anchored_inverse_kinematics(
+                impossible_pt, transform, bounds, [0, None, None, None]
+            )
+
+
+@pytest.mark.parametrize("ik_func", [greedy_axis_inverse_kinematics, primary_axis_inverse_kinematics])
+def test_greedy_axis_inverse_kinematics(ik_func):
+    bounds, transform = overspecified()
+
+    point = [-3 * HALF, 0, -3 * HALF]
+    start = [0, 0, 0, 0]
+    preferred_axis_pos = ik_func(point, transform, bounds, start, 3)
+    assert np.allclose(preferred_axis_pos, [0, 0, 0, 3])
+
+    point = [-2, 0, -4]
+    pos = ik_func(point, transform, bounds, start, 3)
+    assert np.allclose(pos, [0, 0, 2, 2 / HALF])
+
+
+@pytest.mark.parametrize("ik_func", [greedy_axis_inverse_kinematics, primary_axis_inverse_kinematics])
+def test_greedy_axis_inverse_kinematics_all_axes(ik_func):
+    bounds, transform = overspecified()
+    point = [-3, -3, -3]
+    start = [0, 0, 0, 0]
+
+    pos = ik_func(point, transform, bounds, start, 0)
+    assert np.allclose(pos, [3, 3, 3, 0])
+
+    pos = ik_func(point, transform, bounds, start, 2)
+    assert np.allclose(pos, [3, 3, 3, 0])
+
+    pos = ik_func(point, transform, bounds, start, 3)
+    assert np.allclose(pos, [0, 3, 0, 3 / HALF])
+
+
+@pytest.mark.parametrize("ik_func", [greedy_axis_inverse_kinematics, primary_axis_inverse_kinematics])
+def test_greedy_axis_inverse_kinematics_along_each_axis(ik_func):
+    bounds, transform = overspecified()
+    start = [0, 0, 0, 0]
+
+    point = [-5, -1, 0]
+    pos = ik_func(point, transform, bounds, start, 0)
+    assert np.allclose(pos, [5, 1, 0, 0])
+
+    point = [-1, -5, -1]
+    pos = ik_func(point, transform, bounds, start, 1)
+    # TODO should this recursively pick which axis to be greedy along?
+    # The two functions give different (both valid) device positions here; check global target only.
+    assert np.allclose(list(transform.map(pos))[:3], point)
+
+    point = [-1, 0, -5]
+    pos = ik_func(point, transform, bounds, start, 2)
+    assert np.allclose(pos, [1, 0, 5, 0])
+
+    point = [-5 * HALF, -1, -5 * HALF]
+    pos = ik_func(point, transform, bounds, start, 3)
+    assert np.allclose(pos, [0, 1, 0, 5])
+
+
+@pytest.mark.parametrize("ik_func", [greedy_axis_inverse_kinematics, primary_axis_inverse_kinematics])
+def test_greedy_axis_inverse_kinematics_auto_axis(ik_func):
+    bounds, transform = overspecified()
+    start = [0, 0, 0, 0]
+
+    # Check that auto-selection achieves the correct global target in all cases.
+    # The two functions may choose different device positions for the same global target.
+    for point in [
+        [-5, -1, 0],
+        [-1, -5, -1],
+        [-3, -5, -1],  # y then x — known failure for greedy auto-selection
+        [-1, 0, -5],
+        [-5 * HALF, -1, -5 * HALF],
+    ]:
+        pos = ik_func(point, transform, bounds, start)
+        assert np.allclose(list(transform.map(pos))[:3], point), (
+            f"ik_func={ik_func.__name__} point={point}: mapped to {list(transform.map(pos))[:3]}"
+        )
+
+
+@pytest.mark.parametrize("ik_func", [greedy_axis_inverse_kinematics, primary_axis_inverse_kinematics])
+def test_greedy_axis_inverse_kinematics_impossible(ik_func):
+    bounds, transform = overspecified()
+    impossible = [
+        [-2, -20, -2],
+        [-2, -2, 10],
+        [10, -2, -2],
+        [-20, -2, -2],
+        [-2, -2, -20],
+        [0, 1, 0],
+    ]
+    start = [0, 0, 0, 0]
+    for impossible_pt in impossible:
+        with pytest.raises(ValueError):
+            ik_func(impossible_pt, transform, bounds, start)
+        with pytest.raises(ValueError):
+            ik_func(impossible_pt, transform, bounds, start, 0)
+        with pytest.raises(ValueError):
+            ik_func(impossible_pt, transform, bounds, start, 1)
+        with pytest.raises(ValueError):
+            ik_func(impossible_pt, transform, bounds, start, 2)
+        with pytest.raises(ValueError):
+            ik_func(impossible_pt, transform, bounds, start, 3)
+
+
+@pytest.mark.parametrize("ik_func", [greedy_axis_inverse_kinematics, primary_axis_inverse_kinematics])
+def test_greedy_axis_inverse_kinematics_past_boundaries(ik_func):
+    bounds, transform = overspecified()
+    start = [0, 0, 0, 0]
+
+    point = [-5 - 2 * HALF, 0, -2]
+    pos = ik_func(point, transform, bounds, start, 0)
+    assert np.allclose(pos, [5, 0, 2 - 2 * HALF, 2])
+
+    point = [-2, 0, -5 - 2 * HALF]
+    pos = ik_func(point, transform, bounds, start, 2)
+    assert np.allclose(pos, [2 - 2 * HALF, 0, 5, 2])
+
+
+@pytest.mark.parametrize("ik_func", [greedy_axis_inverse_kinematics, primary_axis_inverse_kinematics])
+def test_greedy_axis_inverse_kinematics_starting_point_adherence(ik_func):
+    # The two functions differ in how they distribute motion across axes when starting from a
+    # non-zero position: greedy keeps non-primary axes near their starting values, while
+    # primary_axis maximizes the primary axis regardless.  Both must achieve the global target.
+    bounds, transform = overspecified()
+    start = [1, 1, 1, 1]
+    point = [-3, 0, -3]
+
+    for axis in [0, 2, 3]:
+        pos = ik_func(point, transform, bounds, start, axis)
+        assert np.allclose(list(transform.map(pos))[:3], point), (
+            f"axis={axis}: mapped to {list(transform.map(pos))[:3]}, expected {point}"
+        )
+        assert all(bounds[i][0] <= pos[i] <= bounds[i][1] for i in range(4)), (
+            f"axis={axis}: pos {pos} out of bounds"
+        )
+
+
+@pytest.mark.parametrize("ik_func", [greedy_axis_inverse_kinematics, primary_axis_inverse_kinematics])
+def test_greedy_axis_inverse_kinematics_with_scaled_axis(ik_func):
+    """Both IK functions must correctly handle axes with non-unit scale.
+    The global target must be reached exactly regardless of how the null space is resolved.
+    """
+    bounds, transform = scaled_overspecified()
+    # d-axis is [-3*HALF, 0, -3*HALF] with ||d|| = 3
+    # So 1 device unit on d = 3 global units along that direction
+
+    # Non-zero starting position exposes scale-handling bugs
+    start = [0, 0, 0, 1]
+
+    for target_dev in [
+        np.array([0, 0.5, 0, 0.5]),
+        np.array([0.5, 0.5, 0, 0.5]),
+        np.array([1, 0.5, 0, 0.5]),
+    ]:
+        point = list(transform.map(target_dev))
+        pos = ik_func(point, transform, bounds, start, 3)
+        assert np.allclose(list(transform.map(pos))[:3], point[:3], atol=1e-7), (
+            f"target_dev={target_dev}: mapped to {list(transform.map(pos))[:3]}, expected {point[:3]}"
+        )
+
+
+def real_4axis_manipulator():
+    """Return (bounds, transform) for a real 4-axis manipulator configuration captured from a live device.
+
+    The local-to-global transform matrix was observed in practice. This fixture is used to test the
+    IK functions under a real-world, poorly-conditioned axis configuration.
+
+    The d-axis (axis 3) is nearly a linear combination of the x (axis 0) and z (axis 2) axes in
+    global space. This means when axis 1 (y) is chosen as the greedy axis, the remaining 3x3 system
+    has a condition number ~222. This causes chaotic, position-dependent ValueError failures.
+
+    Bounds are (0, 20000) for all four axes, as configured on the real device.
+    Home device position: (918, 2074, 9195, 52)
+    """
+    M = np.array([
+        [-5.91304202e-07,  7.81460222e-07,  3.92164309e-09, -5.16792046e-07, -5.97800640e-03],
+        [ 7.88488522e-07,  5.90593159e-07, -2.28182544e-10,  6.76800749e-07, -1.13185560e-02],
+        [ 0.00000000e+00,  0.00000000e+00, -1.00288005e-06, -4.87384199e-07,  1.37251357e-02],
+        [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00,  0.00000000e+00,  1.00000000e+00],
+    ])
+    transform = AffineTransform(M[:3, :4], offset=M[:3, 4])
+    bounds = [(0, 20000)] * 4
+    return bounds, transform
+
+
+def test_greedy_ik_real_device_condition_numbers():
+    """The d-axis (axis 3) of the real device transform is nearly a linear combination of x and z,
+    making the (0, 2, 3) sub-matrix poorly conditioned (~222) when axis 1 is chosen as greedy.
+    Choosing a different greedy axis gives condition numbers near 1-4.
+    """
+    bounds, transform = real_4axis_manipulator()
+    T = transform.full_matrix[:3, :4]
+
+    expected_conditions = {
+        0: (1, 5),      # keep [1, 2, 3]: well-conditioned
+        1: (100, 300),  # keep [0, 2, 3]: poorly conditioned — this is the bug trigger
+        2: (1, 10),     # keep [0, 1, 3]: well-conditioned
+        3: (1, 5),      # keep [0, 1, 2]: well-conditioned
+    }
+    for greedy in range(4):
+        cols = [i for i in range(4) if i != greedy]
+        cond = np.linalg.cond(T[:, cols])
+        lo, hi = expected_conditions[greedy]
+        assert lo <= cond <= hi, (
+            f"Greedy axis={greedy}: condition number {cond:.1f} not in expected range [{lo}, {hi}]"
+        )
+
+
+@pytest.mark.parametrize("ik_func", [greedy_axis_inverse_kinematics, primary_axis_inverse_kinematics])
+def test_ik_real_device_nearby_positions_all_succeed(ik_func):
+    """IK must succeed for all starting positions near the known bad region, not just some.
+
+    From (1133, 13788, 8840, 4352), tiny perturbations (1-20 device units, i.e. ~1-20 µm) cause
+    chaotic ValueError failures because the auto-selected greedy axis (y, condition ~222) makes the
+    boundary intersection search numerically unstable. The d-values from successful calls jump
+    unpredictably between 0.000 and 1112.949, and FAILs are scattered non-monotonically throughout.
+
+    All of these starting positions can reach home (home_dev is in-bounds and maps to home_global),
+    so ValueError is never correct here.
+    """
+    bounds, transform = real_4axis_manipulator()
+    home_dev = np.array([918, 2074, 9195, 52], dtype=float)
+    bad_start = np.array([1133, 13788, 8840, 4352], dtype=float)
+    home_global = transform.map(home_dev)[:3]
+
+    failures = []
+    for axis_idx in range(4):
+        for delta in range(-20, 21):
+            start = bad_start.copy()
+            start[axis_idx] += delta
+            if not all(bounds[i][0] <= start[i] <= bounds[i][1] for i in range(4)):
+                continue
+            try:
+                result = ik_func(home_global, transform, bounds, start)
+                result_global = transform.map(result)[:3]
+                if not np.allclose(result_global, home_global, atol=1e-9):
+                    failures.append((axis_idx, delta, f"mapped to wrong global pos {result_global}"))
+            except ValueError as e:
+                failures.append((axis_idx, delta, str(e)))
+
+    assert not failures, (
+        f"{len(failures)} starting positions near bad_start failed IK to home:\n"
+        + "\n".join(f"  axis={ax} delta={d}: {msg}" for ax, d, msg in failures[:10])
+        + (f"\n  ... and {len(failures) - 10} more" if len(failures) > 10 else "")
+    )
+
+
+HALF = 2**0.5 / 2
+
+
+def scaled_overspecified():
+    """Like overspecified(), but the diagonal axis has a non-unit scale factor (3x).
+    This makes axis_scale != 1 for axis 3, exposing projection bugs that
+    divide by axis_scale the wrong number of times.
+    """
+    scale = 3
+    x = [-1, 0, 0]
+    y = [0, -1, 0]
+    z = [0, 0, -1]
+    d = [-scale * HALF, 0, -scale * HALF]  # 45° in x-z plane, but 3x longer
+    transform = AffineTransform(np.asarray([x, y, z, d]).T, offset=np.zeros(3))
+    bounds = [(0, 5)] * 4
+    return bounds, transform
+
+
+def overspecified():
+    # keep the math easy and distinguishable, but still get coverage
+    x = [-1, 0, 0]
+    y = [0, -1, 0]
+    z = [0, 0, -1]
+    d = [-HALF, 0, -HALF]  # 45° in x-z plane
+    transform = AffineTransform(np.asarray([x, y, z, d]).T, offset=np.zeros(3))
+    bounds = [(0, 5)] * 4
+    return bounds, transform
+
+
 draw_n = 0
 
 
@@ -748,6 +1176,85 @@ class FakeDevice(Qt.QObject):
 
     def getBoundaries(self):
         return self._bounds
+
+
+def test_primary_axis_ik_prefers_d_axis():
+    """When moving along the D diagonal, primary_axis_ik should use only D (not Z)."""
+    bounds, transform = overspecified()
+    start = [2, 0, 0, 0]
+    # target device position: only D changes from start
+    target = list(transform.map([2, 0, 0, 2]))[:3]
+
+    pos = primary_axis_inverse_kinematics(target, transform, bounds, start, primary_axis=3)
+
+    assert np.allclose(pos, [2, 0, 0, 2]), f"expected [2,0,0,2], got {pos}"
+
+
+def test_primary_axis_ik_from_origin():
+    """From the origin, advancing along D should use only D (not split across X/Z)."""
+    bounds, transform = overspecified()
+    start = [0, 0, 0, 0]
+    target = list(transform.map([0, 0, 0, 2]))[:3]
+
+    pos = primary_axis_inverse_kinematics(target, transform, bounds, start, primary_axis=3)
+
+    assert np.allclose(pos, [0, 0, 0, 2]), f"expected [0,0,0,2], got {pos}"
+
+
+def test_primary_axis_ik_auto_selects_diagonal_axis():
+    """Auto-selection should pick D as primary when the displacement is along the diagonal."""
+    bounds, transform = overspecified()
+    start = [2, 0, 0, 0]
+    target = list(transform.map([2, 0, 0, 2]))[:3]
+
+    pos = primary_axis_inverse_kinematics(target, transform, bounds, start)
+
+    assert np.allclose(pos, [2, 0, 0, 2]), f"expected [2,0,0,2], got {pos}"
+
+
+def test_primary_axis_ik_saturated_primary_uses_other_axes():
+    """When D is near its bound, overflow should be handled by other axes."""
+    bounds, transform = overspecified()
+    start = [0, 0, 0, 4]
+    # Target requires 2 more D-equivalent units, but D can only go 1 more (bound=5)
+    target = list(transform.map([0, 0, 0, 6]))[:3]  # out-of-bounds target solved by spillover
+
+    pos = primary_axis_inverse_kinematics(target, transform, bounds, start, primary_axis=3)
+
+    assert pos[3] <= 5.0 + 1e-9, f"D axis exceeded bound (got {pos[3]})"
+    assert np.allclose(list(transform.map(pos))[:3], target, atol=1e-7), (
+        f"target not achieved: got {list(transform.map(pos))[:3]}, expected {target}"
+    )
+
+
+def test_primary_axis_ik_maps_to_target_exactly():
+    """The solution must always map exactly back to the target global position."""
+    bounds, transform = overspecified()
+    start = [1, 2, 1, 1]
+    targets = [
+        list(transform.map([1, 2, 1, 3]))[:3],   # only D
+        list(transform.map([2, 2, 0, 2]))[:3],   # mixed X/Z/D
+        list(transform.map([1, 3, 1, 2]))[:3],   # mostly Y
+    ]
+    for target in targets:
+        pos = primary_axis_inverse_kinematics(target, transform, bounds, start, primary_axis=3)
+        result_global = list(transform.map(pos))[:3]
+        assert np.allclose(result_global, target, atol=1e-7), (
+            f"target {target} not achieved: got {result_global}"
+        )
+
+
+def test_primary_axis_ik_non_primary_movement_uses_min_displacement():
+    """Moving purely in Y should not force D to move (null vector has no Y component)."""
+    bounds, transform = overspecified()
+    start = [0, 0, 0, 0]
+    target = list(transform.map([0, 3, 0, 0]))[:3]
+
+    pos = primary_axis_inverse_kinematics(target, transform, bounds, start, primary_axis=3)
+
+    # Y movement is fully decoupled; D should stay at 0
+    assert np.allclose(pos[3], 0, atol=1e-9), f"D should not move for pure Y target, got D={pos[3]}"
+    assert np.allclose(list(transform.map(pos))[:3], target, atol=1e-7)
 
 
 if __name__ == "__main__":
@@ -777,7 +1284,7 @@ if __name__ == "__main__":
     #     "test",
     # )
     geom = Geometry({"type": "box", "size": [1.0, 1.0, 1.0]}, "test_mesh", "test")
-    bounds = [
+    some_bounds = [
         Plane(np.array([1, 0, 0]), np.array([0, 0, 0])),
         Plane(np.array([0, 1, 0]), np.array([0, 0, 0])),
         Plane(np.array([0, 0, 1]), np.array([0, 0, 0])),
@@ -786,12 +1293,12 @@ if __name__ == "__main__":
         Plane(np.array([0, 0, 1]), np.array([1, 1, 1])),
     ]
 
-    dev = FakeDevice("test", geom)  # , bounds=bounds)
+    dev = FakeDevice("test", geom)  # , bounds=some_bounds)
     visualizer.addDevice(dev)
     viz = visualizer.pathPlanVisualizer(dev)
     # test_paths_stay_inside_bounds(geom, viz)
     # test_grazing_paths((0.6, 0.6, 0.6), viz)
-    # test_bounds_prevent_path(geom, bounds, viz)
+    # test_bounds_prevent_path(geom, some_bounds, viz)
     # test_path_with_funner_traveler(geom, viz)
     # test_single_voxel_voxelization(geom, viz)
     # test_find_path(geom, viz)

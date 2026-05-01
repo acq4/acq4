@@ -71,6 +71,10 @@ class PressureControl(Device):
             self.setPressure("regulator", start_pressure + frac_done * (end_pressure - start_pressure))
             _future.sleep(self.regulatorSettlingTime)
 
+    def isValidForPatchPipettes(self):
+        # only allow use with patch pipettes if regulator control is available (for fine pressure control)
+        return 'regulator' in self.sources and 'atmosphere' in self.sources
+
     def setPressure(self, source=None, pressure=None):
         """Set the output pressure (float; in Pa) and/or pressure source (str).
         """

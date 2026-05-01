@@ -31,7 +31,9 @@ class MockStage(Stage):
         - limits: (x, y, z) tuple of booleans for limit support
     
     * **parentDevice** (str, optional): Name of parent device for coordinate transforms
-    
+
+    * **nAxes** (int, optional): Number of axes (default 3)
+
     * **transform** (dict, optional): Spatial transform relative to parent device
     
     Example configuration::
@@ -40,10 +42,21 @@ class MockStage(Stage):
             driver: 'MockStage'
             fastSpeed: 3e-3
             slowSpeed: 100e-6
-            keys: True
+            keys:
+                - 'r'
+                - 'd'
+                - 'f'
+                - 's'
+                - 'a'
+                - 'w'
+                - 'e'
+                - 'q'
     """
 
     def __init__(self, dm, config, name):
+        self.nAxes = config.get("nAxes", 3)
+        self._lastMove = None
+        self.stageThread = MockStageThread()
         Stage.__init__(self, dm, config, name)
         
         self._lastMove = None
@@ -57,12 +70,14 @@ class MockStage(Stage):
             Qt.Qt.Key_Shift: 0.1,
         }
         self.keyDirections = np.array([
-            [0, 0, 1],
-            [0, 1, 0],
-            [0, 0, -1],
-            [-1, 0, 0],
-            [0, -1, 0],
-            [1, 0, 0],
+            [0, 0, 1, 0],  # Z+
+            [0, 1, 0, 0],  # Y+
+            [0, 0, -1, 0],  # Z-
+            [-1, 0, 0, 0],  # X-
+            [0, -1, 0, 0],  # Y-
+            [1, 0, 0, 0],  # X+
+            [0, 0, 0, 1],  # D+
+            [0, 0, 0, -1],  # D-
         ])
         self._directionKeys = set()
         self._modifiers = set()
@@ -70,7 +85,6 @@ class MockStage(Stage):
             Qt.QCoreApplication.instance().installEventFilter(self)
         self._quit = False
         dm.sigAbortAll.connect(self.abort)
-        self.stageThread = MockStageThread()
         self.stageThread.positionChanged.connect(self.posChanged, type=Qt.Qt.DirectConnection)
         self.stageThread.start()
         self._move(self.getPosition(), 10000, False)
@@ -81,13 +95,13 @@ class MockStage(Stage):
             return self.config['capabilities']
         else:
             return {
-                'getPos': (True, True, True),
-                'setPos': (True, True, True),
-                'limits': (False, False, False),
+                'getPos': (True, True, True, True)[:self.nAxes],
+                'setPos': (True, True, True, True)[:self.nAxes],
+                'limits': (False, False, False, False)[:self.nAxes],
             }
 
     def axes(self):
-        return 'x', 'y', 'z'
+        return ['x', 'y', 'z', 'd'][:self.nAxes]
 
     def _move(self, pos, speed, linear, **kwds):
         """Called by base stage class when the user requests to move to an
@@ -138,11 +152,11 @@ class MockStage(Stage):
         for mod in self._modifiers:
             s = s * self.modifierScales[mod]
         
-        vec = np.array([0, 0, 0])
+        vec = np.zeros(self.nAxes + 1)
         for key in self._directionKeys:
             vec = vec + self.keyDirections[key] * s
         
-        self.startMoving(vec)
+        self.startMoving(vec[:self.nAxes])
 
     def stop(self):
         with self.lock:
@@ -164,7 +178,7 @@ class MockStage(Stage):
         return 1.0 / self.stageThread.interval
 
     def _getPosition(self):
-        return self.stageThread.getPosition()
+        return self.stageThread.getPosition()[:self.nAxes]
 
     def targetPosition(self):
         with self.lock:
@@ -178,7 +192,7 @@ class MockStage(Stage):
         """
         with self.lock:
             self._interruptMove()
-            vel1 = np.zeros(3)
+            vel1 = np.zeros(self.nAxes)
             vel1[:len(vel)] = vel
             self.stageThread.setVelocity(vel1)
         
@@ -214,7 +228,7 @@ class MockStageThread(Thread):
     positionChanged = Qt.Signal(object)
     
     def __init__(self):
-        self.pos = np.zeros(3)
+        self.pos = None
         self.target = None
         self.speed = None
         self.velocity = None
@@ -258,6 +272,8 @@ class MockStageThread(Thread):
     
     def getPosition(self):
         with self.lock:
+            if self.pos is None:
+                return np.zeros(4)
             return self.pos.copy()
     
     def run(self):
@@ -276,6 +292,8 @@ class MockStageThread(Thread):
             lastUpdate = now
             
             if target is not None:
+                if pos is None:
+                    pos = np.zeros_like(target)
                 dif = target - pos
                 dist = np.linalg.norm(dif)
                 stepDist = speed * dt

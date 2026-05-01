@@ -267,7 +267,7 @@ class ImagingCtrl(Qt.QWidget):
 
         hist = self.frameDisplay.contrastCtrl.ui.histogram
         im = pg.ImageItem(data, levels=hist.getLevels(), lut=hist.getLookupTable(img=data), removable=True)
-        im.setTransform(self.frameDisplay.currentFrame.globalTransform().as2D())
+        im.setTransform(self.frameDisplay.currentFrame.globalTransform().as_pyqtgraph().as2D())
 
         self.addPinnedFrame(im)
 

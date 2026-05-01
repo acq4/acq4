@@ -48,6 +48,7 @@ class ImageCanvasItem(CanvasItem):
 
             try:
                 if 'transform' in self.handle.info():
+                    # TODO this needs to be coorx'd
                     tr = pg.SRTTransform3D(self.handle.info()['transform'])
                     tr = pg.SRTTransform(tr)  ## convert to 2D
                     opts['pos'] = tr.getTranslation()
