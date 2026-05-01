@@ -96,10 +96,10 @@ class DAQSonicator(Sonicator):
                     amplitude: 3
             expel:
                 type: "Stimulus"
-                items: 
+                items:
                     chirp1:
                         type: "Chirp"
-                        args: 
+                        args:
                             start_time: 0
                             duration: 10
                             start_frequency: 135000
@@ -142,21 +142,21 @@ class DAQSonicator(Sonicator):
         )
 
     @future_wrap
-    def _doProtocol(self, protocol: str | dict, _future):        
+    def _doProtocol(self, protocol: str | dict, _future):
         if isinstance(protocol, str):
             protocol = load_stimulus(json.loads(protocol))
         else:
             protocol = load_stimulus(self._cleanProtocol(protocol))
-        # daq: NiDAQ = self.dm.getDevice(daq_name)
-        # sample_rate = daq.n.GetDevAIMaxSingleChanRate(self._daq...)  # this doesn't work
-        sample_rate = 1_000_000
+        daq_name = self._daq.getDAQName("command")
+        daq_dev_name = self._daq.config["channels"]["command"]["channel"].split("/")[1]  # e.g. "Dev1"
+        daq = self.dm.getDevice(daq_name)
+        sample_rate = int(daq.n.GetDevAOMaxRate(daq_dev_name))
         duration = protocol.total_global_end_time
         wave = protocol.eval(n_pts=duration * sample_rate, sample_rate=sample_rate).data
         slew_rate = calculate_slew_rate(wave, 1 / sample_rate)
         if slew_rate > self._maxSlewRate:
             raise ValueError(f"Waveform slew rate {slew_rate} V/s exceeds max slew rate {self._maxSlewRate} V/s")
         numPts = len(wave)
-        daq_name = self._daq.getDAQName("command")
         cmd = {
             "protocol": {"duration": duration},
             daq_name: {
@@ -168,7 +168,7 @@ class DAQSonicator(Sonicator):
             },
         }
         task = self.dm.createTask(cmd)
-        task.reserveDevices()
+        task.reserveDevices(reserver="DAQSonicator")
         try:
             if "disable" in self.config:
                 self._daq.setChannelValue("disable", 0)
@@ -200,7 +200,7 @@ class DAQSonicator(Sonicator):
 
             # how we support reexpression as dict
             type: "Stimulus"
-            items: 
+            items:
                 key1: item1
                 key2: item2
                 key3: item3
@@ -210,6 +210,13 @@ class DAQSonicator(Sonicator):
         if 'items' in protocol2 and isinstance(protocol2['items'], dict):
             protocol2['items'] = [self._cleanProtocol(item) for item in protocol2['items'].values()]
         return protocol2
+
+    def _protocolDuration(self, protocol: str | dict) -> float:
+        if isinstance(protocol, str):
+            protocol = load_stimulus(json.loads(protocol))
+        else:
+            protocol = load_stimulus(protocol)
+        return protocol.total_global_end_time
 
     def calcVoltage(self, frequency: float) -> float:
         """
