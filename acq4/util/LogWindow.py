@@ -139,9 +139,7 @@ class ErrorDialog(Qt.QDialog):
 
     def logClicked(self):
         self.accept()
-        log = get_log_window()
-        log.show()
-        log.raise_()
+        get_log_window().raise_window()
         self.messages = []
 
     def nextMessage(self):
@@ -264,7 +262,10 @@ class DocumentedLogViewer(LogViewer):
 
     def raise_window(self):
         """Bring the log window to the front."""
-        self.show()
+        if self.isMinimized():
+            self.showNormal()
+        else:
+            self.show()
         self.raise_()
         self.activateWindow()
 
