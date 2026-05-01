@@ -16,7 +16,7 @@ log_file_handler: logging.FileHandler | None = None
 def __reload__(old):
     global log_server, log_handlers
     log_server = old.get('log_server', None)
-    log_handlers = old.get('_handlers', [])
+    log_handlers = old.get('log_handlers', [])
 
 
 class StringAwareJsonFormatter(JsonFormatter):
@@ -145,10 +145,10 @@ def setup_logging(
 
 
 def set_log_file(log_file: str | None, is_temp_file: bool = False) -> None:
-    """Set the log file path for the file handler. 
+    """Set the log file path for the file handler.
     If a file handler already exists, it will be closed and removed before creating a new one.
-    
-    If the previous log file was a temporary file created during early initialization, 
+
+    If the previous log file was a temporary file created during early initialization,
     its contents will be read and rewritten to the new log file handler to preserve all log records.
     """
     global log_file_handler
@@ -189,8 +189,8 @@ def set_log_file(log_file: str | None, is_temp_file: bool = False) -> None:
 
 
 def rewrite_log_from_temp_file(temp_file_path: str) -> None:
-    """Read the temporary log file created during early initialization and rewrite its contents to the current log file handler, 
-    preserving all record attributes. 
+    """Read the temporary log file created during early initialization and rewrite its contents to the current log file handler,
+    preserving all record attributes.
     This should be called after the main logging configuration is set up and a new log file handler is created."""
     logger = logging.getLogger()
 
@@ -213,7 +213,7 @@ def rewrite_log_from_temp_file(temp_file_path: str) -> None:
                     log_file_handler.emit(HistoricLogRecord(**record))
     finally:
         os.remove(temp_file_path)
-        
+
     # log_win = get_log_window()
     # with open(self._logFile.name(), 'r') as f:
     #     for i, line in enumerate(f):
