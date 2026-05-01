@@ -5,6 +5,7 @@ from pathlib import Path
 
 import numpy as np
 
+import pyqtgraph as pg
 from acq4.devices.Camera import Camera
 from acq4.devices.Microscope import Microscope
 from acq4.devices.PatchPipette import PatchPipette
@@ -16,9 +17,8 @@ from acq4.devices.Pipette.planners import (
 from acq4.logging_config import get_logger
 from acq4.modules.Module import Module
 from acq4.util import Qt
-import pyqtgraph as pg
 from acq4.util.future import Future, future_wrap
-from pyqtgraph.units import µm
+from pyqtgraph.units import µm, m
 from .autopatch import Autopatcher
 from .detection import CellDetector
 from .feature_tracking import FeatureTracker
