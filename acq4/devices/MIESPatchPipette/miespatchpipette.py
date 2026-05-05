@@ -6,32 +6,49 @@ from ..PatchPipette import PatchPipette
 
 class MIESPatchPipette(PatchPipette):
     """
-    A patch pipette device that uses a running MIES instance for electrophysiology 
+    A patch pipette device that uses a running MIES instance for electrophysiology
     and pressure control.
-    
+
     Configuration options:
-    
+
     * **headstage** (int, required): MIES headstage number to use for this pipette
-    
+
     * **pipetteDevice** (str, optional): Name of Pipette device for tip tracking
-    
+
+    * **pressureDevice** (str, optional): Name of a pre-configured pressure control device
+      to use instead of the automatically created MIES pressure control. When omitted, a
+      MIESPressureControl device named "{name}_pressure" is created automatically.
+
     * **sonicatorDevice** (str, optional): Name of sonicator device for cleaning
-    
+
     * **stateManagerClass** (str, optional): Custom state manager class name
-    
+
     * All other options from PatchPipette base class are supported
-    
-    This device automatically creates internal MIESPatchClamp and MIESPressureControl 
-    devices named "{name}_clamp" and "{name}_pressure" respectively.
-    
-    Example configuration::
-    
+
+    This device always creates an internal MIESPatchClamp device named "{name}_clamp".
+    A MIESPressureControl device named "{name}_pressure" is created automatically unless
+    **pressureDevice** is specified.
+
+    Example configuration (MIES-managed pressure)::
+
         PatchPipette1:
             driver: 'MIESPatchPipette'
             headstage: 0
             pipetteDevice: 'Pipette1'
             sonicatorDevice: 'Sonicator1'
-    
+
+    Example configuration (externally configured pressure device)::
+
+        Pressure1:
+            driver: 'SomePressureDriver'
+            ...
+
+        PatchPipette1:
+            driver: 'MIESPatchPipette'
+            headstage: 0
+            pipetteDevice: 'Pipette1'
+            pressureDevice: 'Pressure1'
+
     Requires a running MIES instance with configured headstage hardware.
     """
 
@@ -39,18 +56,19 @@ class MIESPatchPipette(PatchPipette):
         self.mies = MIES.getBridge()
         self._headstage = config.pop('headstage')
 
-        # create pressure and clamp devices
         clampName = f"{name}_clamp"
         self._mies_clamp = MIESPatchClamp(
             deviceManager, config={'headstage': self._headstage}, name=clampName
         )
 
-        pressureName = f"{name}_pressure"
-        self._mies_pressure = MIESPressureControl(
-            deviceManager, config={'headstage': self._headstage}, name=pressureName
-        )
+        if 'pressureDevice' not in config:
+            pressureName = f"{name}_pressure"
+            self._mies_pressure = MIESPressureControl(
+                deviceManager, config={'headstage': self._headstage}, name=pressureName
+            )
+            config['pressureDevice'] = pressureName
 
-        config.update({'clampDevice': clampName, 'pressureDevice': pressureName})
+        config['clampDevice'] = clampName
         super().__init__(deviceManager, config, name)
 
     def setActive(self, active):
