@@ -168,7 +168,7 @@ class DAQSonicator(Sonicator):
             },
         }
         task = self.dm.createTask(cmd)
-        task.reserveDevices(reserver="DAQSonicator")
+        task.reserveDevices(reserver=self.name())
         try:
             if "disable" in self.config:
                 self._daq.setChannelValue("disable", 0)
