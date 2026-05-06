@@ -1,6 +1,7 @@
 import json
 import os
 import re
+
 from collections import OrderedDict
 from typing import List
 
@@ -95,6 +96,15 @@ class MultiPatchWindow(Qt.QWidget):
                 pip.mockpatch = MockPatch(pip)
                 self.ui.matrixLayout.addWidget(pip.mockpatch.widget, i, 1)
 
+            # Add this pipette's plots to the right panel
+            plotContainer = Qt.QWidget()
+            plotContainerLayout = Qt.QHBoxLayout(plotContainer)
+            plotContainerLayout.setContentsMargins(0, 0, 0, 0)
+            plotContainerLayout.setSpacing(0)
+            for plt in ctrl.plots:
+                plotContainerLayout.addWidget(plt)
+            self.ui.plotsLayout.addWidget(plotContainer)
+
             pip.sigActiveChanged.connect(self.pipetteActiveChanged)
             ctrl.sigSelectChanged.connect(self.pipetteSelectChanged)
             ctrl.sigLockChanged.connect(self.pipetteLockChanged)
@@ -168,7 +178,7 @@ class MultiPatchWindow(Qt.QWidget):
 
     @_shouldSaveTipImages.setter
     def _shouldSaveTipImages(self, value):
-        self.ui.saveTipImageBtn.setChecked(True)
+        self.ui.saveTipImageBtn.setChecked(value)
 
     def _turnOffSlowBtn(self, checked):
         self.ui.slowBtn.setChecked(False)
@@ -180,6 +190,7 @@ class MultiPatchWindow(Qt.QWidget):
         geom = self.geometry()
         config = {
             'geometry': [geom.x(), geom.y(), geom.width(), geom.height()],
+            'splitterSizes': self.ui.splitter.sizes(),
             'plotModes': self.pipCtrls[0].getPlotModes(),
             "plots": {
                 (ctrl.pip.name(), plot.mode): plot.plot.saveState()
@@ -194,6 +205,8 @@ class MultiPatchWindow(Qt.QWidget):
         if 'geometry' in config:
             geom = Qt.QRect(*config['geometry'])
             self.setGeometry(geom)
+        if 'splitterSizes' in config:
+            self.ui.splitter.setSizes(config['splitterSizes'])
         if 'plotModes' in config:
             self.setPlotModes(config['plotModes'])
         if "plots" in config:
@@ -274,14 +287,12 @@ class MultiPatchWindow(Qt.QWidget):
         return MultiFuture(futures, name="Move pipettes above target")
 
     @future_wrap
-    def _autoFindTip(self, _future):
+    def _autoFindTip(self, max_reps=10, _future=None):
         work_to_do = self.selectedPipettes()
         while work_to_do:
             patchpip = work_to_do.pop(0)
             pip = patchpip.pipetteDevice if isinstance(patchpip, PatchPipette) else patchpip
-            pos = pip.tracker.findTipInFrame()
-            _future.waitFor(pip.setTipOffsetIfAcceptable(pos), timeout=None).getResult()
-            _future.checkStop()
+            _future.waitFor(pip.iterativelyFindTip(max_reps=max_reps), timeout=None)
 
     def _cellDetect(self):
         return self._setAllSelectedPipettesToState('cell detect')
@@ -616,6 +627,8 @@ class MultiPatchWindow(Qt.QWidget):
         for pip in self.selectedPipettes():
             if pip.clampDevice is not None:
                 pip.clampDevice.resetTestPulseHistory()
+        for ctrl in self.pipCtrls:
+            ctrl.clearEventLog()
 
     def writeRecords(self, recs):
         for rec in recs:
