@@ -21,9 +21,9 @@ class SmartStage:
         """Stop the device immediately"""
         return self.control_thread.request('stop')
 
-    def move(self, pos, speed, acceleration=None):
+    def move(self, pos, speed, acceleration=None, name=None):
         """Move to a position and return a SmartStageRequestFuture.
-        
+
         Parameters
         ----------
         pos : sequence of float
@@ -32,10 +32,12 @@ class SmartStage:
             The speed to move at in mm/s.
         acceleration : float | None
             The acceleration to use in mm/s^2. If None, the default acceleration is used.
+        name : str | None
+            Optional name for this move, used in log messages for diagnostics.
         """
         if acceleration is None:
             acceleration = self.default_acceleration
-        return self.control_thread.request('move', pos=pos, speed=speed, acceleration=acceleration)
+        return self.control_thread.request('move', pos=pos, speed=speed, acceleration=acceleration, name=name)
 
     def quit(self):
         """Quit the control thread"""
