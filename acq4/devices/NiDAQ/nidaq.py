@@ -86,7 +86,7 @@ class NiDAQ(Device):
         if ignoreLock:
             res = True
         else:
-            res = self.reserve(block=block, reserver="NiDAQ.setChannelValue")
+            res = self.reserve(block=block, reserver=f"{self.name()}.setChannelValue")
 
         self.verifyChannelBelongs(chan)
 
@@ -135,7 +135,7 @@ class NiDAQ(Device):
             mode = self.config.get('defaultAIMode', None)
 
         self.verifyChannelBelongs(chan)
-        res = self.reserve(block=block, reserver="NiDAQ.getChannelValue")
+        res = self.reserve(block=block, reserver=f"{self.name()}.getChannelValue")
         if not res:  ## False means non-blocking lock attempt failed.
             return False
         try:
