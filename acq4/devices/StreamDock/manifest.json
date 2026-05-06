@@ -1,0 +1,22 @@
+{
+  "Name": "ACQ4",
+  "Version": "0.1.0",
+  "Author": "ACQ4",
+  "Description": "Bridges the VSDInside Stream Dock hardware to ACQ4 data-acquisition software.",
+  "SDKVersion": 2,
+  "CodePath": "bridge.bat",
+  "Category": "ACQ4",
+  "CategoryIcon": "images/category",
+  "Actions": [
+    {
+      "Name": "ACQ4 Button",
+      "UUID": "com.acq4.streamdock.button",
+      "Icon": "images/button",
+      "Tooltip": "Generic ACQ4 button — behaviour is configured inside ACQ4.",
+      "States": [
+        { "Image": "images/button", "Title": "ACQ4" }
+      ],
+      "SupportedInMultiActions": false
+    }
+  ]
+}
