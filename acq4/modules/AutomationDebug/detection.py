@@ -158,6 +158,7 @@ class CellDetector:
                 z_scale=step_z,  # Actual step_z from mock or real (1um for real)
                 multichannel=multichannel,  # Actual flag for detect_neurons
                 trim_edges=True,
+                min_volume_m3=win.ui.minVolumeSpin.value(),
             ),
             timeout=600,
         ).getResult()

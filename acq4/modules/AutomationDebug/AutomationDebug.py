@@ -49,6 +49,9 @@ class AutomationDebugWindow(Qt.QWidget):
         _zstack_depth_layout.addWidget(Qt.QLabel("Stop depth:"))
         self.ui.zStackStopDepthSpin = pg.SpinBox(value=60e-6, suffix='m', siPrefix=True, step=5e-6)
         _zstack_depth_layout.addWidget(self.ui.zStackStopDepthSpin)
+        _zstack_depth_layout.addWidget(Qt.QLabel("Min volume:"))
+        self.ui.minVolumeSpin = pg.SpinBox(value=0, suffix='m³', siPrefix=True, step=100e-18, bounds=(0, None))
+        _zstack_depth_layout.addWidget(self.ui.minVolumeSpin)
         _zstack_depth_layout.addStretch()
         self.ui.groupBox.layout().addLayout(_zstack_depth_layout, 5, 0, 1, 4)
 
