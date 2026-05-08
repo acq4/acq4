@@ -370,16 +370,26 @@ class AutomationDebugWindow(Qt.QWidget):
 class AutomationDebug(Module):
     moduleDisplayName = "Automation Debug"
     moduleCategory = "Utilities"
+    _instance = None
 
     def __init__(self, manager, name, config):
         Module.__init__(self, manager, name, config)
+        if AutomationDebug._instance is not None:
+            AutomationDebug._instance.ui.raise_()
+            AutomationDebug._instance.ui.activateWindow()
+            Qt.QTimer.singleShot(0, self.quit)
+            return
+        AutomationDebug._instance = self
         self.ui = AutomationDebugWindow(self)
         manager.declareInterface(name, ["automationDebugModule"], self)
         this_dir = os.path.dirname(__file__)
         self.ui.setWindowIcon(Qt.QIcon(os.path.join(this_dir, "Manager", "icon.png")))
 
     def quit(self, fromUi=False):
-        self.ui.saveConfig()
-        if not fromUi:
-            self.ui.quit()
+        if AutomationDebug._instance is self:
+            AutomationDebug._instance = None
+        if hasattr(self, 'ui'):
+            self.ui.saveConfig()
+            if not fromUi:
+                self.ui.quit()
         super().quit()
