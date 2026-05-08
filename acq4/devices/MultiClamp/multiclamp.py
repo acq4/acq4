@@ -174,7 +174,7 @@ class MultiClamp(PatchClamp):
             self.mc = mc.getChannel(self.config['channelID'], multiprocess.proxy(self.mcUpdate, callSync='off'))
         else:
             self.mc = mc.getChannel(self.config['channelID'], self.mcUpdate)
-        
+
         ## wait for first update..
         start = time.time()
         while self.mc.getState() is None:
@@ -200,7 +200,7 @@ class MultiClamp(PatchClamp):
                 self.mc.setParams(defaults[mode])
         self.setMode('I=0')  ## safest mode to leave clamp in
 
-        
+
         dm.declareInterface(name, ['clamp'], self)
 
     def description(self):
@@ -253,7 +253,7 @@ class MultiClamp(PatchClamp):
             return 50
         else:
             return 2.5e9
-        
+
     def getState(self):
         return self.mc.getState()
 
@@ -284,10 +284,10 @@ class MultiClamp(PatchClamp):
 
     def taskInterface(self, taskRunner):
         return MultiClampTaskGui(self, taskRunner)
-    
+
     def createTask(self, cmd, parentTask):
         return MultiClampTask(self, cmd, parentTask)
-    
+
     def getHolding(self, mode=None):
         if mode is None:  ## If no mode is specified, use the current mode
             mode = self.mc.getMode()
@@ -296,15 +296,15 @@ class MultiClamp(PatchClamp):
             return 0.0
         else:
             return self.holding[mode]
-            
+
     def setHolding(self, mode=None, value=None):
-        """Define and/or set the holding values for this device. 
+        """Define and/or set the holding values for this device.
 
         Note--these are ACQ4-controlled holding values, NOT the holding values used by the amplifier.
         It is important to have this because the amplifier's holding values cannot be changed
         before switching modes.
         """
-        with self.dm.reserveDevices([self, self.config['commandChannel']['device']], reserver="MultiClamp.setHolding"):
+        with self.dm.reserveDevices([self, self.config['commandChannel']['device']], reserver=f"{self.name()}.setHolding"):
             currentMode = self.mc.getMode()
             if mode is None:  ## If no mode is specified, use the current mode
                 mode = currentMode
@@ -345,21 +345,21 @@ class MultiClamp(PatchClamp):
             daqDev.setChannelValue(chan, holding*scale, block=False)
 
     def autoPipetteOffset(self):
-        with self.dm.reserveDevices([self], reserver="MultiClamp.autoPipetteOffset"):
+        with self.dm.reserveDevices([self], reserver=f"{self.name()}.autoPipetteOffset"):
             self.mc.autoPipetteOffset()
 
     def autoBridgeBalance(self):
-        with self.dm.reserveDevices([self], reserver="MultiClamp.autoBridgeBalance"):
+        with self.dm.reserveDevices([self], reserver=f"{self.name()}.autoBridgeBalance"):
             self.mc.autoBridgeBal()
 
     def autoCapComp(self):
-        with self.dm.reserveDevices([self], reserver="MultiClamp.autoCapComp"):
+        with self.dm.reserveDevices([self], reserver=f"{self.name()}.autoCapComp"):
             self.mc.autoFastComp()
             self.mc.autoSlowComp()
 
     def listSignals(self, mode):
         return self.mc.listSignals(mode)
-        
+
     def getMode(self):
         return self.mc.getMode()
 
@@ -373,7 +373,7 @@ class MultiClamp(PatchClamp):
         for param in self.mode_dependent_params:
             self._paramCache.pop(param, None)
 
-        with self.dm.reserveDevices([self, self.config['commandChannel']['device']], reserver="MultiClamp.setMode"):
+        with self.dm.reserveDevices([self, self.config['commandChannel']['device']], reserver=f"{self.name()}.setMode"):
             mcMode = self.mc.getMode()
             if mcMode == mode:  ## Mode is already correct
                 return
