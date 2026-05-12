@@ -183,45 +183,6 @@ def set_log_file(log_file: str | None, is_temp_file: bool = False) -> None:
     log_file_handler.setFormatter(json_formatter)
     root_logger.addHandler(log_file_handler)
 
-    # replaced by the copy operation above
-    # if old_log_file is not None and old_log_file != log_file:
-    #     rewrite_log_from_temp_file(old_log_file)
-
-
-def rewrite_log_from_temp_file(temp_file_path: str) -> None:
-    """Read the temporary log file created during early initialization and rewrite its contents to the current log file handler,
-    preserving all record attributes.
-    This should be called after the main logging configuration is set up and a new log file handler is created."""
-    logger = logging.getLogger()
-
-    if log_file_handler is None:
-        raise RuntimeError("Log file handler is not set up. Cannot rewrite log from temp file.")
-    try:
-        with open(temp_file_path, 'r') as f:
-            for line_num, line in enumerate(f, start=1):
-                if not line.strip():
-                    continue  # skip blank lines
-                try:
-                    record = json.loads(line)
-                except json.JSONDecodeError as exc:
-                    preview = line[:200].replace('\r', '\\r').replace('\n', '\\n')
-                    logger.warning(
-                        f"Skipping corrupted temporary log entry in {temp_file_path!r} at line {line_num}: "
-                        f"{preview!r}\nError was: {exc}"
-                    )
-                else:
-                    log_file_handler.emit(HistoricLogRecord(**record))
-    finally:
-        os.remove(temp_file_path)
-
-    # log_win = get_log_window()
-    # with open(self._logFile.name(), 'r') as f:
-    #     for i, line in enumerate(f):
-    #         log_win.new_record(HistoricLogRecord(**(json.loads(line))), sort=False)
-    #         if i % 20 == 0:
-    #             Qt.QApplication.processEvents()
-    # log_win.ensure_chronological_sorting()
-
 
 def get_logger(name: str = "acq4") -> logging.Logger:
     """
