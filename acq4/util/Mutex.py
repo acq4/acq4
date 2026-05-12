@@ -19,37 +19,6 @@ class RecursiveMutex(PGRecursiveMutex):
         PGRecursiveMutex.__init__(self, **kargs)
 
 
-# class Mutex:
-#     """QMutex reimplemented using threading.Lock"""
-#     def __init__(self, debug=False, recursive=False):
-#         self.debug = debug
-#         if recursive:
-#             self.l = threading.RLock()
-#         else:
-#             self.l = threading.Lock()
-
-#     def lock(self, id=None):
-#         self.l.acquire()
-
-#     def tryLock(self, timeout=None, id=None):
-#         if timeout is None:
-#             return self.l.acquire(blocking=False)
-#         else:
-#             return self.l.acquire(timeout=timeout)
-
-#     def unlock(self):
-#         self.l.release()
-
-
-# class RecursiveMutex(Mutex):
-#     """Mimics threading.RLock class.
-#     """
-#     def __init__(self, **kwds):
-#         kwds['recursive'] = True
-#         Mutex.__init__(self, **kwds)
-
-
-
 class PriorityMutex(object):
     """A mutex that uses a priority-sorted queue to determine the order
     in which lock requests are granted. 

@@ -49,7 +49,6 @@ class Sonicator(Device):
                 return True
         if not askUser:
             return False
-        print(f"{well} {well.containsPoint(pos, tolerance=5e-6)} {pos} {lower_bound}")
         response = _future.waitFor(
             prompt(
                 "Sonication Safety Warning",

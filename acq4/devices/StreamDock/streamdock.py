@@ -211,7 +211,6 @@ class StreamDock(Device):
 
     def _on_open(self, ws):
         msg = f"[StreamDock] Connected on port {self._port}"
-        print(msg)
         self.logger.info(msg)
         ws.send(json.dumps({
             'event': self._register_event,
