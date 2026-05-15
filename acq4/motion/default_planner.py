@@ -20,262 +20,6 @@ SAFE_SPEED_WAYPOINT = "safe speed waypoint"
 APPROACH_TO_CORRECT_FOR_HYSTERESIS = "hysteresis correction waypoint"
 
 
-class PipettePathGenerator:
-    """Collection of methods for generating safe pipette paths.
-
-    These methods are used by motion planners for avoiding obstacles, determining safe movement speeds, etc.
-
-    The default implementation assumes an upright scope (requiring objective avoidance) and a thick sample
-    (requiring slow, axial motion).
-    """
-
-    def __init__(self, pip: Pipette):
-        self.pip = pip
-        self.manipulator: Stage = pip.parentDevice()
-
-    def safePath(self, globalStart, globalStop, speed, explanation=None):
-        """Given global starting and stopping positions, return a list of global waypoints that avoid obstacles.
-
-        Generally, movements are split into axes parallel and orthogonal to the pipette. When moving "inward", the
-        parallel axis moves last. When moving "outward", the parallel axis moves first. This avoids most opportunities
-        to collide with an objective lens / recording chamber, or to move laterally through tissue.
-
-        If the start and stop positions are both near or inside the sample and have a lateral offset, then the pipette
-        is first retracted away from the sample before proceeding to the final target.
-
-        Any segments of the path that are inside or close to the sample are forced to the 'slow' speed.
-
-        The returned path does _not_ include the starting position.
-        """
-        man = getManager()
-        mod = man.getOrLoadModule("Visualize3D")
-        # grab the visualizer for visualizing errors
-        adapter = mod.window().findAdapter(lambda a: a.device == self.pip)
-        explanation = explanation or MOVE_TO_DESTINATION
-        globalStart = np.asarray(globalStart)
-        globalStop = np.asarray(globalStop)
-        path = [(globalStart, "", False, "")]
-
-        # retract first if we are doing a lateral movement inside the sample
-        lateralDist = np.linalg.norm(globalStop[1:] - globalStart[1:])
-        if lateralDist > 1e-6:
-            slowDepth = self.pip.approachDepth()
-            canMoveLaterally = globalStart[2] > slowDepth or globalStop[2] > slowDepth
-            if not canMoveLaterally:
-                # need to retract first
-                safePos = self.pip.positionAtDepth(slowDepth, start=globalStart)
-                path.append((safePos, "slow", True, RETRACTION_TO_AVOID_SAMPLE_TEAR))
-                # the rest of this method continues as if safePos is the starting point
-                globalStart = safePos
-
-        # ensure lateral motion occurs as far away from the recording chamber as possible
-        localStart = self.pip.mapFromGlobal(path[-1][0])
-        localStop = self.pip.mapFromGlobal(globalStop)
-
-        # sort endpoints into inner (closer to sample) and outer (farther from sample)
-        diff = localStop - localStart
-        inward = diff[0] > 0
-        innerPos, outerPos = (localStop, localStart) if inward else (localStart, localStop)
-
-        # consider two possible waypoints, pick the one closer to the inner position
-        pitch = self.pip.pitchRadians()
-        localDirection = np.array([np.cos(pitch), 0, -np.sin(pitch)])
-        if localDirection[0] == 0 or localDirection[2] == 0:
-            raise ValueError(f"Invalid pipette pitch {pitch}; cannot compute approach waypoints.")
-        waypoint1 = innerPos - localDirection * abs((diff[0] / localDirection[0]))
-        waypoint2 = innerPos - localDirection * abs((diff[2] / localDirection[2]))
-        dist1 = np.linalg.norm(waypoint1 - innerPos)
-        dist2 = np.linalg.norm(waypoint2 - innerPos)
-        waypoint = self.pip.mapToGlobal(waypoint1 if dist1 < dist2 else waypoint2)
-
-        # break up the inner segment if part of it needs to be slower
-        if inward:
-            slowpath = self.enforceSafeSpeed(waypoint, globalStop, speed, explanation, linear=True)
-            path += [(waypoint, speed, False, APPROACH_WAYPOINT)] + slowpath
-        else:
-            slowpath = self.enforceSafeSpeed(
-                globalStart, waypoint, speed, APPROACH_WAYPOINT, linear=True
-            )
-            path += slowpath + [(globalStop, speed, False, explanation)]
-
-        path = path[1:]  # trim off the start position
-        for globalPos, speed, linear, stepName in path:
-            if not np.isfinite(globalPos).all():
-                raise ValueError(
-                    f"Invalid position {globalPos} for step '{stepName}' in path from {globalStart} to {globalStop}"
-                )
-            try:
-                # what global position should we ask the stage to move to in order for the pipette tip to reach globalPos
-                manipulatorGlobalPos = self.pip._solveGlobalStagePosition(globalPos)
-                # ask the stage to check whether this position is reachable
-                self.manipulator.checkGlobalLimits(manipulatorGlobalPos, linear)
-            except Exception as e:
-                adapter.setPathError([globalStart] + [p[0] for p in path], failed_at=globalPos)
-                raise ValueError(
-                    f"Moving {self.pip} to '{stepName}' would be beyond the limits of its manipulator: {e}"
-                ) from e
-        adapter.setPath([globalStart] + [p[0] for p in path])
-        return path
-
-    def enforceSafeSpeed(self, start, stop, speed, explanation, linear):
-        """Given global start/stop positions and a desired speed, return a path that reduces the speed for segments that
-        are close to the sample.
-        """
-        if speed == "slow":
-            # already slow; no need for extra steps
-            return [(stop, speed, linear, explanation)]
-
-        slowDepth = self.pip.approachDepth()
-        startSlow = start[2] < slowDepth
-        stopSlow = stop[2] < slowDepth
-        if startSlow and stopSlow:
-            # all slow
-            return [(stop, "slow", linear, explanation)]
-        elif not startSlow and not stopSlow:
-            return [(stop, speed, linear, explanation)]
-        else:
-            waypoint = self.pip.positionAtDepth(slowDepth, start=start)
-            if startSlow:
-                return [
-                    (waypoint, "slow", linear, SAFE_SPEED_WAYPOINT),
-                    (stop, speed, linear, explanation),
-                ]
-            else:
-                return [
-                    (waypoint, speed, linear, SAFE_SPEED_WAYPOINT),
-                    (stop, "slow", linear, explanation),
-                ]
-
-    def safeYZPosition(self, start, margin=2e-3):
-        """Return a position to travel to, beginning from *start*, where the pipette may freely move in the local YZ
-        plane without hitting obstacles (in particular the objective lens).
-        """
-        start = np.asarray(start)
-
-        # where is the objective?
-        scope = self.pip.scopeDevice()
-        obj = scope.currentObjective
-        objRadius = obj.radius
-        assert (
-            objRadius is not None
-        ), "Can't determine safe location; radius of objective lens is not configured."
-        localFocus = self.pip.mapFromGlobal(scope.globalPosition())
-
-        # safe position along local x axis
-        safeX = localFocus[0] - objRadius - margin
-
-        # return starting position if it is already safe
-        localStart = self.pip.mapFromGlobal(start)
-        if localStart[0] < safeX:
-            return start
-
-        # best way to get to safe position
-        dx = safeX - localStart[0]
-        localDir = self.pip.localDirection()
-        safePos = localStart + localDir * (dx / localDir[0])
-
-        return self.pip.mapToGlobal(safePos)
-
-
-class GeometryAwarePathGenerator(PipettePathGenerator):
-    def __init__(self, pip: Pipette):
-        super().__init__(pip)
-        self._cachePrimer = self._primeCaches()
-        self._cachePrimer.raiseErrors("error priming path planning caches")
-
-    def _getPlanningContext(self):
-        man = getManager()
-        geometries = {}
-        for dev in man.listInterfaces("OptomechDevice"):
-            dev = man.getDevice(dev)
-            # TODO what if one of these devices is actively moving?
-            if dev == self.pip:
-                continue
-            geom = dev.getGeometry()
-            if geom is not None:
-                pg_xform = dev.globalPhysicalTransform().as_pyqtgraph()
-                physical_xform = SRT3DTransform.from_pyqtgraph(
-                    pg_xform,
-                    from_cs=dev.geometryCacheKey,
-                    to_cs="global",
-                )
-                geometries[geom] = physical_xform
-        planner = GeometryMotionPlanner(geometries)
-        pg_xform = self.pip.globalPhysicalTransform().as_pyqtgraph()
-        from_pip_to_global = SRT3DTransform.from_pyqtgraph(
-            pg_xform,
-            from_cs=self.pip.geometryCacheKey,
-            to_cs="global",
-        )
-        return planner, from_pip_to_global
-
-    @future_wrap
-    def _primeCaches(self, _future):
-        try:
-            man = getManager()
-            while not man.isReady.wait(0.05):
-                _future.checkStop()
-            mod = man.getOrLoadModule("Visualize3D")
-            while not mod.isReady.wait(0.05):
-                _future.checkStop()
-            viz = mod.window().findAdapter(lambda a: a.device == self.pip).pathSearchVisualizer()
-            planner, from_pip_to_global = self._getPlanningContext()
-            planner.make_convolved_obstacles(self.pip.getGeometry(), from_pip_to_global, viz)
-            self.pip.logger.info("Finished priming path finding cache")
-        except RuntimeError:
-            self.pip.logger.exception("Blew up while attempting to prime path finding cache")
-
-    def _planAroundSurface(self, pos):
-        surface = self.pip.approachDepth()
-        if pos[2] >= surface:
-            return None
-        return self.pip.positionAtDepth(surface, start=pos)
-
-    def safePath(self, globalStart, globalStop, speed, explanation=None):
-        self._cachePrimer.wait()
-
-        boundaries = self.pip.getBoundaries()
-        surface = self.pip.scopeDevice().getSurfaceDepth()
-        boundaries += [Plane((0, 0, 1), (0, 0, surface), "sample surface")]
-        prepend_path = append_path = []
-        error_explanation = f"Move '{explanation}' could not be planned:"
-        initial_waypoint = self._planAroundSurface(globalStart)
-        if initial_waypoint is not None:
-            prepend_path = [(initial_waypoint, "slow", False, RETRACTION_TO_AVOID_SAMPLE_TEAR)]
-            globalStart = initial_waypoint
-        final_waypoint = self._planAroundSurface(globalStop)
-        if final_waypoint is not None:
-            append_path = [(globalStop, "slow", False, explanation)]
-            explanation = WAYPOINT_TO_AVOID_SAMPLE_TEAR
-            globalStop = final_waypoint
-
-        win = getManager().getOrLoadModule("Visualize3D").window()
-        viz = win.findAdapter(lambda a: a.device == self.pip).pathSearchVisualizer()
-        planner, from_pip_to_global = self._getPlanningContext()
-        try:
-            path = planner.find_path(
-                self.pip.getGeometry(),
-                from_pip_to_global,
-                globalStart,
-                globalStop,
-                boundaries,
-                visualizer=viz,
-            )
-        except Exception as e:
-            viz.focus()
-            raise ValueError(f"{error_explanation} {e}") from e
-        if len(path) == 0:
-            path = [(globalStop, speed, False, explanation)]
-        else:
-            path = [(waypoint, speed, False, OBSTACLE_AVOIDANCE) for waypoint in path]
-            goal = path.pop()
-            path += [(goal[0], speed, False, explanation)]
-        path = prepend_path + path + append_path
-        if viz:
-            viz.endPath([globalStart] + [p[0] for p in path])
-        return path
-
-
 class DefaultMotionPlanner(MotionPlanner):
     """Generic, likely-safe motion planner. Assumes an upright scope and thick sample tissue.
 
@@ -283,6 +27,9 @@ class DefaultMotionPlanner(MotionPlanner):
       1. InteractionSite interaction  — enforce approach->interact order; add approach waypoint on exit
       2. Pipette move                 — avoid objective, move slowly near sample surface
       3. Generic device move          — single atomic move
+
+    Path generation for pipette moves lives on this class (see _safe_path and friends).
+    GeometryAwareMotionPlanner is a subclass that overrides _safe_path with obstacle avoidance.
 
     Sites may set ``directAccess: true`` in their config to skip approach-waypoint enforcement.
     Use this for the recording chamber.  Clean wells and nucleus tubes should leave it unset.
@@ -293,6 +40,10 @@ class DefaultMotionPlanner(MotionPlanner):
     def __init__(self, config=None):
         super().__init__(config)
 
+    # ------------------------------------------------------------------
+    # Device reservation
+    # ------------------------------------------------------------------
+
     def collect_devices(self, plan) -> set:
         devices = super().collect_devices(plan)
         # scope position must be stable while pipette path-finding runs
@@ -302,6 +53,10 @@ class DefaultMotionPlanner(MotionPlanner):
                 if scope is not None:
                     devices.add(scope)
         return devices
+
+    # ------------------------------------------------------------------
+    # Planning entry point
+    # ------------------------------------------------------------------
 
     def plan(self, specs, name=""):
         return SequentialGroup([self._plan_one(spec, name) for spec in specs], name or "motion plan")
@@ -316,6 +71,10 @@ class DefaultMotionPlanner(MotionPlanner):
             return self._plan_pipette_move(spec, name)
         return self._plan_generic(spec, name)
 
+    # ------------------------------------------------------------------
+    # Device type detection
+    # ------------------------------------------------------------------
+
     @staticmethod
     def _is_interaction_site(device) -> bool:
         return (
@@ -324,7 +83,7 @@ class DefaultMotionPlanner(MotionPlanner):
 
     @staticmethod
     def _is_pipette(device) -> bool:
-        return hasattr(device, "approachDepth") and hasattr(device, "pathGenerator")
+        return hasattr(device, "approachDepth") and hasattr(device, "positionAtDepth")
 
     def _find_containing_site(self, pip):
         """Return the first interaction site that geometrically contains the pipette tip, or None.
@@ -350,9 +109,8 @@ class DefaultMotionPlanner(MotionPlanner):
         """Generate waypoints to reach an InteractionSite target.
 
         Approach = site origin (site.globalPosition()).  If spec.position is non-zero the
-        pipette is going deeper into the site: an approach waypoint is prepended and the
-        pipette's position is tracked so it can exit cleanly.  Sites with ``directAccess: true``
-        skip this enforcement and move directly to the target.
+        pipette is going deeper into the site: an approach waypoint is prepended.
+        Sites with ``directAccess: true`` skip this enforcement and move directly to the target.
         """
         site = spec.relative_to
         pip = spec.device
@@ -366,16 +124,16 @@ class DefaultMotionPlanner(MotionPlanner):
         start = np.array(pip.globalPosition())
 
         if not going_inside:
-            waypoints = pip.pathGenerator.safePath(start, approach_global, speed)
+            waypoints = self._safe_path(pip, start, approach_global, speed)
             steps = [AtomicMove(pip, pos, spd, expl) for pos, spd, _, expl in waypoints]
             return SequentialGroup(steps, name or f"approach {site.name()}")
 
         if direct_access:
-            waypoints = pip.pathGenerator.safePath(start, target_global, speed)
+            waypoints = self._safe_path(pip, start, target_global, speed)
             steps = [AtomicMove(pip, pos, spd, expl) for pos, spd, _, expl in waypoints]
             return SequentialGroup(steps, name or f"move to {site.name()}")
 
-        to_approach = pip.pathGenerator.safePath(start, approach_global, speed)
+        to_approach = self._safe_path(pip, start, approach_global, speed)
         to_approach_steps = [AtomicMove(pip, pos, spd, expl) for pos, spd, _, expl in to_approach]
         interact_step = AtomicMove(pip, target_global, speed, name or f"interact with {site.name()}")
         return SequentialGroup(
@@ -395,7 +153,7 @@ class DefaultMotionPlanner(MotionPlanner):
 
         exit_step = AtomicMove(pip, approach_global, speed, f"exit site before {name or 'move'}")
         target = np.asarray(spec.position, dtype=float)
-        rest_waypoints = pip.pathGenerator.safePath(approach_global, target, speed)
+        rest_waypoints = self._safe_path(pip, approach_global, target, speed)
         rest_steps = [AtomicMove(pip, pos, spd, expl) for pos, spd, _, expl in rest_waypoints]
         return SequentialGroup(
             [exit_step] + rest_steps,
@@ -407,12 +165,12 @@ class DefaultMotionPlanner(MotionPlanner):
     # ------------------------------------------------------------------
 
     def _plan_pipette_move(self, spec: MoveSpec, name: str = "") -> MovePlanStep:
-        """Generate safe waypoints using the pipette's own path generator."""
+        """Generate safe waypoints using the planner's path generator."""
         pip = spec.device
         target = np.asarray(spec.position, dtype=float)
         speed = spec.speed or "fast"
         start = np.array(pip.globalPosition())
-        waypoints = pip.pathGenerator.safePath(start, target, speed)
+        waypoints = self._safe_path(pip, start, target, speed)
         steps = [AtomicMove(pip, pos, spd, expl) for pos, spd, _linear, expl in waypoints]
         return SequentialGroup(steps, name or "pipette move")
 
@@ -428,3 +186,115 @@ class DefaultMotionPlanner(MotionPlanner):
             else spec.position
         )
         return AtomicMove(spec.device, global_pos, spec.speed or "fast", name or "move to target")
+
+    # ------------------------------------------------------------------
+    # Path generation — override in subclasses for geometry-aware routing
+    # ------------------------------------------------------------------
+
+    def _safe_path(self, pip, globalStart, globalStop, speed, explanation=None):
+        """Return a list of (position, speed, linear, explanation) waypoints from start to stop.
+
+        Assumes upright scope (objective avoidance) and thick sample (slow axial motion near tissue).
+        Override in subclasses (e.g. GeometryAwareMotionPlanner) for full obstacle avoidance.
+        The returned path does not include the starting position.
+        """
+        man = getManager()
+        mod = man.getOrLoadModule("Visualize3D")
+        adapter = mod.window().findAdapter(lambda a: a.device == pip)
+        explanation = explanation or MOVE_TO_DESTINATION
+        globalStart = np.asarray(globalStart)
+        globalStop = np.asarray(globalStop)
+        path = [(globalStart, "", False, "")]
+
+        # retract first if we are doing a lateral movement inside the sample
+        lateralDist = np.linalg.norm(globalStop[1:] - globalStart[1:])
+        if lateralDist > 1e-6:
+            slowDepth = pip.approachDepth()
+            canMoveLaterally = globalStart[2] > slowDepth or globalStop[2] > slowDepth
+            if not canMoveLaterally:
+                safePos = pip.positionAtDepth(slowDepth, start=globalStart)
+                path.append((safePos, "slow", True, RETRACTION_TO_AVOID_SAMPLE_TEAR))
+                globalStart = safePos
+
+        # ensure lateral motion occurs as far away from the recording chamber as possible
+        localStart = pip.mapFromGlobal(path[-1][0])
+        localStop = pip.mapFromGlobal(globalStop)
+
+        diff = localStop - localStart
+        inward = diff[0] > 0
+        innerPos, outerPos = (localStop, localStart) if inward else (localStart, localStop)
+
+        pitch = pip.pitchRadians()
+        localDirection = np.array([np.cos(pitch), 0, -np.sin(pitch)])
+        if localDirection[0] == 0 or localDirection[2] == 0:
+            raise ValueError(f"Invalid pipette pitch {pitch}; cannot compute approach waypoints.")
+        waypoint1 = innerPos - localDirection * abs((diff[0] / localDirection[0]))
+        waypoint2 = innerPos - localDirection * abs((diff[2] / localDirection[2]))
+        dist1 = np.linalg.norm(waypoint1 - innerPos)
+        dist2 = np.linalg.norm(waypoint2 - innerPos)
+        waypoint = pip.mapToGlobal(waypoint1 if dist1 < dist2 else waypoint2)
+
+        if inward:
+            slowpath = self._enforce_safe_speed(pip, waypoint, globalStop, speed, explanation, linear=True)
+            path += [(waypoint, speed, False, APPROACH_WAYPOINT)] + slowpath
+        else:
+            slowpath = self._enforce_safe_speed(pip, globalStart, waypoint, speed, APPROACH_WAYPOINT, linear=True)
+            path += slowpath + [(globalStop, speed, False, explanation)]
+
+        path = path[1:]
+        for globalPos, spd, linear, stepName in path:
+            if not np.isfinite(globalPos).all():
+                raise ValueError(
+                    f"Invalid position {globalPos} for step '{stepName}' in path from {globalStart} to {globalStop}"
+                )
+            try:
+                manipulatorGlobalPos = pip._solveGlobalStagePosition(globalPos)
+                pip.parentDevice().checkGlobalLimits(manipulatorGlobalPos, linear)
+            except Exception as e:
+                adapter.setPathError([globalStart] + [p[0] for p in path], failed_at=globalPos)
+                raise ValueError(
+                    f"Moving {pip} to '{stepName}' would be beyond the limits of its manipulator: {e}"
+                ) from e
+        adapter.setPath([globalStart] + [p[0] for p in path])
+        return path
+
+    def _enforce_safe_speed(self, pip, start, stop, speed, explanation, linear):
+        """Return path segments with speed reduced for portions near the sample surface."""
+        if speed == "slow":
+            return [(stop, speed, linear, explanation)]
+        slowDepth = pip.approachDepth()
+        startSlow = start[2] < slowDepth
+        stopSlow = stop[2] < slowDepth
+        if startSlow and stopSlow:
+            return [(stop, "slow", linear, explanation)]
+        if not startSlow and not stopSlow:
+            return [(stop, speed, linear, explanation)]
+        waypoint = pip.positionAtDepth(slowDepth, start=start)
+        if startSlow:
+            return [
+                (waypoint, "slow", linear, SAFE_SPEED_WAYPOINT),
+                (stop, speed, linear, explanation),
+            ]
+        return [
+            (waypoint, speed, linear, SAFE_SPEED_WAYPOINT),
+            (stop, "slow", linear, explanation),
+        ]
+
+    def _safe_yz_position(self, pip, start, margin=2e-3):
+        """Return a position where the pipette can freely move in its local YZ plane."""
+        start = np.asarray(start)
+        scope = pip.scopeDevice()
+        obj = scope.currentObjective
+        objRadius = obj.radius
+        assert objRadius is not None, "Can't determine safe location; objective radius not configured."
+        localFocus = pip.mapFromGlobal(scope.globalPosition())
+        safeX = localFocus[0] - objRadius - margin
+        localStart = pip.mapFromGlobal(start)
+        if localStart[0] < safeX:
+            return start
+        dx = safeX - localStart[0]
+        localDir = pip.localDirection()
+        safePos = localStart + localDir * (dx / localDir[0])
+        return pip.mapToGlobal(safePos)
+
+

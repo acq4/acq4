@@ -2,8 +2,6 @@
 # Mock devices expose the position/transform APIs the planner needs without real hardware.
 from __future__ import annotations
 
-from unittest.mock import MagicMock
-
 import numpy as np
 import pytest
 
@@ -57,13 +55,6 @@ class MockPipette(MockDevice):
         self._approach_depth = approach_depth
         self._scope = MockScope("scope", global_pos=(0.0, 0.0, 10e-3))
         self._parent_stage = MockStage("manipulator")
-
-        # Default: one-step path straight to the target; override per-test as needed.
-        self.pathGenerator = MagicMock()
-        self.pathGenerator.safePath.side_effect = (
-            lambda start, stop, speed, explanation=None:
-            [(np.asarray(stop, dtype=float), speed, False, explanation or "move")]
-        )
 
     def approachDepth(self):
         return self._approach_depth

@@ -11,7 +11,12 @@ from acq4.motion.tests.conftest import MockDevice, MockInteractionSite, MockPipe
 
 def make_planner():
     from acq4.motion.minirig_v1 import MinirigV1MotionPlanner
-    return MinirigV1MotionPlanner()
+
+    class _TestPlanner(MinirigV1MotionPlanner):
+        def _safe_path(self, pip, globalStart, globalStop, speed, explanation=None):
+            return [(np.asarray(globalStop, dtype=float), speed, False, explanation or "move")]
+
+    return _TestPlanner()
 
 
 def _flat_moves(plan):
