@@ -425,7 +425,7 @@ class PatchPipetteState(Future):
                 if move_fut is None or restart_move or last_destination is None:
                     restart_move = False
                     if continuous:
-                        move_fut = self.dev.pipetteDevice._moveToGlobal(current_target_pos, speed=speed, name="Update move towards target")
+                        move_fut = self.dev.pipetteDevice.moveToGlobalNoPlanning(current_target_pos, speed=speed, name="Update move towards target")
                     else:
                         move_fut = self.dev.pipetteDevice.stepwiseAdvance(
                             target=current_target_pos,

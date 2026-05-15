@@ -1,8 +1,8 @@
 import numpy as np
 
 import pyqtgraph as pg
-from acq4 import getManager
 from acq4.modules.Camera import CameraModuleInterface
+from acq4.motion import MoveSpec
 from acq4.util import Qt
 from .Device import Device
 from .OptomechDevice import OptomechDevice
@@ -107,13 +107,13 @@ class InteractionSite(Device, OptomechDevice):
     def globalPosition(self):
         return self.mapToGlobal(np.asarray([0, 0, 0]))
 
-    def moveToGlobal(self, pos, speed, **kwds):
+    def moveToGlobalNoPlanning(self, pos, speed, **kwds):
         """Move the parent stage so that this site's origin arrives at *pos* in global coordinates."""
         if self._parentStage is None:
             raise RuntimeError(f"{self.name()} has no parent Stage device and cannot be moved.")
         dif = np.asarray(pos) - self.globalPosition()
         stage_pos = np.asarray(self._parentStage.globalPosition()) + dif
-        return self._parentStage.moveToGlobal(stage_pos, speed, **kwds)
+        return self._parentStage.moveToGlobalNoPlanning(stage_pos, speed, **kwds)
 
     def containsPoint(self, pt, tolerance=1e-9):
         """Return True if the x,y,z coordinates in *pt* lie within the boundaries of this site."""
@@ -180,20 +180,18 @@ class InteractionSite(Device, OptomechDevice):
         Delegates to the global motion planner, which handles scope parking, approach sequencing,
         and device reservation.
         """
-        from acq4.motion import MoveSpec
-        return getManager().move(MoveSpec(other, np.array([0.0, 0.0, 0.0]), relative_to=self, speed=speed))
+        return self.dm.move(MoveSpec(other, np.array([0.0, 0.0, 0.0]), relative_to=self, speed=speed))
 
     def moveToApproach(self, other, speed='fast'):
         """Move this site and *other* to their saved approach position.
 
         Delegates to the global motion planner.
         """
-        from acq4.motion import MoveSpec
         pos_config = self.positions.get(other.name(), {})
         if 'site global' not in pos_config:
             raise RuntimeError(f"No approach position saved for {other.name()} at {self.name()}")
         approach_global = np.array(pos_config['site global'])
-        return getManager().move(MoveSpec(other, approach_global, speed=speed))
+        return self.dm.move(MoveSpec(other, approach_global, speed=speed))
 
 
 def _fmt_pos(pos):
@@ -249,7 +247,7 @@ class InteractionSiteDeviceGui(Qt.QWidget):
     def _populatePipettes(self):
         from .Pipette.pipette import Pipette
 
-        man = getManager()
+        man = self.dm
         pipettes = [name for name in man.listDevices() if isinstance(man.getDevice(name), Pipette)]
         has_pipettes = bool(pipettes)
         for name in pipettes:
@@ -264,7 +262,7 @@ class InteractionSiteDeviceGui(Qt.QWidget):
         name = self.pipetteCombo.currentText()
         if not name:
             return None
-        return getManager().getDevice(name)
+        return self.dm.getDevice(name)
 
     def _saveApproach(self):
         pip = self._selectedPipette()

@@ -1,17 +1,21 @@
-# DefaultMotionPlanner: rig-agnostic motion planning for pipettes, interaction sites, and
-# generic devices.  Scope-parking or other rig-specific sequencing belongs in a subclass.
+# DefaultMotionPlanner: fairly generic motion planning for pipettes, interaction sites, and
+# stages.  Any rig-specific sequencing belongs in a subclass.
 from __future__ import annotations
-
-from typing import TYPE_CHECKING
 
 import numpy as np
 
 from .plan import AtomicMove, ParallelGroup, SequentialGroup
+from .plan import MovePlanStep
 from .planner import MotionPlanner, PlanningError
+from .spec import MoveSpec
 
-if TYPE_CHECKING:
-    from .plan import MovePlanStep
-    from .spec import MoveSpec
+RETRACTION_TO_AVOID_SAMPLE_TEAR = "retracting away from sample"
+WAYPOINT_TO_AVOID_SAMPLE_TEAR = "waypoint to avoid sample tear"
+MOVE_TO_DESTINATION = "final move to destination"
+OBSTACLE_AVOIDANCE = "intermediate waypoint to avoid obstacles"
+APPROACH_WAYPOINT = "approach waypoint"
+SAFE_SPEED_WAYPOINT = "safe speed waypoint"
+APPROACH_TO_CORRECT_FOR_HYSTERESIS = "hysteresis correction waypoint"
 
 
 class DefaultMotionPlanner(MotionPlanner):
@@ -118,10 +122,10 @@ class DefaultMotionPlanner(MotionPlanner):
 
     def _plan_generic(self, spec: "MoveSpec") -> "MovePlanStep":
         """Resolve relative positions and emit a single AtomicMove."""
-        if not hasattr(spec.device, "moveToGlobal") and not hasattr(spec.device, "setGlobalPosition"):
+        if not hasattr(spec.device, "moveToGlobalNoPlanning") and not hasattr(spec.device, "setGlobalPosition"):
             raise PlanningError(
                 f"Device {spec.device!r} has no movement capability "
-                f"(no moveToGlobal or setGlobalPosition)."
+                f"(no moveToGlobalNoPlanning or setGlobalPosition)."
             )
 
         global_pos = (

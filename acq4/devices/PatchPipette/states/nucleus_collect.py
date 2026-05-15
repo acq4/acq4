@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import numpy as np
-
 from acq4 import getManager
 from acq4.motion import MoveSpec
 from acq4.util.future import future_wrap
@@ -25,6 +23,7 @@ class NucleusCollectState(PatchPipetteState):
         Protocol to use for sonication (default "expel"), or if supported, the full protocol definition for a custom
         protocol.
     """
+
     stateName = 'collect'
 
     _parameterDefaultOverrides = {
@@ -41,6 +40,7 @@ class NucleusCollectState(PatchPipetteState):
     def __init__(self, *args, **kwds):
         self.currentFuture = None
         self.sonication = None
+        self.startPos = None
         super().__init__(*args, **kwds)
 
     def run(self):
@@ -54,7 +54,7 @@ class NucleusCollectState(PatchPipetteState):
         self.startPos = pip.globalPosition()
         well = pip.getNucleusDepositionWell()
         if well is not None:
-            self.waitFor(man.move(MoveSpec(pip, np.array([0.0, 0.0, 0.0]), relative_to=well, speed='fast')), timeout=60)
+            self.waitFor(well.moveToInteract(pip), timeout=60)
         else:
             self.waitFor(pip.moveTo('collect', speed='fast'), timeout=None)
 
@@ -78,12 +78,6 @@ class NucleusCollectState(PatchPipetteState):
 
         return {"state": 'out'}
 
-    def resetPosition(self, _future=None):
-        pip = self.dev.pipetteDevice
-        if self.isDone():
-            # self.waitFor([pip._moveToGlobal(self.approachPos, speed='fast')])
-            _future.waitFor(pip._moveToGlobal(self.startPos, speed='fast', name='return to start position'), timeout=None)
-
     @future_wrap
     def _cleanup(self, _future):
         try:
@@ -98,7 +92,9 @@ class NucleusCollectState(PatchPipetteState):
             self.dev.logger.exception("Error resetting pressure after collection")
 
         try:
-            self.resetPosition(_future)
+            if self.startPos is not None:
+                pip = self.dev.pipetteDevice
+                _future.waitFor(pip.dm.move(MoveSpec(pip, self.startPos, speed='fast')), timeout=60)
         except Exception:
             self.dev.logger.exception("Error resetting pipette position after collection")
 

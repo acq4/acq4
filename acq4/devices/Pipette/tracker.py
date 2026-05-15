@@ -504,7 +504,7 @@ class CorrelationPipetteTracker(PipetteTracker):
                         offsets.append(offset)
 
                         # move manipulator
-                        mfut = self.pipette._moveToGlobal(pos + offset, speed, name=f"{self.pipette.name()} tracker calibration step {i}")
+                        mfut = self.pipette.moveToGlobalNoPlanning(pos + offset, speed, name=f"{self.pipette.name()} tracker calibration step {i}")
 
                         # move camera
                         if moveStageXY:
@@ -549,7 +549,7 @@ class CorrelationPipetteTracker(PipetteTracker):
 
                     # step back to actual target position
                     try:
-                        self.pipette._moveToGlobal(pos, speed, name=f"{self.pipette.name()} tracker calibration return to target").wait(updates=True)
+                        self.pipette.moveToGlobalNoPlanning(pos, speed, name=f"{self.pipette.name()} tracker calibration return to target").wait(updates=True)
                     except RuntimeError as exc:
                         misses += 1
                         logger.exception("Manipulator missed target:")
@@ -562,7 +562,7 @@ class CorrelationPipetteTracker(PipetteTracker):
                     if dlg.wasCanceled():
                         return None
         finally:
-            self.pipette._moveToGlobal(start, "fast", name=f"{self.pipette.name()} tracker calibration return to start")
+            self.pipette.moveToGlobalNoPlanning(start, "fast", name=f"{self.pipette.name()} tracker calibration return to start")
             self.pipette.scopeDevice().setFocusDepth(start[2], "fast", name=f"{self.pipette.scopeDevice().name()} tracker calibration return focus to start")
 
         self.errorMap = {

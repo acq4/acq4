@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from acq4 import getManager
-from acq4.motion import MoveSpec
 from acq4.util.future import future_wrap
 from pyqtgraph import units
 from ._base import PatchPipetteState
@@ -62,7 +61,7 @@ class CleanState(PatchPipetteState):
         assert len(sequence) > 0
 
         cw = pip.getCleaningWell()
-        self.waitFor(man.move(MoveSpec(pip, [0.0, 0.0, 0.0], relative_to=cw, speed='fast')), timeout=60)
+        self.waitFor(cw.moveToInteract(pip), timeout=60)
 
         if dev.sonicatorDevice is not None:
             self.sonication = dev.sonicatorDevice.doProtocol(config['sonicationProtocol'])

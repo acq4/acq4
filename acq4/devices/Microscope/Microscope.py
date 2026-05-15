@@ -247,7 +247,7 @@ class Microscope(Device, OptomechDevice):
 
         # and this is where it needs to go
         fdpos[2] += dif
-        return fd.moveToGlobal(fdpos, speed, name=name)
+        return fd.moveToGlobalNoPlanning(fdpos, speed, name=name)
 
     def getDefaultImager(self):
         name = self.config.get('defaultImager', None)
@@ -331,7 +331,7 @@ class Microscope(Device, OptomechDevice):
         gpos = self.globalPosition()
         sgpos = positionDevice.globalPosition()
         sgpos2 = sgpos + (pos - gpos)
-        xyFuture = positionDevice.moveToGlobal(sgpos2, speed, name=f'{name} XY')
+        xyFuture = positionDevice.moveToGlobalNoPlanning(sgpos2, speed, name=f'{name} XY')
         if zFuture is None:
             return xyFuture
         else:

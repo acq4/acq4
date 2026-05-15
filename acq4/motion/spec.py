@@ -22,7 +22,7 @@ class MoveSpec:
     device: "Device"
     position: np.ndarray
     relative_to: Optional["Device"] = None
-    speed: Optional[str] = None
+    speed: str | float = None
 
     def __post_init__(self):
         self.position = np.asarray(self.position, dtype=float)

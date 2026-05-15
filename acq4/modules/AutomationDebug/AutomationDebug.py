@@ -10,10 +10,6 @@ from acq4.devices.Camera import Camera
 from acq4.devices.Microscope import Microscope
 from acq4.devices.PatchPipette import PatchPipette
 from acq4.devices.Pipette import Pipette
-from acq4.devices.Pipette.planners import (
-    PipettePathGenerator,
-    GeometryAwarePathGenerator,
-)
 from acq4.logging_config import get_logger
 from acq4.modules.Module import Module
 from acq4.util import Qt
@@ -89,10 +85,6 @@ class AutomationDebugWindow(Qt.QWidget):
             future_producer=self._detector._addCellFromTarget, stoppable=True
         )
 
-        self.ui.motionPlannerSelector.currentIndexChanged.connect(
-            self._changeMotionPlanner
-        )
-
         self.ui.rankCellsBtn.clicked.connect(self._detector._rankCells)
         self.ui.selectRankDirBtn.clicked.connect(self._detector._selectRankDir)
 
@@ -109,11 +101,9 @@ class AutomationDebugWindow(Qt.QWidget):
         self.ui.autoTargetBtn.setOpts(future_producer=self._autoTarget, stoppable=True)
         self.ui.autoTargetBtn.sigFinished.connect(self._handleAutoFinish)
 
-        self._motionPlanners = {}
         for name, dev in self.module.manager.devices.items():
             if isinstance(dev, Pipette):
                 self.ui.pipetteSelector.addItem(name)
-                self._motionPlanners[(name, dev.pathGeneratorClass)] = dev.pathGenerator
             elif isinstance(dev, Camera):
                 self.ui.cameraSelector.addItem(name)
 
@@ -156,8 +146,6 @@ class AutomationDebugWindow(Qt.QWidget):
         self.ui.reuseLastCellBtn.clicked.connect(self._reuseAllCells)
 
         self.show()
-        planner = self.module.config.get("motionPlanner", "Objective radius only")
-        self.ui.motionPlannerSelector.setCurrentText(planner)
         # Set default ranking dir
         default_rank_dir = (
             Path(self.module.manager.getBaseDir().name()) / "ranked_cells"
@@ -332,20 +320,6 @@ class AutomationDebugWindow(Qt.QWidget):
         # x = random.uniform(self._xLeftSpin.value(), self._xRightSpin.value())
         # y = random.uniform(self._yBottomSpin.value(), self._yTopSpin.value())
         # return x, y
-
-    def _changeMotionPlanner(self, idx):
-        name = self.ui.motionPlannerSelector.currentText()
-        planner = {
-            "Geometry-aware": GeometryAwarePathGenerator,
-            "Objective radius only": PipettePathGenerator,
-        }[name]
-        Pipette.pathGeneratorClass = planner
-        for name, dev in self.module.manager.devices.items():
-            if isinstance(dev, Pipette):
-                cache_key = (dev.name(), planner)
-                if cache_key not in self._motionPlanners:
-                    self._motionPlanners[cache_key] = planner(dev)
-                dev.pathGenerator = self._motionPlanners[cache_key]
 
     def quit(self):
         self.close()

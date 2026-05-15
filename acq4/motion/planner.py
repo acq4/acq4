@@ -1,17 +1,12 @@
 # MotionPlanner ABC: plan() produces a pure-data tree; execute() reserves devices and runs it.
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 from acq4 import getManager
 from acq4.util.future import future_wrap
-
 from .executor import execute_plan
+from .plan import SequentialGroup, ParallelGroup, AtomicMove
 from .plan import collect_devices
-
-if TYPE_CHECKING:
-    from .plan import SequentialGroup
-    from .spec import MoveSpec
+from .spec import MoveSpec
 
 
 class PlanningError(Exception):
@@ -22,7 +17,7 @@ class MotionPlanner:
     def __init__(self, config=None):
         self.config = config or {}
 
-    def plan(self, specs: list["MoveSpec"]) -> "SequentialGroup":
+    def plan(self, specs: list["MoveSpec"]) -> SequentialGroup | AtomicMove | ParallelGroup:
         """Return a plan tree without executing anything.
 
         May read device positions and write to internal state (e.g. scope context),

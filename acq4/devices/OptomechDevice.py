@@ -682,7 +682,7 @@ class OptomechDevice(InterfaceMixin):
             raise ValueError(f"Device {dev} is not connected to a focus controller.")
         dz = depth - self.getFocusDepth()
         dpos = dev.globalPosition()
-        return dev.moveToGlobal([dpos[0], dpos[1], dpos[2] + dz], speed, name=name)
+        return dev.moveToGlobalNoPlanning([dpos[0], dpos[1], dpos[2] + dz], speed, name=name)
 
     def getFocusDevice(self):
         """Return the device that provides focus capabilities for this device."""

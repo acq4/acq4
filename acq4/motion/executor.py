@@ -8,11 +8,11 @@ from .plan import AtomicMove, ParallelGroup, SequentialGroup
 
 def _move_device(device, position, speed, name):
     """Call the appropriate movement primitive on a device."""
-    if hasattr(device, "moveToGlobal"):
-        return device.moveToGlobal(position, speed, name=name)
+    if hasattr(device, "moveToGlobalNoPlanning"):
+        return device.moveToGlobalNoPlanning(position, speed, name=name)
     if hasattr(device, "setGlobalPosition"):
         return device.setGlobalPosition(position, speed, name=name)
-    raise RuntimeError(f"Device {device!r} has no moveToGlobal or setGlobalPosition method")
+    raise RuntimeError(f"Device {device!r} has no moveToGlobalNoPlanning or setGlobalPosition method")
 
 
 @future_wrap
@@ -27,6 +27,12 @@ def execute_plan(plan, _future=None):
         # Start all branches before waiting for any of them.
         futures = [execute_plan(step) for step in plan.steps]
         for f in futures:
-            _future.waitFor(f)
+            try:
+                _future.waitFor(f)
+            except Exception:
+                for f2 in futures:
+                    if not f2.isDone():
+                        f2.stop("error in parallel movements")
+                raise
     else:
         raise TypeError(f"Unknown plan node type: {type(plan)}")

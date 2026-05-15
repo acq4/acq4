@@ -9,7 +9,7 @@ import pytest
 
 
 class MockDevice:
-    """Minimal device mock: fixed global position, records moveToGlobal calls."""
+    """Minimal device mock: fixed global position, records moveToGlobalNoPlanning calls."""
 
     def __init__(self, name, global_pos=(0.0, 0.0, 0.0)):
         self._name = name
@@ -22,7 +22,7 @@ class MockDevice:
     def globalPosition(self):
         return self._global_pos.copy()
 
-    def moveToGlobal(self, pos, speed, name=None, **kwargs):
+    def moveToGlobalNoPlanning(self, pos, speed, name=None, **kwargs):
         self.moves.append((np.asarray(pos, dtype=float), speed, name))
 
     def mapToGlobal(self, local_pos):
@@ -84,7 +84,7 @@ class MockPipette(MockDevice):
     def parentDevice(self):
         return self._parent_stage
 
-    def _moveToGlobal(self, pos, speed, name=None, **kwargs):
+    def _moveToGlobalNoPlanning(self, pos, speed, name=None, **kwargs):
         self.moves.append((np.asarray(pos, dtype=float), speed, name))
 
 
