@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from acq4 import getManager
+from acq4.motion import MoveSpec
 from acq4.util.future import future_wrap
 from pyqtgraph import units
 from ._base import PatchPipetteState
@@ -47,36 +49,12 @@ class CleanState(PatchPipetteState):
         super().__init__(*args, **kwds)
 
     def run(self):
-        # self.monitorTestPulse() # check for later to see if needed
-
         config = self.config.copy()
         dev = self.dev
         pip = dev.pipetteDevice
+        man = getManager()
 
         self.setState('cleaning')
-
-        # for stage in ('clean', 'rinse'):
-        #     self.checkStop()
-        #
-        #     sequence = config[f'{stage}Sequence']
-        #     if isinstance(sequence, str):
-        #         sequence = eval(sequence, units.__dict__)
-        #     if len(sequence) == 0:
-        #         continue
-        #
-        #
-        #
-        #     self.waitFor(pip.moveTo(stage, "fast"), timeout=30)
-        #
-        #     if dev.sonicatorDevice is not None:
-        #         self.sonication = dev.sonicatorDevice.doProtocol(config['sonicationProtocol'])
-        #
-        #     for pressure, delay in sequence:
-        #         dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
-        #         self.sleep(delay)
-        #
-        #     if self.sonication is not None and not self.sonication.isDone():
-        #         self.waitFor(self.sonication)
 
         sequence = config['cleanSequence']
         if isinstance(sequence, str):
@@ -84,7 +62,7 @@ class CleanState(PatchPipetteState):
         assert len(sequence) > 0
 
         cw = pip.getCleaningWell()
-        self.waitFor(cw.moveToInteract(pip), timeout=60)
+        self.waitFor(man.move(MoveSpec(pip, [0.0, 0.0, 0.0], relative_to=cw, speed='fast')), timeout=60)
 
         if dev.sonicatorDevice is not None:
             self.sonication = dev.sonicatorDevice.doProtocol(config['sonicationProtocol'])
@@ -96,12 +74,9 @@ class CleanState(PatchPipetteState):
         if self.sonication is not None and not self.sonication.isDone():
             self.waitFor(self.sonication)
 
-        self.waitFor(cw.moveToApproach(pip))
-
         dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
 
-        self.waitFor(pip.parentStage.goHome('fast'))
-        self.waitFor(cw._unwindKludgePath(pip))
+        self.waitFor(pip.goHome())
 
         dev.pipetteRecord()['cleanCount'] += 1
         dev.setTipClean(True)

@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import numpy as np
+
+from acq4 import getManager
+from acq4.motion import MoveSpec
 from acq4.util.future import future_wrap
 from pyqtgraph import units
 from ._base import PatchPipetteState
@@ -43,16 +47,16 @@ class NucleusCollectState(PatchPipetteState):
         config = self.config.copy()
         dev = self.dev
         pip = dev.pipetteDevice
+        man = getManager()
 
         self.setState('nucleus collection')
 
         self.startPos = pip.globalPosition()
         well = pip.getNucleusDepositionWell()
         if well is not None:
-            self.waitFor(well.moveToInteract(pip), timeout=60)
+            self.waitFor(man.move(MoveSpec(pip, np.array([0.0, 0.0, 0.0]), relative_to=well, speed='fast')), timeout=60)
         else:
-            self.collectionPos = pip.loadPosition('collect')
-            self.waitFor(pip._moveToGlobal(self.collectionPos, speed='fast', name=f"{pip.name()} move to nucleus collection position"), timeout=None)
+            self.waitFor(pip.moveTo('collect', speed='fast'), timeout=None)
 
         if dev.sonicatorDevice is not None:
             self.sonication = dev.sonicatorDevice.doProtocol(config['sonicationProtocol'])
@@ -70,9 +74,7 @@ class NucleusCollectState(PatchPipetteState):
 
         dev.pipetteRecord()['expelled_nucleus'] = True
 
-        if well is not None:
-            self.waitFor(well.moveToApproach(pip))
-            self.waitFor(well._unwindKludgePath(pip))
+        self.waitFor(pip.goHome())
 
         return {"state": 'out'}
 

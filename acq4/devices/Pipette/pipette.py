@@ -218,20 +218,28 @@ class Pipette(Device, OptomechDevice):
     def moveTo(self, position: str, speed, raiseErrors=False, **kwds):
         """Move the pipette tip to a named position, with safe motion planning.
 
+        If the position is a stored global coordinate, the global motion planner handles it.
+        Computed positions (approach, target, search, aboveTarget) use the per-pipette planner
+        system until those are migrated.
+
         If *raiseErrors* is True, then an exception will be raised in a background
         thread if the move fails.
         """
-        # Select a motion planner based on the target position
+        from acq4.motion import MoveSpec
+
+        saved_pos = self.loadPosition(position)
+        if saved_pos is not None:
+            future = getManager().move(MoveSpec(self, np.asarray(saved_pos, dtype=float), speed=speed))
+            if raiseErrors is not False:
+                future.raiseErrors(
+                    message=f"Move to {position} position failed ({{error}}); requested from:\n{{stack}}"
+                )
+            return future
+
+        # Fall back to per-pipette planner for computed positions (approach, target, search, etc.)
         plannerClass = self.motionPlanners.get(
             position, self.defaultMotionPlanners.get(position, None)
         )
-        if plannerClass is None:
-            savedPos = self.loadPosition(position)
-            if savedPos is not None:
-                plannerClass = self.motionPlanners.get(
-                    'saved', self.defaultMotionPlanners.get('saved', None)
-                )
-
         if plannerClass is None:
             raise ValueError(f"Unknown pipette move position {position!r}")
 
@@ -554,8 +562,19 @@ class Pipette(Device, OptomechDevice):
         return self.pitchAngle() * np.pi / 180.0
 
     def goHome(self, speed='fast', **kwds):
-        """Extract pipette tip diagonally, then move to home position."""
-        return self.moveTo('home', speed=speed, **kwds)
+        """Extract pipette tip diagonally, then move to home position.
+
+        Always routes through the global motion planner so that scope unwind and other
+        post-interaction cleanup steps are included when needed.
+        """
+        from acq4.motion import MoveSpec
+        manipulator = self.parentDevice()
+        manip_home = manipulator.homePosition()
+        if manip_home is None:
+            raise RuntimeError(f"No home position defined for {manipulator.name()}")
+        global_move = np.asarray(manip_home) - np.asarray(manipulator.globalPosition())
+        end_pos = np.asarray(self.globalPosition()) + global_move
+        return getManager().move(MoveSpec(self, end_pos, speed=speed))
 
     def goSearch(self, speed='fast', distance=0, **kwds):
         return self.moveTo('search', speed=speed, distance=distance, **kwds)

@@ -7,7 +7,7 @@ from acq4.util import Qt
 from .Device import Device
 from .OptomechDevice import OptomechDevice
 from .Stage import Stage
-from ..util.future import future_wrap, Future
+from ..util.future import Future
 from ..util.target import color_for_diff
 
 
@@ -30,7 +30,6 @@ class InteractionSite(Device, OptomechDevice):
         Device.__init__(self, dm, config, name)
         self.radius = config["radius"]
         self.height = config.get("height")
-        self._approach_scope_path: tuple | None = None
         if self.height is None:
             raise ValueError(f"{self.name()} must have a height specified in config")
         OptomechDevice.__init__(self, dm, config, name)
@@ -175,64 +174,26 @@ class InteractionSite(Device, OptomechDevice):
         tr.rotation = (np.degrees(angle), axis)
         self.setDeviceTransform(tr)
 
-    @future_wrap
-    def moveToInteract(self, other, speed='fast', _future=None):
-        if other.name() not in self.positions:
-            raise RuntimeError(f"No positions saved for {other.name()} at {self.name()}")
-        pos_config = self.positions[other.name()]
-        if 'interact global' not in pos_config:
-            raise RuntimeError(f"No interact position saved for {other.name()} at {self.name()}")
-        _future.waitFor(self.moveToApproach(other, speed))
-        _future.waitFor(other._moveToGlobal(pos_config['interact global'], speed=speed, name=f"move {other.name()} to interact with {self.name()}"))
+    def moveToInteract(self, other, speed='fast'):
+        """Move this site and *other* (typically a pipette) to their interact position.
 
-    @future_wrap
-    def moveToApproach(self, other, speed='fast', _future=None):
-        """Move this site and the pipette to the approach position.
-
-        If 'scopeParkPos' is set in the device config and no scope path is currently stored, the
-        scope is moved out of the way first: straight up to park_z, then laterally to scopeParkPos.
-        The path is stored in self._approach_scope_path for reversal by _unwindKludgePath.
-
-        On the return trip (when _approach_scope_path is already set), only the site and pipette
-        move — the scope is left at its park position until _unwindKludgePath is called.
+        Delegates to the global motion planner, which handles scope parking, approach sequencing,
+        and device reservation.
         """
-        if other.name() not in self.positions:
-            raise RuntimeError(f"No positions saved for {other.name()} at {self.name()}")
-        pos_config = self.positions[other.name()]
+        from acq4.motion import MoveSpec
+        return getManager().move(MoveSpec(other, np.array([0.0, 0.0, 0.0]), relative_to=self, speed=speed))
+
+    def moveToApproach(self, other, speed='fast'):
+        """Move this site and *other* to their saved approach position.
+
+        Delegates to the global motion planner.
+        """
+        from acq4.motion import MoveSpec
+        pos_config = self.positions.get(other.name(), {})
         if 'site global' not in pos_config:
-            raise RuntimeError(f"No site global position saved for {other.name()} at {self.name()}")
+            raise RuntimeError(f"No approach position saved for {other.name()} at {self.name()}")
         approach_global = np.array(pos_config['site global'])
-
-        if 'scopeParkPos' in self.config and self._approach_scope_path is None:
-            scope = other.scopeDevice()
-            start_pos = np.array(scope.globalPosition())
-            park_pos = np.array(self.config['scopeParkPos'])
-            up_pos = np.array([start_pos[0], start_pos[1], park_pos[2]])
-            self._approach_scope_path = (scope, [start_pos, up_pos, park_pos])
-            _future.waitFor(scope.setGlobalPosition(up_pos, 20e-3, name=f"scope up before {self.name()} approach"))
-            _future.waitFor(scope.setGlobalPosition(park_pos, 20e-3, name=f"scope to park for {self.name()} approach"))
-            site_move = self.moveToGlobal(approach_global, speed=speed, name=f"move {self.name()} to approach {other.name()}")
-            _future.waitFor(other.retractFromSurface('fast'))
-            _future.waitFor(other._moveToGlobal([0, 0, 10e-3], 'fast', name=f"safe position before {self.name()}"))
-            _future.waitFor(site_move)
-        else:
-            _future.waitFor(self.moveToGlobal(approach_global, speed=speed, name=f"move {self.name()} to approach {other.name()}"), timeout=120)
-
-        _future.waitFor(other._moveToGlobal(approach_global, speed=speed, name=f"move {other.name()} to approach {self.name()}"), timeout=120)
-
-    @future_wrap
-    def _unwindKludgePath(self, other, _future=None):
-        """Reverse the scope path stored during the last moveToApproach call.
-
-        Call this after moveToApproach (the return trip) and after the pipette stage has gone home,
-        so the scope returns to its original position only once the stage is clear.
-        """
-        if self._approach_scope_path is None:
-            return
-        scope, path = self._approach_scope_path
-        for wp in reversed(path):
-            _future.waitFor(scope.setGlobalPosition(np.array(wp), 20e-3, name=f"return scope from {self.name()}"))
-        self._approach_scope_path = None
+        return getManager().move(MoveSpec(other, approach_global, speed=speed))
 
 
 def _fmt_pos(pos):

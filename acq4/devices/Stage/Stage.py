@@ -643,10 +643,11 @@ class Stage(Device, OptomechDevice):
         return self.getStoredLocation('home')
 
     def goHome(self, speed='fast'):
+        from acq4.motion import MoveSpec
         homePos = self.homePosition()
         if homePos is None:
             raise RuntimeError(f"No home position set for {self.name()}")
-        return self.moveToGlobal(homePos, speed=speed, name='go home')
+        return getManager().move(MoveSpec(self, np.asarray(homePos, dtype=float), speed=speed))
 
     def setHomePosition(self):
         """Set the home position in global coordinates."""
