@@ -108,9 +108,9 @@ class DefaultMotionPlanner(MotionPlanner):
     def _plan_interaction_approach(self, spec: MoveSpec, name: str = "") -> MovePlanStep:
         """Generate waypoints to reach an InteractionSite target.
 
-        Approach = site origin (site.globalPosition()).  If spec.position is non-zero the
-        pipette is going deeper into the site: an approach waypoint is prepended.
-        Sites with ``directAccess: true`` skip this enforcement and move directly to the target.
+        Approach = site origin (site.globalPosition()).  If the site is on a movable stage,
+        a parallel group repositions the stage while the pipette rises to a safe height.
+        Sites with ``directAccess: true`` skip approach-waypoint enforcement.
         """
         site = spec.relative_to
         pip = spec.device
@@ -123,21 +123,33 @@ class DefaultMotionPlanner(MotionPlanner):
 
         start = np.array(pip.globalPosition())
 
-        if not going_inside:
-            waypoints = self._safe_path(pip, start, approach_global, speed)
-            steps = [AtomicMove(pip, pos, spd, expl) for pos, spd, _, expl in waypoints]
-            return SequentialGroup(steps, name or f"approach {site.name()}")
+        # If the site has a movable stage, reposition it (and raise pip) before approaching.
+        site_spec = site.approachMoveSpec(pip, speed=speed)
+        prefix_steps = []
+        if site_spec is not None:
+            safe_z = pip.positionAtDepth(pip.approachDepth(), start=start)
+            prefix_steps = [
+                ParallelGroup(
+                    [
+                        self._plan_generic(site_spec, f"position {site.name()}"),
+                        AtomicMove(pip, safe_z, speed, "pip to safe height"),
+                    ],
+                    f"reposition {site.name()} and lift pip",
+                )
+            ]
+            start = safe_z
 
-        if direct_access:
-            waypoints = self._safe_path(pip, start, target_global, speed)
+        if not going_inside or direct_access:
+            final = approach_global if not going_inside else target_global
+            waypoints = self._safe_path(pip, start, final, speed)
             steps = [AtomicMove(pip, pos, spd, expl) for pos, spd, _, expl in waypoints]
-            return SequentialGroup(steps, name or f"move to {site.name()}")
+            return SequentialGroup(prefix_steps + steps, name or f"approach {site.name()}")
 
         to_approach = self._safe_path(pip, start, approach_global, speed)
         to_approach_steps = [AtomicMove(pip, pos, spd, expl) for pos, spd, _, expl in to_approach]
         interact_step = AtomicMove(pip, target_global, speed, name or f"interact with {site.name()}")
         return SequentialGroup(
-            to_approach_steps + [interact_step],
+            prefix_steps + to_approach_steps + [interact_step],
             name or f"interact with {site.name()}",
         )
 

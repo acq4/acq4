@@ -148,7 +148,32 @@ class InteractionSite(Device, OptomechDevice):
         else:
             self.setLocalOrigin(other.globalPosition())
         self.positions[other.name()]['site global'] = self.globalPosition()
+        if self._parentStage is not None:
+            self.positions[other.name()]['stage approach'] = list(self._parentStage.globalPosition())
         self.writeConfigFile(self.positions, "saved_positions")
+
+    def approachMoveSpec(self, pip, speed='fast'):
+        """Return a MoveSpec to move this site's parent stage to the approach position, or None.
+
+        Returns None for fixed sites (no parent stage or no saved stage position).
+        The returned spec is included by the motion planner so the site repositions in
+        parallel with the pipette being raised to a safe height.
+        """
+        if self._parentStage is None:
+            return None
+        pos_config = self.positions.get(pip.name(), {})
+        stage_pos = pos_config.get('stage approach')
+        if stage_pos is None:
+            return None
+        return MoveSpec(self._parentStage, np.asarray(stage_pos, dtype=float), speed=speed)
+
+    def interactLocalFor(self, pip):
+        """Return the interact position in this site's local frame, or None if not calibrated."""
+        pos_config = self.positions.get(pip.name(), {})
+        interact_global = pos_config.get('interact global')
+        if interact_global is None:
+            return None
+        return self.mapFromGlobal(np.asarray(interact_global, dtype=float))
 
     def _inferAngle(self, a, b):
         """Given two global points, infer the rotation of the site that would be needed to align
@@ -180,10 +205,9 @@ class InteractionSite(Device, OptomechDevice):
         Delegates to the global motion planner, which handles scope parking, approach sequencing,
         and device reservation.
         """
-        pos_config = self.positions.get(other.name(), {})
-        if 'interact global' not in pos_config:
+        interact_local = self.interactLocalFor(other)
+        if interact_local is None:
             raise RuntimeError(f"No interact position saved for {other.name()} at {self.name()}")
-        interact_local = self.mapFromGlobal(np.array(pos_config['interact global']))
         return self.dm.move(
             MoveSpec(other, interact_local, relative_to=self, speed=speed),
             name=f"interact with {self.name()}",

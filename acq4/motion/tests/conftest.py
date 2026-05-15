@@ -112,6 +112,16 @@ class MockInteractionSite(MockDevice):
             "interact local": list(interact_local),
         }
 
+    def approachMoveSpec(self, pip, speed='fast'):
+        """Fixed mock site — no stage repositioning needed."""
+        return None
+
+    def interactLocalFor(self, pip):
+        pos_config = self.positions.get(pip.name(), {})
+        if "interact local" not in pos_config:
+            return None
+        return np.asarray(pos_config["interact local"], dtype=float)
+
 
 @pytest.fixture
 def pip():

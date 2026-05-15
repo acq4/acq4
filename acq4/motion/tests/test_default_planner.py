@@ -10,7 +10,7 @@ import pytest
 from acq4.motion.plan import AtomicMove, ParallelGroup, SequentialGroup
 from acq4.motion.planner import PlanningError
 from acq4.motion.spec import MoveSpec
-from acq4.motion.tests.conftest import MockDevice, MockInteractionSite, MockPipette, MockScope
+from acq4.motion.tests.conftest import MockDevice, MockInteractionSite, MockPipette, MockScope, MockStage
 
 
 def make_planner():
@@ -181,6 +181,43 @@ def test_direct_access_site_skips_approach_waypoint(pip, site_with_direct_access
     assert not any(
         np.allclose(m.position, approach_global) for m in pip_moves[:-1]
     )
+
+
+def test_movable_site_stage_repositioned_before_approach(pip):
+    """If approachMoveSpec returns a spec, the stage is moved in parallel with pip rising."""
+    from acq4.motion.spec import MoveSpec as _MoveSpec
+    stage = MockStage("well_stage", (3e-3, 0.0, 0.0))
+    site = MockInteractionSite("cleanwell", global_pos=(5e-3, 0.0, -2e-3))
+    site.save_positions_for(pip, np.array([0.0, 0.0, -1e-3]))
+    stage_target = np.array([4e-3, 0.0, 0.0])
+    site.approachMoveSpec = lambda p, speed='fast': _MoveSpec(stage, stage_target, speed=speed)
+
+    planner = make_planner()
+    interact_local = np.array(site.positions[pip.name()]["interact local"])
+    plan = planner.plan([_MoveSpec(pip, interact_local, relative_to=site)])
+    moves = _flat_moves(plan)
+
+    stage_moves = [m for m in moves if m.device is stage]
+    pip_moves = [m for m in moves if m.device is pip]
+
+    assert len(stage_moves) >= 1
+    # stage move must precede the approach
+    first_stage = min(i for i, m in enumerate(moves) if m.device is stage)
+    first_pip_approach = min(
+        i for i, m in enumerate(moves)
+        if m.device is pip and np.allclose(m.position, site.globalPosition(), atol=1e-9)
+    )
+    assert first_stage < first_pip_approach
+
+
+def test_fixed_site_no_stage_move(pip, site):
+    """Fixed sites (approachMoveSpec returns None) produce no stage move."""
+    planner = make_planner()
+    interact_local = np.array(site.positions[pip.name()]["interact local"])
+    plan = planner.plan([MoveSpec(pip, interact_local, relative_to=site)])
+    moves = _flat_moves(plan)
+    stage_moves = [m for m in moves if isinstance(m.device, MockStage)]
+    assert len(stage_moves) == 0
 
 
 def test_interaction_site_no_scope_moves_in_default_planner(pip, site_with_scope_park):
