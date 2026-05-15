@@ -253,7 +253,7 @@ class InteractionSiteDeviceGui(Qt.QWidget):
     def _populatePipettes(self):
         from .Pipette.pipette import Pipette
 
-        man = self.dm
+        man = self.dev.dm
         pipettes = [name for name in man.listDevices() if isinstance(man.getDevice(name), Pipette)]
         has_pipettes = bool(pipettes)
         for name in pipettes:
@@ -268,7 +268,7 @@ class InteractionSiteDeviceGui(Qt.QWidget):
         name = self.pipetteCombo.currentText()
         if not name:
             return None
-        return self.dm.getDevice(name)
+        return self.dev.dm.getDevice(name)
 
     def _saveApproach(self):
         pip = self._selectedPipette()
