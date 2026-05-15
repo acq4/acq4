@@ -23,7 +23,6 @@ from coorx import AffineTransform, TTransform
 from pyqtgraph import Point, siFormat
 from pyqtgraph import opengl as gl
 from .planners import PipettePathGenerator
-from .planners import defaultMotionPlanners
 from .tracker import ResnetPipetteTracker
 from ..Camera import Camera
 from ..InteractionSite import InteractionSite
@@ -124,8 +123,6 @@ class Pipette(Device, OptomechDevice):
     sigMoveFinished = Qt.Signal(object, object)  # self, pos
     sigMoveRequested = Qt.Signal(object, object, object, object)  # self, pos, speed, opts
 
-    # May add items here to implement custom motion planning for all pipettes
-    defaultMotionPlanners = defaultMotionPlanners()
     pathGeneratorClass = PipettePathGenerator
 
     def __init__(self, deviceManager, config, name):
@@ -218,41 +215,47 @@ class Pipette(Device, OptomechDevice):
     def moveTo(self, position: str, speed, raiseErrors=False, **kwds):
         """Move the pipette tip to a named position, with safe motion planning.
 
-        If the position is a stored global coordinate, the global motion planner handles it.
-        Computed positions (approach, target, search, aboveTarget) use the per-pipette planner
-        system until those are migrated.
+        Named computed positions (home, search, approach, target, aboveTarget, idle) delegate to
+        the corresponding go*() method which resolves the target coordinate(s) and calls the
+        global motion planner.  Stored positions use the global planner directly.
+        Custom per-pipette planners registered in self.motionPlanners take priority.
 
-        If *raiseErrors* is True, then an exception will be raised in a background
-        thread if the move fails.
+        If *raiseErrors* is True, then an exception will be raised if the move fails.
         """
         from acq4.motion import MoveSpec
 
-        saved_pos = self.loadPosition(position)
-        if saved_pos is not None:
-            future = getManager().move(MoveSpec(self, np.asarray(saved_pos, dtype=float), speed=speed))
+        # Custom per-pipette planner overrides take highest priority.
+        if position in self.motionPlanners:
+            if self.currentMotionPlanner is not None:
+                self.currentMotionPlanner.stop()
+            self.currentMotionPlanner = self.motionPlanners[position](self, position, speed, **kwds)
+            future = self.currentMotionPlanner.move()
             if raiseErrors is not False:
                 future.raiseErrors(
                     message=f"Move to {position} position failed ({{error}}); requested from:\n{{stack}}"
                 )
             return future
 
-        # Fall back to per-pipette planner for computed positions (approach, target, search, etc.)
-        plannerClass = self.motionPlanners.get(
-            position, self.defaultMotionPlanners.get(position, None)
-        )
-        if plannerClass is None:
-            raise ValueError(f"Unknown pipette move position {position!r}")
+        go_methods = {
+            'home': lambda: self.goHome(speed=speed),
+            'search': lambda: self.goSearch(speed=speed, **kwds),
+            'approach': lambda: self.goApproach(speed=speed),
+            'target': lambda: self.goTarget(speed=speed),
+            'aboveTarget': lambda: self.goAboveTarget(speed=speed),
+            'idle': lambda: self.goIdle(speed=speed),
+        }
+        if position in go_methods:
+            future = go_methods[position]()
+        else:
+            saved_pos = self.loadPosition(position)
+            if saved_pos is None:
+                raise ValueError(f"Unknown pipette move position {position!r}")
+            future = getManager().move(MoveSpec(self, np.asarray(saved_pos, dtype=float), speed=speed))
 
-        if self.currentMotionPlanner is not None:
-            self.currentMotionPlanner.stop()
-
-        self.currentMotionPlanner = plannerClass(self, position, speed, **kwds)
-        future = self.currentMotionPlanner.move()
         if raiseErrors is not False:
             future.raiseErrors(
                 message=f"Move to {position} position failed ({{error}}); requested from:\n{{stack}}"
             )
-
         return future
 
     def savePosition(self, name, pos=None):
@@ -576,23 +579,91 @@ class Pipette(Device, OptomechDevice):
         end_pos = np.asarray(self.globalPosition()) + global_move
         return getManager().move(MoveSpec(self, end_pos, speed=speed))
 
-    def goSearch(self, speed='fast', distance=0, **kwds):
-        return self.moveTo('search', speed=speed, distance=distance, **kwds)
+    @future_wrap
+    def goSearch(self, speed='fast', distance=0, _future=None, **kwds):
+        """Focus the scope above the surface, then move the tip to the search position.
+
+        *distance* adjusts the position along the pipette axis relative to the camera center.
+        """
+        from acq4.motion import MoveSpec
+        man = getManager()
+        scope = self.scopeDevice()
+        cam = self.imagingDevice()
+
+        surfaceDepth = scope.getSurfaceDepth()
+        if surfaceDepth is None:
+            raise ValueError("Cannot determine search position; surface depth is not defined.")
+        searchDepth = surfaceDepth + self._opts["searchHeight"]
+
+        # Move scope focus up if needed; pip must wait for the objective to clear.
+        if cam.getFocusDepth() < searchDepth:
+            scope_pos = np.array(scope.globalPosition())
+            scope_pos[2] = searchDepth
+            _future.waitFor(man.move(MoveSpec(scope, scope_pos, speed=speed)))
+
+        globalCenter = cam.globalCenterPosition("roi")
+        globalCenter[2] += self._opts["searchTipHeight"] - self._opts["searchHeight"]
+        target = globalCenter + self.globalDirection() * distance
+
+        _future.waitFor(man.move(MoveSpec(self, target, speed=speed)))
 
     def goApproach(self, speed, **kwds):
-        """Move the electrode tip such that it is 100um above the sample surface with its
-        axis aligned to the target.
-        """
-        return self.moveTo('approach', speed=speed, **kwds)
-
-    def goIdle(self, speed='fast', **kwds):
-        return self.moveTo('idle', speed=speed, **kwds)
+        """Move the tip to approach depth above the target, aligned along the pipette axis."""
+        from acq4.motion import MoveSpec
+        approach_pos = self.positionAtDepth(self.approachDepth(), start=self.targetPosition())
+        return getManager().move(MoveSpec(self, approach_pos, speed=speed))
 
     def goTarget(self, speed, **kwds):
-        return self.moveTo('target', speed=speed, **kwds)
+        """Move the tip to the current target position."""
+        from acq4.motion import MoveSpec
+        return getManager().move(MoveSpec(self, self.targetPosition(), speed=speed))
 
-    def goAboveTarget(self, speed, **kwds):
-        return self.moveTo('aboveTarget', speed=speed, **kwds)
+    @future_wrap
+    def goAboveTarget(self, speed, _future=None, **kwds):
+        """Move the tip to above the target for calibration, then recenter the scope.
+
+        The tip arrives via a short hysteresis-correction approach (100 µm back along the
+        pipette axis) before settling at the final position.
+        """
+        from acq4.motion import MoveSpec
+        man = getManager()
+        scope = self.scopeDevice()
+
+        target = self.targetPosition()
+        surfaceDepth = scope.getSurfaceDepth()
+        above_target = np.array(target)
+        above_target[2] = max(surfaceDepth, target[2]) + 50e-6
+
+        # Approach from 100 µm back along the pipette axis to normalize hysteresis.
+        hysteresis_wp = above_target + self.globalDirection() * -100e-6
+        _future.waitFor(man.move(MoveSpec(self, hysteresis_wp, speed=speed)))
+        _future.waitFor(man.move(
+            MoveSpec(self, above_target, speed=speed),
+            MoveSpec(scope, above_target, speed=speed),
+        ))
+
+    @future_wrap
+    def goIdle(self, speed='fast', _future=None, **kwds):
+        """Move the tip to the idle position at the edge of the recording chamber."""
+        from acq4.motion import MoveSpec
+        man = getManager()
+        scope = self.scopeDevice()
+
+        surface = scope.getSurfaceDepth()
+        if surface is None:
+            raise ValueError("Surface depth has not been set.")
+        idleDepth = surface + self._opts["idleHeight"]
+
+        # Retract along the axis first if the tip is below idle depth.
+        pos = self.globalPosition()
+        if pos[2] < idleDepth:
+            idle_axial = self.positionAtDepth(idleDepth)
+            _future.waitFor(man.move(MoveSpec(self, idle_axial, speed=speed)))
+
+        angle = self.yawRadians()
+        ds = self._opts["idleDistance"]
+        idle_pos = np.array([-ds * np.cos(angle), -ds * np.sin(angle), idleDepth])
+        _future.waitFor(man.move(MoveSpec(self, idle_pos, speed=speed)))
 
     def _movePath(self, path, name=None) -> MovePathFuture:
         """
