@@ -4,8 +4,7 @@ from __future__ import annotations
 from acq4 import getManager
 from acq4.util.future import future_wrap
 from .executor import execute_plan
-from .plan import SequentialGroup, ParallelGroup, AtomicMove
-from .plan import collect_devices
+from .plan import MovePlanStep, collect_devices
 from .spec import MoveSpec
 
 
@@ -17,7 +16,7 @@ class MotionPlanner:
     def __init__(self, config=None):
         self.config = config or {}
 
-    def plan(self, specs: list["MoveSpec"]) -> SequentialGroup | AtomicMove | ParallelGroup:
+    def plan(self, specs: list[MoveSpec]) -> MovePlanStep:
         """Return a plan tree without executing anything.
 
         May read device positions and write to internal state (e.g. scope context),
@@ -26,7 +25,7 @@ class MotionPlanner:
         raise NotImplementedError
 
     @future_wrap
-    def execute(self, specs: list["MoveSpec"], _future=None):
+    def execute(self, specs: list[MoveSpec], _future=None):
         """Plan and execute, holding device locks for the duration."""
         plan = self.plan(specs)
         devices = collect_devices(plan)

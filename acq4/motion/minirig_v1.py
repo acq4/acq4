@@ -3,16 +3,12 @@
 # nucleus deposition tubes).  The scope path is reversed when the pipette goes home.
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 import numpy as np
 
 from .default_planner import DefaultMotionPlanner
 from .plan import AtomicMove, SequentialGroup
-
-if TYPE_CHECKING:
-    from .plan import MovePlanStep
-    from .spec import MoveSpec
+from .plan import MovePlanStep
+from .spec import MoveSpec
 
 
 class MinirigV1MotionPlanner(DefaultMotionPlanner):
@@ -77,10 +73,7 @@ class MinirigV1MotionPlanner(DefaultMotionPlanner):
         scope, forward_path = self._scope_context.pop(pip_name)
         # forward_path = [original, up, park]; return path = [up, original]
         return_waypoints = list(reversed(forward_path))[1:]
-        scope_steps = [
-            AtomicMove(scope, wp, "fast", "scope return")
-            for wp in return_waypoints
-        ]
+        scope_steps = [AtomicMove(scope, wp, "fast", "scope return") for wp in return_waypoints]
         return SequentialGroup(
             base.steps + [SequentialGroup(scope_steps, "scope unwind")],
             base.explanation,
