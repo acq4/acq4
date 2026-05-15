@@ -6,8 +6,9 @@ from acq4.devices.Camera import Camera
 from acq4.util import Qt
 from acq4.util.future import future_wrap
 from acq4.util.imaging.sequencer import acquire_z_stack
+from acq4 import getManager
+from acq4.motion import MoveSpec
 from .pipette import Pipette
-from .planners import PipetteMotionPlanner
 
 
 _z_stack_detection_window = None
@@ -232,9 +233,7 @@ def findNewPipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=0.
         pipY /= np.linalg.norm(pipY)
         searchPos1 = center + pipVector * 1e-3 + pipY * 1e-3
         searchPos2 = center + pipVector * 1e-3 - pipY * 1e-3
-        # using a planner avoids possible collisions with the objective
-        planner = PipetteMotionPlanner(pipette, searchPos1, speed='fast', name=f"{pipette.name()} auto-calibrate search")
-        _future.waitFor(planner.move())
+        _future.waitFor(getManager().move(MoveSpec(pipette, searchPos1, speed='fast')))
 
         # collect background images, analyze noise
         with imager.ensureRunning():

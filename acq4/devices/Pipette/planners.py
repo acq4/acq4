@@ -1,7 +1,11 @@
+# Path generators and base motion planner for the Pipette device.
+# High-level named-position logic (goHome, goApproach, etc.) lives in pipette.py;
+# the global motion planner (acq4.motion) orchestrates multi-device movement.
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Union
 
+import numpy as np
 import pyqtgraph as pg
 from acq4.util.future import future_wrap
 from coorx import SRT3DTransform
@@ -20,12 +24,10 @@ APPROACH_WAYPOINT = "approach waypoint"
 SAFE_SPEED_WAYPOINT = "safe speed waypoint"
 APPROACH_TO_CORRECT_FOR_HYSTERESIS = "hysteresis correction waypoint"
 
-import numpy as np
-
 
 def qmatrix4x4_to_vispy_srt(qt_matrix):
     """Convert QMatrix4x4 to a SRT3DTransform."""
-    np_matrix = np.array(qt_matrix.data()).reshape((4, 4))  # .T?
+    np_matrix = np.array(qt_matrix.data()).reshape((4, 4))
     translation = np_matrix[:3, 3]
 
     rotation_scale_matrix = np_matrix[:3, :3]
@@ -39,9 +41,9 @@ def qmatrix4x4_to_vispy_srt(qt_matrix):
 
     def get_angle_axis():
         axes = [
-            (1, 0, 0),  # x-axis
-            (0, 1, 0),  # y-axis
-            (0, 0, 1),  # z-axis
+            (1, 0, 0),
+            (0, 1, 0),
+            (0, 0, 1),
         ]
 
         for axis_idx, axis in enumerate(axes):
@@ -57,11 +59,10 @@ def qmatrix4x4_to_vispy_srt(qt_matrix):
 
             angle = np.degrees(np.arctan2(sin_val, cos_val))
 
-            # Check if the angle is meaningful (not close to zero)
             if not np.isclose(angle, 0, atol=1e-5):
                 return angle, axis
 
-        return 0, (0, 0, 1)  # default to no rotation
+        return 0, (0, 0, 1)
 
     angle, axis = get_angle_axis()
     return SRT3DTransform(offset=translation, scale=scale, angle=angle, axis=axis)
@@ -295,7 +296,6 @@ class GeometryAwarePathGenerator(PipettePathGenerator):
                 globalStop,
                 boundaries,
                 visualizer=viz,
-                # callback=viz.updatePath,
             )
         except Exception as e:
             viz.focus()
@@ -313,11 +313,11 @@ class GeometryAwarePathGenerator(PipettePathGenerator):
 
 
 class PipetteMotionPlanner:
-    """Pipette motion planners are responsible for safely executing movement of the pipette and (optionally) the
-    microscope focus to specific locations.
+    """Base class for custom per-pipette motion planner overrides.
 
-    For example, moving to a pipette search position involves setting the focus to a certain height, followed by
-    positioning the pipette tip at that height and in the field of view.
+    Register subclasses in Pipette.motionPlanners to handle specific named positions with
+    custom logic.  All standard named positions are handled by the go*() methods on Pipette
+    which delegate to the global motion planner (acq4.motion).
     """
 
     def __init__(self, pip: Pipette, position: Union[np.ndarray, str], speed: float | str, **kwds):
@@ -326,20 +326,16 @@ class PipetteMotionPlanner:
         self.speed = speed
         self.kwds = kwds
         self.name = kwds.get("name", self._default_name())
-
         self.future = None
-
-        # wrap safePath for convenience
         self.safePath = self.pip.pathGenerator.safePath
 
     def _default_name(self):
         return "move"
 
     def move(self):
-        """Move the pipette to the requested named position and return a Future"""
+        """Execute the planned move and return a Future."""
         if self.future is not None:
             self.stop()
-
         self.future = self._move()
         return self.future
 
@@ -357,251 +353,3 @@ class PipetteMotionPlanner:
         else:
             endPosGlobal = self.position
         return self.safePath(startPosGlobal, endPosGlobal, self.speed)
-
-
-class SavedPositionMotionPlanner(PipetteMotionPlanner):
-    """Move to a saved position"""
-
-    def _default_name(self):
-        return f"move to {self.position}"
-
-    def path(self):
-        startPosGlobal = self.pip.globalPosition()
-        endPosGlobal = self.pip.loadPosition(self.position)
-        return self.safePath(startPosGlobal, endPosGlobal, self.speed)
-
-
-class CleanMotionPlanner(SavedPositionMotionPlanner):
-    def _default_name(self):
-        return f"move to {self.position}ing well"
-
-    def path(self):
-        if isinstance(self.pip.pathGenerator, GeometryAwarePathGenerator):
-            return super().path()
-
-        pip = self.pip
-        startPos = pip.globalPosition()
-        safePos = pip.pathGenerator.safeYZPosition(startPos)
-        initial_path = []
-
-        if self.position == "clean":
-            # retract to safe position for visiting cleaning wells
-            initial_path = pip.pathGenerator.safePath(startPos, safePos, 'fast')
-
-        wellPos = pip.loadPosition(self.position)
-        if wellPos is None:
-            raise ValueError(f"Device {pip.name()} does not have a stored {self.position} position.")
-
-        # lift up, then sideways, then down into well
-        waypoint1 = safePos.copy()
-        waypoint1[2] = wellPos[2] + pip.cleanApproachHeight
-
-        # move Y first
-        waypoint2 = waypoint1.copy()
-        waypoint2[1] = wellPos[1]
-
-        # now move X
-        waypoint3 = waypoint2.copy()
-        waypoint3[0] = wellPos[0]
-
-        path = [
-            (waypoint1, 'fast', False, f"{self.position}ing well approach height ({waypoint1[2]} z)"),
-            (waypoint2, 'fast', True, f"match y for {self.position}ing well"),
-            (waypoint3, 'fast', True, f"above the {self.position}ing well"),
-            (wellPos, 'fast', False, f"into the {self.position}ing well"),
-        ]
-        return initial_path + path
-
-
-class HomeMotionPlanner(PipetteMotionPlanner):
-    """Extract pipette tip diagonally, then move to home position."""
-
-    def _default_name(self):
-        return "move to home"
-
-    def path(self):
-        manipulator = self.pip.parentDevice()
-        manipulatorHome = manipulator.homePosition()
-        assert manipulatorHome is not None, f"No home position defined for {manipulator.name()}"
-        # how much should the pipette move in global coordinates
-        globalMove = np.asarray(manipulatorHome) - np.asarray(manipulator.globalPosition())
-
-        startPosGlobal = self.pip.globalPosition()
-        # where should the pipette tip end up in global coordinates
-        endPosGlobal = np.asarray(startPosGlobal) + globalMove
-
-        return self.safePath(startPosGlobal, endPosGlobal, self.speed)
-
-
-class SearchMotionPlanner(PipetteMotionPlanner):
-    """Focus the microscope 2mm above the surface, then move the electrode
-    tip to 500um below the focal point of the microscope.
-
-    This position is used when searching for new electrodes.
-
-    Set *distance* to adjust the search position along the pipette's x-axis. Positive values
-    move the tip farther from the microscope center to reduce the probability of collisions.
-    Negative values move the pipette past the center of the microscope to improve the
-    probability of seeing the tip immediately.
-    """
-
-    def _default_name(self):
-        return "move to search"
-
-    @future_wrap
-    def _move(self, _future):
-        base = f"{self.pip.name()} {self.name}"
-        _future.name = base
-        pip = self.pip
-        speed = self.speed
-        distance = self.kwds.get("distance", 0)
-
-        # Bring focus to 2mm above surface (if needed)
-        scope = pip.scopeDevice()
-        surfaceDepth = scope.getSurfaceDepth()
-        if surfaceDepth is None:
-            raise ValueError("Cannot determine search position; surface depth is not defined.")
-        searchDepth = surfaceDepth + pip._opts["searchHeight"]
-
-        cam = pip.imagingDevice()
-        focusDepth = cam.getFocusDepth()
-
-        # move scope such that camera will be focused at searchDepth
-        if focusDepth < searchDepth:
-            scopeFocus = scope.getFocusDepth()
-            fut = scope.setFocusDepth(scopeFocus + searchDepth - focusDepth, name=f"{base}: focus above surface")
-            # wait for objective to lift before starting pipette motion
-            _future.waitFor(fut)
-
-        # Here's where we want the pipette tip in global coordinates:
-        globalCenter = cam.globalCenterPosition("roi")
-        globalCenter[2] += pip._opts["searchTipHeight"] - pip._opts["searchHeight"]
-
-        # adjust for distance argument:
-        globalTarget = globalCenter + pip.globalDirection() * distance
-
-        path = self.safePath(pip.globalPosition(), globalTarget, speed)
-
-        _future.waitFor(pip._movePath(path, name=f"{base}: pipette path"))
-
-
-class ApproachMotionPlanner(PipetteMotionPlanner):
-    def _default_name(self):
-        return "approach target"
-
-    def path(self):
-        pip = self.pip
-        approachDepth = pip.approachDepth()
-        approachPosition = pip.positionAtDepth(approachDepth, start=pip.targetPosition())
-        return self.safePath(pip.globalPosition(), approachPosition, self.speed)
-
-
-class TargetMotionPlanner(PipetteMotionPlanner):
-    def _default_name(self):
-        return "move to target"
-
-    def path(self):
-        start = self.pip.globalPosition()
-        stop = self.pip.targetPosition()
-        return self.safePath(start, stop, self.speed)
-
-
-class AboveTargetMotionPlanner(PipetteMotionPlanner):
-    """Move the pipette tip to be centered over the target in x/y, and 100 um above
-    the sample surface in z.
-
-    This position is used to recalibrate the pipette immediately before going to approach or to confirm
-    nucleus extraction.
-    """
-
-    def _default_name(self):
-        return "move above target"
-
-    @future_wrap
-    def _move(self, _future):
-        base = f"{self.pip.name()} {self.name}"
-        _future.name = base
-        pip = self.pip
-        speed = self.speed
-        scope = pip.scopeDevice()
-        waypoint1, waypoint2 = self.aboveTargetPath()
-
-        path = self.safePath(pip.globalPosition(), waypoint1, speed, APPROACH_TO_CORRECT_FOR_HYSTERESIS)
-        _future.waitFor(pip._movePath(path + [(waypoint2, "fast", True, "Above target")], name=f"{base}: pipette path"))
-        move_scope = scope.setGlobalPosition(waypoint2, name=f"{base}: scope recenter")
-        _future.waitFor(move_scope)  # TODO act simultaneously once we can handle motion planning around moving objects
-
-    def aboveTargetPath(self):
-        """Return the path to the "above target" recalibration position.
-
-        The path has 2 waypoints:
-
-        1. 100 um away from the second waypoint, on a diagonal approach. This is meant to normalize the hysteresis
-           at the second waypoint.
-        2. This position is centered on the target, a small distance above the sample surface.
-        """
-        pip = self.pip
-        target = pip.targetPosition()
-
-        # will recalibrate 50 um above surface (or target)
-        scope = pip.scopeDevice()
-        surfaceDepth = scope.getSurfaceDepth()
-        waypoint2 = np.array(target)
-        waypoint2[2] = max(surfaceDepth, target[2]) + 50e-6
-
-        # Need to arrive at this point via approach angle to correct for hysteresis
-        waypoint1 = waypoint2 + pip.globalDirection() * -100e-6
-
-        return waypoint1, waypoint2
-
-
-class IdleMotionPlanner(PipetteMotionPlanner):
-    """Move the electrode tip to the outer edge of the recording chamber, 1mm above the sample surface.
-
-    NOTE: this method assumes that (0, 0) in global coordinates represents the center of the recording
-    chamber.
-    """
-
-    def _default_name(self):
-        return "move to idle"
-
-    @future_wrap
-    def _move(self, _future):
-        base = f"{self.pip.name()} {self.name}"
-        _future.name = base
-        pip = self.pip
-        speed = self.speed
-
-        scope = pip.scopeDevice()
-        surface = scope.getSurfaceDepth()
-        if surface is None:
-            raise ValueError("Surface depth has not been set.")
-
-        # we want to land 1 mm above sample surface
-        idleDepth = surface + pip._opts["idleHeight"]
-
-        # If the tip is below idle depth, bring it up along the axis of the electrode.
-        pos = pip.globalPosition()
-        if pos[2] < idleDepth:
-            pip.advance(idleDepth, speed, name=f"{base}: ascend to idle depth")
-
-        # From here, move directly to idle position
-        angle = pip.yawRadians()
-        ds = pip._opts["idleDistance"]  # move to 7 mm from center
-        globalIdlePos = -ds * np.cos(angle), -ds * np.sin(angle), idleDepth
-
-        _future.waitFor(pip._moveToGlobal(globalIdlePos, speed, name=f"{base}: move to edge"))
-
-
-def defaultMotionPlanners() -> dict[str, type[PipetteMotionPlanner]]:
-    return {
-        "home": HomeMotionPlanner,
-        "search": SearchMotionPlanner,
-        "aboveTarget": AboveTargetMotionPlanner,
-        "approach": ApproachMotionPlanner,
-        "target": TargetMotionPlanner,
-        "idle": IdleMotionPlanner,
-        "saved": SavedPositionMotionPlanner,
-        "clean": CleanMotionPlanner,
-        "rinse": CleanMotionPlanner,
-    }
