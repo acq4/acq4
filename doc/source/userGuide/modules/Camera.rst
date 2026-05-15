@@ -83,4 +83,21 @@ Background subtraction is used to improve the contrast (either spatial or tempor
 * **Continuous Average** When checked, background frames are continuously integrated into the averaged background frame, and the time specification instead controls the approximate integration period for this process.
 * **Blur Background** causes the background frame to be smoothed with a gaussian blur before being removed from the displayed image. This can have a contrast-enhancing effect. However, better results can be achieved by collecting a background image that is blurred by defocusing the objective lens instead.
 * **Subtract / Divide background** When depressed, these cause the currently stored background frame to be subtracted or divided from newly acquired frames before they are displayed. Division is more useful in situations where the overall light level may change over time.
-    
+
+
+ROI plot dock
+-------------
+
+The **ROI Plot** dock allows the experimenter to monitor the intensity of a region of interest (ROI) in the camera image over time. Click **Add ROI** to draw a rectangular ROI on the display area. A live intensity-vs-time plot updates continuously while the camera is acquiring. This is particularly useful for monitoring fluorescence signals such as calcium indicator dynamics in real time. Multiple ROIs can be added simultaneously.
+
+
+Image sequencer dock
+--------------------
+
+The **Image Sequencer** dock provides automated image acquisition sequences:
+
+* **Z-Stack** — Acquire a series of frames at evenly spaced focal depths. The number of steps, step size, and direction are configurable.
+* **Timelapse** — Acquire frames at regular time intervals for a specified total duration.
+* **Mosaic** — Acquire a grid of frames by stepping the stage, then stitch them together into a large composite image.
+
+Sequences are stored in the current :ref:`storage directory <userModulesDataManagerStorageDirectory>` alongside any other recorded data.
