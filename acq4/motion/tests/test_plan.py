@@ -4,8 +4,13 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from acq4.motion.plan import AtomicMove, ParallelGroup, SequentialGroup, collect_devices
+from acq4.motion.plan import AtomicMove, ParallelGroup, SequentialGroup
+from acq4.motion.planner import MotionPlanner
 from acq4.motion.tests.conftest import MockDevice
+
+
+def _collect(plan):
+    return MotionPlanner().collect_devices(plan)
 
 
 def test_atomic_move_stores_fields():
@@ -42,21 +47,21 @@ def test_parallel_group_stores_steps():
 def test_collect_devices_atomic():
     d = MockDevice("d")
     move = AtomicMove(d, [0, 0, 0], "fast")
-    assert collect_devices(move) == {d}
+    assert _collect(move) == {d}
 
 
 def test_collect_devices_sequential():
     d1 = MockDevice("d1")
     d2 = MockDevice("d2")
     group = SequentialGroup([AtomicMove(d1, [0, 0, 0], "fast"), AtomicMove(d2, [0, 0, 0], "fast")])
-    assert collect_devices(group) == {d1, d2}
+    assert _collect(group) == {d1, d2}
 
 
 def test_collect_devices_parallel():
     d1 = MockDevice("d1")
     d2 = MockDevice("d2")
     group = ParallelGroup([AtomicMove(d1, [0, 0, 0], "fast"), AtomicMove(d2, [0, 0, 0], "fast")])
-    assert collect_devices(group) == {d1, d2}
+    assert _collect(group) == {d1, d2}
 
 
 def test_collect_devices_nested():
@@ -65,10 +70,10 @@ def test_collect_devices_nested():
     d3 = MockDevice("d3")
     inner = ParallelGroup([AtomicMove(d2, [0, 0, 0], "fast"), AtomicMove(d3, [0, 0, 0], "fast")])
     outer = SequentialGroup([AtomicMove(d1, [0, 0, 0], "fast"), inner])
-    assert collect_devices(outer) == {d1, d2, d3}
+    assert _collect(outer) == {d1, d2, d3}
 
 
 def test_collect_devices_deduplicates():
     d = MockDevice("d")
     group = SequentialGroup([AtomicMove(d, [0, 0, 0], "fast"), AtomicMove(d, [1, 0, 0], "fast")])
-    assert collect_devices(group) == {d}
+    assert _collect(group) == {d}

@@ -117,17 +117,28 @@ def test_pipette_uses_pip_path_generator(pip):
 
 
 # ---------------------------------------------------------------------------
-# InteractionSite approach
+# InteractionSite approach — approach = site origin
 # ---------------------------------------------------------------------------
 
-def test_interaction_site_plan_has_approach_then_interact(pip, site):
+def test_interaction_approach_only_goes_to_site_origin(pip, site):
+    """MoveSpec with zero position = approach only; pip ends at site.globalPosition()."""
     planner = make_planner()
-    plan = planner.plan([MoveSpec(pip, np.array([0.0, 0.0, 0.0]), relative_to=site)])
+    plan = planner.plan([MoveSpec(pip, np.zeros(3), relative_to=site)])
+    moves = _flat_moves(plan)
+    pip_moves = [m for m in moves if m.device is pip]
+    np.testing.assert_array_almost_equal(pip_moves[-1].position, site.globalPosition())
+
+
+def test_interaction_site_plan_has_approach_then_interact(pip, site):
+    """Non-zero spec.position goes to approach first, then to the target inside the site."""
+    planner = make_planner()
+    interact_local = np.array(site.positions[pip.name()]["interact local"])
+    plan = planner.plan([MoveSpec(pip, interact_local, relative_to=site)])
 
     moves = _flat_moves(plan)
     pip_moves = [m for m in moves if m.device is pip]
 
-    approach_global = np.array(site.positions[pip.name()]["site global"])
+    approach_global = np.array(site.globalPosition())
     interact_global = np.array(site.positions[pip.name()]["interact global"])
 
     approach_idx = next(
@@ -141,16 +152,112 @@ def test_interaction_site_plan_has_approach_then_interact(pip, site):
     assert approach_idx < interact_idx
 
 
+def test_interaction_approach_populates_context(pip, site):
+    """Entering a site (non-zero position) stores approach in _interaction_context."""
+    planner = make_planner()
+    interact_local = np.array(site.positions[pip.name()]["interact local"])
+    planner.plan([MoveSpec(pip, interact_local, relative_to=site)])
+    assert pip.name() in planner._interaction_context
+
+
+def test_interaction_approach_only_does_not_populate_context(pip, site):
+    """Approach-only moves (zero position) do not store context."""
+    planner = make_planner()
+    planner.plan([MoveSpec(pip, np.zeros(3), relative_to=site)])
+    assert pip.name() not in planner._interaction_context
+
+
+def test_direct_access_site_skips_approach_waypoint(pip, site_with_direct_access):
+    """Sites with directAccess: true skip the approach waypoint enforcement."""
+    planner = make_planner()
+    interact_local = np.array(site_with_direct_access.positions[pip.name()]["interact local"])
+    plan = planner.plan([MoveSpec(pip, interact_local, relative_to=site_with_direct_access)])
+    moves = _flat_moves(plan)
+    pip_moves = [m for m in moves if m.device is pip]
+    approach_global = np.array(site_with_direct_access.globalPosition())
+    interact_global = np.array(site_with_direct_access.positions[pip.name()]["interact global"])
+    # last move reaches the interact position
+    np.testing.assert_array_almost_equal(pip_moves[-1].position, interact_global)
+    # approach position must not appear as an intermediate stop
+    assert not any(
+        np.allclose(m.position, approach_global) for m in pip_moves[:-1]
+    )
+
+
+def test_direct_access_site_does_not_populate_context(pip, site_with_direct_access):
+    planner = make_planner()
+    interact_local = np.array(site_with_direct_access.positions[pip.name()]["interact local"])
+    planner.plan([MoveSpec(pip, interact_local, relative_to=site_with_direct_access)])
+    assert pip.name() not in planner._interaction_context
+
+
 def test_interaction_site_no_scope_moves_in_default_planner(pip, site_with_scope_park):
     """DefaultMotionPlanner never touches the scope, even when scopeParkPos is configured."""
     planner = make_planner()
-    plan = planner.plan([MoveSpec(pip, np.array([0.0, 0.0, 0.0]), relative_to=site_with_scope_park)])
+    interact_local = np.array(site_with_scope_park.positions[pip.name()]["interact local"])
+    plan = planner.plan([MoveSpec(pip, interact_local, relative_to=site_with_scope_park)])
     scope_moves = [m for m in _flat_moves(plan) if isinstance(m.device, MockScope)]
     assert len(scope_moves) == 0
 
 
-def test_interaction_site_missing_positions_raises(pip):
+# ---------------------------------------------------------------------------
+# InteractionSite exit — approach waypoint prepended when leaving site
+# ---------------------------------------------------------------------------
+
+def test_interaction_exit_prepends_approach_waypoint(pip, site):
+    """Pipette tracked in _interaction_context gets approach waypoint prepended on next move."""
     planner = make_planner()
-    empty_site = MockInteractionSite("empty", global_pos=(5e-3, 0.0, 0.0))
-    with pytest.raises(PlanningError):
-        planner.plan([MoveSpec(pip, np.array([0.0, 0.0, 0.0]), relative_to=empty_site)])
+    approach_global = np.array(site.globalPosition())
+    planner._interaction_context[pip.name()] = approach_global
+
+    home_pos = np.array([0.0, 0.0, 5e-3])
+    plan = planner.plan([MoveSpec(pip, home_pos)])
+    moves = _flat_moves(plan)
+    pip_moves = [m for m in moves if m.device is pip]
+
+    np.testing.assert_array_almost_equal(pip_moves[0].position, approach_global)
+    np.testing.assert_array_almost_equal(pip_moves[-1].position, home_pos)
+
+
+def test_interaction_context_cleared_after_exit(pip, site):
+    planner = make_planner()
+    planner._interaction_context[pip.name()] = np.array(site.globalPosition())
+    planner.plan([MoveSpec(pip, np.array([0.0, 0.0, 5e-3]))])
+    assert pip.name() not in planner._interaction_context
+
+
+# ---------------------------------------------------------------------------
+# collect_devices
+# ---------------------------------------------------------------------------
+
+def test_collect_devices_includes_scope_for_pipette(pip):
+    """DefaultMotionPlanner adds the pipette's scope to the reserved device set."""
+    planner = make_planner()
+    plan = SequentialGroup([AtomicMove(pip, np.zeros(3), "fast")])
+    devices = planner.collect_devices(plan)
+    assert pip in devices
+    assert pip.scopeDevice() in devices
+
+
+def test_collect_devices_generic_device_no_extra(pip):
+    dev = MockDevice("dev1")
+    planner = make_planner()
+    plan = SequentialGroup([AtomicMove(dev, np.zeros(3), "fast")])
+    devices = planner.collect_devices(plan)
+    assert devices == {dev}
+
+
+# ---------------------------------------------------------------------------
+# Move name propagation
+# ---------------------------------------------------------------------------
+
+def test_plan_name_becomes_top_level_explanation(pip):
+    planner = make_planner()
+    plan = planner.plan([MoveSpec(pip, np.zeros(3))], name="go home")
+    assert plan.explanation == "go home"
+
+
+def test_plan_default_explanation_when_no_name(pip):
+    planner = make_planner()
+    plan = planner.plan([MoveSpec(pip, np.zeros(3))])
+    assert plan.explanation == "motion plan"

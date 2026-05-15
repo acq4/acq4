@@ -472,12 +472,12 @@ class Manager(Qt.QObject):
             self._motion_planner = cls(cfg)
         return self._motion_planner
 
-    def move(self, *specs):
+    def move(self, *specs, name: str = ""):
         """Execute a motion plan for one or more MoveSpec objects.
 
         Returns a Future that resolves when all moves are complete.
         """
-        return self.motionPlanner.execute(list(specs))
+        return self.motionPlanner.execute(list(specs), name=name)
 
     def getOrLoadModule(self, name):
         if name in self.modules:

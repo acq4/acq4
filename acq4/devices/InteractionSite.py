@@ -175,23 +175,29 @@ class InteractionSite(Device, OptomechDevice):
         self.setDeviceTransform(tr)
 
     def moveToInteract(self, other, speed='fast'):
-        """Move this site and *other* (typically a pipette) to their interact position.
+        """Move *other* (typically a pipette) to its saved interact position within this site.
 
         Delegates to the global motion planner, which handles scope parking, approach sequencing,
         and device reservation.
         """
-        return self.dm.move(MoveSpec(other, np.array([0.0, 0.0, 0.0]), relative_to=self, speed=speed))
+        pos_config = self.positions.get(other.name(), {})
+        if 'interact global' not in pos_config:
+            raise RuntimeError(f"No interact position saved for {other.name()} at {self.name()}")
+        interact_local = self.mapFromGlobal(np.array(pos_config['interact global']))
+        return self.dm.move(
+            MoveSpec(other, interact_local, relative_to=self, speed=speed),
+            name=f"interact with {self.name()}",
+        )
 
     def moveToApproach(self, other, speed='fast'):
-        """Move this site and *other* to their saved approach position.
+        """Move *other* to the approach position (this site's origin).
 
         Delegates to the global motion planner.
         """
-        pos_config = self.positions.get(other.name(), {})
-        if 'site global' not in pos_config:
-            raise RuntimeError(f"No approach position saved for {other.name()} at {self.name()}")
-        approach_global = np.array(pos_config['site global'])
-        return self.dm.move(MoveSpec(other, approach_global, speed=speed))
+        return self.dm.move(
+            MoveSpec(other, np.zeros(3), relative_to=self, speed=speed),
+            name=f"approach {self.name()}",
+        )
 
 
 def _fmt_pos(pos):

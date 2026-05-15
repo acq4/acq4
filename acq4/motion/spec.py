@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING, Optional
 
 import numpy as np
 
-from acq4.motion import PlanningError
 
 if TYPE_CHECKING:
     from acq4.devices.Device import Device
@@ -31,7 +30,7 @@ class MoveSpec:
         if not hasattr(self.device, "moveToGlobalNoPlanning") and not hasattr(
             self.device, "setGlobalPosition"
         ):
-            raise PlanningError(
+            raise ValueError(
                 f"Device {self.device!r} has no movement capability "
                 f"(no moveToGlobalNoPlanning or setGlobalPosition)."
             )

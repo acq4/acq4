@@ -89,7 +89,11 @@ class MockPipette(MockDevice):
 
 
 class MockInteractionSite(MockDevice):
-    """InteractionSite mock with saved approach and interact positions."""
+    """InteractionSite mock.
+
+    Approach position is always the site's global origin (globalPosition()).
+    Interact positions are stored per-device via save_positions_for().
+    """
 
     def __init__(
         self,
@@ -97,18 +101,24 @@ class MockInteractionSite(MockDevice):
         global_pos=(0.0, 0.0, 0.0),
         scope_park_pos=None,
         parent_stage=None,
+        direct_access=False,
     ):
         super().__init__(name, global_pos)
         self.positions = {}
         self.config = {}
         if scope_park_pos is not None:
             self.config["scopeParkPos"] = np.asarray(scope_park_pos, dtype=float)
+        if direct_access:
+            self.config["directAccess"] = True
         self._parentStage = parent_stage or MockStage(f"{name}_stage", global_pos)
 
-    def save_positions_for(self, pip, approach_global, interact_global):
+    def save_positions_for(self, pip, interact_global):
+        """Store the interact position (global) and its site-local equivalent."""
+        interact_global = np.asarray(interact_global, dtype=float)
+        interact_local = self.mapFromGlobal(interact_global)
         self.positions[pip.name()] = {
-            "site global": list(approach_global),
             "interact global": list(interact_global),
+            "interact local": list(interact_local),
         }
 
 
@@ -130,9 +140,7 @@ def stage():
 @pytest.fixture
 def site(pip):
     s = MockInteractionSite("cleanwell", global_pos=(5e-3, 0.0, -2e-3))
-    approach = np.array([0.0, 0.0, 0.0])
-    interact = np.array([0.0, 0.0, -1e-3])
-    s.save_positions_for(pip, approach, interact)
+    s.save_positions_for(pip, np.array([0.0, 0.0, -1e-3]))
     return s
 
 
@@ -142,7 +150,14 @@ def site_with_scope_park(pip):
     s = MockInteractionSite(
         "cleanwell", global_pos=(5e-3, 0.0, -2e-3), scope_park_pos=park
     )
-    approach = np.array([0.0, 0.0, 0.0])
-    interact = np.array([0.0, 0.0, -1e-3])
-    s.save_positions_for(pip, approach, interact)
+    s.save_positions_for(pip, np.array([0.0, 0.0, -1e-3]))
+    return s
+
+
+@pytest.fixture
+def site_with_direct_access(pip):
+    s = MockInteractionSite(
+        "recording_chamber", global_pos=(5e-3, 0.0, -2e-3), direct_access=True
+    )
+    s.save_positions_for(pip, np.array([0.0, 0.0, -1e-3]))
     return s

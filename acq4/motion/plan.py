@@ -41,15 +41,3 @@ class ParallelGroup:
 
 
 MovePlanStep = Union[AtomicMove, SequentialGroup, ParallelGroup]
-
-
-def collect_devices(plan: MovePlanStep) -> set:
-    """Return the set of all devices referenced anywhere in the plan tree."""
-    if isinstance(plan, AtomicMove):
-        return {plan.device}
-    if isinstance(plan, (SequentialGroup, ParallelGroup)):
-        devices: set = set()
-        for step in plan.steps:
-            devices |= collect_devices(step)
-        return devices
-    return set()

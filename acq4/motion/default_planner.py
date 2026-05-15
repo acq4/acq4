@@ -1,9 +1,11 @@
-# DefaultMotionPlanner: fairly generic motion planning for pipettes, interaction sites, and
-# stages.  Any rig-specific sequencing belongs in a subclass.
+# DefaultMotionPlanner: generic motion planning for pipettes, interaction sites, and stages.
+# Any rig-specific sequencing belongs in a subclass.
 from __future__ import annotations
 
 import numpy as np
 
+from acq4 import getManager
+from acq4.util.future import future_wrap
 from .plan import AtomicMove, ParallelGroup, SequentialGroup
 from .plan import MovePlanStep
 from .planner import MotionPlanner, PlanningError
@@ -277,24 +279,43 @@ class GeometryAwarePathGenerator(PipettePathGenerator):
 class DefaultMotionPlanner(MotionPlanner):
     """Generic, likely-safe motion planner. Assumes an upright scope and thick sample tissue.
 
-    Best described as 3 cases:
-      1. Pipette move                 — avoid the objective, move slowly and parallel to the pipette axis near sample
-      2. InteractionSite interaction  — enforce approach->interact->approach order
-      3. Generic device move          — single move
-      TODO: avoid the pipette when moving the objective?
+    Three dispatch cases:
+      1. InteractionSite interaction  — enforce approach->interact order; add approach waypoint on exit
+      2. Pipette move                 — avoid objective, move slowly near sample surface
+      3. Generic device move          — single atomic move
 
-    Override the relevant `_plan_*` methods for similar rigs (see MinirigV1MotionPlanner for an example).
+    Sites may set ``directAccess: true`` in their config to skip approach-waypoint enforcement.
+    Use this for the recording chamber.  Clean wells and nucleus tubes should leave it unset.
+
+    Override the relevant ``_plan_*`` methods for rig-specific behavior (see MinirigV1MotionPlanner).
     """
 
-    def plan(self, specs):
-        return SequentialGroup([self._plan_one(spec) for spec in specs], "motion plan")
+    def __init__(self, config=None):
+        super().__init__(config)
+        # key: pip.name() -> approach_global; populated when pip enters a restricted-access site
+        self._interaction_context: dict[str, np.ndarray] = {}
 
-    def _plan_one(self, spec: MoveSpec) -> MovePlanStep:
+    def collect_devices(self, plan) -> set:
+        devices = super().collect_devices(plan)
+        # scope position must be stable while pipette path-finding runs
+        for dev in list(devices):
+            if self._is_pipette(dev):
+                scope = dev.scopeDevice()
+                if scope is not None:
+                    devices.add(scope)
+        return devices
+
+    def plan(self, specs, name=""):
+        return SequentialGroup([self._plan_one(spec, name) for spec in specs], name or "motion plan")
+
+    def _plan_one(self, spec: MoveSpec, name: str = "") -> MovePlanStep:
         if self._is_interaction_site(spec.relative_to):
-            return self._plan_interaction_approach(spec)
+            return self._plan_interaction_approach(spec, name)
         if self._is_pipette(spec.device):
-            return self._plan_pipette_move(spec)
-        return self._plan_generic(spec)
+            if spec.device.name() in self._interaction_context:
+                return self._plan_interaction_exit(spec, name)
+            return self._plan_pipette_move(spec, name)
+        return self._plan_generic(spec, name)
 
     @staticmethod
     def _is_interaction_site(device) -> bool:
@@ -307,80 +328,89 @@ class DefaultMotionPlanner(MotionPlanner):
         return hasattr(device, "approachDepth") and hasattr(device, "pathGenerator")
 
     # ------------------------------------------------------------------
-    # Case 1: InteractionSite interaction (approach → interact)
+    # Case 1a: InteractionSite approach
     # ------------------------------------------------------------------
 
-    def _plan_interaction_approach(self, spec: MoveSpec) -> MovePlanStep:
-        """Generate the approach→interact sequence for an InteractionSite target."""
+    def _plan_interaction_approach(self, spec: MoveSpec, name: str = "") -> MovePlanStep:
+        """Generate waypoints to reach an InteractionSite target.
+
+        Approach = site origin (site.globalPosition()).  If spec.position is non-zero the
+        pipette is going deeper into the site: an approach waypoint is prepended and the
+        pipette's position is tracked so it can exit cleanly.  Sites with ``directAccess: true``
+        skip this enforcement and move directly to the target.
+        """
         site = spec.relative_to
         pip = spec.device
-        pip_name = pip.name()
-
-        pos_config = site.positions.get(pip_name, {})
-        if "interact global" not in pos_config:
-            raise PlanningError(
-                f"No interact position saved for {pip_name} at {site.name()}. "
-                f"Use the InteractionSite UI to save approach and interact positions."
-            )
-        if "site global" not in pos_config:
-            raise PlanningError(
-                f"No approach position saved for {pip_name} at {site.name()}. "
-                f"Use the InteractionSite UI to save the approach position."
-            )
-
-        approach_global = np.array(pos_config["site global"])
-        interact_global = np.array(pos_config["interact global"])
         speed = spec.speed or "fast"
 
-        # Compute where the site's stage must go so the site origin reaches approach_global.
-        site_stage = site._parentStage
-        stage_delta = approach_global - np.array(site.globalPosition())
-        site_stage_target = np.array(site_stage.globalPosition()) + stage_delta
+        approach_global = np.array(site.globalPosition())
+        direct_access = site.config.get("directAccess", False)
+        going_inside = not np.allclose(spec.position, 0)
+        target_global = np.array(site.mapToGlobal(spec.position)) if going_inside else approach_global
 
-        safe_pip_pos = np.array([0.0, 0.0, 10e-3])
+        start = np.array(pip.globalPosition())
 
+        if not going_inside:
+            waypoints = pip.pathGenerator.safePath(start, approach_global, speed)
+            steps = [AtomicMove(pip, pos, spd, expl) for pos, spd, _, expl in waypoints]
+            return SequentialGroup(steps, name or f"approach {site.name()}")
+
+        if direct_access:
+            waypoints = pip.pathGenerator.safePath(start, target_global, speed)
+            steps = [AtomicMove(pip, pos, spd, expl) for pos, spd, _, expl in waypoints]
+            return SequentialGroup(steps, name or f"move to {site.name()}")
+
+        self._interaction_context[pip.name()] = approach_global
+        to_approach = pip.pathGenerator.safePath(start, approach_global, speed)
+        to_approach_steps = [AtomicMove(pip, pos, spd, expl) for pos, spd, _, expl in to_approach]
+        interact_step = AtomicMove(pip, target_global, speed, name or f"interact with {site.name()}")
         return SequentialGroup(
-            [
-                ParallelGroup(
-                    [
-                        AtomicMove(
-                            site_stage, site_stage_target, speed, f"move {site.name()} to approach"
-                        ),
-                        AtomicMove(pip, safe_pip_pos, "fast", "pip to safe height"),
-                    ],
-                    "approach preparation",
-                ),
-                AtomicMove(pip, approach_global, speed, "pip to approach position"),
-                AtomicMove(pip, interact_global, speed, "pip to interact position"),
-            ],
-            f"interact with {site.name()}",
+            to_approach_steps + [interact_step],
+            name or f"interact with {site.name()}",
         )
 
     # ------------------------------------------------------------------
-    # Case 2: Pipette move (uses pip.pathGenerator for safe routing)
+    # Case 1b: InteractionSite exit
     # ------------------------------------------------------------------
 
-    def _plan_pipette_move(self, spec: MoveSpec) -> MovePlanStep:
-        """Generate safe waypoints for a pipette tip using the pipette's path generator."""
+    def _plan_interaction_exit(self, spec: MoveSpec, name: str = "") -> MovePlanStep:
+        """Exit a restricted-access site via its approach position before moving to the target."""
+        pip = spec.device
+        approach_global = self._interaction_context.pop(pip.name())
+        speed = spec.speed or "fast"
+
+        exit_step = AtomicMove(pip, approach_global, speed, f"exit site before {name or 'move'}")
+        target = np.asarray(spec.position, dtype=float)
+        rest_waypoints = pip.pathGenerator.safePath(approach_global, target, speed)
+        rest_steps = [AtomicMove(pip, pos, spd, expl) for pos, spd, _, expl in rest_waypoints]
+        return SequentialGroup(
+            [exit_step] + rest_steps,
+            name or "exit site and move to target",
+        )
+
+    # ------------------------------------------------------------------
+    # Case 2: Pipette move
+    # ------------------------------------------------------------------
+
+    def _plan_pipette_move(self, spec: MoveSpec, name: str = "") -> MovePlanStep:
+        """Generate safe waypoints using the pipette's own path generator."""
         pip = spec.device
         target = np.asarray(spec.position, dtype=float)
         speed = spec.speed or "fast"
-
         start = np.array(pip.globalPosition())
         waypoints = pip.pathGenerator.safePath(start, target, speed)
-
         steps = [AtomicMove(pip, pos, spd, expl) for pos, spd, _linear, expl in waypoints]
-        return SequentialGroup(steps, "pipette move")
+        return SequentialGroup(steps, name or "pipette move")
 
     # ------------------------------------------------------------------
     # Case 3: Generic device
     # ------------------------------------------------------------------
 
-    def _plan_generic(self, spec: MoveSpec) -> MovePlanStep:
-        """Resolve relative positions and emit a single AtomicMove."""
+    def _plan_generic(self, spec: MoveSpec, name: str = "") -> MovePlanStep:
+        """Resolve relative position and emit a single AtomicMove."""
         global_pos = (
             spec.relative_to.mapToGlobal(spec.position)
             if spec.relative_to is not None
             else spec.position
         )
-        return AtomicMove(spec.device, global_pos, spec.speed or "fast", "move to target")
+        return AtomicMove(spec.device, global_pos, spec.speed or "fast", name or "move to target")
