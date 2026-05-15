@@ -9,7 +9,6 @@ from .plan import MovePlanStep
 from .planner import MotionPlanner, PlanningError
 from .spec import MoveSpec
 
-
 RETRACTION_TO_AVOID_SAMPLE_TEAR = "retracting away from sample"
 WAYPOINT_TO_AVOID_SAMPLE_TEAR = "waypoint to avoid sample tear"
 MOVE_TO_DESTINATION = "final move to destination"
@@ -92,13 +91,17 @@ class PipettePathGenerator:
             slowpath = self.enforceSafeSpeed(waypoint, globalStop, speed, explanation, linear=True)
             path += [(waypoint, speed, False, APPROACH_WAYPOINT)] + slowpath
         else:
-            slowpath = self.enforceSafeSpeed(globalStart, waypoint, speed, APPROACH_WAYPOINT, linear=True)
+            slowpath = self.enforceSafeSpeed(
+                globalStart, waypoint, speed, APPROACH_WAYPOINT, linear=True
+            )
             path += slowpath + [(globalStop, speed, False, explanation)]
 
         path = path[1:]  # trim off the start position
         for globalPos, speed, linear, stepName in path:
             if not np.isfinite(globalPos).all():
-                raise ValueError(f"Invalid position {globalPos} for step '{stepName}' in path from {globalStart} to {globalStop}")
+                raise ValueError(
+                    f"Invalid position {globalPos} for step '{stepName}' in path from {globalStart} to {globalStop}"
+                )
             try:
                 # what global position should we ask the stage to move to in order for the pipette tip to reach globalPos
                 manipulatorGlobalPos = self.pip._solveGlobalStagePosition(globalPos)
@@ -131,9 +134,15 @@ class PipettePathGenerator:
         else:
             waypoint = self.pip.positionAtDepth(slowDepth, start=start)
             if startSlow:
-                return [(waypoint, "slow", linear, SAFE_SPEED_WAYPOINT), (stop, speed, linear, explanation)]
+                return [
+                    (waypoint, "slow", linear, SAFE_SPEED_WAYPOINT),
+                    (stop, speed, linear, explanation),
+                ]
             else:
-                return [(waypoint, speed, linear, SAFE_SPEED_WAYPOINT), (stop, "slow", linear, explanation)]
+                return [
+                    (waypoint, speed, linear, SAFE_SPEED_WAYPOINT),
+                    (stop, "slow", linear, explanation),
+                ]
 
     def safeYZPosition(self, start, margin=2e-3):
         """Return a position to travel to, beginning from *start*, where the pipette may freely move in the local YZ
@@ -145,7 +154,9 @@ class PipettePathGenerator:
         scope = self.pip.scopeDevice()
         obj = scope.currentObjective
         objRadius = obj.radius
-        assert objRadius is not None, "Can't determine safe location; radius of objective lens is not configured."
+        assert (
+            objRadius is not None
+        ), "Can't determine safe location; radius of objective lens is not configured."
         localFocus = self.pip.mapFromGlobal(scope.globalPosition())
 
         # safe position along local x axis
@@ -272,14 +283,13 @@ class DefaultMotionPlanner(MotionPlanner):
       3. Generic device move          — single move
       TODO: avoid the pipette when moving the objective?
 
-    ALl rig-specific sequencing is intentionally absent here.  Subclass and override `plan` or the
-    relevant `_plan_*` method for rig-specific needs (see MinirigV1MotionPlanner for an example).
+    Override the relevant `_plan_*` methods for similar rigs (see MinirigV1MotionPlanner for an example).
     """
 
     def plan(self, specs):
         return SequentialGroup([self._plan_one(spec) for spec in specs], "motion plan")
 
-    def _plan_one(self, spec: "MoveSpec") -> "MovePlanStep":
+    def _plan_one(self, spec: MoveSpec) -> MovePlanStep:
         if self._is_interaction_site(spec.relative_to):
             return self._plan_interaction_approach(spec)
         if self._is_pipette(spec.device):
@@ -288,7 +298,9 @@ class DefaultMotionPlanner(MotionPlanner):
 
     @staticmethod
     def _is_interaction_site(device) -> bool:
-        return device is not None and hasattr(device, "positions") and hasattr(device, "_parentStage")
+        return (
+            device is not None and hasattr(device, "positions") and hasattr(device, "_parentStage")
+        )
 
     @staticmethod
     def _is_pipette(device) -> bool:
@@ -298,7 +310,7 @@ class DefaultMotionPlanner(MotionPlanner):
     # Case 1: InteractionSite interaction (approach → interact)
     # ------------------------------------------------------------------
 
-    def _plan_interaction_approach(self, spec: "MoveSpec") -> "MovePlanStep":
+    def _plan_interaction_approach(self, spec: MoveSpec) -> MovePlanStep:
         """Generate the approach→interact sequence for an InteractionSite target."""
         site = spec.relative_to
         pip = spec.device
@@ -331,7 +343,9 @@ class DefaultMotionPlanner(MotionPlanner):
             [
                 ParallelGroup(
                     [
-                        AtomicMove(site_stage, site_stage_target, speed, f"move {site.name()} to approach"),
+                        AtomicMove(
+                            site_stage, site_stage_target, speed, f"move {site.name()} to approach"
+                        ),
                         AtomicMove(pip, safe_pip_pos, "fast", "pip to safe height"),
                     ],
                     "approach preparation",
@@ -346,7 +360,7 @@ class DefaultMotionPlanner(MotionPlanner):
     # Case 2: Pipette move (uses pip.pathGenerator for safe routing)
     # ------------------------------------------------------------------
 
-    def _plan_pipette_move(self, spec: "MoveSpec") -> "MovePlanStep":
+    def _plan_pipette_move(self, spec: MoveSpec) -> MovePlanStep:
         """Generate safe waypoints for a pipette tip using the pipette's path generator."""
         pip = spec.device
         target = np.asarray(spec.position, dtype=float)
@@ -355,24 +369,15 @@ class DefaultMotionPlanner(MotionPlanner):
         start = np.array(pip.globalPosition())
         waypoints = pip.pathGenerator.safePath(start, target, speed)
 
-        steps = [
-            AtomicMove(pip, pos, spd, expl)
-            for pos, spd, _linear, expl in waypoints
-        ]
+        steps = [AtomicMove(pip, pos, spd, expl) for pos, spd, _linear, expl in waypoints]
         return SequentialGroup(steps, "pipette move")
 
     # ------------------------------------------------------------------
     # Case 3: Generic device
     # ------------------------------------------------------------------
 
-    def _plan_generic(self, spec: "MoveSpec") -> "MovePlanStep":
+    def _plan_generic(self, spec: MoveSpec) -> MovePlanStep:
         """Resolve relative positions and emit a single AtomicMove."""
-        if not hasattr(spec.device, "moveToGlobalNoPlanning") and not hasattr(spec.device, "setGlobalPosition"):
-            raise PlanningError(
-                f"Device {spec.device!r} has no movement capability "
-                f"(no moveToGlobalNoPlanning or setGlobalPosition)."
-            )
-
         global_pos = (
             spec.relative_to.mapToGlobal(spec.position)
             if spec.relative_to is not None
