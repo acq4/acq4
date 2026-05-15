@@ -78,8 +78,8 @@ class MinirigV1MotionPlanner(DefaultMotionPlanner):
     # Override: append scope unwind when exiting via approach waypoint
     # ------------------------------------------------------------------
 
-    def _plan_interaction_exit(self, spec: "MoveSpec", name: str = "") -> "MovePlanStep":
-        base = super()._plan_interaction_exit(spec, name)
+    def _plan_interaction_exit(self, spec: "MoveSpec", name: str = "", containing_site=None) -> "MovePlanStep":
+        base = super()._plan_interaction_exit(spec, name, containing_site)
         return self._append_scope_unwind(base, spec.device.name())
 
     # ------------------------------------------------------------------

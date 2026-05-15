@@ -152,21 +152,6 @@ def test_interaction_site_plan_has_approach_then_interact(pip, site):
     assert approach_idx < interact_idx
 
 
-def test_interaction_approach_populates_context(pip, site):
-    """Entering a site (non-zero position) stores approach in _interaction_context."""
-    planner = make_planner()
-    interact_local = np.array(site.positions[pip.name()]["interact local"])
-    planner.plan([MoveSpec(pip, interact_local, relative_to=site)])
-    assert pip.name() in planner._interaction_context
-
-
-def test_interaction_approach_only_does_not_populate_context(pip, site):
-    """Approach-only moves (zero position) do not store context."""
-    planner = make_planner()
-    planner.plan([MoveSpec(pip, np.zeros(3), relative_to=site)])
-    assert pip.name() not in planner._interaction_context
-
-
 def test_direct_access_site_skips_approach_waypoint(pip, site_with_direct_access):
     """Sites with directAccess: true skip the approach waypoint enforcement."""
     planner = make_planner()
@@ -184,13 +169,6 @@ def test_direct_access_site_skips_approach_waypoint(pip, site_with_direct_access
     )
 
 
-def test_direct_access_site_does_not_populate_context(pip, site_with_direct_access):
-    planner = make_planner()
-    interact_local = np.array(site_with_direct_access.positions[pip.name()]["interact local"])
-    planner.plan([MoveSpec(pip, interact_local, relative_to=site_with_direct_access)])
-    assert pip.name() not in planner._interaction_context
-
-
 def test_interaction_site_no_scope_moves_in_default_planner(pip, site_with_scope_park):
     """DefaultMotionPlanner never touches the scope, even when scopeParkPos is configured."""
     planner = make_planner()
@@ -201,29 +179,34 @@ def test_interaction_site_no_scope_moves_in_default_planner(pip, site_with_scope
 
 
 # ---------------------------------------------------------------------------
-# InteractionSite exit — approach waypoint prepended when leaving site
+# InteractionSite exit — approach waypoint prepended when pip is inside a site
 # ---------------------------------------------------------------------------
 
 def test_interaction_exit_prepends_approach_waypoint(pip, site):
-    """Pipette tracked in _interaction_context gets approach waypoint prepended on next move."""
+    """When _find_containing_site returns a site, the pip exits via approach first."""
     planner = make_planner()
-    approach_global = np.array(site.globalPosition())
-    planner._interaction_context[pip.name()] = approach_global
+    planner._find_containing_site = lambda dev: site if dev is pip else None
 
     home_pos = np.array([0.0, 0.0, 5e-3])
     plan = planner.plan([MoveSpec(pip, home_pos)])
     moves = _flat_moves(plan)
     pip_moves = [m for m in moves if m.device is pip]
 
-    np.testing.assert_array_almost_equal(pip_moves[0].position, approach_global)
+    np.testing.assert_array_almost_equal(pip_moves[0].position, site.globalPosition())
     np.testing.assert_array_almost_equal(pip_moves[-1].position, home_pos)
 
 
-def test_interaction_context_cleared_after_exit(pip, site):
+def test_no_exit_waypoint_when_pip_not_in_site(pip):
+    """When _find_containing_site returns None, no approach waypoint is added."""
     planner = make_planner()
-    planner._interaction_context[pip.name()] = np.array(site.globalPosition())
-    planner.plan([MoveSpec(pip, np.array([0.0, 0.0, 5e-3]))])
-    assert pip.name() not in planner._interaction_context
+    planner._find_containing_site = lambda dev: None
+
+    home_pos = np.array([0.0, 0.0, 5e-3])
+    plan = planner.plan([MoveSpec(pip, home_pos)])
+    moves = _flat_moves(plan)
+    pip_moves = [m for m in moves if m.device is pip]
+
+    np.testing.assert_array_almost_equal(pip_moves[0].position, home_pos)
 
 
 # ---------------------------------------------------------------------------

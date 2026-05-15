@@ -131,7 +131,7 @@ def test_scope_unwind_appended_after_interaction_exit(pip, site_with_scope_park)
     planner = make_planner()
     scope, original_pos, up_pos, park_pos = _seed_scope_context(planner, pip)
     approach_global = np.array(site_with_scope_park.globalPosition())
-    planner._interaction_context[pip.name()] = approach_global
+    planner._find_containing_site = lambda dev: site_with_scope_park if dev is pip else None
 
     plan = planner.plan([MoveSpec(pip, np.array([0.0, 0.0, 5e-3]))])
     moves = _flat_moves(plan)

@@ -292,8 +292,6 @@ class DefaultMotionPlanner(MotionPlanner):
 
     def __init__(self, config=None):
         super().__init__(config)
-        # key: pip.name() -> approach_global; populated when pip enters a restricted-access site
-        self._interaction_context: dict[str, np.ndarray] = {}
 
     def collect_devices(self, plan) -> set:
         devices = super().collect_devices(plan)
@@ -312,8 +310,9 @@ class DefaultMotionPlanner(MotionPlanner):
         if self._is_interaction_site(spec.relative_to):
             return self._plan_interaction_approach(spec, name)
         if self._is_pipette(spec.device):
-            if spec.device.name() in self._interaction_context:
-                return self._plan_interaction_exit(spec, name)
+            containing_site = self._find_containing_site(spec.device)
+            if containing_site is not None:
+                return self._plan_interaction_exit(spec, name, containing_site)
             return self._plan_pipette_move(spec, name)
         return self._plan_generic(spec, name)
 
@@ -326,6 +325,22 @@ class DefaultMotionPlanner(MotionPlanner):
     @staticmethod
     def _is_pipette(device) -> bool:
         return hasattr(device, "approachDepth") and hasattr(device, "pathGenerator")
+
+    def _find_containing_site(self, pip):
+        """Return the first interaction site that geometrically contains the pipette tip, or None.
+
+        Queries the Manager for all known devices.  Override in tests to inject a mock result.
+        """
+        try:
+            man = getManager()
+        except Exception:
+            return None
+        pip_pos = pip.globalPosition()
+        for dev_name in man.listDevices():
+            dev = man.getDevice(dev_name)
+            if self._is_interaction_site(dev) and dev.containsPoint(pip_pos):
+                return dev
+        return None
 
     # ------------------------------------------------------------------
     # Case 1a: InteractionSite approach
@@ -360,7 +375,6 @@ class DefaultMotionPlanner(MotionPlanner):
             steps = [AtomicMove(pip, pos, spd, expl) for pos, spd, _, expl in waypoints]
             return SequentialGroup(steps, name or f"move to {site.name()}")
 
-        self._interaction_context[pip.name()] = approach_global
         to_approach = pip.pathGenerator.safePath(start, approach_global, speed)
         to_approach_steps = [AtomicMove(pip, pos, spd, expl) for pos, spd, _, expl in to_approach]
         interact_step = AtomicMove(pip, target_global, speed, name or f"interact with {site.name()}")
@@ -373,10 +387,10 @@ class DefaultMotionPlanner(MotionPlanner):
     # Case 1b: InteractionSite exit
     # ------------------------------------------------------------------
 
-    def _plan_interaction_exit(self, spec: MoveSpec, name: str = "") -> MovePlanStep:
+    def _plan_interaction_exit(self, spec: MoveSpec, name: str = "", containing_site=None) -> MovePlanStep:
         """Exit a restricted-access site via its approach position before moving to the target."""
         pip = spec.device
-        approach_global = self._interaction_context.pop(pip.name())
+        approach_global = np.array(containing_site.globalPosition())
         speed = spec.speed or "fast"
 
         exit_step = AtomicMove(pip, approach_global, speed, f"exit site before {name or 'move'}")
