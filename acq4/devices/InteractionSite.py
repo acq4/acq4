@@ -148,9 +148,19 @@ class InteractionSite(Device, OptomechDevice):
         else:
             self.setLocalOrigin(other.globalPosition())
         self.positions[other.name()]['site global'] = self.globalPosition()
-        if self._parentStage is not None:
-            self.positions[other.name()]['stage approach'] = list(self._parentStage.globalPosition())
         self.writeConfigFile(self.positions, "saved_positions")
+
+    def approachGlobal(self, pip):
+        """Return the calibrated approach position in global coordinates.
+
+        For fixed sites this equals globalPosition().  For sites on movable stages this
+        returns the saved position from the last saveApproachPosition call.
+        """
+        pos_config = self.positions.get(pip.name(), {})
+        saved = pos_config.get('site global')
+        if saved is not None:
+            return np.asarray(saved, dtype=float)
+        return self.globalPosition()
 
     def approachMoveSpec(self, pip, speed='fast'):
         """Return a MoveSpec to move this site's parent stage to the approach position, or None.
@@ -162,10 +172,13 @@ class InteractionSite(Device, OptomechDevice):
         if self._parentStage is None:
             return None
         pos_config = self.positions.get(pip.name(), {})
-        stage_pos = pos_config.get('stage approach')
-        if stage_pos is None:
+        if 'site global' not in pos_config:
             return None
-        return MoveSpec(self._parentStage, np.asarray(stage_pos, dtype=float), speed=speed)
+            # Compute where the stage must go so the site origin reaches approach_global.
+        # site.globalPosition() shifts by exactly the same amount as stage.globalPosition().
+        site_delta = self.approachGlobal(pip) - self.globalPosition()
+        stage_global_target = np.array(self._parentStage.globalPosition()) + site_delta
+        return MoveSpec(self._parentStage, stage_global_target, speed=speed)
 
     def interactLocalFor(self, pip):
         """Return the interact position in this site's local frame, or None if not calibrated."""

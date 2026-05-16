@@ -112,6 +112,13 @@ class MockInteractionSite(MockDevice):
             "interact local": list(interact_local),
         }
 
+    def approachGlobal(self, pip):
+        pos_config = self.positions.get(pip.name(), {})
+        saved = pos_config.get("site global")
+        if saved is not None:
+            return np.asarray(saved, dtype=float)
+        return self.globalPosition()
+
     def approachMoveSpec(self, pip, speed='fast'):
         """Fixed mock site — no stage repositioning needed."""
         return None

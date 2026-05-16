@@ -187,10 +187,17 @@ def test_movable_site_stage_repositioned_before_approach(pip):
     """If approachMoveSpec returns a spec, the stage is moved in parallel with pip rising."""
     from acq4.motion.spec import MoveSpec as _MoveSpec
     stage = MockStage("well_stage", (3e-3, 0.0, 0.0))
-    site = MockInteractionSite("cleanwell", global_pos=(5e-3, 0.0, -2e-3))
-    site.save_positions_for(pip, np.array([0.0, 0.0, -1e-3]))
-    stage_target = np.array([4e-3, 0.0, 0.0])
+    # Site is currently at (6e-3, 0, -2e-3) — stage has drifted from calibrated position.
+    site = MockInteractionSite("cleanwell", global_pos=(6e-3, 0.0, -2e-3))
+    # Calibrated approach position is (5e-3, 0, -2e-3) — where it should be.
+    calibrated_approach = np.array([5e-3, 0.0, -2e-3])
+    interact_global = np.array([5e-3, 0.0, -3e-3])
+    site.save_positions_for(pip, interact_global)
+    site.positions[pip.name()]["site global"] = list(calibrated_approach)
+
+    stage_target = np.array([2e-3, 0.0, 0.0])  # stage must move 1mm left
     site.approachMoveSpec = lambda p, speed='fast': _MoveSpec(stage, stage_target, speed=speed)
+    site.approachGlobal = lambda p: calibrated_approach
 
     planner = make_planner()
     interact_local = np.array(site.positions[pip.name()]["interact local"])
@@ -201,13 +208,15 @@ def test_movable_site_stage_repositioned_before_approach(pip):
     pip_moves = [m for m in moves if m.device is pip]
 
     assert len(stage_moves) >= 1
-    # stage move must precede the approach
-    first_stage = min(i for i, m in enumerate(moves) if m.device is stage)
-    first_pip_approach = min(
+    first_stage_idx = min(i for i, m in enumerate(moves) if m.device is stage)
+    first_pip_approach_idx = min(
         i for i, m in enumerate(moves)
-        if m.device is pip and np.allclose(m.position, site.globalPosition(), atol=1e-9)
+        if m.device is pip and np.allclose(m.position, calibrated_approach, atol=1e-9)
     )
-    assert first_stage < first_pip_approach
+    assert first_stage_idx < first_pip_approach_idx
+    # final pip move is the interact position corrected for site movement (delta = -1e-3 in x)
+    expected_interact = interact_global + (calibrated_approach - np.array([6e-3, 0.0, -2e-3]))
+    np.testing.assert_array_almost_equal(pip_moves[-1].position, expected_interact)
 
 
 def test_fixed_site_no_stage_move(pip, site):

@@ -116,10 +116,17 @@ class DefaultMotionPlanner(MotionPlanner):
         pip = spec.device
         speed = spec.speed or "fast"
 
-        approach_global = np.array(site.globalPosition())
+        # approach_global is the calibrated site-origin position in global coords.
+        # For fixed sites this equals site.globalPosition(); for movable sites it may differ.
+        approach_global = np.array(site.approachGlobal(pip))
+        # site_delta is how far the site will shift when repositioned.
+        # All site-relative positions must be offset by this to stay in the right place.
+        site_delta = approach_global - np.array(site.globalPosition())
+
         direct_access = site.config.get("directAccess", False)
         going_inside = not np.allclose(spec.position, 0)
-        target_global = np.array(site.mapToGlobal(spec.position)) if going_inside else approach_global
+        # target_global is computed from the current transform then corrected for site movement.
+        target_global = np.array(site.mapToGlobal(spec.position)) + site_delta if going_inside else approach_global
 
         start = np.array(pip.globalPosition())
 
