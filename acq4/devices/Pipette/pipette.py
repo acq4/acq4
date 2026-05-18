@@ -291,9 +291,7 @@ class Pipette(Device, OptomechDevice):
         # thread safety? if a user starts a new stepwise movement simultaneous with stopping, they
         # deserve to have to stop a second or even third time.
         self.keepOnStepping = False
-        cmp = self.currentMotionPlanner
-        if cmp is not None:
-            cmp.stop()
+        self.parentStage.stop()
 
     def deviceInterface(self, win):
         """Return a widget with a UI to put in the device rack"""
