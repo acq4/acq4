@@ -37,13 +37,6 @@ class DefaultMotionPlanner(MotionPlanner):
     Override the relevant ``_plan_*`` methods for rig-specific behavior (see MinirigV1MotionPlanner).
     """
 
-    def __init__(self, config=None):
-        super().__init__(config)
-
-    # ------------------------------------------------------------------
-    # Device reservation
-    # ------------------------------------------------------------------
-
     def collect_devices(self, plan) -> set:
         devices = super().collect_devices(plan)
         # scope position must be stable while pipette path-finding runs
@@ -53,10 +46,6 @@ class DefaultMotionPlanner(MotionPlanner):
                 if scope is not None:
                     devices.add(scope)
         return devices
-
-    # ------------------------------------------------------------------
-    # Planning entry point
-    # ------------------------------------------------------------------
 
     def plan(self, specs, name=""):
         return SequentialGroup([self._plan_one(spec, name) for spec in specs], name or "motion plan")
@@ -70,10 +59,6 @@ class DefaultMotionPlanner(MotionPlanner):
                 return self._plan_interaction_exit(spec, name, containing_site)
             return self._plan_pipette_move(spec, name)
         return self._plan_generic(spec, name)
-
-    # ------------------------------------------------------------------
-    # Device type detection
-    # ------------------------------------------------------------------
 
     @staticmethod
     def _is_interaction_site(device) -> bool:
@@ -217,9 +202,6 @@ class DefaultMotionPlanner(MotionPlanner):
         Override in subclasses (e.g. GeometryAwareMotionPlanner) for full obstacle avoidance.
         The returned path does not include the starting position.
         """
-        man = getManager()
-        mod = man.getOrLoadModule("Visualize3D")
-        adapter = mod.window().findAdapter(lambda a: a.device == pip)
         explanation = explanation or MOVE_TO_DESTINATION
         globalStart = np.asarray(globalStart)
         globalStop = np.asarray(globalStop)
@@ -261,6 +243,7 @@ class DefaultMotionPlanner(MotionPlanner):
             path += slowpath + [(globalStop, speed, False, explanation)]
 
         path = path[1:]
+        full_path = [globalStart] + [p[0] for p in path]
         for globalPos, spd, linear, stepName in path:
             if not np.isfinite(globalPos).all():
                 raise ValueError(
@@ -270,12 +253,32 @@ class DefaultMotionPlanner(MotionPlanner):
                 manipulatorGlobalPos = pip._solveGlobalStagePosition(globalPos)
                 pip.parentDevice().checkGlobalLimits(manipulatorGlobalPos, linear)
             except Exception as e:
-                adapter.setPathError([globalStart] + [p[0] for p in path], failed_at=globalPos)
+                self._on_path_error(pip, full_path, globalPos)
                 raise ValueError(
                     f"Moving {pip} to '{stepName}' would be beyond the limits of its manipulator: {e}"
                 ) from e
-        adapter.setPath([globalStart] + [p[0] for p in path])
+        self._on_path_computed(pip, full_path)
         return path
+
+    def _on_path_computed(self, pip, full_path):
+        """Notify visualization after a valid path is computed. Override to suppress in tests."""
+        try:
+            man = getManager()
+            mod = man.getOrLoadModule("Visualize3D")
+            adapter = mod.window().findAdapter(lambda a: a.device == pip)
+            adapter.setPath(full_path)
+        except Exception:
+            pass
+
+    def _on_path_error(self, pip, full_path, failed_at):
+        """Notify visualization when a path step fails limit checks. Override to suppress in tests."""
+        try:
+            man = getManager()
+            mod = man.getOrLoadModule("Visualize3D")
+            adapter = mod.window().findAdapter(lambda a: a.device == pip)
+            adapter.setPathError(full_path, failed_at=failed_at)
+        except Exception:
+            pass
 
     def _enforce_safe_speed(self, pip, start, stop, speed, explanation, linear):
         """Return path segments with speed reduced for portions near the sample surface."""

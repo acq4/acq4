@@ -36,6 +36,9 @@ class MockStage(MockDevice):
     def homePosition(self):
         return np.array([0.0, 0.0, 5e-3])
 
+    def checkGlobalLimits(self, pos, linear=False):
+        pass
+
 
 class MockScope(MockDevice):
     """Microscope/scope mock with setGlobalPosition."""
@@ -74,6 +77,12 @@ class MockPipette(MockDevice):
 
     def parentDevice(self):
         return self._parent_stage
+
+    def pitchRadians(self):
+        return np.pi / 4  # 45-degree approach angle; convenient for test geometry
+
+    def _solveGlobalStagePosition(self, pos):
+        return np.asarray(pos, dtype=float)
 
     def _moveToGlobalNoPlanning(self, pos, speed, name=None, **kwargs):
         self.moves.append((np.asarray(pos, dtype=float), speed, name))
