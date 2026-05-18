@@ -241,7 +241,7 @@ def findNewPipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=0.
             bgFrameArray = np.stack([f.data() for f in bgFrames], axis=0)
             bgFrame = bgFrameArray.mean(axis=0)
 
-        # record from imager and pipette position while moving pipette across the objecive
+        # record from imager and pipette position while moving pipette across the objective
         frames, posEvents = watchMovingPipette(pipette, imager, searchPos2, speed=searchSpeed, _future=_future)
         framesArray = np.stack([f.data() for f in frames])
 

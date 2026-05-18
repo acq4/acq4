@@ -18,6 +18,19 @@ class MoveSpec:
 
     position is expressed in relative_to's local coordinate frame when relative_to is set,
     otherwise in global coordinates.  speed is a hint; the planner may tighten it for safety.
+
+    Arguments
+    ---------
+    device
+        The device to move.
+    position
+        The target position for the device, either in global coordinates or relative to another
+        device.
+    relative_to
+        If set, the position is interpreted as relative to this device's current position.
+    speed
+        Optional speed hint for the move, e.g. "fast", "slow", or a numeric speed in m/s.  The
+        planner may ignore or modify this for safety.
     """
 
     device: "Device"

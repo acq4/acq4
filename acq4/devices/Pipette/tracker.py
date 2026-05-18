@@ -326,14 +326,14 @@ class CorrelationPipetteTracker(PipetteTracker):
         frames = np.stack([f.data()[minImgPos[0]:maxImgPos[0], minImgPos[1]:maxImgPos[1]] for f in frames], axis=0).astype(float)
 
         # collect background stack
-        _future.waitFor(self.pipette._moveToLocal([-tipLength * 3, 0, 0], "slow"))
+        _future.waitFor(self.pipette.moveToLocalNoPlanning([-tipLength * 3, 0, 0], "slow"))
         bg_frames = acquire_z_stack(
             imager, zStart, zEnd, zStep, block=True, name="background for subtracting"
         ).getResult()
         bg_frames = np.stack([f.data()[minImgPos[0]:maxImgPos[0], minImgPos[1]:maxImgPos[1]] for f in bg_frames], axis=0).astype(float)
 
         # return pipette to original position
-        self.pipette._moveToLocal([tipLength * 3, 0, 0], "slow")
+        self.pipette.moveToLocalNoPlanning([tipLength * 3, 0, 0], "slow")
 
         # find frame that most closely matches center frame
         maxInd = np.argmax([imageTemplateMatch(f, center)[1] for f in frames])
@@ -391,7 +391,7 @@ class CorrelationPipetteTracker(PipetteTracker):
             # move pipette and take a background frame
             if pos is None:
                 pos = self.pipette.globalPosition()
-            self.pipette._moveToLocal([-tipLength * 3, 0, 0], "fast").wait()
+            self.pipette.moveToLocalNoPlanning([-tipLength * 3, 0, 0], "fast").wait()
             bg_frame = self.takeFrame()
         else:
             bg_frame = None

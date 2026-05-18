@@ -1,6 +1,3 @@
-# MinirigV1MotionPlanner: motion planner for the minirig rig configuration.
-# Adds scope-parking logic around InteractionSite interactions (cleaning wells,
-# nucleus deposition tubes).  The scope path is reversed when the pipette exits.
 from __future__ import annotations
 
 import numpy as np
@@ -12,15 +9,15 @@ from .spec import MoveSpec
 
 
 class MinirigV1MotionPlanner(DefaultMotionPlanner):
-    """Motion planner for the minirig rig.
+    """Motion planner for the v1 minirig rig.
 
-    Extends DefaultMotionPlanner with scope-parking: when approaching an InteractionSite
-    that has a scopeParkPos in its config, the scope is moved out of the way first and
-    its path is stored so it can be reversed when the pipette exits.
+    Extends DefaultMotionPlanner with "microscope parking": when approaching an InteractionSite
+    that has a scopeParkPos in its config, the scope is moved out of the way first and its path
+    is stored so it can be reversed when the pipette exits.
 
     Configure via MotionPlanner.class in the ACQ4 config file:
         MotionPlanner:
-            class: acq4.motion.MinirigV1MotionPlanner
+            class: "acq4.motion.MinirigV1MotionPlanner"
     """
 
     def __init__(self, config=None):

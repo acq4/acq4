@@ -10,9 +10,7 @@ def _move_device(device, position, speed, name):
     """Call the appropriate movement primitive on a device."""
     if hasattr(device, "moveToGlobalNoPlanning"):
         return device.moveToGlobalNoPlanning(position, speed, name=name)
-    if hasattr(device, "setGlobalPosition"):
-        return device.setGlobalPosition(position, speed, name=name)
-    raise RuntimeError(f"Device {device!r} has no moveToGlobalNoPlanning or setGlobalPosition method")
+    raise RuntimeError(f"Device {device!r} has no moveToGlobalNoPlanning method")
 
 
 @future_wrap
