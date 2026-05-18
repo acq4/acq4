@@ -221,6 +221,10 @@ class Pipette(Device, OptomechDevice):
         }
         if position in go_methods:
             future = go_methods[position](speed=speed, **kwds)
+        elif position == 'clean' and self.getCleaningWell():
+            future = self.getCleaningWell().moveToInteract(self, speed=speed)
+        elif position == 'rinse' and self.getElectrodeSolutionWell():
+            future = self.getElectrodeSolutionWell().moveToInteract(self, speed=speed)
         else:
             saved_pos = self.loadPosition(position)
             if saved_pos is None:

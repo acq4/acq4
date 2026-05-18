@@ -51,35 +51,34 @@ class CleanState(PatchPipetteState):
         config = self.config.copy()
         dev = self.dev
         pip = dev.pipetteDevice
-        man = getManager()
 
         self.setState('cleaning')
 
-        sequence = config['cleanSequence']
-        if isinstance(sequence, str):
-            sequence = eval(sequence, units.__dict__)
-        assert len(sequence) > 0
+        for stage in ('clean', 'rinse'):
+            self.checkStop()
 
-        cw = pip.getCleaningWell()
-        self.waitFor(cw.moveToInteract(pip), timeout=60)
+            sequence = config[f'{stage}Sequence']
+            if isinstance(sequence, str):
+                sequence = eval(sequence, units.__dict__)
+            if len(sequence) == 0:
+                continue
 
-        if dev.sonicatorDevice is not None:
-            self.sonication = dev.sonicatorDevice.doProtocol(config['sonicationProtocol'])
+            self.waitFor(pip.moveTo(stage, "fast"), timeout=60)
 
-        for pressure, delay in sequence:
-            dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
-            self.sleep(delay)
+            if dev.sonicatorDevice is not None:
+                self.sonication = dev.sonicatorDevice.doProtocol(config['sonicationProtocol'])
 
-        if self.sonication is not None and not self.sonication.isDone():
-            self.waitFor(self.sonication)
+            for pressure, delay in sequence:
+                dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
+                self.sleep(delay)
+
+            if self.sonication is not None and not self.sonication.isDone():
+                self.waitFor(self.sonication)
 
         dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
-
         self.waitFor(pip.goHome())
-
         dev.pipetteRecord()['cleanCount'] += 1
         dev.setTipClean(True)
-        self.currentFuture = None
         dev.newPatchAttempt()
         return {"state": config['nextState']}
 
