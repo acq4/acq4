@@ -307,7 +307,10 @@ class Microscope(Device, OptomechDevice):
 
         if len(pos) == 3 and focusDevice is not positionDevice:
             z = pos[2]
-            zFuture = self.setFocusDepth(z, name=f'{name} Z')
+            dif = z - self.getFocusDepth()
+            fdpos = focusDevice.globalPosition()
+            fdpos[2] += dif
+            zFuture = focusDevice.moveToGlobalNoPlanning(fdpos, speed, name=f'{name} Z')
             pos = pos[:2]
         else:
             zFuture = None
@@ -315,11 +318,11 @@ class Microscope(Device, OptomechDevice):
         if len(pos) == 2:
             pos = list(pos) + [self.getFocusDepth()]
 
-        # Determine how to move the xy(z) stage to react the new center position
+        # Determine how to move the xy(z) stage to reach the new center position
         gpos = self.globalPosition()
         sgpos = positionDevice.globalPosition()
         sgpos2 = sgpos + (pos - gpos)
-        xyFuture = self.dm.move(MoveSpec(positionDevice, sgpos2, speed=speed), name=f'{name} XY')
+        xyFuture = positionDevice.moveToGlobalNoPlanning(sgpos2, speed, name=f'{name} XY')
         if zFuture is None:
             return xyFuture
         else:
