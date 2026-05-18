@@ -13,6 +13,9 @@ class PlanningError(Exception):
 
 
 class MotionPlanner:
+    """Base class for global motion planners. Subclasses must either implement plan() or override
+    execute() with rig-specific logic.
+    """
     def __init__(self, config=None):
         self.config = config or {}
 

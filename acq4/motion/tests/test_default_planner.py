@@ -13,7 +13,7 @@ from acq4.motion.spec import MoveSpec
 from acq4.motion.tests.conftest import MockDevice, MockInteractionSite, MockPipette, MockScope, MockStage
 
 
-def make_planner():
+def make_simplified_planner():
     """Return a DefaultMotionPlanner whose _safe_path returns a straight line to the target."""
     from acq4.motion.default_planner import DefaultMotionPlanner
 
@@ -41,7 +41,7 @@ def _flat_moves(plan):
 # ---------------------------------------------------------------------------
 
 def test_generic_device_global_move():
-    planner = make_planner()
+    planner = make_simplified_planner()
     dev = MockDevice("dev1", (0.0, 0.0, 0.0))
     target = np.array([1e-3, 2e-3, 3e-3])
     plan = planner.plan([MoveSpec(dev, target)])
@@ -52,21 +52,21 @@ def test_generic_device_global_move():
 
 
 def test_generic_device_speed_hint_used():
-    planner = make_planner()
+    planner = make_simplified_planner()
     dev = MockDevice("dev1")
     plan = planner.plan([MoveSpec(dev, [0, 0, 0], speed="slow")])
     assert _flat_moves(plan)[0].speed == "slow"
 
 
 def test_generic_device_default_speed_is_fast():
-    planner = make_planner()
+    planner = make_simplified_planner()
     dev = MockDevice("dev1")
     plan = planner.plan([MoveSpec(dev, [0, 0, 0])])
     assert _flat_moves(plan)[0].speed == "fast"
 
 
 def test_generic_device_relative_to_resolves_to_global():
-    planner = make_planner()
+    planner = make_simplified_planner()
     dev = MockDevice("dev1")
     anchor = MockDevice("anchor", (10e-3, 0.0, 0.0))
     local_pos = np.array([1e-3, 0.0, 0.0])
@@ -79,7 +79,7 @@ def test_generic_device_relative_to_resolves_to_global():
 # ---------------------------------------------------------------------------
 
 def test_pipette_move_produces_atomic_steps(pip):
-    planner = make_planner()
+    planner = make_simplified_planner()
     target = np.array([0.0, 0.0, 5e-3])
     plan = planner.plan([MoveSpec(pip, target)])
     moves = _flat_moves(plan)
@@ -92,7 +92,7 @@ def test_pipette_move_retraction_when_near_sample(pip):
     retract_pos = np.array([0.0, 0.0, 0.0])
     target = np.array([1e-3, 0.0, -0.5e-3])
 
-    planner = make_planner()
+    planner = make_simplified_planner()
     planner._safe_path = lambda p, start, stop, speed, explanation=None: [
         (retract_pos, "slow", True, "retraction"),
         (np.asarray(stop, dtype=float), speed, False, "final"),
@@ -108,7 +108,7 @@ def test_pipette_move_retraction_when_near_sample(pip):
 def test_pipette_speed_hint_propagated(pip):
     captured = []
 
-    planner = make_planner()
+    planner = make_simplified_planner()
     original = planner._safe_path
 
     def capture(p, start, stop, speed, explanation=None):
@@ -122,7 +122,7 @@ def test_pipette_speed_hint_propagated(pip):
 
 def test_pipette_uses_planner_safe_path(pip):
     """Planner must route pipette moves through its own _safe_path."""
-    planner = make_planner()
+    planner = make_simplified_planner()
     called = []
     original = planner._safe_path
     planner._safe_path = lambda *a, **kw: called.append(True) or original(*a, **kw)
@@ -136,7 +136,7 @@ def test_pipette_uses_planner_safe_path(pip):
 
 def test_interaction_approach_only_goes_to_site_origin(pip, site):
     """MoveSpec with zero position = approach only; pip ends at site.globalPosition()."""
-    planner = make_planner()
+    planner = make_simplified_planner()
     plan = planner.plan([MoveSpec(pip, np.zeros(3), relative_to=site)])
     moves = _flat_moves(plan)
     pip_moves = [m for m in moves if m.device is pip]
@@ -145,7 +145,7 @@ def test_interaction_approach_only_goes_to_site_origin(pip, site):
 
 def test_interaction_site_plan_has_approach_then_interact(pip, site):
     """Non-zero spec.position goes to approach first, then to the target inside the site."""
-    planner = make_planner()
+    planner = make_simplified_planner()
     interact_local = np.array(site.positions[pip.name()]["interact local"])
     plan = planner.plan([MoveSpec(pip, interact_local, relative_to=site)])
 
@@ -168,7 +168,7 @@ def test_interaction_site_plan_has_approach_then_interact(pip, site):
 
 def test_direct_access_site_skips_approach_waypoint(pip, site_with_direct_access):
     """Sites with directAccess: true skip the approach waypoint enforcement."""
-    planner = make_planner()
+    planner = make_simplified_planner()
     interact_local = np.array(site_with_direct_access.positions[pip.name()]["interact local"])
     plan = planner.plan([MoveSpec(pip, interact_local, relative_to=site_with_direct_access)])
     moves = _flat_moves(plan)
@@ -199,7 +199,7 @@ def test_movable_site_stage_repositioned_before_approach(pip):
     site.approachMoveSpec = lambda p, speed='fast': _MoveSpec(stage, stage_target, speed=speed)
     site.approachGlobal = lambda p: calibrated_approach
 
-    planner = make_planner()
+    planner = make_simplified_planner()
     interact_local = np.array(site.positions[pip.name()]["interact local"])
     plan = planner.plan([_MoveSpec(pip, interact_local, relative_to=site)])
     moves = _flat_moves(plan)
@@ -221,7 +221,7 @@ def test_movable_site_stage_repositioned_before_approach(pip):
 
 def test_fixed_site_no_stage_move(pip, site):
     """Fixed sites (approachMoveSpec returns None) produce no stage move."""
-    planner = make_planner()
+    planner = make_simplified_planner()
     interact_local = np.array(site.positions[pip.name()]["interact local"])
     plan = planner.plan([MoveSpec(pip, interact_local, relative_to=site)])
     moves = _flat_moves(plan)
@@ -231,7 +231,7 @@ def test_fixed_site_no_stage_move(pip, site):
 
 def test_interaction_site_no_scope_moves_in_default_planner(pip, site_with_scope_park):
     """DefaultMotionPlanner never touches the scope, even when scopeParkPos is configured."""
-    planner = make_planner()
+    planner = make_simplified_planner()
     interact_local = np.array(site_with_scope_park.positions[pip.name()]["interact local"])
     plan = planner.plan([MoveSpec(pip, interact_local, relative_to=site_with_scope_park)])
     scope_moves = [m for m in _flat_moves(plan) if isinstance(m.device, MockScope)]
@@ -244,7 +244,7 @@ def test_interaction_site_no_scope_moves_in_default_planner(pip, site_with_scope
 
 def test_interaction_exit_prepends_approach_waypoint(pip, site):
     """When _find_containing_site returns a site, the pip exits via approach first."""
-    planner = make_planner()
+    planner = make_simplified_planner()
     planner._find_containing_site = lambda dev: site if dev is pip else None
 
     home_pos = np.array([0.0, 0.0, 5e-3])
@@ -258,7 +258,7 @@ def test_interaction_exit_prepends_approach_waypoint(pip, site):
 
 def test_no_exit_waypoint_when_pip_not_in_site(pip):
     """When _find_containing_site returns None, no approach waypoint is added."""
-    planner = make_planner()
+    planner = make_simplified_planner()
     planner._find_containing_site = lambda dev: None
 
     home_pos = np.array([0.0, 0.0, 5e-3])
@@ -275,7 +275,7 @@ def test_no_exit_waypoint_when_pip_not_in_site(pip):
 
 def test_collect_devices_includes_scope_for_pipette(pip):
     """DefaultMotionPlanner adds the pipette's scope to the reserved device set."""
-    planner = make_planner()
+    planner = make_simplified_planner()
     plan = SequentialGroup([AtomicMove(pip, np.zeros(3), "fast")])
     devices = planner.collect_devices(plan)
     assert pip in devices
@@ -284,7 +284,7 @@ def test_collect_devices_includes_scope_for_pipette(pip):
 
 def test_collect_devices_generic_device_no_extra(pip):
     dev = MockDevice("dev1")
-    planner = make_planner()
+    planner = make_simplified_planner()
     plan = SequentialGroup([AtomicMove(dev, np.zeros(3), "fast")])
     devices = planner.collect_devices(plan)
     assert devices == {dev}
@@ -295,12 +295,12 @@ def test_collect_devices_generic_device_no_extra(pip):
 # ---------------------------------------------------------------------------
 
 def test_plan_name_becomes_top_level_explanation(pip):
-    planner = make_planner()
+    planner = make_simplified_planner()
     plan = planner.plan([MoveSpec(pip, np.zeros(3))], name="go home")
     assert plan.explanation == "go home"
 
 
 def test_plan_default_explanation_when_no_name(pip):
-    planner = make_planner()
+    planner = make_simplified_planner()
     plan = planner.plan([MoveSpec(pip, np.zeros(3))])
     assert plan.explanation == "motion plan"
