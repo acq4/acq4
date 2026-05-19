@@ -1,5 +1,4 @@
 # Tests for DefaultMotionPlanner.plan().
-# The default planner is rig-agnostic: no scope parking, no unwind logic.
 from __future__ import annotations
 
 from unittest.mock import MagicMock

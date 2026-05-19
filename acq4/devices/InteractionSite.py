@@ -215,7 +215,7 @@ class InteractionSite(Device, OptomechDevice):
     def moveToInteract(self, other, speed='fast'):
         """Move *other* (typically a pipette) to its saved interact position within this site.
 
-        Delegates to the global motion planner, which handles scope parking, approach sequencing,
+        Delegates to the global motion planner, which handles microscope parking, approach sequencing,
         and device reservation.
         """
         interact_local = self.interactLocalFor(other)

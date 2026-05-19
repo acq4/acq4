@@ -17,7 +17,7 @@ class GeometryAwareMotionPlanner(DefaultMotionPlanner):
     """DefaultMotionPlanner variant that uses full geometric obstacle avoidance for pipette paths.
 
     Primes a convex-hull obstacle cache on first use per pipette via the Visualize3D module.
-    All other planning behaviour (interaction sites, scope parking, etc.) is inherited.
+    All other planning behaviour is inherited.
 
     Configure via MotionPlanner.class in the ACQ4 config file:
         MotionPlanner:

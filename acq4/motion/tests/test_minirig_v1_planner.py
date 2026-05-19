@@ -31,7 +31,7 @@ def _flat_moves(plan):
 
 
 # ---------------------------------------------------------------------------
-# Interaction approach with scope park
+# Interaction approach with microscope park
 # ---------------------------------------------------------------------------
 
 def test_no_scope_park_when_not_configured(pip, site):

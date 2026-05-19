@@ -26,7 +26,7 @@ class MinirigV1MotionPlanner(DefaultMotionPlanner):
         self._scope_context: dict[str, tuple] = {}
 
     # ------------------------------------------------------------------
-    # Override: prepend scope park to the interaction approach sequence
+    # Override: prepend microscope park to the interaction approach sequence
     # ------------------------------------------------------------------
 
     def _plan_interaction_approach(self, spec: "MoveSpec", name: str = "") -> "MovePlanStep":
@@ -51,7 +51,7 @@ class MinirigV1MotionPlanner(DefaultMotionPlanner):
                 AtomicMove(scope, up_pos, spec.speed or "fast", "scope up before approach"),
                 AtomicMove(scope, park_pos, spec.speed or "fast", "scope to park position"),
             ],
-            "scope park",
+            "park microscope",
         )
         return SequentialGroup([scope_park] + base.steps, base.explanation)
 
