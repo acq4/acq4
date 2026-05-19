@@ -16,8 +16,6 @@ WAYPOINT_TO_AVOID_SAMPLE_TEAR = "waypoint to avoid sample tear"
 MOVE_TO_DESTINATION = "final move to destination"
 OBSTACLE_AVOIDANCE = "intermediate waypoint to avoid obstacles"
 APPROACH_WAYPOINT = "approach waypoint"
-SAFE_SPEED_WAYPOINT = "safe speed waypoint"
-APPROACH_TO_CORRECT_FOR_HYSTERESIS = "hysteresis correction waypoint"
 
 
 class DefaultMotionPlanner(MotionPlanner):
@@ -211,55 +209,43 @@ class DefaultMotionPlanner(MotionPlanner):
     def _safe_path(self, pip, globalStart, globalStop, speed, explanation=None):
         """Return a list of (position, speed, linear, explanation) waypoints from start to stop.
 
-        Assumes upright scope (objective avoidance) and thick sample (slow axial motion near tissue).
+        Tissue crossings always occur along the pipette's global axis: the waypoint at the
+        tissue boundary is positionAtDepth(approachDepth, start=<tissue endpoint>).
         Override in subclasses (e.g. GeometryAwareMotionPlanner) for full obstacle avoidance.
         The returned path does not include the starting position.
         """
         explanation = explanation or MOVE_TO_DESTINATION
-        globalStart = np.asarray(globalStart)
-        globalStop = np.asarray(globalStop)
-        path = [(globalStart, "", False, "")]
+        globalStart = np.asarray(globalStart, dtype=float)
+        globalStop = np.asarray(globalStop, dtype=float)
 
-        pipGlobalDir = pip.globalDirection()
+        slowDepth = pip.approachDepth()
+        start_in = globalStart[2] < slowDepth
+        stop_in = globalStop[2] < slowDepth
+        tissue_speed = speed if speed == "slow" else "slow"
 
-        # retract first if we are doing a lateral movement inside the sample
-        globalDiff = globalStop - globalStart
-        lateralDiff = globalDiff - np.dot(globalDiff, pipGlobalDir) * pipGlobalDir
-        lateralDist = np.linalg.norm(lateralDiff)
-        if lateralDist > 1e-6:
-            slowDepth = pip.approachDepth()
-            canMoveLaterally = globalStart[2] > slowDepth or globalStop[2] > slowDepth
-            if not canMoveLaterally:
-                safePos = pip.positionAtDepth(slowDepth, start=globalStart)
-                path.append((safePos, "slow", True, RETRACTION_TO_AVOID_SAMPLE_TEAR))
-                globalStart = safePos
-
-        # ensure lateral motion occurs as far away from the recording chamber as possible
-        localStart = pip.mapFromGlobal(path[-1][0])
-        localStop = pip.mapFromGlobal(globalStop)
-
-        diff = localStop - localStart
-        inward = diff[0] > 0
-        innerPos, outerPos = (localStop, localStart) if inward else (localStart, localStop)
-
-        pitch = pip.pitchRadians()
-        localDirection = np.array([np.cos(pitch), 0, -np.sin(pitch)])
-        if localDirection[0] == 0 or localDirection[2] == 0:
-            raise ValueError(f"Invalid pipette pitch {pitch}; cannot compute approach waypoints.")
-        waypoint1 = innerPos - localDirection * abs((diff[0] / localDirection[0]))
-        waypoint2 = innerPos - localDirection * abs((diff[2] / localDirection[2]))
-        dist1 = np.linalg.norm(waypoint1 - innerPos)
-        dist2 = np.linalg.norm(waypoint2 - innerPos)
-        waypoint = pip.mapToGlobal(waypoint1 if dist1 < dist2 else waypoint2)
-
-        if inward:
-            slowpath = self._enforce_safe_speed(pip, waypoint, globalStop, speed, explanation, linear=True)
-            path += [(waypoint, speed, False, APPROACH_WAYPOINT)] + slowpath
+        if not start_in and not stop_in:
+            path = [(globalStop, speed, False, explanation)]
+        elif stop_in and not start_in:
+            entry_wp = pip.positionAtDepth(slowDepth, start=globalStop)
+            path = [
+                (entry_wp, speed, False, APPROACH_WAYPOINT),
+                (globalStop, tissue_speed, True, explanation),
+            ]
+        elif start_in and not stop_in:
+            exit_wp = pip.positionAtDepth(slowDepth, start=globalStart)
+            path = [
+                (exit_wp, tissue_speed, True, APPROACH_WAYPOINT),
+                (globalStop, speed, False, explanation),
+            ]
         else:
-            slowpath = self._enforce_safe_speed(pip, globalStart, waypoint, speed, APPROACH_WAYPOINT, linear=True)
-            path += slowpath + [(globalStop, speed, False, explanation)]
+            retract_pos = pip.positionAtDepth(slowDepth, start=globalStart)
+            entry_wp = pip.positionAtDepth(slowDepth, start=globalStop)
+            path = [
+                (retract_pos, tissue_speed, True, RETRACTION_TO_AVOID_SAMPLE_TEAR),
+                (entry_wp, speed, False, WAYPOINT_TO_AVOID_SAMPLE_TEAR),
+                (globalStop, tissue_speed, True, explanation),
+            ]
 
-        path = path[1:]
         full_path = [globalStart] + [p[0] for p in path]
         for globalPos, spd, linear, stepName in path:
             if not np.isfinite(globalPos).all():
@@ -297,41 +283,3 @@ class DefaultMotionPlanner(MotionPlanner):
         except Exception:
             pass
 
-    def _enforce_safe_speed(self, pip, start, stop, speed, explanation, linear):
-        """Return path segments with speed reduced for portions near the sample surface."""
-        if speed == "slow":
-            return [(stop, speed, linear, explanation)]
-        slowDepth = pip.approachDepth()
-        startSlow = start[2] < slowDepth
-        stopSlow = stop[2] < slowDepth
-        if startSlow and stopSlow:
-            return [(stop, "slow", linear, explanation)]
-        if not startSlow and not stopSlow:
-            return [(stop, speed, linear, explanation)]
-        waypoint = pip.positionAtDepth(slowDepth, start=start)
-        if startSlow:
-            return [
-                (waypoint, "slow", linear, SAFE_SPEED_WAYPOINT),
-                (stop, speed, linear, explanation),
-            ]
-        return [
-            (waypoint, speed, linear, SAFE_SPEED_WAYPOINT),
-            (stop, "slow", linear, explanation),
-        ]
-
-    def _safe_yz_position(self, pip, start, margin=2e-3):
-        """Return a position where the pipette can freely move in its local YZ plane."""
-        start = np.asarray(start)
-        scope = pip.scopeDevice()
-        obj = scope.currentObjective
-        objRadius = obj.radius
-        assert objRadius is not None, "Can't determine safe location; objective radius not configured."
-        localFocus = pip.mapFromGlobal(scope.globalPosition())
-        safeX = localFocus[0] - objRadius - margin
-        localStart = pip.mapFromGlobal(start)
-        if localStart[0] < safeX:
-            return start
-        dx = safeX - localStart[0]
-        localDir = pip.localDirection()
-        safePos = localStart + localDir * (dx / localDir[0])
-        return pip.mapToGlobal(safePos)

@@ -468,14 +468,15 @@ def test_movable_site_approach_pip_lift_is_parallel_not_sequential():
 #
 # Geometry for the inward tests (pip at (0,0,5e-3), pitch=π/4, approachDepth=0):
 #   Move from pip.globalPosition() → (5e-3, 0, -3e-3)
-#   Computes APPROACH_WAYPOINT at (0,0,2e-3), then splits at approachDepth=0:
-#     SAFE_SPEED_WAYPOINT (0,0,0) @ fast, MOVE_TO_DESTINATION (5e-3,0,-3e-3) @ slow.
+#   Approach waypoint = positionAtDepth(0, start=(5e-3,0,-3e-3)) = (2e-3, 0, 0).
+#   Path: APPROACH_WAYPOINT (2e-3,0,0) @ fast, MOVE_TO_DESTINATION (5e-3,0,-3e-3) @ slow.
 #
 # Geometry for the above-surface test (pip at (0,0,5e-3), approachDepth=0):
 #   Move from pip.globalPosition() → (5e-3, 0, 3e-3)  — stays above z=0 throughout.
 #
 # Geometry for the retraction test (pip at (0,0,-2e-3), approachDepth=0):
 #   Lateral (y-direction) move while both endpoints are below approachDepth → retraction.
+#   retract_pos = positionAtDepth(0, start=(0,0,-2e-3)) = (-2e-3, 0, 0) at pitch=π/4.
 
 
 @pytest.fixture
@@ -488,6 +489,42 @@ def real_pip_above():
 def real_pip_below():
     """Pipette below approachDepth=0, so lateral moves require retraction first."""
     return MockPipette("pip_below", global_pos=(0.0, 0.0, -2e-3), approach_depth=0.0)
+
+
+def test_inward_move_approach_waypoint_on_pipette_axis(real_pip_above):
+    """Entering tissue: approach waypoint must be positionAtDepth(approachDepth, start=target)."""
+    pip = real_pip_above
+    target = np.array([5e-3, 0.0, -3e-3])
+    expected_wp = pip.positionAtDepth(pip.approachDepth(), start=target)
+
+    planner = make_real_planner()
+    path = planner._safe_path(pip, pip.globalPosition(), target, "fast")
+
+    positions = [step[0] for step in path]
+    assert any(np.allclose(p, expected_wp, atol=1e-9) for p in positions), (
+        f"Expected approach waypoint {expected_wp} in path, got {positions}"
+    )
+    wp_idx = next(i for i, p in enumerate(positions) if np.allclose(p, expected_wp, atol=1e-9))
+    tgt_idx = next(i for i, p in enumerate(positions) if np.allclose(p, target, atol=1e-9))
+    assert wp_idx < tgt_idx, "Approach waypoint must precede tissue destination"
+
+
+def test_outward_move_exit_waypoint_on_pipette_axis(real_pip_below):
+    """Exiting tissue: exit waypoint must be positionAtDepth(approachDepth, start=globalStart)."""
+    pip = real_pip_below
+    target = np.array([0.0, 0.0, 5e-3])
+    expected_wp = pip.positionAtDepth(pip.approachDepth(), start=pip.globalPosition())
+
+    planner = make_real_planner()
+    path = planner._safe_path(pip, pip.globalPosition(), target, "fast")
+
+    positions = [step[0] for step in path]
+    assert any(np.allclose(p, expected_wp, atol=1e-9) for p in positions), (
+        f"Expected exit waypoint {expected_wp} in path, got {positions}"
+    )
+    wp_idx = next(i for i, p in enumerate(positions) if np.allclose(p, expected_wp, atol=1e-9))
+    tgt_idx = next(i for i, p in enumerate(positions) if np.allclose(p, target, atol=1e-9))
+    assert wp_idx < tgt_idx, "Exit waypoint must precede above-tissue destination"
 
 
 def test_safe_path_approach_waypoint_is_named(real_pip_above):
@@ -510,16 +547,6 @@ def test_safe_path_final_step_is_named_move_to_destination(real_pip_above):
     path = planner._safe_path(pip, pip.globalPosition(), np.array([5e-3, 0.0, -3e-3]), "fast")
     assert path[-1][3] == MOVE_TO_DESTINATION
 
-
-def test_safe_path_safe_speed_waypoint_named_when_crossing_approach_depth(real_pip_above):
-    """When the path crosses approachDepth the speed-transition waypoint must be named SAFE_SPEED_WAYPOINT."""
-    from acq4.motion.default_planner import SAFE_SPEED_WAYPOINT
-
-    pip = real_pip_above
-    planner = make_real_planner()
-    path = planner._safe_path(pip, pip.globalPosition(), np.array([5e-3, 0.0, -3e-3]), "fast")
-    names = [step[3] for step in path]
-    assert SAFE_SPEED_WAYPOINT in names, f"Expected SAFE_SPEED_WAYPOINT in {names}"
 
 
 def test_safe_path_slow_speed_below_approach_depth(real_pip_above):

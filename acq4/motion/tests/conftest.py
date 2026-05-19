@@ -63,10 +63,13 @@ class MockPipette(MockDevice):
         return self._approach_depth
 
     def positionAtDepth(self, depth, start=None):
-        pos = (start if start is not None else self._global_pos).copy()
-        pos = np.asarray(pos, dtype=float).copy()
-        pos[2] = depth
-        return pos
+        if start is None:
+            start = self._global_pos.copy()
+        start = np.asarray(start, dtype=float)
+        axis = self.globalDirection()
+        dz = depth - start[2]
+        dist = dz / axis[2]
+        return start + dist * axis
 
     def scopeDevice(self):
         return self._scope
