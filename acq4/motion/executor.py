@@ -13,17 +13,16 @@ def _move_device(device, position, speed, name):
     raise RuntimeError(f"Device {device!r} has no moveToGlobalNoPlanning method")
 
 
-@future_wrap
-def execute_plan(plan, _future=None):
+def execute_plan(plan, _future):
     """Recursively execute a plan tree, blocking until the full tree completes."""
     if isinstance(plan, AtomicMove):
         _future.waitFor(_move_device(plan.device, plan.position, plan.speed, plan.explanation))
     elif isinstance(plan, SequentialGroup):
         for step in plan.steps:
-            _future.waitFor(execute_plan(step))
+            execute_plan(step, _future)
     elif isinstance(plan, ParallelGroup):
         # Start all branches before waiting for any of them.
-        futures = [execute_plan(step) for step in plan.steps]
+        futures = [future_wrap(execute_plan)(step) for step in plan.steps]
         for f in futures:
             try:
                 _future.waitFor(f)

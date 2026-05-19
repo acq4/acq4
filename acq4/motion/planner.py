@@ -51,4 +51,4 @@ class MotionPlanner:
         devices = self.collect_devices(plan)
         man = getManager()
         with man.reserveDevices(list(devices), reserver=type(self).__name__):
-            _future.waitFor(execute_plan(plan))
+            execute_plan(plan, _future)
