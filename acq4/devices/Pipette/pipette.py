@@ -554,31 +554,28 @@ class Pipette(Device, OptomechDevice):
         end_pos = np.asarray(self.globalPosition()) + global_move
         return self.dm.move(MoveSpec(self, end_pos, speed=speed))
 
-    @future_wrap
-    def goSearch(self, speed='fast', distance=0, _future=None, **kwds):
+    def goSearch(self, speed='fast', distance=0):
         """Focus the scope above the surface, then move the tip to the search position.
 
         *distance* adjusts the position along the pipette axis relative to the camera center.
         """
         scope = self.scopeDevice()
         cam = self.imagingDevice()
-
         surfaceDepth = scope.getSurfaceDepth()
         if surfaceDepth is None:
             raise ValueError("Cannot determine search position; surface depth is not defined.")
-        searchDepth = surfaceDepth + self._opts["searchHeight"]
 
-        # Move scope focus up if needed; pip must wait for the objective to clear.
-        if cam.getFocusDepth() < searchDepth:
-            scope_pos = np.array(scope.globalPosition())
-            scope_pos[2] = searchDepth
-            _future.waitFor(self.dm.move(MoveSpec(scope, scope_pos, speed=speed)))
+        scope_pos = np.array(scope.globalPosition())
+        scope_pos[2] = surfaceDepth + self._opts["searchHeight"]
 
         globalCenter = cam.globalCenterPosition("roi")
-        globalCenter[2] += self._opts["searchTipHeight"] - self._opts["searchHeight"]
+        globalCenter[2] = surfaceDepth + self._opts["searchTipHeight"]
         target = globalCenter + self.globalDirection() * distance
 
-        _future.waitFor(self.dm.move(MoveSpec(self, target, speed=speed)))
+        return self.dm.move(
+            MoveSpec(scope, scope_pos, speed=speed),
+            MoveSpec(self, target, speed=speed),
+        )
 
     def goApproach(self, speed, **kwds):
         """Move the tip to approach depth above the target, aligned along the pipette axis."""

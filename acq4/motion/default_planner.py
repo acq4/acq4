@@ -47,8 +47,9 @@ class DefaultMotionPlanner(MotionPlanner):
                     devices.add(scope)
         return devices
 
+
     def plan(self, specs, name=""):
-        # TODO make this parallel (requires thread-safe locking)
+        # TODO can this be parallel? (requires at least thread-safe locking)
         return SequentialGroup([self._plan_one(spec, name) for spec in specs], name or "motion plan")
 
     def _plan_one(self, spec: MoveSpec, name: str = "") -> MovePlanStep:
