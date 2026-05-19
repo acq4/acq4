@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from acq4 import getManager
 from acq4.motion import MoveSpec
 from acq4.util.future import future_wrap
 from pyqtgraph import units
@@ -47,7 +46,6 @@ class NucleusCollectState(PatchPipetteState):
         config = self.config.copy()
         dev = self.dev
         pip = dev.pipetteDevice
-        man = getManager()
 
         self.setState('nucleus collection')
 
