@@ -31,8 +31,9 @@ class DefaultMotionPlanner(MotionPlanner):
     Path generation for pipette moves lives on this class (see _safe_path and friends).
     GeometryAwareMotionPlanner is a subclass that overrides _safe_path with obstacle avoidance.
 
-    Sites may set ``directAccess: true`` in their config to skip approach-waypoint enforcement.
-    Use this for the recording chamber.  Clean wells and nucleus tubes should leave it unset.
+    Sites may set ``strictApproachAndExitPath: true`` in their config to enforce the approach
+    waypoint on entry and force exit via the approach position.  Use this for cleaning wells
+    and nucleus tubes.  Recording chambers should leave it unset (default false).
 
     Override the relevant ``_plan_*`` methods for rig-specific behavior (see MinirigV1MotionPlanner).
     """
@@ -46,7 +47,6 @@ class DefaultMotionPlanner(MotionPlanner):
                 if scope is not None:
                     devices.add(scope)
         return devices
-
 
     def plan(self, specs, name=""):
         # TODO can this be parallel? (requires at least thread-safe locking)
@@ -95,9 +95,10 @@ class DefaultMotionPlanner(MotionPlanner):
     def _plan_interaction_approach(self, spec: MoveSpec, name: str = "") -> MovePlanStep:
         """Generate waypoints to reach an InteractionSite target.
 
-        Approach = site origin (site.globalPosition()).  If the site is on a movable stage,
-        a parallel group repositions the stage while the pipette rises to a safe height.
-        Sites with ``directAccess: true`` skip approach-waypoint enforcement.
+        Approach:
+            If the site is on a movable stage, a parallel group repositions the stage while the
+            pipette rises to a safe height. Sites with ``strictApproachAndExitPath: true`` enforce
+            the approach waypoint; others allow direct access.
         """
         site = spec.relative_to
         pip = spec.device
@@ -110,7 +111,7 @@ class DefaultMotionPlanner(MotionPlanner):
         # All site-relative positions must be offset by this to stay in the right place.
         site_delta = approach_global - np.array(site.globalPosition())
 
-        direct_access = site.config.get("directAccess", False)
+        strict_path = site.strictApproachAndExitPath()
         going_inside = not np.allclose(spec.position, 0)
         # target_global is computed from the current transform then corrected for site movement.
         target_global = np.array(site.mapToGlobal(spec.position)) + site_delta if going_inside else approach_global
@@ -121,19 +122,22 @@ class DefaultMotionPlanner(MotionPlanner):
         site_spec = site.approachMoveSpec(pip, speed=speed)
         prefix_steps = []
         if site_spec is not None:
-            safe_z = pip.positionAtDepth(pip.approachDepth(), start=start)
             prefix_steps = [
                 ParallelGroup(
                     [
                         self._plan_generic(site_spec, f"position {site.name()}"),
-                        AtomicMove(pip, safe_z, speed, "pip to safe height"),
                     ],
                     f"reposition {site.name()} and lift pip",
                 )
             ]
-            start = safe_z
+            safe_z = pip.positionAtDepth(pip.approachDepth(), start=start)
+            if safe_z[2] > start[2]:
+                prefix_steps[0].steps.append(
+                    AtomicMove(pip, safe_z, speed, "pip to safe height")
+                )
+                start = safe_z
 
-        if not going_inside or direct_access:
+        if not going_inside or not strict_path:
             final = approach_global if not going_inside else target_global
             waypoints = self._safe_path(pip, start, final, speed)
             steps = [AtomicMove(pip, pos, spd, expl) for pos, spd, _, expl in waypoints]
@@ -152,9 +156,16 @@ class DefaultMotionPlanner(MotionPlanner):
     # ------------------------------------------------------------------
 
     def _plan_interaction_exit(self, spec: MoveSpec, name: str = "", containing_site=None) -> MovePlanStep:
-        """Exit a restricted-access site via its approach position before moving to the target."""
+        """Exit an interaction site and move to the target.
+
+        When the site has ``strictApproachAndExitPath: true``, the pipette first moves to the
+        site's approach position before continuing.  Otherwise it moves directly.
+        """
+        if not containing_site.strictApproachAndExitPath():
+            return self._plan_pipette_move(spec, name)
+
         pip = spec.device
-        approach_global = np.array(containing_site.globalPosition())
+        approach_global = containing_site.approachGlobal(pip)
         speed = spec.speed or "fast"
 
         exit_step = AtomicMove(pip, approach_global, speed, f"exit site before {name or 'move'}")
@@ -209,8 +220,12 @@ class DefaultMotionPlanner(MotionPlanner):
         globalStop = np.asarray(globalStop)
         path = [(globalStart, "", False, "")]
 
+        pipGlobalDir = pip.globalDirection()
+
         # retract first if we are doing a lateral movement inside the sample
-        lateralDist = np.linalg.norm(globalStop[1:] - globalStart[1:])
+        globalDiff = globalStop - globalStart
+        lateralDiff = globalDiff - np.dot(globalDiff, pipGlobalDir) * pipGlobalDir
+        lateralDist = np.linalg.norm(lateralDiff)
         if lateralDist > 1e-6:
             slowDepth = pip.approachDepth()
             canMoveLaterally = globalStart[2] > slowDepth or globalStop[2] > slowDepth
@@ -320,5 +335,3 @@ class DefaultMotionPlanner(MotionPlanner):
         localDir = pip.localDirection()
         safePos = localStart + localDir * (dx / localDir[0])
         return pip.mapToGlobal(safePos)
-
-

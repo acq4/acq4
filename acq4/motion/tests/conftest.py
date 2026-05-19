@@ -81,6 +81,10 @@ class MockPipette(MockDevice):
     def pitchRadians(self):
         return np.pi / 4  # 45-degree approach angle; convenient for test geometry
 
+    def globalDirection(self):
+        pitch = self.pitchRadians()
+        return np.array([np.cos(pitch), 0.0, -np.sin(pitch)])
+
     def _solveGlobalStagePosition(self, pos):
         return np.asarray(pos, dtype=float)
 
@@ -101,15 +105,13 @@ class MockInteractionSite(MockDevice):
         global_pos=(0.0, 0.0, 0.0),
         scope_park_pos=None,
         parent_stage=None,
-        direct_access=False,
+        strict_path=False,
     ):
         super().__init__(name, global_pos)
         self.positions = {}
-        self.config = {}
+        self.config = {"strictApproachAndExitPath": strict_path}
         if scope_park_pos is not None:
             self.config["scopeParkPos"] = np.asarray(scope_park_pos, dtype=float)
-        if direct_access:
-            self.config["directAccess"] = True
         self._parentStage = parent_stage or MockStage(f"{name}_stage", global_pos)
 
     def save_positions_for(self, pip, interact_global):
@@ -127,6 +129,9 @@ class MockInteractionSite(MockDevice):
         if saved is not None:
             return np.asarray(saved, dtype=float)
         return self.globalPosition()
+
+    def strictApproachAndExitPath(self) -> bool:
+        return self.config.get("strictApproachAndExitPath", False)
 
     def approachMoveSpec(self, pip, speed='fast'):
         """Fixed mock site — no stage repositioning needed."""
@@ -156,7 +161,7 @@ def stage():
 
 @pytest.fixture
 def site(pip):
-    s = MockInteractionSite("cleanwell", global_pos=(5e-3, 0.0, -2e-3))
+    s = MockInteractionSite("cleanwell", global_pos=(5e-3, 0.0, -2e-3), strict_path=True)
     s.save_positions_for(pip, np.array([0.0, 0.0, -1e-3]))
     return s
 
@@ -165,16 +170,16 @@ def site(pip):
 def site_with_scope_park(pip):
     park = np.array([20e-3, 0.0, 15e-3])
     s = MockInteractionSite(
-        "cleanwell", global_pos=(5e-3, 0.0, -2e-3), scope_park_pos=park
+        "cleanwell", global_pos=(5e-3, 0.0, -2e-3), scope_park_pos=park, strict_path=True
     )
     s.save_positions_for(pip, np.array([0.0, 0.0, -1e-3]))
     return s
 
 
 @pytest.fixture
-def site_with_direct_access(pip):
+def site_without_strict_path(pip):
     s = MockInteractionSite(
-        "recording_chamber", global_pos=(5e-3, 0.0, -2e-3), direct_access=True
+        "recording_chamber", global_pos=(5e-3, 0.0, -2e-3), strict_path=False
     )
     s.save_positions_for(pip, np.array([0.0, 0.0, -1e-3]))
     return s

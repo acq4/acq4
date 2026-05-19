@@ -180,6 +180,10 @@ class InteractionSite(Device, OptomechDevice):
         stage_global_target = np.array(self._parentStage.globalPosition()) + site_delta
         return MoveSpec(self._parentStage, stage_global_target, speed=speed)
 
+    def strictApproachAndExitPath(self) -> bool:
+        """Return True if approach and exit must follow the strict path through the site origin."""
+        return self.config.get("strictApproachAndExitPath", False)
+
     def interactLocalFor(self, pip):
         """Return the interact position in this site's local frame, or None if not calibrated."""
         pos_config = self.positions.get(pip.name(), {})

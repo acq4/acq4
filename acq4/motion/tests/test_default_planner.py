@@ -188,15 +188,15 @@ def test_interaction_site_plan_has_approach_then_interact(pip, site):
     assert approach_idx < interact_idx
 
 
-def test_direct_access_site_skips_approach_waypoint(pip, site_with_direct_access):
-    """Sites with directAccess: true skip the approach waypoint enforcement."""
+def test_non_strict_path_site_skips_approach_waypoint(pip, site_without_strict_path):
+    """Sites without strictApproachAndExitPath skip the approach waypoint on entry."""
     planner = make_simplified_planner()
-    interact_local = np.array(site_with_direct_access.positions[pip.name()]["interact local"])
-    plan = planner.plan([MoveSpec(pip, interact_local, relative_to=site_with_direct_access)])
+    interact_local = np.array(site_without_strict_path.positions[pip.name()]["interact local"])
+    plan = planner.plan([MoveSpec(pip, interact_local, relative_to=site_without_strict_path)])
     moves = _flatten(plan)
     pip_moves = [m for m in moves if m.device is pip]
-    approach_global = np.array(site_with_direct_access.globalPosition())
-    interact_global = np.array(site_with_direct_access.positions[pip.name()]["interact global"])
+    approach_global = np.array(site_without_strict_path.globalPosition())
+    interact_global = np.array(site_without_strict_path.positions[pip.name()]["interact global"])
     # last move reaches the interact position
     np.testing.assert_array_almost_equal(pip_moves[-1].position, interact_global)
     # approach position must not appear as an intermediate stop
@@ -210,7 +210,7 @@ def test_movable_site_stage_repositioned_before_approach(pip):
     from acq4.motion.spec import MoveSpec as _MoveSpec
     stage = MockStage("well_stage", (3e-3, 0.0, 0.0))
     # Site is currently at (6e-3, 0, -2e-3) — stage has drifted from calibrated position.
-    site = MockInteractionSite("cleanwell", global_pos=(6e-3, 0.0, -2e-3))
+    site = MockInteractionSite("cleanwell", global_pos=(6e-3, 0.0, -2e-3), strict_path=True)
     # Calibrated approach position is (5e-3, 0, -2e-3) — where it should be.
     calibrated_approach = np.array([5e-3, 0.0, -2e-3])
     interact_global = np.array([5e-3, 0.0, -3e-3])
@@ -261,7 +261,7 @@ def test_interaction_site_no_scope_moves_in_default_planner(pip, site_with_scope
 
 
 # ---------------------------------------------------------------------------
-# InteractionSite exit — approach waypoint prepended when pip is inside a site
+# InteractionSite exit — approach waypoint prepended only for strict-path sites
 # ---------------------------------------------------------------------------
 
 def test_interaction_exit_prepends_approach_waypoint(pip, site):
@@ -289,6 +289,21 @@ def test_no_exit_waypoint_when_pip_not_in_site(pip):
     pip_moves = [m for m in moves if m.device is pip]
 
     np.testing.assert_array_almost_equal(pip_moves[0].position, home_pos)
+
+
+def test_non_strict_exit_skips_approach_waypoint(pip, site_without_strict_path):
+    """Sites without strictApproachAndExitPath allow the pip to exit directly."""
+    planner = make_simplified_planner()
+    planner._find_containing_site = lambda dev: site_without_strict_path if dev is pip else None
+
+    home_pos = np.array([0.0, 0.0, 5e-3])
+    plan = planner.plan([MoveSpec(pip, home_pos)])
+    moves = _flatten(plan)
+    pip_moves = [m for m in moves if m.device is pip]
+
+    approach_global = np.array(site_without_strict_path.globalPosition())
+    assert not any(np.allclose(m.position, approach_global) for m in pip_moves)
+    np.testing.assert_array_almost_equal(pip_moves[-1].position, home_pos)
 
 
 # ---------------------------------------------------------------------------
@@ -354,10 +369,12 @@ def test_movable_site_approach_contains_parallel_group(pip):
     assert len(parallel_groups) >= 1
 
 
-def test_movable_site_approach_parallel_group_contains_pip_and_stage(pip):
-    """The parallel group must move both the pip (lift) and the stage (reposition) together."""
+def test_movable_site_approach_parallel_group_contains_pip_and_stage():
+    """When pip starts below approach depth, the parallel group lifts it alongside the stage move."""
     from acq4.motion.spec import MoveSpec as _MoveSpec
 
+    # pip below approach depth — lift is needed
+    pip = MockPipette("pip1", global_pos=(0.0, 0.0, -2e-3), approach_depth=0.0)
     stage = MockStage("well_stage", (3e-3, 0.0, 0.0))
     site = MockInteractionSite("cleanwell", global_pos=(6e-3, 0.0, -2e-3))
     calibrated_approach = np.array([5e-3, 0.0, -2e-3])
@@ -385,10 +402,39 @@ def test_movable_site_approach_parallel_group_contains_pip_and_stage(pip):
     assert found, "No ParallelGroup contained both pip and stage moves"
 
 
-def test_movable_site_approach_pip_lift_is_parallel_not_sequential(pip):
-    """The pip must rise at the same time as the stage repositions, not before or after."""
+def test_movable_site_no_pip_lift_when_already_at_safe_z():
+    """When pip is already at or above approach depth, no pip lift is added to the plan."""
     from acq4.motion.spec import MoveSpec as _MoveSpec
 
+    # pip at exactly approach depth — already safe, no lift needed
+    pip = MockPipette("pip1", global_pos=(0.0, 0.0, 0.0), approach_depth=0.0)
+    stage = MockStage("well_stage", (3e-3, 0.0, 0.0))
+    site = MockInteractionSite("cleanwell", global_pos=(6e-3, 0.0, -2e-3))
+    calibrated_approach = np.array([5e-3, 0.0, -2e-3])
+    interact_global = np.array([5e-3, 0.0, -3e-3])
+    site.save_positions_for(pip, interact_global)
+    site.positions[pip.name()]["site global"] = list(calibrated_approach)
+    stage_target = np.array([2e-3, 0.0, 0.0])
+    site.approachMoveSpec = lambda p, speed="fast": _MoveSpec(stage, stage_target, speed=speed)
+    site.approachGlobal = lambda p: calibrated_approach
+
+    planner = make_simplified_planner()
+    interact_local = np.array(site.positions[pip.name()]["interact local"])
+    plan = planner.plan([_MoveSpec(pip, interact_local, relative_to=site)])
+
+    parallel_groups = _collect_parallel_groups(plan)
+    for pg in parallel_groups:
+        members = _flatten(pg)
+        pip_moves = [m for m in members if m.device is pip]
+        assert len(pip_moves) == 0, "Pip should not be lifted when already at safe z"
+
+
+def test_movable_site_approach_pip_lift_is_parallel_not_sequential():
+    """When pip needs lifting, it must rise in the same ParallelGroup as the stage, not before it."""
+    from acq4.motion.spec import MoveSpec as _MoveSpec
+
+    # pip below approach depth — lift will be added to the parallel group
+    pip = MockPipette("pip1", global_pos=(0.0, 0.0, -2e-3), approach_depth=0.0)
     stage = MockStage("well_stage", (3e-3, 0.0, 0.0))
     site = MockInteractionSite("cleanwell", global_pos=(6e-3, 0.0, -2e-3))
     calibrated_approach = np.array([5e-3, 0.0, -2e-3])
@@ -409,8 +455,11 @@ def test_movable_site_approach_pip_lift_is_parallel_not_sequential(pip):
     assert isinstance(approach_group, SequentialGroup)
     first_child = approach_group.steps[0]
     assert isinstance(first_child, ParallelGroup), (
-        "First step of the approach SequentialGroup must be a ParallelGroup (pip lift + stage reposition)"
+        "First step of the approach SequentialGroup must be a ParallelGroup (stage reposition, + pip lift when needed)"
     )
+    members = _flatten(first_child)
+    assert any(m.device is pip for m in members), "Pip lift must be inside the ParallelGroup"
+    assert any(m.device is stage for m in members), "Stage reposition must be inside the ParallelGroup"
 
 
 # ---------------------------------------------------------------------------
