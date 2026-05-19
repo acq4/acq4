@@ -75,12 +75,6 @@ class Pipette(Device, OptomechDevice):
     * **approachHeight** (float, optional): The distance to bring the pipette tip above the sample surface when beginning
       a diagonal approach. Default is 100 * um.
 
-    * **idleHeight** (float, optional): The distance to bring the pipette tip above the sample surface when in idle position.
-      Default is 1 * mm.
-
-    * **idleDistance** (float, optional): The x/y distance from the global origin from which the pipette top should be placed
-      in idle mode. Default is 7 * mm.
-
     * **recordingChambers** (list, optional): List of names of RecordingChamber devices that this Pipette is meant to work with.
 
     * **cleaningWell** (str, optional): Name of the well (RecordingChamber) device associated with
@@ -105,7 +99,6 @@ class Pipette(Device, OptomechDevice):
             yaw: 45.0
             searchHeight: 2 * mm
             approachHeight: 100 * um
-            idleHeight: 1 * mm
             recordingChambers: ['Chamber1']
             cleaningWell: 'CleaningWell1'
     """
@@ -131,8 +124,6 @@ class Pipette(Device, OptomechDevice):
             'searchTipHeight': config.get('searchTipHeight', 1.5e-3),
             'approachHeight': config.get('approachHeight', 100e-6),
             'cleanApproachHeight': config.get('cleanApproachHeight', 1500e-6),
-            'idleHeight': config.get('idleHeight', 1e-3),
-            'idleDistance': config.get('idleDistance', 7e-3),
             'showCameraModuleUI': config.get('showCameraModuleUI', False),
         }
 
@@ -205,7 +196,7 @@ class Pipette(Device, OptomechDevice):
     def moveTo(self, position: str, speed, raiseErrors=False, **kwds):
         """Move the pipette tip to a named position, with safe motion planning.
 
-        Named computed positions (home, search, approach, target, aboveTarget, idle) delegate to
+        Named computed positions (home, search, approach, target, aboveTarget) delegate to
         the corresponding go*() method which resolves the target coordinate(s) and calls the
         global motion planner.  Stored positions use the global planner directly.
 
@@ -217,7 +208,6 @@ class Pipette(Device, OptomechDevice):
             'approach': self.goApproach,
             'target': self.goTarget,
             'aboveTarget': self.goAboveTarget,
-            'idle': self.goIdle,
         }
         if position in go_methods:
             future = go_methods[position](speed=speed, **kwds)
@@ -609,27 +599,6 @@ class Pipette(Device, OptomechDevice):
                 MoveSpec(scope, above_target, speed=speed),
             )
         )
-
-    @future_wrap
-    def goIdle(self, speed='fast', _future=None, **kwds):
-        """Move the tip to the idle position at the edge of the recording chamber."""
-        scope = self.scopeDevice()
-
-        surface = scope.getSurfaceDepth()
-        if surface is None:
-            raise ValueError("Surface depth has not been set.")
-        idleDepth = surface + self._opts["idleHeight"]
-
-        # Retract along the axis first if the tip is below idle depth.
-        pos = self.globalPosition()
-        if pos[2] < idleDepth:
-            idle_axial = self.positionAtDepth(idleDepth)
-            _future.waitFor(self.dm.move(MoveSpec(self, idle_axial, speed=speed)))
-
-        angle = self.yawRadians()
-        ds = self._opts["idleDistance"]
-        idle_pos = np.array([-ds * np.cos(angle), -ds * np.sin(angle), idleDepth])
-        _future.waitFor(self.dm.move(MoveSpec(self, idle_pos, speed=speed)))
 
     def _movePath(self, path, name=None) -> MovePathFuture:
         """
@@ -1194,7 +1163,6 @@ class PipetteCamModInterface(CameraModuleInterface):
         self.calibrateAxis.sigRegionChanged.connect(self.calibrateAxisChanging)
         self.ui.homeBtn.clicked.connect(self.homeClicked)
         self.ui.searchBtn.clicked.connect(self.searchClicked)
-        self.ui.idleBtn.clicked.connect(self.idleClicked)
         self.ui.setTargetBtn.toggled.connect(self.setTargetToggled)
         self.ui.targetBtn.clicked.connect(self.targetClicked)
         self.ui.approachBtn.clicked.connect(self.approachClicked)
@@ -1346,9 +1314,6 @@ class PipetteCamModInterface(CameraModuleInterface):
 
     def searchClicked(self):
         self.getDevice().goSearch(self.selectedSpeed())
-
-    def idleClicked(self):
-        self.getDevice().goIdle(self.selectedSpeed())
 
     def setTargetToggled(self, b):
         if b:
