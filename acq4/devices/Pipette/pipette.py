@@ -592,13 +592,13 @@ class Pipette(Device, OptomechDevice):
 
         # Approach from 100 µm back along the pipette axis to normalize hysteresis.
         hysteresis_wp = above_target + self.globalDirection() * -100e-6
-        _future.waitFor(self.dm.move(MoveSpec(self, hysteresis_wp, speed=speed)))
         _future.waitFor(
             self.dm.move(
-                MoveSpec(self, above_target, speed=speed),
+                MoveSpec(self, hysteresis_wp, speed=speed),
                 MoveSpec(scope, above_target, speed=speed),
             )
         )
+        _future.waitFor(self.dm.move(MoveSpec(self, above_target, speed=speed)))
 
     def _movePath(self, path, name=None) -> MovePathFuture:
         """
