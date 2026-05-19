@@ -288,10 +288,7 @@ class InteractionSiteDeviceGui(Qt.QWidget):
         self.pipetteCombo.currentIndexChanged.connect(self._updatePositionLabels)
 
     def _populatePipettes(self):
-        from .Pipette.pipette import Pipette
-
-        man = self.dev.dm
-        pipettes = [name for name in man.listDevices() if isinstance(man.getDevice(name), Pipette)]
+        pipettes = self.dev.dm.listInterfaces('pipette')
         has_pipettes = bool(pipettes)
         for name in pipettes:
             self.pipetteCombo.addItem(name)
