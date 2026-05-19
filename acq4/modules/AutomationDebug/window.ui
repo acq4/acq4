@@ -274,6 +274,18 @@
     </widget>
    </item>
    <item>
+    <widget class="QGroupBox" name="groupBox_4">
+     <property name="title">
+      <string>Motion Planner</string>
+     </property>
+     <layout class="QGridLayout" name="groupBox_4_layout">
+      <item row="0" column="0">
+       <widget class="QComboBox" name="motionPlannerSelector"/>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
     <widget class="QGroupBox" name="groupBox_2">
      <property name="title">
       <string>Pipette calibration</string>

@@ -460,17 +460,22 @@ class Manager(Qt.QObject):
     def motionPlanner(self):
         """Return the global motion planner, instantiating it on first access.
 
-        The planner class is configurable via ``MotionPlanner.class`` in the ACQ4 config file.
-        Defaults to DefaultMotionPlanner when not configured.
+        The planner class is configurable via ``motionPlanner.class`` in the ACQ4 config file.
+        Defaults to DefaultMotionPlanner when not configured. All other keys are passed as
+        arguments to the motion planner constructor.
         """
         if self._motion_planner is None:
-            cfg = self.config.get("MotionPlanner", {})
-            cls_path = cfg.get("class", "acq4.motion.DefaultMotionPlanner")
+            cfg = self.config.get("motionPlanner", {}).copy()
+            cls_path = cfg.pop("class", "acq4.motion.DefaultMotionPlanner")
             module_path, cls_name = cls_path.rsplit(".", 1)
             mod = importlib.import_module(module_path)
             cls = getattr(mod, cls_name)
-            self._motion_planner = cls(cfg)
+            self._motion_planner = cls(**cfg)
         return self._motion_planner
+
+    @motionPlanner.setter
+    def motionPlanner(self, planner):
+        self._motion_planner = planner
 
     def move(self, *specs, name: str = ""):
         """Execute a motion plan for one or more MoveSpec objects.

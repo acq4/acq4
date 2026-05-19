@@ -10,6 +10,11 @@ from acq4.devices.Camera import Camera
 from acq4.devices.Microscope import Microscope
 from acq4.devices.PatchPipette import PatchPipette
 from acq4.devices.Pipette import Pipette
+from acq4.motion import (
+    DefaultMotionPlanner,
+    GeometryAwareMotionPlanner,
+    MinirigV1MotionPlanner,
+)
 from acq4.logging_config import get_logger
 from acq4.modules.Module import Module
 from acq4.util import Qt
@@ -85,6 +90,11 @@ class AutomationDebugWindow(Qt.QWidget):
             future_producer=self._detector._addCellFromTarget, stoppable=True
         )
 
+        self.ui.motionPlannerSelector.addItems(self._MOTION_PLANNERS.keys())
+        self.ui.motionPlannerSelector.currentIndexChanged.connect(
+            self._changeMotionPlanner
+        )
+
         self.ui.rankCellsBtn.clicked.connect(self._detector._rankCells)
         self.ui.selectRankDirBtn.clicked.connect(self._detector._selectRankDir)
 
@@ -146,6 +156,9 @@ class AutomationDebugWindow(Qt.QWidget):
         self.ui.reuseLastCellBtn.clicked.connect(self._reuseAllCells)
 
         self.show()
+        current_planner = type(self.module.manager.motionPlanner).__name__
+        with pg.SignalBlock(self.ui.motionPlannerSelector.currentIndexChanged, self._changeMotionPlanner):
+            self.ui.motionPlannerSelector.setCurrentText(current_planner)
         # Set default ranking dir
         default_rank_dir = (
             Path(self.module.manager.getBaseDir().name()) / "ranked_cells"
@@ -320,6 +333,17 @@ class AutomationDebugWindow(Qt.QWidget):
         # x = random.uniform(self._xLeftSpin.value(), self._xRightSpin.value())
         # y = random.uniform(self._yBottomSpin.value(), self._yTopSpin.value())
         # return x, y
+
+    _MOTION_PLANNERS = {
+        "DefaultMotionPlanner": DefaultMotionPlanner,
+        "GeometryAwareMotionPlanner": GeometryAwareMotionPlanner,
+        "MinirigV1MotionPlanner": MinirigV1MotionPlanner,
+    }
+
+    def _changeMotionPlanner(self, idx):
+        name = self.ui.motionPlannerSelector.currentText()
+        cls = self._MOTION_PLANNERS[name]
+        self.module.manager.motionPlanner = cls()
 
     def quit(self):
         self.close()
