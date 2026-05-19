@@ -1,5 +1,3 @@
-# DefaultMotionPlanner: generic motion planning for pipettes, interaction sites, and stages.
-# Any rig-specific sequencing belongs in a subclass.
 from __future__ import annotations
 
 import numpy as np
