@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from acq4.util.future import future_wrap
-
 from .plan import AtomicMove, ParallelGroup, SequentialGroup
 
 
