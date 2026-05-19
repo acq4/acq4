@@ -20,7 +20,7 @@ class GeometryAwareMotionPlanner(DefaultMotionPlanner):
     All other planning behaviour is inherited.
 
     Configure via MotionPlanner.class in the ACQ4 config file:
-        MotionPlanner:
+        motionPlanner:
             class: acq4.motion.GeometryAwareMotionPlanner
     """
 
