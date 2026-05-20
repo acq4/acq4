@@ -116,7 +116,7 @@ class InteractionSite(Device, OptomechDevice):
         return self._parentStage.moveToGlobalNoPlanning(stage_pos, speed, **kwds)
 
     def containsPoint(self, pt, tolerance=1e-9):
-        """Return True if the x,y,z coordinates in *pt* lie within the boundaries of this site."""
+        """Return True if the global x,y,z coordinates in *pt* lie within the boundaries of this site."""
         for _, pos_config in self.positions.items():
             if 'site global' in pos_config and 'interact global' in pos_config:
                 if np.linalg.norm(np.array(pos_config['site global']) - np.array(pt)) < tolerance:
