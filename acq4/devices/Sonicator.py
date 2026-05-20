@@ -37,16 +37,15 @@ class Sonicator(Device):
         self.protocols = config.get("protocols", {})
 
     def safeToSonicate(self, _future: Future = None, askUser=True) -> bool:
-        return True  # TODO unbroke this
         pos = self.patchPipetteDevice.pipetteDevice.globalPosition()
-        well = self.patchPipetteDevice.pipetteDevice.getCleaningWell()
-        if well and well.containsPoint(pos, tolerance=5e-6):
-            return True
         lower_bound = self.config.get("unsafeSonicationBelow")
         if lower_bound is not None:
             lower_bound += self.patchPipetteDevice.scopeDevice().getSurfaceDepth()
             if pos[2] > lower_bound:
                 return True
+        chambers = self.patchPipetteDevice.pipetteDevice.getRecordingChambers()
+        if not any(c.containsPoint(pos) for c in chambers):
+            return True
         if not askUser:
             return False
         response = _future.waitFor(
