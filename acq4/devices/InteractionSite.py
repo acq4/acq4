@@ -180,9 +180,21 @@ class InteractionSite(Device, OptomechDevice):
         stage_global_target = np.array(self._parentStage.globalPosition()) + site_delta
         return MoveSpec(self._parentStage, stage_global_target, speed=speed)
 
-    def strictApproachAndExitPath(self) -> bool:
-        """Return True if approach and exit must follow the strict path through the site origin."""
-        return self.config.get("strictApproachAndExitPath", False)
+    def hasApproachPosition(self, pip) -> bool:
+        """Return True if a saved approach position exists for pip.
+
+        When True, the motion planner enforces entry and exit via the approach waypoint.
+        When False, the pipette may approach and exit the site directly.
+        Use clearApproachPosition() to remove the saved position and switch to direct access.
+        """
+        return "site global" in self.positions.get(pip.name(), {})
+
+    def clearApproachPosition(self, pip):
+        """Remove the saved approach position for pip, switching to direct (permissive) paths."""
+        pos_config = self.positions.get(pip.name(), {})
+        if "site global" in pos_config:
+            del pos_config["site global"]
+            self.writeConfigFile(self.positions, "saved_positions")
 
     def interactLocalFor(self, pip):
         """Return the interact position in this site's local frame, or None if not calibrated."""
@@ -261,9 +273,22 @@ class InteractionSiteDeviceGui(Qt.QWidget):
         self.pipetteCombo = Qt.QComboBox()
         layout.addWidget(self.pipetteCombo, row, 0)
 
+        _approach_tip = (
+            "With a saved approach position: the pipette must enter and exit via this "
+            "waypoint (strict path). Without one: the pipette may approach and exit "
+            "directly (permissive path). Use 'Clear' to remove the saved approach and "
+            "switch back to direct access."
+        )
+
         self.saveApproachBtn = Qt.QPushButton("Save approach position")
+        self.saveApproachBtn.setToolTip(_approach_tip)
         self.saveApproachBtn.clicked.connect(self._saveApproach)
         layout.addWidget(self.saveApproachBtn, row, 1)
+
+        self.clearApproachBtn = Qt.QPushButton("Clear")
+        self.clearApproachBtn.setToolTip(_approach_tip)
+        self.clearApproachBtn.clicked.connect(self._clearApproach)
+        layout.addWidget(self.clearApproachBtn, row, 2)
         row += 1
 
         self.saveInteractBtn = Qt.QPushButton("Save interact position")
@@ -298,8 +323,8 @@ class InteractionSiteDeviceGui(Qt.QWidget):
             self.pipetteCombo.addItem(name)
         self.pipetteCombo.setEnabled(has_pipettes)
         self.saveApproachBtn.setEnabled(has_pipettes)
+        self.clearApproachBtn.setEnabled(has_pipettes)
         self.saveInteractBtn.setEnabled(has_pipettes)
-        # self.doInteractBtn.setEnabled(has_pipettes)
         self._updatePositionLabels()
 
     def _selectedPipette(self):
@@ -312,6 +337,12 @@ class InteractionSiteDeviceGui(Qt.QWidget):
         pip = self._selectedPipette()
         if pip is not None:
             self.dev.saveApproachPosition(pip)
+            self._updatePositionLabels()
+
+    def _clearApproach(self):
+        pip = self._selectedPipette()
+        if pip is not None:
+            self.dev.clearApproachPosition(pip)
             self._updatePositionLabels()
 
     def _saveInteract(self):

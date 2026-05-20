@@ -98,8 +98,10 @@ class MockPipette(MockDevice):
 class MockInteractionSite(MockDevice):
     """InteractionSite mock.
 
-    Approach position is always the site's global origin (globalPosition()).
-    Interact positions are stored per-device via save_positions_for().
+    Approach position is always the site's global origin (globalPosition()) unless
+    save_approach_for() is called.  Interact positions are stored per-device via
+    save_positions_for().  hasApproachPosition() returns True when 'site global' is present
+    in positions for the given pipette, mirroring InteractionSite behaviour.
     """
 
     def __init__(
@@ -108,11 +110,10 @@ class MockInteractionSite(MockDevice):
         global_pos=(0.0, 0.0, 0.0),
         scope_park_pos=None,
         parent_stage=None,
-        strict_path=False,
     ):
         super().__init__(name, global_pos)
         self.positions = {}
-        self.config = {"strictApproachAndExitPath": strict_path}
+        self.config = {}
         if scope_park_pos is not None:
             self.config["scopeParkPos"] = np.asarray(scope_park_pos, dtype=float)
         self._parentStage = parent_stage or MockStage(f"{name}_stage", global_pos)
@@ -126,15 +127,22 @@ class MockInteractionSite(MockDevice):
             "interact local": list(interact_local),
         }
 
+    def save_approach_for(self, pip, site_global=None):
+        """Store the approach position for pip (defaults to the site's current global origin)."""
+        if site_global is None:
+            site_global = self.globalPosition()
+        self.positions.setdefault(pip.name(), {})
+        self.positions[pip.name()]["site global"] = list(np.asarray(site_global, dtype=float))
+
+    def hasApproachPosition(self, pip) -> bool:
+        return "site global" in self.positions.get(pip.name(), {})
+
     def approachGlobal(self, pip):
         pos_config = self.positions.get(pip.name(), {})
         saved = pos_config.get("site global")
         if saved is not None:
             return np.asarray(saved, dtype=float)
         return self.globalPosition()
-
-    def strictApproachAndExitPath(self) -> bool:
-        return self.config.get("strictApproachAndExitPath", False)
 
     def approachMoveSpec(self, pip, speed='fast'):
         """Fixed mock site — no stage repositioning needed."""
@@ -164,25 +172,24 @@ def stage():
 
 @pytest.fixture
 def site(pip):
-    s = MockInteractionSite("cleanwell", global_pos=(5e-3, 0.0, -2e-3), strict_path=True)
+    s = MockInteractionSite("cleanwell", global_pos=(5e-3, 0.0, -2e-3))
     s.save_positions_for(pip, np.array([0.0, 0.0, -1e-3]))
+    s.save_approach_for(pip)  # enables strict path
     return s
 
 
 @pytest.fixture
 def site_with_scope_park(pip):
     park = np.array([20e-3, 0.0, 15e-3])
-    s = MockInteractionSite(
-        "cleanwell", global_pos=(5e-3, 0.0, -2e-3), scope_park_pos=park, strict_path=True
-    )
+    s = MockInteractionSite("cleanwell", global_pos=(5e-3, 0.0, -2e-3), scope_park_pos=park)
     s.save_positions_for(pip, np.array([0.0, 0.0, -1e-3]))
+    s.save_approach_for(pip)  # enables strict path
     return s
 
 
 @pytest.fixture
 def site_without_strict_path(pip):
-    s = MockInteractionSite(
-        "recording_chamber", global_pos=(5e-3, 0.0, -2e-3), strict_path=False
-    )
+    s = MockInteractionSite("recording_chamber", global_pos=(5e-3, 0.0, -2e-3))
     s.save_positions_for(pip, np.array([0.0, 0.0, -1e-3]))
+    # no save_approach_for → hasApproachPosition returns False → permissive paths
     return s

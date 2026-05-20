@@ -1,3 +1,4 @@
+# DefaultMotionPlanner: safe pipette paths for an upright scope with tissue sample.
 from __future__ import annotations
 
 import numpy as np
@@ -6,7 +7,7 @@ from acq4 import getManager
 from acq4.util.future import future_wrap
 from .plan import AtomicMove, ParallelGroup, SequentialGroup
 from .plan import MovePlanStep
-from .planner import MotionPlanner, PlanningError
+from .planner import MotionPlanner
 from .spec import MoveSpec
 
 RETRACTION_TO_AVOID_SAMPLE_TEAR = "retracting away from sample"
@@ -27,9 +28,8 @@ class DefaultMotionPlanner(MotionPlanner):
     Path generation for pipette moves lives on this class (see _safe_path and friends).
     GeometryAwareMotionPlanner is a subclass that overrides _safe_path with obstacle avoidance.
 
-    Sites may set ``strictApproachAndExitPath: true`` in their config to enforce the approach
-    waypoint on entry and force exit via the approach position.  Use this for cleaning wells
-    and nucleus tubes.  Recording chambers should leave it unset (default false).
+    Sites that have a saved approach position enforce a strict entry/exit path through that
+    waypoint.  Recording chambers without a saved approach position allow direct access.
 
     Override the relevant ``_plan_*`` methods for rig-specific behavior (see MinirigV1MotionPlanner).
     """
@@ -57,12 +57,6 @@ class DefaultMotionPlanner(MotionPlanner):
                 return self._plan_interaction_exit(spec, name, containing_site)
             return self._plan_pipette_move(spec, name)
         return self._plan_generic(spec, name)
-
-    @staticmethod
-    def _is_interaction_site(device) -> bool:
-        return (
-            device is not None and hasattr(device, "positions") and hasattr(device, "_parentStage")
-        )
 
     @staticmethod
     def _is_pipette(device) -> bool:
@@ -93,8 +87,8 @@ class DefaultMotionPlanner(MotionPlanner):
 
         Approach:
             If the site is on a movable stage, a parallel group repositions the stage while the
-            pipette rises to a safe height. Sites with ``strictApproachAndExitPath: true`` enforce
-            the approach waypoint; others allow direct access.
+            pipette rises to a safe height. Sites with a saved approach position enforce the
+            approach waypoint; others allow direct access.
         """
         site = spec.relative_to
         pip = spec.device
@@ -107,7 +101,7 @@ class DefaultMotionPlanner(MotionPlanner):
         # All site-relative positions must be offset by this to stay in the right place.
         site_delta = approach_global - np.array(site.globalPosition())
 
-        strict_path = site.strictApproachAndExitPath()
+        has_approach = site.hasApproachPosition(pip)
         going_inside = not np.allclose(spec.position, 0)
         # target_global is computed from the current transform then corrected for site movement.
         target_global = np.array(site.mapToGlobal(spec.position)) + site_delta if going_inside else approach_global
@@ -133,15 +127,16 @@ class DefaultMotionPlanner(MotionPlanner):
                 )
                 start = safe_z
 
-        if not going_inside or not strict_path:
+        kw = spec.kwargs
+        if not going_inside or not has_approach:
             final = approach_global if not going_inside else target_global
             waypoints = self._safe_path(pip, start, final, speed)
-            steps = [AtomicMove(pip, pos, spd, expl) for pos, spd, _, expl in waypoints]
+            steps = [AtomicMove(pip, pos, spd, expl, {'linear': lin, **kw}) for pos, spd, lin, expl in waypoints]
             return SequentialGroup(prefix_steps + steps, name or f"approach {site.name()}")
 
         to_approach = self._safe_path(pip, start, approach_global, speed)
-        to_approach_steps = [AtomicMove(pip, pos, spd, expl) for pos, spd, _, expl in to_approach]
-        interact_step = AtomicMove(pip, target_global, speed, name or f"interact with {site.name()}")
+        to_approach_steps = [AtomicMove(pip, pos, spd, expl, {'linear': lin, **kw}) for pos, spd, lin, expl in to_approach]
+        interact_step = AtomicMove(pip, target_global, speed, name or f"interact with {site.name()}", kw)
         return SequentialGroup(
             prefix_steps + to_approach_steps + [interact_step],
             name or f"interact with {site.name()}",
@@ -154,20 +149,21 @@ class DefaultMotionPlanner(MotionPlanner):
     def _plan_interaction_exit(self, spec: MoveSpec, name: str = "", containing_site=None) -> MovePlanStep:
         """Exit an interaction site and move to the target.
 
-        When the site has ``strictApproachAndExitPath: true``, the pipette first moves to the
+        When the site has a saved approach position, the pipette first moves to the
         site's approach position before continuing.  Otherwise it moves directly.
         """
-        if not containing_site.strictApproachAndExitPath():
+        pip = spec.device
+        if not containing_site.hasApproachPosition(pip):
             return self._plan_pipette_move(spec, name)
 
-        pip = spec.device
         approach_global = containing_site.approachGlobal(pip)
         speed = spec.speed or "fast"
 
-        exit_step = AtomicMove(pip, approach_global, speed, f"exit site before {name or 'move'}")
+        kw = spec.kwargs
+        exit_step = AtomicMove(pip, approach_global, speed, f"exit site before {name or 'move'}", kw)
         target = np.asarray(spec.position, dtype=float)
         rest_waypoints = self._safe_path(pip, approach_global, target, speed)
-        rest_steps = [AtomicMove(pip, pos, spd, expl) for pos, spd, _, expl in rest_waypoints]
+        rest_steps = [AtomicMove(pip, pos, spd, expl, {'linear': lin, **kw}) for pos, spd, lin, expl in rest_waypoints]
         return SequentialGroup(
             [exit_step] + rest_steps,
             name or "exit site and move to target",
@@ -183,8 +179,9 @@ class DefaultMotionPlanner(MotionPlanner):
         target = np.asarray(spec.position, dtype=float)
         speed = spec.speed or "fast"
         start = np.array(pip.globalPosition())
+        kw = spec.kwargs
         waypoints = self._safe_path(pip, start, target, speed)
-        steps = [AtomicMove(pip, pos, spd, expl) for pos, spd, _linear, expl in waypoints]
+        steps = [AtomicMove(pip, pos, spd, expl, {'linear': lin, **kw}) for pos, spd, lin, expl in waypoints]
         return SequentialGroup(steps, name or "pipette move")
 
     # ------------------------------------------------------------------
@@ -198,7 +195,7 @@ class DefaultMotionPlanner(MotionPlanner):
             if spec.relative_to is not None
             else spec.position
         )
-        return AtomicMove(spec.device, global_pos, spec.speed or "fast", name or "move to target")
+        return AtomicMove(spec.device, global_pos, spec.speed or "fast", name or "move to target", spec.kwargs)
 
     # ------------------------------------------------------------------
     # Path generation — override in subclasses for geometry-aware routing
@@ -280,4 +277,3 @@ class DefaultMotionPlanner(MotionPlanner):
             adapter.setPathError(full_path, failed_at=failed_at)
         except Exception:
             pass
-

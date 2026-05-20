@@ -189,7 +189,7 @@ def test_interaction_site_plan_has_approach_then_interact(pip, site):
 
 
 def test_non_strict_path_site_skips_approach_waypoint(pip, site_without_strict_path):
-    """Sites without strictApproachAndExitPath skip the approach waypoint on entry."""
+    """Sites without a saved approach position skip the approach waypoint on entry."""
     planner = make_simplified_planner()
     interact_local = np.array(site_without_strict_path.positions[pip.name()]["interact local"])
     plan = planner.plan([MoveSpec(pip, interact_local, relative_to=site_without_strict_path)])
@@ -210,12 +210,12 @@ def test_movable_site_stage_repositioned_before_approach(pip):
     from acq4.motion.spec import MoveSpec as _MoveSpec
     stage = MockStage("well_stage", (3e-3, 0.0, 0.0))
     # Site is currently at (6e-3, 0, -2e-3) — stage has drifted from calibrated position.
-    site = MockInteractionSite("cleanwell", global_pos=(6e-3, 0.0, -2e-3), strict_path=True)
+    site = MockInteractionSite("cleanwell", global_pos=(6e-3, 0.0, -2e-3))
     # Calibrated approach position is (5e-3, 0, -2e-3) — where it should be.
     calibrated_approach = np.array([5e-3, 0.0, -2e-3])
     interact_global = np.array([5e-3, 0.0, -3e-3])
     site.save_positions_for(pip, interact_global)
-    site.positions[pip.name()]["site global"] = list(calibrated_approach)
+    site.save_approach_for(pip, calibrated_approach)
 
     stage_target = np.array([2e-3, 0.0, 0.0])  # stage must move 1mm left
     site.approachMoveSpec = lambda p, speed='fast': _MoveSpec(stage, stage_target, speed=speed)
@@ -292,7 +292,7 @@ def test_no_exit_waypoint_when_pip_not_in_site(pip):
 
 
 def test_non_strict_exit_skips_approach_waypoint(pip, site_without_strict_path):
-    """Sites without strictApproachAndExitPath allow the pip to exit directly."""
+    """Sites without a saved approach position allow the pip to exit directly."""
     planner = make_simplified_planner()
     planner._find_containing_site = lambda dev: site_without_strict_path if dev is pip else None
 
@@ -356,7 +356,7 @@ def test_movable_site_approach_contains_parallel_group(pip):
     calibrated_approach = np.array([5e-3, 0.0, -2e-3])
     interact_global = np.array([5e-3, 0.0, -3e-3])
     site.save_positions_for(pip, interact_global)
-    site.positions[pip.name()]["site global"] = list(calibrated_approach)
+    site.save_approach_for(pip, calibrated_approach)
     stage_target = np.array([2e-3, 0.0, 0.0])
     site.approachMoveSpec = lambda p, speed="fast": _MoveSpec(stage, stage_target, speed=speed)
     site.approachGlobal = lambda p: calibrated_approach
@@ -380,7 +380,7 @@ def test_movable_site_approach_parallel_group_contains_pip_and_stage():
     calibrated_approach = np.array([5e-3, 0.0, -2e-3])
     interact_global = np.array([5e-3, 0.0, -3e-3])
     site.save_positions_for(pip, interact_global)
-    site.positions[pip.name()]["site global"] = list(calibrated_approach)
+    site.save_approach_for(pip, calibrated_approach)
     stage_target = np.array([2e-3, 0.0, 0.0])
     site.approachMoveSpec = lambda p, speed="fast": _MoveSpec(stage, stage_target, speed=speed)
     site.approachGlobal = lambda p: calibrated_approach
@@ -413,7 +413,7 @@ def test_movable_site_no_pip_lift_when_already_at_safe_z():
     calibrated_approach = np.array([5e-3, 0.0, -2e-3])
     interact_global = np.array([5e-3, 0.0, -3e-3])
     site.save_positions_for(pip, interact_global)
-    site.positions[pip.name()]["site global"] = list(calibrated_approach)
+    site.save_approach_for(pip, calibrated_approach)
     stage_target = np.array([2e-3, 0.0, 0.0])
     site.approachMoveSpec = lambda p, speed="fast": _MoveSpec(stage, stage_target, speed=speed)
     site.approachGlobal = lambda p: calibrated_approach
@@ -440,7 +440,7 @@ def test_movable_site_approach_pip_lift_is_parallel_not_sequential():
     calibrated_approach = np.array([5e-3, 0.0, -2e-3])
     interact_global = np.array([5e-3, 0.0, -3e-3])
     site.save_positions_for(pip, interact_global)
-    site.positions[pip.name()]["site global"] = list(calibrated_approach)
+    site.save_approach_for(pip, calibrated_approach)
     stage_target = np.array([2e-3, 0.0, 0.0])
     site.approachMoveSpec = lambda p, speed="fast": _MoveSpec(stage, stage_target, speed=speed)
     site.approachGlobal = lambda p: calibrated_approach
@@ -641,3 +641,118 @@ def test_safe_path_limit_exceeded_raises_value_error(real_pip_above):
     planner = make_real_planner()
     with pytest.raises(ValueError, match="beyond the limits"):
         planner._safe_path(pip, pip.globalPosition(), np.array([5e-3, 0.0, -3e-3]), "fast")
+
+
+# ---------------------------------------------------------------------------
+# Spec validation (_validate_specs) — duplicate devices and relative-to ordering
+# ---------------------------------------------------------------------------
+
+def test_duplicate_device_in_specs_raises(pip):
+    """Two specs for the same device must raise PlanningError."""
+    planner = make_simplified_planner()
+    specs = [
+        MoveSpec(pip, np.array([1e-3, 0.0, 0.0])),
+        MoveSpec(pip, np.array([2e-3, 0.0, 0.0])),
+    ]
+    with pytest.raises(PlanningError, match="can only have one final position"):
+        planner._validate_specs(specs)
+
+
+def test_relative_to_anchor_moved_later_raises():
+    """Spec A relative to device X, with X moved by a later spec B, must raise PlanningError."""
+    planner = make_simplified_planner()
+    anchor = MockDevice("anchor", (10e-3, 0.0, 0.0))
+    dev = MockDevice("dev1")
+    specs = [
+        MoveSpec(dev, np.array([1e-3, 0.0, 0.0]), relative_to=anchor),
+        MoveSpec(anchor, np.array([20e-3, 0.0, 0.0])),
+    ]
+    with pytest.raises(PlanningError, match="anchor device is moved by spec"):
+        planner._validate_specs(specs)
+
+
+def test_relative_to_anchor_moved_first_passes():
+    """When the anchor device is moved before the relative spec, validation must pass."""
+    planner = make_simplified_planner()
+    anchor = MockDevice("anchor", (10e-3, 0.0, 0.0))
+    dev = MockDevice("dev1")
+    planner._validate_specs([
+        MoveSpec(anchor, np.array([20e-3, 0.0, 0.0])),
+        MoveSpec(dev, np.array([1e-3, 0.0, 0.0]), relative_to=anchor),
+    ])  # must not raise
+
+
+def test_relative_to_interaction_site_not_flagged_as_ordering_error(pip, site):
+    """Relative-to ordering check must not fire for InteractionSite anchors."""
+    planner = make_simplified_planner()
+    planner._validate_specs([MoveSpec(pip, np.zeros(3), relative_to=site)])  # must not raise
+
+
+def test_wrong_relative_to_order_produces_wrong_position_without_validation():
+    """Demonstrate the silent failure that spec validation prevents.
+
+    Without the check: dev ends at local_pos resolved against anchor's CURRENT (old) position,
+    not against the new position the anchor is moved to later in the same plan.
+    """
+    from acq4.motion.default_planner import DefaultMotionPlanner
+
+    class _SimplePath(DefaultMotionPlanner):
+        def _safe_path(self, pip, gs, gt, speed, explanation=None):
+            return [(np.asarray(gt, dtype=float), speed, False, explanation or "move")]
+
+    planner = _SimplePath()
+    anchor = MockDevice("anchor", (10e-3, 0.0, 0.0))
+    dev = MockDevice("dev1")
+    specs = [
+        MoveSpec(dev, np.array([1e-3, 0.0, 0.0]), relative_to=anchor),   # OLD anchor pos
+        MoveSpec(anchor, np.array([20e-3, 0.0, 0.0])),                    # anchor moves AFTER
+    ]
+
+    # Bypassing _validate_specs to show the wrong-position result
+    plan = SequentialGroup([planner._plan_one(s) for s in specs], "bad plan")
+    moves = _flatten(plan)
+    dev_move = next(m for m in moves if m.device is dev)
+    # resolves to (11e-3,0,0) — the correct answer if anchor moved first would be (21e-3,0,0)
+    np.testing.assert_array_almost_equal(dev_move.position, [11e-3, 0.0, 0.0])
+
+    # Now confirm _validate_specs catches it
+    with pytest.raises(PlanningError, match="anchor device is moved by spec"):
+        planner._validate_specs(specs)
+
+
+# ---------------------------------------------------------------------------
+# Post-plan sanity checks (_validate_plan)
+# ---------------------------------------------------------------------------
+
+def test_plan_final_position_matches_spec_for_generic_device():
+    """_validate_plan must not raise when the plan correctly ends at the spec target."""
+    planner = make_simplified_planner()
+    dev = MockDevice("dev1")
+    target = np.array([3e-3, 0.0, 0.0])
+    specs = [MoveSpec(dev, target)]
+    plan = planner.plan(specs)
+    planner._validate_plan(specs, plan)  # must not raise
+    moves = _flatten(plan)
+    np.testing.assert_array_almost_equal(moves[-1].position, target)
+
+
+def test_plan_final_position_matches_spec_for_pipette(pip):
+    """_validate_plan must pass for a simple pipette move ending at the target."""
+    planner = make_simplified_planner()
+    target = np.array([0.0, 0.0, 5e-3])
+    specs = [MoveSpec(pip, target)]
+    plan = planner.plan(specs)
+    planner._validate_plan(specs, plan)  # must not raise
+
+
+def test_validate_plan_catches_wrong_final_position():
+    """_validate_plan raises PlanningError when the plan ends at the wrong position."""
+    from acq4.motion.default_planner import DefaultMotionPlanner
+
+    planner = make_simplified_planner()
+    dev = MockDevice("dev1")
+    specs = [MoveSpec(dev, np.array([1e-3, 0.0, 0.0]))]
+    # Craft a plan that deliberately puts dev at the wrong position
+    wrong_plan = SequentialGroup([AtomicMove(dev, np.array([99.0, 0.0, 0.0]), "fast", "wrong")])
+    with pytest.raises(PlanningError, match="Plan inconsistency"):
+        planner._validate_plan(specs, wrong_plan)

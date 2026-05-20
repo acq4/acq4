@@ -2,7 +2,7 @@
 # Callers resolve named positions to coordinates before constructing a MoveSpec.
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Optional
 
 import numpy as np
@@ -27,7 +27,7 @@ class MoveSpec:
         The target position for the device, either in global coordinates or relative to another
         device.
     relative_to
-        If set, the position is interpreted as relative to this device's current position.
+        If set, the position is interpreted as relative to this device's position. That
     speed
         Optional speed hint for the move, e.g. "fast", "slow", or a numeric speed in m/s.  The
         planner may ignore or modify this for safety.
@@ -37,6 +37,7 @@ class MoveSpec:
     position: np.ndarray
     relative_to: Optional["Device"] = None
     speed: str | float = None
+    kwargs: dict = field(default_factory=dict)
 
     def __post_init__(self):
         self.position = np.asarray(self.position, dtype=float)

@@ -128,6 +128,69 @@ def test_no_scope_unwind_when_context_empty(pip):
 
 
 # ---------------------------------------------------------------------------
+# Scope-up-first sequence for approach with scopeParkPos
+# ---------------------------------------------------------------------------
+
+def test_scope_up_is_first_move_in_approach(pip, site_with_scope_park):
+    """Scope must move up (z-only) as the very first step, before any pip or lateral scope move."""
+    planner = make_planner()
+    plan = planner.plan([MoveSpec(pip, np.zeros(3), relative_to=site_with_scope_park)])
+    moves = _flat_moves(plan)
+    scope_moves = [m for m in moves if isinstance(m.device, MockScope)]
+    assert moves[0].device is pip.scopeDevice(), "First move must be scope up"
+    park_pos = site_with_scope_park.config["scopeParkPos"]
+    up_pos = np.array([pip.scopeDevice().globalPosition()[0],
+                       pip.scopeDevice().globalPosition()[1],
+                       park_pos[2]])
+    np.testing.assert_array_almost_equal(moves[0].position, up_pos,
+                                         err_msg="First scope move must be z-only (up to park height)")
+
+
+def test_pip_retract_before_scope_lateral_when_pip_in_tissue(site_with_scope_park):
+    """When pip starts below approach depth, it must retract before scope moves laterally."""
+    pip_below = MockPipette("pip_below", global_pos=(0.0, 0.0, -3e-3), approach_depth=0.0)
+    site_with_scope_park.save_positions_for(pip_below, np.array([0.0, 0.0, -1e-3]))
+    site_with_scope_park.save_approach_for(pip_below)
+
+    planner = make_planner()
+    plan = planner.plan([MoveSpec(pip_below, np.zeros(3), relative_to=site_with_scope_park)])
+    moves = _flat_moves(plan)
+
+    scope_moves = [m for m in moves if isinstance(m.device, MockScope)]
+    pip_moves = [m for m in moves if m.device is pip_below]
+    all_idxs = {id(m): i for i, m in enumerate(moves)}
+
+    # scope up is first
+    assert all_idxs[id(scope_moves[0])] == 0, "Scope up must be first"
+
+    # pip retract (any pip move) comes before the second scope move (park lateral)
+    assert len(scope_moves) >= 2, "Expected scope up + scope lateral moves"
+    first_pip_idx = all_idxs[id(pip_moves[0])]
+    scope_lateral_idx = all_idxs[id(scope_moves[1])]
+    assert first_pip_idx < scope_lateral_idx, \
+        "Pip retract must come before scope lateral move to park position"
+
+
+def test_pip_no_retract_step_when_already_at_safe_height(site_with_scope_park):
+    """When pip is already at approach depth, no pip retract step is prepended."""
+    pip_safe = MockPipette("pip_safe", global_pos=(0.0, 0.0, 0.0), approach_depth=0.0)
+    site_with_scope_park.save_positions_for(pip_safe, np.array([0.0, 0.0, -1e-3]))
+    site_with_scope_park.save_approach_for(pip_safe)
+
+    planner = make_planner()
+    plan = planner.plan([MoveSpec(pip_safe, np.zeros(3), relative_to=site_with_scope_park)])
+    moves = _flat_moves(plan)
+
+    # scope up, scope lateral, then pip — no pip move between scope up and scope lateral
+    scope_idxs = [i for i, m in enumerate(moves) if isinstance(m.device, MockScope)]
+    pip_idxs = [i for i, m in enumerate(moves) if m.device is pip_safe]
+    assert len(scope_idxs) >= 2
+    # no pip move should appear between scope up (scope_idxs[0]) and scope lateral (scope_idxs[1])
+    between = [i for i in pip_idxs if scope_idxs[0] < i < scope_idxs[1]]
+    assert len(between) == 0, "No pip move should appear between scope-up and scope-lateral"
+
+
+# ---------------------------------------------------------------------------
 # Scope unwind via interaction exit (_plan_interaction_exit path)
 # ---------------------------------------------------------------------------
 

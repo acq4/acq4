@@ -19,6 +19,7 @@ class AtomicMove:
     position: np.ndarray
     speed: str
     explanation: str = ""
+    kwargs: dict = field(default_factory=dict)
 
     def __post_init__(self):
         self.position = np.asarray(self.position, dtype=float)
