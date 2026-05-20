@@ -71,7 +71,7 @@ class ZeissMicroscope(Microscope):
 
         # should return to same focal plane, correcting for new objective
         if self._startDepth is not None:
-            self.setFocusDepth(self._startDepth).wait()
+            self.setFocusDepth(self._startDepth, name=f"{self.name()} restore focus after objective change").wait()
             self._startDepth = None
 
     def quit(self):
@@ -95,4 +95,4 @@ class ZeissMicroscope(Microscope):
         """Move focus to a safe position for switching objectives.
         """
         safeDepth = self.safeFocusDepth
-        return self.setFocusDepth(safeDepth, speed=speed)
+        return self.setFocusDepth(safeDepth, speed=speed, name=f"{self.name()} move to safe focus depth")

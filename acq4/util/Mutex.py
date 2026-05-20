@@ -2,6 +2,7 @@
 Mutex.py -  Stand-in extension of Qt's QMutex class
 """
 from acq4.util import Qt
+import threading
 from pyqtgraph.util.mutex import Mutex as PGMutex
 from pyqtgraph.util.mutex import RecursiveMutex as PGRecursiveMutex
 

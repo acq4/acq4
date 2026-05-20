@@ -24,7 +24,7 @@ class MockNIDAQ:
                 },
             }
         }
-        self.sampleRate = 20000.
+        self.sampleRate = 20000
         self.Val_Cfg_Default = -1
         self.Val_ChanForAllLines = 1
         self.Val_ChanPerLine = 0
@@ -79,6 +79,9 @@ class MockNIDAQ:
 
     def GetReadAvailSampPerChan(self):
         return self.sampleRate * (time.time() - self.dataPtr)
+
+    def GetDevAOMaxRate(self, dev):
+        return self.sampleRate
 
     def createTask(self):
         return Task(self)

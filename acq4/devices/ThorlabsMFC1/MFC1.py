@@ -96,20 +96,21 @@ class ThorlabsMFC1(Stage):
             self.posChanged([0, 0, pos])
         return [0, 0, pos]
 
-    def _move(self, pos, speed, linear, **kwds):
+    def _move(self, pos, speed, linear, name=None, **kwds):
         pos = self._toAbsolutePosition(pos)
         limits = self.getLimits()[2]
         if limits[0] is not None:
             pos[2] = max(pos[2], limits[0])
         if limits[1] is not None:
             pos[2] = min(pos[2], limits[1])
-        return MFC1MoveFuture(self, pos, speed)
+        return MFC1MoveFuture(self, pos, speed, name=name)
 
     @property
     def positionUpdatesPerSecond(self):
         return 1 / self._monitor.minInterval
 
     def targetPosition(self):
+        # TODO this may be buggy with the new depth control spinbox
         return [0, 0, self.dev.target_position() * self.scale[2]]
 
     def quit(self):
@@ -127,7 +128,7 @@ class ThorlabsMFC1(Stage):
         if dz == 0:
             return
         target = self.dev.target_position() * self.scale[2] + dz
-        self.moveTo([0, 0, target], 'fast')
+        self.move([0, 0, target], 'fast', name='ROE z adjust')
 
     def deviceInterface(self, win):
         return MFC1StageInterface(self, win)
@@ -141,7 +142,7 @@ class ThorlabsMFC1(Stage):
         self.dev.set_encoder(0)
         self._getPosition()
 
-    def stop(self):
+    def stop(self, reason=None):
         self.dev.stop()
 
     def setHolding(self, hold):
@@ -216,8 +217,8 @@ class MFC1StageInterface(StageInterface):
 class MFC1MoveFuture(MoveFuture):
     """Provides access to a move-in-progress on an MPC200 drive.
     """
-    def __init__(self, dev, pos, speed):
-        MoveFuture.__init__(self, dev, pos, speed)
+    def __init__(self, dev, pos, speed, name=None):
+        MoveFuture.__init__(self, dev, pos, speed, name=name)
         self.startPos = dev.getPosition()
         self.stopPos = pos
         self._moveStatus = {'status': None}

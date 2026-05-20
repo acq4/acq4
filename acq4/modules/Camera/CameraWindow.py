@@ -139,11 +139,13 @@ class CameraWindow(Qt.QMainWindow):
         if self.activeInterface is not None:
             try:
                 self.activeInterface.getDevice().sigGlobalTransformChanged.disconnect(self._onActiveFocusChanged)
+                self.activeInterface.setActive(False)
             except (RuntimeError, TypeError):
                 pass
         self.activeInterface = iface
         if iface is not None:
             iface.getDevice().sigGlobalTransformChanged.connect(self._onActiveFocusChanged)
+            iface.setActive(True)
 
     def _onActiveFocusChanged(self, device=None, changed_device=None):
         self.sigFocusPositionChanged.emit()
@@ -354,9 +356,20 @@ class CameraModuleInterface(Qt.QObject):
         self.win = weakref.ref(win)
         self.dev = weakref.ref(dev)
         self._hasQuit = False
+        self.isActive = False
+
+    def setActive(self, active: bool):
+        """Called by the camera module when this interface is set to be the active imaging interface.
+
+        When active, the interface is allowed to control the view position.
+        """
+        self.isActive = active
 
     def getDevice(self):
-        return self.dev()
+        dev = self.dev()
+        if dev is None:
+            raise RuntimeError("Device has been deleted.")
+        return dev
 
     def graphicsItems(self) -> Iterable[pg.GraphicsItem]:
         """Return a list of all graphics items displayed by this interface.

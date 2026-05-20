@@ -73,6 +73,7 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         self._errorMessage = None
         self._excInfo = None
         self._stopRequested = False
+        self._stopReason = None
         self._state = "starting"
         self._errorMonitorThread = None
         self._executingThread = None
@@ -165,6 +166,7 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
 
         if reason is not None:
             self._errorMessage = reason
+        self._stopReason = reason
         self.log(f"Asking Future [{self._name}] to stop: {reason}")
         self._stopRequested = True
         for f in self._stopsToPropagate:
@@ -351,7 +353,7 @@ class Future(Qt.QObject, Generic[FUTURE_RETVAL_TYPE]):
         checking for a stop request.
         """
         if self._stopRequested:
-            raise self.StopRequested()
+            raise self.StopRequested(self._stopReason)
 
     def sleep(self, duration, interval=0.2):
         """Sleep for the specified duration (in seconds) while checking for stop requests."""

@@ -1,10 +1,12 @@
+from typing import Any
+
 import numpy as np
 from MetaArray import MetaArray
 
 import pyqtgraph as pg
 from acq4.util.DataManager import FileHandle, DirHandle
 from acq4.util.imaging.background import remove_background_from_image
-from acq4.util.geometry import load_transform_from_anything
+from acq4.util.geometry import load_transform
 from pyqtgraph import ImageItem
 
 
@@ -32,11 +34,12 @@ class Frame:
                 frames = []
                 for row in data:
                     info = fh.info().deepcopy()
+                    info["transform"] = load_transform(info["transform"])
                     if data.axisName(0) == "Time":
                         info["time"] = row.axisValues(2)
                     elif data.axisName(0) == "Depth":
                         depth = row.axisValues(2)
-                        xform = load_transform_from_anything(info["transform"])
+                        xform = info["transform"]
                         pos = xform.offset
                         pos[2] = depth
                         xform.offset = pos
@@ -47,7 +50,9 @@ class Frame:
                 return frames
             else:
                 data = data.asarray()
-        frame = cls(data, fh.info().deepcopy())
+        info = fh.info().deepcopy()
+        info["transform"] = load_transform(info["transform"])
+        frame = cls(data, info)
         frame.loadLinkedFiles(fh.parent())
         return frame
 
@@ -55,7 +60,7 @@ class Frame:
         """Return raw imaging data.
         """
         return self._data
-    
+
     def info(self):
         """Return the meta info dict for this frame.
         """
@@ -64,7 +69,7 @@ class Frame:
     @property
     def shape(self):
         return self._data.shape
-    
+
     @property
     def ndim(self):
         return self._data.ndim
@@ -97,7 +102,7 @@ class Frame:
         return self._info['frameTransform']
 
     def globalTransform(self):
-        """Return the transform that maps this frame's image coordinates (row, col)
+        """Return the transform that maps this frame's image coordinates (row, col, frame)
         to global coordinates (x, y, z). This is equivalent to (deviceTransform * frameTransform).
         """
         return self._info['transform']
@@ -153,9 +158,7 @@ class Frame:
         value you must also supply as *valuesForAppend*.
         """
         data = self.getImage()
-        info = self.info()
-        if callable(info.get('backgroundInfo')):
-            info['backgroundInfo'] = info['backgroundInfo'](dh)
+        info = self.serializableInfo(dh)
 
         if not filename.endswith('.ma'):
             return dh.writeFile(data, filename, info, fileType="ImageFile", autoIncrement=autoIncrement)
@@ -169,6 +172,12 @@ class Frame:
             autoIncrement=autoIncrement,
             **self._metaArrayWriteKwargs,
         )
+
+    def serializableInfo(self, dh: DirHandle) -> Any:
+        info = self.info()
+        if callable(info.get('backgroundInfo')):
+            info['backgroundInfo'] = info['backgroundInfo'](dh)
+        return info
 
     def loadLinkedFiles(self, dh):
         """Load linked files from the same directory as the main file."""

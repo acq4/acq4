@@ -33,7 +33,7 @@ class SmartStageControlThread:
         self.axes = list(self.motionsynergy.AxisList)
 
         self.last_enabled_state = None
-        self.enable_state_callbacks = []
+        self.enable_state_callback = None
         self.last_known_pos = None
         self.last_reported_pos = None
         self.quit_request: SmartStageRequestFuture | None = None
@@ -46,9 +46,9 @@ class SmartStageControlThread:
     def set_callback(self, cb):
         self.pos_callback = cb
 
-    def add_enabled_state_callback(self, cb):
-        if cb not in self.enable_state_callbacks:
-            self.enable_state_callbacks.append(cb)
+    def set_enabled_callback(self, cb):
+        # if cb not in self.enable_state_callbacks:
+        self.enable_state_callback = cb
 
     def start_thread(self):
         if self.is_running():
@@ -126,9 +126,11 @@ class SmartStageControlThread:
             ]
 
             if len(alerts) == 0:
+                logger.debug(f"Move {self.current_move.label} completed successfully.")
                 self.current_move.set_result(None)
             else:
-                self.current_move.fail(f"Move failed: {', '.join(alerts)}")
+                logger.warning(f"Move {self.current_move.label} failed: {', '.join(alerts)}")
+                self.current_move.fail(f"Move {self.current_move.label} failed: {', '.join(alerts)}")
             self.current_move = None
 
     def _check_enabled_state(self):
@@ -136,10 +138,10 @@ class SmartStageControlThread:
         if enabled_state == self.last_enabled_state:
             return
         self.last_enabled_state = enabled_state
-        for cb in list(self.enable_state_callbacks):
+        if self.enable_state_callback is not None:
             try:
-                cb(enabled_state)
-            except Exception:
+                self.enable_state_callback(enabled_state)
+            except Exception as exc:
                 logger.exception("Error in enabled state callback")
 
     def _handle_request(self, fut: SmartStageRequestFuture):
@@ -174,7 +176,8 @@ class SmartStageControlThread:
 
     def _handle_move(self, fut):
         if self.current_move is not None:
-            self._stop(reason='Interrupted by another move request.')
+            self._stop(reason=f'Move {self.current_move.label} interrupted by new move request {fut.label}.')
+        logger.debug(f"Starting move {fut.label} to pos={fut.kwds['pos']} speed={fut.kwds['speed']}.")
         fut.tasks = self._move(
             pos=fut.kwds['pos'],
             speed=fut.kwds['speed'],
@@ -196,7 +199,7 @@ class SmartStageControlThread:
     def _handle_cancel(self, fut):
         move_req = fut.kwds['move_req']
         if move_req is self.current_move and not move_req.done():
-            self._stop(f"Request to {move_req.request} was cancelled")
+            self._stop(f"Move {move_req.label} was cancelled.")
         fut.set_result(None)
 
     def _handle_disable(self, fut):
@@ -282,6 +285,7 @@ class SmartStageRequestFuture:
     def __init__(self, ctrl_thread, req, kwds):
         self.thread: SmartStageControlThread = ctrl_thread
         self.request = req
+        self.name = kwds.pop('name', None)
         self.kwds = kwds
         self._callback = None
         self._cb_lock = threading.Lock()
@@ -290,6 +294,16 @@ class SmartStageRequestFuture:
         self.exc_info = None
         self.error = None
         self.tasks = []
+
+    @property
+    def label(self):
+        """Human-readable identifier for this request, for use in log messages."""
+        if self.name:
+            return f"'{self.name}'"
+        if self.request == 'move':
+            pos = self.kwds.get('pos')
+            return f"move(pos={pos})"
+        return f"{self.request}"
 
     def done(self):
         """Return True if the request has finished."""
@@ -325,10 +339,10 @@ class SmartStageRequestFuture:
         If the request fails, then raise an exception with more information.
         """
         if not self._done.wait(timeout=timeout):
-            raise TimeoutError(f'Timeout waiting for {self.request} to complete')
+            raise TimeoutError(f'Timeout waiting for {self.label} to complete')
         elif self.exc_info is not None:
             raise self.FutureError(
-                f"An error occurred during the request to {self.request}"
+                f"An error occurred during {self.label}"
             ) from self.exc_info[1]
         elif self.error is not None:
             raise self.FutureError(self.error)
@@ -352,7 +366,10 @@ class SmartStageRequestFuture:
             cb = self._callback
             self._callback = None
         if cb is not None:
-            cb(self)
+            try:
+                cb(self)
+            except Exception:
+                logger.exception(f"Error invoking callback for {self}")
 
     @property
     def target_pos(self):

@@ -86,7 +86,7 @@ class CameraInterface(CameraModuleInterface):
         self.roi = CamROI(self.camSize, parent=self.cameraItemGroup)
         self.roi.sigRegionChangeFinished.connect(self.regionWidgetChanged)
         self.roi.setZValue(-1)
-        self.setRegion()
+        self.setRegion(self.cam.getParam('region'))
 
         # Set up microscope objective borders
         self.borders = CameraItemGroup(self.cam)
@@ -179,7 +179,17 @@ class CameraInterface(CameraModuleInterface):
         self.updateTransform(tr)
 
         self.imageItemGroup.setTransform(tr)
-            
+
+
+    def setActive(self, active: bool):
+        """Called by the camera module when this interface is set to be the active imaging interface.
+
+        When active, the interface is allowed to control the view position.
+        """
+        super().setActive(active)
+        # self.frameDisplay.contrastCtrl.zoomToImage()
+        self.view.autoRange(items=[self.roi])
+
     def updateTransform(self, tr):
         # update view for new transform such that sensor bounds remain stationary on screen.
         pos = tr.getTranslation()
@@ -193,7 +203,6 @@ class CameraInterface(CameraModuleInterface):
             if isActive:
                 anchor = self.view.mapViewToDevice(self.lastCameraPosition)
                 self.view.scaleBy(scale / self.lastCameraScale)
-                # Qt.QApplication.processEvents()
                 anchor2 = self.view.mapDeviceToView(anchor)
                 diff = pos - anchor2
             else:
@@ -312,12 +321,14 @@ class CameraInterface(CameraModuleInterface):
 
     def setRegion(self, rgn=None):
         if rgn is None:
-            rgn = [0, 0, self.camSize[0]-1, self.camSize[1]-1]
-        self.roi.setPos([rgn[0], rgn[1]])
-        self.roi.setSize([self.camSize[0], self.camSize[1]])
+            rgn = [0, 0, self.camSize[0], self.camSize[1]]
+        with pg.SignalBlock(self.roi.sigRegionChangeFinished, self.regionWidgetChanged):
+            self.roi.setPos([rgn[0], rgn[1]])
+            self.roi.setSize([rgn[2], rgn[3]])
 
     def _setRegionToNone(self):
         self.setRegion()
+        self.updateRegion()
 
     def cameraParamsChanged(self, changes):
         # camera parameters changed; update ui to match

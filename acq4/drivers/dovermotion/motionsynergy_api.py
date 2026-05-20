@@ -363,7 +363,7 @@ class SmartStageTrayIcon(qt.QObject):
 
         self.enable_all_action.setEnabled(True)
         self.disable_all_action.setEnabled(True)
-        ss.add_enabled_state_callback(self._on_enabled_state_changed)
+        ss.set_enabled_callback(self._on_enabled_state_changed)
         self._update_enabled_state(ss.is_enabled(refresh=True))
 
     def _toggle_axis(self, axis_index):

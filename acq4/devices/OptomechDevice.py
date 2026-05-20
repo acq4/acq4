@@ -9,7 +9,7 @@ from acq4.Interfaces import InterfaceMixin
 from acq4.modules.Visualize3D import Visualize3D
 from acq4.util import Qt
 from acq4.util.Mutex import Mutex
-from acq4.util.geometry import Plane, Geometry, load_transform_from_anything
+from acq4.util.geometry import Plane, Geometry, load_transform
 from coorx import SRT3DTransform, Transform
 from pyqtgraph import opengl as gl
 from pyqtgraph.parametertree import Parameter
@@ -393,7 +393,7 @@ class OptomechDevice(InterfaceMixin):
         return self.deviceTransform(subdev).inverse
 
     def setDeviceTransform(self, tr):
-        tr = load_transform_from_anything(tr)
+        tr = load_transform(tr)
         with self.__lock:
             self.__transform = tr
             self.invalidateCachedTransforms()
@@ -675,14 +675,14 @@ class OptomechDevice(InterfaceMixin):
         """Return the Z position of this device's origin, mapped to the global coordinate system."""
         return self.mapToGlobal([0, 0, 0])[2]
 
-    def setFocusDepth(self, depth, speed="slow"):
+    def setFocusDepth(self, depth, speed="slow", name=None):
         """Set microscope focus such that this device's origin is moved to the specified global Z position."""
         dev = self.getFocusDevice()
         if dev is None:
             raise ValueError(f"Device {dev} is not connected to a focus controller.")
         dz = depth - self.getFocusDepth()
         dpos = dev.globalPosition()
-        return dev.moveToGlobal([dpos[0], dpos[1], dpos[2] + dz], speed)
+        return dev.moveToGlobal([dpos[0], dpos[1], dpos[2] + dz], speed, name=name)
 
     def getFocusDevice(self):
         """Return the device that provides focus capabilities for this device."""
@@ -832,6 +832,7 @@ class OptomechDeviceVisualizerAdapter(Qt.QObject):
     def _buildControlParam(self):
         children = [
             dict(name='Geometry', type='bool', value=True),
+            dict(name='Center View', type='action'),
         ]
         if self._limits is not None:
             children.append(dict(name='Range of Motion', type='bool', value=False))
@@ -839,9 +840,14 @@ class OptomechDeviceVisualizerAdapter(Qt.QObject):
         param = Parameter.create(name=self.device.name(), type='bool', value=True, children=children)
         param.sigValueChanged.connect(self._handleDeviceToggle)
         param.child('Geometry').sigValueChanged.connect(self._handleGeometryVisible)
+        param.child('Center View').sigActivated.connect(self._handleCenterView)
         if self._limits is not None:
             param.child('Range of Motion').sigValueChanged.connect(self._handleLimitsVisible)
         return param
+
+    def _handleCenterView(self) -> None:
+        pos = self.device.globalPhysicalTransform().map((0, 0, 0))
+        self.win.centerOnPosition(pos)
 
     def _handleDeviceToggle(self, param, value):
         for child in param.children():

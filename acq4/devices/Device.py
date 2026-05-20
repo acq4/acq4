@@ -134,7 +134,7 @@ class Device(InterfaceMixin, Qt.QObject):  # QObject calls super, which is disas
             l = self._lock_.tryLock()
             if not l:
                 return False
-        
+
         lock_tb = ''.join(traceback.format_stack()[:-1])
         self._lock_stack_.append((reserver, lock_tb))
         devices_held_by_this_thread.setdefault(self.name(), 0)

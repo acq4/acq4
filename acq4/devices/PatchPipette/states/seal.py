@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import threading
 import time
 from typing import Any
 
 import numpy as np
 
-from acq4.util import ptime
+from acq4.util import ptime, Qt
 import pyqtgraph as pg
+from acq4.util.debug import log_and_ignore_exception
 from acq4.util.functions import plottable_booleans
 from neuroanalysis.data import TSeries
 from pyqtgraph.units import kPa
@@ -175,6 +177,8 @@ class SealState(PatchPipetteState):
 
     Parameters
     ----------
+    focusOnCell : bool
+        Whether to focus the microscope on the target at the beginning of the seal state. Default True.
     pressureMode : str
         'auto' enables automatic pressure control during sealing;
         'user' simply switches to user control for sealing.
@@ -238,13 +242,14 @@ class SealState(PatchPipetteState):
         'fallbackState': 'fouled',
     }
     _parameterTreeConfig = {
+        'focusOnCell': {'type': 'bool', 'default': True},
         'pressureMode': {'type': 'str', 'default': 'user', 'limits': ['auto', 'user']},
         'startingPressure': {'type': 'float', 'default': -3e3, 'suffix': 'Pa'},
         'holdingThreshold': {'type': 'float', 'default': 100e6, 'suffix': 'Ω'},
         'holdingPotential': {'type': 'float', 'default': -70e-3, 'suffix': 'V'},
         'sealThreshold': {'type': 'float', 'default': 1e9, 'suffix': 'Ω'},
         'breakInThreshold': {'type': 'float', 'default': 10e-12, 'suffix': 'F'},
-        'failureResistanceThreshold': {'type': 'float', 'default': 100e6, 'suffix': 'Ω'},
+        'failureResistanceThreshold': {'type': 'float', 'default': 50e6, 'suffix': 'Ω'},
         'failureDRDTThreshold': {'type': 'float', 'default': 1e6, 'suffix': 'Ω/s'},
         'autoSealTimeout': {'type': 'float', 'default': 30.0, 'suffix': 's'},
         'pressureLimit': {'type': 'float', 'default': -3e3, 'suffix': 'Pa'},
@@ -276,16 +281,18 @@ class SealState(PatchPipetteState):
         self.pressure = config['startingPressure']
         self._lastPressureScan = None
         self._pressures = [[], []]
+        self._pressures_lock = threading.Lock()
         self._resistances = [np.zeros(0), np.zeros(0)]
 
     def initialize(self):
         self.dev.setTipClean(False)
-        self.dev.pressureDevice.sigPressureChanged.connect(self._handlePressureChanged)
+        self.dev.pressureDevice.sigPressureChanged.connect(self._handlePressureChanged, Qt.Qt.DirectConnection)
         super().initialize()
 
     def _handlePressureChanged(self, dev, source, pressure):
-        self._pressures[0].append(ptime.time())
-        self._pressures[1].append(pressure)
+        with self._pressures_lock:
+            self._pressures[0].append(ptime.time())
+            self._pressures[1].append(pressure)
 
     def processAtLeastOneTestPulse(self):
         tps = super().processAtLeastOneTestPulse()
@@ -315,6 +322,8 @@ class SealState(PatchPipetteState):
         startTime = ptime.time()
         self.setState(f'beginning seal (mode: {config["pressureMode"] !r})')
         self.setInitialPressure()
+        if config['focusOnCell']:
+            self.waitFor(dev.focusOnTarget('slow'))
 
         self._patchrec['attemptedSeal'] = True
 
@@ -467,14 +476,18 @@ class SealState(PatchPipetteState):
         return np.clip(best, self.config['pressureLimit'], 0)
 
     def _trim_data_caches(self, start):
-        pressures = TSeries(np.array(self._pressures[1]), time_values=np.array(self._pressures[0]))
-        pressures = pressures.time_slice(start, pressures.t_end)
-        self._pressures = [pressures.time_values.tolist(), pressures.data.tolist()]
+        with self._pressures_lock:
+            pressures = TSeries(np.array(self._pressures[1]), time_values=np.array(self._pressures[0]))
+            pressures = pressures.time_slice(start, pressures.t_end)
+            self._pressures = [pressures.time_values.tolist(), pressures.data.tolist()]
         resistances = TSeries(self._resistances[1], time_values=self._resistances[0])
         resistances = resistances.time_slice(start, resistances.t_end)
         self._resistances = [resistances.time_values, resistances.data]
         return pressures, resistances
 
     def _cleanup(self):
-        self.dev.pressureDevice.setPressure(source='atmosphere')
+        with log_and_ignore_exception(Exception, "Error during pressure state cleanup"):
+            self.dev.pressureDevice.setPressure(source='atmosphere')
+        with log_and_ignore_exception(Exception, "Error during pressure signal disconnect"):
+            self.dev.pressureDevice.sigPressureChanged.disconnect(self._handlePressureChanged)
         return super()._cleanup()

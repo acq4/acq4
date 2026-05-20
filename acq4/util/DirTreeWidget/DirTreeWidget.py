@@ -213,6 +213,8 @@ class DirTreeWidget(Qt.QTreeWidget):
             handle.sigDelayedChange.disconnect(self.dirChanged)
 
     def dirChanged(self, handle, changes):
+        if 'moved' in changes:
+            return  # this get handled by the parent dir's 'children' change
         if handle is self.baseDir:
             item = self.invisibleRootItem()
         else:
@@ -355,7 +357,6 @@ class DirTreeWidget(Qt.QTreeWidget):
         self.setCurrentItem(item)
 
     def dropMimeData(self, parent, index, data, action):
-        #print "dropMimeData:", parent, index, self.selectedFiles()
         source = self.selectedFiles()
         if parent is None:
             target = self.baseDir

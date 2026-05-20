@@ -228,9 +228,13 @@ class FileHandle:
     def __eq__(self, other):
         if not isinstance(other, FileHandle):
             return False
+        if self.path is None or other.path is None:
+            return self.path is other.path
         return abspath(self.name()) == abspath(other.name())
 
     def __hash__(self):
+        if self.path is None:
+            return hash(None)
         return hash(id(self))
 
     def fileType(self):

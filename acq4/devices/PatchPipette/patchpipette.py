@@ -3,6 +3,21 @@ from __future__ import annotations
 from collections import OrderedDict
 from threading import RLock
 
+import numpy as np
+
+from acq4.devices.PatchClamp.patchclamp import PatchClamp
+from acq4.util import Qt
+from acq4.util import ptime
+from coorx import Point
+from neuroanalysis.test_pulse import PatchClampTestPulse
+from .devgui import PatchPipetteDeviceGui
+from .statemanager import PatchPipetteStateManager
+from ..Camera import Camera
+from ..Device import Device
+from ..Pipette import Pipette
+from ..PressureControl import PressureControl
+from ..Sonicator import Sonicator
+
 # Event types stored in the in-memory event log and shown in the UI.
 LOG_EVENT_TYPES = frozenset({
     'state_event',
@@ -13,21 +28,6 @@ LOG_EVENT_TYPES = frozenset({
     'new_patch_attempt',
     'tip_clean_changed',
 })
-
-import numpy as np
-from neuroanalysis.test_pulse import PatchClampTestPulse
-
-from acq4.devices.PatchClamp.patchclamp import PatchClamp
-from acq4.util import Qt
-from acq4.util import ptime
-from coorx import Point
-from .devgui import PatchPipetteDeviceGui
-from .statemanager import PatchPipetteStateManager
-from ..Camera import Camera
-from ..Device import Device
-from ..Pipette import Pipette
-from ..PressureControl import PressureControl
-from ..Sonicator import Sonicator
 
 
 class PatchPipette(Device):
@@ -81,12 +81,13 @@ class PatchPipette(Device):
         # current state variables
         self.active = False
         self.broken = False
-        self.clean = False
+        self.clean = True
         self.calibrated = False
         self.waitingForSwap = False
         self._lastPos = None
         self._emitTestPulseData = False
         self.cell = None
+        self.previousCells = []
 
         # key measurements made during patch process and lifetime of pipette
         self._patchRecord = None
@@ -167,13 +168,18 @@ class PatchPipette(Device):
 
     def focusOnTip(self, speed, raiseErrors=False):
         imdev = self.imagingDevice()
-        fut = imdev.moveCenterToGlobal(self.pipetteDevice.globalPosition(), speed=speed)
+        fut = imdev.moveCenterToGlobal(
+            self.pipetteDevice.globalPosition(), speed=speed, name=f"Focus on {self.name()} tip"
+        )
         if raiseErrors:
             fut.raiseErrors("Error while focusing on pipette tip: {error}")
+        return fut
 
     def focusOnTarget(self, speed, raiseErrors=False):
         imdev = self.imagingDevice()
-        fut = imdev.moveCenterToGlobal(self.pipetteDevice.targetPosition(), speed=speed)
+        fut = imdev.moveCenterToGlobal(
+            self.pipetteDevice.targetPosition(), speed=speed, name=f"Focus on {self.name()} target"
+        )
         if raiseErrors:
             fut.raiseErrors("Error while focusing on pipette target: {error}")
         return fut
@@ -254,6 +260,7 @@ class PatchPipette(Device):
         return self._patchRecord
 
     def setCell(self, cell, target=True):
+        self.closeCell()
         self.cell = cell
         if target:
             self.pipetteDevice.setTarget(cell.position.mapped_to('global').coordinates)
@@ -261,12 +268,18 @@ class PatchPipette(Device):
     def newCell(self):
         try:
             from acq4_automation.feature_tracking.cell import Cell
-
+            self.closeCell()
             self.cell = Cell(Point(self.pipetteDevice.targetPosition(), 'global'))
         except ImportError:
             self.logger.exception(
                 "Cell-based features are unavailable without the acq4_automation package",
             )
+
+    def closeCell(self):
+        if self.cell is not None:
+            self.cell.enableTracking(False)
+            self.previousCells.append(self.cell)
+            self.cell = None
 
     def finishPatchRecord(self):
         if self._patchRecord is None:

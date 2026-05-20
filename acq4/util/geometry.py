@@ -1552,7 +1552,7 @@ class Geometry:
 
         self.color = config.pop("color", None)
 
-        self._transform = load_transform_from_anything(config.pop("transform", {}))
+        self._transform = load_transform(config.pop("transform", {}))
 
         self._children = []
         for name, child_config in config.pop("children", {}).items():
@@ -1954,7 +1954,7 @@ class Plane:
         return str(self)
 
 
-def load_transform_from_anything(thing, **kwargs) -> Transform:
+def load_transform(thing, **kwargs) -> Transform:
     if isinstance(thing, pg.SRTTransform):
         return SRT3DTransform.from_pyqtgraph(thing, **kwargs)
     elif isinstance(thing, Transform):
@@ -2072,7 +2072,104 @@ def minimum_displacement_inverse_kinematics(
 
     # t=0 is the unconstrained optimum; clip to feasible interval.
     t_opt = float(np.clip(0.0, t_lo, t_hi))
-    return pos_unconstrained + t_opt * null_vec
+    pos_constrained = pos_unconstrained + t_opt * null_vec
+
+    # apply limits in device coordinate space to avoid fp errors
+    pos_clipped = np.clip(pos_constrained, np.array(bounds)[:,0], np.array(bounds)[:,1])
+
+    # check final answer
+    final_global = device_to_global.map(pos_clipped)
+    if np.linalg.norm(final_global - point) > 0.1e-6:
+        raise ValueError(f"IK solver generated bad solution (target position: {point} found position: {final_global}  device pos: {pos_constrained})")
+
+    return pos_clipped
+
+
+def sequential_projection_inverse_kinematics(
+    point,
+    device_to_global: Transform,
+    bounds: list[tuple[float, float]],
+    starting_position: list[float],
+    max_passes: int = 1,
+    rel_tol: float = 1e-2,
+) -> np.ndarray:
+    """Naive sequential projection IK: process axes in ranked order, absorbing as much residual
+    as possible at each step.
+
+    At each step the current residual displacement is projected onto one axis and that axis moves
+    to absorb it (clipped to bounds). Axes are ordered by decreasing alignment with the residual
+    at the start of each pass.
+
+    Limitation: because the axes are not orthogonal (D partially overlaps X and Z), moving one
+    axis changes what the others need to do, but earlier axes are never revisited within a pass.
+    A single pass therefore does not guarantee an exact solution. With max_passes > 1 this
+    becomes iterative coordinate descent and converges, but multiple passes defeat the point of
+    "sequential" so the single-pass result is the intended comparison target.
+
+    Parameters
+    ----------
+    point : array-like
+        Target point in global coordinates.
+    device_to_global : Transform
+        Mapping from device coordinates to global.
+    bounds : list[tuple[float, float]]
+        A list of (min, max) pairs for each device axis.
+    starting_position : list[float]
+        Current device position.
+    max_passes : int
+        Number of sequential passes over all axes (default 1). Increasing this converges to the
+        exact solution at the cost of losing the single-pass character.
+    rel_tol : float
+        Maximum acceptable residual as a fraction of the total displacement magnitude (default
+        1e-2, i.e. 1%). A single pass typically achieves ~0.1-0.5% residual for non-orthogonal
+        axes, so the default accepts that; set lower to require more passes.
+
+    Returns
+    -------
+    position : np.ndarray
+        Best device position found; may not map exactly to `point` for max_passes=1.
+
+    Raises
+    ------
+    ValueError
+        If the relative residual after all passes exceeds rel_tol.
+    """
+    n = len(bounds)
+    point = np.asarray(point, dtype=float)
+    starting_position = np.asarray(starting_position, dtype=float)
+
+    T = device_to_global.full_matrix[:3, :n]
+    col_norms = np.array([np.linalg.norm(T[:, i]) for i in range(n)])
+
+    pos = starting_position.copy().astype(float)
+    remaining = point - device_to_global.map(pos)
+    total_displacement = np.linalg.norm(remaining)
+
+    for _ in range(max_passes):
+        if np.linalg.norm(remaining) < 1e-15:
+            break
+        # Re-rank at the start of each pass by alignment with current residual.
+        dots = np.array([abs(T[:, i].dot(remaining) / col_norms[i]) for i in range(n)])
+        axis_order = np.argsort(dots)[::-1]
+
+        for i in axis_order:
+            if np.linalg.norm(remaining) < 1e-15:
+                break
+            # Project residual onto this axis and move accordingly.
+            step_device = remaining.dot(T[:, i]) / col_norms[i] ** 2
+            new_pos_i = float(np.clip(pos[i] + step_device, bounds[i][0], bounds[i][1]))
+            actual_step = new_pos_i - pos[i]
+            pos[i] = new_pos_i
+            remaining -= actual_step * T[:, i]
+
+    residual_mag = np.linalg.norm(remaining)
+    rel_residual = residual_mag / max(total_displacement, 1e-30)
+    if rel_residual > rel_tol:
+        raise ValueError(
+            f"Sequential projection did not reach target after {max_passes} pass(es) "
+            f"(relative residual = {rel_residual:.2e}, tolerance = {rel_tol:.2e})"
+        )
+    return pos
 
 
 def primary_axis_inverse_kinematics(
@@ -2213,93 +2310,6 @@ def primary_axis_inverse_kinematics(
         )
 
     return pos_clipped
-
-
-def sequential_projection_inverse_kinematics(
-    point,
-    device_to_global: Transform,
-    bounds: list[tuple[float, float]],
-    starting_position: list[float],
-    max_passes: int = 1,
-    rel_tol: float = 1e-2,
-) -> np.ndarray:
-    """Naive sequential projection IK: process axes in ranked order, absorbing as much residual
-    as possible at each step.
-
-    At each step the current residual displacement is projected onto one axis and that axis moves
-    to absorb it (clipped to bounds). Axes are ordered by decreasing alignment with the residual
-    at the start of each pass.
-
-    Limitation: because the axes are not orthogonal (D partially overlaps X and Z), moving one
-    axis changes what the others need to do, but earlier axes are never revisited within a pass.
-    A single pass therefore does not guarantee an exact solution. With max_passes > 1 this
-    becomes iterative coordinate descent and converges, but multiple passes defeat the point of
-    "sequential" so the single-pass result is the intended comparison target.
-
-    Parameters
-    ----------
-    point : array-like
-        Target point in global coordinates.
-    device_to_global : Transform
-        Mapping from device coordinates to global.
-    bounds : list[tuple[float, float]]
-        A list of (min, max) pairs for each device axis.
-    starting_position : list[float]
-        Current device position.
-    max_passes : int
-        Number of sequential passes over all axes (default 1). Increasing this converges to the
-        exact solution at the cost of losing the single-pass character.
-    rel_tol : float
-        Maximum acceptable residual as a fraction of the total displacement magnitude (default
-        1e-2, i.e. 1%). A single pass typically achieves ~0.1-0.5% residual for non-orthogonal
-        axes, so the default accepts that; set lower to require more passes.
-
-    Returns
-    -------
-    position : np.ndarray
-        Best device position found; may not map exactly to `point` for max_passes=1.
-
-    Raises
-    ------
-    ValueError
-        If the relative residual after all passes exceeds rel_tol.
-    """
-    n = len(bounds)
-    point = np.asarray(point, dtype=float)
-    starting_position = np.asarray(starting_position, dtype=float)
-
-    T = device_to_global.full_matrix[:3, :n]
-    col_norms = np.array([np.linalg.norm(T[:, i]) for i in range(n)])
-
-    pos = starting_position.copy().astype(float)
-    remaining = point - device_to_global.map(pos)
-    total_displacement = np.linalg.norm(remaining)
-
-    for _ in range(max_passes):
-        if np.linalg.norm(remaining) < 1e-15:
-            break
-        # Re-rank at the start of each pass by alignment with current residual.
-        dots = np.array([abs(T[:, i].dot(remaining) / col_norms[i]) for i in range(n)])
-        axis_order = np.argsort(dots)[::-1]
-
-        for i in axis_order:
-            if np.linalg.norm(remaining) < 1e-15:
-                break
-            # Project residual onto this axis and move accordingly.
-            step_device = remaining.dot(T[:, i]) / col_norms[i] ** 2
-            new_pos_i = float(np.clip(pos[i] + step_device, bounds[i][0], bounds[i][1]))
-            actual_step = new_pos_i - pos[i]
-            pos[i] = new_pos_i
-            remaining -= actual_step * T[:, i]
-
-    residual_mag = np.linalg.norm(remaining)
-    rel_residual = residual_mag / max(total_displacement, 1e-30)
-    if rel_residual > rel_tol:
-        raise ValueError(
-            f"Sequential projection did not reach target after {max_passes} pass(es) "
-            f"(relative residual = {rel_residual:.2e}, tolerance = {rel_tol:.2e})"
-        )
-    return pos
 
 
 def greedy_axis_inverse_kinematics(

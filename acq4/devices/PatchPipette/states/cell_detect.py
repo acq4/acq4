@@ -2,20 +2,16 @@ from __future__ import annotations
 
 from collections import deque
 from threading import Lock
-import time
 from typing import Any, Iterable
 
-from acq4.Manager import getManager
 import numpy as np
-import pyqtgraph as pg
 
+import pyqtgraph as pg
 from acq4.util import ptime
 from acq4.util.debug import log_and_ignore_exception
 from acq4.util.functions import plottable_booleans
 from acq4.util.future import future_wrap
-from ._base import PatchPipetteState, SteadyStateAnalysisBase
 from pyqtgraph.units import µm
-from acq4.util.imaging.sequencer import run_image_sequence
 from ._base import PatchPipetteState, SteadyStateAnalysisBase, exponential_decay_avg
 
 
@@ -313,7 +309,7 @@ class CellDetectState(PatchPipetteState):
         dist = np.linalg.norm(dif)
         if dist > poke:
             goto = pos + dif * (poke / dist)
-            _future.waitFor(pip._moveToGlobal(goto, self.config['detectionSpeed']))
+            _future.waitFor(pip._moveToGlobal(goto, self.config['detectionSpeed'], name='poke cell'))
 
     def processAtLeastOneTestPulse(self):
         tps = super().processAtLeastOneTestPulse()
@@ -431,7 +427,7 @@ class CellDetectState(PatchPipetteState):
         if config['preTargetReposition']:
             _future.waitFor(
                 self.dev.pipetteDevice._moveToGlobal(
-                    self.preTargetPosition(), speed=config['detectionSpeed']
+                    self.preTargetPosition(), speed=config['detectionSpeed'], name='pre-target reposition'
                 )
             )
         self.setState("moving to final search endpoint")
@@ -461,7 +457,7 @@ class CellDetectState(PatchPipetteState):
         for _ in range(count):
             self.setState("pre-target wiggle")
             retract_pos = dev.pipetteDevice.globalPosition() - wiggle_step
-            future.waitFor(dev.pipetteDevice._moveToGlobal(retract_pos, speed=speed), timeout=None)
+            future.waitFor(dev.pipetteDevice._moveToGlobal(retract_pos, speed=speed, name='pre-target wiggle retract'), timeout=None)
             with self._wiggleLock:  # used to prevent cell detect
                 self.waitFor(
                     dev.pipetteDevice.wiggle(
@@ -474,7 +470,7 @@ class CellDetectState(PatchPipetteState):
                     timeout=None,
                 )
             step_pos = dev.pipetteDevice.globalPosition() + wiggle_step
-            future.waitFor(dev.pipetteDevice._moveToGlobal(step_pos, speed=speed), timeout=None)
+            future.waitFor(dev.pipetteDevice._moveToGlobal(step_pos, speed=speed, name='pre-target wiggle advance'), timeout=None)
         self._hasWiggled = True
 
     def _searchAround(self, future):
@@ -494,7 +490,7 @@ class CellDetectState(PatchPipetteState):
         ) * radius
         for rel_pos in steps:
             pos = rel_pos + self.dev.pipetteDevice.targetPosition()
-            future.waitFor(self.dev.pipetteDevice._moveToGlobal(pos, speed))
+            future.waitFor(self.dev.pipetteDevice._moveToGlobal(pos, speed, name='search around target'))
             future.sleep(1)
 
     def _cleanup(self):

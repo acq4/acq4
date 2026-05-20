@@ -4,6 +4,7 @@ import numpy as np
 from MetaArray import MetaArray
 
 import acq4.util.DataManager
+import coorx
 import pyqtgraph as pg
 import pyqtgraph.flowchart
 from acq4.logging_config import get_logger
@@ -48,8 +49,15 @@ class ImageCanvasItem(CanvasItem):
 
             try:
                 if 'transform' in self.handle.info():
-                    # TODO this needs to be coorx'd
-                    tr = pg.SRTTransform3D(self.handle.info()['transform'])
+                    tr = self.handle.info()['transform']
+                    if isinstance(tr, dict):
+                        if 'type' in tr:
+                            tr = coorx.create_transform(**tr.deepcopy())
+                        else:
+                            tr = pg.SRTTransform3D(tr)
+                    if isinstance(tr, coorx.Transform):
+                        tr = tr.as_pyqtgraph()
+                    
                     tr = pg.SRTTransform(tr)  ## convert to 2D
                     opts['pos'] = tr.getTranslation()
                     opts['scale'] = tr.getScale()

@@ -52,7 +52,7 @@ class NucleusCollectState(PatchPipetteState):
         # self.approachPos = self.collectionPos - pip.globalDirection() * config['approachDistance']
 
         # self.waitFor([pip._moveToGlobal(self.approachPos, speed='fast')])
-        self.waitFor(pip._moveToGlobal(self.collectionPos, speed='fast'), timeout=None)
+        self.waitFor(pip._moveToGlobal(self.collectionPos, speed='fast', name=f"{pip.name()} move to nucleus collection position"), timeout=None)
 
         if dev.sonicatorDevice is not None:
             self.sonication = dev.sonicatorDevice.doProtocol(config['sonicationProtocol'])
@@ -71,11 +71,33 @@ class NucleusCollectState(PatchPipetteState):
         dev.pipetteRecord()['expelled_nucleus'] = True
         return {"state": 'out'}
 
+        # # current version using InteractionSite moveToInteract/unwindKludgePath:
+        # well = pip.getNucleusDepositionWell()
+        # self.waitFor(well.moveToInteract(pip))
+        #
+        # if dev.sonicatorDevice is not None:
+        #     self.sonication = dev.sonicatorDevice.doProtocol(config['sonicationProtocol'])
+        #
+        # sequence = config['pressureSequence']
+        # if isinstance(sequence, str):
+        #     sequence = eval(sequence, units.__dict__)
+        #
+        # for pressure, delay in sequence:
+        #     dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
+        #     self.sleep(delay)
+        #
+        # if self.sonication is not None and not self.sonication.isDone():
+        #     self.waitFor(self.sonication)
+        #
+        # dev.pipetteRecord()['expelled_nucleus'] = True
+        # self.waitFor(well._unwindKludgePath(pip))
+        # return {"state": 'out'}
+
     def resetPosition(self, _future=None):
         pip = self.dev.pipetteDevice
         if self.isDone():
             # self.waitFor([pip._moveToGlobal(self.approachPos, speed='fast')])
-            _future.waitFor(pip._moveToGlobal(self.startPos, speed='fast'), timeout=None)
+            _future.waitFor(pip._moveToGlobal(self.startPos, speed='fast', name='return to start position'), timeout=None)
 
     @future_wrap
     def _cleanup(self, _future):

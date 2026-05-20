@@ -3,6 +3,7 @@ import time
 
 import numpy as np
 import scipy
+import scipy.ndimage as ndi
 
 import pyqtgraph as pg
 from acq4.Manager import getManager
@@ -40,16 +41,53 @@ class PipetteTracker:
     def findTipInFrame(self, threshold=0.15, **kwds):
         """Automatically find the pipette tip position.
 
-        Return the offset in pipette-local coordinates.
+        Return the tip position in global coordinates.
 
-        All keyword arguments are passed to `measureTipPosition()`.
+        Parameters
+        ----------
+        threshold : float
+            Minimum confidence value required. If the detection confidence is below this
+            threshold, a RuntimeError is raised. Default is 0.5.
+        **kwds
+            All other keyword arguments are passed to `measureTipPosition()`.
+
+        Returns
+        -------
+        tipPos : array-like
+            (x, y, z) position of pipette tip in global coordinates
+
+        Raises
+        ------
+        RuntimeError
+            If the detection confidence is below threshold.
         """
         if "frame" not in kwds:
             kwds['frame'] = self.takeFrame(ensureFreshFrames=False)
-        tipPos, corr = self.measureTipPosition(**kwds)
+        tipPos, confidence = self.measureTipPosition(**kwds)
+        if confidence < threshold:
+            raise RuntimeError(f"Unable to locate pipette tip (confidence {confidence:.2f} < {threshold:.2f})")
         return tipPos
 
     def measureTipPosition(self, frame, **kwds):
+        """Measure the position of the pipette tip in global coordinates based on the provided camera frame.
+
+        This method must be implemented by subclasses to provide specific algorithms for determining the tip position.
+
+        Parameters
+        -----------
+        frame : Frame
+            A frame acquired from an imager (e.g. using tracker.takeFrame() or imager.acquireFrames(1))
+            Note that the frame must be acquired under simliar conditions to those used previously to collect a reference image set (same objective, filter, lighting, etc.).
+        **kwds : dict
+            Additional keyword arguments that may be used by specific implementations of this method.
+
+        Returns
+        -------
+        tipPos : array-like
+            (x, y, z) predicted location of pipette tip in global coordinates
+        confidence : float
+            Indicates prediction confidence. Arbitrary units, but usually values below about 0.5 will be rejected by the caller.
+        """
         raise NotImplementedError()
 
 
@@ -61,29 +99,83 @@ class ResnetPipetteTracker(PipetteTracker):
         img = frame.data()
 
         # find pipette direction in image
-        pipetteDir = self.pipette.globalDirection()
-        imageDir = np.array(frame.mapFromGlobalToFrame(pipetteDir) - frame.mapFromGlobalToFrame([0, 0, 0]))[:2]
-        imageDir = imageDir / np.linalg.norm(imageDir)
-
-        # Calculate angle of pipette relative to pointing right (positive across columns)
-        pipetteAngle = np.arctan2(-imageDir[0], imageDir[1]) * 180 / np.pi
+        pipetteAngle = self.pipetteAngleFromFrame(frame)
 
         pxSize = frame.info()["pixelSize"][0]
 
         # measure image pixel offset and z error to pipette tip
-        xyOffset, zErr, snr = self.estimateOffset(img, pipetteAngle, pxSize)
-        performance = snr * 100
+        xyOffset, zErr, confidence = self.estimateOffset(img, pipetteAngle, pxSize)
 
         # map pixel offsets back to physical coordinates
         tipPos = frame.mapFromFrameToGlobal(pg.Vector(xyOffset))
 
-        return (tipPos.x(), tipPos.y(), tipPos.z() + zErr * 1e-6), performance
+        return (tipPos.x(), tipPos.y(), tipPos.z() + zErr * 1e-6), confidence
+
+    def pipetteAngleFromFrame(self, frame):
+        """Calculate the angle of the pipette in the image frame, in degrees CCW from pointing right."""
+        pipetteDir = self.pipette.globalDirection()
+        imageDir = np.array(frame.mapFromGlobalToFrame(pipetteDir) - frame.mapFromGlobalToFrame([0, 0, 0]))[:2]
+        imageDir = imageDir / np.linalg.norm(imageDir)
+        pipetteAngle = np.arctan2(-imageDir[0], imageDir[1]) * 180 / np.pi
+        return pipetteAngle
 
     def estimateOffset(self, img, pipetteAngle, pxSize):
         from acq4_automation.object_detection import do_pipette_tip_detection
-        self.result = do_pipette_tip_detection(img, pipetteAngle, pxSize, show=False)
-        return self.result[:3]
+        result = do_pipette_tip_detection(img, pipetteAngle, pxSize, show=False)
+        self.result = result
+        self.last_heatmap = result[3].get('cropped_heatmap') if len(result) > 3 else None
+        return result[:3]
 
+    @future_wrap
+    def estimatePositionFromStack(
+        self,
+        *,
+        _future:Future,
+        z_range: float = 15e-6,
+        z_step: float = 1e-6,
+    ) -> tuple[float, float, float] | None:
+        """Find the global pipette tip position by scanning a z-stack and detecting the tip in each frame.
+
+        Takes a z-stack centered on the current estimated tip position, runs ML-based pipette
+        detection on every frame, and returns the global (x, y, z) position of the tip based
+        on the first frame where both confidence is high and the detected XY position is stable.
+
+        Assumes the pipette tip is already close (within ~10 µm) to its current estimated position.
+
+        Parameters
+        ----------
+        z_range : float
+            Half-range of the z-stack in meters (stack spans tip_z ± z_range). Default 15 µm.
+        z_step : float
+            Step size between z-stack frames in meters. Default 1 µm.
+
+        Returns
+        -------
+        (x, y, z) global position of the tip in meters, or None if detection failed.
+        """
+        from acq4_automation.pipette_detection.stack_detection import find_pipette_in_z_stack
+        pipette = self.pipette
+        imager = self._getImager()
+
+        tip_pos = pipette.globalPosition()
+        z_center = tip_pos[2]
+
+        # Scan from above the tip downward (+Z is up in global coords, so z_center+z_range is shallower).
+        # enforce_linear_z_stack always returns frames sorted low-z to high-z (deep to shallow).
+        fut = acquire_z_stack(
+            imager,
+            start=z_center + z_range,
+            stop=z_center - z_range,
+            step=z_step,
+        )
+        _future.waitFor(fut)
+        frames = fut.getResult()
+
+        pipette_angle = self.pipetteAngleFromFrame(frames[0])
+
+        pos, analysis = find_pipette_in_z_stack(frames, pipette_angle)
+        analysis['frames'] = frames
+        return pos, analysis
 
 class CorrelationPipetteTracker(PipetteTracker):
     """Provides functionality for automated tracking and recalibration of pipette tip position
@@ -227,13 +319,17 @@ class CorrelationPipetteTracker(PipetteTracker):
             zStep = zRange / 30
 
         # collect pipette stack
-        frames = acquire_z_stack(imager, zStart, zEnd, zStep, block=True).getResult()
+        frames = acquire_z_stack(
+            imager, zStart, zEnd, zStep, block=True, name="pipette reference stack"
+        ).getResult()
         pxSize = frames[0].info()["pixelSize"]
         frames = np.stack([f.data()[minImgPos[0]:maxImgPos[0], minImgPos[1]:maxImgPos[1]] for f in frames], axis=0).astype(float)
 
         # collect background stack
         _future.waitFor(self.pipette._moveToLocal([-tipLength * 3, 0, 0], "slow"))
-        bg_frames = acquire_z_stack(imager, zStart, zEnd, zStep, block=True).getResult()
+        bg_frames = acquire_z_stack(
+            imager, zStart, zEnd, zStep, block=True, name="background for subtracting"
+        ).getResult()
         bg_frames = np.stack([f.data()[minImgPos[0]:maxImgPos[0], minImgPos[1]:maxImgPos[1]] for f in bg_frames], axis=0).astype(float)
 
         # return pipette to original position
@@ -257,7 +353,7 @@ class CorrelationPipetteTracker(PipetteTracker):
             pickle.dump(self.reference, fh)
 
     def measureTipPosition(
-        self, frame, searchRegion="near_tip", padding=50e-6, threshold=0.6, pos=None, movePipette=False
+        self, frame, searchRegion="near_tip", padding=50e-6, pos=None, movePipette=False
     ):
         """Find the pipette tip location by template matching within a region surrounding the
         expected tip position.
@@ -269,12 +365,10 @@ class CorrelationPipetteTracker(PipetteTracker):
             Note that the frame must be acquired under simliar conditions to those used previously to collect
             a reference image set (same objective, filter, lighting, etc.).
         searchRegion : str
-            May be "near_tip" to search near the expected position of the pipette, or "full_frame" 
+            May be "near_tip" to search near the expected position of the pipette, or "full_frame"
             to search the entire camera field of view.
         padding : float
             Distance (m) around expected tip position to search. Applies only when searchRegion=="near_tip".
-        threshold : float
-            If the confidence of the match is less than *threshold*, then raise RuntimeError.
         pos : array-like
             Expected position of tip in global coordinates
         movePipette : bool
@@ -286,9 +380,6 @@ class CorrelationPipetteTracker(PipetteTracker):
             (x, y, z) predicted location of pipette tip in global coordinates
         confidence : float
             Indicates confidence in tipPos (arbitrary units)
-
-
-        If movePipette, then take two frames with the pipette moved away for the second frame to allow background subtraction
         """
         detector = self.detectorClass(tracker=self, pipette=self.pipette)
 
@@ -315,21 +406,22 @@ class CorrelationPipetteTracker(PipetteTracker):
         else:
             raise ValueError("searchRegion must be 'near_tip' or 'entire_frame'")
 
-        if performance < threshold:
-            raise RuntimeError("Unable to locate pipette tip (correlation %0.2f < %0.2f)" % (performance, threshold))
-
         return tipPos, performance
 
     def measureError(self, padding=50e-6, threshold=0.7, frame=None, pos=None, movePipette=False):
         """Return an (x, y, z) tuple indicating the error vector from the calibrated tip position to the
         measured (actual) tip position.
+
+        Raises RuntimeError if confidence is below threshold.
         """
         if pos is None:
             expectedTipPos = self.pipette.globalPosition()
         else:
             expectedTipPos = pos
 
-        measuredTipPos, corr = self.measureTipPosition(frame, padding, threshold, pos=pos, movePipette=movePipette)
+        measuredTipPos, confidence = self.measureTipPosition(frame, padding=padding, pos=pos, movePipette=movePipette)
+        if confidence < threshold:
+            raise RuntimeError(f"Unable to locate pipette tip (confidence {confidence:.2f} < {threshold:.2f})")
         return tuple([measuredTipPos[i] - expectedTipPos[i] for i in (0, 1, 2)])
 
     def getReference(self):
@@ -340,28 +432,6 @@ class CorrelationPipetteTracker(PipetteTracker):
             raise Exception(
                 "No reference frames found for this pipette / objective / filter combination: %s" % repr(key)
             )
-
-    def findTipInFrame(self, **kwds):
-        """Automatically calibrate the pipette tip position using template matching on a single camera frame.
-
-        Return the offset in pipette-local coordinates and the normalized cross-correlation value of the template match.
-
-        All keyword arguments are passed to `measureTipPosition()`.
-        """
-        if "frame" not in kwds:
-            kwds['frame'] = self.takeFrame(ensureFreshFrames=False)
-        
-        tipPos, corr = self.measureTipPosition(**kwds)
-
-        self.pipette.resetGlobalPosition(tipPos)
-
-        # localError = self.pipette.mapFromGlobal(tipPos)
-        # tr = self.pipette.deviceTransform()
-        # tr.translate(pg.Vector(localError))
-        # self.pipette.setDeviceTransform(tr)
-        # return localError, corr
-
-    
 
     def mapErrors(
         self,
@@ -434,7 +504,7 @@ class CorrelationPipetteTracker(PipetteTracker):
                         offsets.append(offset)
 
                         # move manipulator
-                        mfut = self.pipette._moveToGlobal(pos + offset, speed)
+                        mfut = self.pipette._moveToGlobal(pos + offset, speed, name=f"{self.pipette.name()} tracker calibration step {i}")
 
                         # move camera
                         if moveStageXY:
@@ -442,7 +512,7 @@ class CorrelationPipetteTracker(PipetteTracker):
                         else:
                             cpos = imager.globalCenterPosition("roi")
                             cpos[2] = pos[2]
-                        ffut = imager.moveCenterToGlobal(cpos, speed, center="roi")
+                        ffut = imager.moveCenterToGlobal(cpos, speed, center="roi", name=f"{imager.name()} center on {self.pipette.name()} for tracker calibration step {i}")
                     if i > 0:
                         ind = inds[order[i - 1]]
 
@@ -479,7 +549,7 @@ class CorrelationPipetteTracker(PipetteTracker):
 
                     # step back to actual target position
                     try:
-                        self.pipette._moveToGlobal(pos, speed).wait(updates=True)
+                        self.pipette._moveToGlobal(pos, speed, name=f"{self.pipette.name()} tracker calibration return to target").wait(updates=True)
                     except RuntimeError as exc:
                         misses += 1
                         logger.exception("Manipulator missed target:")
@@ -492,8 +562,8 @@ class CorrelationPipetteTracker(PipetteTracker):
                     if dlg.wasCanceled():
                         return None
         finally:
-            self.pipette._moveToGlobal(start, "fast")
-            self.pipette.scopeDevice().setFocusDepth(start[2], "fast")
+            self.pipette._moveToGlobal(start, "fast", name=f"{self.pipette.name()} tracker calibration return to start")
+            self.pipette.scopeDevice().setFocusDepth(start[2], "fast", name=f"{self.pipette.scopeDevice().name()} tracker calibration return focus to start")
 
         self.errorMap = {
             "err": err,

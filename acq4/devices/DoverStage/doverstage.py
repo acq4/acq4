@@ -36,14 +36,14 @@ class DoverStage(Stage):
     """
 
     def __init__(self, man, config: dict, name):
+        Stage.__init__(self, man, config, name)
         self.msapi = get_client(dll_path=config["dllPath"])
         self.dev = self.msapi['smartstage']
         self.dev.default_acceleration = config.get("defaultAcceleration", 50.0)
         self.dev.enable()
-        self.dev.set_callback(self.posChanged)
         self._lastMove = None
-        Stage.__init__(self, man, config, name)
         self.posChanged(self.dev.pos(refresh=True))
+        self.dev.set_callback(self.posChanged)
         man.declareInterface(name, ['stream_dock'], self)
 
     def axes(self):
@@ -71,17 +71,10 @@ class DoverStage(Stage):
     def positionUpdatesPerSecond(self):
         return 1 / self.dev.control_thread.poll_interval
 
-    def _move(self, pos, speed, linear, **kwds):
+    def _move(self, pos, speed, linear, name=None, **kwds):
         speed = self._interpretSpeed(speed)
-        self._lastMove = DoverMoveFuture(self, pos, speed)
+        self._lastMove = DoverMoveFuture(self, pos, speed, name=name)
         return self._lastMove
-
-    def targetPosition(self):
-        """Return the target position of the last move command."""
-        if self._lastMove is not None:
-            return self._lastMove.target
-        else:
-            return None
 
     def configure_dock(self, stream_dock_device):
         """Register Stream Dock toggle buttons for enabling / disabling each axis.
@@ -128,11 +121,9 @@ class DoverStage(Stage):
 class DoverMoveFuture(MoveFuture):
     """Provides access to a move-in-progress on a Dover stage."""
 
-    def __init__(self, dev, pos, speed):
-        MoveFuture.__init__(self, dev, pos, speed)
-        self.dev = dev
-        self.target = np.asarray(pos)
-        self._future = self.dev.dev.move(list(pos), self.speed * 1e3)
+    def __init__(self, dev, pos, speed, name=None):
+        MoveFuture.__init__(self, dev, pos, speed, name=name)
+        self._future = self.dev.dev.move(list(pos), self.speed * 1e3, name=self.name)
         self._future.set_callback(self._future_finished)
 
     def _future_finished(self, req_fut):

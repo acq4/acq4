@@ -18,9 +18,10 @@ from pyqtgraph import configfile
 from pyqtgraph.debug import Profiler
 from pyqtgraph.util.mutex import Mutex
 from . import __version__
-from . import devices, modules
+from . import modules
 from .Interfaces import InterfaceDirectory
-from .devices.Device import Device, DeviceTask
+from .devices import getDeviceClass
+from .devices.Device import Device, DeviceTask, DeviceLocker
 from .logging_config import get_logger, set_log_file
 from .util import DataManager, ptime, Qt
 from .util.DataManager import DirHandle
@@ -80,7 +81,6 @@ class Manager(Qt.QObject):
 
     def __init__(self):
         self.moduleLock = Mutex(recursive=True)  ## used for keeping some basic methods thread-safe
-        # self.devices = OrderedDict()  # all currently loaded devices
         self.isReady = threading.Event()
         self.modules = OrderedDict()  # all currently running modules
         self.devices = OrderedDict()  # all devices loaded via Manager
@@ -128,8 +128,6 @@ class Manager(Qt.QObject):
                 )
 
     def initFromCommandLine(self, args: argparse.Namespace):
-        global TEMP_LOG_FILEHANDLE
-
         self.exitOnError = args.exit_on_error
         self.disableDevs = args.disable or []
         self.disableAllDevs = args.disable_all
@@ -420,7 +418,7 @@ class Manager(Qt.QObject):
         device : Device instance
             The instantiated device object
         """
-        devclass = devices.getDeviceClass(devClassName)
+        devclass = getDeviceClass(devClassName)
         dev = devclass(self, conf, name)
         self.devices[name] = dev  # just to prevent device being collected
         return dev
@@ -439,15 +437,22 @@ class Manager(Qt.QObject):
         """
         return self.listInterfaces('device')
 
-    def reserveDevices(self, devices, timeout=10.0):
+    def reserveDevices(self, devices, timeout=10.0, reserver: str = None):
         """Return a DeviceLocker that can be used to reserve multiple devices simultaneously::
 
-            with manager.reserveDevices(['Camera', 'Clamp1', 'Stage']):
+            with manager.reserveDevices([camera, clamp1, stage], reserver='MySubsystem'):
                 # .. do stuff
 
+        Parameters
+        ----------
+        devices : list of Device
+            The devices to be reserved
+        timeout : float
+            The amount of time to wait for the devices to become available before raising a TimeoutError
+        reserver : str
+            Name identifying the caller reserving these devices. Required for deadlock diagnostics.
         """
-        devices = [self.getDevice(d) if isinstance(d, str) else d for d in devices]
-        return DeviceLocker(self, devices, timeout=timeout)
+        return DeviceLocker(self, devices, timeout=timeout, reserver=reserver)
 
     def getOrLoadModule(self, name):
         if name in self.modules:
@@ -596,7 +601,11 @@ class Manager(Qt.QObject):
         try:
             sh = Qt.QShortcut(Qt.QKeySequence(keys), win)
             sh.setContext(Qt.Qt.ApplicationShortcut)
-            sh.activated.connect(lambda *args: win.raise_())
+            def raiseWindow(*rargs):
+                win.setWindowState(win.windowState() & ~Qt.QtCore.Qt.WindowMinimized)
+                win.raise_()
+                win.activateWindow()
+            sh.activated.connect(raiseWindow)
         except:
             if self.exitOnError:
                 raise
@@ -763,7 +772,7 @@ class Manager(Qt.QObject):
             if 'dirType' in info:
                 # infoKeys.remove('dirType')
                 dt = info['dirType']
-                folderTypesConfig = self._folderTypesConfig()
+                folderTypesConfig = self.folderTypesConfig()
                 if dt in folderTypesConfig:
                     fields = folderTypesConfig[dt]['info']
 
@@ -774,7 +783,7 @@ class Manager(Qt.QObject):
 
         return fields
 
-    def _folderTypesConfig(self):
+    def folderTypesConfig(self):
         return self._folderTypes
 
     def showDocumentation(self, label=None):
@@ -824,51 +833,6 @@ def getManager() -> Manager:
     if Manager.single is None:
         raise RuntimeError("No manager created yet")
     return Manager.single
-
-
-class DeviceLocker(object):
-    def __init__(self, manager, devices, timeout=10.0):
-        # make sure we lock devices in a predictable order; this is what prevents deadlocks
-        self.devices = sorted(devices, key=lambda d: d.name())
-        self.locked = []
-        self.timeout = timeout
-        self.lockErr = None
-
-    def tryLock(self, timeout=None):
-        try:
-            for device in self.devices:
-                devLocked = device.reserve(block=True, timeout=timeout)
-                if not devLocked:
-                    self.lockErr = "Timed out waiting for %s" % device.name()
-                    self.unlock()
-                    return False
-                self.locked.append(device)
-
-            return True
-        except Exception:
-            self.unlock()
-            raise
-
-    def lock(self):
-        locked = self.tryLock(timeout=self.timeout)
-        if not locked:
-            self.unlock()
-            raise RuntimeError("Failed to lock devices: %s" % self.lockErr)
-
-    def unlock(self):
-        for device in self.locked:
-            try:
-                device.release()
-            except:
-                pass
-        self.locked = []
-
-    def __enter__(self):
-        self.lock()
-        return self
-
-    def __exit__(self, *args):
-        self.unlock()
 
 
 class Task:
@@ -987,7 +951,7 @@ class Task:
             try:
 
                 ## Reserve all hardware
-                self.reserveDevices()
+                self.reserveDevices(reserver=f"Task[{self.id}].execute")
 
                 prof.mark('reserve')
 
@@ -1175,10 +1139,12 @@ class Task:
             self.stop()
             return self.result
 
-    def reserveDevices(self):
+    def reserveDevices(self, reserver: str = None):
+        if reserver is None:
+            reserver = f"Task[{self.id}]"
         if self.deviceLock is None:
             try:
-                self.deviceLock = self.dm.reserveDevices(list(self.tasks.keys()))
+                self.deviceLock = self.dm.reserveDevices(list(self.tasks.keys()), reserver=reserver)
                 self.deviceLock.lock()
             except Exception:
                 self.deviceLock = None

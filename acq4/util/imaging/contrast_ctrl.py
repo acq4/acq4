@@ -167,6 +167,8 @@ class ContrastCtrl(Qt.QWidget):
 
     def _updateGuiAutoGainLevels(self):
         # Called by signal when processing a new frame causes auto gain levels to change
+        if self.lastMinMax is None or self.lastLevels is None:
+            return
         bl, wl = self.lastLevels
         minVal, maxVal = self.lastMinMax
         try:

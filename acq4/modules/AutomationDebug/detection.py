@@ -80,6 +80,7 @@ class CellDetector:
         segmenter = man.config.get("misc", {}).get("segmenterPath", None)
         autoencoder = man.config.get("misc", {}).get("autoencoderPath", None)
         classifier = man.config.get("misc", {}).get("classifierPath", None)
+        resnet_classifier = man.config.get("misc", {}).get("resnetClassifierPath", None)
         step_z = 1 * µm  # can be updated by mock metadata
         depth = win.cameraDevice.getFocusDepth()
         classification_stack = None  # Initialize as None
@@ -144,7 +145,7 @@ class CellDetector:
             working_stack = detection_stack
             multichannel = False
 
-        win.cameraDevice.setFocusDepth(depth)  # Restore focus
+        win.cameraDevice.setFocusDepth(depth, name=f"{win.cameraDevice.name()} restore focus after detection z-stack")  # Restore focus
 
         global_pos = _future.waitFor(
             detect_neurons(
@@ -152,10 +153,12 @@ class CellDetector:
                 segmenter=segmenter,
                 autoencoder=autoencoder,
                 classifier=classifier,
+                resnet_classifier=resnet_classifier,
                 xy_scale=pixel_size,  # Global pixel_size
                 z_scale=step_z,  # Actual step_z from mock or real (1um for real)
                 multichannel=multichannel,  # Actual flag for detect_neurons
                 trim_edges=True,
+                min_volume_m3=win.ui.minVolumeSpin.value(),
             ),
             timeout=600,
         ).getResult()

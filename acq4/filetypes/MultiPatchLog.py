@@ -529,8 +529,19 @@ class MultiPatchLogWidget(Qt.QWidget):
         self._frames = []
         self._current_time = 0
         self._pinned_image_z = -10000
+        main_layout = Qt.QVBoxLayout()
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        self.setLayout(main_layout)
+        self._splitter = Qt.QSplitter(Qt.Qt.Vertical)
+        main_layout.addWidget(self._splitter)
+
+        # Top widget: plots + controls side by side
+        top_widget = Qt.QWidget()
         layout = Qt.QGridLayout()
-        self.setLayout(layout)
+        layout.setContentsMargins(0, 0, 0, 0)
+        top_widget.setLayout(layout)
+        self._splitter.addWidget(top_widget)
+
         self._plots_widget = pg.GraphicsLayoutWidget()
         self._plots_widget.setObjectName("MultiPatchLog_plotsWidget")
         self._widgets.append(self._plots_widget)
@@ -546,7 +557,7 @@ class MultiPatchLogWidget(Qt.QWidget):
         self._devices = {}
         self._full_test_pulse_stacks = {}
         self._time_sliders = []
-        ctrl_widget = Qt.QWidget(self)
+        ctrl_widget = Qt.QWidget(top_widget)
         ctrl_widget.setMaximumWidth(200)
         self._ctrl_layout = Qt.QVBoxLayout()
         ctrl_widget.setLayout(self._ctrl_layout)
@@ -557,9 +568,10 @@ class MultiPatchLogWidget(Qt.QWidget):
         from acq4.util.ui.pipetteEventLog import PipetteEventLog
 
         self._eventLogWidget = PipetteEventLog()
-        self._eventLogWidget.setMaximumHeight(120)
         self._eventLogWidget.sigTimeSelected.connect(self._eventLogTimeSelected)
-        layout.addWidget(self._eventLogWidget, 1, 0, 1, 2)
+        self._splitter.addWidget(self._eventLogWidget)
+        self._splitter.setStretchFactor(0, 3)
+        self._splitter.setStretchFactor(1, 1)
 
         # Add Z-position display
         self._addZPositionDisplay()

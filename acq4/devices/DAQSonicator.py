@@ -188,6 +188,13 @@ class DAQSonicator(Sonicator):
             if "disable" in self.config:
                 self._daq.setChannelValue("disable", 1)
 
+    def _protocolDuration(self, protocol: str | dict) -> float:
+        if isinstance(protocol, str):
+            protocol = load_stimulus(json.loads(protocol))
+        else:
+            protocol = load_stimulus(protocol)
+        return protocol.total_global_end_time
+
     def _cleanProtocol(self, protocol):
         """Modify a protocol loaded from config file to conform to neuroanalysis.stimuli format.
 
@@ -210,13 +217,6 @@ class DAQSonicator(Sonicator):
         if 'items' in protocol2 and isinstance(protocol2['items'], dict):
             protocol2['items'] = [self._cleanProtocol(item) for item in protocol2['items'].values()]
         return protocol2
-
-    def _protocolDuration(self, protocol: str | dict) -> float:
-        if isinstance(protocol, str):
-            protocol = load_stimulus(json.loads(protocol))
-        else:
-            protocol = load_stimulus(protocol)
-        return protocol.total_global_end_time
 
     def calcVoltage(self, frequency: float) -> float:
         """

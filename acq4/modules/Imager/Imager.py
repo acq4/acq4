@@ -847,8 +847,8 @@ class Imager(Module):
     def getFocusDepth(self):
         return self.scannerDev.getFocusDepth()
 
-    def setFocusDepth(self, depth):
-        return self.scannerDev.setFocusDepth(depth)
+    def setFocusDepth(self, depth, **kwds):
+        return self.scannerDev.setFocusDepth(depth, **kwds)
 
     def getFocusDevice(self):
         return self.scannerDev.getFocusDevice()

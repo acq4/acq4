@@ -63,19 +63,27 @@ class _NIDAQ:
             fn(*args, data=ret, bufferSize=buffSize)
             return ret.value.decode("utf-8")
         elif len(args) < len(sig.parameters):
-            # Assume 1 missing arg, which is the pointer to the useful return value
-            # Assumptions are generally bad things...
             cfuncInfo = PyDAQmx.function_dict["DAQmx" + func]
-            dataType = cfuncInfo["arg_type"][-1]
-            ret = dataType._type_()
-            if "data" in sig.parameters or "isTaskDone" in sig.parameters:
-                args += (dataType(ret),)
-            if "value" in sig.parameters and not func.startswith("Write"):
-                args += (dataType(ret),)
-            if "reserved" in sig.parameters and len(args) < len(sig.parameters):
-                args += (None,)
-            fn(*args)
-            return ret.value
+            ret = None
+            while len(args) < len(sig.parameters):
+                nextArgName = cfuncInfo['arg_name'][len(args)]
+                nextArgType = cfuncInfo['arg_type'][len(args)]
+                if nextArgName in ["data", "isTaskDone"] or (nextArgName == "value" and not func.startswith("Write")):
+                    ret = nextArgType._type_()  # create an instance of the return type (e.g. LP_c_double())
+                    args += (nextArgType(ret),)
+                elif nextArgName == "reserved":
+                    args += (None,)
+                else:
+                    raise Exception(f"Don't know how to fill in argument '{nextArgName}' (type {nextArgType}) for function '{func}'")
+            
+            try:
+                fn(*args)
+            except Exception as e:
+                e.add_note(f"Error in function {func}({', '.join(map(str, args))})")
+                raise
+
+            if ret is not None:
+                return ret.value
         else:
             return fn(*args)
 

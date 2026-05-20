@@ -5,6 +5,7 @@ from pathlib import Path
 
 import numpy as np
 
+import pyqtgraph as pg
 from acq4.devices.Camera import Camera
 from acq4.devices.Microscope import Microscope
 from acq4.devices.PatchPipette import PatchPipette
@@ -16,18 +17,8 @@ from acq4.devices.Pipette.planners import (
 from acq4.logging_config import get_logger
 from acq4.modules.Module import Module
 from acq4.util import Qt
-import pyqtgraph as pg
 from acq4.util.future import Future, future_wrap
-from acq4.util.imaging import Frame
-from acq4.util.imaging.sequencer import acquire_z_stack
-from acq4.util.target import TargetBox
-from acq4.util.threadrun import futureInGuiThread, runInGuiThread
-from acq4_automation.cell_quality_annotation_tool import open_annotation_tool_with_detections
-from acq4_automation.feature_tracking.cell import Cell
-from coorx import Point, AffineTransform, SRT3DTransform
 from pyqtgraph.units import µm, m
-from .ranking_window import RankingWindow
-from pyqtgraph.units import µm
 from .autopatch import Autopatcher
 from .detection import CellDetector
 from .feature_tracking import FeatureTracker
@@ -58,6 +49,9 @@ class AutomationDebugWindow(Qt.QWidget):
         _zstack_depth_layout.addWidget(Qt.QLabel("Stop depth:"))
         self.ui.zStackStopDepthSpin = pg.SpinBox(value=60e-6, suffix='m', siPrefix=True, step=5e-6)
         _zstack_depth_layout.addWidget(self.ui.zStackStopDepthSpin)
+        _zstack_depth_layout.addWidget(Qt.QLabel("Min volume:"))
+        self.ui.minVolumeSpin = pg.SpinBox(value=0, suffix='m³', siPrefix=True, step=100e-18, bounds=(0, None))
+        _zstack_depth_layout.addWidget(self.ui.minVolumeSpin)
         _zstack_depth_layout.addStretch()
         self.ui.groupBox.layout().addLayout(_zstack_depth_layout, 5, 0, 1, 4)
 
@@ -159,6 +153,7 @@ class AutomationDebugWindow(Qt.QWidget):
         self.ui.autopatchDemoBtn.sigFinished.connect(
             self._autopatcher._handleAutopatchDemoFinish
         )
+        self.ui.reuseLastCellBtn.clicked.connect(self._reuseAllCells)
 
         self.show()
         planner = self.module.config.get("motionPlanner", "Objective radius only")
@@ -284,7 +279,7 @@ class AutomationDebugWindow(Qt.QWidget):
             )
             depth = depth_fut.getResult() - 50 * µm  # Target below surface
             _future.checkStop()
-            self.cameraDevice.setFocusDepth(depth)  # Set focus depth
+            self.cameraDevice.setFocusDepth(depth, name=f"{self.cameraDevice.name()} focus below surface for autoTarget")  # Set focus depth
 
             _future.waitFor(
                 self._detector._detectNeuronsZStack(), timeout=600
@@ -315,6 +310,18 @@ class AutomationDebugWindow(Qt.QWidget):
         self._previousTargets.append(target)
         self.pipetteDevice.setTarget(target)  # TODO setCellTarget
         logger.info(f"Setting pipette target to {target}")
+
+    def _reuseAllCells(self):
+        cells_to_requeue = list(self._ranked_cells)
+        if self._cell is not None and self._cell not in cells_to_requeue:
+            cells_to_requeue.append(self._cell)
+        if not cells_to_requeue:
+            return
+        self._ranked_cells.clear()
+        self._cell = None
+        self._unranked_cells[:0] = cells_to_requeue
+        self.ui.reuseLastCellBtn.setEnabled(False)
+        logger.info(f"Re-queued {len(cells_to_requeue)} completed cell(s) to front of unranked list")
 
     def _handleAutoFinish(self, fut: Future):
         self.sigWorking.emit(False)
@@ -363,16 +370,26 @@ class AutomationDebugWindow(Qt.QWidget):
 class AutomationDebug(Module):
     moduleDisplayName = "Automation Debug"
     moduleCategory = "Utilities"
+    _instance = None
 
     def __init__(self, manager, name, config):
         Module.__init__(self, manager, name, config)
+        if AutomationDebug._instance is not None:
+            AutomationDebug._instance.ui.raise_()
+            AutomationDebug._instance.ui.activateWindow()
+            Qt.QTimer.singleShot(0, self.quit)
+            return
+        AutomationDebug._instance = self
         self.ui = AutomationDebugWindow(self)
         manager.declareInterface(name, ["automationDebugModule"], self)
         this_dir = os.path.dirname(__file__)
         self.ui.setWindowIcon(Qt.QIcon(os.path.join(this_dir, "Manager", "icon.png")))
 
     def quit(self, fromUi=False):
-        self.ui.saveConfig()
-        if not fromUi:
-            self.ui.quit()
+        if AutomationDebug._instance is self:
+            AutomationDebug._instance = None
+        if hasattr(self, 'ui'):
+            self.ui.saveConfig()
+            if not fromUi:
+                self.ui.quit()
         super().quit()
