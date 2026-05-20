@@ -7,6 +7,7 @@ import numpy as np
 import pyqtgraph as pg
 from acq4.Interfaces import InterfaceMixin
 from acq4.modules.Visualize3D import Visualize3D
+from acq4.motion import MoveSpec
 from acq4.util import Qt
 from acq4.util.Mutex import Mutex
 from acq4.util.geometry import Plane, Geometry, load_transform
@@ -682,7 +683,9 @@ class OptomechDevice(InterfaceMixin):
             raise ValueError(f"Device {dev} is not connected to a focus controller.")
         dz = depth - self.getFocusDepth()
         dpos = dev.globalPosition()
-        return dev.moveToGlobal([dpos[0], dpos[1], dpos[2] + dz], speed, name=name)
+        return self.__devManager.move(
+            MoveSpec(dev, np.asarray([dpos[0], dpos[1], dpos[2] + dz]), speed=speed), name=name
+        )
 
     def getFocusDevice(self):
         """Return the device that provides focus capabilities for this device."""

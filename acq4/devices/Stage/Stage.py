@@ -17,6 +17,7 @@ from .calibration import ManipulatorAxesCalibrationWindow, StageAxesCalibrationW
 from ..Device import Device
 from ..OptomechDevice import OptomechDevice, map_through_transform
 from ...modules.Visualize3D.travelers_proxy import MovePathException
+from ...motion import MoveSpec
 from ...util.HelpfulException import HelpfulException
 from ...util.future import Future, FutureButton
 from ...util.geometry import (
@@ -487,7 +488,7 @@ class Stage(Device, OptomechDevice):
         pos = map_through_transform(pos, self.axisTransform())[:3]
         return self.mapToGlobal(pos)
 
-    def moveToGlobal(self, pos, speed, progress=False, linear=False, name=None):
+    def moveToGlobalNoPlanning(self, pos, speed, progress=False, linear=False, name=None):
         """Move the stage to a position expressed in the global coordinate frame."""
         return self.move(
             position=self.mapGlobalToDevicePosition(pos, self.getPosition()),
@@ -536,10 +537,9 @@ class Stage(Device, OptomechDevice):
             self._progressTimer.stop()
 
     def getPreferredImagingDevice(self):
-        manager = getManager()
         camName = self.config.get("imagingDevice", None)
         if camName is None:
-            cams = manager.listInterfaces("camera")
+            cams = self.dm.listInterfaces("camera")
             if len(cams) == 1:
                 camName = cams[0]
             else:
@@ -547,7 +547,7 @@ class Stage(Device, OptomechDevice):
                     f"Could not determine preferred camera (found {len(cams)}). Set 'imagingDevice' key in stage "
                     f"configuration to specify."
                 )
-        return manager.getDevice(camName)
+        return self.dm.getDevice(camName)
 
     def setLimits(self, x=None, y=None, z=None, d=None):
         """Set the (min, max) position limits to enforce for each axis.
@@ -646,7 +646,7 @@ class Stage(Device, OptomechDevice):
         homePos = self.homePosition()
         if homePos is None:
             raise RuntimeError(f"No home position set for {self.name()}")
-        return self.moveToGlobal(homePos, speed=speed, name='go home')
+        return self.dm.move(MoveSpec(self, homePos, speed=speed))
 
     def setHomePosition(self):
         """Set the home position in global coordinates."""

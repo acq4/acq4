@@ -3,6 +3,7 @@ import atexit
 import contextlib
 import gc
 import getpass
+import importlib
 import os
 import socket
 import sys
@@ -97,6 +98,7 @@ class Manager(Qt.QObject):
         self.taskLock = Mutex(Qt.QMutex.Recursive)
         self._folderTypes = None
         self._logFile = None
+        self._motion_planner = None
 
         try:
             if Manager.CREATED:
@@ -453,6 +455,34 @@ class Manager(Qt.QObject):
             Name identifying the caller reserving these devices. Required for deadlock diagnostics.
         """
         return DeviceLocker(self, devices, timeout=timeout, reserver=reserver)
+
+    @property
+    def motionPlanner(self):
+        """Return the global motion planner, instantiating it on first access.
+
+        The planner class is configurable via ``motionPlanner.class`` in the ACQ4 config file.
+        Defaults to DefaultMotionPlanner when not configured. All other keys are passed as
+        arguments to the motion planner constructor.
+        """
+        if self._motion_planner is None:
+            cfg = self.config.get("motionPlanner", {}).copy()
+            cls_path = cfg.pop("class", "acq4.motion.DefaultMotionPlanner")
+            module_path, cls_name = cls_path.rsplit(".", 1)
+            mod = importlib.import_module(module_path)
+            cls = getattr(mod, cls_name)
+            self._motion_planner = cls(**cfg)
+        return self._motion_planner
+
+    @motionPlanner.setter
+    def motionPlanner(self, planner):
+        self._motion_planner = planner
+
+    def move(self, *specs, name: str = ""):
+        """Execute a motion plan for one or more MoveSpec objects.
+
+        Returns a Future that resolves when all moves are complete.
+        """
+        return self.motionPlanner.execute(list(specs), name=name)
 
     def getOrLoadModule(self, name):
         if name in self.modules:

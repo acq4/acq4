@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-import numpy as np
-
+from acq4 import getManager
 from acq4.util.future import future_wrap
 from pyqtgraph import units
 from ._base import PatchPipetteState
@@ -49,100 +48,37 @@ class CleanState(PatchPipetteState):
         super().__init__(*args, **kwds)
 
     def run(self):
-        # self.monitorTestPulse() # check for later to see if needed
-
         config = self.config.copy()
         dev = self.dev
         pip = dev.pipetteDevice
 
         self.setState('cleaning')
 
-        # for stage in ('clean', 'rinse'):
-        #     self.checkStop()
-        #
-        #     sequence = config[f'{stage}Sequence']
-        #     if isinstance(sequence, str):
-        #         sequence = eval(sequence, units.__dict__)
-        #     if len(sequence) == 0:
-        #         continue
-        #
-        #
-        #
-        #     self.waitFor(pip.moveTo(stage, "fast"), timeout=30)
-        #
-        #     if dev.sonicatorDevice is not None:
-        #         self.sonication = dev.sonicatorDevice.doProtocol(config['sonicationProtocol'])
-        #
-        #     for pressure, delay in sequence:
-        #         dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
-        #         self.sleep(delay)
-        #
-        #     if self.sonication is not None and not self.sonication.isDone():
-        #         self.waitFor(self.sonication)
+        for stage in ('clean', 'rinse'):
+            self.checkStop()
 
-        sequence = config['cleanSequence']
-        if isinstance(sequence, str):
-            sequence = eval(sequence, units.__dict__)
-        assert len(sequence) > 0
+            sequence = config[f'{stage}Sequence']
+            if isinstance(sequence, str):
+                sequence = eval(sequence, units.__dict__)
+            if len(sequence) == 0:
+                continue
 
-        scope = pip.imagingDevice().scopeDev
-        start_pos = scope.globalPosition()
-        waypoints = [
-            (np.array([start_pos[0], start_pos[1], 30e-3]), "initial pos +3cm up"),
-            (np.array([-90e-3, 20e-3, 30e-3]), "waaay out of the way"),
-        ]
-        for wp, name in waypoints:
-            self.waitFor(scope.setGlobalPosition(wp, 20e-3, name=name))
+            self.waitFor(pip.moveTo(stage, "fast"), timeout=60)
 
-        cw = pip.getCleaningWell()
-        self.waitFor(pip.retractFromSurface('fast'))
-        self.waitFor(pip._moveToGlobal([0, 0, 10e-3], 'fast', name='safe position before cleaning well'))
-        self.waitFor(cw.moveToInteract(pip), timeout=60)
+            if dev.sonicatorDevice is not None:
+                self.sonication = dev.sonicatorDevice.doProtocol(config['sonicationProtocol'])
 
-        if dev.sonicatorDevice is not None:
-            self.sonication = dev.sonicatorDevice.doProtocol(config['sonicationProtocol'])
+            for pressure, delay in sequence:
+                dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
+                self.sleep(delay)
 
-        for pressure, delay in sequence:
-            dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
-            self.sleep(delay)
-
-        if self.sonication is not None and not self.sonication.isDone():
-            self.waitFor(self.sonication)
-
-        self.waitFor(cw.moveToApproach(pip))
+            if self.sonication is not None and not self.sonication.isDone():
+                self.waitFor(self.sonication)
 
         dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
-
-        # self.waitFor(pip.moveTo('home', 'fast'))  # motion planning doesn't work so well from here
-        self.waitFor(pip.parentStage.goHome('fast'))
-        waypoints = waypoints[::-1] + [(start_pos, "initial pos")]
-        for wp, name in waypoints:
-            self.waitFor(scope.setGlobalPosition(wp, 20e-3, name=name))
-
-        # TODO this could have worked...
-        # cw = pip.getCleaningWell()
-        # self.waitFor(cw.moveToInteract(pip), timeout=60)
-        #
-        # if dev.sonicatorDevice is not None:
-        #     self.sonication = dev.sonicatorDevice.doProtocol(config['sonicationProtocol'])
-        #
-        # for pressure, delay in sequence:
-        #     dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
-        #     self.sleep(delay)
-        #
-        # if self.sonication is not None and not self.sonication.isDone():
-        #     self.waitFor(self.sonication)
-        #
-        # self.waitFor(cw.moveToApproach(pip))
-        #
-        # dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
-        #
-        # self.waitFor(pip.parentStage.goHome('fast'))
-        # self.waitFor(cw._unwindKludgePath(pip))
-
+        self.waitFor(pip.goHome())
         dev.pipetteRecord()['cleanCount'] += 1
         dev.setTipClean(True)
-        self.currentFuture = None
         dev.newPatchAttempt()
         return {"state": config['nextState']}
 

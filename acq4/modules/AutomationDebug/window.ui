@@ -280,18 +280,7 @@
      </property>
      <layout class="QGridLayout" name="groupBox_4_layout">
       <item row="0" column="0">
-       <widget class="QComboBox" name="motionPlannerSelector">
-        <item>
-         <property name="text">
-          <string>Objective radius only</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Geometry-aware</string>
-         </property>
-        </item>
-       </widget>
+       <widget class="QComboBox" name="motionPlannerSelector"/>
       </item>
      </layout>
     </widget>

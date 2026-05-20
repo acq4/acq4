@@ -495,7 +495,7 @@ class ScientificaGUI(StageInterface):
                         diff += self._zeroAxis(axis)
 
             self.dev.logger.info(f"Auto-zeroed {self.dev.name()} by {diff}")
-            move_future = self.dev.moveToGlobal(globalStartPos + diff, "fast", name=f"{self.dev.name()} return to start after auto-zero")
+            move_future = self.dev.moveToGlobalNoPlanning(globalStartPos + diff, "fast", name=f"{self.dev.name()} return to start after auto-zero")
             slippedAxes = np.abs(diff) > 50e-6
             if np.any(slippedAxes):
                 msg = f"Detected axis slip on {self.dev.name()}:"

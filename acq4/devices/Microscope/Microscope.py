@@ -8,6 +8,7 @@ from acq4.devices.Device import Device
 from acq4.devices.OptomechDevice import OptomechDevice
 from acq4.devices.Stage import Stage
 from acq4.modules.Camera import CameraModuleInterface
+from acq4.motion import MoveSpec
 from acq4.util import Qt
 from acq4.util.Mutex import Mutex
 from acq4.util.acq4_typing import Number
@@ -233,22 +234,6 @@ class Microscope(Device, OptomechDevice):
         """
         return self.mapToGlobal((0, 0, 0))[2]
 
-    def setFocusDepth(self, z, speed='fast', name=None):
-        """Set the z-position of the focal plane.
-
-        This method requires motorized focus control.
-        """
-        # this is how much the focal plane needs to move (in the global frame)
-        dif = z - self.getFocusDepth()
-
-        # this is the current global location of the focus device
-        fd = self.focusDevice()
-        fdpos = fd.globalPosition()
-
-        # and this is where it needs to go
-        fdpos[2] += dif
-        return fd.moveToGlobal(fdpos, speed, name=name)
-
     def getDefaultImager(self):
         name = self.config.get('defaultImager', None)
         if name is None:
@@ -306,6 +291,9 @@ class Microscope(Device, OptomechDevice):
         return self.mapToGlobal(np.array((0, 0, 0)))
 
     def setGlobalPosition(self, pos, speed='fast', name=None):
+        return self.dm.move(MoveSpec(self, pos, speed=speed), name=name)
+
+    def moveToGlobalNoPlanning(self, pos, speed='fast', name=None):
         """Move the microscope such that its center axis is at a specified global position.
 
         If *pos* is a 3-element vector, then this method will also attempt to set the focus depth
@@ -319,7 +307,10 @@ class Microscope(Device, OptomechDevice):
 
         if len(pos) == 3 and focusDevice is not positionDevice:
             z = pos[2]
-            zFuture = self.setFocusDepth(z, name=f'{name} Z')
+            dif = z - self.getFocusDepth()
+            fdpos = focusDevice.globalPosition()
+            fdpos[2] += dif
+            zFuture = focusDevice.moveToGlobalNoPlanning(fdpos, speed, name=f'{name} Z')
             pos = pos[:2]
         else:
             zFuture = None
@@ -327,11 +318,11 @@ class Microscope(Device, OptomechDevice):
         if len(pos) == 2:
             pos = list(pos) + [self.getFocusDepth()]
 
-        # Determine how to move the xy(z) stage to react the new center position
+        # Determine how to move the xy(z) stage to reach the new center position
         gpos = self.globalPosition()
         sgpos = positionDevice.globalPosition()
         sgpos2 = sgpos + (pos - gpos)
-        xyFuture = positionDevice.moveToGlobal(sgpos2, speed, name=f'{name} XY')
+        xyFuture = positionDevice.moveToGlobalNoPlanning(sgpos2, speed, name=f'{name} XY')
         if zFuture is None:
             return xyFuture
         else:

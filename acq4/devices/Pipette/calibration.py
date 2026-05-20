@@ -6,8 +6,9 @@ from acq4.devices.Camera import Camera
 from acq4.util import Qt
 from acq4.util.future import future_wrap
 from acq4.util.imaging.sequencer import acquire_z_stack
+from acq4 import getManager
+from acq4.motion import MoveSpec
 from .pipette import Pipette
-from .planners import PipetteMotionPlanner
 
 
 _z_stack_detection_window = None
@@ -232,9 +233,7 @@ def findNewPipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=0.
         pipY /= np.linalg.norm(pipY)
         searchPos1 = center + pipVector * 1e-3 + pipY * 1e-3
         searchPos2 = center + pipVector * 1e-3 - pipY * 1e-3
-        # using a planner avoids possible collisions with the objective
-        planner = PipetteMotionPlanner(pipette, searchPos1, speed='fast', name=f"{pipette.name()} auto-calibrate search")
-        _future.waitFor(planner.move())
+        _future.waitFor(getManager().move(MoveSpec(pipette, searchPos1, speed='fast')))
 
         # collect background images, analyze noise
         with imager.ensureRunning():
@@ -242,7 +241,7 @@ def findNewPipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=0.
             bgFrameArray = np.stack([f.data() for f in bgFrames], axis=0)
             bgFrame = bgFrameArray.mean(axis=0)
 
-        # record from imager and pipette position while moving pipette across the objecive
+        # record from imager and pipette position while moving pipette across the objective
         frames, posEvents = watchMovingPipette(pipette, imager, searchPos2, speed=searchSpeed, _future=_future)
         framesArray = np.stack([f.data() for f in frames])
 
@@ -261,7 +260,7 @@ def findNewPipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=0.
         centerPipPos = getPipettePositionAtTime(posEvents, centerTime)
 
         # move back to center position
-        _future.waitFor(pipette._moveToGlobal(centerPipPos, speed='fast', name=f"{pipette.name()} auto-calibrate return to center"))
+        _future.waitFor(pipette.moveToGlobalNoPlanning(centerPipPos, speed='fast', name=f"{pipette.name()} auto-calibrate return to center"))
 
         # todo: at this point we could compare the current image to the previously collected video
         # to see whether we made it back to the desired position (and if not, apply
@@ -273,7 +272,7 @@ def findNewPipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=0.
         pipetteCameraDelay = frames[mostSimilarFrame].info()['time'] - frames[centerIndex].info()['time']
         correctedCenterTime = frames[centerIndex].info()['time'] - pipetteCameraDelay
         correctedCenterPipPos = getPipettePositionAtTime(posEvents, correctedCenterTime)
-        _future.waitFor(pipette._moveToGlobal(correctedCenterPipPos, speed='fast', name=f"{pipette.name()} auto-calibrate corrected center"))
+        _future.waitFor(pipette.moveToGlobalNoPlanning(correctedCenterPipPos, speed='fast', name=f"{pipette.name()} auto-calibrate corrected center"))
 
         # record from imager and pipette position while retracting pipette out of frame
         retractPos = centerPipPos - pipVector * 2e-3
@@ -314,7 +313,7 @@ def findNewPipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=0.
         centerPipPos2 = endPipPos + np.array([0, yDist, 0])
 
         # move to new center
-        _future.waitFor(pipette._moveToGlobal(centerPipPos2, speed='fast', name=f"{pipette.name()} auto-calibrate move to new center"))
+        _future.waitFor(pipette.moveToGlobalNoPlanning(centerPipPos2, speed='fast', name=f"{pipette.name()} auto-calibrate move to new center"))
 
         # autofocus
         z_range = (startDepth - 500e-6, startDepth + 500e-6, 20e-6)
@@ -358,7 +357,7 @@ def findNewPipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=0.
 
         # do initial coarse registration: reset offset to detected position, center in frame
         pipette.resetGlobalPosition(globalPos)
-        _future.waitFor(pipette._moveToGlobal(imager.globalCenterPosition(), 'fast', name=f"{pipette.name()} auto-calibrate coarse center"))
+        _future.waitFor(pipette.moveToGlobalNoPlanning(imager.globalCenterPosition(), 'fast', name=f"{pipette.name()} auto-calibrate coarse center"))
 
         # iteratively refine tip position until convergence
         _future.waitFor(pipette.iterativelyFindTip(30), timeout=None)
@@ -418,7 +417,7 @@ def watchMovingPipette(pipette: Pipette, imager: Camera, pos, speed, _future):
         try:
             imgFuture = imager.acquireFrames()
             pipRecorder = pipette.startRecording()
-            pipFuture = pipette._moveToGlobal(pos, speed=speed, name=f"{pipette.name()} watchMovingPipette")
+            pipFuture = pipette.moveToGlobalNoPlanning(pos, speed=speed, name=f"{pipette.name()} watchMovingPipette")
             _future.waitFor(pipFuture, timeout=40)  # for some reason one of these moves takes a long time to finish..
         finally:
             if pipRecorder is not None:

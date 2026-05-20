@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from acq4.motion import MoveSpec
 from acq4.util.future import future_wrap
 from pyqtgraph import units
 from ._base import PatchPipetteState
@@ -21,6 +22,7 @@ class NucleusCollectState(PatchPipetteState):
         Protocol to use for sonication (default "expel"), or if supported, the full protocol definition for a custom
         protocol.
     """
+
     stateName = 'collect'
 
     _parameterDefaultOverrides = {
@@ -37,6 +39,7 @@ class NucleusCollectState(PatchPipetteState):
     def __init__(self, *args, **kwds):
         self.currentFuture = None
         self.sonication = None
+        self.startPos = None
         super().__init__(*args, **kwds)
 
     def run(self):
@@ -46,13 +49,12 @@ class NucleusCollectState(PatchPipetteState):
 
         self.setState('nucleus collection')
 
-        # move to top of collection tube
         self.startPos = pip.globalPosition()
-        self.collectionPos = pip.loadPosition('collect')
-        # self.approachPos = self.collectionPos - pip.globalDirection() * config['approachDistance']
-
-        # self.waitFor([pip._moveToGlobal(self.approachPos, speed='fast')])
-        self.waitFor(pip._moveToGlobal(self.collectionPos, speed='fast', name=f"{pip.name()} move to nucleus collection position"), timeout=None)
+        well = pip.getNucleusDepositionWell()
+        if well is not None:
+            self.waitFor(well.moveToInteract(pip), timeout=60)
+        else:
+            self.waitFor(pip.moveTo('collect', speed='fast'), timeout=None)
 
         if dev.sonicatorDevice is not None:
             self.sonication = dev.sonicatorDevice.doProtocol(config['sonicationProtocol'])
@@ -69,35 +71,10 @@ class NucleusCollectState(PatchPipetteState):
             self.waitFor(self.sonication)
 
         dev.pipetteRecord()['expelled_nucleus'] = True
+
+        self.waitFor(pip.goHome())
+
         return {"state": 'out'}
-
-        # # current version using InteractionSite moveToInteract/unwindKludgePath:
-        # well = pip.getNucleusDepositionWell()
-        # self.waitFor(well.moveToInteract(pip))
-        #
-        # if dev.sonicatorDevice is not None:
-        #     self.sonication = dev.sonicatorDevice.doProtocol(config['sonicationProtocol'])
-        #
-        # sequence = config['pressureSequence']
-        # if isinstance(sequence, str):
-        #     sequence = eval(sequence, units.__dict__)
-        #
-        # for pressure, delay in sequence:
-        #     dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
-        #     self.sleep(delay)
-        #
-        # if self.sonication is not None and not self.sonication.isDone():
-        #     self.waitFor(self.sonication)
-        #
-        # dev.pipetteRecord()['expelled_nucleus'] = True
-        # self.waitFor(well._unwindKludgePath(pip))
-        # return {"state": 'out'}
-
-    def resetPosition(self, _future=None):
-        pip = self.dev.pipetteDevice
-        if self.isDone():
-            # self.waitFor([pip._moveToGlobal(self.approachPos, speed='fast')])
-            _future.waitFor(pip._moveToGlobal(self.startPos, speed='fast', name='return to start position'), timeout=None)
 
     @future_wrap
     def _cleanup(self, _future):
@@ -113,7 +90,9 @@ class NucleusCollectState(PatchPipetteState):
             self.dev.logger.exception("Error resetting pressure after collection")
 
         try:
-            self.resetPosition(_future)
+            if self.startPos is not None:
+                pip = self.dev.pipetteDevice
+                _future.waitFor(pip.dm.move(MoveSpec(pip, self.startPos, speed='fast')), timeout=60)
         except Exception:
             self.dev.logger.exception("Error resetting pipette position after collection")
 

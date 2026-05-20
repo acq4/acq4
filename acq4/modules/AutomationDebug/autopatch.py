@@ -79,7 +79,7 @@ class Autopatcher:
                     f1 = win.cameraDevice.moveCenterToGlobal(
                         next_pos, "fast", name="move focus to watch sonication"
                     )
-                    f2 = ppip.pipetteDevice._moveToGlobal(
+                    f2 = ppip.pipetteDevice.moveToGlobalNoPlanning(
                         next_pos, 'fast', name="move pipette farther from slice for sonication"
                     )
                     _future.waitFor(f1)

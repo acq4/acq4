@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import collections
 import contextlib
 import json
 import os
@@ -11,19 +10,16 @@ from typing import List
 import numpy as np
 
 import pyqtgraph as pg
-from acq4 import getManager
 from acq4.devices.Device import Device
-from acq4.devices.OptomechDevice import OptomechDevice, OptomechDeviceVisualizerAdapter
+from acq4.devices.OptomechDevice import OptomechDevice
 from acq4.devices.Stage import Stage, MovePathFuture
 from acq4.modules.Camera import CameraModuleInterface
+from acq4.motion import MoveSpec
 from acq4.util import Qt, ptime
 from acq4.util.future import future_wrap, Future
 from acq4.util.target import Target
-from coorx import AffineTransform, TTransform
+from coorx import AffineTransform
 from pyqtgraph import Point, siFormat
-from pyqtgraph import opengl as gl
-from .planners import PipettePathGenerator
-from .planners import defaultMotionPlanners
 from .tracker import ResnetPipetteTracker
 from ..Camera import Camera
 from ..InteractionSite import InteractionSite
@@ -31,7 +27,6 @@ from ...modules.Visualize3D.travelers_proxy import MovePathException
 from ...util.PromptUser import prompt
 from ...util.geometry import Plane
 from ...util.imaging.sequencer import run_image_sequence
-from ...util.threadrun import inGuiThread
 
 CamModTemplate = Qt.importTemplate('.cameraModTemplate')
 
@@ -80,12 +75,6 @@ class Pipette(Device, OptomechDevice):
     * **approachHeight** (float, optional): The distance to bring the pipette tip above the sample surface when beginning
       a diagonal approach. Default is 100 * um.
 
-    * **idleHeight** (float, optional): The distance to bring the pipette tip above the sample surface when in idle position.
-      Default is 1 * mm.
-
-    * **idleDistance** (float, optional): The x/y distance from the global origin from which the pipette top should be placed
-      in idle mode. Default is 7 * mm.
-
     * **recordingChambers** (list, optional): List of names of RecordingChamber devices that this Pipette is meant to work with.
 
     * **cleaningWell** (str, optional): Name of the well (RecordingChamber) device associated with
@@ -110,7 +99,6 @@ class Pipette(Device, OptomechDevice):
             yaw: 45.0
             searchHeight: 2 * mm
             approachHeight: 100 * um
-            idleHeight: 1 * mm
             recordingChambers: ['Chamber1']
             cleaningWell: 'CleaningWell1'
     """
@@ -124,10 +112,6 @@ class Pipette(Device, OptomechDevice):
     sigMoveFinished = Qt.Signal(object, object)  # self, pos
     sigMoveRequested = Qt.Signal(object, object, object, object)  # self, pos, speed, opts
 
-    # May add items here to implement custom motion planning for all pipettes
-    defaultMotionPlanners = defaultMotionPlanners()
-    pathGeneratorClass = PipettePathGenerator
-
     def __init__(self, deviceManager, config, name):
         Device.__init__(self, deviceManager, config, name)
         OptomechDevice.__init__(self, deviceManager, config, name)
@@ -140,8 +124,6 @@ class Pipette(Device, OptomechDevice):
             'searchTipHeight': config.get('searchTipHeight', 1.5e-3),
             'approachHeight': config.get('approachHeight', 100e-6),
             'cleanApproachHeight': config.get('cleanApproachHeight', 1500e-6),
-            'idleHeight': config.get('idleHeight', 1e-3),
-            'idleDistance': config.get('idleDistance', 7e-3),
             'showCameraModuleUI': config.get('showCameraModuleUI', False),
         }
 
@@ -157,11 +139,7 @@ class Pipette(Device, OptomechDevice):
             )
 
         parent.sigOrientationChanged.connect(self.clearSavedOffsets)
-        # may add items here to implement per-pipette custom motion planning
-        self.motionPlanners = {}
-        self.currentMotionPlanner = None
         self.keepOnStepping = True
-        self.pathGenerator = self.pathGeneratorClass(self)
 
         self._camInterfaces = weakref.WeakKeyDictionary()
 
@@ -218,33 +196,35 @@ class Pipette(Device, OptomechDevice):
     def moveTo(self, position: str, speed, raiseErrors=False, **kwds):
         """Move the pipette tip to a named position, with safe motion planning.
 
-        If *raiseErrors* is True, then an exception will be raised in a background
-        thread if the move fails.
+        Named computed positions (home, search, approach, target, aboveTarget) delegate to
+        the corresponding go*() method which resolves the target coordinate(s) and calls the
+        global motion planner.  Stored positions use the global planner directly.
+
+        If *raiseErrors* is True, then an exception will be raised if the move fails.
         """
-        # Select a motion planner based on the target position
-        plannerClass = self.motionPlanners.get(
-            position, self.defaultMotionPlanners.get(position, None)
-        )
-        if plannerClass is None:
-            savedPos = self.loadPosition(position)
-            if savedPos is not None:
-                plannerClass = self.motionPlanners.get(
-                    'saved', self.defaultMotionPlanners.get('saved', None)
-                )
+        go_methods = {
+            'home': self.goHome,
+            'search': self.goSearch,
+            'approach': self.goApproach,
+            'target': self.goTarget,
+            'aboveTarget': self.goAboveTarget,
+        }
+        if position in go_methods:
+            future = go_methods[position](speed=speed, **kwds)
+        elif position == 'clean' and self.getCleaningWell():
+            future = self.getCleaningWell().moveToInteract(self, speed=speed)
+        elif position == 'rinse' and self.getElectrodeSolutionWell():
+            future = self.getElectrodeSolutionWell().moveToInteract(self, speed=speed)
+        else:
+            saved_pos = self.loadPosition(position)
+            if saved_pos is None:
+                raise ValueError(f"Unknown pipette move position {position!r}")
+            future = self.dm.move(MoveSpec(self, np.asarray(saved_pos, dtype=float), speed=speed))
 
-        if plannerClass is None:
-            raise ValueError(f"Unknown pipette move position {position!r}")
-
-        if self.currentMotionPlanner is not None:
-            self.currentMotionPlanner.stop()
-
-        self.currentMotionPlanner = plannerClass(self, position, speed, **kwds)
-        future = self.currentMotionPlanner.move()
         if raiseErrors is not False:
             future.raiseErrors(
                 message=f"Move to {position} position failed ({{error}}); requested from:\n{{stack}}"
             )
-
         return future
 
     def savePosition(self, name, pos=None):
@@ -281,10 +261,9 @@ class Pipette(Device, OptomechDevice):
 
     def imagingDevice(self) -> Camera:
         if self._imagingDev is None:
-            man = getManager()
             name = self.config.get('imagingDevice', None)
             if name is None:
-                cams = man.listInterfaces('camera')
+                cams = self.dm.listInterfaces('camera')
                 if len(cams) == 1:
                     name = cams[0]
                 else:
@@ -292,7 +271,7 @@ class Pipette(Device, OptomechDevice):
                         "Pipette requires either a single imaging device available "
                         f"(found {len(cams)}) or 'imagingDevice' specified in its configuration."
                     )
-            self._imagingDev = man.getDevice(name)
+            self._imagingDev = self.dm.getDevice(name)
         return self._imagingDev
 
     def quit(self):
@@ -302,9 +281,7 @@ class Pipette(Device, OptomechDevice):
         # thread safety? if a user starts a new stepwise movement simultaneous with stopping, they
         # deserve to have to stop a second or even third time.
         self.keepOnStepping = False
-        cmp = self.currentMotionPlanner
-        if cmp is not None:
-            cmp.stop()
+        self.parentStage.stop()
 
     def deviceInterface(self, win):
         """Return a widget with a UI to put in the device rack"""
@@ -554,26 +531,74 @@ class Pipette(Device, OptomechDevice):
         return self.pitchAngle() * np.pi / 180.0
 
     def goHome(self, speed='fast', **kwds):
-        """Extract pipette tip diagonally, then move to home position."""
-        return self.moveTo('home', speed=speed, **kwds)
+        """Extract pipette tip diagonally, then move to home position.
 
-    def goSearch(self, speed='fast', distance=0, **kwds):
-        return self.moveTo('search', speed=speed, distance=distance, **kwds)
+        Always routes through the global motion planner so that any
+        post-interaction cleanup steps are included when needed.
+        """
+        manipulator = self.parentDevice()
+        manip_home = manipulator.homePosition()
+        if manip_home is None:
+            raise RuntimeError(f"No home position defined for {manipulator.name()}")
+        global_move = np.asarray(manip_home) - np.asarray(manipulator.globalPosition())
+        end_pos = np.asarray(self.globalPosition()) + global_move
+        return self.dm.move(MoveSpec(self, end_pos, speed=speed))
+
+    def goSearch(self, speed='fast', distance=0):
+        """Focus the scope above the surface, then move the tip to the search position.
+
+        *distance* adjusts the position along the pipette axis relative to the camera center.
+        """
+        scope = self.scopeDevice()
+        cam = self.imagingDevice()
+        surfaceDepth = scope.getSurfaceDepth()
+        if surfaceDepth is None:
+            raise ValueError("Cannot determine search position; surface depth is not defined.")
+
+        scope_pos = np.array(scope.globalPosition())
+        scope_pos[2] = surfaceDepth + self._opts["searchHeight"]
+
+        globalCenter = cam.globalCenterPosition("roi")
+        globalCenter[2] = surfaceDepth + self._opts["searchTipHeight"]
+        target = globalCenter + self.globalDirection() * distance
+
+        return self.dm.move(
+            MoveSpec(scope, scope_pos, speed=speed),
+            MoveSpec(self, target, speed=speed),
+        )
 
     def goApproach(self, speed, **kwds):
-        """Move the electrode tip such that it is 100um above the sample surface with its
-        axis aligned to the target.
-        """
-        return self.moveTo('approach', speed=speed, **kwds)
-
-    def goIdle(self, speed='fast', **kwds):
-        return self.moveTo('idle', speed=speed, **kwds)
+        """Move the tip to approach depth above the target, aligned along the pipette axis."""
+        approach_pos = self.positionAtDepth(self.approachDepth(), start=self.targetPosition())
+        return self.dm.move(MoveSpec(self, approach_pos, speed=speed))
 
     def goTarget(self, speed, **kwds):
-        return self.moveTo('target', speed=speed, **kwds)
+        """Move the tip to the current target position."""
+        return self.dm.move(MoveSpec(self, self.targetPosition(), speed=speed))
 
-    def goAboveTarget(self, speed, **kwds):
-        return self.moveTo('aboveTarget', speed=speed, **kwds)
+    @future_wrap
+    def goAboveTarget(self, speed, _future=None, **kwds):
+        """Move the tip to above the target for calibration, then recenter the scope.
+
+        The tip arrives via a short hysteresis-correction approach (100 µm back along the
+        pipette axis) before settling at the final position.
+        """
+        scope = self.scopeDevice()
+
+        target = self.targetPosition()
+        surfaceDepth = scope.getSurfaceDepth()
+        above_target = np.array(target)
+        above_target[2] = max(surfaceDepth, target[2]) + 50e-6
+
+        # Approach from 100 µm back along the pipette axis to normalize hysteresis.
+        hysteresis_wp = above_target + self.globalDirection() * -100e-6
+        _future.waitFor(
+            self.dm.move(
+                MoveSpec(self, hysteresis_wp, speed=speed),
+                MoveSpec(scope, above_target, speed=speed),
+            )
+        )
+        _future.waitFor(self.dm.move(MoveSpec(self, above_target, speed=speed)))
 
     def _movePath(self, path, name=None) -> MovePathFuture:
         """
@@ -664,7 +689,7 @@ class Pipette(Device, OptomechDevice):
         if name is None:
             name = f"advance to depth {depth:0.2g}"
         pos = self.positionAtDepth(depth)
-        return self._moveToGlobal(pos, speed, name=name)
+        return self.moveToGlobalNoPlanning(pos, speed, name=name)
 
     def retractFromSurface(self, speed='slow') -> Future:
         """Retract the pipette along its axis until it is above the slice surface."""
@@ -716,7 +741,7 @@ class Pipette(Device, OptomechDevice):
                 break  # overshot
             distance = np.linalg.norm(direction)
             next_pos = pos + step * direction / distance
-            _future.waitFor(self._moveToGlobal(next_pos, speed=speed, linear=True, name=name))
+            _future.waitFor(self.moveToGlobalNoPlanning(next_pos, speed=speed, linear=True, name=name))
             if distance <= step:
                 break
             _future.sleep(interval)
@@ -747,9 +772,9 @@ class Pipette(Device, OptomechDevice):
                 while ptime.time() - start < duration:
                     while np.dot(direction := random_wiggle_direction(), prev_dir) > 0:
                         pass  # ensure different direction from previous
-                    _future.waitFor(self._moveToGlobal(pos=pos + radius * direction, speed=speed, name=f"wiggle step {step_i}"))
+                    _future.waitFor(self.moveToGlobalNoPlanning(pos=pos + radius * direction, speed=speed, name=f"wiggle step {step_i}"))
                     prev_dir = direction
-                _future.waitFor(self._moveToGlobal(pos=pos, speed=speed, name=f"wiggle return {step_i}"))
+                _future.waitFor(self.moveToGlobalNoPlanning(pos=pos, speed=speed, name=f"wiggle return {step_i}"))
 
     def globalPosition(self):
         """Return the position of the electrode tip in global coordinates.
@@ -758,7 +783,7 @@ class Pipette(Device, OptomechDevice):
         """
         return self.mapToGlobal(np.array([0, 0, 0]))
 
-    def _moveToGlobal(self, pos, speed, name=None, **kwds):
+    def moveToGlobalNoPlanning(self, pos, speed, name=None, **kwds):
         """Move the electrode tip directly to the given position in global coordinates.
         WARNING: This method does _not_ implement any motion planning.
         """
@@ -773,7 +798,7 @@ class Pipette(Device, OptomechDevice):
         except Exception:
             self.logger.exception("Error visualizing pipette move path")
         try:
-            return stage.moveToGlobal(stagePos, speed, **kwds)
+            return stage.moveToGlobalNoPlanning(stagePos, speed, **kwds)
         except Exception as exc:
             exc.add_note(
                 f"Moving {self} to global position {pos!r} (name={name})"
@@ -792,11 +817,11 @@ class Pipette(Device, OptomechDevice):
         dif = np.asarray(pos) - np.asarray(self.parentStage.globalPosition())
         return np.asarray(self.globalPosition()) + dif
 
-    def _moveToLocal(self, pos, speed, linear=False, **kwds):
+    def moveToLocalNoPlanning(self, pos, speed, linear=False, **kwds):
         """Move the electrode tip directly to the given position in local coordinates.
         WARNING: This method does _not_ implement any motion planning.
         """
-        return self._moveToGlobal(self.mapToGlobal(pos), speed, linear=linear, **kwds)
+        return self.moveToGlobalNoPlanning(self.mapToGlobal(pos), speed, linear=linear, **kwds)
 
     def setTarget(self, target):
         self.target = np.array(target)
@@ -848,8 +873,7 @@ class Pipette(Device, OptomechDevice):
         """Return a list of RecordingChamber instances that are associated with this Pipette (see
         'recordingChambers' config option).
         """
-        man = getManager()
-        return [man.getDevice(d) for d in self.config.get('recordingChambers', [])]
+        return [self.dm.getDevice(d) for d in self.config.get('recordingChambers', [])]
 
     def getCleaningWell(self) -> InteractionSite | None:
         """Return the RecordingChamber instance that is associated with this Pipette for cleaning
@@ -913,7 +937,7 @@ class Pipette(Device, OptomechDevice):
             iterative process.
         """
         imgr = self.imagingDevice()
-        manager = getManager()
+        manager = self.dm
 
         with contextlib.ExitStack() as stack:
             if reserve_devices:
@@ -929,7 +953,7 @@ class Pipette(Device, OptomechDevice):
                     pos = self._findTipViaZStack()
                     _future.waitFor(self.setTipOffsetIfAcceptable(pos), timeout=None)
                     return
-                
+
                 for _ in range(max_reps):
                     pos = self.tracker.findTipInFrame()
                     heatmap = getattr(self.tracker, 'last_heatmap', None)
@@ -1115,7 +1139,7 @@ class PipetteCamModInterface(CameraModuleInterface):
         if basename != dev.name():
             # If this device looks like "Name00" and another device has the same
             # prefix, then we will label all targets with their device numbers.
-            for devname in getManager().listDevices():
+            for devname in dev.dm.listDevices():
                 if devname.startswith(basename):
                     showLabel = True
                     break
@@ -1139,7 +1163,6 @@ class PipetteCamModInterface(CameraModuleInterface):
         self.calibrateAxis.sigRegionChanged.connect(self.calibrateAxisChanging)
         self.ui.homeBtn.clicked.connect(self.homeClicked)
         self.ui.searchBtn.clicked.connect(self.searchClicked)
-        self.ui.idleBtn.clicked.connect(self.idleClicked)
         self.ui.setTargetBtn.toggled.connect(self.setTargetToggled)
         self.ui.targetBtn.clicked.connect(self.targetClicked)
         self.ui.approachBtn.clicked.connect(self.approachClicked)
@@ -1291,9 +1314,6 @@ class PipetteCamModInterface(CameraModuleInterface):
 
     def searchClicked(self):
         self.getDevice().goSearch(self.selectedSpeed())
-
-    def idleClicked(self):
-        self.getDevice().goIdle(self.selectedSpeed())
 
     def setTargetToggled(self, b):
         if b:
