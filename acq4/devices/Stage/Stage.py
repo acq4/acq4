@@ -15,7 +15,7 @@ from coorx import AffineTransform, TTransform
 from pyqtgraph import siFormat
 from .calibration import ManipulatorAxesCalibrationWindow, StageAxesCalibrationWindow
 from ..Device import Device
-from ..OptomechDevice import OptomechDevice, map_through_transform
+from ..OptomechDevice import OptomechDevice
 from ...modules.Visualize3D.travelers_proxy import MovePathException
 from ...motion import MoveSpec
 from ...util.HelpfulException import HelpfulException
@@ -202,7 +202,7 @@ class Stage(Device, OptomechDevice):
         """
         if axisTransform is None:
             axisTransform = self.axisTransform()
-        offset = map_through_transform(pos, axisTransform)[:3]
+        offset = axisTransform.map(pos)[:3]
         return TTransform(offset=offset, dims=(3, 3))
 
     def axisTransform(self) -> AffineTransform:
@@ -348,7 +348,7 @@ class Stage(Device, OptomechDevice):
         pd = self.parentDevice()
         if pd is not None:
             tr = pd.globalTransform() * tr
-        return map_through_transform([0, 0, 0], tr)
+        return tr.map([0, 0, 0])
 
     def getState(self):
         with self.lock:
@@ -485,7 +485,7 @@ class Stage(Device, OptomechDevice):
         return ik_pos
 
     def mapDeviceToGlobalPosition(self, pos):
-        pos = map_through_transform(pos, self.axisTransform())[:3]
+        pos = self.axisTransform().map(pos)[:3]
         return self.mapToGlobal(pos)
 
     def moveToGlobalNoPlanning(self, pos, speed, progress=False, linear=False, name=None):
