@@ -768,7 +768,8 @@ class Imager(Module):
             self.lastFrame.setDecomb(
                 self.param["Image Control", "Decomb"], self.param["Image Control", "Decomb", "Subpixel"]
             )
-            self.frameDisplay.updateFrame()
+            # TODO is this important? it'll update eventually on its own
+            # self.frameDisplay.updateFrame()
 
     def autoDecomb(self):
         if self.lastFrame is not None:
