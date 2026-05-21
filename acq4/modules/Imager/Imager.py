@@ -349,7 +349,7 @@ class Imager(Module):
         self.laserMonitor.timeout.connect(self.updateLaserInfo)
         ival = self.config.get("powerCheckInterval", 3.0)
         if ival is not False:
-            self.laserMonitor.start(ival * 1000)
+            self.laserMonitor.start(int(ival * 1000))
 
         self.frameDisplay.imageUpdated.connect(self.imageUpdated)
         self.imagingCtrl.sigAcquireFrameClicked.connect(self.acquireFrameClicked)
