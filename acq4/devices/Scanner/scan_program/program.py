@@ -207,7 +207,7 @@ class ScanProgram:
                 off.pop(0)
                 lastOff = nextOff
                 lastValue = arr[nextOff-1]
-            
+
         return arr
     
     def generateLaserMask(self):
