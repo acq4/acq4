@@ -345,7 +345,7 @@ class MockCamera(Camera):
         for k in params:
             if k in self.groupParams:
                 vals[k] = list(self.getParams(self.groupParams[k]).values())
-            else:
+            elif k in self.params:
                 vals[k] = self.params[k]
         return vals
 
@@ -360,7 +360,8 @@ class MockCameraTask(CameraTask):
 
     def __init__(self, dev, cmd, parentTask):
         CameraTask.__init__(self, dev, cmd, parentTask)
-        self._DAQCmd["exposure"]["lowLevelConf"] = {"mockFunc": self.makeExpWave}
+        if "exposure" in self._DAQCmd:
+            self._DAQCmd["exposure"]["lowLevelConf"] = {"mockFunc": self.makeExpWave}
         self.frameTimes = []
 
     def makeExpWave(self):
