@@ -254,7 +254,7 @@ class MockClampTask(DAQGenericTask):
         ### Do not configure daq until mode is set. Otherwise, holding values may be incorrect.
         DAQGenericTask.configure(self)
 
-    def read(self):
+    def read(self, npts, rate):
         ## Called by DAQGeneric to simulate a read-from-DAQ
         return self.job.result(timeout=30)
 

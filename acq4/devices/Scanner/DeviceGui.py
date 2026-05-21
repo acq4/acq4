@@ -209,7 +209,7 @@ class ScannerDeviceGui(Qt.QWidget):
             centerSlice = blur(frames[:, cx:cx*2, cy:cy*2], (0, 5, 5)).max(axis=1).max(axis=1)
             maxIndex = np.argmax(centerSlice)
             maxFrame = frames[maxIndex]
-            dlg.setValue(5)
+            dlg.setValue(int(5))
 
             ## Determine spot intensity and width
             mfBlur = blur(maxFrame, blurRadius)
@@ -227,7 +227,7 @@ class ScannerDeviceGui(Qt.QWidget):
             spotAmplitude = fit[0]
             spotWidth = abs(fit[3] * pixelSize)
             size = self.spotSize(mfBlur)
-            dlg.setValue(50)
+            dlg.setValue(int(50))
 
             ## Determine location of spot within each frame, 
             ## ignoring frames where the spot is too dim or too close to the frame edge
@@ -238,7 +238,7 @@ class ScannerDeviceGui(Qt.QWidget):
             margin = fit[3]
             
             for i in range(len(positions)):
-                dlg.setValue(50. + 50. * i / frames.shape[0])
+                dlg.setValue(int(50. + 50. * i / frames.shape[0]))
                 if dlg.wasCanceled():
                     raise HelpfulException('Calibration canceled by user.', msgType='warning')
 
@@ -470,7 +470,7 @@ class ScannerDeviceGui(Qt.QWidget):
         task.execute(block=False)
         with pg.ProgressDialog("Calibrating scanner: Running scan protocol..", 0, 100) as dlg:
             while not task.isDone():
-                dlg.setValue(100.*task.runTime()/task.duration())
+                dlg.setValue(int(100.*task.runTime()/task.duration()))
                 if dlg.wasCanceled():
                     task.abort()
                     raise HelpfulException('Calibration canceled by user.', msgType='warning')

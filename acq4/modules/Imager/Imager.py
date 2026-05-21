@@ -336,6 +336,7 @@ class Imager(Module):
         # config may specify a single detector device (dev, channel) or a list of devices
         # to select from [(dev1, channel1), ...]
         self.detectors = config.get("detectors", [config.get("detector")])
+        self._mockDetector = config.get("mockDetector", False)
 
         det = self.manager.getDevice(self.detectors[0][0])
         self.filterDevice = None
@@ -349,7 +350,7 @@ class Imager(Module):
         self.laserMonitor.timeout.connect(self.updateLaserInfo)
         ival = self.config.get("powerCheckInterval", 3.0)
         if ival is not False:
-            self.laserMonitor.start(ival * 1000)
+            self.laserMonitor.start(int(ival * 1000))
 
         self.frameDisplay.imageUpdated.connect(self.imageUpdated)
         self.imagingCtrl.sigAcquireFrameClicked.connect(self.acquireFrameClicked)
@@ -768,7 +769,8 @@ class Imager(Module):
             self.lastFrame.setDecomb(
                 self.param["Image Control", "Decomb"], self.param["Image Control", "Decomb", "Subpixel"]
             )
-            self.frameDisplay.updateFrame()
+            # TODO is this important? it'll update eventually on its own
+            # self.frameDisplay.updateFrame()
 
     def autoDecomb(self):
         if self.lastFrame is not None:
@@ -928,8 +930,17 @@ class Imager(Module):
                 pdChannel: {'record': True},
             },
         }
+        if self._mockDetector:
+            prot[pdDevice][pdChannel]['lowLevelConf'] = {"mockFunc": self._mock_PMT_waveform}
 
         return prot
+
+    def _mock_PMT_waveform(self, n_pts, rate):
+        # generate a fake PMT waveform for testing
+        t = np.arange(n_pts) / rate
+        sine = np.sin(2 * np.pi * 500 * t)
+        noise = np.random.normal(0, 0.1, size=t.shape)
+        return sine + noise
 
     def imageUpdated(self, frame):
         ## New image is displayed; update image transform
@@ -1222,7 +1233,17 @@ class ImagingThread(Thread):
 
         # Need to build task from a deep copy of the protocol because
         # it will be modified after execution.
-        task = self.manager.createTask(copy.deepcopy(prot))
+        def deepcopy(obj):
+            # this is a custom deepcopy function that can handle numpy arrays more efficiently than the standard library version.
+            if isinstance(obj, np.ndarray):
+                return obj.copy()
+            elif isinstance(obj, dict):
+                return {k: deepcopy(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [deepcopy(v) for v in obj]
+            else:
+                return obj
+        task = self.manager.createTask(deepcopy(prot))
 
         dur = prot["protocol"]["duration"]
         start = ptime.time()

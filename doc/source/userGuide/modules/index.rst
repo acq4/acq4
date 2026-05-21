@@ -17,6 +17,7 @@ Modules
     TaskRunner
     Camera
     Patch
+    MultiPatch
     Imager
     Console
     

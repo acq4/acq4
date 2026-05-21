@@ -460,7 +460,7 @@ class MockCamera(Camera):
         for k in params:
             if k in self.groupParams:
                 vals[k] = list(self.getParams(self.groupParams[k]).values())
-            else:
+            elif k in self.params:
                 vals[k] = self.params[k]
         return vals
 
@@ -590,17 +590,14 @@ class MockCameraTask(CameraTask):
 
     def __init__(self, dev, cmd, parentTask):
         CameraTask.__init__(self, dev, cmd, parentTask)
-        self._DAQCmd["exposure"]["lowLevelConf"] = {"mockFunc": self.makeExpWave}
+        if "exposure" in self._DAQCmd:
+            self._DAQCmd["exposure"]["lowLevelConf"] = {"mockFunc": self.makeExpWave}
         self.frameTimes = []
 
-    def makeExpWave(self):
+    def makeExpWave(self, numPts, sampleRate):
         # Called by DAQGeneric to simulate a read-from-DAQ
         # first look up the DAQ configuration so we know the sample rate / number
-        daq = self.dev.listChannels()["exposure"]["device"]
-        cmd = self.parentTask().tasks[daq].cmd
         start = self.parentTask().startTime
-        sampleRate = cmd["rate"]
-        numPts = cmd["numPts"]
         data = np.zeros(numPts, dtype=np.uint8)
         if self.fixedFrameCount is None:
             frames = self._future.peekAtResult()  # not exact, but close enough for a mock

@@ -240,7 +240,7 @@ class Task:
 
         for i in range(len(self.chOpts)):
             if 'mockFunc' in self.chOpts[i]:
-                data[i] = self.chOpts[i]['mockFunc']()
+                data[i] = self.chOpts[i]['mockFunc'](self.nPts, self.rate)
             else:
                 data[i] = 0
         return (data, self.nPts)
