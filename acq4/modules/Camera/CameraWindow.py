@@ -256,6 +256,14 @@ class CameraWindow(Qt.QMainWindow):
     def setRange(self, *args, **kargs):
         self.view.setRange(*args, **kargs)
 
+    def centerOn(self, pos):
+        """Pan the camera display to center on the given global (x, y) position without changing zoom."""
+        vr = self.view.viewRect()
+        half_w = vr.width() / 2
+        half_h = vr.height() / 2
+        new_rect = Qt.QRectF(pos[0] - half_w, pos[1] - half_h, vr.width(), vr.height())
+        self.view.setRange(rect=new_rect, padding=0)
+
     def addItem(self, item, pos=(0, 0), scale=(1, 1), z=None, **kwds):
         """Adds an item into the scene. The item is placed in the global coordinate system;
         it will stay fixed on the subject even if the scope moves or changes objective."""

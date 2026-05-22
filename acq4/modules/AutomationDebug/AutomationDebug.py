@@ -39,6 +39,7 @@ class AutomationDebugWindow(Qt.QWidget):
     def __init__(self, module: "AutomationDebug"):
         super().__init__()
         self._annotation_tool = None
+        self._annotation_stack_transform = None
         self.ui = UiTemplate()
         self.ui.setupUi(self)
 
