@@ -186,8 +186,18 @@ class CellDetector:
                 return
 
             stack = np.asarray([frame.data().T for frame in win._current_detection_stack])
-            frame_to_global = win._current_detection_stack[0].globalTransform().inverse
+            stack_transform = win._current_detection_stack[0].globalTransform()
+            frame_to_global = stack_transform.inverse
             centers_ijk = [np.abs(frame_to_global.map(n)[::-1]) for n in neurons]
+
+            win._annotation_stack_transform = stack_transform
+
+            def _center_camera_on_cell(context, _win=win):
+                if _win._annotation_stack_transform is None:
+                    return
+                global_pos = _win._annotation_stack_transform.map(context.center_ijk[::-1])
+                cam_win = _win.module.manager.getModule("Camera").window()
+                cam_win.centerOn(global_pos)
 
             if win._annotation_tool is not None:
                 win._annotation_tool.close()
@@ -198,6 +208,8 @@ class CellDetector:
                 z_scale=1.0e-6,
                 preserve_order=True,  # Keep healthy-first order
                 filter=False,  # No extra filtering
+                transpose_display=True,  # stack is (n_frames, Y, X) after .T; row-major matches camera module orientation
+                custom_buttons=[("Center Camera", _center_camera_on_cell)],
             )
 
             # from acq4_automation.object_detection import NeuronBoxViewer
