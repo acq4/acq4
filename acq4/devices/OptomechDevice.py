@@ -16,23 +16,6 @@ from pyqtgraph import opengl as gl
 from pyqtgraph.parametertree import Parameter
 
 
-def map_through_transform(
-    obj: tuple | list | Qt.QPointF | Qt.QVector3D | np.ndarray, tr: Transform
-):
-    """Map an object through a transform."""
-    if not isinstance(tr, Transform):
-        raise TypeError(f"Transform must be a coorx Transform, not {type(tr)}")
-
-    # handle special types
-    if isinstance(obj, Qt.QPointF):
-        return tr.map([obj.x(), obj.y()])
-    elif isinstance(obj, Qt.QVector3D):
-        return tr.map([obj.x(), obj.y(), obj.z()])
-    elif isinstance(obj[0], (Qt.QPointF, Qt.QVector3D)):
-        return [map_through_transform(o, tr) for o in obj]
-
-    return tr.map(obj)
-
 
 class OptomechDevice(InterfaceMixin):
     """
@@ -325,12 +308,12 @@ class OptomechDevice(InterfaceMixin):
     def mapToParentDevice(self, obj, subdev=None):
         """Map from local coordinates to the parent device (or to global if there is no parent)"""
         tr = self.deviceTransform(subdev)
-        return map_through_transform(obj, tr)
+        return tr.map(obj)
 
     def mapToGlobal(self, obj, subdev=None):
         """Map *obj* from local coordinates to global."""
         tr = self.globalTransform(subdev)
-        return map_through_transform(obj, tr)
+        return tr.map(obj)
 
     def mapToDevice(self, device, obj, subdev=None):
         """Map *obj* from local coordinates to *device*'s coordinate system."""
@@ -340,12 +323,12 @@ class OptomechDevice(InterfaceMixin):
     def mapFromParentDevice(self, obj, subdev=None):
         """Map *obj* from parent coordinates (or from global if there is no parent) to local coordinates."""
         tr = self.inverseDeviceTransform(subdev)
-        return map_through_transform(obj, tr)
+        return tr.map(obj)
 
     def mapFromGlobal(self, obj, subdev=None):
         """Map *obj* from global to local coordinates."""
         tr = self.inverseGlobalTransform(subdev)
-        return map_through_transform(obj, tr)
+        return tr.map(obj)
 
     def mapGlobalToParent(self, obj, subdev=None):
         """Map *obj* from global coordinates to the parent device coordinates.
