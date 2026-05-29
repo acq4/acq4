@@ -117,17 +117,20 @@ class InteractionSiteArray(Device, OptomechDevice):
         self.sigTransformChanged.emit(self)
 
     def saveInteractPosition(self, pip):
-        """Save pip's current global position as the interact position in each site's local frame."""
+        """Save pip's current global position as the interact position in each site's local frame.
+
+        Also stores the site's current global position as 'site global' so that _guessRotation
+        can infer the cylinder axis (approach-to-interact direction) for correct 3D display.
+        """
         for site in self._sites:
-            # Store interact position in each site's local frame so that,
-            # after a stage move, mapToGlobal(local) still gives the right global position.
             site.positions.setdefault(pip.name(), {})
-            # avoid the "only one device per site" guard in InteractionSite.saveInteractPosition
             interact_global = np.asarray(pip.globalPosition(), dtype=float)
             interact_local = site.mapFromGlobal(interact_global)
             site.positions[pip.name()]['interact global'] = interact_global.tolist()
             site.positions[pip.name()]['interact local'] = interact_local.tolist()
+            site.positions[pip.name()]['site global'] = site.globalPosition().tolist()
             site.writeConfigFile(site.positions, "saved_positions")
+            site._guessRotation()
 
     def approachMoveSpec(self, pip, speed='fast'):
         """Return a MoveSpec for the first site that has a saved approach position, or None."""
@@ -152,6 +155,16 @@ class InteractionSiteArray(Device, OptomechDevice):
         return None
 
 
+def _centered(widget):
+    """Wrap a widget in a centered container for use as a QTableWidget cell widget."""
+    container = Qt.QWidget()
+    layout = Qt.QHBoxLayout(container)
+    layout.addWidget(widget)
+    layout.setAlignment(Qt.Qt.AlignCenter)
+    layout.setContentsMargins(0, 0, 0, 0)
+    return container
+
+
 class InteractionSiteArrayDeviceGui(Qt.QWidget):
     def __init__(self, dev: InteractionSiteArray, win):
         Qt.QWidget.__init__(self)
@@ -169,9 +182,12 @@ class InteractionSiteArrayDeviceGui(Qt.QWidget):
 
         self._role_combos: list[Qt.QComboBox] = []
         self._used_up_checks: list[Qt.QCheckBox] = []
+        cols = dev._cols
 
         for i, site in enumerate(dev.sites):
-            slot_item = Qt.QTableWidgetItem(str(i))
+            row, col = divmod(i, cols)
+            slot_item = Qt.QTableWidgetItem(f"{row},{col}")
+            slot_item.setTextAlignment(Qt.Qt.AlignCenter)
             slot_item.setFlags(Qt.Qt.ItemIsEnabled)
             self._table.setItem(i, 0, slot_item)
 
@@ -180,13 +196,13 @@ class InteractionSiteArrayDeviceGui(Qt.QWidget):
                 combo.addItem(role)
             combo.setCurrentText(site.role)
             combo.currentTextChanged.connect(self._makeRoleSetter(i))
-            self._table.setCellWidget(i, 1, combo)
+            self._table.setCellWidget(i, 1, _centered(combo))
             self._role_combos.append(combo)
 
             check = Qt.QCheckBox()
             check.setChecked(site.used_up)
             check.stateChanged.connect(self._makeUsedUpSetter(i))
-            self._table.setCellWidget(i, 2, check)
+            self._table.setCellWidget(i, 2, _centered(check))
             self._used_up_checks.append(check)
 
             site.sigRoleChanged.connect(self._makeRoleReceiver(i))
@@ -239,7 +255,7 @@ class InteractionSiteArrayDeviceGui(Qt.QWidget):
 
     def _makeUsedUpSetter(self, index):
         def setter(state):
-            self.dev.sites[index].used_up = bool(state)
+            self.dev.sites[index].used_up = (state == Qt.Qt.Checked)
         return setter
 
     def _makeRoleReceiver(self, index):
