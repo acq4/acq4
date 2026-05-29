@@ -15,7 +15,7 @@ VALID_ROLES = ('clean', 'rinse', 'nucleus', 'refill', 'empty')
 ROLE_COLORS = {
     'nucleus': (0.72, 0.52, 1.00, 0.85),   # lavender
     'clean':   (0.00, 0.55, 1.00, 0.90),   # electric blue
-    'rinse':   (0.20, 0.45, 0.70, 0.55),   # faded blue
+    'rinse':   (0.55, 0.80, 1.00, 0.70),   # washed-out light blue
     'refill':  (1.00, 0.95, 0.00, 0.90),   # electric yellow
     'empty':   (0.25, 0.25, 0.25, 0.65),   # dark grey
 }
@@ -97,6 +97,7 @@ class InteractionSite(Device, OptomechDevice):
         self.positions.setdefault(self.name(), {})['used_up'] = value
         self.writeConfigFile(self.positions, "saved_positions")
         self.sigUsedUpChanged.emit(value)
+        self.sigGeometryChanged.emit(self)
 
     def _is_array_child(self) -> bool:
         """Return True if this site is managed by an InteractionSiteArray."""
@@ -113,17 +114,43 @@ class InteractionSite(Device, OptomechDevice):
 
     def getGeometry(self, name=None):
         color = ROLE_COLORS.get(self._role, ROLE_COLORS['empty'])
+        if self._used_up:
+            color = (*color[:3], 0.5)
         if isinstance(self.config.get("geometry"), dict):
             defaults = {"color": color}
             defaults.update(self.config["geometry"])
-            defaults["color"] = color  # role always wins over static config color
+            defaults["color"] = color  # role and used_up always win over static config color
             self.config["geometry"] = defaults
         else:
+            h, r = self.height, self.radius
+            tube_h  = h * 0.50
+            taper_h = h * 0.45
+            tip_h   = h - tube_h - taper_h
+            tip_r   = r * 0.4
             self.config["geometry"] = {
                 "color": color,
-                "type": "cylinder",
-                "radius": self.radius,
-                "height": self.height,
+                "children": {
+                    "tube": {
+                        "type": "cylinder",
+                        "height": tube_h,
+                        "radius": r,
+                        "transform": {"pos": [0, 0, -tube_h]},
+                    },
+                    "taper": {
+                        "type": "cone",
+                        "height": taper_h,
+                        "top_radius": r,
+                        "bottom_radius": tip_r,
+                        "transform": {"pos": [0, 0, -(tube_h + taper_h)]},
+                    },
+                    "tip": {
+                        "type": "cone",
+                        "height": tip_h,
+                        "top_radius": tip_r,
+                        "bottom_radius": 0,
+                        "transform": {"pos": [0, 0, -h]},
+                    },
+                },
             }
         return super().getGeometry(name)
 
