@@ -97,7 +97,6 @@ class InteractionSite(Device, OptomechDevice):
         self.positions.setdefault(self.name(), {})['used_up'] = value
         self.writeConfigFile(self.positions, "saved_positions")
         self.sigUsedUpChanged.emit(value)
-        self.sigGeometryChanged.emit(self)
 
     def _is_array_child(self) -> bool:
         """Return True if this site is managed by an InteractionSiteArray."""
@@ -114,8 +113,6 @@ class InteractionSite(Device, OptomechDevice):
 
     def getGeometry(self, name=None):
         color = ROLE_COLORS.get(self._role, ROLE_COLORS['empty'])
-        if self._used_up:
-            color = (*color[:3], 0.1)
         if isinstance(self.config.get("geometry"), dict):
             defaults = {"color": color}
             defaults.update(self.config["geometry"])
