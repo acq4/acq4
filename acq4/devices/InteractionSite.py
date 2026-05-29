@@ -12,6 +12,14 @@ from ..util.target import color_for_diff
 
 VALID_ROLES = ('clean', 'rinse', 'nucleus', 'refill', 'empty')
 
+ROLE_COLORS = {
+    'nucleus': (0.72, 0.52, 1.00, 0.85),   # lavender
+    'clean':   (0.00, 0.55, 1.00, 0.90),   # electric blue
+    'rinse':   (0.20, 0.45, 0.70, 0.55),   # faded blue
+    'refill':  (1.00, 0.95, 0.00, 0.90),   # electric yellow
+    'empty':   (0.25, 0.25, 0.25, 0.65),   # dark grey
+}
+
 
 class InteractionSite(Device, OptomechDevice):
     """Describes the location and dimensions of a cylindrical zone of interaction, such as a
@@ -74,6 +82,7 @@ class InteractionSite(Device, OptomechDevice):
         self.positions.setdefault(self.name(), {})['role'] = value
         self.writeConfigFile(self.positions, "saved_positions")
         self.sigRoleChanged.emit(value)
+        self.sigGeometryChanged.emit(self)
 
     @property
     def used_up(self) -> bool:
@@ -103,13 +112,15 @@ class InteractionSite(Device, OptomechDevice):
                 return
 
     def getGeometry(self, name=None):
+        color = ROLE_COLORS.get(self._role, ROLE_COLORS['empty'])
         if isinstance(self.config.get("geometry"), dict):
-            defaults = {"color": (0.3, 0.3, 0.3, 0.7)}
+            defaults = {"color": color}
             defaults.update(self.config["geometry"])
+            defaults["color"] = color  # role always wins over static config color
             self.config["geometry"] = defaults
         else:
             self.config["geometry"] = {
-                "color": (0.3, 0.3, 0.3, 0.7),
+                "color": color,
                 "type": "cylinder",
                 "radius": self.radius,
                 "height": self.height,
