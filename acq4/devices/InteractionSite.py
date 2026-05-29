@@ -115,42 +115,18 @@ class InteractionSite(Device, OptomechDevice):
     def getGeometry(self, name=None):
         color = ROLE_COLORS.get(self._role, ROLE_COLORS['empty'])
         if self._used_up:
-            color = (*color[:3], 0.5)
+            color = (*color[:3], 0.1)
         if isinstance(self.config.get("geometry"), dict):
             defaults = {"color": color}
             defaults.update(self.config["geometry"])
             defaults["color"] = color  # role and used_up always win over static config color
             self.config["geometry"] = defaults
         else:
-            h, r = self.height, self.radius
-            tube_h  = h * 0.50
-            taper_h = h * 0.45
-            tip_h   = h - tube_h - taper_h
-            tip_r   = r * 0.4
             self.config["geometry"] = {
                 "color": color,
-                "children": {
-                    "tube": {
-                        "type": "cylinder",
-                        "height": tube_h,
-                        "radius": r,
-                        "transform": {"pos": [0, 0, -tube_h]},
-                    },
-                    "taper": {
-                        "type": "cone",
-                        "height": taper_h,
-                        "top_radius": r,
-                        "bottom_radius": tip_r,
-                        "transform": {"pos": [0, 0, -(tube_h + taper_h)]},
-                    },
-                    "tip": {
-                        "type": "cone",
-                        "height": tip_h,
-                        "top_radius": tip_r,
-                        "bottom_radius": 0,
-                        "transform": {"pos": [0, 0, -h]},
-                    },
-                },
+                "type": "cylinder",
+                "radius": self.radius,
+                "height": self.height,
             }
         return super().getGeometry(name)
 

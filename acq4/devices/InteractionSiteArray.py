@@ -24,7 +24,11 @@ class InteractionSiteArray(Device, OptomechDevice):
       site_radius: float (m) — radius of each site cylinder
       site_height: float (m) — height of each site cylinder
       parentDevice: str — name of parent stage device
-      site_role_defaults: list (optional) — roles in row-major order
+      siteRoleDefaults: list (optional) — roles in row-major order
+      childGeometry: dict (optional) — geometry config applied to every child site,
+        same format as a standalone InteractionSite geometry block. Use to give the
+        array a distinctive shape (e.g. tube + conic tip). The role-based color is
+        always applied on top of whatever is configured here.
     """
 
     def __init__(self, dm, config, name):
@@ -35,7 +39,8 @@ class InteractionSiteArray(Device, OptomechDevice):
         self._cols = config['cols']
         site_radius = config['site_radius']
         site_height = config['site_height']
-        role_defaults = config.get('site_role_defaults', [])
+        role_defaults = config.get('siteRoleDefaults', [])
+        child_geometry = config.get('childGeometry', None)
 
         parent = self
         while True:
@@ -58,6 +63,8 @@ class InteractionSiteArray(Device, OptomechDevice):
                 'height': site_height,
                 'role': role,
             }
+            if child_geometry is not None:
+                site_config['geometry'] = child_geometry
             site = InteractionSite(dm, site_config, site_name)
             site.setParentDevice(self)
             dm.declareInterface(site_name, ['device', 'interactionSite'], site)
