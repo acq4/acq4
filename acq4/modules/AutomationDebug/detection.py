@@ -48,8 +48,8 @@ class CellDetector:
             cell = Cell(target)
             _future.waitFor(cell.initializeTracker(self._window.cameraDevice))
         self._window._unranked_cells.append(cell)
-        boxPositions = [c.position for c in self._window._unranked_cells]
-        _future.waitFor(futureInGuiThread(self._displayBoundingBoxes, boxPositions))
+        cells = list(self._window._unranked_cells)
+        _future.waitFor(futureInGuiThread(self._displayBoundingBoxes, cells))
 
     @future_wrap
     def _testUI(self, _future):
@@ -147,7 +147,7 @@ class CellDetector:
 
         win.cameraDevice.setFocusDepth(depth, name=f"{win.cameraDevice.name()} restore focus after detection z-stack")  # Restore focus
 
-        global_pos = _future.waitFor(
+        detection_results = _future.waitFor(
             detect_neurons(
                 working_stack,  # Prepared based on mock/real and single/multi
                 segmenter=segmenter,
@@ -162,12 +162,16 @@ class CellDetector:
             ),
             timeout=600,
         ).getResult()
-        logger.info(f"Neuron detection finished. Found {len(global_pos)} potential neurons.")
+        logger.info(f"Neuron detection finished. Found {len(detection_results)} potential neurons.")
 
         win._current_detection_stack = detection_stack
         win._current_classification_stack = classification_stack
-        win._unranked_cells = [Cell(r) for r in global_pos]
-        return global_pos
+        win._unranked_cells = []
+        for pos, score in detection_results:
+            cell = Cell(pos)
+            cell.score = score
+            win._unranked_cells.append(cell)
+        return detection_results
 
     def _handleDetectResults(self, future: Future) -> None:
         """Handles results from _detectNeuronsZStack or _testUI."""
@@ -185,10 +189,12 @@ class CellDetector:
                 logger.info("No detection stack available, skipping annotation tool launch.")
                 return
 
+            # Extract plain positions for annotation tool (neurons may be (pos, score) tuples)
+            positions = [pos for pos, _ in neurons] if neurons and isinstance(neurons[0], tuple) else neurons
             stack = np.asarray([frame.data().T for frame in win._current_detection_stack])
             stack_transform = win._current_detection_stack[0].globalTransform()
             frame_to_global = stack_transform.inverse
-            centers_ijk = [np.abs(frame_to_global.map(n)[::-1]) for n in neurons]
+            centers_ijk = [np.abs(frame_to_global.map(n)[::-1]) for n in positions]
 
             win._annotation_stack_transform = stack_transform
 
@@ -229,19 +235,23 @@ class CellDetector:
         self.clearBoundingBoxes()  # Clear previous boxes visually and state
         rois_visible = win.ui.showRoisBtn.isChecked()
         for neuron in neurons:
-            start, end = np.array(neuron) - 10e-6, np.array(neuron) + 10e-6
-            box = TargetBox(start, end)
+            if isinstance(neuron, tuple):
+                pos, score = neuron
+                pos = np.array(pos)
+            elif hasattr(neuron, 'position'):
+                pos = np.array(neuron.position.coordinates)
+                score = getattr(neuron, 'score', None)
+            else:
+                pos = np.array(neuron)
+                score = None
+            start, end = pos - 10e-6, pos + 10e-6
+            label = f"{score:.0%}" if score is not None else None
+            box = TargetBox(start, end, label=label)
+            box.noticeFocusChange(win.scopeDevice, None)  # initialize opacity for current focus depth
             box.setVisible(rois_visible)
             cam_win.addItem(box)
-            # TODO: Re-evaluate if this connection is still needed or causes issues
             win.scopeDevice.sigGlobalTransformChanged.connect(box.noticeFocusChange)
             win._previousBoxWidgets.append(box)
-            # TODO label boxes? Maybe add index number?
-            # label = pg.TextItem(f'{len(win._previousBoxWidgets)}') # Example index
-            # label.setPen(pg.mkPen('r', width=1))
-            # label.setPos(*end)
-            # cam_win.addItem(label)
-            # win._previousBoxWidgets.append(label)
 
     def clearCells(self):
         self._window._unranked_cells = []
