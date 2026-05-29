@@ -22,7 +22,7 @@ class PatchPipetteDeviceGui(Qt.QWidget):
         self.positionBtnLayout = Qt.QHBoxLayout()
         self.positionBtnLayout.addWidget(self.cleanBtn)
 
-        positions = ["clean", "rinse", "extract", "collect"]
+        positions = ["clean", "rinse", "extract", "collect", "refill"]
         self.positionBtns = {}
         for pos in positions:
             btn = pg.FeedbackButton(f"Set {pos.capitalize()} Pos")
