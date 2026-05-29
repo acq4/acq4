@@ -37,24 +37,62 @@ def qt_app():
 
 @pytest.fixture
 def make_array(qt_app):
-    """Factory: make_array(rows, cols, spacing_x, spacing_y, site_role_defaults=None)."""
+    """Factory: make_array(rows, cols, site_role_defaults=None)."""
     from acq4.devices.InteractionSiteArray import InteractionSiteArray
+    from acq4.devices.MockStage import MockStage
 
-    def _factory(rows=2, cols=3, spacing_x=2e-3, spacing_y=3e-3, site_role_defaults=None):
+    def _factory(rows=2, cols=3, site_role_defaults=None):
         dm = _make_dm()
+        stage = MockStage(dm, {'nAxes': 3}, 'TestStage')
+        dm.getDevice.side_effect = lambda name: stage if name == 'TestStage' else None
         config = {
             'rows': rows,
             'cols': cols,
-            'spacing_x': spacing_x,
-            'spacing_y': spacing_y,
             'site_radius': 1e-3,
             'site_height': 5e-3,
+            'parentDevice': 'TestStage',
         }
         if site_role_defaults is not None:
             config['site_role_defaults'] = site_role_defaults
         return InteractionSiteArray(dm, config, 'TestArray')
 
     return _factory
+
+
+def _make_pip(approach, stage_pos, interact=None):
+    """Make a mock pipette at *approach* position with a mock stage at *stage_pos*."""
+    pip = MagicMock(spec=['name', 'globalPosition'])
+    pip.name.return_value = 'pip1'
+    pip.globalPosition.return_value = np.asarray(approach, dtype=float)
+    return pip, np.asarray(stage_pos, dtype=float)
+
+
+def _calibrate(arr, col_spacing=2e-3, row_spacing=3e-3, approach=(0., 0., 0.)):
+    """Apply a synthetic calibration so tests can verify site positions."""
+    from unittest.mock import MagicMock
+    P = np.asarray(approach, dtype=float)
+
+    pip = MagicMock(spec=['name', 'globalPosition'])
+    pip.name.return_value = 'pip1'
+    pip.globalPosition.return_value = P
+
+    # Stage positions for each corner: stage moves negatively to bring sites right/down.
+    S_00 = np.array([0., 0., 0.])
+    S_0_N = S_00 + (arr._cols - 1) * np.array([-col_spacing, 0., 0.])
+    S_M_0 = S_00 + (arr._rows - 1) * np.array([0., -row_spacing, 0.])
+
+    arr._parentStage.globalPosition = MagicMock(return_value=S_00)
+    arr.calibrateCorner(pip, 'origin')
+
+    arr._parentStage.globalPosition = MagicMock(return_value=S_0_N)
+    arr.calibrateCorner(pip, 'col_end')
+
+    if arr._rows > 1:
+        arr._parentStage.globalPosition = MagicMock(return_value=S_M_0)
+        arr.calibrateCorner(pip, 'row_end')
+
+    arr.applySpacing(pip)
+    return pip
 
 
 class TestChildSiteCount:
@@ -72,31 +110,40 @@ class TestChildSiteCount:
 
 
 class TestChildSiteOffsets:
-    def test_first_site_has_zero_offset(self, make_array):
-        arr = make_array(rows=2, cols=3, spacing_x=2e-3, spacing_y=3e-3)
-        pos = arr.sites[0].mapToGlobal(np.zeros(3))
-        np.testing.assert_allclose(pos, [0, 0, 0], atol=1e-12)
+    """After calibration, each site has a unique offset so it arrives at the approach
+    position when the stage is moved to the correct position."""
 
-    def test_col_offset(self, make_array):
-        arr = make_array(rows=1, cols=3, spacing_x=2e-3, spacing_y=3e-3)
-        # site at col=1 should be 2e-3 in x from site at col=0
+    def test_all_sites_at_approach_pos_after_calibration(self, make_array):
+        arr = make_array(rows=1, cols=3)
+        _calibrate(arr, col_spacing=2e-3)
+        # After applySpacing, each site's globalPosition() should equal approach (0,0,0)
+        # only when the stage is at its calibrated position for that site.
+        # We verify indirectly: site offsets differ by col_spacing.
         pos0 = arr.sites[0].mapToGlobal(np.zeros(3))
         pos1 = arr.sites[1].mapToGlobal(np.zeros(3))
+        pos2 = arr.sites[2].mapToGlobal(np.zeros(3))
         np.testing.assert_allclose(pos1 - pos0, [2e-3, 0, 0], atol=1e-12)
+        np.testing.assert_allclose(pos2 - pos0, [4e-3, 0, 0], atol=1e-12)
 
-    def test_row_offset(self, make_array):
-        arr = make_array(rows=3, cols=1, spacing_x=2e-3, spacing_y=3e-3)
-        # site at row=1 should be 3e-3 in y from site at row=0
+    def test_row_offsets_after_calibration(self, make_array):
+        arr = make_array(rows=3, cols=1)
+        _calibrate(arr, row_spacing=3e-3)
         pos0 = arr.sites[0].mapToGlobal(np.zeros(3))
         pos1 = arr.sites[1].mapToGlobal(np.zeros(3))
         np.testing.assert_allclose(pos1 - pos0, [0, 3e-3, 0], atol=1e-12)
 
-    def test_row_major_ordering(self, make_array):
-        arr = make_array(rows=2, cols=3, spacing_x=2e-3, spacing_y=3e-3)
-        # index 3 == row=1, col=0
+    def test_row_major_ordering_after_calibration(self, make_array):
+        arr = make_array(rows=2, cols=3)
+        _calibrate(arr, col_spacing=2e-3, row_spacing=3e-3)
         pos0 = arr.sites[0].mapToGlobal(np.zeros(3))
-        pos3 = arr.sites[3].mapToGlobal(np.zeros(3))
+        pos3 = arr.sites[3].mapToGlobal(np.zeros(3))  # row=1, col=0
         np.testing.assert_allclose(pos3 - pos0, [0, 3e-3, 0], atol=1e-12)
+
+    def test_spacing_mm_helpers(self, make_array):
+        arr = make_array(rows=2, cols=3)
+        _calibrate(arr, col_spacing=2e-3, row_spacing=4e-3)
+        assert abs(arr.columnSpacingMm('pip1') - 2.0) < 0.01
+        assert abs(arr.rowSpacingMm('pip1') - 4.0) < 0.01
 
 
 class TestGetFirstAvailableSite:
@@ -161,19 +208,35 @@ class TestGetSite:
             assert arr.getSite(i) is arr.sites[i]
 
 
-class TestSaveInteractPosition:
-    def test_saves_interact_position_in_each_site_local_frame(self, make_array, qt_app):
-        arr = make_array(rows=1, cols=2, spacing_x=2e-3, spacing_y=0)
+class TestCalibrateInteract:
+    def test_interact_position_stored_for_all_sites(self, make_array, qt_app):
+        arr = make_array(rows=1, cols=2)
+        pip = _calibrate(arr, col_spacing=2e-3)
 
-        pip = MagicMock()
-        pip.name.return_value = 'pip1'
-        pip.globalPosition.return_value = np.array([1e-3, 0.0, -1e-3])
+        # Lower pip to interact depth
+        interact_global = np.array([0., 0., -5e-3])
+        pip.globalPosition.return_value = interact_global
+        arr.calibrateInteract(pip)
 
-        arr.saveInteractPosition(pip)
-
+        # All sites should have the same interact global stored
         for site in arr.sites:
-            local = site.interactLocalFor(pip)
-            assert local is not None
-            # reconstruct global from local and verify it matches pip's position
-            reconstructed = site.mapToGlobal(local)
-            np.testing.assert_allclose(reconstructed, [1e-3, 0.0, -1e-3], atol=1e-12)
+            stored = site.positions.get('pip1', {}).get('interact global')
+            assert stored is not None
+            np.testing.assert_allclose(stored, interact_global, atol=1e-12)
+
+    def test_interactLocalFor_is_consistent_with_site_position(self, make_array, qt_app):
+        """The interact local position, when mapped back to global, should equal interact_global."""
+        arr = make_array(rows=1, cols=2)
+        pip = _calibrate(arr, col_spacing=2e-3)
+
+        interact_global = np.array([0., 0., -5e-3])
+        pip.globalPosition.return_value = interact_global
+        arr.calibrateInteract(pip)
+
+        # For site[0] (at approach pos [0,0,0]): interact local = interact_global - site.globalPos
+        # When stage moves to approach [0,0], site[0].globalPosition() = approach = [0,0,0]
+        # So interactLocalFor should be [0,0,-5e-3] in site[0]'s frame
+        local0 = arr.sites[0].interactLocalFor(pip)
+        assert local0 is not None
+        reconstructed = arr.sites[0].mapToGlobal(local0)
+        np.testing.assert_allclose(reconstructed, interact_global, atol=1e-12)
