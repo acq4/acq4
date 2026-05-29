@@ -45,8 +45,8 @@ class RefillState(PatchPipetteState):
     }
     _parameterTreeConfig = {
         'refillPressure': {'type': 'float', 'default': -20e3, 'suffix': 'Pa'},
-        'refillDuration': {'type': 'float', 'default': 5.0, 'suffix': 's'},
-        'clogMitigationInterval': {'type': 'float', 'default': 0.0, 'suffix': 's'},
+        'refillDuration': {'type': 'float', 'default': 180.0, 'suffix': 's'},
+        'clogMitigationInterval': {'type': 'float', 'default': 30.0, 'suffix': 's'},
         'clogMitigationPressure': {'type': 'float', 'default': 10e3, 'suffix': 'Pa'},
         'clogMitigationDuration': {'type': 'float', 'default': 0.5, 'suffix': 's'},
         'sonicationProtocol': {'type': 'str', 'default': ''},
