@@ -63,7 +63,11 @@ class CleanState(PatchPipetteState):
             if len(sequence) == 0:
                 continue
 
-            self.waitFor(pip.moveTo(stage, "fast"), timeout=60)
+            site = pip.getSiteFor(stage)
+            if site is not None:
+                self.waitFor(site.moveToInteract(pip, speed='fast'), timeout=60)
+            else:
+                self.waitFor(pip.moveTo(stage, 'fast'), timeout=60)
 
             if dev.sonicatorDevice is not None:
                 self.sonication = dev.sonicatorDevice.doProtocol(config['sonicationProtocol'])
