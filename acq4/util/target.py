@@ -1,3 +1,5 @@
+# Graphics items for marking targets and bounding boxes in camera views.
+# TargetBox supports z-depth-based fade and optional text labels.
 import numpy as np
 
 import pyqtgraph as pg
@@ -33,12 +35,23 @@ class Target(TargetItem):
         self.update()
 
 
+# Distance from box center z within which opacity is 1.0
+_FULL_ALPHA_DIST = 10e-6
+# Distance from box center z beyond which opacity is 0.0
+_ZERO_ALPHA_DIST = 17e-6
+
+
 class TargetBox(Qt.QGraphicsRectItem):
-    def __init__(self, start, end):
+    def __init__(self, start, end, label=None):
         super().__init__(Qt.QRectF(Qt.QPointF(start[0], start[1]), Qt.QPointF(end[0], end[1])))
         self.setBrush(Qt.QBrush(Qt.QColor(0, 0, 0, 0)))
         self._zRange = sorted((start[2], end[2]))
         self._focus = 0
+        if label is not None:
+            label_item = pg.TextItem(label, color=(255, 255, 0))
+            label_item.setParentItem(self)
+            rect = self.rect()
+            label_item.setPos(rect.topRight())
         self._focusChanged()
 
     def noticeFocusChange(self, focus_device, causal_device):
@@ -46,10 +59,20 @@ class TargetBox(Qt.QGraphicsRectItem):
         self._focusChanged()
 
     def _focusChanged(self):
+        center_z = sum(self._zRange) / 2
+        dist = abs(self._focus - center_z)
+        if dist <= _FULL_ALPHA_DIST:
+            alpha = 1.0
+        elif dist >= _ZERO_ALPHA_DIST:
+            alpha = 0.0
+        else:
+            alpha = 1.0 - (dist - _FULL_ALPHA_DIST) / (_ZERO_ALPHA_DIST - _FULL_ALPHA_DIST)
+        self.setOpacity(alpha)
+
         if self._zRange[0] <= self._focus <= self._zRange[1]:
             color = (255, 255, 0)
         else:
-            diff = (self._focus - sum(self._zRange) / 2)
+            diff = (self._focus - center_z)
             color = color_for_diff(diff)
         self.setPen(pg.mkPen(color))
         self.update()
