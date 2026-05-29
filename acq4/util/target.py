@@ -36,9 +36,9 @@ class Target(TargetItem):
 
 
 # Distance from box center z within which opacity is 1.0
-_FULL_ALPHA_DIST = 3e-6
+_FULL_ALPHA_DIST = 10e-6
 # Distance from box center z beyond which opacity is 0.0
-_ZERO_ALPHA_DIST = 7e-6
+_ZERO_ALPHA_DIST = 17e-6
 
 
 class TargetBox(Qt.QGraphicsRectItem):

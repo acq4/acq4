@@ -203,10 +203,7 @@ class CellDetector:
                 if _win._annotation_stack_transform is None:
                     return
                 global_pos = _win._annotation_stack_transform.map(context.center_ijk[::-1])
-                cam_win = _win.module.manager.getModule("Camera").window()
-                cam_win.centerOn(global_pos)
                 _win.cameraDevice.moveCenterToGlobal(global_pos, speed='fast')
-                _win.cameraDevice.setFocusDepth(global_pos[2], speed='fast')
 
             if win._annotation_tool is not None:
                 win._annotation_tool.close()
