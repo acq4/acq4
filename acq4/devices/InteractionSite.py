@@ -209,7 +209,14 @@ class InteractionSite(Device, OptomechDevice):
         its local "down" direction with the direction from a to b."""
         canonical = np.array([0.0, 0.0, -1.0])  # "down" into the well
         direction = np.array(b) - np.array(a)
-        direction = direction / np.linalg.norm(direction)
+        norm = np.linalg.norm(direction)
+        if norm < 1e-12:
+            # Identical points: default to vertical (no rotation)
+            tr = self.deviceTransform()
+            tr.rotation = (0.0, np.array([1.0, 0.0, 0.0]))
+            self.setDeviceTransform(tr)
+            return
+        direction = direction / norm
 
         dot = np.clip(np.dot(canonical, direction), -1.0, 1.0)
         angle = np.arccos(dot)
