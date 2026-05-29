@@ -8,6 +8,7 @@ from .cell_attached import CellAttachedState
 from .cell_detect import CellDetectAnalysis, CellDetectState
 from .contact_cell import ContactCellState
 from .clean import CleanState
+from .refill import RefillState
 from .fouled import FouledState
 from .move_nucleus_to_home import MoveNucleusToHomeState
 from .nucleus_collect import NucleusCollectState
@@ -41,4 +42,5 @@ __all__ = [
     'BlowoutState',
     'CleanState',
     'NucleusCollectState',
+    'RefillState',
 ]

@@ -49,6 +49,7 @@ class PatchPipetteStateManager(Qt.QObject):
                 states.CleanState,
                 states.NucleusCollectState,
                 states.MoveNucleusToHomeState,
+                states.RefillState,
             ]
         ]
     )

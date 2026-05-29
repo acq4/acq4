@@ -321,7 +321,7 @@ class Imager(Module):
         self.imagingThread.sigAborted.connect(self.imagingAborted)
 
         # connect user interface to camera module
-        self.camModInterface = ImagerCamModInterface(self, self.cameraModule)
+        self.camModInterface = ImagerCamModInterface(self, self.cameraModule.window())
         self.cameraModule.window().addInterface(self.name, self.camModInterface)
 
         # find first scope device that is parent of scanner
