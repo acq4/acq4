@@ -159,6 +159,7 @@ class CellDetector:
                 multichannel=multichannel,  # Actual flag for detect_neurons
                 trim_edges=True,
                 min_volume_m3=win.ui.minVolumeSpin.value(),
+                n=None,
             ),
             timeout=600,
         ).getResult()
