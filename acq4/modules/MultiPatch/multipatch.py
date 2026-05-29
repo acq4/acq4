@@ -127,6 +127,7 @@ class MultiPatchWindow(Qt.QWidget):
         self.ui.sealBtn.setOpts(future_producer=self._seal, raiseOnError=False, **common_opts)
         self.ui.reSealBtn.setOpts(future_producer=self._reSeal, raiseOnError=False, **common_opts)
         self.ui.reSealNoNuzzleBtn.setOpts(future_producer=self._reSealNoNuzzle, raiseOnError=False, **common_opts)
+        self.ui.refillBtn.setOpts(future_producer=self._refill, raiseOnError=False, **common_opts)
         self.ui.approachBtn.setOpts(future_producer=self._approach, raiseOnError=False, **common_opts)
         self.ui.cleanBtn.setOpts(future_producer=self._clean, raiseOnError=False, **common_opts)
         self.ui.collectBtn.setOpts(future_producer=self._collect, raiseOnError=False, **common_opts)
@@ -306,6 +307,9 @@ class MultiPatchWindow(Qt.QWidget):
 
     def _reSealNoNuzzle(self):
         return self._setAllSelectedPipettesToState('reseal', extractNucleus=False)
+
+    def _refill(self):
+        return self._setAllSelectedPipettesToState('refill')
 
     def _approach(self):
         futures = []
