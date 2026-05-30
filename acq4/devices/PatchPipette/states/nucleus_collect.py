@@ -50,7 +50,7 @@ class NucleusCollectState(PatchPipetteState):
         self.setState('nucleus collection')
 
         self.startPos = pip.globalPosition()
-        well = pip.getNucleusDepositionWell()
+        well = pip.getSiteFor('nucleus')
         if well is not None:
             self.waitFor(well.moveToInteract(pip), timeout=60)
         else:
