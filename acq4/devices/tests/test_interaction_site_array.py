@@ -148,24 +148,24 @@ class TestChildSiteOffsets:
 
 class TestGetFirstAvailableSite:
     def test_returns_first_matching_role(self, make_array):
-        arr = make_array(rows=1, cols=3, siteRoleDefaults=['nucleus', 'nucleus', 'empty'])
+        arr = make_array(rows=1, cols=3, siteRoleDefaults=[['nucleus', 'nucleus', 'empty']])
         site = arr.getFirstAvailableSite('nucleus')
         assert site is arr.sites[0]
 
     def test_skips_used_up_sites(self, make_array):
-        arr = make_array(rows=1, cols=3, siteRoleDefaults=['nucleus', 'nucleus', 'empty'])
+        arr = make_array(rows=1, cols=3, siteRoleDefaults=[['nucleus', 'nucleus', 'empty']])
         arr.sites[0].used_up = True
         site = arr.getFirstAvailableSite('nucleus')
         assert site is arr.sites[1]
 
     def test_returns_none_when_all_used_up(self, make_array):
-        arr = make_array(rows=1, cols=2, siteRoleDefaults=['nucleus', 'nucleus'])
+        arr = make_array(rows=1, cols=2, siteRoleDefaults=[['nucleus', 'nucleus']])
         arr.sites[0].used_up = True
         arr.sites[1].used_up = True
         assert arr.getFirstAvailableSite('nucleus') is None
 
     def test_returns_none_when_no_matching_role(self, make_array):
-        arr = make_array(rows=1, cols=2, siteRoleDefaults=['nucleus', 'empty'])
+        arr = make_array(rows=1, cols=2, siteRoleDefaults=[['nucleus', 'empty']])
         assert arr.getFirstAvailableSite('clean') is None
 
 
@@ -176,13 +176,13 @@ class TestSiteRoleDefaults:
         assert arr.sites[1].role == 'empty'
 
     def test_siteRoleDefaults_applied(self, make_array):
-        arr = make_array(rows=1, cols=3, siteRoleDefaults=['clean', 'nucleus', 'rinse'])
+        arr = make_array(rows=1, cols=3, siteRoleDefaults=[['clean', 'nucleus', 'rinse']])
         assert arr.sites[0].role == 'clean'
         assert arr.sites[1].role == 'nucleus'
         assert arr.sites[2].role == 'rinse'
 
     def test_siteRoleDefaults_shorter_than_sites(self, make_array):
-        arr = make_array(rows=1, cols=3, siteRoleDefaults=['clean'])
+        arr = make_array(rows=1, cols=3, siteRoleDefaults=[['clean']])
         assert arr.sites[0].role == 'clean'
         assert arr.sites[1].role == 'empty'
         assert arr.sites[2].role == 'empty'

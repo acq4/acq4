@@ -24,7 +24,7 @@ class InteractionSiteArray(Device, OptomechDevice):
       siteRadius: float (m) — radius of each site cylinder
       siteHeight: float (m) — height of each site cylinder
       parentDevice: str — name of parent stage device
-      siteRoleDefaults: list (optional) — roles in row-major order
+      siteRoleDefaults: list of lists (optional) — roles[row][col], matching the physical grid shape
       childGeometry: dict (optional) — geometry config applied to every child site,
         same format as a standalone InteractionSite geometry block. Use to give the
         array a distinctive shape (e.g. tube + conic tip). The role-based color is
@@ -57,7 +57,10 @@ class InteractionSiteArray(Device, OptomechDevice):
             row = i // self._cols
             col = i % self._cols
             site_name = f"{name}[{i}]"
-            role = role_defaults[i] if i < len(role_defaults) else 'empty'
+            try:
+                role = role_defaults[row][col]
+            except (IndexError, TypeError):
+                role = 'empty'
             site_config = {
                 'radius': siteRadius,
                 'height': siteHeight,
