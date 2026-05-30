@@ -21,8 +21,8 @@ class InteractionSiteArray(Device, OptomechDevice):
     Configuration options:
       rows: int — number of rows in the grid
       cols: int — number of columns in the grid
-      site_radius: float (m) — radius of each site cylinder
-      site_height: float (m) — height of each site cylinder
+      siteRadius: float (m) — radius of each site cylinder
+      siteHeight: float (m) — height of each site cylinder
       parentDevice: str — name of parent stage device
       siteRoleDefaults: list (optional) — roles in row-major order
       childGeometry: dict (optional) — geometry config applied to every child site,
@@ -37,8 +37,8 @@ class InteractionSiteArray(Device, OptomechDevice):
 
         self._rows = config['rows']
         self._cols = config['cols']
-        site_radius = config['site_radius']
-        site_height = config['site_height']
+        siteRadius = config['siteRadius']
+        siteHeight = config['siteHeight']
         role_defaults = config.get('siteRoleDefaults', [])
         child_geometry = config.get('childGeometry', None)
 
@@ -59,8 +59,8 @@ class InteractionSiteArray(Device, OptomechDevice):
             site_name = f"{name}[{i}]"
             role = role_defaults[i] if i < len(role_defaults) else 'empty'
             site_config = {
-                'radius': site_radius,
-                'height': site_height,
+                'radius': siteRadius,
+                'height': siteHeight,
                 'role': role,
             }
             if child_geometry is not None:

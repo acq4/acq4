@@ -48,8 +48,8 @@ def make_array(qt_app):
         config = {
             'rows': rows,
             'cols': cols,
-            'site_radius': 1e-3,
-            'site_height': 5e-3,
+            'siteRadius': 1e-3,
+            'siteHeight': 5e-3,
             'parentDevice': 'TestStage',
         }
         if siteRoleDefaults is not None:
