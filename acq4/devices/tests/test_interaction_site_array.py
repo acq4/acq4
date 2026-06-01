@@ -81,9 +81,11 @@ def _calibrate(arr, col_spacing=2e-3, row_spacing=3e-3,
     pip.globalPosition.return_value = I
     arr.calibrateInteractCorner(pip, 'origin')
 
-    arr._parentStage.globalPosition = MagicMock(return_value=S_0N)
-    pip.globalPosition.return_value = I
-    arr.calibrateInteractCorner(pip, 'col_end')
+    # Only calibrate the corners the array actually has, mirroring the wizard.
+    if arr._cols > 1:
+        arr._parentStage.globalPosition = MagicMock(return_value=S_0N)
+        pip.globalPosition.return_value = I
+        arr.calibrateInteractCorner(pip, 'col_end')
 
     if arr._rows > 1:
         arr._parentStage.globalPosition = MagicMock(return_value=S_M0)
@@ -368,3 +370,54 @@ class TestCalibrationFlow:
 def Qt_accepted():
     from acq4.util import Qt
     return Qt.QDialog.Accepted
+
+
+class TestDegenerateGrids:
+    """Single-row, single-column, and single-site arrays must calibrate and display
+    using only the dimensions they actually have."""
+
+    def test_single_row_calibrates_along_columns(self, make_array, qt_app):
+        arr = make_array(rows=1, cols=4, role='nucleus')
+        I = np.array([0., 0., -5e-3])
+        _calibrate(arr, col_spacing=2e-3, interact=I, approach_offset=(0., 0., 5e-3))
+        for c, site in enumerate(arr.sites):
+            expected = I + c * np.array([2e-3, 0, 0])
+            np.testing.assert_allclose(site.positions['pip1']['interact global'], expected, atol=1e-12)
+        assert abs(arr.columnSpacingMm('pip1') - 2.0) < 0.01
+        assert arr.rowSpacingMm('pip1') is None  # no row dimension to report
+
+    def test_single_col_calibrates_along_rows(self, make_array, qt_app):
+        arr = make_array(rows=4, cols=1, role='nucleus')
+        I = np.array([0., 0., -5e-3])
+        _calibrate(arr, row_spacing=3e-3, interact=I, approach_offset=(0., 0., 5e-3))
+        for r, site in enumerate(arr.sites):
+            expected = I + r * np.array([0, 3e-3, 0])
+            np.testing.assert_allclose(site.positions['pip1']['interact global'], expected, atol=1e-12)
+        assert abs(arr.rowSpacingMm('pip1') - 3.0) < 0.01
+        assert arr.columnSpacingMm('pip1') is None  # no column dimension to report
+
+    def test_single_row_wizard_skips_row_corner(self, make_array, qt_app):
+        from acq4.devices.InteractionSiteArray import InteractionArrayCalibrationFlow
+        arr = make_array(rows=1, cols=4, role='nucleus')
+        pip = MagicMock(spec=['name', 'globalPosition'])
+        pip.name.return_value = 'pip1'
+        flow = InteractionArrayCalibrationFlow(arr, pip)
+        corners = [(s[0], s[1]) for s in flow._steps]
+        assert corners == [('origin', 'interact'), ('origin', 'approach'), ('col_end', 'interact')]
+
+    def test_single_site_applies_without_corners(self, make_array, qt_app):
+        arr = make_array(rows=1, cols=1, role='nucleus')
+        I = np.array([1e-3, 1e-3, -5e-3])
+        _calibrate(arr, interact=I, approach_offset=(0., 0., 5e-3))
+        np.testing.assert_allclose(arr.sites[0].positions['pip1']['interact global'], I, atol=1e-12)
+        assert arr.columnSpacingMm('pip1') is None
+        assert arr.rowSpacingMm('pip1') is None
+
+    def test_single_site_wizard_has_only_origin_and_approach(self, make_array, qt_app):
+        from acq4.devices.InteractionSiteArray import InteractionArrayCalibrationFlow
+        arr = make_array(rows=1, cols=1, role='nucleus')
+        pip = MagicMock(spec=['name', 'globalPosition'])
+        pip.name.return_value = 'pip1'
+        flow = InteractionArrayCalibrationFlow(arr, pip)
+        corners = [(s[0], s[1]) for s in flow._steps]
+        assert corners == [('origin', 'interact'), ('origin', 'approach')]
