@@ -37,11 +37,11 @@ def qt_app():
 
 @pytest.fixture
 def make_array(qt_app):
-    """Factory: make_array(rows, cols, siteRoleDefaults=None)."""
+    """Factory: make_array(rows, cols, role=None)."""
     from acq4.devices.InteractionSiteArray import InteractionSiteArray
     from acq4.devices.MockStage import MockStage
 
-    def _factory(rows=2, cols=3, siteRoleDefaults=None):
+    def _factory(rows=2, cols=3, role=None):
         dm = _make_dm()
         stage = MockStage(dm, {'nAxes': 3}, 'TestStage')
         dm.getDevice.side_effect = lambda name: stage if name == 'TestStage' else None
@@ -52,8 +52,8 @@ def make_array(qt_app):
             'siteHeight': 5e-3,
             'parentDevice': 'TestStage',
         }
-        if siteRoleDefaults is not None:
-            config['siteRoleDefaults'] = siteRoleDefaults
+        if role is not None:
+            config['role'] = role
         return InteractionSiteArray(dm, config, 'TestArray')
 
     return _factory
@@ -147,45 +147,39 @@ class TestChildSiteOffsets:
 
 
 class TestGetFirstAvailableSite:
-    def test_returns_first_matching_role(self, make_array):
-        arr = make_array(rows=1, cols=3, siteRoleDefaults=[['nucleus', 'nucleus', 'empty']])
+    def test_returns_first_site_for_matching_role(self, make_array):
+        arr = make_array(rows=1, cols=3, role='nucleus')
         site = arr.getFirstAvailableSite('nucleus')
         assert site is arr.sites[0]
 
     def test_skips_used_up_sites(self, make_array):
-        arr = make_array(rows=1, cols=3, siteRoleDefaults=[['nucleus', 'nucleus', 'empty']])
+        arr = make_array(rows=1, cols=3, role='nucleus')
         arr.sites[0].used_up = True
         site = arr.getFirstAvailableSite('nucleus')
         assert site is arr.sites[1]
 
     def test_returns_none_when_all_used_up(self, make_array):
-        arr = make_array(rows=1, cols=2, siteRoleDefaults=[['nucleus', 'nucleus']])
+        arr = make_array(rows=1, cols=2, role='nucleus')
         arr.sites[0].used_up = True
         arr.sites[1].used_up = True
         assert arr.getFirstAvailableSite('nucleus') is None
 
-    def test_returns_none_when_no_matching_role(self, make_array):
-        arr = make_array(rows=1, cols=2, siteRoleDefaults=[['nucleus', 'empty']])
+    def test_returns_none_when_role_does_not_match(self, make_array):
+        arr = make_array(rows=1, cols=2, role='nucleus')
         assert arr.getFirstAvailableSite('clean') is None
 
 
-class TestSiteRoleDefaults:
+class TestRole:
     def test_default_role_is_empty(self, make_array):
         arr = make_array(rows=1, cols=2)
+        assert arr.role == 'empty'
         assert arr.sites[0].role == 'empty'
         assert arr.sites[1].role == 'empty'
 
-    def test_siteRoleDefaults_applied(self, make_array):
-        arr = make_array(rows=1, cols=3, siteRoleDefaults=[['clean', 'nucleus', 'rinse']])
-        assert arr.sites[0].role == 'clean'
-        assert arr.sites[1].role == 'nucleus'
-        assert arr.sites[2].role == 'rinse'
-
-    def test_siteRoleDefaults_shorter_than_sites(self, make_array):
-        arr = make_array(rows=1, cols=3, siteRoleDefaults=[['clean']])
-        assert arr.sites[0].role == 'clean'
-        assert arr.sites[1].role == 'empty'
-        assert arr.sites[2].role == 'empty'
+    def test_role_applied_to_all_sites(self, make_array):
+        arr = make_array(rows=2, cols=3, role='clean')
+        assert arr.role == 'clean'
+        assert all(site.role == 'clean' for site in arr.sites)
 
 
 class TestChildSiteDeviceInterface:

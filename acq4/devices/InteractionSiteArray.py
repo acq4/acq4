@@ -7,7 +7,7 @@ import numpy as np
 
 from acq4.util import Qt
 from .Device import Device
-from .InteractionSite import InteractionSite, VALID_ROLES
+from .InteractionSite import InteractionSite
 from .OptomechDevice import OptomechDevice
 from .Stage import Stage
 
@@ -18,13 +18,16 @@ class InteractionSiteArray(Device, OptomechDevice):
     Each site stores its own offset in the parent stage frame; positions are calibrated
     empirically by tagging corner sites and interpolating evenly.
 
+    All sites in an array share a single role (set via the *role* config option); roles
+    are not assignable per-site at runtime.
+
     Configuration options:
       rows: int — number of rows in the grid
       cols: int — number of columns in the grid
       siteRadius: float (m) — radius of each site cylinder
       siteHeight: float (m) — height of each site cylinder
       parentDevice: str — name of parent stage device
-      siteRoleDefaults: list of lists (optional) — roles[row][col], matching the physical grid shape
+      role: str — the role shared by every site (clean, rinse, nucleus, refill, empty)
       childGeometry: dict (optional) — geometry config applied to every child site,
         same format as a standalone InteractionSite geometry block. Use to give the
         array a distinctive shape (e.g. tube + conic tip). The role-based color is
@@ -39,7 +42,7 @@ class InteractionSiteArray(Device, OptomechDevice):
         self._cols = config['cols']
         siteRadius = config['siteRadius']
         siteHeight = config['siteHeight']
-        role_defaults = config.get('siteRoleDefaults', [])
+        self._role = config.get('role', 'empty')
         child_geometry = config.get('childGeometry', None)
 
         parent = self
@@ -57,14 +60,10 @@ class InteractionSiteArray(Device, OptomechDevice):
             row = i // self._cols
             col = i % self._cols
             site_name = f"{name}[{i}]"
-            try:
-                role = role_defaults[row][col]
-            except (IndexError, TypeError):
-                role = 'empty'
             site_config = {
                 'radius': siteRadius,
                 'height': siteHeight,
-                'role': role,
+                'role': self._role,
             }
             if child_geometry is not None:
                 site_config['geometry'] = child_geometry
@@ -77,6 +76,11 @@ class InteractionSiteArray(Device, OptomechDevice):
     # Site access
 
     @property
+    def role(self) -> str:
+        """The single role shared by every site in this array."""
+        return self._role
+
+    @property
     def sites(self) -> list[InteractionSite]:
         return list(self._sites)
 
@@ -84,9 +88,11 @@ class InteractionSiteArray(Device, OptomechDevice):
         return self._sites[index]
 
     def getFirstAvailableSite(self, role: str) -> "InteractionSite | None":
-        """Return the first site with *role* that is not used_up, or None."""
+        """Return the first non-used-up site, or None if *role* does not match this array."""
+        if role != self._role:
+            return None
         for site in self._sites:
-            if site.role == role and not site.used_up:
+            if not site.used_up:
                 return site
         return None
 
@@ -191,16 +197,6 @@ class InteractionSiteArray(Device, OptomechDevice):
         return None
 
 
-def _centered(widget):
-    """Wrap a widget in a centered container for use as a QTableWidget cell widget."""
-    container = Qt.QWidget()
-    layout = Qt.QHBoxLayout(container)
-    layout.addWidget(widget)
-    layout.setAlignment(Qt.Qt.AlignCenter)
-    layout.setContentsMargins(0, 0, 0, 0)
-    return container
-
-
 class InteractionSiteArrayDeviceGui(Qt.QWidget):
     def __init__(self, dev: InteractionSiteArray, win):
         Qt.QWidget.__init__(self)
@@ -210,38 +206,26 @@ class InteractionSiteArrayDeviceGui(Qt.QWidget):
         main_layout = Qt.QVBoxLayout()
         self.setLayout(main_layout)
 
-        # --- Slot table ---
-        self._table = Qt.QTableWidget(len(dev.sites), 3)
-        self._table.setHorizontalHeaderLabels(["Slot", "Role", "Used up"])
-        self._table.horizontalHeader().setStretchLastSection(True)
-        main_layout.addWidget(self._table)
+        # --- Role header ---
+        main_layout.addWidget(Qt.QLabel(f"Role: {dev.role}"))
 
-        self._role_combos: list[Qt.QComboBox] = []
-        self._used_up_checks: list[Qt.QCheckBox] = []
+        # --- Site grid (physical layout; each button toggles used_up) ---
+        grid_widget = Qt.QWidget()
+        grid = Qt.QGridLayout(grid_widget)
+        grid.setSpacing(2)
+        main_layout.addWidget(grid_widget)
+
+        self._site_buttons: list[Qt.QPushButton] = []
         cols = dev._cols
-
         for i, site in enumerate(dev.sites):
             row, col = divmod(i, cols)
-            slot_item = Qt.QTableWidgetItem(f"{row},{col}")
-            slot_item.setTextAlignment(Qt.Qt.AlignCenter)
-            slot_item.setFlags(Qt.Qt.ItemIsEnabled)
-            self._table.setItem(i, 0, slot_item)
-
-            combo = Qt.QComboBox()
-            for role in VALID_ROLES:
-                combo.addItem(role)
-            combo.setCurrentText(site.role)
-            combo.currentTextChanged.connect(self._makeRoleSetter(i))
-            self._table.setCellWidget(i, 1, _centered(combo))
-            self._role_combos.append(combo)
-
-            check = Qt.QCheckBox()
-            check.setChecked(site.used_up)
-            check.stateChanged.connect(self._makeUsedUpSetter(i))
-            self._table.setCellWidget(i, 2, _centered(check))
-            self._used_up_checks.append(check)
-
-            site.sigRoleChanged.connect(self._makeRoleReceiver(i))
+            btn = Qt.QPushButton()
+            btn.setCheckable(True)
+            btn.setChecked(site.used_up)
+            self._styleSiteButton(btn, i)
+            btn.toggled.connect(self._makeUsedUpSetter(i))
+            grid.addWidget(btn, row, col)
+            self._site_buttons.append(btn)
             site.sigUsedUpChanged.connect(self._makeUsedUpReceiver(i))
 
         # --- Mark all unused button ---
@@ -312,32 +296,30 @@ class InteractionSiteArrayDeviceGui(Qt.QWidget):
         self._pipCombo.currentIndexChanged.connect(self._updateCalibStatus)
 
     # ------------------------------------------------------------------
-    # Slot table handlers
+    # Site grid handlers
 
-    def _makeRoleSetter(self, index):
-        def setter(text):
-            self.dev.sites[index].role = text
-        return setter
+    def _styleSiteButton(self, btn, index):
+        """Set a site button's label and tooltip from its position and used_up state."""
+        row, col = divmod(index, self.dev._cols)
+        site = self.dev.sites[index]
+        offset = np.asarray(site.deviceTransform().offset, dtype=float)
+        used = " (used)" if site.used_up else ""
+        btn.setText(f"{row},{col}{used}")
+        btn.setToolTip(f"site [{row},{col}] offset: {_fmt_pos(offset)}")
 
     def _makeUsedUpSetter(self, index):
-        def setter(state):
-            self.dev.sites[index].used_up = (state == Qt.Qt.Checked)
+        def setter(checked):
+            self.dev.sites[index].used_up = bool(checked)
+            self._styleSiteButton(self._site_buttons[index], index)
         return setter
-
-    def _makeRoleReceiver(self, index):
-        def receiver(value):
-            combo = self._role_combos[index]
-            combo.blockSignals(True)
-            combo.setCurrentText(value)
-            combo.blockSignals(False)
-        return receiver
 
     def _makeUsedUpReceiver(self, index):
         def receiver(value):
-            check = self._used_up_checks[index]
-            check.blockSignals(True)
-            check.setChecked(value)
-            check.blockSignals(False)
+            btn = self._site_buttons[index]
+            btn.blockSignals(True)
+            btn.setChecked(value)
+            btn.blockSignals(False)
+            self._styleSiteButton(btn, index)
         return receiver
 
     def _markAllUnused(self):
