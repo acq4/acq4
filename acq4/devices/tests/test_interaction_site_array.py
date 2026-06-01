@@ -37,11 +37,11 @@ def qt_app():
 
 @pytest.fixture
 def make_array(qt_app):
-    """Factory: make_array(rows, cols, siteRoleDefaults=None)."""
+    """Factory: make_array(rows, cols, role=None)."""
     from acq4.devices.InteractionSiteArray import InteractionSiteArray
     from acq4.devices.MockStage import MockStage
 
-    def _factory(rows=2, cols=3, siteRoleDefaults=None):
+    def _factory(rows=2, cols=3, role=None):
         dm = _make_dm()
         stage = MockStage(dm, {'nAxes': 3}, 'TestStage')
         dm.getDevice.side_effect = lambda name: stage if name == 'TestStage' else None
@@ -52,46 +52,49 @@ def make_array(qt_app):
             'siteHeight': 5e-3,
             'parentDevice': 'TestStage',
         }
-        if siteRoleDefaults is not None:
-            config['siteRoleDefaults'] = siteRoleDefaults
+        if role is not None:
+            config['role'] = role
         return InteractionSiteArray(dm, config, 'TestArray')
 
     return _factory
 
 
-def _make_pip(approach, stage_pos, interact=None):
-    """Make a mock pipette at *approach* position with a mock stage at *stage_pos*."""
+def _calibrate(arr, col_spacing=2e-3, row_spacing=3e-3,
+               interact=(0., 0., -5e-3), approach_offset=(0., 0., 5e-3)):
+    """Apply a synthetic calibration in the realistic fixed-pipette / moving-stage scenario.
+
+    The pipette tip stays at a fixed global interact point while the stage moves to bring
+    each corner under it; the stage deltas encode the grid spacing. This exercises the
+    common-frame correction in the array math. The approach is one measurement offset from
+    the origin interact by *approach_offset*.
+    """
     pip = MagicMock(spec=['name', 'globalPosition'])
     pip.name.return_value = 'pip1'
-    pip.globalPosition.return_value = np.asarray(approach, dtype=float)
-    return pip, np.asarray(stage_pos, dtype=float)
+    I = np.asarray(interact, dtype=float)
 
-
-def _calibrate(arr, col_spacing=2e-3, row_spacing=3e-3, approach=(0., 0., 0.)):
-    """Apply a synthetic calibration so tests can verify site positions."""
-    from unittest.mock import MagicMock
-    P = np.asarray(approach, dtype=float)
-
-    pip = MagicMock(spec=['name', 'globalPosition'])
-    pip.name.return_value = 'pip1'
-    pip.globalPosition.return_value = P
-
-    # Stage positions for each corner: stage moves negatively to bring sites right/down.
+    # Stage positions: moving the stage by -delta brings the next site under the fixed pipette.
     S_00 = np.array([0., 0., 0.])
-    S_0_N = S_00 + (arr._cols - 1) * np.array([-col_spacing, 0., 0.])
-    S_M_0 = S_00 + (arr._rows - 1) * np.array([0., -row_spacing, 0.])
+    S_0N = S_00 - (arr._cols - 1) * np.array([col_spacing, 0., 0.])
+    S_M0 = S_00 - (arr._rows - 1) * np.array([0., row_spacing, 0.])
 
     arr._parentStage.globalPosition = MagicMock(return_value=S_00)
-    arr.calibrateCorner(pip, 'origin')
+    pip.globalPosition.return_value = I
+    arr.calibrateInteractCorner(pip, 'origin')
 
-    arr._parentStage.globalPosition = MagicMock(return_value=S_0_N)
-    arr.calibrateCorner(pip, 'col_end')
+    arr._parentStage.globalPosition = MagicMock(return_value=S_0N)
+    pip.globalPosition.return_value = I
+    arr.calibrateInteractCorner(pip, 'col_end')
 
     if arr._rows > 1:
-        arr._parentStage.globalPosition = MagicMock(return_value=S_M_0)
-        arr.calibrateCorner(pip, 'row_end')
+        arr._parentStage.globalPosition = MagicMock(return_value=S_M0)
+        pip.globalPosition.return_value = I
+        arr.calibrateInteractCorner(pip, 'row_end')
 
-    arr.applySpacing(pip)
+    arr._parentStage.globalPosition = MagicMock(return_value=S_00)
+    pip.globalPosition.return_value = I + np.asarray(approach_offset, dtype=float)
+    arr.calibrateApproach(pip)
+
+    arr.applyCalibration(pip)
     return pip
 
 
@@ -147,45 +150,56 @@ class TestChildSiteOffsets:
 
 
 class TestGetFirstAvailableSite:
-    def test_returns_first_matching_role(self, make_array):
-        arr = make_array(rows=1, cols=3, siteRoleDefaults=[['nucleus', 'nucleus', 'empty']])
-        site = arr.getFirstAvailableSite('nucleus')
-        assert site is arr.sites[0]
+    def test_returns_first_site(self, make_array):
+        arr = make_array(rows=1, cols=3, role='nucleus')
+        assert arr.getFirstAvailableSite() is arr.sites[0]
 
     def test_skips_used_up_sites(self, make_array):
-        arr = make_array(rows=1, cols=3, siteRoleDefaults=[['nucleus', 'nucleus', 'empty']])
+        arr = make_array(rows=1, cols=3, role='nucleus')
         arr.sites[0].used_up = True
-        site = arr.getFirstAvailableSite('nucleus')
-        assert site is arr.sites[1]
+        assert arr.getFirstAvailableSite() is arr.sites[1]
 
     def test_returns_none_when_all_used_up(self, make_array):
-        arr = make_array(rows=1, cols=2, siteRoleDefaults=[['nucleus', 'nucleus']])
+        arr = make_array(rows=1, cols=2, role='nucleus')
         arr.sites[0].used_up = True
         arr.sites[1].used_up = True
-        assert arr.getFirstAvailableSite('nucleus') is None
-
-    def test_returns_none_when_no_matching_role(self, make_array):
-        arr = make_array(rows=1, cols=2, siteRoleDefaults=[['nucleus', 'empty']])
-        assert arr.getFirstAvailableSite('clean') is None
+        assert arr.getFirstAvailableSite() is None
 
 
-class TestSiteRoleDefaults:
+class TestRole:
     def test_default_role_is_empty(self, make_array):
         arr = make_array(rows=1, cols=2)
+        assert arr.role == 'empty'
         assert arr.sites[0].role == 'empty'
         assert arr.sites[1].role == 'empty'
 
-    def test_siteRoleDefaults_applied(self, make_array):
-        arr = make_array(rows=1, cols=3, siteRoleDefaults=[['clean', 'nucleus', 'rinse']])
-        assert arr.sites[0].role == 'clean'
-        assert arr.sites[1].role == 'nucleus'
-        assert arr.sites[2].role == 'rinse'
+    def test_role_applied_to_all_sites(self, make_array):
+        arr = make_array(rows=2, cols=3, role='clean')
+        assert arr.role == 'clean'
+        assert all(site.role == 'clean' for site in arr.sites)
 
-    def test_siteRoleDefaults_shorter_than_sites(self, make_array):
-        arr = make_array(rows=1, cols=3, siteRoleDefaults=[['clean']])
-        assert arr.sites[0].role == 'clean'
-        assert arr.sites[1].role == 'empty'
-        assert arr.sites[2].role == 'empty'
+    def test_config_role_overrides_stale_persisted_site_role(self, qt_app):
+        """A per-site role left over from an earlier config must not override the array role."""
+        from acq4.devices.InteractionSiteArray import InteractionSiteArray
+        from acq4.devices.MockStage import MockStage
+
+        storage = {
+            "devices/TestArray[1]_config/saved_positions": {'TestArray[1]': {'role': 'rinse'}},
+        }
+        dm = MagicMock()
+        dm.readConfigFile.side_effect = lambda p: storage.get(p, {})
+        dm.writeConfigFile.side_effect = lambda d, p: storage.update({p: d.copy()})
+        dm.configFileName.side_effect = lambda p: p
+        dm.listDevices.return_value = []
+        dm.listInterfaces.return_value = []
+        stage = MockStage(dm, {'nAxes': 3}, 'TestStage')
+        dm.getDevice.side_effect = lambda n: stage if n == 'TestStage' else None
+
+        arr = InteractionSiteArray(dm, {
+            'rows': 1, 'cols': 3, 'siteRadius': 1e-3, 'siteHeight': 5e-3,
+            'parentDevice': 'TestStage', 'role': 'nucleus',
+        }, 'TestArray')
+        assert all(site.role == 'nucleus' for site in arr.sites)
 
 
 class TestChildSiteDeviceInterface:
@@ -208,35 +222,149 @@ class TestGetSite:
             assert arr.getSite(i) is arr.sites[i]
 
 
-class TestCalibrateInteract:
-    def test_interact_position_stored_for_all_sites(self, make_array, qt_app):
-        arr = make_array(rows=1, cols=2)
-        pip = _calibrate(arr, col_spacing=2e-3)
+class TestCalibration:
+    """The array interpolates the three interact corners and transmits a unique interact
+    (and derived approach) position to each child site."""
 
-        # Lower pip to interact depth
-        interact_global = np.array([0., 0., -5e-3])
-        pip.globalPosition.return_value = interact_global
-        arr.calibrateInteract(pip)
+    def test_interact_interpolated_and_transmitted_to_each_child(self, make_array, qt_app):
+        arr = make_array(rows=2, cols=3, role='nucleus')
+        I = np.array([1e-3, 2e-3, -5e-3])
+        col, rowsp = 2e-3, 3e-3
+        _calibrate(arr, col_spacing=col, row_spacing=rowsp, interact=I,
+                   approach_offset=(0., 0., 5e-3))
 
-        # All sites should have the same interact global stored
+        # Each child's stored interact global = I + c*[col,0,0] + r*[0,rowsp,0]
+        for i, site in enumerate(arr.sites):
+            r, c = divmod(i, arr._cols)
+            expected = I + c * np.array([col, 0, 0]) + r * np.array([0, rowsp, 0])
+            stored = site.positions['pip1']['interact global']
+            np.testing.assert_allclose(stored, expected, atol=1e-12)
+
+    def test_approach_derived_from_shared_offset(self, make_array, qt_app):
+        arr = make_array(rows=2, cols=3, role='nucleus')
+        I = np.array([0., 0., -5e-3])
+        approach_off = np.array([0., 0., 5e-3])
+        _calibrate(arr, col_spacing=2e-3, row_spacing=3e-3, interact=I,
+                   approach_offset=approach_off)
+
+        # Each child's approach ('site global') = its interact + the shared approach offset
         for site in arr.sites:
-            stored = site.positions.get('pip1', {}).get('interact global')
-            assert stored is not None
-            np.testing.assert_allclose(stored, interact_global, atol=1e-12)
+            interact = np.asarray(site.positions['pip1']['interact global'])
+            approach = np.asarray(site.positions['pip1']['site global'])
+            np.testing.assert_allclose(approach - interact, approach_off, atol=1e-12)
 
-    def test_interactLocalFor_is_consistent_with_site_position(self, make_array, qt_app):
-        """The interact local position, when mapped back to global, should equal interact_global."""
-        arr = make_array(rows=1, cols=2)
-        pip = _calibrate(arr, col_spacing=2e-3)
+    def test_interactLocalFor_reconstructs_interact_global(self, make_array, qt_app):
+        """After the stage brings a site to its approach pose, the stored interact-local maps
+        back to the calibrated interact global."""
+        arr = make_array(rows=1, cols=3, role='nucleus')
+        I = np.array([0., 0., -5e-3])
+        _calibrate(arr, col_spacing=2e-3, interact=I, approach_offset=(0., 0., 5e-3))
 
-        interact_global = np.array([0., 0., -5e-3])
-        pip.globalPosition.return_value = interact_global
-        arr.calibrateInteract(pip)
+        # At calibration the reference stage position is S_ref = origin stage = 0, so each
+        # site sits at its approach pose with the stage at 0 (the mock's current position).
+        for i, site in enumerate(arr.sites):
+            local = site.interactLocalFor(arr_pip(site))
+            assert local is not None
+            reconstructed = site.mapToGlobal(local)
+            expected = I + i * np.array([2e-3, 0, 0])
+            np.testing.assert_allclose(reconstructed, expected, atol=1e-12)
 
-        # For site[0] (at approach pos [0,0,0]): interact local = interact_global - site.globalPos
-        # When stage moves to approach [0,0], site[0].globalPosition() = approach = [0,0,0]
-        # So interactLocalFor should be [0,0,-5e-3] in site[0]'s frame
-        local0 = arr.sites[0].interactLocalFor(pip)
-        assert local0 is not None
-        reconstructed = arr.sites[0].mapToGlobal(local0)
-        np.testing.assert_allclose(reconstructed, interact_global, atol=1e-12)
+    def test_apply_requires_approach_and_corners(self, make_array, qt_app):
+        arr = make_array(rows=1, cols=2, role='nucleus')
+        pip = MagicMock(spec=['name', 'globalPosition'])
+        pip.name.return_value = 'pip1'
+        pip.globalPosition.return_value = np.zeros(3)
+        arr._parentStage.globalPosition = MagicMock(return_value=np.zeros(3))
+        # Only origin interact calibrated; applyCalibration should raise (missing keys).
+        arr.calibrateInteractCorner(pip, 'origin')
+        with pytest.raises(KeyError):
+            arr.applyCalibration(pip)
+
+
+def arr_pip(site):
+    """Return a mock pipette named 'pip1' for querying a site's saved positions."""
+    pip = MagicMock(spec=['name'])
+    pip.name.return_value = 'pip1'
+    return pip
+
+
+class TestCalibrationFlow:
+    def _flow(self, arr):
+        from acq4.devices.InteractionSiteArray import InteractionArrayCalibrationFlow
+        pip = MagicMock(spec=['name', 'globalPosition'])
+        pip.name.return_value = 'pip1'
+        pip.globalPosition.return_value = np.zeros(3)
+        return InteractionArrayCalibrationFlow(arr, pip), pip
+
+    def test_step_order_full_grid(self, make_array, qt_app):
+        arr = make_array(rows=2, cols=5, role='nucleus')
+        flow, _ = self._flow(arr)
+        corners = [(s[0], s[1]) for s in flow._steps]
+        assert corners == [
+            ('origin', 'interact'),
+            ('origin', 'approach'),
+            ('row_end', 'interact'),
+            ('col_end', 'interact'),
+        ]
+
+    def test_single_row_skips_row_end(self, make_array, qt_app):
+        arr = make_array(rows=1, cols=4, role='nucleus')
+        flow, _ = self._flow(arr)
+        corners = [(s[0], s[1]) for s in flow._steps]
+        assert ('row_end', 'interact') not in corners
+        assert ('col_end', 'interact') in corners
+
+    def test_single_col_skips_col_end(self, make_array, qt_app):
+        arr = make_array(rows=3, cols=1, role='nucleus')
+        flow, _ = self._flow(arr)
+        corners = [(s[0], s[1]) for s in flow._steps]
+        assert ('col_end', 'interact') not in corners
+        assert ('row_end', 'interact') in corners
+
+    def test_walking_all_steps_applies_calibration(self, make_array, qt_app):
+        arr = make_array(rows=2, cols=3, role='nucleus')
+        flow, pip = self._flow(arr)
+        I = np.array([1e-3, 2e-3, -5e-3])
+        # stage stays at origin for every capture; pipette positions encode the geometry
+        arr._parentStage.globalPosition = MagicMock(return_value=np.zeros(3))
+        captures = {
+            ('origin', 'interact'): I,
+            ('origin', 'approach'): I + np.array([0, 0, 5e-3]),
+            ('row_end', 'interact'): I + np.array([0, 3e-3, 0]),
+            ('col_end', 'interact'): I + np.array([2 * 2e-3, 0, 0]),
+        }
+        results = []
+        flow.finished.connect(results.append)
+        for _ in range(len(flow._steps)):
+            corner, kind, _, _ = flow._steps[flow._index]
+            pip.globalPosition.return_value = captures[(corner, kind)]
+            flow._useCurrent()
+        qt_app.processEvents()
+        # Dialog accepted and calibration applied to children.
+        assert results == [Qt_accepted()]
+        np.testing.assert_allclose(
+            arr.sites[0].positions['pip1']['interact global'], I, atol=1e-12
+        )
+        assert arr.columnSpacingMm('pip1') is not None
+
+    def test_keep_existing_enabled_only_when_saved(self, make_array, qt_app):
+        arr = make_array(rows=1, cols=2, role='nucleus')
+        # Pre-save the origin interact so the first step can keep it.
+        pip = MagicMock(spec=['name', 'globalPosition'])
+        pip.name.return_value = 'pip1'
+        pip.globalPosition.return_value = np.array([0., 0., -5e-3])
+        arr._parentStage.globalPosition = MagicMock(return_value=np.zeros(3))
+        arr.calibrateInteractCorner(pip, 'origin')
+
+        from acq4.devices.InteractionSiteArray import InteractionArrayCalibrationFlow
+        flow = InteractionArrayCalibrationFlow(arr, pip)
+        # Step 1 (origin interact) has a saved value -> keep enabled
+        assert flow._keepBtn.isEnabled()
+        flow._keepExisting()
+        # Step 2 (approach) has no saved value -> keep disabled
+        assert not flow._keepBtn.isEnabled()
+
+
+def Qt_accepted():
+    from acq4.util import Qt
+    return Qt.QDialog.Accepted
