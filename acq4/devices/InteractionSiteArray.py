@@ -87,10 +87,11 @@ class InteractionSiteArray(Device, OptomechDevice):
     def getSite(self, index: int) -> InteractionSite:
         return self._sites[index]
 
-    def getFirstAvailableSite(self, role: str) -> "InteractionSite | None":
-        """Return the first non-used-up site, or None if *role* does not match this array."""
-        if role != self._role:
-            return None
+    def getFirstAvailableSite(self) -> "InteractionSite | None":
+        """Return the first non-used-up site, or None if all sites are used up.
+
+        Callers are responsible for selecting an array whose role matches their need.
+        """
         for site in self._sites:
             if not site.used_up:
                 return site
@@ -99,82 +100,113 @@ class InteractionSiteArray(Device, OptomechDevice):
     # ------------------------------------------------------------------
     # Calibration
 
-    def calibrateCorner(self, pip, corner: str):
-        """Record stage and pipette positions for a calibration corner.
+    def calibrateApproach(self, pip):
+        """Record the single approach waypoint: stage position and pipette global position.
 
-        corner: 'origin' ([0,0]), 'col_end' ([0,cols-1]), 'row_end' ([rows-1,0])
+        The approach point only needs to be a safe spot above the wells; its position
+        relative to the interact point is shared by every (identical, parallel) site.
+        """
+        if self._parentStage is None:
+            raise RuntimeError(f"{self.name()} has no parent Stage, cannot calibrate")
+        pip_name = pip.name()
+        self.positions.setdefault(pip_name, {})
+        self.positions[pip_name]['approach'] = pip.globalPosition().tolist()
+        self.positions[pip_name]['approach_stage'] = self._parentStage.globalPosition().tolist()
+        self.writeConfigFile(self.positions, "saved_positions")
+
+    def calibrateInteractCorner(self, pip, corner: str):
+        """Record an interact corner: stage position and pipette tip global (deep in the fluid).
+
+        corner: 'origin' ([0,0]), 'col_end' ([0,cols-1]), 'row_end' ([rows-1,0]).
+        These three points define the grid of interact positions, which are the
+        precision-critical targets for fluid interaction.
         """
         if self._parentStage is None:
             raise RuntimeError(f"{self.name()} has no parent Stage, cannot calibrate")
         pip_name = pip.name()
         self.positions.setdefault(pip_name, {})
         self.positions[pip_name][f'{corner}_stage'] = self._parentStage.globalPosition().tolist()
-        self.positions[pip_name]['approach'] = pip.globalPosition().tolist()
+        self.positions[pip_name][f'{corner}_interact'] = pip.globalPosition().tolist()
         self.writeConfigFile(self.positions, "saved_positions")
 
-    def calibrateInteract(self, pip):
-        """Record the pipette interact position (tip inside a reference site) for all sites."""
+    def _commonFrameRef(self, cal):
+        """Return the reference stage position (origin corner) for common-frame conversion."""
+        return np.asarray(cal['origin_stage'], dtype=float)
+
+    def _cornerInCommonFrame(self, cal, corner):
+        """Return one interact corner in the common frame (stage at the origin's stage position).
+
+        A point measured at stage position S maps into the common frame (stage at S_ref) by
+        adding (S_ref - S): moving the stage by that delta shifts the array — and the fluid
+        it carries — by the same amount in global coordinates.
+        """
+        S_ref = self._commonFrameRef(cal)
+        interact = np.asarray(cal[f'{corner}_interact'], dtype=float)
+        stage = np.asarray(cal[f'{corner}_stage'], dtype=float)
+        return interact + (S_ref - stage)
+
+    def applyCalibration(self, pip):
+        """Interpolate per-site interact positions from the three corners and apply them.
+
+        Requires calibrateInteractCorner for 'origin', 'col_end' (and 'row_end' when
+        rows > 1) plus calibrateApproach. Each site gets its own interact global position
+        (interpolated) and an approach position derived from the shared approach-to-interact
+        offset. Site offsets are placed so each site's origin sits at its approach point when
+        the stage is at the reference position.
+        """
         pip_name = pip.name()
-        interact_global = np.asarray(pip.globalPosition(), dtype=float)
-        self.positions.setdefault(pip_name, {})
-        self.positions[pip_name]['interact_global'] = interact_global.tolist()
-        self.writeConfigFile(self.positions, "saved_positions")
+        cal = self.positions.get(pip_name, {})
+        S_ref = self._commonFrameRef(cal)
+        J_00 = self._cornerInCommonFrame(cal, 'origin')
 
-        for site in self._sites:
+        if self._cols > 1:
+            J_0N = self._cornerInCommonFrame(cal, 'col_end')
+            col_step = (J_0N - J_00) / (self._cols - 1)
+        else:
+            col_step = np.zeros(3)
+        if self._rows > 1:
+            J_M0 = self._cornerInCommonFrame(cal, 'row_end')
+            row_step = (J_M0 - J_00) / (self._rows - 1)
+        else:
+            row_step = np.zeros(3)
+
+        # Approach point relative to the origin interact, in the common frame; shared by all sites.
+        A_common = np.asarray(cal['approach'], dtype=float) + (
+            S_ref - np.asarray(cal['approach_stage'], dtype=float)
+        )
+        approach_offset = A_common - J_00
+
+        for i, site in enumerate(self._sites):
+            r, c = divmod(i, self._cols)
+            interact_global = J_00 + c * col_step + r * row_step
+            approach_global = interact_global + approach_offset
+            # Place the site origin at its approach point when the stage is at S_ref.
+            site.setOffset(approach_global - S_ref)
             site.positions.setdefault(pip_name, {})
+            site.positions[pip_name]['site global'] = approach_global.tolist()
             site.positions[pip_name]['interact global'] = interact_global.tolist()
             site.writeConfigFile(site.positions, "saved_positions")
             site._guessRotation()
 
-    def applySpacing(self, pip):
-        """Interpolate all site offsets from the calibrated corners and write approach positions.
-
-        Requires calibrateCorner for 'origin', 'col_end' (and 'row_end' when rows > 1).
-        Each site gets its own offset in the parent stage frame so that when the stage moves
-        to bring site [r,c] to the pipette approach position, the site arrives at the correct
-        spot. All sites share the same approach global and interact global.
-        """
-        pip_name = pip.name()
-        cal = self.positions.get(pip_name, {})
-        P = np.asarray(cal['approach'], dtype=float)
-        S_00 = np.asarray(cal['origin_stage'], dtype=float)
-        S_0_N = np.asarray(cal['col_end_stage'], dtype=float)
-
-        col_step = (S_0_N - S_00) / (self._cols - 1) if self._cols > 1 else np.zeros(3)
-        if self._rows > 1:
-            S_M_0 = np.asarray(cal['row_end_stage'], dtype=float)
-            row_step = (S_M_0 - S_00) / (self._rows - 1)
-        else:
-            row_step = np.zeros(3)
-
-        for i, site in enumerate(self._sites):
-            r, c = divmod(i, self._cols)
-            # Stage position when this site will be under the pipette.
-            S_r_c = S_00 + c * col_step + r * row_step
-            # Site offset in parent frame so site.globalPosition() == P when stage is at S_r_c.
-            site_offset = P - S_r_c
-            site.setOffset(site_offset)
-            # Record approach position for the motion planner.
-            site.positions.setdefault(pip_name, {})
-            site.positions[pip_name]['site global'] = P.tolist()
-            site.writeConfigFile(site.positions, "saved_positions")
-            site._guessRotation()
-
     def columnSpacingMm(self, pip_name: str) -> float | None:
-        """Return computed column spacing in mm, or None if not yet calibrated."""
+        """Return computed column spacing in mm (from interact corners), or None."""
         cal = self.positions.get(pip_name, {})
-        if 'origin_stage' not in cal or 'col_end_stage' not in cal or self._cols < 2:
+        needed = ('origin_interact', 'origin_stage', 'col_end_interact', 'col_end_stage')
+        if any(k not in cal for k in needed) or self._cols < 2:
             return None
-        span = np.linalg.norm(np.array(cal['col_end_stage']) - np.array(cal['origin_stage']))
-        return span / (self._cols - 1) * 1e3
+        J_00 = self._cornerInCommonFrame(cal, 'origin')
+        J_0N = self._cornerInCommonFrame(cal, 'col_end')
+        return np.linalg.norm(J_0N - J_00) / (self._cols - 1) * 1e3
 
     def rowSpacingMm(self, pip_name: str) -> float | None:
-        """Return computed row spacing in mm, or None if not yet calibrated."""
+        """Return computed row spacing in mm (from interact corners), or None."""
         cal = self.positions.get(pip_name, {})
-        if 'origin_stage' not in cal or 'row_end_stage' not in cal or self._rows < 2:
+        needed = ('origin_interact', 'origin_stage', 'row_end_interact', 'row_end_stage')
+        if any(k not in cal for k in needed) or self._rows < 2:
             return None
-        span = np.linalg.norm(np.array(cal['row_end_stage']) - np.array(cal['origin_stage']))
-        return span / (self._rows - 1) * 1e3
+        J_00 = self._cornerInCommonFrame(cal, 'origin')
+        J_M0 = self._cornerInCommonFrame(cal, 'row_end')
+        return np.linalg.norm(J_M0 - J_00) / (self._rows - 1) * 1e3
 
     def approachMoveSpec(self, pip, speed='fast'):
         """Return a MoveSpec for the first site that has a saved approach position, or None."""
@@ -248,28 +280,37 @@ class InteractionSiteArrayDeviceGui(Qt.QWidget):
         calib_layout.addWidget(Qt.QLabel(f"Rows: {dev._rows}   Cols: {dev._cols}"), row, 0, 1, 3)
         row += 1
 
-        # Origin [0,0]
+        # Single approach waypoint
+        self._approachStatus = Qt.QLabel("?")
+        calib_layout.addWidget(self._approachStatus, row, 0)
+        calib_layout.addWidget(Qt.QLabel("Approach waypoint:"), row, 1)
+        self._setApproachBtn = Qt.QPushButton("Set")
+        self._setApproachBtn.clicked.connect(self._calibrateApproach)
+        calib_layout.addWidget(self._setApproachBtn, row, 2)
+        row += 1
+
+        # Origin interact [0,0]
         self._originStatus = Qt.QLabel("?")
         calib_layout.addWidget(self._originStatus, row, 0)
-        calib_layout.addWidget(Qt.QLabel("[0,0] approach:"), row, 1)
+        calib_layout.addWidget(Qt.QLabel("[0,0] interact:"), row, 1)
         self._setOriginBtn = Qt.QPushButton("Set")
         self._setOriginBtn.clicked.connect(self._calibrateOrigin)
         calib_layout.addWidget(self._setOriginBtn, row, 2)
         row += 1
 
-        # Column end [0, cols-1]
+        # Column-end interact [0, cols-1]
         self._colEndStatus = Qt.QLabel("?")
         calib_layout.addWidget(self._colEndStatus, row, 0)
-        self._colSpacingLabel = Qt.QLabel(f"[0,{dev._cols-1}] approach:")
+        self._colSpacingLabel = Qt.QLabel(f"[0,{dev._cols-1}] interact:")
         calib_layout.addWidget(self._colSpacingLabel, row, 1)
         self._setColEndBtn = Qt.QPushButton("Set")
         self._setColEndBtn.clicked.connect(self._calibrateColEnd)
         calib_layout.addWidget(self._setColEndBtn, row, 2)
         row += 1
 
-        # Row end [rows-1, 0] — only shown when rows > 1
+        # Row-end interact [rows-1, 0] — only shown when rows > 1
         self._rowEndStatus = Qt.QLabel("?")
-        self._rowSpacingLabel = Qt.QLabel(f"[{dev._rows-1},0] approach:")
+        self._rowSpacingLabel = Qt.QLabel(f"[{dev._rows-1},0] interact:")
         self._setRowEndBtn = Qt.QPushButton("Set")
         self._setRowEndBtn.clicked.connect(self._calibrateRowEnd)
         if dev._rows > 1:
@@ -278,18 +319,9 @@ class InteractionSiteArrayDeviceGui(Qt.QWidget):
             calib_layout.addWidget(self._setRowEndBtn, row, 2)
             row += 1
 
-        # Interact depth
-        self._interactStatus = Qt.QLabel("?")
-        calib_layout.addWidget(self._interactStatus, row, 0)
-        calib_layout.addWidget(Qt.QLabel("Interact depth:"), row, 1)
-        self._setInteractBtn = Qt.QPushButton("Set")
-        self._setInteractBtn.clicked.connect(self._calibrateInteract)
-        calib_layout.addWidget(self._setInteractBtn, row, 2)
-        row += 1
-
         # Apply
-        self._applyBtn = Qt.QPushButton("Apply spacing")
-        self._applyBtn.clicked.connect(self._applySpacing)
+        self._applyBtn = Qt.QPushButton("Apply calibration")
+        self._applyBtn.clicked.connect(self._applyCalibration)
         calib_layout.addWidget(self._applyBtn, row, 0, 1, 3)
 
         self._populatePipettes()
@@ -335,8 +367,8 @@ class InteractionSiteArrayDeviceGui(Qt.QWidget):
             self._pipCombo.addItem(name)
         has_pip = bool(pipettes)
         self._pipCombo.setEnabled(has_pip)
-        for btn in (self._setOriginBtn, self._setColEndBtn, self._setRowEndBtn,
-                    self._setInteractBtn, self._applyBtn):
+        for btn in (self._setApproachBtn, self._setOriginBtn, self._setColEndBtn,
+                    self._setRowEndBtn, self._applyBtn):
             btn.setEnabled(has_pip)
         self._updateCalibStatus()
 
@@ -346,35 +378,37 @@ class InteractionSiteArrayDeviceGui(Qt.QWidget):
             return None
         return self.dev.dm.getDevice(name)
 
+    def _calibrateApproach(self):
+        pip = self._selectedPipette()
+        if pip is not None:
+            self.dev.calibrateApproach(pip)
+            self._updateCalibStatus()
+
     def _calibrateOrigin(self):
         pip = self._selectedPipette()
         if pip is not None:
-            self.dev.calibrateCorner(pip, 'origin')
+            self.dev.calibrateInteractCorner(pip, 'origin')
             self._updateCalibStatus()
 
     def _calibrateColEnd(self):
         pip = self._selectedPipette()
         if pip is not None:
-            self.dev.calibrateCorner(pip, 'col_end')
+            self.dev.calibrateInteractCorner(pip, 'col_end')
             self._updateCalibStatus()
 
     def _calibrateRowEnd(self):
         pip = self._selectedPipette()
         if pip is not None:
-            self.dev.calibrateCorner(pip, 'row_end')
+            self.dev.calibrateInteractCorner(pip, 'row_end')
             self._updateCalibStatus()
 
-    def _calibrateInteract(self):
+    def _applyCalibration(self):
         pip = self._selectedPipette()
         if pip is not None:
-            self.dev.calibrateInteract(pip)
+            self.dev.applyCalibration(pip)
             self._updateCalibStatus()
-
-    def _applySpacing(self):
-        pip = self._selectedPipette()
-        if pip is not None:
-            self.dev.applySpacing(pip)
-            self._updateCalibStatus()
+            for i in range(len(self.dev.sites)):
+                self._styleSiteButton(self._site_buttons[i], i)
 
     def _updateCalibStatus(self):
         pip = self._selectedPipette()
@@ -386,32 +420,32 @@ class InteractionSiteArrayDeviceGui(Qt.QWidget):
         def _mark(label, key):
             label.setText("✓" if key in cal else "?")
 
-        _mark(self._originStatus, 'origin_stage')
-        _mark(self._colEndStatus, 'col_end_stage')
-        _mark(self._rowEndStatus, 'row_end_stage')
-        _mark(self._interactStatus, 'interact_global')
+        _mark(self._approachStatus, 'approach')
+        _mark(self._originStatus, 'origin_interact')
+        _mark(self._colEndStatus, 'col_end_interact')
+        _mark(self._rowEndStatus, 'row_end_interact')
 
         # Update spacing labels
         col_mm = self.dev.columnSpacingMm(pip_name)
         if col_mm is not None:
             self._colSpacingLabel.setText(
-                f"[0,{self.dev._cols-1}] approach:  ({col_mm:.2f} mm/col)"
+                f"[0,{self.dev._cols-1}] interact:  ({col_mm:.2f} mm/col)"
             )
         else:
-            self._colSpacingLabel.setText(f"[0,{self.dev._cols-1}] approach:")
+            self._colSpacingLabel.setText(f"[0,{self.dev._cols-1}] interact:")
 
         row_mm = self.dev.rowSpacingMm(pip_name)
         if row_mm is not None:
             self._rowSpacingLabel.setText(
-                f"[{self.dev._rows-1},0] approach:  ({row_mm:.2f} mm/row)"
+                f"[{self.dev._rows-1},0] interact:  ({row_mm:.2f} mm/row)"
             )
         else:
-            self._rowSpacingLabel.setText(f"[{self.dev._rows-1},0] approach:")
+            self._rowSpacingLabel.setText(f"[{self.dev._rows-1},0] interact:")
 
-        # Enable Apply only when all required corners are ready
-        has_cols = 'origin_stage' in cal and 'col_end_stage' in cal
-        has_rows = self.dev._rows == 1 or 'row_end_stage' in cal
-        self._applyBtn.setEnabled(has_cols and has_rows)
+        # Enable Apply only when approach and all required interact corners are ready
+        has_cols = 'origin_interact' in cal and 'col_end_interact' in cal
+        has_rows = self.dev._rows == 1 or 'row_end_interact' in cal
+        self._applyBtn.setEnabled('approach' in cal and has_cols and has_rows)
 
 
 def _fmt_pos(pos):

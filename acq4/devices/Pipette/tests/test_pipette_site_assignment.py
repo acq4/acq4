@@ -155,23 +155,37 @@ class TestSetSiteFor:
 
 
 class TestArrayDelegation:
-    def test_getSiteFor_calls_getFirstAvailableSite_on_array(self, qt_app):
+    def test_getSiteFor_calls_getFirstAvailableSite_on_matching_array(self, qt_app):
         mock_site = MagicMock()
         mock_site.name.return_value = 'ActualSite'
         mock_array = MagicMock()
         mock_array.name.return_value = 'Array1'
+        mock_array.role = 'nucleus'
         mock_array.getFirstAvailableSite.return_value = mock_site
 
         pip, _, _ = _make_pipette(devices={'Array1': mock_array})
         pip.setSiteFor('nucleus', mock_array)
         result = pip.getSiteFor('nucleus')
 
-        mock_array.getFirstAvailableSite.assert_called_once_with('nucleus')
+        mock_array.getFirstAvailableSite.assert_called_once_with()
         assert result is mock_site
+
+    def test_getSiteFor_returns_none_when_array_role_mismatches(self, qt_app):
+        mock_array = MagicMock()
+        mock_array.name.return_value = 'Array1'
+        mock_array.role = 'clean'
+        mock_site = MagicMock()
+        mock_array.getFirstAvailableSite.return_value = mock_site
+
+        pip, _, _ = _make_pipette(devices={'Array1': mock_array})
+        pip.setSiteFor('nucleus', mock_array)
+        assert pip.getSiteFor('nucleus') is None
+        mock_array.getFirstAvailableSite.assert_not_called()
 
     def test_getSiteFor_returns_none_when_array_has_no_available_site(self, qt_app):
         mock_array = MagicMock()
         mock_array.name.return_value = 'Array1'
+        mock_array.role = 'nucleus'
         mock_array.getFirstAvailableSite.return_value = None
 
         pip, _, _ = _make_pipette(devices={'Array1': mock_array})
