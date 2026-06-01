@@ -68,6 +68,9 @@ class InteractionSiteArray(Device, OptomechDevice):
             if child_geometry is not None:
                 site_config['geometry'] = child_geometry
             site = InteractionSite(dm, site_config, site_name)
+            # The array's configured role is authoritative; override any stale per-site
+            # role persisted from an earlier configuration so all sites share one role.
+            site._role = self._role
             site.setParentDevice(self)
             dm.declareInterface(site_name, ['device', 'interactionSite'], site)
             self._sites.append(site)
@@ -360,7 +363,9 @@ class InteractionSiteArrayDeviceGui(Qt.QWidget):
         except Exception as exc:
             self.dev.logger.warning(f"Could not open Visualize3D for array calibration: {exc}")
         self._calibBtn.setEnabled(False)
-        self._calibFlow = InteractionArrayCalibrationFlow(self.dev, pip, parent=self)
+        # parent=None makes this a top-level window, so it can be moved away from the
+        # Manager window to keep the 3D visualizer visible on a small screen.
+        self._calibFlow = InteractionArrayCalibrationFlow(self.dev, pip, parent=None)
         self._calibFlow.finished.connect(self._onCalibrationFinished)
         self._calibFlow.show()
         self._calibFlow.raise_()
