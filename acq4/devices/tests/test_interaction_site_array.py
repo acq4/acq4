@@ -178,6 +178,29 @@ class TestRole:
         assert arr.role == 'clean'
         assert all(site.role == 'clean' for site in arr.sites)
 
+    def test_config_role_overrides_stale_persisted_site_role(self, qt_app):
+        """A per-site role left over from an earlier config must not override the array role."""
+        from acq4.devices.InteractionSiteArray import InteractionSiteArray
+        from acq4.devices.MockStage import MockStage
+
+        storage = {
+            "devices/TestArray[1]_config/saved_positions": {'TestArray[1]': {'role': 'rinse'}},
+        }
+        dm = MagicMock()
+        dm.readConfigFile.side_effect = lambda p: storage.get(p, {})
+        dm.writeConfigFile.side_effect = lambda d, p: storage.update({p: d.copy()})
+        dm.configFileName.side_effect = lambda p: p
+        dm.listDevices.return_value = []
+        dm.listInterfaces.return_value = []
+        stage = MockStage(dm, {'nAxes': 3}, 'TestStage')
+        dm.getDevice.side_effect = lambda n: stage if n == 'TestStage' else None
+
+        arr = InteractionSiteArray(dm, {
+            'rows': 1, 'cols': 3, 'siteRadius': 1e-3, 'siteHeight': 5e-3,
+            'parentDevice': 'TestStage', 'role': 'nucleus',
+        }, 'TestArray')
+        assert all(site.role == 'nucleus' for site in arr.sites)
+
 
 class TestChildSiteDeviceInterface:
     def test_child_sites_return_none_from_device_interface(self, make_array, qt_app):
