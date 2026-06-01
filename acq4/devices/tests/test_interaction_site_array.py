@@ -263,3 +263,85 @@ def arr_pip(site):
     pip = MagicMock(spec=['name'])
     pip.name.return_value = 'pip1'
     return pip
+
+
+class TestCalibrationFlow:
+    def _flow(self, arr):
+        from acq4.devices.InteractionSiteArray import InteractionArrayCalibrationFlow
+        pip = MagicMock(spec=['name', 'globalPosition'])
+        pip.name.return_value = 'pip1'
+        pip.globalPosition.return_value = np.zeros(3)
+        return InteractionArrayCalibrationFlow(arr, pip), pip
+
+    def test_step_order_full_grid(self, make_array, qt_app):
+        arr = make_array(rows=2, cols=5, role='nucleus')
+        flow, _ = self._flow(arr)
+        corners = [(s[0], s[1]) for s in flow._steps]
+        assert corners == [
+            ('origin', 'interact'),
+            ('origin', 'approach'),
+            ('row_end', 'interact'),
+            ('col_end', 'interact'),
+        ]
+
+    def test_single_row_skips_row_end(self, make_array, qt_app):
+        arr = make_array(rows=1, cols=4, role='nucleus')
+        flow, _ = self._flow(arr)
+        corners = [(s[0], s[1]) for s in flow._steps]
+        assert ('row_end', 'interact') not in corners
+        assert ('col_end', 'interact') in corners
+
+    def test_single_col_skips_col_end(self, make_array, qt_app):
+        arr = make_array(rows=3, cols=1, role='nucleus')
+        flow, _ = self._flow(arr)
+        corners = [(s[0], s[1]) for s in flow._steps]
+        assert ('col_end', 'interact') not in corners
+        assert ('row_end', 'interact') in corners
+
+    def test_walking_all_steps_applies_calibration(self, make_array, qt_app):
+        arr = make_array(rows=2, cols=3, role='nucleus')
+        flow, pip = self._flow(arr)
+        I = np.array([1e-3, 2e-3, -5e-3])
+        # stage stays at origin for every capture; pipette positions encode the geometry
+        arr._parentStage.globalPosition = MagicMock(return_value=np.zeros(3))
+        captures = {
+            ('origin', 'interact'): I,
+            ('origin', 'approach'): I + np.array([0, 0, 5e-3]),
+            ('row_end', 'interact'): I + np.array([0, 3e-3, 0]),
+            ('col_end', 'interact'): I + np.array([2 * 2e-3, 0, 0]),
+        }
+        results = []
+        flow.finished.connect(results.append)
+        for _ in range(len(flow._steps)):
+            corner, kind, _, _ = flow._steps[flow._index]
+            pip.globalPosition.return_value = captures[(corner, kind)]
+            flow._useCurrent()
+        qt_app.processEvents()
+        # Dialog accepted and calibration applied to children.
+        assert results == [Qt_accepted()]
+        np.testing.assert_allclose(
+            arr.sites[0].positions['pip1']['interact global'], I, atol=1e-12
+        )
+        assert arr.columnSpacingMm('pip1') is not None
+
+    def test_keep_existing_enabled_only_when_saved(self, make_array, qt_app):
+        arr = make_array(rows=1, cols=2, role='nucleus')
+        # Pre-save the origin interact so the first step can keep it.
+        pip = MagicMock(spec=['name', 'globalPosition'])
+        pip.name.return_value = 'pip1'
+        pip.globalPosition.return_value = np.array([0., 0., -5e-3])
+        arr._parentStage.globalPosition = MagicMock(return_value=np.zeros(3))
+        arr.calibrateInteractCorner(pip, 'origin')
+
+        from acq4.devices.InteractionSiteArray import InteractionArrayCalibrationFlow
+        flow = InteractionArrayCalibrationFlow(arr, pip)
+        # Step 1 (origin interact) has a saved value -> keep enabled
+        assert flow._keepBtn.isEnabled()
+        flow._keepExisting()
+        # Step 2 (approach) has no saved value -> keep disabled
+        assert not flow._keepBtn.isEnabled()
+
+
+def Qt_accepted():
+    from acq4.util import Qt
+    return Qt.QDialog.Accepted
