@@ -271,61 +271,21 @@ class InteractionSiteArrayDeviceGui(Qt.QWidget):
         calib_group.setLayout(calib_layout)
         main_layout.addWidget(calib_group)
 
-        row = 0
-        calib_layout.addWidget(Qt.QLabel("Pipette:"), row, 0)
+        calib_layout.addWidget(Qt.QLabel("Pipette:"), 0, 0)
         self._pipCombo = Qt.QComboBox()
-        calib_layout.addWidget(self._pipCombo, row, 1, 1, 2)
-        row += 1
+        calib_layout.addWidget(self._pipCombo, 0, 1)
 
-        calib_layout.addWidget(Qt.QLabel(f"Rows: {dev._rows}   Cols: {dev._cols}"), row, 0, 1, 3)
-        row += 1
+        calib_layout.addWidget(Qt.QLabel(f"Grid: {dev._rows} × {dev._cols}"), 1, 0)
+        self._spacingLabel = Qt.QLabel("")
+        calib_layout.addWidget(self._spacingLabel, 1, 1)
 
-        # Single approach waypoint
-        self._approachStatus = Qt.QLabel("?")
-        calib_layout.addWidget(self._approachStatus, row, 0)
-        calib_layout.addWidget(Qt.QLabel("Approach waypoint:"), row, 1)
-        self._setApproachBtn = Qt.QPushButton("Set")
-        self._setApproachBtn.clicked.connect(self._calibrateApproach)
-        calib_layout.addWidget(self._setApproachBtn, row, 2)
-        row += 1
+        self._calibBtn = Qt.QPushButton("Calibrate…")
+        self._calibBtn.clicked.connect(self._startCalibration)
+        calib_layout.addWidget(self._calibBtn, 2, 0, 1, 2)
 
-        # Origin interact [0,0]
-        self._originStatus = Qt.QLabel("?")
-        calib_layout.addWidget(self._originStatus, row, 0)
-        calib_layout.addWidget(Qt.QLabel("[0,0] interact:"), row, 1)
-        self._setOriginBtn = Qt.QPushButton("Set")
-        self._setOriginBtn.clicked.connect(self._calibrateOrigin)
-        calib_layout.addWidget(self._setOriginBtn, row, 2)
-        row += 1
-
-        # Column-end interact [0, cols-1]
-        self._colEndStatus = Qt.QLabel("?")
-        calib_layout.addWidget(self._colEndStatus, row, 0)
-        self._colSpacingLabel = Qt.QLabel(f"[0,{dev._cols-1}] interact:")
-        calib_layout.addWidget(self._colSpacingLabel, row, 1)
-        self._setColEndBtn = Qt.QPushButton("Set")
-        self._setColEndBtn.clicked.connect(self._calibrateColEnd)
-        calib_layout.addWidget(self._setColEndBtn, row, 2)
-        row += 1
-
-        # Row-end interact [rows-1, 0] — only shown when rows > 1
-        self._rowEndStatus = Qt.QLabel("?")
-        self._rowSpacingLabel = Qt.QLabel(f"[{dev._rows-1},0] interact:")
-        self._setRowEndBtn = Qt.QPushButton("Set")
-        self._setRowEndBtn.clicked.connect(self._calibrateRowEnd)
-        if dev._rows > 1:
-            calib_layout.addWidget(self._rowEndStatus, row, 0)
-            calib_layout.addWidget(self._rowSpacingLabel, row, 1)
-            calib_layout.addWidget(self._setRowEndBtn, row, 2)
-            row += 1
-
-        # Apply
-        self._applyBtn = Qt.QPushButton("Apply calibration")
-        self._applyBtn.clicked.connect(self._applyCalibration)
-        calib_layout.addWidget(self._applyBtn, row, 0, 1, 3)
-
+        self._calibFlow = None
         self._populatePipettes()
-        self._pipCombo.currentIndexChanged.connect(self._updateCalibStatus)
+        self._pipCombo.currentIndexChanged.connect(self._updateSpacingLabel)
 
     # ------------------------------------------------------------------
     # Site grid handlers
@@ -359,7 +319,7 @@ class InteractionSiteArrayDeviceGui(Qt.QWidget):
             site.used_up = False
 
     # ------------------------------------------------------------------
-    # Calibration handlers
+    # Calibration
 
     def _populatePipettes(self):
         pipettes = self.dev.dm.listInterfaces('pipette')
@@ -367,10 +327,8 @@ class InteractionSiteArrayDeviceGui(Qt.QWidget):
             self._pipCombo.addItem(name)
         has_pip = bool(pipettes)
         self._pipCombo.setEnabled(has_pip)
-        for btn in (self._setApproachBtn, self._setOriginBtn, self._setColEndBtn,
-                    self._setRowEndBtn, self._applyBtn):
-            btn.setEnabled(has_pip)
-        self._updateCalibStatus()
+        self._calibBtn.setEnabled(has_pip)
+        self._updateSpacingLabel()
 
     def _selectedPipette(self):
         name = self._pipCombo.currentText()
@@ -378,74 +336,148 @@ class InteractionSiteArrayDeviceGui(Qt.QWidget):
             return None
         return self.dev.dm.getDevice(name)
 
-    def _calibrateApproach(self):
+    def _updateSpacingLabel(self):
         pip = self._selectedPipette()
-        if pip is not None:
-            self.dev.calibrateApproach(pip)
-            self._updateCalibStatus()
+        if pip is None:
+            self._spacingLabel.setText("")
+            return
+        parts = []
+        col_mm = self.dev.columnSpacingMm(pip.name())
+        if col_mm is not None:
+            parts.append(f"{col_mm:.2f} mm/col")
+        row_mm = self.dev.rowSpacingMm(pip.name())
+        if row_mm is not None:
+            parts.append(f"{row_mm:.2f} mm/row")
+        self._spacingLabel.setText("  ".join(parts) if parts else "uncalibrated")
 
-    def _calibrateOrigin(self):
-        pip = self._selectedPipette()
-        if pip is not None:
-            self.dev.calibrateInteractCorner(pip, 'origin')
-            self._updateCalibStatus()
-
-    def _calibrateColEnd(self):
-        pip = self._selectedPipette()
-        if pip is not None:
-            self.dev.calibrateInteractCorner(pip, 'col_end')
-            self._updateCalibStatus()
-
-    def _calibrateRowEnd(self):
-        pip = self._selectedPipette()
-        if pip is not None:
-            self.dev.calibrateInteractCorner(pip, 'row_end')
-            self._updateCalibStatus()
-
-    def _applyCalibration(self):
-        pip = self._selectedPipette()
-        if pip is not None:
-            self.dev.applyCalibration(pip)
-            self._updateCalibStatus()
-            for i in range(len(self.dev.sites)):
-                self._styleSiteButton(self._site_buttons[i], i)
-
-    def _updateCalibStatus(self):
+    def _startCalibration(self):
         pip = self._selectedPipette()
         if pip is None:
             return
-        pip_name = pip.name()
-        cal = self.dev.positions.get(pip_name, {})
+        # Make sure the 3D visualizer is up so the user can see the sites move.
+        try:
+            self.dev.dm.getModule("Visualize3D")
+        except Exception as exc:
+            self.dev.logger.warning(f"Could not open Visualize3D for array calibration: {exc}")
+        self._calibBtn.setEnabled(False)
+        self._calibFlow = InteractionArrayCalibrationFlow(self.dev, pip, parent=self)
+        self._calibFlow.finished.connect(self._onCalibrationFinished)
+        self._calibFlow.show()
+        self._calibFlow.raise_()
 
-        def _mark(label, key):
-            label.setText("✓" if key in cal else "?")
+    def _onCalibrationFinished(self, _result):
+        self._calibFlow = None
+        self._calibBtn.setEnabled(self._selectedPipette() is not None)
+        self._updateSpacingLabel()
+        for i in range(len(self.dev.sites)):
+            self._styleSiteButton(self._site_buttons[i], i)
 
-        _mark(self._approachStatus, 'approach')
-        _mark(self._originStatus, 'origin_interact')
-        _mark(self._colEndStatus, 'col_end_interact')
-        _mark(self._rowEndStatus, 'row_end_interact')
 
-        # Update spacing labels
-        col_mm = self.dev.columnSpacingMm(pip_name)
-        if col_mm is not None:
-            self._colSpacingLabel.setText(
-                f"[0,{self.dev._cols-1}] interact:  ({col_mm:.2f} mm/col)"
+class InteractionArrayCalibrationFlow(Qt.QDialog):
+    """Modeless step-by-step calibration wizard for an InteractionSiteArray.
+
+    Walks the user through (in order): the [0,0] interact point, the [0,0] approach
+    waypoint, the [rows-1,0] interact corner, and the [0,cols-1] interact corner.
+    Each step lets the user capture the current pipette position or keep a previously
+    saved one. The calibration is applied automatically after the last step.
+    """
+
+    def __init__(self, dev: InteractionSiteArray, pip, parent=None):
+        Qt.QDialog.__init__(self, parent)
+        self.dev = dev
+        self.pip = pip
+        self.setWindowTitle(f"Calibrate {dev.name()}")
+        self.setModal(False)
+
+        # Build the ordered step list, skipping degenerate corners.
+        self._steps = [
+            ('origin', 'interact', "Site [0,0] — interact point",
+             "Drive the pipette tip into the fluid at the bottom of site [0,0]."),
+            ('origin', 'approach', "Site [0,0] — approach waypoint",
+             "Raise the pipette to a safe waypoint above site [0,0]."),
+        ]
+        if dev._rows > 1:
+            self._steps.append(
+                ('row_end', 'interact', f"Site [{dev._rows-1},0] — interact point",
+                 f"Drive the pipette tip into the fluid at the bottom of site [{dev._rows-1},0].")
             )
-        else:
-            self._colSpacingLabel.setText(f"[0,{self.dev._cols-1}] interact:")
-
-        row_mm = self.dev.rowSpacingMm(pip_name)
-        if row_mm is not None:
-            self._rowSpacingLabel.setText(
-                f"[{self.dev._rows-1},0] interact:  ({row_mm:.2f} mm/row)"
+        if dev._cols > 1:
+            self._steps.append(
+                ('col_end', 'interact', f"Site [0,{dev._cols-1}] — interact point",
+                 f"Drive the pipette tip into the fluid at the bottom of site [0,{dev._cols-1}].")
             )
-        else:
-            self._rowSpacingLabel.setText(f"[{self.dev._rows-1},0] interact:")
+        self._index = 0
 
-        # Enable Apply only when approach and all required interact corners are ready
-        has_cols = 'origin_interact' in cal and 'col_end_interact' in cal
-        has_rows = self.dev._rows == 1 or 'row_end_interact' in cal
-        self._applyBtn.setEnabled('approach' in cal and has_cols and has_rows)
+        layout = Qt.QVBoxLayout()
+        self.setLayout(layout)
+
+        self._stepLabel = Qt.QLabel()
+        f = self._stepLabel.font()
+        f.setBold(True)
+        self._stepLabel.setFont(f)
+        layout.addWidget(self._stepLabel)
+
+        self._instructionLabel = Qt.QLabel()
+        self._instructionLabel.setWordWrap(True)
+        layout.addWidget(self._instructionLabel)
+
+        self._savedLabel = Qt.QLabel()
+        layout.addWidget(self._savedLabel)
+
+        btn_row = Qt.QHBoxLayout()
+        layout.addLayout(btn_row)
+        self._useBtn = Qt.QPushButton("Use current position")
+        self._useBtn.clicked.connect(self._useCurrent)
+        btn_row.addWidget(self._useBtn)
+        self._keepBtn = Qt.QPushButton("Keep existing")
+        self._keepBtn.clicked.connect(self._keepExisting)
+        btn_row.addWidget(self._keepBtn)
+        self._cancelBtn = Qt.QPushButton("Cancel")
+        self._cancelBtn.clicked.connect(self.reject)
+        btn_row.addWidget(self._cancelBtn)
+
+        self._showStep()
+
+    def _currentSaved(self):
+        """Return the saved value for the current step, or None."""
+        corner, kind, _, _ = self._steps[self._index]
+        cal = self.dev.positions.get(self.pip.name(), {})
+        key = 'approach' if kind == 'approach' else f'{corner}_interact'
+        return cal.get(key)
+
+    def _showStep(self):
+        corner, kind, title, instruction = self._steps[self._index]
+        self._stepLabel.setText(f"Step {self._index + 1} of {len(self._steps)}: {title}")
+        self._instructionLabel.setText(instruction)
+        saved = self._currentSaved()
+        if saved is not None:
+            self._savedLabel.setText(f"Saved: {_fmt_pos(np.asarray(saved, dtype=float))}")
+            self._keepBtn.setEnabled(True)
+        else:
+            self._savedLabel.setText("Saved: none yet")
+            self._keepBtn.setEnabled(False)
+
+    def _capture(self):
+        corner, kind, _, _ = self._steps[self._index]
+        if kind == 'approach':
+            self.dev.calibrateApproach(self.pip)
+        else:
+            self.dev.calibrateInteractCorner(self.pip, corner)
+
+    def _useCurrent(self):
+        self._capture()
+        self._advance()
+
+    def _keepExisting(self):
+        self._advance()
+
+    def _advance(self):
+        self._index += 1
+        if self._index >= len(self._steps):
+            self.dev.applyCalibration(self.pip)
+            self.accept()
+        else:
+            self._showStep()
 
 
 def _fmt_pos(pos):
