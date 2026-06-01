@@ -916,8 +916,8 @@ class Pipette(Device, OptomechDevice):
     def getSiteFor(self, role: str) -> "InteractionSite | None":
         """Return the interaction site assigned to this pipette for *role*.
 
-        If the assigned device supports getFirstAvailableSite() (i.e. is an
-        InteractionSiteArray), that is called and the result returned.
+        If the assigned device is an InteractionSiteArray (has getFirstAvailableSite),
+        its role must match *role* and the first available site is returned.
         Returns None if no site is assigned or if the assigned device no longer exists.
         """
         name = self._site_assignments.get(role)
@@ -930,7 +930,9 @@ class Pipette(Device, OptomechDevice):
         if device is None:
             return None
         if hasattr(device, 'getFirstAvailableSite'):
-            return device.getFirstAvailableSite(role)
+            if getattr(device, 'role', None) != role:
+                return None
+            return device.getFirstAvailableSite()
         return device
 
     def setSiteFor(self, role: str, device_or_none):
