@@ -6,6 +6,7 @@ from .break_in import BreakInState
 from .broken import BrokenState
 from .cell_attached import CellAttachedState
 from .cell_detect import CellDetectAnalysis, CellDetectState
+from .clear_access import ClearAccessAnalysis, ClearAccessState
 from .contact_cell import ContactCellState
 from .clean import CleanState
 from .refill import RefillState
@@ -36,6 +37,8 @@ __all__ = [
     'SealState',
     'CellAttachedState',
     'BreakInState',
+    'ClearAccessAnalysis',
+    'ClearAccessState',
     'ResealAnalysis',
     'ResealState',
     'MoveNucleusToHomeState',
