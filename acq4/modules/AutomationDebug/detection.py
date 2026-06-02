@@ -24,6 +24,23 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
+def _annotation_save_dir(manager) -> Path | None:
+    """Directory in which to save cell annotations from the detection workflow.
+
+    Uses the configured ``misc/cellAnnotationDir`` if set, otherwise defaults to a
+    ``cell_annotations`` subdirectory of the data storage directory. Returns None if
+    neither is available, in which case the annotation tool falls back to the
+    working directory.
+    """
+    configured = manager.config.get("misc", {}).get("cellAnnotationDir", None)
+    if configured:
+        return Path(configured)
+    base = manager.getBaseDir()
+    if base is not None:
+        return Path(base.name()) / "cell_annotations"
+    return None
+
+
 class CellDetector:
     def __init__(self, window: AutomationDebugWindow):
         self._window = window
@@ -216,6 +233,7 @@ class CellDetector:
                 filter=False,  # No extra filtering
                 transpose_display=True,  # stack is (n_frames, Y, X) after .T; row-major matches camera module orientation
                 custom_buttons=[("Center Camera", _center_camera_on_cell)],
+                save_dir=_annotation_save_dir(win.module.manager),
             )
 
             # from acq4_automation.object_detection import NeuronBoxViewer
