@@ -1,37 +1,40 @@
-from __future__ import print_function, division
+"""Priority-ordered asynchronous mutex built on gentletask.
+
+PriorityLock hands out PriorityLockRequest tasks that complete when the lock is
+acquired; requests are granted in priority order and can be released or stopped.
+"""
 
 import queue
 import weakref
-from threading import Lock, Thread, Event
+from threading import Lock, Thread
+from threading import Event as ThreadingEvent
 
-
-
-from .future import Future
+from acq4.util.gentle import Promise
 
 
 class PriorityLock(object):
     """Mutex with asynchronous locking and priority queueing.
-    
+
     The purpose of this class is to provide a mutex that:
-    - Uses futures for acquiring locks asynchronously
+    - Uses tasks for acquiring locks asynchronously
     - Allows locks to be acquired in priority order
-    
-    
+
+
     Examples::
-       
+
         lock = PriorityLock()
-        
+
         # manual lock / wait / release
         req = lock.acquire()
         req.wait()  # wait for lock to be acquired
         # .. do stuff while lock is acquired
         req.release()
-        
+
         # context manager
         with lock.acquire() as req:
             req.wait()
             # .. do stuff while lock is acquired
-        
+
     """
 
     def __init__(self, name=None):
@@ -39,7 +42,7 @@ class PriorityLock(object):
         self.req_count = Counter()
         self.lock_queue = queue.PriorityQueue()
 
-        self.unlock_event = Event()
+        self.unlock_event = ThreadingEvent()
         self.unlock_event.set()
 
         self.lock_thread = Thread(target=self._lock_loop, name="PriorityLockThread")
@@ -47,27 +50,29 @@ class PriorityLock(object):
         self.lock_thread.start()
 
     def acquire(self, priority=0, name=None):
-        """Return a Future that completes when the lock is acquired.
-        
+        """Return a task that completes when the lock is acquired.
+
         Higher priority values will be locked first.
         """
-        fut = PriorityLockRequest(self, name=name)
-        # print("request lock:", fut)
-        self.lock_queue.put((-priority, next(self.req_count), fut))
-        return fut
+        req = PriorityLockRequest(self, name=name)
+        # print("request lock:", req)
+        self.lock_queue.put((-priority, next(self.req_count), req))
+        return req
 
-    def _release_lock(self, fut):
-        with fut._acq_lock:
-            # print("release request:", fut)
-            if fut.released:
+    def _release_lock(self, req):
+        with req._acq_lock:
+            # print("release request:", req)
+            if req.released:
                 return
-            fut._released = True
-            if fut.acquired:
-                # print("release lock:", fut)
-                fut._acquired = False
+            req._released = True
+            if req.acquired:
+                # print("release lock:", req)
+                req._acquired = False
                 self.unlock_event.set()
             else:
-                fut._taskDone(interrupted=True)
+                # cancel a request that never got the lock; stopping the
+                # promise completes it with Stopped
+                req.stop()
 
     def _lock_loop(self):
         while True:
@@ -76,15 +81,15 @@ class PriorityLock(object):
 
             # get next lock request
             while True:
-                _, _, fut = self.lock_queue.get()
-                with fut._acq_lock:
-                    if fut._released:
-                        # future has already been released; don't assign lock
+                _, _, req = self.lock_queue.get()
+                with req._acq_lock:
+                    if req._released:
+                        # request has already been released; don't assign lock
                         continue
                     # assign lock to this request
-                    # print("assign lock:", fut)
-                    fut._acquired = True
-                    fut._taskDone()
+                    # print("assign lock:", req)
+                    req._acquired = True
+                    req.resolve(None)
                     self.unlock_event.clear()
                     break
 
@@ -92,15 +97,23 @@ class PriorityLock(object):
         return "<%s %s 0x%x>" % (self.__class__.__name__, self.name, id(self))
 
 
-class PriorityLockRequest(Future):
+class PriorityLockRequest(Promise):
+    """A lock-acquisition request that completes when the lock is granted.
+
+    This is an externally-completed Promise: it spawns no thread. PriorityLock's
+    lock loop completes it via resolve() when the lock is granted, or stop() when
+    a pending request is cancelled (completing it with Stopped). Completing the
+    promise means the lock is held; release() relinquishes it (or cancels a
+    pending request).
+    """
+
     def __init__(self, mutex, name):
-        Future.__init__(self)
         self.mutex = weakref.ref(mutex)
         self.name = name
         self._acq_lock = Lock()
-        self._wait_event = Event()
         self._acquired = False
         self._released = False
+        Promise.__init__(self, name=name)
 
     @property
     def acquired(self):
@@ -115,27 +128,17 @@ class PriorityLockRequest(Future):
         """
         return self._released
 
-    def _wait(self, timeout):
-        self._wait_event.wait(timeout=timeout)
-
-    def percentDone(self):
-        return 100 if (self.acquired or self.released) else 0
-
     def release(self):
         """Release this lock request.
-        
+
         If the lock is currently acquired, then it is released and another queued request may
-        acquire the lock in turn. If the lock is not already acquired, then this request is simply 
+        acquire the lock in turn. If the lock is not already acquired, then this request is simply
         cancelled and will never acquire a lock.
         """
         mutex = self.mutex()
         if mutex is None:
             return
         mutex._release_lock(self)
-
-    def _taskDone(self, *args, **kwds):
-        self._wait_event.set()
-        Future._taskDone(self, *args, **kwds)
 
     def __enter__(self):
         return self

@@ -1,12 +1,15 @@
-from threading import Event
+"""User-prompt helper: show a non-modal choice dialog and return the clicked label.
+
+The dialog is built on the GUI thread and awaited as a gentletask task, so a
+caller can wait on it stop-awarely and cancel it.
+"""
 
 from acq4.util import Qt
-from acq4.util.future import future_wrap
-from acq4.util.threadrun import runInGuiThread
+from acq4.util.gentle import Event, asynch, run_in_gui_thread
 
 
-@future_wrap
-def prompt(title, text, choices, extra_text=None, parent=None, _future=None):
+@asynch
+def prompt(title, text, choices, extra_text=None, parent=None):
     """
     Prompt the user with a choice.
 
@@ -20,15 +23,13 @@ def prompt(title, text, choices, extra_text=None, parent=None, _future=None):
     Returns:
         str: The label of the button that was clicked.
     """
-    is_done = Event()
-    msg_box = runInGuiThread(_make_message_box, title, text, choices, extra_text, parent, is_done)
-
-    while not is_done.is_set():
-        _future.sleep(0.1)
+    done = Event()
+    msg_box = run_in_gui_thread(_make_message_box, title, text, choices, extra_text, parent, done)
+    done.wait()
     return msg_box.clickedButton().text()
 
 
-def _make_message_box(title, text, choices, extra_text, parent, is_done):
+def _make_message_box(title, text, choices, extra_text, parent, done):
     msg_box = Qt.QMessageBox(parent)
     msg_box.setWindowTitle(title)
     msg_box.setText(text)
@@ -36,7 +37,7 @@ def _make_message_box(title, text, choices, extra_text, parent, is_done):
     for choice in reversed(choices):
         msg_box.addButton(choice, Qt.QMessageBox.ButtonRole.AcceptRole)
     msg_box.setWindowModality(Qt.Qt.NonModal)
-    msg_box.buttonClicked.connect(is_done.set)
+    msg_box.buttonClicked.connect(done.set)
     msg_box.buttonClicked.connect(msg_box.close)
     msg_box.show()
     msg_box.raise_()

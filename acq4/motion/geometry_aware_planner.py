@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from acq4 import getManager
-from acq4.util.future import future_wrap
+from acq4.util.gentle import asynch, check_stop
 from .default_planner import (
     DefaultMotionPlanner,
     MOVE_TO_DESTINATION,
@@ -26,7 +26,7 @@ class GeometryAwareMotionPlanner(DefaultMotionPlanner):
 
     def __init__(self, config=None):
         super().__init__(config)
-        self._cache_primers: dict[str, object] = {}  # pip.name() -> Future
+        self._cache_primers: dict[str, object] = {}  # pip.name() -> ThreadTask
 
     def _safe_path(self, pip, globalStart, globalStop, speed, explanation=None):
         pip_name = pip.name()
@@ -103,15 +103,15 @@ class GeometryAwareMotionPlanner(DefaultMotionPlanner):
         )
         return geo_planner, from_pip_to_global
 
-    @future_wrap
-    def _prime_caches(self, pip, _future):
+    @asynch
+    def _prime_caches(self, pip):
         try:
             man = getManager()
             while not man.isReady.wait(0.05):
-                _future.checkStop()
+                check_stop()
             mod = man.getOrLoadModule("Visualize3D")
             while not mod.isReady.wait(0.05):
-                _future.checkStop()
+                check_stop()
             viz = mod.window().findAdapter(lambda a: a.device == pip).pathSearchVisualizer()
             geo_planner, from_pip_to_global = self._get_planning_context(pip)
             geo_planner.make_convolved_obstacles(pip.getGeometry(), from_pip_to_global, viz)

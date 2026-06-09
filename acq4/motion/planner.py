@@ -4,7 +4,7 @@ from __future__ import annotations
 import numpy as np
 
 from acq4 import getManager
-from acq4.util.future import future_wrap
+from acq4.util.gentle import asynch
 from .plan import AtomicMove, MovePlanStep, ParallelGroup, SequentialGroup
 from .spec import MoveSpec
 
@@ -45,8 +45,8 @@ class MotionPlanner:
             return devices
         return set()
 
-    @future_wrap
-    def execute(self, specs: list[MoveSpec], name: str = "", _future=None):
+    @asynch
+    def execute(self, specs: list[MoveSpec], name: str = ""):
         """Validate, plan, and execute, holding device locks for the duration."""
         self._validate_specs(specs)
         plan = self.plan(specs, name=name)
@@ -54,7 +54,7 @@ class MotionPlanner:
         devices = self.collect_devices(plan)
         man = getManager()
         with man.reserveDevices(list(devices), reserver=type(self).__name__):
-            _execute_plan(plan, _future)
+            _execute_plan(plan)
 
     # ------------------------------------------------------------------
     # Validation — called by execute() before and after planning
@@ -135,22 +135,22 @@ def _move_device(device, position, speed, name, kwargs):
     raise RuntimeError(f"Device {device!r} has no moveToGlobalNoPlanning method")
 
 
-def _execute_plan(plan, _future):
+def _execute_plan(plan):
     """Recursively execute a plan tree, blocking until the full tree completes."""
     if isinstance(plan, AtomicMove):
-        _future.waitFor(_move_device(plan.device, plan.position, plan.speed, plan.explanation, plan.kwargs))
+        _move_device(plan.device, plan.position, plan.speed, plan.explanation, plan.kwargs).wait()
     elif isinstance(plan, SequentialGroup):
         for step in plan.steps:
-            _execute_plan(step, _future)
+            _execute_plan(step)
     elif isinstance(plan, ParallelGroup):
-        futures = [future_wrap(_execute_plan)(step) for step in plan.steps]
-        for f in futures:
+        tasks = [asynch(_execute_plan)(step) for step in plan.steps]
+        for task in tasks:
             try:
-                _future.waitFor(f)
+                task.wait()
             except Exception:
-                for f2 in futures:
-                    if not f2.isDone():
-                        f2.stop("error in parallel movements")
+                for other in tasks:
+                    if not other.is_done:
+                        other.stop()
                 raise
     else:
         raise TypeError(f"Unknown plan node type: {type(plan)}")
