@@ -7,7 +7,7 @@ from acq4.util import Qt
 from .Device import Device
 from .OptomechDevice import OptomechDevice
 from .Stage import Stage
-from ..util.future import Future
+from ..util.gentle import FutureButton, GuiPromise
 from ..util.target import color_for_diff
 
 
@@ -362,7 +362,9 @@ class InteractionSiteDeviceGui(Qt.QWidget):
         pip = self._selectedPipette()
         if pip is not None:
             return self.dev.moveToInteract(pip, speed='fast')
-        return Future.immediate()
+        promise = GuiPromise()
+        promise.resolve()
+        return promise
 
     def _updatePositionLabels(self):
         positions = {}
