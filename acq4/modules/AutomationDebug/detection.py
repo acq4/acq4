@@ -25,23 +25,6 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
-def _annotation_save_dir(manager) -> Path | None:
-    """Directory in which to save cell annotations from the detection workflow.
-
-    Uses the configured ``misc/cellAnnotationDir`` if set, otherwise defaults to a
-    ``cell_annotations`` subdirectory of the data storage directory. Returns None if
-    neither is available, in which case the annotation tool falls back to the
-    working directory.
-    """
-    configured = manager.config.get("misc", {}).get("cellAnnotationDir", None)
-    if configured:
-        return Path(configured)
-    base = manager.getBaseDir()
-    if base is not None:
-        return Path(base.name()) / "cell_annotations"
-    return None
-
-
 class CellDetector:
     def __init__(self, window: AutomationDebugWindow):
         self._window = window
@@ -169,13 +152,13 @@ class CellDetector:
         # cellpose masks, and annotations share the annotation tool's naming scheme
         # and reload together. The base is shared with the annotation tool launched
         # in _handleDetectResults.
-        win._annotation_save_dir = _annotation_save_dir(man)
-        win._annotation_base_name = datetime.datetime.now().strftime(
+        win.annotation_base_name = datetime.datetime.now().strftime(
             "in_memory_stack_%Y%m%d_%H%M%S_%f"
         )
+        annotation_save_dir = win.annotation_save_dir
         save_prefix = (
-            str(win._annotation_save_dir / win._annotation_base_name)
-            if win._annotation_save_dir is not None
+            str(annotation_save_dir / win.annotation_base_name)
+            if annotation_save_dir is not None
             else None
         )
 
@@ -249,8 +232,8 @@ class CellDetector:
                 filter=False,  # No extra filtering
                 transpose_display=True,  # stack is (n_frames, Y, X) after .T; row-major matches camera module orientation
                 custom_buttons=[("Center Camera", _center_camera_on_cell)],
-                save_dir=getattr(win, "_annotation_save_dir", None),
-                base_name=getattr(win, "_annotation_base_name", None),
+                save_dir=win.annotation_save_dir,
+                base_name=win.annotation_base_name,
             )
 
             # from acq4_automation.object_detection import NeuronBoxViewer
