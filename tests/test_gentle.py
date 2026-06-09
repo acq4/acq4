@@ -18,6 +18,7 @@ from acq4.util.gentle import (
     check_stop,
     current_state,
     gui_asynch,
+    raise_errors,
     run_in_gui_thread,
     set_state,
     sleep,
@@ -530,3 +531,37 @@ class TestGuiAsynch:
         value = synch(body)()
         assert value == "inline"
         assert ran_in[0] is threading.current_thread()
+
+
+class TestRaiseErrors:
+    def _capture(self):
+        captured = []
+        old = threading.excepthook
+        threading.excepthook = lambda args: captured.append(args.exc_value)
+        return captured, old
+
+    def test_failure_raised_on_background_thread(self):
+        captured, old = self._capture()
+        try:
+            p = Promise()
+            raise_errors(p, "boom: {error}")
+            p.fail(ValueError("kaboom"))
+            for _ in range(200):
+                if captured:
+                    break
+                time.sleep(0.005)
+        finally:
+            threading.excepthook = old
+        assert captured and isinstance(captured[0], RuntimeError)
+        assert "boom: kaboom" in str(captured[0])
+
+    def test_stopped_is_not_an_error(self):
+        captured, old = self._capture()
+        try:
+            p = Promise()
+            raise_errors(p, "boom: {error}")
+            p.stop("deliberate")
+            time.sleep(0.1)
+        finally:
+            threading.excepthook = old
+        assert captured == []

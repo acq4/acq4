@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import threading
+import traceback
 from typing import Any, Callable, Optional
 
 from pyqtgraph import FeedbackButton
@@ -51,6 +53,7 @@ __all__ = [
     # acq4-side additions.
     "set_state",
     "current_state",
+    "raise_errors",
     "GuiTask",
     "GuiPromise",
     "gui_asynch",
@@ -87,6 +90,30 @@ def current_state() -> Any:
     if task is not None and hasattr(task, "state"):
         return task.state
     return None
+
+
+def raise_errors(task: Task, message: str) -> None:
+    """Surface a discarded task's failure loudly from a daemon thread.
+
+    Lets a caller fire-and-forget *task* while still having any error delivered
+    to the user: the failure is re-raised on a background daemon thread, so
+    acq4's excepthook reports it. A deliberate ``Stopped`` is not treated as an
+    error. *message* may contain ``{error}`` (the formatted exception) and
+    ``{stack}`` (the caller's stack at the time raise_errors was called).
+    """
+    caller_stack = "".join(traceback.format_stack()[:-1])
+
+    def monitor() -> None:
+        try:
+            task.wait()
+        except Stopped:
+            return
+        except BaseException as exc:
+            raise RuntimeError(message.format(error=str(exc), stack=caller_stack)) from exc
+
+    threading.Thread(
+        target=monitor, daemon=True, name=f"error monitor for {task!r}"
+    ).start()
 
 
 # ---------------------------------------------------------------------------
