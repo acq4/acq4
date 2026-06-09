@@ -23,12 +23,17 @@ class ClearAccessAnalysis(SteadyStateAnalysisBase):
 
     Emits three flags from rolling averages of access resistance (Ra) and input resistance (Ri):
 
-    - ``recovered``: smoothed Ra has dropped back below ``access_recovered_threshold`` (success).
+    - ``recovered``: smoothed Ra has dropped back below ``access_recovered_threshold`` while the
+      cell is not simultaneously being lost (success).
     - ``repairing``: smoothed Ri is dropping faster than ``input_resistance_decline_threshold``
       (a log10 ratio, expected negative), meaning the membrane is being damaged and pulsing
-      should pause until it recovers.
+      should pause until it recovers. Note this ratio is computed *per test pulse step*, so it
+      scales with the test-pulse interval; the threshold's tuning assumes a roughly steady
+      test-pulse cadence and would need rescaling if that cadence changes substantially.
     - ``lost``: the slow (``repair_tau``) average of Ri has fallen below
-      ``input_resistance_loss_threshold``, meaning the cell is gone.
+      ``input_resistance_loss_threshold``, meaning the cell is gone. Only honored after at least
+      one ``repair_tau`` has elapsed since the first measurement, so a transient low Ri reading
+      on entry cannot prematurely declare the cell lost.
     """
 
     @classmethod
@@ -93,6 +98,10 @@ class ClearAccessAnalysis(SteadyStateAnalysisBase):
         self._input_resistance_decline_threshold = input_resistance_decline_threshold
         self._detection_tau = detection_tau
         self._repair_tau = repair_tau
+        # Time of the first measurement, so cell loss is only honored once the slow repair
+        # average has had at least one repair tau to settle (a single low Ri reading on entry
+        # must not be enough to declare the cell lost).
+        self._first_time = None
 
     def access_recovered(self) -> bool:
         """Return True if the smoothed access resistance has dropped back below threshold."""
@@ -131,6 +140,8 @@ class ClearAccessAnalysis(SteadyStateAnalysisBase):
         )
         for i, measurement in enumerate(measurements):
             start_time, access_resistance, input_resistance = measurement
+            if self._first_time is None:
+                self._first_time = start_time
             if self._last_measurement is None:
                 access_avg = access_resistance
                 input_detect_avg = input_resistance
@@ -147,9 +158,13 @@ class ClearAccessAnalysis(SteadyStateAnalysisBase):
                 input_repair_avg, _ = exponential_decay_avg(
                     dt, last['input_repair_avg'], input_resistance, self._repair_tau)
 
-            recovered = access_avg < self._access_recovered_threshold
+            # Only trust the loss verdict once the slow repair average has had at least one
+            # repair tau to settle, so a transient low Ri reading on entry can't declare loss.
+            settled = (start_time - self._first_time) >= self._repair_tau
+            lost = settled and input_repair_avg < self._input_resistance_loss_threshold
             repairing = input_ratio < self._input_resistance_decline_threshold
-            lost = input_repair_avg < self._input_resistance_loss_threshold
+            # A falling Ra only counts as recovery if the cell is not simultaneously being lost.
+            recovered = (access_avg < self._access_recovered_threshold) and not lost
             ret_array[i] = (
                 start_time, access_resistance, input_resistance,
                 access_avg, input_detect_avg, input_repair_avg, input_ratio,
@@ -190,7 +205,10 @@ class ClearAccessState(PatchPipetteState):
         lost and the state transitions to ``fallbackState`` (default 50 MΩ).
     inputResistanceDeclineThreshold : float
         Maximum log10 of the input-resistance ratio (expected negative) before the membrane is
-        considered to be tearing, pausing recovery pulses until it repairs (default -0.01).
+        considered to be tearing, pausing recovery pulses until it repairs (default -0.01). This
+        ratio is measured between successive test pulses, so it scales with the test-pulse
+        interval; the default assumes a roughly steady cadence and should be rescaled if the
+        test-pulse rate changes substantially.
     detectionTau : float
         Time constant (seconds) for smoothing Ra (recovery) and the Ri decline ratio (default 1 s).
     repairTau : float
@@ -204,6 +222,9 @@ class ClearAccessState(PatchPipetteState):
         Duration (seconds) of each voltage zap (default 1 ms).
     zapAmplitude : float
         Amplitude (Volts) of each voltage zap, relative to the holding potential (default 1 V).
+        1 V is the conventional break-in "zap" amplitude in the patch-clamp literature (e.g. Axon
+        instrumentation); some protocols go higher (up to ~5 V) with correspondingly briefer
+        pulses to rupture without over-stressing the cell.
     fallbackState : str
         State to transition to if recovery fails (default 'fouled').
     """
