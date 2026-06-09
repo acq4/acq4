@@ -105,19 +105,23 @@ class ZeissTurret(FilterWheel):
 
 
 class ZeissFilterWheelFuture(FilterWheelFuture):
-    def isDone(self):
-        """Return True if the move has completed or was interrupted.
-        """
-        if self._wasInterrupted or self._done:
-            return True
+    """Track a Zeiss changer move, completed from the changer's onSettle callback.
 
+    The Zeiss changer is event-driven: ``_poll()`` runs only when the device
+    fires onSettle (it does not report a separate moving state), so completion
+    is decided purely by ``_atTarget()`` rather than waiting out ``isMoving()``.
+    """
+
+    def _poll(self):
+        if self.is_done or self.is_stopped:
+            return
         if self._atTarget():
-            self._done = True
-            return True
+            self.resolve(self.position)
         else:
-            self._wasInterrupted = True
-            self._error = f"Filter wheel did not reach target while moving to {self.position} (got to {self.dev.getPosition()})"
-            return True
+            self.fail(RuntimeError(
+                f"Filter wheel did not reach target while moving to {self.position} "
+                f"(got to {self.dev.getPosition()})"
+            ))
 
     def _atTarget(self):
         # sometimes we transiently return 0 (converted to None) at the end of a move; just wait a little longer
