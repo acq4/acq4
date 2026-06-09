@@ -114,7 +114,10 @@ class PatchClamp(Device):
             Duration (seconds) of the zap pulse (default 1 ms).
         amplitude : float
             Amplitude (Volts in VC, Amps in IC) of the zap relative to the holding value
-            (default 1 V).
+            (default 1 V). 1 V is the conventional break-in "zap" amplitude in the patch-clamp
+            literature (e.g. Axon instrumentation); some protocols go higher (up to ~5 V) with
+            correspondingly briefer pulses. The default assumes VC; an IC zap would need a sane
+            current amplitude supplied explicitly.
         sampleRate : float
             Sample rate (Hz) for the command waveform (default 500 kHz).
         """

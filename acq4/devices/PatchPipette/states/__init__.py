@@ -15,7 +15,7 @@ from .move_nucleus_to_home import MoveNucleusToHomeState
 from .nucleus_collect import NucleusCollectState
 from .reseal import ResealAnalysis, ResealState
 from .seal import SealAnalysis, SealState
-from .whole_cell import WholeCellState
+from .whole_cell import WholeCellAnalysis, WholeCellState
 from .out import OutState
 from .outside_out import OutsideOutState
 
@@ -26,6 +26,7 @@ __all__ = [
     'OutsideOutState',
     'ApproachState',
     'ApproachAnalysis',
+    'WholeCellAnalysis',
     'WholeCellState',
     'BrokenState',
     'FouledState',

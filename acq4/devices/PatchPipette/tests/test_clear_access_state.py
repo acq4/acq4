@@ -109,8 +109,10 @@ def test_clear_access_fouls_when_cell_is_lost(dev):
         accessRecoveredThreshold=25e6, inputResistanceLossThreshold=50e6,
         detectionTau=1.0, repairTau=10.0, fallbackState='fouled',
     )
-    # Access still high (not recovered), input resistance collapsed -> cell lost.
-    state.testPulseResults.put(_FakeTestPulse(0.0, 80e6, input_resistance=20e6))
+    # Access still high (not recovered) while input resistance collapses and stays down past one
+    # repair tau -> cell lost. A single low reading is intentionally not enough (see analysis tests).
+    for i in range(30):  # 15s of data at 0.5s spacing, well past the 10s repair tau
+        state.testPulseResults.put(_FakeTestPulse(i * 0.5, 80e6, input_resistance=20e6))
     result = state.run()
     assert result == {"state": "fouled"}
     assert dev.patchRecord()['clearAccessSuccessful'] is False

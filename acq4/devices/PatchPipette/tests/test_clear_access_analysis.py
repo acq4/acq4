@@ -102,6 +102,28 @@ def test_collapsing_input_resistance_is_cell_loss():
     assert analysis.cell_lost()
 
 
+def test_brief_low_input_resistance_does_not_immediately_lose():
+    """A low Ri reading on entry must not trip loss before one repair tau of data has accrued."""
+    analysis = _default_analysis(repair_tau=10.0)
+    # Ri sits below the loss floor, but only a few seconds of data (< repair_tau) so far.
+    times = np.arange(0, 5, 0.5)  # 0..4.5s, well under the 10s repair tau
+    ra = np.full(len(times), 80e6)
+    ri = np.full(len(times), 20e6)
+    analysis.process_measurements(_measurements(times, ra, ri))
+    assert not analysis.cell_lost()
+
+
+def test_recovery_is_blocked_while_cell_is_lost():
+    """Ra dropping back down must not count as recovery if Ri has collapsed (cell lost wins)."""
+    analysis = _default_analysis(repair_tau=10.0)
+    times = np.arange(0, 20, 0.5)  # long enough to pass the loss delay
+    ra = np.full(len(times), 10e6)  # below the recovered threshold
+    ri = np.full(len(times), 20e6)  # below the loss floor
+    analysis.process_measurements(_measurements(times, ra, ri))
+    assert analysis.cell_lost()
+    assert not analysis.access_recovered()
+
+
 def test_process_test_pulses_reads_ra_and_ri():
     analysis = _default_analysis()
     tps = [
