@@ -25,6 +25,24 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
+def _health_model_config(manager) -> dict:
+    """Health-model paths and score cutoffs from the global ``misc`` config.
+
+    Shared by neuron detection and the annotation-tool launch so both use the same
+    configured models. ``scoreCutoffs`` is an ascending list mapping a ranking
+    model's raw scores onto the 0-5 rating bins (see
+    acq4_automation.compute_score_cutoffs); None falls back to equal-width bins.
+    """
+    misc = manager.config.get("misc", {})
+    return {
+        "segmenter": misc.get("segmenterPath", None),
+        "autoencoder": misc.get("autoencoderPath", None),
+        "classifier": misc.get("classifierPath", None),
+        "resnet_classifier": misc.get("resnetClassifierPath", None),
+        "score_cutoffs": misc.get("scoreCutoffs", None),
+    }
+
+
 class CellDetector:
     def __init__(self, window: AutomationDebugWindow):
         self._window = window
@@ -78,10 +96,11 @@ class CellDetector:
 
         pixel_size = win.cameraDevice.getPixelSize()[0]  # Used for both real and mock
         man = win.module.manager
-        segmenter = man.config.get("misc", {}).get("segmenterPath", None)
-        autoencoder = man.config.get("misc", {}).get("autoencoderPath", None)
-        classifier = man.config.get("misc", {}).get("classifierPath", None)
-        resnet_classifier = man.config.get("misc", {}).get("resnetClassifierPath", None)
+        models = _health_model_config(man)
+        segmenter = models["segmenter"]
+        autoencoder = models["autoencoder"]
+        classifier = models["classifier"]
+        resnet_classifier = models["resnet_classifier"]
         step_z = 1 * µm  # can be updated by mock metadata
         depth = win.cameraDevice.getFocusDepth()
         classification_stack = None  # Initialize as None
@@ -227,6 +246,9 @@ class CellDetector:
 
             if win._annotation_tool is not None:
                 win._annotation_tool.close()
+            # Same configured health models as detection, plus score cutoffs, so the
+            # annotation tool re-scores the detected cells and bins them consistently.
+            models = _health_model_config(win.module.manager)
             win._annotation_tool = open_annotation_tool_with_detections(
                 stack=stack,
                 cell_centers_ijk=centers_ijk,
@@ -238,6 +260,10 @@ class CellDetector:
                 custom_buttons=[("Center Camera", _center_camera_on_cell)],
                 save_dir=win.annotation_save_dir,
                 base_name=win.annotation_base_name,
+                classifier=models["classifier"],
+                autoencoder=models["autoencoder"],
+                resnet_classifier=models["resnet_classifier"],
+                score_cutoffs=models["score_cutoffs"],
             )
 
             # from acq4_automation.object_detection import NeuronBoxViewer
