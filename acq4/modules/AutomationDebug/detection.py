@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -147,6 +148,24 @@ class CellDetector:
 
         win.cameraDevice.setFocusDepth(depth, name=f"{win.cameraDevice.name()} restore focus after detection z-stack")  # Restore focus
 
+        # Persist this detection session under one base name so the saved z-stack,
+        # cellpose masks, and annotations share the annotation tool's naming scheme
+        # and reload together. The base is shared with the annotation tool launched
+        # in _handleDetectResults.
+        win.annotation_base_name = datetime.datetime.now().strftime(
+            "in_memory_stack_%Y%m%d_%H%M%S_%f"
+        )
+        annotation_save_dir = win.annotation_save_dir
+        if annotation_save_dir is None:
+            logger.warning(
+                "No annotation save directory available (set misc/cellAnnotationDir, "
+                "or configure a storage directory); the detection z-stack, cellpose "
+                "masks, and annotations will not be saved alongside the data."
+            )
+            save_prefix = None
+        else:
+            save_prefix = str(annotation_save_dir / win.annotation_base_name)
+
         detection_results = _future.waitFor(
             detect_neurons(
                 working_stack,  # Prepared based on mock/real and single/multi
@@ -160,6 +179,7 @@ class CellDetector:
                 trim_edges=True,
                 min_volume_m3=win.ui.minVolumeSpin.value(),
                 n=None,
+                save_prefix=save_prefix,
             ),
             timeout=600,
         ).getResult()
@@ -216,6 +236,8 @@ class CellDetector:
                 filter=False,  # No extra filtering
                 transpose_display=True,  # stack is (n_frames, Y, X) after .T; row-major matches camera module orientation
                 custom_buttons=[("Center Camera", _center_camera_on_cell)],
+                save_dir=win.annotation_save_dir,
+                base_name=win.annotation_base_name,
             )
 
             # from acq4_automation.object_detection import NeuronBoxViewer
