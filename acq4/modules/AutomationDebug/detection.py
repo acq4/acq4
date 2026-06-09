@@ -156,11 +156,15 @@ class CellDetector:
             "in_memory_stack_%Y%m%d_%H%M%S_%f"
         )
         annotation_save_dir = win.annotation_save_dir
-        save_prefix = (
-            str(annotation_save_dir / win.annotation_base_name)
-            if annotation_save_dir is not None
-            else None
-        )
+        if annotation_save_dir is None:
+            logger.warning(
+                "No annotation save directory available (set misc/cellAnnotationDir, "
+                "or configure a storage directory); the detection z-stack, cellpose "
+                "masks, and annotations will not be saved alongside the data."
+            )
+            save_prefix = None
+        else:
+            save_prefix = str(annotation_save_dir / win.annotation_base_name)
 
         detection_results = _future.waitFor(
             detect_neurons(
