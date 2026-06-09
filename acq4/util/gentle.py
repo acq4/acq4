@@ -10,6 +10,7 @@ from pyqtgraph import FeedbackButton
 from acq4.util import Qt, ptime
 from gentletask import (
     Event,
+    Promise,
     Queue,
     Stopped,
     Task,
@@ -26,6 +27,7 @@ from gentletask import (
     task_context,
     throughline,
 )
+from gentletask import _TaskCore  # base wait() with the result/exception logic
 
 __all__ = [
     # Re-exported gentletask core so acq4 code has one import.
@@ -45,10 +47,13 @@ __all__ = [
     "task_chain",
     "task_context",
     "Task",
+    "Promise",
     # acq4-side additions.
     "set_state",
     "current_state",
     "GuiTask",
+    "GuiPromise",
+    "gui_asynch",
     "run_in_gui_thread",
     "task_in_gui_thread",
     "FutureButton",
@@ -85,87 +90,46 @@ def current_state() -> Any:
 
 
 # ---------------------------------------------------------------------------
-# GuiTask
+# Shared Qt machinery
 # ---------------------------------------------------------------------------
 
 
-class GuiTask(ThreadTask, Qt.QObject):
-    """A gentletask ThreadTask that is also a QObject, so GUI code can connect
-    to its completion and state-change signals.
+class _QtTaskSignals(Qt.QObject):
+    """QObject mixin carrying the Qt machinery shared by GuiTask and GuiPromise.
 
-    Multiple-inheritance note: the bases are ordered (ThreadTask, QObject)
-    rather than (QObject, ThreadTask). PyQt's QObject.__init__ cooperatively
-    forwards its arguments down the MRO via super().__init__(); with QObject
-    first, that forwarding lands on ThreadTask.__init__ (which requires `fn`)
-    and raises. Putting ThreadTask first keeps QObject last before object, so
-    QObject.__init__'s super-chain reaches object harmlessly, and we still
-    initialize the C++ QObject explicitly. The metaclass resolves to QObject's
-    sip.wrappertype (a subclass of `type`, which is ThreadTask's metaclass), so
-    the MI is well-formed in either order.
+    Both classes are gentletask tasks that are also QObjects so GUI code can
+    connect to completion and state-change signals. This mixin owns the parts
+    that are identical between them: the two signals, the state slot + property,
+    the internal finish callback that emits sigFinished, and the event-pumping
+    branch of wait(updates=True).
 
-    Start contract: by default (start=True) the work thread launches at the end
-    of __init__, which keeps call sites terse. Registering completion handling
-    via add_finish_callback is ALWAYS race-free — the callback fires immediately
-    if the task already finished. But catching completion through the
-    sigFinished Qt *signal* connection is only race-free if you connect before
-    the body can finish. For a FAST body where you connect to sigFinished, use
-    the deterministic "construct → connect → start" pattern: pass start=False,
-    connect your slots, then call .start() (inherited from ThreadTask, and
-    idempotent). Otherwise the default auto-start is fine.
+    It is always the QObject base in the MRO. The concrete classes put their
+    gentletask base first — GuiTask(ThreadTask, _QtTaskSignals) and
+    GuiPromise(Promise, _QtTaskSignals) — so this mixin (hence QObject) sits
+    last before object. PyQt's cooperative QObject.__init__ forwards down the
+    MRO via super().__init__(); with QObject last, that forwarding reaches
+    object harmlessly rather than landing on a gentletask __init__ that
+    requires arguments. The metaclass resolves to QObject's sip.wrappertype
+    (a subclass of type, which is the gentletask classes' metaclass), so the
+    multiple inheritance is well-formed.
     """
 
     sigFinished = Qt.Signal(object)  # self
     sigStateChanged = Qt.Signal(object, object)  # self, state
 
-    def __init__(
-        self,
-        fn: Callable[..., Any],
-        args=(),
-        kwargs: Optional[dict] = None,
-        *,
-        name: Optional[str] = None,
-        detach: bool = False,
-        on_finish: Optional[Callable[[Any, Optional[BaseException]], Any]] = None,
-        start: bool = True,
-    ) -> None:
-        # Order matters. Initialize the QObject (and its C++ half) and our own
-        # state first; then build the ThreadTask with start=False so the work
-        # thread does NOT launch yet; then fix signal affinity; then register
-        # the internal finish callback; and only then launch.
+    def _init_qt_signals(self) -> None:
+        """Initialize the QObject half and pin its signal affinity to the GUI thread.
+
+        Pinning matters because acq4 routinely creates tasks from inside running
+        worker tasks; without it, a task built on a worker thread would inherit
+        that thread's affinity, and its queued sigFinished / sigStateChanged
+        would be delivered to a thread with no event loop — so connected slots
+        would silently never fire. moveToThread is legal from the constructing
+        thread because the object is parentless.
+        """
         Qt.QObject.__init__(self)
         self._state: Any = None
-        self._user_on_finish = on_finish
-
-        # Build the underlying ThreadTask WITHOUT starting it, so we can finish
-        # wiring up Qt before any work runs.
-        ThreadTask.__init__(
-            self,
-            fn,
-            args,
-            kwargs,
-            name=name,
-            detach=detach,
-            start=False,
-        )
-
-        # Pin signal affinity to the GUI thread regardless of which thread
-        # constructed this task. acq4 routinely creates nested tasks from inside
-        # running worker tasks; without this, a GuiTask built on a worker thread
-        # would inherit that thread's affinity, and its queued sigFinished /
-        # sigStateChanged would be delivered to a thread with no event loop —
-        # so connected slots would silently never fire. moveToThread is legal
-        # from the constructing thread because the object is parentless.
         self.moveToThread(Qt.QApplication.instance().thread())
-
-        # Register the internal finish callback that emits sigFinished. Done via
-        # add_finish_callback (race-free) BEFORE starting, so the signal is
-        # wired even if the body finishes the instant it starts. The callback
-        # fires on the worker thread; the queued Qt connection then marshals
-        # connected slots to the GUI thread, which is the intended behavior.
-        self.add_finish_callback(self._on_task_finished)
-
-        if start:
-            self.start()
 
     # -- state ---------------------------------------------------------------
 
@@ -173,8 +137,11 @@ class GuiTask(ThreadTask, Qt.QObject):
     def state(self) -> Any:
         return self._state
 
+    def current_state(self) -> Any:
+        return self._state
+
     def set_state(self, state: Any) -> None:
-        """Set the state and emit sigStateChanged (safe from the worker thread)."""
+        """Set the state and emit sigStateChanged (safe from any thread)."""
         if state == self._state:
             return
         self._state = state
@@ -189,17 +156,12 @@ class GuiTask(ThreadTask, Qt.QObject):
 
     # -- waiting -------------------------------------------------------------
 
-    def wait(self, timeout: Optional[float] = None, updates: bool = False) -> Any:
-        """Block until done, returning the result or re-raising the worker's error.
+    def _wait_pumping(self, timeout: Optional[float]) -> Any:
+        """Block until done by pumping the Qt event loop, then return the result.
 
-        When *updates* is True, pump the Qt event loop instead of parking on the
-        gentletask condition, so a wait from the GUI thread does not freeze the
-        UI. When *updates* is False, defer to the normal ThreadTask.wait, which
-        preserves cooperative-stop propagation from a parent task.
+        Used by wait(updates=True) on both GuiTask and GuiPromise so a wait from
+        the GUI thread does not freeze the UI.
         """
-        if not updates:
-            return super().wait(timeout)
-
         start = ptime.time()
         while not self.is_done:
             if timeout is not None and ptime.time() > start + timeout:
@@ -212,8 +174,188 @@ class GuiTask(ThreadTask, Qt.QObject):
         # during call-site migration (the return-vs-raise decision is deferred).
         if not self.is_done:
             return None
-        # Re-raise / return through the normal path now that we know it is done.
-        return super().wait(0)
+        # Re-raise / return through the gentletask wait now that we know it is
+        # done. _TaskCore.wait carries the result/exception logic; reaching it
+        # via super() here would wrongly land on QObject (this mixin's base), so
+        # call _TaskCore.wait directly against the concrete task instance.
+        return _TaskCore.wait(self, 0)
+
+
+# ---------------------------------------------------------------------------
+# GuiTask
+# ---------------------------------------------------------------------------
+
+
+class GuiTask(ThreadTask, _QtTaskSignals):
+    """A gentletask ThreadTask that is also a QObject, so GUI code can connect
+    to its completion and state-change signals.
+
+    The Qt signals, state slot, finish-emit hook, and event-pumping wait live in
+    the _QtTaskSignals mixin (shared with GuiPromise); see its docstring for the
+    multiple-inheritance ordering rationale (ThreadTask first keeps QObject last
+    before object).
+
+    Start contract: by default (start=True) the work thread launches at the end
+    of __init__, which keeps call sites terse. Registering completion handling
+    via add_finish_callback is ALWAYS race-free — the callback fires immediately
+    if the task already finished. But catching completion through the
+    sigFinished Qt *signal* connection is only race-free if you connect before
+    the body can finish. For a FAST body where you connect to sigFinished, use
+    the deterministic "construct → connect → start" pattern: pass start=False,
+    connect your slots, then call .start() (inherited from ThreadTask, and
+    idempotent). Otherwise the default auto-start is fine.
+    """
+
+    def __init__(
+        self,
+        fn: Callable[..., Any],
+        args=(),
+        kwargs: Optional[dict] = None,
+        *,
+        name: Optional[str] = None,
+        detach: bool = False,
+        on_finish: Optional[Callable[[Any, Optional[BaseException]], Any]] = None,
+        start: bool = True,
+    ) -> None:
+        # Order matters. Initialize the QObject (and its C++ half), our own
+        # state, and pin signal affinity first; then build the ThreadTask with
+        # start=False so the work thread does NOT launch yet; then register the
+        # internal finish callback; and only then launch.
+        self._init_qt_signals()
+        self._user_on_finish = on_finish
+
+        # Build the underlying ThreadTask WITHOUT starting it, so we can finish
+        # wiring up Qt before any work runs.
+        ThreadTask.__init__(
+            self,
+            fn,
+            args,
+            kwargs,
+            name=name,
+            detach=detach,
+            start=False,
+        )
+
+        # Register the internal finish callback that emits sigFinished. Done via
+        # add_finish_callback (race-free) BEFORE starting, so the signal is
+        # wired even if the body finishes the instant it starts. The callback
+        # fires on the worker thread; the queued Qt connection then marshals
+        # connected slots to the GUI thread, which is the intended behavior.
+        self.add_finish_callback(self._on_task_finished)
+
+        if start:
+            self.start()
+
+    # -- waiting -------------------------------------------------------------
+
+    def wait(self, timeout: Optional[float] = None, updates: bool = False) -> Any:
+        """Block until done, returning the result or re-raising the worker's error.
+
+        When *updates* is True, pump the Qt event loop instead of parking on the
+        gentletask condition, so a wait from the GUI thread does not freeze the
+        UI. When *updates* is False, defer to the normal ThreadTask.wait, which
+        preserves cooperative-stop propagation from a parent task.
+        """
+        if not updates:
+            return super().wait(timeout)
+        return self._wait_pumping(timeout)
+
+
+def gui_asynch(
+    fn: Callable,
+    name: Optional[str] = None,
+    detach: bool = False,
+    on_finish: Optional[Callable[[Any, Optional[BaseException]], Any]] = None,
+) -> Callable[..., "GuiTask"]:
+    """Like gentletask.asynch, but launches the work in a GuiTask (Qt signals).
+
+    Plain ``asynch`` only builds a ThreadTask; use ``gui_asynch`` when a
+    function's result needs ``sigFinished``/``sigStateChanged`` so GUI code can
+    connect to it. Calling the returned launcher starts a GuiTask immediately::
+
+        @gui_asynch
+        def run_sequence(...):
+            set_state("acquiring"); ...; return result
+
+        task = run_sequence(...)            # a started GuiTask
+        task.sigStateChanged.connect(...)
+
+    ``synch(gui_asynch(fn))`` de-wraps to run ``fn`` inline (via _asynch_wraps),
+    exactly like ``synch`` on an ``asynch``-wrapped callable.
+    """
+
+    def wrapper(*args: Any, **kwargs: Any) -> "GuiTask":
+        return GuiTask(fn, args, kwargs, name=name, detach=detach, on_finish=on_finish)
+
+    # Record the original callable so synch() can de-wrap back to it.
+    wrapper._asynch_wraps = fn
+    return wrapper
+
+
+# ---------------------------------------------------------------------------
+# GuiPromise
+# ---------------------------------------------------------------------------
+
+
+class GuiPromise(Promise, _QtTaskSignals):
+    """A gentletask Promise that is also a QObject, so GUI code can connect to
+    its completion and state-change signals.
+
+    GuiPromise is the externally-completed analog of GuiTask: it has no body and
+    spawns no thread. An external producer (a hardware monitor thread, a socket
+    reader, a GUI callback, a lock loop) completes it by calling resolve(),
+    fail(), or stop(). Completion fires the internal finish callback, which emits
+    sigFinished; a queued Qt connection then marshals connected slots to the GUI
+    thread even when the producer calls resolve()/fail() from its own thread.
+
+    State: because a Promise has no running body, the module-level free
+    set_state() will NOT reach it (the producer is not running as this task's
+    current_task()). The external producer therefore calls
+    guipromise.set_state(...) DIRECTLY. set_state/state/current_state come from
+    the _QtTaskSignals mixin and behave exactly as on GuiTask.
+
+    See _QtTaskSignals for the multiple-inheritance ordering rationale (Promise
+    first keeps QObject last before object).
+    """
+
+    def __init__(
+        self,
+        name: Optional[str] = None,
+        *,
+        on_finish: Optional[Callable[[Any, Optional[BaseException]], Any]] = None,
+    ) -> None:
+        # Order matters and mirrors GuiTask. Initialize the QObject (and its C++
+        # half), our own state, and pin signal affinity first; then build the
+        # Promise (which registers with the parent task for stop-cascade and
+        # spawns NO thread); then register the internal finish callback. There is
+        # no start: a Promise has no body to launch.
+        self._init_qt_signals()
+        self._user_on_finish = on_finish
+
+        # Do NOT forward on_finish to Promise.__init__: _on_task_finished invokes
+        # self._user_on_finish itself (matching GuiTask), so forwarding it would
+        # call the user callback twice.
+        Promise.__init__(self, name=name)
+
+        # Register the internal finish callback that emits sigFinished. Done via
+        # add_finish_callback (race-free): it fires immediately if the promise is
+        # already complete. The producer typically calls resolve()/fail() from a
+        # non-GUI thread; the queued Qt connection then marshals connected slots
+        # to the GUI thread.
+        self.add_finish_callback(self._on_task_finished)
+
+    def wait(self, timeout: Optional[float] = None, updates: bool = False) -> Any:
+        """Block until completed, returning the resolved value or re-raising.
+
+        When *updates* is True, pump the Qt event loop instead of parking on the
+        gentletask condition, so a wait from the GUI thread does not freeze the
+        UI while it blocks on an external producer. When *updates* is False,
+        defer to the normal Promise.wait, which preserves cooperative-stop
+        propagation from a parent task.
+        """
+        if not updates:
+            return super().wait(timeout)
+        return self._wait_pumping(timeout)
 
 
 # ---------------------------------------------------------------------------

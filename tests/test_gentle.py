@@ -9,15 +9,19 @@ from PyQt5.QtWidgets import QApplication
 
 from acq4.util import Qt
 from acq4.util.gentle import (
+    GuiPromise,
     GuiTask,
     FutureButton,
+    Promise,
     Stopped,
     ThreadTask,
     check_stop,
     current_state,
+    gui_asynch,
     run_in_gui_thread,
     set_state,
     sleep,
+    synch,
 )
 
 app = QApplication.instance() or QApplication([])
@@ -338,3 +342,191 @@ class TestFutureButton:
         button.click()  # second click stops
         _pump(until=lambda: the_task[0].is_stopped)
         assert the_task[0].is_stopped
+
+
+class TestGuiPromise:
+    def test_resolve_returns_value_and_fires_finished_on_gui_thread(self):
+        # The producer resolves from a worker thread; wait() returns the value
+        # and the sigFinished slot must run on the GUI thread.
+        gui_thread = QApplication.instance().thread()
+        slot_threads = []
+
+        p = GuiPromise()
+        p.sigFinished.connect(
+            lambda task: slot_threads.append(Qt.QtCore.QThread.currentThread())
+        )
+
+        def producer():
+            p.resolve(99)
+
+        worker = threading.Thread(target=producer)
+        worker.start()
+        result = p.wait()
+        worker.join(timeout=2)
+        _pump(until=lambda: bool(slot_threads))
+
+        assert result == 99
+        assert p.is_done
+        assert slot_threads, "sigFinished slot never fired"
+        assert slot_threads[0] is gui_thread
+
+    def test_fail_makes_wait_raise(self):
+        p = GuiPromise()
+        p.fail(ValueError("boom"))
+        try:
+            p.wait()
+            assert False, "expected ValueError"
+        except ValueError as e:
+            assert "boom" in str(e)
+
+    def test_stop_before_resolve_raises_stopped_and_fires_finished(self):
+        got = []
+        p = GuiPromise()
+        p.sigFinished.connect(lambda task: got.append(task))
+        p.stop()
+        try:
+            p.wait()
+            assert False, "expected Stopped"
+        except Stopped:
+            pass
+        _pump(until=lambda: bool(got))
+
+        assert p.is_stopped
+        assert got == [p]
+
+    def test_set_state_from_producer_emits_on_gui_thread(self):
+        # The external producer calls guipromise.set_state(...) directly (the
+        # module-level free set_state would not reach it). The signal must be
+        # delivered on the GUI thread with the right value.
+        gui_thread = QApplication.instance().thread()
+        states = []
+        slot_threads = []
+
+        p = GuiPromise()
+
+        def on_state(task, state):
+            states.append(state)
+            slot_threads.append(Qt.QtCore.QThread.currentThread())
+
+        p.sigStateChanged.connect(on_state)
+
+        def producer():
+            p.set_state("waiting")
+            p.resolve(None)
+
+        worker = threading.Thread(target=producer)
+        worker.start()
+        p.wait()
+        worker.join(timeout=2)
+        _pump(until=lambda: "waiting" in states)
+
+        assert "waiting" in states
+        assert p.state == "waiting"
+        assert slot_threads[0] is gui_thread
+
+    def test_constructed_on_worker_thread_delivers_on_gui_thread(self):
+        # C2 guard: a GuiPromise constructed on a worker thread must still
+        # deliver its queued sigFinished to the GUI thread.
+        gui_thread = QApplication.instance().thread()
+
+        class Receiver(Qt.QObject):
+            def __init__(self):
+                Qt.QObject.__init__(self)
+                self.slot_threads = []
+
+            def on_finished(self, task):
+                self.slot_threads.append(Qt.QtCore.QThread.currentThread())
+
+        receiver = Receiver()  # constructed on the GUI thread
+        affinity_at_connect = []
+        constructed = threading.Event()
+        promise_box = []
+
+        def constructor():
+            p = GuiPromise()
+            promise_box.append(p)
+            affinity_at_connect.append(p.thread() is gui_thread)
+            p.sigFinished.connect(receiver.on_finished)
+            constructed.set()
+            p.resolve("ok")
+
+        worker = threading.Thread(target=constructor)
+        worker.start()
+        constructed.wait(timeout=1)
+        worker.join(timeout=2)
+        _pump(until=lambda: bool(receiver.slot_threads))
+
+        assert affinity_at_connect == [True], "promise affinity was not the GUI thread"
+        assert receiver.slot_threads, "sigFinished slot never fired"
+        assert receiver.slot_threads[0] is gui_thread
+
+    def test_resolve_spawns_no_thread(self):
+        before = threading.active_count()
+        p = GuiPromise()
+        p.resolve(1)
+        p.wait()
+        # No worker thread should have been spawned for a Promise.
+        assert threading.active_count() == before
+
+    def test_wait_with_updates_returns_result_without_deadlock(self):
+        # A GUI-thread caller blocks on the promise; the event loop stays live so
+        # a timer keeps firing and a queued resolve from a worker is delivered.
+        ticks = []
+        timer = Qt.QTimer()
+        timer.timeout.connect(lambda: ticks.append(1))
+        timer.start(10)
+
+        p = GuiPromise()
+
+        def producer():
+            time.sleep(0.1)
+            p.resolve("late result")
+
+        worker = threading.Thread(target=producer)
+        worker.start()
+        result = p.wait(updates=True)
+        worker.join(timeout=2)
+        timer.stop()
+
+        assert result == "late result"
+        assert ticks, "event loop was not pumped during wait(updates=True)"
+
+    def test_promise_is_reexported(self):
+        # The gentletask Promise must be re-exported from the facade.
+        assert Promise is not None
+
+
+class TestGuiAsynch:
+    def test_launcher_returns_started_gui_task(self):
+        # gui_asynch auto-starts (like asynch). Verify the launcher builds a
+        # started GuiTask and the result flows through. Finish is checked via
+        # add_finish_callback (race-free) rather than the sigFinished signal,
+        # which a fast body can emit before an external connect (documented).
+        got = []
+
+        @gui_asynch
+        def body(x):
+            set_state("running")
+            return x * 2
+
+        task = body(21)
+        assert isinstance(task, GuiTask)
+        task.add_finish_callback(lambda result, exc: got.append(result))
+        result = task.wait()
+
+        assert result == 42
+        assert task.is_done
+        assert got == [42]
+
+    def test_synch_dewraps_to_run_inline(self):
+        # synch(gui_asynch(fn)) runs fn inline (no GuiTask/thread) and returns the value.
+        ran_in = []
+
+        @gui_asynch
+        def body():
+            ran_in.append(threading.current_thread())
+            return "inline"
+
+        value = synch(body)()
+        assert value == "inline"
+        assert ran_in[0] is threading.current_thread()
