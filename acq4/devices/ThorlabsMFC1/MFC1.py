@@ -1,3 +1,4 @@
+import threading
 import time
 
 from acq4.drivers.ThorlabsMFC1 import MFC1 as MFC1_Driver
@@ -224,16 +225,35 @@ class MFC1MoveFuture(MoveFuture):
         self._moveStatus = {'status': None}
         self.id = dev.dev.move(pos[2] / dev.scale[2])
 
-    def wasInterrupted(self):
-        """Return True if the move was interrupted before completing.
-        """
-        return self._getStatus()['status'] in ('interrupted', 'failed')
+        # Producer thread for this externally-completed promise. It is a raw
+        # thread (not a gentletask task), so it honors a stop by polling
+        # self.is_stopped rather than using check_stop().
+        self._monitorThread = threading.Thread(
+            target=self._watchForFinish, daemon=True, name=f"{name} MFC1 monitor"
+        )
+        self._monitorThread.start()
+
+    def _watchForFinish(self):
+        while not self.is_stopped:
+            stat = self._getStatus()['status']
+            if stat == 'interrupted':
+                # The driver only marks a move 'interrupted' when dev.stop() was
+                # called, which also completes this promise with Stopped via
+                # stop(); just let that path own completion.
+                return
+            elif stat == 'failed':
+                self.fail(RuntimeError(self.errorMessage()))
+                return
+            elif stat == 'done':
+                self.resolve(None)
+                return
+            time.sleep(0.05)
 
     def percentDone(self):
-        """Return an estimate of the percent of move completed based on the 
+        """Return an estimate of the percent of move completed based on the
         device's speed table.
         """
-        if self.isDone():
+        if self.is_done:
             return 100
 
         pos = self.dev.getPosition()[2] - self.startPos[2]
@@ -241,11 +261,6 @@ class MFC1MoveFuture(MoveFuture):
         if target == 0:
             return 99
         return 100 * pos / target
-
-    def isDone(self):
-        """Return True if the move is complete.
-        """
-        return self._getStatus()['status'] in ('interrupted', 'failed', 'done')
 
     def errorMessage(self):
         stat = self._getStatus()

@@ -1,3 +1,4 @@
+import threading
 import time
 
 import numpy as np
@@ -5,6 +6,7 @@ from pyqtgraph import debug
 
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
+from acq4.util.gentle import GuiPromise
 from acq4.util.micromanager import getMMCorePy
 from ..Stage import Stage, MoveFuture, StageInterface
 
@@ -211,7 +213,7 @@ class MicroManagerStage(Stage):
 
     def _move(self, pos, speed, linear, name=None, **kwds):
         with self.lock:
-            if self._lastMove is not None and not self._lastMove.isDone():
+            if self._lastMove is not None and not self._lastMove.is_done:
                 self.stop()
 
             # Decide which axes to move
@@ -297,15 +299,27 @@ class MicroManagerMoveFuture(MoveFuture):
             if moveXY:
                 self.dev.mmc.setPosition(self.dev._mmDeviceNames['z'], pos[2])
 
-    def wasInterrupted(self):
-        """Return True if the move was interrupted before completing.
-        """
-        return self._interrupted
+        # External producer for this promise: poll device status and complete the
+        # promise when the move finishes (or errors / misses its target).
+        self._monitorThread = threading.Thread(
+            target=self._monitorMove, name=f'{dev.name()} : {self.name}', daemon=True
+        )
+        self._monitorThread.start()
 
-    def isDone(self):
-        """Return True if the move is complete.
-        """
-        return self._getStatus() != 0
+    def _monitorMove(self):
+        # Raw thread (not a gentletask task): honor a stop request by polling
+        # self.is_stopped, and push completion onto the promise.
+        while True:
+            if self.is_stopped:
+                return
+            status = self._getStatus()
+            if status == 1:
+                self.resolve(None)
+                return
+            elif status == -1:
+                self.fail(RuntimeError(self._errorMsg or "Move did not complete."))
+                return
+            time.sleep(5e-3)
 
     def _getStatus(self):
         # check status of move unless we already know it is complete.
@@ -343,6 +357,12 @@ class MicroManagerMoveFuture(MoveFuture):
             return
         elif status == -1:
             self._errorMsg = "Move was interrupted before completion."
+            # Device detected the abort itself: complete this promise as stopped
+            # unless it is already completing via MoveFuture.stop(). Use
+            # GuiPromise.stop directly to avoid re-entering dev.stop() (this is
+            # called from within dev.stop()/dev.abort()).
+            if not self.is_done and not self.is_stopped:
+                GuiPromise.stop(self, "Move was interrupted before completion.")
         elif status == 0:
             # not actually stopped! This should not happen.
             raise RuntimeError("Interrupted move but manipulator is still running!")

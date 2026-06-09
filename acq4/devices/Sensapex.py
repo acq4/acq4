@@ -279,7 +279,7 @@ class SensapexMoveFuture(MoveFuture):
 
         # no move requested; just bail early
         if distance == 0:
-            self._taskDone(interrupted=False)
+            self.resolve(None)
             return
 
         self._moveReq = None
@@ -317,39 +317,40 @@ class SensapexMoveFuture(MoveFuture):
             waypoint, self.speed * 1e6, simultaneous=self._linear, linear=self._linear, max_attempts=self.max_attempts
         )
         if not self._waitFor(self._moveReq):
-            self._taskDone(
-                interrupted=self._moveReq.interrupted,
-                error=self._generateErrorMessage(),
-                excInfo=None,
-            )
+            self._completeFromMoveReq()
             return
         self._moveReq = self.dev.dev.goto_pos(
             pos, self.speed * 1e6, simultaneous=self._linear, linear=self._linear, max_attempts=self.max_attempts
         )
         self._waitFor(self._moveReq)
-        self._taskDone(
-            interrupted=self._moveReq.interrupted,
-            error=self._generateErrorMessage(),
-            excInfo=None,
-        )
+        self._completeFromMoveReq()
 
     def _waitFor(self, moveReq):
         """Wait for a sensapex MoveRequest, while watching for our own stop signal. Return whether
         the move completed successfully."""
         while not moveReq.finished_event.wait(0.2):
-            if self._stopRequested:
-                moveReq.interrupt(reason=self._errorMessage)
+            if self.is_stopped:
+                moveReq.interrupt(reason=self.stop_reason)
                 return False
         return not moveReq.interrupted
+
+    def _completeFromMoveReq(self):
+        """Complete this promise from the latest move request's outcome.
+
+        A finished-but-interrupted move (or a missed target) fails with the
+        generated error message; otherwise the move succeeded. A stop is already
+        being completed via stop(), so resolve/fail here are harmless no-ops in
+        that case.
+        """
+        if self._moveReq.interrupted:
+            self.fail(RuntimeError(self._generateErrorMessage()))
+        else:
+            self.resolve(None)
 
     def _watchForFinish(self):
         moveReq = self._moveReq
         self._waitFor(moveReq)
-        self._taskDone(
-            interrupted=moveReq.interrupted,
-            error=self._generateErrorMessage(),
-            excInfo=None,
-        )
+        self._completeFromMoveReq()
 
     def _stepwiseMove(self):
         speed = self.speed * 1e6
@@ -382,12 +383,12 @@ class SensapexMoveFuture(MoveFuture):
             if fractionComplete == 1.0:
                 break
 
-        self._taskDone(
-            interrupted=self._moveReq.interrupted or self._stopRequested,
-            error=self._generateErrorMessage(),
-            state=None,
-            excInfo=None,
-        )
+        if self._moveReq.interrupted or self.is_stopped:
+            # A stop is already completing this promise with Stopped via stop();
+            # otherwise an interrupted/missed move is a genuine failure.
+            self.fail(RuntimeError(self._generateErrorMessage()))
+        else:
+            self.resolve(None)
 
     def _generateErrorMessage(self):
         # interrupted?
