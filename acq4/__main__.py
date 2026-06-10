@@ -65,8 +65,8 @@ logger.info("Loading ACQ4...")
 
 # Propagate the gentletask throughline across teleprox process boundaries (parent
 # side: serialize our task context into outgoing remote calls). Child processes
-# are enabled remotely where they are spawned. No-op if gentletask is unavailable.
-from teleprox import throughline as _throughline
+# are enabled remotely where they are spawned.
+from acq4.util import throughline as _throughline
 _throughline.enable_throughline_propagation()
 
 
