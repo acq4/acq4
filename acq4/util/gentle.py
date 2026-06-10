@@ -12,6 +12,8 @@ from pyqtgraph import FeedbackButton
 from acq4.util import Qt, ptime
 from gentletask import (
     Event,
+    MultiException,
+    MultiTask,
     Promise,
     Queue,
     Stopped,
@@ -50,12 +52,16 @@ __all__ = [
     "task_context",
     "Task",
     "Promise",
+    "MultiTask",
+    "MultiException",
     # acq4-side additions.
     "set_state",
     "current_state",
     "raise_errors",
     "GuiTask",
     "GuiPromise",
+    "GuiMultiTask",
+    "MultiFuture",
     "gui_asynch",
     "run_in_gui_thread",
     "task_in_gui_thread",
@@ -383,6 +389,85 @@ class GuiPromise(Promise, _QtTaskSignals):
         if not updates:
             return super().wait(timeout)
         return self._wait_pumping(timeout)
+
+
+# ---------------------------------------------------------------------------
+# GuiMultiTask
+# ---------------------------------------------------------------------------
+
+
+class GuiMultiTask(MultiTask, _QtTaskSignals):
+    """A gentletask MultiTask that is also a QObject, so GUI code can connect to
+    its completion and state-change signals.
+
+    GuiMultiTask is the MultiTask analog of GuiPromise: it has no body and spawns
+    no thread, completing when all of its child tasks complete. wait() returns
+    the list of child results in order (or re-raises a lone child exception, or
+    raises MultiException on several); stop() stops every child then itself.
+
+    Beyond MultiTask, it re-emits each child's sigStateChanged as its own
+    sigStateChanged, with the CHILD as sender (matching the old MultiFuture), so
+    GUI code can watch a single aggregate for all the children's state updates.
+    Children that are not Qt-backed (no sigStateChanged) are simply not relayed.
+
+    Exposed under the name MultiFuture (see the alias below) to keep acq4's
+    existing MultiFuture(futures, name=...) call sites unchanged.
+
+    See _QtTaskSignals for the multiple-inheritance ordering rationale (MultiTask
+    first keeps QObject last before object).
+    """
+
+    def __init__(self, tasks, name: Optional[str] = None) -> None:
+        # Order mirrors GuiPromise. Initialize the QObject (and its C++ half),
+        # our own state, and pin signal affinity first; then build the MultiTask
+        # (which registers with the parent task for stop-cascade, wires each
+        # child's finish callback, and spawns NO thread); then register the
+        # internal finish callback. There is no start: a MultiTask has no body.
+        self._init_qt_signals()
+        self._user_on_finish = None
+
+        MultiTask.__init__(self, tasks, name=name)
+
+        # Register the internal finish callback that emits sigFinished. Done via
+        # add_finish_callback (race-free): it fires immediately if every child is
+        # already complete. The last child typically finishes on a worker thread;
+        # the queued Qt connection then marshals connected slots to the GUI
+        # thread.
+        self.add_finish_callback(self._on_task_finished)
+
+        # Re-emit each Qt-backed child's state changes as our own, with the child
+        # as sender (matching the old MultiFuture). Children without a
+        # sigStateChanged (plain ThreadTask, etc.) carry no Qt state to relay.
+        for child in self.tasks:
+            if hasattr(child, "sigStateChanged"):
+                child.sigStateChanged.connect(self._relay_child_state)
+
+    def _relay_child_state(self, child: Any, state: Any) -> None:
+        self.sigStateChanged.emit(child, state)
+
+    def percentDone(self) -> float:
+        """Return the minimum percentDone across children (0.0 if none report)."""
+        return min(
+            (t.percentDone() for t in self.tasks if hasattr(t, "percentDone")),
+            default=0.0,
+        )
+
+    def wait(self, timeout: Optional[float] = None, updates: bool = False) -> Any:
+        """Block until all children complete, returning their results or raising.
+
+        When *updates* is True, pump the Qt event loop instead of parking on the
+        gentletask condition, so a wait from the GUI thread does not freeze the
+        UI. When *updates* is False, defer to the normal MultiTask.wait, which
+        preserves cooperative-stop propagation from a parent task.
+        """
+        if not updates:
+            return super().wait(timeout)
+        return self._wait_pumping(timeout)
+
+
+# Expose under the name acq4 already uses at ~8 call sites: MultiFuture(futures,
+# name=...). Keeping the alias avoids churning those sites during the migration.
+MultiFuture = GuiMultiTask
 
 
 # ---------------------------------------------------------------------------

@@ -12,6 +12,9 @@ from acq4.util.gentle import (
     GuiPromise,
     GuiTask,
     FutureButton,
+    MultiException,
+    MultiFuture,
+    MultiTask,
     Promise,
     Stopped,
     ThreadTask,
@@ -565,3 +568,140 @@ class TestRaiseErrors:
         finally:
             threading.excepthook = old
         assert captured == []
+
+
+class TestMultiFuture:
+    def test_resolves_to_list_of_results_and_fires_finished_on_gui_thread(self):
+        # MultiFuture over two GuiPromises: wait() returns the child results in
+        # order, and its own sigFinished slot runs on the GUI thread.
+        gui_thread = QApplication.instance().thread()
+        slot_threads = []
+
+        a = GuiPromise()
+        b = GuiPromise()
+        multi = MultiFuture([a, b], name="pair")
+        multi.sigFinished.connect(
+            lambda task: slot_threads.append(Qt.QtCore.QThread.currentThread())
+        )
+
+        def producer():
+            a.resolve("first")
+            b.resolve("second")
+
+        worker = threading.Thread(target=producer)
+        worker.start()
+        result = multi.wait()
+        worker.join(timeout=2)
+        _pump(until=lambda: bool(slot_threads))
+
+        assert result == ["first", "second"]
+        assert multi.is_done
+        assert slot_threads, "sigFinished slot never fired"
+        assert slot_threads[0] is gui_thread
+
+    def test_child_state_change_reemitted_with_child_as_sender_on_gui_thread(self):
+        # A child's sigStateChanged is re-emitted by the MultiFuture, with the
+        # CHILD as sender (matching the old MultiFuture), on the GUI thread.
+        gui_thread = QApplication.instance().thread()
+        senders = []
+        states = []
+        slot_threads = []
+
+        a = GuiPromise()
+        b = GuiPromise()
+        multi = MultiFuture([a, b])
+
+        def on_state(sender, state):
+            senders.append(sender)
+            states.append(state)
+            slot_threads.append(Qt.QtCore.QThread.currentThread())
+
+        multi.sigStateChanged.connect(on_state)
+
+        def producer():
+            a.set_state("moving")
+            a.resolve(1)
+            b.resolve(2)
+
+        worker = threading.Thread(target=producer)
+        worker.start()
+        multi.wait()
+        worker.join(timeout=2)
+        _pump(until=lambda: bool(states))
+
+        assert "moving" in states
+        assert a in senders, "child should be the sender of the relayed state"
+        assert slot_threads[0] is gui_thread
+
+    def test_one_child_failing_makes_wait_raise_that_exception(self):
+        a = GuiPromise()
+        b = GuiPromise()
+        multi = MultiFuture([a, b])
+
+        a.resolve("ok")
+        b.fail(ValueError("child boom"))
+        try:
+            multi.wait()
+            assert False, "expected ValueError"
+        except ValueError as e:
+            assert "child boom" in str(e)
+
+    def test_stop_stops_all_children(self):
+        started = [threading.Event(), threading.Event()]
+        stopped = []
+
+        def make_body(i):
+            def body():
+                started[i].set()
+                while True:
+                    check_stop()
+                    sleep(0.01)
+            return body
+
+        a = GuiTask(make_body(0))
+        b = GuiTask(make_body(1))
+        multi = MultiFuture([a, b])
+        for ev in started:
+            ev.wait(timeout=1)
+
+        multi.stop("done with you")
+        for child in (a, b):
+            try:
+                child.wait()
+            except Stopped:
+                pass
+            stopped.append(child.is_stopped)
+
+        assert stopped == [True, True]
+        assert a.is_stopped and b.is_stopped
+
+    def test_percent_done_returns_min_across_children(self):
+        # Children carry a percentDone; the MultiFuture reports the minimum.
+        class FakeChild:
+            def __init__(self, pct):
+                self._pct = pct
+
+            def percentDone(self):
+                return self._pct
+
+            def add_finish_callback(self, cb):
+                # Never completes during this test; we only probe percentDone.
+                pass
+
+        a = FakeChild(0.3)
+        b = FakeChild(0.7)
+        multi = MultiFuture([a, b])
+
+        assert multi.percentDone() == 0.3
+
+    def test_percent_done_robust_when_child_lacks_percent_done(self):
+        # A child without percentDone must not break the min computation.
+        a = GuiPromise()  # GuiPromise has no percentDone
+        multi = MultiFuture([a])
+        assert multi.percentDone() == 0.0
+        a.resolve(None)
+        multi.wait()
+
+    def test_multitask_and_multiexception_reexported(self):
+        assert MultiTask is not None
+        assert MultiException is not None
