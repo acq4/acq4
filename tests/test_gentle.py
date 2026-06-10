@@ -20,6 +20,7 @@ from acq4.util.gentle import (
     ThreadTask,
     check_stop,
     current_state,
+    current_task,
     gui_asynch,
     raise_errors,
     run_in_gui_thread,
@@ -292,6 +293,22 @@ class TestRunInGuiThread:
 
         assert result_box, "run_in_gui_thread never returned"
         assert result_box[0] is gui_thread
+
+    def test_returns_when_calling_task_is_stopped(self):
+        # Regression: a cancelled FutureButton fires its finish callback, which
+        # marshals to the GUI thread via run_in_gui_thread. _GuiCall's done-signal
+        # must be a plain threading.Event so it returns even though current_task()
+        # is the just-stopped task; a stop-aware Event would raise Stopped here.
+        result_box = []
+
+        def body():
+            current_task().stop()  # this task is now stopped
+            result_box.append(run_in_gui_thread(lambda: 42))
+
+        ThreadTask(body, name="stopped-caller")
+        _pump(until=lambda: bool(result_box))
+
+        assert result_box == [42]
 
 
 class TestFutureButton:

@@ -497,7 +497,12 @@ class _GuiCall(Qt.QObject):
         self._kwargs = kwargs
         self._result: Any = None
         self._exc: Optional[BaseException] = None
-        self._done = Event()  # plain lifecycle signal; this is not a Task
+        # Plain threading.Event, NOT the stop-aware gentletask Event: this is the
+        # call's own lifecycle signal, waited on from a (possibly already-stopped)
+        # task. A gentletask Event would raise Stopped here when the calling task
+        # has been cancelled — e.g. a FutureButton's stop firing the finish
+        # callback that marshals back to the GUI thread.
+        self._done = threading.Event()
 
         if thread is None:
             thread = Qt.QApplication.instance().thread()
