@@ -22,8 +22,9 @@ from . import __version__
 from . import modules
 from .Interfaces import InterfaceDirectory
 from .devices import getDeviceClass
-from .devices.Device import Device, DeviceTask, DeviceLocker
+from .devices.Device import Device, DeviceTask, DeviceLocker, get_devices_held_by_thread
 from .logging_config import get_logger, set_log_file
+from .util.gentle import GuiPromise, synch
 from .util import DataManager, ptime, Qt
 from .util.DataManager import DirHandle
 from .util.HelpfulException import HelpfulException
@@ -481,7 +482,25 @@ class Manager(Qt.QObject):
         """Execute a motion plan for one or more MoveSpec objects.
 
         Returns a Future that resolves when all moves are complete.
+
+        If the calling thread already holds device reservations, the plan is executed
+        inline in this thread rather than on a worker thread. The planner reserves the
+        plan's devices via reserveDevices(); the reservation mutex is recursive only
+        within the holding thread, so a worker thread would block forever waiting on a
+        device this thread already holds (e.g. a focus move inside a z-stack that has
+        reserved the Stage). Running inline re-enters the existing reservation. The
+        returned Future is already resolved in that case.
         """
+        if get_devices_held_by_thread():
+            # Run the plan inline in this thread (re-entering the recursive
+            # per-thread reservation) instead of on a worker thread, then hand
+            # back an already-resolved task so callers' wait()/signals still work.
+            move = GuiPromise(name=name or "move")
+            try:
+                move.resolve(synch(self.motionPlanner.execute)(list(specs), name=name))
+            except BaseException as exc:
+                move.fail(exc)
+            return move
         return self.motionPlanner.execute(list(specs), name=name)
 
     def getOrLoadModule(self, name):

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -22,6 +23,24 @@ if TYPE_CHECKING:
     from .AutomationDebug import AutomationDebugWindow
 
 logger = get_logger(__name__)
+
+
+def _health_model_config(manager) -> dict:
+    """Health-model paths and score cutoffs from the global ``misc`` config.
+
+    Shared by neuron detection and the annotation-tool launch so both use the same
+    configured models. ``scoreCutoffs`` is an ascending list mapping a ranking
+    model's raw scores onto the 0-5 rating bins (see
+    acq4_automation.compute_score_cutoffs); None falls back to equal-width bins.
+    """
+    misc = manager.config.get("misc", {})
+    return {
+        "segmenter": misc.get("segmenterPath", None),
+        "autoencoder": misc.get("autoencoderPath", None),
+        "classifier": misc.get("classifierPath", None),
+        "resnet_classifier": misc.get("resnetClassifierPath", None),
+        "score_cutoffs": misc.get("scoreCutoffs", None),
+    }
 
 
 class CellDetector:
@@ -48,8 +67,8 @@ class CellDetector:
             cell = Cell(target)
             cell.initializeTracker(self._window.cameraDevice).wait()
         self._window._unranked_cells.append(cell)
-        boxPositions = [c.position for c in self._window._unranked_cells]
-        futureInGuiThread(self._displayBoundingBoxes, boxPositions).wait()
+        cells = list(self._window._unranked_cells)
+        futureInGuiThread(self._displayBoundingBoxes, cells).wait()
 
     @gui_asynch
     def _testUI(self):
@@ -77,10 +96,11 @@ class CellDetector:
 
         pixel_size = win.cameraDevice.getPixelSize()[0]  # Used for both real and mock
         man = win.module.manager
-        segmenter = man.config.get("misc", {}).get("segmenterPath", None)
-        autoencoder = man.config.get("misc", {}).get("autoencoderPath", None)
-        classifier = man.config.get("misc", {}).get("classifierPath", None)
-        resnet_classifier = man.config.get("misc", {}).get("resnetClassifierPath", None)
+        models = _health_model_config(man)
+        segmenter = models["segmenter"]
+        autoencoder = models["autoencoder"]
+        classifier = models["classifier"]
+        resnet_classifier = models["resnet_classifier"]
         step_z = 1 * µm  # can be updated by mock metadata
         depth = win.cameraDevice.getFocusDepth()
         classification_stack = None  # Initialize as None
@@ -139,7 +159,25 @@ class CellDetector:
 
         win.cameraDevice.setFocusDepth(depth, name=f"{win.cameraDevice.name()} restore focus after detection z-stack")  # Restore focus
 
-        global_pos = detect_neurons(
+        # Persist this detection session under one base name so the saved z-stack,
+        # cellpose masks, and annotations share the annotation tool's naming scheme
+        # and reload together. The base is shared with the annotation tool launched
+        # in _handleDetectResults.
+        win.annotation_base_name = datetime.datetime.now().strftime(
+            "in_memory_stack_%Y%m%d_%H%M%S_%f"
+        )
+        annotation_save_dir = win.annotation_save_dir
+        if annotation_save_dir is None:
+            logger.warning(
+                "No annotation save directory available (set misc/cellAnnotationDir, "
+                "or configure a storage directory); the detection z-stack, cellpose "
+                "masks, and annotations will not be saved alongside the data."
+            )
+            save_prefix = None
+        else:
+            save_prefix = str(annotation_save_dir / win.annotation_base_name)
+
+        detection_results = detect_neurons(
             working_stack,  # Prepared based on mock/real and single/multi
             segmenter=segmenter,
             autoencoder=autoencoder,
@@ -150,13 +188,19 @@ class CellDetector:
             multichannel=multichannel,  # Actual flag for detect_neurons
             trim_edges=True,
             min_volume_m3=win.ui.minVolumeSpin.value(),
+            n=None,
+            save_prefix=save_prefix,
         ).wait(timeout=600)
-        logger.info(f"Neuron detection finished. Found {len(global_pos)} potential neurons.")
+        logger.info(f"Neuron detection finished. Found {len(detection_results)} potential neurons.")
 
         win._current_detection_stack = detection_stack
         win._current_classification_stack = classification_stack
-        win._unranked_cells = [Cell(r) for r in global_pos]
-        return global_pos
+        win._unranked_cells = []
+        for pos, score in detection_results:
+            cell = Cell(pos)
+            cell.score = score
+            win._unranked_cells.append(cell)
+        return detection_results
 
     def _handleDetectResults(self, future: Task) -> None:
         """Handles results from _detectNeuronsZStack or _testUI."""
@@ -175,12 +219,26 @@ class CellDetector:
                 logger.info("No detection stack available, skipping annotation tool launch.")
                 return
 
+            # Extract plain positions for annotation tool (neurons may be (pos, score) tuples)
+            positions = [pos for pos, _ in neurons] if neurons and isinstance(neurons[0], tuple) else neurons
             stack = np.asarray([frame.data().T for frame in win._current_detection_stack])
-            frame_to_global = win._current_detection_stack[0].globalTransform().inverse
-            centers_ijk = [np.abs(frame_to_global.map(n)[::-1]) for n in neurons]
+            stack_transform = win._current_detection_stack[0].globalTransform()
+            frame_to_global = stack_transform.inverse
+            centers_ijk = [np.abs(frame_to_global.map(n)[::-1]) for n in positions]
+
+            win._annotation_stack_transform = stack_transform
+
+            def _center_camera_on_cell(context, _win=win):
+                if _win._annotation_stack_transform is None:
+                    return
+                global_pos = _win._annotation_stack_transform.map(context.center_ijk[::-1])
+                _win.cameraDevice.moveCenterToGlobal(global_pos, speed='fast')
 
             if win._annotation_tool is not None:
                 win._annotation_tool.close()
+            # Same configured health models as detection, plus score cutoffs, so the
+            # annotation tool re-scores the detected cells and bins them consistently.
+            models = _health_model_config(win.module.manager)
             win._annotation_tool = open_annotation_tool_with_detections(
                 stack=stack,
                 cell_centers_ijk=centers_ijk,
@@ -188,6 +246,14 @@ class CellDetector:
                 z_scale=1.0e-6,
                 preserve_order=True,  # Keep healthy-first order
                 filter=False,  # No extra filtering
+                transpose_display=True,  # stack is (n_frames, Y, X) after .T; row-major matches camera module orientation
+                custom_buttons=[("Center Camera", _center_camera_on_cell)],
+                save_dir=win.annotation_save_dir,
+                base_name=win.annotation_base_name,
+                classifier=models["classifier"],
+                autoencoder=models["autoencoder"],
+                resnet_classifier=models["resnet_classifier"],
+                score_cutoffs=models["score_cutoffs"],
             )
 
             # from acq4_automation.object_detection import NeuronBoxViewer
@@ -207,19 +273,23 @@ class CellDetector:
         self.clearBoundingBoxes()  # Clear previous boxes visually and state
         rois_visible = win.ui.showRoisBtn.isChecked()
         for neuron in neurons:
-            start, end = np.array(neuron) - 10e-6, np.array(neuron) + 10e-6
-            box = TargetBox(start, end)
+            if isinstance(neuron, tuple):
+                pos, score = neuron
+                pos = np.array(pos)
+            elif hasattr(neuron, 'position'):
+                pos = np.array(neuron.position.coordinates)
+                score = getattr(neuron, 'score', None)
+            else:
+                pos = np.array(neuron)
+                score = None
+            start, end = pos - 10e-6, pos + 10e-6
+            label = f"{score:.0%}" if score is not None else None
+            box = TargetBox(start, end, label=label)
+            box.noticeFocusChange(win.scopeDevice, None)  # initialize opacity for current focus depth
             box.setVisible(rois_visible)
             cam_win.addItem(box)
-            # TODO: Re-evaluate if this connection is still needed or causes issues
             win.scopeDevice.sigGlobalTransformChanged.connect(box.noticeFocusChange)
             win._previousBoxWidgets.append(box)
-            # TODO label boxes? Maybe add index number?
-            # label = pg.TextItem(f'{len(win._previousBoxWidgets)}') # Example index
-            # label.setPen(pg.mkPen('r', width=1))
-            # label.setPos(*end)
-            # cam_win.addItem(label)
-            # win._previousBoxWidgets.append(label)
 
     def clearCells(self):
         self._window._unranked_cells = []

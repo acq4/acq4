@@ -39,6 +39,10 @@ class AutomationDebugWindow(Qt.QWidget):
     def __init__(self, module: "AutomationDebug"):
         super().__init__()
         self._annotation_tool = None
+        self._annotation_stack_transform = None
+        # Base name shared by a detection session's saved z-stack, cellpose masks,
+        # and annotations; set when a detection run starts.
+        self.annotation_base_name = None
         self.ui = UiTemplate()
         self.ui.setupUi(self)
 
@@ -223,6 +227,25 @@ class AutomationDebugWindow(Qt.QWidget):
         )
         self.ui.rankCellsBtn.setEnabled(len(self._unranked_cells) > 0)
         # self.ui.autopatchDemoBtn.setEnabled(working == self.ui.autopatchDemoBtn or not working)
+
+    @property
+    def annotation_save_dir(self) -> Path | None:
+        """Directory in which to save cell annotations (and the detection z-stack and
+        cellpose masks) from the detection workflow.
+
+        Uses the configured ``misc/cellAnnotationDir`` if set, otherwise a
+        ``cell_annotations`` subdirectory of the data storage directory. None when
+        neither is available, in which case the annotation tool falls back to the
+        working directory.
+        """
+        manager = self.module.manager
+        configured = manager.config.get("misc", {}).get("cellAnnotationDir", None)
+        if configured:
+            return Path(configured)
+        base = manager.getBaseDir()
+        if base is not None:
+            return Path(base.name()) / "cell_annotations"
+        return None
 
     @property
     def cameraDevice(self) -> Camera:
