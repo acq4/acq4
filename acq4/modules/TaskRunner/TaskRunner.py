@@ -20,7 +20,7 @@ from acq4.util.StatusBar import StatusBar
 from acq4.util.Thread import Thread
 from pyqtgraph.debug import Profiler
 from pyqtgraph.util.mutex import Mutex
-from acq4.util.future import Future
+from acq4.util.gentle import GuiPromise
 from . import analysisModules
 from ..Module import Module
 from ...logging_config import get_logger
@@ -1027,11 +1027,11 @@ class TaskThread(Thread):
             self.task = None  ## free up this memory
             self.paramSpace = None
             logger.exception("Error in task thread, exiting.")
-            self._currentFuture._taskDone(interrupted=True, excInfo=sys.exc_info())
+            self._currentFuture.fail(exc)
             self._currentFuture = None
             self.sigExitFromError.emit()
         else:
-            self._currentFuture._taskDone()
+            self._currentFuture.resolve()
             self._currentFuture = None
 
     def runOnce(self, params=None):
@@ -1171,10 +1171,16 @@ class TaskThread(Thread):
                 self.abortThread = True
 
 
-class TaskFuture(Future):
+class TaskFuture(GuiPromise):
     """Used to check on progress for a running task or task sequence.
 
     Instances of this class are returned from TaskRunner.runSingle() and .runSequence().
+
+    This is an externally-completed GuiPromise: it has no body and spawns no
+    thread. The TaskThread is the producer; it completes this promise by calling
+    ``resolve()`` when the run finishes and ``fail(exc)`` on error. Stopping
+    tells the TaskThread to halt (which polls its own stopThread flag), then
+    completes this promise via GuiPromise.stop().
 
     Results are stored in self.results if the future is initialized with
     collectResults=True (this is False by default to avoid memory overuse).
@@ -1187,14 +1193,14 @@ class TaskFuture(Future):
         self._taskCount = 0
         self._collectResults = collectResults
         self.results = []
-        Future.__init__(self, name='TaskRunnerFuture')
+        GuiPromise.__init__(self, name='TaskRunnerFuture')
 
     def percentDone(self):
         return self._taskCount / self._nTasks
 
     def stop(self, *args, **kwds):
         self._taskThread.stop(task=self._task)
-        return Future.stop(self, *args, **kwds)
+        return GuiPromise.stop(self, *args, **kwds)
 
     def newFrame(self, frame):
         if self._collectResults:

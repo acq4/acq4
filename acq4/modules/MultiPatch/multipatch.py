@@ -16,7 +16,7 @@ from neuroanalysis.test_pulse_stack import H5BackedTestPulseStack
 from .mockPatch import MockPatch
 from .pipetteControl import PipetteControl
 from ...devices.PatchPipette.statemanager import PatchPipetteStateManager
-from ...util.future import MultiFuture, future_wrap
+from ...util.gentle import MultiFuture, asynch, raise_errors, run_in_gui_thread
 from ...util.json_encoder import ACQ4JSONEncoder
 
 Ui_MultiPatch = Qt.importTemplate('.multipatchTemplate')
@@ -125,22 +125,22 @@ class MultiPatchWindow(Qt.QWidget):
 
         common_opts = dict(stoppable=True, failure="FAILED!", showStatus=False)
 
-        self.ui.homeBtn.setOpts(future_producer=self._moveHome, **common_opts)
-        self.ui.nucleusHomeBtn.setOpts(future_producer=self._nucleusHome, raiseOnError=False, **common_opts)
-        self.ui.coarseSearchBtn.setOpts(future_producer=self._coarseSearch, **common_opts)
-        self.ui.fineSearchBtn.setOpts(future_producer=self._fineSearch, **common_opts)
-        self.ui.aboveTargetBtn.setOpts(future_producer=self._aboveTarget, **common_opts)
-        self.ui.autoFindTipBtn.setOpts(future_producer=self._autoFindTip, **common_opts)
-        self.ui.cellDetectBtn.setOpts(future_producer=self._cellDetect, raiseOnError=False, **common_opts)
-        self.ui.breakInBtn.setOpts(future_producer=self._breakIn, raiseOnError=False, **common_opts)
-        self.ui.toTargetBtn.setOpts(future_producer=self._toTarget, **common_opts)
-        self.ui.sealBtn.setOpts(future_producer=self._seal, raiseOnError=False, **common_opts)
-        self.ui.reSealBtn.setOpts(future_producer=self._reSeal, raiseOnError=False, **common_opts)
-        self.ui.reSealNoNuzzleBtn.setOpts(future_producer=self._reSealNoNuzzle, raiseOnError=False, **common_opts)
-        self.ui.refillBtn.setOpts(future_producer=self._refill, raiseOnError=False, **common_opts)
-        self.ui.approachBtn.setOpts(future_producer=self._approach, raiseOnError=False, **common_opts)
-        self.ui.cleanBtn.setOpts(future_producer=self._clean, raiseOnError=False, **common_opts)
-        self.ui.collectBtn.setOpts(future_producer=self._collect, raiseOnError=False, **common_opts)
+        self.ui.homeBtn.setOpts(task_producer=self._moveHome, **common_opts)
+        self.ui.nucleusHomeBtn.setOpts(task_producer=self._nucleusHome, raiseOnError=False, **common_opts)
+        self.ui.coarseSearchBtn.setOpts(task_producer=self._coarseSearch, **common_opts)
+        self.ui.fineSearchBtn.setOpts(task_producer=self._fineSearch, **common_opts)
+        self.ui.aboveTargetBtn.setOpts(task_producer=self._aboveTarget, **common_opts)
+        self.ui.autoFindTipBtn.setOpts(task_producer=self._autoFindTip, **common_opts)
+        self.ui.cellDetectBtn.setOpts(task_producer=self._cellDetect, raiseOnError=False, **common_opts)
+        self.ui.breakInBtn.setOpts(task_producer=self._breakIn, raiseOnError=False, **common_opts)
+        self.ui.toTargetBtn.setOpts(task_producer=self._toTarget, **common_opts)
+        self.ui.sealBtn.setOpts(task_producer=self._seal, raiseOnError=False, **common_opts)
+        self.ui.reSealBtn.setOpts(task_producer=self._reSeal, raiseOnError=False, **common_opts)
+        self.ui.reSealNoNuzzleBtn.setOpts(task_producer=self._reSealNoNuzzle, raiseOnError=False, **common_opts)
+        self.ui.refillBtn.setOpts(task_producer=self._refill, raiseOnError=False, **common_opts)
+        self.ui.approachBtn.setOpts(task_producer=self._approach, raiseOnError=False, **common_opts)
+        self.ui.cleanBtn.setOpts(task_producer=self._clean, raiseOnError=False, **common_opts)
+        self.ui.collectBtn.setOpts(task_producer=self._collect, raiseOnError=False, **common_opts)
 
         self.ui.profileCombo.currentIndexChanged.connect(self.profileComboChanged)
         self.ui.editProfileBtn.clicked.connect(self.openProfileEditor)
@@ -287,13 +287,13 @@ class MultiPatchWindow(Qt.QWidget):
             futures.append(pip.pipetteDevice.goAboveTarget(speed))
         return MultiFuture(futures, name="Move pipettes above target")
 
-    @future_wrap
-    def _autoFindTip(self, max_reps=10, _future=None):
+    @asynch
+    def _autoFindTip(self, max_reps=10):
         work_to_do = self.selectedPipettes()
         while work_to_do:
             patchpip = work_to_do.pop(0)
             pip = patchpip.pipetteDevice if isinstance(patchpip, PatchPipette) else patchpip
-            _future.waitFor(pip.iterativelyFindTip(max_reps=max_reps), timeout=None)
+            pip.iterativelyFindTip(max_reps=max_reps).wait(timeout=None)
 
     def _cellDetect(self):
         return self._setAllSelectedPipettesToState('cell detect')
@@ -401,19 +401,25 @@ class MultiPatchWindow(Qt.QWidget):
         pos = self._cammod.window().getView().mapSceneToView(ev.scenePos())
         spos = pip.scopeDevice().globalPosition()
         pos = [pos.x(), pos.y(), spos[2]]
-        tip_future = pip.setTipOffsetIfAcceptable(pos)
-        tip_future.onFinish(self._handleManualSetTip, pip, inGui=True)
+        tip_task = pip.setTipOffsetIfAcceptable(pos)
+        tip_task.add_finish_callback(
+            lambda result, exc: run_in_gui_thread(self._handleManualSetTip, result, exc, pip)
+        )
 
-    def _handleManualSetTip(self, future, pip):
-        success = future.getResult()
+    def _handleManualSetTip(self, success, exc, pip):
+        if exc is not None:
+            raise exc
         if not success:
             self._pipsToSetTips.insert(0, pip)
             return
 
         if self._shouldSaveTipImages:
-            pip.saveManualTipPosition(
-                stack=self.module.config.get("useStacksForSavedTipImages", True)
-            ).raiseErrors("Failed to save tip images")
+            raise_errors(
+                pip.saveManualTipPosition(
+                    stack=self.module.config.get("useStacksForSavedTipImages", True)
+                ),
+                "Failed to save tip images: {error}",
+            )
 
         if len(self._pipsToSetTips) == 0:
             self.ui.setTipBtn.setChecked(False)
