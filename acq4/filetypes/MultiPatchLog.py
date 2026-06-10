@@ -885,6 +885,7 @@ class MultiPatchLogWidget(Qt.QWidget):
             fields=('access_resistance',),
             access_resistance_threshold=config['accessResistanceThreshold'],
             detection_tau=config['detectionTau'],
+            max_test_pulse_gap=config['maxTestPulseGap'],
         )
 
     def _toggleClearAccessAnalysis(self, state: bool):

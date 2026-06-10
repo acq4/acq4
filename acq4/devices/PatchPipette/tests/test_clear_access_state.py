@@ -1,15 +1,15 @@
-"""Integration tests for the whole cell -> clear access -> (whole cell | fouled) state wiring.
+"""Integration tests for the whole cell warning and clear access -> (whole cell | fouled) wiring.
 
-These drive the real state ``run()`` methods against a lightweight fake device, feeding test
-pulses through the state's queue and asserting on the returned next-state transition. They cover
-the state machine glue; the rolling-average decision logic itself is unit tested separately.
+These drive the real state logic against a lightweight fake device, feeding test pulses through the
+state's queue and asserting on the resulting warning or next-state transition. They cover the state
+machine glue; the rolling-average decision logic itself is unit tested separately.
 """
 from __future__ import annotations
 
 import numpy as np
 import pytest
 
-from acq4.devices.PatchPipette.states.whole_cell import WholeCellState
+from acq4.devices.PatchPipette.states.whole_cell import WholeCellAnalysis, WholeCellState
 from acq4.devices.PatchPipette.states.clear_access import ClearAccessState
 
 
@@ -54,9 +54,13 @@ class _FakeDev:
         self.pressureDevice = _FakePressure()
         self.pipetteDevice = _FakePipette()
         self._patchrec = {}
+        self.accessWarnings = []
 
     def patchRecord(self):
         return self._patchrec
+
+    def setAccessWarning(self, active, message=""):
+        self.accessWarnings.append((bool(active), message))
 
 
 class _FakeTestPulse:
@@ -79,16 +83,45 @@ def dev(qapp):
     return _FakeDev()
 
 
-def test_whole_cell_hands_off_to_clear_access_when_access_climbs(dev):
-    state = _make_state(
-        WholeCellState, dev,
-        accessResistanceThreshold=30e6, detectionTau=1.0, troubleState='clear access',
+def _wholeCellMonitor(dev, **config):
+    """Build a WholeCellState wired with its analysis the way run() does, ready for
+    updateAccessWarning() without entering the infinite hold loop."""
+    config.setdefault('accessResistanceThreshold', 30e6)
+    config.setdefault('detectionTau', 1.0)
+    config.setdefault('maxTestPulseGap', 5.0)
+    state = _make_state(WholeCellState, dev, **config)
+    state._analysis = WholeCellAnalysis(
+        access_resistance_threshold=config['accessResistanceThreshold'],
+        detection_tau=config['detectionTau'],
+        max_test_pulse_gap=config['maxTestPulseGap'],
     )
+    state._warningActive = False
+    return state
+
+
+def test_whole_cell_warns_but_does_not_switch_when_access_climbs(dev):
+    state = _wholeCellMonitor(dev)
     # A ramp of rising access resistance ending well above threshold.
-    for i, ra in enumerate(np.linspace(10e6, 80e6, 30)):
-        state.testPulseResults.put(_FakeTestPulse(i * 0.5, ra))
-    result = state.run()
-    assert result == {"state": "clear access"}
+    tps = [_FakeTestPulse(i * 0.5, ra) for i, ra in enumerate(np.linspace(10e6, 80e6, 30))]
+    result = state.updateAccessWarning(tps)
+    # Whole cell stays put (no state transition) and raises a warning instead.
+    assert result is None
+    assert state._warningActive
+    active, message = dev.accessWarnings[-1]
+    assert active is True
+    assert "clear access" in message
+
+
+def test_whole_cell_warning_clears_when_access_recovers(dev):
+    state = _wholeCellMonitor(dev)
+    # Climb past threshold -> warn.
+    state.updateAccessWarning([_FakeTestPulse(i * 0.5, ra) for i, ra in enumerate(np.linspace(10e6, 80e6, 30))])
+    assert dev.accessWarnings[-1][0] is True
+    assert state._warningActive
+    # Then Ra falls back down -> the warning clears on its own.
+    state.updateAccessWarning([_FakeTestPulse(15.0 + i * 0.5, 10e6) for i in range(30)])
+    assert dev.accessWarnings[-1][0] is False
+    assert not state._warningActive
 
 
 def test_clear_access_returns_to_whole_cell_on_recovery(dev):
