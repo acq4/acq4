@@ -64,6 +64,13 @@ class MockClamp(PatchClamp):
             local_server="threaded",
             log_addr=log_server.address,
         )
+        # Re-establish the gentletask throughline in the child so remote calls
+        # carry our task context for logging/ancestry. Best-effort: a child
+        # without gentletask simply skips it.
+        try:
+            self.process.client._import('teleprox.throughline').enable_throughline_propagation()
+        except Exception:
+            self.logger.debug("Could not enable throughline propagation in MockClamp process", exc_info=True)
         rsys = self.process.client._import('sys')
         rsys.path.append(os.path.abspath(os.path.dirname(__file__)))
         if config['simulator'] == 'builtin':

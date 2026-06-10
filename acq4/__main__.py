@@ -63,6 +63,12 @@ setup_logging("temp_log.json", gui=True, console_level=console_log_level, root_l
 logger = logging.getLogger(__name__)
 logger.info("Loading ACQ4...")
 
+# Propagate the gentletask throughline across teleprox process boundaries (parent
+# side: serialize our task context into outgoing remote calls). Child processes
+# are enabled remotely where they are spawned. No-op if gentletask is unavailable.
+from teleprox import throughline as _throughline
+_throughline.enable_throughline_propagation()
+
 
 if args.teleprox is not None:
     from teleprox import RPCServer
