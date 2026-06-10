@@ -89,14 +89,8 @@ class BathState(PatchPipetteState):
 
             if config['breakThreshold'] is not None and (ssr < initialResistance + config['breakThreshold']):
                 self.setState(f"Pipette break detected using `breakThreshold`; {ssr * 1e-6:0.2f}MOhm < {(initialResistance + config['breakThreshold']) * 1e-6:0.2f}MOhm")
-                self.setResult(
-                    error=f"Pipette break detected using `breakThreshold`; {ssr * 1e-6:0.2f}MOhm < {(initialResistance + config['breakThreshold']) * 1e-6:0.2f}MOhm",
-                )
                 return {"state": 'broken'}
 
             if config['clogThreshold'] is not None and (ssr > initialResistance + config['clogThreshold']):
-                self.setState('clogged pipette detected')
-                self.setResult(
-                    error=f"Pipette clog detected using `clogThreshold`; {ssr * 1e-6:0.2f}MOhm > {(initialResistance + config['clogThreshold']) * 1e-6:0.2f}MOhm",
-                )
+                self.setState(f"Pipette clog detected using `clogThreshold`; {ssr * 1e-6:0.2f}MOhm > {(initialResistance + config['clogThreshold']) * 1e-6:0.2f}MOhm")
                 return {"state": 'fouled'}

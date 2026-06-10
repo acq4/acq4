@@ -77,8 +77,8 @@ class CellAttachedState(PatchPipetteState):
             tp = tps[-1]
             holding = tp.analysis['baseline_current']
             if holding < self.config['holdingCurrentThreshold']:
-                self.setResult(
-                    error=f'Spontaneous detachment: holding current {holding * 1e9:.2f}nA is below `holdingCurrentThreshold`.',
+                self.setState(
+                    f'Spontaneous detachment: holding current {holding * 1e9:.2f}nA is below `holdingCurrentThreshold`.'
                 )
                 return {"state": config['spontaneousDetachmentState']}
 
@@ -94,8 +94,8 @@ class CellAttachedState(PatchPipetteState):
                 return {"state": config['spontaneousBreakInState']}
 
             if ssr_avg < config['resistanceThreshold']:
-                self.setResult(
-                    error=f'Spontaneous detachment: steady state resistance {ssr_avg / 1e6:.1f}MΩ dropped below `resistanceThreshold`.',
+                self.setState(
+                    f'Spontaneous detachment: steady state resistance {ssr_avg / 1e6:.1f}MΩ dropped below `resistanceThreshold`.'
                 )
                 return {"state": config['spontaneousDetachmentState']}
 

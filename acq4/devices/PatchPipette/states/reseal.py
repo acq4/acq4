@@ -8,7 +8,7 @@ import pyqtgraph as pg
 from acq4.util import ptime
 from acq4.util.debug import log_and_ignore_exception
 from acq4.util.functions import plottable_booleans
-from acq4.util.future import Future, future_wrap
+from acq4.util.gentle import asynch, check_stop, sleep, Stopped
 from ._base import PatchPipetteState, SteadyStateAnalysisBase, exponential_decay_avg
 
 
@@ -345,13 +345,13 @@ class ResealState(PatchPipetteState):
             timeout=None,
         )
 
-    @future_wrap
-    def startRollingResistanceThresholds(self, _future: Future):
+    @asynch
+    def startRollingResistanceThresholds(self):
         """Start a rolling average of the resistance to detect stretching and tearing. Load the first 20s of data."""
         self.monitorTestPulse()
         start = ptime.time()
         while ptime.time() - start < self.config['repairTau']:
-            _future.checkStop()
+            check_stop()
             self.processAtLeastOneTestPulse()
 
     def isStretching(self) -> bool:
@@ -444,7 +444,7 @@ class ResealState(PatchPipetteState):
                 config['resealTimeout'] is not None
                 and ptime.time() - start_time > config['resealTimeout']
             ):
-                self.setResult(interrupted=True, error="Took longer than `resealTimeout` attempting to reseal.")
+                self.setState(f"{self.stateName} failed: Took longer than `resealTimeout` attempting to reseal.")
                 return {
                     "state": config['fallbackState'],
                     "initialPressure": config['initialPressure'],
@@ -454,11 +454,11 @@ class ResealState(PatchPipetteState):
             self.processAtLeastOneTestPulse()
 
             if self.isStretching():
-                if retraction_future and not retraction_future.isDone():
+                if retraction_future and not retraction_future.is_done:
                     self.setState("handling stretch")
                     retraction_future.stop()
             elif self.isTearing():
-                if retraction_future and not retraction_future.isDone():
+                if retraction_future and not retraction_future.is_done:
                     self.setState("handling tear")
                     retraction_future.stop()
                     self._moveFuture = recovery_future = dev.pipetteDevice.stepwiseAdvance(
@@ -469,22 +469,32 @@ class ResealState(PatchPipetteState):
                         name='reseal tear recovery',
                     )
             elif self.isTorn():
-                if retraction_future and not retraction_future.isDone():
+                if retraction_future and not retraction_future.is_done:
                     retraction_future.stop()
                 self.setState("tissue is torn beyond repair")
-                self.setResult(error="Tissue is torn beyond repair (via `tornDetectionThreshold`).")
+                self.setState(f"{self.stateName} failed: Tissue is torn beyond repair (via `tornDetectionThreshold`).")
                 return {
                     "state": config['fallbackState'],
                     "initialPressure": config['initialPressure'],
                     "initialPressureSource": config['initialPressureSource'],
                 }
 
-            elif retraction_future is None or retraction_future.wasInterrupted():
+            elif retraction_future is None or retraction_future.is_stopped:
                 if retraction_future is not None:
-                    retraction_future.logErrors("Reseal retraction error")
+                    retraction_future.add_finish_callback(
+                        lambda result, exc, _m="Reseal retraction error": self.logger.error(
+                            _m, exc_info=(type(exc), exc, exc.__traceback__)
+                        ) if exc is not None and not isinstance(exc, Stopped) else None
+                    )
                 if recovery_future is not None:
-                    recovery_future.stop(wait=True)
-                    recovery_future.logErrors("Reseal recovery error")
+                    recovery_future.stop()
+                    with contextlib.suppress(Stopped):
+                        recovery_future.wait()
+                    recovery_future.add_finish_callback(
+                        lambda result, exc, _m="Reseal recovery error": self.logger.error(
+                            _m, exc_info=(type(exc), exc, exc.__traceback__)
+                        ) if exc is not None and not isinstance(exc, Stopped) else None
+                    )
                 self.setState("retracting")
                 self._moveFuture = retraction_future = dev.pipetteDevice.stepwiseAdvance(
                     depth=dev.pipetteDevice.approachDepth(),
@@ -504,7 +514,9 @@ class ResealState(PatchPipetteState):
             self.sleep(0.2)
 
         if self._moveFuture is not None:
-            self._moveFuture.stop(wait=True)
+            self._moveFuture.stop()
+            with contextlib.suppress(Stopped):
+                self._moveFuture.wait()
         self.setState("retracting pipette from surface")
         self._moveFuture = self._retractFromTissue()
         self.waitFor(self._moveFuture)

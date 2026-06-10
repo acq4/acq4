@@ -10,15 +10,16 @@ from typing import Any, Optional, Iterable
 import numpy as np
 
 from acq4 import getManager
+from acq4.logging_config import get_logger
 from acq4.util import Qt
 from acq4.util.debug import log_and_ignore_exception
-from acq4.util.future import Future, future_wrap
+from acq4.util.gentle import GuiTask, GuiPromise, Task, asynch, check_stop, sleep, Stopped
 from neuroanalysis.test_pulse import PatchClampTestPulse
 from pyqtgraph import disconnect
 from pyqtgraph.units import µm
 
 
-class PatchPipetteState(Future):
+class PatchPipetteState(GuiTask):
     """Base class for implementing the details of a patch pipette state:
 
     - Set initial pressure, clamp parameters, position, etc when starting the state
@@ -134,8 +135,19 @@ class PatchPipetteState(Future):
         from acq4.devices.PatchPipette import PatchPipette
 
         self._targetHasChanged = False
-        Future.__init__(self, name=f"State {self.stateName} for {dev}")
+        # The state IS the task; its body is self.runJob. start=False so the state
+        # manager can connect signals before calling start(). GuiTask.__init__
+        # initializes the QObject half, so anything that connects Qt signals (e.g.
+        # sigTargetChanged below) must run AFTER this call.
+        GuiTask.__init__(
+            self,
+            self.runJob,
+            name=f"State {self.stateName} for {dev}",
+            start=False,
+            on_finish=self._stateFinished,
+        )
         self.dev: PatchPipette = dev
+        self.logger = get_logger(f"{__name__}.State {self.stateName} for {dev}")
 
         # generate full config by combining passed-in arguments with default config
         self.config = self.defaultConfig()
@@ -151,23 +163,20 @@ class PatchPipetteState(Future):
         self.nextState = {"state": self.config.get('fallbackState', None)}
         self.dev.sigTargetChanged.connect(self._onTargetChanged)
 
-    def start(self):
-        """Start a background thread that executes this state. This should only be called by the state manager.
+    def _stateFinished(self, result, exc):
+        """on_finish callback: reproduce the old setResult error/stop messaging.
 
-        When runJob completes, self.sigFinished will be emitted."""
-        self.executeInThread(self.runJob, args=(), kwds={})
-
-    def setResult(self, *args, **kwargs):
-        if 'error' in kwargs:
-            self.setState(f"{self.stateName} failed: {kwargs['error']}")
-        if 'excInfo' in kwargs and kwargs['excInfo'] is not None:
-            exc_type, exc_value, _ = kwargs['excInfo']
-            if issubclass(exc_type, Future.StopRequested):
-                self.dev.logger.debug(f"{self.stateName} stopped: {exc_value}")
-            else:
-                self.setState(f"Exception in {self.stateName}: {exc_type.__name__}: {exc_value}")
-                self.dev.logger.error(f"Exception in {self.stateName}:", exc_info=kwargs['excInfo'])
-        super().setResult(*args, **kwargs)
+        GuiTask invokes this before emitting sigFinished. A cooperative Stopped is
+        logged at debug; any other exception updates the state and is logged as an
+        error.
+        """
+        if isinstance(exc, Stopped):
+            self.dev.logger.debug(f"{self.stateName} stopped: {exc}")
+        elif exc is not None:
+            self.setState(f"Exception in {self.stateName}: {type(exc).__name__}: {exc}")
+            self.dev.logger.error(
+                f"Exception in {self.stateName}:", exc_info=(type(exc), exc, exc.__traceback__)
+            )
 
     def initialize(self):
         if self.config.get('finishPatchRecord') is True:
@@ -178,7 +187,7 @@ class PatchPipetteState(Future):
         self.initializePressure()
         self.initializeClamp()
 
-    def runJob(self, _future):  # _future is self
+    def runJob(self):
         """Called in background thread to start the state.
 
         Initialize pressure, clamp, etc. and run the subclass-defined run() method if it exists.
@@ -296,10 +305,10 @@ class PatchPipetteState(Future):
         """While not that slow, we still want to keep the innermost loop as fast as we can."""
         if self._pressureAdjustment is None:
             self._pressureAdjustment = self._adjustPressureForDepth()
-            self._pressureAdjustment.onFinish(self._finishPressureAdjustment)
+            self._pressureAdjustment.add_finish_callback(self._finishPressureAdjustment)
 
-    @future_wrap(logLevel='debug')
-    def _adjustPressureForDepth(self, _future):
+    @asynch
+    def _adjustPressureForDepth(self):
         depth = self.depthBelowSurface()
         if depth < 0:  # above surface
             pressure = self.config["aboveSurfacePressure"]
@@ -308,30 +317,50 @@ class PatchPipetteState(Future):
             pressure = min(pressure, self.config["belowSurfacePressureMax"])
         self.dev.pressureDevice.setPressure("regulator", pressure)
 
-    def _finishPressureAdjustment(self, future):
+    def _finishPressureAdjustment(self, result, exc):
         self._pressureAdjustment = None
 
-    def cleanup(self) -> Future:
+    def cleanup(self) -> Task:
         with self._cleanupMutex:
             if self._cleanupFuture is None:
                 self._cleanupFuture = self._cleanup()
             return self._cleanupFuture
 
-    def _cleanup(self) -> Future:
+    def _cleanup(self) -> Task:
         """Called after job completes, whether it failed or succeeded. Ask `self.wasInterrupted()` to see if the
-        state was stopped early. Return a Future that completes when cleanup is done.
+        state was stopped early. Return a task that completes when cleanup is done.
         """
         disconnect(self.dev.sigTargetChanged, self._onTargetChanged)
         with log_and_ignore_exception(Exception, "Error disabling visual target tracking"):
             if self.dev.cell is not None:
                 self.stopVisualTargetTracking('cleaning up state')
-        return Future.immediate()
+        p = GuiPromise(name=f"{self.stateName} cleanup")
+        p.resolve()
+        return p
 
     def checkStop(self):
         # extend checkStop to also see if the pipette was deactivated.
         if self.dev.active is False:
-            raise self.StopRequested("Stop state because device is not 'active'")
-        Future.checkStop(self)
+            self.stop("Stop state because device is not 'active'")
+        check_stop()
+
+    def setState(self, state):
+        """Set the current state message, emitting sigStateChanged."""
+        self.set_state(state)
+
+    def sleep(self, duration):
+        """Sleep for *duration* seconds, raising Stopped if the state is stopped."""
+        sleep(duration)
+
+    def waitFor(self, task, timeout=None):
+        """Block until *task* completes, returning its result.
+
+        A stop on this state cascades to the awaited task automatically.
+        """
+        return task.wait(timeout)
+
+    def wasInterrupted(self):
+        return self.is_stopped
 
     def __repr__(self):
         return f'<{type(self).__name__} "{self.stateName}">'
@@ -368,7 +397,7 @@ class PatchPipetteState(Future):
             # wait on future until it stops
             try:
                 self.waitFor(fut)
-            except fut.Stopped:
+            except Stopped:
                 pass
 
     def startVisualTargetTracking(self, allow_refresh_reference=True):
@@ -414,12 +443,12 @@ class PatchPipetteState(Future):
         restart_move = False
         last_destination = None
         try:
-            while move_fut is None or not move_fut.isDone():
+            while move_fut is None or not move_fut.is_done:
                 if self._pauseMovement:
                     if move_fut is not None:
                         move_fut.stop("Paused", wait=True)
                         move_fut = None
-                    future.sleep(0.1)
+                    sleep(0.1)
                     continue
                 current_target_pos = position_fn()
                 if move_fut is None or restart_move or last_destination is None:
@@ -456,9 +485,9 @@ class PatchPipetteState(Future):
                             f"{'>' if restart_move else '<'} {move_restart_threshold}°; "
                             f"{'update path' if restart_move else 'keep current path'}")
                 if not restart_move:
-                    future.sleep(0.1)
+                    sleep(0.1)
         except Exception:
-            if move_fut is not None and not move_fut.isDone():
+            if move_fut is not None and not move_fut.is_done:
                 move_fut.stop("Error while moving", wait=True)
             raise
 

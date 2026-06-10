@@ -199,7 +199,7 @@ class ContactCellState(PatchPipetteState):
     #         self._cell = None
 
     def _cleanup(self):
-        if self._moveFuture is not None and not self._moveFuture.isDone():
+        if self._moveFuture is not None and not self._moveFuture.is_done:
             with log_and_ignore_exception(Exception, "Error stopping move during cleanup"):
                 self._moveFuture.stop()
         # with log_and_ignore_exception(Exception, "Error disabling visual tracking"):

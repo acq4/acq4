@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from acq4.motion import MoveSpec
-from acq4.util.future import future_wrap
+from acq4.util.gentle import asynch
 from pyqtgraph import units
 from ._base import PatchPipetteState
 
@@ -67,7 +67,7 @@ class NucleusCollectState(PatchPipetteState):
             dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
             self.sleep(delay)
 
-        if self.sonication is not None and not self.sonication.isDone():
+        if self.sonication is not None and not self.sonication.is_done:
             self.waitFor(self.sonication)
 
         dev.pipetteRecord()['expelled_nucleus'] = True
@@ -76,10 +76,10 @@ class NucleusCollectState(PatchPipetteState):
 
         return {"state": 'out'}
 
-    @future_wrap
-    def _cleanup(self, _future):
+    @asynch
+    def _cleanup(self):
         try:
-            if self.sonication is not None and not self.sonication.isDone():
+            if self.sonication is not None and not self.sonication.is_done:
                 self.sonication.stop("parent task is cleaning up before sonication finished")
         except Exception:
             self.dev.logger.exception("Error stopping sonication")
@@ -92,8 +92,8 @@ class NucleusCollectState(PatchPipetteState):
         try:
             if self.startPos is not None:
                 pip = self.dev.pipetteDevice
-                _future.waitFor(pip.dm.move(MoveSpec(pip, self.startPos, speed='fast')), timeout=60)
+                pip.dm.move(MoveSpec(pip, self.startPos, speed='fast')).wait(timeout=60)
         except Exception:
             self.dev.logger.exception("Error resetting pipette position after collection")
 
-        _future.waitFor(super()._cleanup(), timeout=None)
+        super()._cleanup().wait()
