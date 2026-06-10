@@ -162,7 +162,13 @@ class _QtTaskSignals(Qt.QObject):
         """
         Qt.QObject.__init__(self)
         self._state: Any = None
-        self.moveToThread(Qt.QApplication.instance().thread())
+        # Pin signal affinity to the GUI thread when there is one. Headless
+        # contexts (e.g. the motion-planner tests) have no QApplication; there
+        # the QObject simply stays on its creating thread and signals still work
+        # via direct connection.
+        app = Qt.QApplication.instance()
+        if app is not None:
+            self.moveToThread(app.thread())
 
     # -- state ---------------------------------------------------------------
 

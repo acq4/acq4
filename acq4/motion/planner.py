@@ -4,7 +4,7 @@ from __future__ import annotations
 import numpy as np
 
 from acq4 import getManager
-from acq4.util.gentle import asynch
+from acq4.util.gentle import asynch, gui_asynch
 from .plan import AtomicMove, MovePlanStep, ParallelGroup, SequentialGroup
 from .spec import MoveSpec
 
@@ -45,7 +45,7 @@ class MotionPlanner:
             return devices
         return set()
 
-    @asynch
+    @gui_asynch
     def execute(self, specs: list[MoveSpec], name: str = ""):
         """Validate, plan, and execute, holding device locks for the duration."""
         self._validate_specs(specs)
