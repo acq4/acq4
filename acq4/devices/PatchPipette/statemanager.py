@@ -7,6 +7,7 @@ from docstring_parser import parse
 from acq4 import getManager
 from acq4.logging_config import get_logger
 from acq4.util import Qt
+from acq4.util.gentle import Stopped
 from pyqtgraph import disconnect
 from pyqtgraph.parametertree import Parameter
 from . import states
@@ -250,9 +251,9 @@ class PatchPipetteStateManager(Qt.QObject):
             job.stop()
             try:
                 job.wait(timeout=10)
-            except job.Timeout:
-                self.logger.warning(f"Timed out waiting for job {job} to complete", exc_info=True)
-            except job.Stopped:
+                if not job.is_done:
+                    self.logger.warning(f"Timed out waiting for job {job} to complete")
+            except Stopped:
                 pass
             except Exception:
                 self.logger.warning(f"{self.dev.name()} failed in state {job.stateName}", exc_info=True)
