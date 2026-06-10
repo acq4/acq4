@@ -146,7 +146,7 @@ def _stepped_z_stack(imager, start, end, step, name) -> list[Frame]:
         for z in np.arange(start, end + step, step):
             check_stop()
             _set_focus_depth(imager, z, direction, speed="slow", name=f"{name} step")
-            frames.append(imager.acquireFrames(1).getResult()[0])
+            frames.append(imager.acquireFrames(1).wait()[0])
     return frames
 
 
@@ -305,7 +305,7 @@ def _run_image_sequence(
                         stack = synch(acquire_z_stack)(imager, *z_stack, name=name)
                         handle_new_frames(stack, i)
                     else:  # single frame
-                        frame = imager.acquireFrames(1, ensureFreshFrames=True).getResult()[0]
+                        frame = imager.acquireFrames(1, ensureFreshFrames=True).wait()[0]
                         handle_new_frames(frame, i)
                     check_stop()
                 set_state(_status_message(i, count))
@@ -433,7 +433,7 @@ def acquire_z_stack(
                     imager.acquireFrames(1).wait()  # just to be sure the camera caught up
                 finally:
                     frames_fut.stop()
-        frames = frames_fut.getResult(timeout=10)
+        frames = frames_fut.wait(timeout=10)
         try:
             frames = enforce_linear_z_stack(frames, start, stop, step)
         except ValueError:

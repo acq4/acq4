@@ -111,7 +111,7 @@ class MIES(Qt.QObject):
     #     return float(self.getCtrlValue('setvar_DataAcq_SSPressure'))
 
     def getPressureAndSource(self, headstage):
-        return self.igor('ReadPressureSourceAndPressure', self.getWindowName(), headstage).result()
+        return self.igor('ReadPressureSourceAndPressure', self.getWindowName(), headstage).wait()
 
     def setPressureAndSource(self, headstage, source, pressure):
         # if source == 'user':
@@ -145,7 +145,7 @@ class MIES(Qt.QObject):
         return self.setCtrl('button_DataAcq_SlowComp_VC')
 
     def getLockedDevices(self):
-        res = self.igor("GetListOfLockedDevices").result()
+        res = self.igor("GetListOfLockedDevices").wait()
         return res.split(";")
 
     def setCtrl(self, name, value=None):
@@ -158,7 +158,7 @@ class MIES(Qt.QObject):
         
     def getCtrlValue(self, mies_ctrl_name):
         windowName = self.getWindowName()
-        return self.igor('GetGuiControlValue', windowName, mies_ctrl_name).result()
+        return self.igor('GetGuiControlValue', windowName, mies_ctrl_name).wait()
 
     def getWindowName(self, ):
         if self._windowName is None:

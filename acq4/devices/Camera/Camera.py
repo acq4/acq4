@@ -1167,19 +1167,6 @@ class FrameAcquisitionFuture(GuiPromise):
     def peekAtResult(self) -> list[Frame]:
         return self._frames[:]
 
-    def getResult(self, timeout=None) -> list[Frame]:
-        if (
-            timeout is None
-            and self._frame_count is None
-            and not self.is_done
-            and not self.is_stopped
-        ):
-            raise ValueError(
-                "Future is still acquiring indefinitely; please specify a timeout for getResult."
-            )
-        self.wait(timeout)
-        return self._frames
-
     def stopWhen(self, condition: Callable[[Frame], bool], blocking=True) -> None:
         """Stop acquiring frames when the given condition returns True.
         If blocking is True, then this method will not return until the condition is met.
