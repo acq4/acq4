@@ -64,7 +64,7 @@ class MotionPlanner:
     def _is_interaction_site(device) -> bool:
         from acq4.devices.InteractionSite import InteractionSite
         # TODO not an isinstance, please
-        return isinstance(device, InteractionSite)
+        return isinstance(device, InteractionSite) and hasattr(device, "_parentStage")
 
     def _validate_specs(self, specs: list[MoveSpec]) -> None:
         """Raise PlanningError if specs contain device conflicts or bad relative-to ordering."""

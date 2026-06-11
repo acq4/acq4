@@ -79,14 +79,20 @@ class MinirigV1MotionPlanner(DefaultMotionPlanner):
         # Step 5: pipette to approach position (safe path from current retracted position)
         kw = spec.kwargs
         pip_to_approach = self._safe_path(pip, pip_start, approach_global, speed)
-        steps.extend(AtomicMove(pip, pos, spd, expl, {'linear': lin, **kw}) for pos, spd, lin, expl in pip_to_approach)
+        steps.extend(
+            AtomicMove(pip, pos, spd, expl, {'linear': lin, **kw})
+            for pos, spd, lin, expl in pip_to_approach
+        )
 
         # Step 6: pipette into site (only when going inside and approach is saved)
         going_inside = not np.allclose(spec.position, 0)
         if going_inside and site.hasApproachPosition(pip):
             target_global = np.array(site.mapToGlobal(spec.position)) + site_delta
             pip_to_interact = self._safe_path(pip, approach_global, target_global, speed)
-            steps.extend(AtomicMove(pip, pos, spd, expl, {'linear': lin, **kw}) for pos, spd, lin, expl in pip_to_interact)
+            steps.extend(
+                AtomicMove(pip, pos, spd, expl, {'linear': lin, **kw})
+                for pos, spd, lin, expl in pip_to_interact
+            )
 
         return SequentialGroup(steps, name or f"approach {site.name()}")
 
@@ -110,7 +116,9 @@ class MinirigV1MotionPlanner(DefaultMotionPlanner):
     # Override: append scope unwind when exiting via approach waypoint
     # ------------------------------------------------------------------
 
-    def _plan_interaction_exit(self, spec: "MoveSpec", name: str = "", containing_site=None) -> "MovePlanStep":
+    def _plan_interaction_exit(
+        self, spec: "MoveSpec", name: str = "", containing_site=None
+    ) -> "MovePlanStep":
         base = super()._plan_interaction_exit(spec, name, containing_site)
         return self._append_scope_unwind(base, spec.device.name())
 
