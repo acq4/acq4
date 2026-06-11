@@ -2,11 +2,10 @@
 from __future__ import annotations
 
 import numpy as np
-import pytest
 
 from acq4.motion.plan import AtomicMove, ParallelGroup, SequentialGroup
 from acq4.motion.spec import MoveSpec
-from acq4.motion.tests.conftest import MockDevice, MockInteractionSite, MockPipette, MockScope
+from acq4.motion.tests.conftest import MockPipette, MockScope
 
 
 def make_planner():
@@ -33,6 +32,7 @@ def _flat_moves(plan):
 # ---------------------------------------------------------------------------
 # Interaction approach with microscope park
 # ---------------------------------------------------------------------------
+
 
 def test_no_scope_park_when_not_configured(pip, site):
     """Sites without scopeParkPos produce no scope moves."""
@@ -72,6 +72,7 @@ def test_scope_park_not_repeated_if_already_parked(pip, site_with_scope_park):
 # ---------------------------------------------------------------------------
 # Scope unwind on return home (via _plan_pipette_move fallback)
 # ---------------------------------------------------------------------------
+
 
 def _seed_scope_context(planner, pip):
     scope = pip.scopeDevice()
@@ -131,6 +132,7 @@ def test_no_scope_unwind_when_context_empty(pip):
 # Scope-up-first sequence for approach with scopeParkPos
 # ---------------------------------------------------------------------------
 
+
 def test_scope_up_is_first_move_in_approach(pip, site_with_scope_park):
     """Scope must move up (z-only) as the very first step, before any pip or lateral scope move."""
     planner = make_planner()
@@ -139,11 +141,12 @@ def test_scope_up_is_first_move_in_approach(pip, site_with_scope_park):
     scope_moves = [m for m in moves if isinstance(m.device, MockScope)]
     assert moves[0].device is pip.scopeDevice(), "First move must be scope up"
     park_pos = site_with_scope_park.config["scopeParkPos"]
-    up_pos = np.array([pip.scopeDevice().globalPosition()[0],
-                       pip.scopeDevice().globalPosition()[1],
-                       park_pos[2]])
-    np.testing.assert_array_almost_equal(moves[0].position, up_pos,
-                                         err_msg="First scope move must be z-only (up to park height)")
+    up_pos = np.array(
+        [pip.scopeDevice().globalPosition()[0], pip.scopeDevice().globalPosition()[1], park_pos[2]]
+    )
+    np.testing.assert_array_almost_equal(
+        moves[0].position, up_pos, err_msg="First scope move must be z-only (up to park height)"
+    )
 
 
 def test_pip_retract_before_scope_lateral_when_pip_in_tissue(site_with_scope_park):
@@ -167,8 +170,9 @@ def test_pip_retract_before_scope_lateral_when_pip_in_tissue(site_with_scope_par
     assert len(scope_moves) >= 2, "Expected scope up + scope lateral moves"
     first_pip_idx = all_idxs[id(pip_moves[0])]
     scope_lateral_idx = all_idxs[id(scope_moves[1])]
-    assert first_pip_idx < scope_lateral_idx, \
-        "Pip retract must come before scope lateral move to park position"
+    assert (
+        first_pip_idx < scope_lateral_idx
+    ), "Pip retract must come before scope lateral move to park position"
 
 
 def test_pip_no_retract_step_when_already_at_safe_height(site_with_scope_park):
@@ -193,6 +197,7 @@ def test_pip_no_retract_step_when_already_at_safe_height(site_with_scope_park):
 # ---------------------------------------------------------------------------
 # Scope unwind via interaction exit (_plan_interaction_exit path)
 # ---------------------------------------------------------------------------
+
 
 def test_scope_unwind_appended_after_interaction_exit(pip, site_with_scope_park):
     """When pip exits a site via _plan_interaction_exit, scope unwind is still appended."""

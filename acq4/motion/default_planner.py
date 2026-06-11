@@ -4,7 +4,6 @@ from __future__ import annotations
 import numpy as np
 
 from acq4 import getManager
-from acq4.util.future import future_wrap
 from .plan import AtomicMove, ParallelGroup, SequentialGroup
 from .plan import MovePlanStep
 from .planner import MotionPlanner
@@ -46,7 +45,9 @@ class DefaultMotionPlanner(MotionPlanner):
 
     def plan(self, specs, name=""):
         # TODO can this be parallel? (requires at least thread-safe locking)
-        return SequentialGroup([self._plan_one(spec, name) for spec in specs], name or "motion plan")
+        return SequentialGroup(
+            [self._plan_one(spec, name) for spec in specs], name or "motion plan"
+        )
 
     def _plan_one(self, spec: MoveSpec, name: str = "") -> MovePlanStep:
         if self._is_interaction_site(spec.relative_to):
@@ -104,7 +105,11 @@ class DefaultMotionPlanner(MotionPlanner):
         has_approach = site.hasApproachPosition(pip)
         going_inside = not np.allclose(spec.position, 0)
         # target_global is computed from the current transform then corrected for site movement.
-        target_global = np.array(site.mapToGlobal(spec.position)) + site_delta if going_inside else approach_global
+        target_global = (
+            np.array(site.mapToGlobal(spec.position)) + site_delta
+            if going_inside
+            else approach_global
+        )
 
         start = np.array(pip.globalPosition())
 
@@ -122,21 +127,27 @@ class DefaultMotionPlanner(MotionPlanner):
             ]
             safe_z = pip.positionAtDepth(pip.approachDepth(), start=start)
             if safe_z[2] > start[2]:
-                prefix_steps[0].steps.append(
-                    AtomicMove(pip, safe_z, speed, "pip to safe height")
-                )
+                prefix_steps[0].steps.append(AtomicMove(pip, safe_z, speed, "pip to safe height"))
                 start = safe_z
 
         kw = spec.kwargs
         if not going_inside or not has_approach:
             final = approach_global if not going_inside else target_global
             waypoints = self._safe_path(pip, start, final, speed)
-            steps = [AtomicMove(pip, pos, spd, expl, {'linear': lin, **kw}) for pos, spd, lin, expl in waypoints]
+            steps = [
+                AtomicMove(pip, pos, spd, expl, {'linear': lin, **kw})
+                for pos, spd, lin, expl in waypoints
+            ]
             return SequentialGroup(prefix_steps + steps, name or f"approach {site.name()}")
 
         to_approach = self._safe_path(pip, start, approach_global, speed)
-        to_approach_steps = [AtomicMove(pip, pos, spd, expl, {'linear': lin, **kw}) for pos, spd, lin, expl in to_approach]
-        interact_step = AtomicMove(pip, target_global, speed, name or f"interact with {site.name()}", kw)
+        to_approach_steps = [
+            AtomicMove(pip, pos, spd, expl, {'linear': lin, **kw})
+            for pos, spd, lin, expl in to_approach
+        ]
+        interact_step = AtomicMove(
+            pip, target_global, speed, name or f"interact with {site.name()}", kw
+        )
         return SequentialGroup(
             prefix_steps + to_approach_steps + [interact_step],
             name or f"interact with {site.name()}",
@@ -146,7 +157,9 @@ class DefaultMotionPlanner(MotionPlanner):
     # Case 1b: InteractionSite exit
     # ------------------------------------------------------------------
 
-    def _plan_interaction_exit(self, spec: MoveSpec, name: str = "", containing_site=None) -> MovePlanStep:
+    def _plan_interaction_exit(
+        self, spec: MoveSpec, name: str = "", containing_site=None
+    ) -> MovePlanStep:
         """Exit an interaction site and move to the target.
 
         When the site has a saved approach position, the pipette first moves to the
@@ -160,10 +173,15 @@ class DefaultMotionPlanner(MotionPlanner):
         speed = spec.speed or "fast"
 
         kw = spec.kwargs
-        exit_step = AtomicMove(pip, approach_global, speed, f"exit site before {name or 'move'}", kw)
+        exit_step = AtomicMove(
+            pip, approach_global, speed, f"exit site before {name or 'move'}", kw
+        )
         target = np.asarray(spec.position, dtype=float)
         rest_waypoints = self._safe_path(pip, approach_global, target, speed)
-        rest_steps = [AtomicMove(pip, pos, spd, expl, {'linear': lin, **kw}) for pos, spd, lin, expl in rest_waypoints]
+        rest_steps = [
+            AtomicMove(pip, pos, spd, expl, {'linear': lin, **kw})
+            for pos, spd, lin, expl in rest_waypoints
+        ]
         return SequentialGroup(
             [exit_step] + rest_steps,
             name or "exit site and move to target",
@@ -181,7 +199,10 @@ class DefaultMotionPlanner(MotionPlanner):
         start = np.array(pip.globalPosition())
         kw = spec.kwargs
         waypoints = self._safe_path(pip, start, target, speed)
-        steps = [AtomicMove(pip, pos, spd, expl, {'linear': lin, **kw}) for pos, spd, lin, expl in waypoints]
+        steps = [
+            AtomicMove(pip, pos, spd, expl, {'linear': lin, **kw})
+            for pos, spd, lin, expl in waypoints
+        ]
         return SequentialGroup(steps, name or "pipette move")
 
     # ------------------------------------------------------------------
@@ -195,7 +216,9 @@ class DefaultMotionPlanner(MotionPlanner):
             if spec.relative_to is not None
             else spec.position
         )
-        return AtomicMove(spec.device, global_pos, spec.speed or "fast", name or "move to target", spec.kwargs)
+        return AtomicMove(
+            spec.device, global_pos, spec.speed or "fast", name or "move to target", spec.kwargs
+        )
 
     # ------------------------------------------------------------------
     # Path generation — override in subclasses for geometry-aware routing
