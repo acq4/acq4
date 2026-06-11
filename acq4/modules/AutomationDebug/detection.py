@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -24,21 +25,22 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
-def _annotation_save_dir(manager) -> Path | None:
-    """Directory in which to save cell annotations from the detection workflow.
+def _health_model_config(manager) -> dict:
+    """Health-model paths and score cutoffs from the global ``misc`` config.
 
-    Uses the configured ``misc/cellAnnotationDir`` if set, otherwise defaults to a
-    ``cell_annotations`` subdirectory of the data storage directory. Returns None if
-    neither is available, in which case the annotation tool falls back to the
-    working directory.
+    Shared by neuron detection and the annotation-tool launch so both use the same
+    configured models. ``scoreCutoffs`` is an ascending list mapping a ranking
+    model's raw scores onto the 0-5 rating bins (see
+    acq4_automation.compute_score_cutoffs); None falls back to equal-width bins.
     """
-    configured = manager.config.get("misc", {}).get("cellAnnotationDir", None)
-    if configured:
-        return Path(configured)
-    base = manager.getBaseDir()
-    if base is not None:
-        return Path(base.name()) / "cell_annotations"
-    return None
+    misc = manager.config.get("misc", {})
+    return {
+        "segmenter": misc.get("segmenterPath", None),
+        "autoencoder": misc.get("autoencoderPath", None),
+        "classifier": misc.get("classifierPath", None),
+        "resnet_classifier": misc.get("resnetClassifierPath", None),
+        "score_cutoffs": misc.get("scoreCutoffs", None),
+    }
 
 
 class CellDetector:
@@ -94,10 +96,11 @@ class CellDetector:
 
         pixel_size = win.cameraDevice.getPixelSize()[0]  # Used for both real and mock
         man = win.module.manager
-        segmenter = man.config.get("misc", {}).get("segmenterPath", None)
-        autoencoder = man.config.get("misc", {}).get("autoencoderPath", None)
-        classifier = man.config.get("misc", {}).get("classifierPath", None)
-        resnet_classifier = man.config.get("misc", {}).get("resnetClassifierPath", None)
+        models = _health_model_config(man)
+        segmenter = models["segmenter"]
+        autoencoder = models["autoencoder"]
+        classifier = models["classifier"]
+        resnet_classifier = models["resnet_classifier"]
         step_z = 1 * µm  # can be updated by mock metadata
         depth = win.cameraDevice.getFocusDepth()
         classification_stack = None  # Initialize as None
@@ -164,6 +167,24 @@ class CellDetector:
 
         win.cameraDevice.setFocusDepth(depth, name=f"{win.cameraDevice.name()} restore focus after detection z-stack")  # Restore focus
 
+        # Persist this detection session under one base name so the saved z-stack,
+        # cellpose masks, and annotations share the annotation tool's naming scheme
+        # and reload together. The base is shared with the annotation tool launched
+        # in _handleDetectResults.
+        win.annotation_base_name = datetime.datetime.now().strftime(
+            "in_memory_stack_%Y%m%d_%H%M%S_%f"
+        )
+        annotation_save_dir = win.annotation_save_dir
+        if annotation_save_dir is None:
+            logger.warning(
+                "No annotation save directory available (set misc/cellAnnotationDir, "
+                "or configure a storage directory); the detection z-stack, cellpose "
+                "masks, and annotations will not be saved alongside the data."
+            )
+            save_prefix = None
+        else:
+            save_prefix = str(annotation_save_dir / win.annotation_base_name)
+
         detection_results = _future.waitFor(
             detect_neurons(
                 working_stack,  # Prepared based on mock/real and single/multi
@@ -177,6 +198,7 @@ class CellDetector:
                 trim_edges=True,
                 min_volume_m3=win.ui.minVolumeSpin.value(),
                 n=None,
+                save_prefix=save_prefix,
             ),
             timeout=600,
         ).getResult()
@@ -224,6 +246,9 @@ class CellDetector:
 
             if win._annotation_tool is not None:
                 win._annotation_tool.close()
+            # Same configured health models as detection, plus score cutoffs, so the
+            # annotation tool re-scores the detected cells and bins them consistently.
+            models = _health_model_config(win.module.manager)
             win._annotation_tool = open_annotation_tool_with_detections(
                 stack=stack,
                 cell_centers_ijk=centers_ijk,
@@ -233,7 +258,12 @@ class CellDetector:
                 filter=False,  # No extra filtering
                 transpose_display=True,  # stack is (n_frames, Y, X) after .T; row-major matches camera module orientation
                 custom_buttons=[("Center Camera", _center_camera_on_cell)],
-                save_dir=_annotation_save_dir(win.module.manager),
+                save_dir=win.annotation_save_dir,
+                base_name=win.annotation_base_name,
+                classifier=models["classifier"],
+                autoencoder=models["autoencoder"],
+                resnet_classifier=models["resnet_classifier"],
+                score_cutoffs=models["score_cutoffs"],
             )
 
             # from acq4_automation.object_detection import NeuronBoxViewer
