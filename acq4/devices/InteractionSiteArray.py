@@ -65,6 +65,8 @@ class InteractionSiteArray(Device, OptomechDevice):
                 'height': siteHeight,
                 'role': self._role,
             }
+            if 'scopeParkPos' in config:
+                site_config['scopeParkPos'] = config['scopeParkPos']
             if child_geometry is not None:
                 site_config['geometry'] = child_geometry
             site = InteractionSite(dm, site_config, site_name)
