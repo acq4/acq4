@@ -36,7 +36,7 @@ class Autopatcher:
         multipatch_win = runInGuiThread(man.getModule, 'MultiPatch').win
         demo_dir = self._makeValidDemoDir()
         man.setCurrentDir(demo_dir)
-        win.cameraDevice.scopeDev.findSurfaceDepth(win.cameraDevice).wait()
+        synch(win.cameraDevice.scopeDev.findSurfaceDepth)(win.cameraDevice)
         try:
             while True:
                 cell_dir = runInGuiThread(data_manager.createNewFolder, "Cell")
@@ -66,7 +66,7 @@ class Autopatcher:
                     ppip.pipetteDevice.goHome("fast").wait()
 
                     set_state("Autopatch: find surface above target")
-                    win.cameraDevice.scopeDev.findSurfaceDepth(win.cameraDevice).wait()
+                    synch(win.cameraDevice.scopeDev.findSurfaceDepth)(win.cameraDevice)
 
                     set_state("Autopatch: finding pipette tip")
                     synch(ppip.pipetteDevice.goAboveTarget)("fast")

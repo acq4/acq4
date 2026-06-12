@@ -120,7 +120,7 @@ class CellDetector:
                 raise RuntimeError("Failed to load mock detection stack.")
 
         else:  # --- Real Acquisition ---
-            surface = win.scopeDevice.findSurfaceDepth(win.cameraDevice).wait()
+            surface = synch(win.scopeDevice.findSurfaceDepth)(win.cameraDevice)
 
             start_z = surface - win.ui.zStackStartDepthSpin.value()
             stop_z = surface - win.ui.zStackStopDepthSpin.value()
