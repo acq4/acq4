@@ -65,7 +65,7 @@ class FalconTurret(FilterWheel):
 
     def _setInitialPos(self):
         # used to wait on the initial home move and then switch to initial slot
-        while not self._initialFuture.isDone():
+        while not self._initialFuture.is_done:
             time.sleep(0.1)
         self.setPosition(self._initialSlot)
 
@@ -102,6 +102,12 @@ class FalconTurret(FilterWheel):
 
     
 class FalconTurretFuture(FilterWheelFuture):
+    """Track a Falcon turret move, treating the 'home' request as arrived once homed.
+
+    Arrival is the only Falcon-specific bit; the base ``_poll()`` still drives
+    resolve/fail once the turret stops moving.
+    """
+
     def _atTarget(self):
         if self.position == 'home':
             return self.dev.dev.is_homed

@@ -20,7 +20,7 @@ from acq4.util import Qt
 from acq4.util.Mutex import Mutex
 from acq4.util.Mutex import RecursiveMutex
 from acq4.util.Thread import Thread
-from acq4.util.future import Future, future_wrap
+from acq4.util.gentle import GuiPromise, asynch, check_stop, sleep, synch
 from acq4.util.imaging.frame import Frame
 from coorx import TTransform, SRT3DTransform
 from pyqtgraph import Vector
@@ -247,7 +247,9 @@ class Camera(DAQGeneric, OptomechDevice):
             raise ValueError(f"No camera preset named {preset!r}")
         params = presets[preset]["params"]
         self.setParams(params)
-        return Future.immediate()
+        promise = GuiPromise(name=f"{self.name()}_loadPreset")
+        promise.resolve()
+        return promise
 
     def presetHotkeyPressed(self, dev, changes, presetName):
         self.loadPreset(presetName)
@@ -330,7 +332,7 @@ class Camera(DAQGeneric, OptomechDevice):
 
         Usage::
             with camera.ensureRunning():
-                frames = camera.acquireFrames(10).getResult()
+                frames = camera.acquireFrames(10).wait()
         """
         running = self.isRunning()
         if ensureFreshFrames and running:
@@ -355,7 +357,7 @@ class Camera(DAQGeneric, OptomechDevice):
         """Acquire a specific number of frames and return a FrameAcquisitionFuture.
 
         If *n* is None, then frames will be acquired until future.stop() is called.
-        Call future.getResult() to return the acquired Frame object.
+        Call future.wait() to return the acquired Frame objects.
 
         This method works by collecting frames as they stream from the camera and does not
         handle starting / stopping / configuring the camera.
@@ -364,13 +366,11 @@ class Camera(DAQGeneric, OptomechDevice):
             raise ValueError("ensureFreshFrames=True is not compatible with n=None")
         return FrameAcquisitionFuture(self, n, ensureFreshFrames=ensureFreshFrames)
 
-    @future_wrap
-    def driverSupportedFixedFrameAcquisition(
-        self, n: int = 1, _future: Future = None
-    ) -> list[Frame]:
-        """Ask the camera driver to acquire a specific number of frames and return a Future.
+    @asynch
+    def driverSupportedFixedFrameAcquisition(self, n: int = 1) -> list[Frame]:
+        """Ask the camera driver to acquire a specific number of frames as a ThreadTask.
 
-        Call future.getResult() to return the acquired Frame object.
+        Call task.wait() to return the acquired Frame objects.
 
         Depending on the underlying camera driver, this method may cause the camera to restart.
         """
@@ -404,11 +404,11 @@ class Camera(DAQGeneric, OptomechDevice):
                 raise TimeoutError("Timed out waiting for frame processing thread to stop")
         DAQGeneric.quit(self)
 
-    @future_wrap
-    def getEstimatedFrameRate(self, _future: Future):
+    @asynch
+    def getEstimatedFrameRate(self):
         """Return the estimated frame rate of the camera."""
         with self.ensureRunning():
-            return _future.waitFor(self.acqThread.getEstimatedFrameRate()).getResult()
+            return synch(self.acqThread.getEstimatedFrameRate)()
 
     # @ftrace
     def createTask(self, cmd, parentTask):
@@ -717,7 +717,7 @@ class CameraTask(DAQGenericTask):
 
     def isDone(self):
         # If camera stopped, then probably there was a problem and we are finished.
-        return self._future.isDone() or self._stopTime is not None or not self.dev.isRunning()
+        return self._future.is_done or self._stopTime is not None or not self.dev.isRunning()
 
     def stop(self, abort=False):
         """Warning: this won't stop everything and you'll also need to call *getResult* within the
@@ -744,13 +744,13 @@ class CameraTask(DAQGenericTask):
     def getResult(self):
         if self.resultObj is None:
             daqResult = DAQGenericTask.getResult(self)
-            while time.time() - self._stopTime < 1 and not self._future.isDone():
+            while time.time() - self._stopTime < 1 and not self._future.is_done:
                 # Wait up to 1 second for all frames to arrive from camera thread before returning results.
                 # In some cases, acquisition thread can get bogged down and we may need to wait for it
                 # to catch up.
                 time.sleep(0.05)
             self._future.stop()  # TODO this could error for fixedFrameCount!=None
-            self.resultObj = CameraTaskResult(self, self._future.getResult(timeout=1), daqResult)
+            self.resultObj = CameraTaskResult(self, self._future.wait(timeout=1), daqResult)
             if self._dev_needs_restart or not self._dev_was_running:
                 self.dev.stop(block=True)
                 if self._dev_was_running:
@@ -1066,14 +1066,14 @@ class AcquireThread(Thread):
                 pass
             self.sigShowMessage.emit("ERROR starting acquisition (see console output)")
 
-    @future_wrap
-    def getEstimatedFrameRate(self, _future: Future = None):
+    @asynch
+    def getEstimatedFrameRate(self):
         """Return the estimated frame rate of the camera."""
         if not self.isRunning():
             raise RuntimeError("Cannot get frame rate while camera is not running.")
         while len(self._recentFPS) < self._recentFPS.maxlen:
             time.sleep(0.01)
-            _future.checkStop()
+            check_stop()
         return np.mean(self._recentFPS)
 
     def stop(self, block=False):
@@ -1092,7 +1092,20 @@ class AcquireThread(Thread):
             self.start()
 
 
-class FrameAcquisitionFuture(Future):
+class FrameAcquisitionFuture(GuiPromise):
+    """Acquire frames asynchronously, either a fixed number or continuously until stopped.
+
+    This is an externally-completed GuiPromise: it has no body and spawns no
+    gentletask thread. A dedicated monitor thread is the producer; it collects
+    frames streamed from the camera and completes the promise by calling
+    ``resolve(frames)`` when the fixed count is reached or a ``stopWhen``
+    condition is met, ``fail(exc)`` on timeout, or — for an indefinite
+    acquisition — leaves completion to a stop callback that resolves with the
+    frames collected so far. The monitor thread is a raw thread (not a
+    gentletask task), so it polls ``self.is_done`` rather than calling
+    check_stop().
+    """
+
     def __init__(
         self,
         camera: Camera,
@@ -1100,8 +1113,7 @@ class FrameAcquisitionFuture(Future):
         timeout: float = 10,
         ensureFreshFrames: bool = False,
     ):
-        """Acquire a frames asynchronously, either a fixed number or continuously until stopped."""
-        super().__init__(name=f"{camera.name()}_frameAcquisitionFuture", logLevel='debug')
+        super().__init__(name=f"{camera.name()}_frameAcquisitionFuture")
         self._camera = camera
         self._frame_count = frameCount
         self._ensure_fresh_frames = ensureFreshFrames
@@ -1109,12 +1121,21 @@ class FrameAcquisitionFuture(Future):
         self._frames = []
         self._timeout = timeout
         self._queue = queue.Queue()
+        if frameCount is None:
+            # For an indefinite acquisition, a stop is the normal way to finish:
+            # resolve with the frames collected so far rather than completing
+            # with Stopped. GuiPromise.stop fires this before injecting Stopped,
+            # so the promise is already done and no Stopped is injected.
+            self.add_stop_callback(self._resolveOnStop)
         self._thread = threading.Thread(
             target=self._monitorAcquisition,
             daemon=True,
             name=f"{camera.name()}_frameAquisitionMonitor",
         )
         self._thread.start()
+
+    def _resolveOnStop(self):
+        self.resolve(self._frames)
 
     def _monitorAcquisition(self):
         self._camera.sigNewFrame.connect(self._queue.put, type=Qt.Qt.DirectConnection)
@@ -1124,51 +1145,27 @@ class FrameAcquisitionFuture(Future):
                 stack.enter_context(self._camera.ensureRunning(ensureFreshFrames=True))
             lastFrameTime = ptime.time()
             while True:
-                if self.isDone():
+                if self.is_done:
                     break
                 try:
                     frame = self._queue.get_nowait()
                     lastFrameTime = ptime.time()
                 except queue.Empty:
-                    try:
-                        self.sleep(0.1)
-                    except self.StopRequested:
-                        self._taskDone(interrupted=self._frame_count is not None)
-                        break
+                    sleep(0.1)
                     if ptime.time() - lastFrameTime > self._timeout:
-                        self._taskDone(
-                            interrupted=True,
-                            excInfo=(
-                                TimeoutError,
-                                TimeoutError("Timed out waiting for frames"),
-                                None,
-                            ),
-                        )
+                        self.fail(TimeoutError("Timed out waiting for frames"))
                         break
                     continue
                 self._frames.append(frame)
                 if self._stop_when is not None and self._stop_when(frame):
-                    self._taskDone()
+                    self.resolve(self._frames)
                     break
                 if self._frame_count is not None and len(self._frames) >= self._frame_count:
-                    self._taskDone()
+                    self.resolve(self._frames)
                     break
 
     def peekAtResult(self) -> list[Frame]:
         return self._frames[:]
-
-    def getResult(self, timeout=None) -> list[Frame]:
-        if (
-            timeout is None
-            and self._frame_count is None
-            and not self.isDone()
-            and not self._stopRequested
-        ):
-            raise ValueError(
-                "Future is still acquiring indefinitely; please specify a timeout for getResult."
-            )
-        self.wait(timeout)
-        return self._frames
 
     def stopWhen(self, condition: Callable[[Frame], bool], blocking=True) -> None:
         """Stop acquiring frames when the given condition returns True.

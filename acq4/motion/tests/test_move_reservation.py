@@ -14,7 +14,7 @@ from acq4.devices.Device import Device
 from acq4.motion.plan import AtomicMove, SequentialGroup
 from acq4.motion.planner import MotionPlanner
 from acq4.motion.spec import MoveSpec
-from acq4.util.future import Future
+from acq4.util.gentle import GuiPromise
 
 
 class _FakeDM:
@@ -44,7 +44,9 @@ class _ReservableDevice(Device):
 
     def moveToGlobalNoPlanning(self, pos, speed, name=None, **kwargs):
         self.move_threads.append(threading.current_thread())
-        return Future.immediate()
+        move = GuiPromise(name="move")
+        move.resolve()
+        return move
 
 
 class _TrivialPlanner(MotionPlanner):

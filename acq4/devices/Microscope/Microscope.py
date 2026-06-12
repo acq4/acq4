@@ -12,7 +12,7 @@ from acq4.motion import MoveSpec
 from acq4.util import Qt
 from acq4.util.Mutex import Mutex
 from acq4.util.acq4_typing import Number
-from acq4.util.future import Future, MultiFuture, future_wrap, FutureButton
+from acq4.util.gentle import MultiFuture, Task, asynch, gui_asynch, FutureButton
 from acq4.util.imaging import Frame
 from acq4.util.surface import find_surface
 from acq4.util.ui.ZPositionWidget import ZPositionWidget
@@ -171,20 +171,20 @@ class Microscope(Device, OptomechDevice):
         with self.lock:
             return list(self.selectedObjectives.values())
 
-    @future_wrap
-    def loadPreset(self, name, _future):
+    @asynch
+    def loadPreset(self, name):
         conf = self.presets[name]
-        futures: list[Future] = []
+        tasks: list[Task] = []
         for dev_name, state in conf.items():
             if dev_name == "objective":
                 self.setObjectiveIndex(state)
             elif dev_name != "hotkey":
                 dev = self.dm.getDevice(dev_name)
                 if hasattr(dev, "loadPreset"):
-                    futures.append(dev.loadPreset(state))
-        for fut in futures:
-            if fut is not None:
-                _future.waitFor(fut)
+                    tasks.append(dev.loadPreset(state))
+        for task in tasks:
+            if task is not None:
+                task.wait()
 
     def handlePresetHotkey(self, kb_dev, changes, name):
         key, pressed = changes.get('keys', [])[0]
@@ -243,18 +243,18 @@ class Microscope(Device, OptomechDevice):
             name = cameras[0]
         return self.dm.getDevice(name)
 
-    def getZStack(self, imager: "Device", z_range, block=False, name="z stack") -> Future[list[Frame]]:
+    def getZStack(self, imager: "Device", z_range, name="z stack") -> Task:
         """Acquire a z-stack of images using the given imager.
 
         The z-stack is returned as frames.
         """
         from acq4.util.imaging.sequencer import acquire_z_stack
 
-        return acquire_z_stack(imager, *z_range, block=block, name=name)
+        return acquire_z_stack(imager, *z_range, name=name)
 
-    @future_wrap
+    @gui_asynch
     def findSurfaceDepth(
-        self, imager: "Device", searchDistance=200 * µm, searchStep=5 * µm, returnStack=False, _future: Future = None
+        self, imager: "Device", searchDistance=200 * µm, searchStep=5 * µm, returnStack=False
     ) -> float | tuple[float, list[Frame]]:
         """Set the surface of the sample based on how focused the images are."""
         z_range = (
@@ -262,14 +262,12 @@ class Microscope(Device, OptomechDevice):
             self.getSurfaceDepth() - searchDistance,
             searchStep,
         )
-        z_stack: list[Frame] = _future.waitFor(
-            self.getZStack(imager, z_range, name="finding surface")
-        ).getResult()
+        z_stack: list[Frame] = self.getZStack(imager, z_range, name="finding surface").wait()
         threshold = self.config.get('surfaceDetectionPercentileThreshold', 96)
         if (idx := find_surface(z_stack, threshold)) is not None:
             depth = z_stack[idx].mapFromFrameToGlobal([0, 0, 0])[2]
             self.setSurfaceDepth(depth)
-            _future.waitFor(self.setFocusDepth(depth, name=f"{self.name()} focus to detected surface"))
+            self.setFocusDepth(depth, name=f"{self.name()} focus to detected surface").wait()
             if returnStack:
                 return depth, z_stack
             return depth

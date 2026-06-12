@@ -9,7 +9,7 @@ import pyqtgraph as pg
 from acq4 import getManager
 from acq4.util import ptime
 from acq4.util.functions import plottable_booleans
-from acq4.util.future import future_wrap
+from acq4.util.gentle import asynch
 from acq4.util.imaging.sequencer import run_image_sequence
 from ._base import PatchPipetteState, SteadyStateAnalysisBase, exponential_decay_avg
 
@@ -247,18 +247,18 @@ class ApproachState(PatchPipetteState):
                 self.maybeRecalibratePipette()
                 self.maybeVisuallyTrackTarget()
                 if self._analysis.tip_is_broken():
-                    self.setResult(interrupted=True, error="Pipette broken")
+                    self.setState(f"{self.stateName} failed: Pipette broken")
                     self.dev.patchRecord()["detectedCell"] = False
                     return {"state": "broken"}
                 if self.obstacleDetected():
                     try:
                         self.avoidObstacle()
                     except TimeoutError:
-                        self.setResult(interrupted=True, error="Fouled by obstacle")
+                        self.setState(f"{self.stateName} failed: Fouled by obstacle")
                         return {"state": "fouled"}
                 if self._moveFuture is None:
                     self._moveFuture = self._move()
-                if self._moveFuture.isDone():
+                if self._moveFuture.is_done:
                     self._moveFuture.wait()  # check for errors
                     self.setState('Move finished; next state')
                     break
@@ -311,29 +311,27 @@ class ApproachState(PatchPipetteState):
 
         pip = self.dev.pipetteDevice
         try:
-            tip_fut = self.waitFor(
-                pip.iterativelyFindTip(
-                    max_allowed_offset=self.config["pipetteRecalibrationMaxChange"],
-                    go_to_tip_first=True,
-                )
+            pip.iterativelyFindTip(
+                max_allowed_offset=self.config["pipetteRecalibrationMaxChange"],
+                go_to_tip_first=True,
             )
         except Exception as e:
             self.setState(f"failed pipette position update: {e}")
 
-    @future_wrap
-    def _move(self, _future):
+    @asynch
+    def _move(self):
         config = self.config
         if self.aboveSurface():
             self.setState("move to surface")
             self._waitForMoveWhileTargetChanges(
-                self.surfaceIntersectionPosition, config['aboveSurfaceSpeed'], True, _future
+                self.surfaceIntersectionPosition, config['aboveSurfaceSpeed'], True, self
             )
         self.setState(f'move to endpoint: {self.endpoint()}')
         self._waitForMoveWhileTargetChanges(
             position_fn=self.endpoint,
             speed=config['belowSurfaceSpeed'],
             continuous=config["advanceContinuous"],
-            future=_future,
+            future=self,
             interval=config['advanceStepInterval'],
             step=config['advanceStepDistance'],
         )
@@ -410,7 +408,7 @@ class ApproachState(PatchPipetteState):
 
         go_past_pos = sidestep_pos + self.config["sidestepPassDistance"] * direction
         move = pip.moveToGlobalNoPlanning(go_past_pos, speed=speed, name='obstacle avoidance pass')
-        while not move.isDone():
+        while not move.is_done:
             self.processAtLeastOneTestPulse()
             if self._analysis.obstacle_detected():
                 move.stop("Obstacle detected while sidestepping")
@@ -423,7 +421,7 @@ class ApproachState(PatchPipetteState):
 
     def _cleanup(self):
         try:
-            if self._moveFuture is not None and not self._moveFuture.isDone():
+            if self._moveFuture is not None and not self._moveFuture.is_done:
                 self._moveFuture.stop("State finished", wait=True)
         except Exception:
             self.dev.logger.exception("Error stopping pipette advance during cleanup")

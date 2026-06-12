@@ -407,7 +407,7 @@ def main():
         cam.setParam('exposure', 0.01)
         cam.setParam('triggerMode', 'Normal')
         fut = cam.driverSupportedFixedFrameAcquisition(5)
-        res = fut.getResult()
+        res = fut.wait()
         print(len(res), res[0].data().shape)
         # with cam.ensureRunning():
         #     fut = cam.acquireFrames(5)

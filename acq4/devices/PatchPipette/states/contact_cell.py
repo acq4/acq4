@@ -199,7 +199,7 @@ class ContactCellState(PatchPipetteState):
     #         self._cell = None
 
     def _cleanup(self):
-        if self._moveFuture is not None and not self._moveFuture.isDone():
+        if self._moveFuture is not None and not self._moveFuture.is_done:
             with log_and_ignore_exception(Exception, "Error stopping move during cleanup"):
                 self._moveFuture.stop()
         # with log_and_ignore_exception(Exception, "Error disabling visual tracking"):
@@ -213,18 +213,14 @@ class ContactCellState(PatchPipetteState):
             if zstack:
                 self.stopVisualTargetTracking('pause tracking for pipette recalibration')
                 try:
-                    self.waitFor(
-                        pip.findTipInStack(maxOffsetDistance=5e-6)
-                    )
+                    pip.findTipInStack(maxOffsetDistance=5e-6)
                 finally:
                     self.startVisualTargetTracking()
             else:
-                tip_fut = self.waitFor(
-                    pip.iterativelyFindTip(
-                        max_allowed_offset=self.config["pipetteRecalibrationMaxChange"],
-                        go_to_tip_first=True,
-                        focus_above=2e-6,
-                    )
+                pip.iterativelyFindTip(
+                    max_allowed_offset=self.config["pipetteRecalibrationMaxChange"],
+                    go_to_tip_first=True,
+                    focus_above=2e-6,
                 )
         except Exception as e:
             self.logger.exception(e)

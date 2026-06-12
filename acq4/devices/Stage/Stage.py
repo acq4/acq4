@@ -19,7 +19,7 @@ from ..OptomechDevice import OptomechDevice
 from ...modules.Visualize3D.travelers_proxy import MovePathException
 from ...motion import MoveSpec
 from ...util.HelpfulException import HelpfulException
-from ...util.future import Future, FutureButton
+from ...util.gentle import GuiPromise, Stopped, FutureButton
 from ...util.geometry import (
     Plane,
     limits_to_boundaries,
@@ -371,7 +371,7 @@ class Stage(Device, OptomechDevice):
         self._defaultSpeed = speed
 
     def isMoving(self):
-        return self._lastMove is not None and not self._lastMove.isDone()
+        return self._lastMove is not None and not self._lastMove.is_done
 
     def move(self, position, speed=None, progress=False, linear=False, **kwds) -> MoveFuture:
         """Move the device to a new position.
@@ -709,13 +709,21 @@ class CallOnce:
         self.called = False
 
 
-class MoveFuture(Future):
-    """Used to track the progress of a requested move operation."""
+class MoveFuture(GuiPromise):
+    """Used to track the progress of a requested move operation.
+
+    This is an externally-completed GuiPromise: it has no body and spawns no
+    thread. The device subclass's hardware-monitor thread is the producer; it
+    completes the move by calling ``self.resolve(...)`` when the target is
+    reached or ``self.fail(exc)`` on error, and checks ``self.is_stopped`` (set
+    by ``stop()``) to abort an in-progress move. Subclasses must not call the
+    old ``_taskDone``/``_stopRequested`` API; use resolve/fail/is_stopped.
+    """
 
     def __init__(self, dev: Stage, pos, speed, name=None):
         if name is None:
             name = f"{dev.name()} move"
-        Future.__init__(self, name=name)
+        GuiPromise.__init__(self, name=name)
         self.startTime = ptime.time()
         self.dev = dev
         self.speed = speed
@@ -730,7 +738,7 @@ class MoveFuture(Future):
         the percent complete. Devices that do not provide position updates while
         moving should reimplement this method.
         """
-        if self.isDone():
+        if self.is_done:
             return 100
         s = np.array(self.startPos)
         t = np.array(self.targetPos)
@@ -742,11 +750,20 @@ class MoveFuture(Future):
         return 100 * d1 / d2
 
     def stop(self, reason="stop requested", wait=False):
-        """Stop the move in progress."""
+        """Stop the move in progress.
+
+        Tells the device to halt, then completes this promise with Stopped via
+        GuiPromise.stop(reason). The producer thread sees ``is_stopped`` and
+        aborts. When *wait* is True, block until the promise actually completes,
+        swallowing the resulting Stopped.
+        """
         with self._isStopCallable as can_call_stop:
-            if can_call_stop and not self.isDone():
+            if can_call_stop and not self.is_done:
                 self.dev.stop()
-                super().stop(reason=reason, wait=wait)
+                super().stop(reason)
+                if wait:
+                    with contextlib.suppress(Stopped):
+                        self.wait()
 
 
 class MovePathFuture(MoveFuture):
@@ -787,59 +804,61 @@ class MovePathFuture(MoveFuture):
         return (100 * fut._pathStep + fut.percentDone()) / len(self.path)
 
     def stop(self, reason=None, wait=False):
+        """Stop the path move: halt the current step, then complete with Stopped.
+
+        Skips MoveFuture.stop (and its dev.stop()) because the current step
+        future already owns the device; we just stop that step and self-complete
+        this promise via GuiPromise.stop(reason).
+        """
         fut = self._currentFuture
         if fut is not None:
-            fut.stop(reason=reason)
+            fut.stop(reason)
         # skip MoveFuture.stop to avoid the mess with dev.stop()
-        Future.stop(self, reason=reason, wait=wait)
+        GuiPromise.stop(self, reason)
+        if wait:
+            with contextlib.suppress(Stopped):
+                self.wait()
 
     def _movePath(self):
+        # Producer thread for this externally-completed promise. It is a raw
+        # thread (not a gentletask task), so it honors our stop by polling
+        # self.is_stopped rather than using check_stop().
         try:
             for i, step in enumerate(self.path):
                 step = step.copy()
                 explanation = step.pop('explanation', 'unnamed')
+                fut = self.dev.move(
+                    **step, name=f'{self.name} step {i+1}/{len(self.path)}: {explanation}'
+                )
+                fut._pathStep = i
+                self._currentFuture = fut
+
+                # Wait for the step, honoring a stop request on this path future.
+                while not fut.is_done:
+                    fut.wait(timeout=0.1)  # returns None on timeout
+                    self.currentStep = i + 1
+                    if self.is_stopped:
+                        fut.stop(self.stop_reason)
+                        break
+
+                if self.is_stopped:
+                    # self.stop() has already completed this promise with Stopped.
+                    return
+
+                # Inspect the step result: re-raising via wait() surfaces any
+                # failure or Stopped from the step future.
                 try:
-                    fut: Future = self.dev.move(
-                        **step, name=f'{self.name} step {i+1}/{len(self.path)}: {explanation}'
-                    )
-                    fut._pathStep = i
-                    self._currentFuture = fut
-                    while not fut.isDone():
-                        with contextlib.suppress(fut.Timeout):
-                            fut.wait(timeout=0.1)  # raises Timeout
-                            self.currentStep = i + 1
-                        if self._stopRequested:
-                            fut.stop()
-                            break
-
-                    if self._stopRequested:
-                        self._taskDone(
-                            interrupted=True,
-                            error=f"Move to {explanation} was cancelled by unknown external "
-                                  f"request.\nFull path: {self.path}",
-                        )
-                        return
-
-                    if fut.wasInterrupted():
-                        self._taskDone(
-                            interrupted=True,
-                            error=f"Path step {i + 1:d}/{len(self.path):d}: {fut.errorMessage()}",
-                            excInfo=fut._excInfo,
-                        )
-                        return
-                except Future.Stopped:
-                    # If this future or a step future was stopped, just raise that error again.
-                    raise
-                except Exception as exc:
-                    self._taskDone(
-                        interrupted=True,
-                        error=f"Error moving to path step {i} ({explanation})",
-                        excInfo=(type(exc), exc, exc.__traceback__),
+                    fut.wait()
+                except Stopped:
+                    return
+                except Exception as e:
+                    self.fail(
+                        RuntimeError(f"Path step {i + 1}/{len(self.path)} failed: {e}")
                     )
                     return
         finally:
-            if not self.isDone():
-                self._taskDone()  # success!
+            if not self.is_done:
+                self.resolve()  # success!
 
     def undo(self):
         """Reverse the moves generated in this future and return a new future."""

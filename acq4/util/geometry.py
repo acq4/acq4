@@ -13,6 +13,7 @@ from trimesh.voxel import VoxelGrid
 import pyqtgraph as pg
 import pyqtgraph.opengl as gl
 from acq4.util.approx import ApproxDict, ApproxSet
+from acq4.util.gentle import raise_errors
 from coorx import (
     SRT3DTransform,
     Transform,
@@ -1334,8 +1335,9 @@ class GeometryMotionPlanner:
 
             obstacles.append((obst_volume, to_global_from_obst, obst.name))
             if visualizer is not None:
-                visualizer.addObstacle(obst.name, obst_volume, to_global_from_obst).raiseErrors(
-                    "obstacle failed to render"
+                raise_errors(
+                    visualizer.addObstacle(obst.name, obst_volume, to_global_from_obst),
+                    "obstacle failed to render",
                 )
         return obstacles
 

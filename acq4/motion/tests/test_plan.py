@@ -99,19 +99,22 @@ def test_kwargs_reach_device_via_execute_plan():
     """AtomicMove.kwargs must be forwarded as **kwargs to moveToGlobalNoPlanning."""
     from acq4.motion.planner import _execute_plan
 
-    class _CapturingFuture:
-        def waitFor(self, result):
-            pass
-
     received = {}
+
+    class _DoneMove:
+        """Stand-in for the task a real move returns; _execute_plan waits on it."""
+
+        def wait(self):
+            return None
 
     class _KwargDevice(MockDevice):
         def moveToGlobalNoPlanning(self, pos, speed, name=None, **kwargs):
             received.update(kwargs)
+            return _DoneMove()
 
     dev = _KwargDevice("kw_dev")
     plan = AtomicMove(dev, [1e-3, 0, 0], "fast", "test", {"linear": True, "custom": 42})
-    _execute_plan(plan, _CapturingFuture())
+    _execute_plan(plan)
 
     assert received.get("linear") is True
     assert received.get("custom") == 42

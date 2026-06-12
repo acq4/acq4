@@ -4,7 +4,6 @@ from __future__ import annotations
 import numpy as np
 
 from acq4 import getManager
-from acq4.util.future import future_wrap
 from .plan import AtomicMove, ParallelGroup, SequentialGroup
 from .plan import MovePlanStep
 from .planner import MotionPlanner

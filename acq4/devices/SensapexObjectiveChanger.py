@@ -1,3 +1,4 @@
+import contextlib
 import threading
 from time import sleep
 
@@ -6,7 +7,7 @@ from acq4.devices.Device import Device
 from acq4.drivers.sensapex import UMP
 from acq4.util import ptime
 from acq4.util.Thread import Thread
-from acq4.util.future import Future
+from acq4.util.gentle import GuiPromise, Stopped
 
 
 class SensapexObjectiveChanger(Device):
@@ -59,7 +60,7 @@ class SensapexObjectiveChanger(Device):
         self._pos_poller.start()
 
     def setLensPosition(self, pos):
-        if self._lensChangeFuture is None or self._lensChangeFuture.isDone():
+        if self._lensChangeFuture is None or self._lensChangeFuture.is_done:
             self._lensChangeFuture = ObjectiveChangeFuture(self, pos)
         return self._lensChangeFuture
 
@@ -93,9 +94,17 @@ class _PositionPollThread(Thread):
             sleep(self._poll_interval)
 
 
-class ObjectiveChangeFuture(Future):
+class ObjectiveChangeFuture(GuiPromise):
+    """Track the progress of a requested objective-changer move.
+
+    This is an externally-completed GuiPromise: a raw daemon thread runs
+    ``poll`` and resolves the promise once the changer reaches the target, fails
+    it on timeout, and checks ``self.is_stopped`` to abort when ``stop()`` is
+    called (which also halts the hardware).
+    """
+
     def __init__(self, dev: SensapexObjectiveChanger, pos):
-        Future.__init__(self, name=f"ObjectiveChangeFuture_{dev.name()}")
+        GuiPromise.__init__(self, name=f"ObjectiveChangeFuture_{dev.name()}")
         self.dev = dev
         self.target = pos
         self._start = ptime.time()
@@ -104,7 +113,7 @@ class ObjectiveChangeFuture(Future):
         self.pollThread.daemon = True
 
         if dev.getLensPosition() == pos:
-            self._taskDone()
+            self.resolve(pos)
         else:
             dev.dev.set_lens_position(pos)
             self.pollThread.start()
@@ -113,27 +122,33 @@ class ObjectiveChangeFuture(Future):
         target = self.target
         dev = self.dev
         while True:
+            if self.is_stopped:
+                return
             pos = dev.getLensPosition()
             if pos == target:
-                self._taskDone()
+                self.resolve(pos)
                 break
             elif ptime.time() > self._start + 15:
                 if self._retried:
-                    self._taskDone(interrupted=True, error="Timed out waiting for objective changer to move (retried once)")
+                    self.fail(RuntimeError("Timed out waiting for objective changer to move (retried once)"))
                     break
                 else:
                     self._retried = True
                     self._start = ptime.time()
                     dev.dev.set_lens_position(target)
-            try:
-                self.sleep(0.2)
-            except self.StopRequested:
-                self._taskDone(interrupted=True, error="Stop requested before operation finished.")
-                break
+            sleep(0.2)
 
-    def stop(self, **kwargs):
+    def stop(self, reason=None, wait=False):
+        """Halt the changer hardware, then complete this promise with Stopped.
+
+        The poll thread sees ``is_stopped`` and aborts. When *wait* is True,
+        block until the promise actually completes, swallowing the Stopped.
+        """
         self.dev.stop()
-        Future.stop(self)
+        GuiPromise.stop(self, reason)
+        if wait:
+            with contextlib.suppress(Stopped):
+                self.wait()
 
     def percentDone(self):
-        return 100 if self.isDone() else 0
+        return 100 if self.is_done else 0

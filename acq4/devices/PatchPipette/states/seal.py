@@ -9,6 +9,7 @@ import numpy as np
 from acq4.util import ptime, Qt
 import pyqtgraph as pg
 from acq4.util.debug import log_and_ignore_exception
+from acq4.util.gentle import Stopped
 from acq4.util.functions import plottable_booleans
 from neuroanalysis.data import TSeries
 from pyqtgraph.units import kPa
@@ -348,15 +349,9 @@ class SealState(PatchPipetteState):
                 if self._analysis.failure() or dt > config['autoSealTimeout']:
                     self._patchrec['sealSuccessful'] = False
                     if self._analysis.failure():
-                        self.setResult(
-                            interrupted=True,
-                            error="Resistance hung up below threshold without improving",
-                        )
+                        self.setState("Resistance hung up below threshold without improving")
                     else:
-                        self.setResult(
-                            interrupted=True,
-                            error=f"Seal took longer than `autoSealTimeout` ({dt:f}s)",
-                        )
+                        self.setState(f"Seal took longer than `autoSealTimeout` ({dt:f}s)")
                     next_state = {"state": config["fallbackState"]}
                     if holdingSet:
                         next_state["initialVCHolding"] = None
@@ -438,21 +433,20 @@ class SealState(PatchPipetteState):
         while True:
             try:
                 self.checkStop()
-            except self.StopRequested:
+            except Stopped:
                 future.stop(reason="parent task stop requested")
                 raise
             self.processAtLeastOneTestPulse()
             if self._analysis.success():
                 future.stop(reason="seal acquired")
                 break
-            try:
-                future.wait(0.1)
+            # wait() returns None on timeout (our 0.1s loopbeat) and re-raises any
+            # error from the future; break once the future has actually finished.
+            future.wait(0.1)
+            if future.is_done:
                 break
-            except self.Timeout as e:
-                if future.wasInterrupted():  # a _real_ timeout, as opposed to our 0.1s loopbeat
-                    future.wait()  # let it sing
-                if timeout is not None and time.time() - start > timeout:
-                    raise self.Timeout(f"Timed out waiting {timeout}s for {future!r}") from e
+            if timeout is not None and time.time() - start > timeout:
+                raise RuntimeError(f"Timed out waiting {timeout}s for {future!r}")
 
     def best_pressure(self, start: float, turnaround: float, end: float) -> float:
         pressures, resistances = self._trim_data_caches(start)

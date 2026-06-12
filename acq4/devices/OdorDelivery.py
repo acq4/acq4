@@ -12,7 +12,7 @@ from pyqtgraph.parametertree import ParameterTree
 from pyqtgraph.parametertree.parameterTypes import GroupParameter, ListParameter
 from .Device import Device, TaskGui, DeviceTask
 from ..util import Qt
-from ..util.future import Future
+from ..util.gentle import GuiPromise
 from ..util.generator.StimParamSet import SeqParameter
 
 
@@ -425,7 +425,7 @@ class OdorTask(DeviceTask):
             self.dev.setChannelValue(chan, 1 if chan == first_chan else 0)
 
     def isDone(self):
-        return self._future is not None and self._future.isDone()
+        return self._future is not None and self._future.is_done
 
     def getResult(self):
         cmd = self._cmd.copy()
@@ -443,7 +443,14 @@ class OdorTask(DeviceTask):
             self._future.stop(reason=kwargs.get("reason"))
 
 
-class OdorFuture(Future):
+class OdorFuture(GuiPromise):
+    """Track the progress of a timed odor-delivery schedule.
+
+    This is an externally-completed GuiPromise: a raw worker thread runs
+    ``_executeSchedule`` and resolves the promise once the schedule finishes,
+    checking ``self.is_stopped`` to abort early when ``stop()`` is called.
+    """
+
     def __init__(self, dev, schedule: List[OdorEvent]):
         super().__init__(name=f"{dev.name()}_odor_future")
         self._dev = dev
@@ -454,7 +461,7 @@ class OdorFuture(Future):
         self._thread.start()
 
     def percentDone(self):
-        if self.isDone():
+        if self.is_done:
             return 100
         return 100 * self._time_elapsed / self._duration
 
@@ -463,6 +470,8 @@ class OdorFuture(Future):
         start = datetime.now()
         chan_values = {ev.odor[0]: 0 for ev in self._schedule}
         while True:
+            if self.is_stopped:
+                return
             sleep(0.01)
             now = (datetime.now() - start).total_seconds()
             self._time_elapsed = now
@@ -489,4 +498,4 @@ class OdorFuture(Future):
                 if action_needed:
                     self._dev.setChannelValue(chan, chan_values[chan])
 
-        self._isDone = True
+        self.resolve()
