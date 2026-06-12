@@ -85,8 +85,13 @@ class MinirigV1MotionPlanner(DefaultMotionPlanner):
         going_inside = not np.allclose(spec.position, 0)
         if going_inside and site.hasApproachPosition(pip):
             target_global = np.array(site.mapToGlobal(spec.position)) + site_delta
-            pip_to_interact = self._safe_path(pip, approach_global, target_global, speed)
-            steps.extend(AtomicMove(pip, pos, spd, expl, {'linear': lin, **kw}) for pos, spd, lin, expl in pip_to_interact)
+            steps.append(AtomicMove(pip, target_global, speed, "pipette into site", {'linear': True, **kw}))
+            # MC: maybe we don't need to do a full plan at this point
+            # pip_to_interact = self._safe_path(pip, approach_global, target_global, speed)
+            # steps.extend(
+            #     AtomicMove(pip, pos, spd, expl, {'linear': lin, **kw})
+            #     for pos, spd, lin, expl in pip_to_interact
+            # )
 
         return SequentialGroup(steps, name or f"approach {site.name()}")
 
