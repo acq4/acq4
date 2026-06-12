@@ -71,7 +71,7 @@ class Autopatcher:
                     set_state("Autopatch: finding pipette tip")
                     ppip.pipetteDevice.goAboveTarget("fast").wait()
                     ppip.clampDevice.autoPipetteOffset()
-                    win.pipetteDevice.iterativelyFindTip().wait()
+                    win.pipetteDevice.iterativelyFindTip()
 
                     # move 50 um up for sonication
                     pip_pos = ppip.pipetteDevice.globalPosition()
@@ -206,7 +206,7 @@ class Autopatcher:
         # if (pos - margin) not in stack or (pos + margin) not in stack:
         # stack = None
         try:
-            cell.initializeTracker(win.cameraDevice).wait()
+            cell.initializeTracker(win.cameraDevice)
         except Stopped:
             raise
         except ValueError as e:

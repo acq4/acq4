@@ -126,7 +126,6 @@ class ResnetPipetteTracker(PipetteTracker):
         self.last_heatmap = result[3].get('cropped_heatmap') if len(result) > 3 else None
         return result[:3]
 
-    @asynch
     def estimatePositionFromStack(
         self,
         *,

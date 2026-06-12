@@ -900,7 +900,6 @@ class Pipette(Device, OptomechDevice):
         """Return an object that records all motion updates from this pipette"""
         return PipetteRecorder(self)
 
-    @asynch
     def iterativelyFindTip(self, max_reps=10, found_threshold=3e-6, delay_after_move=0.4,
                            max_allowed_offset=None, delay_after_update=0, reserve_devices=True,
                            go_to_tip_first=False, stack_mode=False, focus_above=0):
@@ -971,10 +970,9 @@ class Pipette(Device, OptomechDevice):
                 self.setTipOffset(start_pos)
                 raise exc
 
-    @asynch
     def findTipInStack(self, *, maxOffsetDistance=20e-6):
         startPos = self.globalPosition()
-        pos, analysis = self.tracker.estimatePositionFromStack().wait()
+        pos, analysis = self.tracker.estimatePositionFromStack()
         if pos is None:
             raise RuntimeError(f"Pipette tip search failed")
         dist = np.linalg.norm(np.array(pos) - np.array(startPos))

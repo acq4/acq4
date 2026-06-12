@@ -65,7 +65,7 @@ class CellDetector:
         cell = self._window.patchPipetteDevice.cell
         if cell is None or cell.position != target:
             cell = Cell(target)
-            cell.initializeTracker(self._window.cameraDevice).wait()
+            cell.initializeTracker(self._window.cameraDevice)
         self._window._unranked_cells.append(cell)
         cells = list(self._window._unranked_cells)
         futureInGuiThread(self._displayBoundingBoxes, cells).wait()
@@ -190,7 +190,7 @@ class CellDetector:
             min_volume_m3=win.ui.minVolumeSpin.value(),
             n=None,
             save_prefix=save_prefix,
-        ).wait(timeout=600)
+        )
         logger.info(f"Neuron detection finished. Found {len(detection_results)} potential neurons.")
 
         win._current_detection_stack = detection_stack

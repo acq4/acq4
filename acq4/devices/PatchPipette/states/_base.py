@@ -406,7 +406,7 @@ class PatchPipetteState(GuiTask):
         if cell is None:
             raise ValueError("Cannot visually track target; no cell is assigned to this pipette device.")
         if not cell.isInitialized:
-            cell.initializeTracker(self.dev.pipetteDevice.imagingDevice()).wait()
+            cell.initializeTracker(self.dev.pipetteDevice.imagingDevice())
 
         cell.enableTracking(True)
         cell.sigTrackingMultipleFramesStart.connect(self._pausePipetteForExtendedTracking)

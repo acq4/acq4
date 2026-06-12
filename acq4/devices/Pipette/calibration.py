@@ -360,7 +360,7 @@ def findNewPipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=0.
         pipette.moveToGlobalNoPlanning(imager.globalCenterPosition(), 'fast', name=f"{pipette.name()} auto-calibrate coarse center").wait()
 
         # iteratively refine tip position until convergence
-        pipette.iterativelyFindTip(30).wait()
+        pipette.iterativelyFindTip(30)
     finally:
         task = current_task()
         if task is not None:
@@ -487,7 +487,7 @@ def calibrate_manipulator_axes(
     calibration_points = []
 
     # Accurately locate the tip before starting the sweep.
-    pipette.iterativelyFindTip(10).wait()
+    pipette.iterativelyFindTip(10)
 
     for axis in range(manipulator.nAxes):
         axis_start_pos = list(manipulator.getPosition())
@@ -525,6 +525,6 @@ def calibrate_manipulator_axes(
         # Return to the starting position before sweeping the next axis.
         manipulator.move(axis_start_pos, 'slow', name=f"{manipulator.name()} calibrate axis {axis} return").wait()
         # Re-locate tip at start before recording the first point of the next axis.
-        pipette.iterativelyFindTip(10).wait()
+        pipette.iterativelyFindTip(10)
 
     return calibration_points

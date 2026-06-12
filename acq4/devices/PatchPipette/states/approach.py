@@ -311,11 +311,9 @@ class ApproachState(PatchPipetteState):
 
         pip = self.dev.pipetteDevice
         try:
-            tip_fut = self.waitFor(
-                pip.iterativelyFindTip(
-                    max_allowed_offset=self.config["pipetteRecalibrationMaxChange"],
-                    go_to_tip_first=True,
-                )
+            pip.iterativelyFindTip(
+                max_allowed_offset=self.config["pipetteRecalibrationMaxChange"],
+                go_to_tip_first=True,
             )
         except Exception as e:
             self.setState(f"failed pipette position update: {e}")

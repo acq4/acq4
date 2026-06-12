@@ -293,7 +293,7 @@ class MultiPatchWindow(Qt.QWidget):
         while work_to_do:
             patchpip = work_to_do.pop(0)
             pip = patchpip.pipetteDevice if isinstance(patchpip, PatchPipette) else patchpip
-            pip.iterativelyFindTip(max_reps=max_reps).wait(timeout=None)
+            pip.iterativelyFindTip(max_reps=max_reps)
 
     def _cellDetect(self):
         return self._setAllSelectedPipettesToState('cell detect')
