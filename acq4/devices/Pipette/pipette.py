@@ -16,7 +16,7 @@ from acq4.devices.Stage import Stage, MovePathFuture
 from acq4.modules.Camera import CameraModuleInterface
 from acq4.motion import MoveSpec
 from acq4.util import Qt, ptime
-from acq4.util.gentle import GuiPromise, asynch, raise_errors, sleep
+from acq4.util.gentle import GuiPromise, asynch, raise_errors, sleep, synch
 from acq4.util.target import Target
 from coorx import AffineTransform
 from pyqtgraph import Point, siFormat
@@ -944,7 +944,7 @@ class Pipette(Device, OptomechDevice):
 
                 if stack_mode:
                     pos = self._findTipViaZStack()
-                    self.setTipOffsetIfAcceptable(pos).wait()
+                    synch(self.setTipOffsetIfAcceptable)(pos)
                     return
 
                 for _ in range(max_reps):
@@ -952,7 +952,7 @@ class Pipette(Device, OptomechDevice):
                     heatmap = getattr(self.tracker, 'last_heatmap', None)
                     if heatmap is not None and heatmap.max() < 2 * heatmap.std():
                         pos = self._findTipViaZStack()
-                    self.setTipOffsetIfAcceptable(pos).wait()
+                    synch(self.setTipOffsetIfAcceptable)(pos)
                     converged = last_pos is not None and np.linalg.norm(np.array(pos) - np.array(last_pos)) < found_threshold
                     sleep(delay_after_update)
                     if converged:

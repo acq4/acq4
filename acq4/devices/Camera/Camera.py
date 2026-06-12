@@ -20,7 +20,7 @@ from acq4.util import Qt
 from acq4.util.Mutex import Mutex
 from acq4.util.Mutex import RecursiveMutex
 from acq4.util.Thread import Thread
-from acq4.util.gentle import GuiPromise, asynch, check_stop, sleep
+from acq4.util.gentle import GuiPromise, asynch, check_stop, sleep, synch
 from acq4.util.imaging.frame import Frame
 from coorx import TTransform, SRT3DTransform
 from pyqtgraph import Vector
@@ -408,7 +408,7 @@ class Camera(DAQGeneric, OptomechDevice):
     def getEstimatedFrameRate(self):
         """Return the estimated frame rate of the camera."""
         with self.ensureRunning():
-            return self.acqThread.getEstimatedFrameRate().wait()
+            return synch(self.acqThread.getEstimatedFrameRate)()
 
     # @ftrace
     def createTask(self, cmd, parentTask):

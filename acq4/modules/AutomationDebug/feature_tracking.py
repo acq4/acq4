@@ -6,7 +6,7 @@ import numpy as np
 
 from acq4.devices.Pipette.calibration import findNewPipette
 from acq4.logging_config import get_logger
-from acq4.util.gentle import Stopped, Task, gui_asynch, sleep
+from acq4.util.gentle import Stopped, Task, gui_asynch, sleep, synch
 from acq4_automation.feature_tracking.cell import Cell
 from coorx import Point
 
@@ -32,7 +32,7 @@ class FeatureTracker:
         pipette.moveTo("home", "fast")
         while True:
             try:
-                findNewPipette(pipette, camera, camera.scopeDev).wait()
+                synch(findNewPipette)(pipette, camera, camera.scopeDev)
                 error = np.linalg.norm(pipette.globalPosition() - true_tip_position)
                 win.sigLogMessage.emit(
                     f"Calibration complete: {error * 1e6:.2g}µm error"

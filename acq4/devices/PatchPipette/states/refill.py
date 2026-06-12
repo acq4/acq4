@@ -2,7 +2,7 @@
 # Supports periodic clog mitigation (pressure pulse and/or sonication) interleaved with suction.
 from __future__ import annotations
 
-from acq4.util.gentle import asynch
+from acq4.util.gentle import asynch, synch
 from ._base import PatchPipetteState
 
 
@@ -122,4 +122,4 @@ class RefillState(PatchPipetteState):
         except Exception:
             dev.logger.exception("Error resetting pressure after refill")
 
-        super()._cleanup().wait()
+        synch(super()._cleanup)()

@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Any
 
 from acq4.devices.PatchPipette import PatchPipette
 from acq4.logging_config import get_logger
-from acq4.util.gentle import Stopped, check_stop, gui_asynch, set_state, sleep
+from acq4.util.gentle import Stopped, check_stop, gui_asynch, set_state, sleep, synch
 from acq4.util.threadrun import runInGuiThread
 from acq4.util.imaging.sequencer import run_image_sequence
 from ..TaskRunner import TaskRunner
@@ -69,7 +69,7 @@ class Autopatcher:
                     win.cameraDevice.scopeDev.findSurfaceDepth(win.cameraDevice).wait()
 
                     set_state("Autopatch: finding pipette tip")
-                    ppip.pipetteDevice.goAboveTarget("fast").wait()
+                    synch(ppip.pipetteDevice.goAboveTarget)("fast")
                     ppip.clampDevice.autoPipetteOffset()
                     win.pipetteDevice.iterativelyFindTip()
 
@@ -113,11 +113,11 @@ class Autopatcher:
                     self._autopatchRunTaskRunner()
 
                     set_state("Autopatch: Taking cell images")
-                    win.scopeDevice.loadPreset('GFP').wait()
+                    synch(win.scopeDevice.loadPreset)('GFP')
                     self._saveStack("patched GFP cellfie")
                     # win.scopeDevice.loadPreset('tdTomato')
                     # self._saveStack("patched tdTomato cellfie")
-                    win.scopeDevice.loadPreset('brightfield').wait()
+                    synch(win.scopeDevice.loadPreset)('brightfield')
                     ppip.pipetteDevice.focusTarget('slow').wait()
 
                     # set_state("Autopatch: resealing")

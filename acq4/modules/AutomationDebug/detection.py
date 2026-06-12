@@ -9,7 +9,7 @@ import numpy as np
 from acq4.logging_config import get_logger
 from acq4.modules.Camera import CameraWindow
 from acq4.util import Qt
-from acq4.util.gentle import Stopped, Task, gui_asynch
+from acq4.util.gentle import Stopped, Task, gui_asynch, synch
 from acq4.util.imaging.sequencer import acquire_z_stack
 from acq4.util.target import TargetBox
 from acq4.util.threadrun import futureInGuiThread, runInGuiThread
@@ -130,13 +130,13 @@ class CellDetector:
                     f"Starting multichannel Z-stack acquisition: Detection='{detection_preset}', "
                     f"Classification='{classification_preset}'"
                 )
-                win.scopeDevice.loadPreset(detection_preset).wait()
+                synch(win.scopeDevice.loadPreset)(detection_preset)
             detection_stack = acquire_z_stack(
                 win.cameraDevice, start_z, stop_z, step_z, slow_fallback=False, name="neuron detection stack"
             ).wait(timeout=100)
 
             if multichannel_processing_intended:
-                win.scopeDevice.loadPreset(classification_preset).wait()
+                synch(win.scopeDevice.loadPreset)(classification_preset)
                 classification_stack = acquire_z_stack(
                     win.cameraDevice, start_z, stop_z, step_z, slow_fallback=False, name="neuron classification stack"
                 ).wait(timeout=100)

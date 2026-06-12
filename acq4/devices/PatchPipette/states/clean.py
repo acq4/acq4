@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from acq4 import getManager
-from acq4.util.gentle import asynch
+from acq4.util.gentle import asynch, synch
 from pyqtgraph import units
 from ._base import PatchPipetteState
 
@@ -108,4 +108,4 @@ class CleanState(PatchPipetteState):
         # except Exception:
         #     dev.logger.exception("Error resetting pipette position after clean")
 
-        super()._cleanup().wait()
+        synch(super()._cleanup)()

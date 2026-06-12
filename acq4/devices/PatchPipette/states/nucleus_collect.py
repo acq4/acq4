@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from acq4.motion import MoveSpec
-from acq4.util.gentle import asynch
+from acq4.util.gentle import asynch, synch
 from pyqtgraph import units
 from ._base import PatchPipetteState
 
@@ -96,4 +96,4 @@ class NucleusCollectState(PatchPipetteState):
         except Exception:
             self.dev.logger.exception("Error resetting pipette position after collection")
 
-        super()._cleanup().wait()
+        synch(super()._cleanup)()
