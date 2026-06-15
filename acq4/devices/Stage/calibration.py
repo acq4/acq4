@@ -227,17 +227,15 @@ class ManipulatorAxesCalibrationWindow(Qt.QWidget):
         self.autoCollectBtn.setEnabled(False)
         self.autoCollectBtn.setText("collecting...")
         future = calibrate_manipulator_axes(pipette)
-        future.onFinish(self._autoCollectFinished)
+        # GuiTask's sigFinished is already marshalled to the GUI thread, so we can
+        # apply the result directly without an extra runInGuiThread hop.
+        future.sigFinished.connect(self._autoCollectFinished)
 
     def _autoCollectFinished(self, future):
-        from acq4.util.threadrun import runInGuiThread
-        runInGuiThread(self._applyAutoCollectResult, future)
-
-    def _applyAutoCollectResult(self, future):
         self.autoCollectBtn.setEnabled(True)
         self.autoCollectBtn.setText("auto collect")
         try:
-            points = future.getResult()
+            points = future.wait()
         except Exception:
             self.dev.logger.exception("Auto collect calibration failed")
             return

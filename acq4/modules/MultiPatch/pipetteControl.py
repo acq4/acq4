@@ -9,7 +9,7 @@ from acq4.util.ui.pipetteEventLog import PipetteEventLog
 from neuroanalysis.data import TSeries
 from neuroanalysis.test_pulse import PatchClampTestPulse
 
-from acq4.util.future import future_wrap
+from acq4.util.gentle import asynch
 
 Ui_PipetteControl = Qt.importTemplate('.pipetteTemplate')
 
@@ -107,8 +107,8 @@ class PipetteControl(Qt.QWidget):
         self.ui.icHoldingSpin.valueChanged.connect(self.icHoldingSpinChanged)
         self.ui.autoBiasTargetSpin.valueChanged.connect(self.autoBiasSpinChanged)
 
-        self.ui.newPipetteBtn.setOpts(future_producer=self.newPipetteClicked, stoppable=True)
-        self.ui.cancelBtn.setOpts(future_producer=self._cancelClicked)
+        self.ui.newPipetteBtn.setOpts(task_producer=self.newPipetteClicked, stoppable=True)
+        self.ui.cancelBtn.setOpts(task_producer=self._cancelClicked)
         self.ui.fouledCheck.stateChanged.connect(self.fouledCheckChanged)
         self.ui.brokenCheck.stateChanged.connect(self.brokenCheckChanged)
 
@@ -355,8 +355,8 @@ class PipetteControl(Qt.QWidget):
         self.ui.newPipetteBtn.setStyleSheet("")
         return self.pip.newPipette()
 
-    @future_wrap
-    def _cancelClicked(self, _future):
+    @asynch
+    def _cancelClicked(self):
         self.pip.getState().stop("user requested cancel", wait=True)
 
     def tipCleanChanged(self, pip, clean):

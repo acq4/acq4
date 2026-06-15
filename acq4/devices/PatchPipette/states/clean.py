@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from acq4 import getManager
-from acq4.util.future import future_wrap
+from acq4.util.gentle import asynch, synch
 from pyqtgraph import units
 from ._base import PatchPipetteState
 
@@ -76,7 +76,7 @@ class CleanState(PatchPipetteState):
                 dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
                 self.sleep(delay)
 
-            if self.sonication is not None and not self.sonication.isDone():
+            if self.sonication is not None and not self.sonication.is_done:
                 self.waitFor(self.sonication)
 
         dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
@@ -86,18 +86,18 @@ class CleanState(PatchPipetteState):
         dev.newPatchAttempt()
         return {"state": config['nextState']}
 
-    def resetPosition(self, parent_future):
+    def resetPosition(self):
         # todo we need to handle this somehow for both path generators
         if self.moveFuture is not None:
             fut = self.moveFuture.undo()
             self.moveFuture = None
-            parent_future.waitFor(fut, timeout=None)
+            fut.wait()
 
-    @future_wrap
-    def _cleanup(self, _future):
+    @asynch
+    def _cleanup(self):
         dev = self.dev
         try:
-            if self.sonication is not None and not self.sonication.isDone():
+            if self.sonication is not None and not self.sonication.is_done:
                 self.sonication.stop("parent task is cleaning up before sonication finished")
         except Exception:
             dev.logger.exception("Error stopping sonication")
@@ -108,8 +108,8 @@ class CleanState(PatchPipetteState):
             dev.logger.exception("Error resetting pressure after clean")
 
         # try:
-        #     _future.waitFor(dev.pipetteDevice.moveTo('home', 'fast'))
+        #     dev.pipetteDevice.moveTo('home', 'fast').wait()
         # except Exception:
         #     dev.logger.exception("Error resetting pipette position after clean")
 
-        _future.waitFor(super()._cleanup(), timeout=None)
+        synch(super()._cleanup)()

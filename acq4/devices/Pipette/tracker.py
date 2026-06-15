@@ -8,7 +8,7 @@ import scipy.ndimage as ndi
 import pyqtgraph as pg
 from acq4.Manager import getManager
 from acq4.util import Qt
-from acq4.util.future import Future, future_wrap
+from acq4.util.gentle import asynch, synch
 from acq4.util.image_registration import imageTemplateMatch
 from acq4.util.imaging.sequencer import acquire_z_stack
 from .pipette_detection import TemplateMatchPipetteDetector
@@ -28,7 +28,7 @@ class PipetteTracker:
         """
         imager = self._getImager(imager)
         with imager.ensureRunning(ensureFreshFrames=True):
-            return imager.acquireFrames(1).getResult()[0]
+            return imager.acquireFrames(1).wait()[0]
 
     def _getImager(self, imager=None):
         if imager is None:
@@ -126,11 +126,9 @@ class ResnetPipetteTracker(PipetteTracker):
         self.last_heatmap = result[3].get('cropped_heatmap') if len(result) > 3 else None
         return result[:3]
 
-    @future_wrap
     def estimatePositionFromStack(
         self,
         *,
-        _future:Future,
         z_range: float = 15e-6,
         z_step: float = 1e-6,
     ) -> tuple[float, float, float] | None:
@@ -162,14 +160,12 @@ class ResnetPipetteTracker(PipetteTracker):
 
         # Scan from above the tip downward (+Z is up in global coords, so z_center+z_range is shallower).
         # enforce_linear_z_stack always returns frames sorted low-z to high-z (deep to shallow).
-        fut = acquire_z_stack(
+        frames = acquire_z_stack(
             imager,
             start=z_center + z_range,
             stop=z_center - z_range,
             step=z_step,
-        )
-        _future.waitFor(fut)
-        frames = fut.getResult()
+        ).wait()
 
         pipette_angle = self.pipetteAngleFromFrame(frames[0])
 
@@ -290,9 +286,9 @@ class CorrelationPipetteTracker(PipetteTracker):
         # currently just returns the length of 100 pixels in the frame
         return frame.info()["pixelSize"][0] * 100
 
-    @future_wrap
+    @asynch
     def takeReferenceFrames(
-        self, zRange=None, zStep=None, imager=None, tipLength=None, _future: Future = None
+        self, zRange=None, zStep=None, imager=None, tipLength=None
     ):
         """Collect a series of images of the pipette tip at various focal depths.
 
@@ -319,17 +315,17 @@ class CorrelationPipetteTracker(PipetteTracker):
             zStep = zRange / 30
 
         # collect pipette stack
-        frames = acquire_z_stack(
-            imager, zStart, zEnd, zStep, block=True, name="pipette reference stack"
-        ).getResult()
+        frames = synch(acquire_z_stack)(
+            imager, zStart, zEnd, zStep, name="pipette reference stack"
+        )
         pxSize = frames[0].info()["pixelSize"]
         frames = np.stack([f.data()[minImgPos[0]:maxImgPos[0], minImgPos[1]:maxImgPos[1]] for f in frames], axis=0).astype(float)
 
         # collect background stack
-        _future.waitFor(self.pipette.moveToLocalNoPlanning([-tipLength * 3, 0, 0], "slow"))
-        bg_frames = acquire_z_stack(
-            imager, zStart, zEnd, zStep, block=True, name="background for subtracting"
-        ).getResult()
+        self.pipette.moveToLocalNoPlanning([-tipLength * 3, 0, 0], "slow").wait()
+        bg_frames = synch(acquire_z_stack)(
+            imager, zStart, zEnd, zStep, name="background for subtracting"
+        )
         bg_frames = np.stack([f.data()[minImgPos[0]:maxImgPos[0], minImgPos[1]:maxImgPos[1]] for f in bg_frames], axis=0).astype(float)
 
         # return pipette to original position

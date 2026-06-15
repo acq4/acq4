@@ -2,7 +2,7 @@
 # Supports periodic clog mitigation (pressure pulse and/or sonication) interleaved with suction.
 from __future__ import annotations
 
-from acq4.util.future import future_wrap
+from acq4.util.gentle import asynch, synch
 from ._base import PatchPipetteState
 
 
@@ -107,16 +107,16 @@ class RefillState(PatchPipetteState):
             dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
             self.sleep(duration)
 
-        if sonication is not None and not sonication.isDone():
+        if sonication is not None and not sonication.is_done:
             self.waitFor(sonication)
 
         self.setState('refilling pipette')
 
-    @future_wrap
-    def _cleanup(self, _future):
+    @asynch
+    def _cleanup(self):
         dev = self.dev
         try:
-            if self._sonication is not None and not self._sonication.isDone():
+            if self._sonication is not None and not self._sonication.is_done:
                 self._sonication.stop("parent task is cleaning up before sonication finished")
         except Exception:
             dev.logger.exception("Error stopping sonication during refill cleanup")
@@ -126,4 +126,4 @@ class RefillState(PatchPipetteState):
         except Exception:
             dev.logger.exception("Error resetting pressure after refill")
 
-        _future.waitFor(super()._cleanup(), timeout=None)
+        synch(super()._cleanup)()

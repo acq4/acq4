@@ -1,6 +1,6 @@
 from acq4.util import Qt
 import pyqtgraph as pg
-from acq4.util.future import FutureButton
+from acq4.util.gentle import FutureButton
 
 
 class PatchPipetteDeviceGui(Qt.QWidget):

@@ -1,3 +1,4 @@
+import threading
 import time
 
 from acq4.drivers.SutterMPC200 import SutterMPC200 as MPC200_Driver
@@ -306,27 +307,39 @@ class MPC200MoveFuture(MoveFuture):
             time.sleep(5e-3)
         if isinstance(status, Exception):
             raise status
-        
-    def wasInterrupted(self):
-        """Return True if the move was interrupted before completing.
-        """
-        return isinstance(self._getStatus()[1], Exception)
+
+        # External producer for this promise: poll the shared monitor thread's
+        # move status and complete the promise when the move finishes or errors.
+        self._monitorThread = threading.Thread(
+            target=self._monitorMove, name=f'{dev.name()} : {self.name}', daemon=True
+        )
+        self._monitorThread.start()
+
+    def _monitorMove(self):
+        # Raw thread (not a gentletask task): honor a stop request by polling
+        # self.is_stopped, and push completion onto the promise.
+        while True:
+            if self.is_stopped:
+                return
+            start, status = self._getStatus()
+            if isinstance(status, Exception):
+                self.fail(status)
+                return
+            if status is True:
+                self.resolve(None)
+                return
+            time.sleep(5e-3)
 
     def percentDone(self):
-        """Return an estimate of the percent of move completed based on the 
+        """Return an estimate of the percent of move completed based on the
         device's speed table.
         """
-        if self.isDone():
+        if self.is_done:
             return 100
         dt = ptime.time() - self._getStatus()[0]
         if self._expectedDuration == 0:
             return 99
         return max(min(100 * dt / self._expectedDuration, 99), 0)
-    
-    def isDone(self):
-        """Return True if the move is complete.
-        """
-        return self._getStatus()[1] not in (None, False)
 
     def _getStatus(self):
         # check status of move unless we already know it is complete.
