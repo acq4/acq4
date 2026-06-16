@@ -57,31 +57,34 @@ class MinirigV1MotionPlanner(DefaultMotionPlanner):
         speed = spec.speed or "fast"
         pip_start = np.array(pip.globalPosition())
 
-        # Step 1: scope up (z-only) — must happen before any lateral scope movement
+        # scope up (z-only) — must happen before any lateral scope movement
         steps = [AtomicMove(scope, up_pos, speed, "scope up before park")]
 
-        # Step 2: pipette retract to approach depth — pip exits tissue before scope goes lateral
+        # pipette retract to approach depth — pip exits tissue before scope goes lateral
         pip_safe = pip.positionAtDepth(pip.approachDepth(), start=pip_start)
         if pip_safe[2] > pip_start[2]:
             steps.append(AtomicMove(pip, pip_safe, speed, "pip retract before scope park"))
             pip_start = pip_safe
 
-        # Step 3: scope lateral to park position
+        # pipette goes home
+        steps.append(AtomicMove(pip, pip.homePosition(), speed, "pipette home before scope park"))
+
+        # scope lateral to park position
         steps.append(AtomicMove(scope, park_pos, speed, "scope to park position"))
 
-        # Step 4: site stage to approach position (if on a movable stage)
+        # site stage to approach position (if on a movable stage)
         approach_global = np.array(site.approachGlobal(pip))
         site_delta = approach_global - np.array(site.globalPosition())
         site_spec = site.approachMoveSpec(pip, speed=speed)
         if site_spec is not None:
             steps.append(self._plan_generic(site_spec, f"position {site.name()}"))
 
-        # Step 5: pipette to approach position (safe path from current retracted position)
+        # pipette to approach position (safe path from current retracted position)
         kw = spec.kwargs
         pip_to_approach = self._safe_path(pip, pip_start, approach_global, speed)
         steps.extend(AtomicMove(pip, pos, spd, expl, {'linear': lin, **kw}) for pos, spd, lin, expl in pip_to_approach)
 
-        # Step 6: pipette into site (only when going inside and approach is saved)
+        # pipette into site (only when going inside and approach is saved)
         going_inside = not np.allclose(spec.position, 0)
         if going_inside and site.hasApproachPosition(pip):
             target_global = np.array(site.mapToGlobal(spec.position)) + site_delta

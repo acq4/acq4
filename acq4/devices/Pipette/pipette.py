@@ -5,9 +5,10 @@ import json
 import os
 import time
 import weakref
-from typing import List
+from typing import List, Any
 
 import numpy as np
+from numpy import dtype, ndarray
 
 import pyqtgraph as pg
 from acq4.devices.Device import Device
@@ -531,13 +532,16 @@ class Pipette(Device, OptomechDevice):
         Always routes through the global motion planner so that any
         post-interaction cleanup steps are included when needed.
         """
+        return self.dm.move(MoveSpec(self, self.homePosition(), speed=speed))
+
+    def homePosition(self) -> ndarray[Any, dtype[Any]]:
         manipulator = self.parentDevice()
         manip_home = manipulator.homePosition()
         if manip_home is None:
             raise RuntimeError(f"No home position defined for {manipulator.name()}")
         global_move = np.asarray(manip_home) - np.asarray(manipulator.globalPosition())
         end_pos = np.asarray(self.globalPosition()) + global_move
-        return self.dm.move(MoveSpec(self, end_pos, speed=speed))
+        return end_pos
 
     def goSearch(self, speed='fast', distance=0):
         """Focus the scope above the surface, then move the tip to the search position.
