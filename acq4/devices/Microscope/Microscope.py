@@ -243,7 +243,7 @@ class Microscope(Device, OptomechDevice):
             name = cameras[0]
         return self.dm.getDevice(name)
 
-    def getZStack(self, imager: "Device", z_range, name="z stack") -> Task:
+    def getZStack(self, imager: "Device", z_range, name="z stack") -> list[Frame]:
         """Acquire a z-stack of images using the given imager.
 
         The z-stack is returned as frames.
@@ -262,7 +262,7 @@ class Microscope(Device, OptomechDevice):
             self.getSurfaceDepth() - searchDistance,
             searchStep,
         )
-        z_stack: list[Frame] = self.getZStack(imager, z_range, name="finding surface").wait()
+        z_stack: list[Frame] = self.getZStack(imager, z_range, name="finding surface")
         threshold = self.config.get('surfaceDetectionPercentileThreshold', 96)
         if (idx := find_surface(z_stack, threshold)) is not None:
             depth = z_stack[idx].mapFromFrameToGlobal([0, 0, 0])[2]

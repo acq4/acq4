@@ -133,13 +133,13 @@ class CellDetector:
                 synch(win.scopeDevice.loadPreset)(detection_preset)
             detection_stack = acquire_z_stack(
                 win.cameraDevice, start_z, stop_z, step_z, slow_fallback=False, name="neuron detection stack"
-            ).wait(timeout=100)
+            )
 
             if multichannel_processing_intended:
                 synch(win.scopeDevice.loadPreset)(classification_preset)
                 classification_stack = acquire_z_stack(
                     win.cameraDevice, start_z, stop_z, step_z, slow_fallback=False, name="neuron classification stack"
-                ).wait(timeout=100)
+                )
 
                 if len(detection_stack) != len(classification_stack):
                     logger.warning(
