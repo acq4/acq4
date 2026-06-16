@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import numpy as np
+from gentletask import throughline
 
 from acq4 import getManager
 from acq4.util.gentle import asynch, gui_asynch
@@ -129,7 +130,8 @@ class MotionPlanner:
 def _move_device(device, position, speed, name, kwargs):
     """Call the appropriate movement primitive on a device."""
     if hasattr(device, "moveToGlobalNoPlanning"):
-        return device.moveToGlobalNoPlanning(position, speed, name=name, **kwargs)
+        with throughline(name=name):
+            return device.moveToGlobalNoPlanning(position, speed, name=name, **kwargs)
     raise RuntimeError(f"Device {device!r} has no moveToGlobalNoPlanning method")
 
 
