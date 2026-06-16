@@ -268,7 +268,7 @@ def measure_field_curvature_beads(camera, z_range, z_step, grid_n, n_terms=1):
         z_center + z_range,
         z_step,
         name="field curvature calibration",
-    ).wait()
+    )
 
     set_state("Analyzing sharpness per tile…")
     images = np.stack([f.data() for f in frames])

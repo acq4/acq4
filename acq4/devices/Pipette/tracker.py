@@ -8,7 +8,7 @@ import scipy.ndimage as ndi
 import pyqtgraph as pg
 from acq4.Manager import getManager
 from acq4.util import Qt
-from acq4.util.gentle import asynch, synch
+from acq4.util.gentle import asynch
 from acq4.util.image_registration import imageTemplateMatch
 from acq4.util.imaging.sequencer import acquire_z_stack
 from .pipette_detection import TemplateMatchPipetteDetector
@@ -165,7 +165,7 @@ class ResnetPipetteTracker(PipetteTracker):
             start=z_center + z_range,
             stop=z_center - z_range,
             step=z_step,
-        ).wait()
+        )
 
         pipette_angle = self.pipetteAngleFromFrame(frames[0])
 
@@ -315,7 +315,7 @@ class CorrelationPipetteTracker(PipetteTracker):
             zStep = zRange / 30
 
         # collect pipette stack
-        frames = synch(acquire_z_stack)(
+        frames = acquire_z_stack(
             imager, zStart, zEnd, zStep, name="pipette reference stack"
         )
         pxSize = frames[0].info()["pixelSize"]
@@ -323,7 +323,7 @@ class CorrelationPipetteTracker(PipetteTracker):
 
         # collect background stack
         self.pipette.moveToLocalNoPlanning([-tipLength * 3, 0, 0], "slow").wait()
-        bg_frames = synch(acquire_z_stack)(
+        bg_frames = acquire_z_stack(
             imager, zStart, zEnd, zStep, name="background for subtracting"
         )
         bg_frames = np.stack([f.data()[minImgPos[0]:maxImgPos[0], minImgPos[1]:maxImgPos[1]] for f in bg_frames], axis=0).astype(float)

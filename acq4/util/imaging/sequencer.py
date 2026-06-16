@@ -15,7 +15,7 @@ import acq4.Manager as Manager
 import pyqtgraph as pg
 from acq4.util import Qt, ptime
 from acq4.util.DataManager import DirHandle
-from acq4.util.gentle import GuiTask, asynch, check_stop, current_task, set_state, sleep, synch
+from acq4.util.gentle import GuiTask, check_stop, current_task, set_state, sleep
 from acq4.util.imaging import Frame
 from acq4.util.surface import find_surface
 from acq4.util.threadrun import runInGuiThread
@@ -302,7 +302,7 @@ def _run_image_sequence(
                 for move in movements_to_cover_region(imager, mosaic, name):
                     move.wait()
                     if z_stack:
-                        stack = synch(acquire_z_stack)(imager, *z_stack, name=name)
+                        stack = acquire_z_stack(imager, *z_stack, name=name)
                         handle_new_frames(stack, i)
                     else:  # single frame
                         frame = imager.acquireFrames(1, ensureFreshFrames=True).wait()[0]
@@ -371,7 +371,6 @@ def positions_to_cover_region(region, imager_center, imager_region) -> Generator
         x_finished = False
 
 
-@asynch
 def acquire_z_stack(
     imager,
     start: float,

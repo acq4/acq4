@@ -4,7 +4,7 @@ import scipy.interpolate
 import pyqtgraph as pg
 from acq4.devices.Camera import Camera
 from acq4.util import Qt
-from acq4.util.gentle import asynch, current_task, gui_asynch, synch
+from acq4.util.gentle import asynch, current_task, gui_asynch
 from acq4.util.imaging.sequencer import acquire_z_stack
 from acq4 import getManager
 from acq4.motion import MoveSpec
@@ -165,7 +165,7 @@ def scan_pipette_z_stack(pipette, imager=None, z_range=50e-6, z_step=5e-6, show=
     z_start = current_z - z_range
     z_end = current_z + z_range
 
-    frames = synch(acquire_z_stack)(
+    frames = acquire_z_stack(
         imager, z_start, z_end, z_step, name="ML pipette detection stack"
     )
 
@@ -317,7 +317,7 @@ def findNewPipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=0.
 
         # autofocus
         z_range = (startDepth - 500e-6, startDepth + 500e-6, 20e-6)
-        zStack = synch(acquire_z_stack)(imager, *z_range, max_dz_per_frame=np.inf, name="finding pipette depth")
+        zStack = acquire_z_stack(imager, *z_range, max_dz_per_frame=np.inf, name="finding pipette depth")
         zStackArray = np.stack([frame.data() for frame in zStack])
         zDiff = np.abs(np.diff(zStackArray.astype(float), axis=0))
         zProfile = zDiff.max(axis=2).max(axis=1)  # most-changed pixel in each frame
