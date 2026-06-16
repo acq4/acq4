@@ -123,7 +123,7 @@ class DoverMoveFuture(MoveFuture):
 
     def __init__(self, dev, pos, speed, name=None):
         MoveFuture.__init__(self, dev, pos, speed, name=name)
-        self._future = self.dev.dev.move(list(pos), self.speed * 1e3, name=self.name)
+        self._future = self.dev.dev.move(list(pos), self.speed * 1e3, name=name)
         self._future.set_callback(self._future_finished)
 
     def _future_finished(self, req_fut):
