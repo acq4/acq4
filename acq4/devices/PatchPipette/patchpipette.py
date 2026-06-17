@@ -42,6 +42,7 @@ class PatchPipette(Device):
     sigNewPipetteRequested = Qt.Signal(object)  # self
     sigTipCleanChanged = Qt.Signal(object, object)  # self, clean
     sigTipBrokenChanged = Qt.Signal(object, object)  # self, broken
+    sigAccessWarningChanged = Qt.Signal(object, object, object)  # self, active, message
 
     # catch-all signal for event logging
     sigNewEvent = Qt.Signal(object, object)  # self, event
@@ -72,6 +73,7 @@ class PatchPipette(Device):
         self.clean = False
         self.calibrated = False
         self.waitingForSwap = False
+        self._accessWarning = (False, "")
         self._lastPos = None
         self._emitTestPulseData = False
         self.cell = None
@@ -125,6 +127,23 @@ class PatchPipette(Device):
         self.clean = clean
         self.sigTipCleanChanged.emit(self, clean)
         self.emitNewEvent('tip_clean_changed', {'clean': clean})
+
+    def accessWarning(self):
+        """Return the current (active, message) access-resistance warning tuple."""
+        return self._accessWarning
+
+    def setAccessWarning(self, active, message=""):
+        """Raise or clear a whole-cell access-resistance warning for the UI to display.
+
+        Unlike a state change, this is a passive alert: whole cell stays put and the user decides
+        whether to initiate a 'clear access' attempt. Emitting with the same active flag is a no-op.
+        """
+        active = bool(active)
+        if self._accessWarning[0] == active:
+            return
+        self._accessWarning = (active, message)
+        self.sigAccessWarningChanged.emit(self, active, message)
+        self.emitNewEvent('access_warning_changed', {'active': active, 'info': message})
 
     def isTipBroken(self):
         return self.broken

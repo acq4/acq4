@@ -57,6 +57,7 @@ class PipetteControl(Qt.QWidget):
             self.pip.sigNewPipetteRequested.connect(self.newPipetteRequested)
             self.pip.sigTipCleanChanged.connect(self.tipCleanChanged)
             self.pip.sigTipBrokenChanged.connect(self.tipBrokenChanged)
+            self.pip.sigAccessWarningChanged.connect(self.accessWarningChanged)
 
         self.ui.vcHoldingSpin.setOpts(
             bounds=[None, None],
@@ -350,6 +351,11 @@ class PipetteControl(Qt.QWidget):
         with pg.SignalBlock(self.ui.brokenCheck.stateChanged, self.brokenCheckChanged):
             self.ui.brokenCheck.setChecked(broken)
         self.ui.brokenCheck.setStyleSheet("" if not broken else "QCheckBox {border: 2px solid #F00;}")
+
+    def accessWarningChanged(self, pip, active, message):
+        """Whole cell flagged (or cleared) an access-resistance warning; show it on the state field."""
+        self.ui.stateText.setStyleSheet("QLineEdit {border: 2px solid #F00;}" if active else "")
+        self.ui.stateText.setToolTip(message if active else "")
 
     def autoOffsetRequested(self):
         self.pip.clampDevice.autoPipetteOffset()

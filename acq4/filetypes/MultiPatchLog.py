@@ -700,6 +700,14 @@ class MultiPatchLogWidget(Qt.QWidget):
         self._displayDetectAnalysis = Qt.QCheckBox('Cell Detect Analysis')
         self._displayDetectAnalysis.toggled.connect(self._toggleDetectAnalysis)
         self._ctrl_layout.addWidget(self._displayDetectAnalysis)
+        self._wholeCellAnalysisItems = {}
+        self._displayWholeCellAnalysis = Qt.QCheckBox('Whole Cell Analysis')
+        self._displayWholeCellAnalysis.toggled.connect(self._toggleWholeCellAnalysis)
+        self._ctrl_layout.addWidget(self._displayWholeCellAnalysis)
+        self._clearAccessAnalysisItems = {}
+        self._displayClearAccessAnalysis = Qt.QCheckBox('Clear Access Analysis')
+        self._displayClearAccessAnalysis.toggled.connect(self._toggleClearAccessAnalysis)
+        self._ctrl_layout.addWidget(self._displayClearAccessAnalysis)
         self._displayFullTestPulse = Qt.QCheckBox('Full Test Pulse Data')
         self._displayFullTestPulse.toggled.connect(self._toggleFullTestPulse)
         self._ctrl_layout.addWidget(self._displayFullTestPulse)
@@ -781,14 +789,17 @@ class MultiPatchLogWidget(Qt.QWidget):
         elif 'Pa' in self._plots_by_units:
             self._plots_by_units['Pa'].hide()
 
-    def _toggleAnalysis(self, cls, analysisItems: dict, state: bool, *args, **kwargs):
+    def _toggleAnalysis(
+        self, cls, analysisItems: dict, state: bool, *args,
+        fields: tuple = ('steady_state_resistance',), **kwargs,
+    ):
         if state:
             for units, items in cls.plot_items(*args, **kwargs).items():
                 plot = self.buildPlotForUnits(units)
                 analysisItems.setdefault(units, []).extend(items)
                 for item in items:
                     plot.addItem(item)
-            measurements = self.testPulseAnalysisDataByState('steady_state_resistance')
+            measurements = self.testPulseAnalysisDataByState(*fields)
             for units, plots in cls.plots_for_data(measurements, *args, **kwargs).items():
                 plot = self.buildPlotForUnits(units)
                 analysisItems.setdefault(units, [])
@@ -863,14 +874,44 @@ class MultiPatchLogWidget(Qt.QWidget):
             break_threshold=config['breakThreshold'],
         )
 
-    def testPulseAnalysisDataByState(self, field: str):
+    def _toggleWholeCellAnalysis(self, state: bool):
+        from acq4.devices.PatchPipette.states import WholeCellAnalysis, WholeCellState
+
+        config = WholeCellState.defaultConfig()
+        self._toggleAnalysis(
+            WholeCellAnalysis,
+            self._wholeCellAnalysisItems,
+            state,
+            fields=('access_resistance',),
+            access_resistance_threshold=config['accessResistanceThreshold'],
+            detection_tau=config['detectionTau'],
+            max_test_pulse_gap=config['maxTestPulseGap'],
+        )
+
+    def _toggleClearAccessAnalysis(self, state: bool):
+        from acq4.devices.PatchPipette.states import ClearAccessAnalysis, ClearAccessState
+
+        config = ClearAccessState.defaultConfig()
+        self._toggleAnalysis(
+            ClearAccessAnalysis,
+            self._clearAccessAnalysisItems,
+            state,
+            fields=('access_resistance', 'input_resistance'),
+            access_recovered_threshold=config['accessRecoveredThreshold'],
+            input_resistance_loss_threshold=config['inputResistanceLossThreshold'],
+            input_resistance_decline_threshold=config['inputResistanceDeclineThreshold'],
+            detection_tau=config['detectionTau'],
+            repair_tau=config['repairTau'],
+        )
+
+    def testPulseAnalysisDataByState(self, *fields: str):
         for data in self._devices.values():
             test_pulses = data.get('test_pulse', np.zeros(0, dtype=TEST_PULSE_NUMPY_DTYPE))
             states = data.get('state', [])
             time = test_pulses['event_time'] - self.startTime()
             if len(time) > 0:
-                measurements = np.concatenate(
-                    (time[:, np.newaxis], test_pulses[field][:, np.newaxis]), axis=1)
+                columns = [time[:, np.newaxis]] + [test_pulses[f][:, np.newaxis] for f in fields]
+                measurements = np.concatenate(columns, axis=1)
                 # break the analysis up by state changes
                 state_times = [s[0] - self.startTime() for s in states if s[2] == '']
                 start_indexes = np.searchsorted(time, state_times)
