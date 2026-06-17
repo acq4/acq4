@@ -5,7 +5,7 @@ import pyqtgraph as pg
 from acq4.devices.Device import TaskGui, Device, DeviceTask
 from acq4.devices.OptomechDevice import OptomechDevice
 from acq4.util import Qt
-from acq4.util.gentle import GuiPromise, Stopped
+from acq4.util.gentle import ManualGuiTask, Stopped
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
 
@@ -228,10 +228,10 @@ class FilterWheel(Device, OptomechDevice):
         return FilterWheelDevGui(self)
 
 
-class FilterWheelFuture(GuiPromise):
+class FilterWheelFuture(ManualGuiTask):
     """Track the progress of a requested filter wheel position change.
 
-    This is an externally-completed GuiPromise: it has no body and spawns no
+    This is an externally-completed ManualGuiTask: it has no body and spawns no
     thread. The device's filter-wheel position monitor (FilterWheelPollThread)
     is the producer; each poll it calls ``_poll()``, which once the wheel stops
     moving resolves the promise if the target was reached or fails it otherwise.
@@ -240,7 +240,7 @@ class FilterWheelFuture(GuiPromise):
     """
 
     def __init__(self, dev, position):
-        GuiPromise.__init__(self, name=f"{dev.name()} filter change to {position}")
+        ManualGuiTask.__init__(self, name=f"{dev.name()} filter change to {position}")
         self.dev = dev
         self.position = position
 

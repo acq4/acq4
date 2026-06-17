@@ -13,7 +13,7 @@ from acq4 import getManager
 from acq4.logging_config import get_logger
 from acq4.util import Qt
 from acq4.util.debug import log_and_ignore_exception
-from acq4.util.gentle import GuiTask, GuiPromise, Task, asynch, check_stop, sleep, Stopped
+from acq4.util.gentle import GuiTask, ManualGuiTask, Task, asynch, check_stop, sleep, Stopped
 from neuroanalysis.test_pulse import PatchClampTestPulse
 from pyqtgraph import disconnect
 from pyqtgraph.units import µm
@@ -334,7 +334,7 @@ class PatchPipetteState(GuiTask):
         with log_and_ignore_exception(Exception, "Error disabling visual target tracking"):
             if self.dev.cell is not None:
                 self.stopVisualTargetTracking('cleaning up state')
-        p = GuiPromise(name=f"{self.stateName} cleanup")
+        p = ManualGuiTask(name=f"{self.stateName} cleanup")
         p.resolve()
         return p
 

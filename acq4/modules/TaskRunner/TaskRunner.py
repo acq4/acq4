@@ -20,7 +20,7 @@ from acq4.util.StatusBar import StatusBar
 from acq4.util.Thread import Thread
 from pyqtgraph.debug import Profiler
 from pyqtgraph.util.mutex import Mutex
-from acq4.util.gentle import GuiPromise
+from acq4.util.gentle import ManualGuiTask
 from . import analysisModules
 from ..Module import Module
 from ...logging_config import get_logger
@@ -1171,16 +1171,16 @@ class TaskThread(Thread):
                 self.abortThread = True
 
 
-class TaskFuture(GuiPromise):
+class TaskFuture(ManualGuiTask):
     """Used to check on progress for a running task or task sequence.
 
     Instances of this class are returned from TaskRunner.runSingle() and .runSequence().
 
-    This is an externally-completed GuiPromise: it has no body and spawns no
+    This is an externally-completed ManualGuiTask: it has no body and spawns no
     thread. The TaskThread is the producer; it completes this promise by calling
     ``resolve()`` when the run finishes and ``fail(exc)`` on error. Stopping
     tells the TaskThread to halt (which polls its own stopThread flag), then
-    completes this promise via GuiPromise.stop().
+    completes this promise via ManualGuiTask.stop().
 
     Results are stored in self.results if the future is initialized with
     collectResults=True (this is False by default to avoid memory overuse).
@@ -1193,14 +1193,14 @@ class TaskFuture(GuiPromise):
         self._taskCount = 0
         self._collectResults = collectResults
         self.results = []
-        GuiPromise.__init__(self, name='TaskRunnerFuture')
+        ManualGuiTask.__init__(self, name='TaskRunnerFuture')
 
     def percentDone(self):
         return self._taskCount / self._nTasks
 
     def stop(self, *args, **kwds):
         self._taskThread.stop(task=self._task)
-        return GuiPromise.stop(self, *args, **kwds)
+        return ManualGuiTask.stop(self, *args, **kwds)
 
     def newFrame(self, frame):
         if self._collectResults:

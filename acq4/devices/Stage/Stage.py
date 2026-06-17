@@ -19,7 +19,7 @@ from ..OptomechDevice import OptomechDevice
 from ...modules.Visualize3D.travelers_proxy import MovePathException
 from ...motion import MoveSpec
 from ...util.HelpfulException import HelpfulException
-from ...util.gentle import GuiPromise, Stopped, FutureButton
+from ...util.gentle import ManualGuiTask, Stopped, FutureButton
 from ...util.geometry import (
     Plane,
     limits_to_boundaries,
@@ -736,10 +736,10 @@ class CallOnce:
         self.called = False
 
 
-class MoveFuture(GuiPromise):
+class MoveFuture(ManualGuiTask):
     """Used to track the progress of a requested move operation.
 
-    This is an externally-completed GuiPromise: it has no body and spawns no
+    This is an externally-completed ManualGuiTask: it has no body and spawns no
     thread. The device subclass's hardware-monitor thread is the producer; it
     completes the move by calling ``self.resolve(...)`` when the target is
     reached or ``self.fail(exc)`` on error, and checks ``self.is_stopped`` (set
@@ -750,7 +750,7 @@ class MoveFuture(GuiPromise):
     def __init__(self, dev: Stage, pos, speed, name=None):
         if name is None:
             name = f"{dev.name()} move"
-        GuiPromise.__init__(self, name=name)
+        ManualGuiTask.__init__(self, name=name)
         self.startTime = ptime.time()
         self.dev = dev
         self.speed = speed
@@ -780,7 +780,7 @@ class MoveFuture(GuiPromise):
         """Stop the move in progress.
 
         Tells the device to halt, then completes this promise with Stopped via
-        GuiPromise.stop(reason). The producer thread sees ``is_stopped`` and
+        ManualGuiTask.stop(reason). The producer thread sees ``is_stopped`` and
         aborts. When *wait* is True, block until the promise actually completes,
         swallowing the resulting Stopped.
         """
@@ -835,13 +835,13 @@ class MovePathFuture(MoveFuture):
 
         Skips MoveFuture.stop (and its dev.stop()) because the current step
         future already owns the device; we just stop that step and self-complete
-        this promise via GuiPromise.stop(reason).
+        this promise via ManualGuiTask.stop(reason).
         """
         fut = self._currentFuture
         if fut is not None:
             fut.stop(reason)
         # skip MoveFuture.stop to avoid the mess with dev.stop()
-        GuiPromise.stop(self, reason)
+        ManualGuiTask.stop(self, reason)
         if wait:
             with contextlib.suppress(Stopped):
                 self.wait()
