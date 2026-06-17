@@ -61,6 +61,7 @@ falconoptics = [
 thorlabs = ["pyserial"]
 dovermotion = ["pythonnet"]
 vimbax = ["vmbpy"]
+webcam = ["pygrabber; platform_system == 'Windows'"]
 analysis = [
     "pycsf @ git+https://github.com/campagnola/pycsf",
     "ccfviewer @ git+https://github.com/campagnola/ccfviewer",
