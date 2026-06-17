@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 from collections import OrderedDict
+import os
 import queue
+import struct
+import sys
 import threading
 import time
 
@@ -30,8 +33,11 @@ class WebcamCamera(Camera):
 
     - ``cameraIndex`` (int): Webcam index for cv2.VideoCapture.
     - ``cameraName`` (str): Substring of the camera's device description (case-insensitive).
-      If omitted along with ``cameraIndex``, an exception is raised that lists all
-      available ``index: description`` pairs so you can copy one into the config.
+      Descriptions include manufacturer/model and, where available, stable USB
+      identifiers (vendor:product, serial, bus path), so a specific camera can be
+      selected regardless of enumeration order. If omitted along with ``cameraIndex``,
+      an exception is raised that lists all available ``index: description`` pairs so
+      you can copy one into the config.
     - ``backend`` (int | str, optional): OpenCV backend (for example "CAP_DSHOW").
     - ``resolution`` ([w, h], default [640, 480]): Requested capture size used as effective sensor size.
     - ``colorMode`` ("gray" | "bgr", default "gray"): Output frame format.
@@ -62,29 +68,222 @@ class WebcamCamera(Camera):
     def _enumerate_devices() -> list[tuple[int, str]]:
         """Return a list of (index, description) for available camera devices.
 
-        Tries pygrabber (Windows DirectShow) for human-readable names first,
-        then falls back to probing indices 0–9 with cv2.VideoCapture.
+        The description embeds whatever manufacturer/model/identifier information
+        the platform can supply so a specific camera can be selected by name
+        regardless of enumeration order. Cameras with identical descriptions are
+        disambiguated with a ``#N`` suffix (which is not stable across reorders).
+
+        Collection is platform-specific:
+
+        - Windows: pygrabber (DirectShow) friendly names.
+        - Linux: V4L2 sysfs metadata plus a ``VIDIOC_QUERYCAP`` ioctl, filtered to
+          actual video-capture nodes (a single camera exposes several ``/dev/video``
+          nodes, only some of which can capture).
+        - Otherwise: probe ``cv2.VideoCapture`` indices and report which ones open.
         """
         if cv2 is None:
             return []
 
-        # Windows DirectShow: pygrabber gives real device names.
+        records = WebcamCamera._collect_device_records()
+        devices = [(rec["index"], WebcamCamera._format_device_description(rec)) for rec in records]
+        devices.sort(key=lambda d: d[0])
+        return WebcamCamera._dedupe_device_descriptions(devices)
+
+    @staticmethod
+    def _collect_device_records() -> list[dict]:
+        """Gather raw per-device identity records using the best available source."""
+        if sys.platform.startswith("win"):
+            records = WebcamCamera._enumerate_dshow()
+            if records:
+                return records
+        elif sys.platform.startswith("linux"):
+            records = WebcamCamera._enumerate_v4l2()
+            if records:
+                return records
+        return WebcamCamera._enumerate_probe()
+
+    @staticmethod
+    def _format_device_description(record: dict) -> str:
+        """Build a human-readable, selectable description from a device record.
+
+        Uses the driver-reported card name (or manufacturer/product, or a plain
+        ``Camera N`` fallback) as the label, then appends manufacturer and any
+        stable identifiers (USB vendor:product, serial, bus path) when present.
+        """
+        manufacturer = (record.get("manufacturer") or "").strip()
+        product = (record.get("product") or "").strip()
+        card = (record.get("card") or "").strip()
+
+        label = card or " ".join(p for p in (manufacturer, product) if p) or f"Camera {record['index']}"
+        parts = [label]
+        if manufacturer and manufacturer.lower() not in label.lower():
+            parts.append(f"by {manufacturer}")
+
+        vendor_id = record.get("vendor_id")
+        product_id = record.get("product_id")
+        if vendor_id and product_id:
+            parts.append(f"[{vendor_id}:{product_id}]")
+        serial = (record.get("serial") or "").strip()
+        if serial:
+            parts.append(f"[serial:{serial}]")
+        bus_info = (record.get("bus_info") or "").strip()
+        if bus_info:
+            parts.append(f"[{bus_info}]")
+        return " ".join(parts)
+
+    @staticmethod
+    def _dedupe_device_descriptions(devices: list[tuple[int, str]]) -> list[tuple[int, str]]:
+        """Append ``#N`` suffixes to descriptions shared by multiple devices.
+
+        Numbering follows the order of *devices* (callers sort by index first), so
+        the lowest index becomes ``#1``. Unique descriptions are left unchanged.
+        """
+        counts = {}
+        for _, desc in devices:
+            counts[desc] = counts.get(desc, 0) + 1
+
+        seen = {}
+        out = []
+        for idx, desc in devices:
+            if counts[desc] > 1:
+                seen[desc] = seen.get(desc, 0) + 1
+                out.append((idx, f"{desc} #{seen[desc]}"))
+            else:
+                out.append((idx, desc))
+        return out
+
+    @staticmethod
+    def _enumerate_dshow() -> list[dict]:
+        """Windows DirectShow enumeration via pygrabber (friendly names only)."""
         try:
             from pygrabber.dshow_graph import FilterGraph  # type: ignore
-
-            graph = FilterGraph()
-            return list(enumerate(graph.get_input_devices()))
         except Exception:
-            pass
+            return []
+        try:
+            graph = FilterGraph()
+            return [{"index": i, "card": name} for i, name in enumerate(graph.get_input_devices())]
+        except Exception:
+            return []
 
-        # Generic fallback: probe indices and report which ones open.
-        devices = []
+    @staticmethod
+    def _enumerate_probe() -> list[dict]:
+        """Generic fallback: probe indices and report which ones open."""
+        records = []
         for i in range(10):
             cap = cv2.VideoCapture(i)
             if cap.isOpened():
-                devices.append((i, f"Camera {i}"))
+                records.append({"index": i, "card": f"Camera {i}"})
                 cap.release()
-        return devices
+        return records
+
+    # V4L2 VIDIOC_QUERYCAP: _IOR('V', 0, struct v4l2_capability); the struct is
+    # 104 bytes. See linux/videodev2.h.
+    _V4L2_QUERYCAP_STRUCT_SIZE = 104
+    _V4L2_CAP_VIDEO_CAPTURE = 0x00000001
+    _V4L2_CAP_DEVICE_CAPS = 0x80000000
+
+    @staticmethod
+    def _enumerate_v4l2() -> list[dict]:
+        """Linux V4L2 enumeration using sysfs metadata and a QUERYCAP ioctl.
+
+        Reads model/manufacturer/serial from sysfs and queries each node's
+        capabilities, keeping only nodes that can capture video (a camera often
+        exposes extra metadata-only nodes that cannot be opened for frames).
+        """
+        sysfs_root = "/sys/class/video4linux"
+        if not os.path.isdir(sysfs_root):
+            return []
+
+        records = []
+        nodes = sorted(os.listdir(sysfs_root), key=WebcamCamera._video_node_index)
+        for node in nodes:
+            index = WebcamCamera._video_node_index(node)
+            if index is None:
+                continue
+
+            sysfs_name = WebcamCamera._read_sysfs_text(os.path.join(sysfs_root, node, "name"))
+            cap = WebcamCamera._v4l2_querycap(f"/dev/{node}")
+            # When QUERYCAP is unavailable (busy/permission), keep the node rather
+            # than risk hiding a real camera; only drop nodes known not to capture.
+            if cap is not None and not cap["capture"]:
+                continue
+
+            record = {"index": index, "card": (cap["card"] if cap else "") or sysfs_name}
+            if cap and cap.get("bus_info"):
+                record["bus_info"] = cap["bus_info"]
+            record.update(WebcamCamera._v4l2_usb_info(os.path.join(sysfs_root, node, "device")))
+            records.append(record)
+        return records
+
+    @staticmethod
+    def _video_node_index(node: str):
+        """Return the integer N from a ``videoN`` sysfs/dev node name, or None."""
+        if not node.startswith("video"):
+            return None
+        suffix = node[len("video") :]
+        return int(suffix) if suffix.isdigit() else None
+
+    @staticmethod
+    def _read_sysfs_text(path: str) -> str:
+        try:
+            with open(path) as fh:
+                return fh.read().strip()
+        except OSError:
+            return ""
+
+    @staticmethod
+    def _v4l2_querycap(device_path: str):
+        """Query a V4L2 node; return {card, bus_info, capture} or None on failure."""
+        import fcntl
+
+        try:
+            fd = os.open(device_path, os.O_RDWR | os.O_NONBLOCK)
+        except OSError:
+            return None
+        try:
+            buf = bytearray(WebcamCamera._V4L2_QUERYCAP_STRUCT_SIZE)
+            request = (2 << 30) | (WebcamCamera._V4L2_QUERYCAP_STRUCT_SIZE << 16) | (ord("V") << 8) | 0
+            fcntl.ioctl(fd, request, buf, True)
+        except OSError:
+            return None
+        finally:
+            os.close(fd)
+
+        card = bytes(buf[16:48]).split(b"\0", 1)[0].decode("ascii", "replace")
+        bus_info = bytes(buf[48:80]).split(b"\0", 1)[0].decode("ascii", "replace")
+        capabilities, device_caps = struct.unpack_from("<II", buf, 84)
+        effective = device_caps if (capabilities & WebcamCamera._V4L2_CAP_DEVICE_CAPS) else capabilities
+        return {
+            "card": card,
+            "bus_info": bus_info,
+            "capture": bool(effective & WebcamCamera._V4L2_CAP_VIDEO_CAPTURE),
+        }
+
+    @staticmethod
+    def _v4l2_usb_info(device_link: str) -> dict:
+        """Walk up the sysfs device tree to read USB identity for a video node."""
+        try:
+            path = os.path.realpath(device_link)
+        except OSError:
+            return {}
+        # Climb to the USB device directory (the one exposing idVendor).
+        while path and path != "/" and not os.path.exists(os.path.join(path, "idVendor")):
+            path = os.path.dirname(path)
+        if not path or path == "/":
+            return {}
+
+        info = {}
+        for key, attr in (
+            ("vendor_id", "idVendor"),
+            ("product_id", "idProduct"),
+            ("manufacturer", "manufacturer"),
+            ("product", "product"),
+            ("serial", "serial"),
+        ):
+            value = WebcamCamera._read_sysfs_text(os.path.join(path, attr))
+            if value:
+                info[key] = value
+        return info
 
     @staticmethod
     def _findCameraByName(name: str) -> int:
@@ -98,9 +297,7 @@ class WebcamCamera(Camera):
             if name_lower in desc.lower():
                 return idx
         lines = "\n".join(f"  {idx}: {desc}" for idx, desc in devices)
-        raise ValueError(
-            f"No camera found matching name {name!r}.\nAvailable devices:\n{lines}"
-        )
+        raise ValueError(f"No camera found matching name {name!r}.\nAvailable devices:\n{lines}")
 
     def __init__(self, dm, config, name):
         self._capture = None
