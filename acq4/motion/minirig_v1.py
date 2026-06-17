@@ -132,7 +132,7 @@ class MinirigV1MotionPlanner(DefaultMotionPlanner):
             return None
         scope, forward_path, _pip, _site = self._scope_context.pop(pip_name)
         # forward_path = [original, up, park]; return path skips park (already there)
-        return_waypoints = list(reversed(forward_path))[1:]
+        return_waypoints = list(reversed(forward_path))
         scope_steps = [
             AtomicMove(scope, wp, "fast", "scope return") for wp in return_waypoints
         ]
