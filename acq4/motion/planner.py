@@ -131,6 +131,7 @@ def _move_device(device, position, speed, name, kwargs):
     """Call the appropriate movement primitive on a device."""
     if hasattr(device, "moveToGlobalNoPlanning"):
         with throughline(name=f"moving {device} to '{name}'"):
+            device.logger.debug(f"Starting move to {position}")
             return device.moveToGlobalNoPlanning(position, speed, name=name, **kwargs)
     raise RuntimeError(f"Device {device!r} has no moveToGlobalNoPlanning method")
 
