@@ -132,7 +132,7 @@ class MotionPlanner:
 def _move_device(device, position, speed, name, kwargs):
     """Call the appropriate movement primitive on a device."""
     if hasattr(device, "moveToGlobalNoPlanning"):
-        with throughline(name=name):
+        with throughline(name=f"moving {device} to '{name}'"):
             return device.moveToGlobalNoPlanning(position, speed, name=name, **kwargs)
     raise RuntimeError(f"Device {device!r} has no moveToGlobalNoPlanning method")
 
