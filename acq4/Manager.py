@@ -24,7 +24,7 @@ from .Interfaces import InterfaceDirectory
 from .devices import getDeviceClass
 from .devices.Device import Device, DeviceTask, DeviceLocker, get_devices_held_by_thread
 from .logging_config import get_logger, set_log_file
-from .util.gentle import GuiPromise, synch
+from .util.gentle import ManualGuiTask, synch
 from .util import DataManager, ptime, Qt
 from .util.DataManager import DirHandle
 from .util.HelpfulException import HelpfulException
@@ -495,7 +495,7 @@ class Manager(Qt.QObject):
             # Run the plan inline in this thread (re-entering the recursive
             # per-thread reservation) instead of on a worker thread, then hand
             # back an already-resolved task so callers' wait()/signals still work.
-            move = GuiPromise(name=name or "move")
+            move = ManualGuiTask(name=name or "move")
             try:
                 move.resolve(synch(self.motionPlanner.execute)(list(specs), name=name))
             except BaseException as exc:

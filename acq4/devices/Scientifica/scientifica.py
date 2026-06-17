@@ -10,7 +10,7 @@ from acq4.util import ptime
 from acq4.devices.Stage import Stage, MoveFuture, StageInterface
 from acq4.drivers.Scientifica import Scientifica as ScientificaDriver
 from acq4.util import Qt
-from acq4.util.gentle import asynch, sleep, Stopped, GuiPromise, FutureButton
+from acq4.util.gentle import asynch, sleep, Stopped, ManualGuiTask, FutureButton
 from acq4.util.threadrun import runInGuiThread
 from pyqtgraph import SpinBox, siFormat
 
@@ -457,7 +457,7 @@ class ScientificaGUI(StageInterface):
         )
         if response != Qt.QMessageBox.Ok:
             self.sigBusyMoving.emit(False)
-            stopped = GuiPromise(name=f"{self.dev.name()} auto-zero")
+            stopped = ManualGuiTask(name=f"{self.dev.name()} auto-zero")
             stopped.stop("User requested stop")
             return stopped
 

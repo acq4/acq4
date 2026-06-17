@@ -9,7 +9,7 @@ from PyQt5.QtWidgets import QApplication
 
 from acq4.util import Qt
 from acq4.util.gentle import (
-    GuiPromise,
+    ManualGuiTask,
     GuiTask,
     FutureButton,
     MultiException,
@@ -365,14 +365,14 @@ class TestFutureButton:
         assert the_task[0].is_stopped
 
 
-class TestGuiPromise:
+class TestManualGuiTask:
     def test_resolve_returns_value_and_fires_finished_on_gui_thread(self):
         # The producer resolves from a worker thread; wait() returns the value
         # and the sigFinished slot must run on the GUI thread.
         gui_thread = QApplication.instance().thread()
         slot_threads = []
 
-        p = GuiPromise()
+        p = ManualGuiTask()
         p.sigFinished.connect(
             lambda task: slot_threads.append(Qt.QtCore.QThread.currentThread())
         )
@@ -392,7 +392,7 @@ class TestGuiPromise:
         assert slot_threads[0] is gui_thread
 
     def test_fail_makes_wait_raise(self):
-        p = GuiPromise()
+        p = ManualGuiTask()
         p.fail(ValueError("boom"))
         try:
             p.wait()
@@ -402,7 +402,7 @@ class TestGuiPromise:
 
     def test_stop_before_resolve_raises_stopped_and_fires_finished(self):
         got = []
-        p = GuiPromise()
+        p = ManualGuiTask()
         p.sigFinished.connect(lambda task: got.append(task))
         p.stop()
         try:
@@ -423,7 +423,7 @@ class TestGuiPromise:
         states = []
         slot_threads = []
 
-        p = GuiPromise()
+        p = ManualGuiTask()
 
         def on_state(task, state):
             states.append(state)
@@ -446,7 +446,7 @@ class TestGuiPromise:
         assert slot_threads[0] is gui_thread
 
     def test_constructed_on_worker_thread_delivers_on_gui_thread(self):
-        # C2 guard: a GuiPromise constructed on a worker thread must still
+        # C2 guard: a ManualGuiTask constructed on a worker thread must still
         # deliver its queued sigFinished to the GUI thread.
         gui_thread = QApplication.instance().thread()
 
@@ -464,7 +464,7 @@ class TestGuiPromise:
         promise_box = []
 
         def constructor():
-            p = GuiPromise()
+            p = ManualGuiTask()
             promise_box.append(p)
             affinity_at_connect.append(p.thread() is gui_thread)
             p.sigFinished.connect(receiver.on_finished)
@@ -483,7 +483,7 @@ class TestGuiPromise:
 
     def test_resolve_spawns_no_thread(self):
         before = threading.active_count()
-        p = GuiPromise()
+        p = ManualGuiTask()
         p.resolve(1)
         p.wait()
         # No worker thread should have been spawned for a Promise.
@@ -497,7 +497,7 @@ class TestGuiPromise:
         timer.timeout.connect(lambda: ticks.append(1))
         timer.start(10)
 
-        p = GuiPromise()
+        p = ManualGuiTask()
 
         def producer():
             time.sleep(0.1)
@@ -589,13 +589,13 @@ class TestRaiseErrors:
 
 class TestMultiFuture:
     def test_resolves_to_list_of_results_and_fires_finished_on_gui_thread(self):
-        # MultiFuture over two GuiPromises: wait() returns the child results in
+        # MultiFuture over two ManualGuiTasks: wait() returns the child results in
         # order, and its own sigFinished slot runs on the GUI thread.
         gui_thread = QApplication.instance().thread()
         slot_threads = []
 
-        a = GuiPromise()
-        b = GuiPromise()
+        a = ManualGuiTask()
+        b = ManualGuiTask()
         multi = MultiFuture([a, b], name="pair")
         multi.sigFinished.connect(
             lambda task: slot_threads.append(Qt.QtCore.QThread.currentThread())
@@ -624,8 +624,8 @@ class TestMultiFuture:
         states = []
         slot_threads = []
 
-        a = GuiPromise()
-        b = GuiPromise()
+        a = ManualGuiTask()
+        b = ManualGuiTask()
         multi = MultiFuture([a, b])
 
         def on_state(sender, state):
@@ -651,8 +651,8 @@ class TestMultiFuture:
         assert slot_threads[0] is gui_thread
 
     def test_one_child_failing_makes_wait_raise_that_exception(self):
-        a = GuiPromise()
-        b = GuiPromise()
+        a = ManualGuiTask()
+        b = ManualGuiTask()
         multi = MultiFuture([a, b])
 
         a.resolve("ok")
@@ -713,7 +713,7 @@ class TestMultiFuture:
 
     def test_percent_done_robust_when_child_lacks_percent_done(self):
         # A child without percentDone must not break the min computation.
-        a = GuiPromise()  # GuiPromise has no percentDone
+        a = ManualGuiTask()  # ManualGuiTask has no percentDone
         multi = MultiFuture([a])
         assert multi.percentDone() == 0.0
         a.resolve(None)

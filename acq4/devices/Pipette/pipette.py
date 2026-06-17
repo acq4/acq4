@@ -17,7 +17,7 @@ from acq4.devices.Stage import Stage, MovePathFuture
 from acq4.modules.Camera import CameraModuleInterface
 from acq4.motion import MoveSpec
 from acq4.util import Qt, ptime
-from acq4.util.gentle import GuiPromise, asynch, raise_errors, sleep, synch
+from acq4.util.gentle import ManualGuiTask, asynch, raise_errors, sleep, synch
 from acq4.util.target import Target
 from coorx import AffineTransform
 from pyqtgraph import Point, siFormat
@@ -688,13 +688,13 @@ class Pipette(Device, OptomechDevice):
         pos = self.positionAtDepth(depth)
         return self.moveToGlobalNoPlanning(pos, speed, name=name)
 
-    def retractFromSurface(self, speed='slow') -> GuiPromise:
+    def retractFromSurface(self, speed='slow') -> ManualGuiTask:
         """Retract the pipette along its axis until it is above the slice surface."""
         depth = self.globalPosition()[2]
         appDepth = self.approachDepth()
         if depth < appDepth:
             return self.advance(appDepth, speed=speed, name='retract from surface')
-        already_retracted = GuiPromise(name='retract from surface (no-op)')
+        already_retracted = ManualGuiTask(name='retract from surface (no-op)')
         already_retracted.resolve(None)
         return already_retracted
 

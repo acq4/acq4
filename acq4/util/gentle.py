@@ -59,7 +59,7 @@ __all__ = [
     "current_state",
     "raise_errors",
     "GuiTask",
-    "GuiPromise",
+    "ManualGuiTask",
     "GuiMultiTask",
     "MultiFuture",
     "gui_asynch",
@@ -128,7 +128,7 @@ def raise_errors(task: Task, message: str) -> None:
 
 
 class _QtTaskSignals(Qt.QObject):
-    """QObject mixin carrying the Qt machinery shared by GuiTask and GuiPromise.
+    """QObject mixin carrying the Qt machinery shared by GuiTask and ManualGuiTask.
 
     Both classes are gentletask tasks that are also QObjects so GUI code can
     connect to completion and state-change signals. This mixin owns the parts
@@ -138,7 +138,7 @@ class _QtTaskSignals(Qt.QObject):
 
     It is always the QObject base in the MRO. The concrete classes put their
     gentletask base first — GuiTask(ThreadTask, _QtTaskSignals) and
-    GuiPromise(Promise, _QtTaskSignals) — so this mixin (hence QObject) sits
+    ManualGuiTask(Promise, _QtTaskSignals) — so this mixin (hence QObject) sits
     last before object. PyQt's cooperative QObject.__init__ forwards down the
     MRO via super().__init__(); with QObject last, that forwarding reaches
     object harmlessly rather than landing on a gentletask __init__ that
@@ -198,7 +198,7 @@ class _QtTaskSignals(Qt.QObject):
     def _wait_pumping(self, timeout: Optional[float]) -> Any:
         """Block until done by pumping the Qt event loop, then return the result.
 
-        Used by wait(updates=True) on both GuiTask and GuiPromise so a wait from
+        Used by wait(updates=True) on both GuiTask and ManualGuiTask so a wait from
         the GUI thread does not freeze the UI.
         """
         start = ptime.time()
@@ -230,7 +230,7 @@ class GuiTask(ThreadTask, _QtTaskSignals):
     to its completion and state-change signals.
 
     The Qt signals, state slot, finish-emit hook, and event-pumping wait live in
-    the _QtTaskSignals mixin (shared with GuiPromise); see its docstring for the
+    the _QtTaskSignals mixin (shared with ManualGuiTask); see its docstring for the
     multiple-inheritance ordering rationale (ThreadTask first keeps QObject last
     before object).
 
@@ -332,15 +332,15 @@ def gui_asynch(
 
 
 # ---------------------------------------------------------------------------
-# GuiPromise
+# ManualGuiTask
 # ---------------------------------------------------------------------------
 
 
-class GuiPromise(Promise, _QtTaskSignals):
+class ManualGuiTask(Promise, _QtTaskSignals):
     """A gentletask Promise that is also a QObject, so GUI code can connect to
     its completion and state-change signals.
 
-    GuiPromise is the externally-completed analog of GuiTask: it has no body and
+    ManualGuiTask is the externally-completed analog of GuiTask: it has no body and
     spawns no thread. An external producer (a hardware monitor thread, a socket
     reader, a GUI callback, a lock loop) completes it by calling resolve(),
     fail(), or stop(). Completion fires the internal finish callback, which emits
@@ -406,7 +406,7 @@ class GuiMultiTask(MultiTask, _QtTaskSignals):
     """A gentletask MultiTask that is also a QObject, so GUI code can connect to
     its completion and state-change signals.
 
-    GuiMultiTask is the MultiTask analog of GuiPromise: it has no body and spawns
+    GuiMultiTask is the MultiTask analog of ManualGuiTask: it has no body and spawns
     no thread, completing when all of its child tasks complete. wait() returns
     the list of child results in order (or re-raises a lone child exception, or
     raises MultiException on several); stop() stops every child then itself.
@@ -424,7 +424,7 @@ class GuiMultiTask(MultiTask, _QtTaskSignals):
     """
 
     def __init__(self, tasks, name: Optional[str] = None) -> None:
-        # Order mirrors GuiPromise. Initialize the QObject (and its C++ half),
+        # Order mirrors ManualGuiTask. Initialize the QObject (and its C++ half),
         # our own state, and pin signal affinity first; then build the MultiTask
         # (which registers with the parent task for stop-cascade, wires each
         # child's finish callback, and spawns NO thread); then register the

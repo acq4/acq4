@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-from collections import deque
-
-import numpy as np
 import queue
 import threading
 import time
+from collections import deque
 from contextlib import contextmanager, ExitStack
 from typing import Callable, Optional
+
+import numpy as np
+from gentletask import Promise
 
 import acq4.util.ptime as ptime
 import pyqtgraph as pg
@@ -20,7 +21,7 @@ from acq4.util import Qt
 from acq4.util.Mutex import Mutex
 from acq4.util.Mutex import RecursiveMutex
 from acq4.util.Thread import Thread
-from acq4.util.gentle import GuiPromise, asynch, check_stop, sleep, synch
+from acq4.util.gentle import ManualGuiTask, asynch, check_stop, sleep, synch
 from acq4.util.imaging.frame import Frame
 from coorx import TTransform, SRT3DTransform
 from pyqtgraph import Vector
@@ -247,7 +248,7 @@ class Camera(DAQGeneric, OptomechDevice):
             raise ValueError(f"No camera preset named {preset!r}")
         params = presets[preset]["params"]
         self.setParams(params)
-        promise = GuiPromise(name=f"{self.name()}_loadPreset")
+        promise = Promise(name=f"{self.name()}_loadPreset")
         promise.resolve()
         return promise
 
@@ -1092,10 +1093,10 @@ class AcquireThread(Thread):
             self.start()
 
 
-class FrameAcquisitionFuture(GuiPromise):
+class FrameAcquisitionFuture(ManualGuiTask):
     """Acquire frames asynchronously, either a fixed number or continuously until stopped.
 
-    This is an externally-completed GuiPromise: it has no body and spawns no
+    This is an externally-completed ManualGuiTask: it has no body and spawns no
     gentletask thread. A dedicated monitor thread is the producer; it collects
     frames streamed from the camera and completes the promise by calling
     ``resolve(frames)`` when the fixed count is reached or a ``stopWhen``
@@ -1124,7 +1125,7 @@ class FrameAcquisitionFuture(GuiPromise):
         if frameCount is None:
             # For an indefinite acquisition, a stop is the normal way to finish:
             # resolve with the frames collected so far rather than completing
-            # with Stopped. GuiPromise.stop fires this before injecting Stopped,
+            # with Stopped. ManualGuiTask.stop fires this before injecting Stopped,
             # so the promise is already done and no Stopped is injected.
             self.add_stop_callback(self._resolveOnStop)
         self._thread = threading.Thread(

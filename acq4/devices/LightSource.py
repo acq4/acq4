@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from collections import OrderedDict
 
+from gentletask import Promise
+
 import acq4.util.Mutex as Mutex
 from acq4.devices.Device import Device, TaskGui
 from acq4.util import Qt
-from acq4.util.gentle import GuiPromise
 from pyqtgraph import SignalBlock
 
 
@@ -101,7 +102,7 @@ class LightSource(Device):
             self.setSourceActive(c, c == chan)
         if 'brightness' in conf:
             self.setSourceBrightness(chan, conf['brightness'])
-        promise = GuiPromise(name=f"{self.name()}_loadPreset")
+        promise = Promise(name=f"{self.name()}_loadPreset")
         promise.resolve()
         return promise
 

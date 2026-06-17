@@ -6,7 +6,7 @@ from pyqtgraph import debug
 
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
-from acq4.util.gentle import GuiPromise
+from acq4.util.gentle import ManualGuiTask
 from acq4.util.micromanager import getMMCorePy
 from ..Stage import Stage, MoveFuture, StageInterface
 
@@ -359,10 +359,10 @@ class MicroManagerMoveFuture(MoveFuture):
             self._errorMsg = "Move was interrupted before completion."
             # Device detected the abort itself: complete this promise as stopped
             # unless it is already completing via MoveFuture.stop(). Use
-            # GuiPromise.stop directly to avoid re-entering dev.stop() (this is
+            # ManualGuiTask.stop directly to avoid re-entering dev.stop() (this is
             # called from within dev.stop()/dev.abort()).
             if not self.is_done and not self.is_stopped:
-                GuiPromise.stop(self, "Move was interrupted before completion.")
+                ManualGuiTask.stop(self, "Move was interrupted before completion.")
         elif status == 0:
             # not actually stopped! This should not happen.
             raise RuntimeError("Interrupted move but manipulator is still running!")
