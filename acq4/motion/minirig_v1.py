@@ -74,7 +74,6 @@ class MinirigV1MotionPlanner(DefaultMotionPlanner):
 
         # site stage to approach position (if on a movable stage)
         approach_global = np.array(site.approachGlobal(pip))
-        site_delta = approach_global - np.array(site.globalPosition())
         site_spec = site.approachMoveSpec(pip, speed=speed)
         if site_spec is not None:
             steps.append(self._plan_generic(site_spec, f"position {site.name()}"))
@@ -90,14 +89,11 @@ class MinirigV1MotionPlanner(DefaultMotionPlanner):
         # pipette into site (only when going inside and approach is saved)
         going_inside = not np.allclose(spec.position, 0)
         if going_inside and site.hasApproachPosition(pip):
-            target_global = np.array(site.mapToGlobal(spec.position)) + site_delta
-            steps.append(AtomicMove(pip, target_global, speed, "pipette into site", {'linear': True, **kw}))
-            # MC: maybe we don't need to do a full plan at this point
-            # pip_to_interact = self._safe_path(pip, approach_global, target_global, speed)
-            # steps.extend(
-            #     AtomicMove(pip, pos, spd, expl, {'linear': lin, **kw})
-            #     for pos, spd, lin, expl in pip_to_interact
-            # )
+            # spec.position is relative to LIVE site, so no need to add site_delta
+            target_global = np.array(site.mapToGlobal(spec.position))
+            steps.append(
+                AtomicMove(pip, target_global, speed, "pipette into site", {'linear': True, **kw})
+            )
 
         return SequentialGroup(steps, name or f"approach {site.name()}")
 
