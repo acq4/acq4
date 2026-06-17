@@ -8,6 +8,7 @@ import weakref
 from typing import Union, Optional, Generator
 
 import numpy as np
+from gentletask import asynch
 from scipy.optimize import linear_sum_assignment
 from skimage.metrics import structural_similarity as ssim
 
