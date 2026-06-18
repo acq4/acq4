@@ -11,6 +11,7 @@ from acq4.Manager import getManager
 from acq4.devices.Stage import Stage
 from acq4.util import Qt, ptime
 from acq4.util.HelpfulException import HelpfulException
+from acq4.util.gentle import FutureButton, run_in_gui_thread
 from acq4.util.target import Target
 from coorx import AffineTransform
 
@@ -124,7 +125,9 @@ class ManipulatorAxesCalibrationWindow(Qt.QWidget):
         self.removePointBtn.setEnabled(False)
         self.btnPanelLayout.addWidget(self.removePointBtn)
 
-        self.autoCollectBtn = Qt.QPushButton("auto collect")
+        # Stoppable button: click to start automated collection, click again to
+        # interrupt it. Progress is shown on the button via the task's state.
+        self.autoCollectBtn = FutureButton(self._startAutoCollect, "auto collect", stoppable=True)
         self.btnPanelLayout.addWidget(self.autoCollectBtn)
 
         self.saveBtn = Qt.QPushButton("save calibration")
@@ -132,7 +135,7 @@ class ManipulatorAxesCalibrationWindow(Qt.QWidget):
 
         self.addPointBtn.toggled.connect(self.addPointToggled)
         self.removePointBtn.clicked.connect(self.removePointClicked)
-        self.autoCollectBtn.clicked.connect(self.autoCollectClicked)
+        self.autoCollectBtn.sigFinished.connect(self._autoCollectFinished)
         self.saveBtn.clicked.connect(self.saveClicked)
 
         # TODO eventually: more controls
@@ -170,17 +173,25 @@ class ManipulatorAxesCalibrationWindow(Qt.QWidget):
 
         stagePos = self.dev.getPosition()
 
+        self._addCollectedPoint(stagePos, parentPos, globalPos)
+        self.addPointBtn.setChecked(False)
+
+    def _addCollectedPoint(self, stagePos, parentPos, globalPos):
+        """Record a calibration point and show it in the tree and camera module.
+
+        Shared by manual point collection (a camera-module click) and automated
+        collection, so both paths display points the same way.
+        """
         self.calibration["points"].append((stagePos, parentPos))
         item = self._addCalibrationPoint(stagePos, parentPos)
 
         target = Target(movable=False)
-        self._cammod.window().addItem(target)
+        self.getCameraModule().window().addItem(target)
         target.setPos(pg.Point(globalPos[:2]))
         target.setDepth(globalPos[2])
         target.setFocusDepth(globalPos[2])
         item.target = target
 
-        self.addPointBtn.setChecked(False)
         self.recalculate()
         self.saveBtn.setText("*save calibration*")
 
@@ -215,33 +226,36 @@ class ManipulatorAxesCalibrationWindow(Qt.QWidget):
     def saveClicked(self):
         self.saveCalibrationToDevice()
 
-    def autoCollectClicked(self):
+    def _startAutoCollect(self):
+        """Produce the calibration task for the FutureButton.
+
+        Raises HelpfulException (surfaced by FutureButton) if no suitable pipette
+        is available; otherwise returns a running GuiTask that streams collected
+        points back via the on_point callback.
+        """
         from acq4.devices.Pipette.calibration import calibrate_manipulator_axes
         pipette = _find_pipette_for_manipulator(self.dev)
         if pipette is None:
-            Qt.QMessageBox.critical(self, "Auto Collect Failed", f"No Pipette device found with {self.dev.name()} as its parent manipulator.")
-            return
+            raise HelpfulException(
+                f"No Pipette device found with {self.dev.name()} as its parent manipulator.")
         if pipette.config.get('yaw') == 'auto':
-            Qt.QMessageBox.critical(self, "Auto Collect Failed", f"{pipette.name()} has yaw='auto', which depends on the axis calibration being collected. Configure an explicit yaw angle first.")
-            return
-        self.autoCollectBtn.setEnabled(False)
-        self.autoCollectBtn.setText("collecting...")
-        future = calibrate_manipulator_axes(pipette)
-        # GuiTask's sigFinished is already marshalled to the GUI thread, so we can
-        # apply the result directly without an extra runInGuiThread hop.
-        future.sigFinished.connect(self._autoCollectFinished)
+            raise HelpfulException(
+                f"{pipette.name()} has yaw='auto', which depends on the axis calibration "
+                f"being collected. Configure an explicit yaw angle first.")
+        # Ensure the camera module is open before collection begins, so points can
+        # be displayed as they arrive.
+        self.getCameraModule()
+        return calibrate_manipulator_axes(pipette, on_point=self._onAutoCollectPoint)
 
-    def _autoCollectFinished(self, future):
-        self.autoCollectBtn.setEnabled(True)
-        self.autoCollectBtn.setText("auto collect")
-        try:
-            points = future.wait()
-        except Exception:
-            self.dev.logger.exception("Auto collect calibration failed")
-            return
-        for device_pos, parent_pos in points:
-            self.calibration["points"].append((device_pos, parent_pos))
-            self._addCalibrationPoint(device_pos, parent_pos)
+    def _onAutoCollectPoint(self, device_pos, parent_pos, global_pos):
+        # Called from the calibration worker thread for each collected point;
+        # marshal the GUI update onto the GUI thread.
+        run_in_gui_thread(
+            self._addCollectedPoint, list(device_pos), list(parent_pos), list(global_pos))
+
+    def _autoCollectFinished(self, task):
+        # Points were already added incrementally via _onAutoCollectPoint; just
+        # make sure the fit reflects everything collected.
         self.recalculate()
         self.saveBtn.setText("*save calibration*")
 
