@@ -6,9 +6,6 @@ import threading
 import traceback
 from typing import Any, Callable, Optional
 
-from pyqtgraph import FeedbackButton
-
-from acq4.util import Qt, ptime
 from gentletask import (
     Event,
     MultiException,
@@ -29,8 +26,11 @@ from gentletask import (
     task_chain,
     task_context,
     throughline,
+    _TaskCore,  # base wait() with the result/exception logic
 )
-from gentletask import _TaskCore  # base wait() with the result/exception logic
+
+from acq4.util import Qt, ptime
+from pyqtgraph import FeedbackButton
 
 __all__ = [
     # Re-exported gentletask core so acq4 code has one import.
@@ -56,11 +56,11 @@ __all__ = [
     # acq4-side additions.
     "set_state",
     "raise_errors",
-    "GuiTask",
-    "ManualGuiTask",
+    "QtFriendlyTask",
+    "ManualQtFriendlyTask",
     "GuiMultiTask",
     "MultiFuture",
-    "gui_asynch",
+    "asynch_with_qt_signals",
     "run_in_gui_thread",
     "task_in_gui_thread",
     "FutureButton",
@@ -212,7 +212,7 @@ class _QtTaskSignals(Qt.QObject):
 # ---------------------------------------------------------------------------
 
 
-class GuiTask(ThreadTask, _QtTaskSignals):
+class QtFriendlyTask(ThreadTask, _QtTaskSignals):
     """A gentletask ThreadTask that is also a QObject, so GUI code can connect
     to its completion and state-change signals.
 
@@ -287,12 +287,12 @@ class GuiTask(ThreadTask, _QtTaskSignals):
         return self._wait_pumping(timeout)
 
 
-def gui_asynch(
+def asynch_with_qt_signals(
     fn: Callable,
     name: Optional[str] = None,
     detach: bool = False,
     on_finish: Optional[Callable[[Any, Optional[BaseException]], Any]] = None,
-) -> Callable[..., "GuiTask"]:
+) -> Callable[..., "QtFriendlyTask"]:
     """Like gentletask.asynch, but launches the work in a GuiTask (Qt signals).
 
     Plain ``asynch`` only builds a ThreadTask; use ``gui_asynch`` when a
@@ -311,8 +311,8 @@ def gui_asynch(
     exactly like ``synch`` on an ``asynch``-wrapped callable.
     """
 
-    def wrapper(*args: Any, **kwargs: Any) -> "GuiTask":
-        return GuiTask(fn, args, kwargs, name=name, detach=detach, on_finish=on_finish)
+    def wrapper(*args: Any, **kwargs: Any) -> "QtFriendlyTask":
+        return QtFriendlyTask(fn, args, kwargs, name=name, detach=detach, on_finish=on_finish)
 
     # Record the original callable so synch() can de-wrap back to it.
     wrapper._asynch_wraps = fn
@@ -324,7 +324,7 @@ def gui_asynch(
 # ---------------------------------------------------------------------------
 
 
-class ManualGuiTask(Promise, _QtTaskSignals):
+class ManualQtFriendlyTask(Promise, _QtTaskSignals):
     """A gentletask Promise that is also a QObject, so GUI code can connect to
     its completion and state-change signals.
 
@@ -525,13 +525,22 @@ def run_in_gui_thread(fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
     return _GuiCall(gui_thread, fn, args, kwargs).result()
 
 
+def in_gui_thread(func):
+    """Decorator to run a function in the GUI thread and return its result."""
+
+    def run_func_in_gui_thread(*args, **kwds):
+        return run_in_gui_thread(func, *args, **kwds)
+
+    return run_func_in_gui_thread
+
+
 def task_in_gui_thread(fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Task:
     """Return a GuiTask that runs *fn* in the GUI thread.
 
     The work itself is marshalled onto the GUI thread via run_in_gui_thread; the
     surrounding GuiTask gives callers a Task handle (wait/stop/signals) for it.
     """
-    return GuiTask(lambda: run_in_gui_thread(fn, *args, **kwargs))
+    return QtFriendlyTask(lambda: run_in_gui_thread(fn, *args, **kwargs))
 
 
 # ---------------------------------------------------------------------------
@@ -641,7 +650,7 @@ class FutureButton(FeedbackButton):
             # Finish display is marshalled to the GUI thread: the finish callback
             # fires on the worker thread, so it routes through run_in_gui_thread.
             task.add_finish_callback(self._taskFinishedFromWorker)
-            if isinstance(task, GuiTask):
+            if isinstance(task, QtFriendlyTask):
                 task.sigStateChanged.connect(self._taskStateChanged)
         else:
             self._userRequestedStop = True

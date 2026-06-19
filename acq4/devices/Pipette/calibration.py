@@ -4,7 +4,7 @@ import scipy.interpolate
 import pyqtgraph as pg
 from acq4.devices.Camera import Camera
 from acq4.util import Qt
-from acq4.util.gentle import asynch, current_task, gui_asynch
+from acq4.util.gentle import asynch, current_task, asynch_with_qt_signals
 from acq4.util.imaging.sequencer import acquire_z_stack
 from acq4 import getManager
 from acq4.motion import MoveSpec
@@ -201,8 +201,8 @@ def scan_pipette_z_stack(pipette, imager=None, z_range=50e-6, z_step=5e-6, show=
     image_positions = np.array(image_positions)
 
     if show:
-        from acq4.util.threadrun import runInGuiThread
-        runInGuiThread(_show_z_stack_detection_widget, frames, image_positions, z_predictions_um, confidences, heatmaps)
+        from acq4.util.gentle import run_in_gui_thread
+        run_in_gui_thread(_show_z_stack_detection_widget, frames, image_positions, z_predictions_um, confidences, heatmaps)
 
     return frames, global_positions, z_predictions_um, confidences, heatmaps
 
@@ -439,7 +439,7 @@ def getPipettePositionAtTime(events, time):
     return events[pipIndex]['position']
 
 
-@gui_asynch
+@asynch_with_qt_signals
 def calibrate_manipulator_axes(
     pipette: Pipette,
     n_steps: int = 10,

@@ -4,8 +4,8 @@ from typing import TYPE_CHECKING, Any
 
 from acq4.devices.PatchPipette import PatchPipette
 from acq4.logging_config import get_logger
-from acq4.util.gentle import Stopped, check_stop, gui_asynch, set_state, sleep, synch
-from acq4.util.threadrun import runInGuiThread
+from acq4.util.gentle import Stopped, check_stop, asynch_with_qt_signals, set_state, sleep, synch
+from acq4.util.gentle import run_in_gui_thread
 from acq4.util.imaging.sequencer import run_image_sequence
 from ..TaskRunner import TaskRunner
 from ...Manager import Manager
@@ -26,20 +26,20 @@ class Autopatcher:
         win.sigWorking.emit(False)
         win.ui.reuseLastCellBtn.setEnabled(win._cell is not None or bool(win._ranked_cells))
 
-    @gui_asynch
+    @asynch_with_qt_signals
     def _autopatchDemo(self):
         win = self._window
         win.sigWorking.emit(win.ui.autopatchDemoBtn)
         ppip: PatchPipette = win.patchPipetteDevice
         man = win.module.manager
-        data_manager = runInGuiThread(man.getModule, "Data Manager")
-        multipatch_win = runInGuiThread(man.getModule, 'MultiPatch').win
+        data_manager = run_in_gui_thread(man.getModule, "Data Manager")
+        multipatch_win = run_in_gui_thread(man.getModule, 'MultiPatch').win
         demo_dir = self._makeValidDemoDir()
         man.setCurrentDir(demo_dir)
         synch(win.cameraDevice.scopeDev.findSurfaceDepth)(win.cameraDevice)
         try:
             while True:
-                cell_dir = runInGuiThread(data_manager.createNewFolder, "Cell")
+                cell_dir = run_in_gui_thread(data_manager.createNewFolder, "Cell")
                 try:
                     started_clean = ppip.isTipClean()
                     if not started_clean:
@@ -61,7 +61,7 @@ class Autopatcher:
                         return
                     set_state("Autopatch: cell found")
                     ppip.newPatchAttempt()
-                    runInGuiThread(multipatch_win.ui.recordBtn.setChecked, True)
+                    run_in_gui_thread(multipatch_win.ui.recordBtn.setChecked, True)
                     set_state("Autopatch: go home before find surface")
                     ppip.pipetteDevice.goHome("fast").wait()
 
@@ -152,7 +152,7 @@ class Autopatcher:
                     continue
                 finally:
                     man.setCurrentDir(cell_dir.parent())
-                    runInGuiThread(multipatch_win.ui.recordBtn.setChecked, False)
+                    run_in_gui_thread(multipatch_win.ui.recordBtn.setChecked, False)
         finally:
             man.setCurrentDir(demo_dir.parent())
 
@@ -237,7 +237,7 @@ class Autopatcher:
             taskrunner.sequenceInfo["period"] * taskrunner.sequenceInfo["totalParams"]
         )
         # runInGuiThread(taskrunner.runSequence, store=True, storeDirHandle=self.dh).wait(...)
-        runInGuiThread(taskrunner.runSequence, store=True).wait(
+        run_in_gui_thread(taskrunner.runSequence, store=True).wait(
             timeout=max(30, expected_duration * 20),
         )
         logger.warning("Autopatch: Task runner sequence completed.")

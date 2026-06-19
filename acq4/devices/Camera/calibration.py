@@ -7,7 +7,7 @@ import scipy.ndimage
 import pyqtgraph as pg
 from acq4.Manager import getManager
 from acq4.util import Qt
-from acq4.util.gentle import gui_asynch, set_state
+from acq4.util.gentle import asynch_with_qt_signals, set_state
 from acq4.util.imaging.sequencer import acquire_z_stack
 from coorx.nonlinear import PetzvalTransform
 
@@ -249,7 +249,7 @@ class FieldCurvatureCalibrationWindow(Qt.QWidget):
         self._status_label.setText("Calibration complete.")
 
 
-@gui_asynch
+@asynch_with_qt_signals
 def measure_field_curvature_beads(camera, z_range, z_step, grid_n, n_terms=1):
     """Measure field curvature from a z-stack of uniform-z objects (e.g. fluorescent beads).
 
@@ -314,7 +314,7 @@ def measure_field_curvature_beads(camera, z_range, z_step, grid_n, n_terms=1):
     }
 
 
-@gui_asynch
+@asynch_with_qt_signals
 def measure_field_curvature_pipette(
     camera, pipette, stage, xy_range, grid_n, z_range, z_step, n_terms=1
 ):

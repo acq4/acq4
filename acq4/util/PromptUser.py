@@ -8,7 +8,6 @@ from acq4.util import Qt
 from acq4.util.gentle import Event, asynch, run_in_gui_thread
 
 
-@asynch
 def prompt(title, text, choices, extra_text=None, parent=None):
     """
     Prompt the user with a choice.

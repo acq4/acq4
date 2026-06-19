@@ -6,7 +6,7 @@ from functools import cached_property
 from acq4.devices.Device import Device
 from acq4.util import Qt
 from acq4.util.PromptUser import prompt
-from acq4.util.gentle import FutureButton, Task, gui_asynch
+from acq4.util.gentle import FutureButton, Task, asynch_with_qt_signals
 
 
 class Sonicator(Device):
@@ -52,10 +52,10 @@ class Sonicator(Device):
             "Sonication Safety Warning",
             "Sonication may be unsafe at the current pipette position. Proceed?",
             ["Yes", "No"],
-        ).wait()
+        )
         return response == "Yes"
 
-    @gui_asynch
+    @asynch_with_qt_signals
     def doProtocol(self, protocol: str | object):
         if not self.safeToSonicate():
             self.logger.info("Sonication deemed unsafe. Aborting.")

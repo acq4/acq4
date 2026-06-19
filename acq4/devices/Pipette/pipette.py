@@ -17,7 +17,7 @@ from acq4.devices.Stage import Stage, MovePathFuture
 from acq4.modules.Camera import CameraModuleInterface
 from acq4.motion import MoveSpec
 from acq4.util import Qt, ptime
-from acq4.util.gentle import ManualGuiTask, asynch, raise_errors, sleep, synch
+from acq4.util.gentle import ManualQtFriendlyTask, asynch, raise_errors, sleep, synch
 from acq4.util.target import Target
 from coorx import AffineTransform
 from pyqtgraph import Point, siFormat
@@ -323,7 +323,7 @@ class Pipette(Device, OptomechDevice):
                 text=f"The tip offset for {self.name()} is {dist} off from its initial value.",
                 extra_text="Do you want to use it, discard it or override all historic offsets?",
                 choices=["Use", "Discard", "Override"],
-            ).wait()
+            )
             if button_text == "Use":
                 self.recordTipOffsetInHistory(pos)
             elif button_text == "Discard":
@@ -346,7 +346,7 @@ class Pipette(Device, OptomechDevice):
                 extra_text="Do you want to include this outlier, discard the value, override all historic "
                 "offsets, or only use this as a temporary offset?",
                 choices=["Include", "Discard", "Override", "Temporary"],
-            ).wait()
+            )
             if button_text == "Include":
                 self.recordTipOffsetInHistory(pos)
             elif button_text == "Discard":
@@ -688,13 +688,13 @@ class Pipette(Device, OptomechDevice):
         pos = self.positionAtDepth(depth)
         return self.moveToGlobalNoPlanning(pos, speed, name=name)
 
-    def retractFromSurface(self, speed='slow') -> ManualGuiTask:
+    def retractFromSurface(self, speed='slow') -> ManualQtFriendlyTask:
         """Retract the pipette along its axis until it is above the slice surface."""
         depth = self.globalPosition()[2]
         appDepth = self.approachDepth()
         if depth < appDepth:
             return self.advance(appDepth, speed=speed, name='retract from surface')
-        already_retracted = ManualGuiTask(name='retract from surface (no-op)')
+        already_retracted = ManualQtFriendlyTask(name='retract from surface (no-op)')
         already_retracted.resolve(None)
         return already_retracted
 

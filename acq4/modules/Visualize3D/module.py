@@ -1,7 +1,7 @@
 import threading
 
 from acq4.modules.Module import Module
-from acq4.util.threadrun import inGuiThread
+from acq4.util.gentle import in_gui_thread
 from .gui import VisualizerWindow
 
 
@@ -20,7 +20,7 @@ class Visualize3D(Module):
         manager.interfaceDir.sigInterfaceListChanged.connect(self.onInterfaceListChanged)
         self.onInterfaceListChanged([self.interfaceName])
 
-    @inGuiThread
+    @in_gui_thread
     def onInterfaceListChanged(self, types: list):
         if self.interfaceName in types:
             seen = set()
@@ -37,7 +37,7 @@ class Visualize3D(Module):
                     self.win.removeAdapter(self._adapters[name])
                     del self._adapters[name]
 
-    @inGuiThread
+    @in_gui_thread
     def openWindow(self):
         if self.win is None:
             self.win = VisualizerWindow(len(self.manager.listInterfaces(self.interfaceName)))

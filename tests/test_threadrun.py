@@ -5,7 +5,7 @@ from unittest.mock import patch
 import pytest
 
 from acq4.util import Qt
-from acq4.util.threadrun import inGuiThread
+from acq4.util.gentle import in_gui_thread
 
 
 # Mock PyQt5 components
@@ -46,7 +46,7 @@ def mock_run_in_gui_thread(func, *args, **kwargs):
 @pytest.fixture(autouse=True)
 def setup_mocks():
     with patch("acq4.util.Qt.pyqtSignal", MockSignal), patch("acq4.util.Qt.QTimer", MockQTimer), patch(
-        "acq4.util.threadrun.runInGuiThread", mock_run_in_gui_thread
+        "acq4.util.gentle.runInGuiThread", mock_run_in_gui_thread
     ):
         yield
 
@@ -56,7 +56,7 @@ def test_decorated_class_nonblocking():
     call_tracker = []
 
     class TestClass(Qt.QObject):
-        @inGuiThread
+        @in_gui_thread
         def test_method(self):
             call_tracker.append("method_called")
             return "result"
@@ -75,7 +75,7 @@ def test_decorated_class_nonblocking():
 # Test case 2: Method in a decorated class (blocking)
 def test_decorated_class_blocking():
     class TestClass(Qt.QObject):
-        @inGuiThread
+        @in_gui_thread
         def test_method(self):
             return "blocking_result"
 
@@ -93,7 +93,7 @@ def test_non_decorated_class_nonblocking():
     call_tracker = []
 
     class TestClass:
-        @inGuiThread
+        @in_gui_thread
         def test_method(self):
             call_tracker.append("method_called")
             return "result"
@@ -113,7 +113,7 @@ def test_non_decorated_class_nonblocking():
 # Test case 4: Method in a non-decorated class (blocking)
 def test_non_decorated_class_blocking():
     class TestClass:
-        @inGuiThread
+        @in_gui_thread
         def test_method(self):
             return "blocking_result"
 
@@ -130,7 +130,7 @@ def test_non_decorated_class_blocking():
 def test_pure_function_nonblocking():
     call_tracker = []
 
-    @inGuiThread
+    @in_gui_thread
     def test_function():
         call_tracker.append("function_called")
         return "function_result"
@@ -147,7 +147,7 @@ def test_pure_function_nonblocking():
 
 # Test case 6: Pure function (blocking)
 def test_pure_function_blocking():
-    @inGuiThread
+    @in_gui_thread
     def test_function():
         return "function_blocking_result"
 
@@ -162,7 +162,7 @@ def test_pure_function_blocking():
 def test_method_with_arguments():
     last_args = None
     class TestClass(Qt.QObject):
-        @inGuiThread
+        @in_gui_thread
         def test_with_args(self, a, b, c=None):
             nonlocal last_args
             last_args = (a, b, c)
@@ -186,15 +186,15 @@ def test_method_with_arguments():
 # Test case 8: Return value handling
 def test_return_value_handling():
     class TestClass(Qt.QObject):
-        @inGuiThread
+        @in_gui_thread
         def returns_none(self):
             return None
 
-        @inGuiThread
+        @in_gui_thread
         def returns_value(self):
             return 42
 
-        @inGuiThread
+        @in_gui_thread
         def returns_object(self):
             return {"key": "value"}
 
@@ -214,7 +214,7 @@ def test_return_value_handling():
 # Test case 9: Keyword argument handling
 def test_keyword_argument_handling():
     class TestClass(Qt.QObject):
-        @inGuiThread
+        @in_gui_thread
         def method_with_kwargs(self, a, b=2, **kwargs):
             return {"a": a, "b": b, **kwargs}
 
@@ -234,7 +234,7 @@ def test_threading_behavior():
             super().__init__()
             self.thread_ids = []
 
-        @inGuiThread
+        @in_gui_thread
         def record_thread_id(self):
             self.thread_ids.append(threading.get_ident())
             time.sleep(0.1)  # Small delay to simulate work
@@ -247,7 +247,7 @@ def test_threading_behavior():
         thread.join()
         return thread.ident
 
-    with patch("acq4.util.threadrun.runInGuiThread", mock_run_in_thread):
+    with patch("acq4.util.gentle.runInGuiThread", mock_run_in_thread):
         instance = TestClass()
 
         # Record the main thread ID
@@ -264,7 +264,7 @@ def test_threading_behavior():
 # Test case 11: Exception handling
 def test_exception_handling():
     class TestClass(Qt.QObject):
-        @inGuiThread
+        @in_gui_thread
         def raises_exception(self):
             raise ValueError("Test exception")
 
@@ -288,11 +288,11 @@ def test_multiple_decorated_methods():
             super().__init__()
             self.calls = []
 
-        @inGuiThread
+        @in_gui_thread
         def method1(self):
             self.calls.append("method1")
 
-        @inGuiThread
+        @in_gui_thread
         def method2(self):
             self.calls.append("method2")
 

@@ -12,7 +12,7 @@ from acq4.motion import MoveSpec
 from acq4.util import Qt
 from acq4.util.Mutex import Mutex
 from acq4.util.acq4_typing import Number
-from acq4.util.gentle import MultiFuture, Task, asynch, gui_asynch, FutureButton
+from acq4.util.gentle import MultiFuture, Task, asynch, asynch_with_qt_signals, FutureButton
 from acq4.util.imaging import Frame
 from acq4.util.surface import find_surface
 from acq4.util.ui.ZPositionWidget import ZPositionWidget
@@ -805,7 +805,7 @@ class ScopeCameraModInterface(CameraModuleInterface):
         self.transformChanged()
 
     def findSurface(self):
-        return gui_asynch(self.getDevice().findSurfaceDepth)(self.getDevice().getDefaultImager())
+        return asynch_with_qt_signals(self.getDevice().findSurfaceDepth)(self.getDevice().getDefaultImager())
 
     def surfaceDepthChanged(self, depth):
         self.zPositionWidget.setSurfaceDepth(depth)

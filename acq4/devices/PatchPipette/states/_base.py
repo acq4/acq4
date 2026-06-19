@@ -14,21 +14,21 @@ from acq4.logging_config import get_logger
 from acq4.util import Qt
 from acq4.util.debug import log_and_ignore_exception
 from acq4.util.gentle import (
-    GuiTask,
-    ManualGuiTask,
+    QtFriendlyTask,
+    ManualQtFriendlyTask,
     Task,
     asynch,
     check_stop,
     sleep,
     Stopped,
-    gui_asynch,
+    asynch_with_qt_signals,
 )
 from neuroanalysis.test_pulse import PatchClampTestPulse
 from pyqtgraph import disconnect
 from pyqtgraph.units import µm
 
 
-class PatchPipetteState(GuiTask):
+class PatchPipetteState(QtFriendlyTask):
     """Base class for implementing the details of a patch pipette state:
 
     - Set initial pressure, clamp parameters, position, etc when starting the state
@@ -148,7 +148,7 @@ class PatchPipetteState(GuiTask):
         # manager can connect signals before calling start(). GuiTask.__init__
         # initializes the QObject half, so anything that connects Qt signals (e.g.
         # sigTargetChanged below) must run AFTER this call.
-        GuiTask.__init__(
+        QtFriendlyTask.__init__(
             self,
             self.runJob,
             name=f"State {self.stateName} for {dev}",
@@ -332,7 +332,7 @@ class PatchPipetteState(GuiTask):
     def cleanup(self) -> Task:
         with self._cleanupMutex:
             if self._cleanupFuture is None:
-                self._cleanupFuture = gui_asynch(self._cleanup)()
+                self._cleanupFuture = asynch_with_qt_signals(self._cleanup)()
             return self._cleanupFuture
 
     def _cleanup(self):

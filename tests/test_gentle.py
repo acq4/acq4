@@ -9,8 +9,8 @@ from PyQt5.QtWidgets import QApplication
 
 from acq4.util import Qt
 from acq4.util.gentle import (
-    ManualGuiTask,
-    GuiTask,
+    ManualQtFriendlyTask,
+    QtFriendlyTask,
     FutureButton,
     MultiException,
     MultiFuture,
@@ -20,7 +20,7 @@ from acq4.util.gentle import (
     ThreadTask,
     check_stop,
     current_task,
-    gui_asynch,
+    asynch_with_qt_signals,
     raise_errors,
     run_in_gui_thread,
     set_state,
@@ -52,7 +52,7 @@ class TestGuiTask:
             worker_thread.append(threading.current_thread())
             return 42
 
-        t = GuiTask(body, start=False)
+        t = QtFriendlyTask(body, start=False)
         t.sigFinished.connect(lambda task: got.append(task))
         t.start()
         result = t.wait()
@@ -70,7 +70,7 @@ class TestGuiTask:
             set_state("measuring")
             return "done"
 
-        t = GuiTask(body, start=False)
+        t = QtFriendlyTask(body, start=False)
         t.sigStateChanged.connect(lambda task, state: states.append(state))
         t.start()
         t.wait()
@@ -92,7 +92,7 @@ class TestGuiTask:
             finally:
                 cleaned_up.append(True)
 
-        t = GuiTask(body)
+        t = QtFriendlyTask(body)
         started.wait(timeout=1)
         t.stop()
         try:
@@ -128,7 +128,7 @@ class TestGuiTask:
             # the child and unwinds both.
             return child.wait()
 
-        parent = GuiTask(parent_body)
+        parent = QtFriendlyTask(parent_body)
         parent_started.wait(timeout=1)
         child_started.wait(timeout=1)
         parent.stop()
@@ -167,7 +167,7 @@ class TestGuiTask:
         constructed = threading.Event()
 
         def constructor():
-            t = GuiTask(lambda: "result", start=False)
+            t = QtFriendlyTask(lambda: "result", start=False)
             affinity_at_connect.append(t.thread() is gui_thread)
             t.sigFinished.connect(receiver.on_finished)
             constructed.set()
@@ -196,7 +196,7 @@ class TestGuiTask:
             time.sleep(0.2)
             return "slow result"
 
-        t = GuiTask(body)
+        t = QtFriendlyTask(body)
         result = t.wait(updates=True)
         timer.stop()
 
@@ -208,7 +208,7 @@ class TestGuiTask:
             time.sleep(0.05)
             raise ValueError("kaboom")
 
-        t = GuiTask(body)
+        t = QtFriendlyTask(body)
         try:
             t.wait(updates=True)
             assert False, "expected ValueError"
@@ -224,7 +224,7 @@ class TestGuiTask:
             time.sleep(0.3)
             return "too late"
 
-        t = GuiTask(body)
+        t = QtFriendlyTask(body)
         result = t.wait(timeout=0.02, updates=True)
 
         assert result is None
@@ -278,7 +278,7 @@ class TestFutureButton:
         produced = []
 
         def producer():
-            t = GuiTask(lambda: "ok")
+            t = QtFriendlyTask(lambda: "ok")
             produced.append(t)
             return t
 
@@ -294,7 +294,7 @@ class TestFutureButton:
             raise ValueError("nope")
 
         button = FutureButton(
-            lambda: GuiTask(boom), "Go", failure="Failed", raiseOnError=False
+            lambda: QtFriendlyTask(boom), "Go", failure="Failed", raiseOnError=False
         )
         button.click()
         _pump(until=lambda: button.text() == "Failed")
@@ -313,7 +313,7 @@ class TestFutureButton:
         the_task = []
 
         def producer():
-            t = GuiTask(body)
+            t = QtFriendlyTask(body)
             the_task.append(t)
             return t
 
@@ -334,7 +334,7 @@ class TestManualGuiTask:
         gui_thread = QApplication.instance().thread()
         slot_threads = []
 
-        p = ManualGuiTask()
+        p = ManualQtFriendlyTask()
         p.sigFinished.connect(
             lambda task: slot_threads.append(Qt.QtCore.QThread.currentThread())
         )
@@ -354,7 +354,7 @@ class TestManualGuiTask:
         assert slot_threads[0] is gui_thread
 
     def test_fail_makes_wait_raise(self):
-        p = ManualGuiTask()
+        p = ManualQtFriendlyTask()
         p.fail(ValueError("boom"))
         try:
             p.wait()
@@ -364,7 +364,7 @@ class TestManualGuiTask:
 
     def test_stop_before_resolve_raises_stopped_and_fires_finished(self):
         got = []
-        p = ManualGuiTask()
+        p = ManualQtFriendlyTask()
         p.sigFinished.connect(lambda task: got.append(task))
         p.stop()
         try:
@@ -385,7 +385,7 @@ class TestManualGuiTask:
         states = []
         slot_threads = []
 
-        p = ManualGuiTask()
+        p = ManualQtFriendlyTask()
 
         def on_state(task, state):
             states.append(state)
@@ -426,7 +426,7 @@ class TestManualGuiTask:
         promise_box = []
 
         def constructor():
-            p = ManualGuiTask()
+            p = ManualQtFriendlyTask()
             promise_box.append(p)
             affinity_at_connect.append(p.thread() is gui_thread)
             p.sigFinished.connect(receiver.on_finished)
@@ -445,7 +445,7 @@ class TestManualGuiTask:
 
     def test_resolve_spawns_no_thread(self):
         before = threading.active_count()
-        p = ManualGuiTask()
+        p = ManualQtFriendlyTask()
         p.resolve(1)
         p.wait()
         # No worker thread should have been spawned for a Promise.
@@ -459,7 +459,7 @@ class TestManualGuiTask:
         timer.timeout.connect(lambda: ticks.append(1))
         timer.start(10)
 
-        p = ManualGuiTask()
+        p = ManualQtFriendlyTask()
 
         def producer():
             time.sleep(0.1)
@@ -487,13 +487,13 @@ class TestGuiAsynch:
         # which a fast body can emit before an external connect (documented).
         got = []
 
-        @gui_asynch
+        @asynch_with_qt_signals
         def body(x):
             set_state("running")
             return x * 2
 
         task = body(21)
-        assert isinstance(task, GuiTask)
+        assert isinstance(task, QtFriendlyTask)
         task.add_finish_callback(lambda result, exc: got.append(result))
         result = task.wait()
 
@@ -505,7 +505,7 @@ class TestGuiAsynch:
         # synch(gui_asynch(fn)) runs fn inline (no GuiTask/thread) and returns the value.
         ran_in = []
 
-        @gui_asynch
+        @asynch_with_qt_signals
         def body():
             ran_in.append(threading.current_thread())
             return "inline"
@@ -556,8 +556,8 @@ class TestMultiFuture:
         gui_thread = QApplication.instance().thread()
         slot_threads = []
 
-        a = ManualGuiTask()
-        b = ManualGuiTask()
+        a = ManualQtFriendlyTask()
+        b = ManualQtFriendlyTask()
         multi = MultiFuture([a, b], name="pair")
         multi.sigFinished.connect(
             lambda task: slot_threads.append(Qt.QtCore.QThread.currentThread())
@@ -586,8 +586,8 @@ class TestMultiFuture:
         states = []
         slot_threads = []
 
-        a = ManualGuiTask()
-        b = ManualGuiTask()
+        a = ManualQtFriendlyTask()
+        b = ManualQtFriendlyTask()
         multi = MultiFuture([a, b])
 
         def on_state(sender, state):
@@ -613,8 +613,8 @@ class TestMultiFuture:
         assert slot_threads[0] is gui_thread
 
     def test_one_child_failing_makes_wait_raise_that_exception(self):
-        a = ManualGuiTask()
-        b = ManualGuiTask()
+        a = ManualQtFriendlyTask()
+        b = ManualQtFriendlyTask()
         multi = MultiFuture([a, b])
 
         a.resolve("ok")
@@ -637,8 +637,8 @@ class TestMultiFuture:
                     sleep(0.01)
             return body
 
-        a = GuiTask(make_body(0))
-        b = GuiTask(make_body(1))
+        a = QtFriendlyTask(make_body(0))
+        b = QtFriendlyTask(make_body(1))
         multi = MultiFuture([a, b])
         for ev in started:
             ev.wait(timeout=1)
@@ -675,7 +675,7 @@ class TestMultiFuture:
 
     def test_percent_done_robust_when_child_lacks_percent_done(self):
         # A child without percentDone must not break the min computation.
-        a = ManualGuiTask()  # ManualGuiTask has no percentDone
+        a = ManualQtFriendlyTask()  # ManualGuiTask has no percentDone
         multi = MultiFuture([a])
         assert multi.percentDone() == 0.0
         a.resolve(None)

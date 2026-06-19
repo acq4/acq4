@@ -12,7 +12,7 @@ from pyqtgraph.parametertree import ParameterTree
 from pyqtgraph.parametertree.parameterTypes import GroupParameter, ListParameter
 from .Device import Device, TaskGui, DeviceTask
 from ..util import Qt
-from ..util.gentle import ManualGuiTask
+from ..util.gentle import ManualQtFriendlyTask
 from ..util.generator.StimParamSet import SeqParameter
 
 
@@ -443,10 +443,10 @@ class OdorTask(DeviceTask):
             self._future.stop(reason=kwargs.get("reason"))
 
 
-class OdorFuture(ManualGuiTask):
+class OdorFuture(ManualQtFriendlyTask):
     """Track the progress of a timed odor-delivery schedule.
 
-    This is an externally-completed ManualGuiTask: a raw worker thread runs
+    This is an externally-completed ManualQtFriendlyTask: a raw worker thread runs
     ``_executeSchedule`` and resolves the promise once the schedule finishes,
     checking ``self.is_stopped`` to abort early when ``stop()`` is called.
     """

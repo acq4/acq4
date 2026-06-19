@@ -7,7 +7,7 @@ from acq4.devices.Device import Device
 from acq4.drivers.sensapex import UMP
 from acq4.util import ptime
 from acq4.util.Thread import Thread
-from acq4.util.gentle import ManualGuiTask, Stopped
+from acq4.util.gentle import ManualQtFriendlyTask, Stopped
 
 
 class SensapexObjectiveChanger(Device):
@@ -94,7 +94,7 @@ class _PositionPollThread(Thread):
             sleep(self._poll_interval)
 
 
-class ObjectiveChangeFuture(ManualGuiTask):
+class ObjectiveChangeFuture(ManualQtFriendlyTask):
     """Track the progress of a requested objective-changer move.
 
     This is an externally-completed ManualGuiTask: a raw daemon thread runs
@@ -104,7 +104,7 @@ class ObjectiveChangeFuture(ManualGuiTask):
     """
 
     def __init__(self, dev: SensapexObjectiveChanger, pos):
-        ManualGuiTask.__init__(self, name=f"ObjectiveChangeFuture_{dev.name()}")
+        ManualQtFriendlyTask.__init__(self, name=f"ObjectiveChangeFuture_{dev.name()}")
         self.dev = dev
         self.target = pos
         self._start = ptime.time()
@@ -145,7 +145,7 @@ class ObjectiveChangeFuture(ManualGuiTask):
         block until the promise actually completes, swallowing the Stopped.
         """
         self.dev.stop()
-        ManualGuiTask.stop(self, reason)
+        ManualQtFriendlyTask.stop(self, reason)
         if wait:
             with contextlib.suppress(Stopped):
                 self.wait()
