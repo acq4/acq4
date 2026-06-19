@@ -1,6 +1,5 @@
 # Calibration windows and utilities for Stage and Manipulator devices.
 # Includes manual point collection, automated axis calibration, and transform fitting.
-from itertools import combinations
 
 import numpy as np
 import scipy.optimize
@@ -11,8 +10,8 @@ from acq4.Manager import getManager
 from acq4.devices.Stage import Stage
 from acq4.util import Qt, ptime
 from acq4.util.HelpfulException import HelpfulException
-from acq4.util.task import FutureButton, run_in_gui_thread
 from acq4.util.target import Target
+from acq4.util.task import FutureButton, run_in_gui_thread
 from coorx import AffineTransform
 
 
@@ -78,6 +77,7 @@ class StageAxesCalibrationWindow(Qt.QWidget):
 def _find_pipette_for_manipulator(manipulator):
     """Return the first Pipette device whose parent stage is *manipulator*, or None."""
     from acq4.devices.Pipette import Pipette
+
     manager = getManager()
     for name in manager.listDevices():
         dev = manager.getDevice(name)
@@ -153,7 +153,9 @@ class ManipulatorAxesCalibrationWindow(Qt.QWidget):
             cammod.window().getView().scene().sigMouseClicked.connect(self.cameraModuleClicked)
             self.addPointBtn.setText("click new point..")
         else:
-            pg.disconnect(cammod.window().getView().scene().sigMouseClicked, self.cameraModuleClicked)
+            pg.disconnect(
+                cammod.window().getView().scene().sigMouseClicked, self.cameraModuleClicked
+            )
             self.addPointBtn.setText("add point")
 
     def cameraModuleClicked(self, ev):
@@ -234,12 +236,19 @@ class ManipulatorAxesCalibrationWindow(Qt.QWidget):
         points back via the on_point callback.
         """
         from acq4.devices.Pipette.calibration import calibrate_manipulator_axes
+
         pipette = _find_pipette_for_manipulator(self.dev)
         if pipette is None:
             raise HelpfulException(
-                f"No Pipette device found with {self.dev.name()} as its parent manipulator.")
+                f"No Pipette device found with {self.dev.name()} as its parent manipulator."
+            )
         if pipette.config.get('yaw') == 'auto':
-            Qt.QMessageBox.critical(self, "Auto Collect Failed", f"{pipette.name()} has yaw='auto', which depends on the axis calibration being collected. Configure an explicit yaw angle first.")
+            Qt.QMessageBox.critical(
+                self,
+                "Auto Collect Failed",
+                f"{pipette.name()} has yaw='auto', which depends on the axis calibration being "
+                f"collected. Configure an explicit yaw angle first.",
+            )
             return
         self.autoCollectBtn.setEnabled(False)
         self.autoCollectBtn.setText("collecting...")
@@ -252,7 +261,8 @@ class ManipulatorAxesCalibrationWindow(Qt.QWidget):
         # Called from the calibration worker thread for each collected point;
         # marshal the GUI update onto the GUI thread.
         run_in_gui_thread(
-            self._addCollectedPoint, list(device_pos), list(parent_pos), list(global_pos))
+            self._addCollectedPoint, list(device_pos), list(parent_pos), list(global_pos)
+        )
 
     def _autoCollectFinished(self, task):
         # Points were already added incrementally via _onAutoCollectPoint; just
@@ -270,7 +280,8 @@ class ManipulatorAxesCalibrationWindow(Qt.QWidget):
     def saveCalibrationToDevice(self):
         self.recalculate(raiseOnInsufficientPoints=True)
         self.calibration["transform"] = (
-            None if self.transform is None else self.transform.save_state())
+            None if self.transform is None else self.transform.save_state()
+        )
         self.dev.writeConfigFile(self.calibration, "calibration")
         self.saveBtn.setText("save calibration")
 
@@ -311,7 +322,7 @@ class ManipulatorAxesCalibrationWindow(Qt.QWidget):
                 line = scipy.stats.linregress(axStagePos[j], axParentPos[j][:, i])
                 transform[i, j] = line.slope
         scale = self.dev.getAxisScale()
-        transform = (transform / np.linalg.norm(transform, axis=0) * scale)
+        transform = transform / np.linalg.norm(transform, axis=0) * scale
 
         # find optimal offset
         self.transform = AffineTransform(transform)
@@ -330,7 +341,7 @@ class ManipulatorAxesCalibrationWindow(Qt.QWidget):
             # given a stage position and axis transform, map from localPos to parent coordinate system
             if isinstance(axisTr, np.ndarray):
                 ident = np.eye(self.dev.nAxes + 1)
-                ident[:self.dev.nAxes] = axisTr.reshape(self.dev.nAxes, self.dev.nAxes + 1)
+                ident[: self.dev.nAxes] = axisTr.reshape(self.dev.nAxes, self.dev.nAxes + 1)
                 axisTr = pg.Transform3D(ident)
             st = self.dev._makeStageTransform(_stage_pos, axisTr)
             tr = pg.Transform3D(self.dev.baseTransform() * st)
@@ -344,7 +355,10 @@ class ManipulatorAxesCalibrationWindow(Qt.QWidget):
         for i in range(len(self.calibration["points"])):
             item = self.pointTree.topLevelItem(i)
             dist = np.linalg.norm(error[i])
-            item.setText(2, f"{1e6 * dist:0.2f} um  ({error[i][0]:0.3g}, {error[i][1]:0.3g}, {error[i][2]:0.3g})")
+            item.setText(
+                2,
+                f"{1e6 * dist:0.2f} um  ({error[i][0]:0.3g}, {error[i][1]:0.3g}, {error[i][2]:0.3g})",
+            )
 
     def _unzippedCalibrationPoints(self):
         npts = len(self.calibration["points"])
@@ -390,7 +404,8 @@ class ManipulatorAxesCalibrationWindow(Qt.QWidget):
 
     def _hasSufficientPoints(self, axisPoints):
         return self.dev.nAxes == len(axisPoints) and all(
-            len(axisPoints[ax]) > 2 for ax in range(self.dev.nAxes))
+            len(axisPoints[ax]) > 2 for ax in range(self.dev.nAxes)
+        )
 
     def _clearCalibration(self):
         for i in range(len(self.calibration["points"])):
@@ -495,7 +510,9 @@ class AutomatedStageCalibration(object):
         # decide whether to move the stage
         finished = self._frame_index >= self._steps_per_axis * 2
         if not finished:
-            self._move = self._stage.move(self.positions[self.index], "slow", name='calibration step')
+            self._move = self._stage.move(
+                self.positions[self.index], "slow", name='calibration step'
+            )
 
         self._offsets[axis_index, step_index] = self._calculate_offset(axis_index, step_index)
 
@@ -528,7 +545,7 @@ class AutomatedStageCalibration(object):
         axis_index = 0  # x
         pos_real = self._positions[axis_index, :, :2]  # exclude z axis if present
         pos_real -= pos_real[0]  # shift everything so that we start at 0
-        pos_real = (pos_real ** 2).sum(axis=1) ** 0.5
+        pos_real = (pos_real**2).sum(axis=1) ** 0.5
 
         pos_measured = (self._offsets[axis_index] ** 2).sum(axis=1) ** 0.5
         lin_regress = scipy.stats.linregress(pos_real, pos_measured)
