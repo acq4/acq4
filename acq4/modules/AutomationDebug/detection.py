@@ -9,10 +9,10 @@ import numpy as np
 from acq4.logging_config import get_logger
 from acq4.modules.Camera import CameraWindow
 from acq4.util import Qt
-from acq4.util.gentle import Stopped, Task, gui_asynch, synch
+from acq4.util.gentle import Stopped, Task, asynch_with_qt_signals
 from acq4.util.imaging.sequencer import acquire_z_stack
 from acq4.util.target import TargetBox
-from acq4.util.threadrun import futureInGuiThread, runInGuiThread
+from acq4.util.gentle import run_in_gui_thread
 from acq4_automation.cell_quality_annotation_tool import open_annotation_tool_with_detections
 from acq4_automation.feature_tracking.cell import Cell
 from coorx import Point
@@ -59,7 +59,7 @@ class CellDetector:
         if path:
             self._window.ui.rankingSaveDirEdit.setText(path)
 
-    @gui_asynch
+    @asynch_with_qt_signals
     def _addCellFromTarget(self):
         target = Point(self._window.pipetteDevice.targetPosition(), "global")
         cell = self._window.patchPipetteDevice.cell
@@ -68,9 +68,9 @@ class CellDetector:
             cell.initializeTracker(self._window.cameraDevice)
         self._window._unranked_cells.append(cell)
         cells = list(self._window._unranked_cells)
-        futureInGuiThread(self._displayBoundingBoxes, cells).wait()
+        run_in_gui_thread(self._displayBoundingBoxes, cells)
 
-    @gui_asynch
+    @asynch_with_qt_signals
     def _testUI(self):
         with self._window.cameraDevice.ensureRunning():
             frame = self._window.cameraDevice.acquireFrames(1).wait()[0]
@@ -80,7 +80,7 @@ class CellDetector:
         points[:, 0] *= frame.shape[1]
         return [frame.mapFromFrameToGlobal(pt) for pt in points]
 
-    @gui_asynch
+    @asynch_with_qt_signals
     def _detectNeuronsZStack(
         self,
     ) -> tuple[list, list[Frame] | None, list[Frame] | None] | list:
@@ -90,7 +90,7 @@ class CellDetector:
         win = self._window
         self._window.sigWorking.emit(win.ui.zStackDetectBtn)
         # Clear previous results before starting detection
-        runInGuiThread(self.clearCells)
+        run_in_gui_thread(self.clearCells)
         win._current_detection_stack = None
         win._current_classification_stack = None
 

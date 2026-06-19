@@ -20,7 +20,7 @@ from acq4.util.StatusBar import StatusBar
 from acq4.util.Thread import Thread
 from pyqtgraph.debug import Profiler
 from pyqtgraph.util.mutex import Mutex
-from acq4.util.gentle import ManualGuiTask
+from acq4.util.gentle import ManualQtFriendlyTask
 from . import analysisModules
 from ..Module import Module
 from ...logging_config import get_logger
@@ -1171,7 +1171,7 @@ class TaskThread(Thread):
                 self.abortThread = True
 
 
-class TaskFuture(ManualGuiTask):
+class TaskFuture(ManualQtFriendlyTask):
     """Used to check on progress for a running task or task sequence.
 
     Instances of this class are returned from TaskRunner.runSingle() and .runSequence().
@@ -1193,14 +1193,14 @@ class TaskFuture(ManualGuiTask):
         self._taskCount = 0
         self._collectResults = collectResults
         self.results = []
-        ManualGuiTask.__init__(self, name='TaskRunnerFuture')
+        ManualQtFriendlyTask.__init__(self, name='TaskRunnerFuture')
 
     def percentDone(self):
         return self._taskCount / self._nTasks
 
     def stop(self, *args, **kwds):
         self._taskThread.stop(task=self._task)
-        return ManualGuiTask.stop(self, *args, **kwds)
+        return ManualQtFriendlyTask.stop(self, *args, **kwds)
 
     def newFrame(self, frame):
         if self._collectResults:

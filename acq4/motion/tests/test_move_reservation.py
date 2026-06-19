@@ -14,7 +14,7 @@ from acq4.devices.Device import Device
 from acq4.motion.plan import AtomicMove, SequentialGroup
 from acq4.motion.planner import MotionPlanner
 from acq4.motion.spec import MoveSpec
-from acq4.util.gentle import ManualGuiTask
+from acq4.util.gentle import ManualQtFriendlyTask
 
 
 class _FakeDM:
@@ -44,7 +44,7 @@ class _ReservableDevice(Device):
 
     def moveToGlobalNoPlanning(self, pos, speed, name=None, **kwargs):
         self.move_threads.append(threading.current_thread())
-        move = ManualGuiTask(name="move")
+        move = ManualQtFriendlyTask(name="move")
         move.resolve()
         return move
 

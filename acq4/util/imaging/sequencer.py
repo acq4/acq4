@@ -16,10 +16,10 @@ import acq4.Manager as Manager
 import pyqtgraph as pg
 from acq4.util import Qt, ptime
 from acq4.util.DataManager import DirHandle
-from acq4.util.gentle import GuiTask, check_stop, current_task, set_state, sleep
+from acq4.util.gentle import QtFriendlyTask, check_stop, current_task, set_state, sleep
 from acq4.util.imaging import Frame
 from acq4.util.surface import find_surface
-from acq4.util.threadrun import runInGuiThread
+from acq4.util.gentle import run_in_gui_thread
 
 
 def enforce_linear_z_stack(frames: list[Frame], start: float, stop: float, step: float) -> list[Frame]:
@@ -233,14 +233,14 @@ def run_image_sequence(
     mosaic: "tuple[float, float, float, float, float] | None" = None,
     storage_dir: "DirHandle | None" = None,
     name: str | None = None,
-) -> GuiTask:
-    """Start an image sequence as a GuiTask whose result is the acquired frames.
+) -> QtFriendlyTask:
+    """Start an image sequence as a QtFriendlyTask whose result is the acquired frames.
 
     Callers connect to sigStateChanged / sigFinished for live progress. The
     directory the frames were saved into is exposed on the task as
     ``imagesSavedIn`` once the task completes.
     """
-    return GuiTask(
+    return QtFriendlyTask(
         _run_image_sequence,
         kwargs=dict(
             imager=imager,
@@ -488,7 +488,7 @@ class ImageSequencerCtrl(Qt.QWidget):
         self.updateDeviceList()
         self.ui.statusLabel.setText("[ stopped ]")
 
-        self._future: Optional[GuiTask] = None
+        self._future: Optional[QtFriendlyTask] = None
 
         self.state = pg.WidgetGroup(self)
         self.state.sigChanged.connect(self.stateChanged)
@@ -557,7 +557,7 @@ class ImageSequencerCtrl(Qt.QWidget):
             )
 
         if self.ui.pinCheckbox.isChecked():
-            prot["pin"] = lambda f: runInGuiThread(self.mod().displayPinnedFrame, f)
+            prot["pin"] = lambda f: run_in_gui_thread(self.mod().displayPinnedFrame, f)
 
         return prot
 

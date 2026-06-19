@@ -19,7 +19,7 @@ from ..OptomechDevice import OptomechDevice
 from ...modules.Visualize3D.travelers_proxy import MovePathException
 from ...motion import MoveSpec
 from ...util.HelpfulException import HelpfulException
-from ...util.gentle import ManualGuiTask, Stopped, FutureButton
+from ...util.gentle import ManualQtFriendlyTask, Stopped, FutureButton
 from ...util.geometry import (
     Plane,
     limits_to_boundaries,
@@ -736,7 +736,7 @@ class CallOnce:
         self.called = False
 
 
-class MoveFuture(ManualGuiTask):
+class MoveFuture(ManualQtFriendlyTask):
     """Used to track the progress of a requested move operation.
 
     This is an externally-completed ManualGuiTask: it has no body and spawns no
@@ -750,7 +750,7 @@ class MoveFuture(ManualGuiTask):
     def __init__(self, dev: Stage, pos, speed, name=None):
         if name is None:
             name = f"{dev.name()} move"
-        ManualGuiTask.__init__(self, name=name)
+        ManualQtFriendlyTask.__init__(self, name=name)
         self.startTime = ptime.time()
         self.dev = dev
         self.speed = speed
@@ -841,7 +841,7 @@ class MovePathFuture(MoveFuture):
         if fut is not None:
             fut.stop(reason)
         # skip MoveFuture.stop to avoid the mess with dev.stop()
-        ManualGuiTask.stop(self, reason)
+        ManualQtFriendlyTask.stop(self, reason)
         if wait:
             with contextlib.suppress(Stopped):
                 self.wait()

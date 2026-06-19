@@ -1335,10 +1335,9 @@ class GeometryMotionPlanner:
 
             obstacles.append((obst_volume, to_global_from_obst, obst.name))
             if visualizer is not None:
-                raise_errors(
-                    visualizer.addObstacle(obst.name, obst_volume, to_global_from_obst),
-                    "obstacle failed to render",
-                )
+                task = visualizer.addObstacle(obst.name, obst_volume, to_global_from_obst)
+                task.detach()
+                raise_errors(task, "obstacle failed to render")
         return obstacles
 
 

@@ -5,7 +5,7 @@ import numpy as np
 from gentletask import throughline
 
 from acq4 import getManager
-from acq4.util.gentle import asynch, gui_asynch
+from acq4.util.gentle import asynch, asynch_with_qt_signals
 from .plan import AtomicMove, MovePlanStep, ParallelGroup, SequentialGroup
 from .spec import MoveSpec
 
@@ -46,7 +46,7 @@ class MotionPlanner:
             return devices
         return set()
 
-    @gui_asynch
+    @asynch_with_qt_signals
     def execute(self, specs: list[MoveSpec], name: str = ""):
         """Validate, plan, and execute, holding device locks for the duration."""
         self._validate_specs(specs)
@@ -56,10 +56,6 @@ class MotionPlanner:
         man = getManager()
         with man.reserveDevices(list(devices), reserver=type(self).__name__):
             _execute_plan(plan)
-
-    # ------------------------------------------------------------------
-    # Validation — called by execute() before and after planning
-    # ------------------------------------------------------------------
 
     @staticmethod
     def _is_interaction_site(device) -> bool:

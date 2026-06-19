@@ -21,7 +21,7 @@ from acq4.util import Qt
 from acq4.util.Mutex import Mutex
 from acq4.util.Mutex import RecursiveMutex
 from acq4.util.Thread import Thread
-from acq4.util.gentle import ManualGuiTask, asynch, check_stop, sleep, synch
+from acq4.util.gentle import ManualQtFriendlyTask, asynch, check_stop, sleep, synch
 from acq4.util.imaging.frame import Frame
 from coorx import TTransform, SRT3DTransform
 from pyqtgraph import Vector
@@ -1087,7 +1087,7 @@ class AcquireThread(Thread):
             self.start()
 
 
-class FrameAcquisitionFuture(ManualGuiTask):
+class FrameAcquisitionFuture(ManualQtFriendlyTask):
     """Acquire frames asynchronously, either a fixed number or continuously until stopped.
 
     This is an externally-completed ManualGuiTask: it has no body and spawns no

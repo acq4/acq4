@@ -6,7 +6,7 @@ import numpy as np
 
 from acq4.devices.Pipette.calibration import findNewPipette
 from acq4.logging_config import get_logger
-from acq4.util.gentle import Stopped, Task, gui_asynch, sleep, synch
+from acq4.util.gentle import Stopped, Task, asynch_with_qt_signals, sleep, synch
 from acq4_automation.feature_tracking.cell import Cell
 from coorx import Point
 
@@ -20,7 +20,7 @@ class FeatureTracker:
     def __init__(self, window: AutomationDebugWindow):
         self._window = window
 
-    @gui_asynch
+    @asynch_with_qt_signals
     def doPipetteCalibrationTest(self):
         win = self._window
         win.sigWorking.emit(win.ui.testPipetteBtn)
@@ -47,7 +47,7 @@ class FeatureTracker:
                 win.sigLogMessage.emit("Calibration interrupted by user request")
                 break
 
-    @gui_asynch
+    @asynch_with_qt_signals
     def doFeatureTracking(self):
         win = self._window
         win.sigWorking.emit(win.ui.trackFeaturesBtn)

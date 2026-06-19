@@ -10,8 +10,8 @@ from acq4.util import ptime
 from acq4.devices.Stage import Stage, MoveFuture, StageInterface
 from acq4.drivers.Scientifica import Scientifica as ScientificaDriver
 from acq4.util import Qt
-from acq4.util.gentle import asynch, sleep, Stopped, ManualGuiTask, FutureButton
-from acq4.util.threadrun import runInGuiThread
+from acq4.util.gentle import asynch, sleep, Stopped, ManualQtFriendlyTask, FutureButton
+from acq4.util.gentle import run_in_gui_thread
 from pyqtgraph import SpinBox, siFormat
 
 
@@ -457,7 +457,7 @@ class ScientificaGUI(StageInterface):
         )
         if response != Qt.QMessageBox.Ok:
             self.sigBusyMoving.emit(False)
-            stopped = ManualGuiTask(name=f"{self.dev.name()} auto-zero")
+            stopped = ManualQtFriendlyTask(name=f"{self.dev.name()} auto-zero")
             stopped.stop("User requested stop")
             return stopped
 
@@ -507,7 +507,7 @@ class ScientificaGUI(StageInterface):
                     if slip:
                         axis = 'XYZ'[ax]
                         msg = f"{msg} {axis}={siFormat(diff[ax], suffix='m')}"
-                runInGuiThread(Qt.QMessageBox.warning, self, "Large slippage detected", msg, Qt.QMessageBox.Ok)
+                run_in_gui_thread(Qt.QMessageBox.warning, self, "Large slippage detected", msg, Qt.QMessageBox.Ok)
             move_future.wait()
         finally:
             self.sigBusyMoving.emit(False)

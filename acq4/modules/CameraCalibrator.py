@@ -9,7 +9,7 @@ import pyqtgraph as pg
 from acq4.modules.Module import Module
 from acq4.util import Qt
 from acq4.util.InterfaceCombo import InterfaceCombo
-from acq4.util.gentle import gui_asynch
+from acq4.util.gentle import asynch_with_qt_signals
 
 
 class CameraCalibrator(Module):
@@ -102,7 +102,7 @@ class CameraCalibrator(Module):
         future = self._runCalibration(camera, lightSource, sourceName)
         future.sigFinished.connect(self._calibrationFinished)
         
-    @gui_asynch
+    @asynch_with_qt_signals
     def _runCalibration(self, camera, lightSource, sourceName):
         """Run the calibration sequence in a thread."""
         

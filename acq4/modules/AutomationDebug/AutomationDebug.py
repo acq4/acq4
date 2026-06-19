@@ -18,7 +18,7 @@ from acq4.motion import (
 from acq4.logging_config import get_logger
 from acq4.modules.Module import Module
 from acq4.util import Qt
-from acq4.util.gentle import Task, check_stop, gui_asynch
+from acq4.util.gentle import Task, check_stop, asynch_with_qt_signals
 from pyqtgraph.units import µm, m
 from .autopatch import Autopatcher
 from .detection import CellDetector
@@ -283,7 +283,7 @@ class AutomationDebugWindow(Qt.QWidget):
         self._xRightSpin.setValue(bound[0])
         self._yBottomSpin.setValue(bound[1])
 
-    @gui_asynch
+    @asynch_with_qt_signals
     def _autoTarget(self):
         self.sigWorking.emit(self.ui.autoTargetBtn)
         # If _unranked_cells is populated, use it. Otherwise, run detection.
