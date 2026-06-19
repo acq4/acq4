@@ -164,11 +164,13 @@ def set_log_file(log_file: str | None, is_temp_file: bool = False) -> None:
         log_file_handler.close()
         log_file_handler = None
 
-    # copy old log file to new location
+    # copy old log file to new location, then delete the temporary file
     if old_log_file is not None and old_log_file != log_file:
         oldlog = open(old_log_file, 'rb').read()
         with open(log_file, 'ab') as f:
             f.write(oldlog)
+        with contextlib.suppress(OSError):
+            os.remove(old_log_file)
 
     # Add new log file handler (all messages, JSON format)
     log_file_handler = logging.FileHandler(log_file)
