@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from acq4 import getManager
-from acq4.util.gentle import asynch, synch
+from acq4.util.debug import log_and_ignore_exception
+from acq4.util.gentle import asynch
 from pyqtgraph import units
 from ._base import PatchPipetteState
 
@@ -65,9 +65,11 @@ class CleanState(PatchPipetteState):
 
             site = pip.getSiteFor(stage)
             if site is not None:
-                self.waitFor(site.moveToInteract(pip, speed='fast'), timeout=60)
+                task = site.moveToInteract(pip, speed='fast')
+                task.wait(60)
             else:
-                self.waitFor(pip.moveTo(stage, 'fast'), timeout=60)
+                task1 = pip.moveTo(stage, 'fast')
+                task1.wait(60)
 
             if dev.sonicatorDevice is not None:
                 self.sonication = dev.sonicatorDevice.doProtocol(config['sonicationProtocol'])
@@ -77,39 +79,22 @@ class CleanState(PatchPipetteState):
                 self.sleep(delay)
 
             if self.sonication is not None and not self.sonication.is_done:
-                self.waitFor(self.sonication)
+                self.sonication.wait(None)
 
         dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
-        self.waitFor(pip.goHome())
+        task2 = pip.goHome()
+        task2.wait(None)
         dev.pipetteRecord()['cleanCount'] += 1
         dev.setTipClean(True)
         dev.newPatchAttempt()
         return {"state": config['nextState']}
 
-    def resetPosition(self):
-        # todo we need to handle this somehow for both path generators
-        if self.moveFuture is not None:
-            fut = self.moveFuture.undo()
-            self.moveFuture = None
-            fut.wait()
-
-    @asynch
     def _cleanup(self):
-        dev = self.dev
-        try:
+        with log_and_ignore_exception(Exception, "Error stopping sonication"):
             if self.sonication is not None and not self.sonication.is_done:
                 self.sonication.stop("parent task is cleaning up before sonication finished")
-        except Exception:
-            dev.logger.exception("Error stopping sonication")
 
-        try:
-            dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
-        except Exception:
-            dev.logger.exception("Error resetting pressure after clean")
+        with log_and_ignore_exception(Exception, "Error resetting pressure after clean"):
+            self.dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
 
-        # try:
-        #     dev.pipetteDevice.moveTo('home', 'fast').wait()
-        # except Exception:
-        #     dev.logger.exception("Error resetting pipette position after clean")
-
-        synch(super()._cleanup)()
+        super()._cleanup()

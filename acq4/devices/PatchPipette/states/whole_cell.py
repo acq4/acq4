@@ -216,8 +216,7 @@ class WholeCellState(PatchPipetteState):
             self.dev.setAccessWarning(False)
 
     def _cleanup(self):
-        patchrec = self.dev.patchRecord()
-        patchrec['wholeCellStopTime'] = ptime.time()
+        self.dev.patchRecord()['wholeCellStopTime'] = ptime.time()
         with log_and_ignore_exception(Exception, "Error clearing access warning after whole cell"):
             self.dev.setAccessWarning(False)
-        return super()._cleanup()
+        super()._cleanup()

@@ -8,6 +8,7 @@ import numpy as np
 import pyqtgraph as pg
 from acq4 import getManager
 from acq4.util import ptime
+from acq4.util.debug import log_and_ignore_exception
 from acq4.util.functions import plottable_booleans
 from acq4.util.gentle import asynch
 from acq4.util.imaging.sequencer import run_image_sequence
@@ -234,7 +235,8 @@ class ApproachState(PatchPipetteState):
                 f"Cannot approach a target depth {target[2] * 1e6:0.2f}µm that is above the surface {surface * 1e6:0.2f}µm."
             )
         # move to approach position + auto pipette offset
-        self.waitFor(pip.goApproach("fast"))
+        task = pip.goApproach("fast")
+        task.wait(None)
         self.dev.clampDevice.autoPipetteOffset()
         self.dev.clampDevice.resetTestPulseHistory()
         self._maybeTakeACellfie()
@@ -281,18 +283,18 @@ class ApproachState(PatchPipetteState):
         ):
             return
         self.setState("approach: taking initial z-stack")
-        self.waitFor(self.dev.focusOnTarget("fast"))
+        task = self.dev.focusOnTarget("fast")
+        task.wait(None)
         start = self.dev.pipetteDevice.targetPosition()[2] - (config["cellfieHeight"] / 2)
         end = start + config["cellfieHeight"]
         save_in = self.dev.dm.getCurrentDir().getDir("cell detect initial z stack", create=True)
-        self.waitFor(
-            run_image_sequence(
-                self.dev.imagingDevice(),
-                z_stack=(start, end, config["cellfieStep"]),
-                storage_dir=save_in,
-                name="cellfie",
-            )
+        task1 = run_image_sequence(
+            self.dev.imagingDevice(),
+            z_stack=(start, end, config["cellfieStep"]),
+            storage_dir=save_in,
+            name="cellfie",
         )
+        task1.wait(None)
 
     def maybeRecalibratePipette(self):
         if self._pipetteRecalibrated or not self.config['recalibratePipette']:
@@ -324,14 +326,13 @@ class ApproachState(PatchPipetteState):
         if self.aboveSurface():
             self.setState("move to surface")
             self._waitForMoveWhileTargetChanges(
-                self.surfaceIntersectionPosition, config['aboveSurfaceSpeed'], True, self
+                self.surfaceIntersectionPosition, config['aboveSurfaceSpeed'], True
             )
         self.setState(f'move to endpoint: {self.endpoint()}')
         self._waitForMoveWhileTargetChanges(
             position_fn=self.endpoint,
             speed=config['belowSurfaceSpeed'],
             continuous=config["advanceContinuous"],
-            future=self,
             interval=config['advanceStepInterval'],
             step=config['advanceStepDistance'],
         )
@@ -393,7 +394,8 @@ class ApproachState(PatchPipetteState):
             retract_pos = init_pos
         else:
             retract_pos = init_pos - self.config["sidestepBackupDistance"] * direction
-            self.waitFor(pip.moveToGlobalNoPlanning(retract_pos, speed=speed, name='obstacle avoidance retract'))
+            task = pip.moveToGlobalNoPlanning(retract_pos, speed=speed, name='obstacle avoidance retract')
+            task.wait(None)
 
         start_time = ptime.time()
         while self._analysis.obstacle_detected():
@@ -404,7 +406,8 @@ class ApproachState(PatchPipetteState):
         # pick a sidestep point orthogonal to the pipette direction on the xy plane
         sidestep = self.config["sidestepLateralDistance"] * self.sidestepDirection(direction)
         sidestep_pos = retract_pos + sidestep
-        self.waitFor(pip.moveToGlobalNoPlanning(sidestep_pos, speed=speed, name='obstacle avoidance sidestep'))
+        task1 = pip.moveToGlobalNoPlanning(sidestep_pos, speed=speed, name='obstacle avoidance sidestep')
+        task1.wait(None)
 
         go_past_pos = sidestep_pos + self.config["sidestepPassDistance"] * direction
         move = pip.moveToGlobalNoPlanning(go_past_pos, speed=speed, name='obstacle avoidance pass')
@@ -412,18 +415,17 @@ class ApproachState(PatchPipetteState):
             self.processAtLeastOneTestPulse()
             if self._analysis.obstacle_detected():
                 move.stop("Obstacle detected while sidestepping")
-                self.waitFor(pip.moveToGlobalNoPlanning(retract_pos, speed=speed, name='obstacle avoidance retract after detection'))
+                task2 = pip.moveToGlobalNoPlanning(retract_pos, speed=speed, name='obstacle avoidance retract after detection')
+                task2.wait(None)
                 return self.avoidObstacle(already_retracted=True)
             self.checkStop()
-        self.waitFor(move)
+        move.wait(None)
         pos = np.array(pip.globalPosition())
-        self.waitFor(pip.moveToGlobalNoPlanning(pos - sidestep, speed=speed, name='obstacle avoidance return to path'))
+        task3 = pip.moveToGlobalNoPlanning(pos - sidestep, speed=speed, name='obstacle avoidance return to path')
+        task3.wait(None)
 
     def _cleanup(self):
-        try:
+        with log_and_ignore_exception(Exception, "Error resetting pressure after approach cleanup"):
             if self._moveFuture is not None and not self._moveFuture.is_done:
                 self._moveFuture.stop("State finished", wait=True)
-        except Exception:
-            self.dev.logger.exception("Error stopping pipette advance during cleanup")
-
-        return super()._cleanup()
+        super()._cleanup()

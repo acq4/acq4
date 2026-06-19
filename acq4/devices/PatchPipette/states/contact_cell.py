@@ -112,7 +112,7 @@ class ContactCellState(PatchPipetteState):
         initial_pos[2] += config['initialApproachHeight']
         self.setState("moving to initial approach position")
         self._moveFuture = pip.moveToGlobalNoPlanning(initial_pos, speed=config['moveSpeed'], name='move to initial approach position')
-        self.waitFor(self._moveFuture)
+        self._moveFuture.wait(None)
         self._moveFuture = None
 
         if config['findPipette']:
@@ -167,7 +167,7 @@ class ContactCellState(PatchPipetteState):
             ])
 
             self._moveFuture = pip.moveToGlobalNoPlanning(next_pos, speed=config['moveSpeed'], name='contact cell descent step')
-            self.waitFor(self._moveFuture)
+            self._moveFuture.wait(None)
             self._moveFuture = None
 
             # Wait between iterations
@@ -204,7 +204,7 @@ class ContactCellState(PatchPipetteState):
                 self._moveFuture.stop()
         # with log_and_ignore_exception(Exception, "Error disabling visual tracking"):
         #     self._disableVisualTracking()
-        return super()._cleanup()
+        super()._cleanup()
 
     def findPipetteTip(self, zstack=True):
         pip = self.dev.pipetteDevice

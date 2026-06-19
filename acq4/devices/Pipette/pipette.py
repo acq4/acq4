@@ -746,7 +746,6 @@ class Pipette(Device, OptomechDevice):
                 break
             sleep(interval)
 
-    @asynch
     def wiggle(
         self, speed, radius, repetitions, duration, pipette_direction=None, extra=None
     ):

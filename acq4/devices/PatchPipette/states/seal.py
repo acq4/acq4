@@ -324,7 +324,8 @@ class SealState(PatchPipetteState):
         self.setState(f'beginning seal (mode: {config["pressureMode"] !r})')
         self.setInitialPressure()
         if config['focusOnCell']:
-            self.waitFor(dev.focusOnTarget('slow'))
+            task = dev.focusOnTarget('slow')
+            task.wait(None)
 
         self._patchrec['attemptedSeal'] = True
 
@@ -484,4 +485,4 @@ class SealState(PatchPipetteState):
             self.dev.pressureDevice.setPressure(source='atmosphere')
         with log_and_ignore_exception(Exception, "Error during pressure signal disconnect"):
             self.dev.pressureDevice.sigPressureChanged.disconnect(self._handlePressureChanged)
-        return super()._cleanup()
+        super()._cleanup()

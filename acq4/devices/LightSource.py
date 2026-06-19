@@ -102,9 +102,6 @@ class LightSource(Device):
             self.setSourceActive(c, c == chan)
         if 'brightness' in conf:
             self.setSourceBrightness(chan, conf['brightness'])
-        promise = Promise(name=f"{self.name()}_loadPreset")
-        promise.resolve()
-        return promise
 
     def sourceActive(self, name):
         """Return True if the named light source is currently active.

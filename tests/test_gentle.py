@@ -19,7 +19,6 @@ from acq4.util.gentle import (
     Stopped,
     ThreadTask,
     check_stop,
-    current_state,
     current_task,
     gui_asynch,
     raise_errors,
@@ -79,43 +78,6 @@ class TestGuiTask:
 
         assert "measuring" in states
         assert t.state == "measuring"
-
-    def test_current_state_reads_running_task(self):
-        seen = []
-
-        def body():
-            set_state("phase-1")
-            seen.append(current_state())
-            return None
-
-        GuiTask(body).wait()
-        assert seen == ["phase-1"]
-
-    def test_set_state_from_nested_task_reports_via_current_state(self):
-        # A child task created from inside a parent GuiTask body sets its own
-        # state; current_state() inside the child must report the child's state,
-        # not the parent's.
-        seen = []
-
-        def child_body():
-            set_state("child-state")
-            seen.append(current_state())
-            return "child-result"
-
-        def parent_body():
-            set_state("parent-state")
-            child = GuiTask(child_body)
-            return child.wait()
-
-        result = GuiTask(parent_body).wait()
-
-        assert result == "child-result"
-        assert seen == ["child-state"]
-
-    def test_set_state_outside_task_is_noop(self):
-        # No current task: must not raise.
-        set_state("nobody home")
-        assert current_state() is None
 
     def test_cooperative_stop(self):
         started = threading.Event()

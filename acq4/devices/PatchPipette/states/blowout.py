@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from acq4.util import ptime
+from acq4.util.debug import log_and_ignore_exception
 from ._base import PatchPipetteState
 
 
@@ -25,7 +26,7 @@ class BlowoutState(PatchPipetteState):
 
         fut = self.dev.pipetteDevice.retractFromSurface()
         if fut is not None:
-            self.waitFor(fut, timeout=None)
+            fut.wait(None)
 
         self.dev.pressureDevice.setPressure(source='regulator', pressure=config['blowoutPressure'])
         self.sleep(config['blowoutDuration'])
@@ -46,9 +47,6 @@ class BlowoutState(PatchPipetteState):
         return {"state": config['fallbackState']}
 
     def _cleanup(self):
-        dev = self.dev
-        try:
-            dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
-        except Exception:
-            dev.logger.exception("Error resetting pressure after blowout")
-        return super()._cleanup()
+        with log_and_ignore_exception(Exception, "Error resetting pressure after blowout"):
+            self.dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
+        super()._cleanup()
