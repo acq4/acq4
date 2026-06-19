@@ -4,7 +4,7 @@ import scipy.interpolate
 import pyqtgraph as pg
 from acq4.devices.Camera import Camera
 from acq4.util import Qt
-from acq4.util.gentle import asynch, check_stop, current_task, asynch_with_qt_signals, set_state
+from acq4.util.task import asynch, current_task, asynch_with_qt_signals
 from acq4.util.imaging.sequencer import acquire_z_stack
 from acq4 import getManager
 from acq4.motion import MoveSpec
@@ -185,7 +185,7 @@ def scan_pipette_z_stack(pipette, imager=None, z_range=50e-6, z_step=5e-6, show=
         pipette_angle = np.arctan2(-image_dir[0], image_dir[1]) * 180 / np.pi
         px_size = frame.info()["pixelSize"][0]
 
-        image_pos_rc, z_um, confidence, _locals = do_pipette_tip_detection(img, pipette_angle, px_size, show=False)
+        image_pos_rc, z_um, confidence, _locals = do_pipette_tip_detection(img, pipette_angle, px_size, show=False, return_heatmap=True)
         heatmap = _locals.get('cropped_heatmap')
 
         tip_pos = frame.mapFromFrameToGlobal(pg.Vector(image_pos_rc))
@@ -201,7 +201,7 @@ def scan_pipette_z_stack(pipette, imager=None, z_range=50e-6, z_step=5e-6, show=
     image_positions = np.array(image_positions)
 
     if show:
-        from acq4.util.gentle import run_in_gui_thread
+        from acq4.util.task import run_in_gui_thread
         run_in_gui_thread(_show_z_stack_detection_widget, frames, image_positions, z_predictions_um, confidences, heatmaps)
 
     return frames, global_positions, z_predictions_um, confidences, heatmaps
@@ -442,10 +442,9 @@ def getPipettePositionAtTime(events, time):
 @asynch_with_qt_signals
 def calibrate_manipulator_axes(
     pipette: Pipette,
-    n_steps: int = 5,
+    n_steps: int = 10,
     step_size: float = 50e-6,
-    z_search_range: float = 10e-6,
-    on_point=None,
+    z_search_range: float = 100e-6,
 ):
     """Automatically collect axis calibration data for a manipulator using the pipette tip finder.
 
@@ -470,11 +469,6 @@ def calibrate_manipulator_axes(
     z_search_range : float
         Half-range of the z-scan used to locate the tip after each move, in meters.
         Should be at least as large as the expected z displacement per step.
-    on_point : callable or None
-        Optional callback invoked as ``on_point(device_pos, parent_pos, global_pos)``
-        immediately after each calibration point is collected, so a GUI can display
-        points as they accumulate rather than waiting for the full sweep. Called from
-        the worker thread; the callback is responsible for any thread marshalling.
 
     Returns
     -------
@@ -492,31 +486,19 @@ def calibrate_manipulator_axes(
 
     calibration_points = []
 
-    def record_point():
-        # Capture the current device/parent/global tip position as a calibration
-        # point and report it to the caller so a GUI can display it immediately.
+    # Accurately locate the tip before starting the sweep.
+    pipette.iterativelyFindTip(10)
+
+    for axis in range(manipulator.nAxes):
+        axis_start_pos = list(manipulator.getPosition())
+
+        # Record the initial point; tip is already accurately located from iterativelyFindTip.
         device_pos = list(manipulator.getPosition())
         global_pos = list(pipette.globalPosition())
         parent_pos = list(parent_dev.mapFromGlobal(global_pos)) if parent_dev is not None else global_pos
         calibration_points.append((device_pos, parent_pos))
-        if on_point is not None:
-            on_point(device_pos, parent_pos, global_pos)
-
-    # Accurately locate the tip before starting the sweep.
-    set_state("locating tip")
-    pipette.iterativelyFindTip(10)
-
-    for axis in range(manipulator.nAxes):
-        check_stop()
-        axis_start_pos = list(manipulator.getPosition())
-
-        # Record the initial point; tip is already accurately located from iterativelyFindTip.
-        record_point()
 
         for step_idx in range(1, n_steps + 1):
-            check_stop()
-            set_state(f"axis {axis + 1}/{manipulator.nAxes}, step {step_idx}/{n_steps}")
-
             # Move along this axis to the next absolute position.
             target_pos = list(axis_start_pos)
             target_pos[axis] = axis_start_pos[axis] + step_idx * (step_size / scale[axis])
@@ -535,10 +517,12 @@ def calibrate_manipulator_axes(
             pipette.resetGlobalPosition(detected_pos)
             pipette.focusTip().wait()
 
-            record_point()
+            device_pos = list(manipulator.getPosition())
+            global_pos = list(pipette.globalPosition())
+            parent_pos = list(parent_dev.mapFromGlobal(global_pos)) if parent_dev is not None else global_pos
+            calibration_points.append((device_pos, parent_pos))
 
         # Return to the starting position before sweeping the next axis.
-        set_state(f"axis {axis + 1}/{manipulator.nAxes} return")
         manipulator.move(axis_start_pos, 'slow', name=f"{manipulator.name()} calibrate axis {axis} return").wait()
         # Re-locate tip at start before recording the first point of the next axis.
         pipette.iterativelyFindTip(10)

@@ -19,7 +19,7 @@ from ..OptomechDevice import OptomechDevice
 from ...modules.Visualize3D.travelers_proxy import MovePathException
 from ...motion import MoveSpec
 from ...util.HelpfulException import HelpfulException
-from ...util.gentle import ManualQtFriendlyTask, Stopped, FutureButton
+from ...util.task import ManualQtFriendlyTask, Stopped, FutureButton
 from ...util.geometry import (
     Plane,
     limits_to_boundaries,
@@ -41,28 +41,6 @@ class Stage(Device, OptomechDevice):
 
     where *baseTransform* is defined in the configuration for the device, and *stageTransform* is
     defined by the hardware.
-
-    Coordinate systems
-    ------------------
-    Stage devices operate in two coordinate systems that must be kept distinct:
-
-    * **Device position coordinates**: The units reported directly by the hardware and returned by
-      ``getPosition()``. These are device-native units — typically micrometers (µm) for most
-      supported hardware (Scientifica, Sensapex). ``move()``, ``checkLimits()``, and the ``limits``
-      config option all use these units.
-
-    * **Global coordinates**: Meters, shared across all ACQ4 devices. Accessed via
-      ``globalPosition()`` and ``moveToGlobal()``. The conversion from device position coordinates
-      to global coordinates is performed by the ``axisTransform``, which incorporates the ``scale``
-      config option (default ``1e-6`` for µm → m).
-
-    The ``limits`` config option therefore takes values in device position coordinates (e.g. µm),
-    not meters::
-
-        limits:
-            x: 0, 20000    # µm  (= 0 to 20 mm)
-            y: 0, 20000
-            z: 0, 20000
 
     Additional config options::
 
@@ -577,9 +555,7 @@ class Stage(Device, OptomechDevice):
         Accepts keyword arguments 'x', 'y', 'z', 'd'; each supplied argument must be
         a (min, max) tuple where either value may be None to disable the limit.
 
-        Values must be in **device position coordinates** — the same units returned by
-        ``getPosition()``, typically micrometers (µm) for Scientifica and Sensapex devices.
-        These are *not* meters.
+        Note that some devices do not support limits.
         """
         changed = []
         for axis, limit in enumerate((x, y, z, d)):
@@ -617,10 +593,7 @@ class Stage(Device, OptomechDevice):
         self.checkLimits(stagePos)
 
     def checkLimits(self, stagePos):
-        """Raise an exception if *stagePos* is outside the configured limits.
-
-        *stagePos* must be in device position coordinates (the same units returned by ``getPosition()``).
-        """
+        """Raise an exception if *stagePos* (in stage coordinates) is outside the configured limits"""
         for axis, limit in enumerate(self._limits):
             ax_name = 'xyzd'[axis]
             x = stagePos[axis]

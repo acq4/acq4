@@ -4,7 +4,7 @@ from typing import Optional
 from acq4.util import Qt, ptime
 from .widgets import PressureControlWidget
 from ..Device import Device
-from ...util.gentle import asynch, sleep
+from ...util.task import asynch, sleep
 
 
 class PressureControl(Device):

@@ -12,7 +12,7 @@ from pyqtgraph.parametertree import ParameterTree
 from pyqtgraph.parametertree.parameterTypes import GroupParameter, ListParameter
 from .Device import Device, TaskGui, DeviceTask
 from ..util import Qt
-from ..util.gentle import ManualQtFriendlyTask
+from ..util.task import ManualQtFriendlyTask
 from ..util.generator.StimParamSet import SeqParameter
 
 

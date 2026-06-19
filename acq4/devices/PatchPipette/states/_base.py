@@ -13,7 +13,7 @@ from acq4 import getManager
 from acq4.logging_config import get_logger
 from acq4.util import Qt
 from acq4.util.debug import log_and_ignore_exception
-from acq4.util.gentle import (
+from acq4.util.task import (
     QtFriendlyTask,
     ManualQtFriendlyTask,
     Task,

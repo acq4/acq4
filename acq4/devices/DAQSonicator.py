@@ -6,7 +6,7 @@ import numpy as np
 
 from acq4.devices.DAQGeneric import DAQGeneric
 from acq4.devices.Sonicator import Sonicator
-from acq4.util.gentle import asynch, sleep
+from acq4.util.task import asynch, sleep
 from neuroanalysis.stimuli import load_stimulus
 from pyqtgraph.units import nF, A
 

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from acq4.util.debug import log_and_ignore_exception
-from acq4.util.gentle import asynch, synch
+from acq4.util.task import asynch, synch
 from ._base import PatchPipetteState
 
 
@@ -64,13 +64,8 @@ class RefillState(PatchPipetteState):
         pip = dev.pipetteDevice
 
         self.setState('refilling pipette')
-        site = pip.getSiteFor('refill')
-        if site is not None:
-            task = site.moveToInteract(pip, speed='fast')
-            task.wait(60)
-        else:
-            task1 = pip.moveTo('refill', 'fast')
-            task1.wait(60)
+        task1 = pip.moveTo('refill', 'fast')
+        task1.wait(60)
 
         refill_pressure = config['refillPressure']
         refill_duration = config['refillDuration']

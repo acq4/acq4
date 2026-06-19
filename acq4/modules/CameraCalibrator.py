@@ -9,7 +9,7 @@ import pyqtgraph as pg
 from acq4.modules.Module import Module
 from acq4.util import Qt
 from acq4.util.InterfaceCombo import InterfaceCombo
-from acq4.util.gentle import asynch_with_qt_signals
+from acq4.util.task import asynch_with_qt_signals
 
 
 class CameraCalibrator(Module):

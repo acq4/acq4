@@ -6,7 +6,7 @@ from pyqtgraph import debug
 
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
-from acq4.util.gentle import ManualQtFriendlyTask
+from acq4.util.task import ManualQtFriendlyTask
 from acq4.util.micromanager import getMMCorePy
 from ..Stage import Stage, MoveFuture, StageInterface
 

@@ -9,10 +9,10 @@ import numpy as np
 from acq4.logging_config import get_logger
 from acq4.modules.Camera import CameraWindow
 from acq4.util import Qt
-from acq4.util.gentle import Stopped, Task, asynch_with_qt_signals
+from acq4.util.task import Stopped, Task, asynch_with_qt_signals
 from acq4.util.imaging.sequencer import acquire_z_stack
 from acq4.util.target import TargetBox
-from acq4.util.gentle import run_in_gui_thread
+from acq4.util.task import run_in_gui_thread
 from acq4_automation.cell_quality_annotation_tool import open_annotation_tool_with_detections
 from acq4_automation.feature_tracking.cell import Cell
 from coorx import Point
@@ -94,7 +94,7 @@ class CellDetector:
         win._current_detection_stack = None
         win._current_classification_stack = None
 
-        pixel_size = win.cameraDevice.getPixelSize()[0]  # Real acquisition; overridden from the loaded stack for mock
+        pixel_size = win.cameraDevice.getPixelSize()[0]  # Used for both real and mock
         man = win.module.manager
         models = _health_model_config(man)
         segmenter = models["segmenter"]
@@ -118,15 +118,6 @@ class CellDetector:
             detection_stack, classification_stack, step_z = win._mock_handler._mockNeuronStacks()
             if detection_stack is None:
                 raise RuntimeError("Failed to load mock detection stack.")
-            # Use the loaded mock stack's pixel size rather than the live camera's.
-            pixel_size = detection_stack[0].info()["pixelSize"][0]
-            if classification_stack is not None:
-                classification_pixel_size = classification_stack[0].info()["pixelSize"][0]
-                if classification_pixel_size != pixel_size:
-                    raise ValueError(
-                        f"Mock detection stack pixel size ({pixel_size / µm:.4f} µm) does not match "
-                        f"classification stack pixel size ({classification_pixel_size / µm:.4f} µm)."
-                    )
 
         else:  # --- Real Acquisition ---
             surface = win.scopeDevice.findSurfaceDepth(win.cameraDevice)

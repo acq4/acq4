@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from acq4.motion import MoveSpec
 from acq4.util.debug import log_and_ignore_exception
-from acq4.util.gentle import asynch, synch
+from acq4.util.task import asynch, synch
 from pyqtgraph import units
 from ._base import PatchPipetteState
 
@@ -51,7 +51,7 @@ class NucleusCollectState(PatchPipetteState):
         self.setState('nucleus collection')
 
         self.startPos = pip.globalPosition()
-        well = pip.getSiteFor('nucleus')
+        well = pip.getNucleusDepositionWell()
         if well is not None:
             task = well.moveToInteract(pip)
             task.wait(60)

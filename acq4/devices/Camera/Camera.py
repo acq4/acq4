@@ -21,7 +21,7 @@ from acq4.util import Qt
 from acq4.util.Mutex import Mutex
 from acq4.util.Mutex import RecursiveMutex
 from acq4.util.Thread import Thread
-from acq4.util.gentle import ManualQtFriendlyTask, asynch, check_stop, sleep, synch
+from acq4.util.task import ManualQtFriendlyTask, asynch, check_stop, sleep, synch
 from acq4.util.imaging.frame import Frame
 from coorx import TTransform, SRT3DTransform
 from pyqtgraph import Vector

@@ -1,7 +1,7 @@
 import threading
 
 from acq4.modules.Module import Module
-from acq4.util.gentle import in_gui_thread
+from acq4.util.task import in_gui_thread
 from .gui import VisualizerWindow
 
 

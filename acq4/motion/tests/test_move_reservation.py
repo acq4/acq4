@@ -14,7 +14,7 @@ from acq4.devices.Device import Device
 from acq4.motion.plan import AtomicMove, SequentialGroup
 from acq4.motion.planner import MotionPlanner
 from acq4.motion.spec import MoveSpec
-from acq4.util.gentle import ManualQtFriendlyTask
+from acq4.util.task import ManualQtFriendlyTask
 
 
 class _FakeDM:

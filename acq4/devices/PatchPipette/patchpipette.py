@@ -8,7 +8,7 @@ import numpy as np
 from acq4.devices.PatchClamp.patchclamp import PatchClamp
 from acq4.util import Qt
 from acq4.util import ptime
-from acq4.util.gentle import raise_errors
+from acq4.util.task import raise_errors
 from coorx import Point
 from neuroanalysis.test_pulse import PatchClampTestPulse
 from .devgui import PatchPipetteDeviceGui

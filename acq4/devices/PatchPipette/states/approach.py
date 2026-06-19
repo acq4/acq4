@@ -6,12 +6,11 @@ from typing import Iterable, Any
 import numpy as np
 
 import pyqtgraph as pg
-from acq4 import getManager
 from acq4.util import ptime
 from acq4.util.debug import log_and_ignore_exception
 from acq4.util.functions import plottable_booleans
-from acq4.util.gentle import asynch
 from acq4.util.imaging.sequencer import run_image_sequence
+from acq4.util.task import asynch
 from ._base import PatchPipetteState, SteadyStateAnalysisBase, exponential_decay_avg
 
 

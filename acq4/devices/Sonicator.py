@@ -6,7 +6,7 @@ from functools import cached_property
 from acq4.devices.Device import Device
 from acq4.util import Qt
 from acq4.util.PromptUser import prompt
-from acq4.util.gentle import FutureButton, Task, asynch_with_qt_signals
+from acq4.util.task import FutureButton, Task, asynch_with_qt_signals
 
 
 class Sonicator(Device):

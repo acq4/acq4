@@ -5,7 +5,7 @@ import numpy as np
 from gentletask import throughline
 
 from acq4 import getManager
-from acq4.util.gentle import asynch, asynch_with_qt_signals
+from acq4.util.task import asynch, asynch_with_qt_signals
 from .plan import AtomicMove, MovePlanStep, ParallelGroup, SequentialGroup
 from .spec import MoveSpec
 
@@ -59,9 +59,11 @@ class MotionPlanner:
 
     @staticmethod
     def _is_interaction_site(device) -> bool:
-        from acq4.devices.InteractionSite import InteractionSite
-        # TODO not an isinstance, please
-        return isinstance(device, InteractionSite) and hasattr(device, "_parentStage")
+        return (
+            device is not None
+            and hasattr(device, "positions")
+            and hasattr(device, "_parentStage")
+        )
 
     def _validate_specs(self, specs: list[MoveSpec]) -> None:
         """Raise PlanningError if specs contain device conflicts or bad relative-to ordering."""

@@ -17,7 +17,7 @@ from acq4.devices.Stage import Stage, MovePathFuture
 from acq4.modules.Camera import CameraModuleInterface
 from acq4.motion import MoveSpec
 from acq4.util import Qt, ptime
-from acq4.util.gentle import ManualQtFriendlyTask, asynch, raise_errors, sleep, synch
+from acq4.util.task import ManualQtFriendlyTask, asynch, raise_errors, sleep, synch
 from acq4.util.target import Target
 from coorx import AffineTransform
 from pyqtgraph import Point, siFormat
@@ -176,9 +176,6 @@ class Pipette(Device, OptomechDevice):
 
         deviceManager.sigAbortAll.connect(self.stop)
 
-        self._site_assignments: dict[str, str | None] = {}
-        self._loadSiteAssignments()
-
     def getGeometry(self, name=None):
         if isinstance(self.config.get("geometry"), dict):
             defaults = {'color': (0, 1, 0.2, 1)}
@@ -213,11 +210,12 @@ class Pipette(Device, OptomechDevice):
             'target': self.goTarget,
             'aboveTarget': self.goAboveTarget,
         }
-        _site_roles = {'clean': 'clean', 'rinse': 'rinse', 'refill': 'refill'}
         if position in go_methods:
             future = go_methods[position](speed=speed, **kwds)
-        elif position in _site_roles and self.getSiteFor(_site_roles[position]) is not None:
-            future = self.getSiteFor(_site_roles[position]).moveToInteract(self, speed=speed)
+        elif position == 'clean' and self.getCleaningWell():
+            future = self.getCleaningWell().moveToInteract(self, speed=speed)
+        elif position == 'rinse' and self.getElectrodeSolutionWell():
+            future = self.getElectrodeSolutionWell().moveToInteract(self, speed=speed)
         else:
             saved_pos = self.loadPosition(position)
             if saved_pos is None:
@@ -875,74 +873,31 @@ class Pipette(Device, OptomechDevice):
         return [self.dm.getDevice(d) for d in self.config.get('recordingChambers', [])]
 
     def getCleaningWell(self) -> InteractionSite | None:
-        """Return the site associated with this Pipette for cleaning.
-
-        Delegates to getSiteFor('clean'). Legacy config key 'cleaningWell' is
-        automatically migrated on startup.
+        """Return the RecordingChamber instance that is associated with this Pipette for cleaning
+        (see 'cleaningWell' config option).
         """
-        return self.getSiteFor('clean')
-
-    def getNucleusDepositionWell(self) -> InteractionSite | None:
-        """Return the site associated with this Pipette for nucleus expulsion.
-
-        Delegates to getSiteFor('nucleus'). Legacy config key 'nucleusExpulsionWell'
-        is automatically migrated on startup.
-        """
-        return self.getSiteFor('nucleus')
-
-    def getElectrodeSolutionWell(self) -> InteractionSite | None:
-        """Return the site associated with this Pipette for electrode solution refill.
-
-        Delegates to getSiteFor('refill'). Legacy config key 'electrodeSolutionWell' is
-        automatically migrated on startup.
-        """
-        return self.getSiteFor('refill')
-
-    def _loadSiteAssignments(self):
-        saved = self.readConfigFile("saved_sites")
-        self._site_assignments = saved if saved else {}
-        compat_map = {
-            'clean': self.config.get('cleaningWell'),
-            'nucleus': self.config.get('nucleusExpulsionWell'),
-            'refill': self.config.get('electrodeSolutionWell'),
-        }
-        for role, name in compat_map.items():
-            if name is not None and role not in self._site_assignments:
-                self._site_assignments[role] = name
-
-    def getSiteFor(self, role: str) -> "InteractionSite | None":
-        """Return the interaction site assigned to this pipette for *role*.
-
-        If the assigned device is an InteractionSiteArray (has getFirstAvailableSite),
-        its role must match *role* and the first available site is returned.
-        Returns None if no site is assigned or if the assigned device no longer exists.
-        """
-        name = self._site_assignments.get(role)
+        name = self.config.get('cleaningWell', None)
         if name is None:
             return None
-        try:
-            device = self.dm.getDevice(name)
-        except Exception:
-            return None
-        if device is None:
-            return None
-        if hasattr(device, 'getFirstAvailableSite'):
-            if getattr(device, 'role', None) != role:
-                return None
-            return device.getFirstAvailableSite()
-        return device
+        return self.dm.getDevice(name)
 
-    def setSiteFor(self, role: str, device_or_none):
-        """Assign an interaction site (or None) for *role* and persist the choice.
-
-        Accepts either a device object (with a .name() method) or a bare string device name.
+    def getNucleusDepositionWell(self) -> InteractionSite | None:
+        """Return the RecordingChamber instance that is associated with this Pipette for nucleus expulsion
+        (see 'nucleusExpulsionWell' config option).
         """
-        if device_or_none is None:
-            self._site_assignments.pop(role, None)
-        else:
-            n = device_or_none if isinstance(device_or_none, str) else device_or_none.name()
-            self._site_assignments[role] = n
-        self.writeConfigFile(self._site_assignments, "saved_sites")
+        name = self.config.get('nucleusExpulsionWell', None)
+        if name is None:
+            return None
+        return self.dm.getDevice(name)
+
+    def getElectrodeSolutionWell(self) -> InteractionSite | None:
+        """Return the RecordingChamber instance that is associated with this Pipette for electrode solution
+        (see 'electrodeSolutionWell' config option).
+        """
+        name = self.config.get('electrodeSolutionWell', None)
+        if name is None:
+            return None
+        return self.dm.getDevice(name)
 
     def startRecording(self):
         """Return an object that records all motion updates from this pipette"""

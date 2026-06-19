@@ -1,4 +1,4 @@
-# Tests for acq4.util.gentle, the Qt bridge over the gentletask concurrency library.
+# Tests for acq4.util.task, the Qt bridge over the gentletask concurrency library.
 # Covers GuiTask, the set_state idiom, cooperative stop, stop cascade, event-pumping
 # wait(updates=True), run_in_gui_thread, and the gentletask-backed FutureButton.
 
@@ -8,7 +8,7 @@ import time
 from PyQt5.QtWidgets import QApplication
 
 from acq4.util import Qt
-from acq4.util.gentle import (
+from acq4.util.task import (
     ManualQtFriendlyTask,
     QtFriendlyTask,
     FutureButton,

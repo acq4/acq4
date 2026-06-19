@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from acq4.util.debug import log_and_ignore_exception
-from acq4.util.gentle import asynch
+from acq4.util.task import asynch
 from pyqtgraph import units
 from ._base import PatchPipetteState
 
@@ -63,13 +63,8 @@ class CleanState(PatchPipetteState):
             if len(sequence) == 0:
                 continue
 
-            site = pip.getSiteFor(stage)
-            if site is not None:
-                task = site.moveToInteract(pip, speed='fast')
-                task.wait(60)
-            else:
-                task1 = pip.moveTo(stage, 'fast')
-                task1.wait(60)
+            task1 = pip.moveTo(stage, "fast")
+            task1.wait(60)
 
             if dev.sonicatorDevice is not None:
                 self.sonication = dev.sonicatorDevice.doProtocol(config['sonicationProtocol'])

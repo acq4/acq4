@@ -24,7 +24,7 @@ from .Interfaces import InterfaceDirectory
 from .devices import getDeviceClass
 from .devices.Device import Device, DeviceTask, DeviceLocker, get_devices_held_by_thread
 from .logging_config import get_logger, set_log_file
-from .util.gentle import ManualQtFriendlyTask, synch
+from .util.task import ManualQtFriendlyTask, synch
 from .util import DataManager, ptime, Qt
 from .util.DataManager import DirHandle
 from .util.HelpfulException import HelpfulException

@@ -8,7 +8,7 @@ import scipy.ndimage as ndi
 import pyqtgraph as pg
 from acq4.Manager import getManager
 from acq4.util import Qt
-from acq4.util.gentle import asynch
+from acq4.util.task import asynch
 from acq4.util.image_registration import imageTemplateMatch
 from acq4.util.imaging.sequencer import acquire_z_stack
 from .pipette_detection import TemplateMatchPipetteDetector

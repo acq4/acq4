@@ -752,7 +752,7 @@
   <customwidget>
    <class>FutureButton</class>
    <extends>FeedbackButton</extends>
-   <header>acq4.util.gentle</header>
+   <header>acq4.util.task</header>
   </customwidget>
  </customwidgets>
  <resources/>
