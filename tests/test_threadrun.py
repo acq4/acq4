@@ -37,7 +37,7 @@ class MockQTimer:
         callback()
 
 
-# Mock the runInGuiThread function
+# Mock the run_in_gui_thread function
 def mock_run_in_gui_thread(func, *args, **kwargs):
     return func(*args, **kwargs)
 
@@ -46,7 +46,7 @@ def mock_run_in_gui_thread(func, *args, **kwargs):
 @pytest.fixture(autouse=True)
 def setup_mocks():
     with patch("acq4.util.Qt.pyqtSignal", MockSignal), patch("acq4.util.Qt.QTimer", MockQTimer), patch(
-        "acq4.util.task.runInGuiThread", mock_run_in_gui_thread
+        "acq4.util.task.run_in_gui_thread", mock_run_in_gui_thread
     ):
         yield
 
@@ -240,14 +240,14 @@ def test_threading_behavior():
             time.sleep(0.1)  # Small delay to simulate work
             return threading.get_ident()
 
-    # For this test, we need to mock runInGuiThread to run in a separate thread
+    # For this test, we need to mock run_in_gui_thread to run in a separate thread
     def mock_run_in_thread(func, *args, **kwargs):
         thread = threading.Thread(target=func, args=args, kwargs=kwargs)
         thread.start()
         thread.join()
         return thread.ident
 
-    with patch("acq4.util.task.runInGuiThread", mock_run_in_thread):
+    with patch("acq4.util.task.run_in_gui_thread", mock_run_in_thread):
         instance = TestClass()
 
         # Record the main thread ID

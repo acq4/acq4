@@ -295,19 +295,19 @@ def asynch_with_qt_signals(
 ) -> Callable[..., "QtFriendlyTask"]:
     """Like gentletask.asynch, but launches the work in a GuiTask (Qt signals).
 
-    Plain ``asynch`` only builds a ThreadTask; use ``gui_asynch`` when a
+    Plain ``asynch`` only builds a ThreadTask; use ``asynch_with_qt_signals`` when a
     function's result needs ``sigFinished``/``sigStateChanged``/``set_state`` so
     GUI code can connect to it. Calling the returned launcher starts a GuiTask
     immediately::
 
-        @gui_asynch
+        @asynch_with_qt_signals
         def run_sequence(...):
             set_state("acquiring"); ...; return result
 
         task = run_sequence(...)            # a started GuiTask
         task.sigStateChanged.connect(...)
 
-    ``synch(gui_asynch(fn))`` de-wraps to run ``fn`` inline (via _asynch_wraps),
+    ``synch(asynch_with_qt_signals(fn))`` de-wraps to run ``fn`` inline (via _asynch_wraps),
     exactly like ``synch`` on an ``asynch``-wrapped callable.
     """
 

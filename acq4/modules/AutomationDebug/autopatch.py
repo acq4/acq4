@@ -236,7 +236,7 @@ class Autopatcher:
         expected_duration = (
             taskrunner.sequenceInfo["period"] * taskrunner.sequenceInfo["totalParams"]
         )
-        # runInGuiThread(taskrunner.runSequence, store=True, storeDirHandle=self.dh).wait(...)
+        # run_in_gui_thread(taskrunner.runSequence, store=True, storeDirHandle=self.dh).wait(...)
         run_in_gui_thread(taskrunner.runSequence, store=True).wait(
             timeout=max(30, expected_duration * 20),
         )

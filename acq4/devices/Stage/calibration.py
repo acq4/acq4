@@ -11,7 +11,7 @@ from acq4.Manager import getManager
 from acq4.devices.Stage import Stage
 from acq4.util import Qt, ptime
 from acq4.util.HelpfulException import HelpfulException
-from acq4.util.gentle import FutureButton, run_in_gui_thread
+from acq4.util.task import FutureButton, run_in_gui_thread
 from acq4.util.target import Target
 from coorx import AffineTransform
 
@@ -239,13 +239,14 @@ class ManipulatorAxesCalibrationWindow(Qt.QWidget):
             raise HelpfulException(
                 f"No Pipette device found with {self.dev.name()} as its parent manipulator.")
         if pipette.config.get('yaw') == 'auto':
-            raise HelpfulException(
-                f"{pipette.name()} has yaw='auto', which depends on the axis calibration "
-                f"being collected. Configure an explicit yaw angle first.")
-        # Ensure the camera module is open before collection begins, so points can
-        # be displayed as they arrive.
-        self.getCameraModule()
-        return calibrate_manipulator_axes(pipette, on_point=self._onAutoCollectPoint)
+            Qt.QMessageBox.critical(self, "Auto Collect Failed", f"{pipette.name()} has yaw='auto', which depends on the axis calibration being collected. Configure an explicit yaw angle first.")
+            return
+        self.autoCollectBtn.setEnabled(False)
+        self.autoCollectBtn.setText("collecting...")
+        future = calibrate_manipulator_axes(pipette)
+        # GuiTask's sigFinished is already marshalled to the GUI thread, so we can
+        # apply the result directly without an extra run_in_gui_thread hop.
+        future.sigFinished.connect(self._autoCollectFinished)
 
     def _onAutoCollectPoint(self, device_pos, parent_pos, global_pos):
         # Called from the calibration worker thread for each collected point;

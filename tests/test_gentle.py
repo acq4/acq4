@@ -481,7 +481,7 @@ class TestManualGuiTask:
 
 class TestGuiAsynch:
     def test_launcher_returns_started_gui_task(self):
-        # gui_asynch auto-starts (like asynch). Verify the launcher builds a
+        # asynch_with_qt_signals auto-starts (like asynch). Verify the launcher builds a
         # started GuiTask and the result flows through. Finish is checked via
         # add_finish_callback (race-free) rather than the sigFinished signal,
         # which a fast body can emit before an external connect (documented).
@@ -502,7 +502,7 @@ class TestGuiAsynch:
         assert got == [42]
 
     def test_synch_dewraps_to_run_inline(self):
-        # synch(gui_asynch(fn)) runs fn inline (no GuiTask/thread) and returns the value.
+        # synch(asynch_with_qt_signals(fn)) runs fn inline (no GuiTask/thread) and returns the value.
         ran_in = []
 
         @asynch_with_qt_signals
