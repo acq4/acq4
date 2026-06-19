@@ -9,7 +9,7 @@ import numpy as np
 from acq4.util import ptime, Qt
 import pyqtgraph as pg
 from acq4.util.debug import log_and_ignore_exception
-from acq4.util.gentle import Stopped
+from acq4.util.task import Stopped
 from acq4.util.functions import plottable_booleans
 from neuroanalysis.data import TSeries
 from pyqtgraph.units import kPa

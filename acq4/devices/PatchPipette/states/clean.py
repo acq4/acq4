@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from acq4.util.debug import log_and_ignore_exception
-from acq4.util.gentle import asynch
+from acq4.util.task import asynch
 from pyqtgraph import units
 from ._base import PatchPipetteState
 

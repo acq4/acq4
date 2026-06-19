@@ -9,10 +9,10 @@ import numpy as np
 from acq4.logging_config import get_logger
 from acq4.modules.Camera import CameraWindow
 from acq4.util import Qt
-from acq4.util.gentle import Stopped, Task, asynch_with_qt_signals
+from acq4.util.task import Stopped, Task, asynch_with_qt_signals
 from acq4.util.imaging.sequencer import acquire_z_stack
 from acq4.util.target import TargetBox
-from acq4.util.gentle import run_in_gui_thread
+from acq4.util.task import run_in_gui_thread
 from acq4_automation.cell_quality_annotation_tool import open_annotation_tool_with_detections
 from acq4_automation.feature_tracking.cell import Cell
 from coorx import Point

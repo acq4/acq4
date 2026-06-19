@@ -19,7 +19,7 @@ from ..OptomechDevice import OptomechDevice
 from ...modules.Visualize3D.travelers_proxy import MovePathException
 from ...motion import MoveSpec
 from ...util.HelpfulException import HelpfulException
-from ...util.gentle import ManualQtFriendlyTask, Stopped, FutureButton
+from ...util.task import ManualQtFriendlyTask, Stopped, FutureButton
 from ...util.geometry import (
     Plane,
     limits_to_boundaries,

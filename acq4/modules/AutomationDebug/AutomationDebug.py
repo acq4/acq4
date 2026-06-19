@@ -18,7 +18,7 @@ from acq4.motion import (
 from acq4.logging_config import get_logger
 from acq4.modules.Module import Module
 from acq4.util import Qt
-from acq4.util.gentle import Task, check_stop, asynch_with_qt_signals
+from acq4.util.task import Task, check_stop, asynch_with_qt_signals
 from pyqtgraph.units import µm, m
 from .autopatch import Autopatcher
 from .detection import CellDetector

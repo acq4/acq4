@@ -7,7 +7,7 @@ from acq4.devices.Device import Device
 from acq4.drivers.sensapex import UMP
 from acq4.util import ptime
 from acq4.util.Thread import Thread
-from acq4.util.gentle import ManualQtFriendlyTask, Stopped
+from acq4.util.task import ManualQtFriendlyTask, Stopped
 
 
 class SensapexObjectiveChanger(Device):

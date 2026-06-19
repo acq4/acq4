@@ -5,7 +5,7 @@ import numpy as np
 from gentletask import throughline
 
 from acq4 import getManager
-from acq4.util.gentle import asynch, asynch_with_qt_signals
+from acq4.util.task import asynch, asynch_with_qt_signals
 from .plan import AtomicMove, MovePlanStep, ParallelGroup, SequentialGroup
 from .spec import MoveSpec
 

@@ -7,7 +7,7 @@ import scipy.ndimage
 import pyqtgraph as pg
 from acq4.Manager import getManager
 from acq4.util import Qt
-from acq4.util.gentle import asynch_with_qt_signals, set_state
+from acq4.util.task import asynch_with_qt_signals, set_state
 from acq4.util.imaging.sequencer import acquire_z_stack
 from coorx.nonlinear import PetzvalTransform
 

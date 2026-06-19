@@ -6,7 +6,7 @@ import numpy as np
 
 from acq4.devices.Pipette.calibration import findNewPipette
 from acq4.logging_config import get_logger
-from acq4.util.gentle import Stopped, Task, asynch_with_qt_signals, sleep, synch
+from acq4.util.task import Stopped, Task, asynch_with_qt_signals, sleep, synch
 from acq4_automation.feature_tracking.cell import Cell
 from coorx import Point
 

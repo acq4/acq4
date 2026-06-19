@@ -20,7 +20,7 @@ from acq4.util.StatusBar import StatusBar
 from acq4.util.Thread import Thread
 from pyqtgraph.debug import Profiler
 from pyqtgraph.util.mutex import Mutex
-from acq4.util.gentle import ManualQtFriendlyTask
+from acq4.util.task import ManualQtFriendlyTask
 from . import analysisModules
 from ..Module import Module
 from ...logging_config import get_logger

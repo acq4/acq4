@@ -16,10 +16,10 @@ import acq4.Manager as Manager
 import pyqtgraph as pg
 from acq4.util import Qt, ptime
 from acq4.util.DataManager import DirHandle
-from acq4.util.gentle import QtFriendlyTask, check_stop, current_task, set_state, sleep
+from acq4.util.task import QtFriendlyTask, check_stop, current_task, set_state, sleep
 from acq4.util.imaging import Frame
 from acq4.util.surface import find_surface
-from acq4.util.gentle import run_in_gui_thread
+from acq4.util.task import run_in_gui_thread
 
 
 def enforce_linear_z_stack(frames: list[Frame], start: float, stop: float, step: float) -> list[Frame]:

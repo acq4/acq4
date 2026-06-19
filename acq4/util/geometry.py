@@ -13,7 +13,7 @@ from trimesh.voxel import VoxelGrid
 import pyqtgraph as pg
 import pyqtgraph.opengl as gl
 from acq4.util.approx import ApproxDict, ApproxSet
-from acq4.util.gentle import raise_errors
+from acq4.util.task import raise_errors
 from coorx import (
     SRT3DTransform,
     Transform,

@@ -10,8 +10,8 @@ from acq4.util import ptime
 from acq4.devices.Stage import Stage, MoveFuture, StageInterface
 from acq4.drivers.Scientifica import Scientifica as ScientificaDriver
 from acq4.util import Qt
-from acq4.util.gentle import asynch, sleep, Stopped, ManualQtFriendlyTask, FutureButton
-from acq4.util.gentle import run_in_gui_thread
+from acq4.util.task import asynch, sleep, Stopped, ManualQtFriendlyTask, FutureButton
+from acq4.util.task import run_in_gui_thread
 from pyqtgraph import SpinBox, siFormat
 
 

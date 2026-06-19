@@ -16,7 +16,7 @@ from neuroanalysis.test_pulse_stack import H5BackedTestPulseStack
 from .mockPatch import MockPatch
 from .pipetteControl import PipetteControl
 from ...devices.PatchPipette.statemanager import PatchPipetteStateManager
-from ...util.gentle import MultiFuture, asynch, raise_errors, run_in_gui_thread
+from ...util.task import MultiFuture, asynch, raise_errors, run_in_gui_thread
 from ...util.json_encoder import ACQ4JSONEncoder
 
 Ui_MultiPatch = Qt.importTemplate('.multipatchTemplate')

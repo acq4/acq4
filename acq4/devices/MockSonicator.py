@@ -5,7 +5,7 @@ import pyaudio
 
 import pyqtgraph as pg
 from acq4.devices.Sonicator import Sonicator
-from acq4.util.gentle import asynch, sleep
+from acq4.util.task import asynch, sleep
 from pyqtgraph import siFormat
 
 

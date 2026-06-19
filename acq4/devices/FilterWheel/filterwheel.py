@@ -7,7 +7,7 @@ import pyqtgraph as pg
 from acq4.devices.Device import TaskGui, Device, DeviceTask
 from acq4.devices.OptomechDevice import OptomechDevice
 from acq4.util import Qt
-from acq4.util.gentle import ManualQtFriendlyTask, Stopped
+from acq4.util.task import ManualQtFriendlyTask, Stopped
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
 

@@ -17,7 +17,7 @@ from acq4.devices.Stage import Stage, MovePathFuture
 from acq4.modules.Camera import CameraModuleInterface
 from acq4.motion import MoveSpec
 from acq4.util import Qt, ptime
-from acq4.util.gentle import ManualQtFriendlyTask, asynch, raise_errors, sleep, synch
+from acq4.util.task import ManualQtFriendlyTask, asynch, raise_errors, sleep, synch
 from acq4.util.target import Target
 from coorx import AffineTransform
 from pyqtgraph import Point, siFormat

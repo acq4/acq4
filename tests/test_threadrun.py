@@ -5,7 +5,7 @@ from unittest.mock import patch
 import pytest
 
 from acq4.util import Qt
-from acq4.util.gentle import in_gui_thread
+from acq4.util.task import in_gui_thread
 
 
 # Mock PyQt5 components
@@ -46,7 +46,7 @@ def mock_run_in_gui_thread(func, *args, **kwargs):
 @pytest.fixture(autouse=True)
 def setup_mocks():
     with patch("acq4.util.Qt.pyqtSignal", MockSignal), patch("acq4.util.Qt.QTimer", MockQTimer), patch(
-        "acq4.util.gentle.runInGuiThread", mock_run_in_gui_thread
+        "acq4.util.task.runInGuiThread", mock_run_in_gui_thread
     ):
         yield
 
@@ -247,7 +247,7 @@ def test_threading_behavior():
         thread.join()
         return thread.ident
 
-    with patch("acq4.util.gentle.runInGuiThread", mock_run_in_thread):
+    with patch("acq4.util.task.runInGuiThread", mock_run_in_thread):
         instance = TestClass()
 
         # Record the main thread ID

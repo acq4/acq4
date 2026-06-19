@@ -17,7 +17,7 @@ import logging
 
 from acq4.util.json_encoder import IgorJSONEncoder
 from acq4.util import Qt
-from acq4.util.gentle import Promise
+from acq4.util.task import Promise
 
 
 logger = logging.getLogger('igorpro')

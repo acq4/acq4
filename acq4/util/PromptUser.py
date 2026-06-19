@@ -5,7 +5,7 @@ caller can wait on it stop-awarely and cancel it.
 """
 
 from acq4.util import Qt
-from acq4.util.gentle import Event, asynch, run_in_gui_thread
+from acq4.util.task import Event, asynch, run_in_gui_thread
 
 
 def prompt(title, text, choices, extra_text=None, parent=None):

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from acq4.motion import MoveSpec
 from acq4.util.debug import log_and_ignore_exception
-from acq4.util.gentle import asynch, synch
+from acq4.util.task import asynch, synch
 from pyqtgraph import units
 from ._base import PatchPipetteState
 

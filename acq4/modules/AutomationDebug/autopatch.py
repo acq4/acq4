@@ -4,8 +4,8 @@ from typing import TYPE_CHECKING, Any
 
 from acq4.devices.PatchPipette import PatchPipette
 from acq4.logging_config import get_logger
-from acq4.util.gentle import Stopped, check_stop, asynch_with_qt_signals, set_state, sleep, synch
-from acq4.util.gentle import run_in_gui_thread
+from acq4.util.task import Stopped, check_stop, asynch_with_qt_signals, set_state, sleep, synch
+from acq4.util.task import run_in_gui_thread
 from acq4.util.imaging.sequencer import run_image_sequence
 from ..TaskRunner import TaskRunner
 from ...Manager import Manager

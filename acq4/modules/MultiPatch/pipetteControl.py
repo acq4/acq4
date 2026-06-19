@@ -9,7 +9,7 @@ from acq4.util.ui.pipetteEventLog import PipetteEventLog
 from neuroanalysis.data import TSeries
 from neuroanalysis.test_pulse import PatchClampTestPulse
 
-from acq4.util.gentle import asynch
+from acq4.util.task import asynch
 
 Ui_PipetteControl = Qt.importTemplate('.pipetteTemplate')
 

@@ -7,7 +7,7 @@ from docstring_parser import parse
 from acq4 import getManager
 from acq4.logging_config import get_logger
 from acq4.util import Qt
-from acq4.util.gentle import Stopped
+from acq4.util.task import Stopped
 from pyqtgraph import disconnect
 from pyqtgraph.parametertree import Parameter
 from . import states

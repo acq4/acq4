@@ -5,8 +5,8 @@ from threading import Thread
 import numpy as np
 
 from acq4.util import Qt
-from acq4.util.gentle import asynch
-from acq4.util.gentle import in_gui_thread, run_in_gui_thread
+from acq4.util.task import asynch
+from acq4.util.task import in_gui_thread, run_in_gui_thread
 from coorx import TTransform
 from pyqtgraph import opengl as gl
 

@@ -7,7 +7,7 @@ from acq4.util import Qt
 from .Device import Device
 from .OptomechDevice import OptomechDevice
 from .Stage import Stage
-from ..util.gentle import FutureButton, ManualQtFriendlyTask
+from ..util.task import FutureButton, ManualQtFriendlyTask
 from ..util.target import color_for_diff
 
 

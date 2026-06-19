@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from acq4 import getManager
-from acq4.util.gentle import asynch, check_stop
+from acq4.util.task import asynch, check_stop
 from .default_planner import (
     DefaultMotionPlanner,
     MOVE_TO_DESTINATION,
