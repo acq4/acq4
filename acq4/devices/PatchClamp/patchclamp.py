@@ -104,6 +104,49 @@ class PatchClamp(Device):
             tp.analysis.update(self._testPulseAnalysisOverrides)
         return tp
 
+    def zap(self, duration=1e-3, amplitude=1.0, sampleRate=500000):
+        """Apply a brief voltage pulse ("zap") on top of the current holding to help clear or
+        rupture the membrane.
+
+        Parameters
+        ----------
+        duration : float
+            Duration (seconds) of the zap pulse (default 1 ms).
+        amplitude : float
+            Amplitude (Volts in VC, Amps in IC) of the zap relative to the holding value
+            (default 1 V). 1 V is the conventional break-in "zap" amplitude in the patch-clamp
+            literature (e.g. Axon instrumentation); some protocols go higher (up to ~5 V) with
+            correspondingly briefer pulses. The default assumes VC; an IC zap would need a sane
+            current amplitude supplied explicitly.
+        sampleRate : float
+            Sample rate (Hz) for the command waveform (default 500 kHz).
+        """
+        import time
+
+        from acq4.Manager import getManager
+        from neuroanalysis.stimuli import SquarePulse
+
+        mode = self.getMode()
+        pad = 1e-3
+        total = pad + duration + pad
+        numPts = int(total * sampleRate)
+        square = SquarePulse(start_time=pad, duration=duration, amplitude=amplitude)
+        cmdData = square.eval(n_pts=numPts, t0=0, sample_rate=sampleRate).data + self.getHolding(mode)
+        daqName = self.getDAQName("primary")
+        cmd = {
+            'protocol': {'duration': total},
+            daqName: {'rate': sampleRate, 'numPts': numPts, 'downsample': 1},
+            self.name(): {'mode': mode, 'command': cmdData, 'stimulus': square},
+        }
+        task = getManager().createTask(cmd)
+        task.reserveDevices(reserver=f"{self.name()}.zap")
+        try:
+            task.execute()
+            while not task.isDone():
+                time.sleep(0.01)
+        finally:
+            task.releaseDevices()
+
     def autoPipetteOffset(self):
         """Automatically set the pipette offset.
         """
