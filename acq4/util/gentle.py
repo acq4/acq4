@@ -1,5 +1,4 @@
 # acq4's Qt bridge over the gentletask concurrency library.
-# The gentletask core stays pure Python; every Qt dependency lives here.
 
 from __future__ import annotations
 
@@ -56,7 +55,6 @@ __all__ = [
     "MultiException",
     # acq4-side additions.
     "set_state",
-    "current_state",
     "raise_errors",
     "GuiTask",
     "ManualGuiTask",
@@ -73,11 +71,10 @@ __all__ = [
 # State free functions
 # ---------------------------------------------------------------------------
 #
-# These replace the old `_future.setState(...)` idiom. A task body simply calls
-# set_state("measuring"); the call finds the running task via current_task()
-# and, if that task carries state (e.g. a GuiTask), updates it — which emits
-# sigStateChanged. Outside any task, or for a task that does not carry state,
-# the call is a safe no-op.
+# A task body simply calls set_state("measuring"); the call finds the running task via
+# current_task() and, if that task carries state (e.g. a GuiTask), updates it — which emits
+# sigStateChanged. Outside any task, or for a task that does not carry state, the call is a safe
+# no-op.
 
 
 def set_state(state: Any) -> None:
@@ -88,14 +85,6 @@ def set_state(state: Any) -> None:
     task = current_task()
     if task is not None and hasattr(task, "set_state"):
         task.set_state(state)
-
-
-def current_state() -> Any:
-    """Return the running task's state, or None outside any state-carrying task."""
-    task = current_task()
-    if task is not None and hasattr(task, "state"):
-        return task.state
-    return None
 
 
 def raise_errors(task: Task, message: str) -> None:
@@ -117,9 +106,7 @@ def raise_errors(task: Task, message: str) -> None:
         except BaseException as exc:
             raise RuntimeError(message.format(error=str(exc), stack=caller_stack)) from exc
 
-    threading.Thread(
-        target=monitor, daemon=True, name=f"error monitor for {task!r}"
-    ).start()
+    threading.Thread(target=monitor, daemon=True, name=f"error monitor for {task!r}").start()
 
 
 # ---------------------------------------------------------------------------
@@ -309,8 +296,9 @@ def gui_asynch(
     """Like gentletask.asynch, but launches the work in a GuiTask (Qt signals).
 
     Plain ``asynch`` only builds a ThreadTask; use ``gui_asynch`` when a
-    function's result needs ``sigFinished``/``sigStateChanged`` so GUI code can
-    connect to it. Calling the returned launcher starts a GuiTask immediately::
+    function's result needs ``sigFinished``/``sigStateChanged``/``set_state`` so
+    GUI code can connect to it. Calling the returned launcher starts a GuiTask
+    immediately::
 
         @gui_asynch
         def run_sequence(...):
@@ -350,7 +338,7 @@ class ManualGuiTask(Promise, _QtTaskSignals):
     State: because a Promise has no running body, the module-level free
     set_state() will NOT reach it (the producer is not running as this task's
     current_task()). The external producer therefore calls
-    guipromise.set_state(...) DIRECTLY. set_state/state/current_state come from
+    guitask.set_state(...) DIRECTLY. set_state/state/current_state come from
     the _QtTaskSignals mixin and behave exactly as on GuiTask.
 
     See _QtTaskSignals for the multiple-inheritance ordering rationale (Promise
@@ -626,8 +614,7 @@ class FutureButton(FeedbackButton):
         """Displays specified message on button to let user know the action is in progress. Threadsafe."""
         # This had to be reimplemented to allow stoppable buttons to remain enabled.
         isGuiThread = (
-            Qt.QtCore.QThread.currentThread()
-            == Qt.QtCore.QCoreApplication.instance().thread()
+            Qt.QtCore.QThread.currentThread() == Qt.QtCore.QCoreApplication.instance().thread()
         )
         if isGuiThread:
             self.setEnabled(self._stoppable)

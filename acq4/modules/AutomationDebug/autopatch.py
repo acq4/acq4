@@ -113,11 +113,11 @@ class Autopatcher:
                     self._autopatchRunTaskRunner()
 
                     set_state("Autopatch: Taking cell images")
-                    synch(win.scopeDevice.loadPreset)('GFP')
+                    win.scopeDevice.loadPreset('GFP')
                     self._saveStack("patched GFP cellfie")
                     # win.scopeDevice.loadPreset('tdTomato')
                     # self._saveStack("patched tdTomato cellfie")
-                    synch(win.scopeDevice.loadPreset)('brightfield')
+                    win.scopeDevice.loadPreset('brightfield')
                     ppip.pipetteDevice.focusTarget('slow').wait()
 
                     # set_state("Autopatch: resealing")

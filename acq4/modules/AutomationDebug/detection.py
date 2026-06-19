@@ -120,7 +120,7 @@ class CellDetector:
                 raise RuntimeError("Failed to load mock detection stack.")
 
         else:  # --- Real Acquisition ---
-            surface = synch(win.scopeDevice.findSurfaceDepth)(win.cameraDevice)
+            surface = win.scopeDevice.findSurfaceDepth(win.cameraDevice)
 
             start_z = surface - win.ui.zStackStartDepthSpin.value()
             stop_z = surface - win.ui.zStackStopDepthSpin.value()
@@ -130,13 +130,13 @@ class CellDetector:
                     f"Starting multichannel Z-stack acquisition: Detection='{detection_preset}', "
                     f"Classification='{classification_preset}'"
                 )
-                synch(win.scopeDevice.loadPreset)(detection_preset)
+                win.scopeDevice.loadPreset(detection_preset)
             detection_stack = acquire_z_stack(
                 win.cameraDevice, start_z, stop_z, step_z, slow_fallback=False, name="neuron detection stack"
             )
 
             if multichannel_processing_intended:
-                synch(win.scopeDevice.loadPreset)(classification_preset)
+                win.scopeDevice.loadPreset(classification_preset)
                 classification_stack = acquire_z_stack(
                     win.cameraDevice, start_z, stop_z, step_z, slow_fallback=False, name="neuron classification stack"
                 )

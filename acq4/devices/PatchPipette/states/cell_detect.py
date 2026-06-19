@@ -421,12 +421,11 @@ class CellDetectState(PatchPipetteState):
                 self.surfaceIntersectionPosition,
                 config['aboveSurfaceSpeed'],
                 True,
-                self,
             )
             self.setState("moved to surface")
         if not self.closeEnoughToTargetToDetectCell():
             self._waitForMoveWhileTargetChanges(
-                self.fastTravelEndpoint, config['belowSurfaceSpeed'], True, self
+                self.fastTravelEndpoint, config['belowSurfaceSpeed'], True
             )
             self.setState("moved to detection area")
         if config['preTargetWiggle']:
@@ -440,7 +439,6 @@ class CellDetectState(PatchPipetteState):
             position_fn=self.finalSearchEndpoint,
             speed=config['detectionSpeed'],
             continuous=True,
-            future=self,
             interval=config['advanceStepInterval'],
             step=config['advanceStepDistance'],
         )
@@ -462,20 +460,17 @@ class CellDetectState(PatchPipetteState):
         for _ in range(count):
             self.setState("pre-target wiggle")
             retract_pos = dev.pipetteDevice.globalPosition() - wiggle_step
-            self.waitFor(dev.pipetteDevice.moveToGlobalNoPlanning(retract_pos, speed=speed, name='pre-target wiggle retract'), timeout=None)
+            dev.pipetteDevice.moveToGlobalNoPlanning(retract_pos, speed=speed, name='pre-target wiggle retract').wait()
             with self._wiggleLock:  # used to prevent cell detect
-                self.waitFor(
-                    dev.pipetteDevice.wiggle(
-                        speed=config['preTargetWiggleSpeed'],
-                        radius=config['preTargetWiggleRadius'],
-                        repetitions=1,
-                        duration=config['preTargetWiggleDuration'],
-                        pipette_direction=self.direction_unit,
-                    ),
-                    timeout=None,
+                dev.pipetteDevice.wiggle(
+                    speed=config['preTargetWiggleSpeed'],
+                    radius=config['preTargetWiggleRadius'],
+                    repetitions=1,
+                    duration=config['preTargetWiggleDuration'],
+                    pipette_direction=self.direction_unit,
                 )
             step_pos = dev.pipetteDevice.globalPosition() + wiggle_step
-            self.waitFor(dev.pipetteDevice.moveToGlobalNoPlanning(step_pos, speed=speed, name='pre-target wiggle advance'), timeout=None)
+            dev.pipetteDevice.moveToGlobalNoPlanning(step_pos, speed=speed, name='pre-target wiggle advance').wait()
         self._hasWiggled = True
 
     def _searchAround(self):
@@ -495,7 +490,7 @@ class CellDetectState(PatchPipetteState):
         ) * radius
         for rel_pos in steps:
             pos = rel_pos + self.dev.pipetteDevice.targetPosition()
-            self.waitFor(self.dev.pipetteDevice.moveToGlobalNoPlanning(pos, speed, name='search around target'))
+            self.dev.pipetteDevice.moveToGlobalNoPlanning(pos, speed, name='search around target').wait()
             sleep(1)
 
     def _cleanup(self):
@@ -505,4 +500,4 @@ class CellDetectState(PatchPipetteState):
         with log_and_ignore_exception(Exception, "Error storing target position"):
             patchrec = self.dev.patchRecord()
             patchrec['cellDetectFinalTarget'] = tuple(self.dev.pipetteDevice.targetPosition())
-        return super()._cleanup()
+        super()._cleanup()

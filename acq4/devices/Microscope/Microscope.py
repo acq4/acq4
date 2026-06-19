@@ -171,25 +171,23 @@ class Microscope(Device, OptomechDevice):
         with self.lock:
             return list(self.selectedObjectives.values())
 
-    @asynch
     def loadPreset(self, name):
         conf = self.presets[name]
-        tasks: list[Task] = []
+        tasks = []
         for dev_name, state in conf.items():
             if dev_name == "objective":
                 self.setObjectiveIndex(state)
             elif dev_name != "hotkey":
                 dev = self.dm.getDevice(dev_name)
                 if hasattr(dev, "loadPreset"):
-                    tasks.append(dev.loadPreset(state))
+                    tasks.append(asynch(dev.loadPreset)(state))
         for task in tasks:
-            if task is not None:
-                task.wait()
+            task.wait()
 
     def handlePresetHotkey(self, kb_dev, changes, name):
         key, pressed = changes.get('keys', [])[0]
         if pressed:
-            self.loadPreset(name)
+            asynch(self.loadPreset, detach=True)(name)
 
     def deviceInterface(self, win):
         iface = ScopeGUI(self, win)
@@ -252,7 +250,6 @@ class Microscope(Device, OptomechDevice):
 
         return acquire_z_stack(imager, *z_range, name=name)
 
-    @gui_asynch
     def findSurfaceDepth(
         self, imager: "Device", searchDistance=200 * µm, searchStep=5 * µm, returnStack=False
     ) -> float | tuple[float, list[Frame]]:
@@ -591,7 +588,7 @@ class ScopeGUI(Qt.QWidget):
     def loadPreset(self):
         btn = self.sender()
         name = btn.objectName()
-        self.dev.loadPreset(name)
+        asynch(self.dev.loadPreset, detach=True)(name)
 
     def objectiveChanged(self, obj):
         ## Microscope says new objective has been selected; update selection radio
@@ -808,7 +805,7 @@ class ScopeCameraModInterface(CameraModuleInterface):
         self.transformChanged()
 
     def findSurface(self):
-        return self.getDevice().findSurfaceDepth(self.getDevice().getDefaultImager())
+        return gui_asynch(self.getDevice().findSurfaceDepth)(self.getDevice().getDefaultImager())
 
     def surfaceDepthChanged(self, depth):
         self.zPositionWidget.setSurfaceDepth(depth)

@@ -3,6 +3,7 @@ from __future__ import annotations
 import time
 
 from acq4.util import ptime
+from acq4.util.debug import log_and_ignore_exception
 from pyqtgraph import units
 from ._base import PatchPipetteState
 
@@ -154,9 +155,6 @@ class BreakInState(PatchPipetteState):
             raise BreakInSuccessful()
 
     def _cleanup(self):
-        dev = self.dev
-        try:
-            dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
-        except Exception:
-            dev.logger.exception("Error resetting pressure after clean")
-        return super()._cleanup()
+        with log_and_ignore_exception(Exception, "Error resetting pressure after clean"):
+            self.dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
+        super()._cleanup()

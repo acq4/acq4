@@ -332,17 +332,14 @@ class ResealState(PatchPipetteState):
                 target=self.config['nuzzlePressureLimit'], duration=self.config['nuzzleDuration']
             )
             yield
-            self.waitFor(self._pressureFuture)
+            self._pressureFuture.wait(None)
 
-        self.waitFor(
-            self.dev.pipetteDevice.wiggle(
-                speed=self.config['nuzzleSpeed'],
-                radius=self.config['nuzzleLateralWiggleRadius'],
-                duration=self.config['nuzzleDuration'],
-                repetitions=self.config['nuzzleRepetitions'],
-                extra=pressure_ramp,
-            ),
-            timeout=None,
+        self.dev.pipetteDevice.wiggle(
+            speed=self.config['nuzzleSpeed'],
+            radius=self.config['nuzzleLateralWiggleRadius'],
+            duration=self.config['nuzzleDuration'],
+            repetitions=self.config['nuzzleRepetitions'],
+            extra=pressure_ramp,
         )
 
     @asynch
@@ -433,7 +430,8 @@ class ResealState(PatchPipetteState):
             self.nuzzle()
         self.checkStop()
         self.setState("measuring baseline resistance")
-        self.waitFor(baseline_future, timeout=2 * self.config['repairTau'])
+        timeout = 2 * self.config['repairTau']
+        baseline_future.wait(timeout)
         dev.pressureDevice.setPressure(source='regulator', pressure=config['retractionPressure'])
 
         start_time = ptime.time()  # getting the nucleus and baseline measurements doesn't count
@@ -510,7 +508,8 @@ class ResealState(PatchPipetteState):
                     dev.imagingDevice().globalCenterPosition() - dev.pipetteDevice.globalPosition()
                 )
             ):
-                self.waitFor(dev.focusOnTip('slow'))
+                task = dev.focusOnTip('slow')
+                task.wait(None)
             self.sleep(0.2)
 
         if self._moveFuture is not None:
@@ -519,12 +518,13 @@ class ResealState(PatchPipetteState):
                 self._moveFuture.wait()
         self.setState("retracting pipette from surface")
         self._moveFuture = self._retractFromTissue()
-        self.waitFor(self._moveFuture)
+        self._moveFuture.wait(None)
 
         self.setState("go above target before slurp")
         self._moveFuture = dev.pipetteDevice.goAboveTarget(speed=100e-6)
-        self.waitFor(self._moveFuture, timeout=120)
-        self.waitFor(dev.pipetteDevice.focusTip())
+        self._moveFuture.wait(120)
+        task1 = dev.pipetteDevice.focusTip()
+        task1.wait(None)
 
         self.setState("slurping in nucleus")
         dev.pressureDevice.setPressure(source='regulator', pressure=config['slurpPressure'])
@@ -578,4 +578,4 @@ class ResealState(PatchPipetteState):
         if self._pressureFuture is not None:
             with log_and_ignore_exception(Exception, "Failed to stop pressure future"):
                 self._pressureFuture.stop()
-        return super()._cleanup()
+        super()._cleanup()

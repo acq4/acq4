@@ -248,9 +248,6 @@ class Camera(DAQGeneric, OptomechDevice):
             raise ValueError(f"No camera preset named {preset!r}")
         params = presets[preset]["params"]
         self.setParams(params)
-        promise = Promise(name=f"{self.name()}_loadPreset")
-        promise.resolve()
-        return promise
 
     def presetHotkeyPressed(self, dev, changes, presetName):
         self.loadPreset(presetName)
@@ -367,7 +364,6 @@ class Camera(DAQGeneric, OptomechDevice):
             raise ValueError("ensureFreshFrames=True is not compatible with n=None")
         return FrameAcquisitionFuture(self, n, ensureFreshFrames=ensureFreshFrames)
 
-    @asynch
     def driverSupportedFixedFrameAcquisition(self, n: int = 1) -> list[Frame]:
         """Ask the camera driver to acquire a specific number of frames as a ThreadTask.
 
@@ -405,11 +401,10 @@ class Camera(DAQGeneric, OptomechDevice):
                 raise TimeoutError("Timed out waiting for frame processing thread to stop")
         DAQGeneric.quit(self)
 
-    @asynch
     def getEstimatedFrameRate(self):
         """Return the estimated frame rate of the camera."""
         with self.ensureRunning():
-            return synch(self.acqThread.getEstimatedFrameRate)()
+            return self.acqThread.getEstimatedFrameRate()
 
     # @ftrace
     def createTask(self, cmd, parentTask):
@@ -709,7 +704,7 @@ class CameraTask(DAQGenericTask):
         # arm recording
         self.stopRecording = False
         if self.fixedFrameCount is not None:
-            self._future = self.dev.driverSupportedFixedFrameAcquisition(n=self.fixedFrameCount)
+            self._future = asynch(self.dev.driverSupportedFixedFrameAcquisition)(n=self.fixedFrameCount)
         elif not self.dev.isRunning():
             self.dev.start(block=True)
 
@@ -1067,7 +1062,6 @@ class AcquireThread(Thread):
                 pass
             self.sigShowMessage.emit("ERROR starting acquisition (see console output)")
 
-    @asynch
     def getEstimatedFrameRate(self):
         """Return the estimated frame rate of the camera."""
         if not self.isRunning():

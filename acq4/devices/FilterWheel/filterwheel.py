@@ -1,6 +1,8 @@
 import time
 from collections import OrderedDict
 
+from gentletask import synch
+
 import pyqtgraph as pg
 from acq4.devices.Device import TaskGui, Device, DeviceTask
 from acq4.devices.OptomechDevice import OptomechDevice
@@ -172,7 +174,7 @@ class FilterWheel(Device, OptomechDevice):
     def loadPreset(self, name):
         """Load a preset filter wheel position by name."""
         idx = next((i for i, n in self._slotNames.items() if n == name), None)
-        return self.setPosition(idx)
+        synch(self.setPosition)(idx)
 
     def _positionChanged(self, pos):
         filt = self.getFilter(pos)

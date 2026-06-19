@@ -344,7 +344,6 @@ class ClearAccessState(PatchPipetteState):
                 time.sleep(0.1)  # short delay between pulses
 
     def _cleanup(self):
-        dev = self.dev
         with log_and_ignore_exception(Exception, "Error resetting pressure after clear access"):
-            dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
-        return super()._cleanup()
+            self.dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
+        super()._cleanup()

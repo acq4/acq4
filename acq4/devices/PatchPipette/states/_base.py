@@ -13,7 +13,16 @@ from acq4 import getManager
 from acq4.logging_config import get_logger
 from acq4.util import Qt
 from acq4.util.debug import log_and_ignore_exception
-from acq4.util.gentle import GuiTask, ManualGuiTask, Task, asynch, check_stop, sleep, Stopped
+from acq4.util.gentle import (
+    GuiTask,
+    ManualGuiTask,
+    Task,
+    asynch,
+    check_stop,
+    sleep,
+    Stopped,
+    gui_asynch,
+)
 from neuroanalysis.test_pulse import PatchClampTestPulse
 from pyqtgraph import disconnect
 from pyqtgraph.units import µm
@@ -323,10 +332,10 @@ class PatchPipetteState(GuiTask):
     def cleanup(self) -> Task:
         with self._cleanupMutex:
             if self._cleanupFuture is None:
-                self._cleanupFuture = self._cleanup()
+                self._cleanupFuture = gui_asynch(self._cleanup)()
             return self._cleanupFuture
 
-    def _cleanup(self) -> Task:
+    def _cleanup(self):
         """Called after job completes, whether it failed or succeeded. Ask `self.wasInterrupted()` to see if the
         state was stopped early. Return a task that completes when cleanup is done.
         """
@@ -334,9 +343,6 @@ class PatchPipetteState(GuiTask):
         with log_and_ignore_exception(Exception, "Error disabling visual target tracking"):
             if self.dev.cell is not None:
                 self.stopVisualTargetTracking('cleaning up state')
-        p = ManualGuiTask(name=f"{self.stateName} cleanup")
-        p.resolve()
-        return p
 
     def checkStop(self):
         # extend checkStop to also see if the pipette was deactivated.
@@ -351,13 +357,6 @@ class PatchPipetteState(GuiTask):
     def sleep(self, duration):
         """Sleep for *duration* seconds, raising Stopped if the state is stopped."""
         sleep(duration)
-
-    def waitFor(self, task, timeout=None):
-        """Block until *task* completes, returning its result.
-
-        A stop on this state cascades to the awaited task automatically.
-        """
-        return task.wait(timeout)
 
     def wasInterrupted(self):
         return self.is_stopped
@@ -396,7 +395,7 @@ class PatchPipetteState(GuiTask):
             self.dev.cell.enableTracking(False, reason=reason)
             # wait on future until it stops
             try:
-                self.waitFor(fut)
+                fut.wait(None)
             except Stopped:
                 pass
 
@@ -432,7 +431,7 @@ class PatchPipetteState(GuiTask):
         cell.sigTrackingMultipleFramesFinish.disconnect(self._resumePipetteAfterExtendedTracking)
         cell.sigTrackingMultipleFramesStart.connect(self._pausePipetteForExtendedTracking)
 
-    def _waitForMoveWhileTargetChanges(self, position_fn, speed, continuous, future, interval=None, step=None, move_restart_threshold=3.0):
+    def _waitForMoveWhileTargetChanges(self, position_fn, speed, continuous, interval=None, step=None, move_restart_threshold=3.0):
         """Wait for a move to complete while also monitoring for changes in the target position.
 
         When the target position updates, the move will be updated as well to track the new target.
