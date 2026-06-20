@@ -10,6 +10,16 @@ from .Stage import Stage
 from ..util.task import FutureButton, ManualQtFriendlyTask
 from ..util.target import color_for_diff
 
+VALID_ROLES = ('clean', 'rinse', 'nucleus', 'refill', 'empty')
+
+ROLE_COLORS = {
+    'nucleus': (0.72, 0.52, 1.00, 0.85),   # lavender
+    'clean':   (0.00, 0.55, 1.00, 0.90),   # electric blue
+    'rinse':   (0.55, 0.80, 1.00, 0.70),   # washed-out light blue
+    'refill':  (1.00, 0.95, 0.00, 0.90),   # electric yellow
+    'empty':   (0.25, 0.25, 0.25, 0.65),   # dark grey
+}
+
 
 class InteractionSite(Device, OptomechDevice):
     """Describes the location and dimensions of a cylindrical zone of interaction, such as a
@@ -24,7 +34,12 @@ class InteractionSite(Device, OptomechDevice):
         for details.
     * parentDevice: Optional name of parent device for coordinate transforms.  E.g. a stage that
         the site is mounted on.
+    * role: (str) Initial role for this site. One of: clean, rinse, nucleus, refill, empty.
+        Default is 'empty'. Also persisted at runtime via saved_positions.
     """
+
+    sigRoleChanged = Qt.Signal(str)
+    sigUsedUpChanged = Qt.Signal(bool)
 
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
@@ -47,6 +62,46 @@ class InteractionSite(Device, OptomechDevice):
         offset = self.positions.get(self.name(), {}).get("offset", [0, 0, 0])
         self.setOffset(np.asarray(offset))
         self._guessRotation()
+        site_data = self.positions.get(self.name(), {})
+        cfg_role = config.get('role', 'empty')
+        self._role = site_data.get('role', cfg_role)
+        self._used_up = site_data.get('used_up', False)
+
+    @property
+    def role(self) -> str:
+        """The functional role of this site: one of VALID_ROLES."""
+        return self._role
+
+    @role.setter
+    def role(self, value: str):
+        if value not in VALID_ROLES:
+            raise ValueError(f"Invalid role {value!r}; must be one of {VALID_ROLES}")
+        if value == self._role:
+            return
+        self._role = value
+        self.positions.setdefault(self.name(), {})['role'] = value
+        self.writeConfigFile(self.positions, "saved_positions")
+        self.sigRoleChanged.emit(value)
+        self.sigGeometryChanged.emit(self)
+
+    @property
+    def used_up(self) -> bool:
+        """True when this site has been consumed and is no longer available."""
+        return self._used_up
+
+    @used_up.setter
+    def used_up(self, value: bool):
+        if value == self._used_up:
+            return
+        self._used_up = value
+        self.positions.setdefault(self.name(), {})['used_up'] = value
+        self.writeConfigFile(self.positions, "saved_positions")
+        self.sigUsedUpChanged.emit(value)
+
+    def _is_array_child(self) -> bool:
+        """Return True if this site is managed by an InteractionSiteArray."""
+        parent = self.parentDevice()
+        return parent is not None and hasattr(parent, 'getFirstAvailableSite')
 
     def _guessRotation(self):
         for other_name, pos_config in self.positions.items():
@@ -57,13 +112,15 @@ class InteractionSite(Device, OptomechDevice):
                 return
 
     def getGeometry(self, name=None):
+        color = ROLE_COLORS.get(self._role, ROLE_COLORS['empty'])
         if isinstance(self.config.get("geometry"), dict):
-            defaults = {"color": (0.3, 0.3, 0.3, 0.7)}
+            defaults = {"color": color}
             defaults.update(self.config["geometry"])
+            defaults["color"] = color  # role and used_up always win over static config color
             self.config["geometry"] = defaults
         else:
             self.config["geometry"] = {
-                "color": (0.3, 0.3, 0.3, 0.7),
+                "color": color,
                 "type": "cylinder",
                 "radius": self.radius,
                 "height": self.height,
@@ -101,7 +158,9 @@ class InteractionSite(Device, OptomechDevice):
         return InteractionSiteCameraInterface(self, mod)
 
     def deviceInterface(self, win):
-        """Return a widget with a UI to put in the device rack."""
+        """Return a widget with a UI to put in the device rack, or None for array-managed sites."""
+        if self._is_array_child():
+            return None
         return InteractionSiteDeviceGui(self, win)
 
     def globalPosition(self):
@@ -314,6 +373,23 @@ class InteractionSiteDeviceGui(Qt.QWidget):
         layout.addWidget(self.interactLabel, row, 1)
         row += 1
 
+        # Role display (read-only; set via array UI or config)
+        layout.addWidget(Qt.QLabel("Role:"), row, 0)
+        self.roleLabel = Qt.QLabel(dev.role)
+        layout.addWidget(self.roleLabel, row, 1)
+        row += 1
+
+        # Used-up flag (user-editable)
+        layout.addWidget(Qt.QLabel("Used up:"), row, 0)
+        self.usedUpCheck = Qt.QCheckBox()
+        self.usedUpCheck.setChecked(dev.used_up)
+        self.usedUpCheck.stateChanged.connect(self._onUsedUpChanged)
+        layout.addWidget(self.usedUpCheck, row, 1)
+        row += 1
+
+        dev.sigRoleChanged.connect(self.roleLabel.setText)
+        dev.sigUsedUpChanged.connect(self.usedUpCheck.setChecked)
+
         # layout.addWidget(Qt.QLabel("( for testing )"), row, 0)
         # self.doInteractBtn = FutureButton(
         #     self._doInteractForTest, "Do test interact!", stoppable=True
@@ -357,6 +433,9 @@ class InteractionSiteDeviceGui(Qt.QWidget):
         if pip is not None:
             self.dev.saveInteractPosition(pip)
             self._updatePositionLabels()
+
+    def _onUsedUpChanged(self, state):
+        self.dev.used_up = bool(state)
 
     def _doInteractForTest(self):
         pip = self._selectedPipette()

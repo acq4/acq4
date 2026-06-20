@@ -63,7 +63,11 @@ class CleanState(PatchPipetteState):
             if len(sequence) == 0:
                 continue
 
-            task1 = pip.moveTo(stage, "fast")
+            site = pip.getSiteFor(stage)
+            if site is not None:
+                task1 = site.moveToInteract(pip, speed='fast')
+            else:
+                task1 = pip.moveTo(stage, "fast")
             task1.wait(60)
 
             if dev.sonicatorDevice is not None:
