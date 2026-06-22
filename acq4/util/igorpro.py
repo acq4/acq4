@@ -1,7 +1,7 @@
 """IgorPro integration: ZMQ bridge to a running Igor/MIES process.
 
 Requests are dispatched on a long-lived worker thread and resolved
-asynchronously by message ID; each request is exposed as a gentletask Promise.
+asynchronously by message ID; each request is exposed as a gentletask ManualTask.
 """
 
 import queue
@@ -17,7 +17,7 @@ import logging
 
 from acq4.util.json_encoder import IgorJSONEncoder
 from acq4.util import Qt
-from acq4.util.task import Promise
+from acq4.util.task import ManualTask
 
 
 logger = logging.getLogger('igorpro')
@@ -177,10 +177,10 @@ class IgorReqThread(threading.Thread):
     def send(self, cmd, *args):
         if not self.running:
             raise Exception("IGOR thread is already shut down; cannot send request.")
-        # The Promise is the settable result: the request loop completes it from
+        # The ManualTask is the settable result: the request loop completes it from
         # this thread when the matching reply arrives. No parking thread per
         # request — callers get a gentletask handle (wait/result/stop) directly.
-        promise = Promise(name=f"igor:{cmd}")
+        promise = ManualTask(name=f"igor:{cmd}")
         self.send_queue.put((cmd, args, promise))
         return promise
 

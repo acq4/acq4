@@ -14,8 +14,8 @@ from acq4.util.task import (
     FutureButton,
     MultiException,
     MultiFuture,
+    ManualTask,
     MultiTask,
-    Promise,
     Stopped,
     ThreadTask,
     check_stop,
@@ -448,7 +448,7 @@ class TestManualGuiTask:
         p = ManualQtFriendlyTask()
         p.resolve(1)
         p.wait()
-        # No worker thread should have been spawned for a Promise.
+        # No worker thread should have been spawned for a ManualTask.
         assert threading.active_count() == before
 
     def test_wait_with_updates_returns_result_without_deadlock(self):
@@ -474,9 +474,9 @@ class TestManualGuiTask:
         assert result == "late result"
         assert ticks, "event loop was not pumped during wait(updates=True)"
 
-    def test_promise_is_reexported(self):
-        # The gentletask Promise must be re-exported from the facade.
-        assert Promise is not None
+    def test_manualtask_is_reexported(self):
+        # The gentletask ManualTask must be re-exported from the facade.
+        assert ManualTask is not None
 
 
 class TestGuiAsynch:
@@ -525,7 +525,7 @@ class TestRaiseErrors:
     def test_failure_raised_on_background_thread(self):
         captured, old = self._capture()
         try:
-            p = Promise()
+            p = ManualTask()
             raise_errors(p, "boom: {error}")
             p.fail(ValueError("kaboom"))
             for _ in range(200):
@@ -540,7 +540,7 @@ class TestRaiseErrors:
     def test_stopped_is_not_an_error(self):
         captured, old = self._capture()
         try:
-            p = Promise()
+            p = ManualTask()
             raise_errors(p, "boom: {error}")
             p.stop("deliberate")
             time.sleep(0.1)
