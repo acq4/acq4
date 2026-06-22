@@ -354,6 +354,19 @@ class PatchPipetteState(QtFriendlyTask):
         """Set the current state message, emitting sigStateChanged."""
         self.set_state(state)
 
+    def setResult(self, error=None):
+        """Flag this state as failed with an explicit error string.
+
+        Restores the pre-gentletask ``setResult(error=...)`` framing: the status
+        becomes ``"<stateName> failed: <error>"`` (emitted via sigStateChanged),
+        framed as a failure rather than ordinary progress. Call sites pair this
+        with ``return {"state": fallbackState}`` to flag the failure and then
+        fall back. Stopped / unexpected-exception handling lives in
+        _stateFinished; this is only the explicit-error path.
+        """
+        if error is not None:
+            self.setState(f"{self.stateName} failed: {error}")
+
     def sleep(self, duration):
         """Sleep for *duration* seconds, raising Stopped if the state is stopped."""
         sleep(duration)
