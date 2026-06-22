@@ -113,13 +113,25 @@ class MockInteractionSite(MockDevice):
         global_pos=(0.0, 0.0, 0.0),
         scope_park_pos=None,
         parent_stage=None,
+        radius=1e-3,
+        height=1e-3,
     ):
         super().__init__(name, global_pos)
         self.positions = {}
         self.config = {}
+        self.radius = radius
+        self.height = height
         if scope_park_pos is not None:
             self.config["scopeParkPos"] = np.asarray(scope_park_pos, dtype=float)
         self._parentStage = parent_stage or MockStage(f"{name}_stage", global_pos)
+
+    def containsPoint(self, pt, tolerance=1e-9):
+        """Mirror InteractionSite.containsPoint: True if pt lies within this site's cylinder."""
+        local_pt = self.mapFromGlobal(pt)
+        return (
+            local_pt[0] ** 2 + local_pt[1] ** 2 <= self.radius**2 + tolerance
+            and -tolerance <= local_pt[2] <= self.height + tolerance
+        )
 
     def parentDevice(self):
         """The device this site is mounted on (its parent stage), mirroring OptomechDevice."""
@@ -162,6 +174,31 @@ class MockInteractionSite(MockDevice):
         if "interact local" not in pos_config:
             return None
         return np.asarray(pos_config["interact local"], dtype=float)
+
+
+class MockInteractionSiteArray:
+    """InteractionSiteArray mock: a *container* that manages child sites.
+
+    Mirrors the real array's duck-type surface (positions + _parentStage) but, like the
+    real class, deliberately has no containsPoint -- a pipette interacts with the array's
+    child sites, never with the array itself.
+    """
+
+    def __init__(self, name, sites=None, parent_stage=None):
+        self._name = name
+        self.positions = {}
+        self._parentStage = parent_stage or MockStage(f"{name}_stage")
+        self._sites = list(sites or [])
+
+    def name(self):
+        return self._name
+
+    @property
+    def sites(self):
+        return list(self._sites)
+
+    def getFirstAvailableSite(self):
+        return self._sites[0] if self._sites else None
 
 
 @pytest.fixture
