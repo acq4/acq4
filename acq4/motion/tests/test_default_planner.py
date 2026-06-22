@@ -9,7 +9,27 @@ import pytest
 from acq4.motion.plan import AtomicMove, ParallelGroup, SequentialGroup
 from acq4.motion.planner import PlanningError
 from acq4.motion.spec import MoveSpec
-from acq4.motion.tests.conftest import MockDevice, MockInteractionSite, MockPipette, MockScope, MockStage
+from acq4.motion.tests.conftest import (
+    MockDevice,
+    MockInteractionSite,
+    MockInteractionSiteArray,
+    MockPipette,
+    MockScope,
+    MockStage,
+)
+
+
+class _FakeManager:
+    """Minimal Manager stand-in for _find_containing_site: a name->device registry."""
+
+    def __init__(self, devices):
+        self._devices = {d.name(): d for d in devices}
+
+    def listDevices(self):
+        return list(self._devices)
+
+    def getDevice(self, name):
+        return self._devices[name]
 
 
 def make_simplified_planner():
@@ -304,6 +324,49 @@ def test_non_strict_exit_skips_approach_waypoint(pip, site_without_strict_path):
     approach_global = np.array(site_without_strict_path.globalPosition())
     assert not any(np.allclose(m.position, approach_global) for m in pip_moves)
     np.testing.assert_array_almost_equal(pip_moves[-1].position, home_pos)
+
+
+# ---------------------------------------------------------------------------
+# _find_containing_site / _is_interaction_site — InteractionSiteArray must not
+# be mistaken for a single site (it manages child sites and has no containsPoint)
+# ---------------------------------------------------------------------------
+
+def test_is_interaction_site_true_for_single_site(site):
+    """A single InteractionSite (with containsPoint) is an interaction site."""
+    planner = make_simplified_planner()
+    assert planner._is_interaction_site(site) is True
+
+
+def test_is_interaction_site_false_for_site_array():
+    """An InteractionSiteArray container is not itself an interaction site."""
+    planner = make_simplified_planner()
+    array = MockInteractionSiteArray("nucleus_array")
+    assert planner._is_interaction_site(array) is False
+
+
+def test_find_containing_site_ignores_site_array(pip, monkeypatch):
+    """An InteractionSiteArray in the device list must be skipped, not have containsPoint
+    called on it (it has none). The real child site is returned instead."""
+    import acq4.motion.default_planner as dp
+
+    site = MockInteractionSite("cleanwell", global_pos=(0.0, 0.0, 0.0))  # contains pip at origin
+    array = MockInteractionSiteArray("nucleus_array", sites=[site])
+    monkeypatch.setattr(dp, "getManager", lambda: _FakeManager([array, site]))
+
+    planner = make_simplified_planner()
+    assert planner._find_containing_site(pip) is site
+
+
+def test_find_containing_site_returns_none_when_pip_outside(pip, monkeypatch):
+    """No site contains the pip → None (and the array is still skipped without error)."""
+    import acq4.motion.default_planner as dp
+
+    far_site = MockInteractionSite("cleanwell", global_pos=(50e-3, 0.0, 0.0))
+    array = MockInteractionSiteArray("nucleus_array", sites=[far_site])
+    monkeypatch.setattr(dp, "getManager", lambda: _FakeManager([array, far_site]))
+
+    planner = make_simplified_planner()
+    assert planner._find_containing_site(pip) is None
 
 
 # ---------------------------------------------------------------------------

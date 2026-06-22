@@ -253,11 +253,25 @@ This procedure should be performed any time a manipulator is physically reconfig
 If your manipulator position meets these requirements,
 
 1. Run calibrations recommended by the hardware manufacturer, if needed.
-    - For Sensapex uMp: 
+    - For Sensapex uMp:
         - Move manipulator to a safe position and remove the pipette+holder.
           NOTE: The manipulator will move over its full range of motion, so it is important
           that no collisions are possible during this calibration.
         - Run the position calibration from the sensapex touchpad (tap the manipulator icon [4th from left along the screen bottom], then expand the "Setup" group, then "Calibrate positions").
+    - For Scientifica manipulators:
+        - Scientifica manipulators track their position relative to a hardware zero point, which
+          is retained across power cycles. The zero point only needs to be re-established if the
+          motor has slipped or was rotated while the device was powered off.
+        - There are two ways to set the zero position from the device's dock in the Manager window:
+            - **"Zero position"**: Sets the current position as the new zero on all axes. Use this
+              when the manipulator has already been moved to its mechanical limit manually.
+            - **"Auto-set zero position"**: Drives each axis to its mechanical limit switch and
+              sets that as the zero position. This is the recommended approach.
+              NOTE: The manipulator will move to the limit of its range on each axis. Ensure the
+              device is not obstructed before using this feature. A confirmation dialog will appear
+              before any movement begins.
+        - Per-axis variants ("Auto-set X/Y/Z zero") are also available if only specific axes need
+          to be re-zeroed.
 
 2. Calibrate manipulator axis orientation. This step tells acq4 about the *direction* that each manipulator axis points relative to the
    global coordinate system:
