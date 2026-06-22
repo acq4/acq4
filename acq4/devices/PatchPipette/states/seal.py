@@ -441,9 +441,12 @@ class SealState(PatchPipetteState):
             if self._analysis.success():
                 future.stop(reason="seal acquired")
                 break
-            # wait() returns None on timeout (our 0.1s loopbeat) and re-raises any
-            # error from the future; break once the future has actually finished.
-            future.wait(0.1)
+            # wait(timeout) raises future.Timeout on the 0.1s loopbeat and re-raises
+            # any error from the future; break once the future has actually finished.
+            try:
+                future.wait(0.1)
+            except future.Timeout:
+                pass
             if future.is_done:
                 break
             if timeout is not None and time.time() - start > timeout:

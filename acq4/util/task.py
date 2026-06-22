@@ -9,14 +9,13 @@ from typing import Any, Callable, Optional
 from gentletask import (
     Event,
     MultiException,
+    ManualTask,
     MultiTask,
-    Promise,
     Queue,
     Stopped,
     Task,
     ThreadTask,
     WorkerThread,
-    WorkTask,
     asynch,
     check_stop,
     current_task,
@@ -35,7 +34,6 @@ from pyqtgraph import FeedbackButton
 __all__ = [
     # Re-exported gentletask core so acq4 code has one import.
     "ThreadTask",
-    "WorkTask",
     "WorkerThread",
     "asynch",
     "synch",
@@ -50,7 +48,7 @@ __all__ = [
     "task_chain",
     "task_context",
     "Task",
-    "Promise",
+    "ManualTask",
     "MultiTask",
     "MultiException",
     # acq4-side additions.
@@ -125,7 +123,7 @@ class _QtTaskSignals(Qt.QObject):
 
     It is always the QObject base in the MRO. The concrete classes put their
     gentletask base first — GuiTask(ThreadTask, _QtTaskSignals) and
-    ManualGuiTask(Promise, _QtTaskSignals) — so this mixin (hence QObject) sits
+    ManualQtFriendlyTask(ManualTask, _QtTaskSignals) — so this mixin (hence QObject) sits
     last before object. PyQt's cooperative QObject.__init__ forwards down the
     MRO via super().__init__(); with QObject last, that forwarding reaches
     object harmlessly rather than landing on a gentletask __init__ that
@@ -324,8 +322,8 @@ def asynch_with_qt_signals(
 # ---------------------------------------------------------------------------
 
 
-class ManualQtFriendlyTask(Promise, _QtTaskSignals):
-    """A gentletask Promise that is also a QObject, so GUI code can connect to
+class ManualQtFriendlyTask(ManualTask, _QtTaskSignals):
+    """A gentletask ManualTask that is also a QObject, so GUI code can connect to
     its completion and state-change signals.
 
     ManualGuiTask is the externally-completed analog of GuiTask: it has no body and
@@ -335,13 +333,13 @@ class ManualQtFriendlyTask(Promise, _QtTaskSignals):
     sigFinished; a queued Qt connection then marshals connected slots to the GUI
     thread even when the producer calls resolve()/fail() from its own thread.
 
-    State: because a Promise has no running body, the module-level free
+    State: because a ManualTask has no running body, the module-level free
     set_state() will NOT reach it (the producer is not running as this task's
     current_task()). The external producer therefore calls
     guitask.set_state(...) DIRECTLY. set_state/state/current_state come from
     the _QtTaskSignals mixin and behave exactly as on GuiTask.
 
-    See _QtTaskSignals for the multiple-inheritance ordering rationale (Promise
+    See _QtTaskSignals for the multiple-inheritance ordering rationale (ManualTask
     first keeps QObject last before object).
     """
 
@@ -353,16 +351,16 @@ class ManualQtFriendlyTask(Promise, _QtTaskSignals):
     ) -> None:
         # Order matters and mirrors GuiTask. Initialize the QObject (and its C++
         # half), our own state, and pin signal affinity first; then build the
-        # Promise (which registers with the parent task for stop-cascade and
+        # ManualTask (which registers with the parent task for stop-cascade and
         # spawns NO thread); then register the internal finish callback. There is
-        # no start: a Promise has no body to launch.
+        # no start: a ManualTask has no body to launch.
         self._init_qt_signals()
         self._user_on_finish = on_finish
 
-        # Do NOT forward on_finish to Promise.__init__: _on_task_finished invokes
+        # Do NOT forward on_finish to ManualTask.__init__: _on_task_finished invokes
         # self._user_on_finish itself (matching GuiTask), so forwarding it would
         # call the user callback twice.
-        Promise.__init__(self, name=name)
+        ManualTask.__init__(self, name=name)
 
         # Register the internal finish callback that emits sigFinished. Done via
         # add_finish_callback (race-free): it fires immediately if the promise is
@@ -377,7 +375,7 @@ class ManualQtFriendlyTask(Promise, _QtTaskSignals):
         When *updates* is True, pump the Qt event loop instead of parking on the
         gentletask condition, so a wait from the GUI thread does not freeze the
         UI while it blocks on an external producer. When *updates* is False,
-        defer to the normal Promise.wait, which preserves cooperative-stop
+        defer to the normal ManualTask.wait, which preserves cooperative-stop
         propagation from a parent task.
         """
         if not updates:

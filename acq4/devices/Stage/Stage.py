@@ -835,7 +835,10 @@ class MovePathFuture(MoveFuture):
 
                 # Wait for the step, honoring a stop request on this path future.
                 while not fut.is_done:
-                    fut.wait(timeout=0.1)  # returns None on timeout
+                    try:
+                        fut.wait(timeout=0.1)  # raises fut.Timeout on timeout
+                    except fut.Timeout:
+                        pass
                     self.currentStep = i + 1
                     if self.is_stopped:
                         fut.stop(self.stop_reason)

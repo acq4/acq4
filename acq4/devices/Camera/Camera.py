@@ -8,7 +8,6 @@ from contextlib import contextmanager, ExitStack
 from typing import Callable, Optional
 
 import numpy as np
-from gentletask import Promise
 
 import acq4.util.ptime as ptime
 import pyqtgraph as pg

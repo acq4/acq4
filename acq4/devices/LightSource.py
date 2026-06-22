@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from collections import OrderedDict
 
-from gentletask import Promise
 
 import acq4.util.Mutex as Mutex
 from acq4.devices.Device import Device, TaskGui
