@@ -62,10 +62,13 @@ class MotionPlanner:
 
     @staticmethod
     def _is_interaction_site(device) -> bool:
+        # containsPoint distinguishes a single site from an InteractionSiteArray, which shares
+        # the positions/_parentStage attributes but is a container of sites, not a site itself.
         return (
             device is not None
             and hasattr(device, "positions")
             and hasattr(device, "_parentStage")
+            and hasattr(device, "containsPoint")
         )
 
     def _validate_specs(self, specs: list[MoveSpec]) -> None:
