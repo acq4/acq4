@@ -364,11 +364,8 @@ class Camera(DAQGeneric, OptomechDevice):
         return FrameAcquisitionFuture(self, n, ensureFreshFrames=ensureFreshFrames)
 
     def driverSupportedFixedFrameAcquisition(self, n: int = 1) -> list[Frame]:
-        """Ask the camera driver to acquire a specific number of frames as a ThreadTask.
-
-        Call task.wait() to return the acquired Frame objects.
-
-        Depending on the underlying camera driver, this method may cause the camera to restart.
+        """Ask the camera driver to acquire a specific number of frames. Depending on the
+        underlying camera driver, this method may cause the camera to restart.
         """
         frames = self._acquireFrames(n)
         now = ptime.time()
