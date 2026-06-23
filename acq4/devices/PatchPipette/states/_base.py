@@ -145,7 +145,7 @@ class PatchPipetteState(QtFriendlyTask):
 
         self._targetHasChanged = False
         # The state IS the task; its body is self.runJob. start=False so the state
-        # manager can connect signals before calling start(). GuiTask.__init__
+        # manager can connect signals before calling start(). QtFriendlyTask.__init__
         # initializes the QObject half, so anything that connects Qt signals (e.g.
         # sigTargetChanged below) must run AFTER this call.
         QtFriendlyTask.__init__(
@@ -175,7 +175,7 @@ class PatchPipetteState(QtFriendlyTask):
     def _stateFinished(self, result, exc):
         """on_finish callback: reproduce the old setResult error/stop messaging.
 
-        GuiTask invokes this before emitting sigFinished. A cooperative Stopped is
+        QtFriendlyTask invokes this before emitting sigFinished. A cooperative Stopped is
         logged at debug; any other exception updates the state and is logged as an
         error.
         """

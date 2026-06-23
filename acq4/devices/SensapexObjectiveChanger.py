@@ -97,7 +97,7 @@ class _PositionPollThread(Thread):
 class ObjectiveChangeFuture(ManualQtFriendlyTask):
     """Track the progress of a requested objective-changer move.
 
-    This is an externally-completed ManualGuiTask: a raw daemon thread runs
+    This is an externally-completed ManualQtFriendlyTask: a raw daemon thread runs
     ``poll`` and resolves the promise once the changer reaches the target, fails
     it on timeout, and checks ``self.is_stopped`` to abort when ``stop()`` is
     called (which also halts the hardware).

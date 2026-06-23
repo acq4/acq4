@@ -70,7 +70,7 @@ __all__ = [
 # ---------------------------------------------------------------------------
 #
 # A task body simply calls set_state("measuring"); the call finds the running task via
-# current_task() and, if that task carries state (e.g. a GuiTask), updates it — which emits
+# current_task() and, if that task carries state (e.g. a QtFriendlyTask), updates it — which emits
 # sigStateChanged. Outside any task, or for a task that does not carry state, the call is a safe
 # no-op.
 
@@ -113,7 +113,7 @@ def raise_errors(task: Task, message: str) -> None:
 
 
 class _QtTaskSignals(Qt.QObject):
-    """QObject mixin carrying the Qt machinery shared by GuiTask and ManualGuiTask.
+    """QObject mixin carrying the Qt machinery shared by QtFriendlyTask and ManualQtFriendlyTask.
 
     Both classes are gentletask tasks that are also QObjects so GUI code can
     connect to completion and state-change signals. This mixin owns the parts
@@ -122,7 +122,7 @@ class _QtTaskSignals(Qt.QObject):
     branch of wait(updates=True).
 
     It is always the QObject base in the MRO. The concrete classes put their
-    gentletask base first — GuiTask(ThreadTask, _QtTaskSignals) and
+    gentletask base first — QtFriendlyTask(ThreadTask, _QtTaskSignals) and
     ManualQtFriendlyTask(ManualTask, _QtTaskSignals) — so this mixin (hence QObject) sits
     last before object. PyQt's cooperative QObject.__init__ forwards down the
     MRO via super().__init__(); with QObject last, that forwarding reaches
@@ -183,7 +183,7 @@ class _QtTaskSignals(Qt.QObject):
     def _wait_pumping(self, timeout: Optional[float]) -> Any:
         """Block until done by pumping the Qt event loop, then return the result.
 
-        Used by wait(updates=True) on both GuiTask and ManualGuiTask so a wait from
+        Used by wait(updates=True) on both QtFriendlyTask and ManualQtFriendlyTask so a wait from
         the GUI thread does not freeze the UI.
         """
         start = ptime.time()
@@ -206,7 +206,7 @@ class _QtTaskSignals(Qt.QObject):
 
 
 # ---------------------------------------------------------------------------
-# GuiTask
+# QtFriendlyTask
 # ---------------------------------------------------------------------------
 
 
@@ -215,7 +215,7 @@ class QtFriendlyTask(ThreadTask, _QtTaskSignals):
     to its completion and state-change signals.
 
     The Qt signals, state slot, finish-emit hook, and event-pumping wait live in
-    the _QtTaskSignals mixin (shared with ManualGuiTask); see its docstring for the
+    the _QtTaskSignals mixin (shared with ManualQtFriendlyTask); see its docstring for the
     multiple-inheritance ordering rationale (ThreadTask first keeps QObject last
     before object).
 
@@ -291,18 +291,18 @@ def asynch_with_qt_signals(
     detach: bool = False,
     on_finish: Optional[Callable[[Any, Optional[BaseException]], Any]] = None,
 ) -> Callable[..., "QtFriendlyTask"]:
-    """Like gentletask.asynch, but launches the work in a GuiTask (Qt signals).
+    """Like gentletask.asynch, but launches the work in a QtFriendlyTask (Qt signals).
 
     Plain ``asynch`` only builds a ThreadTask; use ``asynch_with_qt_signals`` when a
     function's result needs ``sigFinished``/``sigStateChanged``/``set_state`` so
-    GUI code can connect to it. Calling the returned launcher starts a GuiTask
+    GUI code can connect to it. Calling the returned launcher starts a QtFriendlyTask
     immediately::
 
         @asynch_with_qt_signals
         def run_sequence(...):
             set_state("acquiring"); ...; return result
 
-        task = run_sequence(...)            # a started GuiTask
+        task = run_sequence(...)            # a started QtFriendlyTask
         task.sigStateChanged.connect(...)
 
     ``synch(asynch_with_qt_signals(fn))`` de-wraps to run ``fn`` inline (via _asynch_wraps),
@@ -318,7 +318,7 @@ def asynch_with_qt_signals(
 
 
 # ---------------------------------------------------------------------------
-# ManualGuiTask
+# ManualQtFriendlyTask
 # ---------------------------------------------------------------------------
 
 
@@ -326,7 +326,7 @@ class ManualQtFriendlyTask(ManualTask, _QtTaskSignals):
     """A gentletask ManualTask that is also a QObject, so GUI code can connect to
     its completion and state-change signals.
 
-    ManualGuiTask is the externally-completed analog of GuiTask: it has no body and
+    ManualQtFriendlyTask is the externally-completed analog of QtFriendlyTask: it has no body and
     spawns no thread. An external producer (a hardware monitor thread, a socket
     reader, a GUI callback, a lock loop) completes it by calling resolve(),
     fail(), or stop(). Completion fires the internal finish callback, which emits
@@ -336,8 +336,8 @@ class ManualQtFriendlyTask(ManualTask, _QtTaskSignals):
     State: because a ManualTask has no running body, the module-level free
     set_state() will NOT reach it (the producer is not running as this task's
     current_task()). The external producer therefore calls
-    guitask.set_state(...) DIRECTLY. set_state/state/current_state come from
-    the _QtTaskSignals mixin and behave exactly as on GuiTask.
+    QtFriendlyTask.set_state(...) DIRECTLY. set_state/state/current_state come from
+    the _QtTaskSignals mixin and behave exactly as on QtFriendlyTask.
 
     See _QtTaskSignals for the multiple-inheritance ordering rationale (ManualTask
     first keeps QObject last before object).
@@ -349,7 +349,7 @@ class ManualQtFriendlyTask(ManualTask, _QtTaskSignals):
         *,
         on_finish: Optional[Callable[[Any, Optional[BaseException]], Any]] = None,
     ) -> None:
-        # Order matters and mirrors GuiTask. Initialize the QObject (and its C++
+        # Order matters and mirrors QtFriendlyTask. Initialize the QObject (and its C++
         # half), our own state, and pin signal affinity first; then build the
         # ManualTask (which registers with the parent task for stop-cascade and
         # spawns NO thread); then register the internal finish callback. There is
@@ -358,7 +358,7 @@ class ManualQtFriendlyTask(ManualTask, _QtTaskSignals):
         self._user_on_finish = on_finish
 
         # Do NOT forward on_finish to ManualTask.__init__: _on_task_finished invokes
-        # self._user_on_finish itself (matching GuiTask), so forwarding it would
+        # self._user_on_finish itself (matching QtFriendlyTask), so forwarding it would
         # call the user callback twice.
         ManualTask.__init__(self, name=name)
 
@@ -392,7 +392,7 @@ class GuiMultiTask(MultiTask, _QtTaskSignals):
     """A gentletask MultiTask that is also a QObject, so GUI code can connect to
     its completion and state-change signals.
 
-    GuiMultiTask is the MultiTask analog of ManualGuiTask: it has no body and spawns
+    GuiMultiTask is the MultiTask analog of ManualQtFriendlyTask: it has no body and spawns
     no thread, completing when all of its child tasks complete. wait() returns
     the list of child results in order (or re-raises a lone child exception, or
     raises MultiException on several); stop() stops every child then itself.
@@ -410,7 +410,7 @@ class GuiMultiTask(MultiTask, _QtTaskSignals):
     """
 
     def __init__(self, tasks, name: Optional[str] = None) -> None:
-        # Order mirrors ManualGuiTask. Initialize the QObject (and its C++ half),
+        # Order mirrors ManualQtFriendlyTask. Initialize the QObject (and its C++ half),
         # our own state, and pin signal affinity first; then build the MultiTask
         # (which registers with the parent task for stop-cascade, wires each
         # child's finish callback, and spawns NO thread); then register the
@@ -533,10 +533,10 @@ def in_gui_thread(func):
 
 
 def task_in_gui_thread(fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Task:
-    """Return a GuiTask that runs *fn* in the GUI thread.
+    """Return a QtFriendlyTask that runs *fn* in the GUI thread.
 
     The work itself is marshalled onto the GUI thread via run_in_gui_thread; the
-    surrounding GuiTask gives callers a Task handle (wait/stop/signals) for it.
+    surrounding QtFriendlyTask gives callers a Task handle (wait/stop/signals) for it.
     """
     return QtFriendlyTask(lambda: run_in_gui_thread(fn, *args, **kwargs))
 

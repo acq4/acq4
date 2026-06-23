@@ -233,7 +233,7 @@ class FilterWheel(Device, OptomechDevice):
 class FilterWheelFuture(ManualQtFriendlyTask):
     """Track the progress of a requested filter wheel position change.
 
-    This is an externally-completed ManualGuiTask: it has no body and spawns no
+    This is an externally-completed ManualQtFriendlyTask: it has no body and spawns no
     thread. The device's filter-wheel position monitor (FilterWheelPollThread)
     is the producer; each poll it calls ``_poll()``, which once the wheel stops
     moving resolves the promise if the target was reached or fails it otherwise.
