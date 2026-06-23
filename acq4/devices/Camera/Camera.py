@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import queue
 import threading
-import time
 from collections import deque
 from contextlib import contextmanager, ExitStack
 from typing import Callable, Optional
@@ -20,8 +19,8 @@ from acq4.util import Qt
 from acq4.util.Mutex import Mutex
 from acq4.util.Mutex import RecursiveMutex
 from acq4.util.Thread import Thread
-from acq4.util.task import ManualQtFriendlyTask, asynch, check_stop, sleep, synch
 from acq4.util.imaging.frame import Frame
+from acq4.util.task import ManualQtFriendlyTask, asynch, sleep, Event
 from coorx import TTransform, SRT3DTransform
 from pyqtgraph import Vector
 from pyqtgraph.debug import Profiler
@@ -337,7 +336,7 @@ class Camera(DAQGeneric, OptomechDevice):
                 # if we know the latency of the camera, wait for that time
                 if not isinstance(self.knownLatency, (int, float)) or self.knownLatency <= 0:
                     raise ValueError("withKnownLatency must be a positive number.")
-                time.sleep(self.knownLatency)
+                sleep(self.knownLatency)
             else:
                 # otherwise, restart the camera to flush out old frames
                 self.stop()
@@ -720,7 +719,7 @@ class CameraTask(DAQGenericTask):
 
         with self.lock:
             self.stopRecording = True
-            self._stopTime = time.time()
+            self._stopTime = ptime.time()
             if self._dev_needs_restart and self._dev_was_running:
                 self.dev.stopCamera()  # leave the acq thread for filling in the future
             if self.fixedFrameCount is None:
@@ -736,11 +735,11 @@ class CameraTask(DAQGenericTask):
     def getResult(self):
         if self.resultObj is None:
             daqResult = DAQGenericTask.getResult(self)
-            while time.time() - self._stopTime < 1 and not self._future.is_done:
+            while ptime.time() - self._stopTime < 1 and not self._future.is_done:
                 # Wait up to 1 second for all frames to arrive from camera thread before returning results.
                 # In some cases, acquisition thread can get bogged down and we may need to wait for it
                 # to catch up.
-                time.sleep(0.05)
+                sleep(0.05)
             self._future.stop()  # TODO this could error for fixedFrameCount!=None
             self.resultObj = CameraTaskResult(self, self._future.wait(timeout=1), daqResult)
             if self._dev_needs_restart or not self._dev_was_running:
@@ -961,7 +960,7 @@ class AcquireThread(Thread):
         self.acqBuffer = None
         self.bufferTime = 5.0
         self.tasks = []
-        self.cameraStartEvent = threading.Event()
+        self.cameraStartEvent = Event()
         self._recentFPS = deque(maxlen=10)
 
     def __del__(self):
@@ -1025,7 +1024,7 @@ class AcquireThread(Thread):
                     lastFrameTime = now
                     lastFrameId = frames[-1]["id"]
 
-                time.sleep(1e-3)
+                sleep(1e-3)
 
                 # check for stop request every 10ms
                 if now - lastStopCheck > 10e-3:
@@ -1063,8 +1062,7 @@ class AcquireThread(Thread):
         if not self.isRunning():
             raise RuntimeError("Cannot get frame rate while camera is not running.")
         while len(self._recentFPS) < self._recentFPS.maxlen:
-            time.sleep(0.01)
-            check_stop()
+            sleep(0.01)
         return np.mean(self._recentFPS)
 
     def stop(self, block=False):
