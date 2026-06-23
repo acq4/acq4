@@ -6,11 +6,11 @@ from typing import Any
 
 import numpy as np
 
-from acq4.util import ptime, Qt
 import pyqtgraph as pg
+from acq4.util import ptime, Qt
 from acq4.util.debug import log_and_ignore_exception
-from acq4.util.task import Stopped
 from acq4.util.functions import plottable_booleans
+from acq4.util.task import Stopped, sleep
 from neuroanalysis.data import TSeries
 from pyqtgraph.units import kPa
 from ._base import PatchPipetteState, SteadyStateAnalysisBase, exponential_decay_avg
@@ -369,7 +369,8 @@ class SealState(PatchPipetteState):
                 dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
             else:
                 dev.pressureDevice.setPressure(source='regulator', pressure=config['afterSealPressure'])
-            self.sleep(config['delayAfterSeal'])
+            duration = config['delayAfterSeal']
+            sleep(duration)
 
         dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
 

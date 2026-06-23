@@ -136,14 +136,7 @@ class _QtTaskSignals(Qt.QObject):
 
     # -- state ---------------------------------------------------------------
 
-    @property
-    def state(self) -> Any:
-        return self._state
-
-    def current_state(self) -> Any:
-        return self._state
-
-    def set_state(self, state: Any) -> None:
+    def setState(self, state: Any) -> None:
         """Set the state and emit sigStateChanged (safe from any thread)."""
         if state == self._state:
             return

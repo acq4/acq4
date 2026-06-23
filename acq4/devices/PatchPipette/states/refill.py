@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from acq4.util.debug import log_and_ignore_exception
-from acq4.util.task import asynch, synch
+from acq4.util.task import sleep
 from ._base import PatchPipetteState
 
 
@@ -87,7 +87,7 @@ class RefillState(PatchPipetteState):
             self.checkStop()
             chunk = min(remaining, mitigation_interval)
             dev.pressureDevice.setPressure(source='regulator', pressure=refill_pressure)
-            self.sleep(chunk)
+            sleep(chunk)
             remaining -= chunk
 
             if remaining > 0:
@@ -108,7 +108,7 @@ class RefillState(PatchPipetteState):
 
         if pressure != 0:
             dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
-            self.sleep(duration)
+            sleep(duration)
 
         if sonication is not None and not sonication.is_done:
             sonication.wait(None)

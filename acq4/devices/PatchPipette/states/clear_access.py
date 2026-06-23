@@ -287,7 +287,7 @@ class ClearAccessState(PatchPipetteState):
             self.checkStop()
 
             if ptime.time() - start_time > config['clearTimeout']:
-                self.setResult(error="Took longer than `clearTimeout` to recover access.")
+                self.setState(f"{self.stateName} failed: took longer than {config['clearTimeout']} s")
                 return {"state": config['fallbackState']}
 
             self._analysis.process_test_pulses(self.processAtLeastOneTestPulse())
@@ -298,7 +298,7 @@ class ClearAccessState(PatchPipetteState):
                 return {"state": 'whole cell'}
 
             if self._analysis.cell_lost():
-                self.setResult(error="Input resistance collapsed below `inputResistanceLossThreshold`; cell lost.")
+                self.setState(f"{self.stateName} failed: Input resistance collapsed below `inputResistanceLossThreshold`")
                 return {"state": config['fallbackState']}
 
             if self._analysis.is_repairing():
@@ -311,7 +311,7 @@ class ClearAccessState(PatchPipetteState):
                 continue
 
             if attempt >= len(config['nPulses']):
-                self.setResult(error=f"Access not recovered after {attempt} clearing attempts.")
+                self.setState(f"{self.stateName} failed: Access not recovered after {attempt} clearing attempts.")
                 return {"state": config['fallbackState']}
 
             self.setState('Clear access attempt %d' % attempt)
