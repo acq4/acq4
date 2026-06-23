@@ -739,7 +739,7 @@ class CallOnce:
 class MoveFuture(ManualQtFriendlyTask):
     """Used to track the progress of a requested move operation.
 
-    This is an externally-completed ManualGuiTask: it has no body and spawns no
+    This is an externally-completed ManualQtFriendlyTask: it has no body and spawns no
     thread. The device subclass's hardware-monitor thread is the producer; it
     completes the move by calling ``self.resolve(...)`` when the target is
     reached or ``self.fail(exc)`` on error, and checks ``self.is_stopped`` (set
@@ -780,7 +780,7 @@ class MoveFuture(ManualQtFriendlyTask):
         """Stop the move in progress.
 
         Tells the device to halt, then completes this promise with Stopped via
-        ManualGuiTask.stop(reason). The producer thread sees ``is_stopped`` and
+        ManualQtFriendlyTask.stop(reason). The producer thread sees ``is_stopped`` and
         aborts. When *wait* is True, block until the promise actually completes,
         swallowing the resulting Stopped.
         """
@@ -835,7 +835,7 @@ class MovePathFuture(MoveFuture):
 
         Skips MoveFuture.stop (and its dev.stop()) because the current step
         future already owns the device; we just stop that step and self-complete
-        this promise via ManualGuiTask.stop(reason).
+        this promise via ManualQtFriendlyTask.stop(reason).
         """
         fut = self._currentFuture
         if fut is not None:

@@ -1084,7 +1084,7 @@ class AcquireThread(Thread):
 class FrameAcquisitionFuture(ManualQtFriendlyTask):
     """Acquire frames asynchronously, either a fixed number or continuously until stopped.
 
-    This is an externally-completed ManualGuiTask: it has no body and spawns no
+    This is an externally-completed ManualQtFriendlyTask: it has no body and spawns no
     gentletask thread. A dedicated monitor thread is the producer; it collects
     frames streamed from the camera and completes the promise by calling
     ``resolve(frames)`` when the fixed count is reached or a ``stopWhen``
@@ -1113,7 +1113,7 @@ class FrameAcquisitionFuture(ManualQtFriendlyTask):
         if frameCount is None:
             # For an indefinite acquisition, a stop is the normal way to finish:
             # resolve with the frames collected so far rather than completing
-            # with Stopped. ManualGuiTask.stop fires this before injecting Stopped,
+            # with Stopped. ManualQtFriendlyTask.stop fires this before injecting Stopped,
             # so the promise is already done and no Stopped is injected.
             self.add_stop_callback(self._resolveOnStop)
         self._thread = threading.Thread(

@@ -361,7 +361,7 @@ class MicroManagerMoveFuture(MoveFuture):
             self._errorMsg = "Move was interrupted before completion."
             # Device detected the abort itself: complete this promise as stopped
             # unless it is already completing via MoveFuture.stop(). Use
-            # ManualGuiTask.stop directly to avoid re-entering dev.stop() (this is
+            # ManualQtFriendlyTask.stop directly to avoid re-entering dev.stop() (this is
             # called from within dev.stop()/dev.abort()).
             if not self.is_done and not self.is_stopped:
                 ManualQtFriendlyTask.stop(self, "Move was interrupted before completion.")

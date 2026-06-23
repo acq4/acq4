@@ -227,7 +227,7 @@ class ManipulatorAxesCalibrationWindow(Qt.QWidget):
         self.autoCollectBtn.setEnabled(False)
         self.autoCollectBtn.setText("collecting...")
         future = calibrate_manipulator_axes(pipette)
-        # GuiTask's sigFinished is already marshalled to the GUI thread, so we can
+        # QtFriendlyTask's sigFinished is already marshalled to the GUI thread, so we can
         # apply the result directly without an extra run_in_gui_thread hop.
         future.sigFinished.connect(self._autoCollectFinished)
 

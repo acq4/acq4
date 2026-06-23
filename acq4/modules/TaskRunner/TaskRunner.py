@@ -1176,11 +1176,11 @@ class TaskFuture(ManualQtFriendlyTask):
 
     Instances of this class are returned from TaskRunner.runSingle() and .runSequence().
 
-    This is an externally-completed ManualGuiTask: it has no body and spawns no
+    This is an externally-completed ManualQtFriendlyTask: it has no body and spawns no
     thread. The TaskThread is the producer; it completes this promise by calling
     ``resolve()`` when the run finishes and ``fail(exc)`` on error. Stopping
     tells the TaskThread to halt (which polls its own stopThread flag), then
-    completes this promise via ManualGuiTask.stop().
+    completes this promise via ManualQtFriendlyTask.stop().
 
     Results are stored in self.results if the future is initialized with
     collectResults=True (this is False by default to avoid memory overuse).

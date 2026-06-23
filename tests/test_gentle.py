@@ -1,5 +1,5 @@
 # Tests for acq4.util.task, the Qt bridge over the gentletask concurrency library.
-# Covers GuiTask, the set_state idiom, cooperative stop, stop cascade, event-pumping
+# Covers QtFriendlyTask, the set_state idiom, cooperative stop, stop cascade, event-pumping
 # wait(updates=True), run_in_gui_thread, and the gentletask-backed FutureButton.
 
 import threading
@@ -41,7 +41,7 @@ def _pump(duration=0.5, until=None):
         time.sleep(0.005)
 
 
-class TestGuiTask:
+class TestQtFriendlyTask:
     def test_runs_fn_in_thread_and_emits_finished(self):
         # Deterministic "connect before start" contract: construct with
         # start=False, connect, then start(). No Event gate papering over a race.
@@ -103,7 +103,7 @@ class TestGuiTask:
         assert cleaned_up == [True]
 
     def test_stop_cascades_to_child_task(self):
-        # The headline gentletask feature: stopping a parent GuiTask stops a
+        # The headline gentletask feature: stopping a parent QtFriendlyTask stops a
         # child task it created. Confirm the Qt bridge did not break it.
         parent_started = threading.Event()
         child_started = threading.Event()
@@ -142,7 +142,7 @@ class TestGuiTask:
         assert child_cleaned == [True]
 
     def test_gui_task_from_worker_thread_fires_slot_on_gui_thread(self):
-        # C2 regression guard: a GuiTask constructed on a worker thread must
+        # C2 regression guard: a QtFriendlyTask constructed on a worker thread must
         # still deliver its queued sigFinished to the GUI thread (where the
         # event loop lives), thanks to moveToThread(app.thread()) in __init__.
         #
@@ -327,7 +327,7 @@ class TestFutureButton:
         assert the_task[0].is_stopped
 
 
-class TestManualGuiTask:
+class TestManualQtFriendlyTask:
     def test_resolve_returns_value_and_fires_finished_on_gui_thread(self):
         # The producer resolves from a worker thread; wait() returns the value
         # and the sigFinished slot must run on the GUI thread.
@@ -408,7 +408,7 @@ class TestManualGuiTask:
         assert slot_threads[0] is gui_thread
 
     def test_constructed_on_worker_thread_delivers_on_gui_thread(self):
-        # C2 guard: a ManualGuiTask constructed on a worker thread must still
+        # C2 guard: a ManualQtFriendlyTask constructed on a worker thread must still
         # deliver its queued sigFinished to the GUI thread.
         gui_thread = QApplication.instance().thread()
 
@@ -482,7 +482,7 @@ class TestManualGuiTask:
 class TestGuiAsynch:
     def test_launcher_returns_started_gui_task(self):
         # asynch_with_qt_signals auto-starts (like asynch). Verify the launcher builds a
-        # started GuiTask and the result flows through. Finish is checked via
+        # started QtFriendlyTask and the result flows through. Finish is checked via
         # add_finish_callback (race-free) rather than the sigFinished signal,
         # which a fast body can emit before an external connect (documented).
         got = []
@@ -502,7 +502,7 @@ class TestGuiAsynch:
         assert got == [42]
 
     def test_synch_dewraps_to_run_inline(self):
-        # synch(asynch_with_qt_signals(fn)) runs fn inline (no GuiTask/thread) and returns the value.
+        # synch(asynch_with_qt_signals(fn)) runs fn inline (no QtFriendlyTask/thread) and returns the value.
         ran_in = []
 
         @asynch_with_qt_signals
@@ -551,7 +551,7 @@ class TestRaiseErrors:
 
 class TestMultiFuture:
     def test_resolves_to_list_of_results_and_fires_finished_on_gui_thread(self):
-        # MultiFuture over two ManualGuiTasks: wait() returns the child results in
+        # MultiFuture over two ManualQtFriendlyTasks: wait() returns the child results in
         # order, and its own sigFinished slot runs on the GUI thread.
         gui_thread = QApplication.instance().thread()
         slot_threads = []
@@ -675,7 +675,7 @@ class TestMultiFuture:
 
     def test_percent_done_robust_when_child_lacks_percent_done(self):
         # A child without percentDone must not break the min computation.
-        a = ManualQtFriendlyTask()  # ManualGuiTask has no percentDone
+        a = ManualQtFriendlyTask()  # ManualQtFriendlyTask has no percentDone
         multi = MultiFuture([a])
         assert multi.percentDone() == 0.0
         a.resolve(None)
