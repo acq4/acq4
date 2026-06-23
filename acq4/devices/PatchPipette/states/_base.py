@@ -337,9 +337,10 @@ class PatchPipetteState(QtFriendlyTask):
 
     def _cleanup(self):
         """Called after job completes, whether it failed or succeeded. Ask `self.wasInterrupted()` to see if the
-        state was stopped early. Return a task that completes when cleanup is done.
+        state was stopped early.
         """
-        disconnect(self.dev.sigTargetChanged, self._onTargetChanged)
+        with log_and_ignore_exception(Exception, "Error disconnecting target-change signal"):
+            disconnect(self.dev.sigTargetChanged, self._onTargetChanged)
         with log_and_ignore_exception(Exception, "Error disabling visual target tracking"):
             if self.dev.cell is not None:
                 self.stopVisualTargetTracking('cleaning up state')
