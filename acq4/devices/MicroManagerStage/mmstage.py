@@ -270,10 +270,9 @@ class MonitorThread(Thread):
 
                 pos = self.dev._getPosition()  # this causes sigPositionChanged to be emitted
 
-                # Drive the in-flight move toward completion. This lifetime
-                # monitor is the active MoveFuture's external producer (replacing
-                # the old per-move polling thread): each tick it advances the
-                # move via _poll(), which resolves on arrival / fails on miss.
+                # Drive the in-flight move toward completion. This lifetime monitor is the active
+                # MoveFuture's external producer: each tick it advances the move via _poll(),
+                # which resolves on arrival / fails on miss.
                 move = self.dev._lastMove
                 moving = move is not None and not move.is_done
                 if moving:
@@ -307,9 +306,6 @@ class MicroManagerMoveFuture(MoveFuture):
                 self.dev.mmc.setXYPosition(self.dev._mmDeviceNames['xy'], pos[:2])
             if moveZ:
                 self.dev.mmc.setPosition(self.dev._mmDeviceNames['z'], pos[2])
-
-        # No per-move thread: the device's lifetime MonitorThread is this
-        # promise's external producer, calling _poll() each tick while in flight.
 
     def _poll(self):
         # Advance this move toward completion. Called by the device MonitorThread
