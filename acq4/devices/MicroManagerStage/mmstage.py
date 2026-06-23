@@ -1,4 +1,3 @@
-import threading
 import time
 
 import numpy as np
@@ -270,8 +269,18 @@ class MonitorThread(Thread):
                     maxInterval = self.interval
 
                 pos = self.dev._getPosition()  # this causes sigPositionChanged to be emitted
-                if pos != lastPos:
-                    # if there was a change, then loop more rapidly for a short time.
+
+                # Drive the in-flight move toward completion. This lifetime
+                # monitor is the active MoveFuture's external producer (replacing
+                # the old per-move polling thread): each tick it advances the
+                # move via _poll(), which resolves on arrival / fails on miss.
+                move = self.dev._lastMove
+                moving = move is not None and not move.is_done
+                if moving:
+                    move._poll()
+
+                if moving or pos != lastPos:
+                    # an active move or a position change keeps us in fast cadence
                     interval = self.minInterval
                     lastPos = pos
                 else:
@@ -290,36 +299,29 @@ class MicroManagerMoveFuture(MoveFuture):
     def __init__(self, dev, pos, speed, userSpeed, moveXY=True, moveZ=True, name=None):
         MoveFuture.__init__(self, dev, pos, speed, name=name)
         self._interrupted = False
-        self._errorMSg = None
+        self._errorMsg = None
         self._finished = False
         pos = np.array(pos) / np.array(self.dev.scale)
         with self.dev.lock:
             if moveXY:
-                self.dev.mmc.setXYPosition(self.dev._mmDeviceNames['xy'], pos[:1])
-            if moveXY:
+                self.dev.mmc.setXYPosition(self.dev._mmDeviceNames['xy'], pos[:2])
+            if moveZ:
                 self.dev.mmc.setPosition(self.dev._mmDeviceNames['z'], pos[2])
 
-        # External producer for this promise: poll device status and complete the
-        # promise when the move finishes (or errors / misses its target).
-        self._monitorThread = threading.Thread(
-            target=self._monitorMove, name=f'{dev.name()} : {self.name}', daemon=True
-        )
-        self._monitorThread.start()
+        # No per-move thread: the device's lifetime MonitorThread is this
+        # promise's external producer, calling _poll() each tick while in flight.
 
-    def _monitorMove(self):
-        # Raw thread (not a gentletask task): honor a stop request by polling
-        # self.is_stopped, and push completion onto the promise.
-        while True:
-            if self.is_stopped:
-                return
-            status = self._getStatus()
-            if status == 1:
-                self.resolve(None)
-                return
-            elif status == -1:
-                self.fail(RuntimeError(self._errorMsg or "Move did not complete."))
-                return
-            time.sleep(5e-3)
+    def _poll(self):
+        # Advance this move toward completion. Called by the device MonitorThread
+        # each tick while the move is in flight: resolve on arrival, fail on a
+        # missed target. Idempotent and race-safe (guards + atomic completion).
+        if self.is_stopped or self.is_done:
+            return
+        status = self._getStatus()
+        if status == 1:
+            self.resolve(None)
+        elif status == -1:
+            self.fail(RuntimeError(self._errorMsg or "Move did not complete."))
 
     def _getStatus(self):
         # check status of move unless we already know it is complete.
@@ -330,7 +332,7 @@ class MicroManagerMoveFuture(MoveFuture):
             else:
                 return 1
 
-        for ax in self._axes:
+        for ax in self.dev._axes:
             if self.dev.mmc.deviceBusy(self.dev._mmDeviceNames[ax]):
                 # Still moving
                 return 0
