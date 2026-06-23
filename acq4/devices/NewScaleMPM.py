@@ -107,6 +107,12 @@ class NewScaleMPM(Stage):
         while True:
             try:
                 self._getPosition()
+                # Drive the active move to completion: this lifetime monitor is
+                # the MoveFuture's external producer (the future has no thread of
+                # its own and previously never resolved).
+                move = self._lastMove
+                if move is not None and not move.is_done:
+                    move._poll()
             except socket.timeout:
                 print("timeout in newscale monitor thread")
             time.sleep(self._interval)
@@ -127,4 +133,22 @@ class NewScaleMoveFuture(MoveFuture):
         self.dev.dev.moveToTarget(pos[1])
         self.dev.dev.selectAxis('z')
         self.dev.dev.moveToTarget(pos[2])
-        
+
+    def _poll(self):
+        # Advance this move toward completion. Called by the device monitor
+        # thread each tick while in flight. The closed-loop driver reports motion
+        # per axis via isMoving(); resolve once no axis is still moving (mirrors
+        # the driver's own wait(), but checks all three axes). Previously this
+        # future was never completed.
+        if self.is_stopped or self.is_done:
+            return
+        with self.dev.lock:
+            moving = False
+            for ax in ('x', 'y', 'z'):
+                self.dev.dev.selectAxis(ax)
+                if self.dev.dev.isMoving():
+                    moving = True
+                    break
+        if not moving:
+            self.resolve(None)
+
