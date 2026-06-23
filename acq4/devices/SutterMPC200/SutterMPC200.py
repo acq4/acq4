@@ -1,4 +1,3 @@
-import threading
 import time
 
 from acq4.drivers.SutterMPC200 import SutterMPC200 as MPC200_Driver
@@ -249,7 +248,25 @@ class MonitorThread(Thread):
 
                 if moveRequest is None:
                     # just check for position update
-                    if self.dev._checkPositionChange() is not False:
+                    posChanged = self.dev._checkPositionChange() is not False
+
+                    # Drive in-flight moves toward completion. This singleton
+                    # monitor is shared across all drives, so it is the external
+                    # producer for every device's active MoveFuture (replacing
+                    # the old per-move polling thread): each tick it advances the
+                    # active move on each drive via _poll(), which resolves on
+                    # arrival / fails on error.
+                    moving = False
+                    for drive in self.dev._drives:
+                        if drive is None:
+                            continue
+                        move = drive._lastMove
+                        if move is not None and not move.is_done:
+                            moving = True
+                            move._poll()
+
+                    if moving or posChanged:
+                        # an active move or a position change keeps us fast
                         interval = self.minInterval
                     else:
                         interval = min(maxInterval, interval*2)
@@ -308,27 +325,20 @@ class MPC200MoveFuture(MoveFuture):
         if isinstance(status, Exception):
             raise status
 
-        # External producer for this promise: poll the shared monitor thread's
-        # move status and complete the promise when the move finishes or errors.
-        self._monitorThread = threading.Thread(
-            target=self._monitorMove, name=f'{dev.name()} : {self.name}', daemon=True
-        )
-        self._monitorThread.start()
+        # No per-move thread: the shared singleton MonitorThread is this
+        # promise's external producer, calling _poll() each tick while in flight.
 
-    def _monitorMove(self):
-        # Raw thread (not a gentletask task): honor a stop request by polling
-        # self.is_stopped, and push completion onto the promise.
-        while True:
-            if self.is_stopped:
-                return
-            start, status = self._getStatus()
-            if isinstance(status, Exception):
-                self.fail(status)
-                return
-            if status is True:
-                self.resolve(None)
-                return
-            time.sleep(5e-3)
+    def _poll(self):
+        # Advance this move toward completion. Called by the shared MonitorThread
+        # each tick while the move is in flight: resolve on arrival, fail on a
+        # move error. Idempotent and race-safe (guards + atomic completion).
+        if self.is_stopped or self.is_done:
+            return
+        start, status = self._getStatus()
+        if isinstance(status, Exception):
+            self.fail(status)
+        elif status is True:
+            self.resolve(None)
 
     def percentDone(self):
         """Return an estimate of the percent of move completed based on the

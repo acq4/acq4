@@ -1,4 +1,3 @@
-import threading
 import time
 
 from acq4.drivers.ThorlabsMFC1 import MFC1 as MFC1_Driver
@@ -181,8 +180,18 @@ class MonitorThread(Thread):
                         break
                     maxInterval = self.interval
                 pos = self.dev._getPosition()[2]
-                if pos != lastPos:
-                    # stage is moving; request more frequent updates
+
+                # Drive the in-flight move toward completion. This lifetime
+                # monitor is the active MoveFuture's external producer (replacing
+                # the old per-move polling thread): each tick it advances the
+                # move via _poll(), which resolves on arrival / fails on miss.
+                move = self.dev._lastMove
+                moving = move is not None and not move.is_done
+                if moving:
+                    move._poll()
+
+                if moving or pos != lastPos:
+                    # an active move or a position change keeps us in fast cadence
                     interval = self.minInterval
                 else:
                     interval = min(maxInterval, interval*2)
@@ -225,29 +234,25 @@ class MFC1MoveFuture(MoveFuture):
         self._moveStatus = {'status': None}
         self.id = dev.dev.move(pos[2] / dev.scale[2])
 
-        # Producer thread for this externally-completed promise. It is a raw
-        # thread (not a gentletask task), so it honors a stop by polling
-        # self.is_stopped rather than using check_stop().
-        self._monitorThread = threading.Thread(
-            target=self._watchForFinish, daemon=True, name=f"{name} MFC1 monitor"
-        )
-        self._monitorThread.start()
+        # No per-move thread: the device's lifetime MonitorThread is this
+        # promise's external producer, calling _poll() each tick while in flight.
 
-    def _watchForFinish(self):
-        while not self.is_stopped:
-            stat = self._getStatus()['status']
-            if stat == 'interrupted':
-                # The driver only marks a move 'interrupted' when dev.stop() was
-                # called, which also completes this promise with Stopped via
-                # stop(); just let that path own completion.
-                return
-            elif stat == 'failed':
-                self.fail(RuntimeError(self.errorMessage()))
-                return
-            elif stat == 'done':
-                self.resolve(None)
-                return
-            time.sleep(0.05)
+    def _poll(self):
+        # Advance this move toward completion. Called by the device MonitorThread
+        # each tick while the move is in flight: resolve on arrival, fail on a
+        # missed target. Idempotent and race-safe (guards + atomic completion).
+        if self.is_stopped or self.is_done:
+            return
+        stat = self._getStatus()['status']
+        if stat == 'interrupted':
+            # The driver only marks a move 'interrupted' when dev.stop() was
+            # called, which also completes this promise with Stopped via
+            # stop(); just let that path own completion.
+            return
+        elif stat == 'failed':
+            self.fail(RuntimeError(self.errorMessage()))
+        elif stat == 'done':
+            self.resolve(None)
 
     def percentDone(self):
         """Return an estimate of the percent of move completed based on the
