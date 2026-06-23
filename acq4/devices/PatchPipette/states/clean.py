@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from acq4.util.debug import log_and_ignore_exception
-from acq4.util.task import asynch
+from acq4.util.task import sleep
 from pyqtgraph import units
 from ._base import PatchPipetteState
 
@@ -71,7 +71,7 @@ class CleanState(PatchPipetteState):
 
             for pressure, delay in sequence:
                 dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
-                self.sleep(delay)
+                sleep(delay)
 
             if self.sonication is not None and not self.sonication.is_done:
                 self.sonication.wait(None)

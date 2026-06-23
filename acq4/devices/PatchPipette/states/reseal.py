@@ -510,7 +510,7 @@ class ResealState(PatchPipetteState):
             ):
                 task = dev.focusOnTip('slow')
                 task.wait(None)
-            self.sleep(0.2)
+            sleep(0.2)
 
         if self._moveFuture is not None:
             self._moveFuture.stop()

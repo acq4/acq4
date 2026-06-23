@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import numpy as np
-from pyqtgraph.units import µm, MΩ
 
 from acq4.util.debug import log_and_ignore_exception
+from acq4.util.task import sleep
+from pyqtgraph.units import µm, MΩ
 from ._base import PatchPipetteState
 from .cell_detect import CellDetectAnalysis
-from acq4 import getManager
 
 
 class ContactCellState(PatchPipetteState):
@@ -171,7 +171,8 @@ class ContactCellState(PatchPipetteState):
             self._moveFuture = None
 
             # Wait between iterations
-            self.sleep(config['stepInterval'])
+            duration = config['stepInterval']
+            sleep(duration)
 
     def processAtLeastOneTestPulse(self):
         tps = super().processAtLeastOneTestPulse()

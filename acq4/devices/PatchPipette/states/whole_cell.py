@@ -12,6 +12,7 @@ import pyqtgraph as pg
 from acq4.util import ptime
 from acq4.util.debug import log_and_ignore_exception
 from acq4.util.functions import plottable_booleans
+from acq4.util.task import sleep
 from ._base import PatchPipetteState, SteadyStateAnalysisBase, exponential_decay_avg
 
 
@@ -177,7 +178,7 @@ class WholeCellState(PatchPipetteState):
 
         if not self.config['monitorAccessResistance']:
             while True:
-                self.sleep(0.1)
+                sleep(0.1)
 
         self.dev.setAccessWarning(False)  # clear any stale warning when (re)entering whole cell
         self.monitorTestPulse()

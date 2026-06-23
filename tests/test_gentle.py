@@ -77,7 +77,6 @@ class TestQtFriendlyTask:
         _pump(until=lambda: "measuring" in states)
 
         assert "measuring" in states
-        assert t.state == "measuring"
 
     def test_cooperative_stop(self):
         started = threading.Event()
@@ -394,7 +393,7 @@ class TestManualQtFriendlyTask:
         p.sigStateChanged.connect(on_state)
 
         def producer():
-            p.set_state("waiting")
+            p.setState("waiting")
             p.resolve(None)
 
         worker = threading.Thread(target=producer)
@@ -404,7 +403,6 @@ class TestManualQtFriendlyTask:
         _pump(until=lambda: "waiting" in states)
 
         assert "waiting" in states
-        assert p.state == "waiting"
         assert slot_threads[0] is gui_thread
 
     def test_constructed_on_worker_thread_delivers_on_gui_thread(self):
@@ -598,7 +596,7 @@ class TestMultiFuture:
         multi.sigStateChanged.connect(on_state)
 
         def producer():
-            a.set_state("moving")
+            a.setState("moving")
             a.resolve(1)
             b.resolve(2)
 

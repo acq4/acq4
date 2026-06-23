@@ -4,6 +4,7 @@ import time
 
 from acq4.util import ptime
 from acq4.util.debug import log_and_ignore_exception
+from acq4.util.task import sleep
 from pyqtgraph import units
 from ._base import PatchPipetteState
 
@@ -86,7 +87,7 @@ class BreakInState(PatchPipetteState):
             while True:
                 time_until_next = (lastPulse + config['pulseInterval']) - ptime.time()
                 if time_until_next > 0:
-                    self.sleep(time_until_next)
+                    sleep(time_until_next)
                 self.checkBreakIn()
                 nPulses = config['nPulses'][attempt]
                 pdur = config['pulseDurations'][attempt]

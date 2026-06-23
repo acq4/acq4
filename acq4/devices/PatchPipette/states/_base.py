@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import contextlib
 import queue
-import sys
 import threading
 from copy import deepcopy
 from typing import Any, Optional, Iterable
@@ -15,7 +14,6 @@ from acq4.util import Qt
 from acq4.util.debug import log_and_ignore_exception
 from acq4.util.task import (
     QtFriendlyTask,
-    ManualQtFriendlyTask,
     Task,
     asynch,
     check_stop,
@@ -238,7 +236,8 @@ class PatchPipetteState(QtFriendlyTask):
         """Subclasses can implement this method to have code executed in a background thread after the state starts.
 
         The default implementation just waits until the state is stopped by the state manager."""
-        self.sleep(float('inf'))
+        duration = float('inf')
+        sleep(duration)
 
     def initializePressure(self):
         """Set initial pressure based on the config keys 'initialPressureSource' and 'initialPressure'
@@ -351,30 +350,6 @@ class PatchPipetteState(QtFriendlyTask):
             self.stop("Stop state because device is not 'active'")
         check_stop()
 
-    def setState(self, state):
-        """Set the current state message, emitting sigStateChanged."""
-        self.set_state(state)
-
-    def setResult(self, error=None):
-        """Flag this state as failed with an explicit error string.
-
-        Restores the pre-gentletask ``setResult(error=...)`` framing: the status
-        becomes ``"<stateName> failed: <error>"`` (emitted via sigStateChanged),
-        framed as a failure rather than ordinary progress. Call sites pair this
-        with ``return {"state": fallbackState}`` to flag the failure and then
-        fall back. Stopped / unexpected-exception handling lives in
-        _stateFinished; this is only the explicit-error path.
-        """
-        if error is not None:
-            self.setState(f"{self.stateName} failed: {error}")
-
-    def sleep(self, duration):
-        """Sleep for *duration* seconds, raising Stopped if the state is stopped."""
-        sleep(duration)
-
-    def wasInterrupted(self):
-        return self.is_stopped
-
     def __repr__(self):
         return f'<{type(self).__name__} "{self.stateName}">'
 
@@ -427,8 +402,6 @@ class PatchPipetteState(QtFriendlyTask):
         cell._trackingFuture.sigFinished.connect(self._visualTargetTrackingFinished)
 
     def _visualTargetTrackingFinished(self, future):
-        from acq4_automation.feature_tracking.visualization import LiveTrackerVisualizer
-
         if not hasattr(self.dev, '_trackingVisualizers'):
             self.dev._trackingVisualizers = []
         disconnect(self.dev.cell.sigPositionChanged, self.dev.pipetteDevice.setTarget)
