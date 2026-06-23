@@ -12,7 +12,7 @@ from acq4.motion import MoveSpec
 from acq4.util import Qt
 from acq4.util.Mutex import Mutex
 from acq4.util.acq4_typing import Number
-from acq4.util.task import MultiFuture, Task, asynch, asynch_with_qt_signals, FutureButton
+from acq4.util.task import MultiFuture, Task, asynch, asynch_with_qt_signals, FutureButton, raise_errors
 from acq4.util.imaging import Frame
 from acq4.util.surface import find_surface
 from acq4.util.ui.ZPositionWidget import ZPositionWidget
@@ -187,7 +187,7 @@ class Microscope(Device, OptomechDevice):
     def handlePresetHotkey(self, kb_dev, changes, name):
         key, pressed = changes.get('keys', [])[0]
         if pressed:
-            asynch(self.loadPreset, detach=True)(name)
+            raise_errors(asynch(self.loadPreset, detach=True)(name), "Error loading preset")
 
     def deviceInterface(self, win):
         iface = ScopeGUI(self, win)
