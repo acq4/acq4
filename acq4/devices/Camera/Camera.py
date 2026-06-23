@@ -1135,6 +1135,8 @@ class FrameAcquisitionFuture(ManualQtFriendlyTask):
             lastFrameTime = ptime.time()
             while True:
                 if self.is_done:
+                    if self._frame_count is not None and len(self._frames) < self._frame_count:
+                        self.fail(RuntimeError("Acquisition stopped before all frames were collected"))
                     break
                 try:
                     frame = self._queue.get_nowait()
