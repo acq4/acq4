@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from gentletask import check_stop
+
 from acq4.util.debug import log_and_ignore_exception
 from acq4.util.task import sleep
 from pyqtgraph import units
@@ -55,7 +57,7 @@ class CleanState(PatchPipetteState):
         self.setState('cleaning')
 
         for stage in ('clean', 'rinse'):
-            self.checkStop()
+            check_stop()
 
             sequence = config[f'{stage}Sequence']
             if isinstance(sequence, str):

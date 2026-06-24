@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import numpy as np
+from gentletask import check_stop
 
 from ._base import PatchPipetteState
 
@@ -50,7 +51,7 @@ class BathState(PatchPipetteState):
         bathResistances = []
 
         while True:
-            self.checkStop()
+            check_stop()
 
             # pull in all new test pulses (hopefully only one since the last time we checked)
             tps = self.getTestPulses(timeout=0.2)

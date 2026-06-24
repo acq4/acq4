@@ -9,6 +9,7 @@ from __future__ import annotations
 import time
 
 import numpy as np
+from gentletask import check_stop
 
 import pyqtgraph as pg
 from acq4.util import ptime
@@ -284,7 +285,7 @@ class ClearAccessState(PatchPipetteState):
         lastPulse = -np.inf
         attempt = 0
         while True:
-            self.checkStop()
+            check_stop()
 
             if ptime.time() - start_time > config['clearTimeout']:
                 self.setState(f"{self.stateName} failed: took longer than {config['clearTimeout']} s")
@@ -336,7 +337,7 @@ class ClearAccessState(PatchPipetteState):
                     remaining = stop - ptime.time()
                     if remaining <= 0:
                         break
-                    self.checkStop()
+                    check_stop()
                     time.sleep(min(0.1, remaining))
             finally:
                 self.dev.pressureDevice.setPressure(source='atmosphere')

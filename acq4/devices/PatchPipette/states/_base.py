@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import contextlib
-import queue
 import threading
 from copy import deepcopy
 from typing import Any, Optional, Iterable
@@ -20,6 +19,8 @@ from acq4.util.task import (
     sleep,
     Stopped,
     asynch_with_qt_signals,
+    Queue,
+    Empty,
 )
 from neuroanalysis.test_pulse import PatchClampTestPulse
 from pyqtgraph import disconnect
@@ -161,7 +162,7 @@ class PatchPipetteState(QtFriendlyTask):
         if config is not None:
             self.config.update(config)
         self._cleanupMutex = threading.Lock()
-        self.testPulseResults = queue.Queue()
+        self.testPulseResults = Queue()
         self._cleanupFuture = None
         self._pressureAdjustment = None
         self._pauseMovement = False
@@ -169,6 +170,7 @@ class PatchPipetteState(QtFriendlyTask):
         # This is usually set by the return value of run(), and must be invoked by the state manager.
         self.nextState = {"state": self.config.get('fallbackState', None)}
         self.dev.sigTargetChanged.connect(self._onTargetChanged)
+        self.dev.sigActiveChanged.connect(self._onActiveChanged)
 
     def _stateFinished(self, result, exc):
         """on_finish callback: reproduce the old setResult error/stop messaging.
@@ -291,7 +293,7 @@ class PatchPipetteState(QtFriendlyTask):
     def processAtLeastOneTestPulse(self) -> list[PatchClampTestPulse]:
         """Wait for at least one test pulse to be processed."""
         while not (tps := self.getTestPulses(timeout=0.2)):
-            self.checkStop()
+            check_stop()
         return tps
 
     def testPulseFinished(self, clamp, result):
@@ -302,7 +304,7 @@ class PatchPipetteState(QtFriendlyTask):
         wait *timeout* seconds for one to arrive.
         """
         tps = []
-        with contextlib.suppress(queue.Empty):
+        with contextlib.suppress(Empty):
             if timeout is not None:
                 tps.append(self.testPulseResults.get(timeout=timeout))
             while not self.testPulseResults.empty():
@@ -340,15 +342,11 @@ class PatchPipetteState(QtFriendlyTask):
         """
         with log_and_ignore_exception(Exception, "Error disconnecting target-change signal"):
             disconnect(self.dev.sigTargetChanged, self._onTargetChanged)
+        with log_and_ignore_exception(Exception, "Error disconnecting active-change signal"):
+            disconnect(self.dev.sigActiveChanged, self._onActiveChanged)
         with log_and_ignore_exception(Exception, "Error disabling visual target tracking"):
             if self.dev.cell is not None:
                 self.stopVisualTargetTracking('cleaning up state')
-
-    def checkStop(self):
-        # extend checkStop to also see if the pipette was deactivated.
-        if self.dev.active is False:
-            self.stop("Stop state because device is not 'active'")
-        check_stop()
 
     def __repr__(self):
         return f'<{type(self).__name__} "{self.stateName}">'
@@ -479,6 +477,10 @@ class PatchPipetteState(QtFriendlyTask):
 
     def _onTargetChanged(self, pos):
         self._targetHasChanged = True
+
+    def _onActiveChanged(self, active):
+        if not active:
+            self.stop("Stop state because device is not 'active'")
 
     def _distanceToTarget(self):
         pip = self.dev.pipetteDevice

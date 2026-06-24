@@ -2,6 +2,8 @@
 # Supports periodic clog mitigation (pressure pulse and/or sonication) interleaved with suction.
 from __future__ import annotations
 
+from gentletask import check_stop
+
 from acq4.util.debug import log_and_ignore_exception
 from acq4.util.task import sleep
 from ._base import PatchPipetteState
@@ -84,7 +86,7 @@ class RefillState(PatchPipetteState):
 
         remaining = refill_duration
         while remaining > 0:
-            self.checkStop()
+            check_stop()
             chunk = min(remaining, mitigation_interval)
             dev.pressureDevice.setPressure(source='regulator', pressure=refill_pressure)
             sleep(chunk)

@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextlib
 
 import numpy as np
+from gentletask import check_stop
 
 import pyqtgraph as pg
 from acq4.util import ptime
@@ -428,7 +429,7 @@ class ResealState(PatchPipetteState):
         baseline_future = self.startRollingResistanceThresholds()
         if config['extractNucleus'] is True:
             self.nuzzle()
-        self.checkStop()
+        check_stop()
         self.setState("measuring baseline resistance")
         timeout = 2 * self.config['repairTau']
         baseline_future.wait(timeout)

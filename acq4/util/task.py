@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import threading
-import traceback
 from typing import Any, Callable, Optional
 
 from gentletask import (
@@ -12,6 +11,7 @@ from gentletask import (
     ManualTask,
     MultiTask,
     Queue,
+    Empty,
     Stopped,
     Task,
     ThreadTask,
@@ -43,6 +43,7 @@ __all__ = [
     "check_stop",
     "poll",
     "Queue",
+    "Empty",
     "Event",
     "throughline",
     "current_task",

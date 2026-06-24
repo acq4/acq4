@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import numpy as np
+from gentletask import check_stop
 
 from acq4.util import ptime
 from ._base import PatchPipetteState, exponential_decay_avg
@@ -68,7 +69,7 @@ class CellAttachedState(PatchPipetteState):
             if delay is not None and ptime.time() - startTime > delay:
                 return {"state": 'break in'}
 
-            self.checkStop()
+            check_stop()
 
             tps = self.getTestPulses(timeout=0.2)
             if len(tps) == 0:

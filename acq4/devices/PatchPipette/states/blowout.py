@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from gentletask import check_stop
+
 from acq4.util import ptime
 from acq4.util.debug import log_and_ignore_exception
 from acq4.util.task import sleep
@@ -37,7 +39,7 @@ class BlowoutState(PatchPipetteState):
         # wait until we have a test pulse that ran after blowout was finished.
         start = ptime.time()
         while True:
-            self.checkStop()
+            check_stop()
             tps = self.getTestPulses(timeout=0.2)
             if len(tps) == 0 or tps[-1].start_time < start:
                 continue

@@ -4,6 +4,7 @@ from threading import Lock
 from typing import Iterable, Any
 
 import numpy as np
+from gentletask import check_stop
 
 import pyqtgraph as pg
 from acq4 import getManager
@@ -243,7 +244,7 @@ class ApproachState(PatchPipetteState):
         if self.config["autoAdvance"]:
             self.monitorTestPulse()
             while True:
-                self.checkStop()
+                check_stop()
                 self.processAtLeastOneTestPulse()
                 self.adjustPressureForDepth()
                 self.maybeRecalibratePipette()
@@ -418,7 +419,7 @@ class ApproachState(PatchPipetteState):
                 task2 = pip.moveToGlobalNoPlanning(retract_pos, speed=speed, name='obstacle avoidance retract after detection')
                 task2.wait(None)
                 return self.avoidObstacle(already_retracted=True)
-            self.checkStop()
+            check_stop()
         move.wait(None)
         pos = np.array(pip.globalPosition())
         task3 = pip.moveToGlobalNoPlanning(pos - sidestep, speed=speed, name='obstacle avoidance return to path')
