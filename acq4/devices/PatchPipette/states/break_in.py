@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import time
 
+from gentletask import check_stop
+
 from acq4.util import ptime
 from acq4.util.debug import log_and_ignore_exception
 from acq4.util.task import sleep
@@ -139,7 +141,7 @@ class BreakInState(PatchPipetteState):
         """
         start = ptime.time()
         while True:
-            self.checkStop()
+            check_stop()
             tps = self.getTestPulses(timeout=0.2)
             if len(tps) > 0:
                 break

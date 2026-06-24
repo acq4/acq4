@@ -5,6 +5,7 @@ import time
 from typing import Any
 
 import numpy as np
+from gentletask import check_stop
 
 import pyqtgraph as pg
 from acq4.util import ptime, Qt
@@ -330,7 +331,7 @@ class SealState(PatchPipetteState):
         self._patchrec['attemptedSeal'] = True
 
         while True:
-            self.checkStop()
+            check_stop()
             self.processAtLeastOneTestPulse()
 
             if not holdingSet and self._analysis.hold():
@@ -434,7 +435,7 @@ class SealState(PatchPipetteState):
         start = time.time()
         while True:
             try:
-                self.checkStop()
+                check_stop()
             except Stopped:
                 future.stop(reason="parent task stop requested")
                 raise

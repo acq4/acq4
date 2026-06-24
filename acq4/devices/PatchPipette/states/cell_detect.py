@@ -5,6 +5,7 @@ from threading import Lock
 from typing import Any, Iterable
 
 import numpy as np
+from gentletask import check_stop
 
 import pyqtgraph as pg
 from acq4.util import ptime
@@ -276,7 +277,7 @@ class CellDetectState(PatchPipetteState):
                     self._moveFuture.stop("cell detected", wait=True)
                     self._moveFuture = None
                 return self._transition_to_seal(detectedThresholdSpeed)
-            self.checkStop()
+            check_stop()
             self.processAtLeastOneTestPulse()
             self.adjustPressureForDepth()
             self.maybeVisuallyTrackTarget()

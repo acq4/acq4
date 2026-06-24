@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import numpy as np
+from gentletask import check_stop
 
 from acq4.util.debug import log_and_ignore_exception
 from acq4.util.task import sleep
@@ -124,7 +125,7 @@ class ContactCellState(PatchPipetteState):
         # 5. Main descent loop
         self.setState("descending toward cell")
         while True:
-            self.checkStop()
+            check_stop()
 
             # Process test pulses and check for broken tip
             self.processAtLeastOneTestPulse()

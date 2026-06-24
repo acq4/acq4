@@ -7,6 +7,7 @@ to manually initiate a 'clear access' recovery attempt.
 from __future__ import annotations
 
 import numpy as np
+from gentletask import check_stop
 
 import pyqtgraph as pg
 from acq4.util import ptime
@@ -188,7 +189,7 @@ class WholeCellState(PatchPipetteState):
             max_test_pulse_gap=self.config['maxTestPulseGap'],
         )
         while True:
-            self.checkStop()
+            check_stop()
             tps = self.getTestPulses(timeout=0.2)
             if len(tps) == 0:
                 continue
