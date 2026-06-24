@@ -39,7 +39,9 @@ class MinirigV1MotionPlanner(DefaultMotionPlanner):
     # Override: full approach sequence with scope park
     # ------------------------------------------------------------------
 
-    def _plan_interaction_approach(self, spec: "MoveSpec", name: str = "") -> "MovePlanStep":
+    def _plan_interaction_approach(
+        self, spec: "MoveSpec", name: str = ""
+    ) -> "MovePlanStep":
         site = spec.relative_to
         pip = spec.device
         pip_name = pip.name()
@@ -63,7 +65,9 @@ class MinirigV1MotionPlanner(DefaultMotionPlanner):
         # pipette retract to approach depth — pip exits tissue before scope goes lateral
         pip_safe = pip.positionAtDepth(pip.approachDepth(), start=pip_start)
         if pip_safe[2] > pip_start[2]:
-            steps.append(AtomicMove(pip, pip_safe, speed, "pip retract before scope park"))
+            steps.append(
+                AtomicMove(pip, pip_safe, speed, "pip retract before scope park")
+            )
             pip_start = pip_safe
 
         # pipette goes home
@@ -81,7 +85,10 @@ class MinirigV1MotionPlanner(DefaultMotionPlanner):
         # pipette to approach position (safe path from current retracted position)
         kw = spec.kwargs
         pip_to_approach = self._safe_path(pip, pip_start, approach_global, speed)
-        steps.extend(AtomicMove(pip, pos, spd, expl, {'linear': lin, **kw}) for pos, spd, lin, expl in pip_to_approach)
+        steps.extend(
+            AtomicMove(pip, pos, spd, expl, {"linear": lin, **kw})
+            for pos, spd, lin, expl in pip_to_approach
+        )
 
         # pipette into site (only when going inside and approach is saved)
         going_inside = not np.allclose(spec.position, 0)
@@ -89,7 +96,13 @@ class MinirigV1MotionPlanner(DefaultMotionPlanner):
             # spec.position is relative to LIVE site, so no need to add site_delta
             target_global = np.array(site.mapToGlobal(spec.position))
             steps.append(
-                AtomicMove(pip, target_global, speed, "pipette into site", {'linear': True, **kw})
+                AtomicMove(
+                    pip,
+                    target_global,
+                    speed,
+                    "pipette into site",
+                    {"linear": True, **kw},
+                )
             )
 
         return SequentialGroup(steps, name or f"approach {site.name()}")
@@ -98,13 +111,17 @@ class MinirigV1MotionPlanner(DefaultMotionPlanner):
     # Shared helper: append scope unwind steps to a plan
     # ------------------------------------------------------------------
 
-    def _append_scope_unwind(self, base: "MovePlanStep", pip_name: str) -> "MovePlanStep":
+    def _append_scope_unwind(
+        self, base: "MovePlanStep", pip_name: str
+    ) -> "MovePlanStep":
         if pip_name not in self._scope_context:
             return base
         scope, forward_path = self._scope_context.pop(pip_name)
         # forward_path = [original, up, park]; return path skips park (already there)
         return_waypoints = list(reversed(forward_path))[1:]
-        scope_steps = [AtomicMove(scope, wp, "fast", "scope return") for wp in return_waypoints]
+        scope_steps = [
+            AtomicMove(scope, wp, "fast", "scope return") for wp in return_waypoints
+        ]
         return SequentialGroup(
             base.steps + [SequentialGroup(scope_steps, "scope unwind")],
             base.explanation,
@@ -114,7 +131,9 @@ class MinirigV1MotionPlanner(DefaultMotionPlanner):
     # Override: append scope unwind when exiting via approach waypoint
     # ------------------------------------------------------------------
 
-    def _plan_interaction_exit(self, spec: "MoveSpec", name: str = "", containing_site=None) -> "MovePlanStep":
+    def _plan_interaction_exit(
+        self, spec: "MoveSpec", name: str = "", containing_site=None
+    ) -> "MovePlanStep":
         base = super()._plan_interaction_exit(spec, name, containing_site)
         return self._append_scope_unwind(base, spec.device.name())
 

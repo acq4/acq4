@@ -64,7 +64,11 @@ class RefillState(PatchPipetteState):
         pip = dev.pipetteDevice
 
         self.setState('refilling pipette')
-        task1 = pip.moveTo('refill', 'fast')
+        site = pip.getSiteFor('refill')
+        if site is not None:
+            task1 = site.moveToInteract(pip, speed='fast')
+        else:
+            task1 = pip.moveTo('refill', 'fast')
         task1.wait(60)
 
         refill_pressure = config['refillPressure']
