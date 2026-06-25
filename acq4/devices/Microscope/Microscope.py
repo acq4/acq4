@@ -14,7 +14,7 @@ from acq4.util.Mutex import Mutex
 from acq4.util.acq4_typing import Number
 from acq4.util.imaging import Frame
 from acq4.util.surface import find_surface
-from acq4.util.task import MultiFuture, asynch, asynch_with_qt_signals, FutureButton, synch
+from acq4.util.task import MultiFuture, asynch, asynch_with_qt_signals, FutureButton
 from acq4.util.ui.ZPositionWidget import ZPositionWidget
 from coorx import TTransform
 from pyqtgraph.units import µm
@@ -264,7 +264,7 @@ class Microscope(Device, OptomechDevice):
         if (idx := find_surface(z_stack, threshold)) is not None:
             depth = z_stack[idx].mapFromFrameToGlobal([0, 0, 0])[2]
             self.setSurfaceDepth(depth)
-            synch(self.setFocusDepth(depth, name=f"{self.name()} focus to detected surface"))
+            self.setFocusDepth(depth, name=f"{self.name()} focus to detected surface").wait()
             if returnStack:
                 return depth, z_stack
             return depth
