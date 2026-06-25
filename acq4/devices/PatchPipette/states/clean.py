@@ -69,7 +69,7 @@ class CleanState(PatchPipetteState):
             if site is not None:
                 task1 = site.moveToInteract(pip, speed='fast')
             else:
-                task1 = pip.moveTo(stage, 'fast')
+                task1 = pip.moveTo(stage, "fast")
             task1.wait(60)
 
             if dev.sonicatorDevice is not None:
