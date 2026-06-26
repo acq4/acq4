@@ -75,7 +75,7 @@ class DefaultMotionPlanner(MotionPlanner):
         pip_pos = pip.globalPosition()
         for dev_name in man.listDevices():
             dev = man.getDevice(dev_name)
-            if self._is_interaction_site(dev) and dev.containsPoint(pip_pos):
+            if self._is_interaction_site(dev) and dev.containsPoint(pip_pos, tolerance=10e-6):
                 return dev
         return None
 
