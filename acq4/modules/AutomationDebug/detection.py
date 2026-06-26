@@ -188,7 +188,7 @@ class CellDetector:
             multichannel=multichannel,  # Actual flag for detect_neurons
             trim_edges=True,
             min_volume_m3=win.ui.minVolumeSpin.value(),
-            n=None,
+            n=5,  # Number of top candidates to return
             save_prefix=save_prefix,
         )
         logger.info(f"Neuron detection finished. Found {len(detection_results)} potential neurons.")

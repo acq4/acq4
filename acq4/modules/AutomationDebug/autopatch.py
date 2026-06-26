@@ -188,12 +188,12 @@ class Autopatcher:
         win = self._window
         if not win._unranked_cells:
             set_state("Autopatch: searching for cells")
-            return None
-            # surf = win.cameraDevice.scopeDev.findSurfaceDepth(win.cameraDevice).wait()
-            # win.cameraDevice.setFocusDepth(surf - 60e-6, "fast").wait()
-            z_stack = win._detector._detectNeuronsZStack()
-            z_stack.sigFinished.connect(win._detector._handleDetectResults)
-            z_stack.wait(timeout=600)
+            # return None
+            surf = win.cameraDevice.scopeDev.findSurfaceDepth(win.cameraDevice).wait()
+            win.cameraDevice.setFocusDepth(surf - 60e-6, "fast").wait()
+            fut = win._detector._detectNeuronsZStack()
+            fut.sigFinished.connect(win._detector._handleDetectResults)  # adds to win._unranked_cells
+            fut.wait(timeout=600)
 
         set_state("Autopatch: checking selected cell")
         cell = win._unranked_cells.pop(0)
