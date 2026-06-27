@@ -180,8 +180,18 @@ class MonitorThread(Thread):
                         break
                     maxInterval = self.interval
                 pos = self.dev._getPosition()[2]
-                if pos != lastPos:
-                    # stage is moving; request more frequent updates
+
+                # Drive the in-flight move toward completion. This lifetime
+                # monitor is the active MoveFuture's external producer (replacing
+                # the old per-move polling thread): each tick it advances the
+                # move via _poll(), which resolves on arrival / fails on miss.
+                move = self.dev._lastMove
+                moving = move is not None and not move.is_done
+                if moving:
+                    move._poll()
+
+                if moving or pos != lastPos:
+                    # an active move or a position change keeps us in fast cadence
                     interval = self.minInterval
                 else:
                     interval = min(maxInterval, interval*2)
@@ -224,16 +234,31 @@ class MFC1MoveFuture(MoveFuture):
         self._moveStatus = {'status': None}
         self.id = dev.dev.move(pos[2] / dev.scale[2])
 
-    def wasInterrupted(self):
-        """Return True if the move was interrupted before completing.
-        """
-        return self._getStatus()['status'] in ('interrupted', 'failed')
+        # No per-move thread: the device's lifetime MonitorThread is this
+        # promise's external producer, calling _poll() each tick while in flight.
+
+    def _poll(self):
+        # Advance this move toward completion. Called by the device MonitorThread
+        # each tick while the move is in flight: resolve on arrival, fail on a
+        # missed target. Idempotent and race-safe (guards + atomic completion).
+        if self.is_stopped or self.is_done:
+            return
+        stat = self._getStatus()['status']
+        if stat == 'interrupted':
+            # The driver only marks a move 'interrupted' when dev.stop() was
+            # called, which also completes this promise with Stopped via
+            # stop(); just let that path own completion.
+            return
+        elif stat == 'failed':
+            self.fail(RuntimeError(self.errorMessage()))
+        elif stat == 'done':
+            self.resolve(None)
 
     def percentDone(self):
-        """Return an estimate of the percent of move completed based on the 
+        """Return an estimate of the percent of move completed based on the
         device's speed table.
         """
-        if self.isDone():
+        if self.is_done:
             return 100
 
         pos = self.dev.getPosition()[2] - self.startPos[2]
@@ -241,11 +266,6 @@ class MFC1MoveFuture(MoveFuture):
         if target == 0:
             return 99
         return 100 * pos / target
-
-    def isDone(self):
-        """Return True if the move is complete.
-        """
-        return self._getStatus()['status'] in ('interrupted', 'failed', 'done')
 
     def errorMessage(self):
         stat = self._getStatus()

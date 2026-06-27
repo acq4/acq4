@@ -1,11 +1,13 @@
 import time
 from collections import OrderedDict
 
+from gentletask import synch
+
 import pyqtgraph as pg
 from acq4.devices.Device import TaskGui, Device, DeviceTask
 from acq4.devices.OptomechDevice import OptomechDevice
 from acq4.util import Qt
-from acq4.util import ptime
+from acq4.util.task import ManualQtFriendlyTask, Stopped
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
 
@@ -137,8 +139,8 @@ class FilterWheel(Device, OptomechDevice):
         """
         with self.lock:
             fut = self._lastFuture
-            if fut is not None and not fut.isDone():
-                fut.cancel()
+            if fut is not None and not fut.is_done:
+                fut.stop("Filter change was cancelled")
             self._lastFuture = self._setPosition(pos)
             return self._lastFuture
 
@@ -172,7 +174,7 @@ class FilterWheel(Device, OptomechDevice):
     def loadPreset(self, name):
         """Load a preset filter wheel position by name."""
         idx = next((i for i, n in self._slotNames.items() if n == name), None)
-        return self.setPosition(idx)
+        synch(self.setPosition)(idx)
 
     def _positionChanged(self, pos):
         filt = self.getFilter(pos)
@@ -188,7 +190,7 @@ class FilterWheel(Device, OptomechDevice):
     def _checkMoveFuture(self):
         if self._lastFuture is None:
             return
-        self._lastFuture.isDone()
+        self._lastFuture._poll()
 
     def isMoving(self):
         """Return the current position of the filter wheel.
@@ -202,7 +204,7 @@ class FilterWheel(Device, OptomechDevice):
         with self.lock:
             fut = self._lastFuture
             if fut is not None:
-                fut.cancel()
+                fut.stop("Filter wheel stopped")
 
     def _stop(self):
         raise NotImplementedError("Method must be implemented in subclass")
@@ -228,76 +230,44 @@ class FilterWheel(Device, OptomechDevice):
         return FilterWheelDevGui(self)
 
 
-class FilterWheelFuture(object):
+class FilterWheelFuture(ManualQtFriendlyTask):
+    """Track the progress of a requested filter wheel position change.
+
+    This is an externally-completed ManualQtFriendlyTask: it has no body and spawns no
+    thread. The device's filter-wheel position monitor (FilterWheelPollThread)
+    is the producer; each poll it calls ``_poll()``, which once the wheel stops
+    moving resolves the promise if the target was reached or fails it otherwise.
+    ``stop()`` aborts an in-progress move; the producer sees ``is_stopped``.
+    Subclasses override ``_atTarget()`` to decide when the move has arrived.
+    """
+
     def __init__(self, dev, position):
+        ManualQtFriendlyTask.__init__(self, name=f"{dev.name()} filter change to {position}")
         self.dev = dev
         self.position = position
-        self._wasInterrupted = False
-        self._done = False
-        self._error = None
-
-    def wasInterrupted(self):
-        """Return True if the move was interrupted before completing.
-        """
-        return self._wasInterrupted
-
-    def cancel(self):
-        if self.isDone():
-            return
-        self._wasInterrupted = True
-        self._error = "Filter change was cancelled"
 
     def _atTarget(self):
         return self.dev.getPosition() == self.position
 
-    def isDone(self):
-        """Return True if the move has completed or was interrupted.
+    def _poll(self):
+        """Evaluate move progress and complete the promise if it has settled.
+
+        Called by the device's position monitor thread (the producer). While the
+        wheel is still moving, or once the promise is already complete, this is a
+        no-op. When the wheel stops, the promise is resolved at the target or
+        failed if it stopped short.
         """
-        if self._wasInterrupted or self._done:
-            return True
+        if self.is_done or self.is_stopped:
+            return
         if self.dev.isMoving():
-            return False
-
+            return
         if self._atTarget():
-            self._done = True
-            return True
+            self.resolve(self.position)
         else:
-            self._wasInterrupted = True
-            self._error = f"Filter wheel did not reach target while moving to {self.position} (got to {self.dev.getPosition()})"
-            return True
-
-    def errorMessage(self):
-        """Return a string description of the reason for a move failure,
-        or None if there was no failure (or if the reason is unknown).
-        """
-        return self._error
-        
-    def wait(self, timeout=None, updates=False):
-        """Block until the move has completed, has been interrupted, or the
-        specified timeout has elapsed.
-
-        If *updates* is True, process Qt events while waiting.
-
-        If the move did not complete, raise an exception.
-        """
-        start = ptime.time()
-        while (timeout is None) or (ptime.time() < start + timeout):
-            if self.isDone():
-                break
-            if updates is True:
-                Qt.QTest.qWait(100)
-            else:
-                time.sleep(0.1)
-        
-        if not self.isDone():
-            err = self.errorMessage()
-            if err is None:
-                raise RuntimeError("Timeout waiting for filter wheel change")
-            else:
-                raise RuntimeError("Move did not complete: %s" % err)
-        if self.wasInterrupted():
-            err = self.errorMessage()
-            raise RuntimeError("Move was interrupted: %s" % err)
+            self.fail(RuntimeError(
+                f"Filter wheel did not reach target while moving to {self.position} "
+                f"(got to {self.dev.getPosition()})"
+            ))
 
 
 class FilterWheelTask(DeviceTask):
@@ -453,6 +423,7 @@ class FilterWheelPollThread(Thread):
         while self.stopThread is False:
             try:
                 pos = self.dev.getPosition()
+                self.dev._checkMoveFuture()
                 time.sleep(self.interval)
             except:
                 self.dev.logger.exception("Error in Filter Wheel poll thread:")

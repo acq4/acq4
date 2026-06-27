@@ -9,10 +9,10 @@ import numpy as np
 from acq4.logging_config import get_logger
 from acq4.modules.Camera import CameraWindow
 from acq4.util import Qt
-from acq4.util.future import Future, future_wrap
+from acq4.util.task import Stopped, Task, asynch_with_qt_signals
 from acq4.util.imaging.sequencer import acquire_z_stack
 from acq4.util.target import TargetBox
-from acq4.util.threadrun import futureInGuiThread, runInGuiThread
+from acq4.util.task import run_in_gui_thread
 from acq4_automation.cell_quality_annotation_tool import open_annotation_tool_with_detections
 from acq4_automation.feature_tracking.cell import Cell
 from coorx import Point
@@ -59,30 +59,30 @@ class CellDetector:
         if path:
             self._window.ui.rankingSaveDirEdit.setText(path)
 
-    @future_wrap
-    def _addCellFromTarget(self, _future):
+    @asynch_with_qt_signals
+    def _addCellFromTarget(self):
         target = Point(self._window.pipetteDevice.targetPosition(), "global")
         cell = self._window.patchPipetteDevice.cell
         if cell is None or cell.position != target:
             cell = Cell(target)
-            _future.waitFor(cell.initializeTracker(self._window.cameraDevice))
+            cell.initializeTracker(self._window.cameraDevice)
         self._window._unranked_cells.append(cell)
         cells = list(self._window._unranked_cells)
-        _future.waitFor(futureInGuiThread(self._displayBoundingBoxes, cells))
+        run_in_gui_thread(self._displayBoundingBoxes, cells)
 
-    @future_wrap
-    def _testUI(self, _future):
+    @asynch_with_qt_signals
+    def _testUI(self):
         with self._window.cameraDevice.ensureRunning():
-            frame = _future.waitFor(self._window.cameraDevice.acquireFrames(1)).getResult()[0]
+            frame = self._window.cameraDevice.acquireFrames(1).wait()[0]
         points = np.random.random((20, 3))
         points[:, 2] *= 20e-6
         points[:, 1] *= frame.shape[0]
         points[:, 0] *= frame.shape[1]
         return [frame.mapFromFrameToGlobal(pt) for pt in points]
 
-    @future_wrap
+    @asynch_with_qt_signals
     def _detectNeuronsZStack(
-        self, _future: Future
+        self,
     ) -> tuple[list, list[Frame] | None, list[Frame] | None] | list:
         """Acquires Z-stack(s) and runs neuron detection. Returns (bboxes, detection_stack, classification_stack)."""
         from acq4_automation.object_detection import detect_neurons
@@ -90,11 +90,11 @@ class CellDetector:
         win = self._window
         self._window.sigWorking.emit(win.ui.zStackDetectBtn)
         # Clear previous results before starting detection
-        runInGuiThread(self.clearCells)
+        run_in_gui_thread(self.clearCells)
         win._current_detection_stack = None
         win._current_classification_stack = None
 
-        pixel_size = win.cameraDevice.getPixelSize()[0]  # Real acquisition; overridden from the loaded stack for mock
+        pixel_size = win.cameraDevice.getPixelSize()[0]  # Used for both real and mock
         man = win.module.manager
         models = _health_model_config(man)
         segmenter = models["segmenter"]
@@ -115,23 +115,12 @@ class CellDetector:
         )
 
         if win.ui.mockCheckBox.isChecked():
-            detection_stack, classification_stack, step_z = win._mock_handler._mockNeuronStacks(
-                _future
-            )
+            detection_stack, classification_stack, step_z = win._mock_handler._mockNeuronStacks()
             if detection_stack is None:
                 raise RuntimeError("Failed to load mock detection stack.")
-            # Use the loaded mock stack's pixel size rather than the live camera's.
-            pixel_size = detection_stack[0].info()["pixelSize"][0]
-            if classification_stack is not None:
-                classification_pixel_size = classification_stack[0].info()["pixelSize"][0]
-                if classification_pixel_size != pixel_size:
-                    raise ValueError(
-                        f"Mock detection stack pixel size ({pixel_size / µm:.4f} µm) does not match "
-                        f"classification stack pixel size ({classification_pixel_size / µm:.4f} µm)."
-                    )
 
         else:  # --- Real Acquisition ---
-            surface = _future.waitFor(win.scopeDevice.findSurfaceDepth(win.cameraDevice)).getResult()
+            surface = win.scopeDevice.findSurfaceDepth(win.cameraDevice)
 
             start_z = surface - win.ui.zStackStartDepthSpin.value()
             stop_z = surface - win.ui.zStackStopDepthSpin.value()
@@ -141,22 +130,16 @@ class CellDetector:
                     f"Starting multichannel Z-stack acquisition: Detection='{detection_preset}', "
                     f"Classification='{classification_preset}'"
                 )
-                _future.waitFor(win.scopeDevice.loadPreset(detection_preset))
-            detection_stack = _future.waitFor(
-                acquire_z_stack(
-                    win.cameraDevice, start_z, stop_z, step_z, slow_fallback=False, name="neuron detection stack"
-                ),
-                timeout=100,
-            ).getResult()
+                win.scopeDevice.loadPreset(detection_preset)
+            detection_stack = acquire_z_stack(
+                win.cameraDevice, start_z, stop_z, step_z, slow_fallback=False, name="neuron detection stack"
+            )
 
             if multichannel_processing_intended:
-                _future.waitFor(win.scopeDevice.loadPreset(classification_preset))
-                classification_stack = _future.waitFor(
-                    acquire_z_stack(
-                        win.cameraDevice, start_z, stop_z, step_z, slow_fallback=False, name="neuron classification stack"
-                    ),
-                    timeout=100,
-                ).getResult()
+                win.scopeDevice.loadPreset(classification_preset)
+                classification_stack = acquire_z_stack(
+                    win.cameraDevice, start_z, stop_z, step_z, slow_fallback=False, name="neuron classification stack"
+                )
 
                 if len(detection_stack) != len(classification_stack):
                     logger.warning(
@@ -194,23 +177,20 @@ class CellDetector:
         else:
             save_prefix = str(annotation_save_dir / win.annotation_base_name)
 
-        detection_results = _future.waitFor(
-            detect_neurons(
-                working_stack,  # Prepared based on mock/real and single/multi
-                segmenter=segmenter,
-                autoencoder=autoencoder,
-                classifier=classifier,
-                resnet_classifier=resnet_classifier,
-                xy_scale=pixel_size,  # Global pixel_size
-                z_scale=step_z,  # Actual step_z from mock or real (1um for real)
-                multichannel=multichannel,  # Actual flag for detect_neurons
-                trim_edges=True,
-                min_volume_m3=win.ui.minVolumeSpin.value(),
-                n=None,
-                save_prefix=save_prefix,
-            ),
-            timeout=600,
-        ).getResult()
+        detection_results = detect_neurons(
+            working_stack,  # Prepared based on mock/real and single/multi
+            segmenter=segmenter,
+            autoencoder=autoencoder,
+            classifier=classifier,
+            resnet_classifier=resnet_classifier,
+            xy_scale=pixel_size,  # Global pixel_size
+            z_scale=step_z,  # Actual step_z from mock or real (1um for real)
+            multichannel=multichannel,  # Actual flag for detect_neurons
+            trim_edges=True,
+            min_volume_m3=win.ui.minVolumeSpin.value(),
+            n=5,  # Number of top candidates to return
+            save_prefix=save_prefix,
+        )
         logger.info(f"Neuron detection finished. Found {len(detection_results)} potential neurons.")
 
         win._current_detection_stack = detection_stack
@@ -222,14 +202,15 @@ class CellDetector:
             win._unranked_cells.append(cell)
         return detection_results
 
-    def _handleDetectResults(self, future: Future) -> None:
+    def _handleDetectResults(self, future: Task) -> None:
         """Handles results from _detectNeuronsZStack or _testUI."""
         win = self._window
         try:
-            if future.wasInterrupted():
+            try:
+                neurons = future.wait()
+            except Stopped:
                 logger.info("Cell detection failed.")
                 return
-            neurons = future.getResult()
 
             logger.info(f"Cell detection complete. Found {len(neurons)} potential cells")
             self._displayBoundingBoxes(neurons)

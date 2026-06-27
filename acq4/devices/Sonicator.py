@@ -6,7 +6,7 @@ from functools import cached_property
 from acq4.devices.Device import Device
 from acq4.util import Qt
 from acq4.util.PromptUser import prompt
-from acq4.util.future import Future, FutureButton, future_wrap
+from acq4.util.task import FutureButton, Task, asynch_with_qt_signals
 
 
 class Sonicator(Device):
@@ -36,7 +36,7 @@ class Sonicator(Device):
         super().__init__(deviceManager, config, name)
         self.protocols = config.get("protocols", {})
 
-    def safeToSonicate(self, _future: Future = None, askUser=True) -> bool:
+    def safeToSonicate(self, askUser=True) -> bool:
         pos = self.patchPipetteDevice.pipetteDevice.globalPosition()
         lower_bound = self.config.get("unsafeSonicationBelow")
         if lower_bound is not None:
@@ -48,18 +48,16 @@ class Sonicator(Device):
             return True
         if not askUser:
             return False
-        response = _future.waitFor(
-            prompt(
-                "Sonication Safety Warning",
-                "Sonication may be unsafe at the current pipette position. Proceed?",
-                ["Yes", "No"],
-            )
-        ).getResult()
+        response = prompt(
+            "Sonication Safety Warning",
+            "Sonication may be unsafe at the current pipette position. Proceed?",
+            ["Yes", "No"],
+        )
         return response == "Yes"
 
-    @future_wrap
-    def doProtocol(self, protocol: str | object, _future):
-        if not self.safeToSonicate(_future):
+    @asynch_with_qt_signals
+    def doProtocol(self, protocol: str | object):
+        if not self.safeToSonicate():
             self.logger.info("Sonication deemed unsafe. Aborting.")
             return
         status = "Running"
@@ -67,10 +65,10 @@ class Sonicator(Device):
             status = protocol
             protocol = self.protocols[protocol]
         self.sigSonicationChanged.emit(status)
-        _future.waitFor(self._doProtocol(protocol), timeout=self._protocolDuration(protocol)*1.3)
+        self._doProtocol(protocol).wait(timeout=self._protocolDuration(protocol) * 1.3)
         self._onProtocolFinished()
 
-    def _doProtocol(self, protocol: object) -> Future:
+    def _doProtocol(self, protocol: object) -> Task:
         raise NotImplementedError()
 
     def _protocolDuration(self, protocol: object) -> float:
@@ -138,7 +136,7 @@ class SonicatorGUI(Qt.QWidget):
         self.layout.addWidget(protocolGroup)
         self.layout.addWidget(statusGroup)
 
-    def runProtocol(self) -> Future:
+    def runProtocol(self) -> Task:
         """Run the specified protocol and update UI accordingly"""
         protocol = self.sender().objectName()
         self.updateButtonStates(True, protocol)

@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from acq4.motion import MoveSpec
-from acq4.util.future import future_wrap
+from acq4.util.debug import log_and_ignore_exception
+from acq4.util.task import sleep
 from pyqtgraph import units
 from ._base import PatchPipetteState
 
@@ -52,9 +53,11 @@ class NucleusCollectState(PatchPipetteState):
         self.startPos = pip.globalPosition()
         well = pip.getSiteFor('nucleus')
         if well is not None:
-            self.waitFor(well.moveToInteract(pip), timeout=60)
+            task = well.moveToInteract(pip)
+            task.wait(60)
         else:
-            self.waitFor(pip.moveTo('collect', speed='fast'), timeout=None)
+            task1 = pip.moveTo('collect', speed='fast')
+            task1.wait(None)
 
         if dev.sonicatorDevice is not None:
             self.sonication = dev.sonicatorDevice.doProtocol(config['sonicationProtocol'])
@@ -65,35 +68,26 @@ class NucleusCollectState(PatchPipetteState):
 
         for pressure, delay in sequence:
             dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
-            self.sleep(delay)
+            sleep(delay)
 
-        if self.sonication is not None and not self.sonication.isDone():
-            self.waitFor(self.sonication)
+        if self.sonication is not None and not self.sonication.is_done:
+            self.sonication.wait(None)
 
         dev.pipetteRecord()['expelled_nucleus'] = True
 
-        self.waitFor(pip.goHome())
+        task2 = pip.goHome()
+        task2.wait(None)
 
         return {"state": 'out'}
 
-    @future_wrap
-    def _cleanup(self, _future):
-        try:
-            if self.sonication is not None and not self.sonication.isDone():
+    def _cleanup(self):
+        with log_and_ignore_exception(Exception, "Error stopping sonication"):
+            if self.sonication is not None and not self.sonication.is_done:
                 self.sonication.stop("parent task is cleaning up before sonication finished")
-        except Exception:
-            self.dev.logger.exception("Error stopping sonication")
-
-        try:
+        with log_and_ignore_exception(Exception, "Error resetting pressure after collection"):
             self.dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
-        except Exception:
-            self.dev.logger.exception("Error resetting pressure after collection")
-
-        try:
+        with log_and_ignore_exception(Exception, "Error resetting pipette position after collection"):
             if self.startPos is not None:
                 pip = self.dev.pipetteDevice
-                _future.waitFor(pip.dm.move(MoveSpec(pip, self.startPos, speed='fast')), timeout=60)
-        except Exception:
-            self.dev.logger.exception("Error resetting pipette position after collection")
-
-        _future.waitFor(super()._cleanup(), timeout=None)
+                pip.dm.move(MoveSpec(pip, self.startPos, speed='fast')).wait(timeout=60)
+        super()._cleanup()

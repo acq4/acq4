@@ -43,7 +43,7 @@ class MockStage(MockDevice):
 class MockScope(MockDevice):
     """Microscope/scope mock with setGlobalPosition."""
 
-    def setGlobalPosition(self, pos, speed='fast', name=None):
+    def setGlobalPosition(self, pos, speed="fast", name=None):
         self.moves.append((np.asarray(pos, dtype=float), speed, name))
 
 
@@ -73,6 +73,9 @@ class MockPipette(MockDevice):
 
     def scopeDevice(self):
         return self._scope
+
+    def homePosition(self):
+        return np.array([0.0, 0.0, 5e-3])
 
     @property
     def parentStage(self):
@@ -130,6 +133,10 @@ class MockInteractionSite(MockDevice):
             and -tolerance <= local_pt[2] <= self.height + tolerance
         )
 
+    def parentDevice(self):
+        """The device this site is mounted on (its parent stage), mirroring OptomechDevice."""
+        return self._parentStage
+
     def save_positions_for(self, pip, interact_global):
         """Store the interact position (global) and its site-local equivalent."""
         interact_global = np.asarray(interact_global, dtype=float)
@@ -144,7 +151,9 @@ class MockInteractionSite(MockDevice):
         if site_global is None:
             site_global = self.globalPosition()
         self.positions.setdefault(pip.name(), {})
-        self.positions[pip.name()]["site global"] = list(np.asarray(site_global, dtype=float))
+        self.positions[pip.name()]["site global"] = list(
+            np.asarray(site_global, dtype=float)
+        )
 
     def hasApproachPosition(self, pip) -> bool:
         return "site global" in self.positions.get(pip.name(), {})
@@ -156,7 +165,7 @@ class MockInteractionSite(MockDevice):
             return np.asarray(saved, dtype=float)
         return self.globalPosition()
 
-    def approachMoveSpec(self, pip, speed='fast'):
+    def approachMoveSpec(self, pip, speed="fast"):
         """Fixed mock site — no stage repositioning needed."""
         return None
 
@@ -218,7 +227,9 @@ def site(pip):
 @pytest.fixture
 def site_with_scope_park(pip):
     park = np.array([20e-3, 0.0, 15e-3])
-    s = MockInteractionSite("cleanwell", global_pos=(5e-3, 0.0, -2e-3), scope_park_pos=park)
+    s = MockInteractionSite(
+        "cleanwell", global_pos=(5e-3, 0.0, -2e-3), scope_park_pos=park
+    )
     s.save_positions_for(pip, np.array([0.0, 0.0, -1e-3]))
     s.save_approach_for(pip)  # enables strict path
     return s

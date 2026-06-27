@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import contextlib
-import queue
-import sys
 import threading
 from copy import deepcopy
 from typing import Any, Optional, Iterable
@@ -10,15 +8,26 @@ from typing import Any, Optional, Iterable
 import numpy as np
 
 from acq4 import getManager
+from acq4.logging_config import get_logger
 from acq4.util import Qt
 from acq4.util.debug import log_and_ignore_exception
-from acq4.util.future import Future, future_wrap
+from acq4.util.task import (
+    QtFriendlyTask,
+    Task,
+    asynch,
+    check_stop,
+    sleep,
+    Stopped,
+    asynch_with_qt_signals,
+    Queue,
+    Empty,
+)
 from neuroanalysis.test_pulse import PatchClampTestPulse
 from pyqtgraph import disconnect
 from pyqtgraph.units import µm
 
 
-class PatchPipetteState(Future):
+class PatchPipetteState(QtFriendlyTask):
     """Base class for implementing the details of a patch pipette state:
 
     - Set initial pressure, clamp parameters, position, etc when starting the state
@@ -134,15 +143,26 @@ class PatchPipetteState(Future):
         from acq4.devices.PatchPipette import PatchPipette
 
         self._targetHasChanged = False
-        Future.__init__(self, name=f"State {self.stateName} for {dev}")
+        # The state IS the task; its body is self.runJob. start=False so the state
+        # manager can connect signals before calling start(). QtFriendlyTask.__init__
+        # initializes the QObject half, so anything that connects Qt signals (e.g.
+        # sigTargetChanged below) must run AFTER this call.
+        QtFriendlyTask.__init__(
+            self,
+            self.runJob,
+            name=f"State {self.stateName} for {dev}",
+            start=False,
+            on_finish=self._stateFinished,
+        )
         self.dev: PatchPipette = dev
+        self.logger = get_logger(f"{__name__}.State {self.stateName} for {dev}")
 
         # generate full config by combining passed-in arguments with default config
         self.config = self.defaultConfig()
         if config is not None:
             self.config.update(config)
         self._cleanupMutex = threading.Lock()
-        self.testPulseResults = queue.Queue()
+        self.testPulseResults = Queue()
         self._cleanupFuture = None
         self._pressureAdjustment = None
         self._pauseMovement = False
@@ -150,24 +170,22 @@ class PatchPipetteState(Future):
         # This is usually set by the return value of run(), and must be invoked by the state manager.
         self.nextState = {"state": self.config.get('fallbackState', None)}
         self.dev.sigTargetChanged.connect(self._onTargetChanged)
+        self.dev.sigActiveChanged.connect(self._onActiveChanged)
 
-    def start(self):
-        """Start a background thread that executes this state. This should only be called by the state manager.
+    def _stateFinished(self, result, exc):
+        """on_finish callback: reproduce the old setResult error/stop messaging.
 
-        When runJob completes, self.sigFinished will be emitted."""
-        self.executeInThread(self.runJob, args=(), kwds={})
-
-    def setResult(self, *args, **kwargs):
-        if 'error' in kwargs:
-            self.setState(f"{self.stateName} failed: {kwargs['error']}")
-        if 'excInfo' in kwargs and kwargs['excInfo'] is not None:
-            exc_type, exc_value, _ = kwargs['excInfo']
-            if issubclass(exc_type, Future.StopRequested):
-                self.dev.logger.debug(f"{self.stateName} stopped: {exc_value}")
-            else:
-                self.setState(f"Exception in {self.stateName}: {exc_type.__name__}: {exc_value}")
-                self.dev.logger.error(f"Exception in {self.stateName}:", exc_info=kwargs['excInfo'])
-        super().setResult(*args, **kwargs)
+        QtFriendlyTask invokes this before emitting sigFinished. A cooperative Stopped is
+        logged at debug; any other exception updates the state and is logged as an
+        error.
+        """
+        if isinstance(exc, Stopped):
+            self.dev.logger.debug(f"{self.stateName} stopped: {exc}")
+        elif exc is not None:
+            self.setState(f"Exception in {self.stateName}: {type(exc).__name__}: {exc}")
+            self.dev.logger.error(
+                f"Exception in {self.stateName}:", exc_info=(type(exc), exc, exc.__traceback__)
+            )
 
     def initialize(self):
         if self.config.get('finishPatchRecord') is True:
@@ -178,7 +196,7 @@ class PatchPipetteState(Future):
         self.initializePressure()
         self.initializeClamp()
 
-    def runJob(self, _future):  # _future is self
+    def runJob(self):
         """Called in background thread to start the state.
 
         Initialize pressure, clamp, etc. and run the subclass-defined run() method if it exists.
@@ -220,7 +238,8 @@ class PatchPipetteState(Future):
         """Subclasses can implement this method to have code executed in a background thread after the state starts.
 
         The default implementation just waits until the state is stopped by the state manager."""
-        self.sleep(float('inf'))
+        duration = float('inf')
+        sleep(duration)
 
     def initializePressure(self):
         """Set initial pressure based on the config keys 'initialPressureSource' and 'initialPressure'
@@ -274,7 +293,7 @@ class PatchPipetteState(Future):
     def processAtLeastOneTestPulse(self) -> list[PatchClampTestPulse]:
         """Wait for at least one test pulse to be processed."""
         while not (tps := self.getTestPulses(timeout=0.2)):
-            self.checkStop()
+            check_stop()
         return tps
 
     def testPulseFinished(self, clamp, result):
@@ -285,7 +304,7 @@ class PatchPipetteState(Future):
         wait *timeout* seconds for one to arrive.
         """
         tps = []
-        with contextlib.suppress(queue.Empty):
+        with contextlib.suppress(Empty):
             if timeout is not None:
                 tps.append(self.testPulseResults.get(timeout=timeout))
             while not self.testPulseResults.empty():
@@ -296,10 +315,10 @@ class PatchPipetteState(Future):
         """While not that slow, we still want to keep the innermost loop as fast as we can."""
         if self._pressureAdjustment is None:
             self._pressureAdjustment = self._adjustPressureForDepth()
-            self._pressureAdjustment.onFinish(self._finishPressureAdjustment)
+            self._pressureAdjustment.add_finish_callback(self._finishPressureAdjustment)
 
-    @future_wrap(logLevel='debug')
-    def _adjustPressureForDepth(self, _future):
+    @asynch
+    def _adjustPressureForDepth(self):
         depth = self.depthBelowSurface()
         if depth < 0:  # above surface
             pressure = self.config["aboveSurfacePressure"]
@@ -308,30 +327,26 @@ class PatchPipetteState(Future):
             pressure = min(pressure, self.config["belowSurfacePressureMax"])
         self.dev.pressureDevice.setPressure("regulator", pressure)
 
-    def _finishPressureAdjustment(self, future):
+    def _finishPressureAdjustment(self, result, exc):
         self._pressureAdjustment = None
 
-    def cleanup(self) -> Future:
+    def cleanup(self) -> Task:
         with self._cleanupMutex:
             if self._cleanupFuture is None:
-                self._cleanupFuture = self._cleanup()
+                self._cleanupFuture = asynch_with_qt_signals(self._cleanup)()
             return self._cleanupFuture
 
-    def _cleanup(self) -> Future:
+    def _cleanup(self):
         """Called after job completes, whether it failed or succeeded. Ask `self.wasInterrupted()` to see if the
-        state was stopped early. Return a Future that completes when cleanup is done.
+        state was stopped early.
         """
-        disconnect(self.dev.sigTargetChanged, self._onTargetChanged)
+        with log_and_ignore_exception(Exception, "Error disconnecting target-change signal"):
+            disconnect(self.dev.sigTargetChanged, self._onTargetChanged)
+        with log_and_ignore_exception(Exception, "Error disconnecting active-change signal"):
+            disconnect(self.dev.sigActiveChanged, self._onActiveChanged)
         with log_and_ignore_exception(Exception, "Error disabling visual target tracking"):
             if self.dev.cell is not None:
                 self.stopVisualTargetTracking('cleaning up state')
-        return Future.immediate()
-
-    def checkStop(self):
-        # extend checkStop to also see if the pipette was deactivated.
-        if self.dev.active is False:
-            raise self.StopRequested("Stop state because device is not 'active'")
-        Future.checkStop(self)
 
     def __repr__(self):
         return f'<{type(self).__name__} "{self.stateName}">'
@@ -367,8 +382,8 @@ class PatchPipetteState(Future):
             self.dev.cell.enableTracking(False, reason=reason)
             # wait on future until it stops
             try:
-                self.waitFor(fut)
-            except fut.Stopped:
+                fut.wait(None)
+            except Stopped:
                 pass
 
     def startVisualTargetTracking(self, allow_refresh_reference=True):
@@ -377,7 +392,7 @@ class PatchPipetteState(Future):
         if cell is None:
             raise ValueError("Cannot visually track target; no cell is assigned to this pipette device.")
         if not cell.isInitialized:
-            cell.initializeTracker(self.dev.pipetteDevice.imagingDevice()).wait()
+            cell.initializeTracker(self.dev.pipetteDevice.imagingDevice())
 
         cell.enableTracking(True)
         cell.sigTrackingMultipleFramesStart.connect(self._pausePipetteForExtendedTracking)
@@ -385,8 +400,6 @@ class PatchPipetteState(Future):
         cell._trackingFuture.sigFinished.connect(self._visualTargetTrackingFinished)
 
     def _visualTargetTrackingFinished(self, future):
-        from acq4_automation.feature_tracking.visualization import LiveTrackerVisualizer
-
         if not hasattr(self.dev, '_trackingVisualizers'):
             self.dev._trackingVisualizers = []
         disconnect(self.dev.cell.sigPositionChanged, self.dev.pipetteDevice.setTarget)
@@ -403,7 +416,7 @@ class PatchPipetteState(Future):
         cell.sigTrackingMultipleFramesFinish.disconnect(self._resumePipetteAfterExtendedTracking)
         cell.sigTrackingMultipleFramesStart.connect(self._pausePipetteForExtendedTracking)
 
-    def _waitForMoveWhileTargetChanges(self, position_fn, speed, continuous, future, interval=None, step=None, move_restart_threshold=3.0):
+    def _waitForMoveWhileTargetChanges(self, position_fn, speed, continuous, interval=None, step=None, move_restart_threshold=3.0):
         """Wait for a move to complete while also monitoring for changes in the target position.
 
         When the target position updates, the move will be updated as well to track the new target.
@@ -414,12 +427,12 @@ class PatchPipetteState(Future):
         restart_move = False
         last_destination = None
         try:
-            while move_fut is None or not move_fut.isDone():
+            while move_fut is None or not move_fut.is_done:
                 if self._pauseMovement:
                     if move_fut is not None:
                         move_fut.stop("Paused", wait=True)
                         move_fut = None
-                    future.sleep(0.1)
+                    sleep(0.1)
                     continue
                 current_target_pos = position_fn()
                 if move_fut is None or restart_move or last_destination is None:
@@ -456,14 +469,18 @@ class PatchPipetteState(Future):
                             f"{'>' if restart_move else '<'} {move_restart_threshold}°; "
                             f"{'update path' if restart_move else 'keep current path'}")
                 if not restart_move:
-                    future.sleep(0.1)
+                    sleep(0.1)
         except Exception:
-            if move_fut is not None and not move_fut.isDone():
+            if move_fut is not None and not move_fut.is_done:
                 move_fut.stop("Error while moving", wait=True)
             raise
 
     def _onTargetChanged(self, pos):
         self._targetHasChanged = True
+
+    def _onActiveChanged(self, active):
+        if not active:
+            self.stop("Stop state because device is not 'active'")
 
     def _distanceToTarget(self):
         pip = self.dev.pipetteDevice

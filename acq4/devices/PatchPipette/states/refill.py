@@ -2,7 +2,10 @@
 # Supports periodic clog mitigation (pressure pulse and/or sonication) interleaved with suction.
 from __future__ import annotations
 
-from acq4.util.future import future_wrap
+from gentletask import check_stop
+
+from acq4.util.debug import log_and_ignore_exception
+from acq4.util.task import sleep
 from ._base import PatchPipetteState
 
 
@@ -65,9 +68,10 @@ class RefillState(PatchPipetteState):
         self.setState('refilling pipette')
         site = pip.getSiteFor('refill')
         if site is not None:
-            self.waitFor(site.moveToInteract(pip, speed='fast'), timeout=60)
+            task1 = site.moveToInteract(pip, speed='fast')
         else:
-            self.waitFor(pip.moveTo('refill', 'fast'), timeout=60)
+            task1 = pip.moveTo('refill', 'fast')
+        task1.wait(60)
 
         refill_pressure = config['refillPressure']
         refill_duration = config['refillDuration']
@@ -82,17 +86,18 @@ class RefillState(PatchPipetteState):
 
         remaining = refill_duration
         while remaining > 0:
-            self.checkStop()
+            check_stop()
             chunk = min(remaining, mitigation_interval)
             dev.pressureDevice.setPressure(source='regulator', pressure=refill_pressure)
-            self.sleep(chunk)
+            sleep(chunk)
             remaining -= chunk
 
             if remaining > 0:
                 self._runClogMitigation(dev, sonication_protocol, mitigation_pressure, mitigation_duration)
 
         dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
-        self.waitFor(pip.goHome())
+        task2 = pip.goHome()
+        task2.wait(None)
         dev.pipetteRecord()['refillCount'] = dev.pipetteRecord().get('refillCount', 0) + 1
         return {'state': config['nextState']}
 
@@ -105,25 +110,18 @@ class RefillState(PatchPipetteState):
 
         if pressure != 0:
             dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
-            self.sleep(duration)
+            sleep(duration)
 
-        if sonication is not None and not sonication.isDone():
-            self.waitFor(sonication)
+        if sonication is not None and not sonication.is_done:
+            sonication.wait(None)
 
         self.setState('refilling pipette')
 
-    @future_wrap
-    def _cleanup(self, _future):
-        dev = self.dev
-        try:
-            if self._sonication is not None and not self._sonication.isDone():
+    def _cleanup(self):
+        with log_and_ignore_exception(Exception, "Error stopping sonication during refill cleanup"):
+            if self._sonication is not None and not self._sonication.is_done:
                 self._sonication.stop("parent task is cleaning up before sonication finished")
-        except Exception:
-            dev.logger.exception("Error stopping sonication during refill cleanup")
+        with log_and_ignore_exception(Exception, "Error resetting pressure after refill"):
+            self.dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
 
-        try:
-            dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
-        except Exception:
-            dev.logger.exception("Error resetting pressure after refill")
-
-        _future.waitFor(super()._cleanup(), timeout=None)
+        super()._cleanup()

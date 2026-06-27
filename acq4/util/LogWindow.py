@@ -155,6 +155,24 @@ class ErrorDialog(Qt.QDialog):
 class DocumentedLogModel(LogModel):
     """Custom LogModel that handles 'docs' attribute as clickable documentation links."""
 
+    def _get_column_text(self, record, col_id):
+        """Show the gentletask throughline (task-name chain) in the Task column.
+
+        The throughline is the chain of task names active when the record was
+        emitted, set by ThroughlineNameFilter and carried on the record. It is
+        joined with ' > '. Records without a throughline fall back to the base
+        column text (taskName); every other column defers to the base.
+        """
+        if col_id == LogColumns.TASK:
+            throughline = getattr(record, 'throughline', None)
+            if throughline:
+                if not hasattr(record, '_column_text_cache'):
+                    record._column_text_cache = {}
+                if col_id not in record._column_text_cache:
+                    record._column_text_cache[col_id] = " > ".join(str(n) for n in throughline)
+                return record._column_text_cache[col_id]
+        return super()._get_column_text(record, col_id)
+
     def _get_attribute_handler(self, attr_name):
         """Override to add custom handler for 'docs' attribute."""
         # Check for docs attribute
@@ -257,6 +275,12 @@ class DocumentedLogViewer(LogViewer):
         # Replace the standard model with our custom one
         self._replace_model_with_custom()
 
+        # Surface the gentletask throughline: the base viewer ships a hidden
+        # 'Task' column; show it (retitled 'Throughline' by the header below)
+        # and give it room for a task-name chain.
+        self.tree.setColumnHidden(LogColumns.TASK, False)
+        self.tree.setColumnWidth(LogColumns.TASK, 250)
+
         # Connect our custom signal to open URLs in browser
         self.documentation_link_clicked.connect(self._open_documentation_link)
 
@@ -273,7 +297,11 @@ class DocumentedLogViewer(LogViewer):
         """Replace the standard LogModel with our CustomLogModel."""
         # Create our custom model
         custom_model = DocumentedLogModel()
-        custom_model.setHorizontalHeaderLabels(LogColumns.TITLES)
+        # Retitle the base 'Task' column to 'Throughline' (its contents are the
+        # gentletask task-name chain; see DocumentedLogModel._get_column_text).
+        titles = list(LogColumns.TITLES)
+        titles[LogColumns.TASK] = 'Throughline'
+        custom_model.setHorizontalHeaderLabels(titles)
 
         # Replace the model in the proxy
         if USE_CHAINED_FILTERING:

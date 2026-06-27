@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import numpy as np
+from gentletask import check_stop
 
 from acq4.util import ptime
 from ._base import PatchPipetteState, exponential_decay_avg
@@ -68,7 +69,7 @@ class CellAttachedState(PatchPipetteState):
             if delay is not None and ptime.time() - startTime > delay:
                 return {"state": 'break in'}
 
-            self.checkStop()
+            check_stop()
 
             tps = self.getTestPulses(timeout=0.2)
             if len(tps) == 0:
@@ -77,8 +78,8 @@ class CellAttachedState(PatchPipetteState):
             tp = tps[-1]
             holding = tp.analysis['baseline_current']
             if holding < self.config['holdingCurrentThreshold']:
-                self.setResult(
-                    error=f'Spontaneous detachment: holding current {holding * 1e9:.2f}nA is below `holdingCurrentThreshold`.',
+                self.setState(
+                    f'Spontaneous detachment: holding current {holding * 1e9:.2f}nA is below `holdingCurrentThreshold`.'
                 )
                 return {"state": config['spontaneousDetachmentState']}
 
@@ -94,8 +95,8 @@ class CellAttachedState(PatchPipetteState):
                 return {"state": config['spontaneousBreakInState']}
 
             if ssr_avg < config['resistanceThreshold']:
-                self.setResult(
-                    error=f'Spontaneous detachment: steady state resistance {ssr_avg / 1e6:.1f}MΩ dropped below `resistanceThreshold`.',
+                self.setState(
+                    f'Spontaneous detachment: steady state resistance {ssr_avg / 1e6:.1f}MΩ dropped below `resistanceThreshold`.'
                 )
                 return {"state": config['spontaneousDetachmentState']}
 

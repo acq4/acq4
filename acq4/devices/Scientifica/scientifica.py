@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import sys
 import threading
 import time
 from typing import Optional
@@ -11,8 +10,8 @@ from acq4.util import ptime
 from acq4.devices.Stage import Stage, MoveFuture, StageInterface
 from acq4.drivers.Scientifica import Scientifica as ScientificaDriver
 from acq4.util import Qt
-from acq4.util.future import future_wrap, Future, FutureButton
-from acq4.util.threadrun import runInGuiThread
+from acq4.util.task import asynch, sleep, Stopped, ManualQtFriendlyTask, FutureButton
+from acq4.util.task import run_in_gui_thread
 from pyqtgraph import SpinBox, siFormat
 
 
@@ -240,7 +239,7 @@ class Scientifica(Stage):
 
     def _move(self, pos, speed, linear, name=None, **kwds):
         with self.lock:
-            if self._lastMove is not None and not self._lastMove.isDone():
+            if self._lastMove is not None and not self._lastMove.is_done:
                 self.stop()
             speed = self._interpretSpeed(speed)
 
@@ -302,15 +301,15 @@ class ScientificaMoveFuture(MoveFuture):
             self._moveReq.set_callback(self._requestFinished)
 
     def _requestFinished(self, moveReq):
+        # External producer: the driver request's completion callback completes
+        # this promise. Honor a stop already requested on this future.
+        if self.is_stopped:
+            return
         try:
             moveReq.wait(timeout=None)
-            self._taskDone()
+            self.resolve(None)
         except Exception as exc:
-            self._taskDone(
-                interrupted=True,
-                error=moveReq.error,
-                excInfo=moveReq.exc_info,
-            )
+            self.fail(exc)
 
     def interrupt(self):
         if self._moveReq is None:
@@ -319,6 +318,8 @@ class ScientificaMoveFuture(MoveFuture):
             self._moveReq.cancel()
 
     def _stepwiseMove(self):
+        # Raw producer thread (not a gentletask task): honor a stop request by
+        # polling self.is_stopped, and push completion onto the promise.
         try:
             minSpeed = self.dev.minimumSpeed
             start = np.array(self.startPos)
@@ -328,23 +329,24 @@ class ScientificaMoveFuture(MoveFuture):
             duration = dist / speed
             startTime = ptime.time()
             while True:
-                if not self.doStepwise:
-                    raise self.Stopped()
+                if not self.doStepwise or self.is_stopped:
+                    raise Stopped()
                 now = ptime.time()
                 fracComplete = min(1, (now - startTime) / duration)
                 step = start + (stop-start) * fracComplete
                 self.f = self.dev.driver.moveTo(step, speed=minSpeed, name=f"{self.dev.name()} stepwise substep")
                 self.f.wait()
                 if fracComplete == 1:
-                    self._taskDone()
+                    self.resolve(None)
                     break
+        except Stopped:
+            # If stop() drove this (is_stopped), the promise is already
+            # completing with Stopped; otherwise (interrupt() flipped
+            # doStepwise) complete it ourselves.
+            if not self.is_done:
+                self.stop("stepwise move interrupted")
         except Exception as exc:
-            print()
-            self._taskDone(
-                interrupted=True,
-                error=str(exc),
-                excInfo=sys.exc_info(),
-            )
+            self.fail(exc)
 
 
 class ScientificaGUI(StageInterface):
@@ -455,12 +457,14 @@ class ScientificaGUI(StageInterface):
         )
         if response != Qt.QMessageBox.Ok:
             self.sigBusyMoving.emit(False)
-            return Future.immediate(error="User requested stop", stopped=True)
+            stopped = ManualQtFriendlyTask(name=f"{self.dev.name()} auto-zero")
+            stopped.stop("User requested stop")
+            return stopped
 
         return self._doAutoZero(axis)
 
-    @future_wrap
-    def _doAutoZero(self, axis: int = None, _future: Future = None) -> None:
+    @asynch
+    def _doAutoZero(self, axis: int = None) -> None:
         self._savedLimits = self.dev.getLimits()
         try:
             diff = np.zeros(3)  # keep track of offset changes
@@ -472,7 +476,7 @@ class ScientificaGUI(StageInterface):
             if axis is not None and far_away[axis] is None:
                 raise Exception(f"Requested auto zero for axis {'XYZ'[axis]}, but autoZeroDirection is disabled for this axis in the configuration.")
 
-            self._moveAndWait(far_away, axis, _future)
+            self._moveAndWait(far_away, axis)
             diff += self._zeroAxis(axis)
 
             # This part is a pain: if the approach switch is enabled on the control cube, then it's possible for the
@@ -489,9 +493,9 @@ class ScientificaGUI(StageInterface):
                         currentPos = self.dev.getPosition()
                         currentPos[otherAxis] += 300 * dir
                         # small step to move z (x) away from its limit switch
-                        self._moveAndWait(currentPos, otherAxis, _future)
+                        self._moveAndWait(currentPos, otherAxis)
                         # far step to get x (z) to its limit switch
-                        self._moveAndWait(far_away, axis, _future)
+                        self._moveAndWait(far_away, axis)
                         diff += self._zeroAxis(axis)
 
             self.dev.logger.info(f"Auto-zeroed {self.dev.name()} by {diff}")
@@ -503,15 +507,15 @@ class ScientificaGUI(StageInterface):
                     if slip:
                         axis = 'XYZ'[ax]
                         msg = f"{msg} {axis}={siFormat(diff[ax], suffix='m')}"
-                runInGuiThread(Qt.QMessageBox.warning, self, "Large slippage detected", msg, Qt.QMessageBox.Ok)
-            _future.waitFor(move_future)
+                run_in_gui_thread(Qt.QMessageBox.warning, self, "Large slippage detected", msg, Qt.QMessageBox.Ok)
+            move_future.wait()
         finally:
             self.sigBusyMoving.emit(False)
             self.dev.stop()
             self.dev.setLimits(*self._savedLimits)
 
-    def _moveAndWait(self, pos, axis, _future):
-        """Move to pos and wait for the move to complete. 
+    def _moveAndWait(self, pos, axis):
+        """Move to pos and wait for the move to complete.
         If axis is None, move all three axes to the specified position.
         If axis is 0,1,2, move only the specified axis to pos[axis].
 
@@ -525,15 +529,18 @@ class ScientificaGUI(StageInterface):
             dest = [None, None, None]
             dest[axis] = pos[axis]
         f = self.dev._move(dest, "fast", False, attempts_allowed=1, name=f"{self.dev.name()} auto-zero axis {axis}")
-        while not f.isDone():
-            _future.sleep(0.1)
+        while not f.is_done:
+            sleep(0.1)  # cooperative: raises Stopped if this task was stopped
 
         # raise errors not related to missing the target
-        missed = f.wasInterrupted() and 'Stopped moving before reaching target' in f.errorMessage()
-        if f.wasInterrupted() and not missed:
+        try:
             f.wait()
+        except Exception as exc:
+            if 'Stopped moving before reaching target' in str(exc):
+                return False  # missed target; silently ignored
+            raise
 
-        return not missed
+        return True
 
     def _zeroAxis(self, axis):
         """Zero an axis (or all three) and return the vector change in global position."""

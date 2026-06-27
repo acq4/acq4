@@ -1,7 +1,9 @@
 from __future__ import annotations
 
-from acq4 import getManager
-from acq4.util.future import future_wrap
+from gentletask import check_stop
+
+from acq4.util.debug import log_and_ignore_exception
+from acq4.util.task import sleep
 from pyqtgraph import units
 from ._base import PatchPipetteState
 
@@ -55,7 +57,7 @@ class CleanState(PatchPipetteState):
         self.setState('cleaning')
 
         for stage in ('clean', 'rinse'):
-            self.checkStop()
+            check_stop()
 
             sequence = config[f'{stage}Sequence']
             if isinstance(sequence, str):
@@ -65,51 +67,35 @@ class CleanState(PatchPipetteState):
 
             site = pip.getSiteFor(stage)
             if site is not None:
-                self.waitFor(site.moveToInteract(pip, speed='fast'), timeout=60)
+                task1 = site.moveToInteract(pip, speed='fast')
             else:
-                self.waitFor(pip.moveTo(stage, 'fast'), timeout=60)
+                task1 = pip.moveTo(stage, "fast")
+            task1.wait(60)
 
             if dev.sonicatorDevice is not None:
                 self.sonication = dev.sonicatorDevice.doProtocol(config['sonicationProtocol'])
 
             for pressure, delay in sequence:
                 dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
-                self.sleep(delay)
+                sleep(delay)
 
-            if self.sonication is not None and not self.sonication.isDone():
-                self.waitFor(self.sonication)
+            if self.sonication is not None and not self.sonication.is_done:
+                self.sonication.wait(None)
 
         dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
-        self.waitFor(pip.goHome())
+        task2 = pip.goHome()
+        task2.wait(None)
         dev.pipetteRecord()['cleanCount'] += 1
         dev.setTipClean(True)
         dev.newPatchAttempt()
         return {"state": config['nextState']}
 
-    def resetPosition(self, parent_future):
-        # todo we need to handle this somehow for both path generators
-        if self.moveFuture is not None:
-            fut = self.moveFuture.undo()
-            self.moveFuture = None
-            parent_future.waitFor(fut, timeout=None)
-
-    @future_wrap
-    def _cleanup(self, _future):
-        dev = self.dev
-        try:
-            if self.sonication is not None and not self.sonication.isDone():
+    def _cleanup(self):
+        with log_and_ignore_exception(Exception, "Error stopping sonication"):
+            if self.sonication is not None and not self.sonication.is_done:
                 self.sonication.stop("parent task is cleaning up before sonication finished")
-        except Exception:
-            dev.logger.exception("Error stopping sonication")
 
-        try:
-            dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
-        except Exception:
-            dev.logger.exception("Error resetting pressure after clean")
+        with log_and_ignore_exception(Exception, "Error resetting pressure after clean"):
+            self.dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
 
-        # try:
-        #     _future.waitFor(dev.pipetteDevice.moveTo('home', 'fast'))
-        # except Exception:
-        #     dev.logger.exception("Error resetting pipette position after clean")
-
-        _future.waitFor(super()._cleanup(), timeout=None)
+        super()._cleanup()

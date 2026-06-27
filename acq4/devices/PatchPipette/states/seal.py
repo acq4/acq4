@@ -5,11 +5,13 @@ import time
 from typing import Any
 
 import numpy as np
+from gentletask import check_stop
 
-from acq4.util import ptime, Qt
 import pyqtgraph as pg
+from acq4.util import ptime, Qt
 from acq4.util.debug import log_and_ignore_exception
 from acq4.util.functions import plottable_booleans
+from acq4.util.task import Stopped, sleep
 from neuroanalysis.data import TSeries
 from pyqtgraph.units import kPa
 from ._base import PatchPipetteState, SteadyStateAnalysisBase, exponential_decay_avg
@@ -323,12 +325,13 @@ class SealState(PatchPipetteState):
         self.setState(f'beginning seal (mode: {config["pressureMode"] !r})')
         self.setInitialPressure()
         if config['focusOnCell']:
-            self.waitFor(dev.focusOnTarget('slow'))
+            task = dev.focusOnTarget('slow')
+            task.wait(None)
 
         self._patchrec['attemptedSeal'] = True
 
         while True:
-            self.checkStop()
+            check_stop()
             self.processAtLeastOneTestPulse()
 
             if not holdingSet and self._analysis.hold():
@@ -348,15 +351,9 @@ class SealState(PatchPipetteState):
                 if self._analysis.failure() or dt > config['autoSealTimeout']:
                     self._patchrec['sealSuccessful'] = False
                     if self._analysis.failure():
-                        self.setResult(
-                            interrupted=True,
-                            error="Resistance hung up below threshold without improving",
-                        )
+                        self.setState("Resistance hung up below threshold without improving")
                     else:
-                        self.setResult(
-                            interrupted=True,
-                            error=f"Seal took longer than `autoSealTimeout` ({dt:f}s)",
-                        )
+                        self.setState(f"Seal took longer than `autoSealTimeout` ({dt:f}s)")
                     next_state = {"state": config["fallbackState"]}
                     if holdingSet:
                         next_state["initialVCHolding"] = None
@@ -373,7 +370,8 @@ class SealState(PatchPipetteState):
                 dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
             else:
                 dev.pressureDevice.setPressure(source='regulator', pressure=config['afterSealPressure'])
-            self.sleep(config['delayAfterSeal'])
+            duration = config['delayAfterSeal']
+            sleep(duration)
 
         dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
 
@@ -437,22 +435,24 @@ class SealState(PatchPipetteState):
         start = time.time()
         while True:
             try:
-                self.checkStop()
-            except self.StopRequested:
+                check_stop()
+            except Stopped:
                 future.stop(reason="parent task stop requested")
                 raise
             self.processAtLeastOneTestPulse()
             if self._analysis.success():
                 future.stop(reason="seal acquired")
                 break
+            # wait(timeout) raises future.Timeout on the 0.1s loopbeat and re-raises
+            # any error from the future; break once the future has actually finished.
             try:
                 future.wait(0.1)
+            except future.Timeout:
+                pass
+            if future.is_done:
                 break
-            except self.Timeout as e:
-                if future.wasInterrupted():  # a _real_ timeout, as opposed to our 0.1s loopbeat
-                    future.wait()  # let it sing
-                if timeout is not None and time.time() - start > timeout:
-                    raise self.Timeout(f"Timed out waiting {timeout}s for {future!r}") from e
+            if timeout is not None and time.time() - start > timeout:
+                raise RuntimeError(f"Timed out waiting {timeout}s for {future!r}")
 
     def best_pressure(self, start: float, turnaround: float, end: float) -> float:
         pressures, resistances = self._trim_data_caches(start)
@@ -490,4 +490,4 @@ class SealState(PatchPipetteState):
             self.dev.pressureDevice.setPressure(source='atmosphere')
         with log_and_ignore_exception(Exception, "Error during pressure signal disconnect"):
             self.dev.pressureDevice.sigPressureChanged.disconnect(self._handlePressureChanged)
-        return super()._cleanup()
+        super()._cleanup()

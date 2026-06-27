@@ -24,6 +24,7 @@ from .Interfaces import InterfaceDirectory
 from .devices import getDeviceClass
 from .devices.Device import Device, DeviceTask, DeviceLocker, get_devices_held_by_thread
 from .logging_config import get_logger, set_log_file
+from .util.task import ManualQtFriendlyTask, synch
 from .util import DataManager, ptime, Qt
 from .util.DataManager import DirHandle
 from .util.HelpfulException import HelpfulException
@@ -490,8 +491,17 @@ class Manager(Qt.QObject):
         reserved the Stage). Running inline re-enters the existing reservation. The
         returned Future is already resolved in that case.
         """
-        block = bool(get_devices_held_by_thread())
-        return self.motionPlanner.execute(list(specs), name=name, block=block)
+        if get_devices_held_by_thread():
+            # Run the plan inline in this thread (re-entering the recursive
+            # per-thread reservation) instead of on a worker thread, then hand
+            # back an already-resolved task so callers' wait()/signals still work.
+            move = ManualQtFriendlyTask(name=name or "move")
+            try:
+                move.resolve(synch(self.motionPlanner.execute)(list(specs), name=name))
+            except BaseException as exc:
+                move.fail(exc)
+            return move
+        return self.motionPlanner.execute(list(specs), name=name)
 
     def getOrLoadModule(self, name):
         if name in self.modules:

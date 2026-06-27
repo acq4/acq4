@@ -8,6 +8,7 @@ import numpy as np
 from acq4.devices.PatchClamp.patchclamp import PatchClamp
 from acq4.util import Qt
 from acq4.util import ptime
+from acq4.util.task import raise_errors
 from coorx import Point
 from neuroanalysis.test_pulse import PatchClampTestPulse
 from .devgui import PatchPipetteDeviceGui
@@ -191,7 +192,7 @@ class PatchPipette(Device):
             self.pipetteDevice.globalPosition(), speed=speed, name=f"Focus on {self.name()} tip"
         )
         if raiseErrors:
-            fut.raiseErrors("Error while focusing on pipette tip: {error}")
+            raise_errors(fut, "Error while focusing on pipette tip: {error}")
         return fut
 
     def focusOnTarget(self, speed, raiseErrors=False):
@@ -200,7 +201,7 @@ class PatchPipette(Device):
             self.pipetteDevice.targetPosition(), speed=speed, name=f"Focus on {self.name()} target"
         )
         if raiseErrors:
-            fut.raiseErrors("Error while focusing on pipette target: {error}")
+            raise_errors(fut, "Error while focusing on pipette target: {error}")
         return fut
 
     def newPipette(self):

@@ -1,3 +1,6 @@
+"""Acquire z-stacks, timelapses, and mosaics from an imager, plus the GUI to drive them.
+Acquisition runs as gentletask tasks; the pure z-stack math lives in standalone functions."""
+
 from __future__ import annotations
 
 import itertools
@@ -5,6 +8,7 @@ import weakref
 from typing import Union, Optional, Generator
 
 import numpy as np
+from gentletask import asynch
 from scipy.optimize import linear_sum_assignment
 from skimage.metrics import structural_similarity as ssim
 
@@ -12,10 +16,10 @@ import acq4.Manager as Manager
 import pyqtgraph as pg
 from acq4.util import Qt, ptime
 from acq4.util.DataManager import DirHandle
-from acq4.util.future import Future, future_wrap
+from acq4.util.task import QtFriendlyTask, check_stop, current_task, set_state, sleep
 from acq4.util.imaging import Frame
 from acq4.util.surface import find_surface
-from acq4.util.threadrun import runInGuiThread
+from acq4.util.task import run_in_gui_thread
 
 
 def enforce_linear_z_stack(frames: list[Frame], start: float, stop: float, step: float) -> list[Frame]:
@@ -106,7 +110,6 @@ def _set_focus_depth(
     speed: Union[float, str],
     hysteresis_correction: bool = True,
     name: str | None = None,
-    future: Optional[Future] = None,
 ):
     if depth is None:
         return
@@ -130,26 +133,21 @@ def _set_focus_depth(
     else:
         move = imager.setFocusDepth(depth, speed, name=f"redundant {name}")
 
-    if future is not None:
-        future.waitFor(move, timeout=timeout)
-    else:
-        move.wait(timeout=timeout)
+    move.wait(timeout=timeout)
 
     move = imager.setFocusDepth(depth, speed, name=name)  # maybe redundant
-    if future is not None:
-        future.waitFor(move, timeout=timeout)
-    else:
-        move.wait(timeout=timeout)
+    move.wait(timeout=timeout)
 
 
-def _stepped_z_stack(imager, start, end, step, name, future) -> list[Frame]:
+def _stepped_z_stack(imager, start, end, step, name) -> list[Frame]:
     direction = np.sign(end - start)
     step = direction * abs(step)
     frames = []
     with imager.ensureRunning(ensureFreshFrames=True):
         for z in np.arange(start, end + step, step):
-            _set_focus_depth(imager, z, direction, speed="slow", name=f"{name} step", future=future)
-            frames.append(future.waitFor(imager.acquireFrames(1)).getResult()[0])
+            check_stop()
+            _set_focus_depth(imager, z, direction, speed="slow", name=f"{name} step")
+            frames.append(imager.acquireFrames(1).wait()[0])
     return frames
 
 
@@ -226,7 +224,6 @@ def _save_results(
     return ret_fh
 
 
-@future_wrap(logLevel='debug')
 def run_image_sequence(
     imager,
     count: float = 1,
@@ -236,7 +233,38 @@ def run_image_sequence(
     mosaic: "tuple[float, float, float, float, float] | None" = None,
     storage_dir: "DirHandle | None" = None,
     name: str | None = None,
-    _future: Future = None,
+) -> QtFriendlyTask:
+    """Start an image sequence as a QtFriendlyTask whose result is the acquired frames.
+
+    Callers connect to sigStateChanged / sigFinished for live progress. The
+    directory the frames were saved into is exposed on the task as
+    ``imagesSavedIn`` once the task completes.
+    """
+    return QtFriendlyTask(
+        _run_image_sequence,
+        kwargs=dict(
+            imager=imager,
+            count=count,
+            interval=interval,
+            pin=pin,
+            z_stack=z_stack,
+            mosaic=mosaic,
+            storage_dir=storage_dir,
+            name=name,
+        ),
+        name=name or "run_image_sequence",
+    )
+
+
+def _run_image_sequence(
+    imager,
+    count: float = 1,
+    interval: float = 0,
+    pin: "Callable[[Frame]] | None" = None,
+    z_stack: "tuple[float, float, float] | None" = None,
+    mosaic: "tuple[float, float, float, float, float] | None" = None,
+    storage_dir: "DirHandle | None" = None,
+    name: str | None = None,
 ) -> "Frame | list[Frame | list[Frame | list[Frame]]]":
     _hold_imager_focus(imager, True)
     _open_shutter(imager, True)  # don't toggle shutter between stack frames
@@ -273,33 +301,35 @@ def run_image_sequence(
                     break
                 start = ptime.time()
                 for move in movements_to_cover_region(imager, mosaic, name):
-                    _future.waitFor(move)
+                    move.wait()
                     if z_stack:
-                        stack = acquire_z_stack(imager, *z_stack, block=True, name=name, checkStopThrough=_future).getResult()
+                        stack = acquire_z_stack(imager, *z_stack, name=name)
                         handle_new_frames(stack, i)
                     else:  # single frame
-                        frame = _future.waitFor(imager.acquireFrames(1, ensureFreshFrames=True)).getResult()[0]
+                        frame = imager.acquireFrames(1, ensureFreshFrames=True).wait()[0]
                         handle_new_frames(frame, i)
-                    _future.checkStop()
-                _future.setState(_status_message(i, count))
-                _future.sleep(interval - (ptime.time() - start))
+                    check_stop()
+                set_state(_status_message(i, count))
+                sleep(interval - (ptime.time() - start))
         finally:
             _open_shutter(imager, False)
             _hold_imager_focus(imager, False)
-    _future.imagesSavedIn = ret_fh
+    task = current_task()
+    if task is not None:
+        task.imagesSavedIn = ret_fh
     return result
 
 
 def movements_to_cover_region(
     imager, region: "tuple[float, float, float, float, float] | None", name: str = "mosaic"
-) -> Generator[Future, None, None]:
+) -> Generator[object, None, None]:
     """
     Generate a sequence of snaking movements to cover the region. `region` is a tuple containing the `left`, `top`,
     `right`, and `bottom` coordinates, as well as an `overlap`, all in global/meters. `region` can also be None, in
-    which case this yields once with a no-op Future.
+    which case this yields once with a no-op task.
     """
     if region is None:
-        yield Future.immediate()
+        yield asynch(lambda: None)()
         return
 
     for pos in positions_to_cover_region(region, imager.globalCenterPosition(), imager.getBoundary(mode="roi")):
@@ -342,7 +372,6 @@ def positions_to_cover_region(region, imager_center, imager_region) -> Generator
         x_finished = False
 
 
-@future_wrap(logLevel='debug')
 def acquire_z_stack(
     imager,
     start: float,
@@ -353,7 +382,6 @@ def acquire_z_stack(
     device_reservation_timeout=10.0,
     max_dz_per_frame=5e-6,  # m
     name: str | None = "z stack",
-    _future: Future = None,
 ) -> list[Frame]:
     """Acquire a Z stack from the given imager.
 
@@ -378,12 +406,12 @@ def acquire_z_stack(
 
     Returns
     -------
-    Future[list[Frame]]
-        Future wrapped around the acquired frames, with corrected z positions.
+    list[Frame]
+        The acquired frames, with corrected z positions.
     """
     # TODO think about strobing the lighting for clearer images
     direction = stop - start
-    _set_focus_depth(imager, start, direction, "fast", hysteresis_correction, f"{name} start", _future)
+    _set_focus_depth(imager, start, direction, "fast", hysteresis_correction, f"{name} start")
     stage = imager.scopeDev.getFocusDevice()
     exposure = imager.getParam('exposure')
     # todo estimate the depth of field of the objective from its numerical aperture and wavelength
@@ -394,18 +422,18 @@ def acquire_z_stack(
     man = Manager.getManager()
     if dz_per_frame > max_dz_per_frame:
         with man.reserveDevices(imager.devicesToReserve(), timeout=device_reservation_timeout, reserver="acquire_z_stack"):
-            frames = _stepped_z_stack(imager, start, stop, step, name, _future)
+            frames = _stepped_z_stack(imager, start, stop, step, name)
     else:
         with man.reserveDevices(imager.devicesToReserve(), timeout=device_reservation_timeout, reserver="acquire_z_stack"):
             with imager.ensureRunning(ensureFreshFrames=True):
                 frames_fut = imager.acquireFrames()
                 try:
-                    _future.waitFor(imager.acquireFrames(1))  # just to be sure the camera's recording
-                    _set_focus_depth(imager, stop, direction, speed, hysteresis_correction=False, name=f"{name} stop", future=_future)
-                    _future.waitFor(imager.acquireFrames(1))  # just to be sure the camera caught up
+                    imager.acquireFrames(1).wait()  # just to be sure the camera's recording
+                    _set_focus_depth(imager, stop, direction, speed, hysteresis_correction=False, name=f"{name} stop")
+                    imager.acquireFrames(1).wait()  # just to be sure the camera caught up
                 finally:
                     frames_fut.stop()
-        frames = _future.waitFor(frames_fut).getResult(timeout=10)
+        frames = frames_fut.wait(timeout=10)
         try:
             frames = enforce_linear_z_stack(frames, start, stop, step)
         except ValueError:
@@ -413,7 +441,7 @@ def acquire_z_stack(
                 raise
             imager.logger.info("Failed to fast-acquire linear z stack. Retrying with stepwise movement.")
             with man.reserveDevices(imager.devicesToReserve(), timeout=device_reservation_timeout, reserver="acquire_z_stack"):
-                frames = _stepped_z_stack(imager, start, stop, step, name, _future)
+                frames = _stepped_z_stack(imager, start, stop, step, name)
     _fix_frame_transforms(frames, step)
     return frames
 
@@ -460,7 +488,7 @@ class ImageSequencerCtrl(Qt.QWidget):
         self.updateDeviceList()
         self.ui.statusLabel.setText("[ stopped ]")
 
-        self._future: Optional[Future] = None
+        self._future: Optional[QtFriendlyTask] = None
 
         self.state = pg.WidgetGroup(self)
         self.state.sigChanged.connect(self.stateChanged)
@@ -529,7 +557,7 @@ class ImageSequencerCtrl(Qt.QWidget):
             )
 
         if self.ui.pinCheckbox.isChecked():
-            prot["pin"] = lambda f: runInGuiThread(self.mod().displayPinnedFrame, f)
+            prot["pin"] = lambda f: run_in_gui_thread(self.mod().displayPinnedFrame, f)
 
         return prot
 
@@ -555,12 +583,12 @@ class ImageSequencerCtrl(Qt.QWidget):
             prot["storage_dir"] = dh
             self.setRunning(True)
             self._future = run_image_sequence(**prot)
-            self._future.onFinish(self.threadStopped, inGui=True)
+            self._future.sigFinished.connect(self.threadStopped)
             self._future.sigStateChanged.connect(self.threadMessage)
         except Exception:
             self.threadStopped(self._future)
             raise
-        if self._future.isDone():  # probably an immediate error
+        if self._future.is_done:  # probably an immediate error
             self.threadStopped(self._future)
 
     def stop(self):

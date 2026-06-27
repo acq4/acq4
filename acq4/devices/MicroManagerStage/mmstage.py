@@ -5,6 +5,7 @@ from pyqtgraph import debug
 
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
+from acq4.util.task import ManualQtFriendlyTask
 from acq4.util.micromanager import getMMCorePy
 from ..Stage import Stage, MoveFuture, StageInterface
 
@@ -211,7 +212,7 @@ class MicroManagerStage(Stage):
 
     def _move(self, pos, speed, linear, name=None, **kwds):
         with self.lock:
-            if self._lastMove is not None and not self._lastMove.isDone():
+            if self._lastMove is not None and not self._lastMove.is_done:
                 self.stop()
 
             # Decide which axes to move
@@ -268,8 +269,17 @@ class MonitorThread(Thread):
                     maxInterval = self.interval
 
                 pos = self.dev._getPosition()  # this causes sigPositionChanged to be emitted
-                if pos != lastPos:
-                    # if there was a change, then loop more rapidly for a short time.
+
+                # Drive the in-flight move toward completion. This lifetime monitor is the active
+                # MoveFuture's external producer: each tick it advances the move via _poll(),
+                # which resolves on arrival / fails on miss.
+                move = self.dev._lastMove
+                moving = move is not None and not move.is_done
+                if moving:
+                    move._poll()
+
+                if moving or pos != lastPos:
+                    # an active move or a position change keeps us in fast cadence
                     interval = self.minInterval
                     lastPos = pos
                 else:
@@ -288,24 +298,26 @@ class MicroManagerMoveFuture(MoveFuture):
     def __init__(self, dev, pos, speed, userSpeed, moveXY=True, moveZ=True, name=None):
         MoveFuture.__init__(self, dev, pos, speed, name=name)
         self._interrupted = False
-        self._errorMSg = None
+        self._errorMsg = None
         self._finished = False
         pos = np.array(pos) / np.array(self.dev.scale)
         with self.dev.lock:
             if moveXY:
-                self.dev.mmc.setXYPosition(self.dev._mmDeviceNames['xy'], pos[:1])
-            if moveXY:
+                self.dev.mmc.setXYPosition(self.dev._mmDeviceNames['xy'], pos[:2])
+            if moveZ:
                 self.dev.mmc.setPosition(self.dev._mmDeviceNames['z'], pos[2])
 
-    def wasInterrupted(self):
-        """Return True if the move was interrupted before completing.
-        """
-        return self._interrupted
-
-    def isDone(self):
-        """Return True if the move is complete.
-        """
-        return self._getStatus() != 0
+    def _poll(self):
+        # Advance this move toward completion. Called by the device MonitorThread
+        # each tick while the move is in flight: resolve on arrival, fail on a
+        # missed target. Idempotent and race-safe (guards + atomic completion).
+        if self.is_stopped or self.is_done:
+            return
+        status = self._getStatus()
+        if status == 1:
+            self.resolve(None)
+        elif status == -1:
+            self.fail(RuntimeError(self._errorMsg or "Move did not complete."))
 
     def _getStatus(self):
         # check status of move unless we already know it is complete.
@@ -316,7 +328,7 @@ class MicroManagerMoveFuture(MoveFuture):
             else:
                 return 1
 
-        for ax in self._axes:
+        for ax in self.dev._axes:
             if self.dev.mmc.deviceBusy(self.dev._mmDeviceNames[ax]):
                 # Still moving
                 return 0
@@ -343,6 +355,12 @@ class MicroManagerMoveFuture(MoveFuture):
             return
         elif status == -1:
             self._errorMsg = "Move was interrupted before completion."
+            # Device detected the abort itself: complete this promise as stopped
+            # unless it is already completing via MoveFuture.stop(). Use
+            # ManualQtFriendlyTask.stop directly to avoid re-entering dev.stop() (this is
+            # called from within dev.stop()/dev.abort()).
+            if not self.is_done and not self.is_stopped:
+                ManualQtFriendlyTask.stop(self, "Move was interrupted before completion.")
         elif status == 0:
             # not actually stopped! This should not happen.
             raise RuntimeError("Interrupted move but manipulator is still running!")

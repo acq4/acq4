@@ -5,7 +5,12 @@ import numpy as np
 
 from acq4.motion.plan import AtomicMove, ParallelGroup, SequentialGroup
 from acq4.motion.spec import MoveSpec
-from acq4.motion.tests.conftest import MockPipette, MockScope
+from acq4.motion.tests.conftest import (
+    MockInteractionSite,
+    MockPipette,
+    MockScope,
+    MockStage,
+)
 
 
 def make_planner():
@@ -13,7 +18,14 @@ def make_planner():
 
     class _TestPlanner(MinirigV1MotionPlanner):
         def _safe_path(self, pip, globalStart, globalStop, speed, explanation=None):
-            return [(np.asarray(globalStop, dtype=float), speed, False, explanation or "move")]
+            return [
+                (
+                    np.asarray(globalStop, dtype=float),
+                    speed,
+                    False,
+                    explanation or "move",
+                )
+            ]
 
     return _TestPlanner()
 
@@ -62,7 +74,13 @@ def test_scope_park_not_repeated_if_already_parked(pip, site_with_scope_park):
     """If _scope_context is already populated, the approach plan must not re-park."""
     planner = make_planner()
     scope = pip.scopeDevice()
-    planner._scope_context[pip.name()] = (scope, [np.zeros(3), np.zeros(3), np.zeros(3)])
+    site = MockInteractionSite("cleanwell", global_pos=(5e-3, 0.0, -2e-3))
+    planner._scope_context[pip.name()] = (
+        scope,
+        [np.zeros(3), np.zeros(3), np.zeros(3)],
+        pip,
+        site,
+    )
 
     plan = planner.plan([MoveSpec(pip, np.zeros(3), relative_to=site_with_scope_park)])
     scope_moves = [m for m in _flat_moves(plan) if isinstance(m.device, MockScope)]
@@ -79,7 +97,13 @@ def _seed_scope_context(planner, pip):
     original_pos = np.array([0.0, 0.0, 10e-3])
     up_pos = np.array([0.0, 0.0, 15e-3])
     park_pos = np.array([20e-3, 0.0, 15e-3])
-    planner._scope_context[pip.name()] = (scope, [original_pos, up_pos, park_pos])
+    site = MockInteractionSite("cleanwell", global_pos=(5e-3, 0.0, -2e-3))
+    planner._scope_context[pip.name()] = (
+        scope,
+        [original_pos, up_pos, park_pos],
+        pip,
+        site,
+    )
     return scope, original_pos, up_pos, park_pos
 
 
@@ -104,7 +128,13 @@ def test_scope_unwind_reverses_park_path(pip):
     planner.plan([MoveSpec(pip, np.array([0.0, 0.0, 5e-3]))])
 
     # re-seed and re-plan to inspect the generated scope moves
-    planner._scope_context[pip.name()] = (scope, [original_pos, up_pos, park_pos])
+    site = MockInteractionSite("cleanwell", global_pos=(5e-3, 0.0, -2e-3))
+    planner._scope_context[pip.name()] = (
+        scope,
+        [original_pos, up_pos, park_pos],
+        pip,
+        site,
+    )
     plan = planner.plan([MoveSpec(pip, np.array([0.0, 0.0, 5e-3]))])
 
     moves = _flat_moves(plan)
@@ -142,21 +172,31 @@ def test_scope_up_is_first_move_in_approach(pip, site_with_scope_park):
     assert moves[0].device is pip.scopeDevice(), "First move must be scope up"
     park_pos = site_with_scope_park.config["scopeParkPos"]
     up_pos = np.array(
-        [pip.scopeDevice().globalPosition()[0], pip.scopeDevice().globalPosition()[1], park_pos[2]]
+        [
+            pip.scopeDevice().globalPosition()[0],
+            pip.scopeDevice().globalPosition()[1],
+            park_pos[2],
+        ]
     )
     np.testing.assert_array_almost_equal(
-        moves[0].position, up_pos, err_msg="First scope move must be z-only (up to park height)"
+        moves[0].position,
+        up_pos,
+        err_msg="First scope move must be z-only (up to park height)",
     )
 
 
 def test_pip_retract_before_scope_lateral_when_pip_in_tissue(site_with_scope_park):
     """When pip starts below approach depth, it must retract before scope moves laterally."""
-    pip_below = MockPipette("pip_below", global_pos=(0.0, 0.0, -3e-3), approach_depth=0.0)
+    pip_below = MockPipette(
+        "pip_below", global_pos=(0.0, 0.0, -3e-3), approach_depth=0.0
+    )
     site_with_scope_park.save_positions_for(pip_below, np.array([0.0, 0.0, -1e-3]))
     site_with_scope_park.save_approach_for(pip_below)
 
     planner = make_planner()
-    plan = planner.plan([MoveSpec(pip_below, np.zeros(3), relative_to=site_with_scope_park)])
+    plan = planner.plan(
+        [MoveSpec(pip_below, np.zeros(3), relative_to=site_with_scope_park)]
+    )
     moves = _flat_moves(plan)
 
     scope_moves = [m for m in moves if isinstance(m.device, MockScope)]
@@ -182,7 +222,9 @@ def test_pip_no_retract_step_when_already_at_safe_height(site_with_scope_park):
     site_with_scope_park.save_approach_for(pip_safe)
 
     planner = make_planner()
-    plan = planner.plan([MoveSpec(pip_safe, np.zeros(3), relative_to=site_with_scope_park)])
+    plan = planner.plan(
+        [MoveSpec(pip_safe, np.zeros(3), relative_to=site_with_scope_park)]
+    )
     moves = _flat_moves(plan)
 
     # scope up, scope lateral, then pip — no pip move between scope up and scope lateral
@@ -191,7 +233,9 @@ def test_pip_no_retract_step_when_already_at_safe_height(site_with_scope_park):
     assert len(scope_idxs) >= 2
     # no pip move should appear between scope up (scope_idxs[0]) and scope lateral (scope_idxs[1])
     between = [i for i in pip_idxs if scope_idxs[0] < i < scope_idxs[1]]
-    assert len(between) == 0, "No pip move should appear between scope-up and scope-lateral"
+    assert (
+        len(between) == 0
+    ), "No pip move should appear between scope-up and scope-lateral"
 
 
 # ---------------------------------------------------------------------------
@@ -204,7 +248,9 @@ def test_scope_unwind_appended_after_interaction_exit(pip, site_with_scope_park)
     planner = make_planner()
     scope, original_pos, up_pos, park_pos = _seed_scope_context(planner, pip)
     approach_global = np.array(site_with_scope_park.globalPosition())
-    planner._find_containing_site = lambda dev: site_with_scope_park if dev is pip else None
+    planner._find_containing_site = lambda dev: (
+        site_with_scope_park if dev is pip else None
+    )
 
     plan = planner.plan([MoveSpec(pip, np.array([0.0, 0.0, 5e-3]))])
     moves = _flat_moves(plan)
@@ -219,3 +265,133 @@ def test_scope_unwind_appended_after_interaction_exit(pip, site_with_scope_park)
     last_pip_idx = max(i for i, m in enumerate(moves) if m.device is pip)
     first_scope_idx = min(i for i, m in enumerate(moves) if m.device is scope)
     assert first_scope_idx > last_pip_idx
+
+
+# ---------------------------------------------------------------------------
+# Scope unwind + pipette extraction on stage (or stage-child) moves
+# ---------------------------------------------------------------------------
+
+
+def _seed_mobile_site_context(planner, pip, *, inside=True):
+    """Seed scope context for *pip* docked in a mobile site mounted on a parent stage.
+
+    Returns (scope, stage, site, original_pos, up_pos, park_pos).  When ``inside`` is True the
+    planner's containment check reports the pipette as being inside the site.
+    """
+    scope = pip.scopeDevice()
+    original_pos = np.array([0.0, 0.0, 10e-3])
+    up_pos = np.array([0.0, 0.0, 15e-3])
+    park_pos = np.array([20e-3, 0.0, 15e-3])
+    stage = MockStage("well_stage", global_pos=(0.0, 0.0, 0.0))
+    site = MockInteractionSite(
+        "cleanwell", global_pos=(5e-3, 0.0, -2e-3), parent_stage=stage
+    )
+    site.save_positions_for(pip, np.array([0.0, 0.0, -1e-3]))
+    site.save_approach_for(pip)
+    planner._scope_context[pip.name()] = (
+        scope,
+        [original_pos, up_pos, park_pos],
+        pip,
+        site,
+    )
+    planner._find_containing_site = lambda dev: (
+        site if (inside and dev is pip) else None
+    )
+    return scope, stage, site, original_pos, up_pos, park_pos
+
+
+def test_stage_move_order_is_extract_then_unwind_then_move(pip):
+    """A parent-stage move first extracts the pip, then unwinds the scope, then moves the stage."""
+    planner = make_planner()
+    scope, stage, site, *_ = _seed_mobile_site_context(planner, pip, inside=True)
+
+    plan = planner.plan([MoveSpec(stage, np.array([1e-3, 0.0, 0.0]))])
+    moves = _flat_moves(plan)
+
+    pip_idxs = [i for i, m in enumerate(moves) if m.device is pip]
+    scope_idxs = [i for i, m in enumerate(moves) if m.device is scope]
+    stage_idxs = [i for i, m in enumerate(moves) if m.device is stage]
+
+    assert pip_idxs and scope_idxs and stage_idxs
+    assert max(pip_idxs) < min(scope_idxs), "pip extraction must precede scope unwind"
+    assert max(scope_idxs) < min(stage_idxs), "scope unwind must precede the stage move"
+    assert stage_idxs == [len(moves) - 1], "the stage move must be the final step"
+
+
+def test_stage_move_extracts_via_approach_then_home(pip):
+    """Extraction exits via the site's approach waypoint and finishes at the pipette home."""
+    planner = make_planner()
+    scope, stage, site, *_ = _seed_mobile_site_context(planner, pip, inside=True)
+    approach = np.array(site.approachGlobal(pip))
+    home = np.array(pip.homePosition())
+
+    plan = planner.plan([MoveSpec(stage, np.array([1e-3, 0.0, 0.0]))])
+    pip_moves = [m for m in _flat_moves(plan) if m.device is pip]
+
+    assert len(pip_moves) >= 2
+    np.testing.assert_array_almost_equal(pip_moves[0].position, approach)
+    np.testing.assert_array_almost_equal(pip_moves[-1].position, home)
+
+
+def test_stage_move_unwinds_but_does_not_extract_when_pip_not_inside(pip):
+    """When the pip is not inside the site, the scope still unwinds but no extraction is added."""
+    planner = make_planner()
+    scope, stage, site, *_ = _seed_mobile_site_context(planner, pip, inside=False)
+
+    plan = planner.plan([MoveSpec(stage, np.array([1e-3, 0.0, 0.0]))])
+    moves = _flat_moves(plan)
+
+    assert not any(
+        m.device is pip for m in moves
+    ), "no extraction when pip is not inside the site"
+    assert any(m.device is scope for m in moves), "scope still unwinds"
+    assert any(m.device is stage for m in moves)
+
+
+def test_stage_child_move_triggers_unwind(pip):
+    """Moving a child of the stage (the site itself) also triggers extraction + unwind."""
+    planner = make_planner()
+    scope, stage, site, *_ = _seed_mobile_site_context(planner, pip, inside=True)
+
+    plan = planner.plan([MoveSpec(site, np.array([6e-3, 0.0, -2e-3]))])
+    moves = _flat_moves(plan)
+
+    assert any(
+        m.device is scope for m in moves
+    ), "scope unwind triggered by stage-child move"
+    assert any(m.device is pip for m in moves), "pip extracted on stage-child move"
+    assert moves[-1].device is site, "the site's own move runs last"
+
+
+def test_unrelated_generic_move_leaves_scope_parked(pip):
+    """A move of a device outside the docked site's stage subtree does not unwind anything."""
+    planner = make_planner()
+    scope, stage, site, *_ = _seed_mobile_site_context(planner, pip, inside=True)
+    other = MockStage("other_stage", global_pos=(0.0, 0.0, 0.0))
+
+    plan = planner.plan([MoveSpec(other, np.array([1e-3, 0.0, 0.0]))])
+    moves = _flat_moves(plan)
+
+    assert not any(m.device is scope for m in moves)
+    assert not any(m.device is pip for m in moves)
+    assert len(moves) == 1 and moves[0].device is other
+    assert (
+        pip.name() in planner._scope_context
+    ), "context preserved for an unrelated move"
+
+
+def test_stage_move_clears_context(pip):
+    """The scope context is popped once the stage move has consumed it."""
+    planner = make_planner()
+    scope, stage, site, *_ = _seed_mobile_site_context(planner, pip, inside=True)
+
+    planner.plan([MoveSpec(stage, np.array([1e-3, 0.0, 0.0]))])
+    assert pip.name() not in planner._scope_context
+
+
+def test_generic_move_without_context_is_a_plain_move(stage):
+    """With no scope parked, a generic device move is a single untouched atomic move."""
+    planner = make_planner()
+    plan = planner.plan([MoveSpec(stage, np.array([1e-3, 0.0, 0.0]))])
+    moves = _flat_moves(plan)
+    assert len(moves) == 1 and moves[0].device is stage
