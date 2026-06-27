@@ -1,6 +1,7 @@
 # MotionPlanner ABC: plan() produces a pure-data tree; execute() reserves devices and runs it.
 from __future__ import annotations
 
+import contextlib
 import numpy as np
 from gentletask import throughline
 
@@ -55,7 +56,9 @@ class MotionPlanner:
         devices = self.collect_devices(plan)
         man = getManager()
         with man.reserveDevices(list(devices), reserver=type(self).__name__):
-            _execute_plan(plan)
+            ctx = throughline(name=name) if name else contextlib.nullcontext()
+            with ctx:
+                _execute_plan(plan)
 
     @staticmethod
     def _is_interaction_site(device) -> bool:
@@ -142,17 +145,21 @@ def _execute_plan(plan):
     if isinstance(plan, AtomicMove):
         _move_device(plan.device, plan.position, plan.speed, plan.explanation, plan.kwargs).wait()
     elif isinstance(plan, SequentialGroup):
-        for step in plan.steps:
-            _execute_plan(step)
+        ctx = throughline(name=plan.explanation) if plan.explanation else contextlib.nullcontext()
+        with ctx:
+            for step in plan.steps:
+                _execute_plan(step)
     elif isinstance(plan, ParallelGroup):
-        tasks = [asynch(_execute_plan)(step) for step in plan.steps]
-        for task in tasks:
-            try:
-                task.wait()
-            except Exception:
-                for other in tasks:
-                    if not other.is_done:
-                        other.stop()
-                raise
+        ctx = throughline(name=plan.explanation) if plan.explanation else contextlib.nullcontext()
+        with ctx:
+            tasks = [asynch(_execute_plan)(step) for step in plan.steps]
+            for task in tasks:
+                try:
+                    task.wait()
+                except Exception:
+                    for other in tasks:
+                        if not other.is_done:
+                            other.stop()
+                    raise
     else:
         raise TypeError(f"Unknown plan node type: {type(plan)}")
