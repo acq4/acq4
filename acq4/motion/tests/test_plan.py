@@ -120,6 +120,98 @@ def test_kwargs_reach_device_via_execute_plan():
     assert received.get("custom") == 42
 
 
+# ---------------------------------------------------------------------------
+# throughline propagation — operation name visible inside moveToGlobalNoPlanning
+# ---------------------------------------------------------------------------
+
+class _MockLogger:
+    """No-op logger for test devices that need one."""
+    def debug(self, *a, **kw): pass
+    def info(self, *a, **kw): pass
+    def warning(self, *a, **kw): pass
+
+
+def test_sequential_group_explanation_appears_in_throughline():
+    """SequentialGroup.explanation must be active in the throughline during child steps."""
+    from acq4.motion.planner import _execute_plan
+    from gentletask import throughline
+
+    captured = []
+
+    class _DoneMove:
+        def wait(self): return None
+
+    class _TraceDevice(MockDevice):
+        logger = _MockLogger()
+        def moveToGlobalNoPlanning(self, pos, speed, name=None, **kwargs):
+            captured.append(throughline.collect("name"))
+            return _DoneMove()
+
+    dev = _TraceDevice("trace_dev")
+    group = SequentialGroup([AtomicMove(dev, [0, 0, 0], "fast", "step")], "my sequence")
+    _execute_plan(group)
+
+    assert len(captured) == 1
+    assert "my sequence" in captured[0]
+
+
+def test_parallel_group_explanation_appears_in_throughline():
+    """ParallelGroup.explanation must be in the throughline on each child's thread."""
+    import threading
+    from acq4.motion.planner import _execute_plan
+    from gentletask import throughline
+
+    captured = []
+    lock = threading.Lock()
+
+    class _DoneMove:
+        def wait(self): return None
+
+    class _TraceDevice(MockDevice):
+        logger = _MockLogger()
+        def moveToGlobalNoPlanning(self, pos, speed, name=None, **kwargs):
+            with lock:
+                captured.append(throughline.collect("name"))
+            return _DoneMove()
+
+    dev1 = _TraceDevice("dev1")
+    dev2 = _TraceDevice("dev2")
+    group = ParallelGroup(
+        [AtomicMove(dev1, [0, 0, 0], "fast", "step1"), AtomicMove(dev2, [1, 0, 0], "fast", "step2")],
+        "my parallel",
+    )
+    _execute_plan(group)
+
+    assert len(captured) == 2
+    for chain in captured:
+        assert "my parallel" in chain
+
+
+def test_outer_throughline_frame_propagates_to_device():
+    """A frame pushed before _execute_plan (as execute(name=...) does) reaches the device."""
+    from acq4.motion.planner import _execute_plan
+    from gentletask import throughline
+
+    captured = []
+
+    class _DoneMove:
+        def wait(self): return None
+
+    class _TraceDevice(MockDevice):
+        logger = _MockLogger()
+        def moveToGlobalNoPlanning(self, pos, speed, name=None, **kwargs):
+            captured.append(throughline.collect("name"))
+            return _DoneMove()
+
+    dev = _TraceDevice("trace_dev")
+    plan = AtomicMove(dev, [0, 0, 0], "fast", "step")
+    with throughline(name="top op"):
+        _execute_plan(plan)
+
+    assert len(captured) == 1
+    assert "top op" in captured[0]
+
+
 def test_linear_kwarg_flows_through_safe_path():
     """Steps generated from _safe_path must carry linear=True/False in their kwargs."""
     from acq4.motion.default_planner import DefaultMotionPlanner
