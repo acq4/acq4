@@ -1,5 +1,9 @@
+import contextlib
+
 import numpy as np
 import re
+
+from gentletask import Stopped
 
 import pyqtgraph as pg
 from acq4.util import ptime
@@ -358,7 +362,10 @@ class PipetteControl(Qt.QWidget):
 
     @asynch
     def _cancelClicked(self):
-        self.pip.getState().stop("user requested cancel", wait=True)
+        state = self.pip.getState()
+        state.stop("user requested cancel")
+        with contextlib.suppress(Stopped):
+            state.wait()
 
     def tipCleanChanged(self, pip, clean):
         with pg.SignalBlock(self.ui.fouledCheck.stateChanged, self.fouledCheckChanged):

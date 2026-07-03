@@ -383,7 +383,9 @@ class ApproachState(PatchPipetteState):
     def avoidObstacle(self, already_retracted=False):
         self.setState("avoiding obstacle" + (" (recursively)" if already_retracted else ""))
         if self._moveFuture is not None:
-            self._moveFuture.stop("Obstacle detected", wait=True)
+            self._moveFuture.stop("Obstacle detected")
+            with contextlib.suppress(Stopped):
+                self._moveFuture.wait()
             self._moveFuture = None
 
         pip = self.dev.pipetteDevice
@@ -428,5 +430,6 @@ class ApproachState(PatchPipetteState):
     def _cleanup(self):
         with log_and_ignore_exception(Exception, "Error resetting pressure after approach cleanup"):
             if self._moveFuture is not None and not self._moveFuture.is_done:
-                self._moveFuture.stop("State finished", wait=True)
+                self._moveFuture.stop("State finished")
+                self._moveFuture.wait()
         super()._cleanup()

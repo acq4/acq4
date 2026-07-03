@@ -283,15 +283,9 @@ class SuperTask:
                 data[t] = self.tasks[t].read()
         return data
 
-    def stop(self, wait=False, abort=False):
-        # print "ST stopping, wait=",wait, " abort:", abort
+    def stop(self, abort=False):
         # need to be very careful about stopping and unreserving all hardware, even if there is a failure at some point.
         try:
-            if wait:
-                while not self.isDone():
-                    # print "Sleeping..", time.time()
-                    time.sleep(10e-6)
-
             if not abort and self.isDone():
                 # data must be read before stopping the task,
                 # but should only be read if we know the task is complete.
@@ -356,12 +350,8 @@ class SuperTask:
 
     #
     def run(self):
-        # print "Start..", time.time()
         self.start()
-        # print "wait/stop..", time.time()
-        # self.stop(wait=True)
         while not self.isDone():
             time.sleep(10e-6)
-        # print "get samples.."
         r = self.getResult()
         return r

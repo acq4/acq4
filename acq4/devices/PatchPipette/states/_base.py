@@ -430,7 +430,9 @@ class PatchPipetteState(QtFriendlyTask):
             while move_fut is None or not move_fut.is_done:
                 if self._pauseMovement:
                     if move_fut is not None:
-                        move_fut.stop("Paused", wait=True)
+                        move_fut.stop("Paused")
+                        with contextlib.suppress(Stopped):
+                            move_fut.wait()
                         move_fut = None
                     sleep(0.1)
                     continue
@@ -472,7 +474,9 @@ class PatchPipetteState(QtFriendlyTask):
                     sleep(0.1)
         except Exception:
             if move_fut is not None and not move_fut.is_done:
-                move_fut.stop("Error while moving", wait=True)
+                move_fut.stop("Error while moving")
+                with contextlib.suppress(Stopped):
+                    move_fut.wait()
             raise
 
     def _onTargetChanged(self, pos):
