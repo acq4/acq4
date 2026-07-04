@@ -217,8 +217,7 @@ class Autopatcher:
                 set_state("Autopatch: reached end of cell list; stopping")
                 return None
             set_state("Autopatch: searching for cells")
-            # return None
-            surf = win.cameraDevice.scopeDev.findSurfaceDepth(win.cameraDevice).wait()
+            surf = win.cameraDevice.scopeDev.findSurfaceDepth(win.cameraDevice)
             win.cameraDevice.setFocusDepth(surf - 60e-6, "fast").wait()
             fut = win._detector._detectNeuronsZStack()
             fut.sigFinished.connect(win._detector._handleDetectResults)  # adds to win._unranked_cells
