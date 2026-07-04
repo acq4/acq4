@@ -4,6 +4,13 @@ An [MCP](https://modelcontextprotocol.io) server that lets an AI client (Claude 
 Claude Code, etc.) inspect and drive a **running** ACQ4 instance by executing Python
 inside the ACQ4 process. It connects over ACQ4's existing teleprox `RPCServer`.
 
+> **Status — not yet production-safe.** Concurrent or high-rate MCP traffic corrupts the
+> teleprox transport, which can kill ACQ4's RPCServer thread or (intermittently) abort the
+> whole process with a libzmq assertion. This is a teleprox-level bug exposed — not caused
+> — by the MCP, and is **not** fixed by the MCP's client-side serialization. See
+> [KNOWN_ISSUES.md](KNOWN_ISSUES.md). Safe for gentle, single-threaded, interactive use;
+> do not point it at a production rig where a crash is costly until teleprox is hardened.
+
 ## How it works
 
 ```

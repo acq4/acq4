@@ -100,6 +100,49 @@ def test_list_devices_delegates_to_target(manager, recorder):
     assert recorder[-1][0] == "list_devices"
 
 
+def test_all_teleprox_access_serialized_onto_one_thread():
+    """Every teleprox call must run on a single dedicated thread, even under concurrent
+    callers, so one zmq client socket is never touched by two threads at once.
+    """
+    import threading
+
+    idents = []
+    idents_lock = threading.Lock()
+
+    class _IdentModule:
+        def __init__(self, host, port):
+            pass
+
+        def _record(self):
+            with idents_lock:
+                idents.append(threading.get_ident())
+
+        def instance_info(self, **kw):
+            self._record()
+            return {"has_manager": False}
+
+        def execute(self, code, gui_thread=False, **kw):
+            self._record()
+            return {"result": None}
+
+    cm = ConnectionManager(host_module_provider=lambda h, p: _IdentModule(h, p))
+    cm.connect(5000)
+
+    callers = [threading.Thread(target=lambda: cm.execute("1")) for _ in range(6)]
+    for t in callers:
+        t.start()
+    for t in callers:
+        t.join()
+
+    worker_idents = set(idents)
+    assert (
+        len(worker_idents) == 1
+    ), f"teleprox access spread across threads: {worker_idents}"
+    assert worker_idents != {
+        threading.get_ident()
+    }, "should run on a dedicated worker, not the caller"
+
+
 # ---------------------------------------------------------------------------
 # Live round-trip over a real teleprox child process (the same separate-process
 # model the MCP server uses in production, and teleprox's own reliable test pattern).
