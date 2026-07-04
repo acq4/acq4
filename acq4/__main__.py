@@ -71,7 +71,7 @@ if args.teleprox is not None:
     else:
         addr = f'tcp://127.0.0.1:{args.teleprox}'
     teleprox_debug_server = RPCServer(addr)
-    teleprox_debug_server.run_in_thread()
+    teleprox_debug_server._run_in_thread()
     print(f"Teleprox server listening on {teleprox_debug_server.address}")
 
 
