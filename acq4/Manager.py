@@ -289,9 +289,9 @@ class Manager(Qt.QObject):
                             if 'config' in conf:  # for backward compatibility
                                 conf = conf['config']
                             self.loadDevice(driverName, conf, k)
-                        except:
+                        except Exception as exc:
                             if self.exitOnError:
-                                raise
+                                raise RuntimeError(f"Error configuring device {k}") from exc
                             else:
                                 logger.exception(f"Error configuring device {k}")
 
