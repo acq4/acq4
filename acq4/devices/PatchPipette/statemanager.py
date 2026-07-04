@@ -218,8 +218,18 @@ class PatchPipetteStateManager(Qt.QObject):
             self.sigStateChanged.emit(self, job)
             return job
         except Exception:
-            # in case of failure, go to fallback state
+            # in case of failure, go to fallback state.
+            # Log the *primary* exception here. Without this, an error thrown while starting
+            # `state` (e.g. in job.start() or a sigStateChanged slot, both of which run
+            # synchronously in this thread) is silently swallowed: the state is entered
+            # (_setState already emitted its state_change) and then immediately bounced to its
+            # fallbackState with no explanation, because the re-raise below unwinds into a Qt
+            # DirectConnection signal handler that discards it.
             self.currentJob = None
+            fallbackState = fallback["state"] if fallback else None
+            self.logger.exception(
+                f"Error while starting state {state!r}; falling back to {fallbackState!r}"
+            )
             if not allowReset or fallback is None:
                 raise
             try:
@@ -267,6 +277,8 @@ class PatchPipetteStateManager(Qt.QObject):
         self.logger.debug(f"Job {job.stateName} finished; allowNextState={allowNextState}")
         try:
             job.cleanup().wait()
+        except Stopped:
+            self.logger.debug(f"{job.stateName} cleanup was stopped")
         except Exception:
             self.logger.exception(f"Error during {job.stateName} cleanup:")
         disconnect(job.sigStateChanged, self.jobStateChanged)
@@ -275,6 +287,17 @@ class PatchPipetteStateManager(Qt.QObject):
             if job.nextState.get("state") is not None:
                 config = job.nextState
                 state = config.pop("state")
+                # Distinguish a deliberate transition (run() returned this state) from an
+                # unexplained fallback: if the job was stopped/failed before run() returned, it
+                # never chose a next state and we are using its default fallbackState. That case
+                # otherwise looks like the state was "entered and immediately left" with no reason.
+                if getattr(job, "_runChoseNextState", True):
+                    self.logger.debug(f"{job.stateName} finished; transitioning to next state {state!r}")
+                else:
+                    self.logger.info(
+                        f"{job.stateName} did not complete (stopped or failed before choosing a next "
+                        f"state); using its default fallback next state {state!r}"
+                    )
                 self.requestStateChange(state, **config)
             else:
                 self.logger.debug(f"No next state specified by {job.stateName}")
