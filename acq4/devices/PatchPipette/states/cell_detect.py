@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 from collections import deque
 from threading import Lock
 from typing import Any, Iterable
@@ -274,7 +275,9 @@ class CellDetectState(PatchPipetteState):
         while not self.weTookTooLong():
             if detectedThresholdSpeed := self.targetCellFound():
                 if self._moveFuture is not None:
-                    self._moveFuture.stop("cell detected", wait=True)
+                    self._moveFuture.stop("cell detected")
+                    with contextlib.suppress(Stopped):
+                        self._moveFuture.wait()
                     self._moveFuture = None
                 return self._transition_to_seal(detectedThresholdSpeed)
             check_stop()
