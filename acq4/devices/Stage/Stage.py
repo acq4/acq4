@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import contextlib
 import functools
 import threading
 from typing import Tuple, List
@@ -8,7 +7,6 @@ from typing import Tuple, List
 import numpy as np
 
 import pyqtgraph as pg
-from acq4 import getManager
 from acq4.util import Qt, ptime
 from acq4.util.Mutex import Mutex
 from coorx import AffineTransform, TTransform
@@ -19,13 +17,13 @@ from ..OptomechDevice import OptomechDevice
 from ...modules.Visualize3D.travelers_proxy import MovePathException
 from ...motion import MoveSpec
 from ...util.HelpfulException import HelpfulException
-from ...util.task import ManualQtFriendlyTask, Stopped, FutureButton
 from ...util.geometry import (
     Plane,
     limits_to_boundaries,
     load_transform,
     minimum_displacement_inverse_kinematics,
 )
+from ...util.task import ManualQtFriendlyTask, Stopped, FutureButton
 
 
 class Stage(Device, OptomechDevice):
@@ -749,17 +747,18 @@ class MoveFuture(ManualQtFriendlyTask):
             return 100
         return 100 * d1 / d2
 
-    def stop(self, reason="stop requested"):
+    def stop(self, reason="stop requested", wait=False):
         """Stop the move in progress.
 
         Tells the device to halt, then completes this promise with Stopped via
         ManualQtFriendlyTask.stop(reason). The producer thread sees ``is_stopped`` and
-        aborts.
+        aborts. When *wait* is True, block until the promise actually completes,
+        swallowing the resulting Stopped.
         """
         with self._isStopCallable as can_call_stop:
             if can_call_stop and not self.is_done:
                 self.dev.stop()
-                super().stop(reason)
+                super().stop(reason, wait=wait)
 
 
 class MovePathFuture(MoveFuture):
@@ -799,7 +798,7 @@ class MovePathFuture(MoveFuture):
             return 0.0
         return (100 * fut._pathStep + fut.percentDone()) / len(self.path)
 
-    def stop(self, reason=None):
+    def stop(self, reason=None, wait=False):
         """Stop the path move: halt the current step, then complete with Stopped.
 
         Skips MoveFuture.stop (and its dev.stop()) because the current step
@@ -810,7 +809,7 @@ class MovePathFuture(MoveFuture):
         if fut is not None:
             fut.stop(reason)
         # skip MoveFuture.stop to avoid the mess with dev.stop()
-        ManualQtFriendlyTask.stop(self, reason)
+        ManualQtFriendlyTask.stop(self, reason, wait=wait)
 
     def _movePath(self):
         # Producer thread for this externally-completed promise. It is a raw

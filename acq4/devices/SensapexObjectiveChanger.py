@@ -1,4 +1,3 @@
-import contextlib
 import threading
 from time import sleep
 
@@ -7,7 +6,7 @@ from acq4.devices.Device import Device
 from acq4.drivers.sensapex import UMP
 from acq4.util import ptime
 from acq4.util.Thread import Thread
-from acq4.util.task import ManualQtFriendlyTask, Stopped
+from acq4.util.task import ManualQtFriendlyTask
 
 
 class SensapexObjectiveChanger(Device):
@@ -138,14 +137,14 @@ class ObjectiveChangeFuture(ManualQtFriendlyTask):
                     dev.dev.set_lens_position(target)
             sleep(0.2)
 
-    def stop(self, reason=None):
+    def stop(self, reason=None, wait=False):
         """Halt the changer hardware, then complete this promise with Stopped.
 
         The poll thread sees ``is_stopped`` and aborts. When *wait* is True,
         block until the promise actually completes, swallowing the Stopped.
         """
         self.dev.stop()
-        ManualQtFriendlyTask.stop(self, reason)
+        ManualQtFriendlyTask.stop(self, reason, wait=wait)
 
     def percentDone(self):
         return 100 if self.is_done else 0
