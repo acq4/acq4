@@ -375,8 +375,10 @@ class MultiPatchLog(FileType):
         """Return priority value if the file can be read by this class.
         Otherwise, return False.
         The default implementation just checks for the correct name extensions."""
-        name = fileHandle.shortName()
-        if name.startswith('MultiPatch_') and name.endswith('.log'):
+        # Match case-insensitively: the MultiPatch module writes 'MultiPatch_NNN.log',
+        # but copied/renamed data may differ in case (e.g. 'multipatch_000.log').
+        name = fileHandle.shortName().lower()
+        if name.startswith('multipatch_') and name.endswith('.log'):
             return cls.priority
         return False
 
