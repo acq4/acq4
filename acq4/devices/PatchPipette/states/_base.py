@@ -147,11 +147,21 @@ class PatchPipetteState(QtFriendlyTask):
         # manager can connect signals before calling start(). QtFriendlyTask.__init__
         # initializes the QObject half, so anything that connects Qt signals (e.g.
         # sigTargetChanged below) must run AFTER this call.
+        #
+        # detach=True: a state job is a top-level task owned by the state manager,
+        # which stops it explicitly via stopJob(). It must NOT become a gentletask
+        # child of whatever task happens to be current when it is constructed. A
+        # state transition creates the next state's job from within the outgoing
+        # state's finish handling (current_task() is still the outgoing state), so
+        # without detach the new state registers as the outgoing state's child and
+        # is immediately cascade-stopped when that state stops — landing silently in
+        # its fallbackState before run() ever executes. Detaching breaks that link.
         QtFriendlyTask.__init__(
             self,
             self.runJob,
             name=f"State {self.stateName} for {dev}",
             start=False,
+            detach=True,
             on_finish=self._stateFinished,
         )
         self.dev: PatchPipette = dev
