@@ -749,17 +749,21 @@ class MoveFuture(ManualQtFriendlyTask):
             return 100
         return 100 * d1 / d2
 
-    def stop(self, reason="stop requested"):
+    def stop(self, reason="stop requested", wait=False):
         """Stop the move in progress.
 
         Tells the device to halt, then completes this promise with Stopped via
         ManualQtFriendlyTask.stop(reason). The producer thread sees ``is_stopped`` and
-        aborts.
+        aborts. When *wait* is True, block until the promise actually completes,
+        swallowing the resulting Stopped.
         """
         with self._isStopCallable as can_call_stop:
             if can_call_stop and not self.is_done:
                 self.dev.stop()
                 super().stop(reason)
+                if wait:
+                    with contextlib.suppress(Stopped):
+                        self.wait()
 
 
 class MovePathFuture(MoveFuture):
@@ -799,7 +803,7 @@ class MovePathFuture(MoveFuture):
             return 0.0
         return (100 * fut._pathStep + fut.percentDone()) / len(self.path)
 
-    def stop(self, reason=None):
+    def stop(self, reason=None, wait=False):
         """Stop the path move: halt the current step, then complete with Stopped.
 
         Skips MoveFuture.stop (and its dev.stop()) because the current step
@@ -811,6 +815,9 @@ class MovePathFuture(MoveFuture):
             fut.stop(reason)
         # skip MoveFuture.stop to avoid the mess with dev.stop()
         ManualQtFriendlyTask.stop(self, reason)
+        if wait:
+            with contextlib.suppress(Stopped):
+                self.wait()
 
     def _movePath(self):
         # Producer thread for this externally-completed promise. It is a raw

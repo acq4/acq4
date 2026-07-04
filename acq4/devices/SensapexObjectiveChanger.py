@@ -138,7 +138,7 @@ class ObjectiveChangeFuture(ManualQtFriendlyTask):
                     dev.dev.set_lens_position(target)
             sleep(0.2)
 
-    def stop(self, reason=None):
+    def stop(self, reason=None, wait=False):
         """Halt the changer hardware, then complete this promise with Stopped.
 
         The poll thread sees ``is_stopped`` and aborts. When *wait* is True,
@@ -146,6 +146,9 @@ class ObjectiveChangeFuture(ManualQtFriendlyTask):
         """
         self.dev.stop()
         ManualQtFriendlyTask.stop(self, reason)
+        if wait:
+            with contextlib.suppress(Stopped):
+                self.wait()
 
     def percentDone(self):
         return 100 if self.is_done else 0
