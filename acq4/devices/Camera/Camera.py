@@ -146,7 +146,7 @@ class Camera(DAQGeneric, OptomechDevice):
         dm.declareInterface(name, ["camera"], self)
 
     def devicesToReserve(self) -> list[Device]:
-        return self.parentDevices()
+        return self.parentDevices() + [self.scopeDev] if self.scopeDev is not None else []
 
     def addFrameInfo(self, frame: Frame):
         if self._frameInfoUpdater is None:

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import contextlib
 import functools
 import threading
 from typing import Tuple, List
@@ -8,7 +7,6 @@ from typing import Tuple, List
 import numpy as np
 
 import pyqtgraph as pg
-from acq4 import getManager
 from acq4.util import Qt, ptime
 from acq4.util.Mutex import Mutex
 from coorx import AffineTransform, TTransform
@@ -19,13 +17,13 @@ from ..OptomechDevice import OptomechDevice
 from ...modules.Visualize3D.travelers_proxy import MovePathException
 from ...motion import MoveSpec
 from ...util.HelpfulException import HelpfulException
-from ...util.task import ManualQtFriendlyTask, Stopped, FutureButton
 from ...util.geometry import (
     Plane,
     limits_to_boundaries,
     load_transform,
     minimum_displacement_inverse_kinematics,
 )
+from ...util.task import ManualQtFriendlyTask, Stopped, FutureButton
 
 
 class Stage(Device, OptomechDevice):
@@ -760,10 +758,7 @@ class MoveFuture(ManualQtFriendlyTask):
         with self._isStopCallable as can_call_stop:
             if can_call_stop and not self.is_done:
                 self.dev.stop()
-                super().stop(reason)
-                if wait:
-                    with contextlib.suppress(Stopped):
-                        self.wait()
+                super().stop(reason, wait=wait)
 
 
 class MovePathFuture(MoveFuture):
@@ -814,10 +809,7 @@ class MovePathFuture(MoveFuture):
         if fut is not None:
             fut.stop(reason)
         # skip MoveFuture.stop to avoid the mess with dev.stop()
-        ManualQtFriendlyTask.stop(self, reason)
-        if wait:
-            with contextlib.suppress(Stopped):
-                self.wait()
+        ManualQtFriendlyTask.stop(self, reason, wait=wait)
 
     def _movePath(self):
         # Producer thread for this externally-completed promise. It is a raw
