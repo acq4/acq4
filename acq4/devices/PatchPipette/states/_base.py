@@ -414,9 +414,9 @@ class PatchPipetteState(QtFriendlyTask):
 
     def startVisualTargetTracking(self, allow_refresh_reference=True):
         cell = self.dev.cell
-        cell.allow_refresh_reference = allow_refresh_reference
         if cell is None:
             raise ValueError("Cannot visually track target; no cell is assigned to this pipette device.")
+        cell.allow_refresh_reference = allow_refresh_reference
         if not cell.isInitialized:
             cell.initializeTracker(self.dev.pipetteDevice.imagingDevice())
 

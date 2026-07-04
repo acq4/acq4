@@ -1055,8 +1055,13 @@ class Pipette(Device, OptomechDevice):
 
         # Discard frames where heatmap peak < 2 * heatmap stdev.
         keep = []
+        if len(heatmaps) < 2:
+            raise RuntimeError(f"Z-stack fallback: not enough frames ({len(heatmaps)}) to estimate tip position.")
+        heatmaps = [hm for hm in heatmaps if hm is not None]
+        if len(heatmaps) < 2:
+            raise RuntimeError(f"Z-stack fallback: heatmaps returned as None")
         for i, hm in enumerate(heatmaps):
-            if hm is not None and hm.max() >= 2 * hm.std():
+            if hm.max() >= 2 * hm.std():
                 keep.append(i)
 
         if len(keep) < 2:
