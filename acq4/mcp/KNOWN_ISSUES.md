@@ -2,8 +2,10 @@
 
 ## teleprox transport framing corrupts under concurrent / sustained load (blocker for production)
 
-**Status:** open. The MCP is safe for gentle, single-threaded, interactive use, but is
-**not yet production-safe** on rigs where a crash is costly.
+**Status:** open. Tracked upstream at
+[campagnola/teleprox#40](https://github.com/campagnola/teleprox/issues/40). The MCP is safe
+for gentle, single-threaded, interactive use, but is **not yet production-safe** on rigs
+where a crash is costly.
 
 ### Symptom
 
