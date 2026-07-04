@@ -115,11 +115,11 @@ class AutomationDebugWindow(Qt.QWidget):
         self.ui.autoTargetBtn.setOpts(task_producer=self._autoTarget, stoppable=True)
         self.ui.autoTargetBtn.sigFinished.connect(self._handleAutoFinish)
 
-        for name, dev in self.module.manager.devices.items():
-            if isinstance(dev, Pipette):
-                self.ui.pipetteSelector.addItem(name)
-            elif isinstance(dev, Camera):
-                self.ui.cameraSelector.addItem(name)
+        # These are InterfaceCombo widgets (promoted in window.ui); they populate
+        # themselves from the manager's interface directory and stay in sync as
+        # devices come and go.
+        self.ui.pipetteSelector.setTypes(['pipette'])
+        self.ui.cameraSelector.setTypes(['camera'])
 
         self.ui.trackFeaturesBtn.setOpts(
             task_producer=self._feature_tracker.doFeatureTracking,

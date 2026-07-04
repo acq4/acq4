@@ -302,10 +302,10 @@
        </widget>
       </item>
       <item row="0" column="1">
-       <widget class="QComboBox" name="cameraSelector"/>
+       <widget class="InterfaceCombo" name="cameraSelector"/>
       </item>
       <item row="0" column="0">
-       <widget class="QComboBox" name="pipetteSelector"/>
+       <widget class="InterfaceCombo" name="pipetteSelector"/>
       </item>
       <item row="1" column="0">
        <widget class="QLabel" name="label_3">
@@ -369,6 +369,19 @@
         </property>
        </widget>
       </item>
+      <item>
+       <widget class="QCheckBox" name="autoFindMoreCellsCheck">
+        <property name="text">
+         <string>Find more cells when list is empty</string>
+        </property>
+        <property name="toolTip">
+         <string>When the demo runs out of queued cells, run detection to find new cells. When unchecked, the demo stops once the current cell list is exhausted.</string>
+        </property>
+        <property name="checked">
+         <bool>false</bool>
+        </property>
+       </widget>
+      </item>
      </layout>
     </widget>
    </item>
@@ -379,6 +392,11 @@
    <class>FutureButton</class>
    <extends>QPushButton</extends>
    <header>acq4.util.task</header>
+  </customwidget>
+  <customwidget>
+   <class>InterfaceCombo</class>
+   <extends>QComboBox</extends>
+   <header>acq4.util.InterfaceCombo</header>
   </customwidget>
  </customwidgets>
  <resources/>
