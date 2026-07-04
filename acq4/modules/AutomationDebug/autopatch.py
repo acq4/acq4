@@ -20,6 +20,10 @@ logger = get_logger(__name__)
 class Autopatcher:
     def __init__(self, window: AutomationDebugWindow):
         self._window = window
+        # Whether the current demo has worked through at least one cell. Once the
+        # queued cell list is exhausted, the "find more cells" option decides
+        # whether to run detection for new cells or stop the demo.
+        self._hasWorkedCell = False
 
     def _handleAutopatchDemoFinish(self, fut):
         win = self._window
@@ -30,6 +34,7 @@ class Autopatcher:
     def _autopatchDemo(self):
         win = self._window
         win.sigWorking.emit(win.ui.autopatchDemoBtn)
+        self._hasWorkedCell = False
         ppip: PatchPipette = win.patchPipetteDevice
         man = win.module.manager
         data_manager = run_in_gui_thread(man.getModule, "Data Manager")
@@ -39,6 +44,12 @@ class Autopatcher:
         synch(win.cameraDevice.scopeDev.findSurfaceDepth)(win.cameraDevice)
         try:
             while True:
+                # Decide whether there's another cell to work on before creating a
+                # cell folder, cleaning the pipette, or clearing the patch log, so
+                # the demo stops cleanly instead of setting up a nonexistent cell.
+                if self._outOfCells():
+                    set_state("Autopatch: reached end of cell list; stopping")
+                    return
                 cell_dir = run_in_gui_thread(data_manager.createNewFolder, "Cell")
                 try:
                     started_clean = ppip.isTipClean()
@@ -184,9 +195,27 @@ class Autopatcher:
             sleep(0.1)
         return state
 
+    def _outOfCells(self) -> bool:
+        """Whether the queued cell list is exhausted and we shouldn't look for more.
+
+        True once we've worked through at least one cell, the unranked list is
+        empty, and the user hasn't opted into detecting new cells. Re-detecting in
+        that case would (in mock mode) just repeat the same cells; this lets the
+        demo stop before starting work on a nonexistent cell.
+        """
+        win = self._window
+        return (
+            not win._unranked_cells
+            and self._hasWorkedCell
+            and not win.ui.autoFindMoreCellsCheck.isChecked()
+        )
+
     def _autopatchFindCell(self):
         win = self._window
         if not win._unranked_cells:
+            if self._outOfCells():
+                set_state("Autopatch: reached end of cell list; stopping")
+                return None
             set_state("Autopatch: searching for cells")
             # return None
             surf = win.cameraDevice.scopeDev.findSurfaceDepth(win.cameraDevice).wait()
@@ -194,9 +223,12 @@ class Autopatcher:
             fut = win._detector._detectNeuronsZStack()
             fut.sigFinished.connect(win._detector._handleDetectResults)  # adds to win._unranked_cells
             fut.wait(timeout=600)
+            if not win._unranked_cells:
+                return None
 
         set_state("Autopatch: checking selected cell")
         cell = win._unranked_cells.pop(0)
+        self._hasWorkedCell = True
         win._ranked_cells.append(cell)
         win.patchPipetteDevice.setCell(cell)
         win._cell = cell
