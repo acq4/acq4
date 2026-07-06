@@ -75,6 +75,10 @@ class AutomationDebugWindow(Qt.QWidget):
         self.ui.groupBox.layout().addLayout(
             _survey_layout, self.ui.groupBox.layout().rowCount(), 0, 1, 4
         )
+        self.ui.surveyStatsLabel = Qt.QLabel("Survey: no region")
+        self.ui.groupBox.layout().addWidget(
+            self.ui.surveyStatsLabel, self.ui.groupBox.layout().rowCount(), 0, 1, 4
+        )
 
         self.sigWorking.connect(self._setWorkingState)
         self.failedCalibrations = []
@@ -102,6 +106,7 @@ class AutomationDebugWindow(Qt.QWidget):
         self.ui.clearBtn.clicked.connect(self._detector.clearCells)
         self.ui.addSurveyRegionBtn.clicked.connect(self._surveyRegion.addRegion)
         self.ui.clearSurveyRegionBtn.clicked.connect(self._surveyRegion.clearRegion)
+        self.ui.surveyOverlapSpin.sigValueChanged.connect(self._refreshSurveyStats)
         self.ui.showRoisBtn.toggled.connect(self._toggleCellRois)
         self.ui.zStackDetectBtn.setOpts(
             task_producer=self._detector._detectNeuronsZStack, stoppable=True
@@ -221,6 +226,22 @@ class AutomationDebugWindow(Qt.QWidget):
         self.ui.classificationPresetCombo.clear()
         self.ui.detectionPresetCombo.addItems(presets)
         self.ui.classificationPresetCombo.addItems(presets)
+
+    def _refreshSurveyStats(self, *args):
+        """Update the survey stats readout from the current region and progress.
+
+        Connected to ROI changes and the overlap spinbox, and called by
+        SurveyRegion when a region is added/cleared/reset or a tile is imaged.
+        """
+        stats = self._surveyRegion.stats()
+        if stats is None:
+            self.ui.surveyStatsLabel.setText("Survey: no region")
+            return
+        area, total, covered, percent = stats
+        self.ui.surveyStatsLabel.setText(
+            f"Survey: {area * 1e6:.3g} mm² area | {total} tiles | "
+            f"{percent:.0f}% surveyed ({covered}/{total})"
+        )
 
     def _toggleCellRois(self, visible: bool):
         for box in self._previousBoxWidgets:

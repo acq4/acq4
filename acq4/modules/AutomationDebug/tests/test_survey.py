@@ -7,7 +7,7 @@ a user-defined region one z-stack per tile.
 
 import math
 
-from acq4.modules.AutomationDebug.survey import plan_grid, select_next
+from acq4.modules.AutomationDebug.survey import count_covered, plan_grid, select_next
 
 
 def _covers(grid, x0, y0, x1, y1, fov_w, fov_h):
@@ -86,3 +86,19 @@ def test_select_next_matches_within_threshold():
 def test_select_next_none_when_all_visited():
     grid = [(0.0, 0.0), (10.0, 0.0)]
     assert select_next(grid, visited=[(0.0, 0.0), (10.0, 0.0)], threshold=1.0) is None
+
+
+def test_count_covered_none_when_nothing_visited():
+    grid = [(0.0, 0.0), (10.0, 0.0), (20.0, 0.0)]
+    assert count_covered(grid, visited=[], threshold=1.0) == 0
+
+
+def test_count_covered_all_when_all_visited():
+    grid = [(0.0, 0.0), (10.0, 0.0)]
+    assert count_covered(grid, visited=[(0.0, 0.0), (10.0, 0.0)], threshold=1.0) == 2
+
+
+def test_count_covered_partial_within_threshold():
+    grid = [(0.0, 0.0), (10.0, 0.0), (20.0, 0.0)]
+    # Visited centers a hair off two of the three planned tiles still count them.
+    assert count_covered(grid, visited=[(0.2, 0.0), (19.8, 0.0)], threshold=1.0) == 2

@@ -76,6 +76,19 @@ def select_next(
     return None
 
 
+def count_covered(
+    grid: list[tuple[float, float]],
+    visited: list[tuple[float, float]],
+    threshold: float,
+) -> int:
+    """Number of centers in ``grid`` within ``threshold`` of some visited center."""
+    return sum(
+        1
+        for cx, cy in grid
+        if any(math.hypot(cx - vx, cy - vy) < threshold for vx, vy in visited)
+    )
+
+
 class SurveyRegion:
     """A user-placed rectangle on the camera view that the autopatch demo surveys.
 
@@ -89,6 +102,17 @@ class SurveyRegion:
         self._roi = None
         # Centers of tiles already imaged this run, in global (x, y).
         self._visited: list[tuple[float, float]] = []
+
+    def _notify(self):
+        """Refresh the window's survey stats readout on the GUI thread.
+
+        Safe from any thread: nextTile runs on the GUI thread while the demo's
+        reset() runs on a worker thread, and run_in_gui_thread calls inline when
+        already on the GUI thread.
+        """
+        from acq4.util.task import run_in_gui_thread
+
+        run_in_gui_thread(self._window._refreshSurveyStats)
 
     def _cameraWindow(self):
         return self._window.module.manager.getModule("Camera").window()
@@ -118,7 +142,9 @@ class SurveyRegion:
         # but below the pipette target and its arrows (z=5000) so those stay on
         # top.
         self._cameraWindow().addItem(roi, pos=pos, z=4000)
+        roi.sigRegionChanged.connect(self._window._refreshSurveyStats)
         self._roi = roi
+        self._notify()
 
     def clearRegion(self):
         """Remove the survey rectangle and forget imaged-tile progress."""
@@ -126,11 +152,13 @@ class SurveyRegion:
             self._cameraWindow().removeItem(self._roi)
             self._roi = None
         self._visited = []
+        self._notify()
 
     def reset(self):
         """Forget imaged-tile progress while keeping the region, so a re-run
         surveys the same rectangle from scratch."""
         self._visited = []
+        self._notify()
 
     def _bounds(self) -> tuple[float, float, float, float]:
         pos = self._roi.pos()
@@ -138,11 +166,8 @@ class SurveyRegion:
         x0, y0 = float(pos.x()), float(pos.y())
         return x0, y0, x0 + float(size.x()), y0 + float(size.y())
 
-    def nextTile(self) -> tuple[float, float] | None:
-        """Global (x, y) center of the next un-imaged tile, or None when the region
-        is fully imaged. Marks the returned tile as imaged. GUI-thread only."""
-        if self._roi is None:
-            return None
+    def _grid_and_threshold(self):
+        """Return (grid, threshold) for the current ROI, camera FOV, and overlap."""
         fov_w, fov_h = self._fov()
         overlap = self._window.ui.surveyOverlapSpin.value()
         x0, y0, x1, y1 = self._bounds()
@@ -150,7 +175,31 @@ class SurveyRegion:
         step = min(fov_w - overlap, fov_h - overlap)
         if step <= 0:
             step = min(fov_w, fov_h)
-        center = select_next(grid, self._visited, threshold=step / 2)
+        return grid, step / 2
+
+    def nextTile(self) -> tuple[float, float] | None:
+        """Global (x, y) center of the next un-imaged tile, or None when the region
+        is fully imaged. Marks the returned tile as imaged. GUI-thread only."""
+        if self._roi is None:
+            return None
+        grid, threshold = self._grid_and_threshold()
+        center = select_next(grid, self._visited, threshold)
         if center is not None:
             self._visited.append(center)
+        self._notify()
         return center
+
+    def stats(self) -> tuple[float, int, int, float] | None:
+        """Survey progress for the current region, or None when none is set.
+
+        Returns (area_m2, total_tiles, covered_tiles, percent_covered).
+        """
+        if self._roi is None:
+            return None
+        x0, y0, x1, y1 = self._bounds()
+        area = abs(x1 - x0) * abs(y1 - y0)
+        grid, threshold = self._grid_and_threshold()
+        total = len(grid)
+        covered = count_covered(grid, self._visited, threshold)
+        percent = 100.0 * covered / total if total else 0.0
+        return area, total, covered, percent
