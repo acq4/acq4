@@ -113,10 +113,11 @@ class SurveyRegion:
         w, h = fov_w * 3, fov_h * 3
         pos = (cx - w / 2, cy - h / 2)
         roi = pg.RectROI(pos, (w, h), pen=pg.mkPen("y", width=2), removable=False)
-        # Sit above the camera frame image (as the camera module's own ROIs do)
-        # so body drags translate the ROI instead of falling through to the
-        # ViewBox and panning the whole view.
-        self._cameraWindow().addItem(roi, pos=pos, z=40000)
+        # Sit above the camera frame image so body drags translate the ROI
+        # instead of falling through to the ViewBox and panning the whole view,
+        # but below the pipette target and its arrows (z=5000) so those stay on
+        # top.
+        self._cameraWindow().addItem(roi, pos=pos, z=4000)
         self._roi = roi
 
     def clearRegion(self):
