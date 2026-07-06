@@ -24,6 +24,8 @@ class CleanState(PatchPipetteState):
     sonicationProtocol : str
         Protocol to use for sonication (default "clean"), or if supported, the full protocol definition for a custom
         protocol.
+    nextState : str
+        Name of the state to transition to after cleaning (default "out")
     """
     stateName = 'clean'
 

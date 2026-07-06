@@ -163,6 +163,16 @@ class ApproachState(PatchPipetteState):
         (default 75 µm)
     pipetteRecalibrationMaxChange : float
         Maximum distance allowed for an automatic pipette tip position update (default 15 µm)
+    startANewCell : bool
+        If True, register a new cell record when entering this state (default True)
+    baselineResistanceTau : float
+        Time constant (s) for the rolling average of baseline pipette resistance used for
+        obstacle and tip-break detection (default 20 s)
+    breakThreshold : float
+        Resistance change (Ohm) below baseline that indicates a broken pipette tip
+        (default -1 MOhm)
+    nextState : str
+        Name of the state to transition to on successful completion (default "cell detect")
     """
 
     stateName = "approach"

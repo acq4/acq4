@@ -52,6 +52,13 @@ class ContactCellState(PatchPipetteState):
         Threshold for change in resistance (Ohm) to detect broken pipette (default -1 MOhm)
     pipetteRecalibrationMaxChange : float
         Maximum allowed change in pipette position during recalibration before rejecting update (default 5 µm)
+    visualTargetTracking : bool
+        Whether to visually track the target cell during descent (default True)
+    minDetectionDistance : float
+        Minimum distance (m) from target before cell detection is considered; negative disables
+        the limit (default -1)
+    nextState : str
+        Name of the state to transition to once contact is established (default "seal")
     """
 
     stateName = 'contact cell'
