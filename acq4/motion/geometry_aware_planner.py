@@ -107,11 +107,9 @@ class GeometryAwareMotionPlanner(DefaultMotionPlanner):
     def _prime_caches(self, pip):
         try:
             man = getManager()
-            while not man.isReady.wait(0.05):
-                check_stop()
+            man.isReady.wait()
             mod = man.getOrLoadModule("Visualize3D")
-            while not mod.isReady.wait(0.05):
-                check_stop()
+            mod.isReady.wait()
             viz = mod.window().findAdapter(lambda a: a.device == pip).pathSearchVisualizer()
             geo_planner, from_pip_to_global = self._get_planning_context(pip)
             geo_planner.make_convolved_obstacles(pip.getGeometry(), from_pip_to_global, viz)

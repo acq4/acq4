@@ -1,7 +1,7 @@
 import threading
 
 from acq4.modules.Module import Module
-from acq4.util.task import in_gui_thread
+from acq4.util.task import in_gui_thread, Event
 from .gui import VisualizerWindow
 
 
@@ -14,7 +14,7 @@ class Visualize3D(Module):
 
     def __init__(self, manager, name: str, config: dict):
         super().__init__(manager, name, config)
-        self.isReady = threading.Event()
+        self.isReady = Event()
         self.openWindow()
         self._adapters = {}
         manager.interfaceDir.sigInterfaceListChanged.connect(self.onInterfaceListChanged)
