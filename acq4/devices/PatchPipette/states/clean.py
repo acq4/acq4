@@ -80,11 +80,10 @@ class CleanState(PatchPipetteState):
                 sleep(delay)
 
             if self.sonication is not None and not self.sonication.is_done:
-                self.sonication.wait(None)
+                self.sonication.wait()
 
         dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
-        task2 = pip.goHome()
-        task2.wait(None)
+        pip.goHome().wait()
         dev.pipetteRecord()['cleanCount'] += 1
         dev.setTipClean(True)
         dev.newPatchAttempt()

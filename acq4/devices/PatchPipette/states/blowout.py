@@ -29,7 +29,7 @@ class BlowoutState(PatchPipetteState):
 
         fut = self.dev.pipetteDevice.retractFromSurface()
         if fut is not None:
-            fut.wait(None)
+            fut.wait()
 
         self.dev.pressureDevice.setPressure(source='regulator', pressure=config['blowoutPressure'])
         duration = config['blowoutDuration']
