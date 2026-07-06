@@ -35,6 +35,8 @@ class Autopatcher:
         win = self._window
         win.sigWorking.emit(win.ui.autopatchDemoBtn)
         self._hasWorkedCell = False
+        # Start each run surveying the region from scratch; the ROI persists.
+        win._surveyRegion.reset()
         ppip: PatchPipette = win.patchPipetteDevice
         man = win.module.manager
         data_manager = run_in_gui_thread(man.getModule, "Data Manager")
@@ -215,6 +217,15 @@ class Autopatcher:
             if self._outOfCells():
                 set_state("Autopatch: reached end of cell list; stopping")
                 return None
+            if not win._surveyRegion.hasRegion():
+                set_state("Autopatch: add a survey region to search for cells")
+                return None
+            center = run_in_gui_thread(win._surveyRegion.nextTile)
+            if center is None:
+                set_state("Autopatch: survey region fully imaged; stopping")
+                return None
+            set_state("Autopatch: moving to next survey tile")
+            win.scopeDevice.setGlobalPosition(center, name="autopatch survey move").wait()
             set_state("Autopatch: searching for cells")
             surf = win.cameraDevice.scopeDev.findSurfaceDepth(win.cameraDevice)
             win.cameraDevice.setFocusDepth(surf - 60e-6, "fast").wait()
