@@ -325,8 +325,7 @@ class SealState(PatchPipetteState):
         self.setState(f'beginning seal (mode: {config["pressureMode"] !r})')
         self.setInitialPressure()
         if config['focusOnCell']:
-            task = dev.focusOnTarget('slow')
-            task.wait(None)
+            dev.focusOnTarget('slow').wait()
 
         self._patchrec['attemptedSeal'] = True
 

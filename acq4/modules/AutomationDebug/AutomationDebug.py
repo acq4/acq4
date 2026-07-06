@@ -294,12 +294,13 @@ class AutomationDebugWindow(Qt.QWidget):
                 (x, y), name="random move to find cells"
             ).wait()
             # TODO don't know why this hangs when using waitFor, but it does
-            depth_fut = self.scopeDevice.findSurfaceDepth(
+            depth = self.scopeDevice.findSurfaceDepth(
                 self.cameraDevice,
                 searchDistance=50 * µm,
                 searchStep=15 * µm,
             )
-            depth = depth_fut.wait() - 50 * µm  # Target below surface
+            # Target below surface
+            depth = depth - 50 * µm
             check_stop()
             self.cameraDevice.setFocusDepth(depth, name=f"{self.cameraDevice.name()} focus below surface for autoTarget")  # Set focus depth
 

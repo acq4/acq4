@@ -56,8 +56,7 @@ class NucleusCollectState(PatchPipetteState):
             task = well.moveToInteract(pip)
             task.wait(60)
         else:
-            task1 = pip.moveTo('collect', speed='fast')
-            task1.wait(None)
+            pip.moveTo('collect', speed='fast').wait()
 
         if dev.sonicatorDevice is not None:
             self.sonication = dev.sonicatorDevice.doProtocol(config['sonicationProtocol'])
@@ -71,12 +70,11 @@ class NucleusCollectState(PatchPipetteState):
             sleep(delay)
 
         if self.sonication is not None and not self.sonication.is_done:
-            self.sonication.wait(None)
+            self.sonication.wait()
 
         dev.pipetteRecord()['expelled_nucleus'] = True
 
-        task2 = pip.goHome()
-        task2.wait(None)
+        pip.goHome().wait()
 
         return {"state": 'out'}
 
