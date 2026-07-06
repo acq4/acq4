@@ -104,7 +104,6 @@ class Autopatcher:
                     sleep(4)
                     ppip.pressureDevice.setPressure(source='regulator', pressure=start_pressure)
 
-
                     set_state("Autopatch: go approach")
                     ppip.pipetteDevice.goApproach("fast").wait()
                     try:
@@ -140,11 +139,11 @@ class Autopatcher:
                     #
                     # check on the resealed cell
                     # win.scopeDevice.loadPreset('GFP')
-                    win.cameraDevice.moveCenterToGlobal(
-                        cell.position, "fast", name="center on resealed cell"
-                    ).wait()
-                    self._saveStack("cell without nucleus")
-                    ppip.pipetteDevice.focusTip('slow').wait()
+                    # win.cameraDevice.moveCenterToGlobal(
+                    #     cell.position, "fast", name="center on resealed cell"
+                    # ).wait()
+                    # self._saveStack("cell without nucleus")
+                    # ppip.pipetteDevice.focusTip('slow').wait()
                     # homeFut.wait()
 
                     # collect the nucleus
