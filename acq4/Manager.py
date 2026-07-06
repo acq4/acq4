@@ -7,7 +7,6 @@ import importlib
 import os
 import socket
 import sys
-import threading
 import time
 import weakref
 from collections import OrderedDict
@@ -24,11 +23,11 @@ from .Interfaces import InterfaceDirectory
 from .devices import getDeviceClass
 from .devices.Device import Device, DeviceTask, DeviceLocker, get_devices_held_by_thread
 from .logging_config import get_logger, set_log_file
-from .util.task import ManualQtFriendlyTask, synch
 from .util import DataManager, ptime, Qt
 from .util.DataManager import DirHandle
 from .util.HelpfulException import HelpfulException
 from .util.LogWindow import get_log_window, get_error_dialog
+from .util.task import ManualQtFriendlyTask, synch, Event
 
 logger = get_logger()
 
@@ -83,7 +82,7 @@ class Manager(Qt.QObject):
 
     def __init__(self):
         self.moduleLock = Mutex(recursive=True)  ## used for keeping some basic methods thread-safe
-        self.isReady = threading.Event()
+        self.isReady = Event()
         self.modules = OrderedDict()  # all currently running modules
         self.devices = OrderedDict()  # all devices loaded via Manager
         self.definedModules = OrderedDict()  # all custom-defined module configurations
