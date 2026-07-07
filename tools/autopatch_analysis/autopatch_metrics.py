@@ -1,0 +1,196 @@
+"""Aggregate parsed autopatch attempts into throughput/efficiency tables.
+
+Turns a list of :class:`autopatch_log.Attempt` into pandas DataFrames for the
+funnel (find/seal/break-in conversion), throughput, per-state time budget, and
+failure-mode breakdown consumed by the analysis notebook.
+"""
+
+from __future__ import annotations
+
+import os
+from typing import Iterable
+
+import pandas as pd
+
+from autopatch_log import STAGE_NAMES, Attempt
+
+# Funnel stages in order, paired with the Attempt boolean that marks reaching them.
+FUNNEL_STAGES = [
+    ("attempted", lambda a: True),
+    ("attempted_find", lambda a: a.attempted_find),
+    ("found_cell", lambda a: a.found_cell),
+    ("sealed", lambda a: a.sealed),
+    ("broke_in", lambda a: a.broke_in),
+]
+
+
+# Columns of the per-attempt table, in order. Declared so an empty run still
+# yields a well-formed (column-bearing) DataFrame instead of a bare one.
+ATTEMPT_COLUMNS = [
+    "source",
+    "cell_dir",
+    "device",
+    "attempt_index",
+    "start_time",
+    "end_time",
+    "duration_s",
+    "best_stage",
+    "best_stage_name",
+    "attempted_find",
+    "found_cell",
+    "sealed",
+    "broke_in",
+    "gigaseal",
+    "outcome",
+    "final_state",
+    "max_seal_resistance",
+    "access_resistance",
+    "input_resistance",
+    "holding_current",
+    "capacitance",
+    "n_test_pulses",
+    "n_state_changes",
+]
+
+
+def attempts_to_dataframe(attempts: Iterable[Attempt]) -> pd.DataFrame:
+    """One row per attempt with outcome flags and whole-cell quality numbers."""
+    rows = []
+    for a in attempts:
+        rows.append(
+            {
+                "source": a.source,
+                "cell_dir": os.path.basename(os.path.dirname(a.source)),
+                "device": a.device,
+                "attempt_index": a.index,
+                "start_time": a.start_time,
+                "end_time": a.end_time,
+                "duration_s": a.duration,
+                "best_stage": a.best_stage,
+                "best_stage_name": a.best_stage_name,
+                "attempted_find": a.attempted_find,
+                "found_cell": a.found_cell,
+                "sealed": a.sealed,
+                "broke_in": a.broke_in,
+                "gigaseal": a.gigaseal,
+                "outcome": a.outcome,
+                "final_state": a.final_state,
+                "max_seal_resistance": a.max_seal_resistance,
+                "access_resistance": a.access_resistance,
+                "input_resistance": a.input_resistance,
+                "holding_current": a.holding_current,
+                "capacitance": a.capacitance,
+                "n_test_pulses": len(a.test_pulses),
+                "n_state_changes": len(a.states),
+            }
+        )
+    return pd.DataFrame(rows, columns=ATTEMPT_COLUMNS)
+
+
+def funnel_counts(df: pd.DataFrame) -> pd.DataFrame:
+    """Counts and conversion percentages at each funnel stage.
+
+    ``pct_of_attempts`` is the share of all attempts reaching a stage;
+    ``conversion_from_prev`` is the share of the previous stage that advanced.
+    """
+    total = len(df)
+    rows = []
+    prev = None
+    for name, _pred in FUNNEL_STAGES:
+        count = int(df[name].sum()) if name != "attempted" else total
+        rows.append(
+            {
+                "stage": name,
+                "count": count,
+                "pct_of_attempts": (100.0 * count / total) if total else 0.0,
+                "conversion_from_prev": (100.0 * count / prev) if prev else 100.0,
+            }
+        )
+        prev = count
+    return pd.DataFrame(rows)
+
+
+def failure_mode_counts(df: pd.DataFrame) -> pd.DataFrame:
+    """How many attempts ended in each outcome, most common first."""
+    counts = df["outcome"].value_counts()
+    return (
+        counts.rename_axis("outcome")
+        .reset_index(name="count")
+        .assign(pct=lambda d: 100.0 * d["count"] / len(df) if len(df) else 0.0)
+    )
+
+
+def state_dwell_times(attempts: Iterable[Attempt]) -> pd.DataFrame:
+    """Total/mean seconds spent in each patch state across all attempts."""
+    rows = []
+    for a in attempts:
+        for state, t0, t1 in a.state_intervals():
+            rows.append({"state": state, "seconds": t1 - t0})
+    if not rows:
+        return pd.DataFrame(columns=["state", "total_s", "mean_s", "n"])
+    df = pd.DataFrame(rows)
+    agg = (
+        df.groupby("state")["seconds"]
+        .agg(total_s="sum", mean_s="mean", n="count")
+        .reset_index()
+        .sort_values("total_s", ascending=False)
+        .reset_index(drop=True)
+    )
+    return agg
+
+
+def throughput(df: pd.DataFrame) -> pd.Series:
+    """Run-level throughput: active time, attempt and whole-cell rates.
+
+    Rates use ``active_hours`` -- the summed span of each log file -- rather than
+    the global first-to-last span, so pointing at logs recorded on different days
+    doesn't count the idle gaps between runs against the rate.
+    """
+    if df.empty:
+        return pd.Series(dtype=float)
+    per_log = df.groupby("source").agg(t0=("start_time", "min"), t1=("end_time", "max"))
+    active_h = (per_log["t1"] - per_log["t0"]).sum() / 3600.0
+    span_h = (df["end_time"].max() - df["start_time"].min()) / 3600.0
+    n_attempts = len(df)
+    n_whole = int(df["broke_in"].sum())
+    return pd.Series(
+        {
+            "n_logs": df["source"].nunique(),
+            "n_attempts": n_attempts,
+            "n_found": int(df["found_cell"].sum()),
+            "n_sealed": int(df["sealed"].sum()),
+            "n_whole_cell": n_whole,
+            "active_hours": active_h,
+            "span_hours": span_h,
+            "attempts_per_hour": (n_attempts / active_h) if active_h else float("nan"),
+            "whole_cells_per_hour": (n_whole / active_h) if active_h else float("nan"),
+            "overall_yield_pct": 100.0 * n_whole / n_attempts if n_attempts else 0.0,
+            "mean_attempt_minutes": df["duration_s"].mean() / 60.0,
+        }
+    )
+
+
+def cumulative_whole_cells(df: pd.DataFrame) -> pd.DataFrame:
+    """Whole-cell successes over wall-clock, for a cumulative-yield plot."""
+    if df.empty:
+        return pd.DataFrame(columns=["minutes", "cumulative_whole_cells"])
+    t0 = df["start_time"].min()
+    wc = df[df["broke_in"]].sort_values("end_time")
+    return pd.DataFrame(
+        {
+            "minutes": (wc["end_time"] - t0) / 60.0,
+            "cumulative_whole_cells": range(1, len(wc) + 1),
+        }
+    )
+
+
+# Re-export for notebook convenience.
+__all__ = [
+    "STAGE_NAMES",
+    "attempts_to_dataframe",
+    "funnel_counts",
+    "failure_mode_counts",
+    "state_dwell_times",
+    "throughput",
+    "cumulative_whole_cells",
+]
