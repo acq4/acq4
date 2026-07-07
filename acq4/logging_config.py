@@ -8,6 +8,7 @@ from pythonjsonlogger.json import JsonFormatter
 
 from acq4.util.LogWindow import get_log_window, get_error_dialog
 from teleprox.log import LogServer
+from gentletask import ThroughlineNameFilter
 
 log_server: LogServer | None = None
 log_handlers = []
@@ -142,6 +143,16 @@ def setup_logging(
         error_dialog.handler.setLevel(logging.ERROR)
         root_logger.addHandler(error_dialog.handler)
         log_handlers.append(error_dialog.handler)
+
+    # Tag every record with the gentletask throughline (the task-name chain) so the
+    # log viewer, console, and file show what operation each line belongs to.
+    # Attaching to the handlers (rather than a logger) ensures propagated
+    # child-logger records are tagged too; the filter mutates the record in place,
+    # and teleprox's LogSender copies the record __dict__ on to the viewer.
+    throughline_filter = ThroughlineNameFilter()
+    for _logger in (root_logger, acq4_logger):
+        for _handler in _logger.handlers:
+            _handler.addFilter(throughline_filter)
 
 
 def set_log_file(log_file: str | None, is_temp_file: bool = False) -> None:

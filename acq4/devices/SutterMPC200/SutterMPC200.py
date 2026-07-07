@@ -248,7 +248,25 @@ class MonitorThread(Thread):
 
                 if moveRequest is None:
                     # just check for position update
-                    if self.dev._checkPositionChange() is not False:
+                    posChanged = self.dev._checkPositionChange() is not False
+
+                    # Drive in-flight moves toward completion. This singleton
+                    # monitor is shared across all drives, so it is the external
+                    # producer for every device's active MoveFuture (replacing
+                    # the old per-move polling thread): each tick it advances the
+                    # active move on each drive via _poll(), which resolves on
+                    # arrival / fails on error.
+                    moving = False
+                    for drive in self.dev._drives:
+                        if drive is None:
+                            continue
+                        move = drive._lastMove
+                        if move is not None and not move.is_done:
+                            moving = True
+                            move._poll()
+
+                    if moving or posChanged:
+                        # an active move or a position change keeps us fast
                         interval = self.minInterval
                     else:
                         interval = min(maxInterval, interval*2)
@@ -306,27 +324,32 @@ class MPC200MoveFuture(MoveFuture):
             time.sleep(5e-3)
         if isinstance(status, Exception):
             raise status
-        
-    def wasInterrupted(self):
-        """Return True if the move was interrupted before completing.
-        """
-        return isinstance(self._getStatus()[1], Exception)
+
+        # No per-move thread: the shared singleton MonitorThread is this
+        # promise's external producer, calling _poll() each tick while in flight.
+
+    def _poll(self):
+        # Advance this move toward completion. Called by the shared MonitorThread
+        # each tick while the move is in flight: resolve on arrival, fail on a
+        # move error. Idempotent and race-safe (guards + atomic completion).
+        if self.is_stopped or self.is_done:
+            return
+        start, status = self._getStatus()
+        if isinstance(status, Exception):
+            self.fail(status)
+        elif status is True:
+            self.resolve(None)
 
     def percentDone(self):
-        """Return an estimate of the percent of move completed based on the 
+        """Return an estimate of the percent of move completed based on the
         device's speed table.
         """
-        if self.isDone():
+        if self.is_done:
             return 100
         dt = ptime.time() - self._getStatus()[0]
         if self._expectedDuration == 0:
             return 99
         return max(min(100 * dt / self._expectedDuration, 99), 0)
-    
-    def isDone(self):
-        """Return True if the move is complete.
-        """
-        return self._getStatus()[1] not in (None, False)
 
     def _getStatus(self):
         # check status of move unless we already know it is complete.

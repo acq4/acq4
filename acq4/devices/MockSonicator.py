@@ -5,7 +5,7 @@ import pyaudio
 
 import pyqtgraph as pg
 from acq4.devices.Sonicator import Sonicator
-from acq4.util.future import future_wrap
+from acq4.util.task import asynch, sleep
 from pyqtgraph import siFormat
 
 
@@ -93,8 +93,8 @@ class MockSonicator(Sonicator):
         self.audio_thread = threading.Thread(target=stop_sound, name="MockSonicatorAudioStopThread")
         self.audio_thread.start()
 
-    @future_wrap
-    def sonicate(self, frequency, duration, lock=True, _future=None):
+    @asynch
+    def sonicate(self, frequency, duration, lock=True):
         if lock:
             self.actionLock.acquire()
         try:
@@ -108,7 +108,7 @@ class MockSonicator(Sonicator):
             self.play_sound(frequency, duration)
 
             # Wait for duration
-            _future.sleep(duration)
+            sleep(duration)
 
             self.sigSonicationChanged.emit(0.0)
         finally:

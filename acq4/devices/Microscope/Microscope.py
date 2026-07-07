@@ -12,9 +12,9 @@ from acq4.motion import MoveSpec
 from acq4.util import Qt
 from acq4.util.Mutex import Mutex
 from acq4.util.acq4_typing import Number
-from acq4.util.future import Future, MultiFuture, future_wrap, FutureButton
 from acq4.util.imaging import Frame
 from acq4.util.surface import find_surface
+from acq4.util.task import MultiFuture, asynch, asynch_with_qt_signals, FutureButton
 from acq4.util.ui.ZPositionWidget import ZPositionWidget
 from coorx import TTransform
 from pyqtgraph.units import µm
@@ -171,25 +171,23 @@ class Microscope(Device, OptomechDevice):
         with self.lock:
             return list(self.selectedObjectives.values())
 
-    @future_wrap
-    def loadPreset(self, name, _future):
+    def loadPreset(self, name):
         conf = self.presets[name]
-        futures: list[Future] = []
+        tasks = []
         for dev_name, state in conf.items():
             if dev_name == "objective":
                 self.setObjectiveIndex(state)
             elif dev_name != "hotkey":
                 dev = self.dm.getDevice(dev_name)
                 if hasattr(dev, "loadPreset"):
-                    futures.append(dev.loadPreset(state))
-        for fut in futures:
-            if fut is not None:
-                _future.waitFor(fut)
+                    tasks.append(asynch(dev.loadPreset)(state))
+        for task in tasks:
+            task.wait()
 
     def handlePresetHotkey(self, kb_dev, changes, name):
         key, pressed = changes.get('keys', [])[0]
         if pressed:
-            self.loadPreset(name)
+            asynch(self.loadPreset, detach=True, raise_errors=f"Error loading preset {name}")(name)
 
     def deviceInterface(self, win):
         iface = ScopeGUI(self, win)
@@ -243,18 +241,17 @@ class Microscope(Device, OptomechDevice):
             name = cameras[0]
         return self.dm.getDevice(name)
 
-    def getZStack(self, imager: "Device", z_range, block=False, name="z stack") -> Future[list[Frame]]:
+    def getZStack(self, imager: "Device", z_range, name="z stack") -> list[Frame]:
         """Acquire a z-stack of images using the given imager.
 
         The z-stack is returned as frames.
         """
         from acq4.util.imaging.sequencer import acquire_z_stack
 
-        return acquire_z_stack(imager, *z_range, block=block, name=name)
+        return acquire_z_stack(imager, *z_range, name=name)
 
-    @future_wrap
     def findSurfaceDepth(
-        self, imager: "Device", searchDistance=200 * µm, searchStep=5 * µm, returnStack=False, _future: Future = None
+        self, imager: "Device", searchDistance=200 * µm, searchStep=5 * µm, returnStack=False
     ) -> float | tuple[float, list[Frame]]:
         """Set the surface of the sample based on how focused the images are."""
         z_range = (
@@ -262,14 +259,12 @@ class Microscope(Device, OptomechDevice):
             self.getSurfaceDepth() - searchDistance,
             searchStep,
         )
-        z_stack: list[Frame] = _future.waitFor(
-            self.getZStack(imager, z_range, name="finding surface")
-        ).getResult()
+        z_stack: list[Frame] = self.getZStack(imager, z_range, name="finding surface")
         threshold = self.config.get('surfaceDetectionPercentileThreshold', 96)
         if (idx := find_surface(z_stack, threshold)) is not None:
             depth = z_stack[idx].mapFromFrameToGlobal([0, 0, 0])[2]
             self.setSurfaceDepth(depth)
-            _future.waitFor(self.setFocusDepth(depth, name=f"{self.name()} focus to detected surface"))
+            self.setFocusDepth(depth, name=f"{self.name()} focus to detected surface").wait()
             if returnStack:
                 return depth, z_stack
             return depth
@@ -593,7 +588,7 @@ class ScopeGUI(Qt.QWidget):
     def loadPreset(self):
         btn = self.sender()
         name = btn.objectName()
-        self.dev.loadPreset(name)
+        asynch(self.dev.loadPreset, detach=True, raise_errors=f"Error loading preset {name}")(name)
 
     def objectiveChanged(self, obj):
         ## Microscope says new objective has been selected; update selection radio
@@ -810,7 +805,7 @@ class ScopeCameraModInterface(CameraModuleInterface):
         self.transformChanged()
 
     def findSurface(self):
-        return self.getDevice().findSurfaceDepth(self.getDevice().getDefaultImager())
+        return asynch_with_qt_signals(self.getDevice().findSurfaceDepth)(self.getDevice().getDefaultImager())
 
     def surfaceDepthChanged(self, depth):
         self.zPositionWidget.setSurfaceDepth(depth)

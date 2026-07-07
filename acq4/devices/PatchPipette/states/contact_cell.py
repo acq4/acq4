@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import numpy as np
-from pyqtgraph.units import µm, MΩ
+from gentletask import check_stop
 
 from acq4.util.debug import log_and_ignore_exception
+from acq4.util.task import sleep
+from pyqtgraph.units import µm, MΩ
 from ._base import PatchPipetteState
 from .cell_detect import CellDetectAnalysis
-from acq4 import getManager
 
 
 class ContactCellState(PatchPipetteState):
@@ -112,7 +113,7 @@ class ContactCellState(PatchPipetteState):
         initial_pos[2] += config['initialApproachHeight']
         self.setState("moving to initial approach position")
         self._moveFuture = pip.moveToGlobalNoPlanning(initial_pos, speed=config['moveSpeed'], name='move to initial approach position')
-        self.waitFor(self._moveFuture)
+        self._moveFuture.wait()
         self._moveFuture = None
 
         if config['findPipette']:
@@ -124,7 +125,7 @@ class ContactCellState(PatchPipetteState):
         # 5. Main descent loop
         self.setState("descending toward cell")
         while True:
-            self.checkStop()
+            check_stop()
 
             # Process test pulses and check for broken tip
             self.processAtLeastOneTestPulse()
@@ -167,11 +168,12 @@ class ContactCellState(PatchPipetteState):
             ])
 
             self._moveFuture = pip.moveToGlobalNoPlanning(next_pos, speed=config['moveSpeed'], name='contact cell descent step')
-            self.waitFor(self._moveFuture)
+            self._moveFuture.wait()
             self._moveFuture = None
 
             # Wait between iterations
-            self.sleep(config['stepInterval'])
+            duration = config['stepInterval']
+            sleep(duration)
 
     def processAtLeastOneTestPulse(self):
         tps = super().processAtLeastOneTestPulse()
@@ -199,12 +201,12 @@ class ContactCellState(PatchPipetteState):
     #         self._cell = None
 
     def _cleanup(self):
-        if self._moveFuture is not None and not self._moveFuture.isDone():
+        if self._moveFuture is not None and not self._moveFuture.is_done:
             with log_and_ignore_exception(Exception, "Error stopping move during cleanup"):
                 self._moveFuture.stop()
         # with log_and_ignore_exception(Exception, "Error disabling visual tracking"):
         #     self._disableVisualTracking()
-        return super()._cleanup()
+        super()._cleanup()
 
     def findPipetteTip(self, zstack=True):
         pip = self.dev.pipetteDevice
@@ -213,18 +215,14 @@ class ContactCellState(PatchPipetteState):
             if zstack:
                 self.stopVisualTargetTracking('pause tracking for pipette recalibration')
                 try:
-                    self.waitFor(
-                        pip.findTipInStack(maxOffsetDistance=5e-6)
-                    )
+                    pip.findTipInStack(maxOffsetDistance=5e-6)
                 finally:
                     self.startVisualTargetTracking()
             else:
-                tip_fut = self.waitFor(
-                    pip.iterativelyFindTip(
-                        max_allowed_offset=self.config["pipetteRecalibrationMaxChange"],
-                        go_to_tip_first=True,
-                        focus_above=2e-6,
-                    )
+                pip.iterativelyFindTip(
+                    max_allowed_offset=self.config["pipetteRecalibrationMaxChange"],
+                    go_to_tip_first=True,
+                    focus_above=2e-6,
                 )
         except Exception as e:
             self.logger.exception(e)

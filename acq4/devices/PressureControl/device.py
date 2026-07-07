@@ -4,7 +4,7 @@ from typing import Optional
 from acq4.util import Qt, ptime
 from .widgets import PressureControlWidget
 from ..Device import Device
-from ...util.future import Future, future_wrap
+from ...util.task import asynch, sleep
 
 
 class PressureControl(Device):
@@ -31,7 +31,7 @@ class PressureControl(Device):
         self.source = None
         self.sources = ("regulator", "user", "atmosphere")
 
-    @future_wrap
+    @asynch
     def rampPressure(
         self,
         target: Optional[float] = None,
@@ -40,7 +40,6 @@ class PressureControl(Device):
         minimum: Optional[float] = None,
         rate: Optional[float] = None,
         duration: Optional[float] = None,
-        _future: Optional[Future] = None,
     ) -> None:
         if target is None and maximum is None and minimum is None:
             raise ValueError("Must specify at least one of target, maximum, or minimum")
@@ -69,7 +68,7 @@ class PressureControl(Device):
         while frac_done < 1:
             frac_done = min((ptime.time() - start_time) / duration, 1)
             self.setPressure("regulator", start_pressure + frac_done * (end_pressure - start_pressure))
-            _future.sleep(self.regulatorSettlingTime)
+            sleep(self.regulatorSettlingTime)
 
     def isValidForPatchPipettes(self):
         # only allow use with patch pipettes if regulator control is available (for fine pressure control)

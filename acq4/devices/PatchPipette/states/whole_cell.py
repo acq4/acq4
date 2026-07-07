@@ -7,11 +7,13 @@ to manually initiate a 'clear access' recovery attempt.
 from __future__ import annotations
 
 import numpy as np
+from gentletask import check_stop
 
 import pyqtgraph as pg
 from acq4.util import ptime
 from acq4.util.debug import log_and_ignore_exception
 from acq4.util.functions import plottable_booleans
+from acq4.util.task import sleep
 from ._base import PatchPipetteState, SteadyStateAnalysisBase, exponential_decay_avg
 
 
@@ -177,7 +179,7 @@ class WholeCellState(PatchPipetteState):
 
         if not self.config['monitorAccessResistance']:
             while True:
-                self.sleep(0.1)
+                sleep(0.1)
 
         self.dev.setAccessWarning(False)  # clear any stale warning when (re)entering whole cell
         self.monitorTestPulse()
@@ -187,7 +189,7 @@ class WholeCellState(PatchPipetteState):
             max_test_pulse_gap=self.config['maxTestPulseGap'],
         )
         while True:
-            self.checkStop()
+            check_stop()
             tps = self.getTestPulses(timeout=0.2)
             if len(tps) == 0:
                 continue
@@ -216,8 +218,7 @@ class WholeCellState(PatchPipetteState):
             self.dev.setAccessWarning(False)
 
     def _cleanup(self):
-        patchrec = self.dev.patchRecord()
-        patchrec['wholeCellStopTime'] = ptime.time()
+        self.dev.patchRecord()['wholeCellStopTime'] = ptime.time()
         with log_and_ignore_exception(Exception, "Error clearing access warning after whole cell"):
             self.dev.setAccessWarning(False)
-        return super()._cleanup()
+        super()._cleanup()

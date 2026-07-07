@@ -7,7 +7,7 @@ import scipy.ndimage
 import pyqtgraph as pg
 from acq4.Manager import getManager
 from acq4.util import Qt
-from acq4.util.future import future_wrap
+from acq4.util.task import asynch_with_qt_signals, set_state
 from acq4.util.imaging.sequencer import acquire_z_stack
 from coorx.nonlinear import PetzvalTransform
 
@@ -160,7 +160,7 @@ class FieldCurvatureCalibrationWindow(Qt.QWidget):
         return widget
 
     def _start(self):
-        if self._calibration_future is not None and not self._calibration_future.isDone():
+        if self._calibration_future is not None and not self._calibration_future.is_done:
             return
         self._start_btn.setEnabled(False)
         self._progress_bar.setVisible(True)
@@ -216,7 +216,7 @@ class FieldCurvatureCalibrationWindow(Qt.QWidget):
         self._start_btn.setEnabled(True)
         self._progress_bar.setVisible(False)
         try:
-            result = self._calibration_future.getResult()
+            result = self._calibration_future.wait()
             self._result = result
             self._display_result(result)
         except Exception as exc:
@@ -249,8 +249,8 @@ class FieldCurvatureCalibrationWindow(Qt.QWidget):
         self._status_label.setText("Calibration complete.")
 
 
-@future_wrap
-def measure_field_curvature_beads(camera, z_range, z_step, grid_n, n_terms=1, _future=None):
+@asynch_with_qt_signals
+def measure_field_curvature_beads(camera, z_range, z_step, grid_n, n_terms=1):
     """Measure field curvature from a z-stack of uniform-z objects (e.g. fluorescent beads).
 
     Divides each frame into a grid_n × grid_n tiling.  For each tile the frame
@@ -260,7 +260,7 @@ def measure_field_curvature_beads(camera, z_range, z_step, grid_n, n_terms=1, _f
     Returns a dict with keys: z_offsets_um, z_absolute, grid_n, xy_range_um,
     positions_global, petzval_transform, method.
     """
-    _future.setState("Acquiring z-stack…")
+    set_state("Acquiring z-stack…")
     z_center = camera.getFocusDepth()
     frames = acquire_z_stack(
         camera,
@@ -268,9 +268,9 @@ def measure_field_curvature_beads(camera, z_range, z_step, grid_n, n_terms=1, _f
         z_center + z_range,
         z_step,
         name="field curvature calibration",
-    ).getResult()
+    )
 
-    _future.setState("Analyzing sharpness per tile…")
+    set_state("Analyzing sharpness per tile…")
     images = np.stack([f.data() for f in frames])
     z_positions = np.array([f.depth for f in frames])
 
@@ -292,7 +292,7 @@ def measure_field_curvature_beads(camera, z_range, z_step, grid_n, n_terms=1, _f
             global_pos = frames[0].mapFromFrameToGlobal(px_center)
             positions_global[row * grid_n + col] = global_pos[:2]
 
-    _future.setState("Fitting Petzval surface…")
+    set_state("Fitting Petzval surface…")
     z_flat = tile_z.ravel()
     petzval = _fit_petzval(positions_global, z_flat, n_terms=n_terms)
 
@@ -314,9 +314,9 @@ def measure_field_curvature_beads(camera, z_range, z_step, grid_n, n_terms=1, _f
     }
 
 
-@future_wrap
+@asynch_with_qt_signals
 def measure_field_curvature_pipette(
-    camera, pipette, stage, xy_range, grid_n, z_range, z_step, n_terms=1, _future=None
+    camera, pipette, stage, xy_range, grid_n, z_range, z_step, n_terms=1
 ):
     """Measure field curvature by scanning the pipette tip across the field.
 
@@ -338,7 +338,7 @@ def measure_field_curvature_pipette(
         for i, dx in enumerate(offsets):
             for j, dy in enumerate(offsets):
                 count = i * grid_n + j + 1
-                _future.setState(f"Scanning position {count}/{total}…")
+                set_state(f"Scanning position {count}/{total}…")
 
                 target = center_pos.copy()
                 target[0] += dx
@@ -348,10 +348,10 @@ def measure_field_curvature_pipette(
                 z_values[i, j] = _find_focus_z_with_pipette(camera, pipette, z_range, z_step)
                 positions_global[i * grid_n + j] = target[:2]
     finally:
-        _future.setState("Returning stage to start position…")
+        set_state("Returning stage to start position…")
         stage.move(list(center_pos), "slow").wait()
 
-    _future.setState("Fitting Petzval surface…")
+    set_state("Fitting Petzval surface…")
     z_flat = z_values.ravel()
     petzval = _fit_petzval(positions_global, z_flat, n_terms=n_terms)
 

@@ -5,9 +5,10 @@ import json
 import os
 import time
 import weakref
-from typing import List
+from typing import List, Any
 
 import numpy as np
+from numpy import dtype, ndarray
 
 import pyqtgraph as pg
 from acq4.devices.Device import Device
@@ -16,7 +17,7 @@ from acq4.devices.Stage import Stage, MovePathFuture
 from acq4.modules.Camera import CameraModuleInterface
 from acq4.motion import MoveSpec
 from acq4.util import Qt, ptime
-from acq4.util.future import future_wrap, Future
+from acq4.util.task import ManualQtFriendlyTask, asynch, raise_errors, sleep, synch
 from acq4.util.target import Target
 from coorx import AffineTransform
 from pyqtgraph import Point, siFormat
@@ -224,8 +225,9 @@ class Pipette(Device, OptomechDevice):
             future = self.dm.move(MoveSpec(self, np.asarray(saved_pos, dtype=float), speed=speed))
 
         if raiseErrors is not False:
-            future.raiseErrors(
-                message=f"Move to {position} position failed ({{error}}); requested from:\n{{stack}}"
+            raise_errors(
+                future,
+                message=f"Move to {position} position failed ({{error}}); requested from:\n{{stack}}",
             )
         return future
 
@@ -311,22 +313,19 @@ class Pipette(Device, OptomechDevice):
                 return False
         return True
 
-    @future_wrap
-    def setTipOffsetIfAcceptable(self, pos, _future=None):
+    @asynch
+    def setTipOffsetIfAcceptable(self, pos):
         if self.tipOffsetIsReasonable(pos):
             self.resetGlobalPosition(pos)
         else:
             dist = np.linalg.norm(np.array(self.mapToGlobal((0, 0, 0))) - pos)
             dist = siFormat(dist, suffix='m', precision=3)
-            button_text = _future.waitFor(
-                prompt(
-                    title="Pipette displacement detected",
-                    text=f"The tip offset for {self.name()} is {dist} off from its initial value.",
-                    extra_text="Do you want to use it, discard it or override all historic offsets?",
-                    choices=["Use", "Discard", "Override"],
-                ),
-                timeout=None,
-            ).getResult()
+            button_text = prompt(
+                title="Pipette displacement detected",
+                text=f"The tip offset for {self.name()} is {dist} off from its initial value.",
+                extra_text="Do you want to use it, discard it or override all historic offsets?",
+                choices=["Use", "Discard", "Override"],
+            )
             if button_text == "Use":
                 self.recordTipOffsetInHistory(pos)
             elif button_text == "Discard":
@@ -337,22 +336,19 @@ class Pipette(Device, OptomechDevice):
                 raise AssertionError("Unknown button clicked")
         return True
 
-    @future_wrap
-    def setNewPipetteTipOffsetIfAcceptable(self, pos, _future=None):
+    @asynch
+    def setNewPipetteTipOffsetIfAcceptable(self, pos):
         """Returns whether the tip position was saved. Otherwise, the user requested a re-do."""
         if self.newPipetteTipOffsetIsReasonable(pos):
             self.recordTipOffsetInHistory(pos)
         else:
-            button_text = _future.waitFor(
-                prompt(
-                    title="Initial tip offset outlier",
-                    text=f"The tip offset for {self.name()} is outside of its normal range.",
-                    extra_text="Do you want to include this outlier, discard the value, override all historic "
-                    "offsets, or only use this as a temporary offset?",
-                    choices=["Include", "Discard", "Override", "Temporary"],
-                ),
-                timeout=None,
-            ).getResult()
+            button_text = prompt(
+                title="Initial tip offset outlier",
+                text=f"The tip offset for {self.name()} is outside of its normal range.",
+                extra_text="Do you want to include this outlier, discard the value, override all historic "
+                "offsets, or only use this as a temporary offset?",
+                choices=["Include", "Discard", "Override", "Temporary"],
+            )
             if button_text == "Include":
                 self.recordTipOffsetInHistory(pos)
             elif button_text == "Discard":
@@ -401,8 +397,8 @@ class Pipette(Device, OptomechDevice):
         else:
             return self.offset
 
-    @future_wrap
-    def saveManualTipPosition(self, stack=True, _future=None):
+    @asynch
+    def saveManualTipPosition(self, stack=True):
         path = os.path.join(self.configPath(), "manual-calibrations")
         path = self.dm.configFileName(path)
         path = self.dm.dirHandle(path, create=True)
@@ -415,7 +411,7 @@ class Pipette(Device, OptomechDevice):
 
         cam: Camera = self.imagingDevice()
         with cam.ensureRunning():
-            img = _future.waitFor(cam.acquireFrames(n=1, ensureFreshFrames=True)).getResult()[0]
+            img = cam.acquireFrames(n=1, ensureFreshFrames=True).wait()[0]
         img.addInfo(pip_info)
         timestamp = time.strftime("%Y%m%d-%H%M%S")
         path.writeFile(
@@ -436,9 +432,9 @@ class Pipette(Device, OptomechDevice):
                     storage_dir=path,
                     name="manual calibration stack",
                 )
-                _future.waitFor(seq_future)
+                seq_future.wait()
             finally:
-                _future.waitFor(cam.setFocusDepth(depth, name=f"{cam.name()} restore focus after {self.name()} manual calibration stack"))
+                cam.setFocusDepth(depth, name=f"{cam.name()} restore focus after {self.name()} manual calibration stack").wait()
             fh = seq_future.imagesSavedIn
             info = {
                 **fh.info(),
@@ -538,13 +534,16 @@ class Pipette(Device, OptomechDevice):
         Always routes through the global motion planner so that any
         post-interaction cleanup steps are included when needed.
         """
+        return self.dm.move(MoveSpec(self, self.homePosition(), speed=speed))
+
+    def homePosition(self) -> ndarray[Any, dtype[Any]]:
         manipulator = self.parentDevice()
         manip_home = manipulator.homePosition()
         if manip_home is None:
             raise RuntimeError(f"No home position defined for {manipulator.name()}")
         global_move = np.asarray(manip_home) - np.asarray(manipulator.globalPosition())
         end_pos = np.asarray(self.globalPosition()) + global_move
-        return self.dm.move(MoveSpec(self, end_pos, speed=speed))
+        return end_pos
 
     def goSearch(self, speed='fast', distance=0):
         """Focus the scope above the surface, then move the tip to the search position.
@@ -578,8 +577,8 @@ class Pipette(Device, OptomechDevice):
         """Move the tip to the current target position."""
         return self.dm.move(MoveSpec(self, self.targetPosition(), speed=speed))
 
-    @future_wrap
-    def goAboveTarget(self, speed, _future=None, **kwds):
+    @asynch
+    def goAboveTarget(self, speed, **kwds):
         """Move the tip to above the target for calibration, then recenter the scope.
 
         The tip arrives via a short hysteresis-correction approach (100 µm back along the
@@ -594,13 +593,11 @@ class Pipette(Device, OptomechDevice):
 
         # Approach from 100 µm back along the pipette axis to normalize hysteresis.
         hysteresis_wp = above_target + self.globalDirection() * -100e-6
-        _future.waitFor(
-            self.dm.move(
-                MoveSpec(self, hysteresis_wp, speed=speed),
-                MoveSpec(scope, above_target, speed=speed),
-            )
-        )
-        _future.waitFor(self.dm.move(MoveSpec(self, above_target, speed=speed)))
+        self.dm.move(
+            MoveSpec(self, hysteresis_wp, speed=speed),
+            MoveSpec(scope, above_target, speed=speed),
+        ).wait()
+        self.dm.move(MoveSpec(self, above_target, speed=speed)).wait()
 
     def _movePath(self, path, name=None) -> MovePathFuture:
         """
@@ -693,15 +690,17 @@ class Pipette(Device, OptomechDevice):
         pos = self.positionAtDepth(depth)
         return self.moveToGlobalNoPlanning(pos, speed, name=name)
 
-    def retractFromSurface(self, speed='slow') -> Future:
+    def retractFromSurface(self, speed='slow') -> ManualQtFriendlyTask:
         """Retract the pipette along its axis until it is above the slice surface."""
         depth = self.globalPosition()[2]
         appDepth = self.approachDepth()
         if depth < appDepth:
             return self.advance(appDepth, speed=speed, name='retract from surface')
-        return Future.immediate()
+        already_retracted = ManualQtFriendlyTask(name='retract from surface (no-op)')
+        already_retracted.resolve(None)
+        return already_retracted
 
-    @future_wrap
+    @asynch
     def stepwiseAdvance(
         self,
         depth: float | None = None,
@@ -710,7 +709,6 @@ class Pipette(Device, OptomechDevice):
         interval: float = 5,
         step: float = 1e-6,
         name: str | None = None,
-        _future=None,
     ):
         """Retract/advance in small steps, allowing for manual user movements.
 
@@ -743,14 +741,13 @@ class Pipette(Device, OptomechDevice):
                 break  # overshot
             distance = np.linalg.norm(direction)
             next_pos = pos + step * direction / distance
-            _future.waitFor(self.moveToGlobalNoPlanning(next_pos, speed=speed, linear=True, name=name))
+            self.moveToGlobalNoPlanning(next_pos, speed=speed, linear=True, name=name).wait()
             if distance <= step:
                 break
-            _future.sleep(interval)
+            sleep(interval)
 
-    @future_wrap
     def wiggle(
-        self, speed, radius, repetitions, duration, pipette_direction=None, extra=None, _future=None
+        self, speed, radius, repetitions, duration, pipette_direction=None, extra=None
     ):
         if pipette_direction is None:
             pipette_direction = self.globalDirection()
@@ -774,9 +771,9 @@ class Pipette(Device, OptomechDevice):
                 while ptime.time() - start < duration:
                     while np.dot(direction := random_wiggle_direction(), prev_dir) > 0:
                         pass  # ensure different direction from previous
-                    _future.waitFor(self.moveToGlobalNoPlanning(pos=pos + radius * direction, speed=speed, name=f"wiggle step {step_i}"))
+                    self.moveToGlobalNoPlanning(pos=pos + radius * direction, speed=speed, name=f"wiggle step {step_i}").wait()
                     prev_dir = direction
-                _future.waitFor(self.moveToGlobalNoPlanning(pos=pos, speed=speed, name=f"wiggle return {step_i}"))
+                self.moveToGlobalNoPlanning(pos=pos, speed=speed, name=f"wiggle return {step_i}").wait()
 
     def globalPosition(self):
         """Return the position of the electrode tip in global coordinates.
@@ -846,7 +843,7 @@ class Pipette(Device, OptomechDevice):
             pos, speed=speed, name=f"focus on {self.name()}"
         )
         if raiseErrors:
-            future.raiseErrors("Focus on pipette tip failed ({error}); requested from:\n{stack})")
+            raise_errors(future, "Focus on pipette tip failed ({error}); requested from:\n{stack})")
         return future
 
     def focusTarget(self, speed='fast', raiseErrors=False):
@@ -855,8 +852,8 @@ class Pipette(Device, OptomechDevice):
             pos, speed=speed, name=f"focus on target for {self.name()}"
         )
         if raiseErrors:
-            future.raiseErrors(
-                "Focus on pipette target failed ({error}); requested from:\n{stack})"
+            raise_errors(
+                future, "Focus on pipette target failed ({error}); requested from:\n{stack})"
             )
         return future
 
@@ -951,10 +948,9 @@ class Pipette(Device, OptomechDevice):
         """Return an object that records all motion updates from this pipette"""
         return PipetteRecorder(self)
 
-    @future_wrap
     def iterativelyFindTip(self, max_reps=10, found_threshold=3e-6, delay_after_move=0.4,
                            max_allowed_offset=None, delay_after_update=0, reserve_devices=True,
-                           go_to_tip_first=False, stack_mode=False, focus_above=0, _future=None):
+                           go_to_tip_first=False, stack_mode=False, focus_above=0):
         """Iteratively refine the tip position by finding the tip in frame and focusing, until convergence.
 
         Returns if convergence is reached (tip position changes less than *found_threshold* between iterations) or after *max_reps* iterations.
@@ -991,12 +987,12 @@ class Pipette(Device, OptomechDevice):
                 last_pos = None
                 start_pos = self.globalPosition()
                 if go_to_tip_first:
-                    _future.waitFor(self.focusAboveTip(focus_above))
-                    _future.sleep(delay_after_move)
+                    self.focusAboveTip(focus_above).wait()
+                    sleep(delay_after_move)
 
                 if stack_mode:
                     pos = self._findTipViaZStack()
-                    _future.waitFor(self.setTipOffsetIfAcceptable(pos), timeout=None)
+                    synch(self.setTipOffsetIfAcceptable)(pos)
                     return
 
                 for _ in range(max_reps):
@@ -1004,9 +1000,9 @@ class Pipette(Device, OptomechDevice):
                     heatmap = getattr(self.tracker, 'last_heatmap', None)
                     if heatmap is not None and heatmap.max() < 2 * heatmap.std():
                         pos = self._findTipViaZStack()
-                    _future.waitFor(self.setTipOffsetIfAcceptable(pos), timeout=None)
+                    synch(self.setTipOffsetIfAcceptable)(pos)
                     converged = last_pos is not None and np.linalg.norm(np.array(pos) - np.array(last_pos)) < found_threshold
-                    _future.sleep(delay_after_update)
+                    sleep(delay_after_update)
                     if converged:
                         diff = np.linalg.norm(np.array(pos) - np.array(start_pos))
                         if max_allowed_offset is not None and diff > max_allowed_offset:
@@ -1014,20 +1010,17 @@ class Pipette(Device, OptomechDevice):
                         return
 
                     last_pos = pos
-                    _future.waitFor(self.focusAboveTip(focus_above))
-                    _future.sleep(delay_after_move)
+                    self.focusAboveTip(focus_above).wait()
+                    sleep(delay_after_move)
                 raise TimeoutError(f"Iterative tip finding did not converge after {max_reps} iterations.")
             except Exception as exc:
                 # reset position to start if we fail, to avoid leaving the pipette in a bad position
                 self.setTipOffset(start_pos)
                 raise exc
 
-    @future_wrap
-    def findTipInStack(self, *, _future:Future, maxOffsetDistance=20e-6):
+    def findTipInStack(self, *, maxOffsetDistance=20e-6):
         startPos = self.globalPosition()
-        fut = self.tracker.estimatePositionFromStack()
-        _future.waitFor(fut)
-        pos, analysis = fut.getResult()
+        pos, analysis = self.tracker.estimatePositionFromStack()
         if pos is None:
             raise RuntimeError(f"Pipette tip search failed")
         dist = np.linalg.norm(np.array(pos) - np.array(startPos))
@@ -1378,11 +1371,10 @@ class PipetteCamModInterface(CameraModuleInterface):
         pip = self.getDevice()
         pos = pip.tracker.findTipInFrame()
         tip_future = pip.setTipOffsetIfAcceptable(pos)
-        tip_future.onFinish(self._handleTipPositionSet)
+        tip_future.add_finish_callback(self._handleTipPositionSet)
 
-    def _handleTipPositionSet(self, future):
-        success = future.getResult()
-        if not success:
+    def _handleTipPositionSet(self, result, exc):
+        if not result:
             return self.autoCalibrateClicked()
 
     def getRefFramesClicked(self):

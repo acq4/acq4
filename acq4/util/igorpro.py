@@ -1,10 +1,15 @@
+"""IgorPro integration: ZMQ bridge to a running Igor/MIES process.
+
+Requests are dispatched on a long-lived worker thread and resolved
+asynchronously by message ID; each request is exposed as a gentletask ManualTask.
+"""
+
 import queue
 import sys
 import threading
 import pywintypes
 import numpy as np
 import subprocess
-import concurrent.futures
 import atexit
 import json
 import zmq
@@ -12,6 +17,7 @@ import logging
 
 from acq4.util.json_encoder import IgorJSONEncoder
 from acq4.util import Qt
+from acq4.util.task import ManualTask
 
 
 logger = logging.getLogger('igorpro')
@@ -160,7 +166,7 @@ class IgorReqThread(threading.Thread):
         self.address = address
         self.stop_flag = False
         self.send_queue = queue.Queue()
-        self.unresolved_futures = {}
+        self.unresolved_promises = {}
         self.resolved_ids = set()
         self.next_result_id = 0
         self.running = True
@@ -171,9 +177,12 @@ class IgorReqThread(threading.Thread):
     def send(self, cmd, *args):
         if not self.running:
             raise Exception("IGOR thread is already shut down; cannot send request.")
-        fut = concurrent.futures.Future()
-        self.send_queue.put((cmd, args, fut))
-        return fut
+        # The ManualTask is the settable result: the request loop completes it from
+        # this thread when the matching reply arrives. No parking thread per
+        # request — callers get a gentletask handle (wait/result/stop) directly.
+        promise = ManualTask(name=f"igor:{cmd}")
+        self.send_queue.put((cmd, args, promise))
+        return promise
 
     def stop(self):
         self.stop_flag = True
@@ -192,12 +201,12 @@ class IgorReqThread(threading.Thread):
         finally:
             self.running = False
 
-            # resolve all remaining futures and unhandled requests
-            for f in self.unresolved_futures.values():
-                f.set_exception(RuntimeError("IGOR thread closed before getting result from this request"))
+            # fail all outstanding and not-yet-dispatched requests
+            for promise in self.unresolved_promises.values():
+                promise.fail(RuntimeError("IGOR thread closed before getting result from this request"))
             while self.send_queue.qsize() > 0:
-                cmd, params, fut = self.send_queue.get(block=False)
-                fut.set_exception(RuntimeError("IGOR thread closed before getting result from this request"))
+                cmd, params, promise = self.send_queue.get(block=False)
+                promise.fail(RuntimeError("IGOR thread closed before getting result from this request"))
 
             self.socket.close()
 
@@ -206,13 +215,13 @@ class IgorReqThread(threading.Thread):
         for i in range(10):
             if not zmq_context.closed:
                 try:
-                    cmd, params, fut = self.send_queue.get(block=False)
+                    cmd, params, promise = self.send_queue.get(block=False)
                 except queue.Empty:
                     break
                 try:
                     msg_id = self.next_result_id
                     self.next_result_id += 1
-                    self.unresolved_futures[msg_id] = fut
+                    self.unresolved_promises[msg_id] = promise
                     # print(f"IGOR SEND: {msg_id} {cmd} {params}")
                     self.socket.send_multipart(self.format_call(cmd, params, msg_id))
                 except zmq.error.Again:
@@ -230,7 +239,7 @@ class IgorReqThread(threading.Thread):
                 except KeyError as ke:
                     raise RuntimeError(f"Igor message has no ID: {reply}") from ke
                 try:
-                    future = self.unresolved_futures.pop(message_id)
+                    promise = self.unresolved_promises.pop(message_id)
                 except KeyError as ke:
                     if message_id in self.resolved_ids:
                         raise ValueError(f"Received IGOR message {message_id} multiple times.") from ke
@@ -238,13 +247,13 @@ class IgorReqThread(threading.Thread):
                         raise ValueError(f"Received unexpected IGOR message {message_id}") from ke
                 self.resolved_ids.add(message_id)
 
-                if future is None:
-                    raise RuntimeError(f"No future found for messageID {message_id}")
+                if promise is None:
+                    raise RuntimeError(f"No reply promise found for messageID {message_id}")
                 try:
                     reply = self.parse_reply(reply)
-                    future.set_result(reply)
+                    promise.resolve(reply)
                 except IgorCallError as e:
-                    future.set_exception(e)
+                    promise.fail(e)
             except zmq.error.Again:
                 pass
             except zmq.error.ContextTerminated:
@@ -327,8 +336,8 @@ if __name__ == '__main__':
         if len(fut) < 10:
             fut.append(igor.getWave(path, file))
 
-        if fut[0].done():
-            data, scaling = fut.pop(0).result()
+        if fut[0].is_done:
+            data, scaling = fut.pop(0).result
             #data, scaling = igor.getWave('root:MIES:ITCDevices:ITC1600:Device0:TestPulse', 'TestPulseITC')
             x = np.arange(data.shape[0]) * (scaling[0][0] * 1e-3)
             plt.clear()

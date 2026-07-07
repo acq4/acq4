@@ -7,7 +7,7 @@ from acq4.util import Qt
 from .Device import Device
 from .OptomechDevice import OptomechDevice
 from .Stage import Stage
-from ..util.future import Future
+from ..util.task import FutureButton, ManualQtFriendlyTask
 from ..util.target import color_for_diff
 
 VALID_ROLES = ('clean', 'rinse', 'nucleus', 'refill', 'empty')
@@ -441,7 +441,9 @@ class InteractionSiteDeviceGui(Qt.QWidget):
         pip = self._selectedPipette()
         if pip is not None:
             return self.dev.moveToInteract(pip, speed='fast')
-        return Future.immediate()
+        promise = ManualQtFriendlyTask()
+        promise.resolve()
+        return promise
 
     def _updatePositionLabels(self):
         positions = {}

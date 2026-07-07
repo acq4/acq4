@@ -7,7 +7,6 @@ import importlib
 import os
 import socket
 import sys
-import threading
 import time
 import weakref
 from collections import OrderedDict
@@ -28,6 +27,7 @@ from .util import DataManager, ptime, Qt
 from .util.DataManager import DirHandle
 from .util.HelpfulException import HelpfulException
 from .util.LogWindow import get_log_window, get_error_dialog
+from .util.task import ManualQtFriendlyTask, synch, Event
 
 logger = get_logger()
 
@@ -82,7 +82,7 @@ class Manager(Qt.QObject):
 
     def __init__(self):
         self.moduleLock = Mutex(recursive=True)  ## used for keeping some basic methods thread-safe
-        self.isReady = threading.Event()
+        self.isReady = Event()
         self.modules = OrderedDict()  # all currently running modules
         self.devices = OrderedDict()  # all devices loaded via Manager
         self.definedModules = OrderedDict()  # all custom-defined module configurations
@@ -490,8 +490,17 @@ class Manager(Qt.QObject):
         reserved the Stage). Running inline re-enters the existing reservation. The
         returned Future is already resolved in that case.
         """
-        block = bool(get_devices_held_by_thread())
-        return self.motionPlanner.execute(list(specs), name=name, block=block)
+        if get_devices_held_by_thread():
+            # Run the plan inline in this thread (re-entering the recursive
+            # per-thread reservation) instead of on a worker thread, then hand
+            # back an already-resolved task so callers' wait()/signals still work.
+            move = ManualQtFriendlyTask(name=name or "move")
+            try:
+                move.resolve(synch(self.motionPlanner.execute)(list(specs), name=name))
+            except BaseException as exc:
+                move.fail(exc)
+            return move
+        return self.motionPlanner.execute(list(specs), name=name)
 
     def getOrLoadModule(self, name):
         if name in self.modules:

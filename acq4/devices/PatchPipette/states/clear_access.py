@@ -9,6 +9,7 @@ from __future__ import annotations
 import time
 
 import numpy as np
+from gentletask import check_stop
 
 import pyqtgraph as pg
 from acq4.util import ptime
@@ -284,10 +285,10 @@ class ClearAccessState(PatchPipetteState):
         lastPulse = -np.inf
         attempt = 0
         while True:
-            self.checkStop()
+            check_stop()
 
             if ptime.time() - start_time > config['clearTimeout']:
-                self.setResult(error="Took longer than `clearTimeout` to recover access.")
+                self.setState(f"{self.stateName} failed: took longer than {config['clearTimeout']} s")
                 return {"state": config['fallbackState']}
 
             self._analysis.process_test_pulses(self.processAtLeastOneTestPulse())
@@ -298,7 +299,7 @@ class ClearAccessState(PatchPipetteState):
                 return {"state": 'whole cell'}
 
             if self._analysis.cell_lost():
-                self.setResult(error="Input resistance collapsed below `inputResistanceLossThreshold`; cell lost.")
+                self.setState(f"{self.stateName} failed: Input resistance collapsed below `inputResistanceLossThreshold`")
                 return {"state": config['fallbackState']}
 
             if self._analysis.is_repairing():
@@ -311,7 +312,7 @@ class ClearAccessState(PatchPipetteState):
                 continue
 
             if attempt >= len(config['nPulses']):
-                self.setResult(error=f"Access not recovered after {attempt} clearing attempts.")
+                self.setState(f"{self.stateName} failed: Access not recovered after {attempt} clearing attempts.")
                 return {"state": config['fallbackState']}
 
             self.setState('Clear access attempt %d' % attempt)
@@ -336,7 +337,7 @@ class ClearAccessState(PatchPipetteState):
                     remaining = stop - ptime.time()
                     if remaining <= 0:
                         break
-                    self.checkStop()
+                    check_stop()
                     time.sleep(min(0.1, remaining))
             finally:
                 self.dev.pressureDevice.setPressure(source='atmosphere')
@@ -344,7 +345,6 @@ class ClearAccessState(PatchPipetteState):
                 time.sleep(0.1)  # short delay between pulses
 
     def _cleanup(self):
-        dev = self.dev
         with log_and_ignore_exception(Exception, "Error resetting pressure after clear access"):
-            dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
-        return super()._cleanup()
+            self.dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
+        super()._cleanup()

@@ -5,8 +5,8 @@ from threading import Thread
 import numpy as np
 
 from acq4.util import Qt
-from acq4.util.future import future_wrap
-from acq4.util.threadrun import inGuiThread, runInGuiThread
+from acq4.util.task import asynch
+from acq4.util.task import in_gui_thread, run_in_gui_thread
 from coorx import TTransform
 from pyqtgraph import opengl as gl
 
@@ -44,7 +44,7 @@ class VisualizePathSearch(Qt.QObject):
         self._pathWatcherThread = Thread(target=self._watchForPathUpdates, daemon=True, name="PathWatcherThread")
         self._pathWatcherThread.start()
 
-    @inGuiThread
+    @in_gui_thread
     def _initGui(self):
         path_param = self._adapter._param.child('Path plan')
         show_path = path_param.value() and path_param.opts.get('enabled', True)
@@ -53,7 +53,7 @@ class VisualizePathSearch(Qt.QObject):
         self._activePath = self._adapter.win.path((0.1, 1, 0.7, 0.5), show_path)
         self._previousPath = self._adapter.win.path((1, 0.7, 0, 0.01), show_path)
 
-    @inGuiThread
+    @in_gui_thread
     def reset(self):
         # todo mutexes?
         self._bounds.setVisible(False)
@@ -64,14 +64,14 @@ class VisualizePathSearch(Qt.QObject):
         self._previousPath.setVisible(False)
         self._previousPath.setData(pos=[])
 
-    @future_wrap
-    def startPath(self, path, bounds, _future):
+    @asynch
+    def startPath(self, path, bounds):
         # TODO this is going to break with bitrot
         if self._bounds is None:
             self._bounds = self._adapter.createBounds(bounds, False)
         self._startPath(path, bounds)
 
-    @inGuiThread
+    @in_gui_thread
     def _startPath(self, path, bounds):
         self.reset()
         visible = self.shouldShowPath
@@ -91,7 +91,7 @@ class VisualizePathSearch(Qt.QObject):
     def endPath(self, path):
         self.updatePath(path, skip=1)
 
-    @inGuiThread
+    @in_gui_thread
     def setVisible(self, visible):
         self._startTarget.setVisible(visible)
         self._destTarget.setVisible(visible)
@@ -120,7 +120,7 @@ class VisualizePathSearch(Qt.QObject):
                 self._appendPath(path)
                 time.sleep(0.05)
 
-    @inGuiThread
+    @in_gui_thread
     def _appendPath(self, path):
         if len(self._activePath.pos) > 0:
             prev = self._activePath.pos
@@ -132,8 +132,8 @@ class VisualizePathSearch(Qt.QObject):
         self._previousPath.setData(pos=prev)
         self._activePath.setData(pos=np.array(path + path[:-1][::-1]))  # it needs to walk back to the origin
 
-    @future_wrap
-    def addObstacle(self, name, obstacle, to_global, _future):
+    @asynch
+    def addObstacle(self, name, obstacle, to_global):
         if name not in self._obstacles:
             self._buildObstacleMesh(name, *obstacle.surface_mesh)
         cs_name = obstacle.transform.systems[0].name
@@ -143,7 +143,7 @@ class VisualizePathSearch(Qt.QObject):
             to_cs=cs_name,
         )
         mesh_xform = (to_global * obstacle.transform * recenter_voxels).as_pyqtgraph()
-        runInGuiThread(self._obstacles[name].setTransform, mesh_xform)
+        run_in_gui_thread(self._obstacles[name].setTransform, mesh_xform)
 
         # build voxel volume
         if name not in self._voxels:
@@ -153,7 +153,7 @@ class VisualizePathSearch(Qt.QObject):
             vol_data[..., 3] = obstacle.volume.T * 5
             self._buildVoxelVolume(name, vol_data)
         vol_xform = (to_global * obstacle.transform).as_pyqtgraph()
-        runInGuiThread(self._voxels[name].setTransform, vol_xform)
+        run_in_gui_thread(self._voxels[name].setTransform, vol_xform)
 
         self._setInitialObstacleVisibility(name)
 
@@ -162,7 +162,7 @@ class VisualizePathSearch(Qt.QObject):
         param = self._adapter._param
         return param.value() and param.child('Path plan').value()
 
-    @inGuiThread
+    @in_gui_thread
     def _setInitialObstacleVisibility(self, name):
         generally_visible = self._adapter._param.value()
         dev_param = self._adapter._obstacles[name]["device param"]
@@ -173,12 +173,12 @@ class VisualizePathSearch(Qt.QObject):
         vox_visible = dev_param.child('Raw Obstacle Voxels').value()
         self._voxels[name].setVisible(generally_visible and dev_param.value() and vox_visible and self.shouldShowPath)
 
-    @inGuiThread
+    @in_gui_thread
     def _buildVoxelVolume(self, name, vol_data):
         self._voxels[name] = gl.GLVolumeItem(vol_data, sliceDensity=10, smooth=False, glOptions="additive")
         self._adapter.win.view.addItem(self._voxels[name])
 
-    @inGuiThread
+    @in_gui_thread
     def _buildObstacleMesh(self, name, verts, faces):
         mesh_data = gl.MeshData(vertexes=verts, faces=faces)
         self._obstacles[name] = gl.GLMeshItem(
@@ -186,7 +186,7 @@ class VisualizePathSearch(Qt.QObject):
         )
         self._adapter.win.view.addItem(self._obstacles[name])
 
-    @inGuiThread
+    @in_gui_thread
     def removeDevice(self, dev):
         for name, obst in self._obstacles.items():
             if dev.name() in name:
@@ -208,7 +208,7 @@ class VisualizePathSearch(Qt.QObject):
                 obst.setVisible(visible)
                 break
 
-    @inGuiThread
+    @in_gui_thread
     def safelyDestroy(self):
         self._stopThread = True
         self._adapter.win.view.removeItem(self._startTarget)

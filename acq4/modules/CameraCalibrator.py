@@ -9,7 +9,7 @@ import pyqtgraph as pg
 from acq4.modules.Module import Module
 from acq4.util import Qt
 from acq4.util.InterfaceCombo import InterfaceCombo
-from acq4.util.future import future_wrap
+from acq4.util.task import asynch_with_qt_signals
 
 
 class CameraCalibrator(Module):
@@ -102,8 +102,8 @@ class CameraCalibrator(Module):
         future = self._runCalibration(camera, lightSource, sourceName)
         future.sigFinished.connect(self._calibrationFinished)
         
-    @future_wrap
-    def _runCalibration(self, camera, lightSource, sourceName, _future=None):
+    @asynch_with_qt_signals
+    def _runCalibration(self, camera, lightSource, sourceName):
         """Run the calibration sequence in a thread."""
         
         try:
@@ -124,7 +124,7 @@ class CameraCalibrator(Module):
                 frameAcquisition.stop()
                 
                 # Get the acquired frames
-                frames = frameAcquisition.getResult()
+                frames = frameAcquisition.wait()
             
             return {'frames': frames, 'activationTime': activationTime}
             
@@ -144,7 +144,7 @@ class CameraCalibrator(Module):
         self.calibrateBtn.setText("Calibrate Latency")
         
         try:
-            result = future.getResult()
+            result = future.wait()
             self._displayFrames(result['frames'], result['activationTime'])
             
         except Exception as e:

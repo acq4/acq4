@@ -378,7 +378,7 @@
   <customwidget>
    <class>FutureButton</class>
    <extends>QPushButton</extends>
-   <header>acq4.util.future</header>
+   <header>acq4.util.task</header>
   </customwidget>
  </customwidgets>
  <resources/>
