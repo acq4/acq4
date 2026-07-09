@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 from threading import Lock
 from typing import Iterable, Any
 
@@ -270,7 +271,8 @@ class ApproachState(PatchPipetteState):
                 if self._moveFuture is None:
                     self._moveFuture = self._move()
                 if self._moveFuture.is_done:
-                    self._moveFuture.wait()  # check for errors
+                    with contextlib.suppress(self._moveFuture.Stopped):
+                        self._moveFuture.wait()  # check for legit errors
                     self.setState('Move finished; next state')
                     break
 
