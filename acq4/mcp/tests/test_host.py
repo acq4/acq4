@@ -32,7 +32,9 @@ def test_namespace_reheals_man_once_manager_exists(monkeypatch):
 
     host.reset_namespace()
     # First build: no Manager yet -> man is None.
-    monkeypatch.setattr(acq4, "getManager", lambda: (_ for _ in ()).throw(RuntimeError("none")))
+    monkeypatch.setattr(
+        acq4, "getManager", lambda: (_ for _ in ()).throw(RuntimeError("none"))
+    )
     assert host.execute("man is None")["result"] == "True"
     host.execute("user_var = 7")  # user state that must survive the heal
     # Manager appears.
