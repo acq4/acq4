@@ -88,3 +88,25 @@ def test_close_all_terminates_every_tunnel(manager, spawned):
     manager.close()
     assert all(p.terminated for p in spawned)
     assert manager.active == {}
+
+
+def test_open_reraises_when_ssh_exits_immediately(monkeypatch):
+    # ssh dies right after spawn: open() must raise, not hang.
+    monkeypatch.setattr(ssh_tunnel, "_port_open", lambda port, host="127.0.0.1": False)
+
+    class _DeadProc:
+        def __init__(self, argv):
+            self.argv = argv
+
+        def poll(self):
+            return 1  # already exited
+
+        def terminate(self):
+            pass
+
+        def wait(self, timeout=None):
+            return 1
+
+    mgr = SSHTunnelManager(spawn=lambda argv: _DeadProc(argv), wait_timeout=1.0)
+    with pytest.raises(RuntimeError, match="exited"):
+        mgr.open("minirig", 40104, local_port=45000)

@@ -84,6 +84,10 @@ class SSHTunnelManager:
             time.sleep(0.1)
 
         proc.terminate()
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            pass
         raise RuntimeError(
             f"ssh tunnel to {target}:{remote_port} did not open on local port "
             f"{local_port} within {self._wait_timeout}s"
@@ -97,7 +101,7 @@ class SSHTunnelManager:
                 tun.process.terminate()
                 try:
                     tun.process.wait(timeout=5)
-                except Exception:
+                except subprocess.TimeoutExpired:
                     pass
                 closed.append(key[0])
                 del self._tunnels[key]
