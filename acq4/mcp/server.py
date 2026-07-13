@@ -12,10 +12,12 @@ import json
 from typing import Optional
 
 from acq4.mcp.connection import ConnectionManager, NotConnectedError
+from acq4.mcp.ssh_tunnel import SSHTunnelManager
 
 # One connection manager for the life of the server process; the active ACQ4 target is
 # chosen and can be re-pointed at runtime through the connect_acq4 tool.
 _connection = ConnectionManager()
+_tunnels = SSHTunnelManager()
 
 
 def _format_execute(result: dict) -> str:
@@ -58,6 +60,31 @@ def build_server():
         tunnel to that port.
         """
         return json.dumps(_connection.connect(port, host), indent=2, default=str)
+
+    @server.tool()
+    def connect_via_ssh(
+        target: str, remote_port: int, local_port: Optional[int] = None
+    ) -> str:
+        """Open an SSH tunnel to a remote rig and connect to its ACQ4 in one step.
+
+        Example: connect_via_ssh("minirig", 40104) for an ACQ4 started with
+        `--teleprox 40104` on host `minirig`. `target` is anything ssh accepts — a
+        ~/.ssh/config alias, `user@host`, etc. A free local port is chosen unless you
+        pass local_port. Spawns `ssh -N -L <local>:127.0.0.1:<remote_port> <target>`,
+        waits for it, then connect_acq4 on the local end. Returns the rig identity
+        summary. Reuses an existing tunnel for the same target/port.
+        """
+        try:
+            port = _tunnels.open(target, remote_port, local_port=local_port)
+        except RuntimeError as exc:
+            return f"SSH tunnel failed: {exc}"
+        return json.dumps(_connection.connect(port), indent=2, default=str)
+
+    @server.tool()
+    def disconnect_ssh(target: Optional[str] = None) -> str:
+        """Close the SSH tunnel for `target` (or all tunnels if omitted)."""
+        closed = _tunnels.close(target)
+        return json.dumps({"closed": closed}, indent=2)
 
     @server.tool()
     def execute_code(

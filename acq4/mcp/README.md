@@ -60,20 +60,26 @@ AI client  --stdio-->  acq4-mcp server  --teleprox TCP-->  ACQ4 process
 
 ### Remote rigs
 
-ACQ4 binds its teleprox server to `127.0.0.1`. To reach a rig on another machine, open an
-SSH tunnel and connect to the local end, e.g.:
+ACQ4 binds its teleprox server to `127.0.0.1`. To reach a rig on another machine, use
+`connect_via_ssh`, which opens an SSH tunnel and connects to ACQ4 in one step:
 
+```python
+connect_via_ssh("minirig", 40104)  # relies on ~/.ssh/config
 ```
-ssh -L 5000:127.0.0.1:5000 user@rig-host
-```
+
+If `~/.ssh/config` has `Host minirig`, this will tunnel to the remote rig's ACQ4 (started
+with `--teleprox 40104`) and connect you to it. A free local port is chosen automatically.
+To close the tunnel, call `disconnect_ssh("minirig")`.
 
 ## Tools
 
 | Tool | Description |
 |------|-------------|
 | `connect_acq4(port, host="127.0.0.1")` | Connect to a running ACQ4 and make it the active target. Returns an identity/sanity summary. |
+| `connect_via_ssh(target, remote_port, local_port=None)` | Open an SSH tunnel to a remote rig and connect to its ACQ4 in one step. Returns the rig identity summary. |
+| `disconnect_ssh(target=None)` | Close the SSH tunnel for `target` (or all tunnels if omitted). |
 | `execute_code(code, gui_thread=False, timeout=30.0, port=None, host=None)` | Execute arbitrary Python in the ACQ4 process. |
-| `reset_namespace(port=None, host=None)` | Clear the persistent execute_code namespace (read-only-ish). |
+| `reset_namespace(port=None, host=None)` | Clear the persistent execute_code namespace. |
 | `list_devices(port=None, host=None)` | Device name -> class mapping (read-only). |
 | `list_modules(port=None, host=None)` | Loaded and configured module names (read-only). |
 | `manager_state(port=None, host=None)` | Storage dirs, device count, config keys (read-only). |
