@@ -27,6 +27,36 @@ def _build_namespace() -> dict:
     return {"__name__": "__acq4_mcp__", "acq4": acq4, "man": man}
 
 
+_PERSISTENT_NS = None
+
+
+def _get_namespace() -> dict:
+    """Return the process-global persistent exec namespace, building it on first use.
+
+    State set by one execute() call is visible to the next. `man` is re-resolved when it
+    was None (no Manager existed at build time) so it heals once a Manager appears,
+    without disturbing user-defined variables. Call reset_namespace() to start clean.
+    """
+    global _PERSISTENT_NS
+    if _PERSISTENT_NS is None:
+        _PERSISTENT_NS = _build_namespace()
+    if _PERSISTENT_NS.get("man") is None:
+        import acq4
+
+        try:
+            _PERSISTENT_NS["man"] = acq4.getManager()
+        except Exception:
+            pass
+    return _PERSISTENT_NS
+
+
+def reset_namespace() -> dict:
+    """Discard the persistent exec namespace so the next execute() starts fresh."""
+    global _PERSISTENT_NS
+    _PERSISTENT_NS = None
+    return {"reset": True}
+
+
 def _exec_and_capture(code: str, namespace: dict) -> dict:
     """Exec *code* in *namespace*, capturing stdout/stderr and the trailing expression.
 
@@ -68,8 +98,9 @@ def execute(code: str, gui_thread: bool = False) -> dict:
     The dict has keys: stdout, stderr, result (repr of the trailing expression or None),
     and traceback (a formatted string, or None on success).
 
-    A fresh namespace is built for every call (no state persists between calls), seeded
-    with `man` (the Manager) and `acq4`.
+    A single persistent namespace is shared across calls (state persists); call
+    reset_namespace() to clear it. The namespace is seeded with `man` (the Manager) and
+    `acq4`.
 
     gui_thread selects where the code runs:
 
@@ -80,7 +111,7 @@ def execute(code: str, gui_thread: bool = False) -> dict:
       until it returns. Use this ONLY for fast, non-blocking access to Qt widgets/objects
       or GUI state. Touching Qt objects from another thread risks a segfault.
     """
-    namespace = _build_namespace()
+    namespace = _get_namespace()
 
     def run():
         return _exec_and_capture(code, namespace)
