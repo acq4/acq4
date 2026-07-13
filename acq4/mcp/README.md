@@ -73,14 +73,17 @@ ssh -L 5000:127.0.0.1:5000 user@rig-host
 |------|-------------|
 | `connect_acq4(port, host="127.0.0.1")` | Connect to a running ACQ4 and make it the active target. Returns an identity/sanity summary. |
 | `execute_code(code, gui_thread=False, timeout=30.0, port=None, host=None)` | Execute arbitrary Python in the ACQ4 process. |
+| `reset_namespace(port=None, host=None)` | Clear the persistent execute_code namespace (read-only-ish). |
 | `list_devices(port=None, host=None)` | Device name -> class mapping (read-only). |
 | `list_modules(port=None, host=None)` | Loaded and configured module names (read-only). |
 | `manager_state(port=None, host=None)` | Storage dirs, device count, config keys (read-only). |
 | `get_log(lines=50, port=None, host=None)` | Tail of the ACQ4 log file (read-only). |
 
-`execute_code` runs in a fresh namespace each call (nothing persists between calls), seeded
-with `man` (the ACQ4 Manager) and `acq4`. It returns captured stdout/stderr, the value of a
-trailing expression, and any traceback.
+`execute_code` runs in a persistent namespace shared across calls (variables persist
+across calls). The namespace is seeded with `man` (the ACQ4 Manager) and `acq4` on the first
+call (or after a `reset_namespace` call). It returns captured stdout/stderr, the value of a
+trailing expression, and any traceback. Use `reset_namespace` to discard accumulated state
+and start fresh.
 
 ## GUI thread: `gui_thread=False` vs `gui_thread=True`
 

@@ -69,9 +69,10 @@ def build_server():
     ) -> str:
         """Execute arbitrary Python inside the running ACQ4 process and return its output.
 
-        The code runs in a fresh namespace (nothing persists between calls) seeded with
-        `man` (the ACQ4 Manager, via getManager()) and `acq4`. Captured stdout/stderr,
-        the value of a trailing expression (repr), and any traceback are returned.
+        The code runs in a persistent namespace shared across calls (variables persist;
+        call reset_namespace to clear it). The namespace is seeded with `man` (the ACQ4
+        Manager, via getManager()) and `acq4`. Captured stdout/stderr, the value of a
+        trailing expression (repr), and any traceback are returned.
 
         SAFETY -- read this before mutating anything: inspect freely, but obtain
         EXPLICIT USER APPROVAL before executing anything that changes running state or
@@ -98,6 +99,21 @@ def build_server():
         except NotConnectedError as exc:
             return f"Not connected: {exc}"
         return _format_execute(result)
+
+    @server.tool()
+    def reset_namespace(port: Optional[int] = None, host: Optional[str] = None) -> str:
+        """Clear the persistent execute_code namespace on the ACQ4 side.
+
+        execute_code shares one long-lived namespace across calls (variables persist).
+        Call this to discard all of that accumulated state and start fresh; `man` and
+        `acq4` are re-seeded on the next execute_code call.
+        """
+        try:
+            return json.dumps(
+                _connection.reset_namespace(port=port, host=host), indent=2, default=str
+            )
+        except NotConnectedError as exc:
+            return f"Not connected: {exc}"
 
     @server.tool()
     def list_devices(port: Optional[int] = None, host: Optional[str] = None) -> str:
