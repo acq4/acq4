@@ -39,6 +39,10 @@ class _FakeHostModule:
         self.recorder.append(("list_devices", self.host, self.port, kw))
         return {"cam": "MockCamera"}
 
+    def reset_namespace(self, **kw):
+        self.recorder.append(("reset_namespace", self.host, self.port, kw))
+        return {"reset": True}
+
 
 @pytest.fixture
 def recorder():
@@ -98,6 +102,13 @@ def test_list_devices_delegates_to_target(manager, recorder):
     devices = manager.list_devices()
     assert devices == {"cam": "MockCamera"}
     assert recorder[-1][0] == "list_devices"
+
+
+def test_reset_namespace_delegates_to_target(manager, recorder):
+    manager.connect(5000)
+    assert manager.reset_namespace() == {"reset": True}
+    assert recorder[-1][0] == "reset_namespace"
+    assert recorder[-1][1:3] == ("127.0.0.1", 5000)
 
 
 def test_all_teleprox_access_serialized_onto_one_thread():

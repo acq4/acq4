@@ -141,3 +141,11 @@ class ConnectionManager:
     def _get_log(self, lines, port, host):
         host, port = self._resolve(host, port)
         return self._host_module(host, port).get_log(lines, _return_type="value")
+
+    def reset_namespace(self, port=None, host=None):
+        """Clear the target's persistent exec namespace."""
+        return self._run(self._reset_namespace, port, host)
+
+    def _reset_namespace(self, port, host):
+        host, port = self._resolve(host, port)
+        return self._host_module(host, port).reset_namespace(_return_type="value")
