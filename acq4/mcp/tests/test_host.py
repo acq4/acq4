@@ -9,7 +9,43 @@ import pytest
 from acq4.mcp import host
 
 
+def test_execute_persists_variables_across_calls():
+    host.reset_namespace()
+    host.execute("persisted_value = 123")
+    result = host.execute("persisted_value * 2")
+    assert result["result"] == "246"
+
+
+def test_reset_namespace_clears_state():
+    host.execute("scratch = 'gone soon'")
+    host.reset_namespace()
+    result = host.execute("'scratch' in dir()")
+    assert result["result"] == "False"
+
+
+def test_reset_namespace_returns_confirmation():
+    assert host.reset_namespace() == {"reset": True}
+
+
+def test_namespace_reheals_man_once_manager_exists(monkeypatch):
+    import acq4
+
+    host.reset_namespace()
+    # First build: no Manager yet -> man is None.
+    monkeypatch.setattr(
+        acq4, "getManager", lambda: (_ for _ in ()).throw(RuntimeError("none"))
+    )
+    assert host.execute("man is None")["result"] == "True"
+    host.execute("user_var = 7")  # user state that must survive the heal
+    # Manager appears.
+    sentinel = object()
+    monkeypatch.setattr(acq4, "getManager", lambda: sentinel)
+    assert host.execute("man is not None")["result"] == "True"
+    assert host.execute("user_var")["result"] == "7"
+
+
 def test_execute_returns_last_expression_repr():
+    host.reset_namespace()
     result = host.execute("1 + 1")
     assert result["result"] == "2"
     assert result["traceback"] is None
@@ -46,12 +82,14 @@ def test_execute_captures_stdout_before_exception():
 
 
 def test_execute_seeds_acq4_module():
+    host.reset_namespace()
     result = host.execute("acq4.__name__")
     assert result["result"] == "'acq4'"
 
 
 def test_execute_seeds_man_as_none_without_manager():
     # Without a running Manager, `man` is seeded as None rather than raising NameError.
+    host.reset_namespace()
     result = host.execute("man is None")
     assert result["result"] == "True"
     assert result["traceback"] is None

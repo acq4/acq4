@@ -6,6 +6,27 @@ import threading
 from ..util import Qt
 
 
+def sample_resources(app=None):
+    """Return a one-shot resource sample: CPU %, memory %, and Qt activity %.
+
+    qt_activity is app.activity_fraction * 100 when a ProfiledQApplication is active,
+    else None. Shared by ResourceMonitorWidget and the acq4-mcp health_series tool.
+    """
+    try:
+        cpu = psutil.cpu_percent(interval=None)
+    except Exception:
+        cpu = None
+    try:
+        memory = psutil.virtual_memory().percent
+    except Exception:
+        memory = None
+    qt_activity = None
+    fraction = getattr(app, "activity_fraction", None) if app is not None else None
+    if fraction is not None:
+        qt_activity = fraction * 100
+    return {"cpu_percent": cpu, "memory_percent": memory, "qt_activity": qt_activity}
+
+
 class ResourceMonitorWidget(Qt.QWidget):
     """Widget for displaying Qt activity percentage and system memory usage.
 
@@ -88,32 +109,12 @@ class ResourceMonitorWidget(Qt.QWidget):
         while self.threadRunning:
             data = {}
 
-            # Measure CPU
-            try:
-                data['cpu'] = psutil.cpu_percent(interval=None)
-            except Exception:
-                data['cpu'] = None
-
-            # Measure memory
-            try:
-                memory = psutil.virtual_memory()
-                data['memory'] = memory.percent
-            except Exception:
-                data['memory'] = None
-
-            # Measure Qt activity
-            if self.hasQtProfiling:
-                try:
-                    app = Qt.QApplication.instance()
-                    fraction = app.activity_fraction
-                    if fraction is None:
-                        data['qt_activity'] = None
-                    else:
-                        data['qt_activity'] = fraction * 100
-                except Exception:
-                    data['qt_activity'] = None
-            else:
-                data['qt_activity'] = None
+            # Measure CPU, memory, and Qt activity via the shared sampling helper
+            app = Qt.QApplication.instance()
+            s = sample_resources(app)
+            data['cpu'] = s['cpu_percent']
+            data['memory'] = s['memory_percent']
+            data['qt_activity'] = s['qt_activity']
 
             # Measure Qt latency
             latency_start = time.perf_counter()

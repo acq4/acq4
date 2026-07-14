@@ -60,27 +60,53 @@ AI client  --stdio-->  acq4-mcp server  --teleprox TCP-->  ACQ4 process
 
 ### Remote rigs
 
-ACQ4 binds its teleprox server to `127.0.0.1`. To reach a rig on another machine, open an
-SSH tunnel and connect to the local end, e.g.:
+ACQ4 binds its teleprox server to `127.0.0.1`. To reach a rig on another machine, use
+`connect_via_ssh`, which opens an SSH tunnel and connects to ACQ4 in one step:
 
+```python
+connect_via_ssh("minirig", 40104)  # relies on ~/.ssh/config
 ```
-ssh -L 5000:127.0.0.1:5000 user@rig-host
-```
+
+If `~/.ssh/config` has `Host minirig`, this will tunnel to the remote rig's ACQ4 (started
+with `--teleprox 40104`) and connect you to it. A free local port is chosen automatically.
+To close the tunnel, call `disconnect_ssh("minirig")`.
 
 ## Tools
 
 | Tool | Description |
 |------|-------------|
 | `connect_acq4(port, host="127.0.0.1")` | Connect to a running ACQ4 and make it the active target. Returns an identity/sanity summary. |
+| `connect_via_ssh(target, remote_port, local_port=None)` | Open an SSH tunnel to a remote rig and connect to its ACQ4 in one step. Returns the rig identity summary. |
+| `disconnect_ssh(target=None)` | Close the SSH tunnel for `target` (or all tunnels if omitted). |
 | `execute_code(code, gui_thread=False, timeout=30.0, port=None, host=None)` | Execute arbitrary Python in the ACQ4 process. |
+| `reset_namespace(port=None, host=None)` | Clear the persistent execute_code namespace. |
 | `list_devices(port=None, host=None)` | Device name -> class mapping (read-only). |
 | `list_modules(port=None, host=None)` | Loaded and configured module names (read-only). |
 | `manager_state(port=None, host=None)` | Storage dirs, device count, config keys (read-only). |
 | `get_log(lines=50, port=None, host=None)` | Tail of the ACQ4 log file (read-only). |
+| `profile_functions(seconds=10.0, top=15, port=None, host=None)` | Profile all-thread function calls; return the hottest functions in the Profiler window. |
+| `memory_snapshot(name=None, top=15, port=None, host=None)` | Take a guppy heap snapshot and build a memory-over-time series in the Profiler window. |
+| `profile_qt_events(seconds=10.0, top=15, port=None, host=None)` | Profile the Qt event loop; return the busiest event types (requires `--qt-profile`). |
+| `health_series(seconds=10.0, interval=1.0, port=None, host=None)` | Sample CPU/memory/Qt-activity/event-loop-latency over time. |
 
-`execute_code` runs in a fresh namespace each call (nothing persists between calls), seeded
-with `man` (the ACQ4 Manager) and `acq4`. It returns captured stdout/stderr, the value of a
-trailing expression, and any traceback.
+`execute_code` runs in a persistent namespace shared across calls (variables persist
+across calls). The namespace is seeded with `man` (the ACQ4 Manager) and `acq4` on the first
+call (or after a `reset_namespace` call). It returns captured stdout/stderr, the value of a
+trailing expression, and any traceback. Use `reset_namespace` to discard accumulated state
+and start fresh.
+
+## Profiling
+
+The four profiling tools (`profile_functions`, `memory_snapshot`, `profile_qt_events`,
+`health_series`) drive ACQ4's live Profiler window and collect observability data without
+mutating running state.
+
+- **`profile_functions` and `profile_qt_events`** add overhead (they install per-thread
+  profiling callbacks). Keep profiling windows short on a busy rig to avoid exacerbating
+  the teleprox load issues documented in [KNOWN_ISSUES.md](KNOWN_ISSUES.md).
+- **`profile_qt_events`** requires ACQ4 to be started with `--qt-profile`.
+- **`memory_snapshot`** requires `guppy3` installed on the rig. Repeated calls build a
+  memory-over-time series; each call reports heap growth since the previous snapshot.
 
 ## GUI thread: `gui_thread=False` vs `gui_thread=True`
 
