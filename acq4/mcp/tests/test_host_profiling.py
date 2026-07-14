@@ -47,3 +47,23 @@ def test_top_functions_handles_c_call_keys():
     rows = host._top_functions(lookup, top=5)
     assert rows[0]["function"] == "len"
     assert rows[0]["total_seconds"] == 0.2
+
+
+class _TypeStat:
+    def __init__(self, kind, count, size):
+        self.kind = kind
+        self.count = count
+        self.size = size
+
+
+class _Heap:
+    def __init__(self, size, rows):
+        self.size = size
+        self.bytype = rows  # list is indexable + has len, like a guppy partition
+
+
+def test_summarize_heap_reports_total_and_top_types():
+    heap = _Heap(300, [_TypeStat("dict", 2, 200), _TypeStat("list", 5, 100)])
+    summary = host._summarize_heap(heap, top=1)
+    assert summary["total_bytes"] == 300
+    assert summary["top_types"] == [{"type": "dict", "count": 2, "bytes": 200}]

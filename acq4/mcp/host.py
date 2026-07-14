@@ -200,6 +200,51 @@ def profile_functions(seconds=10.0, top=15):
     }
 
 
+def _summarize_heap(heap_stats, top=15):
+    """Summarize a guppy heap (or heap diff): total bytes and the top types by size.
+
+    Pure aside from reading the guppy object's `.size`/`.bytype` interface, so it is
+    testable with a fake exposing those.
+    """
+    by_type = heap_stats.bytype
+    rows = []
+    for i in range(min(top, len(by_type))):
+        stat = by_type[i]
+        rows.append({"type": str(stat.kind), "count": stat.count, "bytes": stat.size})
+    return {"total_bytes": heap_stats.size, "top_types": rows}
+
+
+def memory_snapshot(name=None, top=15):
+    """Take a guppy heap snapshot into the live Profiler window and summarize it.
+
+    Repeated calls accumulate snapshots in the window (the memory-over-time series). When
+    a prior snapshot exists, `growth` summarizes the heap increase since the last one.
+    Must run on the GUI thread path via run_in_gui_thread (touches the widget).
+    """
+    from acq4.util import task
+
+    tabs = task.run_in_gui_thread(_profiler_tabs)
+    mp = tabs.memory_profiler
+    if not hasattr(mp, "take_snapshot"):
+        raise RuntimeError(
+            "Installed rtprofile lacks the headless take_snapshot API; update rtprofile."
+        )
+    previous = mp.snapshots[-1] if mp.snapshots else None
+    snapshot = task.run_in_gui_thread(mp.take_snapshot, name)
+    if not snapshot.is_valid:
+        return {"name": snapshot.name, "error": snapshot.error_message}
+    out = {
+        "name": snapshot.name,
+        "snapshot": _summarize_heap(snapshot.heap_stats, top=top),
+    }
+    if previous is not None and previous.is_valid:
+        out["growth_since"] = previous.name
+        out["growth"] = _summarize_heap(
+            snapshot.heap_stats - previous.heap_stats, top=top
+        )
+    return out
+
+
 def instance_info() -> dict:
     """Return a lightweight identity/sanity summary of this ACQ4 instance.
 
