@@ -247,7 +247,9 @@ class Autopatcher:
         # if (pos - margin) not in stack or (pos + margin) not in stack:
         # stack = None
         try:
-            cell.initializeTracker(win.cameraDevice)
+            # Pass the pipette so occlusion masking is active during later visual
+            # tracking; the pose is sampled fresh at each acquisition.
+            cell.initializeTracker(win.cameraDevice, pipette=win.pipetteDevice)
         except Stopped:
             raise
         except ValueError as e:
