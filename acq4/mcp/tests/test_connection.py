@@ -43,6 +43,10 @@ class _FakeHostModule:
         self.recorder.append(("reset_namespace", self.host, self.port, kw))
         return {"reset": True}
 
+    def profile_functions(self, seconds, top, **kw):
+        self.recorder.append(("profile_functions", self.host, self.port, seconds, top, kw))
+        return {"top_functions": []}
+
 
 @pytest.fixture
 def recorder():
@@ -109,6 +113,15 @@ def test_reset_namespace_delegates_to_target(manager, recorder):
     assert manager.reset_namespace() == {"reset": True}
     assert recorder[-1][0] == "reset_namespace"
     assert recorder[-1][1:3] == ("127.0.0.1", 5000)
+
+
+def test_profile_functions_delegates_with_timeout(manager, recorder):
+    manager.connect(5000)
+    manager.profile_functions(seconds=5.0, top=3)
+    call = recorder[-1]
+    assert call[0] == "profile_functions"
+    assert call[3] == 5.0 and call[4] == 3
+    assert call[5]["_timeout"] >= 20.0  # seconds + margin
 
 
 def test_all_teleprox_access_serialized_onto_one_thread():

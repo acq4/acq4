@@ -149,3 +149,43 @@ class ConnectionManager:
     def _reset_namespace(self, port, host):
         host, port = self._resolve(host, port)
         return self._host_module(host, port).reset_namespace(_return_type="value")
+
+    def profile_functions(self, seconds=10.0, top=15, port=None, host=None):
+        """Profile function hot-spots on the target for `seconds`."""
+        return self._run(self._profile_functions, seconds, top, port, host)
+
+    def _profile_functions(self, seconds, top, port, host):
+        host, port = self._resolve(host, port)
+        return self._host_module(host, port).profile_functions(
+            seconds, top, _return_type="value", _timeout=seconds + 15
+        )
+
+    def memory_snapshot(self, name=None, top=15, port=None, host=None):
+        """Take a memory snapshot on the target and summarize it."""
+        return self._run(self._memory_snapshot, name, top, port, host)
+
+    def _memory_snapshot(self, name, top, port, host):
+        host, port = self._resolve(host, port)
+        return self._host_module(host, port).memory_snapshot(
+            name, top, _return_type="value", _timeout=60.0
+        )
+
+    def profile_qt_events(self, seconds=10.0, top=15, port=None, host=None):
+        """Profile the Qt event loop on the target for `seconds`."""
+        return self._run(self._profile_qt_events, seconds, top, port, host)
+
+    def _profile_qt_events(self, seconds, top, port, host):
+        host, port = self._resolve(host, port)
+        return self._host_module(host, port).profile_qt_events(
+            seconds, top, _return_type="value", _timeout=seconds + 15
+        )
+
+    def health_series(self, seconds=10.0, interval=1.0, port=None, host=None):
+        """Collect a resource health time-series from the target."""
+        return self._run(self._health_series, seconds, interval, port, host)
+
+    def _health_series(self, seconds, interval, port, host):
+        host, port = self._resolve(host, port)
+        return self._host_module(host, port).health_series(
+            seconds, interval, _return_type="value", _timeout=seconds + 15
+        )
