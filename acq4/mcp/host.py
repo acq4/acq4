@@ -130,6 +130,22 @@ def _manager():
     return acq4.getManager()
 
 
+def _profiler_tabs():
+    """Return the live Profiler module's ProfilerTabs widget, loading it if needed.
+
+    Loads the `Profiler` module (opening its window) when it is not already loaded, so
+    profiling data collects into the same window the human sees. Must be called on the
+    GUI thread.
+    """
+    man = _manager()
+    for name in man.listModules():
+        mod = man.getModule(name)
+        if type(mod).__name__ == "Profiler" and hasattr(mod, "profiler_tabs"):
+            return mod.profiler_tabs
+    mod = man.loadModule("Profiler")
+    return mod.profiler_tabs
+
+
 def instance_info() -> dict:
     """Return a lightweight identity/sanity summary of this ACQ4 instance.
 
