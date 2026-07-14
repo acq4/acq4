@@ -146,6 +146,60 @@ def _profiler_tabs():
     return mod.profiler_tabs
 
 
+def _top_functions(function_lookup, top=15):
+    """Rank functions in a ProfileAnalyzer lookup by summed call duration (desc).
+
+    function_lookup maps a function_key to {"calls": [CallRecord, ...]}. Pure: takes only
+    the lookup dict so it is testable without a live profile.
+    """
+    rows = []
+    for calls in (data["calls"] for data in function_lookup.values()):
+        durations = [c.duration for c in calls if c.duration is not None]
+        if not durations:
+            continue
+        first = calls[0]
+        rows.append(
+            {
+                "function": first.display_name,
+                "filename": first.filename,
+                "lineno": first.lineno,
+                "n_calls": len(durations),
+                "total_seconds": sum(durations),
+            }
+        )
+    rows.sort(key=lambda r: r["total_seconds"], reverse=True)
+    return rows[:top]
+
+
+def profile_functions(seconds=10.0, top=15):
+    """Profile all-thread function calls for `seconds`, return the hottest functions.
+
+    Drives the live Profiler window's function profiler (opening it if needed), so the
+    same call tree is visible to the human. Must run off the GUI thread (it sleeps for
+    the profiling window); the start/stop touch the widget via run_in_gui_thread.
+    """
+    import time
+
+    from acq4.util import task
+    from rtprofile.profiler import ProfileAnalyzer
+
+    tabs = task.run_in_gui_thread(_profiler_tabs)
+    fp = tabs.function_profiler
+    if not hasattr(fp, "start_session"):
+        raise RuntimeError(
+            "Installed rtprofile lacks the headless start_session API; update rtprofile."
+        )
+    task.run_in_gui_thread(fp.start_session, None, None)
+    time.sleep(seconds)
+    result = task.run_in_gui_thread(fp.stop_session)
+    analyzer = ProfileAnalyzer(result.profile)
+    return {
+        "session": result.name,
+        "duration_seconds": result.profile_duration,
+        "top_functions": _top_functions(analyzer.build_function_lookup(), top=top),
+    }
+
+
 def instance_info() -> dict:
     """Return a lightweight identity/sanity summary of this ACQ4 instance.
 
