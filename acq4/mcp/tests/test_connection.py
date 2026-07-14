@@ -44,7 +44,9 @@ class _FakeHostModule:
         return {"reset": True}
 
     def profile_functions(self, seconds, top, **kw):
-        self.recorder.append(("profile_functions", self.host, self.port, seconds, top, kw))
+        self.recorder.append(
+            ("profile_functions", self.host, self.port, seconds, top, kw)
+        )
         return {"top_functions": []}
 
 
