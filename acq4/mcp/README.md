@@ -84,12 +84,29 @@ To close the tunnel, call `disconnect_ssh("minirig")`.
 | `list_modules(port=None, host=None)` | Loaded and configured module names (read-only). |
 | `manager_state(port=None, host=None)` | Storage dirs, device count, config keys (read-only). |
 | `get_log(lines=50, port=None, host=None)` | Tail of the ACQ4 log file (read-only). |
+| `profile_functions(seconds=10.0, top=15, port=None, host=None)` | Profile all-thread function calls; return the hottest functions in the Profiler window. |
+| `memory_snapshot(name=None, top=15, port=None, host=None)` | Take a guppy heap snapshot and build a memory-over-time series in the Profiler window. |
+| `profile_qt_events(seconds=10.0, top=15, port=None, host=None)` | Profile the Qt event loop; return the busiest event types (requires `--qt-profile`). |
+| `health_series(seconds=10.0, interval=1.0, port=None, host=None)` | Sample CPU/memory/Qt-activity/event-loop-latency over time. |
 
 `execute_code` runs in a persistent namespace shared across calls (variables persist
 across calls). The namespace is seeded with `man` (the ACQ4 Manager) and `acq4` on the first
 call (or after a `reset_namespace` call). It returns captured stdout/stderr, the value of a
 trailing expression, and any traceback. Use `reset_namespace` to discard accumulated state
 and start fresh.
+
+## Profiling
+
+The four profiling tools (`profile_functions`, `memory_snapshot`, `profile_qt_events`,
+`health_series`) drive ACQ4's live Profiler window and collect observability data without
+mutating running state.
+
+- **`profile_functions` and `profile_qt_events`** add overhead (they install per-thread
+  profiling callbacks). Keep profiling windows short on a busy rig to avoid exacerbating
+  the teleprox load issues documented in [KNOWN_ISSUES.md](KNOWN_ISSUES.md).
+- **`profile_qt_events`** requires ACQ4 to be started with `--qt-profile`.
+- **`memory_snapshot`** requires `guppy3` installed on the rig. Repeated calls build a
+  memory-over-time series; each call reports heap growth since the previous snapshot.
 
 ## GUI thread: `gui_thread=False` vs `gui_thread=True`
 

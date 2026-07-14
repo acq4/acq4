@@ -183,6 +183,92 @@ def build_server():
             return f"Not connected: {exc}"
         return f"{log.get('path')}\n\n{log.get('text', '')}"
 
+    @server.tool()
+    def profile_functions(
+        seconds: float = 10.0,
+        top: int = 15,
+        port: Optional[int] = None,
+        host: Optional[str] = None,
+    ) -> str:
+        """Profile all-thread function calls for `seconds`; return the hottest functions.
+
+        Opens ACQ4's Profiler window if needed and collects there (visible to the human).
+        Observability only — adds profiling overhead but moves no hardware. Note: installs
+        setprofile across all threads; keep windows short on a busy rig.
+        """
+        try:
+            return json.dumps(
+                _connection.profile_functions(
+                    seconds=seconds, top=top, port=port, host=host
+                ),
+                indent=2,
+                default=str,
+            )
+        except NotConnectedError as exc:
+            return f"Not connected: {exc}"
+
+    @server.tool()
+    def memory_snapshot(
+        name: Optional[str] = None,
+        top: int = 15,
+        port: Optional[int] = None,
+        host: Optional[str] = None,
+    ) -> str:
+        """Take a guppy heap snapshot into the Profiler window and summarize it.
+
+        Repeated calls build a memory-over-time series; each call also reports heap growth
+        since the previous snapshot. Requires guppy3 on the rig.
+        """
+        try:
+            return json.dumps(
+                _connection.memory_snapshot(name=name, top=top, port=port, host=host),
+                indent=2,
+                default=str,
+            )
+        except NotConnectedError as exc:
+            return f"Not connected: {exc}"
+
+    @server.tool()
+    def profile_qt_events(
+        seconds: float = 10.0,
+        top: int = 15,
+        port: Optional[int] = None,
+        host: Optional[str] = None,
+    ) -> str:
+        """Profile the Qt event loop for `seconds`; return the busiest event types.
+
+        Requires ACQ4 started with --qt-profile; otherwise returns an error note.
+        """
+        try:
+            return json.dumps(
+                _connection.profile_qt_events(
+                    seconds=seconds, top=top, port=port, host=host
+                ),
+                indent=2,
+                default=str,
+            )
+        except NotConnectedError as exc:
+            return f"Not connected: {exc}"
+
+    @server.tool()
+    def health_series(
+        seconds: float = 10.0,
+        interval: float = 1.0,
+        port: Optional[int] = None,
+        host: Optional[str] = None,
+    ) -> str:
+        """Sample CPU/memory/Qt-activity/event-loop-latency over `seconds` and return the series."""
+        try:
+            return json.dumps(
+                _connection.health_series(
+                    seconds=seconds, interval=interval, port=port, host=host
+                ),
+                indent=2,
+                default=str,
+            )
+        except NotConnectedError as exc:
+            return f"Not connected: {exc}"
+
     return server
 
 
