@@ -418,7 +418,12 @@ class PatchPipetteState(QtFriendlyTask):
             raise ValueError("Cannot visually track target; no cell is assigned to this pipette device.")
         cell.allow_refresh_reference = allow_refresh_reference
         if not cell.isInitialized:
-            cell.initializeTracker(self.dev.pipetteDevice.imagingDevice())
+            # Pass the pipette so the tracker can mask features occluded by the pipette
+            # as it enters the frame near contact (otherwise optical flow locks onto the
+            # pipette edges and the estimated cell center random-walks off the surface).
+            cell.initializeTracker(
+                self.dev.pipetteDevice.imagingDevice(), pipette=self.dev.pipetteDevice
+            )
 
         cell.enableTracking(True)
         cell.sigTrackingMultipleFramesStart.connect(self._pausePipetteForExtendedTracking)
