@@ -2,7 +2,7 @@ import pytest
 import numpy as np
 import pyqtgraph as pg
 
-from acq4.util.imaging.sequencer import enforce_linear_z_stack, calculate_hysteresis
+from acq4.util.imaging.sequencer import enforce_linear_z_stack, calculate_hysteresis, stamp_surface_depth
 from coorx import SRT3DTransform
 
 
@@ -375,3 +375,34 @@ def test_calculate_hysteresis_unreasonable_data():
     center = MockFrame(2, data=100)
     with pytest.raises(ValueError, match="Center frame does not match any frame in the stack"):
         calculate_hysteresis(stack, center)
+
+
+class InfoFrame:
+    """Minimal frame stand-in that records info written via addInfo."""
+    def __init__(self):
+        self._info = {}
+
+    def addInfo(self, info=None, **kwargs):
+        if info is not None:
+            self._info.update(info)
+        self._info.update(kwargs)
+
+    def info(self):
+        return self._info
+
+
+def test_stamp_surface_depth_records_value_on_all_frames():
+    frames = [InfoFrame(), InfoFrame(), InfoFrame()]
+    stamp_surface_depth(frames, -1.5e-4)
+    for f in frames:
+        assert f.info()["surfaceDepth"] == -1.5e-4
+
+
+def test_stamp_surface_depth_stores_none_when_unset():
+    frames = [InfoFrame()]
+    stamp_surface_depth(frames, None)
+    assert frames[0].info()["surfaceDepth"] is None
+
+
+def test_stamp_surface_depth_empty_frames_is_noop():
+    stamp_surface_depth([], -1.5e-4)  # must not raise
