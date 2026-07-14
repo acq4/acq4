@@ -53,6 +53,9 @@ def test_open_spawns_ssh_and_returns_local_port(manager, spawned):
     assert "-L" in argv
     assert "45000:127.0.0.1:40104" in argv
     assert argv[-1] == "minirig"
+    assert (
+        argv[-2] == "--"
+    )  # guards a target starting with "-" from being parsed as an option
 
 
 def test_open_picks_free_port_when_unspecified(manager, monkeypatch):

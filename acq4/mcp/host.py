@@ -186,9 +186,9 @@ def profile_functions(seconds=10.0, top=15):
     tabs = task.run_in_gui_thread(_profiler_tabs)
     fp = tabs.function_profiler
     if not hasattr(fp, "start_session"):
-        raise RuntimeError(
-            "Installed rtprofile lacks the headless start_session API; update rtprofile."
-        )
+        return {
+            "error": "Installed rtprofile lacks the headless start_session API; update rtprofile."
+        }
     task.run_in_gui_thread(fp.start_session, None, None)
     time.sleep(seconds)
     result = task.run_in_gui_thread(fp.stop_session)
@@ -226,11 +226,14 @@ def memory_snapshot(name=None, top=15):
     tabs = task.run_in_gui_thread(_profiler_tabs)
     mp = tabs.memory_profiler
     if not hasattr(mp, "take_snapshot"):
-        raise RuntimeError(
-            "Installed rtprofile lacks the headless take_snapshot API; update rtprofile."
-        )
+        return {
+            "error": "Installed rtprofile lacks the headless take_snapshot API; update rtprofile."
+        }
     previous = mp.snapshots[-1] if mp.snapshots else None
-    snapshot = task.run_in_gui_thread(mp.take_snapshot, name)
+    try:
+        snapshot = task.run_in_gui_thread(mp.take_snapshot, name)
+    except RuntimeError as exc:
+        return {"error": str(exc)}
     if not snapshot.is_valid:
         return {"name": snapshot.name, "error": snapshot.error_message}
     out = {
@@ -362,9 +365,9 @@ def profile_qt_events(seconds=10.0, top=15):
     tabs = task.run_in_gui_thread(_profiler_tabs)
     qp = tabs.qt_profiler
     if not hasattr(qp, "start_session"):
-        raise RuntimeError(
-            "Installed rtprofile lacks the headless start_session API; update rtprofile."
-        )
+        return {
+            "error": "Installed rtprofile lacks the headless start_session API; update rtprofile."
+        }
     try:
         task.run_in_gui_thread(qp.start_session, None, False)
     except RuntimeError as exc:

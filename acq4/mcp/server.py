@@ -17,6 +17,7 @@ from acq4.mcp.ssh_tunnel import SSHTunnelManager
 # One connection manager for the life of the server process; the active ACQ4 target is
 # chosen and can be re-pointed at runtime through the connect_acq4 tool.
 _connection = ConnectionManager()
+# Tracks SSH tunnels opened via connect_via_ssh for the life of the server process.
 _tunnels = SSHTunnelManager()
 
 
@@ -78,7 +79,12 @@ def build_server():
             port = _tunnels.open(target, remote_port, local_port=local_port)
         except RuntimeError as exc:
             return f"SSH tunnel failed: {exc}"
-        return json.dumps(_connection.connect(port), indent=2, default=str)
+        try:
+            info = _connection.connect(port)
+        except Exception as exc:
+            _tunnels.close(target)
+            return f"Connected tunnel but ACQ4 connect failed: {exc}"
+        return json.dumps(info, indent=2, default=str)
 
     @server.tool()
     def disconnect_ssh(target: Optional[str] = None) -> str:

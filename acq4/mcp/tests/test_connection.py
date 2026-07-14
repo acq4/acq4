@@ -122,6 +122,7 @@ def test_profile_functions_delegates_with_timeout(manager, recorder):
     manager.profile_functions(seconds=5.0, top=3)
     call = recorder[-1]
     assert call[0] == "profile_functions"
+    assert call[1:3] == ("127.0.0.1", 5000)
     assert call[3] == 5.0 and call[4] == 3
     assert call[5]["_timeout"] >= 20.0  # seconds + margin
 

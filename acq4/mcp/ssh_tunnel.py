@@ -68,6 +68,7 @@ class SSHTunnelManager:
             "-N",
             "-L",
             f"{local_port}:127.0.0.1:{remote_port}",
+            "--",
             target,
         ]
         proc = self._spawn(argv)

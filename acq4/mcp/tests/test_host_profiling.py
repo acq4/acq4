@@ -104,3 +104,41 @@ def test_health_series_collects_expected_sample_count(monkeypatch):
     out = h.health_series(seconds=3.0, interval=1.0)
     assert len(out["samples"]) == 3
     assert out["samples"][0]["latency_ms"] >= 0
+
+
+def test_profile_functions_returns_error_when_rtprofile_lacks_api(monkeypatch):
+    """profile_functions should report {"error": ...} rather than raise when the
+    installed rtprofile lacks the headless start_session API (env not ready)."""
+    import acq4.mcp.host as h
+    from acq4.util import task
+
+    class _FakeFunctionProfiler:
+        pass  # no start_session
+
+    class _FakeTabs:
+        function_profiler = _FakeFunctionProfiler()
+
+    monkeypatch.setattr(task, "run_in_gui_thread", lambda fn, *a, **k: fn(*a, **k))
+    monkeypatch.setattr(h, "_profiler_tabs", lambda: _FakeTabs())
+
+    result = h.profile_functions(seconds=1.0)
+    assert "error" in result
+
+
+def test_memory_snapshot_returns_error_when_rtprofile_lacks_api(monkeypatch):
+    """memory_snapshot should report {"error": ...} rather than raise when the
+    installed rtprofile lacks the headless take_snapshot API (env not ready)."""
+    import acq4.mcp.host as h
+    from acq4.util import task
+
+    class _FakeMemoryProfiler:
+        pass  # no take_snapshot
+
+    class _FakeTabs:
+        memory_profiler = _FakeMemoryProfiler()
+
+    monkeypatch.setattr(task, "run_in_gui_thread", lambda fn, *a, **k: fn(*a, **k))
+    monkeypatch.setattr(h, "_profiler_tabs", lambda: _FakeTabs())
+
+    result = h.memory_snapshot()
+    assert "error" in result
