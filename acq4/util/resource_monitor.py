@@ -6,6 +6,27 @@ import threading
 from ..util import Qt
 
 
+def sample_resources(app=None):
+    """Return a one-shot resource sample: CPU %, memory %, and Qt activity %.
+
+    qt_activity is app.activity_fraction * 100 when a ProfiledQApplication is active,
+    else None. Shared by ResourceMonitorWidget and the acq4-mcp health_series tool.
+    """
+    try:
+        cpu = psutil.cpu_percent(interval=None)
+    except Exception:
+        cpu = None
+    try:
+        memory = psutil.virtual_memory().percent
+    except Exception:
+        memory = None
+    qt_activity = None
+    fraction = getattr(app, "activity_fraction", None) if app is not None else None
+    if fraction is not None:
+        qt_activity = fraction * 100
+    return {"cpu_percent": cpu, "memory_percent": memory, "qt_activity": qt_activity}
+
+
 class ResourceMonitorWidget(Qt.QWidget):
     """Widget for displaying Qt activity percentage and system memory usage.
 

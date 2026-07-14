@@ -67,3 +67,40 @@ def test_summarize_heap_reports_total_and_top_types():
     summary = host._summarize_heap(heap, top=1)
     assert summary["total_bytes"] == 300
     assert summary["top_types"] == [{"type": "dict", "count": 2, "bytes": 200}]
+
+
+def test_health_series_collects_expected_sample_count(monkeypatch):
+    import time
+
+    import acq4.mcp.host as h
+    import acq4.util.resource_monitor as rm
+    from acq4.util import Qt, task
+
+    # health_series does local `import time`, `from acq4.util import task`, `from
+    # acq4.util.Qt import QApplication`, and `from acq4.util.resource_monitor import
+    # sample_resources` at call time, so patching each on its home module takes effect.
+    #
+    # A bare object() stand-in for the app would break pytest-qt's autouse hook, which
+    # calls QApplication.instance().processEvents() after every test; give the fake a
+    # no-op processEvents so that hook keeps working while QApplication.instance is
+    # patched for the duration of this test.
+    class _FakeApp:
+        def processEvents(self):
+            pass
+
+    monkeypatch.setattr(Qt.QApplication, "instance", staticmethod(lambda: _FakeApp()))
+    monkeypatch.setattr(task, "run_in_gui_thread", lambda fn, *a, **k: fn(*a, **k))
+    monkeypatch.setattr(
+        rm,
+        "sample_resources",
+        lambda app=None: {
+            "cpu_percent": 1.0,
+            "memory_percent": 2.0,
+            "qt_activity": None,
+        },
+    )
+    monkeypatch.setattr(time, "sleep", lambda s: None)
+
+    out = h.health_series(seconds=3.0, interval=1.0)
+    assert len(out["samples"]) == 3
+    assert out["samples"][0]["latency_ms"] >= 0

@@ -321,6 +321,60 @@ def manager_state() -> dict:
     }
 
 
+def health_series(seconds=10.0, interval=1.0):
+    """Sample CPU/memory/Qt-activity/event-loop-latency every `interval` for `seconds`.
+
+    Returns a time series. Must run off the GUI thread (it sleeps between samples);
+    latency is a GUI-thread round-trip timing per sample.
+    """
+    import time
+
+    from acq4.util import task
+    from acq4.util.Qt import QApplication
+    from acq4.util.resource_monitor import sample_resources
+
+    app = QApplication.instance()
+    samples = []
+    start = time.perf_counter()
+    n = max(1, int(seconds / interval))
+    for _ in range(n):
+        t0 = time.perf_counter()
+        task.run_in_gui_thread(lambda: None)  # measure GUI-thread responsiveness
+        latency_ms = (time.perf_counter() - t0) * 1000
+        sample = sample_resources(app=app)
+        sample["t"] = time.perf_counter() - start
+        sample["latency_ms"] = latency_ms
+        samples.append(sample)
+        time.sleep(interval)
+    return {"interval": interval, "samples": samples}
+
+
+def profile_qt_events(seconds=10.0, top=15):
+    """Profile the Qt event loop for `seconds`; return the busiest event types.
+
+    Requires ACQ4 started with --qt-profile (ProfiledQApplication); otherwise returns an
+    error dict. Drives the live Profiler window's Qt tab.
+    """
+    import time
+
+    from acq4.util import task
+
+    tabs = task.run_in_gui_thread(_profiler_tabs)
+    qp = tabs.qt_profiler
+    if not hasattr(qp, "start_session"):
+        raise RuntimeError(
+            "Installed rtprofile lacks the headless start_session API; update rtprofile."
+        )
+    try:
+        task.run_in_gui_thread(qp.start_session, None, False)
+    except RuntimeError as exc:
+        return {"error": str(exc)}
+    time.sleep(seconds)
+    profile = task.run_in_gui_thread(qp.stop_session)
+    stats = profile.get_statistics(group_by="type")
+    return {"session": profile.name, "top_events": stats[:top]}
+
+
 def get_log(lines: int = 50) -> dict:
     """Return the last *lines* lines of the ACQ4 log file.
 
