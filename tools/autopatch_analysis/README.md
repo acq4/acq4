@@ -9,7 +9,7 @@ run from its saved `MultiPatch_*.log` files.
   find/seal/break-in funnel from the `state_change` sequence and pull
   whole-cell quality numbers from `test_pulse` events.
 - `autopatch_metrics.py` — aggregate attempts into funnel / throughput /
-  time-budget / failure-mode DataFrames.
+  time-budget / failure-mode / timeline DataFrames.
 - `autopatch_analysis.ipynb` — set `ROOTS`, load a run, and render the graphs.
 - `tests/` — unit tests for the parsing and metrics (`pytest tools/autopatch_analysis/tests`).
 
@@ -22,13 +22,23 @@ meaningful throughput rates.
 
 ## What's measured
 
-- **Funnel:** attempted → attempted-find → found cell → sealed → whole-cell,
-  with per-stage conversion.
-- **Throughput:** attempts/hour, whole-cells/hour, overall yield, active time.
+The analysis is restricted to attempts that actually **approached** a cell.
+Attempts that never got past bath/clean/out are pipette setup and cleaning
+cycles, not real patch attempts, and are excluded (set `ONLY_APPROACHED=False`
+to keep them). This keeps the funnel base and the active time honest: the
+active time is the demo window (first to last approached attempt), not the whole
+recording including pre/post-demo idle.
+
+- **Funnel:** approached → found cell → sealed → whole-cell, with per-stage
+  conversion, based on approached attempts.
+- **Throughput:** attempts/hour, whole-cells/hour, overall yield, active time
+  (demo window, summed per-log).
 - **Time budget:** per-attempt duration and total time spent in each patch state.
 - **Failure modes:** the terminal state each attempt gave up in.
 - **Quality:** peak seal resistance, and access resistance / holding current
   during whole-cell.
+- **Timeline:** a per-folder Gantt of every device's patch states over
+  wall-clock (using all attempts), with the analyzed demo window shaded.
 
 ## Notes
 
