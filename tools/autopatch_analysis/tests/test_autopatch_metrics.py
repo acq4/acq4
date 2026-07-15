@@ -60,17 +60,51 @@ def test_dataframe_has_row_per_attempt():
     assert list(df["broke_in"]) == [True, False, False, False]
 
 
-def test_funnel_counts_and_conversion():
+def test_funnel_is_based_on_approached_not_all_attempts():
+    # The 4th sample attempt (bath -> clean) never approached a cell and must
+    # not count toward the funnel, even if the full df is passed in.
     df = am.attempts_to_dataframe(_sample_attempts())
     funnel = am.funnel_counts(df).set_index("stage")
-    assert funnel.loc["attempted", "count"] == 4
+    # base of the funnel is the 3 approached attempts, not all 4
+    assert funnel.loc["approached", "count"] == 3
+    assert "attempted" not in funnel.index
     assert funnel.loc["found_cell", "count"] == 3
     assert funnel.loc["sealed", "count"] == 2
     assert funnel.loc["broke_in", "count"] == 1
-    # 3 of 4 attempts found a cell
-    assert funnel.loc["found_cell", "pct_of_attempts"] == pytest.approx(75.0)
+    # conversions/percentages are relative to approached attempts
+    assert funnel.loc["found_cell", "pct_of_approached"] == pytest.approx(100.0)
+    assert funnel.loc["sealed", "pct_of_approached"] == pytest.approx(200.0 / 3)
     # 1 of 2 sealed attempts broke in
     assert funnel.loc["broke_in", "conversion_from_prev"] == pytest.approx(50.0)
+
+
+def test_state_timeline_spans_per_folder():
+    attempts = _sample_attempts()
+    tl = am.state_timeline(attempts)
+    # one row per state interval across all attempts
+    n_intervals = sum(len(a.states) for a in attempts)
+    assert len(tl) == n_intervals
+    assert set(["folder", "cell_dir", "device", "state", "t_start", "t_end"]) <= set(
+        tl.columns
+    )
+    # spans are ordered and non-negative in duration
+    assert (tl["t_end"] >= tl["t_start"]).all()
+    # folder is the directory holding the log
+    assert tl["folder"].iloc[0].endswith("cell_000")
+
+
+def test_state_timeline_empty_is_well_formed():
+    tl = am.state_timeline([])
+    assert list(tl.columns) == [
+        "folder",
+        "cell_dir",
+        "device",
+        "attempt_index",
+        "state",
+        "t_start",
+        "t_end",
+    ]
+    assert len(tl) == 0
 
 
 def test_failure_mode_counts():
