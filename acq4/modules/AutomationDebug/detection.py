@@ -199,6 +199,17 @@ class CellDetector:
         for pos, score in detection_results:
             cell = Cell(pos)
             cell.score = score
+            # Seed each detected cell's tracking reference from the z-stack it was
+            # found in, so its ObjectStack is ready for the cell-queue display and
+            # for later tracking without re-acquiring a stack per cell. Cells too
+            # close to the stack edge can't be extracted; keep them queued anyway.
+            try:
+                cell.initializeTrackerFromStack(win.cameraDevice, detection_stack)
+            except Exception:
+                logger.warning(
+                    f"Could not initialize ObjectStack for detected cell at {pos}",
+                    exc_info=True,
+                )
             win._unranked_cells.append(cell)
         return detection_results
 
