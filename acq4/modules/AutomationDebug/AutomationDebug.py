@@ -31,11 +31,86 @@ logger = get_logger(__name__)
 UiTemplate = Qt.importTemplate(".window")
 
 
+class _ObservableList(list):
+    """A ``list`` that calls ``on_change`` after any in-place mutation.
+
+    The autopatch workflow tracks cell state purely by which list a cell lives in
+    (waiting / in-progress / patched), and those lists are mutated from many
+    places (detection, the demo loop, re-queueing) and from worker threads. Making
+    the lists observable lets the UI stay in sync no matter how or where they
+    change, rather than relying on every call site to remember to notify.
+    """
+
+    def __init__(self, iterable=(), on_change=None):
+        self._on_change = None  # suppress notification while populating
+        super().__init__(iterable)
+        self._on_change = on_change
+
+    def _changed(self):
+        if self._on_change is not None:
+            self._on_change()
+
+    def append(self, item):
+        super().append(item)
+        self._changed()
+
+    def extend(self, iterable):
+        super().extend(iterable)
+        self._changed()
+
+    def insert(self, index, item):
+        super().insert(index, item)
+        self._changed()
+
+    def remove(self, item):
+        super().remove(item)
+        self._changed()
+
+    def pop(self, index=-1):
+        item = super().pop(index)
+        self._changed()
+        return item
+
+    def clear(self):
+        super().clear()
+        self._changed()
+
+    def sort(self, *args, **kwargs):
+        super().sort(*args, **kwargs)
+        self._changed()
+
+    def reverse(self):
+        super().reverse()
+        self._changed()
+
+    def __setitem__(self, key, value):
+        super().__setitem__(key, value)
+        self._changed()
+
+    def __delitem__(self, key):
+        super().__delitem__(key)
+        self._changed()
+
+    def __iadd__(self, other):
+        result = super().__iadd__(other)
+        self._changed()
+        return result
+
+    def __imul__(self, n):
+        result = super().__imul__(n)
+        self._changed()
+        return result
+
+
 class AutomationDebugWindow(Qt.QWidget):
     sigWorking = Qt.Signal(
         object
     )  # a btn that is busy or False to signify no longer working
     sigLogMessage = Qt.Signal(str)
+    # Emitted whenever the waiting/in-progress/patched cell lists change. Drives
+    # the cell table; may be emitted from worker threads, so the connected slot
+    # runs in the GUI thread via Qt's queued delivery.
+    sigCellsChanged = Qt.Signal()
 
     def __init__(self, module: "AutomationDebug"):
         super().__init__()
@@ -80,6 +155,10 @@ class AutomationDebugWindow(Qt.QWidget):
             self.ui.surveyStatsLabel, self.ui.groupBox.layout().rowCount(), 0, 1, 4
         )
 
+        # A live table of every known cell and its current patch state. Built
+        # before the cell lists are initialized so _refreshCellTable can find it.
+        self._buildCellTableUi()
+
         self.sigWorking.connect(self._setWorkingState)
         self.failedCalibrations = []
         self.module = module
@@ -94,6 +173,11 @@ class AutomationDebugWindow(Qt.QWidget):
         self._current_classification_stack = None  # May be None
         self._previousTargets = []  # Used by autoTarget
         self._open_ranking_windows = []  # Keep track of open windows
+        self._autopatchRunning = False
+
+        # Now that the cell lists exist, keep the table in sync with any change.
+        self.sigCellsChanged.connect(self._refreshCellTable)
+        self._refreshCellTable()
 
         # --- Composed objects ---
         self._detector = CellDetector(self)
@@ -201,6 +285,345 @@ class AutomationDebugWindow(Qt.QWidget):
         self._updateMultiChannelAndMockStates()  # Set initial states
 
         self.loadConfig()
+
+    # ------------------------------------------------------------------
+    # Cell state tracking
+    #
+    # A cell's patch state is defined by which container it lives in:
+    #   _unranked_cells -> "Waiting" (queued, not yet worked on)
+    #   _cell           -> "In progress" (currently being patched)
+    #   _ranked_cells   -> "Patched" (already worked on; the in-progress cell is
+    #                       also appended here, so it is checked first below)
+    # These are exposed as properties backed by _ObservableList so that any
+    # mutation or reassignment emits sigCellsChanged and refreshes the table.
+    # ------------------------------------------------------------------
+
+    # Semi-transparent tints (read on both light and dark themes), keyed by the
+    # colour category a row falls into rather than its free-text label.
+    _CELL_STATE_COLORS = {
+        "waiting": Qt.QColor(128, 128, 128, 60),
+        "progress": Qt.QColor(240, 180, 40, 100),
+        "ok": Qt.QColor(60, 180, 75, 90),
+        "bad": Qt.QColor(200, 70, 70, 80),
+    }
+
+    @property
+    def _autopatchRunning(self) -> bool:
+        """Whether the autopatch demo is actively working a cell.
+
+        Gates the "In progress" label so a cell stops reading as in-progress once
+        the demo has finished or been stopped.
+        """
+        return self._autopatchRunningState
+
+    @_autopatchRunning.setter
+    def _autopatchRunning(self, value):
+        self._autopatchRunningState = bool(value)
+        self._onCellListsChanged()
+
+    def setCellStatus(self, cell, status: str, category: str | None = None):
+        """Record a short outcome description for ``cell`` and refresh the table.
+
+        ``category`` is one of "ok"/"bad"/None and only drives the row colour.
+        Safe to call from worker threads (updates go through sigCellsChanged).
+        """
+        if cell is None:
+            return
+        cell._debugStatus = status
+        cell._debugStatusCategory = category
+        self._onCellListsChanged()
+
+    @property
+    def _cell(self):
+        return self._current_cell
+
+    @_cell.setter
+    def _cell(self, value):
+        self._current_cell = value
+        self._onCellListsChanged()
+
+    @property
+    def _unranked_cells(self):
+        return self._unranked_cells_store
+
+    @_unranked_cells.setter
+    def _unranked_cells(self, value):
+        self._unranked_cells_store = _ObservableList(value, self._onCellListsChanged)
+        self._onCellListsChanged()
+
+    @property
+    def _ranked_cells(self):
+        return self._ranked_cells_store
+
+    @_ranked_cells.setter
+    def _ranked_cells(self, value):
+        self._ranked_cells_store = _ObservableList(value, self._onCellListsChanged)
+        self._onCellListsChanged()
+
+    def _onCellListsChanged(self):
+        """Notify listeners (the cell table) that the cell lists changed.
+
+        Emitting a signal rather than touching widgets directly keeps this safe to
+        call from worker threads: the connected slot runs in the GUI thread.
+        """
+        self.sigCellsChanged.emit()
+
+    def _buildCellTableUi(self):
+        """Create the "Cells" group box.
+
+        Left: a table of every cell and its state, plus cell action buttons.
+        Right: a pg.ImageView showing the selected cell's initial 3D stack.
+        """
+        self._cellTableRows = []  # cells in the same order as table rows
+        self._selectedCell = None
+
+        group = Qt.QGroupBox("Cells")
+        outer = Qt.QVBoxLayout(group)
+
+        self.ui.cellSummaryLabel = Qt.QLabel("No cells")
+        outer.addWidget(self.ui.cellSummaryLabel)
+
+        split = Qt.QHBoxLayout()
+        outer.addLayout(split)
+
+        # --- Left column: table + action buttons ---
+        left = Qt.QVBoxLayout()
+        split.addLayout(left, 1)
+
+        table = Qt.QTableWidget(0, 3)
+        table.setHorizontalHeaderLabels(["State", "Position (µm)", "Score"])
+        table.setEditTriggers(Qt.QAbstractItemView.NoEditTriggers)
+        table.setSelectionBehavior(Qt.QAbstractItemView.SelectRows)
+        table.setSelectionMode(Qt.QAbstractItemView.SingleSelection)
+        table.verticalHeader().setVisible(False)
+        header = table.horizontalHeader()
+        header.setSectionResizeMode(0, Qt.QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(1, Qt.QHeaderView.Stretch)
+        header.setSectionResizeMode(2, Qt.QHeaderView.ResizeToContents)
+        table.setMinimumHeight(160)
+        table.itemSelectionChanged.connect(self._onCellSelectionChanged)
+        self.ui.cellTable = table
+        left.addWidget(table)
+
+        btnRow = Qt.QHBoxLayout()
+        left.addLayout(btnRow)
+        # Reuse-all button, relocated here from the Autopatch Demo group. Adding it
+        # to this layout reparents it out of that group automatically.
+        btnRow.addWidget(self.ui.reuseLastCellBtn)
+        self.ui.setTargetFromCellBtn = Qt.QPushButton("Set target from cell")
+        self.ui.setTargetFromCellBtn.setToolTip(
+            "Set the pipette target to the selected cell's position"
+        )
+        self.ui.setTargetFromCellBtn.setEnabled(False)
+        self.ui.setTargetFromCellBtn.clicked.connect(self._setTargetFromSelectedCell)
+        btnRow.addWidget(self.ui.setTargetFromCellBtn)
+        self.ui.removeCellBtn = Qt.QPushButton("Remove cell")
+        self.ui.removeCellBtn.setToolTip(
+            "Remove the selected cell from the waiting/in-progress/patched lists"
+        )
+        self.ui.removeCellBtn.setEnabled(False)
+        self.ui.removeCellBtn.clicked.connect(self._removeSelectedCell)
+        btnRow.addWidget(self.ui.removeCellBtn)
+        btnRow.addStretch()
+
+        # --- Right column: initial 3D stack of the selected cell ---
+        self.ui.cellImageView = pg.ImageView()
+        self.ui.cellImageView.setMinimumWidth(260)
+        split.addWidget(self.ui.cellImageView, 1)
+
+        self.layout().addWidget(group)
+
+    def _refreshCellTable(self):
+        """Rebuild the cell table from the current cell lists.
+
+        Rows are ordered finished -> in progress -> waiting and de-duplicated by
+        identity (the in-progress cell also lives in the ranked list). The state
+        column shows each cell's recorded outcome rather than a blanket "patched".
+        """
+        table = getattr(self.ui, "cellTable", None)
+        if table is None:
+            return
+
+        current = self._cell
+        running = self._autopatchRunning
+        rows = []  # (cell, label, colour_category)
+        seen = set()
+
+        def add(cell, label, category):
+            if id(cell) in seen:
+                return
+            seen.add(id(cell))
+            rows.append((cell, label, category))
+
+        for cell in list(self._ranked_cells):
+            if cell is current:
+                continue
+            label, category = self._cellRowInfo(cell, is_current=False, running=running)
+            add(cell, label, category)
+        if current is not None:
+            label, category = self._cellRowInfo(current, is_current=True, running=running)
+            add(current, label, category)
+        for cell in list(self._unranked_cells):
+            add(cell, "Waiting", "waiting")
+
+        counts = {"waiting": 0, "progress": 0, "finished": 0}
+        # Suppress selection signals while rebuilding; we restore the selection
+        # (by cell identity) and refresh the dependent UI explicitly afterward.
+        table.blockSignals(True)
+        table.setRowCount(len(rows))
+        for row, (cell, label, category) in enumerate(rows):
+            if category == "waiting":
+                counts["waiting"] += 1
+            elif category == "progress":
+                counts["progress"] += 1
+            else:
+                counts["finished"] += 1
+            color = self._CELL_STATE_COLORS.get(category)
+            values = (label, self._formatCellPosition(cell), self._formatCellScore(cell))
+            for col, text in enumerate(values):
+                item = Qt.QTableWidgetItem(text)
+                if color is not None:
+                    item.setBackground(Qt.QBrush(color))
+                table.setItem(row, col, item)
+        self._cellTableRows = [r[0] for r in rows]
+
+        target_row = next(
+            (i for i, cell in enumerate(self._cellTableRows) if cell is self._selectedCell),
+            -1,
+        )
+        if target_row >= 0:
+            table.selectRow(target_row)
+        else:
+            table.clearSelection()
+        table.blockSignals(False)
+        self._syncCellSelectionUi()
+
+        self.ui.cellSummaryLabel.setText(
+            f"{len(rows)} cell(s) — "
+            f"{counts['waiting']} waiting, "
+            f"{counts['progress']} in progress, "
+            f"{counts['finished']} finished"
+        )
+
+    @staticmethod
+    def _cellRowInfo(cell, is_current: bool, running: bool):
+        """Return (label, colour_category) for a worked/in-progress cell.
+
+        A cell only reads as "In progress" while the demo is actively running;
+        otherwise it shows the outcome recorded via setCellStatus, falling back to
+        "stopped" for a cell that was interrupted before any outcome was recorded.
+        """
+        if is_current and running:
+            return "In progress", "progress"
+        status = getattr(cell, "_debugStatus", None)
+        if status is None:
+            return "stopped", "bad"
+        category = getattr(cell, "_debugStatusCategory", None)
+        return status, category if category in ("ok", "bad") else None
+
+    def _onCellSelectionChanged(self):
+        self._syncCellSelectionUi()
+
+    def _syncCellSelectionUi(self):
+        """Reconcile the selected cell with the image view and target button."""
+        table = getattr(self.ui, "cellTable", None)
+        if table is None:
+            return
+        selected = table.selectionModel().selectedRows()
+        rows = self._cellTableRows
+        if selected and 0 <= selected[0].row() < len(rows):
+            cell = rows[selected[0].row()]
+        else:
+            cell = None
+        self._selectedCell = cell
+        self.ui.setTargetFromCellBtn.setEnabled(cell is not None)
+        self.ui.removeCellBtn.setEnabled(cell is not None)
+        self._updateCellImage()
+
+    def _updateCellImage(self):
+        iv = getattr(self.ui, "cellImageView", None)
+        if iv is None:
+            return
+        stack = self._cellInitialStack(self._selectedCell)
+        if stack is None:
+            iv.clear()
+            return
+        # Transpose rows/cols (swap the last two axes) so the stack displays in
+        # the same orientation as the camera module, leaving the z axis first.
+        if stack.ndim >= 2:
+            stack = np.swapaxes(stack, -2, -1)
+        iv.setImage(stack, autoRange=True, autoLevels=True)
+
+    @staticmethod
+    def _cellInitialStack(cell):
+        """The 3D image stack captured when the cell's tracker was initialized.
+
+        Returns None if the cell has not been initialized for tracking yet (e.g. a
+        freshly detected cell still waiting in the queue), so callers can clear the
+        view instead of showing stale data.
+        """
+        if cell is None:
+            return None
+        tracker = getattr(cell, "_tracker", None)
+        if tracker is None:
+            return None
+        try:
+            stack = tracker.motion_estimator.original_object_stack.data
+        except Exception:
+            return None
+        if stack is None:
+            return None
+        return np.asarray(stack)
+
+    def _setTargetFromSelectedCell(self):
+        cell = self._selectedCell
+        if cell is None:
+            return
+        try:
+            target = np.asarray(cell.position.coordinates, dtype=float)
+        except Exception:
+            logger.exception("Selected cell has no usable position")
+            return
+        try:
+            self.pipetteDevice.setTarget(target)
+        except Exception:
+            logger.exception("Failed to set pipette target from selected cell")
+            return
+        logger.info(f"Set pipette target from selected cell to {target}")
+
+    def _removeSelectedCell(self):
+        """Remove the selected cell from whichever list(s) it lives in."""
+        cell = self._selectedCell
+        if cell is None:
+            return
+        # Drop the selection first so the table rebuild triggered by the removals
+        # below doesn't try to re-select the cell we're deleting.
+        self._selectedCell = None
+        if self._cell is cell:
+            self._cell = None
+        if cell in self._unranked_cells:
+            self._unranked_cells.remove(cell)
+        if cell in self._ranked_cells:
+            self._ranked_cells.remove(cell)
+        logger.info("Removed selected cell from the cell lists")
+
+    @staticmethod
+    def _formatCellPosition(cell) -> str:
+        try:
+            x, y, z = np.asarray(cell.position.coordinates, dtype=float) * 1e6
+            return f"({x:.1f}, {y:.1f}, {z:.1f})"
+        except Exception:
+            return "?"
+
+    @staticmethod
+    def _formatCellScore(cell) -> str:
+        score = getattr(cell, "score", None)
+        if score is None:
+            return ""
+        try:
+            return f"{score:.0%}"
+        except (ValueError, TypeError):
+            return str(score)
 
     def _updateMultiChannelAndMockStates(self):
         multi_channel_enabled = self.ui.multiChannelEnableCheck.isChecked()
