@@ -16,6 +16,15 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
+# Human-readable descriptions for the terminal patch states returned by
+# _autopatchCellPatch, shown per-cell in the Automation Debug cell table.
+_PATCH_STATE_DESCRIPTIONS = {
+    "whole cell": "whole cell",
+    "bath": "no seal (returned to bath)",
+    "broken": "membrane broken",
+    "fouled": "pipette fouled",
+}
+
 
 class Autopatcher:
     def __init__(self, window: AutomationDebugWindow):
@@ -28,12 +37,19 @@ class Autopatcher:
     def _handleAutopatchDemoFinish(self, fut):
         win = self._window
         win.sigWorking.emit(False)
+        # The demo is no longer running, so the last cell should stop reading as
+        # "in progress". If it was interrupted before reaching a terminal state,
+        # record that it was stopped rather than leaving it blank.
+        win._autopatchRunning = False
+        if win._cell is not None and getattr(win._cell, "_debugStatus", None) is None:
+            win.setCellStatus(win._cell, "stopped", "bad")
         win.ui.reuseLastCellBtn.setEnabled(win._cell is not None or bool(win._ranked_cells))
 
     @asynch_with_qt_signals
     def _autopatchDemo(self):
         win = self._window
         win.sigWorking.emit(win.ui.autopatchDemoBtn)
+        win._autopatchRunning = True
         self._hasWorkedCell = False
         # Start each run surveying the region from scratch; the ROI persists.
         win._surveyRegion.reset()
@@ -51,6 +67,9 @@ class Autopatcher:
                 # the demo stops cleanly instead of setting up a nonexistent cell.
                 if self._outOfCells():
                     set_state("Autopatch: reached end of cell list; stopping")
+                    logger.info(
+                        "Autopatch: reached end of cell list and 'find more cells' is off; stopping demo"
+                    )
                     return
                 cell_dir = run_in_gui_thread(data_manager.createNewFolder, "Cell")
                 try:
@@ -71,6 +90,7 @@ class Autopatcher:
                     cell = self._autopatchFindCell()
                     if cell is None:
                         set_state("No cells found; quitting demo")
+                        logger.info("Autopatch: no cell to work on; quitting demo")
                         return
                     set_state("Autopatch: cell found")
                     ppip.newPatchAttempt()
@@ -117,6 +137,11 @@ class Autopatcher:
                         raise
 
                     logger.warning(f"Autopatch: Cell patching finished: {state}")
+                    win.setCellStatus(
+                        cell,
+                        _PATCH_STATE_DESCRIPTIONS.get(state, state),
+                        "ok" if state == "whole cell" else "bad",
+                    )
                     if state != "whole cell":
                         logger.warning("Autopatch: Next cell!")
                         continue
@@ -161,6 +186,8 @@ class Autopatcher:
                     raise
                 except Exception:
                     logger.exception("Error during protocol:")
+                    if win._cell is not None and getattr(win._cell, "_debugStatus", None) is None:
+                        win.setCellStatus(win._cell, "error during patching", "bad")
                     continue
                 finally:
                     man.setCurrentDir(cell_dir.parent())
@@ -212,6 +239,10 @@ class Autopatcher:
         )
 
     def _autopatchFindCell(self):
+        # send pipette home - get out of the way before finding new cells or re-finding an old cell
+        set_state("Autopatch: go home before next cell")
+        self._window.patchPipetteDevice.pipetteDevice.goHome("fast").wait()
+
         win = self._window
         # Keep imaging survey tiles until one yields a cell. An empty field of
         # view is the common case, so it must advance to the next tile rather than
@@ -220,13 +251,23 @@ class Autopatcher:
         while not win._unranked_cells:
             if self._outOfCells():
                 set_state("Autopatch: reached end of cell list; stopping")
+                logger.info(
+                    "Autopatch: cell list empty and 'find more cells' is off; stopping demo"
+                )
                 return None
             if not win._surveyRegion.hasRegion():
                 set_state("Autopatch: add a survey region to search for cells")
+                logger.info(
+                    "Autopatch: 'find more cells' is on but no survey region is defined; "
+                    "add a survey region to search for more cells. Stopping demo"
+                )
                 return None
             center = run_in_gui_thread(win._surveyRegion.nextTile)
             if center is None:
                 set_state("Autopatch: survey region fully imaged; stopping")
+                logger.info(
+                    "Autopatch: survey region fully imaged; no more tiles to search. Stopping demo"
+                )
                 return None
             set_state("Autopatch: moving to next survey tile")
             win.scopeDevice.setGlobalPosition(center, name="autopatch survey move").wait()
@@ -236,6 +277,11 @@ class Autopatcher:
             fut = win._detector._detectNeuronsZStack()
             fut.sigFinished.connect(win._detector._handleDetectResults)  # adds to win._unranked_cells
             fut.wait(timeout=600)
+            if not win._unranked_cells:
+                set_state("Autopatch: no cells detected in this tile")
+                logger.info(
+                    "Autopatch: detection ran on the survey tile but found no cells"
+                )
 
         set_state("Autopatch: checking selected cell")
         cell = win._unranked_cells.pop(0)
@@ -243,13 +289,16 @@ class Autopatcher:
         win._ranked_cells.append(cell)
         win.patchPipetteDevice.setCell(cell)
         win._cell = cell
-        # cell.sigPositionChanged.connect(win._feature_tracker._updatePipetteTarget)
+        # Clear any outcome carried over from a previous run (e.g. a re-queued
+        # cell) so this fresh attempt starts without a stale status.
+        cell._debugStatus = None
+        cell._debugStatusCategory = None
 
-        # stack = win._current_classification_stack or win._current_detection_stack
-        # if (pos - margin) not in stack or (pos + margin) not in stack:
-        # stack = None
+        # find cell again
         try:
-            cell.initializeTracker(win.cameraDevice)
+            # Pass the pipette so occlusion masking is active during later visual
+            # tracking; the pose is sampled fresh at each acquisition.
+            cell.initializeTracker(win.cameraDevice)  #, pipette=win.pipetteDevice)
         except Stopped:
             raise
         except ValueError as e:
@@ -257,6 +306,7 @@ class Autopatcher:
                 logger.info(f"Autopatch: Mocking cell despite {e}")
                 return cell
             logger.info(f"Cell moved too much? {e}\nRetrying")
+            win.setCellStatus(cell, "skipped — tracker lost cell", "bad")
             return self._autopatchFindCell()
         logger.info(f"Autopatch: Cell found at {cell.position}")
         return cell
