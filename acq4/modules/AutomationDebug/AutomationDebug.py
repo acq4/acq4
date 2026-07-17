@@ -553,6 +553,22 @@ class AutomationDebugWindow(Qt.QWidget):
         if stack.ndim >= 2:
             stack = np.swapaxes(stack, -2, -1)
         iv.setImage(stack, autoRange=True, autoLevels=True)
+        # Default the z slider to the center frame (the plane the cell was detected
+        # on) rather than the first frame setImage jumps to.
+        center = self._centerFrameIndex(stack)
+        if center is not None:
+            iv.setCurrentIndex(center)
+
+    @staticmethod
+    def _centerFrameIndex(stack):
+        """The z index to display by default: the center frame of a 3D stack.
+
+        Returns None for a 2D image or a single-frame stack, where there is no
+        meaningful center frame to jump to.
+        """
+        if stack.ndim >= 3 and stack.shape[0] > 1:
+            return stack.shape[0] // 2
+        return None
 
     @staticmethod
     def _cellInitialStack(cell):
