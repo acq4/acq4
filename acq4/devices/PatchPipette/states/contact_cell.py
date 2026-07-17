@@ -52,6 +52,13 @@ class ContactCellState(PatchPipetteState):
         Threshold for change in resistance (Ohm) to detect broken pipette (default -1 MOhm)
     pipetteRecalibrationMaxChange : float
         Maximum allowed change in pipette position during recalibration before rejecting update (default 5 µm)
+    visualTargetTracking : bool
+        Whether to visually track the target cell during descent (default True)
+    minDetectionDistance : float
+        Minimum distance (m) from target before cell detection is considered; negative disables
+        the limit (default -1)
+    nextState : str
+        Name of the state to transition to once contact is established (default "seal")
     """
 
     stateName = 'contact cell'
@@ -133,7 +140,7 @@ class ContactCellState(PatchPipetteState):
             initial_pos[2] += config['initialApproachHeight']
             self.setState("moving to initial approach position")
             self._moveFuture = pip.moveToGlobalNoPlanning(initial_pos, speed=config['moveSpeed'], name='move to initial approach position')
-            self._moveFuture.wait(None)
+            self._moveFuture.wait()
             self._moveFuture = None
 
             if config['findPipette']:
@@ -194,7 +201,7 @@ class ContactCellState(PatchPipetteState):
                 ])
 
                 self._moveFuture = pip.moveToGlobalNoPlanning(next_pos, speed=config['moveSpeed'], name='contact cell descent step')
-                self._moveFuture.wait(None)
+                self._moveFuture.wait()
                 self._moveFuture = None
 
                 # Wait between iterations

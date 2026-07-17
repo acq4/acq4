@@ -333,7 +333,7 @@ class ResealState(PatchPipetteState):
                 target=self.config['nuzzlePressureLimit'], duration=self.config['nuzzleDuration']
             )
             yield
-            self._pressureFuture.wait(None)
+            self._pressureFuture.wait()
 
         self.dev.pipetteDevice.wiggle(
             speed=self.config['nuzzleSpeed'],
@@ -509,8 +509,7 @@ class ResealState(PatchPipetteState):
                     dev.imagingDevice().globalCenterPosition() - dev.pipetteDevice.globalPosition()
                 )
             ):
-                task = dev.focusOnTip('slow')
-                task.wait(None)
+                dev.focusOnTip('slow').wait()
             sleep(0.2)
 
         if self._moveFuture is not None:
@@ -519,13 +518,12 @@ class ResealState(PatchPipetteState):
                 self._moveFuture.wait()
         self.setState("retracting pipette from surface")
         self._moveFuture = self._retractFromTissue()
-        self._moveFuture.wait(None)
+        self._moveFuture.wait()
 
         self.setState("go above target before slurp")
         self._moveFuture = dev.pipetteDevice.goAboveTarget(speed=100e-6)
         self._moveFuture.wait(120)
-        task1 = dev.pipetteDevice.focusTip()
-        task1.wait(None)
+        dev.pipetteDevice.focusTip().wait()
 
         self.setState("slurping in nucleus")
         dev.pressureDevice.setPressure(source='regulator', pressure=config['slurpPressure'])

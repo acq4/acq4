@@ -9,6 +9,15 @@ from ._base import PatchPipetteState
 
 
 class BlowoutState(PatchPipetteState):
+    """State that applies positive pressure to blow debris out of the pipette tip.
+
+    Parameters
+    ----------
+    blowoutPressure : float
+        Positive pressure (Pascals) to apply while blowing out the pipette tip (default 65 kPa)
+    blowoutDuration : float
+        Duration (s) to apply the blowout pressure (default 2 s)
+    """
     stateName = 'blowout'
     _parameterDefaultOverrides = {
         'initialPressureSource': 'atmosphere',
@@ -29,7 +38,7 @@ class BlowoutState(PatchPipetteState):
 
         fut = self.dev.pipetteDevice.retractFromSurface()
         if fut is not None:
-            fut.wait(None)
+            fut.wait()
 
         self.dev.pressureDevice.setPressure(source='regulator', pressure=config['blowoutPressure'])
         duration = config['blowoutDuration']

@@ -24,6 +24,8 @@ class CleanState(PatchPipetteState):
     sonicationProtocol : str
         Protocol to use for sonication (default "clean"), or if supported, the full protocol definition for a custom
         protocol.
+    nextState : str
+        Name of the state to transition to after cleaning (default "out")
     """
     stateName = 'clean'
 
@@ -80,11 +82,10 @@ class CleanState(PatchPipetteState):
                 sleep(delay)
 
             if self.sonication is not None and not self.sonication.is_done:
-                self.sonication.wait(None)
+                self.sonication.wait()
 
         dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
-        task2 = pip.goHome()
-        task2.wait(None)
+        pip.goHome().wait()
         dev.pipetteRecord()['cleanCount'] += 1
         dev.setTipClean(True)
         dev.newPatchAttempt()

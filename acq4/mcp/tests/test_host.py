@@ -226,6 +226,40 @@ def test_get_log_tails_file(monkeypatch, tmp_path):
     ]
 
 
+def test_get_log_returns_only_last_n_lines(monkeypatch, tmp_path):
+    import types
+
+    import acq4.logging_config as lc
+
+    log = tmp_path / "acq4.log"
+    log.write_text("".join(f"line {i}\n" for i in range(10)))
+    monkeypatch.setattr(
+        lc, "log_file_handler", types.SimpleNamespace(baseFilename=str(log))
+    )
+
+    result = host.get_log(lines=2)
+    assert result["path"] == str(log)
+    assert result["text"].splitlines() == ["line 8", "line 9"]
+
+
+def test_get_log_zero_lines_returns_empty_text(monkeypatch, tmp_path):
+    # lines=0 means "no lines": empty text, not the whole file (a plain [-0:] slice
+    # would return everything).
+    import types
+
+    import acq4.logging_config as lc
+
+    log = tmp_path / "acq4.log"
+    log.write_text("".join(f"line {i}\n" for i in range(10)))
+    monkeypatch.setattr(
+        lc, "log_file_handler", types.SimpleNamespace(baseFilename=str(log))
+    )
+
+    result = host.get_log(lines=0)
+    assert result["path"] == str(log)
+    assert result["text"] == ""
+
+
 def test_get_log_without_handler_reports_no_file(monkeypatch):
     import acq4.logging_config as lc
 

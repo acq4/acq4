@@ -12,6 +12,8 @@ class MoveNucleusToHomeState(PatchPipetteState):
     ----------
     pressureLimit : float
         The smallest vacuum pressure (pascals, expected negative value) to allow during state.
+    positionName : str
+        Named pipette position to move to while carrying the nucleus (default "extract")
     """
     stateName = "home with nucleus"
     _parameterDefaultOverrides = {
@@ -25,10 +27,8 @@ class MoveNucleusToHomeState(PatchPipetteState):
     }
 
     def run(self):
-        task = self.dev.pressureDevice.rampPressure(maximum=self.config['pressureLimit'])
-        task.wait(None)
-        task1 = self.dev.pipetteDevice.moveTo(self.config['positionName'], 'fast')
-        task1.wait(None)
+        self.dev.pressureDevice.rampPressure(maximum=self.config['pressureLimit']).wait()
+        self.dev.pipetteDevice.moveTo(self.config['positionName'], 'fast').wait()
         return {
             "state": "out",
             "initialPressure": self.config['pressureLimit'],

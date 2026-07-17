@@ -465,7 +465,7 @@ class AutomatedStageCalibration(object):
         self._camera.sigNewFrame.connect(self.handleNewFrame)
 
     def _build_movement_plan(self):
-        step_size = 10e-6  # TODO this should be magnification-dependent
+        step_size = 100e-6  # TODO this should be magnification-dependent
         # current stage position
         pos = self._stage.getPosition()
         # where to move on each update

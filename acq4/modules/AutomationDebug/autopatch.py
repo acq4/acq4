@@ -35,6 +35,8 @@ class Autopatcher:
         win = self._window
         win.sigWorking.emit(win.ui.autopatchDemoBtn)
         self._hasWorkedCell = False
+        # Start each run surveying the region from scratch; the ROI persists.
+        win._surveyRegion.reset()
         ppip: PatchPipette = win.patchPipetteDevice
         man = win.module.manager
         data_manager = run_in_gui_thread(man.getModule, "Data Manager")
@@ -104,7 +106,6 @@ class Autopatcher:
                     sleep(4)
                     ppip.pressureDevice.setPressure(source='regulator', pressure=start_pressure)
 
-
                     set_state("Autopatch: go approach")
                     ppip.pipetteDevice.goApproach("fast").wait()
                     try:
@@ -140,11 +141,11 @@ class Autopatcher:
                     #
                     # check on the resealed cell
                     # win.scopeDevice.loadPreset('GFP')
-                    win.cameraDevice.moveCenterToGlobal(
-                        cell.position, "fast", name="center on resealed cell"
-                    ).wait()
-                    self._saveStack("cell without nucleus")
-                    ppip.pipetteDevice.focusTip('slow').wait()
+                    # win.cameraDevice.moveCenterToGlobal(
+                    #     cell.position, "fast", name="center on resealed cell"
+                    # ).wait()
+                    # self._saveStack("cell without nucleus")
+                    # ppip.pipetteDevice.focusTip('slow').wait()
                     # homeFut.wait()
 
                     # collect the nucleus
@@ -212,18 +213,29 @@ class Autopatcher:
 
     def _autopatchFindCell(self):
         win = self._window
-        if not win._unranked_cells:
+        # Keep imaging survey tiles until one yields a cell. An empty field of
+        # view is the common case, so it must advance to the next tile rather than
+        # end the survey; we only give up (return None) when nextTile() reports the
+        # region is fully imaged, there's no region, or we're out of cells.
+        while not win._unranked_cells:
             if self._outOfCells():
                 set_state("Autopatch: reached end of cell list; stopping")
                 return None
+            if not win._surveyRegion.hasRegion():
+                set_state("Autopatch: add a survey region to search for cells")
+                return None
+            center = run_in_gui_thread(win._surveyRegion.nextTile)
+            if center is None:
+                set_state("Autopatch: survey region fully imaged; stopping")
+                return None
+            set_state("Autopatch: moving to next survey tile")
+            win.scopeDevice.setGlobalPosition(center, name="autopatch survey move").wait()
             set_state("Autopatch: searching for cells")
             surf = win.cameraDevice.scopeDev.findSurfaceDepth(win.cameraDevice)
             win.cameraDevice.setFocusDepth(surf - 60e-6, "fast").wait()
             fut = win._detector._detectNeuronsZStack()
             fut.sigFinished.connect(win._detector._handleDetectResults)  # adds to win._unranked_cells
             fut.wait(timeout=600)
-            if not win._unranked_cells:
-                return None
 
         set_state("Autopatch: checking selected cell")
         cell = win._unranked_cells.pop(0)

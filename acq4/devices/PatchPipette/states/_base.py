@@ -408,7 +408,7 @@ class PatchPipetteState(QtFriendlyTask):
             self.dev.cell.enableTracking(False, reason=reason)
             # wait on future until it stops
             try:
-                fut.wait(None)
+                fut.wait()
             except Stopped:
                 pass
 

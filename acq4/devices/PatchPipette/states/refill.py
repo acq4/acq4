@@ -96,8 +96,7 @@ class RefillState(PatchPipetteState):
                 self._runClogMitigation(dev, sonication_protocol, mitigation_pressure, mitigation_duration)
 
         dev.pressureDevice.setPressure(source='atmosphere', pressure=0)
-        task2 = pip.goHome()
-        task2.wait(None)
+        pip.goHome().wait()
         dev.pipetteRecord()['refillCount'] = dev.pipetteRecord().get('refillCount', 0) + 1
         return {'state': config['nextState']}
 
@@ -113,7 +112,7 @@ class RefillState(PatchPipetteState):
             sleep(duration)
 
         if sonication is not None and not sonication.is_done:
-            sonication.wait(None)
+            sonication.wait()
 
         self.setState('refilling pipette')
 
