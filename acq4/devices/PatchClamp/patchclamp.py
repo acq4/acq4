@@ -1,11 +1,15 @@
+import time
+
 import numpy as np
 from typing import Literal
 
+from acq4.Manager import getManager
 from acq4.devices.Device import Device
 from acq4.devices.PatchClamp.gui import PatchClampDeviceGui
 from acq4.devices.PatchClamp.testpulse import TestPulseThread
 from acq4.filetypes.MultiPatchLog import TEST_PULSE_NUMPY_DTYPE
 from acq4.util import Qt
+from neuroanalysis.stimuli import SquarePulse
 from neuroanalysis.test_pulse import PatchClampTestPulse
 
 
@@ -103,6 +107,45 @@ class PatchClamp(Device):
         if self._testPulseAnalysisOverrides:
             tp.analysis.update(self._testPulseAnalysisOverrides)
         return tp
+
+    def zap(self, duration=1e-3, amplitude=1.0):
+        """Apply a brief voltage pulse ("zap") on top of the current holding to help clear or
+        rupture the membrane.
+
+        The command waveform is generated at the device's own test-pulse sample rate.
+
+        Parameters
+        ----------
+        duration : float
+            Duration (seconds) of the zap pulse (default 1 ms).
+        amplitude : float
+            Amplitude (Volts in VC, Amps in IC) of the zap relative to the holding value
+            (default 1 V). 1 V is the conventional break-in "zap" amplitude in the patch-clamp
+            literature (e.g. Axon instrumentation); some protocols go higher (up to ~5 V) with
+            correspondingly briefer pulses. The default assumes VC; an IC zap would need a sane
+            current amplitude supplied explicitly.
+        """
+        sampleRate = self.testPulseConfig.get('sampleRate', 500000)
+        mode = self.getMode()
+        pad = 1e-3
+        total = pad + duration + pad
+        numPts = int(total * sampleRate)
+        square = SquarePulse(start_time=pad, duration=duration, amplitude=amplitude)
+        cmdData = square.eval(n_pts=numPts, t0=0, sample_rate=sampleRate).data + self.getHolding(mode)
+        daqName = self.getDAQName("primary")
+        cmd = {
+            'protocol': {'duration': total},
+            daqName: {'rate': sampleRate, 'numPts': numPts, 'downsample': 1},
+            self.name(): {'mode': mode, 'command': cmdData, 'stimulus': square},
+        }
+        task = getManager().createTask(cmd)
+        task.reserveDevices(reserver=f"{self.name()}.zap")
+        try:
+            task.execute()
+            while not task.isDone():
+                time.sleep(0.01)
+        finally:
+            task.releaseDevices()
 
     def autoPipetteOffset(self):
         """Automatically set the pipette offset.
