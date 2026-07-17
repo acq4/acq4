@@ -14,13 +14,15 @@ import pandas as pd
 
 from autopatch_log import STAGE_NAMES, Attempt
 
-# Funnel stages in order, paired with the Attempt boolean that marks reaching them.
+# Funnel stages in order, as (display stage, Attempt-boolean DataFrame column).
+# The funnel is rooted at ``approached`` -- attempts that never engaged a cell
+# (setup/cleaning cycles) are not real patch attempts and are excluded, so the
+# base of the funnel is the count of approached attempts, not all attempts.
 FUNNEL_STAGES = [
-    ("attempted", lambda a: True),
-    ("attempted_find", lambda a: a.attempted_find),
-    ("found_cell", lambda a: a.found_cell),
-    ("sealed", lambda a: a.sealed),
-    ("broke_in", lambda a: a.broke_in),
+    ("approached", "attempted_find"),
+    ("found_cell", "found_cell"),
+    ("sealed", "sealed"),
+    ("broke_in", "broke_in"),
 ]
 
 
@@ -90,19 +92,23 @@ def attempts_to_dataframe(attempts: Iterable[Attempt]) -> pd.DataFrame:
 def funnel_counts(df: pd.DataFrame) -> pd.DataFrame:
     """Counts and conversion percentages at each funnel stage.
 
-    ``pct_of_attempts`` is the share of all attempts reaching a stage;
+    The funnel is rooted at ``approached`` (attempts that engaged a cell), so
+    never-approached attempts are excluded even if they are present in ``df``.
+    ``pct_of_approached`` is the share of approached attempts reaching a stage;
     ``conversion_from_prev`` is the share of the previous stage that advanced.
     """
-    total = len(df)
+    approached = int(df["attempted_find"].sum()) if len(df) else 0
     rows = []
     prev = None
-    for name, _pred in FUNNEL_STAGES:
-        count = int(df[name].sum()) if name != "attempted" else total
+    for stage, column in FUNNEL_STAGES:
+        count = int(df[column].sum()) if len(df) else 0
         rows.append(
             {
-                "stage": name,
+                "stage": stage,
                 "count": count,
-                "pct_of_attempts": (100.0 * count / total) if total else 0.0,
+                "pct_of_approached": (
+                    (100.0 * count / approached) if approached else 0.0
+                ),
                 "conversion_from_prev": (100.0 * count / prev) if prev else 100.0,
             }
         )
@@ -139,12 +145,55 @@ def state_dwell_times(attempts: Iterable[Attempt]) -> pd.DataFrame:
     return agg
 
 
+# Columns of the state-timeline table, so an empty run still yields a
+# well-formed (column-bearing) DataFrame.
+TIMELINE_COLUMNS = [
+    "folder",
+    "cell_dir",
+    "device",
+    "attempt_index",
+    "state",
+    "t_start",
+    "t_end",
+]
+
+
+def state_timeline(attempts: Iterable[Attempt]) -> pd.DataFrame:
+    """Long-form (folder, device, state, t_start, t_end) spans for a Gantt view.
+
+    One row per state interval of every attempt, keyed by ``folder`` (the
+    directory holding the log). Times are absolute (epoch seconds); the notebook
+    rebases them per folder. This intentionally includes non-approached attempts
+    so the idle time trimmed from the active-time window stays visible.
+    """
+    rows = []
+    for a in attempts:
+        folder = os.path.dirname(a.source)
+        cell_dir = os.path.basename(folder)
+        for state, t0, t1 in a.state_intervals():
+            rows.append(
+                {
+                    "folder": folder,
+                    "cell_dir": cell_dir,
+                    "device": a.device,
+                    "attempt_index": a.index,
+                    "state": state,
+                    "t_start": t0,
+                    "t_end": t1,
+                }
+            )
+    return pd.DataFrame(rows, columns=TIMELINE_COLUMNS)
+
+
 def throughput(df: pd.DataFrame) -> pd.Series:
     """Run-level throughput: active time, attempt and whole-cell rates.
 
-    Rates use ``active_hours`` -- the summed span of each log file -- rather than
-    the global first-to-last span, so pointing at logs recorded on different days
-    doesn't count the idle gaps between runs against the rate.
+    Rates use ``active_hours`` -- the summed per-log span of the attempts in
+    ``df`` -- rather than the global first-to-last span, so pointing at logs
+    recorded on different days doesn't count the idle gaps between runs against
+    the rate. Pass the approached attempts (see ``approached_attempts``) so this
+    span covers only the autopatch demo's active window and not the pipette
+    setup/cleaning idle before the first cell or after the last.
     """
     if df.empty:
         return pd.Series(dtype=float)
@@ -191,6 +240,7 @@ __all__ = [
     "funnel_counts",
     "failure_mode_counts",
     "state_dwell_times",
+    "state_timeline",
     "throughput",
     "cumulative_whole_cells",
 ]

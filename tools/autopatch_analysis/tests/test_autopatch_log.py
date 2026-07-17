@@ -135,6 +135,27 @@ def test_never_found_cell(tmp_path):
     assert a.outcome == "clean"
 
 
+def test_approached_attempts_filters_out_never_approached(tmp_path):
+    # idx0 never gets past bath/clean; idx1 seals (so it approached a cell)
+    path = _write(
+        tmp_path,
+        [
+            _attempt_marker(0.0),
+            _state(1.0, "bath", "out"),
+            _state(2.0, "clean", "bath"),
+            _attempt_marker(10.0),
+            _state(11.0, "bath", "out"),
+            _state(12.0, "seal", "bath"),
+            _state(13.0, "fouled", "seal"),
+        ],
+    )
+    attempts = al.load_log(path)
+    assert len(attempts) == 2
+    approached = al.approached_attempts(attempts)
+    assert [a.index for a in approached] == [1]
+    assert all(a.attempted_find for a in approached)
+
+
 def test_multiple_devices_are_separated(tmp_path):
     path = _write(
         tmp_path,

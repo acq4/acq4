@@ -267,6 +267,17 @@ def load_log(path: str) -> list[Attempt]:
     return attempts
 
 
+def approached_attempts(attempts: Iterable[Attempt]) -> list[Attempt]:
+    """Keep only attempts that actually engaged a cell (reached the approach stage).
+
+    Attempts that never progress past out/bath/clean/fouled (``best_stage ==
+    ATTEMPTED``) are pipette setup and cleaning cycles, not real patch attempts
+    on a cell. They are excluded so the demo analysis (funnel, throughput,
+    active time) reflects only cells the rig actually tried to patch.
+    """
+    return [a for a in attempts if a.attempted_find]
+
+
 def find_logs(roots: Iterable[str]) -> list[str]:
     """Recursively find MultiPatch_*.log files under ``roots`` (case-insensitive)."""
     found = []
