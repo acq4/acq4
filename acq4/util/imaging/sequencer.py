@@ -443,6 +443,7 @@ def acquire_z_stack(
             with man.reserveDevices(imager.devicesToReserve(), timeout=device_reservation_timeout, reserver="acquire_z_stack"):
                 frames = _stepped_z_stack(imager, start, stop, step, name)
     _fix_frame_transforms(frames, step)
+    stamp_surface_depth(frames, imager.scopeDev.getSurfaceDepth())
     return frames
 
 
@@ -458,6 +459,18 @@ def _fix_frame_transforms(frames, z_step):
         m[:, 2] = z_vector
         xform.matrix = m  # use the setter so the change is stored
         f.addInfo(transform=xform)
+
+
+def stamp_surface_depth(frames: list[Frame], surface_depth: "float | None") -> None:
+    """Record the sample surface depth on every frame's info dict.
+
+    The surface is the plane along which the sample was cut; storing its global z
+    position (meters) in each acquired stack lets downstream analysis compute a
+    feature's depth below the surface. ``surface_depth`` is whatever the
+    microscope currently reports and may be None if no surface has been marked.
+    """
+    for frame in frames:
+        frame.addInfo(surfaceDepth=surface_depth)
 
 
 class ImageSequencerCtrl(Qt.QWidget):
