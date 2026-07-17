@@ -3,6 +3,7 @@
 Fixtures use real event-line shapes copied from actual MultiPatch_*.log files.
 """
 
+import math
 import os
 import sys
 
@@ -133,6 +134,101 @@ def test_never_found_cell(tmp_path):
     assert not a.attempted_find
     assert not a.found_cell
     assert a.outcome == "clean"
+
+
+def test_outcome_ignores_earlier_reset_states(tmp_path):
+    # Ends in a progress state after starting in bath; must report the progress
+    # state, not the earlier bath reset state.
+    path = _write(
+        tmp_path,
+        [
+            _state(0.0, "bath", "out"),
+            _state(5.0, "approach", "bath"),
+            _state(10.0, "seal", "approach"),
+        ],
+    )
+    a = al.load_log(path)[0]
+    assert a.outcome == "seal"
+
+
+def test_outcome_is_last_non_reset_state(tmp_path):
+    # A failure (broken) followed by a bath reset gives up in 'broken'.
+    path = _write(
+        tmp_path,
+        [
+            _state(0.0, "bath", "out"),
+            _state(5.0, "approach", "bath"),
+            _state(10.0, "broken", "approach"),
+            _state(15.0, "bath", "broken"),
+        ],
+    )
+    a = al.load_log(path)[0]
+    assert a.outcome == "broken"
+
+
+def test_outcome_only_reset_states_falls_back_to_final_state(tmp_path):
+    path = _write(tmp_path, [_state(0.0, "bath", "out"), _state(5.0, "out", "bath")])
+    a = al.load_log(path)[0]
+    assert a.outcome == "out"
+
+
+def test_outcome_no_states(tmp_path):
+    a = al.Attempt(
+        source="x", device="PatchPipette1", index=0, start_time=0.0, end_time=0.0
+    )
+    assert a.outcome == "no states"
+
+
+def test_max_seal_resistance_ignores_nan(tmp_path):
+    # A NaN test-pulse value must not defeat the real gigaohm reading.
+    a = al.Attempt(
+        source="x",
+        device="PatchPipette1",
+        index=0,
+        start_time=0.0,
+        end_time=40.0,
+        states=[(0.0, "bath"), (10.0, "seal")],
+        test_pulses=[
+            {"event_time": 15.0, "steady_state_resistance": float("nan")},
+            {"event_time": 20.0, "steady_state_resistance": 1.2e9},
+        ],
+    )
+    assert a.max_seal_resistance == pytest.approx(1.2e9)
+    assert a.gigaseal is True
+
+
+def test_whole_cell_stat_ignores_nan(tmp_path):
+    a = al.Attempt(
+        source="x",
+        device="PatchPipette1",
+        index=0,
+        start_time=0.0,
+        end_time=40.0,
+        states=[(0.0, "whole cell")],
+        test_pulses=[
+            {"event_time": 10.0, "access_resistance": float("nan")},
+            {"event_time": 20.0, "access_resistance": 12e6},
+        ],
+    )
+    assert a.access_resistance == pytest.approx(12e6)
+    assert math.isfinite(a.access_resistance)
+
+
+def test_whole_cell_stat_is_true_median_for_even_length(tmp_path):
+    a = al.Attempt(
+        source="x",
+        device="PatchPipette1",
+        index=0,
+        start_time=0.0,
+        end_time=40.0,
+        states=[(0.0, "whole cell")],
+        test_pulses=[
+            {"event_time": 10.0, "access_resistance": 10e6},
+            {"event_time": 20.0, "access_resistance": 20e6},
+        ],
+    )
+    # true median of [10e6, 20e6] is 15e6, not the upper-middle element (20e6)
+    assert a.access_resistance == pytest.approx(15e6)
 
 
 def test_approached_attempts_filters_out_never_approached(tmp_path):

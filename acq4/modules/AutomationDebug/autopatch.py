@@ -213,7 +213,11 @@ class Autopatcher:
 
     def _autopatchFindCell(self):
         win = self._window
-        if not win._unranked_cells:
+        # Keep imaging survey tiles until one yields a cell. An empty field of
+        # view is the common case, so it must advance to the next tile rather than
+        # end the survey; we only give up (return None) when nextTile() reports the
+        # region is fully imaged, there's no region, or we're out of cells.
+        while not win._unranked_cells:
             if self._outOfCells():
                 set_state("Autopatch: reached end of cell list; stopping")
                 return None
@@ -232,8 +236,6 @@ class Autopatcher:
             fut = win._detector._detectNeuronsZStack()
             fut.sigFinished.connect(win._detector._handleDetectResults)  # adds to win._unranked_cells
             fut.wait(timeout=600)
-            if not win._unranked_cells:
-                return None
 
         set_state("Autopatch: checking selected cell")
         cell = win._unranked_cells.pop(0)

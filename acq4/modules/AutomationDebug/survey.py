@@ -61,6 +61,16 @@ def plan_grid(
     return grid
 
 
+def _is_visited(
+    cx: float,
+    cy: float,
+    visited: list[tuple[float, float]],
+    threshold: float,
+) -> bool:
+    """Whether ``(cx, cy)`` lies within ``threshold`` of any visited center."""
+    return any(math.hypot(cx - vx, cy - vy) < threshold for vx, vy in visited)
+
+
 def select_next(
     grid: list[tuple[float, float]],
     visited: list[tuple[float, float]],
@@ -71,7 +81,7 @@ def select_next(
     Returns None when every planned tile has already been imaged.
     """
     for cx, cy in grid:
-        if not any(math.hypot(cx - vx, cy - vy) < threshold for vx, vy in visited):
+        if not _is_visited(cx, cy, visited, threshold):
             return (cx, cy)
     return None
 
@@ -82,11 +92,7 @@ def count_covered(
     threshold: float,
 ) -> int:
     """Number of centers in ``grid`` within ``threshold`` of some visited center."""
-    return sum(
-        1
-        for cx, cy in grid
-        if any(math.hypot(cx - vx, cy - vy) < threshold for vx, vy in visited)
-    )
+    return sum(1 for cx, cy in grid if _is_visited(cx, cy, visited, threshold))
 
 
 class SurveyRegion:
@@ -133,7 +139,10 @@ class SurveyRegion:
         self.clearRegion()
         cam = self._window.cameraDevice
         fov_w, fov_h = self._fov()
-        cx, cy = cam.globalCenterPosition()[:2]
+        # Center in "roi" mode so the default rectangle matches the imaged field:
+        # _fov() and detection use mode="roi", so this must too (globalCenterPosition
+        # defaults to mode="sensor", which is off-center for a cropped camera ROI).
+        cx, cy = cam.globalCenterPosition("roi")[:2]
         w, h = fov_w * 3, fov_h * 3
         pos = (cx - w / 2, cy - h / 2)
         roi = pg.RectROI(pos, (w, h), pen=pg.mkPen("y", width=2), removable=False)
@@ -149,6 +158,10 @@ class SurveyRegion:
     def clearRegion(self):
         """Remove the survey rectangle and forget imaged-tile progress."""
         if self._roi is not None:
+            try:
+                self._roi.sigRegionChanged.disconnect(self._window._refreshSurveyStats)
+            except (TypeError, RuntimeError):
+                pass
             self._cameraWindow().removeItem(self._roi)
             self._roi = None
         self._visited = []

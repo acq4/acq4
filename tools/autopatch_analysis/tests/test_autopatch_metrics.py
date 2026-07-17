@@ -78,6 +78,24 @@ def test_funnel_is_based_on_approached_not_all_attempts():
     assert funnel.loc["broke_in", "conversion_from_prev"] == pytest.approx(50.0)
 
 
+def test_funnel_conversion_from_zero_prev_is_zero():
+    # A single attempt that approached but never found a cell: found_cell count
+    # is 0, so sealed/broke_in have a zero-count predecessor. Their conversion
+    # from the previous stage must be 0.0, not 100.0.
+    attempts = [_attempt(0, [(0.0, "bath"), (1.0, "approach")])]
+    df = am.attempts_to_dataframe(attempts)
+    funnel = am.funnel_counts(df).set_index("stage")
+    assert funnel.loc["approached", "count"] == 1
+    assert funnel.loc["found_cell", "count"] == 0
+    assert funnel.loc["sealed", "count"] == 0
+    # first stage is always 100%; downstream stages with a 0-count predecessor
+    # convert at 0%, not 100%.
+    assert funnel.loc["approached", "conversion_from_prev"] == pytest.approx(100.0)
+    assert funnel.loc["found_cell", "conversion_from_prev"] == pytest.approx(0.0)
+    assert funnel.loc["sealed", "conversion_from_prev"] == pytest.approx(0.0)
+    assert funnel.loc["broke_in", "conversion_from_prev"] == pytest.approx(0.0)
+
+
 def test_state_timeline_spans_per_folder():
     attempts = _sample_attempts()
     tl = am.state_timeline(attempts)

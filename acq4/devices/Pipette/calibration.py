@@ -185,9 +185,8 @@ def scan_pipette_z_stack(pipette, imager=None, z_range=50e-6, z_step=5e-6, show=
         pipette_angle = np.arctan2(-image_dir[0], image_dir[1]) * 180 / np.pi
         px_size = frame.info()["pixelSize"][0]
 
-        result = do_pipette_tip_detection(img, pipette_angle, px_size, show=False)
-        image_pos_rc, z_um, confidence = result[:3]
-        heatmap = result[3].get('cropped_heatmap') if len(result) > 3 else None
+        image_pos_rc, z_um, confidence, _locals = do_pipette_tip_detection(img, pipette_angle, px_size, show=False)
+        heatmap = _locals.get('cropped_heatmap')
 
         tip_pos = frame.mapFromFrameToGlobal(pg.Vector(image_pos_rc))
         global_positions.append((tip_pos.x(), tip_pos.y(), tip_pos.z() + z_um * 1e-6))
