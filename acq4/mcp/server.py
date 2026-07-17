@@ -12,6 +12,7 @@ import json
 from typing import Optional
 
 from acq4.mcp.connection import ConnectionManager, NotConnectedError
+from acq4.mcp.ssh_tunnel import SSHTunnelManager
 
 # One connection manager for the life of the server process; the active ACQ4 target is
 # chosen and can be re-pointed at runtime through the connect_acq4 tool. Constructed
@@ -26,6 +27,10 @@ def _get_connection() -> ConnectionManager:
     if _connection is None:
         _connection = ConnectionManager()
     return _connection
+
+
+# Tracks SSH tunnels opened via connect_via_ssh for the life of the server process.
+_tunnels = SSHTunnelManager()
 
 
 def _format_execute(result: dict) -> str:
@@ -70,6 +75,36 @@ def build_server():
         return json.dumps(_get_connection().connect(port, host), indent=2, default=str)
 
     @server.tool()
+    def connect_via_ssh(
+        target: str, remote_port: int, local_port: Optional[int] = None
+    ) -> str:
+        """Open an SSH tunnel to a remote rig and connect to its ACQ4 in one step.
+
+        Example: connect_via_ssh("minirig", 40104) for an ACQ4 started with
+        `--teleprox 40104` on host `minirig`. `target` is anything ssh accepts — a
+        ~/.ssh/config alias, `user@host`, etc. A free local port is chosen unless you
+        pass local_port. Spawns `ssh -N -L <local>:127.0.0.1:<remote_port> <target>`,
+        waits for it, then connect_acq4 on the local end. Returns the rig identity
+        summary. Reuses an existing tunnel for the same target/port.
+        """
+        try:
+            port = _tunnels.open(target, remote_port, local_port=local_port)
+        except RuntimeError as exc:
+            return f"SSH tunnel failed: {exc}"
+        try:
+            info = _connection.connect(port)
+        except Exception as exc:
+            _tunnels.close(target)
+            return f"Connected tunnel but ACQ4 connect failed: {exc}"
+        return json.dumps(info, indent=2, default=str)
+
+    @server.tool()
+    def disconnect_ssh(target: Optional[str] = None) -> str:
+        """Close the SSH tunnel for `target` (or all tunnels if omitted)."""
+        closed = _tunnels.close(target)
+        return json.dumps({"closed": closed}, indent=2)
+
+    @server.tool()
     def execute_code(
         code: str,
         gui_thread: bool = False,
@@ -79,9 +114,10 @@ def build_server():
     ) -> str:
         """Execute arbitrary Python inside the running ACQ4 process and return its output.
 
-        The code runs in a fresh namespace (nothing persists between calls) seeded with
-        `man` (the ACQ4 Manager, via getManager()) and `acq4`. Captured stdout/stderr,
-        the value of a trailing expression (repr), and any traceback are returned.
+        The code runs in a persistent namespace shared across calls (variables persist;
+        call reset_namespace to clear it). The namespace is seeded with `man` (the ACQ4
+        Manager, via getManager()) and `acq4`. Captured stdout/stderr, the value of a
+        trailing expression (repr), and any traceback are returned.
 
         SAFETY -- read this before mutating anything: inspect freely, but obtain
         EXPLICIT USER APPROVAL before executing anything that changes running state or
@@ -108,6 +144,21 @@ def build_server():
         except NotConnectedError as exc:
             return f"Not connected: {exc}"
         return _format_execute(result)
+
+    @server.tool()
+    def reset_namespace(port: Optional[int] = None, host: Optional[str] = None) -> str:
+        """Clear the persistent execute_code namespace on the ACQ4 side.
+
+        execute_code shares one long-lived namespace across calls (variables persist).
+        Call this to discard all of that accumulated state and start fresh; `man` and
+        `acq4` are re-seeded on the next execute_code call.
+        """
+        try:
+            return json.dumps(
+                _connection.reset_namespace(port=port, host=host), indent=2, default=str
+            )
+        except NotConnectedError as exc:
+            return f"Not connected: {exc}"
 
     @server.tool()
     def list_devices(port: Optional[int] = None, host: Optional[str] = None) -> str:
@@ -155,6 +206,92 @@ def build_server():
         except NotConnectedError as exc:
             return f"Not connected: {exc}"
         return f"{log.get('path')}\n\n{log.get('text', '')}"
+
+    @server.tool()
+    def profile_functions(
+        seconds: float = 10.0,
+        top: int = 15,
+        port: Optional[int] = None,
+        host: Optional[str] = None,
+    ) -> str:
+        """Profile all-thread function calls for `seconds`; return the hottest functions.
+
+        Opens ACQ4's Profiler window if needed and collects there (visible to the human).
+        Observability only — adds profiling overhead but moves no hardware. Note: installs
+        setprofile across all threads; keep windows short on a busy rig.
+        """
+        try:
+            return json.dumps(
+                _connection.profile_functions(
+                    seconds=seconds, top=top, port=port, host=host
+                ),
+                indent=2,
+                default=str,
+            )
+        except NotConnectedError as exc:
+            return f"Not connected: {exc}"
+
+    @server.tool()
+    def memory_snapshot(
+        name: Optional[str] = None,
+        top: int = 15,
+        port: Optional[int] = None,
+        host: Optional[str] = None,
+    ) -> str:
+        """Take a guppy heap snapshot into the Profiler window and summarize it.
+
+        Repeated calls build a memory-over-time series; each call also reports heap growth
+        since the previous snapshot. Requires guppy3 on the rig.
+        """
+        try:
+            return json.dumps(
+                _connection.memory_snapshot(name=name, top=top, port=port, host=host),
+                indent=2,
+                default=str,
+            )
+        except NotConnectedError as exc:
+            return f"Not connected: {exc}"
+
+    @server.tool()
+    def profile_qt_events(
+        seconds: float = 10.0,
+        top: int = 15,
+        port: Optional[int] = None,
+        host: Optional[str] = None,
+    ) -> str:
+        """Profile the Qt event loop for `seconds`; return the busiest event types.
+
+        Requires ACQ4 started with --qt-profile; otherwise returns an error note.
+        """
+        try:
+            return json.dumps(
+                _connection.profile_qt_events(
+                    seconds=seconds, top=top, port=port, host=host
+                ),
+                indent=2,
+                default=str,
+            )
+        except NotConnectedError as exc:
+            return f"Not connected: {exc}"
+
+    @server.tool()
+    def health_series(
+        seconds: float = 10.0,
+        interval: float = 1.0,
+        port: Optional[int] = None,
+        host: Optional[str] = None,
+    ) -> str:
+        """Sample CPU/memory/Qt-activity/event-loop-latency over `seconds` and return the series."""
+        try:
+            return json.dumps(
+                _connection.health_series(
+                    seconds=seconds, interval=interval, port=port, host=host
+                ),
+                indent=2,
+                default=str,
+            )
+        except NotConnectedError as exc:
+            return f"Not connected: {exc}"
 
     return server
 

@@ -28,6 +28,36 @@ def _build_namespace() -> dict:
     return {"__name__": "__acq4_mcp__", "acq4": acq4, "man": man}
 
 
+_PERSISTENT_NS = None
+
+
+def _get_namespace() -> dict:
+    """Return the process-global persistent exec namespace, building it on first use.
+
+    State set by one execute() call is visible to the next. `man` is re-resolved when it
+    was None (no Manager existed at build time) so it heals once a Manager appears,
+    without disturbing user-defined variables. Call reset_namespace() to start clean.
+    """
+    global _PERSISTENT_NS
+    if _PERSISTENT_NS is None:
+        _PERSISTENT_NS = _build_namespace()
+    if _PERSISTENT_NS.get("man") is None:
+        import acq4
+
+        try:
+            _PERSISTENT_NS["man"] = acq4.getManager()
+        except Exception:
+            pass
+    return _PERSISTENT_NS
+
+
+def reset_namespace() -> dict:
+    """Discard the persistent exec namespace so the next execute() starts fresh."""
+    global _PERSISTENT_NS
+    _PERSISTENT_NS = None
+    return {"reset": True}
+
+
 def _exec_and_capture(code: str, namespace: dict) -> dict:
     """Exec *code* in *namespace*, capturing stdout/stderr and the trailing expression.
 
@@ -73,8 +103,9 @@ def execute(code: str, gui_thread: bool = False) -> dict:
     The dict has keys: stdout, stderr, result (repr of the trailing expression or None),
     and traceback (a formatted string, or None on success).
 
-    A fresh namespace is built for every call (no state persists between calls), seeded
-    with `man` (the Manager) and `acq4`.
+    A single persistent namespace is shared across calls (state persists); call
+    reset_namespace() to clear it. The namespace is seeded with `man` (the Manager) and
+    `acq4`.
 
     gui_thread selects where the code runs:
 
@@ -85,7 +116,7 @@ def execute(code: str, gui_thread: bool = False) -> dict:
       until it returns. Use this ONLY for fast, non-blocking access to Qt widgets/objects
       or GUI state. Touching Qt objects from another thread risks a segfault.
     """
-    namespace = _build_namespace()
+    namespace = _get_namespace()
 
     def run():
         return _exec_and_capture(code, namespace)
@@ -102,6 +133,124 @@ def _manager():
     import acq4
 
     return acq4.getManager()
+
+
+def _profiler_tabs():
+    """Return the live Profiler module's ProfilerTabs widget, loading it if needed.
+
+    Loads the `Profiler` module (opening its window) when it is not already loaded, so
+    profiling data collects into the same window the human sees. Must be called on the
+    GUI thread.
+    """
+    man = _manager()
+    for name in man.listModules():
+        mod = man.getModule(name)
+        if type(mod).__name__ == "Profiler" and hasattr(mod, "profiler_tabs"):
+            return mod.profiler_tabs
+    mod = man.loadModule("Profiler")
+    return mod.profiler_tabs
+
+
+def _top_functions(function_lookup, top=15):
+    """Rank functions in a ProfileAnalyzer lookup by summed call duration (desc).
+
+    function_lookup maps a function_key to {"calls": [CallRecord, ...]}. Pure: takes only
+    the lookup dict so it is testable without a live profile.
+    """
+    rows = []
+    for calls in (data["calls"] for data in function_lookup.values()):
+        durations = [c.duration for c in calls if c.duration is not None]
+        if not durations:
+            continue
+        first = calls[0]
+        rows.append(
+            {
+                "function": first.display_name,
+                "filename": first.filename,
+                "lineno": first.lineno,
+                "n_calls": len(durations),
+                "total_seconds": sum(durations),
+            }
+        )
+    rows.sort(key=lambda r: r["total_seconds"], reverse=True)
+    return rows[:top]
+
+
+def profile_functions(seconds=10.0, top=15):
+    """Profile all-thread function calls for `seconds`, return the hottest functions.
+
+    Drives the live Profiler window's function profiler (opening it if needed), so the
+    same call tree is visible to the human. Must run off the GUI thread (it sleeps for
+    the profiling window); the start/stop touch the widget via run_in_gui_thread.
+    """
+    import time
+
+    from acq4.util import task
+    from rtprofile.profiler import ProfileAnalyzer
+
+    tabs = task.run_in_gui_thread(_profiler_tabs)
+    fp = tabs.function_profiler
+    if not hasattr(fp, "start_session"):
+        return {
+            "error": "Installed rtprofile lacks the headless start_session API; update rtprofile."
+        }
+    task.run_in_gui_thread(fp.start_session, None, None)
+    time.sleep(seconds)
+    result = task.run_in_gui_thread(fp.stop_session)
+    analyzer = ProfileAnalyzer(result.profile)
+    return {
+        "session": result.name,
+        "duration_seconds": result.profile_duration,
+        "top_functions": _top_functions(analyzer.build_function_lookup(), top=top),
+    }
+
+
+def _summarize_heap(heap_stats, top=15):
+    """Summarize a guppy heap (or heap diff): total bytes and the top types by size.
+
+    Pure aside from reading the guppy object's `.size`/`.bytype` interface, so it is
+    testable with a fake exposing those.
+    """
+    by_type = heap_stats.bytype
+    rows = []
+    for i in range(min(top, len(by_type))):
+        stat = by_type[i]
+        rows.append({"type": str(stat.kind), "count": stat.count, "bytes": stat.size})
+    return {"total_bytes": heap_stats.size, "top_types": rows}
+
+
+def memory_snapshot(name=None, top=15):
+    """Take a guppy heap snapshot into the live Profiler window and summarize it.
+
+    Repeated calls accumulate snapshots in the window (the memory-over-time series). When
+    a prior snapshot exists, `growth` summarizes the heap increase since the last one.
+    Must run on the GUI thread path via run_in_gui_thread (touches the widget).
+    """
+    from acq4.util import task
+
+    tabs = task.run_in_gui_thread(_profiler_tabs)
+    mp = tabs.memory_profiler
+    if not hasattr(mp, "take_snapshot"):
+        return {
+            "error": "Installed rtprofile lacks the headless take_snapshot API; update rtprofile."
+        }
+    previous = mp.snapshots[-1] if mp.snapshots else None
+    try:
+        snapshot = task.run_in_gui_thread(mp.take_snapshot, name)
+    except RuntimeError as exc:
+        return {"error": str(exc)}
+    if not snapshot.is_valid:
+        return {"name": snapshot.name, "error": snapshot.error_message}
+    out = {
+        "name": snapshot.name,
+        "snapshot": _summarize_heap(snapshot.heap_stats, top=top),
+    }
+    if previous is not None and previous.is_valid:
+        out["growth_since"] = previous.name
+        out["growth"] = _summarize_heap(
+            snapshot.heap_stats - previous.heap_stats, top=top
+        )
+    return out
 
 
 def instance_info() -> dict:
@@ -178,6 +327,60 @@ def manager_state() -> dict:
         "device_count": len(man.listDevices()),
         "config_keys": list(getattr(man, "config", {}).keys()),
     }
+
+
+def health_series(seconds=10.0, interval=1.0):
+    """Sample CPU/memory/Qt-activity/event-loop-latency every `interval` for `seconds`.
+
+    Returns a time series. Must run off the GUI thread (it sleeps between samples);
+    latency is a GUI-thread round-trip timing per sample.
+    """
+    import time
+
+    from acq4.util import task
+    from acq4.util.Qt import QApplication
+    from acq4.util.resource_monitor import sample_resources
+
+    app = QApplication.instance()
+    samples = []
+    start = time.perf_counter()
+    n = max(1, int(seconds / interval))
+    for _ in range(n):
+        t0 = time.perf_counter()
+        task.run_in_gui_thread(lambda: None)  # measure GUI-thread responsiveness
+        latency_ms = (time.perf_counter() - t0) * 1000
+        sample = sample_resources(app=app)
+        sample["t"] = time.perf_counter() - start
+        sample["latency_ms"] = latency_ms
+        samples.append(sample)
+        time.sleep(interval)
+    return {"interval": interval, "samples": samples}
+
+
+def profile_qt_events(seconds=10.0, top=15):
+    """Profile the Qt event loop for `seconds`; return the busiest event types.
+
+    Requires ACQ4 started with --qt-profile (ProfiledQApplication); otherwise returns an
+    error dict. Drives the live Profiler window's Qt tab.
+    """
+    import time
+
+    from acq4.util import task
+
+    tabs = task.run_in_gui_thread(_profiler_tabs)
+    qp = tabs.qt_profiler
+    if not hasattr(qp, "start_session"):
+        return {
+            "error": "Installed rtprofile lacks the headless start_session API; update rtprofile."
+        }
+    try:
+        task.run_in_gui_thread(qp.start_session, None, False)
+    except RuntimeError as exc:
+        return {"error": str(exc)}
+    time.sleep(seconds)
+    profile = task.run_in_gui_thread(qp.stop_session)
+    stats = profile.get_statistics(group_by="type")
+    return {"session": profile.name, "top_events": stats[:top]}
 
 
 def get_log(lines: int = 50) -> dict:
