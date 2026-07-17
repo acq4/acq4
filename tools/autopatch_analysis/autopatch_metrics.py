@@ -109,7 +109,13 @@ def funnel_counts(df: pd.DataFrame) -> pd.DataFrame:
                 "pct_of_approached": (
                     (100.0 * count / approached) if approached else 0.0
                 ),
-                "conversion_from_prev": (100.0 * count / prev) if prev else 100.0,
+                # first stage is 100% by definition; a downstream stage whose
+                # predecessor had zero attempts converts at 0%, not 100%.
+                "conversion_from_prev": (
+                    100.0
+                    if prev is None
+                    else (100.0 * count / prev if prev else 0.0)
+                ),
             }
         )
         prev = count

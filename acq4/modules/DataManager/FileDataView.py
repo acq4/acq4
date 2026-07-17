@@ -36,8 +36,8 @@ class FileDataView(Qt.QSplitter):
             self._current = fh
             self.displayMessage(
                 f"No file type could be detected for {fh.name()!r}.\n\n"
-                "A MultiPatch log must be named 'MultiPatch_*.log' (or have its "
-                "'__object_type__' recorded as 'MultiPatchLog' in the .index) to be "
+                "A MultiPatch log must be named like 'MultiPatch_*.log' (case-insensitive) "
+                "or have its '__object_type__' recorded as 'MultiPatchLog' in the .index to be "
                 "recognized by the data viewer."
             )
             return

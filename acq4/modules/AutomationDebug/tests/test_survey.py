@@ -7,7 +7,12 @@ a user-defined region one z-stack per tile.
 
 import math
 
-from acq4.modules.AutomationDebug.survey import count_covered, plan_grid, select_next
+from acq4.modules.AutomationDebug.survey import (
+    _is_visited,
+    count_covered,
+    plan_grid,
+    select_next,
+)
 
 
 def _covers(grid, x0, y0, x1, y1, fov_w, fov_h):
@@ -65,6 +70,19 @@ def test_grid_centered_over_rect():
     ys = sorted({round(cy, 6) for _, cy in grid})
     assert math.isclose((xs[0] + xs[-1]) / 2, 125.0)
     assert math.isclose((ys[0] + ys[-1]) / 2, 65.0)
+
+
+def test_is_visited_false_when_nothing_visited():
+    assert _is_visited(0.0, 0.0, visited=[], threshold=1.0) is False
+
+
+def test_is_visited_true_within_threshold():
+    # A visited center a hair off the query point still counts as imaged.
+    assert _is_visited(0.0, 0.0, visited=[(0.3, 0.0)], threshold=1.0) is True
+
+
+def test_is_visited_false_outside_threshold():
+    assert _is_visited(0.0, 0.0, visited=[(10.0, 0.0)], threshold=1.0) is False
 
 
 def test_select_next_returns_first_when_nothing_visited():
