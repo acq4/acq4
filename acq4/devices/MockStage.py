@@ -209,6 +209,11 @@ class MockMoveFuture(MoveFuture):
             self.resolve(None)
 
     def mockInterrupt(self):
+        # A cooperative stop is completed with Stopped by stop(); don't overwrite
+        # that with a RuntimeError, or callers suppressing Stopped see a spurious
+        # error. Only a non-stop interruption (e.g. a superseding move) fails.
+        if self.is_stopped:
+            return
         self.fail(RuntimeError('Move interrupted'))
 
 
