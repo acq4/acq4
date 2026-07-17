@@ -338,10 +338,18 @@ class SensapexMoveFuture(MoveFuture):
         """Complete this promise from the latest move request's outcome.
 
         A finished-but-interrupted move (or a missed target) fails with the
-        generated error message; otherwise the move succeeded. A stop is already
-        being completed via stop(), so resolve/fail here are harmless no-ops in
-        that case.
+        generated error message; otherwise the move succeeded.
+
+        A cooperative stop is a special case: the monitor thread polls
+        ``is_stopped`` independently of stop(), so it can reach here after stop()
+        has flagged the stop but before stop() has injected the ``Stopped``. If we
+        completed the promise here (with a ``RuntimeError`` built from our own
+        interrupt reason), that would win the idempotent-``_finish`` race and
+        callers stopping cooperatively would see a ``RuntimeError`` instead of the
+        ``Stopped`` they expect. So when stopped, leave completion to stop().
         """
+        if self.is_stopped:
+            return
         if self._moveReq.interrupted:
             self.fail(RuntimeError(self._generateErrorMessage()))
         else:
@@ -383,12 +391,10 @@ class SensapexMoveFuture(MoveFuture):
             if fractionComplete == 1.0:
                 break
 
-        if self._moveReq.interrupted or self.is_stopped:
-            # A stop is already completing this promise with Stopped via stop();
-            # otherwise an interrupted/missed move is a genuine failure.
-            self.fail(RuntimeError(self._generateErrorMessage()))
-        else:
-            self.resolve(None)
+        # Same completion rules as the single-request path: a cooperative stop is
+        # left for stop() to complete with Stopped, an interrupted/missed move is a
+        # genuine failure, and a clean finish resolves.
+        self._completeFromMoveReq()
 
     def _generateErrorMessage(self):
         # interrupted?

@@ -4,7 +4,7 @@ import numpy as np
 from gentletask import check_stop
 
 from acq4.util.debug import log_and_ignore_exception
-from acq4.util.task import sleep
+from acq4.util.task import sleep, Stopped
 from pyqtgraph.units import µm, MΩ
 from ._base import PatchPipetteState
 from .cell_detect import CellDetectAnalysis
@@ -52,6 +52,13 @@ class ContactCellState(PatchPipetteState):
         Threshold for change in resistance (Ohm) to detect broken pipette (default -1 MOhm)
     pipetteRecalibrationMaxChange : float
         Maximum allowed change in pipette position during recalibration before rejecting update (default 5 µm)
+    visualTargetTracking : bool
+        Whether to visually track the target cell during descent (default True)
+    minDetectionDistance : float
+        Minimum distance (m) from target before cell detection is considered; negative disables
+        the limit (default -1)
+    nextState : str
+        Name of the state to transition to once contact is established (default "seal")
     """
 
     stateName = 'contact cell'
@@ -96,84 +103,129 @@ class ContactCellState(PatchPipetteState):
     def run(self):
         config = self.config
         pip = self.dev.pipetteDevice
+        # Track how far setup got, so a stop/exception before the main loop is explained.
+        # This state has been observed being stopped within milliseconds of entry (before any
+        # setState fired), which looked like an immediate, unexplained bounce to the fallback.
+        phase = "starting"
 
-        # 1. Create new cell if needed
-        if self.dev.cell is None:
-            self.dev.newCell()
+        try:
+            self.setState("contact cell: initializing")
 
-        # 2. Start monitoring test pulses
-        self.monitorTestPulse()
+            # 1. Create new cell if needed
+            if self.dev.cell is None:
+                phase = "creating new cell"
+                self.dev.newCell()
 
-        # 3. Enable visual target tracking
-        self.startVisualTargetTracking(allow_refresh_reference=True)
+            # 2. Start monitoring test pulses
+            phase = "starting test pulse monitoring"
+            self.monitorTestPulse()
 
-        # 4. Move to target position + 7 µm in z
-        target = np.array(pip.targetPosition())
-        initial_pos = target.copy()
-        initial_pos[2] += config['initialApproachHeight']
-        self.setState("moving to initial approach position")
-        self._moveFuture = pip.moveToGlobalNoPlanning(initial_pos, speed=config['moveSpeed'], name='move to initial approach position')
-        self._moveFuture.wait()
-        self._moveFuture = None
+            # 3. Enable visual target tracking (only when requested and a cell exists).
+            #    newCell() silently leaves cell=None if acq4_automation is unavailable, so
+            #    guard explicitly instead of crashing into the fallback state with no message.
+            if config['visualTargetTracking']:
+                if self.dev.cell is None:
+                    self.setState(
+                        "visual target tracking unavailable (no cell assigned; is acq4_automation "
+                        "installed?); continuing descent without tracking"
+                    )
+                else:
+                    phase = "enabling visual target tracking"
+                    self.startVisualTargetTracking(allow_refresh_reference=True)
 
-        if config['findPipette']:
-            self.findPipetteTip(zstack=True)
-
-        self._startZ = pip.globalPosition()[2]
-        iterations = 0
-
-        # 5. Main descent loop
-        self.setState("descending toward cell")
-        while True:
-            check_stop()
-
-            # Process test pulses and check for broken tip
-            self.processAtLeastOneTestPulse()
-            if self._analysis.tip_is_broken():
-                self.dev.patchRecord()['detectedCell'] = False
-                return {"state": 'broken', "error": "Pipette break detected"}
-
-            # Check if cell membrane detected
-            if self._cellDetected():
-                if self._contactDepth is None:
-                    current_z = pip.globalPosition()[2]
-                    self._contactDepth = current_z
-                    self.setState("cell contact detected, continuing descent")
-                    self.dev.patchRecord()['detectedCell'] = True
-                    self.dev.patchRecord()['contactDepth'] = current_z
-
-            # Check if we should transition to seal
-            if self._contactDepth is not None:
-                current_z = pip.globalPosition()[2]
-                depth_past_contact = self._contactDepth - current_z
-                if depth_past_contact >= config['depthPastContact']:
-                    self.setState("reached target depth past contact")
-                    return {"state": config['nextState']}
-
-            # Check if we've traveled too far without contact
-            current_z = pip.globalPosition()[2]
-            total_descent = self._startZ - current_z
-            if total_descent >= config['maxTravelWithoutContact']:
-                self.setState("max travel reached without contact, giving up")
-                self.dev.patchRecord()['detectedCell'] = False
-                return {"state": config['fallbackState']}
-
-            # Get target xy from visual tracking (if available), keep stepping down in z
-            target_xy = pip.targetPosition()[:2]
-            iterations += 1
-            next_pos = np.array([
-                target_xy[0],
-                target_xy[1],
-                self._startZ - iterations * config['stepSize'],
-            ])
-
-            self._moveFuture = pip.moveToGlobalNoPlanning(next_pos, speed=config['moveSpeed'], name='contact cell descent step')
+            # 4. Move to target position + initial approach height in z
+            phase = "moving to initial approach position"
+            target = np.array(pip.targetPosition())
+            initial_pos = target.copy()
+            initial_pos[2] += config['initialApproachHeight']
+            self.setState("moving to initial approach position")
+            self._moveFuture = pip.moveToGlobalNoPlanning(initial_pos, speed=config['moveSpeed'], name='move to initial approach position')
             self._moveFuture.wait()
             self._moveFuture = None
 
-            # Wait between iterations
-            duration = config['stepInterval']
-            sleep(duration)
+            if config['findPipette']:
+                self.findPipetteTip(zstack=True)
+
+            self._startZ = pip.globalPosition()[2]
+            iterations = 0
+
+            # 5. Main descent loop
+            phase = "descending toward cell"
+            self.setState("descending toward cell")
+            while True:
+                check_stop()
+
+                # Process test pulses and check for broken tip
+                self.processAtLeastOneTestPulse()
+                if self._analysis.tip_is_broken():
+                    self.setState(f"{self.stateName} failed: pipette break detected")
+                    self.dev.patchRecord()['detectedCell'] = False
+                    return {"state": 'broken', "error": "Pipette break detected"}
+
+                # Check if cell membrane detected
+                if self._cellDetected():
+                    if self._contactDepth is None:
+                        current_z = pip.globalPosition()[2]
+                        self._contactDepth = current_z
+                        self.setState("cell contact detected, continuing descent")
+                        self.dev.patchRecord()['detectedCell'] = True
+                        self.dev.patchRecord()['contactDepth'] = current_z
+
+                # Check if we should transition to seal
+                if self._contactDepth is not None:
+                    current_z = pip.globalPosition()[2]
+                    depth_past_contact = self._contactDepth - current_z
+                    if depth_past_contact >= config['depthPastContact']:
+                        self.setState(f"reached target depth past contact; advancing to {config['nextState']}")
+                        return {"state": config['nextState']}
+
+                # Check if we've traveled too far without contact
+                current_z = pip.globalPosition()[2]
+                total_descent = self._startZ - current_z
+                if total_descent >= config['maxTravelWithoutContact']:
+                    self.setState(
+                        f"{self.stateName} failed: traveled "
+                        f"{total_descent * 1e6:0.1f} µm without contact; "
+                        f"falling back to {config['fallbackState']}"
+                    )
+                    self.dev.patchRecord()['detectedCell'] = False
+                    return {"state": config['fallbackState']}
+
+                # Get target xy from visual tracking (if available), keep stepping down in z
+                target_xy = pip.targetPosition()[:2]
+                iterations += 1
+                next_pos = np.array([
+                    target_xy[0],
+                    target_xy[1],
+                    self._startZ - iterations * config['stepSize'],
+                ])
+
+                self._moveFuture = pip.moveToGlobalNoPlanning(next_pos, speed=config['moveSpeed'], name='contact cell descent step')
+                self._moveFuture.wait()
+                self._moveFuture = None
+
+                # Wait between iterations
+                duration = config['stepInterval']
+                sleep(duration)
+        except Stopped as exc:
+            # Cooperative stop (state manager / device deactivated); let it propagate so the
+            # framework handles it normally without treating it as a failure. Log the phase and
+            # reason first: this state has been seen stopping almost immediately after entry,
+            # which without this leaves no trace of where/why the descent was aborted.
+            self.logger.info(f"contact cell stopped during phase {phase!r} (reason: {exc!r})")
+            raise
+        except Exception as exc:
+            # Any other error (e.g. failed move, tracker init, pipette recalibration) would
+            # otherwise fall through to the default fallback state with no explanation. Emit a
+            # clear message and route to the fallback state explicitly.
+            self.logger.exception(f"Unexpected error in contact cell state during phase {phase!r}")
+            self.setState(
+                f"{self.stateName} failed during {phase}: {type(exc).__name__}: {exc}; "
+                f"falling back to {config['fallbackState']}"
+            )
+            with log_and_ignore_exception(Exception, "Error recording failed cell detection"):
+                self.dev.patchRecord()['detectedCell'] = False
+            return {"state": config['fallbackState']}
 
     def processAtLeastOneTestPulse(self):
         tps = super().processAtLeastOneTestPulse()

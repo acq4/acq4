@@ -52,6 +52,7 @@ dependencies = [
 
 [project.optional-dependencies]
 nidaq = ["pydaqmx"]
+mcp = ["mcp"]
 micromanager = ["pymmcore"]
 sensapex = ["sensapex"]
 scientifica = ["pyserial"]
@@ -87,6 +88,9 @@ docs = [
     "Sphinx>=4.1.2",
     "sphinx-rtd-theme>=0.5.2",
 ]
+
+[project.scripts]
+acq4-mcp = "acq4.mcp.server:main"
 
 [project.urls]
 Homepage = "http://www.acq4.org"

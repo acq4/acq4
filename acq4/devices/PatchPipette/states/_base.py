@@ -147,11 +147,21 @@ class PatchPipetteState(QtFriendlyTask):
         # manager can connect signals before calling start(). QtFriendlyTask.__init__
         # initializes the QObject half, so anything that connects Qt signals (e.g.
         # sigTargetChanged below) must run AFTER this call.
+        #
+        # detach=True: a state job is a top-level task owned by the state manager,
+        # which stops it explicitly via stopJob(). It must NOT become a gentletask
+        # child of whatever task happens to be current when it is constructed. A
+        # state transition creates the next state's job from within the outgoing
+        # state's finish handling (current_task() is still the outgoing state), so
+        # without detach the new state registers as the outgoing state's child and
+        # is immediately cascade-stopped when that state stops — landing silently in
+        # its fallbackState before run() ever executes. Detaching breaks that link.
         QtFriendlyTask.__init__(
             self,
             self.runJob,
             name=f"State {self.stateName} for {dev}",
             start=False,
+            detach=True,
             on_finish=self._stateFinished,
         )
         self.dev: PatchPipette = dev
@@ -169,6 +179,11 @@ class PatchPipetteState(QtFriendlyTask):
         # indicates state that should be transitioned to next, if any.
         # This is usually set by the return value of run(), and must be invoked by the state manager.
         self.nextState = {"state": self.config.get('fallbackState', None)}
+        # True once run() returns normally (and thus actually chose nextState). If the state is
+        # stopped or raises before run() returns, this stays False and nextState keeps the
+        # fallback default above. The state manager logs this to explain *why* a state
+        # transitioned (a real choice vs. an unexplained fallback after an early stop).
+        self._runChoseNextState = False
         self.dev.sigTargetChanged.connect(self._onTargetChanged)
         self.dev.sigActiveChanged.connect(self._onActiveChanged)
 
@@ -180,7 +195,17 @@ class PatchPipetteState(QtFriendlyTask):
         error.
         """
         if isinstance(exc, Stopped):
-            self.dev.logger.debug(f"{self.stateName} stopped: {exc}")
+            # A stop *before* run() returned means the state never chose a next state; it will
+            # fall back to its default nextState (fallbackState). Log this at info so an
+            # unexpectedly short-lived state (e.g. immediately bounced to its fallback) is
+            # explained rather than silent.
+            if self._runChoseNextState:
+                self.dev.logger.debug(f"{self.stateName} stopped after choosing next state: {exc!r}")
+            else:
+                self.dev.logger.info(
+                    f"{self.stateName} stopped before choosing a next state (reason: {exc!r}); "
+                    f"will fall back to default next state {self.nextState.get('state')!r}"
+                )
         elif exc is not None:
             self.setState(f"Exception in {self.stateName}: {type(exc).__name__}: {exc}")
             self.dev.logger.error(
@@ -226,6 +251,7 @@ class PatchPipetteState(QtFriendlyTask):
 
                 # TODO: can we use the rval of the Future for this?
                 self.nextState = self.run()
+                self._runChoseNextState = True
 
         finally:
             # If run() called monitorTestPulse(), then we need to disconnect the signal here
@@ -388,9 +414,9 @@ class PatchPipetteState(QtFriendlyTask):
 
     def startVisualTargetTracking(self, allow_refresh_reference=True):
         cell = self.dev.cell
-        cell.allow_refresh_reference = allow_refresh_reference
         if cell is None:
             raise ValueError("Cannot visually track target; no cell is assigned to this pipette device.")
+        cell.allow_refresh_reference = allow_refresh_reference
         if not cell.isInitialized:
             cell.initializeTracker(self.dev.pipetteDevice.imagingDevice())
 

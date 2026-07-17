@@ -8,6 +8,7 @@ deriving how far each attempt progressed through the find/seal/break-in funnel.
 from __future__ import annotations
 
 import json
+import math
 import os
 from dataclasses import dataclass, field
 from typing import Any, Iterable
@@ -57,8 +58,10 @@ STATE_STAGE = {
     "collect": WHOLE_CELL,
 }
 
-# States that indicate an attempt has ended without a live whole-cell recording.
-FAILURE_STATES = frozenset({"broken", "fouled", "clean", "out", "bath", "blowout"})
+# Terminal reset states: the pipette parking in bath / out of the bath before or
+# after doing work. They are not a meaningful outcome, so ``outcome`` skips past
+# them to report the last state in which the attempt actually gave up.
+RESET_STATES = frozenset({"bath", "out"})
 
 
 def parse_log_events(path: str) -> list[dict[str, Any]]:
@@ -135,9 +138,10 @@ class Attempt:
         """'whole cell' on success, else the state the attempt gave up in."""
         if self.broke_in:
             return "whole cell"
-        # last failure/reset state entered, else the final state, else 'no states'
+        # last meaningful state entered (ignoring bath/out reset parking), else
+        # the final state if only reset states were seen, else 'no states'
         for _, state in reversed(self.states):
-            if state in FAILURE_STATES:
+            if state not in RESET_STATES:
                 return state
         return self.final_state or "no states"
 
@@ -174,6 +178,7 @@ class Attempt:
             tp["steady_state_resistance"]
             for tp in tps
             if tp.get("steady_state_resistance") is not None
+            and math.isfinite(tp["steady_state_resistance"])
         ]
         return max(vals) if vals else None
 
@@ -185,11 +190,19 @@ class Attempt:
 
     def _whole_cell_stat(self, field_name: str) -> float | None:
         tps = self.test_pulses_in_states({"whole cell"})
-        vals = [tp[field_name] for tp in tps if tp.get(field_name) is not None]
+        vals = [
+            tp[field_name]
+            for tp in tps
+            if tp.get(field_name) is not None and math.isfinite(tp[field_name])
+        ]
         if not vals:
             return None
         vals.sort()
-        return vals[len(vals) // 2]  # median
+        # true median: average the two middle values for an even-length list
+        mid = len(vals) // 2
+        if len(vals) % 2:
+            return vals[mid]
+        return (vals[mid - 1] + vals[mid]) / 2.0
 
     @property
     def access_resistance(self) -> float | None:

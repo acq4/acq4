@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import functools
 import threading
 from typing import Tuple, List
@@ -750,15 +751,28 @@ class MoveFuture(ManualQtFriendlyTask):
     def stop(self, reason="stop requested", wait=False):
         """Stop the move in progress.
 
-        Tells the device to halt, then completes this promise with Stopped via
-        ManualQtFriendlyTask.stop(reason). The producer thread sees ``is_stopped`` and
+        Completes this promise with Stopped via ManualQtFriendlyTask.stop(reason)
+        FIRST, then tells the device to halt. The order matters: halting the
+        device interrupts the in-progress hardware move, which wakes the producer
+        thread and makes it complete this promise with a RuntimeError (e.g.
+        "stop requested before move finished"). Since ``_finish`` is idempotent
+        (first completer wins), we must inject Stopped before that interrupt so
+        the producer's later fail() is the harmless no-op it assumes it is.
+        Doing the device halt first opens a race window in which the producer can
+        win, leaving the promise failed with a RuntimeError that callers stopping
+        cooperatively do not expect. The producer still sees ``is_stopped`` and
         aborts. When *wait* is True, block until the promise actually completes,
         swallowing the resulting Stopped.
         """
         with self._isStopCallable as can_call_stop:
             if can_call_stop and not self.is_done:
+                super().stop(reason, wait=False)
                 self.dev.stop()
-                super().stop(reason, wait=wait)
+                if wait:
+                    # Reimplemented here so we can stop the device between the
+                    # promise being completed and the hardware stop.
+                    with contextlib.suppress(Stopped):
+                        self.wait()
 
 
 class MovePathFuture(MoveFuture):

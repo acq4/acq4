@@ -12,6 +12,8 @@ class MoveNucleusToHomeState(PatchPipetteState):
     ----------
     pressureLimit : float
         The smallest vacuum pressure (pascals, expected negative value) to allow during state.
+    positionName : str
+        Named pipette position to move to while carrying the nucleus (default "extract")
     """
     stateName = "home with nucleus"
     _parameterDefaultOverrides = {

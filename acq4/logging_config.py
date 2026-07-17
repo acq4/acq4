@@ -113,6 +113,11 @@ def setup_logging(
     acq4_logger = logging.getLogger("acq4")
     acq4_logger.setLevel(acq4_level)
     root_logger.setLevel(root_level)
+    # gentletask drives our task/state machinery (including cooperative stops and
+    # parent/child stop cascades). Its logger is top-level (not under "acq4"), so it
+    # would otherwise inherit the root level and drop DEBUG when root is above DEBUG.
+    # Pin it to acq4_level so task stop reasons / requesters are always captured.
+    logging.getLogger("gentletask").setLevel(acq4_level)
 
     # set up new file handler
     set_log_file(log_file, is_temp_file=is_temp_file)

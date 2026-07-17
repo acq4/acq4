@@ -1,3 +1,4 @@
+import traceback
 from typing import Optional
 
 import pyqtgraph as pg
@@ -6,6 +7,9 @@ from acq4.filetypes.MultiPatchLog import MultiPatchLogWidget
 from acq4.util import Qt
 from acq4.util.DataManager import FileHandle
 from acq4.util.DictView import DictView
+from acq4.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
 class FileDataView(Qt.QSplitter):
@@ -22,28 +26,67 @@ class FileDataView(Qt.QSplitter):
     def setCurrentFile(self, fh: FileHandle):
         if fh is self._current:
             return
-        self._current = fh
-        if fh is None or fh.isDir() or (typ := fh.fileType()) is None:
+        if fh is None or fh.isDir():
+            self._current = fh
             self.clear()
             return
 
-        with pg.BusyCursor():
-            if typ == 'MultiPatchLog':
-                self.displayMultiPatchLog(fh)
-                return
+        typ = fh.fileType()
+        if typ is None:
+            self._current = fh
+            self.displayMessage(
+                f"No file type could be detected for {fh.name()!r}.\n\n"
+                "A MultiPatch log must be named like 'MultiPatch_*.log' (case-insensitive) "
+                "or have its '__object_type__' recorded as 'MultiPatchLog' in the .index to be "
+                "recognized by the data viewer."
+            )
+            return
 
-            data = fh.read()
-            if typ == 'ImageFile':
-                self.displayDataAsImage(data)
-                self.displayMetaInfoForData(data)
-            elif typ == 'MetaArray':
-                if data.ndim == 2 and not data.axisHasColumns(0) and not data.axisHasColumns(1):
-                    self.displayDataAsImage(data)
-                elif data.ndim > 2:
-                    self.displayDataAsImage(data)
+        try:
+            with pg.BusyCursor():
+                if typ == 'MultiPatchLog':
+                    self.displayMultiPatchLog(fh)
                 else:
-                    self.displayDataAsPlot(data)
-                self.displayMetaInfoForData(data)
+                    data = fh.read()
+                    if typ == 'ImageFile':
+                        self.displayDataAsImage(data)
+                        self.displayMetaInfoForData(data)
+                    elif typ == 'MetaArray':
+                        if data.ndim == 2 and not data.axisHasColumns(0) and not data.axisHasColumns(1):
+                            self.displayDataAsImage(data)
+                        elif data.ndim > 2:
+                            self.displayDataAsImage(data)
+                        else:
+                            self.displayDataAsPlot(data)
+                        self.displayMetaInfoForData(data)
+                    else:
+                        self.displayMessage(f"No data view available for file type {typ!r}.")
+        except Exception:
+            # Don't mark the file as current so the user can retry by re-selecting it.
+            # Surface the error in the tab itself; otherwise it is only quietly logged
+            # by the global excepthook and the tab simply appears blank.
+            self._current = None
+            logger.exception(f"Error displaying data for {fh.name()!r} (type {typ!r})")
+            self.displayError(fh, typ)
+            return
+        self._current = fh
+
+    def displayError(self, fh: FileHandle, typ: str):
+        """Show a traceback in the data tab instead of leaving it blank."""
+        self.displayMessage(
+            f"Error displaying {fh.name()!r} (detected file type: {typ!r}):\n\n"
+            f"{traceback.format_exc()}"
+        )
+
+    def displayMessage(self, text: str):
+        """Show a plain-text message in the data tab instead of leaving it blank."""
+        self.clear()
+        w = Qt.QTextEdit()
+        w.setReadOnly(True)
+        w.setLineWrapMode(Qt.QTextEdit.NoWrap)
+        w.setText(text)
+        self.addWidget(w)
+        self._widgets.append(w)
 
     def displayMetaInfoForData(self, data):
         if not hasattr(data, 'implements') or not data.implements('MetaArray'):

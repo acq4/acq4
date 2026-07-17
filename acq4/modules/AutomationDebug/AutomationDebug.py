@@ -24,6 +24,7 @@ from .autopatch import Autopatcher
 from .detection import CellDetector
 from .feature_tracking import FeatureTracker
 from .mock_data import MockDataHandler
+from .survey import SurveyRegion
 from ... import getManager
 
 logger = get_logger(__name__)
@@ -60,6 +61,25 @@ class AutomationDebugWindow(Qt.QWidget):
         _zstack_depth_layout.addStretch()
         self.ui.groupBox.layout().addLayout(_zstack_depth_layout, 5, 0, 1, 4)
 
+        # Survey region controls: a rectangle on the camera view that the autopatch
+        # demo tiles across, taking one z-stack per unexamined field of view.
+        _survey_layout = Qt.QHBoxLayout()
+        self.ui.addSurveyRegionBtn = Qt.QPushButton("Add survey region")
+        self.ui.clearSurveyRegionBtn = Qt.QPushButton("Clear region")
+        _survey_layout.addWidget(self.ui.addSurveyRegionBtn)
+        _survey_layout.addWidget(self.ui.clearSurveyRegionBtn)
+        _survey_layout.addWidget(Qt.QLabel("Tile overlap:"))
+        self.ui.surveyOverlapSpin = pg.SpinBox(value=20e-6, suffix='m', siPrefix=True, step=5e-6, bounds=(0, None))
+        _survey_layout.addWidget(self.ui.surveyOverlapSpin)
+        _survey_layout.addStretch()
+        self.ui.groupBox.layout().addLayout(
+            _survey_layout, self.ui.groupBox.layout().rowCount(), 0, 1, 4
+        )
+        self.ui.surveyStatsLabel = Qt.QLabel("Survey: no region")
+        self.ui.groupBox.layout().addWidget(
+            self.ui.surveyStatsLabel, self.ui.groupBox.layout().rowCount(), 0, 1, 4
+        )
+
         self.sigWorking.connect(self._setWorkingState)
         self.failedCalibrations = []
         self.module = module
@@ -80,9 +100,13 @@ class AutomationDebugWindow(Qt.QWidget):
         self._mock_handler = MockDataHandler(self)
         self._autopatcher = Autopatcher(self)
         self._feature_tracker = FeatureTracker(self)
+        self._surveyRegion = SurveyRegion(self)
 
         # --- UI wiring ---
         self.ui.clearBtn.clicked.connect(self._detector.clearCells)
+        self.ui.addSurveyRegionBtn.clicked.connect(self._surveyRegion.addRegion)
+        self.ui.clearSurveyRegionBtn.clicked.connect(self._surveyRegion.clearRegion)
+        self.ui.surveyOverlapSpin.sigValueChanged.connect(self._refreshSurveyStats)
         self.ui.showRoisBtn.toggled.connect(self._toggleCellRois)
         self.ui.zStackDetectBtn.setOpts(
             task_producer=self._detector._detectNeuronsZStack, stoppable=True
@@ -115,11 +139,11 @@ class AutomationDebugWindow(Qt.QWidget):
         self.ui.autoTargetBtn.setOpts(task_producer=self._autoTarget, stoppable=True)
         self.ui.autoTargetBtn.sigFinished.connect(self._handleAutoFinish)
 
-        for name, dev in self.module.manager.devices.items():
-            if isinstance(dev, Pipette):
-                self.ui.pipetteSelector.addItem(name)
-            elif isinstance(dev, Camera):
-                self.ui.cameraSelector.addItem(name)
+        # These are InterfaceCombo widgets (promoted in window.ui); they populate
+        # themselves from the manager's interface directory and stay in sync as
+        # devices come and go.
+        self.ui.pipetteSelector.setTypes(['pipette'])
+        self.ui.cameraSelector.setTypes(['camera'])
 
         self.ui.trackFeaturesBtn.setOpts(
             task_producer=self._feature_tracker.doFeatureTracking,
@@ -202,6 +226,22 @@ class AutomationDebugWindow(Qt.QWidget):
         self.ui.classificationPresetCombo.clear()
         self.ui.detectionPresetCombo.addItems(presets)
         self.ui.classificationPresetCombo.addItems(presets)
+
+    def _refreshSurveyStats(self, *args):
+        """Update the survey stats readout from the current region and progress.
+
+        Connected to ROI changes and the overlap spinbox, and called by
+        SurveyRegion when a region is added/cleared/reset or a tile is imaged.
+        """
+        stats = self._surveyRegion.stats()
+        if stats is None:
+            self.ui.surveyStatsLabel.setText("Survey: no region")
+            return
+        area, total, covered, percent = stats
+        self.ui.surveyStatsLabel.setText(
+            f"Survey: {area * 1e6:.3g} mm² area | {total} tiles | "
+            f"{percent:.0f}% surveyed ({covered}/{total})"
+        )
 
     def _toggleCellRois(self, visible: bool):
         for box in self._previousBoxWidgets:

@@ -1054,7 +1054,15 @@ class Pipette(Device, OptomechDevice):
         frame_zs = global_positions[:, 2] - z_predictions_um * 1e-6
 
         # Discard frames where heatmap peak < 2 * heatmap stdev.
+        # keep-indices must stay aligned with frame_zs / z_predictions_um /
+        # global_positions, so we index into the original heatmaps list and skip
+        # (rather than filter out) frames with no heatmap instead of rebinding to
+        # a shorter list, which would misalign every subsequent index.
         keep = []
+        if len(heatmaps) < 2:
+            raise RuntimeError(f"Z-stack fallback: not enough frames ({len(heatmaps)}) to estimate tip position.")
+        if sum(hm is not None for hm in heatmaps) < 2:
+            raise RuntimeError("Z-stack fallback: heatmaps returned as None")
         for i, hm in enumerate(heatmaps):
             if hm is not None and hm.max() >= 2 * hm.std():
                 keep.append(i)
