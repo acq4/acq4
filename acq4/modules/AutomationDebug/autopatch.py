@@ -244,7 +244,11 @@ class Autopatcher:
         self._window.patchPipetteDevice.pipetteDevice.goHome("fast").wait()
 
         win = self._window
-        if not win._unranked_cells:
+        # Keep imaging survey tiles until one yields a cell. An empty field of
+        # view is the common case, so it must advance to the next tile rather than
+        # end the survey; we only give up (return None) when nextTile() reports the
+        # region is fully imaged, there's no region, or we're out of cells.
+        while not win._unranked_cells:
             if self._outOfCells():
                 set_state("Autopatch: reached end of cell list; stopping")
                 logger.info(
@@ -274,11 +278,10 @@ class Autopatcher:
             fut.sigFinished.connect(win._detector._handleDetectResults)  # adds to win._unranked_cells
             fut.wait(timeout=600)
             if not win._unranked_cells:
-                set_state("Autopatch: no cells detected in this tile; stopping")
+                set_state("Autopatch: no cells detected in this tile")
                 logger.info(
-                    "Autopatch: detection ran on the survey tile but found no cells; stopping demo"
+                    "Autopatch: detection ran on the survey tile but found no cells"
                 )
-                return None
 
         set_state("Autopatch: checking selected cell")
         cell = win._unranked_cells.pop(0)

@@ -15,8 +15,20 @@ from acq4.mcp.connection import ConnectionManager, NotConnectedError
 from acq4.mcp.ssh_tunnel import SSHTunnelManager
 
 # One connection manager for the life of the server process; the active ACQ4 target is
-# chosen and can be re-pointed at runtime through the connect_acq4 tool.
-_connection = ConnectionManager()
+# chosen and can be re-pointed at runtime through the connect_acq4 tool. Constructed
+# lazily on first use (not at import) so that importing acq4.mcp.server for its pure
+# helpers does not build the ConnectionManager or its teleprox worker executor.
+_connection = None
+
+
+def _get_connection() -> ConnectionManager:
+    """Return the process-wide ConnectionManager, constructing it on first use."""
+    global _connection
+    if _connection is None:
+        _connection = ConnectionManager()
+    return _connection
+
+
 # Tracks SSH tunnels opened via connect_via_ssh for the life of the server process.
 _tunnels = SSHTunnelManager()
 
@@ -60,7 +72,7 @@ def build_server():
         host defaults to 127.0.0.1 (ACQ4 binds localhost); a remote rig needs an SSH
         tunnel to that port.
         """
-        return json.dumps(_connection.connect(port, host), indent=2, default=str)
+        return json.dumps(_get_connection().connect(port, host), indent=2, default=str)
 
     @server.tool()
     def connect_via_ssh(
@@ -126,7 +138,7 @@ def build_server():
         port/host optionally override the active connection for this one call.
         """
         try:
-            result = _connection.execute(
+            result = _get_connection().execute(
                 code, gui_thread=gui_thread, timeout=timeout, port=port, host=host
             )
         except NotConnectedError as exc:
@@ -153,7 +165,9 @@ def build_server():
         """Return the ACQ4 devices as a name -> device-class mapping (read-only)."""
         try:
             return json.dumps(
-                _connection.list_devices(port=port, host=host), indent=2, default=str
+                _get_connection().list_devices(port=port, host=host),
+                indent=2,
+                default=str,
             )
         except NotConnectedError as exc:
             return f"Not connected: {exc}"
@@ -163,7 +177,9 @@ def build_server():
         """Return loaded and configured-but-unloaded ACQ4 module names (read-only)."""
         try:
             return json.dumps(
-                _connection.list_modules(port=port, host=host), indent=2, default=str
+                _get_connection().list_modules(port=port, host=host),
+                indent=2,
+                default=str,
             )
         except NotConnectedError as exc:
             return f"Not connected: {exc}"
@@ -173,7 +189,9 @@ def build_server():
         """Return ACQ4 Manager storage dirs, device count, and config keys (read-only)."""
         try:
             return json.dumps(
-                _connection.manager_state(port=port, host=host), indent=2, default=str
+                _get_connection().manager_state(port=port, host=host),
+                indent=2,
+                default=str,
             )
         except NotConnectedError as exc:
             return f"Not connected: {exc}"
@@ -184,7 +202,7 @@ def build_server():
     ) -> str:
         """Return the tail of the ACQ4 log file (read-only)."""
         try:
-            log = _connection.get_log(lines=lines, port=port, host=host)
+            log = _get_connection().get_log(lines=lines, port=port, host=host)
         except NotConnectedError as exc:
             return f"Not connected: {exc}"
         return f"{log.get('path')}\n\n{log.get('text', '')}"

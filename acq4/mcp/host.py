@@ -7,6 +7,7 @@ inspection helpers.
 """
 
 import ast
+import collections
 import contextlib
 import io
 import traceback
@@ -69,6 +70,10 @@ def _exec_and_capture(code: str, namespace: dict) -> dict:
     result_repr = None
     tb = None
 
+    # redirect_stdout/redirect_stderr swap the process-global sys.stdout/sys.stderr, so
+    # for off-GUI (threaded) exec this also captures -- and thus steals -- concurrent
+    # print()s emitted by other threads while the code runs; their output may end up in
+    # this result or be lost from wherever it was meant to go.
     with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
         try:
             parsed = ast.parse(code)
@@ -381,7 +386,9 @@ def profile_qt_events(seconds=10.0, top=15):
 def get_log(lines: int = 50) -> dict:
     """Return the last *lines* lines of the ACQ4 log file.
 
-    Returns a dict with keys `path` (the log file path or None) and `text`.
+    Returns a dict with keys `path` (the log file path or None) and `text`. A
+    non-positive *lines* (0 or negative) means "no lines" and yields empty `text`
+    without touching the file.
     """
     from acq4 import logging_config
 
@@ -389,9 +396,14 @@ def get_log(lines: int = 50) -> dict:
     path = getattr(handler, "baseFilename", None) if handler is not None else None
     if path is None:
         return {"path": None, "text": "No log file is currently configured."}
+    if lines <= 0:
+        return {"path": path, "text": ""}
     try:
         with open(path, "r", errors="replace") as f:
-            tail = f.readlines()[-lines:]
+            # deque(maxlen=lines) keeps only the last `lines` lines in memory as it
+            # streams the file, rather than materializing the whole file into a list
+            # just to slice off the tail.
+            tail = collections.deque(f, maxlen=lines)
     except OSError as exc:
         return {"path": path, "text": f"Could not read log file: {exc}"}
     return {"path": path, "text": "".join(tail)}
