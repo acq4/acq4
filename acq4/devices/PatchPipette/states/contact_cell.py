@@ -262,6 +262,8 @@ class ContactCellState(PatchPipetteState):
         # with log_and_ignore_exception(Exception, "Error disabling visual tracking"):
         #     self._disableVisualTracking()
         super()._cleanup()
+        with log_and_ignore_exception(Exception, "Error focusing on target during cleanup"):
+            self.dev.focusOnTarget("fast").wait()
 
     def findPipetteTip(self, zstack=True):
         pip = self.dev.pipetteDevice
