@@ -150,6 +150,17 @@ class ConnectionManager:
         host, port = self._resolve(host, port)
         return self._host_module(host, port).reset_namespace(_return_type="value")
 
+    def reload_libraries(self, port=None, host=None):
+        """Hot-reload changed modules on the target (mirrors the Reload button)."""
+        return self._run(self._reload_libraries, port, host)
+
+    def _reload_libraries(self, port, host):
+        host, port = self._resolve(host, port)
+        # reload can walk every loaded module, so allow well beyond the execute default.
+        return self._host_module(host, port).reload_libraries(
+            _return_type="value", _timeout=120.0
+        )
+
     def profile_functions(self, seconds=10.0, top=15, port=None, host=None):
         """Profile function hot-spots on the target for `seconds`."""
         return self._run(self._profile_functions, seconds, top, port, host)

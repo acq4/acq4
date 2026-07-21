@@ -161,6 +161,49 @@ def build_server():
             return f"Not connected: {exc}"
 
     @server.tool()
+    def reload_libraries(port: Optional[int] = None, host: Optional[str] = None) -> str:
+        """Hot-reload changed ACQ4/library code in the running process (the Reload button).
+
+        Mirrors the Manager window's "Reload Libraries" button (Ctrl+R). Re-execs every
+        loaded module whose source file changed and rebinds existing
+        functions/methods/instances to the new code -- no ACQ4 restart. This powers a
+        fast debug loop: edit code (e.g. add a log line), reload_libraries, perform the
+        action, then get_log to read the new messages.
+
+        Reliable for edits to the *bodies* of existing functions and methods. Likely to
+        NOT take effect until a real ACQ4 restart:
+        * new or changed module-level (global) values, and `from module import name`
+          bindings -- the existing binding keeps pointing at the old object. Reference
+          via `import module; module.name` for reload to pick up changes.
+        * __init__ / class-attribute changes on already-existing instances -- live
+          objects keep their old state; only newly created instances get the new code.
+        * renamed or newly added classes/functions, and signature changes relied on by
+          already-bound callers.
+        * import-time / initialization side effects -- they ran once at first import and
+          are not re-run.
+        * C extensions, and any module whose on-disk .py is not newer than its cached
+          .pyc (e.g. an unsaved edit) -- such modules are simply skipped.
+
+        Returns which modules reloaded, how many were skipped, the reloader's debug log,
+        and an `error` naming any module that failed to reload (the rest still reload).
+        When results look stale or inconsistent, restart ACQ4 rather than trusting the
+        reload.
+
+        SAFETY: reloading mutates live code objects across the whole process and runs
+        briefly on the GUI thread. It moves no hardware, but a bad reload can leave ACQ4
+        in an inconsistent state -- prefer it where a restart is cheap, and get user
+        approval before reloading a rig mid-experiment.
+        """
+        try:
+            return json.dumps(
+                _get_connection().reload_libraries(port=port, host=host),
+                indent=2,
+                default=str,
+            )
+        except NotConnectedError as exc:
+            return f"Not connected: {exc}"
+
+    @server.tool()
     def list_devices(port: Optional[int] = None, host: Optional[str] = None) -> str:
         """Return the ACQ4 devices as a name -> device-class mapping (read-only)."""
         try:

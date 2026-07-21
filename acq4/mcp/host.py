@@ -128,6 +128,53 @@ def execute(code: str, gui_thread: bool = False) -> dict:
     return run()
 
 
+def reload_libraries() -> dict:
+    """Hot-reload changed Python modules in the running ACQ4 process.
+
+    Mirrors the Manager window's "Reload Libraries" button (Ctrl+R): calls
+    pyqtgraph.reload.reloadAll, which re-execs every loaded module whose source file is
+    newer than its compiled cache and rebinds existing functions/methods/instances to the
+    updated code. Runs on the Qt GUI thread, exactly as the button does, because it
+    mutates live (possibly Qt) objects.
+
+    Returns a dict with keys: reloaded (sorted list of module names actually reloaded),
+    skipped (count of modules left unchanged), error (a formatted message if the reload
+    raised -- some modules may still have reloaded before it did), and output (the
+    reloader's captured debug log). When the reload raises, reloadAll discards its
+    per-module dict, so reloaded/skipped are None and only output/error describe what
+    happened.
+    """
+    import pyqtgraph.reload as reload
+
+    from acq4.util import task
+
+    def run():
+        buf = io.StringIO()
+        error = None
+        results = None
+        # debug=True prints one line per reloaded module; redirect_stdout captures those
+        # so the summary can carry the reload log back to the caller.
+        with contextlib.redirect_stdout(buf):
+            try:
+                results = reload.reloadAll(debug=True)
+            except Exception:
+                error = traceback.format_exc()
+        summary = {"output": buf.getvalue(), "error": error}
+        if results is None:
+            summary["reloaded"] = None
+            summary["skipped"] = None
+        else:
+            summary["reloaded"] = sorted(
+                name for name, (ok, _reason) in results.items() if ok
+            )
+            summary["skipped"] = sum(
+                1 for _name, (ok, _reason) in results.items() if not ok
+            )
+        return summary
+
+    return task.run_in_gui_thread(run)
+
+
 def _manager():
     """Return the running Manager (raises RuntimeError if none has been created)."""
     import acq4

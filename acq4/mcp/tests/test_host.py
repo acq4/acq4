@@ -127,6 +127,61 @@ def test_execute_default_does_not_use_gui_thread(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
+# Hot reload
+# ---------------------------------------------------------------------------
+
+
+def test_reload_libraries_runs_on_gui_thread_and_summarizes(monkeypatch):
+    import pyqtgraph.reload as reload
+    from acq4.util import task
+
+    calls = []
+    monkeypatch.setattr(
+        task,
+        "run_in_gui_thread",
+        lambda fn, *a, **k: (calls.append(fn) or fn(*a, **k)),
+    )
+
+    def fake_reload_all(debug=False):
+        print("Reloading acq4.foo")
+        return {
+            "acq4.foo": (True, None),
+            "acq4.bar": (True, None),
+            "os": (False, "code has not changed since compile"),
+        }
+
+    monkeypatch.setattr(reload, "reloadAll", fake_reload_all)
+
+    result = host.reload_libraries()
+    assert calls, "reload must run on the GUI thread, like the Reload button"
+    assert result["reloaded"] == ["acq4.bar", "acq4.foo"]
+    assert result["skipped"] == 1
+    assert result["error"] is None
+    assert "Reloading acq4.foo" in result["output"]
+
+
+def test_reload_libraries_reports_partial_failure(monkeypatch):
+    import pyqtgraph.reload as reload
+    from acq4.util import task
+
+    monkeypatch.setattr(task, "run_in_gui_thread", lambda fn, *a, **k: fn(*a, **k))
+
+    def fake_reload_all(debug=False):
+        # pyqtgraph.reload.reloadAll reloads what it can, then raises if any module
+        # failed -- so the return dict is lost but the debug log survives.
+        print("Reloading acq4.broken")
+        raise Exception("Some modules failed to reload: acq4.broken")
+
+    monkeypatch.setattr(reload, "reloadAll", fake_reload_all)
+
+    result = host.reload_libraries()
+    assert result["reloaded"] is None
+    assert result["skipped"] is None
+    assert "acq4.broken" in result["error"]
+    assert "Reloading acq4.broken" in result["output"]
+
+
+# ---------------------------------------------------------------------------
 # Read-only inspection helpers
 # ---------------------------------------------------------------------------
 

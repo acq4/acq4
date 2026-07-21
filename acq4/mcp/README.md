@@ -80,6 +80,7 @@ To close the tunnel, call `disconnect_ssh("minirig")`.
 | `disconnect_ssh(target=None)` | Close the SSH tunnel for `target` (or all tunnels if omitted). |
 | `execute_code(code, gui_thread=False, timeout=30.0, port=None, host=None)` | Execute arbitrary Python in the ACQ4 process. |
 | `reset_namespace(port=None, host=None)` | Clear the persistent execute_code namespace. |
+| `reload_libraries(port=None, host=None)` | Hot-reload changed code in the running process (the Manager's "Reload Libraries" button). |
 | `list_devices(port=None, host=None)` | Device name -> class mapping (read-only). |
 | `list_modules(port=None, host=None)` | Loaded and configured module names (read-only). |
 | `manager_state(port=None, host=None)` | Storage dirs, device count, config keys (read-only). |
@@ -107,6 +108,40 @@ mutating running state.
 - **`profile_qt_events`** requires ACQ4 to be started with `--qt-profile`.
 - **`memory_snapshot`** requires `guppy3` installed on the rig. Repeated calls build a
   memory-over-time series; each call reports heap growth since the previous snapshot.
+
+## Hot reload: `reload_libraries`
+
+`reload_libraries` is the MCP equivalent of the Manager window's **Reload Libraries**
+button (`Ctrl+R`). It runs `pyqtgraph.reload.reloadAll` on the GUI thread: every loaded
+module whose source file is newer than its compiled cache is re-exec'd, and existing
+functions, methods, and instances are rebound to the new code — no ACQ4 restart.
+
+This enables a tight debug loop against a live rig:
+
+1. Edit code — e.g. add a `logger.info(...)` line.
+2. `reload_libraries()`
+3. Perform the action that exercises the changed code.
+4. `get_log()` to read the new messages.
+
+**What reloads reliably:** edits to the *bodies* of existing functions and methods.
+
+**What will NOT take effect until a real restart** (edit → reload → still stale means
+one of these; restart ACQ4 rather than trusting the reload):
+
+- **New/changed module-level globals and `from module import name` bindings.** The
+  existing binding still points at the old object. Reference via `import module;
+  module.name` for reload to pick it up.
+- **`__init__` and class-attribute changes on already-existing instances.** Live objects
+  keep their old state; only newly created instances get the new code.
+- **Renamed or newly added classes/functions**, and signature changes relied on by
+  already-bound callers.
+- **Import-time / initialization side effects.** They ran once at first import and are
+  not re-run on reload.
+- **C extensions**, and any module whose on-disk `.py` is not newer than its cached
+  `.pyc` (e.g. an unsaved edit) — those modules are silently skipped.
+
+The return value lists which modules reloaded, how many were skipped, the reloader's
+debug log, and an `error` naming any module that failed (the rest still reload).
 
 ## GUI thread: `gui_thread=False` vs `gui_thread=True`
 

@@ -49,6 +49,10 @@ class _FakeHostModule:
         )
         return {"top_functions": []}
 
+    def reload_libraries(self, **kw):
+        self.recorder.append(("reload_libraries", self.host, self.port, kw))
+        return {"reloaded": ["acq4.foo"], "skipped": 3, "error": None, "output": ""}
+
 
 @pytest.fixture
 def recorder():
@@ -125,6 +129,17 @@ def test_profile_functions_delegates_with_timeout(manager, recorder):
     assert call[1:3] == ("127.0.0.1", 5000)
     assert call[3] == 5.0 and call[4] == 3
     assert call[5]["_timeout"] >= 20.0  # seconds + margin
+
+
+def test_reload_libraries_delegates_with_timeout(manager, recorder):
+    manager.connect(5000)
+    result = manager.reload_libraries()
+    assert result["reloaded"] == ["acq4.foo"]
+    call = recorder[-1]
+    assert call[0] == "reload_libraries"
+    assert call[1:3] == ("127.0.0.1", 5000)
+    # reload can walk every loaded module, so it needs a generous timeout.
+    assert call[3]["_timeout"] >= 60.0
 
 
 def test_all_teleprox_access_serialized_onto_one_thread():
