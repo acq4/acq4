@@ -102,9 +102,21 @@ class Autopatcher:
                     synch(win.cameraDevice.scopeDev.findSurfaceDepth)(win.cameraDevice)
 
                     set_state("Autopatch: finding pipette tip")
-                    synch(ppip.pipetteDevice.goAboveTarget)("fast")
-                    ppip.clampDevice.autoPipetteOffset()
-                    win.pipetteDevice.iterativelyFindTip()
+                    try:
+                        synch(ppip.pipetteDevice.goAboveTarget)("fast")
+                        ppip.clampDevice.autoPipetteOffset()
+                        win.pipetteDevice.iterativelyFindTip()
+                    except Stopped:
+                        raise
+                    except Exception:
+                        # Failing to locate the pipette tip means calibration or
+                        # imaging is broken; the next cell would fail the same way,
+                        # so quit the demo rather than continuing to it.
+                        set_state("Could not find pipette tip; quitting demo")
+                        logger.exception("Error finding pipette tip - quitting autopatch demo")
+                        if win._cell is not None and getattr(win._cell, "_debugStatus", None) is None:
+                            win.setCellStatus(win._cell, "error finding pipette tip", "bad")
+                        return
 
                     # move 50 um up for sonication
                     pip_pos = ppip.pipetteDevice.globalPosition()
