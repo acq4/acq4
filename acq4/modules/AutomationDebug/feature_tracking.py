@@ -54,7 +54,7 @@ class FeatureTracker:
         pipette = win.pipetteDevice
         target = Point(pipette.targetPosition(), "global")
         cell = win._cell = Cell(target)
-        cell.initializeTracker(win.cameraDevice, pipette=win.pipetteDevice, use_cellpose=True)
+        cell.initializeTracker(win.cameraDevice, use_cellpose=True)  # pipette=win.pipetteDevice, 
         cell.enableTracking()
         cell.sigPositionChanged.connect(self._updatePipetteTarget)
         win.sigWorking.emit(win.ui.trackFeaturesBtn)

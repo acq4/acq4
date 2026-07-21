@@ -423,7 +423,7 @@ class PatchPipetteState(QtFriendlyTask):
             # pipette edges and the estimated cell center random-walks off the surface).
             cell.initializeTracker(
                 self.dev.pipetteDevice.imagingDevice(),
-                pipette=self.dev.pipetteDevice,
+                # pipette=self.dev.pipetteDevice,
                 use_cellpose=True,
             )
 
