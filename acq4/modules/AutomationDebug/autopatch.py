@@ -298,7 +298,7 @@ class Autopatcher:
         try:
             # Pass the pipette so occlusion masking is active during later visual
             # tracking; the pose is sampled fresh at each acquisition.
-            cell.initializeTracker(win.cameraDevice)  #, pipette=win.pipetteDevice)
+            cell.initializeTracker(win.cameraDevice, use_cellpose=True)  #, pipette=win.pipetteDevice)
         except Stopped:
             raise
         except ValueError as e:

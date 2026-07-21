@@ -422,7 +422,9 @@ class PatchPipetteState(QtFriendlyTask):
             # as it enters the frame near contact (otherwise optical flow locks onto the
             # pipette edges and the estimated cell center random-walks off the surface).
             cell.initializeTracker(
-                self.dev.pipetteDevice.imagingDevice(), pipette=self.dev.pipetteDevice
+                self.dev.pipetteDevice.imagingDevice(),
+                pipette=self.dev.pipetteDevice,
+                use_cellpose=True,
             )
 
         cell.enableTracking(True)

@@ -65,7 +65,7 @@ class CellDetector:
         cell = self._window.patchPipetteDevice.cell
         if cell is None or cell.position != target:
             cell = Cell(target)
-            cell.initializeTracker(self._window.cameraDevice)
+            cell.initializeTracker(self._window.cameraDevice, use_cellpose=True)
         self._window._unranked_cells.append(cell)
         cells = list(self._window._unranked_cells)
         run_in_gui_thread(self._displayBoundingBoxes, cells)
@@ -204,7 +204,7 @@ class CellDetector:
             # for later tracking without re-acquiring a stack per cell. Cells too
             # close to the stack edge can't be extracted; keep them queued anyway.
             try:
-                cell.initializeTrackerFromStack(win.cameraDevice, detection_stack)
+                cell.initializeTrackerFromStack(win.cameraDevice, detection_stack, use_cellpose=True)
             except Exception:
                 logger.warning(
                     f"Could not initialize ObjectStack for detected cell at {pos}",
