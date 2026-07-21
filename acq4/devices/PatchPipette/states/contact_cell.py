@@ -147,7 +147,7 @@ class ContactCellState(PatchPipetteState):
                 self.findPipetteTip(zstack=True)
 
             if not config['visualTargetTracking']:
-                pip.focusOnTarget("fast").wait()
+                self.dev.focusOnTarget("fast").wait()
 
             self._startZ = pip.globalPosition()[2]
             iterations = 0
