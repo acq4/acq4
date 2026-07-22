@@ -904,6 +904,8 @@ git commit --author="Claude (claude) <noreply@anthropic.com>" -m "feat: add Stat
 
 ### Task 6: CellPanel — cell list seeded manually, driven by orchestrator signals (Area 5, list only)
 
+> **SUPERSEDED (human decision, applied 2026-07-22):** the x/y/z-`QLineEdit` seeding mechanism below (Open Question #2's proposal) was dropped before implementation. The actually-built `CellPanel` seeds via **two** buttons instead: `self.addFromTargetBtn` ("Add from target") — builds `Cell(Point(pipetteGetter().targetPosition(), "global"))` from the injected `pipetteGetter` callable (a no-op if it resolves to `None`); and `self.scatterFakeCellsBtn` ("Scatter fake cells") — enqueues 3-5 `Cell`s at random offsets (±40µm) around `cameraGetter().globalCenterPosition()` (a no-op if it resolves to `None`). `CellPanel.__init__(self, pipetteGetter=None, cameraGetter=None)` takes both getters as optional injected callables, mirroring `make_context_factory`'s pipette-getter pattern, so the panel stays unit-testable with plain fakes. See `acq4/modules/Autopatch/cell_panel.py` and `acq4/modules/Autopatch/tests/test_cell_panel.py` for the implementation actually shipped. The rest of this task's description (list/signal wiring) still applies as written.
+
 **Files:**
 - Create: `acq4/modules/Autopatch/cell_panel.py`
 - Test: `acq4/modules/Autopatch/tests/test_cell_panel.py`
@@ -911,6 +913,7 @@ git commit --author="Claude (claude) <noreply@anthropic.com>" -m "feat: add Stat
 **Interfaces:**
 - Consumes: `Orchestrator.enqueue(cell)`, `.sigCurrentAction(cell, action)`, `.sigCellFinished(cell, status)`.
 - Produces: `CellPanel(Qt.QWidget)` — `self.cellList: Qt.QListWidget`; `self.addCellBtn: Qt.QPushButton`; `self.positionEdit` fields (`xEdit`/`yEdit`/`zEdit`, plain `Qt.QLineEdit`, meters as float text — the crudest possible manual seeding UI, see Open Questions); method `bindOrchestrator(self, orchestrator)`; method `addCell(self, cell) -> None` (appends a `QListWidgetItem` storing the cell via `Qt.Qt.UserRole`, initial label `f"cell {id(cell)} — queued"`); slot `_onCurrentAction(cell, action)` updates that cell's row text to `"... — running: {action.name}"`; slot `_onCellFinished(cell, status)` updates to `"... — {status}"`. `self.addCellBtn.clicked` builds a `Cell(Point((x, y, z), "global"))` (imported from `acq4_automation.feature_tracking.cell`) from the three edits, calls `self.orchestrator.enqueue(cell)` and `self.addCell(cell)`.
+- **(Superseded, see note above)**
 
 - [ ] **Step 1: Write the failing test** — create `acq4/modules/Autopatch/tests/test_cell_panel.py`:
 
