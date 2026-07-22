@@ -81,3 +81,18 @@ def test_catchall_handler_used_for_unmapped(raising_cls, recording_cls):
     )
     Orchestrator(p).run_sync_cell("c1")
     assert recording_cls.ran == ["h"]
+
+
+def test_handler_raising_exception_aborts(raising_cls):
+    # main raises BrokenPipette; its handler itself raises Fouled -> controlled abort
+    handler = Protocol(
+        nodes={"h": raising_cls(name="h", params={"exc": "Fouled"})},
+        edges={}, entry="h",
+    )
+    p = Protocol(
+        nodes={"a": raising_cls(name="a", params={"exc": "BrokenPipette"})},
+        edges={}, entry="a",
+        exceptionHandlers={"BrokenPipette": handler},
+    )
+    with pytest.raises(AbortExperiment):
+        Orchestrator(p).run_sync_cell("c1")

@@ -159,4 +159,11 @@ class Orchestrator(Qt.QObject):
             return "advance"
         except RetryCurrentCell:
             return "retry"
+        except OrchestrationError as handler_exc:
+            # A handler that itself hits an exceptional state cannot recover the
+            # cell; fail closed to a controlled abort rather than letting it escape.
+            raise AbortExperiment(
+                f"exception in handler for {exc.typeName}: "
+                f"{handler_exc.typeName}: {handler_exc}"
+            ) from handler_exc
         return "advance"  # handler ran to completion without a flow action
