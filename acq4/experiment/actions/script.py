@@ -2,7 +2,6 @@
 Action subclass it defines. Import/exec failures surface as ScriptError."""
 from __future__ import annotations
 
-import importlib
 import importlib.util
 import os
 import sys
@@ -36,7 +35,9 @@ class ScriptAction(Action):
             if spec is None or spec.loader is None:
                 raise ScriptError(f"Cannot load script at {path!r}")
             module = importlib.util.module_from_spec(spec)
-            # Register the module before execution so relative imports work
+            # Register the module before execution so the module's own
+            # __module__ / introspection (e.g. matching Action subclasses to
+            # this module by name) resolves correctly during exec.
             sys.modules[mod_name] = module
             spec.loader.exec_module(module)
         except ScriptError:

@@ -1,5 +1,5 @@
-"""Protocol: an outcome-routed directed graph of Actions, with exception-handler
-sub-protocols. Serialization is added alongside JSON I/O."""
+"""Protocol: an outcome-routed directed graph of Actions with exception-handler
+sub-protocols, plus JSON (de)serialization."""
 from __future__ import annotations
 
 from .action import Action

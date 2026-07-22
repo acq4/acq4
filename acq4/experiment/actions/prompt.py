@@ -1,5 +1,5 @@
-"""Prompt action: surfaces operator instructions via the log/status. In this
-device-free phase it does not block on a dialog; the UI phase adds an operator-blocking widget."""
+"""Prompt action: surfaces operator instructions via the log/status and returns
+once acknowledged. It does not itself block on a GUI dialog."""
 from __future__ import annotations
 
 from ..action import Action

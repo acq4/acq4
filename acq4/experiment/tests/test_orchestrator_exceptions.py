@@ -96,3 +96,35 @@ def test_handler_raising_exception_aborts(raising_cls):
     )
     with pytest.raises(AbortExperiment):
         Orchestrator(p).run_sync_cell("c1")
+
+
+def test_status_returns_to_running_after_handler_retry():
+    from acq4.experiment.action import Action
+    from acq4.experiment.registry import register_action
+    from acq4.experiment.exceptions import BrokenPipette
+    from acq4.experiment.actions.flow import RetryCellAction
+
+    @register_action(name="FailOnceStatus")
+    class FailOnceStatus(Action):
+        outcomes = ("done",)
+        calls = {"n": 0}
+
+        def run(self, ctx):
+            FailOnceStatus.calls["n"] += 1
+            if FailOnceStatus.calls["n"] == 1:
+                raise BrokenPipette("first attempt fails")
+            return "done"
+
+    FailOnceStatus.calls["n"] = 0
+    handler = Protocol(nodes={"r": RetryCellAction(name="r")}, edges={}, entry="r")
+    p = Protocol(
+        nodes={"a": FailOnceStatus(name="a")}, edges={}, entry="a",
+        exceptionHandlers={"BrokenPipette": handler},
+    )
+    statuses = []
+    orch = Orchestrator(p)
+    orch.sigStatus.connect(statuses.append)
+    orch.run_sync_cell("c1")
+    # error is emitted during handling, then running is re-emitted for the retry
+    # attempt (status must NOT stay stuck on "error")
+    assert statuses == ["running", "error", "running"]

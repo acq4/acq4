@@ -128,6 +128,7 @@ class Orchestrator(Qt.QObject):
         """Run the main protocol for one cell, dispatching exceptional states to
         handler sub-protocols. RetryCurrentCell loops; AdvanceToNextCell skips."""
         while True:
+            self.sigStatus.emit("running")
             try:
                 self._walk(cell, self.protocol, self.protocol.entry)
             except AdvanceToNextCell:
