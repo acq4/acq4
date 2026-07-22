@@ -43,18 +43,18 @@ class AutopatchWindow(Qt.QWidget):
         for box in (self.area1Box, self.area2Box, self.area3Box, self.area4Box, self.area5Box):
             box.setLayout(Qt.QVBoxLayout())
 
-        topRow = Qt.QHBoxLayout()
-        topRow.addWidget(self.area1Box)
-        topRow.addWidget(self.area2Box)
+        leftCol = Qt.QVBoxLayout()
+        leftCol.addWidget(self.area1Box)
+        leftCol.addWidget(self.area2Box)
 
-        bottomRow = Qt.QHBoxLayout()
-        bottomRow.addWidget(self.area3Box)
-        bottomRow.addWidget(self.area4Box)
-        bottomRow.addWidget(self.area5Box)
+        rightCol = Qt.QVBoxLayout()
+        rightCol.addWidget(self.area3Box)
+        rightCol.addWidget(self.area4Box)
+        rightCol.addWidget(self.area5Box)
 
-        outer = Qt.QVBoxLayout()
-        outer.addLayout(topRow)
-        outer.addLayout(bottomRow)
+        outer = Qt.QHBoxLayout()
+        outer.addLayout(leftCol)
+        outer.addLayout(rightCol)
         self.setLayout(outer)
 
         if protocolDir is None:

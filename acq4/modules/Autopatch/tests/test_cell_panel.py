@@ -118,6 +118,48 @@ def test_current_action_updates_row(qapp):
     assert "running: Patch" in panel.cellList.item(0).text()
 
 
+def test_add_from_target_without_an_orchestrator_bound_does_not_raise(qapp):
+    """Seeding a cell before a protocol is loaded (no orchestrator bound yet)
+    must not raise, and the cell must still show up in the list."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    pip = _FakePipette((1e-3, 2e-3, 3e-3))
+    panel = CellPanel(pipetteGetter=lambda: pip)
+
+    panel.addFromTargetBtn.click()
+
+    assert panel.cellList.count() == 1
+    assert "queued" in panel.cellList.item(0).text()
+
+
+def test_bind_orchestrator_flushes_previously_held_cells_exactly_once(qapp):
+    """Cells seeded while no orchestrator was bound are flushed into the
+    orchestrator bound afterward, each exactly once; a cell added after
+    binding is enqueued exactly once too (no double-enqueue either way)."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    pip = _FakePipette((1e-3, 2e-3, 3e-3))
+    panel = CellPanel(pipetteGetter=lambda: pip)
+
+    panel.addFromTargetBtn.click()
+    panel.addFromTargetBtn.click()
+    assert panel.cellList.count() == 2
+    seededCells = list(panel._cells.values())
+
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+
+    assert len(orch.enqueued) == 2
+    for cell in seededCells:
+        assert orch.enqueued.count(cell) == 1
+
+    panel.addFromTargetBtn.click()
+    assert panel.cellList.count() == 3
+    assert len(orch.enqueued) == 3
+    newCell = orch.enqueued[-1]
+    assert orch.enqueued.count(newCell) == 1
+
+
 def test_cell_finished_updates_row(qapp):
     from acq4.modules.Autopatch.cell_panel import CellPanel
 

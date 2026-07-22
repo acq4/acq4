@@ -53,3 +53,25 @@ def test_area_titles_name_their_design_doc_role(qapp, tmp_path):
 def test_window_has_a_title(qapp, tmp_path):
     win = _makeWindow(tmp_path)
     assert win.windowTitle() == "Autopatch"
+
+
+def test_areas_are_arranged_in_two_columns(qapp, tmp_path):
+    """Left column (top->bottom): Area 1, Area 2. Right column (top->bottom):
+    Area 3, Area 4, Area 5."""
+    win = _makeWindow(tmp_path)
+
+    outer = win.layout()
+    assert isinstance(outer, Qt.QHBoxLayout)
+    assert outer.count() == 2
+
+    leftCol = outer.itemAt(0).layout()
+    rightCol = outer.itemAt(1).layout()
+
+    assert leftCol.count() == 2
+    assert leftCol.itemAt(0).widget() is win.area1Box
+    assert leftCol.itemAt(1).widget() is win.area2Box
+
+    assert rightCol.count() == 3
+    assert rightCol.itemAt(0).widget() is win.area3Box
+    assert rightCol.itemAt(1).widget() is win.area4Box
+    assert rightCol.itemAt(2).widget() is win.area5Box

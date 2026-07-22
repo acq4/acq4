@@ -70,6 +70,12 @@ class CellPanel(Qt.QWidget):
         orchestrator.sigCurrentAction.connect(self._onCurrentAction)
         orchestrator.sigCellFinished.connect(self._onCellFinished)
         orchestrator.sigActionFinished.connect(self._onActionFinished)
+        # Cells seeded before a protocol was loaded (self._orchestrator was None)
+        # were held here without being enqueued; flush them into the newly bound
+        # orchestrator now, exactly once each, so a freshly loaded protocol runs
+        # over any cells the operator already seeded.
+        for cell in self._cells.values():
+            orchestrator.enqueue(cell)
 
     def _onAddFromTargetClicked(self) -> None:
         pipette = self._pipetteGetter()
@@ -90,7 +96,14 @@ class CellPanel(Qt.QWidget):
             self._enqueueAndAdd(cell)
 
     def _enqueueAndAdd(self, cell) -> None:
-        self._orchestrator.enqueue(cell)
+        # self._cells (via addCell) is the authoritative source of truth for
+        # seeded cells, so seeding must work even before a protocol has been
+        # loaded and bound an orchestrator. If one IS bound, also enqueue the
+        # new cell into it immediately; unbound cells are flushed into whatever
+        # orchestrator bindOrchestrator() later binds, so this never
+        # double-enqueues.
+        if self._orchestrator is not None:
+            self._orchestrator.enqueue(cell)
         self.addCell(cell)
 
     def addCell(self, cell) -> None:
