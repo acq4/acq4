@@ -20,6 +20,7 @@ class Orchestrator(Qt.QObject):
     sigStatus = Qt.Signal(str)                 # "running"/"waiting"/"paused"/"error"
     sigCurrentAction = Qt.Signal(object, object)   # cell, action (None,None when idle)
     sigCellFinished = Qt.Signal(object, str)   # cell, status
+    sigActionFinished = Qt.Signal(object, object, str)  # cell, action, outcome
 
     def __init__(self, protocol, manager=None, contextFactory=None, maxRetries=100):
         Qt.QObject.__init__(self)
@@ -128,6 +129,7 @@ class Orchestrator(Qt.QObject):
             ctx = self._contextFactory(cell)
             self.sigCurrentAction.emit(cell, action)
             outcome = self._runAction(action, ctx)
+            self.sigActionFinished.emit(cell, action, outcome)
             node_id = protocol.next_node(node_id, outcome)
 
     def _processCell(self, cell):

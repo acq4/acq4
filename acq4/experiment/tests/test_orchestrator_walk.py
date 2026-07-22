@@ -43,3 +43,14 @@ def test_current_action_signal_emitted(qtbot, recording_cls):
         orch.run_sync_cell("cell1")
     assert blocker.args[0] == "cell1"
     assert blocker.args[1] is a
+
+
+def test_action_finished_signal_emitted_with_cell_action_outcome(qtbot, recording_cls):
+    a = recording_cls(name="a")   # returns "done" by default
+    p = Protocol(nodes={"a": a}, edges={}, entry="a")
+    orch = Orchestrator(p)
+    with qtbot.waitSignal(orch.sigActionFinished, timeout=1000) as blocker:
+        orch.run_sync_cell("cell1")
+    assert blocker.args[0] == "cell1"
+    assert blocker.args[1] is a
+    assert blocker.args[2] == "done"
