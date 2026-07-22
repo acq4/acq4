@@ -78,7 +78,10 @@ def test_entry_config_not_shared_mutable_default(fake_pip_factory):
     assert config is not WithConfig.entry_config
 
 
-def test_safeabort_retracts_to_bath(fake_pip_factory):
+def test_safeabort_cancels_current_state(fake_pip_factory):
+    # Mirrors the MultiPatch Cancel button: safeAbort stops the current state's
+    # job (which falls back per-state) rather than forcing a hard-coded state.
     pip = fake_pip_factory([])
     PatchAction().safeAbort(_ctx(pip))
-    assert ("bath", {}) in pip.setState_calls
+    assert len(pip.stop_calls) == 1
+    assert pip.stop_calls[0][1] == "orchestration abort"

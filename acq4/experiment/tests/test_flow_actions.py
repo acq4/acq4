@@ -37,9 +37,13 @@ def test_flow_actions_registered():
     assert get_action_class("Abort") is AbortAction
 
 
-def test_prompt_logs_and_acknowledges():
-    logged = []
-    ctx = ExecutionContext(log=logged.append)
-    a = PromptAction(params={"message": "Swap the pipette, then continue."})
-    assert a.run(ctx) == "acknowledged"
-    assert logged == ["Swap the pipette, then continue."]
+def test_prompt_registered():
+    assert get_action_class("Prompt") is PromptAction
+
+
+def test_prompt_choices_parse_to_outcomes():
+    # The clicked button label is the outcome, so choices must parse cleanly.
+    # (The GUI prompt itself requires an operator and is exercised live, not here.)
+    assert PromptAction().choices() == ["OK"]
+    a = PromptAction(params={"choices": "Retry, Skip , Abort"})
+    assert a.choices() == ["Retry", "Skip", "Abort"]

@@ -76,10 +76,16 @@ def stop_cls():
 
 
 class FakeStateJob:
-    """Stand-in for a PatchPipetteState job: exposes .stateName."""
+    """Stand-in for a PatchPipetteState job: exposes .stateName and a stop() that
+    mirrors the real state job (records the cancel on the owning pipette)."""
 
-    def __init__(self, name):
+    def __init__(self, name, pipette=None):
         self.stateName = name
+        self._pipette = pipette
+
+    def stop(self, reason=None, wait=False):
+        if self._pipette is not None:
+            self._pipette.stop_calls.append((self.stateName, reason))
 
 
 class FakePatchPipette:
@@ -87,23 +93,25 @@ class FakePatchPipette:
 
     ``state_sequence`` is the list of state names ``getState()`` reports on successive
     polls (simulating the FSM self-driving). ``setState`` records its calls and sets the
-    current state to the requested entry state.
+    current state to the requested entry state. ``stop_calls`` records state-job stops
+    (the Cancel-style safeAbort path).
     """
 
     def __init__(self, state_sequence=()):
         self._seq = list(state_sequence)
         self._current = "out"
         self.setState_calls = []
+        self.stop_calls = []
 
     def setState(self, state, **config):
         self.setState_calls.append((state, config))
         self._current = state
-        return FakeStateJob(state)
+        return FakeStateJob(state, self)
 
     def getState(self):
         if self._seq:
             self._current = self._seq.pop(0)
-        return FakeStateJob(self._current)
+        return FakeStateJob(self._current, self)
 
 
 @pytest.fixture

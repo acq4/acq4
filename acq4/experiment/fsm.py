@@ -2,7 +2,7 @@
 terminal state, mapping unexpected abnormal states to orchestration exceptions."""
 from __future__ import annotations
 
-from acq4.util.task import check_stop, sleep
+from acq4.util.task import sleep
 
 from .action import Action
 from .registry import register_action
@@ -32,7 +32,6 @@ class FsmCompositeAction(Action):
         # Fresh dict per call so no instance/subclass shares a mutable default.
         pip.setState(self.entry_state, **dict(self.entry_config or {}))
         while True:
-            check_stop()
             state = pip.getState().stateName
             if state in self.outcomes:
                 self.setState(f"reached {state!r}")
@@ -41,17 +40,19 @@ class FsmCompositeAction(Action):
             exc_cls = ABNORMAL_STATE_EXCEPTIONS.get(state)
             if exc_cls is not None:
                 raise exc_cls(f"{self.name}: pipette entered {state!r} state")
-            sleep(self.poll_interval)
+            sleep(self.poll_interval)  # stop-aware: raises Stopped when the run stops
 
     def safeAbort(self, ctx) -> None:
         pip = getattr(ctx, "pipette", None)
         if pip is None:
             return
-        # Best-effort retract to a safe holding state.
-        try:
-            pip.setState("bath")
-        except Exception:
-            pass
+        # Mirror the MultiPatch "Cancel" button (pipetteControl._cancelClicked):
+        # stop the current FSM state's job, which switches the pipette to that
+        # state's declared fallback state rather than forcing a single hard-coded
+        # holding state.
+        state = pip.getState()
+        if state is not None:
+            state.stop("orchestration abort", wait=True)
 
 
 @register_action(name="Patch")

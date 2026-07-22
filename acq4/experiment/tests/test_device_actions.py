@@ -1,30 +1,15 @@
-"""Tests for device-wrapping Actions (Cellfie, Task) using small fakes."""
+"""Tests for device-wrapping Actions (FindTip, Cellfie, Task).
+
+Task is fully headless. FindTip and Cellfie drive real pipette/imaging hardware
+(moves, tip-finding, z-stack capture), so only their registration and declared
+outcomes/params are checked here; their behavior is verified by live testing.
+"""
 import pytest
 
 from acq4.experiment.context import ExecutionContext
-from acq4.experiment.actions.device import CellfieAction, TaskAction
+from acq4.experiment.actions.device import FindTipAction, CellfieAction, TaskAction
 from acq4.experiment.exceptions import OrchestrationError
 from acq4.experiment.registry import get_action_class
-
-
-class _FakeCell:
-    def __init__(self):
-        self.tracker_calls = []
-
-    def initializeTracker(self, imager, **kwargs):
-        self.tracker_calls.append((imager, kwargs))
-
-
-class _FakeCamera:
-    pass
-
-
-class _FakePipette:
-    def __init__(self):
-        self._imager = _FakeCamera()
-
-    def imagingDevice(self):
-        return self._imager
 
 
 class _FakeManager:
@@ -35,17 +20,6 @@ class _FakeManager:
     def runTask(self, cmd):
         self.runTask_calls.append(cmd)
         return self.result
-
-
-def test_cellfie_initializes_tracker():
-    pip = _FakePipette()
-    cell = _FakeCell()
-    ctx = ExecutionContext(cell=cell, pipette=pip)
-    assert CellfieAction().run(ctx) == "captured"
-    assert len(cell.tracker_calls) == 1
-    imager, kwargs = cell.tracker_calls[0]
-    assert imager is pip._imager
-    assert kwargs.get("use_cellpose") is True
 
 
 def test_task_runs_command_and_returns_done():
@@ -66,6 +40,15 @@ def test_task_invalid_json_raises_orchestration_error():
     assert mgr.runTask_calls == []
 
 
+def test_findtip_declares_found_outcome():
+    assert FindTipAction.outcomes == ("found",)
+
+
+def test_cellfie_declares_captured_outcome():
+    assert CellfieAction.outcomes == ("captured",)
+
+
 def test_registered():
+    assert get_action_class("FindTip") is FindTipAction
     assert get_action_class("Cellfie") is CellfieAction
     assert get_action_class("Task") is TaskAction
