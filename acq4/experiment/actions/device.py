@@ -1,25 +1,12 @@
-"""Device-wrapping Actions: move the pipette to a cell (GoTo), capture the cell
-tracker reference stack (Cellfie), and run a TaskRunner command (Task)."""
+"""Device-wrapping Actions: capture the cell tracker reference stack (Cellfie)
+and run a TaskRunner command (Task)."""
 from __future__ import annotations
 
 import json
 
 from ..action import Action
 from ..registry import register_action
-
-
-@register_action(name="GoTo")
-class GoToAction(Action):
-    """Move the pipette to the current cell's position (planned move to target)."""
-
-    outcomes = ("arrived",)
-    paramSpec = ({"name": "speed", "type": "str", "default": "fast"},)
-
-    def run(self, ctx):
-        pip = ctx.pipette
-        pip.setTarget(ctx.cell.position.coordinates)
-        pip.moveTo("target", self.paramValue("speed")).wait()
-        return "arrived"
+from ..exceptions import OrchestrationError
 
 
 @register_action(name="Cellfie")
@@ -38,12 +25,25 @@ class CellfieAction(Action):
 class TaskAction(Action):
     """Run a TaskRunner command (a JSON object in the `command` param) headless via
     Manager.runTask. Loading a saved protocol file into a command dict is a later
-    concern; this action takes the command directly."""
+    concern; this action takes the command directly.
+
+    TODO: the real implementation should drive an already-open TaskRunner module
+    instance (loading the specified task and taking over the run), rather than
+    calling Manager.runTask with a raw command dict. See
+    acq4.modules.AutomationDebug.autopatch.Autopatcher._autopatchRunTaskRunner for
+    the pattern to take over. Deferred to a later stage of this work.
+    """
 
     outcomes = ("done",)
     paramSpec = ({"name": "command", "type": "text", "default": "{}"},)
 
     def run(self, ctx):
-        command = json.loads(self.paramValue("command") or "{}")
+        raw = self.paramValue("command") or "{}"
+        try:
+            command = json.loads(raw)
+        except ValueError as e:
+            # Route malformed command JSON through the orchestrator's exception
+            # handling (catch-all "Exception") rather than crashing the run loop.
+            raise OrchestrationError(f"{self.name}: invalid command JSON: {e}") from e
         self.results["result"] = ctx.manager.runTask(command)
         return "done"

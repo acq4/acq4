@@ -5,6 +5,8 @@ import pytest
 from acq4.experiment.context import ExecutionContext
 from acq4.experiment.actions.script import ScriptAction
 from acq4.experiment.exceptions import ScriptError
+from acq4.experiment.protocol import Protocol
+from acq4.experiment.orchestrator import Orchestrator
 
 
 def _write(tmp_path, name, body):
@@ -58,6 +60,60 @@ def test_no_action_subclass_raises(tmp_path):
     path = _write(tmp_path, "empty.py", "x = 1\n")
     with pytest.raises(ScriptError):
         ScriptAction(params={"path": path}).run(ExecutionContext())
+
+
+def test_script_exposes_inner_outcomes(tmp_path):
+    path = _write(tmp_path, "oc.py", """
+        from acq4.experiment.action import Action
+        class A(Action):
+            outcomes = ("weird",)
+            def run(self, ctx): return "weird"
+    """)
+    a = ScriptAction(params={"path": path})
+    result = a.run(ExecutionContext())
+    assert result == "weird"
+    # The wrapper adopts the inner action's outcomes so the orchestrator's
+    # `result in action.outcomes` validation passes for non-"done" outcomes.
+    assert a.outcomes == ("weird",)
+    assert result in a.outcomes
+
+
+def test_script_routes_through_orchestrator(tmp_path, recording_cls):
+    # Regression: a ScriptAction whose inner action returns a non-"done" outcome
+    # must route through the orchestrator rather than raising "unknown outcome".
+    recording_cls.ran.clear()
+    path = _write(tmp_path, "route.py", """
+        from acq4.experiment.action import Action
+        class A(Action):
+            outcomes = ("weird",)
+            def run(self, ctx): return "weird"
+    """)
+    script = ScriptAction(name="s", params={"path": path})
+    after = recording_cls(name="after")
+    p = Protocol(nodes={"s": script, "after": after},
+                 edges={("s", "weird"): "after"}, entry="s")
+    Orchestrator(p).run_sync_cell("cell1")
+    assert recording_cls.ran == ["after"]
+
+
+def test_script_safeabort_delegates_to_inner(tmp_path):
+    path = _write(tmp_path, "ab.py", """
+        from acq4.experiment.action import Action
+        class A(Action):
+            outcomes = ("ok",)
+            def run(self, ctx): return "ok"
+            def safeAbort(self, ctx): ctx.log("inner aborted")
+    """)
+    logged = []
+    a = ScriptAction(params={"path": path})
+    a.run(ExecutionContext(log=logged.append))
+    a.safeAbort(ExecutionContext(log=logged.append))
+    assert "inner aborted" in logged
+
+
+def test_script_safeabort_before_run_is_noop():
+    # No inner action loaded yet -> must not raise.
+    ScriptAction(params={"path": ""}).safeAbort(ExecutionContext())
 
 
 def test_multiple_action_subclasses_raises(tmp_path):

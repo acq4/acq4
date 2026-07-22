@@ -21,7 +21,7 @@ class FsmCompositeAction(Action):
     """
 
     entry_state: str = None
-    entry_config: dict = {}
+    entry_config: dict = None  # None -> no extra config; never a shared mutable default
     poll_interval: float = 0.1  # seconds between FSM state polls
 
     def run(self, ctx) -> str:
@@ -29,7 +29,8 @@ class FsmCompositeAction(Action):
             raise ValueError(f"{self.name}: entry_state is not set")
         pip = ctx.pipette
         self.setState(f"driving FSM from {self.entry_state!r}")
-        pip.setState(self.entry_state, **self.entry_config)
+        # Fresh dict per call so no instance/subclass shares a mutable default.
+        pip.setState(self.entry_state, **dict(self.entry_config or {}))
         while True:
             check_stop()
             state = pip.getState().stateName

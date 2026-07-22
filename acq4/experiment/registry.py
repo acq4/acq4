@@ -30,4 +30,10 @@ def get_action_class(name: str) -> type:
 
 
 def action_type_name(action: Action) -> str:
-    return getattr(type(action), "_typeName", type(action).__name__)
+    cls = type(action)
+    # Only report a registered name that belongs to this exact class, not one
+    # inherited from a registered base. Otherwise an unregistered subclass would
+    # serialize under its parent's type name and silently reconstruct as the
+    # parent on load; falling back to __name__ makes that fail loudly instead.
+    name = cls.__dict__.get("_typeName")
+    return name if name is not None else cls.__name__

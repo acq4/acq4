@@ -57,6 +57,27 @@ def test_missing_entry_state_raises(fake_pip_factory):
         Bare().run(_ctx(pip))
 
 
+def test_entry_config_not_shared_mutable_default(fake_pip_factory):
+    # The base class must not carry a shared mutable dict default.
+    assert FsmCompositeAction.entry_config is None
+
+    class WithConfig(FsmCompositeAction):
+        entry_state = "reseal"
+        outcomes = ("whole cell",)
+        entry_config = {"resealTimeout": 30}
+
+    pip = fake_pip_factory(["whole cell"])
+    a = WithConfig()
+    a.poll_interval = 0
+    a.run(_ctx(pip))
+    state, config = pip.setState_calls[0]
+    assert state == "reseal"
+    assert config == {"resealTimeout": 30}
+    # A fresh copy is passed each call, so a caller mutating it can't leak into
+    # the class-level attribute shared across instances.
+    assert config is not WithConfig.entry_config
+
+
 def test_safeabort_retracts_to_bath(fake_pip_factory):
     pip = fake_pip_factory([])
     PatchAction().safeAbort(_ctx(pip))

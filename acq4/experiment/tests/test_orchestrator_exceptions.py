@@ -98,6 +98,56 @@ def test_handler_raising_exception_aborts(raising_cls):
         Orchestrator(p).run_sync_cell("c1")
 
 
+def test_status_returns_to_running_after_handler_advance(raising_cls, recording_cls):
+    # After a handler recovers by advancing, status must not stay stuck on "error".
+    from acq4.experiment.actions.flow import GoToNextAction
+    handler = Protocol(
+        nodes={"h": recording_cls(name="h"), "adv": GoToNextAction(name="adv")},
+        edges={("h", "done"): "adv"}, entry="h",
+    )
+    p = Protocol(
+        nodes={"a": raising_cls(name="a", params={"exc": "BrokenPipette"})},
+        edges={}, entry="a",
+        exceptionHandlers={"BrokenPipette": handler},
+    )
+    statuses = []
+    orch = Orchestrator(p)
+    orch.sigStatus.connect(statuses.append)
+    orch.run_sync_cell("c1")
+    assert statuses == ["running", "error", "running"]
+
+
+def test_retry_cap_exhausts_and_skips():
+    # A handler that always retries an always-failing action must not loop forever;
+    # after maxRetries it finishes the cell as "retry-exhausted".
+    from acq4.experiment.action import Action
+    from acq4.experiment.registry import register_action
+    from acq4.experiment.exceptions import BrokenPipette
+    from acq4.experiment.actions.flow import RetryCellAction
+
+    @register_action(name="AlwaysFails")
+    class AlwaysFails(Action):
+        outcomes = ("done",)
+        calls = {"n": 0}
+
+        def run(self, ctx):
+            AlwaysFails.calls["n"] += 1
+            raise BrokenPipette("always fails")
+
+    AlwaysFails.calls["n"] = 0
+    handler = Protocol(nodes={"r": RetryCellAction(name="r")}, edges={}, entry="r")
+    p = Protocol(
+        nodes={"a": AlwaysFails(name="a")}, edges={}, entry="a",
+        exceptionHandlers={"BrokenPipette": handler},
+    )
+    finished = []
+    orch = Orchestrator(p, maxRetries=3)
+    orch.sigCellFinished.connect(lambda c, s: finished.append((c, s)))
+    orch.run_sync_cell("c1")
+    assert finished == [("c1", "retry-exhausted")]
+    assert AlwaysFails.calls["n"] == 4  # initial attempt + 3 retries, then give up
+
+
 def test_status_returns_to_running_after_handler_retry():
     from acq4.experiment.action import Action
     from acq4.experiment.registry import register_action

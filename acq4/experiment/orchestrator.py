@@ -21,7 +21,7 @@ class Orchestrator(Qt.QObject):
     sigCurrentAction = Qt.Signal(object, object)   # cell, action (None,None when idle)
     sigCellFinished = Qt.Signal(object, str)   # cell, status
 
-    def __init__(self, protocol, manager=None, contextFactory=None):
+    def __init__(self, protocol, manager=None, contextFactory=None, maxRetries=100):
         Qt.QObject.__init__(self)
         self.protocol = protocol
         self.manager = manager
@@ -30,6 +30,10 @@ class Orchestrator(Qt.QObject):
         self._pauseEvent.set()  # set == running
         self._nextCellRequested = False
         self._contextFactory = contextFactory or self._defaultContext
+        # Guard against an unbounded retry loop (a cell whose handler always
+        # retries, or a persistently-failing action). On exhaustion the cell is
+        # skipped rather than wedging the queue forever.
+        self.maxRetries = maxRetries
 
     # ---- queue / context ----
     def enqueue(self, cell):
@@ -68,6 +72,10 @@ class Orchestrator(Qt.QObject):
             task.stop(reason)
 
     def requestNextCell(self):
+        # P0 scope: the request is honored at the next action boundary (checked at
+        # the top of _walk), not mid-action. It does not interrupt or safeAbort an
+        # action that is already running -- use stop() for that. The design doc's
+        # "safeAbort the pipette and advance" semantics are a later enhancement.
         self._nextCellRequested = True
 
     def wait(self, timeout=None):
@@ -126,7 +134,9 @@ class Orchestrator(Qt.QObject):
 
     def _processCell(self, cell):
         """Run the main protocol for one cell, dispatching exceptional states to
-        handler sub-protocols. RetryCurrentCell loops; AdvanceToNextCell skips."""
+        handler sub-protocols. RetryCurrentCell loops (bounded by maxRetries);
+        AdvanceToNextCell skips."""
+        retries = 0
         while True:
             self.sigStatus.emit("running")
             try:
@@ -135,13 +145,24 @@ class Orchestrator(Qt.QObject):
                 self.sigCellFinished.emit(cell, "skipped")
                 return
             except RetryCurrentCell:
+                retries += 1
+                if retries > self.maxRetries:
+                    self.sigCellFinished.emit(cell, "retry-exhausted")
+                    return
                 self.sigCellFinished.emit(cell, "retry")
                 continue
             except OrchestrationError as exc:
                 self.sigStatus.emit("error")
                 disposition = self._handleException(exc, cell)
                 if disposition == "retry":
-                    continue
+                    retries += 1
+                    if retries > self.maxRetries:
+                        self.sigCellFinished.emit(cell, "retry-exhausted")
+                        return
+                    continue  # loop top re-emits "running"
+                # Handler recovered by advancing: the run is no longer in an
+                # error state, so restore "running" before finishing the cell.
+                self.sigStatus.emit("running")
                 self.sigCellFinished.emit(cell, "handled")
                 return
             else:

@@ -32,6 +32,23 @@ def test_unknown_type_raises():
         get_action_class("does-not-exist")
 
 
+def test_unregistered_subclass_not_misattributed():
+    @register_action(name="BaseRegistered")
+    class BaseRegistered(Action):
+        outcomes = ("ok",)
+
+    class DerivedUnregistered(BaseRegistered):
+        outcomes = ("ok2",)
+
+    # The unregistered subclass must report its own class name (not the parent's
+    # registered name), so a round-trip fails loudly rather than silently
+    # reconstructing the parent type.
+    assert action_type_name(BaseRegistered()) == "BaseRegistered"
+    assert action_type_name(DerivedUnregistered()) == "DerivedUnregistered"
+    with pytest.raises(KeyError):
+        get_action_class("DerivedUnregistered")
+
+
 def test_duplicate_name_different_class_raises():
     @register_action(name="dupe")
     class Gamma(Action):

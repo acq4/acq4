@@ -14,12 +14,25 @@ from ..exceptions import ScriptError
 
 @register_action(name="Script")
 class ScriptAction(Action):
+    # Placeholder until a script is loaded; run() replaces this with the loaded
+    # action's own outcomes (they aren't known until load time, by design).
     outcomes = ("done",)
     paramSpec = ({"name": "path", "type": "str", "default": ""},)
 
+    _inner: Action | None = None
+
     def run(self, ctx):
         action = self._loadAction()
+        self._inner = action
+        # Expose the loaded script's outcomes so the orchestrator validates and
+        # routes on what the inner action actually returns, not the placeholder.
+        self.outcomes = tuple(action.outcomes)
         return action.run(ctx)
+
+    def safeAbort(self, ctx) -> None:
+        # Delegate unwinding to the inner action loaded by the most recent run().
+        if self._inner is not None:
+            self._inner.safeAbort(ctx)
 
     def _loadAction(self) -> Action:
         path = self.paramValue("path")
