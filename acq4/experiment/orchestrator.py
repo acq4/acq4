@@ -52,8 +52,22 @@ class Orchestrator(Qt.QObject):
     # ---- controls ----
     def start(self):
         """Launch the queue loop asynchronously; returns the launched task."""
-        self._task = asynch_with_qt_signals(self._runLoopBody)()
+        self._task = asynch_with_qt_signals(
+            self._runLoopBody, on_finish=self._onLoopFinished
+        )()
         return self._task
+
+    def _onLoopFinished(self, result, exc):
+        """Clear self._task once the loop finishes.
+
+        self._task and its QtFriendlyTask hold a mutual reference (the task's
+        _fn is the bound method self._runLoopBody, and self._task references
+        the task back) -- a QObject reference cycle that only Python's cyclic
+        GC could otherwise reclaim, non-deterministically and off Qt's safe
+        teardown path. Clearing the reference here, from the task's own
+        completion hook, breaks the cycle as soon as a run finishes.
+        """
+        self._task = None
 
     def run_sync(self):
         """Run the whole queue inline (deterministic; for tests / headless)."""
