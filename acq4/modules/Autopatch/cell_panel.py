@@ -15,11 +15,18 @@ _SCATTER_RADIUS = 40e-6
 
 
 class CellPanel(Qt.QWidget):
+    # Emitted by appendLog() so log messages arriving from the orchestrator's
+    # worker thread (via ExecutionContext.log) are marshaled onto the GUI thread
+    # by Qt's automatic queued connection, rather than touching logView directly
+    # from a non-GUI thread.
+    sigLogMessage = Qt.Signal(str)
+
     def __init__(self, pipetteGetter=None, cameraGetter=None):
         super().__init__()
         self._orchestrator = None
         self._rows: dict[int, Qt.QListWidgetItem] = {}
         self._timelines: dict[int, list[str]] = {}
+        self._cells: dict[int, object] = {}
         self._pipetteGetter = pipetteGetter or (lambda: None)
         self._cameraGetter = cameraGetter or (lambda: None)
 
@@ -51,6 +58,7 @@ class CellPanel(Qt.QWidget):
         self.setLayout(layout)
 
         self.cellList.currentItemChanged.connect(self._onCellSelectionChanged)
+        self.sigLogMessage.connect(self._onLogMessage)
 
     def bindOrchestrator(self, orchestrator) -> None:
         if self._orchestrator is not None:
@@ -90,8 +98,20 @@ class CellPanel(Qt.QWidget):
         self.cellList.addItem(item)
         self._rows[id(cell)] = item
         self._timelines[id(cell)] = []
+        # QListWidgetItem.setData() does not keep a strong Python reference to a
+        # QObject-derived value (Cell is one): once the orchestrator's queue/worker
+        # frame drops its own reference, the cell can be garbage-collected and
+        # item.data() comes back re-wrapped as a bare, dangling QObject. Holding a
+        # reference here for the panel's lifetime keeps the original object alive.
+        self._cells[id(cell)] = cell
 
     def appendLog(self, message: str) -> None:
+        # May be called from the orchestrator's worker thread (ExecutionContext.log);
+        # emitting rather than touching logView directly lets Qt's automatic queued
+        # connection marshal the update onto the GUI thread.
+        self.sigLogMessage.emit(message)
+
+    def _onLogMessage(self, message: str) -> None:
         self.logView.appendPlainText(message)
 
     def _onCurrentAction(self, cell, action) -> None:

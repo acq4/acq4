@@ -1428,8 +1428,15 @@ git commit --author="Claude (claude) <noreply@anthropic.com>" -m "feat: add cell
 
 ### Task 9: Wire the window end-to-end (Orchestrator construction on protocol load)
 
+> **Deviations from the plan text below (applied 2026-07-22):**
+> 1. `AutopatchWindow.__init__` gains a `cameraSelector=None` constructor param too (not just `pipetteSelector`), because Task 6's "Scatter fake cells" button needs a camera device (`InterfaceCombo(types=['camera'])` in production, injected fake in tests). `CellPanel` is constructed with both `pipetteGetter=self.pipetteSelector.getSelectedObj` and `cameraGetter=self.cameraSelector.getSelectedObj`.
+> 2. **Real bug found and fixed while writing the full end-to-end test:** `Qt.QListWidgetItem.setData(role, cell)` does not hold a strong Python reference to a `QObject`-derived value (`Cell` subclasses `Qt.QObject`). Once the orchestrator's queue/worker-thread frame drops its own reference to a running cell, the `Cell` can be garbage-collected mid-flight; a later `item.data(role)` then returns a re-wrapped, dangling generic `QObject` (losing all `Cell`-specific state) or segfaults outright, depending on timing. Fixed by having `CellPanel.addCell` retain its own strong reference (`self._cells[id(cell)] = cell`) for the panel's lifetime, independent of the `QListWidgetItem`'s `QVariant` storage. This is a correctness fix in `acq4/modules/Autopatch/cell_panel.py`, not an engine change.
+> 3. Task 9 Step 6 (registering `Autopatch:` in a config) targets `config/mock/default.cfg` per resolved Open Question #4, alongside `AutomationDebug`'s pattern in `config/default.cfg`.
+
 **Files:**
 - Modify: `acq4/modules/Autopatch/Autopatch.py`
+- Modify: `acq4/modules/Autopatch/cell_panel.py` (strong-reference fix, see above)
+- Modify: `config/mock/default.cfg` (module registration)
 - Test: `acq4/modules/Autopatch/tests/test_window_integration.py`
 
 **Interfaces:**

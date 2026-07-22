@@ -4,20 +4,31 @@ from __future__ import annotations
 
 import os
 
+from acq4.experiment.orchestrator import Orchestrator
 from acq4.modules.Module import Module
 from acq4.util import Qt
+from acq4.util.InterfaceCombo import InterfaceCombo
 
+from .cell_panel import CellPanel
+from .context_factory import make_context_factory
 from .protocol_panel import ProtocolPanel
+from .status_panel import StatusPanel
 
 
 class AutopatchWindow(Qt.QWidget):
     """The Autopatch run window: five labeled areas per the design doc.
 
-    This task only builds empty placeholder group boxes; later tasks add each
-    area's real content (protocol selection, status/controls, cell list).
+    Areas 1/2 stay empty placeholders in P1; Areas 3/4/5 hold the real
+    status/protocol/cell-queue content wired to a live Orchestrator.
     """
 
-    def __init__(self, module: "Autopatch | None" = None, protocolDir: str | None = None):
+    def __init__(
+        self,
+        module: "Autopatch | None" = None,
+        protocolDir: str | None = None,
+        pipetteSelector=None,
+        cameraSelector=None,
+    ):
         super().__init__()
         self.module = module
         self.manager = module.manager if module is not None else None
@@ -55,6 +66,39 @@ class AutopatchWindow(Qt.QWidget):
             protocolDir = os.path.join(self.manager.configDir, "autopatch_protocols")
         self.protocolPanel = ProtocolPanel(protocolDir=protocolDir)
         self.area4Box.layout().addWidget(self.protocolPanel)
+
+        self.pipetteSelector = (
+            pipetteSelector if pipetteSelector is not None else InterfaceCombo(types=["pipette"])
+        )
+        self.cameraSelector = (
+            cameraSelector if cameraSelector is not None else InterfaceCombo(types=["camera"])
+        )
+        self.area4Box.layout().addWidget(self.pipetteSelector)
+        self.area4Box.layout().addWidget(self.cameraSelector)
+
+        self.statusPanel = StatusPanel()
+        self.area3Box.layout().addWidget(self.statusPanel)
+
+        self.cellPanel = CellPanel(
+            pipetteGetter=self.pipetteSelector.getSelectedObj,
+            cameraGetter=self.cameraSelector.getSelectedObj,
+        )
+        self.area5Box.layout().addWidget(self.cellPanel)
+
+        self.orchestrator = None
+        self.protocolPanel.sigProtocolLoaded.connect(self._onProtocolLoaded)
+
+    def _onProtocolLoaded(self, protocol) -> None:
+        contextFactory = make_context_factory(
+            pipetteGetter=self.pipetteSelector.getSelectedObj,
+            manager=self.manager,
+            log=self.cellPanel.appendLog,
+        )
+        self.orchestrator = Orchestrator(
+            protocol, manager=self.manager, contextFactory=contextFactory
+        )
+        self.statusPanel.bindOrchestrator(self.orchestrator)
+        self.cellPanel.bindOrchestrator(self.orchestrator)
 
 
 class Autopatch(Module):

@@ -11,10 +11,27 @@ def qapp():
     return Qt.QApplication.instance() or Qt.QApplication([])
 
 
-def test_window_constructs_with_five_area_boxes(qapp, tmp_path):
+class _FakeDeviceSelector(Qt.QWidget):
+    """Stands in for InterfaceCombo so these skeleton tests never trigger its
+    internal getManager() call."""
+
+    def getSelectedObj(self):
+        return None
+
+
+def _makeWindow(tmp_path):
     from acq4.modules.Autopatch.Autopatch import AutopatchWindow
 
-    win = AutopatchWindow(module=None, protocolDir=str(tmp_path))
+    return AutopatchWindow(
+        module=None,
+        protocolDir=str(tmp_path),
+        pipetteSelector=_FakeDeviceSelector(),
+        cameraSelector=_FakeDeviceSelector(),
+    )
+
+
+def test_window_constructs_with_five_area_boxes(qapp, tmp_path):
+    win = _makeWindow(tmp_path)
 
     assert isinstance(win.area1Box, Qt.QGroupBox)
     assert isinstance(win.area2Box, Qt.QGroupBox)
@@ -24,9 +41,7 @@ def test_window_constructs_with_five_area_boxes(qapp, tmp_path):
 
 
 def test_area_titles_name_their_design_doc_role(qapp, tmp_path):
-    from acq4.modules.Autopatch.Autopatch import AutopatchWindow
-
-    win = AutopatchWindow(module=None, protocolDir=str(tmp_path))
+    win = _makeWindow(tmp_path)
 
     assert "slice" in win.area1Box.title().lower()
     assert "cell" in win.area2Box.title().lower() and "find" in win.area2Box.title().lower()
@@ -36,7 +51,5 @@ def test_area_titles_name_their_design_doc_role(qapp, tmp_path):
 
 
 def test_window_has_a_title(qapp, tmp_path):
-    from acq4.modules.Autopatch.Autopatch import AutopatchWindow
-
-    win = AutopatchWindow(module=None, protocolDir=str(tmp_path))
+    win = _makeWindow(tmp_path)
     assert win.windowTitle() == "Autopatch"
