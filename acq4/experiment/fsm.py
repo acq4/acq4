@@ -57,9 +57,10 @@ class FsmCompositeAction(Action):
 
 @register_action(name="Patch")
 class PatchAction(FsmCompositeAction):
-    """Drive cell detection through sealing/break-in to a resting terminal state."""
+    """Drive approach through detection, sealing, and break-in to a resting
+    terminal state."""
 
-    entry_state = "cell detect"
+    entry_state = "approach"
     outcomes = ("whole cell", "cell attached", "bath", "broken", "fouled")
 
 
@@ -69,3 +70,13 @@ class ResealAction(FsmCompositeAction):
 
     entry_state = "reseal"
     outcomes = ("outside out", "whole cell")
+
+
+@register_action(name="Clean")
+class CleanAction(FsmCompositeAction):
+    """Run the pipette-cleaning cycle and return once it settles at its resting
+    state (``out`` by default; configure ``nextState`` via entry_config, and set
+    ``outcomes`` to match)."""
+
+    entry_state = "clean"
+    outcomes = ("out",)

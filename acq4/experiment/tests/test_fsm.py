@@ -2,7 +2,7 @@
 import pytest
 
 from acq4.experiment.context import ExecutionContext
-from acq4.experiment.fsm import PatchAction, ResealAction, FsmCompositeAction
+from acq4.experiment.fsm import PatchAction, ResealAction, CleanAction, FsmCompositeAction
 from acq4.experiment.exceptions import BrokenPipette
 from acq4.experiment.registry import get_action_class
 
@@ -16,7 +16,7 @@ def test_patch_reaches_whole_cell(fake_pip_factory):
     a = PatchAction()
     a.poll_interval = 0
     assert a.run(_ctx(pip)) == "whole cell"
-    assert pip.setState_calls[0][0] == "cell detect"
+    assert pip.setState_calls[0][0] == "approach"  # Patch enters the FSM at approach
 
 
 def test_patch_declares_broken_as_outcome(fake_pip_factory):
@@ -43,9 +43,18 @@ def test_reseal_broken_raises_exception(fake_pip_factory):
         a.run(_ctx(pip))
 
 
+def test_clean_reaches_out(fake_pip_factory):
+    pip = fake_pip_factory(["clean", "out"])
+    a = CleanAction()
+    a.poll_interval = 0
+    assert a.run(_ctx(pip)) == "out"
+    assert pip.setState_calls[0][0] == "clean"
+
+
 def test_registered():
     assert get_action_class("Patch") is PatchAction
     assert get_action_class("Reseal") is ResealAction
+    assert get_action_class("Clean") is CleanAction
 
 
 def test_missing_entry_state_raises(fake_pip_factory):
