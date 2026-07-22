@@ -73,3 +73,42 @@ def raising_cls():
 @pytest.fixture
 def stop_cls():
     return StopAction
+
+
+class FakeStateJob:
+    """Stand-in for a PatchPipetteState job: exposes .stateName."""
+
+    def __init__(self, name):
+        self.stateName = name
+
+
+class FakePatchPipette:
+    """Minimal fake of PatchPipette for FSM-action tests.
+
+    ``state_sequence`` is the list of state names ``getState()`` reports on successive
+    polls (simulating the FSM self-driving). ``setState`` records its calls and sets the
+    current state to the requested entry state.
+    """
+
+    def __init__(self, state_sequence=()):
+        self._seq = list(state_sequence)
+        self._current = "out"
+        self.setState_calls = []
+
+    def setState(self, state, **config):
+        self.setState_calls.append((state, config))
+        self._current = state
+        return FakeStateJob(state)
+
+    def getState(self):
+        if self._seq:
+            self._current = self._seq.pop(0)
+        return FakeStateJob(self._current)
+
+
+@pytest.fixture
+def fake_pip_factory():
+    def make(state_sequence):
+        return FakePatchPipette(state_sequence)
+
+    return make
