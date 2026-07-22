@@ -157,6 +157,7 @@ class Orchestrator(Qt.QObject):
                     if retries > self.maxRetries:
                         self.sigCellFinished.emit(cell, "retry-exhausted")
                         return
+                    self.sigCellFinished.emit(cell, "retry")
                     continue  # loop top re-emits "running"
                 # Handler recovered by advancing: the run is no longer in an
                 # error state, so restore "running" before finishing the cell.

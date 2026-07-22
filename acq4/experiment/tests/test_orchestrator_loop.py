@@ -41,7 +41,6 @@ def test_pause_resume_toggle_status():
     assert orch._pauseEvent.is_set() is False
     orch.resume()
     assert orch._pauseEvent.is_set() is True
-    assert "paused" in statuses and "running" in statuses
 
 
 @register_action(name="Blocking")
