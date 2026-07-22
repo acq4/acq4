@@ -125,10 +125,38 @@ class Orchestrator(Qt.QObject):
             node_id = protocol.next_node(node_id, outcome)
 
     def _processCell(self, cell):
-        """Run the main protocol for one cell, honoring a next-cell request."""
+        """Run the main protocol for one cell, dispatching exceptional states to
+        handler sub-protocols. RetryCurrentCell loops; AdvanceToNextCell skips."""
+        while True:
+            try:
+                self._walk(cell, self.protocol, self.protocol.entry)
+            except AdvanceToNextCell:
+                self.sigCellFinished.emit(cell, "skipped")
+                return
+            except RetryCurrentCell:
+                self.sigCellFinished.emit(cell, "retry")
+                continue
+            except OrchestrationError as exc:
+                self.sigStatus.emit("error")
+                disposition = self._handleException(exc, cell)
+                if disposition == "retry":
+                    continue
+                self.sigCellFinished.emit(cell, "handled")
+                return
+            else:
+                self.sigCellFinished.emit(cell, "done")
+                return
+
+    def _handleException(self, exc, cell) -> str:
+        """Run the matching handler sub-protocol. Returns 'retry' or 'advance';
+        raises AbortExperiment when the handler aborts or none matches."""
+        handler = self.protocol.handler_for(exc.typeName)
+        if handler is None or handler.entry is None:
+            raise AbortExperiment(f"unhandled {exc.typeName}: {exc}")
         try:
-            self._walk(cell, self.protocol, self.protocol.entry)
+            self._walk(cell, handler, handler.entry)
         except AdvanceToNextCell:
-            self.sigCellFinished.emit(cell, "skipped")
-            return
-        self.sigCellFinished.emit(cell, "done")
+            return "advance"
+        except RetryCurrentCell:
+            return "retry"
+        return "advance"  # handler ran to completion without a flow action
