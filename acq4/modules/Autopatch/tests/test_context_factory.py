@@ -36,10 +36,28 @@ def test_factory_forwards_log_callable():
 
     messages = []
     factory = make_context_factory(
-        pipetteGetter=lambda: None, manager=None, log=messages.append
+        pipetteGetter=lambda: None, manager=None, log=lambda cell, message: messages.append((cell, message))
     )
 
-    ctx = factory(object())
+    cell = object()
+    ctx = factory(cell)
     ctx.log("hello")
 
-    assert messages == ["hello"]
+    assert messages == [(cell, "hello")]
+
+
+def test_factory_binds_log_per_cell_so_lines_can_be_scoped():
+    from acq4.modules.Autopatch.context_factory import make_context_factory
+
+    messages = []
+    factory = make_context_factory(
+        pipetteGetter=lambda: None, manager=None, log=lambda cell, message: messages.append((cell, message))
+    )
+
+    cellA, cellB = object(), object()
+    ctxA = factory(cellA)
+    ctxB = factory(cellB)
+    ctxA.log("from A")
+    ctxB.log("from B")
+
+    assert messages == [(cellA, "from A"), (cellB, "from B")]

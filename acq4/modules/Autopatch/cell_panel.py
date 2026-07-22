@@ -19,13 +19,14 @@ class CellPanel(Qt.QWidget):
     # worker thread (via ExecutionContext.log) are marshaled onto the GUI thread
     # by Qt's automatic queued connection, rather than touching logView directly
     # from a non-GUI thread.
-    sigLogMessage = Qt.Signal(str)
+    sigLogMessage = Qt.Signal(object, str)
 
     def __init__(self, pipetteGetter=None, cameraGetter=None):
         super().__init__()
         self._orchestrator = None
         self._rows: dict[int, Qt.QListWidgetItem] = {}
         self._timelines: dict[int, list[str]] = {}
+        self._logs: dict[int, list[str]] = {}
         self._cells: dict[int, object] = {}
         self._pipetteGetter = pipetteGetter or (lambda: None)
         self._cameraGetter = cameraGetter or (lambda: None)
@@ -98,6 +99,7 @@ class CellPanel(Qt.QWidget):
         self.cellList.addItem(item)
         self._rows[id(cell)] = item
         self._timelines[id(cell)] = []
+        self._logs[id(cell)] = []
         # QListWidgetItem.setData() does not keep a strong Python reference to a
         # QObject-derived value (Cell is one): once the orchestrator's queue/worker
         # frame drops its own reference, the cell can be garbage-collected and
@@ -105,14 +107,17 @@ class CellPanel(Qt.QWidget):
         # reference here for the panel's lifetime keeps the original object alive.
         self._cells[id(cell)] = cell
 
-    def appendLog(self, message: str) -> None:
-        # May be called from the orchestrator's worker thread (ExecutionContext.log);
-        # emitting rather than touching logView directly lets Qt's automatic queued
-        # connection marshal the update onto the GUI thread.
-        self.sigLogMessage.emit(message)
+    def appendLog(self, cell, message: str) -> None:
+        # May be called from the orchestrator's worker thread (ExecutionContext.log,
+        # bound per-cell by the context factory); emitting rather than touching
+        # logView directly lets Qt's automatic queued connection marshal the
+        # update onto the GUI thread.
+        self.sigLogMessage.emit(cell, message)
 
-    def _onLogMessage(self, message: str) -> None:
-        self.logView.appendPlainText(message)
+    def _onLogMessage(self, cell, message: str) -> None:
+        self._logs.setdefault(id(cell), []).append(message)
+        if cell is self._currentSelectedCell():
+            self.logView.appendPlainText(message)
 
     def _onCurrentAction(self, cell, action) -> None:
         if cell is None:
@@ -121,15 +126,18 @@ class CellPanel(Qt.QWidget):
         if item is not None:
             item.setText(f"cell {id(cell)} — running: {action.name}")
 
+        self._clearShowContainer()
+        if cell is self._currentSelectedCell():
+            widget = action.show()
+            if widget is not None:
+                self.showContainer.layout().addWidget(widget)
+
+    def _clearShowContainer(self) -> None:
         showLayout = self.showContainer.layout()
         while showLayout.count():
             child = showLayout.takeAt(0)
             if child.widget() is not None:
                 child.widget().setParent(None)
-        if cell is self._currentSelectedCell():
-            widget = action.show()
-            if widget is not None:
-                showLayout.addWidget(widget)
 
     def _onCellFinished(self, cell, status: str) -> None:
         item = self._rows.get(id(cell))
@@ -144,11 +152,18 @@ class CellPanel(Qt.QWidget):
 
     def _onCellSelectionChanged(self, current, _previous) -> None:
         self.timelineList.clear()
+        self.logView.clear()
+        # A followed cell's live show() widget must not linger once the
+        # operator switches away; only the selected cell's current action (via
+        # the next sigCurrentAction) may repopulate this container.
+        self._clearShowContainer()
         if current is None:
             return
         cell = current.data(Qt.Qt.UserRole)
         for line in self._timelines.get(id(cell), []):
             self.timelineList.addItem(line)
+        for line in self._logs.get(id(cell), []):
+            self.logView.appendPlainText(line)
 
     def _currentSelectedCell(self):
         item = self.cellList.currentItem()

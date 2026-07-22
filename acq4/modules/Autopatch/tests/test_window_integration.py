@@ -139,3 +139,97 @@ def test_full_flow_seeds_a_cell_starts_and_updates_status_timeline_log(qapp, qtb
     assert timelineLines == ["n1: done"]  # action.name is the protocol node id
 
     assert "ran on" in win.cellPanel.logView.toPlainText()
+
+
+class _CountingPipetteSelector(Qt.QWidget):
+    """Like _FakePipetteSelector, but counts getSelectedObj() calls and allows
+    mutating the "selection" mid-test, so a test can prove the context factory
+    reads a cached pipette rather than re-consulting the selector widget."""
+
+    def __init__(self, target):
+        super().__init__()
+        self._target = target
+        self.callCount = 0
+
+    def getSelectedObj(self):
+        self.callCount += 1
+        return _FakePipette(self._target)
+
+    def setTarget(self, target) -> None:
+        self._target = target
+
+
+@register_action(name="AutopatchPipetteCaptureA")
+class _CapturePipetteA(Action):
+    """Captures ctx.pipette on its `results`, then advances to the next node."""
+
+    outcomes = ("next",)
+
+    def run(self, ctx):
+        self.results["pipette"] = ctx.pipette
+        return "next"
+
+
+@register_action(name="AutopatchPipetteCaptureB")
+class _CapturePipetteB(Action):
+    """Captures ctx.pipette on its `results`, then finishes the cell."""
+
+    outcomes = ("done",)
+
+    def run(self, ctx):
+        self.results["pipette"] = ctx.pipette
+        return "done"
+
+
+def _write_pipette_capture_protocol(path, name):
+    data = {
+        "version": 1,
+        "entry": "n1",
+        "nodes": {
+            "n1": {"type": "AutopatchPipetteCaptureA", "params": {}},
+            "n2": {"type": "AutopatchPipetteCaptureB", "params": {}},
+        },
+        "edges": [{"from": "n1", "outcome": "next", "to": "n2"}],
+        "publicParams": [],
+        "exceptionHandlers": {},
+    }
+    with open(os.path.join(path, name), "w") as fh:
+        json.dump(data, fh)
+
+
+def test_pipette_is_snapshotted_at_start_not_read_from_selector_mid_run(qapp, qtbot, tmp_path):
+    """The context factory must not call the pipette selector widget from the
+    orchestrator's worker thread during a run (a race on currentIndex()/
+    interfaceMap). It should read a plain object cached at Start (GUI thread)."""
+    from acq4.modules.Autopatch.Autopatch import AutopatchWindow
+
+    _write_pipette_capture_protocol(tmp_path, "demo.json")
+
+    selector = _CountingPipetteSelector(target=(1e-3, 2e-3, 3e-3))
+    win = AutopatchWindow(
+        module=None,
+        protocolDir=str(tmp_path),
+        pipetteSelector=selector,
+        cameraSelector=_FakeCameraSelector(),
+    )
+    win.protocolPanel.fileCombo.setCurrentText("demo.json")
+    win.protocolPanel.loadSelected()
+
+    win.cellPanel.addFromTargetBtn.click()
+    assert win.cellPanel.cellList.count() == 1
+
+    callsBeforeStart = selector.callCount
+    win.statusPanel.startBtn.click()
+    # Simulate the operator changing the pipette selection immediately after
+    # Start -- the in-flight run (both of its nodes) must not notice.
+    selector.setTarget((9e-3, 9e-3, 9e-3))
+
+    qtbot.waitUntil(lambda: "done" in win.cellPanel.cellList.item(0).text(), timeout=2000)
+
+    nodeA = win.orchestrator.protocol.nodes["n1"]
+    nodeB = win.orchestrator.protocol.nodes["n2"]
+    assert nodeA.results["pipette"] is nodeB.results["pipette"]
+    assert nodeA.results["pipette"].targetPosition() == pytest.approx((1e-3, 2e-3, 3e-3))
+    # Resolved exactly once (at Start) -- not once per node during _walk, and
+    # not affected by the mid-run mutation above.
+    assert selector.callCount == callsBeforeStart + 1

@@ -9,6 +9,7 @@ class StatusPanel(Qt.QWidget):
     def __init__(self):
         super().__init__()
         self._orchestrator = None
+        self._onStart = None
 
         self.startBtn = Qt.QPushButton("Start")
         self.stopBtn = Qt.QPushButton("Stop")
@@ -33,9 +34,16 @@ class StatusPanel(Qt.QWidget):
         layout.addWidget(self.instructionLabel)
         self.setLayout(layout)
 
-    def bindOrchestrator(self, orchestrator) -> None:
+    def bindOrchestrator(self, orchestrator, onStart=None) -> None:
+        """Bind Start/Stop/Pause/Next to `orchestrator`.
+
+        `onStart`, if given, is called on the GUI thread when Start is clicked,
+        before `orchestrator.start()` -- the seam a caller uses to snapshot any
+        GUI-thread-only state (e.g. the selected pipette) before the
+        orchestrator's worker thread begins running.
+        """
         if self._orchestrator is not None:
-            Qt.disconnect(self.startBtn.clicked, self._orchestrator.start)
+            Qt.disconnect(self.startBtn.clicked, self._onStartClicked)
             Qt.disconnect(self.stopBtn.clicked, self._orchestrator.stop)
             Qt.disconnect(self.pauseBtn.clicked, self._orchestrator.pause)
             Qt.disconnect(self.nextBtn.clicked, self._orchestrator.requestNextCell)
@@ -43,12 +51,18 @@ class StatusPanel(Qt.QWidget):
             Qt.disconnect(self._orchestrator.sigCurrentAction, self._onCurrentAction)
 
         self._orchestrator = orchestrator
-        self.startBtn.clicked.connect(orchestrator.start)
+        self._onStart = onStart
+        self.startBtn.clicked.connect(self._onStartClicked)
         self.stopBtn.clicked.connect(orchestrator.stop)
         self.pauseBtn.clicked.connect(orchestrator.pause)
         self.nextBtn.clicked.connect(orchestrator.requestNextCell)
         orchestrator.sigStatus.connect(self._onStatus)
         orchestrator.sigCurrentAction.connect(self._onCurrentAction)
+
+    def _onStartClicked(self) -> None:
+        if self._onStart is not None:
+            self._onStart()
+        self._orchestrator.start()
 
     def _onStatus(self, status: str) -> None:
         self.statusLabel.setText(status)

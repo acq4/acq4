@@ -86,18 +86,31 @@ class AutopatchWindow(Qt.QWidget):
         self.area5Box.layout().addWidget(self.cellPanel)
 
         self.orchestrator = None
+        # The pipette resolved from self.pipetteSelector at the moment Start was
+        # last pressed (GUI thread). The orchestrator's contextFactory reads this
+        # cached value rather than the selector widget, since _walk() calls the
+        # factory from the orchestrator's worker thread -- see _resolvePipette().
+        self._cachedPipette = None
         self.protocolPanel.sigProtocolLoaded.connect(self._onProtocolLoaded)
+
+    def _resolvePipette(self) -> None:
+        """Snapshot the currently-selected pipette on the GUI thread. Called at
+        Start (before the orchestrator's worker thread starts running), so the
+        in-flight run never reads InterfaceCombo's currentIndex()/interfaceMap
+        off-thread. Re-resolved on every Start, so the selection may still
+        change between runs."""
+        self._cachedPipette = self.pipetteSelector.getSelectedObj()
 
     def _onProtocolLoaded(self, protocol) -> None:
         contextFactory = make_context_factory(
-            pipetteGetter=self.pipetteSelector.getSelectedObj,
+            pipetteGetter=lambda: self._cachedPipette,
             manager=self.manager,
             log=self.cellPanel.appendLog,
         )
         self.orchestrator = Orchestrator(
             protocol, manager=self.manager, contextFactory=contextFactory
         )
-        self.statusPanel.bindOrchestrator(self.orchestrator)
+        self.statusPanel.bindOrchestrator(self.orchestrator, onStart=self._resolvePipette)
         self.cellPanel.bindOrchestrator(self.orchestrator)
 
 
