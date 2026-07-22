@@ -47,11 +47,3 @@ class RetryCurrentCell(FlowSignal):
 
 class AbortExperiment(FlowSignal):
     """Stop the whole experiment."""
-
-
-# Maps an abnormal FSM state name to an exception class. Consumed by the FSM
-# watcher in the P0b plan; defined here so the taxonomy lives in one place.
-ABNORMAL_STATE_EXCEPTIONS: dict[str, type[OrchestrationError]] = {
-    "broken": BrokenPipette,
-    "fouled": Fouled,
-}

@@ -60,11 +60,9 @@ class Orchestrator(Qt.QObject):
 
     def pause(self):
         self._pauseEvent.clear()
-        self.sigStatus.emit("paused")
 
     def resume(self):
         self._pauseEvent.set()
-        self.sigStatus.emit("running")
 
     def stop(self, reason: str = "stopped by operator"):
         task = getattr(self, "_task", None)

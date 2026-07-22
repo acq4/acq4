@@ -1,12 +1,12 @@
 """FSM-wrapping Actions: drive acq4's PatchPipette state machine to a declared
 terminal state, mapping unexpected abnormal states to orchestration exceptions."""
+
 from __future__ import annotations
 
 from acq4.util.task import sleep
-
 from .action import Action
+from .exceptions import BrokenPipette
 from .registry import register_action
-from .exceptions import ABNORMAL_STATE_EXCEPTIONS
 
 
 class FsmCompositeAction(Action):
@@ -37,10 +37,12 @@ class FsmCompositeAction(Action):
                 self.setState(f"reached {state!r}")
                 self.results["final_state"] = state
                 return state
-            exc_cls = ABNORMAL_STATE_EXCEPTIONS.get(state)
-            if exc_cls is not None:
-                raise exc_cls(f"{self.name}: pipette entered {state!r} state")
-            sleep(self.poll_interval)  # stop-aware: raises Stopped when the run stops
+            self._checkIfStateIsExceptional(state)
+            sleep(self.poll_interval)
+
+    def _checkIfStateIsExceptional(self, state):
+        if state == "broken":
+            raise BrokenPipette(f"{self.name}: pipette is broken")
 
     def safeAbort(self, ctx) -> None:
         pip = getattr(ctx, "pipette", None)

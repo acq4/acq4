@@ -24,8 +24,3 @@ def test_flow_signals_are_not_orchestration_errors():
     for cls in (exc.AdvanceToNextCell, exc.RetryCurrentCell, exc.AbortExperiment):
         assert issubclass(cls, exc.FlowSignal)
         assert not issubclass(cls, exc.OrchestrationError)
-
-
-def test_abnormal_state_map():
-    assert exc.ABNORMAL_STATE_EXCEPTIONS["broken"] is exc.BrokenPipette
-    assert exc.ABNORMAL_STATE_EXCEPTIONS["fouled"] is exc.Fouled
