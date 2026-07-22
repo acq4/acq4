@@ -1093,6 +1093,8 @@ git commit --author="Claude (claude) <noreply@anthropic.com>" -m "feat: add Cell
 
 ### Task 7: Per-cell executed-path timeline (Area 5)
 
+> **SUPERSEDED (human decision, applied 2026-07-22):** the engine-signal task (done first, see resolved Open Question #6) added `Orchestrator.sigActionFinished(cell, action, outcome)`. The timeline actually built consumes that signal directly instead of `Action.sigStateChanged` — `bindOrchestrator` connects `orchestrator.sigActionFinished` to `CellPanel._onActionFinished(cell, action, outcome)`, which appends `f"{action.name}: {outcome}"` to `self._timelines[id(cell)]` and, if that cell is currently selected, to `self.timelineList` live. This is simpler than the plan's original per-action `sigStateChanged` connect/disconnect dance (no stale-connection bookkeeping needed, since there's one orchestrator-level signal instead of one per running action). See `acq4/modules/Autopatch/cell_panel.py` / `acq4/modules/Autopatch/tests/test_cell_timeline.py` for what shipped. The rest of this task's description (timelineList display, preserved-across-switch semantics) still applies as written.
+
 **Files:**
 - Modify: `acq4/modules/Autopatch/cell_panel.py`
 - Test: `acq4/modules/Autopatch/tests/test_cell_timeline.py`
@@ -1100,7 +1102,7 @@ git commit --author="Claude (claude) <noreply@anthropic.com>" -m "feat: add Cell
 **Interfaces:**
 - Consumes: `Action.sigStateChanged(self, msg: str)`.
 - Produces: `CellPanel.timelineList: Qt.QListWidget` (shown for the currently-selected cell in `cellList`); `CellPanel._timelines: dict[int, list[str]]` (cell id -> ordered list of timeline line strings, so a finished cell's timeline is preserved and redisplayed on reselect); connecting to a new action's `sigStateChanged` happens in `_onCurrentAction` (which now also disconnects from the previous action, if any, to avoid stale connections); `cellList.currentItemChanged` swaps `timelineList`'s contents to the selected cell's stored timeline.
-- **Known gap (see Open Questions):** the orchestrator does not emit the action's resolved *outcome* string on a signal — only free-text `sigStateChanged` messages and, for `FsmCompositeAction`, `action.results["final_state"]` (not all Action subclasses populate `results`). This task's timeline therefore records `sigStateChanged` messages verbatim (e.g. "reached 'whole cell'" already reads as an outcome for FSM actions) rather than inventing a structured outcome field the engine doesn't expose.
+- **(Superseded, see note above)**
 
 - [ ] **Step 1: Write the failing test** — create `acq4/modules/Autopatch/tests/test_cell_timeline.py`:
 

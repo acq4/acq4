@@ -19,10 +19,12 @@ class CellPanel(Qt.QWidget):
         super().__init__()
         self._orchestrator = None
         self._rows: dict[int, Qt.QListWidgetItem] = {}
+        self._timelines: dict[int, list[str]] = {}
         self._pipetteGetter = pipetteGetter or (lambda: None)
         self._cameraGetter = cameraGetter or (lambda: None)
 
         self.cellList = Qt.QListWidget()
+        self.timelineList = Qt.QListWidget()
 
         self.addFromTargetBtn = Qt.QPushButton("Add from target")
         self.scatterFakeCellsBtn = Qt.QPushButton("Scatter fake cells")
@@ -33,18 +35,26 @@ class CellPanel(Qt.QWidget):
         btnRow.addWidget(self.addFromTargetBtn)
         btnRow.addWidget(self.scatterFakeCellsBtn)
 
+        listsRow = Qt.QHBoxLayout()
+        listsRow.addWidget(self.cellList)
+        listsRow.addWidget(self.timelineList)
+
         layout = Qt.QVBoxLayout()
         layout.addLayout(btnRow)
-        layout.addWidget(self.cellList)
+        layout.addLayout(listsRow)
         self.setLayout(layout)
+
+        self.cellList.currentItemChanged.connect(self._onCellSelectionChanged)
 
     def bindOrchestrator(self, orchestrator) -> None:
         if self._orchestrator is not None:
             Qt.disconnect(self._orchestrator.sigCurrentAction, self._onCurrentAction)
             Qt.disconnect(self._orchestrator.sigCellFinished, self._onCellFinished)
+            Qt.disconnect(self._orchestrator.sigActionFinished, self._onActionFinished)
         self._orchestrator = orchestrator
         orchestrator.sigCurrentAction.connect(self._onCurrentAction)
         orchestrator.sigCellFinished.connect(self._onCellFinished)
+        orchestrator.sigActionFinished.connect(self._onActionFinished)
 
     def _onAddFromTargetClicked(self) -> None:
         pipette = self._pipetteGetter()
@@ -73,6 +83,7 @@ class CellPanel(Qt.QWidget):
         item.setData(Qt.Qt.UserRole, cell)
         self.cellList.addItem(item)
         self._rows[id(cell)] = item
+        self._timelines[id(cell)] = []
 
     def _onCurrentAction(self, cell, action) -> None:
         if cell is None:
@@ -85,3 +96,21 @@ class CellPanel(Qt.QWidget):
         item = self._rows.get(id(cell))
         if item is not None:
             item.setText(f"cell {id(cell)} — {status}")
+
+    def _onActionFinished(self, cell, action, outcome: str) -> None:
+        line = f"{action.name}: {outcome}"
+        self._timelines.setdefault(id(cell), []).append(line)
+        if cell is self._currentSelectedCell():
+            self.timelineList.addItem(line)
+
+    def _onCellSelectionChanged(self, current, _previous) -> None:
+        self.timelineList.clear()
+        if current is None:
+            return
+        cell = current.data(Qt.Qt.UserRole)
+        for line in self._timelines.get(id(cell), []):
+            self.timelineList.addItem(line)
+
+    def _currentSelectedCell(self):
+        item = self.cellList.currentItem()
+        return None if item is None else item.data(Qt.Qt.UserRole)
