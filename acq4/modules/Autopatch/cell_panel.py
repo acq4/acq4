@@ -63,9 +63,7 @@ class CellPanel(Qt.QWidget):
 
     def bindOrchestrator(self, orchestrator) -> None:
         if self._orchestrator is not None:
-            Qt.disconnect(self._orchestrator.sigCurrentAction, self._onCurrentAction)
-            Qt.disconnect(self._orchestrator.sigCellFinished, self._onCellFinished)
-            Qt.disconnect(self._orchestrator.sigActionFinished, self._onActionFinished)
+            self.unbindOrchestrator()
         self._orchestrator = orchestrator
         orchestrator.sigCurrentAction.connect(self._onCurrentAction)
         orchestrator.sigCellFinished.connect(self._onCellFinished)
@@ -76,6 +74,39 @@ class CellPanel(Qt.QWidget):
         # over any cells the operator already seeded.
         for cell in self._cells.values():
             orchestrator.enqueue(cell)
+
+    def unbindOrchestrator(self) -> None:
+        """Disconnect everything bindOrchestrator() connected to the currently
+        bound orchestrator, and drop the reference to it.
+
+        Shared by bindOrchestrator() (rebinding to a freshly loaded protocol)
+        and window teardown (on module/window close), so both paths sever the
+        panel<->orchestrator signal wiring the same way -- leaving no dangling
+        Qt connection either way.
+        """
+        if self._orchestrator is None:
+            return
+        Qt.disconnect(self._orchestrator.sigCurrentAction, self._onCurrentAction)
+        Qt.disconnect(self._orchestrator.sigCellFinished, self._onCellFinished)
+        Qt.disconnect(self._orchestrator.sigActionFinished, self._onActionFinished)
+        self._orchestrator = None
+
+    def clearCells(self) -> None:
+        """Drop every seeded Cell this panel is holding, for window teardown.
+
+        Cell is a QObject; self._cells is the only strong Python reference
+        keeping a seeded-but-not-yet-garbage-collected Cell alive once its own
+        run finishes (see addCell()), and Cell instances are parented to this
+        panel (also set in addCell()) so Qt's ownership cascade destroys them
+        deterministically when the window closes. This clears the Python-side
+        bookkeeping (and any per-cell signal connections a future change might
+        add) to match -- nothing here should still reference a Cell afterward.
+        """
+        self._cells.clear()
+        self._rows.clear()
+        self._timelines.clear()
+        self._logs.clear()
+        self.cellList.clear()
 
     def _onAddFromTargetClicked(self) -> None:
         pipette = self._pipetteGetter()
@@ -107,6 +138,14 @@ class CellPanel(Qt.QWidget):
         self.addCell(cell)
 
     def addCell(self, cell) -> None:
+        # Cell is a QObject; parenting it to this panel (itself parented into
+        # the window's widget tree) lets Qt's ownership cascade destroy it
+        # deterministically when the window closes, rather than relying solely
+        # on Python holding the last reference (see self._cells below). Guarded
+        # with getattr since tests stand in a plain object() for a cell.
+        setParent = getattr(cell, "setParent", None)
+        if setParent is not None:
+            setParent(self)
         item = Qt.QListWidgetItem(f"cell {id(cell)} — queued")
         item.setData(Qt.Qt.UserRole, cell)
         self.cellList.addItem(item)

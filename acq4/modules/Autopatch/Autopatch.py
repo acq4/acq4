@@ -91,6 +91,7 @@ class AutopatchWindow(Qt.QWidget):
         # cached value rather than the selector widget, since _walk() calls the
         # factory from the orchestrator's worker thread -- see _resolvePipette().
         self._cachedPipette = None
+        self._tornDown = False
         self.protocolPanel.sigProtocolLoaded.connect(self._onProtocolLoaded)
 
     def _resolvePipette(self) -> None:
@@ -110,8 +111,61 @@ class AutopatchWindow(Qt.QWidget):
         self.orchestrator = Orchestrator(
             protocol, manager=self.manager, contextFactory=contextFactory
         )
+        # Belt-and-suspenders on top of teardown(): parenting the orchestrator
+        # (a QObject, not otherwise part of the widget tree) to this window
+        # means Qt's own parent/child cascade destroys it deterministically,
+        # on the GUI thread, when the window is destroyed -- rather than
+        # leaning solely on teardown() having already dropped every reference.
+        self.orchestrator.setParent(self)
         self.statusPanel.bindOrchestrator(self.orchestrator, onStart=self._resolvePipette)
         self.cellPanel.bindOrchestrator(self.orchestrator)
+
+    def teardown(self) -> None:
+        """Break the Orchestrator/Cell QObject cycle deterministically.
+
+        Without this, the orchestrator and seeded Cell objects are parentless
+        QObjects cross-wired to the window's panels via Qt signal/slot
+        connections -- a reference cycle only Python's cyclic GC can reclaim,
+        and that collector may run non-deterministically (possibly off the GUI
+        thread), tearing down live QObjects outside Qt's safe teardown path and
+        crashing on exit. Calling this before the window is destroyed stops the
+        orchestrator and severs every one of those connections up front, so the
+        remaining objects are plain refcounted and go away immediately.
+
+        Idempotent: safe to call more than once (e.g. once explicitly from
+        Autopatch.quit() and again via closeEvent() when the operator closes
+        the window directly).
+        """
+        if self._tornDown:
+            return
+        self._tornDown = True
+        if self.orchestrator is not None:
+            self.orchestrator.stop()
+            try:
+                # Bounded wait so a stuck action can't hang teardown forever;
+                # any outcome (finished, stopped, timed out) is fine here since
+                # we are about to drop every reference to the orchestrator
+                # regardless.
+                self.orchestrator.wait(timeout=5.0)
+            except Exception:
+                pass
+            # The orchestrator's context factory closes over this window (to
+            # read the cached pipette) and over cellPanel (to log), so as long
+            # as the orchestrator is alive it keeps both alive too -- fine on
+            # its own, but setParent(self) above also makes Qt's parent/child
+            # bookkeeping keep the orchestrator alive for as long as this
+            # window is, which would turn that one-way dependency back into a
+            # cycle. Unparenting here breaks that, so dropping the reference
+            # below is enough for plain refcounting to free everything.
+            self.orchestrator.setParent(None)
+        self.statusPanel.unbindOrchestrator()
+        self.cellPanel.unbindOrchestrator()
+        self.cellPanel.clearCells()
+        self.orchestrator = None
+
+    def closeEvent(self, event) -> None:
+        self.teardown()
+        super().closeEvent(event)
 
 
 class Autopatch(Module):
@@ -137,6 +191,8 @@ class Autopatch(Module):
     def quit(self, fromUi=False):
         if Autopatch._instance is self:
             Autopatch._instance = None
-        if hasattr(self, "ui") and not fromUi:
-            self.ui.close()
+        if hasattr(self, "ui"):
+            self.ui.teardown()
+            if not fromUi:
+                self.ui.close()
         super().quit()

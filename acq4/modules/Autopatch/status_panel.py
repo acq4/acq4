@@ -43,12 +43,7 @@ class StatusPanel(Qt.QWidget):
         orchestrator's worker thread begins running.
         """
         if self._orchestrator is not None:
-            Qt.disconnect(self.startBtn.clicked, self._onStartClicked)
-            Qt.disconnect(self.stopBtn.clicked, self._orchestrator.stop)
-            Qt.disconnect(self.pauseBtn.clicked, self._orchestrator.pause)
-            Qt.disconnect(self.nextBtn.clicked, self._orchestrator.requestNextCell)
-            Qt.disconnect(self._orchestrator.sigStatus, self._onStatus)
-            Qt.disconnect(self._orchestrator.sigCurrentAction, self._onCurrentAction)
+            self.unbindOrchestrator()
 
         self._orchestrator = orchestrator
         self._onStart = onStart
@@ -58,6 +53,26 @@ class StatusPanel(Qt.QWidget):
         self.nextBtn.clicked.connect(orchestrator.requestNextCell)
         orchestrator.sigStatus.connect(self._onStatus)
         orchestrator.sigCurrentAction.connect(self._onCurrentAction)
+
+    def unbindOrchestrator(self) -> None:
+        """Disconnect everything bindOrchestrator() connected to the currently
+        bound orchestrator, and drop the reference to it.
+
+        Shared by bindOrchestrator() (rebinding to a freshly loaded protocol)
+        and window teardown (on module/window close), so both paths sever the
+        panel<->orchestrator signal wiring the same way -- leaving no dangling
+        Qt connection either way.
+        """
+        if self._orchestrator is None:
+            return
+        Qt.disconnect(self.startBtn.clicked, self._onStartClicked)
+        Qt.disconnect(self.stopBtn.clicked, self._orchestrator.stop)
+        Qt.disconnect(self.pauseBtn.clicked, self._orchestrator.pause)
+        Qt.disconnect(self.nextBtn.clicked, self._orchestrator.requestNextCell)
+        Qt.disconnect(self._orchestrator.sigStatus, self._onStatus)
+        Qt.disconnect(self._orchestrator.sigCurrentAction, self._onCurrentAction)
+        self._orchestrator = None
+        self._onStart = None
 
     def _onStartClicked(self) -> None:
         if self._onStart is not None:
