@@ -25,6 +25,10 @@ class CellPanel(Qt.QWidget):
 
         self.cellList = Qt.QListWidget()
         self.timelineList = Qt.QListWidget()
+        self.logView = Qt.QPlainTextEdit()
+        self.logView.setReadOnly(True)
+        self.showContainer = Qt.QWidget()
+        self.showContainer.setLayout(Qt.QVBoxLayout())
 
         self.addFromTargetBtn = Qt.QPushButton("Add from target")
         self.scatterFakeCellsBtn = Qt.QPushButton("Scatter fake cells")
@@ -42,6 +46,8 @@ class CellPanel(Qt.QWidget):
         layout = Qt.QVBoxLayout()
         layout.addLayout(btnRow)
         layout.addLayout(listsRow)
+        layout.addWidget(self.showContainer)
+        layout.addWidget(self.logView)
         self.setLayout(layout)
 
         self.cellList.currentItemChanged.connect(self._onCellSelectionChanged)
@@ -85,12 +91,25 @@ class CellPanel(Qt.QWidget):
         self._rows[id(cell)] = item
         self._timelines[id(cell)] = []
 
+    def appendLog(self, message: str) -> None:
+        self.logView.appendPlainText(message)
+
     def _onCurrentAction(self, cell, action) -> None:
         if cell is None:
             return
         item = self._rows.get(id(cell))
         if item is not None:
             item.setText(f"cell {id(cell)} — running: {action.name}")
+
+        showLayout = self.showContainer.layout()
+        while showLayout.count():
+            child = showLayout.takeAt(0)
+            if child.widget() is not None:
+                child.widget().setParent(None)
+        if cell is self._currentSelectedCell():
+            widget = action.show()
+            if widget is not None:
+                showLayout.addWidget(widget)
 
     def _onCellFinished(self, cell, status: str) -> None:
         item = self._rows.get(id(cell))
