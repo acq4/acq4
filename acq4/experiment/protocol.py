@@ -3,6 +3,9 @@ sub-protocols. Serialization is added alongside JSON I/O."""
 from __future__ import annotations
 
 from .action import Action
+import json
+
+from .registry import get_action_class, action_type_name
 
 
 class Protocol:
@@ -34,3 +37,56 @@ class Protocol:
         return self.exceptionHandlers.get(exc_type_name) or self.exceptionHandlers.get(
             "Exception"
         )
+
+    # ---- serialization ----
+    def to_dict(self) -> dict:
+        return {
+            "version": self.version,
+            "entry": self.entry,
+            "nodes": {
+                nid: {"type": action_type_name(a), "params": _param_values(a)}
+                for nid, a in self.nodes.items()
+            },
+            "edges": [
+                {"from": f, "outcome": o, "to": t}
+                for (f, o), t in self.edges.items()
+            ],
+            "publicParams": self.publicParams,
+            "exceptionHandlers": {
+                k: p.to_dict() for k, p in self.exceptionHandlers.items()
+            },
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "Protocol":
+        nodes = {}
+        for nid, ndata in data.get("nodes", {}).items():
+            action_cls = get_action_class(ndata["type"])
+            nodes[nid] = action_cls(name=nid, params=ndata.get("params", {}))
+        edges = {(e["from"], e["outcome"]): e["to"] for e in data.get("edges", [])}
+        handlers = {
+            k: cls.from_dict(v) for k, v in data.get("exceptionHandlers", {}).items()
+        }
+        return cls(
+            nodes=nodes,
+            edges=edges,
+            entry=data.get("entry"),
+            publicParams=data.get("publicParams", []),
+            exceptionHandlers=handlers,
+        )
+
+    def save_json(self, path: str) -> None:
+        with open(path, "w") as fh:
+            json.dump(self.to_dict(), fh, indent=2)
+
+    @classmethod
+    def load_json(cls, path: str) -> "Protocol":
+        with open(path) as fh:
+            return cls.from_dict(json.load(fh))
+
+
+def _param_values(action: Action) -> dict:
+    return {
+        spec["name"]: action.paramValue(spec["name"])
+        for spec in type(action).paramSpec
+    }
