@@ -2,8 +2,12 @@
 orchestration engine (acq4/experiment/). See autopatch-orchestration-design.md."""
 from __future__ import annotations
 
+import os
+
 from acq4.modules.Module import Module
 from acq4.util import Qt
+
+from .protocol_panel import ProtocolPanel
 
 
 class AutopatchWindow(Qt.QWidget):
@@ -13,9 +17,10 @@ class AutopatchWindow(Qt.QWidget):
     area's real content (protocol selection, status/controls, cell list).
     """
 
-    def __init__(self, module: "Autopatch | None" = None):
+    def __init__(self, module: "Autopatch | None" = None, protocolDir: str | None = None):
         super().__init__()
         self.module = module
+        self.manager = module.manager if module is not None else None
         self.setWindowTitle("Autopatch")
 
         self.area1Box = Qt.QGroupBox("Area 1 — Slice && region")
@@ -40,6 +45,16 @@ class AutopatchWindow(Qt.QWidget):
         outer.addLayout(topRow)
         outer.addLayout(bottomRow)
         self.setLayout(outer)
+
+        if protocolDir is None:
+            if self.manager is None:
+                raise ValueError(
+                    "AutopatchWindow needs a `module` (for module.manager.configDir) "
+                    "or an explicit `protocolDir`"
+                )
+            protocolDir = os.path.join(self.manager.configDir, "autopatch_protocols")
+        self.protocolPanel = ProtocolPanel(protocolDir=protocolDir)
+        self.area4Box.layout().addWidget(self.protocolPanel)
 
 
 class Autopatch(Module):
