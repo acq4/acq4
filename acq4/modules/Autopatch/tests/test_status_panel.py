@@ -41,15 +41,37 @@ def test_buttons_drive_the_bound_orchestrator(qapp):
     orch = _FakeOrchestrator()
     panel.bindOrchestrator(orch)
 
+    # Freshly bound (protocol loaded, not yet running): only Start is enabled.
     panel.startBtn.click()
+    assert orch.started == 1
+
+    # Once running, Stop/Pause/Next are enabled and each reaches the orchestrator.
+    orch.sigStatus.emit("running")
     panel.pauseBtn.click()
     panel.stopBtn.click()
     panel.nextBtn.click()
 
-    assert orch.started == 1
     assert orch.paused == 1
     assert orch.stopped == 1
     assert orch.nexted == 1
+
+
+def test_pause_button_toggles_to_resume_while_paused(qapp):
+    from acq4.modules.Autopatch.status_panel import StatusPanel
+
+    panel = StatusPanel()
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+
+    orch.sigStatus.emit("running")
+    panel.pauseBtn.click()
+    assert orch.paused == 1
+    assert orch.resumed == 0
+
+    orch.sigStatus.emit("paused")
+    assert panel.pauseBtn.text() == "Resume"
+    panel.pauseBtn.click()
+    assert orch.resumed == 1
 
 
 def test_status_signal_updates_label(qapp):
@@ -103,3 +125,129 @@ def test_rebinding_disconnects_previous_orchestrator(qapp):
 
     assert orch2.started == 1
     assert orch1.started == 0
+
+
+def test_status_and_current_action_share_the_first_row(qapp):
+    """The status indicator and the current-action message sit in one QHBoxLayout
+    (statusLabel, a stretch, then currentActionLabel) that is the panel's first
+    row; the Start/Stop/Pause/Next buttons are a separate row below it."""
+    from acq4.modules.Autopatch.status_panel import StatusPanel
+
+    panel = StatusPanel()
+    outer = panel.layout()
+
+    statusRow = outer.itemAt(0).layout()
+    assert statusRow is not None
+    assert statusRow.itemAt(0).widget() is panel.statusLabel
+    assert statusRow.itemAt(1).spacerItem() is not None  # the addStretch()
+    assert statusRow.itemAt(2).widget() is panel.currentActionLabel
+
+    btnRow = outer.itemAt(1).layout()
+    assert btnRow is not None
+    buttons = {btnRow.itemAt(i).widget() for i in range(btnRow.count())}
+    assert buttons == {panel.startBtn, panel.stopBtn, panel.pauseBtn, panel.nextBtn}
+
+
+def test_no_protocol_loaded_disables_every_action_button(qapp):
+    from acq4.modules.Autopatch.status_panel import StatusPanel
+
+    panel = StatusPanel()
+
+    assert not panel.startBtn.isEnabled()
+    assert not panel.stopBtn.isEnabled()
+    assert not panel.pauseBtn.isEnabled()
+    assert not panel.nextBtn.isEnabled()
+
+
+def test_protocol_loaded_idle_enables_only_start(qapp):
+    from acq4.modules.Autopatch.status_panel import StatusPanel
+
+    panel = StatusPanel()
+    panel.bindOrchestrator(_FakeOrchestrator())
+
+    assert panel.startBtn.isEnabled()
+    assert not panel.stopBtn.isEnabled()
+    assert not panel.pauseBtn.isEnabled()
+    assert not panel.nextBtn.isEnabled()
+
+
+def test_running_enables_stop_pause_next_disables_start(qapp):
+    from acq4.modules.Autopatch.status_panel import StatusPanel
+
+    panel = StatusPanel()
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+
+    orch.sigStatus.emit("running")
+
+    assert not panel.startBtn.isEnabled()
+    assert panel.stopBtn.isEnabled()
+    assert panel.pauseBtn.isEnabled()
+    assert panel.nextBtn.isEnabled()
+
+
+def test_paused_disables_next_keeps_stop_and_pause_enabled(qapp):
+    from acq4.modules.Autopatch.status_panel import StatusPanel
+
+    panel = StatusPanel()
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+
+    orch.sigStatus.emit("running")
+    orch.sigStatus.emit("paused")
+
+    assert not panel.startBtn.isEnabled()
+    assert panel.stopBtn.isEnabled()
+    assert panel.pauseBtn.isEnabled()
+    assert not panel.nextBtn.isEnabled()
+
+
+def test_error_enables_only_stop(qapp):
+    from acq4.modules.Autopatch.status_panel import StatusPanel
+
+    panel = StatusPanel()
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+
+    orch.sigStatus.emit("running")
+    orch.sigStatus.emit("error")
+
+    assert not panel.startBtn.isEnabled()
+    assert panel.stopBtn.isEnabled()
+    assert not panel.pauseBtn.isEnabled()
+    assert not panel.nextBtn.isEnabled()
+
+
+def test_finishing_a_run_returns_to_protocol_loaded_idle_gating(qapp):
+    """The orchestrator's own loop emits "waiting" once the queue drains; that
+    must re-enable Start and disable Stop/Pause/Next again, same as right
+    after a fresh bind."""
+    from acq4.modules.Autopatch.status_panel import StatusPanel
+
+    panel = StatusPanel()
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+
+    orch.sigStatus.emit("running")
+    orch.sigStatus.emit("waiting")
+
+    assert panel.startBtn.isEnabled()
+    assert not panel.stopBtn.isEnabled()
+    assert not panel.pauseBtn.isEnabled()
+    assert not panel.nextBtn.isEnabled()
+
+
+def test_unbinding_returns_to_no_protocol_gating(qapp):
+    from acq4.modules.Autopatch.status_panel import StatusPanel
+
+    panel = StatusPanel()
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+    orch.sigStatus.emit("running")
+
+    panel.unbindOrchestrator()
+
+    assert not panel.startBtn.isEnabled()
+    assert not panel.stopBtn.isEnabled()
+    assert not panel.pauseBtn.isEnabled()
+    assert not panel.nextBtn.isEnabled()
