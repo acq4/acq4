@@ -73,7 +73,9 @@ class AutopatchWindow(Qt.QWidget):
         self.area4Box.layout().addWidget(self.protocolPanel)
 
         self.pipetteSelector = (
-            pipetteSelector if pipetteSelector is not None else InterfaceCombo(types=["pipette"])
+            pipetteSelector
+            if pipetteSelector is not None
+            else InterfaceCombo(types=["patchpipette"])
         )
         self.cameraSelector = (
             cameraSelector if cameraSelector is not None else InterfaceCombo(types=["camera"])

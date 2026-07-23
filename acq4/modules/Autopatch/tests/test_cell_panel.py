@@ -25,6 +25,14 @@ class _FakeOrchestrator(Qt.QObject):
 
 
 class _FakePipette:
+    """Stands in for a PatchPipette: exposes .pipetteDevice.targetPosition()
+    the way a real PatchPipette delegates target lookups to its manipulator."""
+
+    def __init__(self, target):
+        self.pipetteDevice = _FakeManipulator(target)
+
+
+class _FakeManipulator:
     def __init__(self, target):
         self._target = target
 
@@ -55,6 +63,25 @@ def test_add_from_target_enqueues_and_lists(qapp):
     assert np.asarray(cell.position) == pytest.approx((1e-3, 2e-3, 3e-3))
     assert panel.cellList.count() == 1
     assert "queued" in panel.cellList.item(0).text()
+
+
+def test_add_from_target_reads_position_via_patchpipette_manipulator(qapp):
+    """"Add from target" must read the current target through the
+    PatchPipette's manipulator (pipetteDevice.targetPosition()) -- a real
+    PatchPipette has no targetPosition() of its own; only its .pipetteDevice
+    (the underlying Pipette manipulator) exposes one."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    pip = _FakePipette((4e-3, 5e-3, 6e-3))
+    assert not hasattr(pip, "targetPosition")
+    panel = CellPanel(pipetteGetter=lambda: pip)
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+
+    panel.addFromTargetBtn.click()
+
+    cell = orch.enqueued[0]
+    assert np.asarray(cell.position) == pytest.approx((4e-3, 5e-3, 6e-3))
 
 
 def test_add_from_target_is_a_noop_without_a_selected_pipette(qapp):

@@ -30,6 +30,19 @@ class _FakePipetteSelector(Qt.QWidget):
 
 
 class _FakePipette:
+    """Stands in for a PatchPipette: exposes .pipetteDevice.targetPosition()
+    the way a real PatchPipette delegates target lookups to its manipulator,
+    plus a direct targetPosition() convenience so tests can assert on the
+    cached ctx.pipette's value without reaching into .pipetteDevice."""
+
+    def __init__(self, target):
+        self.pipetteDevice = _FakeManipulator(target)
+
+    def targetPosition(self):
+        return self.pipetteDevice.targetPosition()
+
+
+class _FakeManipulator:
     def __init__(self, target):
         self._target = target
 

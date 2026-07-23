@@ -112,7 +112,9 @@ class CellPanel(Qt.QWidget):
         pipette = self._pipetteGetter()
         if pipette is None:
             return
-        position = Point(pipette.targetPosition(), "global")
+        # pipette is a PatchPipette; it delegates target position to its
+        # manipulator (pipetteDevice) rather than exposing targetPosition() itself.
+        position = Point(pipette.pipetteDevice.targetPosition(), "global")
         cell = Cell(position)
         self._enqueueAndAdd(cell)
 

@@ -55,6 +55,43 @@ def test_window_has_a_title(qapp, tmp_path):
     assert win.windowTitle() == "Autopatch"
 
 
+def test_default_pipette_selector_is_built_for_the_patchpipette_interface(qapp, tmp_path, monkeypatch):
+    """The device actions (Cellfie/GoApproach/Patch/Focus*/etc.) are written
+    against a PatchPipette (interface "patchpipette"), not the bare
+    manipulator (interface "pipette") -- so the default pipette selector
+    (built when the caller doesn't inject one) must resolve the
+    "patchpipette" interface."""
+    import importlib
+
+    # NOT `import acq4.modules.Autopatch.Autopatch as autopatch_module`: the
+    # package's __init__.py does `from .Autopatch import Autopatch`, which
+    # shadows the submodule's own name in the package namespace with the
+    # class, so that dotted-attribute path resolves to the class instead of
+    # the module. importlib.import_module bypasses that by returning the
+    # module straight from sys.modules.
+    autopatch_module = importlib.import_module("acq4.modules.Autopatch.Autopatch")
+
+    captured = {}
+
+    class _SpyInterfaceCombo(Qt.QWidget):
+        def __init__(self, types=None):
+            super().__init__()
+            captured["types"] = types
+
+        def getSelectedObj(self):
+            return None
+
+    monkeypatch.setattr(autopatch_module, "InterfaceCombo", _SpyInterfaceCombo)
+
+    autopatch_module.AutopatchWindow(
+        module=None,
+        protocolDir=str(tmp_path),
+        cameraSelector=_FakeDeviceSelector(),
+    )
+
+    assert captured["types"] == ["patchpipette"]
+
+
 def test_areas_are_arranged_in_two_columns(qapp, tmp_path):
     """Left column (top->bottom): Area 1, Area 2. Right column (top->bottom):
     Area 3, Area 4, Area 5."""

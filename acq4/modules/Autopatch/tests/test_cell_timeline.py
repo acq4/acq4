@@ -24,6 +24,14 @@ class _FakeOrchestrator(Qt.QObject):
 
 
 class _FakePipette:
+    """Stands in for a PatchPipette: exposes .pipetteDevice.targetPosition()
+    the way a real PatchPipette delegates target lookups to its manipulator."""
+
+    def __init__(self, target):
+        self.pipetteDevice = _FakeManipulator(target)
+
+
+class _FakeManipulator:
     def __init__(self, target):
         self._target = target
 
