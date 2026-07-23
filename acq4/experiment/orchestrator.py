@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import deque
 
+from acq4.logging_config import get_logger
 from acq4.util import Qt
 from acq4.util.task import Stopped, Event, check_stop, asynch_with_qt_signals
 
@@ -13,7 +14,10 @@ from .exceptions import (
     AdvanceToNextCell,
     RetryCurrentCell,
     AbortExperiment,
+    FlowSignal,
 )
+
+logger = get_logger(__name__)
 
 
 class Orchestrator(Qt.QObject):
@@ -67,6 +71,8 @@ class Orchestrator(Qt.QObject):
         teardown path. Clearing the reference here, from the task's own
         completion hook, breaks the cycle as soon as a run finishes.
         """
+        if exc is not None:
+            logger.error("Orchestrator run loop finished with an unhandled exception", exc_info=exc)
         self._task = None
 
     def run_sync(self):
@@ -180,6 +186,28 @@ class Orchestrator(Qt.QObject):
                 self.sigStatus.emit("running")
                 self.sigCellFinished.emit(cell, "handled")
                 return
+            except FlowSignal:
+                # AdvanceToNextCell/RetryCurrentCell are handled above and never
+                # reach here; AbortExperiment (and any future FlowSignal) must
+                # keep propagating uncaught, to stop the run loop, rather than
+                # being mistaken for an unexpected bug by the broad except below.
+                raise
+            except Stopped:
+                # A cooperative stop (operator-initiated, via check_stop()) is
+                # not an unexpected bug either -- action.safeAbort() has already
+                # run (in _runAction), so let it keep propagating uncaught.
+                raise
+            except Exception as exc:
+                # An unexpected bug (not an exceptional state routed to a
+                # handler) must fail loud rather than be silently swallowed:
+                # log it, surface it as an error to the UI, and abort the run
+                # rather than blazing through the remaining queued cells.
+                logger.exception("Unexpected exception while processing cell %r", cell)
+                self.sigStatus.emit("error")
+                self.sigCellFinished.emit(cell, "error")
+                raise AbortExperiment(
+                    f"unexpected exception while processing cell: {exc}"
+                ) from exc
             else:
                 self.sigCellFinished.emit(cell, "done")
                 return
