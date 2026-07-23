@@ -1,0 +1,90 @@
+{
+  "version": 1,
+  "entry": "cellfie",
+  "nodes": {
+    "cellfie": {
+      "type": "Cellfie",
+      "params": {
+        "height": 3e-05,
+        "step": 1e-06
+      }
+    },
+    "goto": {
+      "type": "GoApproach",
+      "params": {
+        "speed": "fast"
+      }
+    },
+    "patch": {
+      "type": "Patch",
+      "params": {}
+    },
+    "advance": {
+      "type": "GoToNext",
+      "params": {}
+    }
+  },
+  "edges": [
+    {
+      "from": "cellfie",
+      "outcome": "captured",
+      "to": "goto"
+    },
+    {
+      "from": "goto",
+      "outcome": "moved",
+      "to": "patch"
+    },
+    {
+      "from": "patch",
+      "outcome": "whole cell",
+      "to": "advance"
+    },
+    {
+      "from": "patch",
+      "outcome": "cell attached",
+      "to": "advance"
+    },
+    {
+      "from": "patch",
+      "outcome": "bath",
+      "to": "advance"
+    }
+  ],
+  "publicParams": [
+    {
+      "node": "goto",
+      "param": "speed",
+      "public": "speed"
+    }
+  ],
+  "exceptionHandlers": {
+    "Exception": {
+      "version": 1,
+      "entry": "warn",
+      "nodes": {
+        "warn": {
+          "type": "Prompt",
+          "params": {
+            "title": "Prompt",
+            "message": "Pipette problem \u2014 intervene",
+            "choices": "OK"
+          }
+        },
+        "abort": {
+          "type": "Abort",
+          "params": {}
+        }
+      },
+      "edges": [
+        {
+          "from": "warn",
+          "outcome": "OK",
+          "to": "abort"
+        }
+      ],
+      "publicParams": [],
+      "exceptionHandlers": {}
+    }
+  }
+}

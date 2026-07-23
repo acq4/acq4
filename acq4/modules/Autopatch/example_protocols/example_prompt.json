@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "entry": "ask",
+  "nodes": {
+    "ask": {
+      "type": "Prompt",
+      "params": {
+        "title": "Prompt",
+        "message": "Ready to patch this cell?",
+        "choices": "OK"
+      }
+    },
+    "next": {
+      "type": "GoToNext",
+      "params": {}
+    }
+  },
+  "edges": [
+    {
+      "from": "ask",
+      "outcome": "OK",
+      "to": "next"
+    }
+  ],
+  "publicParams": [
+    {
+      "node": "ask",
+      "param": "message",
+      "public": "message"
+    }
+  ],
+  "exceptionHandlers": {}
+}

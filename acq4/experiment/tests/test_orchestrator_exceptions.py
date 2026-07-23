@@ -148,6 +148,35 @@ def test_retry_cap_exhausts_and_skips():
     assert AlwaysFails.calls["n"] == 4  # initial attempt + 3 retries, then give up
 
 
+def test_unexpected_exception_is_surfaced_not_swallowed():
+    """A plain (non-OrchestrationError) exception -- an ordinary bug, not an
+    exceptional state routed to a handler -- must not vanish silently. It must
+    be surfaced via sigStatus/sigCellFinished as an error and abort the run,
+    rather than let the loop carry on as though nothing happened."""
+    from acq4.experiment.action import Action
+    from acq4.experiment.registry import register_action
+
+    @register_action(name="RaisesPlainAttributeError")
+    class _RaisesPlainAttributeError(Action):
+        outcomes = ("done",)
+
+        def run(self, ctx):
+            raise AttributeError("boom: an ordinary bug, not an OrchestrationError")
+
+    p = Protocol(nodes={"a": _RaisesPlainAttributeError(name="a")}, edges={}, entry="a")
+    statuses = []
+    finished = []
+    orch = Orchestrator(p)
+    orch.sigStatus.connect(statuses.append)
+    orch.sigCellFinished.connect(lambda c, s: finished.append((c, s)))
+
+    with pytest.raises(AbortExperiment):
+        orch.run_sync_cell("c1")
+
+    assert "error" in statuses
+    assert finished == [("c1", "error")]
+
+
 def test_status_returns_to_running_after_handler_retry():
     from acq4.experiment.action import Action
     from acq4.experiment.registry import register_action

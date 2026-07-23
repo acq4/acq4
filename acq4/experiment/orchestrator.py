@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import deque
 
+from acq4.logging_config import get_logger
 from acq4.util import Qt
 from acq4.util.task import Stopped, Event, check_stop, asynch_with_qt_signals
 
@@ -13,13 +14,17 @@ from .exceptions import (
     AdvanceToNextCell,
     RetryCurrentCell,
     AbortExperiment,
+    FlowSignal,
 )
+
+logger = get_logger(__name__)
 
 
 class Orchestrator(Qt.QObject):
     sigStatus = Qt.Signal(str)                 # "running"/"waiting"/"paused"/"error"
     sigCurrentAction = Qt.Signal(object, object)   # cell, action (None,None when idle)
     sigCellFinished = Qt.Signal(object, str)   # cell, status
+    sigActionFinished = Qt.Signal(object, object, str)  # cell, action, outcome
 
     def __init__(self, protocol, manager=None, contextFactory=None, maxRetries=100):
         Qt.QObject.__init__(self)
@@ -51,8 +56,24 @@ class Orchestrator(Qt.QObject):
     # ---- controls ----
     def start(self):
         """Launch the queue loop asynchronously; returns the launched task."""
-        self._task = asynch_with_qt_signals(self._runLoopBody)()
+        self._task = asynch_with_qt_signals(
+            self._runLoopBody, on_finish=self._onLoopFinished
+        )()
         return self._task
+
+    def _onLoopFinished(self, result, exc):
+        """Clear self._task once the loop finishes.
+
+        self._task and its QtFriendlyTask hold a mutual reference (the task's
+        _fn is the bound method self._runLoopBody, and self._task references
+        the task back) -- a QObject reference cycle that only Python's cyclic
+        GC could otherwise reclaim, non-deterministically and off Qt's safe
+        teardown path. Clearing the reference here, from the task's own
+        completion hook, breaks the cycle as soon as a run finishes.
+        """
+        if exc is not None:
+            logger.error("Orchestrator run loop finished with an unhandled exception", exc_info=exc)
+        self._task = None
 
     def run_sync(self):
         """Run the whole queue inline (deterministic; for tests / headless)."""
@@ -128,6 +149,7 @@ class Orchestrator(Qt.QObject):
             ctx = self._contextFactory(cell)
             self.sigCurrentAction.emit(cell, action)
             outcome = self._runAction(action, ctx)
+            self.sigActionFinished.emit(cell, action, outcome)
             node_id = protocol.next_node(node_id, outcome)
 
     def _processCell(self, cell):
@@ -164,6 +186,28 @@ class Orchestrator(Qt.QObject):
                 self.sigStatus.emit("running")
                 self.sigCellFinished.emit(cell, "handled")
                 return
+            except FlowSignal:
+                # AdvanceToNextCell/RetryCurrentCell are handled above and never
+                # reach here; AbortExperiment (and any future FlowSignal) must
+                # keep propagating uncaught, to stop the run loop, rather than
+                # being mistaken for an unexpected bug by the broad except below.
+                raise
+            except Stopped:
+                # A cooperative stop (operator-initiated, via check_stop()) is
+                # not an unexpected bug either -- action.safeAbort() has already
+                # run (in _runAction), so let it keep propagating uncaught.
+                raise
+            except Exception as exc:
+                # An unexpected bug (not an exceptional state routed to a
+                # handler) must fail loud rather than be silently swallowed:
+                # log it, surface it as an error to the UI, and abort the run
+                # rather than blazing through the remaining queued cells.
+                logger.exception("Unexpected exception while processing cell %r", cell)
+                self.sigStatus.emit("error")
+                self.sigCellFinished.emit(cell, "error")
+                raise AbortExperiment(
+                    f"unexpected exception while processing cell: {exc}"
+                ) from exc
             else:
                 self.sigCellFinished.emit(cell, "done")
                 return
