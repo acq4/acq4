@@ -11,6 +11,7 @@ from acq4.util.InterfaceCombo import InterfaceCombo
 
 from .cell_panel import CellPanel
 from .context_factory import make_context_factory
+from .example_protocols import install_example_protocols
 from .protocol_panel import ProtocolPanel
 from .status_panel import StatusPanel
 
@@ -64,6 +65,10 @@ class AutopatchWindow(Qt.QWidget):
                     "or an explicit `protocolDir`"
                 )
             protocolDir = os.path.join(self.manager.configDir, "autopatch_protocols")
+        # First-run convenience: seed the protocol dir with the bundled example
+        # protocols (never overwriting a file that's already there) before the
+        # picker below lists its contents.
+        install_example_protocols(protocolDir)
         self.protocolPanel = ProtocolPanel(protocolDir=protocolDir)
         self.area4Box.layout().addWidget(self.protocolPanel)
 
