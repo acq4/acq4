@@ -200,3 +200,33 @@ class ConnectionManager:
         return self._host_module(host, port).health_series(
             seconds, interval, _return_type="value", _timeout=seconds + 15
         )
+
+    def arm_exception_capture(self, timeout=60.0, include_caught=False, filter_regex=None, port=None, host=None):
+        """Arm a one-shot exception hook on the target and block until an exception fires or timeout."""
+        return self._run(self._arm_exception_capture, timeout, include_caught, filter_regex, port, host)
+
+    def _arm_exception_capture(self, timeout, include_caught, filter_regex, port, host):
+        host, port = self._resolve(host, port)
+        return self._host_module(host, port).arm_exception_capture(
+            timeout, include_caught, filter_regex, _return_type="value", _timeout=timeout + 5.0
+        )
+
+    def get_exception_frame(self, frame_index, port=None, host=None):
+        """Return locals for the captured exception's frame at frame_index."""
+        return self._run(self._get_exception_frame, frame_index, port, host)
+
+    def _get_exception_frame(self, frame_index, port, host):
+        host, port = self._resolve(host, port)
+        return self._host_module(host, port).get_exception_frame(
+            frame_index, _return_type="value"
+        )
+
+    def exec_in_exception_frame(self, frame_index, code, gui_thread=False, timeout=30.0, port=None, host=None):
+        """Execute code in the namespace of the captured exception's frame."""
+        return self._run(self._exec_in_exception_frame, frame_index, code, gui_thread, timeout, port, host)
+
+    def _exec_in_exception_frame(self, frame_index, code, gui_thread, timeout, port, host):
+        host, port = self._resolve(host, port)
+        return self._host_module(host, port).exec_in_exception_frame(
+            frame_index, code, gui_thread, _return_type="value", _timeout=timeout
+        )

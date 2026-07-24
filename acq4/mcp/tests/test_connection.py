@@ -53,6 +53,22 @@ class _FakeHostModule:
         self.recorder.append(("reload_libraries", self.host, self.port, kw))
         return {"reloaded": ["acq4.foo"], "skipped": 3, "error": None, "output": ""}
 
+    def arm_exception_capture(self, timeout, include_caught, filter_regex, **kw):
+        self.recorder.append(
+            ("arm_exception_capture", self.host, self.port, timeout, include_caught, filter_regex, kw)
+        )
+        return {"type": "ValueError", "message": "bad value", "frames": []}
+
+    def get_exception_frame(self, frame_index, **kw):
+        self.recorder.append(("get_exception_frame", self.host, self.port, frame_index, kw))
+        return {"locals": {"x": 1}}
+
+    def exec_in_exception_frame(self, frame_index, code, gui_thread, **kw):
+        self.recorder.append(
+            ("exec_in_exception_frame", self.host, self.port, frame_index, code, gui_thread, kw)
+        )
+        return {"stdout": "", "stderr": "", "result": None, "traceback": None}
+
 
 @pytest.fixture
 def recorder():
@@ -213,3 +229,50 @@ def test_live_connect_and_execute(child_process):
     result = cm.execute("21 * 2")
     assert result["result"] == "42"
     assert result["traceback"] is None
+
+
+# ---------------------------------------------------------------------------
+# Exception interrogation wrappers
+# ---------------------------------------------------------------------------
+
+
+def test_arm_exception_capture_delegates_with_extended_timeout(manager, recorder):
+    manager.connect(5000)
+    result = manager.arm_exception_capture(timeout=20.0, include_caught=True, filter_regex="Val.*")
+    assert result["type"] == "ValueError"
+    call = recorder[-1]
+    assert call[0] == "arm_exception_capture"
+    assert call[1:3] == ("127.0.0.1", 5000)
+    assert call[3] == 20.0   # timeout positional arg
+    assert call[4] is True   # include_caught
+    assert call[5] == "Val.*"  # filter_regex
+    # teleprox _timeout must be timeout + 5.0 so the blocking wait can complete
+    assert call[6]["_timeout"] == 25.0
+
+
+def test_get_exception_frame_delegates_frame_index(manager, recorder):
+    manager.connect(5000)
+    result = manager.get_exception_frame(frame_index=2)
+    assert result == {"locals": {"x": 1}}
+    call = recorder[-1]
+    assert call[0] == "get_exception_frame"
+    assert call[1:3] == ("127.0.0.1", 5000)
+    assert call[3] == 2  # frame_index
+
+
+def test_exec_in_exception_frame_delegates_with_timeout(manager, recorder):
+    manager.connect(5000)
+    result = manager.exec_in_exception_frame(frame_index=1, code="x + 1", gui_thread=False, timeout=15.0)
+    assert result["traceback"] is None
+    call = recorder[-1]
+    assert call[0] == "exec_in_exception_frame"
+    assert call[1:3] == ("127.0.0.1", 5000)
+    assert call[3] == 1       # frame_index
+    assert call[4] == "x + 1"  # code
+    assert call[5] is False   # gui_thread
+    assert call[6]["_timeout"] == 15.0
+
+
+def test_arm_exception_capture_raises_when_not_connected(manager):
+    with pytest.raises(NotConnectedError):
+        manager.arm_exception_capture()
