@@ -454,3 +454,57 @@ def get_log(lines: int = 50) -> dict:
     except OSError as exc:
         return {"path": path, "text": f"Could not read log file: {exc}"}
     return {"path": path, "text": "".join(tail)}
+
+
+def arm_exception_capture(timeout, include_caught=False, filter_regex=None):
+    """Arm a one-shot exception hook and block until an exception fires or timeout.
+
+    include_caught=True installs sys.settrace across all threads, which adds
+    per-call overhead to every Python function call for the duration of the wait.
+    Keep the window short on a busy rig.
+
+    Returns a dict: on success {"timed_out": False, "exception_type": ..., "message": ...,
+    "traceback": ..., "frames": [{"index", "file", "line", "function"}, ...]};
+    on timeout {"timed_out": True}.
+    """
+    from acq4.mcp import exception_capture
+    fired = exception_capture.arm(timeout, include_caught=include_caught, filter_regex=filter_regex)
+    if not fired:
+        return {"timed_out": True}
+    return exception_capture.get_summary()
+
+
+def get_exception_frame(frame_index):
+    """Return locals for the captured exception's frame at frame_index.
+
+    Returns None if no exception is currently held.
+    Returns a dict: {"frame_index", "file", "line", "function", "locals": {name: repr}}.
+    """
+    from acq4.mcp import exception_capture
+    result = exception_capture.get_frame_locals(frame_index)
+    if result is None:
+        return {"error": "no exception captured"}
+    return result
+
+
+def exec_in_exception_frame(frame_index, code, gui_thread=False):
+    """Execute code in the namespace of the captured exception's frame at frame_index.
+
+    CPython does not write exec results back into the live frame's locals —
+    use this for inspection (print(x), type(obj)) not mutation.
+
+    Returns the same dict shape as execute(): stdout, stderr, result, traceback.
+    If no exception is held, returns {"error": "no exception captured"}.
+    """
+    from acq4.mcp import exception_capture
+    ns_or_err = exception_capture.exec_in_frame(frame_index, code)
+    if isinstance(ns_or_err, dict) and "error" in ns_or_err:
+        return ns_or_err
+
+    def run():
+        return _exec_and_capture(code, ns_or_err)
+
+    if gui_thread:
+        from acq4.util import task
+        return task.run_in_gui_thread(run)
+    return run()

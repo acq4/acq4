@@ -342,3 +342,54 @@ def test_instance_info_with_manager(fake_manager):
     assert info["has_manager"] is True
     assert info["device_count"] == 2
     assert info["base_dir"] == "/data/base"
+
+
+# ---------------------------------------------------------------------------
+# Exception interrogation
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def captured_exception():
+    """Inject a real captured exception into exception_capture and clean up after."""
+    import acq4.mcp.exception_capture as ec
+    try:
+        raise ValueError("test exception for mcp interrogation")
+    except ValueError as e:
+        exc = e
+        ec._captured_exc = exc
+    yield exc
+    ec._captured_exc = None
+
+
+def test_get_exception_frame_returns_error_when_no_capture():
+    import acq4.mcp.exception_capture as ec
+    ec._captured_exc = None
+    result = host.get_exception_frame(0)
+    assert result == {"error": "no exception captured"}
+
+
+def test_exec_in_exception_frame_returns_error_when_no_capture():
+    import acq4.mcp.exception_capture as ec
+    ec._captured_exc = None
+    result = host.exec_in_exception_frame(0, "1+1")
+    assert result == {"error": "no exception captured"}
+
+
+def test_arm_exception_capture_returns_timed_out_on_short_timeout():
+    result = host.arm_exception_capture(0.01)
+    assert result == {"timed_out": True}
+
+
+def test_get_exception_frame_returns_locals_dict_when_captured(captured_exception):
+    result = host.get_exception_frame(0)
+    assert "locals" in result
+    assert result["frame_index"] == 0
+    assert "file" in result
+    assert "function" in result
+
+
+def test_exec_in_exception_frame_evaluates_expression_in_frame(captured_exception):
+    result = host.exec_in_exception_frame(0, "1+1")
+    assert result["result"] == "2"
+    assert result["traceback"] is None
