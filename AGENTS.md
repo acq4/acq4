@@ -7,23 +7,6 @@
 
 * acq4 uses pytest-style testing; place tests in a `tests/` directory adjacent to the relevant code.
 
-## Project Overview
-
-ACQ4 is a platform for neurophysiology acquisition and analysis, focusing on patch clamp electrophysiology, optogenetics, and related techniques. It provides tools for data acquisition, management, and analysis with features including:
-
-* Semi- and fully-automated patch clamp electrophysiology
-* Automated manipulator control
-* Pipette cleaning/reuse and multipatch support
-* Resistance and machine vision-based autopatch
-* Photostimulation mapping
-* Fluorescent indicator imaging
-* 2-photon imaging
-
-## Collaboration & Workflow
-
-* Favor small, maintainable changes; avoid redesigning large surfaces.
-* Preserve existing comments unless demonstrably incorrect.
-
 ## Shared Guidance
 
 - Workflow, testing, technology, and architecture expectations are detailed in `CONTRIBUTING.md`; follow them unless explicitly directed otherwise.
