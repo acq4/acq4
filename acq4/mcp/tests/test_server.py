@@ -41,3 +41,11 @@ def test_format_empty_result_reports_no_output():
         {"stdout": "", "stderr": "", "result": None, "traceback": None}
     )
     assert "no output" in text.lower()
+
+
+def test_timed_out_result_serializes():
+    import json
+
+    result = {"timed_out": True}
+    text = json.dumps(result, indent=2, default=str)
+    assert '"timed_out": true' in text

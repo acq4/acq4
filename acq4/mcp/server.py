@@ -336,6 +336,101 @@ def build_server():
         except NotConnectedError as exc:
             return f"Not connected: {exc}"
 
+    @server.tool()
+    def arm_exception_capture(
+        timeout: float = 60.0,
+        include_caught: bool = False,
+        filter: Optional[str] = None,
+        port: Optional[int] = None,
+        host: Optional[str] = None,
+    ) -> str:
+        """Arm a one-shot exception hook and block until an exception fires or timeout expires.
+
+        Arms a hook in the running ACQ4 process that captures the next exception matching
+        `filter` (a regex applied to "filename:function:exception_message"). When an exception
+        fires, immediately unregisters all hooks (single-shot) and returns a summary with the
+        traceback and a frame list. If timeout expires with no exception, returns
+        {"timed_out": true}.
+
+        include_caught=True installs sys.settrace across all threads, which adds per-call
+        overhead to every Python function call for the duration of the wait. Keep the window
+        short on a busy rig.
+
+        After arm_exception_capture returns a captured exception, use get_exception_frame to
+        inspect locals and exec_in_exception_frame to run code in any frame.
+        """
+        try:
+            result = _get_connection().arm_exception_capture(
+                timeout=timeout,
+                include_caught=include_caught,
+                filter_regex=filter,
+                port=port,
+                host=host,
+            )
+        except NotConnectedError as exc:
+            return f"Not connected: {exc}"
+        return json.dumps(result, indent=2, default=str)
+
+    @server.tool()
+    def get_exception_frame(
+        frame_index: int,
+        port: Optional[int] = None,
+        host: Optional[str] = None,
+    ) -> str:
+        """Return local variables for one frame of the currently captured exception.
+
+        frame_index corresponds to the "index" field in the frames list returned by
+        arm_exception_capture (0 = outermost/call-site, last = raise site).
+
+        Returns a dict with file, line, function, and locals (name -> repr string).
+        Returns {"error": "no exception captured"} if no exception is currently held.
+        """
+        try:
+            result = _get_connection().get_exception_frame(
+                frame_index=frame_index,
+                port=port,
+                host=host,
+            )
+        except NotConnectedError as exc:
+            return f"Not connected: {exc}"
+        return json.dumps(result, indent=2, default=str)
+
+    @server.tool()
+    def exec_in_exception_frame(
+        frame_index: int,
+        code: str,
+        gui_thread: bool = False,
+        timeout: float = 30.0,
+        port: Optional[int] = None,
+        host: Optional[str] = None,
+    ) -> str:
+        """Execute code in the namespace of the captured exception's frame.
+
+        Runs code with the captured frame's locals merged over its globals as the
+        execution namespace. Returns stdout, stderr, result (repr of trailing expression),
+        and traceback -- same format as execute_code.
+
+        CPython does not write exec results back into the live frame's locals -- use this
+        for inspection (print(x), type(obj)) not mutation.
+
+        gui_thread follows identical semantics to execute_code: False for blocking or
+        long-running work; True only for fast, non-blocking Qt widget access.
+        """
+        try:
+            result = _get_connection().exec_in_exception_frame(
+                frame_index=frame_index,
+                code=code,
+                gui_thread=gui_thread,
+                timeout=timeout,
+                port=port,
+                host=host,
+            )
+        except NotConnectedError as exc:
+            return f"Not connected: {exc}"
+        if isinstance(result, dict) and "error" in result:
+            return result["error"]
+        return _format_execute(result)
+
     return server
 
 
