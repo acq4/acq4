@@ -354,7 +354,8 @@ def build_server():
 
         include_caught=True installs sys.settrace across all threads, which adds per-call
         overhead to every Python function call for the duration of the wait. Keep the window
-        short on a busy rig.
+        short on a busy rig. Note: threading.settrace only affects threads started after
+        arm() is called; pre-existing threads (Qt GUI, device workers) are not covered.
 
         After arm_exception_capture returns a captured exception, use get_exception_frame to
         inspect locals and exec_in_exception_frame to run code in any frame.

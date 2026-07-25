@@ -104,24 +104,20 @@ def test_exec_in_frame_returns_namespace_dict():
     result = ec.exec_in_frame(0, "x")
 
     assert isinstance(result, dict)
-    # Should not be an error dict
-    assert "error" not in result
+    # Errors are raised as RuntimeError, so any returned dict is a namespace dict.
 
 
-def test_exec_in_frame_returns_error_when_nothing_captured():
-    result = ec.exec_in_frame(0, "x")
+def test_exec_in_frame_raises_when_nothing_captured():
+    with pytest.raises(RuntimeError, match="no exception captured"):
+        ec.exec_in_frame(0, "x")
 
-    assert result == {"error": "no exception captured"}
 
-
-def test_exec_in_frame_returns_error_for_nonexistent_frame():
+def test_exec_in_frame_raises_for_nonexistent_frame():
     exc = _make_captured_exc()
     ec._captured_exc = exc
 
-    result = ec.exec_in_frame(99, "x")
-
-    assert "error" in result
-    assert "99" in result["error"]
+    with pytest.raises(RuntimeError, match="99"):
+        ec.exec_in_frame(99, "x")
 
 
 # --- arm ---

@@ -494,15 +494,16 @@ def exec_in_exception_frame(frame_index, code, gui_thread=False):
     use this for inspection (print(x), type(obj)) not mutation.
 
     Returns the same dict shape as execute(): stdout, stderr, result, traceback.
-    If no exception is held, returns {"error": "no exception captured"}.
+    If no exception is held or frame_index is out of range, returns an error string.
     """
     from acq4.mcp import exception_capture
-    ns_or_err = exception_capture.exec_in_frame(frame_index, code)
-    if isinstance(ns_or_err, dict) and "error" in ns_or_err:
-        return ns_or_err
+    try:
+        ns = exception_capture.exec_in_frame(frame_index, code)
+    except RuntimeError as exc:
+        return {"error": str(exc)}
 
     def run():
-        return _exec_and_capture(code, ns_or_err)
+        return _exec_and_capture(code, ns)
 
     if gui_thread:
         from acq4.util import task

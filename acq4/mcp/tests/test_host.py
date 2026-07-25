@@ -393,3 +393,28 @@ def test_exec_in_exception_frame_evaluates_expression_in_frame(captured_exceptio
     result = host.exec_in_exception_frame(0, "1+1")
     assert result["result"] == "2"
     assert result["traceback"] is None
+
+
+def test_exec_in_exception_frame_frame_with_error_local():
+    """A frame local named 'error' must not be mistaken for the error sentinel."""
+    import acq4.mcp.exception_capture as ec
+
+    def inner():
+        error = "I am a local named error"  # noqa: F841
+        raise ValueError("test")
+
+    try:
+        inner()
+    except ValueError as e:
+        ec._captured_exc = e
+
+    try:
+        # Frame 0 is inner(), which has a local named 'error'.
+        # Before the fix, exec_in_frame returned {"error": "I am a local named error"}
+        # and exec_in_exception_frame treated it as an error sentinel, refusing to
+        # execute the code.
+        result = host.exec_in_exception_frame(0, "1 + 1")
+        assert "result" in result, f"Got error instead of result: {result}"
+        assert result["result"] == "2"
+    finally:
+        ec._captured_exc = None

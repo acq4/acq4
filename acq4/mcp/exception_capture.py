@@ -15,6 +15,13 @@ _armed_filter = None      # compiled regex or None
 
 
 def arm(timeout, include_caught=False, filter_regex=None):
+    """Arm a one-shot exception hook and block until an exception fires or timeout.
+
+    include_caught=True installs sys.settrace across all threads, which adds per-call
+    overhead to every Python function call for the duration of the wait. Keep the window
+    short on a busy rig. Note: threading.settrace only affects threads started after
+    arm() is called; pre-existing threads (Qt GUI, device workers) are not covered.
+    """
     global _captured_exc, _armed_event, _armed_filter
 
     with _lock:
@@ -126,14 +133,14 @@ def get_frame_locals(frame_index):
 def exec_in_frame(frame_index, code):
     exc = _captured_exc
     if exc is None:
-        return {"error": "no exception captured"}
+        raise RuntimeError("no exception captured")
     tb = exc.__traceback__
     for i in range(frame_index):
         if tb is None:
-            return {"error": f"frame {frame_index} not found"}
+            raise RuntimeError(f"frame {frame_index} not found")
         tb = tb.tb_next
     if tb is None:
-        return {"error": f"frame {frame_index} not found"}
+        raise RuntimeError(f"frame {frame_index} not found")
     frame = tb.tb_frame
     ns = {**frame.f_globals, **frame.f_locals}
     # (caller executes code in ns; stdout/stderr capture happens in host.py)
