@@ -276,3 +276,10 @@ def test_exec_in_exception_frame_delegates_with_timeout(manager, recorder):
 def test_arm_exception_capture_raises_when_not_connected(manager):
     with pytest.raises(NotConnectedError):
         manager.arm_exception_capture()
+
+
+def test_arm_exception_capture_default_timeout_is_60():
+    import inspect
+
+    sig = inspect.signature(ConnectionManager.arm_exception_capture)
+    assert sig.parameters["timeout"].default == 60.0

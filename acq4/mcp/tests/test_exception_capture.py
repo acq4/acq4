@@ -124,6 +124,14 @@ def test_exec_in_frame_returns_error_for_nonexistent_frame():
     assert "99" in result["error"]
 
 
+# --- arm ---
+
+def test_arm_with_short_timeout_returns_false():
+    # arm() with a timeout so short no exception can fire should return False.
+    fired = ec.arm(0.001)
+    assert fired is False
+
+
 # --- _matches ---
 
 def test_matches_returns_true_when_filter_is_none():
