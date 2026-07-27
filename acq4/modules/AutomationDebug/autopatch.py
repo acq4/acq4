@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from acq4.devices.PatchPipette import PatchPipette
@@ -72,6 +73,7 @@ class Autopatcher:
                     )
                     return
                 cell_dir = run_in_gui_thread(data_manager.createNewFolder, "Cell")
+                cell_to_save = None
                 try:
                     started_clean = ppip.isTipClean()
                     if not started_clean:
@@ -92,6 +94,7 @@ class Autopatcher:
                         set_state("No cells found; quitting demo")
                         logger.info("Autopatch: no cell to work on; quitting demo")
                         return
+                    cell_to_save = cell
                     set_state("Autopatch: cell found")
                     ppip.newPatchAttempt()
                     run_in_gui_thread(multipatch_win.ui.recordBtn.setChecked, True)
@@ -202,6 +205,7 @@ class Autopatcher:
                         win.setCellStatus(win._cell, "error during patching", "bad")
                     continue
                 finally:
+                    self._saveTrackingHistory(cell_to_save, cell_dir)
                     man.setCurrentDir(cell_dir.parent())
                     run_in_gui_thread(multipatch_win.ui.recordBtn.setChecked, False)
         finally:
@@ -346,6 +350,25 @@ class Autopatcher:
             timeout=max(30, expected_duration * 20),
         )
         logger.warning("Autopatch: Task runner sequence completed.")
+
+    def _saveTrackingHistory(self, cell, cell_dir) -> None:
+        """Save the cell's tracking history to an .acqtrack file in cell_dir.
+
+        Silently skips when there is nothing to save (no cell, no tracker, or no
+        recorded tracking results). Exceptions from the save are logged and
+        swallowed so a failed save never aborts the demo loop.
+        """
+        if cell is None:
+            return
+        tracker = getattr(cell, "_tracker", None)
+        if tracker is None or not tracker.tracking_results:
+            return
+        path = Path(cell_dir.name()) / "tracking_history.acqtrack"
+        try:
+            tracker.save_history(path)
+            logger.info(f"Saved tracking history to {path}")
+        except Exception:
+            logger.exception("Failed to save tracking history")
 
     def _saveStack(self, name):
         ppip = self._window.patchPipetteDevice
