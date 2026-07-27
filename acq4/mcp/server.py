@@ -375,20 +375,25 @@ def build_server():
     @server.tool()
     def get_exception_frame(
         frame_index: int,
+        exception_id: Optional[int] = None,
         port: Optional[int] = None,
         host: Optional[str] = None,
     ) -> str:
-        """Return local variables for one frame of the currently captured exception.
+        """Return local variables for one frame of a captured exception.
+
+        exception_id: use an ID from list_exceptions to address a ring-buffer exception.
+        Omit (or pass None) to address the most recent one-shot arm_exception_capture result.
 
         frame_index corresponds to the "index" field in the frames list returned by
         arm_exception_capture (0 = outermost/call-site, last = raise site).
 
         Returns a dict with file, line, function, and locals (name -> repr string).
-        Returns {"error": "no exception captured"} if no exception is currently held.
+        Returns an error string if no exception is available or the ID has aged off.
         """
         try:
             result = _get_connection().get_exception_frame(
                 frame_index=frame_index,
+                exception_id=exception_id,
                 port=port,
                 host=host,
             )
@@ -402,10 +407,14 @@ def build_server():
         code: str,
         gui_thread: bool = False,
         timeout: float = 30.0,
+        exception_id: Optional[int] = None,
         port: Optional[int] = None,
         host: Optional[str] = None,
     ) -> str:
-        """Execute code in the namespace of the captured exception's frame.
+        """Execute code in the namespace of a captured exception's frame.
+
+        exception_id: use an ID from list_exceptions to address a ring-buffer exception.
+        Omit (or pass None) to address the most recent one-shot arm_exception_capture result.
 
         Runs code with the captured frame's locals merged over its globals as the
         execution namespace. Returns stdout, stderr, result (repr of trailing expression),
@@ -414,8 +423,7 @@ def build_server():
         CPython does not write exec results back into the live frame's locals -- use this
         for inspection (print(x), type(obj)) not mutation.
 
-        gui_thread follows identical semantics to execute_code: False for blocking or
-        long-running work; True only for fast, non-blocking Qt widget access.
+        gui_thread follows identical semantics to execute_code.
         """
         try:
             result = _get_connection().exec_in_exception_frame(
@@ -423,6 +431,7 @@ def build_server():
                 code=code,
                 gui_thread=gui_thread,
                 timeout=timeout,
+                exception_id=exception_id,
                 port=port,
                 host=host,
             )
@@ -431,6 +440,27 @@ def build_server():
         if isinstance(result, dict) and "error" in result:
             return result["error"]
         return _format_execute(result)
+
+    @server.tool()
+    def list_exceptions(
+        filter: Optional[str] = None,
+        port: Optional[int] = None,
+        host: Optional[str] = None,
+    ) -> str:
+        """List buffered exceptions (most-recent first), optionally filtered by regex.
+
+        ACQ4 must have been started with --exception-buffer N. Returns a JSON array
+        of one-line summaries; each entry includes exception_id -- pass that to
+        get_exception_frame or exec_in_exception_frame to inspect a specific exception.
+
+        filter is a regex applied to "exception_type:message:file:function".
+        Returns [] if the buffer is not active.
+        """
+        try:
+            result = _get_connection().list_exceptions(filter_regex=filter, port=port, host=host)
+        except NotConnectedError as exc:
+            return f"Not connected: {exc}"
+        return json.dumps(result, indent=2, default=str)
 
     return server
 

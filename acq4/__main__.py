@@ -21,6 +21,11 @@ control_arg_parser.add_argument("--threadtrace", action="store_true", help="Run 
 control_arg_parser.add_argument("--qt-profile", action="store_true", help="Use ProfiledQApplication to collect Qt event loop performance statistics")
 control_arg_parser.add_argument("--teleprox", type=int, nargs='?', const=0, default=None,
                                 help="Run a teleprox server in the background. If no port number is specified, a random port will be used.")
+control_arg_parser.add_argument(
+    "--exception-buffer", type=int, default=0, metavar="N",
+    help="Keep a ring buffer of the last N unhandled exceptions for MCP inspection. "
+         "0 (default) disables the buffer.",
+)
 args = control_arg_parser.parse_args()
 
 console_log_level = getattr(logging, args.console_log_level.upper(), logging.INFO)
@@ -128,6 +133,11 @@ if sys.platform == 'win32':
 
 # Enable exception handling
 installExceptionHandler()
+
+if args.exception_buffer > 0:
+    from acq4.mcp import exception_capture as _exc_capture
+    _exc_capture.start_buffer(args.exception_buffer)
+    print(f"Exception ring buffer active (size={args.exception_buffer})")
 
 
 ## Disable garbage collector to improve stability.

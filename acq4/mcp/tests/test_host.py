@@ -6,6 +6,7 @@ capture, exception reporting, and GUI-thread dispatch in isolation.
 
 import pytest
 
+import acq4.mcp.exception_capture as _ec
 from acq4.mcp import host
 
 
@@ -418,3 +419,119 @@ def test_exec_in_exception_frame_frame_with_error_local():
         assert result["result"] == "2"
     finally:
         ec._captured_exc = None
+
+
+# ---------------------------------------------------------------------------
+# Ring-buffer exception interrogation
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def buffer_with_exception():
+    """Start buffer, inject an exception, yield its exception_id, then clean up."""
+    import sys
+    from types import SimpleNamespace
+
+    # Patch exceptionHandling so start_buffer doesn't touch real pyqtgraph hooks
+    import pyqtgraph.exceptionHandling as _eh
+    orig_reg = _eh.registerCallback
+    orig_unreg = _eh.unregisterCallback
+    _eh.registerCallback = lambda cb: None
+    _eh.unregisterCallback = lambda cb: None
+
+    _ec._buffer_counter = 0
+    _ec._exception_buffer = None
+    _ec.start_buffer(size=5)
+
+    def inner(data):
+        error = ValueError("an error local")  # noqa: F841
+        raise KeyError("buffer_test_key")
+
+    try:
+        inner({"x": 1})
+    except KeyError as exc:
+        _ec._buffer_callback(SimpleNamespace(
+            exc_type=type(exc), exc_value=exc,
+            exc_traceback=exc.__traceback__, thread=None,
+        ))
+        exc_id = _ec._exception_buffer[0][0]
+
+    yield exc_id
+
+    _ec._exception_buffer = None
+    _ec._buffer_counter = 0
+    _eh.registerCallback = orig_reg
+    _eh.unregisterCallback = orig_unreg
+
+
+def test_list_exceptions_returns_empty_when_buffer_inactive():
+    _ec._exception_buffer = None
+    result = host.list_exceptions()
+    assert result == []
+
+
+def test_list_exceptions_returns_entries(buffer_with_exception):
+    result = host.list_exceptions()
+    assert len(result) == 1
+    assert result[0]["exception_type"] == "KeyError"
+    assert "exception_id" in result[0]
+
+
+def test_list_exceptions_filter_matches(buffer_with_exception):
+    result = host.list_exceptions(filter_regex="KeyError")
+    assert len(result) == 1
+
+
+def test_list_exceptions_filter_no_match(buffer_with_exception):
+    result = host.list_exceptions(filter_regex="ValueError")
+    assert result == []
+
+
+def test_get_exception_frame_with_exception_id(buffer_with_exception):
+    # frame 0 is the fixture's try-block; frame 1 is the inner() function where
+    # the KeyError was raised — that's the more informative innermost frame.
+    result = host.get_exception_frame(1, exception_id=buffer_with_exception)
+    assert "locals" in result
+    assert result["function"] == "inner"
+
+
+def test_get_exception_frame_aged_off_returns_error():
+    import pyqtgraph.exceptionHandling as _eh
+    from types import SimpleNamespace
+    orig_reg = _eh.registerCallback
+    orig_unreg = _eh.unregisterCallback
+    _eh.registerCallback = lambda cb: None
+    _eh.unregisterCallback = lambda cb: None
+
+    _ec._buffer_counter = 0
+    _ec._exception_buffer = None
+    _ec.start_buffer(size=1)
+    ids = []
+    for msg in ["first", "second"]:
+        try:
+            raise RuntimeError(msg)
+        except RuntimeError as exc:
+            _ec._buffer_callback(SimpleNamespace(
+                exc_type=type(exc), exc_value=exc,
+                exc_traceback=exc.__traceback__, thread=None,
+            ))
+            ids.append(_ec._exception_buffer[0][0])
+    result = host.get_exception_frame(0, exception_id=ids[0])
+    assert "error" in result
+    _ec._exception_buffer = None
+    _ec._buffer_counter = 0
+    _eh.registerCallback = orig_reg
+    _eh.unregisterCallback = orig_unreg
+
+
+def test_exec_in_exception_frame_with_exception_id(buffer_with_exception):
+    result = host.exec_in_exception_frame(0, "1 + 1", exception_id=buffer_with_exception)
+    assert result.get("result") == "2"
+
+
+def test_exec_in_exception_frame_exception_id_none_still_works():
+    """Original one-shot path must be unaffected."""
+    host.reset_namespace()
+    _ec._captured_exc = None
+    result = host.exec_in_exception_frame(0, "1+1")
+    assert "error" in result  # no captured exc

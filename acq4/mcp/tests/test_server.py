@@ -49,3 +49,20 @@ def test_timed_out_result_serializes():
     result = {"timed_out": True}
     text = json.dumps(result, indent=2, default=str)
     assert '"timed_out": true' in text
+
+
+def test_list_exceptions_empty_serializes():
+    import json
+
+    result = json.dumps([], indent=2)
+    assert result == "[]"
+
+
+def test_aged_off_error_serializes():
+    import json
+
+    result = json.dumps(
+        {"error": "exception 37 is no longer in buffer (oldest held: 40)"},
+        indent=2,
+    )
+    assert '"exception 37' in result

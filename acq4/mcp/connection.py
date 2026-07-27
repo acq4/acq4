@@ -211,22 +211,32 @@ class ConnectionManager:
             timeout, include_caught, filter_regex, _return_type="value", _timeout=timeout + 5.0
         )
 
-    def get_exception_frame(self, frame_index, port=None, host=None):
-        """Return locals for the captured exception's frame at frame_index."""
-        return self._run(self._get_exception_frame, frame_index, port, host)
+    def get_exception_frame(self, frame_index, exception_id=None, port=None, host=None):
+        """Return locals for the given frame of a captured exception."""
+        return self._run(self._get_exception_frame, frame_index, exception_id, port, host)
 
-    def _get_exception_frame(self, frame_index, port, host):
+    def _get_exception_frame(self, frame_index, exception_id, port, host):
         host, port = self._resolve(host, port)
         return self._host_module(host, port).get_exception_frame(
-            frame_index, _return_type="value"
+            frame_index, _return_type="value", exception_id=exception_id
         )
 
-    def exec_in_exception_frame(self, frame_index, code, gui_thread=False, timeout=30.0, port=None, host=None):
-        """Execute code in the namespace of the captured exception's frame."""
-        return self._run(self._exec_in_exception_frame, frame_index, code, gui_thread, timeout, port, host)
+    def exec_in_exception_frame(self, frame_index, code, gui_thread=False, timeout=30.0, exception_id=None, port=None, host=None):
+        """Execute code in the namespace of a captured exception's frame."""
+        return self._run(self._exec_in_exception_frame, frame_index, code, gui_thread, timeout, exception_id, port, host)
 
-    def _exec_in_exception_frame(self, frame_index, code, gui_thread, timeout, port, host):
+    def _exec_in_exception_frame(self, frame_index, code, gui_thread, timeout, exception_id, port, host):
         host, port = self._resolve(host, port)
         return self._host_module(host, port).exec_in_exception_frame(
-            frame_index, code, gui_thread, _return_type="value", _timeout=timeout
+            frame_index, code, gui_thread, _return_type="value", _timeout=timeout, exception_id=exception_id
+        )
+
+    def list_exceptions(self, filter_regex=None, port=None, host=None):
+        """Return one-line summaries of buffered exceptions, filtered by optional regex."""
+        return self._run(self._list_exceptions, filter_regex, port, host)
+
+    def _list_exceptions(self, filter_regex, port, host):
+        host, port = self._resolve(host, port)
+        return self._host_module(host, port).list_exceptions(
+            filter_regex, _return_type="value"
         )

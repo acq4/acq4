@@ -1,10 +1,12 @@
 # acq4/mcp/exception_capture.py — exception capture state and hooks for MCP
 # Captures live exceptions in the ACQ4 process for MCP client interrogation.
 
+import datetime
 import re
 import sys
 import threading
 import traceback
+from collections import deque
 
 from pyqtgraph import exceptionHandling
 
@@ -12,6 +14,9 @@ _lock = threading.Lock()
 _captured_exc = None      # the Exception object (keeps __traceback__ alive)
 _armed_event = None       # threading.Event, set when a matching exception arrives
 _armed_filter = None      # compiled regex or None
+
+_buffer_counter = 0          # monotonically incremented; IDs start at 1
+_exception_buffer = None     # None = buffer mode not active; deque of (id, exc, captured_at)
 
 
 def arm(timeout, include_caught=False, filter_regex=None):
@@ -82,6 +87,134 @@ def _systrace(frame, event, arg):
             exc_type=exc_type, exc_value=exc_value, exc_traceback=exc_tb, thread=None
         ))
     return _systrace
+
+
+def start_buffer(size: int = 5) -> None:
+    """Arm the ring buffer. Registers _buffer_callback; returns immediately (non-blocking)."""
+    global _exception_buffer
+    _exception_buffer = deque(maxlen=size)
+    exceptionHandling.registerCallback(_buffer_callback)
+
+
+def stop_buffer() -> None:
+    """Disarm the ring buffer hook. Buffer contents remain readable after stopping."""
+    try:
+        exceptionHandling.unregisterCallback(_buffer_callback)
+    except ValueError:
+        pass
+
+
+def _buffer_callback(exc_info) -> None:
+    # Never touches _armed_event — fully independent from one-shot mode.
+    global _buffer_counter
+    if _exception_buffer is None:
+        return
+    captured_at = datetime.datetime.now().isoformat()
+    with _lock:
+        _buffer_counter += 1
+        exc_id = _buffer_counter
+        _exception_buffer.appendleft((exc_id, exc_info.exc_value, captured_at))
+
+
+def _get_buffer_entry(exception_id: int):
+    """Return (id, exc, captured_at) for exception_id, or None if aged off / not found."""
+    if _exception_buffer is None:
+        return None
+    with _lock:
+        snapshot = list(_exception_buffer)
+    for entry in snapshot:
+        if entry[0] == exception_id:
+            return entry
+    return None
+
+
+def list_buffer() -> list:
+    """Return one-line summaries for all buffered exceptions, most-recent first.
+
+    Returns [] when buffer mode is not active.
+    Each entry: {exception_id, exception_type, message, file, line, function, captured_at}.
+    """
+    if _exception_buffer is None:
+        return []
+    with _lock:
+        snapshot = list(_exception_buffer)
+    result = []
+    for exc_id, exc, captured_at in snapshot:
+        tb = exc.__traceback__
+        while tb and tb.tb_next:
+            tb = tb.tb_next
+        result.append({
+            "exception_id": exc_id,
+            "exception_type": type(exc).__name__,
+            "message": str(exc),
+            "file": tb.tb_frame.f_code.co_filename if tb else "",
+            "line": tb.tb_lineno if tb else 0,
+            "function": tb.tb_frame.f_code.co_name if tb else "",
+            "captured_at": captured_at,
+        })
+    return result
+
+
+def get_buffer_frame_locals(exception_id: int, frame_index: int) -> dict:
+    """Return locals for a buffered exception's frame. Same shape as get_frame_locals().
+
+    Raises RuntimeError if exception_id has aged off or frame_index is out of range.
+    """
+    entry = _get_buffer_entry(exception_id)
+    if entry is None:
+        _raise_buffer_error(exception_id)
+    _, exc, _ = entry
+    tb = exc.__traceback__
+    for _ in range(frame_index):
+        if tb is None:
+            raise RuntimeError(f"frame {frame_index} not found")
+        tb = tb.tb_next
+    if tb is None:
+        raise RuntimeError(f"frame {frame_index} not found")
+    frame = tb.tb_frame
+    return {
+        "frame_index": frame_index,
+        "file": frame.f_code.co_filename,
+        "line": frame.f_lineno,
+        "function": frame.f_code.co_name,
+        "locals": {k: repr(v) for k, v in frame.f_locals.items()},
+    }
+
+
+def exec_in_buffer_frame(exception_id: int, frame_index: int, code: str) -> dict:
+    """Return namespace dict for exec in a buffered exception's frame.
+
+    Raises RuntimeError if exception_id has aged off or frame_index is out of range.
+    Execution with stdout/stderr capture happens in host.py (same contract as exec_in_frame).
+    """
+    entry = _get_buffer_entry(exception_id)
+    if entry is None:
+        _raise_buffer_error(exception_id)
+    _, exc, _ = entry
+    tb = exc.__traceback__
+    for _ in range(frame_index):
+        if tb is None:
+            raise RuntimeError(f"frame {frame_index} not found")
+        tb = tb.tb_next
+    if tb is None:
+        raise RuntimeError(f"frame {frame_index} not found")
+    frame = tb.tb_frame
+    return {**frame.f_globals, **frame.f_locals}
+
+
+def _raise_buffer_error(exception_id: int) -> None:
+    """Raise a RuntimeError naming the oldest held ID (or noting buffer is inactive)."""
+    if _exception_buffer is None:
+        raise RuntimeError(
+            f"exception {exception_id} not found: buffer not active "
+            f"(start ACQ4 with --exception-buffer N)"
+        )
+    if _exception_buffer:
+        oldest_id = _exception_buffer[-1][0]
+        raise RuntimeError(
+            f"exception {exception_id} is no longer in buffer (oldest held: {oldest_id})"
+        )
+    raise RuntimeError(f"exception {exception_id} not found: buffer is empty")
 
 
 def get_summary():
