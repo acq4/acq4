@@ -1,11 +1,15 @@
+import time
+
 import numpy as np
 from typing import Literal
 
+from acq4.Manager import getManager
 from acq4.devices.Device import Device
 from acq4.devices.PatchClamp.gui import PatchClampDeviceGui
 from acq4.devices.PatchClamp.testpulse import TestPulseThread
 from acq4.filetypes.MultiPatchLog import TEST_PULSE_NUMPY_DTYPE
 from acq4.util import Qt
+from neuroanalysis.stimuli import SquarePulse
 from neuroanalysis.test_pulse import PatchClampTestPulse
 
 
@@ -104,9 +108,11 @@ class PatchClamp(Device):
             tp.analysis.update(self._testPulseAnalysisOverrides)
         return tp
 
-    def zap(self, duration=1e-3, amplitude=1.0, sampleRate=500000):
+    def zap(self, duration=1e-3, amplitude=1.0):
         """Apply a brief voltage pulse ("zap") on top of the current holding to help clear or
         rupture the membrane.
+
+        The command waveform is generated at the device's own test-pulse sample rate.
 
         Parameters
         ----------
@@ -118,14 +124,8 @@ class PatchClamp(Device):
             literature (e.g. Axon instrumentation); some protocols go higher (up to ~5 V) with
             correspondingly briefer pulses. The default assumes VC; an IC zap would need a sane
             current amplitude supplied explicitly.
-        sampleRate : float
-            Sample rate (Hz) for the command waveform (default 500 kHz).
         """
-        import time
-
-        from acq4.Manager import getManager
-        from neuroanalysis.stimuli import SquarePulse
-
+        sampleRate = self.testPulseConfig.get('sampleRate', 500000)
         mode = self.getMode()
         pad = 1e-3
         total = pad + duration + pad
