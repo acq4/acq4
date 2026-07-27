@@ -474,33 +474,51 @@ def arm_exception_capture(timeout, include_caught=False, filter_regex=None):
     return exception_capture.get_summary()
 
 
-def get_exception_frame(frame_index):
-    """Return locals for the captured exception's frame at frame_index.
+def get_exception_frame(frame_index, exception_id=None):
+    """Return locals for the given frame of a captured exception.
 
-    Returns None if no exception is currently held.
-    Returns a dict: {"frame_index", "file", "line", "function", "locals": {name: repr}}.
+    exception_id=None uses the one-shot _captured_exc (existing behaviour).
+    exception_id=N uses the ring-buffer exception with that ID; returns an error
+    dict if the exception has aged off the buffer.
+
+    Returns a dict with frame_index, file, line, function, and locals (name->repr).
+    Returns {"error": "no exception captured"} if no exception is available.
     """
     from acq4.mcp import exception_capture
+    if exception_id is not None:
+        try:
+            return exception_capture.get_buffer_frame_locals(exception_id, frame_index)
+        except RuntimeError as exc:
+            return {"error": str(exc)}
     result = exception_capture.get_frame_locals(frame_index)
     if result is None:
         return {"error": "no exception captured"}
     return result
 
 
-def exec_in_exception_frame(frame_index, code, gui_thread=False):
-    """Execute code in the namespace of the captured exception's frame at frame_index.
+def exec_in_exception_frame(frame_index, code, gui_thread=False, exception_id=None):
+    """Execute code in the namespace of a captured exception's frame.
 
     CPython does not write exec results back into the live frame's locals —
     use this for inspection (print(x), type(obj)) not mutation.
 
+    exception_id=None uses the one-shot _captured_exc (existing behaviour).
+    exception_id=N uses the ring-buffer exception with that ID.
+
     Returns the same dict shape as execute(): stdout, stderr, result, traceback.
-    If no exception is held or frame_index is out of range, returns an error string.
+    Returns {"error": "..."} if no exception is available or the ID has aged off.
     """
     from acq4.mcp import exception_capture
-    try:
-        ns = exception_capture.exec_in_frame(frame_index, code)
-    except RuntimeError as exc:
-        return {"error": str(exc)}
+    if exception_id is not None:
+        try:
+            ns = exception_capture.exec_in_buffer_frame(exception_id, frame_index, code)
+        except RuntimeError as exc:
+            return {"error": str(exc)}
+    else:
+        try:
+            ns = exception_capture.exec_in_frame(frame_index, code)
+        except RuntimeError as exc:
+            return {"error": str(exc)}
 
     def run():
         return _exec_and_capture(code, ns)
@@ -509,3 +527,21 @@ def exec_in_exception_frame(frame_index, code, gui_thread=False):
         from acq4.util import task
         return task.run_in_gui_thread(run)
     return run()
+
+
+def list_exceptions(filter_regex=None):
+    """Return one-line summaries of buffered exceptions, optionally filtered by regex.
+
+    filter_regex is applied to "exception_type:message:file:function".
+    Returns [] when the buffer is not active (ACQ4 not started with --exception-buffer).
+    """
+    import re as _re
+    from acq4.mcp import exception_capture
+    entries = exception_capture.list_buffer()
+    if not filter_regex:
+        return entries
+    pat = _re.compile(filter_regex)
+    return [
+        e for e in entries
+        if pat.search(f"{e['exception_type']}:{e['message']}:{e['file']}:{e['function']}")
+    ]
