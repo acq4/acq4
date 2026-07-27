@@ -113,14 +113,16 @@ def _buffer_callback(exc_info) -> None:
     with _lock:
         _buffer_counter += 1
         exc_id = _buffer_counter
-    _exception_buffer.appendleft((exc_id, exc_info.exc_value, captured_at))
+        _exception_buffer.appendleft((exc_id, exc_info.exc_value, captured_at))
 
 
 def _get_buffer_entry(exception_id: int):
     """Return (id, exc, captured_at) for exception_id, or None if aged off / not found."""
     if _exception_buffer is None:
         return None
-    for entry in _exception_buffer:
+    with _lock:
+        snapshot = list(_exception_buffer)
+    for entry in snapshot:
         if entry[0] == exception_id:
             return entry
     return None
@@ -134,8 +136,10 @@ def list_buffer() -> list:
     """
     if _exception_buffer is None:
         return []
+    with _lock:
+        snapshot = list(_exception_buffer)
     result = []
-    for exc_id, exc, captured_at in _exception_buffer:
+    for exc_id, exc, captured_at in snapshot:
         tb = exc.__traceback__
         while tb and tb.tb_next:
             tb = tb.tb_next

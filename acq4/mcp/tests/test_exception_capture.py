@@ -334,3 +334,16 @@ def test_exec_in_buffer_frame_raises_for_aged_off():
             ids.append(ec._exception_buffer[0][0])
     with pytest.raises(RuntimeError, match="oldest held"):
         ec.exec_in_buffer_frame(ids[0], 0, "1+1")
+
+
+def test_raise_buffer_error_when_buffer_not_active():
+    ec._exception_buffer = None
+    with pytest.raises(RuntimeError, match="buffer not active"):
+        ec._raise_buffer_error(99)
+
+
+def test_raise_buffer_error_when_buffer_empty():
+    ec.start_buffer(size=5)  # _mock_eh handles registration
+    # Buffer is empty — no exceptions captured yet
+    with pytest.raises(RuntimeError, match="buffer is empty"):
+        ec._raise_buffer_error(99)
