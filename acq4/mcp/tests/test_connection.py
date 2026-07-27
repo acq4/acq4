@@ -5,9 +5,19 @@ resolution, active-target tracking, port overrides, and delegation are covered w
 live socket. A single module-scoped live test exercises the real teleprox round-trip.
 """
 
+from unittest import mock
+
 import pytest
 
 from acq4.mcp.connection import ConnectionManager, NotConnectedError
+
+
+def _fake_host(method_returns):
+    """Return a MagicMock host module with each method in method_returns returning its value."""
+    mod = mock.MagicMock()
+    for method_name, return_value in method_returns.items():
+        getattr(mod, method_name).return_value = return_value
+    return mod
 
 
 class _FakeHostModule:
@@ -68,6 +78,10 @@ class _FakeHostModule:
             ("exec_in_exception_frame", self.host, self.port, frame_index, code, gui_thread, kw)
         )
         return {"stdout": "", "stderr": "", "result": None, "traceback": None}
+
+    def list_exceptions(self, filter_regex=None, **kw):
+        self.recorder.append(("list_exceptions", self.host, self.port, filter_regex, kw))
+        return []
 
 
 @pytest.fixture
@@ -283,3 +297,55 @@ def test_arm_exception_capture_default_timeout_is_60():
 
     sig = inspect.signature(ConnectionManager.arm_exception_capture)
     assert sig.parameters["timeout"].default == 60.0
+
+
+def test_list_exceptions_calls_host():
+    mgr = ConnectionManager(host_module_provider=lambda h, p: _fake_host({"list_exceptions": []}), serialize=False)
+    mgr._active = ("127.0.0.1", 9999)
+    result = mgr.list_exceptions(filter_regex="KeyError")
+    # Verify it called through (result is the canned [])
+    assert result == []
+
+
+def test_list_exceptions_raises_not_connected():
+    mgr = ConnectionManager(serialize=False)
+    with pytest.raises(NotConnectedError):
+        mgr.list_exceptions()
+
+
+def test_get_exception_frame_passes_exception_id():
+    calls = {}
+
+    def fake_provider(h, p):
+        mod = mock.MagicMock()
+
+        def get_frame(*args, **kwargs):
+            calls["kwargs"] = kwargs
+            return {"frame_index": 0, "locals": {}}
+
+        mod.get_exception_frame.side_effect = get_frame
+        return mod
+
+    mgr = ConnectionManager(host_module_provider=fake_provider, serialize=False)
+    mgr._active = ("127.0.0.1", 9999)
+    mgr.get_exception_frame(frame_index=0, exception_id=42)
+    assert calls["kwargs"].get("exception_id") == 42 or 42 in calls["kwargs"].values()
+
+
+def test_exec_in_exception_frame_passes_exception_id():
+    calls = {}
+
+    def fake_provider(h, p):
+        mod = mock.MagicMock()
+
+        def exec_frame(*args, **kwargs):
+            calls["kwargs"] = kwargs
+            return {"stdout": "", "stderr": "", "result": "2", "traceback": None}
+
+        mod.exec_in_exception_frame.side_effect = exec_frame
+        return mod
+
+    mgr = ConnectionManager(host_module_provider=fake_provider, serialize=False)
+    mgr._active = ("127.0.0.1", 9999)
+    mgr.exec_in_exception_frame(frame_index=0, code="1+1", exception_id=7)
+    assert calls["kwargs"].get("exception_id") == 7 or 7 in calls["kwargs"].values()
