@@ -61,11 +61,16 @@ class ProtocolFile:
                 raise ProtocolLoadError(f"Protocol {self.path!r} has no run() function")
 
             params = list(getattr(module, "PARAMS", []))
+            description = (module.__doc__ or "").strip()
+            # Build the tree before touching instance state, so a rejected
+            # PARAMS spec leaves the previously-loaded run/params/description/
+            # param_tree fully intact rather than mixed with the new run().
+            param_tree = self._build_tree(params)
 
             self.run = run
             self.params = params
-            self.description = (module.__doc__ or "").strip()
-            self.param_tree = self._build_tree(params)
+            self.description = description
+            self.param_tree = param_tree
             self.is_loaded = True
             self.load_error = None
         except ProtocolLoadError as e:

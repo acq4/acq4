@@ -153,6 +153,42 @@ def test_dataclass_at_module_level_loads(tmp_path):
     assert pf.run(None).x == 1
 
 
+def test_failed_reload_leaves_previous_good_state_untouched(tmp_path):
+    path = _write(tmp_path, "goodthenbad.py", """
+        \"\"\"A good protocol.\"\"\"
+        PARAMS = [dict(name="count", type="int", default=3)]
+
+        def run(ctx, **params):
+            return "done"
+    """)
+    pf = ProtocolFile(path)
+    pf.load()
+    assert pf.is_loaded is True
+    good_run = pf.run
+    good_description = pf.description
+    good_params = pf.params
+    good_param_tree = pf.param_tree
+    assert pf.param_values() == {"count": 3}
+
+    _write(tmp_path, "goodthenbad.py", """
+        \"\"\"A newer, broken protocol.\"\"\"
+        PARAMS = [dict(name="count", type="not_a_real_pyqtgraph_type")]
+
+        def run(ctx, **params):
+            return "done"
+    """)
+    with pytest.raises(ProtocolLoadError):
+        pf.load()
+
+    assert pf.is_loaded is False
+    assert pf.load_error is not None
+    assert pf.run is good_run
+    assert pf.description == good_description
+    assert pf.params is good_params
+    assert pf.param_tree is good_param_tree
+    assert pf.param_values() == {"count": 3}
+
+
 def test_successful_reload_after_failed_load_clears_error(tmp_path):
     path = _write(tmp_path, "flaky.py", "this is not valid python !!!")
     pf = ProtocolFile(path)
