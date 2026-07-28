@@ -47,3 +47,21 @@ class RetryCurrentCell(FlowSignal):
 
 class AbortExperiment(FlowSignal):
     """Stop the whole experiment."""
+
+
+ABNORMAL_STATE_EXCEPTIONS: dict[str, type[OrchestrationError]] = {
+    "broken": BrokenPipette,
+    "fouled": Fouled,
+}
+
+
+def raise_if_abnormal(state: str, expected, context: str = "") -> None:
+    """Raise the ``ABNORMAL_STATE_EXCEPTIONS``-mapped exception for ``state``,
+    unless ``state`` is one of the caller's declared terminal states in
+    ``expected``. States that are neither expected nor mapped are internal FSM
+    hops and pass through without raising."""
+    if state in expected:
+        return
+    exc_cls = ABNORMAL_STATE_EXCEPTIONS.get(state)
+    if exc_cls is not None:
+        raise exc_cls(f"{context}: pipette state is {state!r}" if context else f"pipette state is {state!r}")
