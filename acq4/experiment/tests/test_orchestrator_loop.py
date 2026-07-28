@@ -1,4 +1,7 @@
 """Tests for the Orchestrator queue loop, pause/resume, stop, and next-cell."""
+import gc
+import weakref
+
 import pytest
 
 from acq4.util.task import Stopped, Event
@@ -77,3 +80,41 @@ def test_stop_aborts_running_action(qtbot):
     with pytest.raises(Stopped):
         task.wait(timeout=5)
     assert _BlockingAction.aborted == ["a"]  # safeAbort ran on stop
+
+
+def test_finished_task_does_not_leave_qobject_cycle(qtbot):
+    """Regression test for the exit-segfault root cause: Orchestrator and its
+    QtFriendlyTask are both QObjects, so a permanent orch<->task reference cycle
+    can only be reclaimed by Python's cyclic GC -- non-deterministically, off
+    Qt's safe teardown path. Once a run has finished, plain refcounting alone
+    (cyclic GC disabled) must be enough to free both.
+    """
+    _BlockingAction.gate = Event()
+    _BlockingAction.started = Event()
+    _BlockingAction.aborted = []
+    p = Protocol(nodes={"a": _BlockingAction(name="a")}, edges={}, entry="a")
+    # A plain function, not a bound method of orch, so the orchestrator's own
+    # self._contextFactory attribute does not itself create a self-cycle --
+    # this test is targeted at the orch<->task cycle specifically.
+    orch = Orchestrator(p, contextFactory=lambda cell: None)
+    orch.enqueue("c1")
+    task = orch.start()
+    _BlockingAction.started.wait()  # action is parked in run(), definitely not finished
+
+    # Connect to sigFinished BEFORE releasing the gate, so there is no race
+    # between the task starting/finishing and us starting to listen.
+    with qtbot.waitSignal(task.sigFinished, timeout=5000):
+        _BlockingAction.gate.set()  # let the action, and the run loop, finish
+
+    task_ref = weakref.ref(task)
+    orch_ref = weakref.ref(orch)
+
+    gc.disable()
+    try:
+        del task
+        del orch
+        assert orch_ref() is None, "Orchestrator survived refcounting alone -- a cycle remains"
+        assert task_ref() is None, "Task survived refcounting alone -- a cycle remains"
+    finally:
+        gc.collect()
+        gc.enable()
