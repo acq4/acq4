@@ -4,6 +4,7 @@ from .context import ExecutionContext  # noqa: F401
 from .log_entry import ActionLogEntry  # noqa: F401
 from .action import Action  # noqa: F401
 from .protocol import Protocol  # noqa: F401
+from .protocol_file import ProtocolFile, ProtocolLoadError  # noqa: F401
 from .orchestrator import Orchestrator  # noqa: F401
 from .registry import register_action, get_action_class, action_type_name  # noqa: F401
 from . import exceptions  # noqa: F401
