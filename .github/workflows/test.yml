@@ -26,5 +26,10 @@ jobs:
         pip install -U pytest numpy scipy pyqtgraph pyqt5 metaarray neuroanalysis numba pyyaml pillow trimesh pyopengl coorx teleprox click tifffile vispy gentletask python-json-logger
 
     - name: Run tests
+      env:
+        # The runner has no display, so Qt must use the offscreen platform
+        # plugin; without it QGuiApplication aborts while creating its platform
+        # integration and pytest dies with a core dump.
+        QT_QPA_PLATFORM: offscreen
       run: |
         python -m pytest tests/
