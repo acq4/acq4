@@ -50,6 +50,7 @@ class _FakeDev:
     def __init__(self):
         self.active = True
         self.sigTargetChanged = _FakeSignal()
+        self.sigActiveChanged = _FakeSignal()
         self.clampDevice = _FakeClamp()
         self.pressureDevice = _FakePressure()
         self.pipetteDevice = _FakePipette()

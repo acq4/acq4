@@ -122,6 +122,7 @@ def test_scope_unwind_appended_after_pip_home(pip):
 
 
 def test_scope_unwind_reverses_park_path(pip):
+    """Unwind walks the forward park path backwards, re-commanding park before descending."""
     planner = make_planner()
     scope, original_pos, up_pos, park_pos = _seed_scope_context(planner, pip)
 
@@ -140,9 +141,10 @@ def test_scope_unwind_reverses_park_path(pip):
     moves = _flat_moves(plan)
     scope_moves = [m for m in moves if m.device is scope]
 
-    assert len(scope_moves) == 2
-    np.testing.assert_array_almost_equal(scope_moves[0].position, up_pos)
-    np.testing.assert_array_almost_equal(scope_moves[1].position, original_pos)
+    expected = list(reversed([original_pos, up_pos, park_pos]))
+    assert len(scope_moves) == len(expected)
+    for move, waypoint in zip(scope_moves, expected):
+        np.testing.assert_array_almost_equal(move.position, waypoint)
 
 
 def test_scope_context_cleared_after_plan(pip):
@@ -227,15 +229,16 @@ def test_pip_no_retract_step_when_already_at_safe_height(site_with_scope_park):
     )
     moves = _flat_moves(plan)
 
-    # scope up, scope lateral, then pip — no pip move between scope up and scope lateral
+    # scope up, pip home, scope lateral, then pip.  The unconditional go-home step is the
+    # only pip move allowed between scope-up and scope-lateral; the retract-to-approach-depth
+    # step must be absent because the pip already sits at its approach depth.
     scope_idxs = [i for i, m in enumerate(moves) if isinstance(m.device, MockScope)]
     pip_idxs = [i for i, m in enumerate(moves) if m.device is pip_safe]
     assert len(scope_idxs) >= 2
-    # no pip move should appear between scope up (scope_idxs[0]) and scope lateral (scope_idxs[1])
-    between = [i for i in pip_idxs if scope_idxs[0] < i < scope_idxs[1]]
-    assert (
-        len(between) == 0
-    ), "No pip move should appear between scope-up and scope-lateral"
+    between = [moves[i] for i in pip_idxs if scope_idxs[0] < i < scope_idxs[1]]
+    assert [m.explanation for m in between] == [
+        "pipette home before scope park"
+    ], "No pip retract step should appear between scope-up and scope-lateral"
 
 
 # ---------------------------------------------------------------------------

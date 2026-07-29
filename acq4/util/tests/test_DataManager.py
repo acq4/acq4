@@ -49,8 +49,8 @@ def test_datamanager():
 
     # test _getTree
     d3 = rh.mkdir('subdir3')
-    assert d3.name() not in dm.dm._getTree(d1.name())
-    assert d2.name() in dm.dm._getTree(d1.name())
+    assert d3.name() not in dm.getDataManager()._getTree(d1.name())
+    assert d2.name() in dm.getDataManager()._getTree(d1.name())
 
     #
     # root

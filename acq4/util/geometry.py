@@ -1553,7 +1553,9 @@ class Geometry:
 
         self.color = config.pop("color", None)
 
-        self._transform = load_transform(config.pop("transform", {}))
+        self._transform = load_transform(
+            config.pop("transform", {}), **self._default_transform_args()
+        )
 
         self._children = []
         for name, child_config in config.pop("children", {}).items():
