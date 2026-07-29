@@ -61,14 +61,14 @@ class ExecutionContext:
     def log_action(self, name: str):
         """Track one action for the UI: yields an ActionLogEntry, notifies the UI
         hook if attached, and records the outcome on exit. Never suppresses."""
-        entry = ActionLogEntry(name)
+        action_entry = ActionLogEntry(name)
         if self.on_log_action is not None:
-            self.on_log_action(entry)
+            self.on_log_action(action_entry)
         exc_seen = None
         try:
-            yield entry
+            yield action_entry
         except BaseException as exc:
             exc_seen = exc
             raise
         finally:
-            entry._finish(exc_seen)
+            action_entry._finish(exc_seen)

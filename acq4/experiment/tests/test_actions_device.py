@@ -176,7 +176,7 @@ def ctx(pip):
 
 def _entry_names(ctx):
     names = []
-    ctx.on_log_action = lambda entry: names.append(entry.name)
+    ctx.on_log_action = lambda action_entry: names.append(action_entry.name)
     return names
 
 
@@ -186,11 +186,11 @@ def _entry_names(ctx):
 @pytest.mark.parametrize(
     "fn, name, position",
     [
-        (go_home, "GoHome", "home"),
-        (go_search, "GoSearch", "search"),
-        (go_approach, "GoApproach", "approach"),
-        (go_target, "GoTarget", "target"),
-        (go_above_target, "GoAboveTarget", "aboveTarget"),
+        (go_home, "Pipette To Home", "home"),
+        (go_search, "Pipette To Search Position", "search"),
+        (go_approach, "Pipette To Approach Position", "approach"),
+        (go_target, "Pipette To Target", "target"),
+        (go_above_target, "Pipette To Above Target", "aboveTarget"),
     ],
 )
 def test_named_move_calls_pipette_device_move_to_and_waits(ctx, pip, fn, name, position):
@@ -217,7 +217,7 @@ def test_focus_tip_dispatches_to_focus_on_tip(ctx, pip):
     focus_tip(ctx, speed="slow")
 
     assert pip.focus_calls == [("tip", "slow")]
-    assert names == ["FocusTip"]
+    assert names == ["Focus On Pipette Tip"]
 
 
 def test_focus_target_dispatches_to_focus_on_target(ctx, pip):
@@ -226,7 +226,7 @@ def test_focus_target_dispatches_to_focus_on_target(ctx, pip):
     focus_target(ctx, speed="slow")
 
     assert pip.focus_calls == [("target", "slow")]
-    assert names == ["FocusTarget"]
+    assert names == ["Focus On Target"]
 
 
 # -- new_pipette ------------------------------------------------------------
@@ -238,7 +238,7 @@ def test_new_pipette_calls_new_pipette_and_waits(ctx, pip):
     new_pipette(ctx)
 
     assert pip.new_pipette_calls == 1
-    assert names == ["NewPipette"]
+    assert names == ["New Pipette Calibration"]
 
 
 def test_new_pipette_wraps_failure_as_orchestration_error(ctx, pip):
@@ -247,7 +247,7 @@ def test_new_pipette_wraps_failure_as_orchestration_error(ctx, pip):
     with pytest.raises(OrchestrationError) as excinfo:
         new_pipette(ctx)
 
-    assert "NewPipette" in str(excinfo.value)
+    assert "New Pipette Calibration" in str(excinfo.value)
     assert "boom" in str(excinfo.value)
 
 
@@ -264,7 +264,7 @@ def test_find_tip_calls_steps_in_order(ctx, pip):
         ("offset",),
         ("find_tip",),
     ]
-    assert names == ["FindTip"]
+    assert names == ["Find Pipette Tip"]
 
 
 def test_find_tip_wraps_failure_as_orchestration_error(ctx, pip):
@@ -273,7 +273,7 @@ def test_find_tip_wraps_failure_as_orchestration_error(ctx, pip):
     with pytest.raises(OrchestrationError) as excinfo:
         find_tip(ctx)
 
-    assert "FindTip" in str(excinfo.value)
+    assert "Find Pipette Tip" in str(excinfo.value)
     assert "no tip" in str(excinfo.value)
 
 
@@ -288,7 +288,7 @@ def test_find_surface_returns_depth(ctx, pip):
 
     assert result == 123.4
     assert pip.scope.calls == [pip.imager]
-    assert names == ["FindSurface"]
+    assert names == ["Find Sample Surface"]
 
 
 def test_find_surface_wraps_value_error(ctx, pip):
@@ -297,7 +297,7 @@ def test_find_surface_wraps_value_error(ctx, pip):
     with pytest.raises(OrchestrationError) as excinfo:
         find_surface(ctx)
 
-    assert "FindSurface" in str(excinfo.value)
+    assert "Find Sample Surface" in str(excinfo.value)
     assert "no surface" in str(excinfo.value)
 
 
@@ -367,7 +367,7 @@ def test_run_task_finds_module_by_clamp_name_and_runs(ctx, pip, monkeypatch):
     run_task(ctx, store=False)
 
     assert mod.run_calls == [False]
-    assert names == ["Task"]
+    assert names == ["Task Runner Sequence"]
 
 
 def test_run_task_timeout_defaults_from_sequence_length(ctx, pip, monkeypatch):
@@ -397,5 +397,5 @@ def test_run_task_raises_when_no_module_matches(ctx, pip):
     with pytest.raises(OrchestrationError) as excinfo:
         run_task(ctx)
 
-    assert "Task" in str(excinfo.value)
+    assert "Task Runner Sequence" in str(excinfo.value)
     assert "Clamp1" in str(excinfo.value)

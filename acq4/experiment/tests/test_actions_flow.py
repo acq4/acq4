@@ -164,7 +164,7 @@ def test_prompt_creates_prompt_log_entry(monkeypatch):
     prompt(ctx, message="hi")
 
     assert len(seen) == 1
-    assert seen[0].name == "Prompt"
+    assert seen[0].name == "Operator Prompt"
     assert seen[0].status == "hi"
 
 

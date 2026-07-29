@@ -60,8 +60,8 @@ that proof too -- not just resolving immediately without touching ctx."""
 
 
 def run(ctx, **kwargs):
-    with ctx.log_action("Noop") as entry:
-        entry.set_status("doing nothing in particular")
+    with ctx.log_action("Noop") as action_entry:
+        action_entry.set_status("doing nothing in particular")
 '''
 
 _SLOW_PROTOCOL = '''"""Teardown test fixture: loops until stopped. Used to prove

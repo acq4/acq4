@@ -84,12 +84,12 @@ def test_details_widget_mounted_for_selected_cell(qapp):
     cell = orch.enqueued[0]
     panel.cellList.setCurrentRow(0)
 
-    entry = ActionLogEntry("Patch")
-    panel.onLogAction(cell, entry)
+    action_entry = ActionLogEntry("Patch")
+    panel.onLogAction(cell, action_entry)
     # Built on the GUI thread here, matching set_details_widget()'s requirement
     # that a widget handed to the UI must not be constructed off-thread.
     liveWidget = Qt.QLabel("live plot")
-    entry.set_details_widget(liveWidget)
+    action_entry.set_details_widget(liveWidget)
 
     assert panel.showContainer.layout().indexOf(liveWidget) != -1
 
@@ -105,10 +105,10 @@ def test_details_widget_not_mounted_for_unselected_cell(qapp):
     cellA, cellB = orch.enqueued
     panel.cellList.setCurrentRow(0)  # follow cellA
 
-    entry = ActionLogEntry("Patch")
-    panel.onLogAction(cellB, entry)  # B is running, but A is selected
+    action_entry = ActionLogEntry("Patch")
+    panel.onLogAction(cellB, action_entry)  # B is running, but A is selected
     liveWidget = Qt.QLabel("live plot for B")
-    entry.set_details_widget(liveWidget)
+    action_entry.set_details_widget(liveWidget)
 
     assert panel.showContainer.layout().indexOf(liveWidget) == -1
 
@@ -124,10 +124,10 @@ def test_details_widget_cleared_when_selection_moves_away_from_running_cell(qapp
     cellA, cellB = orch.enqueued
     panel.cellList.setCurrentRow(0)  # follow cellA
 
-    entry = ActionLogEntry("Patch")
-    panel.onLogAction(cellA, entry)
+    action_entry = ActionLogEntry("Patch")
+    panel.onLogAction(cellA, action_entry)
     liveWidget = Qt.QLabel("live plot for A")
-    entry.set_details_widget(liveWidget)
+    action_entry.set_details_widget(liveWidget)
     assert panel.showContainer.layout().indexOf(liveWidget) != -1
 
     panel.cellList.setCurrentRow(1)  # switch away to cellB; cellA is still "running"
@@ -175,12 +175,12 @@ def test_details_widget_cleared_when_the_entry_finishes(qapp):
     cell = orch.enqueued[0]
     panel.cellList.setCurrentRow(0)
 
-    entry = ActionLogEntry("Patch")
-    panel.onLogAction(cell, entry)
+    action_entry = ActionLogEntry("Patch")
+    panel.onLogAction(cell, action_entry)
     liveWidget = Qt.QLabel("live plot")
-    entry.set_details_widget(liveWidget)
+    action_entry.set_details_widget(liveWidget)
     assert panel.showContainer.layout().indexOf(liveWidget) != -1
 
-    entry._finish(None)
+    action_entry._finish(None)
 
     assert panel.showContainer.layout().count() == 0

@@ -24,8 +24,8 @@ def prompt(ctx, message: str = "", title: str = "Prompt", choices=("OK",)) -> st
     """Ask the operator to choose from labeled buttons; returns the clicked label.
     Non-modal and stop-aware. Headless (no UI): logs and returns the first choice."""
     labels = _resolve_choices(choices)
-    with ctx.log_action("Prompt") as entry:
-        entry.set_status(message)
+    with ctx.log_action("Operator Prompt") as action_entry:
+        action_entry.set_status(message)
         ctx.log(message)
         if _is_headless():
             return labels[0]

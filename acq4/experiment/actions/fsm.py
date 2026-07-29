@@ -23,9 +23,9 @@ def _safe_abort(ctx) -> None:
 def _drive_fsm(ctx, name, entry_state, terminals, entry_config=None, poll_interval=0.1) -> str:
     """Drive the PatchPipette FSM from entry_state and return the terminal state
     it reaches. Abnormal states not in `terminals` raise (see raise_if_abnormal)."""
-    with ctx.log_action(name) as entry:
+    with ctx.log_action(name) as action_entry:
         pip = ctx.pipette
-        entry.set_status(f"driving FSM from {entry_state!r}")
+        action_entry.set_status(f"driving FSM from {entry_state!r}")
         try:
             # Fresh dict per call so no caller shares a mutable default.
             pip.setState(entry_state, **dict(entry_config or {}))
@@ -37,7 +37,7 @@ def _drive_fsm(ctx, name, entry_state, terminals, entry_config=None, poll_interv
                     )
                 state = pip.getState().stateName
                 if state in terminals:
-                    entry.set_status(f"reached {state!r}")
+                    action_entry.set_status(f"reached {state!r}")
                     return state
                 raise_if_abnormal(state, terminals, name)
                 sleep(poll_interval)
@@ -67,4 +67,4 @@ def reseal(ctx, **entry_config) -> str:
 def clean(ctx, **entry_config) -> str:
     """Run the pipette-cleaning cycle and return once it settles at its resting
     state (``out``)."""
-    return _drive_fsm(ctx, "Clean", "clean", {"out"}, entry_config)
+    return _drive_fsm(ctx, "Clean Pipette", "clean", {"out"}, entry_config)

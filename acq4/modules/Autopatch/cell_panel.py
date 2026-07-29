@@ -224,7 +224,7 @@ class CellPanel(Qt.QWidget):
         (make_context_factory's onLogAction=partial(..., cell)).
 
         Called from the orchestrator's worker thread the instant an action
-        opens `with ctx.log_action(name) as entry:`. Assigns the entry's
+        opens `with ctx.log_action(name) as action_entry:`. Assigns the entry's
         on_status/on_widget/on_finish callbacks -- themselves also called from
         the worker thread as the action progresses -- so every one of them,
         like this method itself, only ever emits sigActionEntry rather than

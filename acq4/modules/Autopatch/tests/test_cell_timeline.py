@@ -51,8 +51,8 @@ def test_timeline_appends_a_running_row_when_an_entry_starts(qapp):
     cell = orch.enqueued[0]
     panel.cellList.setCurrentRow(0)
 
-    entry = ActionLogEntry("Patch")
-    panel.onLogAction(cell, entry)
+    action_entry = ActionLogEntry("Patch")
+    panel.onLogAction(cell, action_entry)
 
     assert panel.timelineList.count() == 1
     text = panel.timelineList.item(0).text()
@@ -70,9 +70,9 @@ def test_timeline_row_updates_in_place_when_the_entry_finishes(qapp):
     cell = orch.enqueued[0]
     panel.cellList.setCurrentRow(0)
 
-    entry = ActionLogEntry("Patch")
-    panel.onLogAction(cell, entry)
-    entry._finish(None)  # ctx.log_action()'s normal exit -> outcome "done"
+    action_entry = ActionLogEntry("Patch")
+    panel.onLogAction(cell, action_entry)
+    action_entry._finish(None)  # ctx.log_action()'s normal exit -> outcome "done"
 
     assert panel.timelineList.count() == 1  # updated in place, not appended
     text = panel.timelineList.item(0).text()
@@ -209,7 +209,7 @@ def test_log_action_entries_marshal_from_the_worker_thread_to_the_gui_thread(qap
         "worker thread it ran on, onto the cell, for the test to inspect.\"\"\"\n"
         "from acq4.util import Qt\n\n\n"
         "def run(ctx, **kwargs):\n"
-        "    with ctx.log_action('Patch') as entry:\n"
+        "    with ctx.log_action('Patch') as action_entry:\n"
         "        ctx.cell._workerThread = Qt.QtCore.QThread.currentThread()\n"
     )
     pf = ProtocolFile(str(protocol_path))

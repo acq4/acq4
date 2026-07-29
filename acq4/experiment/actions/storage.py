@@ -14,7 +14,7 @@ def new_data_dir(ctx, level: str = "Cell", set_current: bool = True):
     inside another of the same type. The special level "Folder" makes an untyped
     "NewFolder" under the current directory.
     """
-    with ctx.log_action("NewDataDir"):
+    with ctx.log_action("New Data Directory"):
         man = ctx.manager
         cdir = man.getCurrentDir()
         if not cdir.isManaged():

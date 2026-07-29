@@ -15,7 +15,7 @@ def _ctx(pip, **kwargs):
 
 def _entry_names(ctx):
     names = []
-    ctx.on_log_action = lambda entry: names.append(entry.name)
+    ctx.on_log_action = lambda action_entry: names.append(action_entry.name)
     return names
 
 
@@ -233,4 +233,4 @@ def test_clean_creates_log_entry_named_clean(fake_pip_factory):
     ctx = _ctx(pip)
     names = _entry_names(ctx)
     clean(ctx)
-    assert names == ["Clean"]
+    assert names == ["Clean Pipette"]

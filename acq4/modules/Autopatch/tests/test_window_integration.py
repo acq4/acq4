@@ -93,8 +93,8 @@ view and the Area 5 timeline."""
 
 def run(ctx, **kwargs):
     ctx.log(f"ran on {ctx.cell!r}")
-    with ctx.log_action("Noop") as entry:
-        entry.set_status("doing nothing in particular")
+    with ctx.log_action("Noop") as action_entry:
+        action_entry.set_status("doing nothing in particular")
 '''
 
 

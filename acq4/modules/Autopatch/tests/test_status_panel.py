@@ -112,13 +112,13 @@ def test_current_action_entry_updates_label_with_name_and_status(qapp):
     panel.bindOrchestrator(orch, entrySource)
 
     cell = _Cell()
-    entry = ActionLogEntry("Patch")
-    entrySource.sigActionEntry.emit(cell, entry, "started")
+    action_entry = ActionLogEntry("Patch")
+    entrySource.sigActionEntry.emit(cell, action_entry, "started")
     assert "Patch" in panel.currentActionLabel.text()
     assert "cell-1" in panel.currentActionLabel.text()
 
-    entry.set_status("seeking")
-    entrySource.sigActionEntry.emit(cell, entry, "status")
+    action_entry.set_status("seeking")
+    entrySource.sigActionEntry.emit(cell, action_entry, "status")
     assert "seeking" in panel.currentActionLabel.text()
 
     orch.sigCurrentCell.emit(None)
@@ -146,8 +146,8 @@ def test_current_action_label_clears_on_transition_to_a_new_cell(qapp):
 
     cellA = _Cell("cell-A")
     orch.sigCurrentCell.emit(cellA)
-    entry = ActionLogEntry("Patch")
-    entrySource.sigActionEntry.emit(cellA, entry, "started")
+    action_entry = ActionLogEntry("Patch")
+    entrySource.sigActionEntry.emit(cellA, action_entry, "started")
     assert "Patch" in panel.currentActionLabel.text()
 
     cellB = _Cell("cell-B")
