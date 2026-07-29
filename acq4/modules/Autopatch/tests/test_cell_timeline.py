@@ -5,6 +5,7 @@ import pytest
 
 from acq4.experiment.log_entry import ActionLogEntry
 from acq4.util import Qt
+from acq4.util.task import Stopped
 
 
 @pytest.fixture(scope="module")
@@ -82,7 +83,6 @@ def test_timeline_row_updates_in_place_when_the_entry_finishes(qapp):
 
 def test_timeline_row_glyph_matches_error_and_stopped_outcomes(qapp):
     from acq4.modules.Autopatch.cell_panel import CellPanel
-    from acq4.util.task import Stopped
 
     panel = CellPanel(pipetteGetter=lambda: _FakePipette((0, 0, 0)))
     orch = _FakeOrchestrator()

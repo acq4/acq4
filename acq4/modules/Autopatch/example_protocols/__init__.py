@@ -19,7 +19,7 @@ def install_example_protocols(protocol_dir: str) -> None:
     """
     os.makedirs(protocol_dir, exist_ok=True)
     for name in sorted(os.listdir(_HERE)):
-        if not name.endswith(".py") or name == "__init__.py" or name.startswith("_"):
+        if not name.endswith(".py") or name.startswith("_"):
             continue
         dest = os.path.join(protocol_dir, name)
         if os.path.exists(dest):

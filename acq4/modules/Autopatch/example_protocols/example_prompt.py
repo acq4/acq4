@@ -1,4 +1,4 @@
-"""Ask the operator a yes/no question, then advance to the next cell.
+"""Ask the operator to confirm they're ready, then advance to the next cell.
 Hardware-free demo protocol."""
 from acq4.experiment.actions import next_cell, prompt
 

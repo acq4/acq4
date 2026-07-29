@@ -216,3 +216,29 @@ def test_rebinding_disconnects_previous_orchestrators_signals(qapp):
     orch1.sigCellFinished.emit(cell, "done")
 
     assert panel.cellList.item(0).text() == f"cell {id(cell)} — queued"
+
+
+def test_clear_cells_resets_shown_entry_id_and_clears_show_container(qapp):
+    """clearCells() is also CellPanel's rebind path (a freshly loaded protocol
+    calls it before binding the new orchestrator, with the panel itself still
+    alive), so a mounted details widget left over from the previous protocol
+    must not survive it, and _shownEntryId must go back to None -- otherwise a
+    recycled id(entry) after reload could match the stale value and cause a
+    spurious container clear.
+
+    This sets up the stale state directly (bypassing cellList selection)
+    since clearCells() emptying an already-populated, currently-selected
+    cellList would incidentally reset both via the ordinary
+    currentItemChanged -> _onCellSelectionChanged path, masking whether
+    clearCells() itself does the resetting."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    staleWidget = Qt.QLabel("stale details widget")
+    panel.showContainer.layout().addWidget(staleWidget)
+    panel._shownEntryId = 12345
+
+    panel.clearCells()
+
+    assert panel._shownEntryId is None
+    assert panel.showContainer.layout().count() == 0

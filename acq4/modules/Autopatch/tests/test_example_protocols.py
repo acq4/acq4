@@ -38,7 +38,8 @@ def test_bundled_example_loads_through_protocol_file(filename):
     assert pf.is_loaded is True
     assert pf.load_error is None
     assert callable(pf.run)
-    # PARAMS builds a tree without raising, even for the empty-list case.
+    # PARAMS builds a param_tree without raising, for either bundled example's
+    # single declared param.
     assert pf.param_tree is not None
 
 
@@ -52,6 +53,27 @@ def test_example_patch_exposes_speed_param_with_a_default():
     pf = ProtocolFile(os.path.join(_EXAMPLES_DIR, "example_patch.py"))
     pf.load()
     assert pf.param_values() == {"speed": "fast"}
+
+
+def test_example_prompt_description_is_populated_from_its_module_docstring():
+    """The operator's protocol picker shows ProtocolFile.description, so it
+    must actually describe the single-acknowledgement prompt this protocol
+    runs -- not some other behavior."""
+    pf = ProtocolFile(os.path.join(_EXAMPLES_DIR, "example_prompt.py"))
+    pf.load()
+    assert pf.description == (
+        "Ask the operator to confirm they're ready, then advance to the next cell.\n"
+        "Hardware-free demo protocol."
+    )
+
+
+def test_example_patch_description_is_populated_from_its_module_docstring():
+    pf = ProtocolFile(os.path.join(_EXAMPLES_DIR, "example_patch.py"))
+    pf.load()
+    assert pf.description == (
+        "Capture a cellfie, move to the approach position, then drive the patch FSM.\n"
+        "Any pipette problem prompts the operator and aborts the run."
+    )
 
 
 def test_install_example_protocols_copies_into_a_fresh_config_dir(tmp_path):

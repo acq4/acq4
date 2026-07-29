@@ -140,6 +140,8 @@ class CellPanel(Qt.QWidget):
         self._timelineItems.clear()
         self._logs.clear()
         self.cellList.clear()
+        self._clearShowContainer()
+        self._shownEntryId = None
 
     def _onAddFromTargetClicked(self) -> None:
         pipette = self._pipetteGetter()

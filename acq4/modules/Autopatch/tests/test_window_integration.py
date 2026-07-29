@@ -165,10 +165,9 @@ class _CountingPipetteSelector(Qt.QWidget):
 
 
 _PIPETTE_CAPTURE_PROTOCOL = '''"""Integration test fixture: reads ctx.pipette at two separate points in the
-protocol body and stashes both onto ctx.cell, so the test can assert (without
-an Action's `results` dict, which no longer exists) that the SAME pipette
-object was seen both times -- i.e. the whole protocol shares one ExecutionContext
-per cell, built once at the start of that cell's run."""
+protocol body and stashes both onto ctx.cell. The first write lets the test
+wait for the run to reach that point; the second lets it inspect the pipette
+snapshot ctx took at Start, from a point later in the same run."""
 
 
 def run(ctx, **kwargs):
