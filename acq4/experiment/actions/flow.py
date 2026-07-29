@@ -29,3 +29,18 @@ class AbortAction(Action):
 
     def run(self, ctx):
         raise AbortExperiment(f"{self.name}: abort experiment")
+
+
+def next_cell(ctx) -> None:
+    """Advance the orchestrator to the next cell."""
+    raise AdvanceToNextCell("advance to next cell")
+
+
+def retry_cell(ctx) -> None:
+    """Retry the current cell from the start."""
+    raise RetryCurrentCell("retry current cell")
+
+
+def abort(ctx) -> None:
+    """Abort the whole experiment run."""
+    raise AbortExperiment("abort experiment")
