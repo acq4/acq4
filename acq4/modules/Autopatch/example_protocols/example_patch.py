@@ -1,14 +1,20 @@
 """Capture a cellfie, move to the approach position, then drive the patch FSM.
-A broken or fouled pipette prompts the operator and aborts the run; otherwise
-advances to the next cell."""
-from acq4.experiment.actions import cellfie, go_approach, patch, prompt
+On a successful patch (whole cell), runs the sequence already loaded in an
+open TaskRunner module -- have one open, with a sequence loaded, before
+running this protocol. Any other outcome prompts the operator to intervene."""
+from acq4.experiment.actions import cellfie, go_approach, load_preset, patch, prompt, run_task
 
-PARAMS = [{"name": "speed", "type": "str", "default": "fast"}]
+PARAMS = [
+    {"name": "cellfie_preset", "type": "str", "default": ""},
+    {"name": "patch_preset", "type": "str", "default": ""},
+]
 
 
-def run(ctx, speed="fast"):
+def run(ctx, cellfie_preset="", patch_preset=""):
+    load_preset(ctx, cellfie_preset)
     cellfie(ctx)
-    go_approach(ctx, speed=speed)
+    load_preset(ctx, patch_preset)
+    go_approach(ctx)
     # patch() declares "broken"/"fouled" as its own terminal states, so it
     # returns them as an outcome rather than raising -- unlike reseal()/
     # clean(), which don't declare them and so raise BrokenPipette/Fouled
@@ -16,8 +22,7 @@ def run(ctx, speed="fast"):
     # OrchestrationError around patch().
     outcome = patch(ctx)
     ctx.log(f"patch outcome: {outcome}")
-    if outcome in ("broken", "fouled"):
-        prompt(ctx, message=f"Pipette {outcome} — intervene")
-        ctx.abort()
-    else:
-        ctx.next_cell()
+    if outcome != "whole cell":
+        prompt(ctx, message=f"Patch ended in {outcome!r} — intervene if needed")
+        return
+    run_task(ctx)

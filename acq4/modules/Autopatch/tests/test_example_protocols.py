@@ -12,7 +12,6 @@ import pytest
 import acq4.modules.Autopatch.example_protocols as example_protocols_pkg
 import acq4.modules.Autopatch.example_protocols.example_patch as example_patch_mod
 from acq4.experiment.context import ExecutionContext
-from acq4.experiment.exceptions import AbortExperiment
 from acq4.experiment.orchestrator import Orchestrator
 from acq4.experiment.protocol_directory import ProtocolDirectory
 from acq4.experiment.protocol_file import ProtocolFile
@@ -51,10 +50,12 @@ def test_example_prompt_exposes_message_param_with_a_default():
     assert pf.param_values() == {"message": "Ready to patch this cell?"}
 
 
-def test_example_patch_exposes_speed_param_with_a_default():
+def test_example_patch_exposes_preset_params_with_empty_defaults():
     pf = ProtocolFile(os.path.join(_EXAMPLES_DIR, "example_patch.py"))
     pf.load()
-    assert pf.param_values() == {"speed": "fast"}
+    # Empty defaults mean both load_preset() calls are no-ops out of the box,
+    # so the bundled example runs on config/mock, which defines no presets.
+    assert pf.param_values() == {"cellfie_preset": "", "patch_preset": ""}
 
 
 def test_example_prompt_description_is_populated_from_its_module_docstring():
@@ -64,7 +65,7 @@ def test_example_prompt_description_is_populated_from_its_module_docstring():
     pf = ProtocolFile(os.path.join(_EXAMPLES_DIR, "example_prompt.py"))
     pf.load()
     assert pf.description == (
-        "Ask the operator to confirm they're ready, then advance to the next cell.\n"
+        "Ask the operator to confirm they're ready.\n"
         "Hardware-free demo protocol."
     )
 
@@ -74,8 +75,9 @@ def test_example_patch_description_is_populated_from_its_module_docstring():
     pf.load()
     assert pf.description == (
         "Capture a cellfie, move to the approach position, then drive the patch FSM.\n"
-        "A broken or fouled pipette prompts the operator and aborts the run; otherwise\n"
-        "advances to the next cell."
+        "On a successful patch (whole cell), runs the sequence already loaded in an\n"
+        "open TaskRunner module -- have one open, with a sequence loaded, before\n"
+        "running this protocol. Any other outcome prompts the operator to intervene."
     )
 
 
@@ -90,62 +92,54 @@ def test_example_patch_description_is_populated_from_its_module_docstring():
 
 
 def _patch_actions(monkeypatch, ctx, *, patch_outcome, calls):
-    monkeypatch.setattr(example_patch_mod, "cellfie", lambda ctx: calls.append("cellfie"))
     monkeypatch.setattr(
         example_patch_mod,
-        "go_approach",
-        lambda ctx, speed: calls.append(("go_approach", speed)),
+        "load_preset",
+        lambda ctx, preset: calls.append(("load_preset", preset)),
     )
+    monkeypatch.setattr(example_patch_mod, "cellfie", lambda ctx: calls.append("cellfie"))
+    monkeypatch.setattr(example_patch_mod, "go_approach", lambda ctx: calls.append("go_approach"))
     monkeypatch.setattr(example_patch_mod, "patch", lambda ctx: patch_outcome)
     monkeypatch.setattr(
         example_patch_mod, "prompt", lambda ctx, message: calls.append(("prompt", message))
     )
-
-    def fake_abort():
-        calls.append("abort")
-        raise AbortExperiment("abort")
-
-    monkeypatch.setattr(ctx, "abort", fake_abort)
-
-    def fake_next_cell():
-        calls.append("next_cell")
-        from acq4.experiment.exceptions import AdvanceToNextCell
-
-        raise AdvanceToNextCell("advance to next cell")
-
-    monkeypatch.setattr(ctx, "next_cell", fake_next_cell)
+    monkeypatch.setattr(example_patch_mod, "run_task", lambda ctx: calls.append("run_task"))
 
 
-@pytest.mark.parametrize("outcome", ["broken", "fouled"])
-def test_example_patch_prompts_and_aborts_on_broken_or_fouled_pipette(monkeypatch, outcome):
+@pytest.mark.parametrize("outcome", ["bath", "broken", "fouled"])
+def test_example_patch_prompts_the_operator_on_a_non_success_outcome(monkeypatch, outcome):
     calls = []
     ctx = ExecutionContext()
     _patch_actions(monkeypatch, ctx, patch_outcome=outcome, calls=calls)
 
-    with pytest.raises(AbortExperiment):
-        example_patch_mod.run(ctx, speed="fast")
+    example_patch_mod.run(ctx, cellfie_preset="GFP", patch_preset="brightfield")
 
-    assert calls[:2] == ["cellfie", ("go_approach", "fast")]
-    assert calls[2][0] == "prompt"
-    assert outcome in calls[2][1]  # the prompt names which problem occurred
-    assert calls[3] == "abort"
-    assert "next_cell" not in calls
+    assert calls[:4] == [
+        ("load_preset", "GFP"),
+        "cellfie",
+        ("load_preset", "brightfield"),
+        "go_approach",
+    ]
+    assert calls[4][0] == "prompt"
+    assert outcome in calls[4][1]  # the prompt names which outcome occurred
+    assert "run_task" not in calls
 
 
-@pytest.mark.parametrize("outcome", ["whole cell", "cell attached", "bath"])
-def test_example_patch_advances_to_next_cell_on_a_normal_outcome(monkeypatch, outcome):
+def test_example_patch_runs_the_task_runner_sequence_on_whole_cell(monkeypatch):
     calls = []
     ctx = ExecutionContext()
-    _patch_actions(monkeypatch, ctx, patch_outcome=outcome, calls=calls)
+    _patch_actions(monkeypatch, ctx, patch_outcome="whole cell", calls=calls)
 
-    from acq4.experiment.exceptions import AdvanceToNextCell
+    example_patch_mod.run(ctx, cellfie_preset="GFP", patch_preset="brightfield")
 
-    with pytest.raises(AdvanceToNextCell):
-        example_patch_mod.run(ctx, speed="fast")
-
-    assert calls == ["cellfie", ("go_approach", "fast"), "next_cell"]
+    assert calls == [
+        ("load_preset", "GFP"),
+        "cellfie",
+        ("load_preset", "brightfield"),
+        "go_approach",
+        "run_task",
+    ]
     assert "prompt" not in calls
-    assert "abort" not in calls
 
 
 def test_install_example_protocols_copies_into_a_fresh_config_dir(tmp_path):
@@ -192,13 +186,15 @@ def test_protocol_directory_over_installed_dir_lists_exactly_the_two_examples(tm
     assert directory.protocols["example_patch"].is_loaded is True
 
 
-def test_example_prompt_runs_end_to_end_and_finishes_the_cell_as_skipped(tmp_path, monkeypatch):
+def test_example_prompt_runs_end_to_end_and_finishes_the_cell_as_done(tmp_path, monkeypatch):
     """End-to-end demo with the operator simulated: prompt_user is patched to
     return a choice immediately (standing in for the human click) since a
     stray QApplication left behind by another test would otherwise make
     prompt() block forever waiting for a real one. Everything else is real:
-    ProtocolFile loading, the orchestrator running the protocol, next_cell()
-    raising AdvanceToNextCell, and the cell finishing as "skipped"."""
+    ProtocolFile loading and the orchestrator running the protocol. The
+    protocol never advances the queue itself -- run() returning normally is
+    what the orchestrator's success path (Orchestrator._processCell's `else`
+    branch) reports as "done"."""
     monkeypatch.setattr(_prompt_mod, "prompt_user", lambda title, message, choices: choices[0])
 
     dest = tmp_path / "autopatch_protocols"
@@ -211,7 +207,7 @@ def test_example_prompt_runs_end_to_end_and_finishes_the_cell_as_skipped(tmp_pat
     orch.sigCellFinished.connect(lambda cell, status: finished.append((cell, status)))
     orch.run_sync_cell("cell-1")
 
-    assert finished == [("cell-1", "skipped")]
+    assert finished == [("cell-1", "done")]
 
 
 def test_autopatch_window_init_seeds_a_missing_protocol_dir_with_examples(qapp, tmp_path):
