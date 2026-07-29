@@ -580,7 +580,9 @@ class Manager(Qt.QObject):
         """Return a module"""
         with self.moduleLock:
             if name not in self.modules:
-                self.loadDefinedModule(name)
+                # loadModule() renames on collision, so the module may not be filed
+                # under the name requested here; hand back what was actually loaded.
+                return self.loadDefinedModule(name)
         return self.modules[name]
 
     def getCurrentDatabase(self):
