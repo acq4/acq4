@@ -25,7 +25,15 @@ class Orchestrator(Qt.QObject):
     sigCurrentCell = Qt.Signal(object)         # cell, or None when idle
     sigCellFinished = Qt.Signal(object, str)   # cell, status
 
-    def __init__(self, protocolFile, manager=None, contextFactory=None, maxRetries=100):
+    def __init__(
+        self,
+        protocolFile,
+        manager=None,
+        contextFactory=None,
+        maxRetries=100,
+        cellProducer=None,
+        targetQueueDepth=1,
+    ):
         Qt.QObject.__init__(self)
         self.protocolFile = protocolFile
         self.manager = manager
@@ -38,10 +46,38 @@ class Orchestrator(Qt.QObject):
         # RetryCurrentCell, or a persistently-failing action). On exhaustion the
         # cell finishes as "retry-exhausted" rather than wedging the queue forever.
         self.maxRetries = maxRetries
+        if targetQueueDepth < 1:
+            raise ValueError(
+                f"targetQueueDepth must be at least 1, got {targetQueueDepth!r}: "
+                f"a target of 0 makes the refill condition unreachable, silently "
+                f"disabling the producer"
+            )
+        # Read fresh on every pass of the run loop rather than snapshotted, so
+        # the cell-finding config can retune it while a run is in progress.
+        self.targetQueueDepth = targetQueueDepth
+        self._cellProducer = cellProducer
+        # Per-run: set once the producer reports exhaustion, cleared by
+        # _runLoopBody's finally. See setCellProducer for why it is not
+        # simply "has the producer ever returned None".
+        self._producerExhausted = False
 
     # ---- queue / context ----
     def enqueue(self, cell):
         self._queue.append(cell)
+
+    def setCellProducer(self, producer):
+        """Install (or clear, with None) the callback that refills the queue.
+
+        `producer()` takes no arguments, runs on the worker thread, and returns
+        either a sequence of new cells -- possibly empty, meaning "made
+        progress, found none here, ask again" -- or None, meaning exhausted.
+
+        Installing a producer clears the exhausted flag: a caller swapping in a
+        fresh producer (a new survey region) is declaring there is more to find,
+        and would otherwise be ignored for the rest of the run.
+        """
+        self._cellProducer = producer
+        self._producerExhausted = False
 
     def _defaultContext(self, cell) -> ExecutionContext:
         return ExecutionContext(cell=cell, manager=self.manager)
@@ -132,9 +168,21 @@ class Orchestrator(Qt.QObject):
     def _runLoopBody(self):
         self.sigStatus.emit("running")
         try:
-            while self._queue:
+            while True:
                 self._checkPause()
                 check_stop()
+                if self._shouldRefill():
+                    self._refillQueue()
+                    # Back to the top rather than falling through to a cell:
+                    # re-checks the depth target (so a deep queue fills over
+                    # several passes) and, more importantly, re-checks pause
+                    # and stop between refills. Imaging a tile is slow, so an
+                    # operator pressing Stop part-way through filling a deep
+                    # queue must not have to wait out the whole batch.
+                    continue
+                if not self._queue:
+                    # Queue empty and nothing left to produce: the run is done.
+                    break
                 cell = self._queue.popleft()
                 self._processCell(cell)
         except Stopped as exc:
@@ -166,6 +214,35 @@ class Orchestrator(Qt.QObject):
             self.sigStatus.emit("paused")
             self._pauseEvent.wait()
             self.sigStatus.emit("running")
+
+    def _shouldRefill(self) -> bool:
+        return (
+            self._cellProducer is not None
+            and not self._producerExhausted
+            and len(self._queue) < self.targetQueueDepth
+        )
+
+    def _refillQueue(self):
+        """Ask the producer for more cells; record exhaustion when it has none."""
+        try:
+            cells = self._cellProducer()
+        except (Stopped, FlowSignal):
+            # Same pass-through as _processCell: a cooperative stop is a normal
+            # end to the run, and a producer that raises AbortExperiment means
+            # it -- neither is a bug to be wrapped by the clause below.
+            raise
+        except Exception as exc:
+            # An unexpected bug in the producer must fail loud rather than
+            # quietly ending the survey and letting the run look complete.
+            # There is no cell to attribute it to, so no sigCellFinished.
+            logger.exception("Cell producer raised while refilling the queue")
+            self.sigStatus.emit("error")
+            raise AbortExperiment(f"cell producer failed: {exc}") from exc
+        if cells is None:
+            self._producerExhausted = True
+            return
+        for cell in cells:
+            self.enqueue(cell)
 
     def _processCell(self, cell):
         """Run the protocol function for one cell. RetryCurrentCell loops in
