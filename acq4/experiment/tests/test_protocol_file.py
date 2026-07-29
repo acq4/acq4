@@ -131,6 +131,64 @@ def test_reload_picks_up_new_params_default(tmp_path):
     assert pf.param_values() == {"count": 9}
 
 
+def test_tip_is_mirrored_onto_tooltip(tmp_path):
+    path = _write(tmp_path, "tipped.py", """
+        PARAMS = [dict(name="count", type="int", default=3, tip="How many times.")]
+
+        def run(ctx, **params):
+            return "done"
+    """)
+    pf = ProtocolFile(path)
+    pf.load()
+    opts = pf.param_tree.child("count").opts
+    assert opts["tip"] == "How many times."
+    assert opts["tooltip"] == "How many times."
+
+
+def test_explicit_tooltip_is_not_clobbered_by_tip(tmp_path):
+    path = _write(tmp_path, "bothset.py", """
+        PARAMS = [dict(
+            name="count",
+            type="int",
+            default=3,
+            tip="Field tip.",
+            tooltip="Label tooltip.",
+        )]
+
+        def run(ctx, **params):
+            return "done"
+    """)
+    pf = ProtocolFile(path)
+    pf.load()
+    opts = pf.param_tree.child("count").opts
+    assert opts["tip"] == "Field tip."
+    assert opts["tooltip"] == "Label tooltip."
+
+
+def test_no_tip_gains_no_tooltip(tmp_path):
+    path = _write(tmp_path, "notip.py", """
+        PARAMS = [dict(name="count", type="int", default=3)]
+
+        def run(ctx, **params):
+            return "done"
+    """)
+    pf = ProtocolFile(path)
+    pf.load()
+    assert "tooltip" not in pf.param_tree.child("count").opts
+
+
+def test_build_tree_does_not_mutate_the_authors_params_list(tmp_path):
+    path = _write(tmp_path, "sourcedicts.py", """
+        PARAMS = [dict(name="count", type="int", default=3, tip="How many times.")]
+
+        def run(ctx, **params):
+            return "done"
+    """)
+    pf = ProtocolFile(path)
+    pf.load()
+    assert "tooltip" not in pf.params[0]
+
+
 def test_dataclass_at_module_level_loads(tmp_path):
     # Regression: sys.modules must be populated before exec_module, otherwise
     # dataclass's ClassVar/InitVar detection (which looks up the defining

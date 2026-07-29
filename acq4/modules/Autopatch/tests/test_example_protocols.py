@@ -50,6 +50,16 @@ def test_example_prompt_exposes_message_param_with_a_default():
     assert pf.param_values() == {"message": "Ready to patch this cell?"}
 
 
+@pytest.mark.parametrize("filename", ["example_prompt.py", "example_patch.py"])
+def test_bundled_example_declares_a_tip_on_every_param(filename):
+    """Bundled examples are the templates operators copy, so every param they
+    expose must demonstrate an operator-facing tip -- not just the name."""
+    pf = ProtocolFile(os.path.join(_EXAMPLES_DIR, filename))
+    pf.load()
+    for child in pf.param_tree.children():
+        assert child.opts.get("tip"), f"{filename}: {child.name()!r} has no tip"
+
+
 def test_example_patch_exposes_preset_params_with_empty_defaults():
     pf = ProtocolFile(os.path.join(_EXAMPLES_DIR, "example_patch.py"))
     pf.load()

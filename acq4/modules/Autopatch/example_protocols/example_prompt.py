@@ -2,7 +2,12 @@
 Hardware-free demo protocol."""
 from acq4.experiment.actions import prompt
 
-PARAMS = [{"name": "message", "type": "str", "default": "Ready to patch this cell?"}]
+PARAMS = [{
+    "name": "message",
+    "type": "str",
+    "default": "Ready to patch this cell?",
+    "tip": "Text shown to the operator in the prompt dialog.",
+}]
 
 
 def run(ctx, message="Ready to patch this cell?"):

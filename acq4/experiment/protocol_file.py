@@ -88,7 +88,19 @@ class ProtocolFile:
 
     @staticmethod
     def _build_tree(params: list[dict]) -> Parameter:
-        return Parameter.create(name="params", type="group", children=[dict(p) for p in params])
+        children = []
+        for p in params:
+            child = dict(p)
+            # pyqtgraph reads these from two different opts keys: 'tip' sets
+            # the tooltip on the value widget (basetypes.py's
+            # WidgetParameterItem.updateWidget), while 'tooltip' sets it on
+            # the name column (ParameterItem.__init__). A protocol author
+            # only writes 'tip', so mirror it onto 'tooltip' here unless the
+            # author set 'tooltip' explicitly.
+            if "tip" in child and "tooltip" not in child:
+                child["tooltip"] = child["tip"]
+            children.append(child)
+        return Parameter.create(name="params", type="group", children=children)
 
     def param_values(self) -> dict:
         if self.param_tree is None:

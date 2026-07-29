@@ -9,8 +9,21 @@ patch attempt, respectively; leave either empty to skip it."""
 from acq4.experiment.actions import cellfie, go_approach, load_preset, patch, prompt, run_task
 
 PARAMS = [
-    {"name": "cellfie_preset", "type": "str", "default": ""},
-    {"name": "patch_preset", "type": "str", "default": ""},
+    {
+        "name": "cellfie_preset",
+        "type": "str",
+        "default": "",
+        "tip": "Configured microscope imaging preset (e.g. \"GFP\") to load "
+        "before the cellfie. Leave empty to skip loading a preset.",
+    },
+    {
+        "name": "patch_preset",
+        "type": "str",
+        "default": "",
+        "tip": "Configured microscope imaging preset (e.g. \"brightfield\") "
+        "to load before the patch attempt. Leave empty to skip loading a "
+        "preset.",
+    },
 ]
 
 
