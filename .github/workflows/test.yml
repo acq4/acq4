@@ -13,7 +13,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v2
       with:
-        python-version: '3.x'
+        python-version: '3.12'
 
     - name: Install apt dependencies
       run: |
@@ -23,7 +23,11 @@ jobs:
     - name: Install Python dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -U pytest numpy scipy pyqtgraph pyqt5 metaarray neuroanalysis numba pyyaml pillow trimesh pyopengl coorx teleprox click tifffile vispy gentletask python-json-logger scikit-image
+        # Install the project so the dependency set comes from pyproject.toml.
+        # pytest is the only test-time addition, since it is not a runtime
+        # dependency of the package.
+        pip install -e .
+        pip install -U pytest
 
     - name: Run tests
       env:
@@ -32,4 +36,4 @@ jobs:
         # integration and pytest dies with a core dump.
         QT_QPA_PLATFORM: offscreen
       run: |
-        python -m pytest tests/
+        python -m pytest
