@@ -49,6 +49,15 @@ def test_patch_reaches_whole_cell(fake_pip_factory, monkeypatch):
     assert patch(_ctx(pip)) == "whole cell"
 
 
+def test_patch_passes_through_cell_attached_to_whole_cell(fake_pip_factory, monkeypatch):
+    # Auto-break-in always follows "cell attached" on these rigs, so it is an
+    # internal hop, not a patch terminal -- the poll must continue through it
+    # and patch() must report the outcome it actually settles at.
+    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
+    pip = fake_pip_factory(["cell detect", "seal", "cell attached", "break in", "whole cell"])
+    assert patch(_ctx(pip)) == "whole cell"
+
+
 def test_patch_on_broken_returns_broken(fake_pip_factory, monkeypatch):
     # broken IS a declared Patch terminal -> routes as an outcome, not an exception.
     monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)

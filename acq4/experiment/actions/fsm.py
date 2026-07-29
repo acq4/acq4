@@ -53,7 +53,10 @@ def patch(ctx, **entry_config) -> str:
         ctx,
         "Patch",
         "approach",
-        {"whole cell", "cell attached", "bath", "broken", "fouled"},
+        # "cell attached" is not a resting state on these rigs: auto-break-in
+        # always follows it on the way to whole-cell, so it is an internal
+        # hop the poll continues through rather than a patch outcome.
+        {"whole cell", "bath", "broken", "fouled"},
         entry_config,
     )
 
