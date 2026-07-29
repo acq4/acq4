@@ -233,8 +233,9 @@ class FileHandle:
         return abspath(self.name()) == abspath(other.name())
 
     def __hash__(self):
-        if self.path is None:
-            return hash(None)
+        # Identity-based, so the hash stays stable across renames and deletion (which
+        # sets path to None). Handles are singletons per path via DataManager's cache,
+        # so identity hashing does not split entries that should share a key.
         return hash(id(self))
 
     def fileType(self):

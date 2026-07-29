@@ -27,31 +27,44 @@ def enforce_linear_z_stack(frames: list[Frame], start: float, stop: float, step:
     grouped z-values due to the stage's infrequent updates (i.e. 4 frames will arrive
     simultaneously, or just in the time it takes to get a new z value). This assumes the z
     values of the first and last frames are correct, but not necessarily any of the other
-    frames."""
+    frames.
+
+    Frames whose depth lies outside the commanded [start, stop] range are discarded as movement
+    artifacts: they were captured while the stage was still settling into (or overshooting out
+    of) the range, so they do not belong to any commanded step. Frames that miss their expected
+    depth but still fall inside the range are kept, assigned to the expected depth they best
+    match, and keep their own measured depth. If fewer frames survive the trim than there are
+    expected depths, ValueError is raised.
+    """
     if step == 0:
         raise ValueError("Z stack step size must be non-zero.")
     start, stop = sorted((start, stop))
     step = abs(step)
+    # How far past start/stop a frame may sit and still count as in-range. This is an absolute
+    # distance in meters (0.5 µm), not a fraction of step; it is meant to absorb stage-reporting
+    # jitter at the ends of the sweep, and is roughly half of a typical 1 µm z-step. Frames
+    # further out than this are movement artifacts and get trimmed.
     tol = 5e-7
     depths = [(f.depth, i) for i, f in enumerate(frames) if start - tol <= f.depth <= stop + tol]
-    if depths[0][0] > depths[-1][0]:
-        depths.reverse()
     if (stop - start) % step != 0:
         expected_depths = np.arange(start, stop, step)
     else:
         expected_depths = np.arange(start, stop + step, step)
     if len(depths) < len(expected_depths):
         raise ValueError("Insufficient frames to have one frame per step.")
+    if depths[0][0] > depths[-1][0]:
+        depths.reverse()
 
     first = depths.pop(0)
-    last = depths.pop(-1)
+    # a single-frame stack has no distinct last frame
+    last = depths.pop(-1) if depths else None
 
     def is_significant(frame1: tuple[float, int]):
         # throw out frames with depth equal to the first or last
         tol = np.clip(step / 10, 1e-12, 1e-7)
         return not (np.isclose(frame1[0], first[0], atol=tol) or np.isclose(frame1[0], last[0], atol=tol))
 
-    depths = [first] + [d for d in depths if is_significant(d)] + [last]
+    depths = [first] + [d for d in depths if is_significant(d)] + ([] if last is None else [last])
     if len(depths) < len(expected_depths):
         raise ValueError("Insufficient frames to have one frame per step (after pruning nigh identical frames).")
     if not np.all(np.diff([d[0] for d in depths]) >= 0):
