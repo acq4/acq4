@@ -50,7 +50,18 @@ class Orchestrator(Qt.QObject):
     def run_sync_cell(self, cell):
         """Run a single cell through the protocol inline. Used by tests/headless."""
         self._nextCellRequested = False
-        self._processCell(cell)
+        try:
+            self._processCell(cell)
+        finally:
+            # A request set (or left set) while processing this cell cannot
+            # outlive this call -- whether _processCell returns normally or
+            # raises (FlowSignal, Stopped, OrchestrationError, or an
+            # unexpected exception all propagate straight through this call,
+            # with no _runLoopBody frame around it to catch them on the way
+            # out). Without this, a request left set by a raising call would
+            # be silently consumed against an unrelated cell the next time
+            # run_sync()/start() runs on this instance.
+            self._nextCellRequested = False
 
     # ---- controls ----
     def start(self):
@@ -143,6 +154,10 @@ class Orchestrator(Qt.QObject):
             # ignores Pause completely.
             self._checkPause()
             if self._nextCellRequested:
+                # Consumed here, against this cell, rather than left for
+                # whichever cell _runLoopBody's own while loop pops next --
+                # that next iteration is still inside this same call, past
+                # the reach of either entry point's finally.
                 self._nextCellRequested = False
                 self.sigCellFinished.emit(cell, "skipped")
                 return
@@ -161,12 +176,18 @@ class Orchestrator(Qt.QObject):
             try:
                 self.protocolFile.run(ctx, **self.protocolFile.param_values())
             except AdvanceToNextCell:
+                # Same boundary as the top-of-loop check above: this cell is
+                # done, and the request that caused it must not ride along to
+                # whichever cell the queue processes next.
                 self._nextCellRequested = False
                 self.sigCellFinished.emit(cell, "skipped")
                 return
             except RetryCurrentCell:
                 retries += 1
                 if retries > self.maxRetries:
+                    # Same boundary again: retries on this cell are over, and
+                    # a request observed during them must not carry into the
+                    # next queued cell.
                     self._nextCellRequested = False
                     self.sigCellFinished.emit(cell, "retry-exhausted")
                     return
@@ -232,12 +253,19 @@ class Orchestrator(Qt.QObject):
                         signal,
                         cell,
                     )
-                    self._nextCellRequested = False
+                    # This path always raises AbortExperiment rather than
+                    # returning, so it is caught by _runLoopBody's finally (for
+                    # the queue loop) or run_sync_cell's finally (for the
+                    # direct path) on the way out -- no separate clear needed
+                    # here.
                     self.sigStatus.emit("error")
                     self.sigCellFinished.emit(cell, "error")
                     raise AbortExperiment(
                         f"flow signal raised but swallowed by the protocol: {signal!r}"
                     ) from signal
+                # Same boundary again: this cell finished normally, and a
+                # request the protocol set but never itself acted on must not
+                # carry into the next queued cell.
                 self._nextCellRequested = False
                 self.sigCellFinished.emit(cell, "done")
                 return

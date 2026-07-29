@@ -127,6 +127,37 @@ def test_error_exit_then_restart_does_not_skip_queued_cell(make_pf):
     assert finished == [("cell1", "error"), ("cell2", "done")]
 
 
+def test_run_sync_cell_raising_then_run_sync_does_not_skip_queued_cell(make_pf):
+    """run_sync_cell() has no _runLoopBody frame around it, so a request left
+    set by a run_sync_cell() call that raises is not touched by
+    _runLoopBody's finally at all. A later run_sync() over a queued cell must
+    still attempt that cell rather than silently skip it for a request that
+    was never its own."""
+    pf = make_pf()
+    ran = []
+
+    def run(ctx, **kwargs):
+        ran.append(ctx.cell)
+        if ctx.cell == "solo-cell":
+            orch.requestNextCell()
+            raise Stopped("operator pressed stop")
+
+    pf.run = run
+    orch = Orchestrator(pf)
+    finished = []
+    orch.sigCellFinished.connect(lambda c, s: finished.append((c, s)))
+
+    with pytest.raises(Stopped):
+        orch.run_sync_cell("solo-cell")
+
+    assert orch._nextCellRequested is False  # must not survive the raising call
+
+    orch.enqueue("cell2")
+    orch.run_sync()  # a separate run, over an unrelated queued cell
+    assert ran == ["solo-cell", "cell2"]  # cell2 was actually attempted, not skipped
+    assert finished == [("cell2", "done")]
+
+
 def test_pause_resume_toggle_status(make_pf):
     pf = make_pf()
     orch = Orchestrator(pf)
