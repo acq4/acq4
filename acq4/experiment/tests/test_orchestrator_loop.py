@@ -186,6 +186,22 @@ def test_finished_task_does_not_leave_qobject_cycle(make_pf, qtbot):
     with qtbot.waitSignal(task.sigFinished, timeout=5000):
         gate.set()  # let the protocol function, and the run loop, finish
 
+    # task.wait() is NOT a sufficient barrier here: _TaskCore._finish() (which
+    # sets the done event sigFinished waits on) runs inside ThreadTask._run(),
+    # which is itself the target of the worker's own threading.Thread --
+    # still inside Thread.run()'s try/finally at that point. Thread.run()'s
+    # own finally clears self._target/self._args/self._kwargs only AFTER
+    # _run() returns, and until that unwind completes, the worker thread's
+    # frame keeps task._run (a bound method of task) alive via Thread._args,
+    # which keeps task itself alive -- exactly the kind of retainer that
+    # makes the refcounting proof below flaky under gc.disable(). There is no
+    # public join() on Task/ThreadTask, so join the underlying
+    # threading.Thread directly: once it returns, Thread.run()'s finally has
+    # already cleared that reference, so no race remains between "sigFinished
+    # delivered" and "the worker thread has fully unwound".
+    task._thread.join(timeout=5)
+    assert not task._thread.is_alive()
+
     task_ref = weakref.ref(task)
     orch_ref = weakref.ref(orch)
 
