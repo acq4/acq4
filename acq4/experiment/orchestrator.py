@@ -48,7 +48,13 @@ class Orchestrator(Qt.QObject):
 
     # ---- test / headless entry points ----
     def run_sync_cell(self, cell):
-        """Run a single cell through the protocol inline. Used by tests/headless."""
+        """Run a single cell through the protocol inline. Used by tests/headless.
+
+        The lower-level single-cell primitive: unlike run_sync()/start(), a
+        cooperative Stopped from _processCell still propagates to the caller
+        here, since there is no _runLoopBody frame around this call to end the
+        run normally instead.
+        """
         self._nextCellRequested = False
         try:
             self._processCell(cell)
@@ -86,7 +92,14 @@ class Orchestrator(Qt.QObject):
         self._task = None
 
     def run_sync(self):
-        """Run the whole queue inline (deterministic; for tests / headless)."""
+        """Run the whole queue inline (deterministic; for tests / headless).
+
+        Same run-loop scope as start(): a cooperative Stopped (operator-
+        initiated, via check_stop()) ends this call normally rather than
+        raising -- see _runLoopBody. Contrast run_sync_cell(), the lower-level
+        single-cell primitive below, which still lets Stopped propagate to its
+        caller.
+        """
         self._runLoopBody()
 
     def pause(self):
@@ -124,6 +137,18 @@ class Orchestrator(Qt.QObject):
                 check_stop()
                 cell = self._queue.popleft()
                 self._processCell(cell)
+        except Stopped as exc:
+            # An operator-initiated stop is a normal way for the run loop to
+            # end, not an unhandled exception: check_stop()/_processCell's own
+            # Stopped propagation has already unwound whatever action was
+            # running (and, for an FSM-driving action, _safe_abort has already
+            # put the pipette in its declared fallback state). Returning here
+            # instead of re-raising means _onLoopFinished sees exc=None rather
+            # than logging an operator-initiated stop as a failure. A problem
+            # encountered *during* that cleanup is a different exception (not
+            # Stopped) raised from inside _safe_abort/_drive_fsm's own except
+            # clause, so it is not caught here -- it keeps propagating.
+            logger.info("Orchestrator run loop stopped: %s", str(exc) or "no reason given")
         finally:
             # A "Next cell" request cannot outlive the run loop it was made
             # during -- whether that loop exits by returning (the queue

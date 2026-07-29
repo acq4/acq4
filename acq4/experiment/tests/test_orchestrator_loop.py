@@ -86,14 +86,147 @@ def test_stop_then_restart_does_not_skip_queued_cell(make_pf):
     finished = []
     orch.sigCellFinished.connect(lambda c, s: finished.append((c, s)))
 
-    with pytest.raises(Stopped):
-        orch.run_sync()
+    orch.run_sync()  # a cooperative stop is a normal end to the run, not a raise
 
     assert orch._nextCellRequested is False  # must not survive the aborted run
 
     orch.run_sync()  # a second run, over the remaining queue
     assert ran == ["cell1", "cell2"]  # cell2 was actually attempted, not skipped
     assert finished == [("cell2", "done")]
+
+
+def test_run_sync_stop_mid_action_completes_without_raising_and_leaves_queue(make_pf):
+    """A cooperative stop mid-action is a normal way for run_sync() to end --
+    not an exception the caller must catch -- and the queue's remaining cells
+    are still queued afterward (a stop is not a queue-drain)."""
+    pf = make_pf()
+    ran = []
+
+    def run(ctx, **kwargs):
+        ran.append(ctx.cell)
+        if ctx.cell == "cell1":
+            raise Stopped("operator pressed stop")
+
+    pf.run = run
+    orch = Orchestrator(pf)
+    orch.enqueue("cell1")
+    orch.enqueue("cell2")
+
+    orch.run_sync()  # must not raise
+
+    assert ran == ["cell1"]  # cell2 never attempted -- the run ended at the stop
+    assert list(orch._queue) == ["cell2"]  # remaining cells still queued, not drained
+
+
+def test_stop_logs_info_with_reason_not_error(make_pf, caplog):
+    """The operator's Stop is not a bug, so it must not be logged as one:
+    info level, with the reason if one was given, never error/exc_info."""
+    import logging
+
+    pf = make_pf()
+    pf.run = lambda ctx, **kwargs: (_ for _ in ()).throw(Stopped("operator pressed stop"))
+    orch = Orchestrator(pf)
+    orch.enqueue("cell1")
+
+    with caplog.at_level(logging.INFO, logger="acq4.experiment.orchestrator"):
+        orch.run_sync()
+
+    assert not any(r.levelno >= logging.WARNING for r in caplog.records)
+    assert any(
+        r.levelno == logging.INFO and "operator pressed stop" in r.getMessage()
+        for r in caplog.records
+    )
+
+
+def test_start_then_stop_onLoopFinished_receives_no_exception(make_pf, monkeypatch):
+    """start() + stop() must hand _onLoopFinished exc=None for a cooperative
+    stop -- that hook's error log (see _onLoopFinished) must not fire for an
+    operator-initiated Stop."""
+    gate = Event()       # never set -> run() blocks
+    started = Event()
+
+    pf = make_pf()
+
+    def blocking_run(ctx, **kwargs):
+        started.set()
+        gate.wait()  # stop-aware; raises Stopped on stop()
+
+    pf.run = blocking_run
+    orch = Orchestrator(pf)
+    orch.enqueue("c1")
+
+    received = []
+    original = orch._onLoopFinished
+
+    def spy(result, exc):
+        received.append(exc)
+        original(result, exc)
+
+    monkeypatch.setattr(orch, "_onLoopFinished", spy)
+
+    task = orch.start()
+    started.wait(timeout=5)
+    orch.stop("test stop")
+    task.wait(timeout=5)  # must not raise
+
+    assert received == [None]  # _onLoopFinished saw no exception for a cooperative stop
+
+
+def test_cleanup_failure_during_stop_propagates_out_of_run_instead_of_stopped(
+    make_pf, fake_pip_factory, monkeypatch
+):
+    """_safe_abort is called from inside _drive_fsm's `except (Stopped,
+    AdvanceToNextCell)` clause; if the pipette's state job fails to stop (the
+    pipette didn't respond), that failure must still surface to the operator
+    -- it must propagate out of the run, and it must not be mistaken for the
+    Stopped that triggered the abort."""
+    from acq4.experiment.actions import fsm as fsm_mod
+    from acq4.experiment.actions.fsm import patch as fsm_patch
+
+    pip = fake_pip_factory([])  # "approach" repeats forever without a request
+
+    def failing_stop(reason=None, wait=False):
+        raise RuntimeError("pipette did not respond to stop")
+
+    original_get_state = pip.getState
+
+    def get_state_with_failing_stop():
+        job = original_get_state()
+        job.stop = failing_stop
+        return job
+
+    pip.getState = get_state_with_failing_stop
+
+    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
+    calls = {"n": 0}
+
+    def fake_check_stop():
+        calls["n"] += 1
+        if calls["n"] > 1:
+            raise Stopped("stopped by operator")
+
+    monkeypatch.setattr(fsm_mod, "check_stop", fake_check_stop)
+
+    def run(ctx, **kwargs):
+        fsm_patch(ctx)
+
+    pf = make_pf()
+    pf.run = run
+
+    def contextFactory(cell):
+        return ExecutionContext(cell=cell, pipette=pip)
+
+    orch = Orchestrator(pf, contextFactory=contextFactory)
+    orch.enqueue("cell1")
+
+    with pytest.raises(AbortExperiment) as excinfo:
+        orch.run_sync()
+
+    # The RuntimeError from the failed cleanup propagated (wrapped in
+    # AbortExperiment by _processCell's broad except, same as any other
+    # unexpected exception) -- not the Stopped that triggered the abort.
+    assert isinstance(excinfo.value.__cause__, RuntimeError)
+    assert not isinstance(excinfo.value.__cause__, Stopped)
 
 
 def test_error_exit_then_restart_does_not_skip_queued_cell(make_pf):
@@ -189,8 +322,7 @@ def test_stop_aborts_running_action(make_pf, qtbot):
     task = orch.start()
     started.wait()       # wait until the protocol function is running
     orch.stop("test stop")
-    with pytest.raises(Stopped):
-        task.wait(timeout=5)
+    task.wait(timeout=5)  # a cooperative stop is a normal end to the run, not a raise
     assert aborted == ["a"]  # the protocol's own try/finally ran on stop
 
 
@@ -225,8 +357,7 @@ def test_pause_is_honored_across_a_retry(make_pf, qtbot):
     qtbot.waitUntil(lambda: calls["n"] > countAtPause, timeout=5000)
 
     orch.stop("test cleanup")
-    with pytest.raises(Stopped):
-        orch.wait(timeout=5)
+    orch.wait(timeout=5)  # a cooperative stop is a normal end to the run, not a raise
 
 
 def test_requestnextcell_mid_poll_abandons_cell_and_advances_queue(

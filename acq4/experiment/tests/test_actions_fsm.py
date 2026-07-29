@@ -165,6 +165,41 @@ def test_stopped_mid_poll_propagates_and_triggers_safe_abort(fake_pip_factory, m
     assert pip.stop_calls[0][2] is True
 
 
+def test_safe_abort_cleanup_failure_propagates_instead_of_stopped(fake_pip_factory, monkeypatch):
+    """_safe_abort is called from inside _drive_fsm's `except (Stopped,
+    AdvanceToNextCell)` clause. If it raises (e.g. the state job's stop()
+    itself fails -- the pipette didn't respond), Python's own exception
+    semantics mean that new exception replaces the Stopped that triggered the
+    abort on its way out of patch() -- there is no `except Stopped` upstream
+    that could catch it instead."""
+    pip = fake_pip_factory(["cell detect", "seal", "break in", "whole cell"])
+    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
+
+    def failing_stop(reason=None, wait=False):
+        raise RuntimeError("pipette did not respond to stop")
+
+    original_get_state = pip.getState
+
+    def get_state_with_failing_stop():
+        job = original_get_state()
+        job.stop = failing_stop
+        return job
+
+    pip.getState = get_state_with_failing_stop
+
+    calls = {"n": 0}
+
+    def fake_check_stop():
+        calls["n"] += 1
+        if calls["n"] > 1:
+            raise Stopped("stopped by operator")
+
+    monkeypatch.setattr(fsm_mod, "check_stop", fake_check_stop)
+
+    with pytest.raises(RuntimeError, match="did not respond"):
+        patch(_ctx(pip))
+
+
 def test_patch_success_does_not_call_stop(fake_pip_factory, monkeypatch):
     # Reaching a terminal state normally (no Stopped) must leave the pipette
     # alone -- a successful patch() ends by *staying* in its terminal state
