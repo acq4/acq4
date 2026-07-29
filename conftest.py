@@ -1,6 +1,9 @@
 """Root pytest configuration for acq4.
-Excludes hardware-only diagnostic scripts from automated test collection.
+Excludes hardware-only diagnostic scripts, and tests needing an unpublished
+dependency, from automated test collection.
 """
+
+import importlib.util
 
 # These files have ``test_``-shaped names but are NOT unit tests. They are
 # interactive bench/diagnostic scripts, predating this repo's pytest suite, that
@@ -31,3 +34,24 @@ collect_ignore = [
     # a module-level input() loop that would block collection indefinitely.
     "acq4/drivers/zeiss/zeiss_test.py",
 ]
+
+# acq4-automation (feature tracking, cell detection) lives in an INTERNAL
+# repository, so a public runner cannot install it. Where it is present -- any
+# rig or dev checkout -- these run normally; where it is not, skip them rather
+# than fail collection for the whole suite. Anything reaching PatchPipette,
+# Pipette.tracker, AutomationDebug, or Autopatch's CellPanel needs it.
+def _installed(name):
+    """Whether `name` can be imported. find_spec() itself raises for some
+    unimportable states, and a raise here would abort collection for the whole
+    repository, so anything other than a found spec counts as absent."""
+    try:
+        return importlib.util.find_spec(name) is not None
+    except Exception:
+        return False
+
+
+if not _installed("acq4_automation"):
+    collect_ignore += [
+        "acq4/modules/AutomationDebug/tests",
+        "acq4/modules/Autopatch/tests",
+    ]

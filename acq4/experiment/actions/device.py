@@ -1,7 +1,8 @@
-"""Device-wrapping Actions: staged pipette moves (Go*), focusing (Focus*), a
-fresh-pipette search+tip-find (NewPipette), tip finding above the target
-(FindTip), surface detection (FindSurface), the cell z-stack capture (Cellfie),
-and running a loaded TaskRunner sequence (Task).
+"""Device-wrapping protocol functions: staged pipette moves (go_*), focusing
+(focus_*), a fresh-pipette search+tip-find (new_pipette), tip finding above the
+target (find_tip), surface detection (find_surface), the cell z-stack capture
+(cellfie), applying a microscope imaging preset (load_preset), and running a
+loaded TaskRunner sequence (run_task).
 
 These wrap existing PatchPipette/Pipette/Microscope device APIs and drive real
 hardware, so they are exercised by live testing rather than the headless suite.
@@ -12,200 +13,156 @@ from __future__ import annotations
 from acq4.util.imaging.sequencer import run_image_sequence
 from acq4.util.task import run_in_gui_thread
 
-from ..action import Action
-from ..registry import register_action
 from ..exceptions import OrchestrationError
 
 
-class _NamedMoveAction(Action):
-    """Base for moves to a named pipette position via the global motion planner.
-
-    Subclasses set ``position`` to one of the Pipette's named positions
-    (home, search, approach, target, aboveTarget).
-    """
-
-    position: str = None
-    outcomes = ("moved",)
-    paramSpec = ({"name": "speed", "type": "str", "default": "fast"},)
-
-    def run(self, ctx):
-        self.setState(f"moving to {self.position!r}")
-        ctx.pipette.pipetteDevice.moveTo(self.position, self.paramValue("speed")).wait()
-        return "moved"
+def _move(ctx, name: str, position: str, speed: str) -> None:
+    """Move the pipette to a named position via the global motion planner."""
+    with ctx.log_action(name) as action_entry:
+        action_entry.set_status(f"moving to {position!r}")
+        ctx.pipette.pipetteDevice.moveTo(position, speed).wait()
 
 
-@register_action(name="GoHome")
-class GoHomeAction(_NamedMoveAction):
+def go_home(ctx, speed: str = "fast") -> None:
     """Retract the pipette to its home position."""
+    _move(ctx, "Pipette To Home", "home", speed)
 
-    position = "home"
 
-
-@register_action(name="GoSearch")
-class GoSearchAction(_NamedMoveAction):
+def go_search(ctx, speed: str = "fast") -> None:
     """Move the pipette to its search position."""
+    _move(ctx, "Pipette To Search Position", "search", speed)
 
-    position = "search"
 
-
-@register_action(name="GoApproach")
-class GoApproachAction(_NamedMoveAction):
+def go_approach(ctx, speed: str = "fast") -> None:
     """Move the pipette to the approach position above the target."""
+    _move(ctx, "Pipette To Approach Position", "approach", speed)
 
-    position = "approach"
 
-
-@register_action(name="GoTarget")
-class GoTargetAction(_NamedMoveAction):
+def go_target(ctx, speed: str = "fast") -> None:
     """Move the pipette to the target position."""
+    _move(ctx, "Pipette To Target", "target", speed)
 
-    position = "target"
 
-
-@register_action(name="GoAboveTarget")
-class GoAboveTargetAction(_NamedMoveAction):
+def go_above_target(ctx, speed: str = "fast") -> None:
     """Move the pipette to the position directly above the target."""
+    _move(ctx, "Pipette To Above Target", "aboveTarget", speed)
 
-    position = "aboveTarget"
 
-
-class _FocusAction(Action):
-    """Base for focusing the imaging device on a pipette feature.
-
-    Subclasses set ``focus_on`` to "tip" or "target".
-    """
-
-    focus_on: str = None
-    outcomes = ("focused",)
-    paramSpec = ({"name": "speed", "type": "str", "default": "fast"},)
-
-    def run(self, ctx):
+def _focus(ctx, name: str, focus_on: str, speed: str) -> None:
+    """Focus the imaging device on a pipette feature ("tip" or "target")."""
+    with ctx.log_action(name) as action_entry:
         pip = ctx.pipette
-        method = {"tip": pip.focusOnTip, "target": pip.focusOnTarget}[self.focus_on]
-        self.setState(f"focusing on {self.focus_on}")
-        method(self.paramValue("speed")).wait()
-        return "focused"
+        method = {"tip": pip.focusOnTip, "target": pip.focusOnTarget}[focus_on]
+        action_entry.set_status(f"focusing on {focus_on}")
+        method(speed).wait()
 
 
-@register_action(name="FocusTip")
-class FocusTipAction(_FocusAction):
+def focus_tip(ctx, speed: str = "fast") -> None:
     """Focus the imaging device on the pipette tip."""
+    _focus(ctx, "Focus On Pipette Tip", "tip", speed)
 
-    focus_on = "tip"
 
-
-@register_action(name="FocusTarget")
-class FocusTargetAction(_FocusAction):
+def focus_target(ctx, speed: str = "fast") -> None:
     """Focus the imaging device on the target."""
+    _focus(ctx, "Focus On Target", "target", speed)
 
-    focus_on = "target"
 
-
-@register_action(name="NewPipette")
-class NewPipetteAction(Action):
+def new_pipette(ctx) -> None:
     """Reset per-pipette state and run the search + tip-find calibration for a
     freshly-attached pipette. Mirrors the MultiPatch "New Pipette" button
     (PatchPipette.newPipette)."""
-
-    outcomes = ("ready",)
-
-    def run(self, ctx):
-        self.setState("new pipette: search and tip-find")
+    with ctx.log_action("New Pipette Calibration") as action_entry:
+        action_entry.set_status("new pipette: search and tip-find")
         try:
             ctx.pipette.newPipette().wait()
         except Exception as e:
-            raise OrchestrationError(
-                f"{self.name}: new-pipette calibration failed: {e}"
-            ) from e
-        return "ready"
+            raise OrchestrationError(f"{action_entry.name}: new-pipette calibration failed: {e}") from e
 
 
-@register_action(name="FindTip")
-class FindTipAction(Action):
+def find_tip(ctx, speed: str = "fast") -> None:
     """Move the pipette to just above the target and auto-locate its tip.
 
     Mirrors the AutomationDebug autopatch tip-finding step: go to the "above
     target" position, auto-set the clamp pipette offset, then iteratively find
     the tip so the pipette position is calibrated before a patch attempt.
     """
-
-    outcomes = ("found",)
-    paramSpec = ({"name": "speed", "type": "str", "default": "fast"},)
-
-    def run(self, ctx):
+    with ctx.log_action("Find Pipette Tip") as action_entry:
         pip = ctx.pipette
-        self.setState("moving above target")
-        pip.pipetteDevice.moveTo("aboveTarget", self.paramValue("speed")).wait()
+        action_entry.set_status("moving above target")
+        pip.pipetteDevice.moveTo("aboveTarget", speed).wait()
         pip.clampDevice.autoPipetteOffset()
-        self.setState("finding pipette tip")
+        action_entry.set_status("finding pipette tip")
         try:
             pip.pipetteDevice.iterativelyFindTip()
         except Exception as e:
             # Route a tip-finding failure through the orchestrator's exception
             # handling rather than crashing the run loop.
-            raise OrchestrationError(f"{self.name}: could not find pipette tip: {e}") from e
-        return "found"
+            raise OrchestrationError(f"{action_entry.name}: could not find pipette tip: {e}") from e
 
 
-@register_action(name="FindSurface")
-class FindSurfaceAction(Action):
+def find_surface(ctx):
     """Detect the sample surface depth by focusing the scope through a z-range
-    (Microscope.findSurfaceDepth) and store it on the results."""
-
-    outcomes = ("found",)
-
-    def run(self, ctx):
+    (Microscope.findSurfaceDepth). Returns the detected depth."""
+    with ctx.log_action("Find Sample Surface") as action_entry:
         pip = ctx.pipette
         scope = pip.scopeDevice()
         imager = pip.imagingDevice()
-        self.setState("detecting surface")
+        action_entry.set_status("detecting surface")
         try:
             depth = scope.findSurfaceDepth(imager)
         except ValueError as e:
-            raise OrchestrationError(f"{self.name}: {e}") from e
-        self.results["surface_depth"] = depth
-        return "found"
+            raise OrchestrationError(f"{action_entry.name}: {e}") from e
+        return depth
 
 
-@register_action(name="Cellfie")
-class CellfieAction(Action):
+def cellfie(ctx, height: float = 30e-6, step: float = 1e-6) -> None:
     """Capture the cell "cellfie": focus on the target, save a z-stack into the
     current storage directory, and initialize the cell tracker's reference.
 
     The z-stack save mirrors ApproachState._maybeTakeACellfie; preset switching
     (e.g. GFP/brightfield) is protocol-specific and left to the caller.
     """
-
-    outcomes = ("captured",)
-    paramSpec = (
-        {"name": "height", "type": "float", "default": 30e-6},
-        {"name": "step", "type": "float", "default": 1e-6},
-    )
-
-    def run(self, ctx):
+    with ctx.log_action("Cellfie") as action_entry:
         pip = ctx.pipette
         imager = pip.imagingDevice()
-        self.setState("focusing on target for cellfie")
+        action_entry.set_status("focusing on target for cellfie")
         pip.focusOnTarget("fast").wait()
-        height = self.paramValue("height")
         target_z = pip.pipetteDevice.targetPosition()[2]
         start = target_z - height / 2
         end = start + height
         storage = ctx.manager.getCurrentDir().getDir("cellfie", create=True)
-        self.setState("saving cellfie z-stack")
+        action_entry.set_status("saving cellfie z-stack")
         run_image_sequence(
             imager,
-            z_stack=(start, end, self.paramValue("step")),
+            z_stack=(start, end, step),
             storage_dir=storage,
             name="cellfie",
         ).wait()
         # Initialize the tracker reference used to follow the cell during patching.
         ctx.cell.initializeTracker(imager, use_cellpose=True)
-        return "captured"
 
 
-@register_action(name="Task")
-class TaskAction(Action):
+def load_preset(ctx, preset: str | None = None) -> None:
+    """Apply a configured microscope imaging preset (e.g. "GFP", "brightfield").
+    A preset of None or empty is a no-op, so a protocol can leave it unconfigured."""
+    if not preset:
+        return
+    with ctx.log_action("Load Imaging Preset") as action_entry:
+        scope = ctx.pipette.scopeDevice()
+        action_entry.set_status(f"loading preset {preset!r}")
+        try:
+            scope.loadPreset(preset)
+        except KeyError as e:
+            if scope.presets:
+                available = f"available: {', '.join(sorted(scope.presets))}"
+            else:
+                available = "no presets are configured on this device"
+            raise OrchestrationError(
+                f"{action_entry.name}: unknown preset {preset!r} ({available})"
+            ) from e
+
+
+def run_task(ctx, store: bool = True, timeout: float = 0.0):
     """Run the sequence already loaded into an open TaskRunner module.
 
     Finds the TaskRunner module whose docks include this pipette's clamp device
@@ -215,14 +172,7 @@ class TaskAction(Action):
     TODO: opening the TaskRunner module and loading a specified protocol file are
     still the operator's responsibility; taking that over is deferred.
     """
-
-    outcomes = ("done",)
-    paramSpec = (
-        {"name": "store", "type": "bool", "default": True},
-        {"name": "timeout", "type": "float", "default": 0.0},  # 0 -> auto from sequence length
-    )
-
-    def run(self, ctx):
+    with ctx.log_action("Task Runner Sequence") as action_entry:
         man = ctx.manager
         clampName = ctx.pipette.clampDevice.name()
         taskrunner = None
@@ -233,13 +183,10 @@ class TaskAction(Action):
                 break
         if taskrunner is None:
             raise OrchestrationError(
-                f"{self.name}: no task runner module found using clamp {clampName!r}"
+                f"{action_entry.name}: no task runner module found using clamp {clampName!r}"
             )
         info = taskrunner.sequenceInfo
         expected_duration = info["period"] * info["totalParams"]
-        timeout = self.paramValue("timeout") or max(30, expected_duration * 20)
-        self.setState("running task runner sequence")
-        run_in_gui_thread(
-            taskrunner.runSequence, store=self.paramValue("store")
-        ).wait(timeout=timeout)
-        return "done"
+        timeout = timeout or max(30, expected_duration * 20)
+        action_entry.set_status("running task runner sequence")
+        run_in_gui_thread(taskrunner.runSequence, store=store).wait(timeout=timeout)

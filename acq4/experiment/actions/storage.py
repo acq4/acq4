@@ -1,35 +1,24 @@
-"""Storage Actions: create managed data directories for an experiment run."""
+"""Storage protocol function: create managed data directories for an experiment run."""
 from __future__ import annotations
 
 import time
 
-from ..action import Action
-from ..registry import register_action
 
-
-@register_action(name="NewDataDir")
-class NewDataDirAction(Action):
+def new_data_dir(ctx, level: str = "Cell", set_current: bool = True):
     """Create a new managed data directory of a given type ("level") under the
-    current storage directory and (by default) make it current.
+    current storage directory and (by default) make it current. Returns the
+    created directory.
 
     Mirrors the non-GUI logic of DataManagerModule.createNewFolder: for a typed
     level the parent is chosen by walking up the tree so a directory is not nested
     inside another of the same type. The special level "Folder" makes an untyped
     "NewFolder" under the current directory.
     """
-
-    outcomes = ("created",)
-    paramSpec = (
-        {"name": "level", "type": "str", "default": "Cell"},
-        {"name": "setCurrent", "type": "bool", "default": True},
-    )
-
-    def run(self, ctx):
+    with ctx.log_action("New Data Directory"):
         man = ctx.manager
         cdir = man.getCurrentDir()
         if not cdir.isManaged():
             cdir.createIndex()
-        level = self.paramValue("level")
         if level == "Folder":
             new_dir = cdir.mkdir("NewFolder", autoIncrement=True)
             new_dir.setInfo({})
@@ -51,7 +40,6 @@ class NewDataDirAction(Action):
             if spec.get("experimentalUnit", False):
                 info["expUnit"] = True
             new_dir.setInfo(info)
-        if self.paramValue("setCurrent"):
+        if set_current:
             man.setCurrentDir(new_dir)
-        self.results["dir"] = new_dir
-        return "created"
+        return new_dir
