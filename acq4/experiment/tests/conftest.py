@@ -85,7 +85,7 @@ class FakeStateJob:
 
     def stop(self, reason=None, wait=False):
         if self._pipette is not None:
-            self._pipette.stop_calls.append((self.stateName, reason))
+            self._pipette.stop_calls.append((self.stateName, reason, wait))
 
 
 class FakePatchPipette:

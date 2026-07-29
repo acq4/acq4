@@ -87,6 +87,22 @@ def test_reseal_on_fouled_raises_fouled(fake_pip_factory, monkeypatch):
         reseal(_ctx(pip))
 
 
+def test_clean_on_broken_raises_broken_pipette(fake_pip_factory, monkeypatch):
+    # broken is NOT a declared Clean terminal ({"out"}) -> mapped to BrokenPipette.
+    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
+    pip = fake_pip_factory(["clean", "broken"])
+    with pytest.raises(BrokenPipette):
+        clean(_ctx(pip))
+
+
+def test_clean_on_fouled_raises_fouled(fake_pip_factory, monkeypatch):
+    # fouled is NOT a declared Clean terminal ({"out"}) -> mapped to Fouled.
+    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
+    pip = fake_pip_factory(["clean", "fouled"])
+    with pytest.raises(Fouled):
+        clean(_ctx(pip))
+
+
 # -- entry_config -------------------------------------------------------------
 
 
@@ -134,6 +150,10 @@ def test_stopped_mid_poll_propagates_and_triggers_safe_abort(fake_pip_factory, m
     # MultiPatch's Cancel button -- not a hard-coded holding state.
     assert len(pip.stop_calls) == 1
     assert pip.stop_calls[0][1] == "orchestration abort"
+    # wait=True makes the abort synchronous: the state has actually unwound
+    # by the time _safe_abort returns, so the orchestrator doesn't move on
+    # while the pipette is still mid-transition.
+    assert pip.stop_calls[0][2] is True
 
 
 def test_patch_success_does_not_call_stop(fake_pip_factory, monkeypatch):
