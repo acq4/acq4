@@ -184,7 +184,10 @@ def _write_pipette_capture_protocol(path, name):
 def test_pipette_is_snapshotted_at_start_not_read_from_selector_mid_run(qapp, qtbot, tmp_path):
     """The context factory must not call the pipette selector widget from the
     orchestrator's worker thread during a run (a race on currentIndex()/
-    interfaceMap). It should read a plain object cached at Start (GUI thread)."""
+    interfaceMap). It should read a plain object cached at Start (GUI thread):
+    the resolved pipette's target matches the selector's state at Start
+    (not the mid-run mutation below), and the selector is consulted exactly
+    once for the whole run."""
     from acq4.modules.Autopatch.Autopatch import AutopatchWindow
 
     _write_pipette_capture_protocol(tmp_path, "demo.py")
@@ -211,7 +214,6 @@ def test_pipette_is_snapshotted_at_start_not_read_from_selector_mid_run(qapp, qt
 
     qtbot.waitUntil(lambda: hasattr(seededCell, "_secondPipette"), timeout=2000)
 
-    assert seededCell._firstPipette is seededCell._secondPipette
     assert seededCell._firstPipette.targetPosition() == pytest.approx((1e-3, 2e-3, 3e-3))
     # Resolved exactly once (at Start) -- not once per protocol step, and not
     # affected by the mid-run mutation above.

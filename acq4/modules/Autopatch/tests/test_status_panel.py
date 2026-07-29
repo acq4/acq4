@@ -125,6 +125,37 @@ def test_current_action_entry_updates_label_with_name_and_status(qapp):
     assert panel.currentActionLabel.text() == ""
 
 
+def test_current_action_label_clears_on_transition_to_a_new_cell(qapp):
+    """sigCurrentCell(cellB) fires directly after cellA (no None in between) when
+    the orchestrator advances straight to the next cell; if cellB's protocol
+    opens no log_action at all, the label must not keep showing cellA's last
+    action instead of going blank for cellB."""
+    from acq4.modules.Autopatch.status_panel import StatusPanel
+
+    class _Cell:
+        def __init__(self, label):
+            self._label = label
+
+        def __repr__(self):
+            return self._label
+
+    panel = StatusPanel()
+    orch = _FakeOrchestrator()
+    entrySource = _FakeEntrySource()
+    panel.bindOrchestrator(orch, entrySource)
+
+    cellA = _Cell("cell-A")
+    orch.sigCurrentCell.emit(cellA)
+    entry = ActionLogEntry("Patch")
+    entrySource.sigActionEntry.emit(cellA, entry, "started")
+    assert "Patch" in panel.currentActionLabel.text()
+
+    cellB = _Cell("cell-B")
+    orch.sigCurrentCell.emit(cellB)  # advance directly to the next cell
+
+    assert panel.currentActionLabel.text() == ""
+
+
 def test_rebinding_disconnects_previous_orchestrator(qapp):
     from acq4.modules.Autopatch.status_panel import StatusPanel
 

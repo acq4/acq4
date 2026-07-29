@@ -125,12 +125,13 @@ class StatusPanel(Qt.QWidget):
 
     def _onCurrentCell(self, cell) -> None:
         # sigCurrentCell(None) fires once the orchestrator's queue drains (see
-        # Orchestrator._runLoopBody's finally); that's the only "back to idle"
-        # signal now that the orchestrator itself doesn't know about
-        # individual actions -- the label's live content otherwise comes from
-        # _onActionEntry() below.
-        if cell is None:
-            self.currentActionLabel.setText("")
+        # Orchestrator._runLoopBody's finally). But the orchestrator can also
+        # advance directly from one cell to the next with no None in between,
+        # and the new cell's protocol may open no log_action at all -- so the
+        # label must clear on every transition, not just the final None, or it
+        # would keep showing the previous cell's last action. Any further live
+        # content comes from _onActionEntry() below.
+        self.currentActionLabel.setText("")
 
     def _onActionEntry(self, cell, entry, phase: str) -> None:
         if phase == "started":

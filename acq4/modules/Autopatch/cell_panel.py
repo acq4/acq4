@@ -48,6 +48,13 @@ class CellPanel(Qt.QWidget):
         self._timelineItems: dict[int, Qt.QListWidgetItem] = {}
         self._logs: dict[int, list[str]] = {}
         self._cells: dict[int, object] = {}
+        # id(entry) of whichever entry's widget currently occupies
+        # showContainer, or None if it's empty. No action nests log_action
+        # blocks today, but if one did, this lets a "finished" phase tell
+        # whether it actually owns what's mounted before clearing it -- an
+        # inner entry finishing must not tear down an outer entry's still-live
+        # widget.
+        self._shownEntryId: int | None = None
         self._pipetteGetter = pipetteGetter or (lambda: None)
         self._cameraGetter = cameraGetter or (lambda: None)
 
@@ -239,14 +246,17 @@ class CellPanel(Qt.QWidget):
             self._appendTimelineRow(cell, entry)
         elif phase == "finished":
             self._finishTimelineRow(cell, entry)
-            if cell is self._currentSelectedCell():
+            if cell is self._currentSelectedCell() and self._shownEntryId == id(entry):
                 self._clearShowContainer()
+                self._shownEntryId = None
         elif phase == "widget":
             if cell is self._currentSelectedCell():
                 self._clearShowContainer()
+                self._shownEntryId = None
                 widget = entry.details_widget
                 if widget is not None:
                     self.showContainer.layout().addWidget(widget)
+                    self._shownEntryId = id(entry)
         # "status" intentionally leaves the timeline row and details container
         # alone: Area 5's timeline only ever shows "running" then the finished
         # outcome, never each intermediate ctx.log_action status message (see
@@ -263,9 +273,15 @@ class CellPanel(Qt.QWidget):
             self.timelineList.addItem(item)
             self._timelineItems[id(entry)] = item
 
+    # Glyph shown in a finished timeline row for each ActionLogEntry.outcome
+    # value (see ActionLogEntry._finish); an outcome this doesn't recognize
+    # falls back to "?" rather than crashing the row.
+    _OUTCOME_GLYPHS = {"done": "✓", "error": "✗", "stopped": "⊘"}
+
     def _finishTimelineRow(self, cell, entry) -> None:
         elapsed = (entry.end_time - entry.start_time) if entry.end_time is not None else 0.0
-        text = f"{entry.name} — ✓ {entry.outcome} ({elapsed:.2f}s)"
+        glyph = self._OUTCOME_GLYPHS.get(entry.outcome, "?")
+        text = f"{entry.name} — {glyph} {entry.outcome} ({elapsed:.2f}s)"
         loc = self._entryTimelineLoc.pop(id(entry), None)
         if loc is not None:
             cellId, index = loc
@@ -296,6 +312,7 @@ class CellPanel(Qt.QWidget):
         # operator switches away; only a fresh entry (via sigActionEntry) may
         # repopulate this container.
         self._clearShowContainer()
+        self._shownEntryId = None
         if current is None:
             return
         cell = current.data(Qt.Qt.UserRole)

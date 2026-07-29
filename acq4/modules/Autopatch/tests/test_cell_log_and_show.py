@@ -135,6 +135,36 @@ def test_details_widget_cleared_when_selection_moves_away_from_running_cell(qapp
     assert panel.showContainer.layout().count() == 0
 
 
+def test_finishing_an_entry_does_not_clear_another_entrys_still_mounted_widget(qapp):
+    """If the currently mounted details widget belongs to a different, still
+    in-flight entry than the one that just finished, finishing must not tear
+    it down. No action currently nests log_action blocks, so this only
+    happens if two entries are opened for the same cell in sequence and the
+    earlier one outlives the later one's mount -- but the guard must hold
+    regardless."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel(pipetteGetter=lambda: _FakePipette((0, 0, 0)))
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+    panel.addFromTargetBtn.click()
+    cell = orch.enqueued[0]
+    panel.cellList.setCurrentRow(0)
+
+    outerEntry = ActionLogEntry("Outer")
+    panel.onLogAction(cell, outerEntry)
+    innerEntry = ActionLogEntry("Inner")
+    panel.onLogAction(cell, innerEntry)
+
+    innerWidget = Qt.QLabel("inner widget")
+    innerEntry.set_details_widget(innerWidget)
+    assert panel.showContainer.layout().indexOf(innerWidget) != -1
+
+    outerEntry._finish(None)  # outer finishes; inner's widget is the live one
+
+    assert panel.showContainer.layout().indexOf(innerWidget) != -1
+
+
 def test_details_widget_cleared_when_the_entry_finishes(qapp):
     from acq4.modules.Autopatch.cell_panel import CellPanel
 

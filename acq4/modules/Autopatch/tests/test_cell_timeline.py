@@ -80,6 +80,36 @@ def test_timeline_row_updates_in_place_when_the_entry_finishes(qapp):
     assert "running" not in text
 
 
+def test_timeline_row_glyph_matches_error_and_stopped_outcomes(qapp):
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+    from acq4.util.task import Stopped
+
+    panel = CellPanel(pipetteGetter=lambda: _FakePipette((0, 0, 0)))
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+    panel.addFromTargetBtn.click()
+    panel.addFromTargetBtn.click()
+    cellA, cellB = orch.enqueued
+
+    panel.cellList.setCurrentRow(0)
+    errorEntry = ActionLogEntry("Patch")
+    panel.onLogAction(cellA, errorEntry)
+    errorEntry._finish(RuntimeError("boom"))
+    errorText = panel.timelineList.item(0).text()
+    assert "error" in errorText
+    assert "✗" in errorText
+    assert "✓" not in errorText
+
+    panel.cellList.setCurrentRow(1)
+    stoppedEntry = ActionLogEntry("Patch")
+    panel.onLogAction(cellB, stoppedEntry)
+    stoppedEntry._finish(Stopped("operator stop"))
+    stoppedText = panel.timelineList.item(0).text()
+    assert "stopped" in stoppedText
+    assert "⊘" in stoppedText
+    assert "✓" not in stoppedText
+
+
 def test_timeline_preserved_across_cell_switch(qapp):
     from acq4.modules.Autopatch.cell_panel import CellPanel
 
@@ -200,6 +230,7 @@ def test_log_action_entries_marshal_from_the_worker_thread_to_the_gui_thread(qap
     panel.bindOrchestrator(orch)
     panel.addFromTargetBtn.click()
     cell = list(panel._cells.values())[0]
+    panel.cellList.setCurrentRow(0)  # follow the cell so its timeline row renders
 
     orch.start()
     qtbot.waitUntil(lambda: hasattr(cell, "_workerThread"), timeout=2000)
@@ -208,3 +239,7 @@ def test_log_action_entries_marshal_from_the_worker_thread_to_the_gui_thread(qap
     mainThread = Qt.QtCore.QThread.currentThread()
     assert all(t is mainThread for t in guiThreads)
     assert cell._workerThread is not mainThread
+    # The marshaled entries must actually have driven CellPanel's own slot,
+    # not just reached this test's separately-connected lambda.
+    assert panel.timelineList.count() == 1
+    assert panel.timelineList.item(0).text().startswith("Patch")

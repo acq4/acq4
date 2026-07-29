@@ -120,6 +120,9 @@ def test_teardown_breaks_the_orchestrator_cell_window_cycle(qapp, tmp_path):
         win.cellPanel.addFromTargetBtn.click()
         assert win.cellPanel.cellList.count() == 1
         seededCell = list(win.cellPanel._cells.values())[0]
+        # Select the row before running so the run below actually populates
+        # _timelineItems, making the empty-dict assertions after it meaningful.
+        win.cellPanel.cellList.setCurrentRow(0)
 
         orchestrator = win.orchestrator
         assert orchestrator is not None
