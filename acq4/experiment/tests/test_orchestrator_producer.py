@@ -184,23 +184,39 @@ def test_exhaustion_cleared_when_the_run_ends_by_raising(make_pf):
     """_runLoopBody can leave by raising as well as returning (an
     OrchestrationError from a cell re-raised as AbortExperiment). The clear
     belongs in the finally, not on the return path -- the same mistake that
-    left the next-cell flag set on four separate raise paths."""
+    left the next-cell flag set on four separate raise paths.
+
+    A target of 1 would let the first batch alone satisfy the depth check,
+    so the producer would never be asked again and never get the chance to
+    return None -- the run would raise before exhaustion ever happened,
+    proving nothing about the clear. A depth of 2 forces a second ask, which
+    is the one that returns None and actually sets the flag before the cell
+    (and its raise) is reached."""
     pf = make_pf()
 
     def run(ctx, **kwargs):
         raise AttributeError("an ordinary bug, mid-cell")
 
     pf.run = run
-    orch = Orchestrator(pf, cellProducer=make_producer([["c1"], None]))
+    producer = make_producer([["c1"], None])
+    orch = Orchestrator(pf, cellProducer=producer, targetQueueDepth=2)
     with pytest.raises(AbortExperiment):
         orch.run_sync()
+    assert producer.calls["n"] == 2  # the batch, then the None that exhausted it
     assert orch._producerExhausted is False
 
 
 def test_exhaustion_cleared_after_a_cooperative_stop(make_pf):
     """Operator presses Stop after the region is exhausted but while cells
     remain queued, then presses Start again. The remaining cells must be
-    worked, and the producer must be re-asked rather than assumed dry."""
+    worked, and the producer must be re-asked rather than assumed dry.
+
+    The first batch alone (two cells) already meets a target of 1, so with
+    the default depth the producer would never be asked a second time and
+    would never get to return None -- the stop would land with exhaustion
+    never having happened. A target of 3 keeps the refill loop asking past
+    that first batch, so the second call is the one that returns None and
+    sets the flag before c1's Stopped ends the run."""
     pf = make_pf()
     ran = []
 
@@ -211,9 +227,10 @@ def test_exhaustion_cleared_after_a_cooperative_stop(make_pf):
 
     pf.run = run
     producer = make_producer([["c1", "c2"], None])
-    orch = Orchestrator(pf, cellProducer=producer)
+    orch = Orchestrator(pf, cellProducer=producer, targetQueueDepth=3)
     orch.run_sync()  # a cooperative stop ends the run normally
     assert ran == ["c1"]
+    assert producer.calls["n"] == 2  # the batch, then the None that exhausted it
     assert orch._producerExhausted is False
     assert list(orch._queue) == ["c2"]  # a stop is not a queue drain
 
