@@ -4,7 +4,7 @@ import pytest
 
 from acq4.util.task import Stopped
 from acq4.experiment.context import ExecutionContext
-from acq4.experiment.exceptions import BrokenPipette, Fouled
+from acq4.experiment.exceptions import AdvanceToNextCell, BrokenPipette, Fouled
 from acq4.experiment.actions import fsm as fsm_mod
 from acq4.experiment.actions.fsm import patch, reseal, clean
 
@@ -174,6 +174,39 @@ def test_reseal_on_broken_does_not_call_stop(fake_pip_factory, monkeypatch):
     with pytest.raises(BrokenPipette):
         reseal(_ctx(pip))
     assert pip.stop_calls == []
+
+
+# -- next-cell request mid-poll ------------------------------------------
+
+
+def test_next_cell_requested_mid_poll_raises_advance_and_triggers_safe_abort(
+    fake_pip_factory, monkeypatch
+):
+    # "approach" is not a Patch terminal, so without a next-cell request this
+    # would poll forever; the fake never advances its own state sequence.
+    pip = fake_pip_factory([])
+    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
+
+    calls = {"n": 0}
+
+    def requested():
+        calls["n"] += 1
+        return calls["n"] > 1
+
+    ctx = _ctx(pip, next_cell_requested=requested)
+    with pytest.raises(AdvanceToNextCell):
+        patch(ctx)
+
+    # Abandoning the cell mid-FSM must stop the pipette's in-flight job, the
+    # same as a cooperative Stopped -- not leave it running underneath the
+    # cell the orchestrator has already moved on from.
+    assert len(pip.stop_calls) == 1
+
+
+def test_no_next_cell_request_does_not_raise(fake_pip_factory, monkeypatch):
+    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
+    pip = fake_pip_factory(["cell detect", "seal", "break in", "whole cell"])
+    assert patch(_ctx(pip)) == "whole cell"
 
 
 # -- log entry ------------------------------------------------------------

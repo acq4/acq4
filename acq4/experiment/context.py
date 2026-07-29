@@ -13,6 +13,10 @@ def _noop_log(_message: str) -> None:
     return None
 
 
+def _no_next_cell_requested() -> bool:
+    return False
+
+
 @dataclass
 class ExecutionContext:
     cell: Any = None
@@ -22,6 +26,13 @@ class ExecutionContext:
     on_log_action: Callable[[ActionLogEntry], None] | None = field(
         default=None, repr=False
     )
+    # Polled by actions.fsm's poll loop next to check_stop(): True once the
+    # orchestrator's operator-facing "Next cell" request should be honored at
+    # the next cooperative checkpoint. The Orchestrator sets this to a closure
+    # over its own request flag when building each cell's context; a headless
+    # ExecutionContext (as built directly by tests, or a contextFactory that
+    # doesn't set it) simply never requests one.
+    next_cell_requested: Callable[[], bool] = field(default=_no_next_cell_requested)
 
     @contextlib.contextmanager
     def log_action(self, name: str):

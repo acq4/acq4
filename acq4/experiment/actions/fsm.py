@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from acq4.util.task import Stopped, check_stop, sleep
 
-from ..exceptions import raise_if_abnormal
+from ..exceptions import AdvanceToNextCell, raise_if_abnormal
 
 
 def _safe_abort(ctx) -> None:
@@ -31,13 +31,15 @@ def _drive_fsm(ctx, name, entry_state, terminals, entry_config=None, poll_interv
             pip.setState(entry_state, **dict(entry_config or {}))
             while True:
                 check_stop()
+                if ctx.next_cell_requested():
+                    raise AdvanceToNextCell("next cell requested during FSM poll")
                 state = pip.getState().stateName
                 if state in terminals:
                     entry.set_status(f"reached {state!r}")
                     return state
                 raise_if_abnormal(state, terminals, name)
                 sleep(poll_interval)
-        except Stopped:
+        except (Stopped, AdvanceToNextCell):
             _safe_abort(ctx)
             raise
 

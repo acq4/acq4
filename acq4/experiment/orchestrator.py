@@ -90,14 +90,12 @@ class Orchestrator(Qt.QObject):
             task.stop(reason)
 
     def requestNextCell(self):
-        # The request is honored at the next cell boundary (checked at the top
-        # of _processCell) -- there is no action boundary left for the
-        # orchestrator to check mid-protocol, because a running protocol
-        # function is a plain Python call, opaque to it. This is a real
-        # narrowing of behavior versus the graph model, where the request was
-        # honored between any two action nodes: it does not interrupt or
-        # safeAbort a protocol that is already running -- use stop() for that.
-        # A protocol author who wants finer granularity checks ctx cooperatively.
+        # Honored at the next cell boundary (checked at the top of
+        # _processCell's retry loop) and, cooperatively, inside actions.fsm's
+        # poll loop (via ExecutionContext.next_cell_requested, injected below)
+        # -- a cell spends nearly all its wall-clock there. A protocol that
+        # never enters an FSM-driving action and never returns has no
+        # checkpoint for this to interrupt; use stop() for that.
         self._nextCellRequested = True
 
     def wait(self, timeout=None):
@@ -115,7 +113,6 @@ class Orchestrator(Qt.QObject):
                 check_stop()
                 cell = self._queue.popleft()
                 self._processCell(cell)
-                self._nextCellRequested = False
         finally:
             self.sigCurrentCell.emit(None)
             self.sigStatus.emit("waiting")
@@ -133,14 +130,25 @@ class Orchestrator(Qt.QObject):
         retries = 0
         while True:
             if self._nextCellRequested:
+                self._nextCellRequested = False
                 self.sigCellFinished.emit(cell, "skipped")
                 return
             self.sigStatus.emit("running")
             ctx = self._contextFactory(cell)
+            # Give the context a way to observe a mid-cell "Next cell" request
+            # without handing it a back-reference to the orchestrator itself --
+            # a narrow closure over the flag, injected the same way regardless
+            # of which contextFactory built ctx (mirroring how log/on_log_action
+            # are already bound onto a context by whoever builds one). Guarded
+            # since a contextFactory is free to hand back None (e.g. a test
+            # deliberately avoiding a self-cycle through a real ExecutionContext).
+            if ctx is not None:
+                ctx.next_cell_requested = lambda: self._nextCellRequested
             self.sigCurrentCell.emit(cell)
             try:
                 self.protocolFile.run(ctx, **self.protocolFile.param_values())
             except AdvanceToNextCell:
+                self._nextCellRequested = False
                 self.sigCellFinished.emit(cell, "skipped")
                 return
             except RetryCurrentCell:
