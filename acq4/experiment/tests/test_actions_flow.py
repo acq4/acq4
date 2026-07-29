@@ -99,6 +99,19 @@ def test_prompt_choices_accepts_a_sequence(monkeypatch):
     assert calls == [["Retry", "Skip"]]
 
 
+def test_prompt_choices_empty_sequence_defaults_to_ok(monkeypatch):
+    monkeypatch.setattr(prompt_mod, "_is_headless", lambda: False)
+    calls = []
+    monkeypatch.setattr(
+        prompt_mod, "prompt_user", lambda t, m, c: calls.append(c) or c[0]
+    )
+
+    ctx = ExecutionContext()
+    prompt(ctx, choices=())
+
+    assert calls == [["OK"]]
+
+
 def test_prompt_headless_returns_first_choice_and_logs(monkeypatch):
     monkeypatch.setattr(prompt_mod, "_is_headless", lambda: True)
 
@@ -126,6 +139,55 @@ def test_prompt_creates_prompt_log_entry(monkeypatch):
     assert len(seen) == 1
     assert seen[0].name == "Prompt"
     assert seen[0].status == "hi"
+
+
+# `_is_headless` itself is never monkeypatched below: these drive its real
+# body by faking the `Qt.QApplication` it consults, so a regression in the
+# detection logic (which the `prompt` tests above all bypass) fails a test
+# instead of leaving `PromptUser.prompt`'s unbounded `done.wait()` to hang
+# with no operator present.
+class _FakeQApplication:
+    """Stand-in for Qt.QApplication exposing only the `instance()` query that
+    `_is_headless` reads."""
+
+    def __init__(self, instance):
+        self._instance = instance
+
+    def instance(self):
+        return self._instance
+
+
+def test_is_headless_true_when_no_application_instance(monkeypatch):
+    monkeypatch.setattr(prompt_mod.Qt, "QApplication", _FakeQApplication(None))
+
+    assert prompt_mod._is_headless() is True
+
+
+def test_is_headless_false_when_application_instance_present(monkeypatch):
+    monkeypatch.setattr(
+        prompt_mod.Qt, "QApplication", _FakeQApplication(object())
+    )
+
+    assert prompt_mod._is_headless() is False
+
+
+def test_prompt_reaches_operator_dialog_when_application_present(monkeypatch):
+    monkeypatch.setattr(
+        prompt_mod.Qt, "QApplication", _FakeQApplication(object())
+    )
+    calls = []
+
+    def fake_prompt_user(title, message, choices):
+        calls.append((title, message, choices))
+        return "Skip"
+
+    monkeypatch.setattr(prompt_mod, "prompt_user", fake_prompt_user)
+
+    ctx = ExecutionContext()
+    result = prompt(ctx, message="continue?", title="Prompt", choices="Retry,Skip")
+
+    assert result == "Skip"
+    assert calls == [("Prompt", "continue?", ["Retry", "Skip"])]
 
 
 # -- storage ------------------------------------------------------------
@@ -191,6 +253,21 @@ def test_new_data_dir_does_not_nest_same_type(root_dir):
     second = new_data_dir(ctx, level="Cell")
     assert second.name() != first.name()
     assert second.parent().name() == root_dir.name()
+
+
+def test_new_data_dir_walks_up_through_a_different_type_to_find_same_type(root_dir):
+    man = FakeManager(root_dir)
+    ctx = ExecutionContext(manager=man)
+
+    cell_dir = new_data_dir(ctx, level="Cell")
+    slice_dir = new_data_dir(ctx, level="Slice")
+    assert slice_dir.parent().name() == cell_dir.name()
+
+    new_dir = new_data_dir(ctx, level="Cell")
+
+    assert new_dir.parent().name() == root_dir.name()
+    assert new_dir.parent().name() != cell_dir.name()
+    assert new_dir.parent().name() != slice_dir.name()
 
 
 def test_new_data_dir_no_experimental_unit_flag_when_not_configured(root_dir):
