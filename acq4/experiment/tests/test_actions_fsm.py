@@ -273,3 +273,59 @@ def test_clean_creates_log_entry_named_clean(fake_pip_factory):
     names = _entry_names(ctx)
     clean(ctx)
     assert names == ["Clean Pipette"]
+
+
+# -- status updates on state change ------------------------------------------
+
+
+def _statuses(ctx):
+    """Attach an on_status recorder to the next log_action entry, returning the
+    list of status strings it observes over the entry's lifetime."""
+    statuses = []
+
+    def on_log_action(action_entry):
+        action_entry.on_status = lambda entry: statuses.append(entry.status)
+
+    ctx.on_log_action = on_log_action
+    return statuses
+
+
+def test_status_updates_when_observed_state_changes(fake_pip_factory, monkeypatch):
+    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
+    # "cell detect" repeats before advancing, so the repeat must not re-emit.
+    pip = fake_pip_factory(["cell detect", "cell detect", "seal", "whole cell"])
+    ctx = _ctx(pip)
+    statuses = _statuses(ctx)
+
+    assert patch(ctx) == "whole cell"
+
+    assert statuses == [
+        "driving FSM from 'approach'",
+        "now in 'cell detect'",
+        "now in 'seal'",
+        "reached 'whole cell'",
+    ]
+
+
+# -- fake state-sequence exhaustion ------------------------------------------
+
+
+def test_fake_pipette_raises_once_its_declared_state_sequence_is_exhausted(
+    fake_pip_factory, monkeypatch
+):
+    # A declared sequence that never reaches a terminal is a broken test setup
+    # -- with sleep() a no-op, silently repeating the last state forever turns
+    # this into a hanging hot loop instead of a fast, clear failure.
+    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
+    pip = fake_pip_factory(["cell detect"])
+    with pytest.raises(RuntimeError, match="exhausted"):
+        patch(_ctx(pip))
+
+
+def test_fake_pipette_with_no_declared_sequence_repeats_forever(fake_pip_factory):
+    # An explicitly empty state_sequence is the deliberate "never advances"
+    # shape other tests rely on (driven out only by check_stop/next_cell), so
+    # it must NOT be treated as an exhausted sequence.
+    pip = fake_pip_factory([])
+    for _ in range(5):
+        assert pip.getState().stateName == "out"

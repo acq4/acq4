@@ -26,6 +26,7 @@ def _drive_fsm(ctx, name, entry_state, terminals, entry_config=None, poll_interv
     with ctx.log_action(name) as action_entry:
         pip = ctx.pipette
         action_entry.set_status(f"driving FSM from {entry_state!r}")
+        last_state = entry_state
         try:
             # Fresh dict per call so no caller shares a mutable default.
             pip.setState(entry_state, **dict(entry_config or {}))
@@ -37,6 +38,13 @@ def _drive_fsm(ctx, name, entry_state, terminals, entry_config=None, poll_interv
                 if state in terminals:
                     action_entry.set_status(f"reached {state!r}")
                     return state
+                if state != last_state:
+                    # Only on change: re-setting the same string every poll
+                    # would spam the UI callback for no new information, and
+                    # would hide a pipette parked in a non-terminal state
+                    # (e.g. "cell attached") behind a stale row otherwise.
+                    action_entry.set_status(f"now in {state!r}")
+                    last_state = state
                 raise_if_abnormal(state, terminals, name)
                 sleep(poll_interval)
         except (Stopped, AdvanceToNextCell):
@@ -51,9 +59,13 @@ def patch(ctx, **entry_config) -> str:
         ctx,
         "Patch",
         "approach",
-        # "cell attached" is not a resting state on these rigs: auto-break-in
-        # always follows it on the way to whole-cell, so it is an internal
-        # hop the poll continues through rather than a patch outcome.
+        # "cell attached" is not a resting state on these rigs: it exits via
+        # spontaneous break-in (routed to "whole cell" by
+        # spontaneousBreakInState) or spontaneous detachment (routed to
+        # "fouled"), so it is an internal hop the poll continues through
+        # rather than a patch outcome. autoBreakInDelay is an optional
+        # wall-clock fallback that ships disabled (None) on both active rig
+        # profiles.
         {"whole cell", "bath", "broken", "fouled"},
         entry_config,
     )

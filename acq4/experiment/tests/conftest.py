@@ -44,10 +44,20 @@ class FakePatchPipette:
     polls (simulating the FSM self-driving). ``setState`` records its calls and sets the
     current state to the requested entry state. ``stop_calls`` records state-job stops
     (the Cancel-style safeAbort path).
+
+    An empty ``state_sequence`` (the default) is the deliberate "never advances"
+    shape some tests rely on: ``getState()`` then repeats whatever ``setState()``
+    last set, forever, so a mid-poll ``check_stop``/``next_cell_requested`` is
+    what has to end the drive. A *non-empty* ``state_sequence`` that runs out
+    without ``getState()`` ever reporting one of the caller's terminal states is
+    instead a broken test setup, not that shape -- with ``sleep`` commonly
+    monkeypatched to a no-op in these tests, silently repeating the last state
+    would turn it into a hanging hot loop instead of a fast, clear failure.
     """
 
     def __init__(self, state_sequence=()):
         self._seq = list(state_sequence)
+        self._had_sequence = bool(self._seq)
         self._current = "out"
         self.setState_calls = []
         self.stop_calls = []
@@ -60,6 +70,11 @@ class FakePatchPipette:
     def getState(self):
         if self._seq:
             self._current = self._seq.pop(0)
+        elif self._had_sequence:
+            raise RuntimeError(
+                f"FakePatchPipette: declared state_sequence exhausted while parked "
+                f"at {self._current!r} -- it never reached a declared terminal state"
+            )
         return FakeStateJob(self._current, self)
 
 
