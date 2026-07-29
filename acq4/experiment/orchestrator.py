@@ -206,6 +206,16 @@ class Orchestrator(Qt.QObject):
             # be silently consumed against an unrelated cell the next time
             # the queue is started.
             self._nextCellRequested = False
+            # Per-run, exactly like the next-cell request above: a producer
+            # that exhausted during this run must not leave the orchestrator
+            # permanently convinced there is nothing left to find. A later run
+            # -- over a new survey region, or over cells still queued after a
+            # stop -- has to ask again. Unlike the next-cell flag, this one
+            # needs no per-exit clears: it is only ever read by the refill
+            # check at the top of this method's own loop, so there is no
+            # equivalent of _processCell's inner retry loop running past the
+            # reach of this finally.
+            self._producerExhausted = False
             self.sigCurrentCell.emit(None)
             self.sigStatus.emit("waiting")
 
