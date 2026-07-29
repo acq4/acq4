@@ -41,9 +41,12 @@ def make_array(qt_app):
     from acq4.devices.InteractionSiteArray import InteractionSiteArray
     from acq4.devices.MockStage import MockStage
 
+    stages = []
+
     def _factory(rows=2, cols=3, role=None):
         dm = _make_dm()
         stage = MockStage(dm, {'nAxes': 3}, 'TestStage')
+        stages.append(stage)
         dm.getDevice.side_effect = lambda name: stage if name == 'TestStage' else None
         config = {
             'rows': rows,
@@ -56,7 +59,12 @@ def make_array(qt_app):
             config['role'] = role
         return InteractionSiteArray(dm, config, 'TestArray')
 
-    return _factory
+    yield _factory
+
+    # Each MockStage runs a polling MockStageThread for its lifetime; shut them down so
+    # they do not outlive the test.
+    for stage in stages:
+        stage.quit()
 
 
 def _calibrate(arr, col_spacing=2e-3, row_spacing=3e-3,
@@ -197,11 +205,14 @@ class TestRole:
         stage = MockStage(dm, {'nAxes': 3}, 'TestStage')
         dm.getDevice.side_effect = lambda n: stage if n == 'TestStage' else None
 
-        arr = InteractionSiteArray(dm, {
-            'rows': 1, 'cols': 3, 'siteRadius': 1e-3, 'siteHeight': 5e-3,
-            'parentDevice': 'TestStage', 'role': 'nucleus',
-        }, 'TestArray')
-        assert all(site.role == 'nucleus' for site in arr.sites)
+        try:
+            arr = InteractionSiteArray(dm, {
+                'rows': 1, 'cols': 3, 'siteRadius': 1e-3, 'siteHeight': 5e-3,
+                'parentDevice': 'TestStage', 'role': 'nucleus',
+            }, 'TestArray')
+            assert all(site.role == 'nucleus' for site in arr.sites)
+        finally:
+            stage.quit()
 
 
 class TestChildSiteDeviceInterface:

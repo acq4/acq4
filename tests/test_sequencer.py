@@ -10,7 +10,9 @@ class MockFrame:
     def __init__(self, depth, data=None):
         self.depth = depth
         seed = depth if data is None else data
-        self._data = np.ones((10, 10), dtype=np.uint8) * 10 * seed
+        # cast back to uint8: a fractional seed would otherwise produce a float array,
+        # which ssim refuses to compare without an explicit data_range
+        self._data = (np.ones((10, 10), dtype=np.uint8) * 10 * seed).astype(np.uint8)
 
     def globalTransform(self):
         return SRT3DTransform(offset=(0, 0, self.depth))
@@ -31,8 +33,9 @@ def test_enforce_linear_z_stack_empty_frames():
 
 
 def test_enforce_linear_z_stack_single_frame():
+    # the only frame is far outside [start, stop], so nothing survives the range trim
     frames = [MockFrame(5.0)]
-    with pytest.raises(IndexError):
+    with pytest.raises(ValueError, match="Insufficient frames to have one frame per step."):
         enforce_linear_z_stack(frames, 0.0, 0.8, 1.0)
 
 
@@ -172,30 +175,45 @@ def test_enforce_linear_z_stack_pruning_identical_frames():
 
 
 def test_enforce_linear_z_stack_frames_not_perfectly_on_expected_depths():
-    f_neg_0_1 = MockFrame(-0.1)
-    f_0_9 = MockFrame(0.9)
-    f_2_1 = MockFrame(2.1)
-    frames = [f_neg_0_1, f_0_9, f_2_1] # depths: -0.1, 0.9, 2.1
-    result = enforce_linear_z_stack(frames, 0.0, 2.0, 1.0) # expects 0, 1, 2
-    # Hungarian algorithm assigns frames to expected depths
-    assert len(result) == 3
-    # Verify we get a frame close to each expected depth
-    assert abs(result[0].depth - 0.0) < 0.2
-    assert abs(result[1].depth - 1.0) < 0.2
-    assert abs(result[2].depth - 2.0) < 0.2
+    """Frames that miss their expected depth but land inside [start, stop] are still accepted,
+    each keeping its own measured depth. Frames outside that range (beyond the 5e-7 m end
+    tolerance) are deliberately discarded as movement artifacts, so a stack whose frames all
+    straddle the ends has too few usable frames and raises."""
+    # near misses inside the range are accepted, one per expected depth
+    f_0, f_0_95, f_2 = MockFrame(0.0), MockFrame(0.95), MockFrame(2.0)
+    result = enforce_linear_z_stack([f_0, f_0_95, f_2], 0.0, 2.0, 1.0) # expects 0, 1, 2
+    assert result == [f_0, f_0_95, f_2]
+    assert [f.depth for f in result] == [0.0, 0.95, 2.0]
+
+    # frames just past the ends, but within the end tolerance, still count as in-range
+    f_low, f_mid, f_high = MockFrame(-4e-7), MockFrame(0.95), MockFrame(2.0 + 4e-7)
+    result = enforce_linear_z_stack([f_low, f_mid, f_high], 0.0, 2.0, 1.0)
+    assert result == [f_low, f_mid, f_high]
+
+    # frames well outside the range are movement artifacts and get trimmed; only 0.9 survives,
+    # which is fewer than the three expected depths
+    frames = [MockFrame(-0.1), MockFrame(0.9), MockFrame(2.1)] # depths: -0.1, 0.9, 2.1
+    with pytest.raises(ValueError, match="Insufficient frames to have one frame per step."):
+        enforce_linear_z_stack(frames, 0.0, 2.0, 1.0)
+
 
 def test_enforce_linear_z_stack_descending_frames_not_perfectly_on_expected_depths():
-    f_neg_0_1 = MockFrame(-0.1)
-    f_0_9 = MockFrame(0.9)
-    f_2_1 = MockFrame(2.1)
-    frames = [f_2_1, f_0_9, f_neg_0_1] # depths sorted: -0.1, 0.9, 2.1
+    """Same contract as the ascending case for a descending sweep: start/stop are sorted
+    internally, near misses inside the range are kept, and frames outside the range are
+    discarded as movement artifacts rather than being pulled back to an expected depth."""
+    # near misses inside the range are accepted
+    f_0, f_0_95, f_2 = MockFrame(0.0), MockFrame(0.95), MockFrame(2.0)
+    frames = [f_2, f_0_95, f_0] # depths sorted: 0.0, 0.95, 2.0
     result = enforce_linear_z_stack(frames, 2.0, 0.0, -1.0) # expects 2, 1, 0
-    # Function sorts start/stop internally, so depths are still [0, 1, 2]
-    assert len(result) == 3
-    # Verify we get a frame close to each expected depth
-    assert abs(result[0].depth - 0.0) < 0.2
-    assert abs(result[1].depth - 1.0) < 0.2
-    assert abs(result[2].depth - 2.0) < 0.2
+    # Function sorts start/stop internally, so expected depths are still [0, 1, 2]
+    assert result == [f_0, f_0_95, f_2]
+    assert [f.depth for f in result] == [0.0, 0.95, 2.0]
+
+    # frames well outside the range are movement artifacts and get trimmed; only 0.9 survives,
+    # which is fewer than the three expected depths
+    frames = [MockFrame(2.1), MockFrame(0.9), MockFrame(-0.1)] # depths sorted: -0.1, 0.9, 2.1
+    with pytest.raises(ValueError, match="Insufficient frames to have one frame per step."):
+        enforce_linear_z_stack(frames, 2.0, 0.0, -1.0)
 
 def test_enforce_linear_z_stack_stop_start_step_consistency():
     # (stop - start) % step == 0, so stop should be inclusive

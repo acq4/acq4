@@ -83,8 +83,8 @@ def set_state(state: Any) -> None:
     No-op outside any task or when the running task does not carry state.
     """
     task = current_task()
-    if task is not None and hasattr(task, "set_state"):
-        task.set_state(state)
+    if task is not None and hasattr(task, "setState"):
+        task.setState(state)
 
 
 # ---------------------------------------------------------------------------

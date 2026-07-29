@@ -1,6 +1,6 @@
 import numpy as np
 
-from acq4.util.MultiPatchLog import IrregularTimeSeries
+from acq4.filetypes.MultiPatchLog import IrregularTimeSeries
 
 
 def test_timeseries_index():

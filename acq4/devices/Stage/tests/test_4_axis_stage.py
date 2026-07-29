@@ -3,6 +3,7 @@ import pytest
 from pytestqt.qtbot import QtBot
 from unittest.mock import MagicMock, patch
 
+from acq4.util import Qt
 from acq4.devices.MockStage import MockStage
 from acq4.devices.Stage import Stage
 from acq4.devices.Stage.calibration import (
@@ -11,15 +12,21 @@ from acq4.devices.Stage.calibration import (
 
 @pytest.fixture
 def unlimited_manipulator() -> Stage:
+    class MockCamera(Qt.QObject):
+        """Just enough camera for ManipulatorAxesCalibrationWindow to wire itself up."""
+
+        sigGlobalTransformChanged = Qt.Signal(object, object)
+
     class MockDM:
         def __init__(self):
             self.sigAbortAll = MagicMock()
+            self.camera = MockCamera()
 
         def declareInterface(self, name, interfaces, obj):
             pass
 
         def getDevice(self, name):
-            return None
+            return self.camera
 
         def readConfigFile(self, fn):
             return {}
@@ -32,7 +39,9 @@ def unlimited_manipulator() -> Stage:
     }
     with patch("acq4.Manager.Manager.single") as mock_get_manager:
         mock_get_manager.return_value = mock_dm
-        yield MockStage(mock_dm, config, "Stage4")
+        dev = MockStage(mock_dm, config, "Stage4")
+        yield dev
+        dev.quit()
 
 
 def test_axis_calibration_4_axes(unlimited_manipulator, qtbot):

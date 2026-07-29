@@ -229,12 +229,16 @@ class FileHandle:
         if not isinstance(other, FileHandle):
             return False
         if self.path is None or other.path is None:
-            return self.path is other.path
+            # A deleted handle has no path to compare, so it is only equal to itself.
+            # Comparing paths here would make every deleted handle equal to every other
+            # one while __hash__ keeps them distinct, breaking the eq/hash contract.
+            return self is other
         return abspath(self.name()) == abspath(other.name())
 
     def __hash__(self):
-        if self.path is None:
-            return hash(None)
+        # Identity-based, so the hash stays stable across renames and deletion (which
+        # sets path to None). Handles are singletons per path via DataManager's cache,
+        # so identity hashing does not split entries that should share a key.
         return hash(id(self))
 
     def fileType(self):

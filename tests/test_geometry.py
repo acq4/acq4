@@ -731,7 +731,7 @@ def test_cylinder_pathfinding_performance():
     print(f"Average path length: {avg_path_length:.1f} waypoints")
     print(f"Time range: {min(times):.4f}s - {max(times):.4f}s")
 
-    return avg_time, avg_path_length, path
+    assert path is not None
 
 
 def test_neutral_anchored_inverse_kinematics_neutral():
