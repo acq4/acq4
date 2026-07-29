@@ -19,12 +19,12 @@ The autopatch orchestration design (`autopatch-orchestration-design.md`, §6 and
 then reuse those same cells for another protocol. Pass 2 inherits pass 1's
 reference stacks because the `Cell` object persists in `CellPanel._cells`.
 
-Today that reuse happens *implicitly and indiscriminately*: every time a
-protocol is loaded or reloaded, `AutopatchWindow._onProtocolLoaded`
-(`Autopatch.py:112`) builds a fresh `Orchestrator`, and
-`CellPanel.bindOrchestrator` (`cell_panel.py:64-76`) flushes **every** held cell
-— completed, skipped, or errored — into the new queue. There is no operator
-control over which cells carry forward.
+Today that reuse happens *implicitly and indiscriminately*: selecting a protocol
+in Area 4 loads it, and every genuine selection change drives
+`AutopatchWindow._onProtocolLoaded` (`Autopatch.py:132`) to build a fresh
+`Orchestrator`, whereupon `CellPanel.bindOrchestrator` (`cell_panel.py:92-103`)
+flushes **every** held cell — completed, abandoned, stopped, or errored — into
+the new queue. There is no operator control over which cells carry forward.
 
 This feature replaces that implicit flush-everything with an explicit,
 operator-controlled reuse action.
@@ -63,7 +63,7 @@ Disposition is tracked in `CellPanel`, not on the `Cell` object and not in the
 Rationale:
 
 - `CellPanel` is already "the authoritative source of truth for seeded cells"
-  (`cell_panel.py:132`) and already outlives every orchestrator — a fresh
+  (`cell_panel.py:167-172`) and already outlives every orchestrator — a fresh
   orchestrator is created and re-bound on each protocol load, but the panel and
   its `_cells` dict persist across passes.
 - The `Orchestrator` is recreated per protocol load, so it cannot remember
@@ -80,26 +80,54 @@ Add to `CellPanel`:
 
 - `self._status: dict[int, str]` — keyed by `id(cell)`, holding the last
   terminal disposition emitted for that cell. Populated in the existing
-  `_onCellFinished` handler. A cell **absent** from this dict is implicitly
-  "queued" (never run to a terminal state).
+  `_onCellFinished` handler (`cell_panel.py:304-307`). A cell **absent** from
+  this dict is implicitly "queued" (never run to a terminal state).
 
-Disposition vocabulary (the statuses `Orchestrator.sigCellFinished` emits):
+Disposition vocabulary — the complete set of statuses
+`Orchestrator.sigCellFinished` emits, one row per emission site:
+
+| Status | Site | Meaning |
+|---|---|---|
+| `"done"` | `orchestrator.py:297` | `run()` returned normally: the protocol ran to completion |
+| `"skipped"` | `orchestrator.py:187`, `:208` | a Next-cell request consumed at the cell/retry boundary, or `AdvanceToNextCell` propagating out of `run()`. **Abandoned without completing.** |
+| `"stopped"` | `orchestrator.py:233` | a cooperative `Stopped`: the operator pressed Stop while this cell was mid-run |
+| `"retry-exhausted"` | `orchestrator.py:217` | `maxRetries` blown against a persistently failing cell |
+| `"error"` | `orchestrator.py:243`, `:255`, `:289` | an uncaught `OrchestrationError`, an unexpected exception, or a flow signal the protocol raised and then swallowed |
+| `"retry"` | `orchestrator.py:219` | transient; superseded by whichever terminal status that cell eventually reaches |
+
+There is no `"handled"` disposition: handler sub-protocols do not exist in the
+engine, so nothing emits one.
 
 ```
-TERMINAL  = {"done", "handled", "skipped", "retry-exhausted", "error"}
-COMPLETED = TERMINAL - {"error"}
-          = {"done", "handled", "skipped", "retry-exhausted"}
+TERMINAL  = {"done", "skipped", "stopped", "retry-exhausted", "error"}
+COMPLETED = {"done"}
 ```
 
 - `TERMINAL` — a cell that finished a pass in any of these states is *not*
   auto-flushed on the next protocol load; it waits for an explicit reuse.
-- `COMPLETED` — the set that "check all completed" ticks. `error` is excluded
-  because it signals an aborted run (possibly a bug); the operator opts an
-  errored cell into reuse manually.
+  `"stopped"` belongs here even though the cell did not finish: silently
+  re-running a cell the operator deliberately interrupted is exactly the
+  indiscriminate behavior §1 exists to remove.
+- `COMPLETED` — the set that "check all completed" ticks. It holds `"done"`
+  alone, so the button means precisely *every cell whose protocol ran to
+  completion*. Every other terminal disposition is a manual opt-in, each for its
+  own reason:
+  - `"error"` signals an aborted run, possibly a bug.
+  - `"retry-exhausted"` is a *persistent* failure (`orchestrator.py:211-218`),
+    not a completion. The rationale for excluding `"error"` applies verbatim.
+  - `"stopped"` and `"skipped"` are both abandonment — the protocol never
+    reached its end. `"skipped"` in particular is what `ctx.next_cell()` reports
+    (`orchestrator.py:208`): the protocol, or the operator's Next-cell press,
+    explicitly giving up on this cell. A protocol that runs to completion
+    reports `"done"`, never `"skipped"` — neither bundled example protocol ends
+    in a flow-control call, and none should. **`"skipped"` therefore does not
+    belong in `COMPLETED`**: ticking it under "check all completed" would offer
+    up cells that never did the work as though they had. If some future protocol
+    ends by abandoning its cell, the thing to fix is that protocol, not this set.
 
-The transient `"retry"` status (`orchestrator.py:172,182`) is not terminal and
-is never stored as a final disposition — it is superseded by the eventual
-terminal status for that cell.
+The transient `"retry"` status (`orchestrator.py:219`) is not terminal and is
+never stored as a final disposition — it is superseded by the eventual terminal
+status for that cell.
 
 ---
 
@@ -146,12 +174,13 @@ different set of cells is checked for reuse.
 
 ### 6.2 Buttons
 
-Two buttons are added to the existing button row (`cell_panel.py:41-48`),
+Two buttons are added to the existing button row (`cell_panel.py:68-75`),
 alongside "Add from target" and "Scatter fake cells":
 
 - **"check all completed"** — sets check state to checked for every row whose
-  `self._status[id(cell)] ∈ COMPLETED`; leaves `error` and never-run rows
-  unchecked. A convenience for the common "reuse everything that worked" case.
+  `self._status[id(cell)] ∈ COMPLETED`; leaves `skipped`, `stopped`,
+  `retry-exhausted`, `error`, and never-run rows unchecked. A convenience for the
+  common "reuse everything that worked" case.
 - **"Reuse checked cells"** — for each checked cell, in list order:
   1. `self._orchestrator.enqueue(cell)` — the *same* `Cell` object.
   2. Reset the row text to `f"cell {id(cell)} — queued"`.
@@ -173,9 +202,14 @@ alongside "Add from target" and "Scatter fake cells":
 - at least one row is checked.
 
 To observe run state, `CellPanel.bindOrchestrator` additionally connects to
-`Orchestrator.sigStatus`; `unbindOrchestrator` disconnects it. The panel caches
-the latest status string and re-evaluates button enablement on status change and
-on checkbox toggle.
+`Orchestrator.sigStatus`. `CellPanel.unbindOrchestrator` (`cell_panel.py:105-123`)
+must disconnect it in the same change: that method disconnects exactly what
+`bindOrchestrator` connects, 1-for-1, and both the rebind path (selecting a
+different protocol) and window teardown go through it. A third connection with no
+matching `Qt.disconnect` leaves a live orchestrator wired into a panel that has
+stopped tracking it — the dangling-connection shape `test_teardown.py` guards
+against. The panel caches the latest status string and re-evaluates button
+enablement on status change and on checkbox toggle.
 
 "check all completed" is enabled whenever ≥1 cell is in a `COMPLETED` state.
 
@@ -183,8 +217,18 @@ on checkbox toggle.
 
 Re-queuing does not start a run. After pressing "Reuse checked cells", the
 operator presses **Start** (Area 3 / `StatusPanel`) to run the current protocol
-over the freshly-queued cells. The implementation must confirm `StatusPanel`
-re-enables Start once a prior run reaches `waiting` (verified under test).
+over the freshly-queued cells.
+
+`StatusPanel` re-enables Start once a prior run reaches `waiting`:
+`_updateButtons` enables Start for `None`/`"waiting"` (`status_panel.py:166-167`),
+and `Orchestrator._runLoopBody`'s `finally` emits `"waiting"` on every exit path
+(`orchestrator.py:152-162`). That holds by inspection, but it hangs on emission
+*order*, not on a final state: the failure path emits `"error"`
+(`orchestrator.py:242`) and only then `"waiting"` from the `finally`, and
+`"error"` on its own disables Start (`status_panel.py:172-173`). So the
+implementation must assert the ordering in a test — drive a run to `error`
+through the real signal path and assert Start ends up enabled — rather than
+assuming the terminal `"waiting"` wins.
 
 ---
 
@@ -198,9 +242,9 @@ The cell's physical continuity is unaffected: the tracker / reference stack live
 on the persistent `Cell` object, not in the panel's log dicts, so pass 2 still
 inherits pass 1's reference stack.
 
-This simplifies the note in `autopatch-orchestration-design.md` §7 (Area 5,
-line 402), which had contemplated keeping per-pass timeline/log segments. That
-line is updated to reflect clear-on-reuse.
+This simplifies the note in `autopatch-orchestration-design.md` §7 (Area 5, the
+"Reuse completed cells" bullet, lines 404-411), which contemplates keeping
+per-pass timeline/log segments. That line is updated to reflect clear-on-reuse.
 
 ---
 
@@ -228,8 +272,10 @@ not printed.
 
 - `_onCellFinished` records each terminal status into `_status` keyed by
   `id(cell)`.
-- "check all completed" checks exactly the `COMPLETED` rows; leaves `error` and
-  never-run rows unchecked.
+- "check all completed" checks exactly the `COMPLETED` rows; leaves `skipped`,
+  `stopped`, `retry-exhausted`, `error`, and never-run rows unchecked. Cover
+  `skipped` explicitly — it is the one status whose name invites being read as a
+  completion.
 - "Reuse checked cells" enqueues each checked `Cell` into the bound orchestrator,
   resets its row text to "queued", clears its `_timelines`/`_logs`, pops its
   `_status`, and unchecks it.
@@ -237,6 +283,11 @@ not printed.
   re-enqueued on rebind; a never-run (queued) cell **is**.
 - Button gating: "Reuse checked cells" disabled with no orchestrator, while
   `running`/`paused`, and with nothing checked; enabled otherwise.
+- Start is enabled again after a run that ends in `error`, driven through the
+  real `"error"`-then-`"waiting"` emission order rather than a single synthetic
+  `sigStatus("waiting")` (§6.4).
+- `unbindOrchestrator` leaves no `sigStatus` connection behind: rebinding to a
+  second orchestrator must not let the first one still drive this panel's gating.
 
 **Integration (mock rig)**
 
@@ -258,8 +309,11 @@ not printed.
   reuse handler, selective-flush change, `sigStatus` subscription, gating.
 - `acq4/modules/Autopatch/tests/` — new unit + integration tests; update
   flush-all regression test.
-- `autopatch-orchestration-design.md` — amend §7 Area 5 (clear-on-reuse; note
-  the selective-flush change).
+- `autopatch-orchestration-design.md` — amend §7 Area 5: clear-on-reuse (§7
+  above), the selective-flush behavior (§5), the disposition vocabulary (Area 5
+  still describes "Completed" as `done / handled` and the reset status as
+  *waiting*; §4 above is the real set, and a cell row's reset text is
+  `queued`).
 
 No changes to `acq4/experiment/` (engine) or the external `acq4_automation`
 package.
