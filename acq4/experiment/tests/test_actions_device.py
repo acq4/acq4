@@ -1,6 +1,5 @@
-"""Tests for the plain-function device actions (go_*, focus_*, new_pipette,
-find_tip, find_surface, cellfie, run_task): fakes prove the right device calls
-happen in the right order with the right arguments."""
+"""Tests for the plain-function device actions (go_*, focus_*, new_pipette, find_tip,
+find_surface, cellfie, run_task): fakes prove the right device calls happen in order."""
 import pytest
 
 from acq4.experiment.context import ExecutionContext
@@ -245,8 +244,11 @@ def test_new_pipette_calls_new_pipette_and_waits(ctx, pip):
 def test_new_pipette_wraps_failure_as_orchestration_error(ctx, pip):
     pip.new_pipette_error = RuntimeError("boom")
 
-    with pytest.raises(OrchestrationError):
+    with pytest.raises(OrchestrationError) as excinfo:
         new_pipette(ctx)
+
+    assert "NewPipette" in str(excinfo.value)
+    assert "boom" in str(excinfo.value)
 
 
 # -- find_tip -----------------------------------------------------------
@@ -268,8 +270,11 @@ def test_find_tip_calls_steps_in_order(ctx, pip):
 def test_find_tip_wraps_failure_as_orchestration_error(ctx, pip):
     pip.pipetteDevice.find_tip_error = RuntimeError("no tip")
 
-    with pytest.raises(OrchestrationError):
+    with pytest.raises(OrchestrationError) as excinfo:
         find_tip(ctx)
+
+    assert "FindTip" in str(excinfo.value)
+    assert "no tip" in str(excinfo.value)
 
 
 # -- find_surface -------------------------------------------------------
@@ -289,8 +294,11 @@ def test_find_surface_returns_depth(ctx, pip):
 def test_find_surface_wraps_value_error(ctx, pip):
     pip.scope.error = ValueError("no surface")
 
-    with pytest.raises(OrchestrationError):
+    with pytest.raises(OrchestrationError) as excinfo:
         find_surface(ctx)
+
+    assert "FindSurface" in str(excinfo.value)
+    assert "no surface" in str(excinfo.value)
 
 
 # -- cellfie --------------------------------------------------------------
@@ -386,5 +394,8 @@ def test_run_task_raises_when_no_module_matches(ctx, pip):
     pip.clampDevice._name = "Clamp1"
     ctx.manager.modules = {}
 
-    with pytest.raises(OrchestrationError):
+    with pytest.raises(OrchestrationError) as excinfo:
         run_task(ctx)
+
+    assert "Task" in str(excinfo.value)
+    assert "Clamp1" in str(excinfo.value)

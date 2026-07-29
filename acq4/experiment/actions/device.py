@@ -306,7 +306,7 @@ def new_pipette(ctx) -> None:
         try:
             ctx.pipette.newPipette().wait()
         except Exception as e:
-            raise OrchestrationError(f"new-pipette calibration failed: {e}") from e
+            raise OrchestrationError(f"{entry.name}: new-pipette calibration failed: {e}") from e
 
 
 def find_tip(ctx, speed: str = "fast") -> None:
@@ -327,7 +327,7 @@ def find_tip(ctx, speed: str = "fast") -> None:
         except Exception as e:
             # Route a tip-finding failure through the orchestrator's exception
             # handling rather than crashing the run loop.
-            raise OrchestrationError(f"could not find pipette tip: {e}") from e
+            raise OrchestrationError(f"{entry.name}: could not find pipette tip: {e}") from e
 
 
 def find_surface(ctx):
@@ -341,7 +341,7 @@ def find_surface(ctx):
         try:
             depth = scope.findSurfaceDepth(imager)
         except ValueError as e:
-            raise OrchestrationError(str(e)) from e
+            raise OrchestrationError(f"{entry.name}: {e}") from e
         return depth
 
 
@@ -393,7 +393,7 @@ def run_task(ctx, store: bool = True, timeout: float = 0.0):
                 break
         if taskrunner is None:
             raise OrchestrationError(
-                f"no task runner module found using clamp {clampName!r}"
+                f"{entry.name}: no task runner module found using clamp {clampName!r}"
             )
         info = taskrunner.sequenceInfo
         expected_duration = info["period"] * info["totalParams"]
