@@ -5,7 +5,9 @@
 import pytest
 from pyqtgraph.util.mutex import Mutex
 
+from acq4 import modules as module_registry
 from acq4.Manager import Manager
+from acq4.util import Qt
 
 
 class FakeModule:
@@ -81,6 +83,66 @@ def test_getOrLoadModule_falls_back_to_undefined_module_class(manager):
 
     assert isinstance(mod, FakeModule)
     assert mod is manager.modules['Visualize3D']
+
+
+@pytest.fixture
+def loading_manager():
+    """A Manager that runs the real loadModule(). QObject.__init__ is needed so
+    sigModulesChanged can be emitted; interfaceDir and the module class registry
+    are the only other things loadModule touches."""
+    man = Manager.__new__(Manager)
+    Qt.QObject.__init__(man)
+    man.modules = {}
+    man.definedModules = {}
+    man.moduleLock = Mutex(recursive=True)
+    man.listInterfaces = lambda *args, **kwds: {}
+    return man
+
+
+class ModuleShaped:
+    """Matches the modclass(manager, name, config) constructor signature."""
+
+    def __init__(self, manager, name, config):
+        self.name = name
+
+    def window(self):
+        return None
+
+
+def test_loadModule_drops_its_reservation_when_construction_fails(loading_manager, monkeypatch):
+    """loadModule reserves self.modules[name] = None before constructing. If the
+    constructor raises, that None must not be left behind: every later
+    getOrLoadModule() would hand it out as if the module were loaded, turning one
+    failed load into a permanent, silent None."""
+
+    class FailingModule:
+        def __init__(self, manager, name, config):
+            raise RuntimeError("constructor exploded")
+
+    monkeypatch.setattr(module_registry, "getModuleClass", lambda name: FailingModule)
+
+    with pytest.raises(RuntimeError, match="constructor exploded"):
+        loading_manager.loadModule('Visualize3D')
+
+    assert 'Visualize3D' not in loading_manager.modules
+
+
+def test_loadModule_reservation_drop_allows_a_later_retry(loading_manager, monkeypatch):
+    """After a failed load the name must be free for a later successful load,
+    rather than raising NameError('already in use')."""
+
+    class FailingModule:
+        def __init__(self, manager, name, config):
+            raise RuntimeError("constructor exploded")
+
+    monkeypatch.setattr(module_registry, "getModuleClass", lambda name: FailingModule)
+    with pytest.raises(RuntimeError):
+        loading_manager.loadModule('Visualize3D')
+
+    monkeypatch.setattr(module_registry, "getModuleClass", lambda name: ModuleShaped)
+    mod = loading_manager.loadModule('Visualize3D')
+
+    assert mod is loading_manager.modules['Visualize3D']
 
 
 def test_getModule_returns_freshly_loaded_defined_module(manager):
