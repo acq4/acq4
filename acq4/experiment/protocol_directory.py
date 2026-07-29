@@ -14,8 +14,13 @@ class ProtocolDirectory:
     in `protocols` with its error recorded, rather than raised or hidden, so
     the UI can list a broken protocol with an error indicator.
 
-    `scan()` is the reload-all path: it re-`load()`s known files, discovers
-    newly-appeared ones, and drops entries whose file no longer exists.
+    `scan()` is the discovery path: it discovers newly-appeared files, drops
+    entries whose file no longer exists, and `load()`s only entries that are
+    new or that previously failed to load -- an already-loaded ProtocolFile is
+    left untouched, so a rescan never clobbers a live, edited param tree still
+    held by an in-progress run. `reload_all()` is the explicit force-reload
+    path: it re-`load()`s every discovered file regardless of its current
+    state, resetting any edited param tree back to the file's defaults.
     """
 
     def __init__(self, path: str):
@@ -23,6 +28,12 @@ class ProtocolDirectory:
         self.protocols: dict[str, ProtocolFile] = {}
 
     def scan(self) -> None:
+        self._discover(force=False)
+
+    def reload_all(self) -> None:
+        self._discover(force=True)
+
+    def _discover(self, force: bool) -> None:
         if not os.path.isdir(self.path):
             return
 
@@ -36,14 +47,13 @@ class ProtocolDirectory:
             if protocol is None:
                 protocol = ProtocolFile(os.path.join(self.path, entry))
                 self.protocols[name] = protocol
-            self._load_quietly(protocol)
+                self._load_quietly(protocol)
+            elif force or not protocol.is_loaded:
+                self._load_quietly(protocol)
 
         for name in list(self.protocols):
             if name not in found_names:
                 del self.protocols[name]
-
-    def reload_all(self) -> None:
-        self.scan()
 
     def reload(self, name: str) -> None:
         protocol = self.get(name)

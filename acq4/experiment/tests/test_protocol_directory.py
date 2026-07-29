@@ -180,3 +180,61 @@ def test_scan_on_non_directory_path_is_noop(tmp_path):
     pd = ProtocolDirectory(str(file_path))
     pd.scan()  # must not raise
     assert pd.protocols == {}
+
+
+def test_scan_does_not_reload_an_already_loaded_protocol(tmp_path):
+    """Reproduces the operator-facing bug: opening the protocol picker's
+    dropdown (which calls scan() for discovery) must not silently replace an
+    edited, already-loaded ProtocolFile's param_tree with fresh defaults."""
+    _write(tmp_path, "one.py", """
+        PARAMS = [dict(name="speed", type="str", default="fast")]
+
+        def run(ctx, **params):
+            return "done"
+    """)
+    pd = ProtocolDirectory(str(tmp_path))
+    pd.scan()
+    protocol = pd.get("one")
+    assert protocol.param_values() == {"speed": "fast"}
+
+    # Operator edits the live param tree (e.g. via the ParameterTree widget).
+    protocol.param_tree.child("speed").setValue("slow")
+    assert protocol.param_values() == {"speed": "slow"}
+
+    # Discovery-only rescan (e.g. from opening the dropdown) must not touch it.
+    pd.scan()
+    assert pd.get("one") is protocol
+    assert protocol.param_values() == {"speed": "slow"}
+
+
+def test_reload_all_does_reset_an_edited_param_tree(tmp_path):
+    """reload_all() (the explicit Reload button) is the force-reload path, so
+    it SHOULD reset an edited param tree back to the file's defaults."""
+    _write(tmp_path, "one.py", """
+        PARAMS = [dict(name="speed", type="str", default="fast")]
+
+        def run(ctx, **params):
+            return "done"
+    """)
+    pd = ProtocolDirectory(str(tmp_path))
+    pd.scan()
+    protocol = pd.get("one")
+    protocol.param_tree.child("speed").setValue("slow")
+    assert protocol.param_values() == {"speed": "slow"}
+
+    pd.reload_all()
+    assert pd.get("one").param_values() == {"speed": "fast"}
+
+
+def test_scan_still_retries_a_previously_failed_load(tmp_path):
+    """A protocol that failed to import must still be retried on the next
+    discovery scan -- only successfully-loaded protocols are left alone."""
+    path = _write(tmp_path, "bad.py", "this is not valid python !!!")
+    pd = ProtocolDirectory(str(tmp_path))
+    pd.scan()
+    assert pd.get("bad").is_loaded is False
+
+    with open(path, "w") as fh:
+        fh.write("def run(ctx, **params):\n    return 'done'\n")
+    pd.scan()
+    assert pd.get("bad").is_loaded is True

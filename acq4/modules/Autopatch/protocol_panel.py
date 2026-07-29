@@ -58,7 +58,7 @@ class ProtocolPanel(Qt.QWidget):
         outer.addWidget(self.errorLabel)
         self.setLayout(outer)
 
-        self.reloadBtn.clicked.connect(self.refreshFileList)
+        self.reloadBtn.clicked.connect(self.forceReloadFileList)
         self.loadBtn.clicked.connect(self.loadSelected)
         self.editorBtn.clicked.connect(self.openInEditor)
         self.fileCombo.currentIndexChanged.connect(self._onSelectionChanged)
@@ -66,8 +66,23 @@ class ProtocolPanel(Qt.QWidget):
         self.refreshFileList()
 
     def refreshFileList(self) -> None:
-        current = self.fileCombo.currentData()
+        """Discovery-only rescan: picks up new/removed files and retries any
+        that previously failed to load, but never re-imports an
+        already-loaded protocol -- see `_RescanningComboBox.showPopup()`,
+        which calls this just before the popup opens. Use `forceReloadFileList()`
+        (the Reload button) to re-import everything, including the one that's
+        currently loaded."""
         self.directory.scan()
+        self._rebuildCombo()
+
+    def forceReloadFileList(self) -> None:
+        """Force-reload every discovered protocol, including one that is
+        already loaded -- the explicit Reload button's path."""
+        self.directory.reload_all()
+        self._rebuildCombo()
+
+    def _rebuildCombo(self) -> None:
+        current = self.fileCombo.currentData()
         self.fileCombo.blockSignals(True)
         self.fileCombo.clear()
         for name in sorted(self.directory.protocols):

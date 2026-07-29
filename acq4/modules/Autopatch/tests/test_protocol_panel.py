@@ -214,6 +214,28 @@ def test_opening_the_picker_rescans_for_a_newly_dropped_file(qapp, tmp_path):
     assert panel.fileCombo.findData("demo") >= 0
 
 
+def test_opening_the_picker_does_not_reset_the_loaded_protocols_params(qapp, tmp_path):
+    """Reproduces the operator-facing bug: after Load, an operator's param
+    edit must survive opening the dropdown -- the live Orchestrator holds
+    this exact ProtocolFile and re-reads its param_values() every cell, so a
+    silent reset mid-run would revert parameters without any indication."""
+    from acq4.modules.Autopatch.protocol_panel import ProtocolPanel
+
+    _write(tmp_path, "demo.py", _good_protocol_body(default=3))
+    panel = ProtocolPanel(protocolDir=str(tmp_path))
+    panel.fileCombo.setCurrentIndex(panel.fileCombo.findData("demo"))
+    pf = panel.loadSelected()
+    assert pf.param_values() == {"count": 3}
+
+    pf.param_tree.child("count").setValue(9)
+    assert pf.param_values() == {"count": 9}
+
+    panel.fileCombo.showPopup()  # discovery-only rescan, not a reload
+
+    assert panel.protocolFile is pf
+    assert pf.param_values() == {"count": 9}
+
+
 def test_reload_button_renamed_from_refresh(qapp, tmp_path):
     from acq4.modules.Autopatch.protocol_panel import ProtocolPanel
 
