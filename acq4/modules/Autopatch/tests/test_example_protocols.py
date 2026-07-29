@@ -89,7 +89,7 @@ def test_example_patch_description_is_populated_from_its_module_docstring():
 # exercised without needing real pipette hardware.
 
 
-def _patch_actions(monkeypatch, *, patch_outcome, calls):
+def _patch_actions(monkeypatch, ctx, *, patch_outcome, calls):
     monkeypatch.setattr(example_patch_mod, "cellfie", lambda ctx: calls.append("cellfie"))
     monkeypatch.setattr(
         example_patch_mod,
@@ -101,27 +101,27 @@ def _patch_actions(monkeypatch, *, patch_outcome, calls):
         example_patch_mod, "prompt", lambda ctx, message: calls.append(("prompt", message))
     )
 
-    def fake_abort(ctx):
+    def fake_abort():
         calls.append("abort")
         raise AbortExperiment("abort")
 
-    monkeypatch.setattr(example_patch_mod, "abort", fake_abort)
+    monkeypatch.setattr(ctx, "abort", fake_abort)
 
-    def fake_next_cell(ctx):
+    def fake_next_cell():
         calls.append("next_cell")
         from acq4.experiment.exceptions import AdvanceToNextCell
 
         raise AdvanceToNextCell("advance to next cell")
 
-    monkeypatch.setattr(example_patch_mod, "next_cell", fake_next_cell)
+    monkeypatch.setattr(ctx, "next_cell", fake_next_cell)
 
 
 @pytest.mark.parametrize("outcome", ["broken", "fouled"])
 def test_example_patch_prompts_and_aborts_on_broken_or_fouled_pipette(monkeypatch, outcome):
     calls = []
-    _patch_actions(monkeypatch, patch_outcome=outcome, calls=calls)
-
     ctx = ExecutionContext()
+    _patch_actions(monkeypatch, ctx, patch_outcome=outcome, calls=calls)
+
     with pytest.raises(AbortExperiment):
         example_patch_mod.run(ctx, speed="fast")
 
@@ -135,9 +135,9 @@ def test_example_patch_prompts_and_aborts_on_broken_or_fouled_pipette(monkeypatc
 @pytest.mark.parametrize("outcome", ["whole cell", "cell attached", "bath"])
 def test_example_patch_advances_to_next_cell_on_a_normal_outcome(monkeypatch, outcome):
     calls = []
-    _patch_actions(monkeypatch, patch_outcome=outcome, calls=calls)
-
     ctx = ExecutionContext()
+    _patch_actions(monkeypatch, ctx, patch_outcome=outcome, calls=calls)
+
     from acq4.experiment.exceptions import AdvanceToNextCell
 
     with pytest.raises(AdvanceToNextCell):

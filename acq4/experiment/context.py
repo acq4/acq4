@@ -6,7 +6,7 @@ import contextlib
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-from .exceptions import FlowSignal
+from .exceptions import AbortExperiment, AdvanceToNextCell, FlowSignal, RetryCurrentCell
 from .log_entry import ActionLogEntry
 
 
@@ -34,25 +34,37 @@ class ExecutionContext:
     # ExecutionContext (as built directly by tests, or a contextFactory that
     # doesn't set it) simply never requests one.
     next_cell_requested: Callable[[], bool] = field(default=_no_next_cell_requested)
-    # Set by a flow action (next_cell/retry_cell/abort, in actions/flow.py)
-    # to the FlowSignal it is about to raise, before raising it -- so the
-    # orchestrator can tell, on the success path of a protocol run(), whether
-    # a flow signal was raised and then swallowed by the protocol's own
-    # try/except rather than actually propagating. A fresh context is built
-    # per attempt, so this never needs resetting between retries.
+    # Set by next_cell/retry_cell/abort to the FlowSignal each is about to
+    # raise, before raising it -- so the orchestrator can tell, on the
+    # success path of a protocol run(), whether a flow signal was raised and
+    # then swallowed by the protocol's own try/except rather than actually
+    # propagating. A fresh context is built per attempt, so this never needs
+    # resetting between retries.
     pending_flow_signal: FlowSignal | None = field(default=None, repr=False)
 
-    def raise_flow_signal(self, exc: FlowSignal) -> None:
+    def next_cell(self) -> None:
+        """Abandon this cell and advance the orchestrator's queue."""
+        self._raise_flow_signal(AdvanceToNextCell("advance to next cell"))
+
+    def retry_cell(self) -> None:
+        """Restart this cell's protocol from the top."""
+        self._raise_flow_signal(RetryCurrentCell("retry current cell"))
+
+    def abort(self) -> None:
+        """Stop the whole experiment run."""
+        self._raise_flow_signal(AbortExperiment("abort experiment"))
+
+    def _raise_flow_signal(self, exc: FlowSignal) -> None:
         """Record `exc` on pending_flow_signal, then raise it.
 
-        The single place a FlowSignal is ever raised from: both the flow
-        actions (actions/flow.py's next_cell/retry_cell/abort) and
-        actions.fsm's poll-loop checkpoint go through this rather than
-        raising directly, so a future third raise site can't repeat the
-        omission of recording the signal -- which is what lets the
-        orchestrator's success-path swallow-net (Orchestrator._processCell)
-        tell a genuinely-returned run() apart from one that raised a flow
-        signal the protocol's own try/except then caught and suppressed.
+        The single place a FlowSignal is ever raised from: next_cell,
+        retry_cell, abort, and actions.fsm's poll-loop checkpoint (via
+        next_cell) all go through this rather than raising directly, so a
+        future new raise site can't repeat the omission of recording the
+        signal -- which is what lets the orchestrator's success-path
+        swallow-net (Orchestrator._processCell) tell a genuinely-returned
+        run() apart from one that raised a flow signal the protocol's own
+        try/except then caught and suppressed.
         """
         self.pending_flow_signal = exc
         raise exc

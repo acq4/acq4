@@ -40,7 +40,7 @@ def test_requestnextcell_cleared_when_cell_ends_normally_does_not_skip_following
 ):
     """A "Next cell" request must apply to at most the cell it was made
     during. If that cell's protocol simply returns without raising a flow
-    signal (e.g. a survey-only protocol with no next_cell(ctx) call), the
+    signal (e.g. a survey-only protocol with no ctx.next_cell() call), the
     flag must not survive into the next queue iteration -- otherwise the
     following queued cell is skipped without ever being attempted, with no
     error and no indication anything went wrong."""

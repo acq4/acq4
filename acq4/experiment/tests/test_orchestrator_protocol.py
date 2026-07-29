@@ -135,17 +135,15 @@ def test_current_cell_signal_emits_cell_then_none_after_the_loop(make_pf):
 
 def test_swallowed_flow_signal_halts_instead_of_reporting_done(make_pf):
     """Design §5's safety net: protocol authors write their own try/except by
-    design, so `try: ... next_cell(ctx) ... except Exception: pass` is a
+    design, so `try: ... ctx.next_cell() ... except Exception: pass` is a
     likely mistake, not a theoretical one. A FlowSignal that doesn't
     propagate must be treated as a bug -- logged and halted -- rather than
     quietly reported "done" with a queue that didn't actually advance."""
-    from acq4.experiment.actions.flow import next_cell
-
     pf = make_pf()
 
     def spy_run(ctx, **kwargs):
         try:
-            next_cell(ctx)
+            ctx.next_cell()
         except Exception:
             pass  # the protocol author's own overly-broad try/except
 

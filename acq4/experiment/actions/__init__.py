@@ -1,5 +1,4 @@
 """Built-in protocol functions used by .py protocol files."""
-from .flow import next_cell, retry_cell, abort  # noqa: F401
 from .fsm import patch, reseal, clean  # noqa: F401
 from .prompt import prompt  # noqa: F401
 from .storage import new_data_dir  # noqa: F401

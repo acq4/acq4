@@ -239,7 +239,7 @@ class Orchestrator(Qt.QObject):
                     # protocol thought it told it to), not a success.
                     signal = ctx.pending_flow_signal
                     # Captured into a local and cleared on ctx before raising.
-                    # signal.__traceback__ already holds raise_flow_signal's own
+                    # signal.__traceback__ already holds _raise_flow_signal's own
                     # frame, whose `self` is ctx, so ctx stays reachable from the
                     # chained exception regardless of this clear. What the clear
                     # achieves is breaking ctx's own reference to signal, turning
