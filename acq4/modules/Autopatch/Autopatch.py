@@ -95,11 +95,20 @@ class AutopatchWindow(Qt.QWidget):
         self.orchestrator = None
         # The pipette resolved from self.pipetteSelector at the moment Start was
         # last pressed (GUI thread). The orchestrator's contextFactory reads this
-        # cached value rather than the selector widget, since _walk() calls the
-        # factory from the orchestrator's worker thread -- see _resolvePipette().
+        # cached value rather than the selector widget, since the factory is
+        # called from the orchestrator's worker thread -- see _resolvePipette().
         self._cachedPipette = None
         self._tornDown = False
         self.protocolPanel.sigProtocolLoaded.connect(self._onProtocolLoaded)
+        # Area 4 (the protocol picker/Load/Reload) must not be usable while a
+        # run is in flight; StatusPanel derives this from whichever orchestrator
+        # it's currently bound to, so this connection is made once here rather
+        # than re-wired per protocol load. A direct bound-method connection
+        # (not a lambda closing over self/the window) so this permanent,
+        # never-disconnected wiring can't turn into a window<->statusPanel
+        # reference cycle -- exactly what bindOrchestrator/unbindOrchestrator
+        # elsewhere are careful to avoid.
+        self.statusPanel.sigInteractionLocked.connect(self.protocolPanel.setInteractionLocked)
 
     def _resolvePipette(self) -> None:
         """Snapshot the currently-selected pipette on the GUI thread. Called at
@@ -110,6 +119,15 @@ class AutopatchWindow(Qt.QWidget):
         self._cachedPipette = self.pipetteSelector.getSelectedObj()
 
     def _onProtocolLoaded(self, protocolFile) -> None:
+        # Loading a second protocol must not abandon a still-live Orchestrator:
+        # left running, it would keep calling cellPanel.appendLog/onLogAction
+        # directly (bound into its own contextFactory closure, not through an
+        # Orchestrator signal -- see CellPanel.unbindOrchestrator's docstring
+        # for the one path it deliberately doesn't sever), writing into this
+        # new session's Area 5/Area 3 out from under it, and leaving two
+        # worker threads eligible to drive the same pipette.
+        if self.orchestrator is not None:
+            self._stopAndReleaseOrchestrator(self.orchestrator)
         contextFactory = make_context_factory(
             pipetteGetter=lambda: self._cachedPipette,
             manager=self.manager,
@@ -129,6 +147,32 @@ class AutopatchWindow(Qt.QWidget):
             self.orchestrator, self.cellPanel, onStart=self._resolvePipette
         )
         self.cellPanel.bindOrchestrator(self.orchestrator)
+
+    @staticmethod
+    def _stopAndReleaseOrchestrator(orchestrator) -> None:
+        """Stop `orchestrator` and unparent it from the window, bounded so a
+        stuck action can't hang the caller forever.
+
+        Shared by teardown() (window close) and _onProtocolLoaded() (loading
+        a second protocol over a still-live one) so both paths release an
+        outgoing orchestrator the same way: any outcome of the wait
+        (finished, stopped, timed out) is fine here, since the caller is
+        about to drop every reference to `orchestrator` regardless.
+        """
+        orchestrator.stop()
+        try:
+            orchestrator.wait(timeout=5.0)
+        except Exception:
+            pass
+        # The orchestrator's context factory closes over this window (to read
+        # the cached pipette) and over cellPanel (to log), so as long as the
+        # orchestrator is alive it keeps both alive too -- fine on its own,
+        # but setParent(self) in _onProtocolLoaded also makes Qt's parent/
+        # child bookkeeping keep the orchestrator alive for as long as this
+        # window is, which would turn that one-way dependency back into a
+        # cycle. Unparenting here breaks that, so dropping the last Python
+        # reference is enough for plain refcounting to free everything.
+        orchestrator.setParent(None)
 
     def teardown(self) -> None:
         """Break the Orchestrator/Cell QObject cycle deterministically.
@@ -150,24 +194,7 @@ class AutopatchWindow(Qt.QWidget):
             return
         self._tornDown = True
         if self.orchestrator is not None:
-            self.orchestrator.stop()
-            try:
-                # Bounded wait so a stuck action can't hang teardown forever;
-                # any outcome (finished, stopped, timed out) is fine here since
-                # we are about to drop every reference to the orchestrator
-                # regardless.
-                self.orchestrator.wait(timeout=5.0)
-            except Exception:
-                pass
-            # The orchestrator's context factory closes over this window (to
-            # read the cached pipette) and over cellPanel (to log), so as long
-            # as the orchestrator is alive it keeps both alive too -- fine on
-            # its own, but setParent(self) above also makes Qt's parent/child
-            # bookkeeping keep the orchestrator alive for as long as this
-            # window is, which would turn that one-way dependency back into a
-            # cycle. Unparenting here breaks that, so dropping the reference
-            # below is enough for plain refcounting to free everything.
-            self.orchestrator.setParent(None)
+            self._stopAndReleaseOrchestrator(self.orchestrator)
         self.statusPanel.unbindOrchestrator()
         self.cellPanel.unbindOrchestrator()
         self.cellPanel.clearCells()

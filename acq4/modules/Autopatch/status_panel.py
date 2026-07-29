@@ -6,6 +6,15 @@ from acq4.util import Qt
 
 
 class StatusPanel(Qt.QWidget):
+    # Emitted whenever the bound orchestrator's status changes, True while a
+    # run is "running" or "paused". Area 4 (the protocol picker/Load/Reload)
+    # listens to this to gate itself, rather than the window connecting
+    # directly to the orchestrator's own sigStatus -- that would give the
+    # orchestrator a live reference back to the window for as long as it
+    # exists, exactly the kind of cycle bindOrchestrator/unbindOrchestrator
+    # are already careful to avoid.
+    sigInteractionLocked = Qt.Signal(bool)
+
     def __init__(self):
         super().__init__()
         self._orchestrator = None
@@ -103,6 +112,7 @@ class StatusPanel(Qt.QWidget):
         self._onStart = None
         self._currentStatus = None
         self._updateButtons()
+        self.sigInteractionLocked.emit(False)
 
     def _onStartClicked(self) -> None:
         if self._onStart is not None:
@@ -122,6 +132,7 @@ class StatusPanel(Qt.QWidget):
         self.instructionLabel.setVisible(status == "error")
         self._currentStatus = status
         self._updateButtons()
+        self.sigInteractionLocked.emit(status in ("running", "paused"))
 
     def _onCurrentCell(self, cell) -> None:
         # sigCurrentCell(None) fires once the orchestrator's queue drains (see

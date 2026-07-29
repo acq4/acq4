@@ -130,6 +130,23 @@ class ProtocolPanel(Qt.QWidget):
         self.sigProtocolLoaded.emit(protocol)
         return protocol
 
+    def setInteractionEnabled(self, enabled: bool) -> None:
+        """Gate the protocol picker, Load, and Reload -- disabled while a run
+        is in flight, so the operator can't load a second protocol out from
+        under a still-running Orchestrator (leaving two worker threads
+        eligible to drive the same pipette). Open-in-editor is left alone:
+        editing the file on disk doesn't touch the live run."""
+        self.fileCombo.setEnabled(enabled)
+        self.loadBtn.setEnabled(enabled)
+        self.reloadBtn.setEnabled(enabled)
+
+    def setInteractionLocked(self, locked: bool) -> None:
+        """The inverse of setInteractionEnabled(), so this can be connected
+        directly to StatusPanel.sigInteractionLocked (a bound-method
+        connection, not a lambda closing over the window -- see
+        AutopatchWindow.__init__ for why that distinction matters)."""
+        self.setInteractionEnabled(not locked)
+
     def openInEditor(self) -> None:
         name = self._currentName()
         if name is None:
