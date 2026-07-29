@@ -32,7 +32,9 @@ def _drive_fsm(ctx, name, entry_state, terminals, entry_config=None, poll_interv
             while True:
                 check_stop()
                 if ctx.next_cell_requested():
-                    raise AdvanceToNextCell("next cell requested during FSM poll")
+                    ctx.raise_flow_signal(
+                        AdvanceToNextCell("next cell requested during FSM poll")
+                    )
                 state = pip.getState().stateName
                 if state in terminals:
                     entry.set_status(f"reached {state!r}")

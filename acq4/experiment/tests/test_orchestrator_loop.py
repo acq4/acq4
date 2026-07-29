@@ -6,7 +6,7 @@ import pytest
 
 from acq4.util.task import Stopped, Event, sleep
 from acq4.experiment.context import ExecutionContext
-from acq4.experiment.exceptions import RetryCurrentCell
+from acq4.experiment.exceptions import AbortExperiment, RetryCurrentCell
 from acq4.experiment.orchestrator import Orchestrator
 
 
@@ -33,6 +33,35 @@ def test_requestnextcell_skips_current(make_pf):
     orch.run_sync()
     assert ran == []                          # run() never called
     assert finished == [("c1", "skipped")]
+
+
+def test_requestnextcell_cleared_when_cell_ends_normally_does_not_skip_following_cell(
+    make_pf,
+):
+    """A "Next cell" request must apply to at most the cell it was made
+    during. If that cell's protocol simply returns without raising a flow
+    signal (e.g. a survey-only protocol with no next_cell(ctx) call), the
+    flag must not survive into the next queue iteration -- otherwise the
+    following queued cell is skipped without ever being attempted, with no
+    error and no indication anything went wrong."""
+    pf = make_pf()
+    ran = []
+
+    def run(ctx, **kwargs):
+        ran.append(ctx.cell)
+        if ctx.cell == "cell1":
+            orch.requestNextCell()
+        # returns normally -- no flow signal raised
+
+    pf.run = run
+    orch = Orchestrator(pf)
+    orch.enqueue("cell1")
+    orch.enqueue("cell2")
+    finished = []
+    orch.sigCellFinished.connect(lambda c, s: finished.append((c, s)))
+    orch.run_sync()
+    assert ran == ["cell1", "cell2"]
+    assert finished == [("cell1", "done"), ("cell2", "done")]
 
 
 def test_pause_resume_toggle_status(make_pf):
@@ -153,6 +182,52 @@ def test_requestnextcell_mid_poll_abandons_cell_and_advances_queue(
     assert finished == [("cell1", "skipped"), ("cell2", "done")]
     # The pipette's in-flight FSM job was told to stop, not left running
     # underneath the cell the orchestrator already moved on from.
+    assert len(pip.stop_calls) == 1
+
+
+def test_requestnextcell_mid_poll_swallowed_by_protocol_halts_with_error(
+    make_pf, fake_pip_factory
+):
+    """actions.fsm's poll-loop checkpoint raises AdvanceToNextCell the same
+    way a flow action does -- so a protocol with a broad except around an
+    FSM action must not be able to swallow a mid-poll abandon invisibly. The
+    cell must be reported "error" and the run must halt with
+    AbortExperiment, not report a false "done" while the pipette was
+    actually abandoned mid-FSM."""
+    from acq4.experiment.actions.fsm import patch as fsm_patch
+
+    # No state_sequence: "approach" is not a Patch terminal, so without the
+    # mid-poll request this would poll forever.
+    pip = fake_pip_factory([])
+
+    def run(ctx, **kwargs):
+        # Simulates the operator's "Next cell" button firing before the poll
+        # loop's next checkpoint (run_sync is single-threaded, so this simply
+        # has to happen before fsm_patch's first check to reproduce it).
+        orch.requestNextCell()
+        try:
+            fsm_patch(ctx)
+        except Exception:
+            pass  # a protocol author's broad except, swallowing the abandon
+        return None
+
+    pf = make_pf()
+    pf.run = run
+
+    def contextFactory(cell):
+        return ExecutionContext(cell=cell, pipette=pip)
+
+    orch = Orchestrator(pf, contextFactory=contextFactory)
+    orch.enqueue("cell1")
+    finished = []
+    orch.sigCellFinished.connect(lambda c, s: finished.append((c, s)))
+
+    with pytest.raises(AbortExperiment):
+        orch.run_sync()
+
+    assert finished == [("cell1", "error")]
+    # The FSM job was still safely aborted even though the protocol swallowed
+    # the exception -- the orchestrator's detection is independent of that.
     assert len(pip.stop_calls) == 1
 
 

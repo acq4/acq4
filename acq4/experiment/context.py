@@ -42,6 +42,21 @@ class ExecutionContext:
     # per attempt, so this never needs resetting between retries.
     pending_flow_signal: FlowSignal | None = field(default=None, repr=False)
 
+    def raise_flow_signal(self, exc: FlowSignal) -> None:
+        """Record `exc` on pending_flow_signal, then raise it.
+
+        The single place a FlowSignal is ever raised from: both the flow
+        actions (actions/flow.py's next_cell/retry_cell/abort) and
+        actions.fsm's poll-loop checkpoint go through this rather than
+        raising directly, so a future third raise site can't repeat the
+        omission of recording the signal -- which is what lets the
+        orchestrator's success-path swallow-net (Orchestrator._processCell)
+        tell a genuinely-returned run() apart from one that raised a flow
+        signal the protocol's own try/except then caught and suppressed.
+        """
+        self.pending_flow_signal = exc
+        raise exc
+
     @contextlib.contextmanager
     def log_action(self, name: str):
         """Track one action for the UI: yields an ActionLogEntry, notifies the UI

@@ -159,6 +159,7 @@ class Orchestrator(Qt.QObject):
             except RetryCurrentCell:
                 retries += 1
                 if retries > self.maxRetries:
+                    self._nextCellRequested = False
                     self.sigCellFinished.emit(cell, "retry-exhausted")
                     return
                 self.sigCellFinished.emit(cell, "retry")
@@ -207,17 +208,25 @@ class Orchestrator(Qt.QObject):
                     # and swallowed it instead of letting it propagate. That
                     # is a bug (the queue did not actually do what the
                     # protocol thought it told it to), not a success.
+                    signal = ctx.pending_flow_signal
+                    # Captured into a local and cleared on ctx before raising,
+                    # so the raised exception's `from signal` diagnostic chain
+                    # doesn't hold a __traceback__ referencing this frame (and
+                    # thus ctx, and thus everything ctx reaches through
+                    # on_log_action) -- only reclaimable via cyclic GC otherwise.
+                    ctx.pending_flow_signal = None
                     logger.error(
                         "Flow signal %r was raised but swallowed by the "
                         "protocol while processing cell %r",
-                        ctx.pending_flow_signal,
+                        signal,
                         cell,
                     )
+                    self._nextCellRequested = False
                     self.sigStatus.emit("error")
                     self.sigCellFinished.emit(cell, "error")
                     raise AbortExperiment(
-                        f"flow signal raised but swallowed by the protocol: "
-                        f"{ctx.pending_flow_signal!r}"
-                    ) from ctx.pending_flow_signal
+                        f"flow signal raised but swallowed by the protocol: {signal!r}"
+                    ) from signal
+                self._nextCellRequested = False
                 self.sigCellFinished.emit(cell, "done")
                 return
