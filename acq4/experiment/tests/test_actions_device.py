@@ -451,3 +451,16 @@ def test_load_preset_unknown_name_raises_orchestration_error_listing_available(c
     assert "Load Imaging Preset" in str(excinfo.value)
     assert "GFP" in str(excinfo.value)
     assert "brightfield" in str(excinfo.value)
+
+
+def test_load_preset_unknown_name_with_no_presets_configured_reads_sensibly(ctx, pip):
+    # pip.scope.presets is already {} from the FakeScope fixture -- the mock
+    # rig configures no presets, so this is what a typo'd name hits there.
+    with pytest.raises(OrchestrationError) as excinfo:
+        load_preset(ctx, "GFP")
+
+    message = str(excinfo.value)
+    assert "GFP" in message
+    # No dangling "(available: )" -- say plainly that nothing is configured.
+    assert "available:" not in message
+    assert "no presets are configured" in message

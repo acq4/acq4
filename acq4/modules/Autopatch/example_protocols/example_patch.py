@@ -1,7 +1,11 @@
 """Capture a cellfie, move to the approach position, then drive the patch FSM.
 On a successful patch (whole cell), runs the sequence already loaded in an
 open TaskRunner module -- have one open, with a sequence loaded, before
-running this protocol. Any other outcome prompts the operator to intervene."""
+running this protocol. Any other outcome prompts the operator to intervene.
+
+`cellfie_preset` and `patch_preset` name configured microscope imaging
+presets (e.g. "GFP", "brightfield") to load before the cellfie and before the
+patch attempt, respectively; leave either empty to skip it."""
 from acq4.experiment.actions import cellfie, go_approach, load_preset, patch, prompt, run_task
 
 PARAMS = [

@@ -77,7 +77,11 @@ def test_example_patch_description_is_populated_from_its_module_docstring():
         "Capture a cellfie, move to the approach position, then drive the patch FSM.\n"
         "On a successful patch (whole cell), runs the sequence already loaded in an\n"
         "open TaskRunner module -- have one open, with a sequence loaded, before\n"
-        "running this protocol. Any other outcome prompts the operator to intervene."
+        "running this protocol. Any other outcome prompts the operator to intervene.\n"
+        "\n"
+        "`cellfie_preset` and `patch_preset` name configured microscope imaging\n"
+        "presets (e.g. \"GFP\", \"brightfield\") to load before the cellfie and before the\n"
+        "patch attempt, respectively; leave either empty to skip it."
     )
 
 

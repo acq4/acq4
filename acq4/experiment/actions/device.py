@@ -142,9 +142,9 @@ def cellfie(ctx, height: float = 30e-6, step: float = 1e-6) -> None:
         ctx.cell.initializeTracker(imager, use_cellpose=True)
 
 
-def load_preset(ctx, preset: str = None) -> None:
+def load_preset(ctx, preset: str | None = None) -> None:
     """Apply a configured microscope imaging preset (e.g. "GFP", "brightfield").
-    A preset of None is a no-op, so a protocol can leave it unconfigured."""
+    A preset of None or empty is a no-op, so a protocol can leave it unconfigured."""
     if not preset:
         return
     with ctx.log_action("Load Imaging Preset") as action_entry:
@@ -153,9 +153,12 @@ def load_preset(ctx, preset: str = None) -> None:
         try:
             scope.loadPreset(preset)
         except KeyError as e:
-            available = ", ".join(sorted(scope.presets))
+            if scope.presets:
+                available = f"available: {', '.join(sorted(scope.presets))}"
+            else:
+                available = "no presets are configured on this device"
             raise OrchestrationError(
-                f"{action_entry.name}: unknown preset {preset!r} (available: {available})"
+                f"{action_entry.name}: unknown preset {preset!r} ({available})"
             ) from e
 
 
