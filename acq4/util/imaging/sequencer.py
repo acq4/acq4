@@ -57,14 +57,14 @@ def enforce_linear_z_stack(frames: list[Frame], start: float, stop: float, step:
 
     first = depths.pop(0)
     # a single-frame stack has no distinct last frame
-    last = depths.pop(-1) if depths else None
+    last = [depths.pop(-1)] if depths else []
 
     def is_significant(frame1: tuple[float, int]):
         # throw out frames with depth equal to the first or last
         tol = np.clip(step / 10, 1e-12, 1e-7)
-        return not (np.isclose(frame1[0], first[0], atol=tol) or np.isclose(frame1[0], last[0], atol=tol))
+        return not any(np.isclose(frame1[0], f[0], atol=tol) for f in [first, *last])
 
-    depths = [first] + [d for d in depths if is_significant(d)] + ([] if last is None else [last])
+    depths = [first] + [d for d in depths if is_significant(d)] + last
     if len(depths) < len(expected_depths):
         raise ValueError("Insufficient frames to have one frame per step (after pruning nigh identical frames).")
     if not np.all(np.diff([d[0] for d in depths]) >= 0):
