@@ -34,6 +34,16 @@ class ActionLogEntry:
             self.on_status(self)
 
     def set_details_widget(self, widget) -> None:
+        """Hand the UI a live widget for this action (e.g. a plot updated as the
+        action progresses), stored and passed to on_widget(entry, widget).
+
+        ctx.log_action() is opened from whatever thread is running the
+        protocol/action function -- typically the orchestrator's worker
+        thread, not the GUI thread. A widget is a GUI object: if the caller
+        constructs one here, it must build it via run_in_gui_thread (from
+        acq4.util.task) rather than instantiating it directly, since a widget
+        built off the GUI thread is not safe to parent into the GUI tree.
+        """
         self.details_widget = widget
         if self.on_widget is not None:
             self.on_widget(self, widget)

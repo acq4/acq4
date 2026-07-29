@@ -12,9 +12,8 @@ def qapp():
 
 
 class _FakeOrchestrator(Qt.QObject):
-    sigCurrentAction = Qt.Signal(object, object)
+    sigCurrentCell = Qt.Signal(object)
     sigCellFinished = Qt.Signal(object, str)
-    sigActionFinished = Qt.Signal(object, object, str)
 
     def __init__(self):
         super().__init__()
@@ -128,7 +127,7 @@ def test_scatter_fake_cells_is_a_noop_without_a_camera(qapp):
     assert panel.cellList.count() == 0
 
 
-def test_current_action_updates_row(qapp):
+def test_current_cell_updates_row_to_running(qapp):
     from acq4.modules.Autopatch.cell_panel import CellPanel
 
     pip = _FakePipette((0, 0, 0))
@@ -138,11 +137,8 @@ def test_current_action_updates_row(qapp):
     panel.addFromTargetBtn.click()
     cell = orch.enqueued[0]
 
-    class _Action:
-        name = "Patch"
-
-    orch.sigCurrentAction.emit(cell, _Action())
-    assert "running: Patch" in panel.cellList.item(0).text()
+    orch.sigCurrentCell.emit(cell)
+    assert panel.cellList.item(0).text() == f"cell {id(cell)} — running"
 
 
 def test_add_from_target_without_an_orchestrator_bound_does_not_raise(qapp):
@@ -199,3 +195,24 @@ def test_cell_finished_updates_row(qapp):
 
     orch.sigCellFinished.emit(cell, "done")
     assert "done" in panel.cellList.item(0).text()
+
+
+def test_rebinding_disconnects_previous_orchestrators_signals(qapp):
+    """unbindOrchestrator() must disconnect exactly what bindOrchestrator()
+    connected (sigCurrentCell, sigCellFinished), so a signal emitted by an
+    orchestrator this panel is no longer bound to is silently ignored."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    pip = _FakePipette((0, 0, 0))
+    panel = CellPanel(pipetteGetter=lambda: pip)
+    orch1 = _FakeOrchestrator()
+    orch2 = _FakeOrchestrator()
+    panel.bindOrchestrator(orch1)
+    panel.addFromTargetBtn.click()
+    cell = orch1.enqueued[0]
+    panel.bindOrchestrator(orch2)
+
+    orch1.sigCurrentCell.emit(cell)
+    orch1.sigCellFinished.emit(cell, "done")
+
+    assert panel.cellList.item(0).text() == f"cell {id(cell)} — queued"

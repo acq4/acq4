@@ -1,7 +1,9 @@
 """Tests for StatusPanel: Start/Stop/Pause/Next wired to an Orchestrator, and
-sigStatus/sigCurrentAction reflected in the status + current-action labels."""
+sigStatus / a cell-bound ctx.log_action() entry stream reflected in the status
+and current-action labels."""
 import pytest
 
+from acq4.experiment.log_entry import ActionLogEntry
 from acq4.util import Qt
 
 
@@ -12,7 +14,7 @@ def qapp():
 
 class _FakeOrchestrator(Qt.QObject):
     sigStatus = Qt.Signal(str)
-    sigCurrentAction = Qt.Signal(object, object)
+    sigCurrentCell = Qt.Signal(object)
 
     def __init__(self):
         super().__init__()
@@ -34,12 +36,19 @@ class _FakeOrchestrator(Qt.QObject):
         self.nexted += 1
 
 
+class _FakeEntrySource(Qt.QObject):
+    """Stands in for CellPanel: the only surface StatusPanel needs from it is
+    the cell-bound sigActionEntry(cell, entry, phase) stream."""
+
+    sigActionEntry = Qt.Signal(object, object, str)
+
+
 def test_buttons_drive_the_bound_orchestrator(qapp):
     from acq4.modules.Autopatch.status_panel import StatusPanel
 
     panel = StatusPanel()
     orch = _FakeOrchestrator()
-    panel.bindOrchestrator(orch)
+    panel.bindOrchestrator(orch, _FakeEntrySource())
 
     # Freshly bound (protocol loaded, not yet running): only Start is enabled.
     panel.startBtn.click()
@@ -61,7 +70,7 @@ def test_pause_button_toggles_to_resume_while_paused(qapp):
 
     panel = StatusPanel()
     orch = _FakeOrchestrator()
-    panel.bindOrchestrator(orch)
+    panel.bindOrchestrator(orch, _FakeEntrySource())
 
     orch.sigStatus.emit("running")
     panel.pauseBtn.click()
@@ -80,7 +89,7 @@ def test_status_signal_updates_label(qapp):
     panel = StatusPanel()
     panel.show()  # isVisible() only reflects setVisible() once shown
     orch = _FakeOrchestrator()
-    panel.bindOrchestrator(orch)
+    panel.bindOrchestrator(orch, _FakeEntrySource())
 
     orch.sigStatus.emit("running")
     assert "running" in panel.statusLabel.text().lower()
@@ -90,25 +99,29 @@ def test_status_signal_updates_label(qapp):
     assert panel.instructionLabel.isVisible()
 
 
-def test_current_action_signal_updates_label(qapp):
+def test_current_action_entry_updates_label_with_name_and_status(qapp):
     from acq4.modules.Autopatch.status_panel import StatusPanel
 
     class _Cell:
         def __repr__(self):
             return "cell-1"
 
-    class _Action:
-        name = "Patch"
-
     panel = StatusPanel()
     orch = _FakeOrchestrator()
-    panel.bindOrchestrator(orch)
+    entrySource = _FakeEntrySource()
+    panel.bindOrchestrator(orch, entrySource)
 
-    orch.sigCurrentAction.emit(_Cell(), _Action())
+    cell = _Cell()
+    entry = ActionLogEntry("Patch")
+    entrySource.sigActionEntry.emit(cell, entry, "started")
     assert "Patch" in panel.currentActionLabel.text()
     assert "cell-1" in panel.currentActionLabel.text()
 
-    orch.sigCurrentAction.emit(None, None)
+    entry.set_status("seeking")
+    entrySource.sigActionEntry.emit(cell, entry, "status")
+    assert "seeking" in panel.currentActionLabel.text()
+
+    orch.sigCurrentCell.emit(None)
     assert panel.currentActionLabel.text() == ""
 
 
@@ -118,13 +131,30 @@ def test_rebinding_disconnects_previous_orchestrator(qapp):
     panel = StatusPanel()
     orch1 = _FakeOrchestrator()
     orch2 = _FakeOrchestrator()
-    panel.bindOrchestrator(orch1)
-    panel.bindOrchestrator(orch2)
+    panel.bindOrchestrator(orch1, _FakeEntrySource())
+    panel.bindOrchestrator(orch2, _FakeEntrySource())
 
     panel.startBtn.click()
 
     assert orch2.started == 1
     assert orch1.started == 0
+
+
+def test_unbinding_disconnects_the_entry_source(qapp):
+    """unbindOrchestrator() must disconnect exactly what bindOrchestrator()
+    connected, including the entry-source subscription -- a signal emitted by
+    an entry source this panel is no longer bound to must be ignored."""
+    from acq4.modules.Autopatch.status_panel import StatusPanel
+
+    panel = StatusPanel()
+    orch = _FakeOrchestrator()
+    entrySource = _FakeEntrySource()
+    panel.bindOrchestrator(orch, entrySource)
+    panel.unbindOrchestrator()
+
+    entrySource.sigActionEntry.emit(object(), ActionLogEntry("Patch"), "started")
+
+    assert panel.currentActionLabel.text() == ""
 
 
 def test_status_and_current_action_share_the_first_row(qapp):
@@ -163,7 +193,7 @@ def test_protocol_loaded_idle_enables_only_start(qapp):
     from acq4.modules.Autopatch.status_panel import StatusPanel
 
     panel = StatusPanel()
-    panel.bindOrchestrator(_FakeOrchestrator())
+    panel.bindOrchestrator(_FakeOrchestrator(), _FakeEntrySource())
 
     assert panel.startBtn.isEnabled()
     assert not panel.stopBtn.isEnabled()
@@ -176,7 +206,7 @@ def test_running_enables_stop_pause_next_disables_start(qapp):
 
     panel = StatusPanel()
     orch = _FakeOrchestrator()
-    panel.bindOrchestrator(orch)
+    panel.bindOrchestrator(orch, _FakeEntrySource())
 
     orch.sigStatus.emit("running")
 
@@ -191,7 +221,7 @@ def test_paused_disables_next_keeps_stop_and_pause_enabled(qapp):
 
     panel = StatusPanel()
     orch = _FakeOrchestrator()
-    panel.bindOrchestrator(orch)
+    panel.bindOrchestrator(orch, _FakeEntrySource())
 
     orch.sigStatus.emit("running")
     orch.sigStatus.emit("paused")
@@ -207,7 +237,7 @@ def test_error_enables_only_stop(qapp):
 
     panel = StatusPanel()
     orch = _FakeOrchestrator()
-    panel.bindOrchestrator(orch)
+    panel.bindOrchestrator(orch, _FakeEntrySource())
 
     orch.sigStatus.emit("running")
     orch.sigStatus.emit("error")
@@ -226,7 +256,7 @@ def test_finishing_a_run_returns_to_protocol_loaded_idle_gating(qapp):
 
     panel = StatusPanel()
     orch = _FakeOrchestrator()
-    panel.bindOrchestrator(orch)
+    panel.bindOrchestrator(orch, _FakeEntrySource())
 
     orch.sigStatus.emit("running")
     orch.sigStatus.emit("waiting")
@@ -242,7 +272,7 @@ def test_unbinding_returns_to_no_protocol_gating(qapp):
 
     panel = StatusPanel()
     orch = _FakeOrchestrator()
-    panel.bindOrchestrator(orch)
+    panel.bindOrchestrator(orch, _FakeEntrySource())
     orch.sigStatus.emit("running")
 
     panel.unbindOrchestrator()

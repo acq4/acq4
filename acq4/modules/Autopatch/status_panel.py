@@ -9,6 +9,7 @@ class StatusPanel(Qt.QWidget):
     def __init__(self):
         super().__init__()
         self._orchestrator = None
+        self._entrySource = None
         self._onStart = None
         # None stands for "no status yet reported" -- same button gating as the
         # orchestrator's own post-run "waiting" (see _updateButtons()).
@@ -47,8 +48,14 @@ class StatusPanel(Qt.QWidget):
         # No protocol is bound yet, so every action button starts disabled.
         self._updateButtons()
 
-    def bindOrchestrator(self, orchestrator, onStart=None) -> None:
+    def bindOrchestrator(self, orchestrator, entrySource, onStart=None) -> None:
         """Bind Start/Stop/Pause/Next to `orchestrator`.
+
+        `entrySource` is anything exposing `sigActionEntry(cell, entry, phase)`
+        (CellPanel, in practice) -- the current-action label's text comes from
+        that cell-bound ctx.log_action() entry stream (name + status) rather
+        than from the orchestrator directly, since the orchestrator itself no
+        longer knows about individual actions.
 
         `onStart`, if given, is called on the GUI thread when Start is clicked,
         before `orchestrator.start()` -- the seam a caller uses to snapshot any
@@ -59,6 +66,7 @@ class StatusPanel(Qt.QWidget):
             self.unbindOrchestrator()
 
         self._orchestrator = orchestrator
+        self._entrySource = entrySource
         self._onStart = onStart
         # A freshly bound orchestrator hasn't reported a status yet -- treat it
         # the same as "waiting" so Start is enabled and Stop/Pause/Next are not.
@@ -68,12 +76,13 @@ class StatusPanel(Qt.QWidget):
         self.pauseBtn.clicked.connect(self._onPauseClicked)
         self.nextBtn.clicked.connect(orchestrator.requestNextCell)
         orchestrator.sigStatus.connect(self._onStatus)
-        orchestrator.sigCurrentAction.connect(self._onCurrentAction)
+        orchestrator.sigCurrentCell.connect(self._onCurrentCell)
+        entrySource.sigActionEntry.connect(self._onActionEntry)
         self._updateButtons()
 
     def unbindOrchestrator(self) -> None:
         """Disconnect everything bindOrchestrator() connected to the currently
-        bound orchestrator, and drop the reference to it.
+        bound orchestrator (and entry source), and drop both references.
 
         Shared by bindOrchestrator() (rebinding to a freshly loaded protocol)
         and window teardown (on module/window close), so both paths sever the
@@ -87,8 +96,10 @@ class StatusPanel(Qt.QWidget):
         Qt.disconnect(self.pauseBtn.clicked, self._onPauseClicked)
         Qt.disconnect(self.nextBtn.clicked, self._orchestrator.requestNextCell)
         Qt.disconnect(self._orchestrator.sigStatus, self._onStatus)
-        Qt.disconnect(self._orchestrator.sigCurrentAction, self._onCurrentAction)
+        Qt.disconnect(self._orchestrator.sigCurrentCell, self._onCurrentCell)
+        Qt.disconnect(self._entrySource.sigActionEntry, self._onActionEntry)
         self._orchestrator = None
+        self._entrySource = None
         self._onStart = None
         self._currentStatus = None
         self._updateButtons()
@@ -112,11 +123,20 @@ class StatusPanel(Qt.QWidget):
         self._currentStatus = status
         self._updateButtons()
 
-    def _onCurrentAction(self, cell, action) -> None:
-        if action is None:
+    def _onCurrentCell(self, cell) -> None:
+        # sigCurrentCell(None) fires once the orchestrator's queue drains (see
+        # Orchestrator._runLoopBody's finally); that's the only "back to idle"
+        # signal now that the orchestrator itself doesn't know about
+        # individual actions -- the label's live content otherwise comes from
+        # _onActionEntry() below.
+        if cell is None:
             self.currentActionLabel.setText("")
-            return
-        self.currentActionLabel.setText(f"{action.name} — {cell!r}")
+
+    def _onActionEntry(self, cell, entry, phase: str) -> None:
+        if phase == "started":
+            self.currentActionLabel.setText(f"{entry.name} — {cell!r}")
+        elif phase == "status":
+            self.currentActionLabel.setText(f"{entry.name} ({entry.status}) — {cell!r}")
 
     def _updateButtons(self) -> None:
         """Gate Start/Stop/Pause/Next on whether a protocol is loaded (an

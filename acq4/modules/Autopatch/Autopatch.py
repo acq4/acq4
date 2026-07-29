@@ -114,6 +114,7 @@ class AutopatchWindow(Qt.QWidget):
             pipetteGetter=lambda: self._cachedPipette,
             manager=self.manager,
             log=self.cellPanel.appendLog,
+            onLogAction=self.cellPanel.onLogAction,
         )
         self.orchestrator = Orchestrator(
             protocolFile, manager=self.manager, contextFactory=contextFactory
@@ -124,7 +125,9 @@ class AutopatchWindow(Qt.QWidget):
         # on the GUI thread, when the window is destroyed -- rather than
         # leaning solely on teardown() having already dropped every reference.
         self.orchestrator.setParent(self)
-        self.statusPanel.bindOrchestrator(self.orchestrator, onStart=self._resolvePipette)
+        self.statusPanel.bindOrchestrator(
+            self.orchestrator, self.cellPanel, onStart=self._resolvePipette
+        )
         self.cellPanel.bindOrchestrator(self.orchestrator)
 
     def teardown(self) -> None:

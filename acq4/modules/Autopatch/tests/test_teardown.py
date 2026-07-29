@@ -4,16 +4,12 @@ stopped) deterministically on close, rather than left for Python's
 non-deterministic cyclic GC to eventually reclaim -- which can free live
 QObjects outside Qt's safe teardown path and crash the process on exit."""
 import gc
-import json
 import os
 import weakref
 
 import pytest
 
-from acq4.experiment.action import Action
-from acq4.experiment.registry import register_action
 from acq4.util import Qt
-from acq4.util.task import check_stop, sleep as task_sleep
 
 
 @pytest.fixture(scope="module")
@@ -56,41 +52,34 @@ class _FakeCameraSelector(Qt.QWidget):
         return None
 
 
-@register_action(name="TeardownNoop")
-class _NoopAction(Action):
-    """Resolves immediately; used by the weakref/gc proof, which never starts
-    the orchestrator (see that test's docstring for why)."""
-
-    outcomes = ("done",)
-
-    def run(self, ctx):
-        return "done"
+_NOOP_PROTOCOL = '''"""Teardown test fixture: opens and immediately closes one log_action entry.
+Used by the weakref/gc proof, which never starts the orchestrator (see that
+test's docstring for why) but does run this protocol synchronously via
+run_sync_cell(), so the on_log_action wiring this task adds is exercised by
+that proof too -- not just resolving immediately without touching ctx."""
 
 
-@register_action(name="TeardownSlow")
-class _SlowAction(Action):
-    """Loops until stopped; used to prove teardown() actually stops an
-    in-flight run rather than abandoning it."""
+def run(ctx, **kwargs):
+    with ctx.log_action("Noop") as entry:
+        entry.set_status("doing nothing in particular")
+'''
 
-    outcomes = ("done",)
-
-    def run(self, ctx):
-        while True:
-            check_stop()
-            task_sleep(0.01)
+_SLOW_PROTOCOL = '''"""Teardown test fixture: loops until stopped. Used to prove
+AutopatchWindow.teardown() actually stops an in-flight run rather than
+abandoning it."""
+from acq4.util.task import check_stop, sleep
 
 
-def _write_protocol(path, name, actionType):
-    data = {
-        "version": 1,
-        "entry": "n1",
-        "nodes": {"n1": {"type": actionType, "params": {}}},
-        "edges": [],
-        "publicParams": [],
-        "exceptionHandlers": {},
-    }
+def run(ctx, **kwargs):
+    while True:
+        check_stop()
+        sleep(0.01)
+'''
+
+
+def _write_protocol(path, name, body):
     with open(os.path.join(path, name), "w") as fh:
-        json.dump(data, fh)
+        fh.write(body)
 
 
 def test_teardown_breaks_the_orchestrator_cell_window_cycle(qapp, tmp_path):
@@ -115,7 +104,7 @@ def test_teardown_breaks_the_orchestrator_cell_window_cycle(qapp, tmp_path):
     """
     from acq4.modules.Autopatch.Autopatch import AutopatchWindow
 
-    _write_protocol(tmp_path, "demo.json", "TeardownNoop")
+    _write_protocol(tmp_path, "demo.py", _NOOP_PROTOCOL)
 
     gc.disable()
     try:
@@ -125,7 +114,7 @@ def test_teardown_breaks_the_orchestrator_cell_window_cycle(qapp, tmp_path):
             pipetteSelector=_FakePipetteSelector(target=(1e-3, 2e-3, 3e-3)),
             cameraSelector=_FakeCameraSelector(),
         )
-        win.protocolPanel.fileCombo.setCurrentText("demo.json")
+        win.protocolPanel.fileCombo.setCurrentText("demo")
         win.protocolPanel.loadSelected()
 
         win.cellPanel.addFromTargetBtn.click()
@@ -138,6 +127,24 @@ def test_teardown_breaks_the_orchestrator_cell_window_cycle(qapp, tmp_path):
         # is cross-wired to both panels via signal connections.
         assert win.statusPanel._orchestrator is orchestrator
         assert win.cellPanel._orchestrator is orchestrator
+
+        # Actually run the protocol synchronously (main thread; no gentletask
+        # ThreadTask involved, so this does not hit the independent, permanent
+        # ThreadTask/orchestrator cycle the docstring above rules out of
+        # scope), so ctx.log_action() -> CellPanel.onLogAction -> the entry's
+        # on_status/on_widget/on_finish callbacks all actually run -- exactly
+        # the new reference path this task adds (an ActionLogEntry's
+        # callbacks closing over CellPanel) -- before proving the whole graph
+        # is still freed by plain refcounting below.
+        orchestrator.run_sync_cell(seededCell)
+        win.cellPanel.cellList.setCurrentRow(0)
+        assert win.cellPanel.timelineList.count() == 1
+        assert "Noop" in win.cellPanel.timelineList.item(0).text()
+        # No stale per-entry bookkeeping left behind once the entry finished --
+        # if onLogAction's wiring held onto the entry itself instead of just
+        # its id, this would still show it.
+        assert win.cellPanel._entryTimelineLoc == {}
+        assert win.cellPanel._timelineItems == {}
 
         orchestrator_ref = weakref.ref(orchestrator)
         cell_ref = weakref.ref(seededCell)
@@ -172,7 +179,7 @@ def test_teardown_stops_an_in_flight_orchestrator_run(qapp, qtbot, tmp_path):
     abandon it, and leave no panel still bound to it afterward."""
     from acq4.modules.Autopatch.Autopatch import AutopatchWindow
 
-    _write_protocol(tmp_path, "slow.json", "TeardownSlow")
+    _write_protocol(tmp_path, "slow.py", _SLOW_PROTOCOL)
 
     win = AutopatchWindow(
         module=None,
@@ -180,7 +187,7 @@ def test_teardown_stops_an_in_flight_orchestrator_run(qapp, qtbot, tmp_path):
         pipetteSelector=_FakePipetteSelector(target=(1e-3, 2e-3, 3e-3)),
         cameraSelector=_FakeCameraSelector(),
     )
-    win.protocolPanel.fileCombo.setCurrentText("slow.json")
+    win.protocolPanel.fileCombo.setCurrentText("slow")
     win.protocolPanel.loadSelected()
     win.cellPanel.addFromTargetBtn.click()
 
