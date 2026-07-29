@@ -136,6 +136,26 @@ def test_stopped_mid_poll_propagates_and_triggers_safe_abort(fake_pip_factory, m
     assert pip.stop_calls[0][1] == "orchestration abort"
 
 
+def test_patch_success_does_not_call_stop(fake_pip_factory, monkeypatch):
+    # Reaching a terminal state normally (no Stopped) must leave the pipette
+    # alone -- a successful patch() ends by *staying* in its terminal state
+    # (e.g. "whole cell"), not by having that state's job stopped.
+    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
+    pip = fake_pip_factory(["cell detect", "seal", "break in", "whole cell"])
+    assert patch(_ctx(pip)) == "whole cell"
+    assert pip.stop_calls == []
+
+
+def test_reseal_on_broken_does_not_call_stop(fake_pip_factory, monkeypatch):
+    # An abnormal state mapped to an OrchestrationError (here BrokenPipette)
+    # propagates untouched -- it is not a cooperative Stopped, so no abort.
+    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
+    pip = fake_pip_factory(["reseal", "broken"])
+    with pytest.raises(BrokenPipette):
+        reseal(_ctx(pip))
+    assert pip.stop_calls == []
+
+
 # -- log entry ------------------------------------------------------------
 
 

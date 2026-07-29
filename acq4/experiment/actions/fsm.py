@@ -3,9 +3,21 @@ entry state to one of this action's declared terminal states, mapping unexpected
 abnormal states to orchestration exceptions."""
 from __future__ import annotations
 
-from acq4.util.task import check_stop, sleep
+from acq4.util.task import Stopped, check_stop, sleep
 
 from ..exceptions import raise_if_abnormal
+
+
+def _safe_abort(ctx) -> None:
+    """Mirror the MultiPatch "Cancel" button (pipetteControl._cancelClicked):
+    stop the current FSM state's job, which switches the pipette to that
+    state's declared fallback state rather than forcing a single hard-coded
+    holding state."""
+    pip = getattr(ctx, "pipette", None)
+    if pip is not None:
+        state_job = pip.getState()
+        if state_job is not None:
+            state_job.stop("orchestration abort", wait=True)
 
 
 def _drive_fsm(ctx, name, entry_state, terminals, entry_config=None, poll_interval=0.1) -> str:
@@ -25,16 +37,9 @@ def _drive_fsm(ctx, name, entry_state, terminals, entry_config=None, poll_interv
                     return state
                 raise_if_abnormal(state, terminals, name)
                 sleep(poll_interval)
-        finally:
-            # Mirror the MultiPatch "Cancel" button (pipetteControl._cancelClicked):
-            # stop the current FSM state's job, which switches the pipette to that
-            # state's declared fallback state rather than forcing a single hard-coded
-            # holding state.
-            pip = getattr(ctx, "pipette", None)
-            if pip is not None:
-                state_job = pip.getState()
-                if state_job is not None:
-                    state_job.stop("orchestration abort", wait=True)
+        except Stopped:
+            _safe_abort(ctx)
+            raise
 
 
 def patch(ctx, **entry_config) -> str:
