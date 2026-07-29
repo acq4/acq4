@@ -29,10 +29,6 @@ class NoSolution(OrchestrationError):
     typeName = "NoSolution"
 
 
-class ScriptError(OrchestrationError):
-    typeName = "ScriptError"
-
-
 class FlowSignal(Exception):
     """Base for control-flow signals raised by flow actions."""
 

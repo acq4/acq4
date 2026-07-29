@@ -5,22 +5,11 @@ import weakref
 import pytest
 
 from acq4.util.task import Stopped, Event
-from acq4.experiment.protocol_file import ProtocolFile
 from acq4.experiment.orchestrator import Orchestrator
 
 
-def _make_pf(tmp_path, name="protocol.py"):
-    """A minimally valid ProtocolFile, loaded from a real file on disk; tests
-    overwrite pf.run afterward with whatever behavior they need to exercise."""
-    path = tmp_path / name
-    path.write_text("def run(ctx, **kwargs):\n    return None\n")
-    pf = ProtocolFile(str(path))
-    pf.load()
-    return pf
-
-
-def test_run_sync_processes_whole_queue(tmp_path):
-    pf = _make_pf(tmp_path)
+def test_run_sync_processes_whole_queue(make_pf):
+    pf = make_pf()
     ran = []
     pf.run = lambda ctx, **kwargs: ran.append(ctx.cell)
     orch = Orchestrator(pf)
@@ -30,8 +19,8 @@ def test_run_sync_processes_whole_queue(tmp_path):
     assert ran == ["c1", "c2"]  # ran once per cell, in queue order
 
 
-def test_requestnextcell_skips_current(tmp_path):
-    pf = _make_pf(tmp_path)
+def test_requestnextcell_skips_current(make_pf):
+    pf = make_pf()
     ran = []
     pf.run = lambda ctx, **kwargs: ran.append(ctx.cell)
     orch = Orchestrator(pf)
@@ -44,8 +33,8 @@ def test_requestnextcell_skips_current(tmp_path):
     assert finished == [("c1", "skipped")]
 
 
-def test_pause_resume_toggle_status(tmp_path):
-    pf = _make_pf(tmp_path)
+def test_pause_resume_toggle_status(make_pf):
+    pf = make_pf()
     orch = Orchestrator(pf)
     statuses = []
     orch.sigStatus.connect(statuses.append)
@@ -55,12 +44,12 @@ def test_pause_resume_toggle_status(tmp_path):
     assert orch._pauseEvent.is_set() is True
 
 
-def test_stop_aborts_running_action(tmp_path, qtbot):
+def test_stop_aborts_running_action(make_pf, qtbot):
     gate = Event()       # never set -> run() blocks
     started = Event()
     aborted = []
 
-    pf = _make_pf(tmp_path)
+    pf = make_pf()
 
     def blocking_run(ctx, **kwargs):
         started.set()
@@ -80,7 +69,7 @@ def test_stop_aborts_running_action(tmp_path, qtbot):
     assert aborted == ["a"]  # the protocol's own try/finally ran on stop
 
 
-def test_finished_task_does_not_leave_qobject_cycle(tmp_path, qtbot):
+def test_finished_task_does_not_leave_qobject_cycle(make_pf, qtbot):
     """Regression test for the exit-segfault root cause: Orchestrator and its
     QtFriendlyTask are both QObjects, so a permanent orch<->task reference cycle
     can only be reclaimed by Python's cyclic GC -- non-deterministically, off
@@ -90,7 +79,7 @@ def test_finished_task_does_not_leave_qobject_cycle(tmp_path, qtbot):
     gate = Event()
     started = Event()
 
-    pf = _make_pf(tmp_path)
+    pf = make_pf()
 
     def blocking_run(ctx, **kwargs):
         started.set()
