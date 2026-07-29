@@ -109,14 +109,14 @@ class AutopatchWindow(Qt.QWidget):
         change between runs."""
         self._cachedPipette = self.pipetteSelector.getSelectedObj()
 
-    def _onProtocolLoaded(self, protocol) -> None:
+    def _onProtocolLoaded(self, protocolFile) -> None:
         contextFactory = make_context_factory(
             pipetteGetter=lambda: self._cachedPipette,
             manager=self.manager,
             log=self.cellPanel.appendLog,
         )
         self.orchestrator = Orchestrator(
-            protocol, manager=self.manager, contextFactory=contextFactory
+            protocolFile, manager=self.manager, contextFactory=contextFactory
         )
         # Belt-and-suspenders on top of teardown(): parenting the orchestrator
         # (a QObject, not otherwise part of the widget tree) to this window
