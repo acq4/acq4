@@ -81,3 +81,23 @@ def test_getOrLoadModule_falls_back_to_undefined_module_class(manager):
 
     assert isinstance(mod, FakeModule)
     assert mod is manager.modules['Visualize3D']
+
+
+def test_getModule_returns_freshly_loaded_defined_module(manager):
+    manager.definedModules['Visualize3D'] = {'module': 'Visualize3D'}
+
+    assert manager.getModule('Visualize3D') is manager.modules['Visualize3D']
+
+
+def test_getModule_survives_a_renamed_module(manager):
+    """loadModule() picks a different name when the requested one collides, so
+    the loaded module is not necessarily filed under the name asked for. Return
+    what was loaded rather than indexing by the requested name."""
+    manager.definedModules['Visualize3D'] = {'module': 'Visualize3D'}
+    manager.loadModule = lambda moduleClassName, name=None, config=None, **kwds: (
+        manager.modules.setdefault('Visualize3D_0', FakeModule('Visualize3D_0'))
+    )
+
+    mod = manager.getModule('Visualize3D')
+
+    assert mod is manager.modules['Visualize3D_0']
