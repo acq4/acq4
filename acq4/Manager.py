@@ -610,6 +610,7 @@ class Manager(Qt.QObject):
         if 'shortcut' in conf and win is not None:
             self.createWindowShortcut(conf['shortcut'], win)
         logger.info(f"Loaded module '{mod.name}'")
+        return mod
 
     def moduleHasQuit(self, mod):
         with self.moduleLock:
