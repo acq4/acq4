@@ -767,9 +767,23 @@ have `CellPanel` own the entry stream and expose a signal `StatusPanel` consumes
 
 **`Autopatch.py`:** pass `onLogAction=self.cellPanel.onLogAction` into
 `make_context_factory`, and keep `teardown()` unchanged apart from any new
-connection it must sever. `teardown()`'s guarantees are covered by
-`test_teardown.py` — that file must stay green **without modification**; if it
-fails, the new wiring introduced a reference cycle and the wiring is wrong.
+connection it must sever.
+
+`teardown()`'s guarantees are covered by `test_teardown.py`. That file's
+*scaffolding* must be rewritten — it currently builds its protocols as JSON
+graphs of `Action` subclasses (`register_action`, `{"nodes": {...}}`), which no
+longer exist — but **every assertion it makes must survive intact**: the weakref
+and refcount-under-`gc.disable()` proofs that the orchestrator/Cell/window graph
+is freed by plain refcounting, and the bounded-wait stop of an in-flight run.
+Those assertions are the regression test for a real exit segfault; weakening one
+to make it pass is the failure mode to watch for. Replace only the protocol
+fixtures (a no-op `.py` protocol, and a slow one that blocks so the in-flight
+stop path is exercised).
+
+The same applies to `test_window_integration.py`, which builds graphs the same
+way and additionally asserts `win.orchestrator.protocol is win.protocolPanel.protocol`
+(both attributes are renamed) and `timelineLines == ["n1: done"]` (a graph node
+id — under the new model the timeline row comes from the `log_action` name).
 
 - [ ] **Step 1: Write the failing tests** — a worker-thread `log_action` reaches
   the timeline on the GUI thread; a started entry appends a running row; a
