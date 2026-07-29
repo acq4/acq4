@@ -19,6 +19,12 @@ def run(ctx, cellfie_preset="", patch_preset=""):
     cellfie(ctx)
     load_preset(ctx, patch_preset)
     go_approach(ctx)
+    # Stuck here with the status showing "now in 'cell attached'"? Check the
+    # patch profile: "cell attached" only advances on a configured transition
+    # (spontaneousBreakInState, or the optional autoBreakInDelay timer), so a
+    # profile that configures neither never breaks in and patch() waits
+    # indefinitely.
+    #
     # patch() declares "broken"/"fouled" as its own terminal states, so it
     # returns them as an outcome rather than raising -- unlike reseal()/
     # clean(), which don't declare them and so raise BrokenPipette/Fouled
