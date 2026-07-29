@@ -30,12 +30,15 @@ def test_stopped_propagates_and_sets_stopped_outcome():
     assert action_entry.outcome == "stopped"
 
 
-def test_advance_to_next_cell_propagates_and_sets_done_outcome():
+def test_advance_to_next_cell_propagates_and_sets_abandoned_outcome():
+    # A FlowSignal escaping an action's block means that action was abandoned
+    # partway, not completed -- it must never propagate to the operator as
+    # "done", and it must still propagate (log_action never suppresses).
     ctx = ExecutionContext()
     with pytest.raises(AdvanceToNextCell):
         with ctx.log_action("Patch") as action_entry:
             raise AdvanceToNextCell()
-    assert action_entry.outcome == "done"
+    assert action_entry.outcome == "abandoned"
 
 
 def test_broken_pipette_propagates_and_sets_error_outcome():

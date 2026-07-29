@@ -278,7 +278,7 @@ class CellPanel(Qt.QWidget):
     # Glyph shown in a finished timeline row for each ActionLogEntry.outcome
     # value (see ActionLogEntry._finish); an outcome this doesn't recognize
     # falls back to "?" rather than crashing the row.
-    _OUTCOME_GLYPHS = {"done": "✓", "error": "✗", "stopped": "⊘"}
+    _OUTCOME_GLYPHS = {"done": "✓", "error": "✗", "stopped": "⊘", "abandoned": "⊘"}
 
     def _finishTimelineRow(self, cell, entry) -> None:
         elapsed = (entry.end_time - entry.start_time) if entry.end_time is not None else 0.0

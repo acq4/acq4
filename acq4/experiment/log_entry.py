@@ -55,8 +55,10 @@ class ActionLogEntry:
         elif isinstance(exc, Stopped):
             self.outcome = "stopped"
         elif isinstance(exc, FlowSignal):
-            # Flow signals are control flow, not failure.
-            self.outcome = "done"
+            # A flow signal is control flow, not a failure -- that's why this
+            # isn't "error". But an action whose block a flow signal escaped
+            # was abandoned partway, not completed, so it isn't "done" either.
+            self.outcome = "abandoned"
         else:
             self.outcome = "error"
         if self.on_finish is not None:

@@ -110,6 +110,30 @@ def test_timeline_row_glyph_matches_error_and_stopped_outcomes(qapp):
     assert "✓" not in stoppedText
 
 
+def test_timeline_row_glyph_matches_abandoned_outcome(qapp):
+    # A FlowSignal (e.g. AdvanceToNextCell from the operator's "Next cell" mid-
+    # action) escaping an action's log_action block must render as abandoned,
+    # not as a false "done" -- an action cut short did not complete.
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+    from acq4.experiment.exceptions import AdvanceToNextCell
+
+    panel = CellPanel(pipetteGetter=lambda: _FakePipette((0, 0, 0)))
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+    panel.addFromTargetBtn.click()
+    cell = orch.enqueued[0]
+    panel.cellList.setCurrentRow(0)
+
+    abandonedEntry = ActionLogEntry("Patch")
+    panel.onLogAction(cell, abandonedEntry)
+    abandonedEntry._finish(AdvanceToNextCell("advance to next cell"))
+    abandonedText = panel.timelineList.item(0).text()
+    assert "abandoned" in abandonedText
+    assert "⊘" in abandonedText
+    assert "✓" not in abandonedText
+    assert "— ✓ done" not in abandonedText
+
+
 def test_timeline_preserved_across_cell_switch(qapp):
     from acq4.modules.Autopatch.cell_panel import CellPanel
 

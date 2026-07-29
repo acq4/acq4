@@ -212,6 +212,36 @@ def test_next_cell_requested_mid_poll_raises_advance_and_triggers_safe_abort(
     assert len(pip.stop_calls) == 1
 
 
+def test_next_cell_requested_mid_poll_sets_abandoned_outcome_on_log_entry(
+    fake_pip_factory, monkeypatch
+):
+    # The regression this guards: the operator hits "Next cell" mid-Patch, the
+    # poll loop's cooperative checkpoint raises AdvanceToNextCell from *inside*
+    # patch()'s own open log_action block (not from a standalone flow action),
+    # and the entry that reaches the UI must say the action was abandoned, not
+    # report a false "done" for work that was cut short.
+    pip = fake_pip_factory([])
+    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
+
+    calls = {"n": 0}
+
+    def requested():
+        calls["n"] += 1
+        return calls["n"] > 1
+
+    entries = []
+    ctx = _ctx(pip, next_cell_requested=requested)
+    ctx.on_log_action = entries.append
+
+    with pytest.raises(AdvanceToNextCell):
+        patch(ctx)
+
+    assert len(entries) == 1
+    assert entries[0].outcome == "abandoned"
+    # The safe-abort still fires on this path.
+    assert len(pip.stop_calls) == 1
+
+
 def test_no_next_cell_request_does_not_raise(fake_pip_factory, monkeypatch):
     monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
     pip = fake_pip_factory(["cell detect", "seal", "break in", "whole cell"])
