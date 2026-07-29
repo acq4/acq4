@@ -27,7 +27,7 @@ jobs:
         # pytest is the only test-time addition, since it is not a runtime
         # dependency of the package.
         pip install -e .
-        pip install -U pytest
+        pip install -U pytest pytest-qt
 
     - name: Run tests
       env:
