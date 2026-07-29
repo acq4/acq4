@@ -537,12 +537,20 @@ Preserve from `FsmCompositeAction` exactly:
   call, never a shared mutable default.
 - the poll loop returns the reached terminal state name, `sleep(poll_interval)`
   between polls.
-- **safe abort:** the `finally` must call `pip.getState().stop("orchestration
+- **safe abort:** on a cooperative stop, call `pip.getState().stop("orchestration
   abort", wait=True)` — the FSM's own declared fallback state, mirroring
   MultiPatch's Cancel button (`pipetteControl._cancelClicked`). Do **not**
   substitute `pip.setState("bath")`; the existing comment explains why and must
   be carried over. Guard for `ctx.pipette` / `getState()` being `None` as the
   class did.
+  **Abort on the `Stopped` path only — not in a bare `finally`.** In the class
+  model `safeAbort` was invoked solely by `Orchestrator._runAction`'s
+  `except Stopped:` branch, so it did not run on success and did not run when an
+  abnormal state raised. A bare `finally` would stop the terminal state's job the
+  instant `patch()` succeeded, dropping the pipette out of the whole-cell state
+  the protocol just achieved and breaking any recording that follows. Design
+  §4.2's illustrative snippet shows a `finally`; that snippet is wrong on this
+  point and the class's actual invocation site is the authority.
 
 Add `check_stop()` at the top of each poll iteration (the class relied on
 `sleep()` to raise; an explicit `check_stop()` makes a stop between polls
