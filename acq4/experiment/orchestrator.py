@@ -114,6 +114,14 @@ class Orchestrator(Qt.QObject):
                 cell = self._queue.popleft()
                 self._processCell(cell)
         finally:
+            # A "Next cell" request cannot outlive the run loop it was made
+            # during -- whether that loop exits by returning (the queue
+            # drained) or by raising (FlowSignal/Stopped propagating,
+            # OrchestrationError/an unexpected exception aborting). Without
+            # this, a request left over from a cell abandoned mid-run would
+            # be silently consumed against an unrelated cell the next time
+            # the queue is started.
+            self._nextCellRequested = False
             self.sigCurrentCell.emit(None)
             self.sigStatus.emit("waiting")
 
@@ -209,11 +217,14 @@ class Orchestrator(Qt.QObject):
                     # is a bug (the queue did not actually do what the
                     # protocol thought it told it to), not a success.
                     signal = ctx.pending_flow_signal
-                    # Captured into a local and cleared on ctx before raising,
-                    # so the raised exception's `from signal` diagnostic chain
-                    # doesn't hold a __traceback__ referencing this frame (and
-                    # thus ctx, and thus everything ctx reaches through
-                    # on_log_action) -- only reclaimable via cyclic GC otherwise.
+                    # Captured into a local and cleared on ctx before raising.
+                    # signal.__traceback__ already holds raise_flow_signal's own
+                    # frame, whose `self` is ctx, so ctx stays reachable from the
+                    # chained exception regardless of this clear. What the clear
+                    # achieves is breaking ctx's own reference to signal, turning
+                    # ctx -> signal -> traceback -> frame -> ctx from a reference
+                    # cycle into a one-way chain -- reclaimable by plain
+                    # refcounting instead of needing the cyclic GC.
                     ctx.pending_flow_signal = None
                     logger.error(
                         "Flow signal %r was raised but swallowed by the "

@@ -6,7 +6,7 @@ import pytest
 
 from acq4.util.task import Stopped, Event, sleep
 from acq4.experiment.context import ExecutionContext
-from acq4.experiment.exceptions import AbortExperiment, RetryCurrentCell
+from acq4.experiment.exceptions import AbortExperiment, BrokenPipette, RetryCurrentCell
 from acq4.experiment.orchestrator import Orchestrator
 
 
@@ -62,6 +62,69 @@ def test_requestnextcell_cleared_when_cell_ends_normally_does_not_skip_following
     orch.run_sync()
     assert ran == ["cell1", "cell2"]
     assert finished == [("cell1", "done"), ("cell2", "done")]
+
+
+def test_stop_then_restart_does_not_skip_queued_cell(make_pf):
+    """The operator flow: press Next cell mid-cell (nothing visible happens --
+    the request is only ever consumed at a cell boundary), get impatient and
+    press Stop, then press Start again. A request that arrived during the
+    aborted cell must not outlive the run loop it was made during and consume
+    a cell in the second run that was never its subject."""
+    pf = make_pf()
+    ran = []
+
+    def run(ctx, **kwargs):
+        ran.append(ctx.cell)
+        if ctx.cell == "cell1":
+            orch.requestNextCell()
+            raise Stopped("operator pressed stop")
+
+    pf.run = run
+    orch = Orchestrator(pf)
+    orch.enqueue("cell1")
+    orch.enqueue("cell2")
+    finished = []
+    orch.sigCellFinished.connect(lambda c, s: finished.append((c, s)))
+
+    with pytest.raises(Stopped):
+        orch.run_sync()
+
+    assert orch._nextCellRequested is False  # must not survive the aborted run
+
+    orch.run_sync()  # a second run, over the remaining queue
+    assert ran == ["cell1", "cell2"]  # cell2 was actually attempted, not skipped
+    assert finished == [("cell2", "done")]
+
+
+def test_error_exit_then_restart_does_not_skip_queued_cell(make_pf):
+    """Same leak as test_stop_then_restart_does_not_skip_queued_cell, but via
+    the OrchestrationError exit (which re-raises as AbortExperiment) instead
+    of Stopped -- both propagate out of _runLoopBody by raising rather than
+    returning, so both must clear the request on the way out."""
+    pf = make_pf()
+    ran = []
+
+    def run(ctx, **kwargs):
+        ran.append(ctx.cell)
+        if ctx.cell == "cell1":
+            orch.requestNextCell()
+            raise BrokenPipette("pipette broke mid-cell")
+
+    pf.run = run
+    orch = Orchestrator(pf)
+    orch.enqueue("cell1")
+    orch.enqueue("cell2")
+    finished = []
+    orch.sigCellFinished.connect(lambda c, s: finished.append((c, s)))
+
+    with pytest.raises(AbortExperiment):
+        orch.run_sync()
+
+    assert orch._nextCellRequested is False  # must not survive the aborted run
+
+    orch.run_sync()  # a second run, over the remaining queue
+    assert ran == ["cell1", "cell2"]  # cell2 was actually attempted, not skipped
+    assert finished == [("cell1", "error"), ("cell2", "done")]
 
 
 def test_pause_resume_toggle_status(make_pf):
