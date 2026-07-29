@@ -228,7 +228,9 @@ class Orchestrator(Qt.QObject):
                 # A cooperative stop (operator-initiated, via check_stop()) is
                 # not an unexpected bug either -- the protocol's own try/finally
                 # has already unwound the device, so let it keep propagating
-                # uncaught.
+                # uncaught. Reported "stopped" first so the interrupted cell's
+                # row doesn't read "running" forever once the run has ended.
+                self.sigCellFinished.emit(cell, "stopped")
                 raise
             except OrchestrationError as exc:
                 # Design §5's catch-all safety net: an uncaught orchestration

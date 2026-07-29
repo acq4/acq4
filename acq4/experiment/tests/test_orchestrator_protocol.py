@@ -122,6 +122,21 @@ def test_stopped_propagates(make_pf):
         Orchestrator(pf).run_sync_cell("cell1")
 
 
+def test_stopped_mid_cell_reports_stopped_disposition(make_pf):
+    """The interrupted cell's row must not be left reading "running" forever
+    once the run has ended -- "stopped" is already a disposition the UI
+    understands (see ActionLogEntry's own "stopped" outcome), so report it for
+    the cell sigCellFinished otherwise never gets a finished status for."""
+    pf = make_pf()
+    pf.run = lambda ctx, **kwargs: (_ for _ in ()).throw(Stopped("operator pressed stop"))
+    finished = []
+    orch = Orchestrator(pf)
+    orch.sigCellFinished.connect(lambda c, s: finished.append((c, s)))
+    with pytest.raises(Stopped):
+        orch.run_sync_cell("cell1")
+    assert finished == [("cell1", "stopped")]
+
+
 def test_current_cell_signal_emits_cell_then_none_after_the_loop(make_pf):
     pf = make_pf()
     pf.run = lambda ctx, **kwargs: None

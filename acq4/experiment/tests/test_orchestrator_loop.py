@@ -92,7 +92,8 @@ def test_stop_then_restart_does_not_skip_queued_cell(make_pf):
 
     orch.run_sync()  # a second run, over the remaining queue
     assert ran == ["cell1", "cell2"]  # cell2 was actually attempted, not skipped
-    assert finished == [("cell2", "done")]
+    # cell1 is reported "stopped" (the interrupted cell), then cell2 "done".
+    assert finished == [("cell1", "stopped"), ("cell2", "done")]
 
 
 def test_run_sync_stop_mid_action_completes_without_raising_and_leaves_queue(make_pf):
@@ -288,7 +289,8 @@ def test_run_sync_cell_raising_then_run_sync_does_not_skip_queued_cell(make_pf):
     orch.enqueue("cell2")
     orch.run_sync()  # a separate run, over an unrelated queued cell
     assert ran == ["solo-cell", "cell2"]  # cell2 was actually attempted, not skipped
-    assert finished == [("cell2", "done")]
+    # solo-cell is reported "stopped" (the interrupted cell), then cell2 "done".
+    assert finished == [("solo-cell", "stopped"), ("cell2", "done")]
 
 
 def test_pause_resume_toggle_status(make_pf):
