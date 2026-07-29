@@ -129,6 +129,11 @@ class Orchestrator(Qt.QObject):
         re-queuing it); AdvanceToNextCell skips."""
         retries = 0
         while True:
+            # A retry restarts the protocol from the top of this loop, not
+            # through _runLoopBody's own loop -- so Pause must be checked
+            # here too, or a protocol retrying against a persistent failure
+            # ignores Pause completely.
+            self._checkPause()
             if self._nextCellRequested:
                 self._nextCellRequested = False
                 self.sigCellFinished.emit(cell, "skipped")

@@ -4,8 +4,9 @@ import weakref
 
 import pytest
 
-from acq4.util.task import Stopped, Event
+from acq4.util.task import Stopped, Event, sleep
 from acq4.experiment.context import ExecutionContext
+from acq4.experiment.exceptions import RetryCurrentCell
 from acq4.experiment.orchestrator import Orchestrator
 
 
@@ -68,6 +69,41 @@ def test_stop_aborts_running_action(make_pf, qtbot):
     with pytest.raises(Stopped):
         task.wait(timeout=5)
     assert aborted == ["a"]  # the protocol's own try/finally ran on stop
+
+
+def test_pause_is_honored_across_a_retry(make_pf, qtbot):
+    """A protocol retrying against a persistent failure restarts from the top
+    of _processCell's own retry loop, not through _runLoopBody -- so Pause
+    (checked only in _runLoopBody until this fix) must also be checked at the
+    top of that retry loop, or a persistently-retrying protocol ignores
+    Pause completely."""
+    pf = make_pf()
+    calls = {"n": 0}
+
+    def run(ctx, **kwargs):
+        calls["n"] += 1
+        sleep(0.005)  # paces retries out so pause/resume can be observed
+        raise RetryCurrentCell("always fails")
+
+    pf.run = run
+    orch = Orchestrator(pf, maxRetries=100_000)
+    orch.enqueue("cell1")
+
+    orch.start()
+    qtbot.waitUntil(lambda: calls["n"] >= 2, timeout=5000)
+
+    orch.pause()
+    qtbot.wait(20)  # let any in-flight attempt finish and hit the retry loop's top
+    countAtPause = calls["n"]
+    qtbot.wait(100)
+    assert calls["n"] == countAtPause, "retries continued after pause()"
+
+    orch.resume()
+    qtbot.waitUntil(lambda: calls["n"] > countAtPause, timeout=5000)
+
+    orch.stop("test cleanup")
+    with pytest.raises(Stopped):
+        orch.wait(timeout=5)
 
 
 def test_requestnextcell_mid_poll_abandons_cell_and_advances_queue(
