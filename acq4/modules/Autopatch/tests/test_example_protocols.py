@@ -10,7 +10,9 @@ import os
 import pytest
 
 import acq4.modules.Autopatch.example_protocols as example_protocols_pkg
+import acq4.modules.Autopatch.example_protocols.example_patch as example_patch_mod
 from acq4.experiment.context import ExecutionContext
+from acq4.experiment.exceptions import AbortExperiment
 from acq4.experiment.orchestrator import Orchestrator
 from acq4.experiment.protocol_directory import ProtocolDirectory
 from acq4.experiment.protocol_file import ProtocolFile
@@ -72,8 +74,78 @@ def test_example_patch_description_is_populated_from_its_module_docstring():
     pf.load()
     assert pf.description == (
         "Capture a cellfie, move to the approach position, then drive the patch FSM.\n"
-        "Any pipette problem prompts the operator and aborts the run."
+        "A broken or fouled pipette prompts the operator and aborts the run; otherwise\n"
+        "advances to the next cell."
     )
+
+
+# -- branching on patch()'s returned outcome ---------------------------------
+#
+# patch() declares "broken"/"fouled" as terminals (see actions/fsm.py), so it
+# can never raise an OrchestrationError for them -- an `except
+# OrchestrationError` around it is dead code. The protocol must instead
+# branch on the returned outcome string itself. These monkeypatch the plain
+# functions example_patch.py imported by name, so the branching logic is
+# exercised without needing real pipette hardware.
+
+
+def _patch_actions(monkeypatch, *, patch_outcome, calls):
+    monkeypatch.setattr(example_patch_mod, "cellfie", lambda ctx: calls.append("cellfie"))
+    monkeypatch.setattr(
+        example_patch_mod,
+        "go_approach",
+        lambda ctx, speed: calls.append(("go_approach", speed)),
+    )
+    monkeypatch.setattr(example_patch_mod, "patch", lambda ctx: patch_outcome)
+    monkeypatch.setattr(
+        example_patch_mod, "prompt", lambda ctx, message: calls.append(("prompt", message))
+    )
+
+    def fake_abort(ctx):
+        calls.append("abort")
+        raise AbortExperiment("abort")
+
+    monkeypatch.setattr(example_patch_mod, "abort", fake_abort)
+
+    def fake_next_cell(ctx):
+        calls.append("next_cell")
+        from acq4.experiment.exceptions import AdvanceToNextCell
+
+        raise AdvanceToNextCell("advance to next cell")
+
+    monkeypatch.setattr(example_patch_mod, "next_cell", fake_next_cell)
+
+
+@pytest.mark.parametrize("outcome", ["broken", "fouled"])
+def test_example_patch_prompts_and_aborts_on_broken_or_fouled_pipette(monkeypatch, outcome):
+    calls = []
+    _patch_actions(monkeypatch, patch_outcome=outcome, calls=calls)
+
+    ctx = ExecutionContext()
+    with pytest.raises(AbortExperiment):
+        example_patch_mod.run(ctx, speed="fast")
+
+    assert calls[:2] == ["cellfie", ("go_approach", "fast")]
+    assert calls[2][0] == "prompt"
+    assert outcome in calls[2][1]  # the prompt names which problem occurred
+    assert calls[3] == "abort"
+    assert "next_cell" not in calls
+
+
+@pytest.mark.parametrize("outcome", ["whole cell", "cell attached", "bath"])
+def test_example_patch_advances_to_next_cell_on_a_normal_outcome(monkeypatch, outcome):
+    calls = []
+    _patch_actions(monkeypatch, patch_outcome=outcome, calls=calls)
+
+    ctx = ExecutionContext()
+    from acq4.experiment.exceptions import AdvanceToNextCell
+
+    with pytest.raises(AdvanceToNextCell):
+        example_patch_mod.run(ctx, speed="fast")
+
+    assert calls == ["cellfie", ("go_approach", "fast"), "next_cell"]
+    assert "prompt" not in calls
+    assert "abort" not in calls
 
 
 def test_install_example_protocols_copies_into_a_fresh_config_dir(tmp_path):
