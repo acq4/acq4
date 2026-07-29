@@ -98,11 +98,11 @@ class Orchestrator(Qt.QObject):
         # checkpoint for this to interrupt; use stop() for that.
         self._nextCellRequested = True
 
-    def wait(self, timeout=None):
+    def wait(self, timeout=None, updates=False):
         task = getattr(self, "_task", None)
         if task is None:
             raise RuntimeError("Orchestrator was not started; nothing to wait on")
-        return task.wait(timeout=timeout)
+        return task.wait(timeout=timeout, updates=updates)
 
     # ---- loop body ----
     def _runLoopBody(self):

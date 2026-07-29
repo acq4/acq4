@@ -207,6 +207,37 @@ def test_scan_does_not_reload_an_already_loaded_protocol(tmp_path):
     assert protocol.param_values() == {"speed": "slow"}
 
 
+def test_scan_reimports_a_file_whose_contents_changed_on_disk(tmp_path):
+    """Design 2.6: opening the protocol selector (scan()) must re-import a
+    file whose contents changed on disk since it was last loaded -- an
+    operator's edit -- even though an already-loaded protocol whose file is
+    otherwise unchanged is left untouched (test_scan_does_not_reload_an_
+    already_loaded_protocol, above)."""
+    path = _write(tmp_path, "one.py", """
+        PARAMS = [dict(name="speed", type="str", default="fast")]
+
+        def run(ctx, **params):
+            return "done"
+    """)
+    pd = ProtocolDirectory(str(tmp_path))
+    pd.scan()
+    assert pd.get("one").param_values() == {"speed": "fast"}
+
+    _write(tmp_path, "one.py", """
+        PARAMS = [dict(name="speed", type="str", default="slow")]
+
+        def run(ctx, **params):
+            return "done"
+    """)
+    # Force the mtime forward so this reproduces reliably regardless of the
+    # filesystem's mtime resolution (which can be as coarse as one second).
+    newer = os.stat(path).st_mtime + 2
+    os.utime(path, (newer, newer))
+
+    pd.scan()
+    assert pd.get("one").param_values() == {"speed": "slow"}
+
+
 def test_reload_all_does_reset_an_edited_param_tree(tmp_path):
     """reload_all() (the explicit Reload button) is the force-reload path, so
     it SHOULD reset an edited param tree back to the file's defaults."""

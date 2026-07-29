@@ -16,16 +16,20 @@ class ProtocolDirectory:
 
     `scan()` is the discovery path: it discovers newly-appeared files, drops
     entries whose file no longer exists, and `load()`s only entries that are
-    new or that previously failed to load -- an already-loaded ProtocolFile is
-    left untouched, so a rescan never clobbers a live, edited param tree still
-    held by an in-progress run. `reload_all()` is the explicit force-reload
-    path: it re-`load()`s every discovered file regardless of its current
-    state, resetting any edited param tree back to the file's defaults.
+    new, that previously failed to load, or whose file's mtime has moved on
+    since it was last loaded -- an already-loaded ProtocolFile whose file is
+    otherwise untouched is left alone, so a rescan never clobbers a live,
+    edited param tree still held by an in-progress run, while an operator's
+    on-disk edit is still picked up (design doc §2.6). `reload_all()` is the
+    explicit force-reload path: it re-`load()`s every discovered file
+    regardless of its current state or mtime, resetting any edited param
+    tree back to the file's defaults.
     """
 
     def __init__(self, path: str):
         self.path = path
         self.protocols: dict[str, ProtocolFile] = {}
+        self._mtimes: dict[str, float] = {}
 
     def scan(self) -> None:
         self._discover(force=False)
@@ -43,24 +47,36 @@ class ProtocolDirectory:
                 continue
             name = Path(entry).stem
             found_names.add(name)
+            full_path = os.path.join(self.path, entry)
             protocol = self.protocols.get(name)
             if protocol is None:
-                protocol = ProtocolFile(os.path.join(self.path, entry))
+                protocol = ProtocolFile(full_path)
                 self.protocols[name] = protocol
                 self._load_quietly(protocol)
-            elif force or not protocol.is_loaded:
+                self._mtimes[name] = self._mtime(full_path)
+            elif force or not protocol.is_loaded or self._mtime(full_path) != self._mtimes.get(name):
                 self._load_quietly(protocol)
+                self._mtimes[name] = self._mtime(full_path)
 
         for name in list(self.protocols):
             if name not in found_names:
                 del self.protocols[name]
+                self._mtimes.pop(name, None)
 
     def reload(self, name: str) -> None:
         protocol = self.get(name)
         self._load_quietly(protocol)
+        self._mtimes[name] = self._mtime(protocol.path)
 
     def get(self, name: str) -> ProtocolFile:
         return self.protocols[name]
+
+    @staticmethod
+    def _mtime(path: str) -> float:
+        try:
+            return os.stat(path).st_mtime
+        except OSError:
+            return 0.0
 
     @staticmethod
     def _load_quietly(protocol: ProtocolFile) -> None:

@@ -158,10 +158,16 @@ class AutopatchWindow(Qt.QWidget):
         outgoing orchestrator the same way: any outcome of the wait
         (finished, stopped, timed out) is fine here, since the caller is
         about to drop every reference to `orchestrator` regardless.
+
+        This runs on the GUI thread, so the wait must pump the Qt event loop
+        (updates=True) rather than parking on it: a worker still finishing up
+        via run_in_gui_thread (as run_task does) cannot complete while the
+        GUI thread isn't pumping, which would turn the 5s timeout from a
+        backstop into a deadlock.
         """
         orchestrator.stop()
         try:
-            orchestrator.wait(timeout=5.0)
+            orchestrator.wait(timeout=5.0, updates=True)
         except Exception:
             pass
         # The orchestrator's context factory closes over this window (to read

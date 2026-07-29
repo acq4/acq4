@@ -241,7 +241,15 @@ def test_loading_a_second_protocol_stops_and_releases_the_previous_orchestrator(
     """Loading a second protocol must not abandon a still-live, still-running
     Orchestrator: it must be stopped and unparented before the new one is
     built, so it stops writing into the window's panels and is free to be
-    garbage collected."""
+    garbage collected.
+
+    Drives this through protocolPanel.loadSelected() directly rather than a
+    Load button click, deliberately: Area 4's Load button is disabled while
+    a run is in flight (see test_area4_controls_disabled_while_running_and_
+    reenabled_when_stopped, below), so the button itself is not reachable
+    mid-run. This test exists to cover the programmatic sigProtocolLoaded
+    path -- e.g. a future caller that loads a protocol some other way -- not
+    to claim the operator can trigger it via the button."""
     from acq4.modules.Autopatch.Autopatch import AutopatchWindow
 
     _write_slow_protocol(tmp_path, "slow.py")
