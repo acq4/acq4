@@ -35,17 +35,21 @@ class ProtocolPanel(Qt.QWidget):
         os.makedirs(self.protocolDir, exist_ok=True)
         self.directory = ProtocolDirectory(self.protocolDir)
         self.protocolFile: ProtocolFile | None = None
+        # Name of the protocol _onSelectionChanged last processed, so a rescan
+        # that repopulates the combo and reselects the same entry (see
+        # _rebuildCombo() below, and _RescanningComboBox.showPopup()) can tell
+        # "still the same selection" from "the operator picked something
+        # else" and only emit sigProtocolLoaded for a genuine change.
+        self._selectedName: str | None = None
 
         self.fileCombo = _RescanningComboBox(onOpen=self.refreshFileList)
         self.reloadBtn = Qt.QPushButton("Reload")
-        self.loadBtn = Qt.QPushButton("Load")
         self.editorBtn = Qt.QPushButton("Open in editor")
         self.editorBtn.setEnabled(False)
 
         row = Qt.QHBoxLayout()
         row.addWidget(self.fileCombo)
         row.addWidget(self.reloadBtn)
-        row.addWidget(self.loadBtn)
         row.addWidget(self.editorBtn)
 
         self.paramTree = ParameterTree(showHeader=False)
@@ -59,7 +63,6 @@ class ProtocolPanel(Qt.QWidget):
         self.setLayout(outer)
 
         self.reloadBtn.clicked.connect(self.forceReloadFileList)
-        self.loadBtn.clicked.connect(self.loadSelected)
         self.editorBtn.clicked.connect(self.openInEditor)
         self.fileCombo.currentIndexChanged.connect(self._onSelectionChanged)
 
@@ -100,8 +103,19 @@ class ProtocolPanel(Qt.QWidget):
         return self.fileCombo.currentData()
 
     def _onSelectionChanged(self, *args) -> None:
+        """The selected protocol IS the loaded protocol -- there is no separate
+        Load step. This runs for an actual operator selection and for a
+        combo repopulate that lands back on the same entry (_rebuildCombo()
+        calls this unconditionally after every scan), so sigProtocolLoaded
+        only fires when `name` genuinely differs from the previous call --
+        see self._selectedName. It never reloads the protocol itself: the
+        already-scanned ProtocolFile from self.directory is used as-is, so an
+        operator's param edits survive clicking away and back (reloading is
+        forceReloadFileList()'s job -- the Reload button)."""
         name = self._currentName()
         self.editorBtn.setEnabled(name is not None)
+        changed = name != self._selectedName
+        self._selectedName = name
         if name is None:
             self.paramTree.clear()
             self.errorLabel.setText("")
@@ -110,34 +124,20 @@ class ProtocolPanel(Qt.QWidget):
         if protocol.is_loaded:
             self.errorLabel.setText("")
             self.paramTree.setParameters(protocol.param_tree, showTop=False)
+            self.protocolFile = protocol
+            if changed:
+                self.sigProtocolLoaded.emit(protocol)
         else:
             self.paramTree.clear()
             self.errorLabel.setText(protocol.load_error or "")
 
-    def loadSelected(self) -> ProtocolFile | None:
-        name = self._currentName()
-        if name is None:
-            return None
-        self.directory.reload(name)
-        protocol = self.directory.get(name)
-        if not protocol.is_loaded:
-            self.paramTree.clear()
-            self.errorLabel.setText(protocol.load_error or "")
-            return None
-        self.protocolFile = protocol
-        self.errorLabel.setText("")
-        self.paramTree.setParameters(protocol.param_tree, showTop=False)
-        self.sigProtocolLoaded.emit(protocol)
-        return protocol
-
     def setInteractionEnabled(self, enabled: bool) -> None:
-        """Gate the protocol picker, Load, and Reload -- disabled while a run
-        is in flight, so the operator can't load a second protocol out from
+        """Gate the protocol picker and Reload -- disabled while a run is in
+        flight, so the operator can't select a second protocol out from
         under a still-running Orchestrator (leaving two worker threads
         eligible to drive the same pipette). Open-in-editor is left alone:
         editing the file on disk doesn't touch the live run."""
         self.fileCombo.setEnabled(enabled)
-        self.loadBtn.setEnabled(enabled)
         self.reloadBtn.setEnabled(enabled)
 
     def setInteractionLocked(self, locked: bool) -> None:

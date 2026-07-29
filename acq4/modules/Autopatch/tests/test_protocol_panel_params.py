@@ -36,9 +36,8 @@ def test_param_tree_installed_is_the_protocol_files_own_tree(qapp, tmp_path):
     from acq4.modules.Autopatch.protocol_panel import ProtocolPanel
 
     _write_protocol_with_params(tmp_path, "demo.py")
-    panel = ProtocolPanel(protocolDir=str(tmp_path))
-    panel.fileCombo.setCurrentIndex(panel.fileCombo.findData("demo"))
-    pf = panel.loadSelected()
+    panel = ProtocolPanel(protocolDir=str(tmp_path))  # auto-selects/loads "demo"
+    pf = panel.protocolFile
 
     names = [c.name() for c in pf.param_tree.children()]
     assert names == ["Approach speed"]
@@ -57,9 +56,8 @@ def test_editing_installed_tree_changes_param_values(qapp, tmp_path):
     from acq4.modules.Autopatch.protocol_panel import ProtocolPanel
 
     _write_protocol_with_params(tmp_path, "demo.py")
-    panel = ProtocolPanel(protocolDir=str(tmp_path))
-    panel.fileCombo.setCurrentIndex(panel.fileCombo.findData("demo"))
-    pf = panel.loadSelected()
+    panel = ProtocolPanel(protocolDir=str(tmp_path))  # auto-selects/loads "demo"
+    pf = panel.protocolFile
 
     pf.param_tree.child("Approach speed").setValue("fast")
 

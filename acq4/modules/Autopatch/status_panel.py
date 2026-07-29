@@ -7,7 +7,7 @@ from acq4.util import Qt
 
 class StatusPanel(Qt.QWidget):
     # Emitted whenever the bound orchestrator's status changes, True while a
-    # run is "running" or "paused". Area 4 (the protocol picker/Load/Reload)
+    # run is "running" or "paused". Area 4 (the protocol picker/Reload)
     # listens to this to gate itself, rather than the window connecting
     # directly to the orchestrator's own sigStatus -- that would give the
     # orchestrator a live reference back to the window for as long as it

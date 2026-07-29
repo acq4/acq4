@@ -116,7 +116,6 @@ def test_teardown_breaks_the_orchestrator_cell_window_cycle(qapp, tmp_path):
             cameraSelector=_FakeCameraSelector(),
         )
         win.protocolPanel.fileCombo.setCurrentText("demo")
-        win.protocolPanel.loadSelected()
 
         win.cellPanel.addFromTargetBtn.click()
         assert win.cellPanel.cellList.count() == 1
@@ -192,7 +191,6 @@ def test_teardown_stops_an_in_flight_orchestrator_run(qapp, qtbot, tmp_path):
         cameraSelector=_FakeCameraSelector(),
     )
     win.protocolPanel.fileCombo.setCurrentText("slow")
-    win.protocolPanel.loadSelected()
     win.cellPanel.addFromTargetBtn.click()
 
     win.statusPanel.startBtn.click()

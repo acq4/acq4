@@ -100,7 +100,7 @@ class AutopatchWindow(Qt.QWidget):
         self._cachedPipette = None
         self._tornDown = False
         self.protocolPanel.sigProtocolLoaded.connect(self._onProtocolLoaded)
-        # Area 4 (the protocol picker/Load/Reload) must not be usable while a
+        # Area 4 (the protocol picker/Reload) must not be usable while a
         # run is in flight; StatusPanel derives this from whichever orchestrator
         # it's currently bound to, so this connection is made once here rather
         # than re-wired per protocol load. A direct bound-method connection
@@ -109,6 +109,17 @@ class AutopatchWindow(Qt.QWidget):
         # reference cycle -- exactly what bindOrchestrator/unbindOrchestrator
         # elsewhere are careful to avoid.
         self.statusPanel.sigInteractionLocked.connect(self.protocolPanel.setInteractionLocked)
+        # ProtocolPanel selects (and thus loads) a protocol as soon as its own
+        # constructor's initial scan populates the combo -- before the
+        # `sigProtocolLoaded` connection above exists, since that scan runs
+        # inside `ProtocolPanel(protocolDir=protocolDir)` above, several lines
+        # before this window finishes wiring itself up. That first emission
+        # therefore reaches no slot and is lost. Replay it explicitly, now
+        # that every panel this handler touches (cellPanel, statusPanel) is
+        # built and the connection is live, so an operator who opens the
+        # window and presses Start immediately still gets a run.
+        if self.protocolPanel.protocolFile is not None:
+            self._onProtocolLoaded(self.protocolPanel.protocolFile)
 
     def _resolvePipette(self) -> None:
         """Snapshot the currently-selected pipette on the GUI thread. Called at

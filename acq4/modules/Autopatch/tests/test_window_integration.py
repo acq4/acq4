@@ -77,11 +77,32 @@ def test_loading_a_protocol_builds_and_binds_an_orchestrator(qapp, tmp_path):
         cameraSelector=_FakeCameraSelector(),
     )
     win.protocolPanel.fileCombo.setCurrentText("demo")
-    win.protocolPanel.loadSelected()
 
     assert win.orchestrator is not None
     assert win.orchestrator.protocolFile is win.protocolPanel.protocolFile
     # StatusPanel/CellPanel are bound: clicking Start reaches the real orchestrator.
+    win.statusPanel.startBtn.click()
+    win.orchestrator.wait(timeout=2)
+
+
+def test_initial_populate_already_binds_an_orchestrator(qapp, tmp_path):
+    """An operator who opens the window and immediately presses Start must
+    get a run -- the protocol selected by the panel's own first scan (before
+    the window ever wires up sigProtocolLoaded) must still end up bound."""
+    from acq4.modules.Autopatch.Autopatch import AutopatchWindow
+
+    _write_protocol(tmp_path, "demo.py", _NOOP_PROTOCOL)
+
+    win = AutopatchWindow(
+        module=None,
+        protocolDir=str(tmp_path),
+        pipetteSelector=_FakePipetteSelector(),
+        cameraSelector=_FakeCameraSelector(),
+    )
+
+    assert win.protocolPanel.fileCombo.currentText() == "demo"
+    assert win.orchestrator is not None
+    assert win.orchestrator.protocolFile is win.protocolPanel.protocolFile
     win.statusPanel.startBtn.click()
     win.orchestrator.wait(timeout=2)
 
@@ -121,7 +142,6 @@ def test_full_flow_seeds_a_cell_starts_and_updates_status_timeline_log(qapp, qtb
         cameraSelector=_FakeCameraSelector(),
     )
     win.protocolPanel.fileCombo.setCurrentText("demo")
-    win.protocolPanel.loadSelected()
 
     win.cellPanel.addFromTargetBtn.click()
     assert win.cellPanel.cellList.count() == 1
@@ -199,7 +219,6 @@ def test_pipette_is_snapshotted_at_start_not_read_from_selector_mid_run(qapp, qt
         cameraSelector=_FakeCameraSelector(),
     )
     win.protocolPanel.fileCombo.setCurrentText("demo")
-    win.protocolPanel.loadSelected()
 
     win.cellPanel.addFromTargetBtn.click()
     assert win.cellPanel.cellList.count() == 1
@@ -243,13 +262,12 @@ def test_loading_a_second_protocol_stops_and_releases_the_previous_orchestrator(
     built, so it stops writing into the window's panels and is free to be
     garbage collected.
 
-    Drives this through protocolPanel.loadSelected() directly rather than a
-    Load button click, deliberately: Area 4's Load button is disabled while
-    a run is in flight (see test_area4_controls_disabled_while_running_and_
-    reenabled_when_stopped, below), so the button itself is not reachable
-    mid-run. This test exists to cover the programmatic sigProtocolLoaded
-    path -- e.g. a future caller that loads a protocol some other way -- not
-    to claim the operator can trigger it via the button."""
+    Drives this through selecting the protocol in the combo directly rather
+    than a button click, deliberately: Area 4's picker is disabled while a
+    run is in flight (see test_area4_controls_disabled_while_running_and_
+    reenabled_when_stopped, below), so re-selecting is not reachable mid-run
+    either. This test exists to cover the sigProtocolLoaded path itself, not
+    to claim the operator can trigger it mid-run."""
     from acq4.modules.Autopatch.Autopatch import AutopatchWindow
 
     _write_slow_protocol(tmp_path, "slow.py")
@@ -262,7 +280,6 @@ def test_loading_a_second_protocol_stops_and_releases_the_previous_orchestrator(
         cameraSelector=_FakeCameraSelector(),
     )
     win.protocolPanel.fileCombo.setCurrentText("slow")
-    win.protocolPanel.loadSelected()
     firstOrchestrator = win.orchestrator
     win.cellPanel.addFromTargetBtn.click()  # a queued cell so the run loop body actually runs
 
@@ -272,7 +289,6 @@ def test_loading_a_second_protocol_stops_and_releases_the_previous_orchestrator(
     assert not task.is_done
 
     win.protocolPanel.fileCombo.setCurrentText("demo")
-    win.protocolPanel.loadSelected()
 
     assert win.orchestrator is not None
     assert win.orchestrator is not firstOrchestrator
@@ -285,9 +301,9 @@ def test_loading_a_second_protocol_stops_and_releases_the_previous_orchestrator(
 def test_area4_controls_disabled_while_running_and_reenabled_when_stopped(
     qapp, qtbot, tmp_path
 ):
-    """Area 4 (the protocol picker, Load, and Reload) must not be usable
-    while a run is in flight -- pressing Load mid-run would otherwise leave
-    two worker threads eligible to drive the same pipette."""
+    """Area 4 (the protocol picker and Reload) must not be usable while a
+    run is in flight -- selecting a different protocol mid-run would
+    otherwise leave two worker threads eligible to drive the same pipette."""
     from acq4.modules.Autopatch.Autopatch import AutopatchWindow
 
     _write_slow_protocol(tmp_path, "slow.py")
@@ -299,20 +315,16 @@ def test_area4_controls_disabled_while_running_and_reenabled_when_stopped(
         cameraSelector=_FakeCameraSelector(),
     )
     win.protocolPanel.fileCombo.setCurrentText("slow")
-    win.protocolPanel.loadSelected()
     win.cellPanel.addFromTargetBtn.click()  # a queued cell so the run loop body actually runs
     assert win.protocolPanel.fileCombo.isEnabled()
-    assert win.protocolPanel.loadBtn.isEnabled()
     assert win.protocolPanel.reloadBtn.isEnabled()
 
     win.statusPanel.startBtn.click()
     qtbot.wait(50)
 
     assert not win.protocolPanel.fileCombo.isEnabled()
-    assert not win.protocolPanel.loadBtn.isEnabled()
     assert not win.protocolPanel.reloadBtn.isEnabled()
 
     win.orchestrator.stop()
     qtbot.waitUntil(lambda: win.protocolPanel.fileCombo.isEnabled(), timeout=2000)
-    assert win.protocolPanel.loadBtn.isEnabled()
     assert win.protocolPanel.reloadBtn.isEnabled()
