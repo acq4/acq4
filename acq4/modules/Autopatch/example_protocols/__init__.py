@@ -14,8 +14,9 @@ def install_example_protocols(protocol_dir: str) -> None:
     Creates `protocol_dir` if it does not exist yet. Skips this package's own
     `__init__.py` and any `_`-prefixed helper, so the package machinery is
     never installed as a protocol. Skips any file whose name already exists
-    there, so an operator's edits (or deletions) are never overwritten on a
-    later run.
+    there, so an operator's edits are never overwritten on a later run --
+    though a deleted example reappears on the next call, since a missing
+    file is indistinguishable from one never installed.
     """
     os.makedirs(protocol_dir, exist_ok=True)
     for name in sorted(os.listdir(_HERE)):

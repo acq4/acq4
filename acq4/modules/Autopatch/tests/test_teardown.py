@@ -96,11 +96,12 @@ def test_teardown_breaks_the_orchestrator_cell_window_cycle(qapp, tmp_path):
     This deliberately never calls orchestrator.start(): doing so hands the
     orchestrator to gentletask as a ThreadTask whose stored target is a bound
     method of the orchestrator itself (`self._task._fn is orchestrator._runLoopBody`),
-    which is its own independent, permanent reference cycle -- unrelated to the
-    window/panel wiring this fix addresses, and out of scope here since it
-    lives in acq4/experiment + the separate gentletask library. A second test
-    below starts the orchestrator to prove teardown() stops an in-flight run;
-    it does not repeat this refcounting proof.
+    which is its own independent reference cycle -- permanent only while that
+    run is in flight, since _onLoopFinished breaks it once the run completes.
+    It is unrelated to the window/panel wiring this fix addresses, and out of
+    scope here since it lives in acq4/experiment + the separate gentletask
+    library. A second test below starts the orchestrator to prove teardown()
+    stops an in-flight run; it does not repeat this refcounting proof.
     """
     from acq4.modules.Autopatch.Autopatch import AutopatchWindow
 
@@ -132,7 +133,7 @@ def test_teardown_breaks_the_orchestrator_cell_window_cycle(qapp, tmp_path):
         assert win.cellPanel._orchestrator is orchestrator
 
         # Actually run the protocol synchronously (main thread; no gentletask
-        # ThreadTask involved, so this does not hit the independent, permanent
+        # ThreadTask involved, so this does not hit the independent
         # ThreadTask/orchestrator cycle the docstring above rules out of
         # scope), so ctx.log_action() -> CellPanel.onLogAction -> the entry's
         # on_status/on_widget/on_finish callbacks all actually run -- exactly
