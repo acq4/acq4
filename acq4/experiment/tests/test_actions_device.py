@@ -17,6 +17,7 @@ from acq4.experiment.actions.device import (
     find_surface,
     cellfie,
     run_task,
+    load_preset,
 )
 from acq4.experiment.actions import device as device_mod
 
@@ -81,12 +82,19 @@ class FakeScope:
         self.depth = depth
         self.error = error
         self.calls = []
+        self.presets = {}
+        self.preset_calls = []
 
     def findSurfaceDepth(self, imager):
         self.calls.append(imager)
         if self.error is not None:
             raise self.error
         return self.depth
+
+    def loadPreset(self, name):
+        conf = self.presets[name]  # raises bare KeyError for an unknown name, like the real device
+        self.preset_calls.append(name)
+        return conf
 
 
 class FakePipette:
@@ -399,3 +407,47 @@ def test_run_task_raises_when_no_module_matches(ctx, pip):
 
     assert "Task Runner Sequence" in str(excinfo.value)
     assert "Clamp1" in str(excinfo.value)
+
+
+# -- load_preset ------------------------------------------------------------
+
+
+def test_load_preset_applies_the_named_preset(ctx, pip):
+    names = _entry_names(ctx)
+    pip.scope.presets = {"GFP": {"camera": "GFP"}, "brightfield": {"camera": "brightfield"}}
+
+    load_preset(ctx, "GFP")
+
+    assert pip.scope.preset_calls == ["GFP"]
+    assert names == ["Load Imaging Preset"]
+
+
+def test_load_preset_none_is_a_silent_noop(ctx, pip):
+    names = _entry_names(ctx)
+    pip.scope.presets = {"GFP": {}}
+
+    load_preset(ctx, None)
+
+    assert pip.scope.preset_calls == []
+    assert names == []
+
+
+def test_load_preset_empty_string_is_also_a_silent_noop(ctx, pip):
+    names = _entry_names(ctx)
+    pip.scope.presets = {"GFP": {}}
+
+    load_preset(ctx, "")
+
+    assert pip.scope.preset_calls == []
+    assert names == []
+
+
+def test_load_preset_unknown_name_raises_orchestration_error_listing_available(ctx, pip):
+    pip.scope.presets = {"GFP": {}, "brightfield": {}}
+
+    with pytest.raises(OrchestrationError) as excinfo:
+        load_preset(ctx, "nonexistent")
+
+    assert "Load Imaging Preset" in str(excinfo.value)
+    assert "GFP" in str(excinfo.value)
+    assert "brightfield" in str(excinfo.value)

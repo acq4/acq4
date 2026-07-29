@@ -1,7 +1,8 @@
 """Device-wrapping protocol functions: staged pipette moves (go_*), focusing
 (focus_*), a fresh-pipette search+tip-find (new_pipette), tip finding above the
 target (find_tip), surface detection (find_surface), the cell z-stack capture
-(cellfie), and running a loaded TaskRunner sequence (run_task).
+(cellfie), applying a microscope imaging preset (load_preset), and running a
+loaded TaskRunner sequence (run_task).
 
 These wrap existing PatchPipette/Pipette/Microscope device APIs and drive real
 hardware, so they are exercised by live testing rather than the headless suite.
@@ -139,6 +140,23 @@ def cellfie(ctx, height: float = 30e-6, step: float = 1e-6) -> None:
         ).wait()
         # Initialize the tracker reference used to follow the cell during patching.
         ctx.cell.initializeTracker(imager, use_cellpose=True)
+
+
+def load_preset(ctx, preset: str = None) -> None:
+    """Apply a configured microscope imaging preset (e.g. "GFP", "brightfield").
+    A preset of None is a no-op, so a protocol can leave it unconfigured."""
+    if not preset:
+        return
+    with ctx.log_action("Load Imaging Preset") as action_entry:
+        scope = ctx.pipette.scopeDevice()
+        action_entry.set_status(f"loading preset {preset!r}")
+        try:
+            scope.loadPreset(preset)
+        except KeyError as e:
+            available = ", ".join(sorted(scope.presets))
+            raise OrchestrationError(
+                f"{action_entry.name}: unknown preset {preset!r} (available: {available})"
+            ) from e
 
 
 def run_task(ctx, store: bool = True, timeout: float = 0.0):

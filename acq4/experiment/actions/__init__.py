@@ -14,5 +14,6 @@ from .device import (  # noqa: F401
     find_tip,
     find_surface,
     cellfie,
+    load_preset,
     run_task,
 )
