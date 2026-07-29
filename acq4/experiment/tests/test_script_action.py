@@ -5,8 +5,6 @@ import pytest
 from acq4.experiment.context import ExecutionContext
 from acq4.experiment.actions.script import ScriptAction
 from acq4.experiment.exceptions import ScriptError
-from acq4.experiment.protocol import Protocol
-from acq4.experiment.orchestrator import Orchestrator
 
 
 def _write(tmp_path, name, body):
@@ -76,24 +74,6 @@ def test_script_exposes_inner_outcomes(tmp_path):
     # `result in action.outcomes` validation passes for non-"done" outcomes.
     assert a.outcomes == ("weird",)
     assert result in a.outcomes
-
-
-def test_script_routes_through_orchestrator(tmp_path, recording_cls):
-    # Regression: a ScriptAction whose inner action returns a non-"done" outcome
-    # must route through the orchestrator rather than raising "unknown outcome".
-    recording_cls.ran.clear()
-    path = _write(tmp_path, "route.py", """
-        from acq4.experiment.action import Action
-        class A(Action):
-            outcomes = ("weird",)
-            def run(self, ctx): return "weird"
-    """)
-    script = ScriptAction(name="s", params={"path": path})
-    after = recording_cls(name="after")
-    p = Protocol(nodes={"s": script, "after": after},
-                 edges={("s", "weird"): "after"}, entry="s")
-    Orchestrator(p).run_sync_cell("cell1")
-    assert recording_cls.ran == ["after"]
 
 
 def test_script_safeabort_delegates_to_inner(tmp_path):

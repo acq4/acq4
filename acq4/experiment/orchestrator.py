@@ -1,5 +1,5 @@
-"""Orchestrator: runs a Protocol over a queue of cells, serially, routing on each
-action's outcome and converting flow signals / exceptional states into control."""
+"""Orchestrator: runs a cell queue serially, calling each cell's protocol
+function and converting its flow-signal exceptions into queue control."""
 from __future__ import annotations
 
 from collections import deque
@@ -22,22 +22,21 @@ logger = get_logger(__name__)
 
 class Orchestrator(Qt.QObject):
     sigStatus = Qt.Signal(str)                 # "running"/"waiting"/"paused"/"error"
-    sigCurrentAction = Qt.Signal(object, object)   # cell, action (None,None when idle)
+    sigCurrentCell = Qt.Signal(object)         # cell, or None when idle
     sigCellFinished = Qt.Signal(object, str)   # cell, status
-    sigActionFinished = Qt.Signal(object, object, str)  # cell, action, outcome
 
-    def __init__(self, protocol, manager=None, contextFactory=None, maxRetries=100):
+    def __init__(self, protocolFile, manager=None, contextFactory=None, maxRetries=100):
         Qt.QObject.__init__(self)
-        self.protocol = protocol
+        self.protocolFile = protocolFile
         self.manager = manager
         self._queue = deque()
         self._pauseEvent = Event()
         self._pauseEvent.set()  # set == running
         self._nextCellRequested = False
         self._contextFactory = contextFactory or self._defaultContext
-        # Guard against an unbounded retry loop (a cell whose handler always
-        # retries, or a persistently-failing action). On exhaustion the cell is
-        # skipped rather than wedging the queue forever.
+        # Guard against an unbounded retry loop (a protocol that always raises
+        # RetryCurrentCell, or a persistently-failing action). On exhaustion the
+        # cell finishes as "retry-exhausted" rather than wedging the queue forever.
         self.maxRetries = maxRetries
 
     # ---- queue / context ----
@@ -91,10 +90,14 @@ class Orchestrator(Qt.QObject):
             task.stop(reason)
 
     def requestNextCell(self):
-        # P0 scope: the request is honored at the next action boundary (checked at
-        # the top of _walk), not mid-action. It does not interrupt or safeAbort an
-        # action that is already running -- use stop() for that. The design doc's
-        # "safeAbort the pipette and advance" semantics are a later enhancement.
+        # The request is honored at the next cell boundary (checked at the top
+        # of _processCell) -- there is no action boundary left for the
+        # orchestrator to check mid-protocol, because a running protocol
+        # function is a plain Python call, opaque to it. This is a real
+        # narrowing of behavior versus the graph model, where the request was
+        # honored between any two action nodes: it does not interrupt or
+        # safeAbort a protocol that is already running -- use stop() for that.
+        # A protocol author who wants finer granularity checks ctx cooperatively.
         self._nextCellRequested = True
 
     def wait(self, timeout=None):
@@ -114,53 +117,29 @@ class Orchestrator(Qt.QObject):
                 self._processCell(cell)
                 self._nextCellRequested = False
         finally:
-            self.sigCurrentAction.emit(None, None)
+            self.sigCurrentCell.emit(None)
             self.sigStatus.emit("waiting")
 
-    # ---- graph walk ----
     def _checkPause(self):
         if not self._pauseEvent.is_set():
             self.sigStatus.emit("paused")
             self._pauseEvent.wait()
             self.sigStatus.emit("running")
 
-    def _runAction(self, action, ctx) -> str:
-        try:
-            result = action.run(ctx)
-        except Stopped:
-            action.safeAbort(ctx)
-            raise
-        if result not in action.outcomes:
-            raise ValueError(
-                f"{action.name} returned unknown outcome {result!r}; "
-                f"expected one of {action.outcomes}"
-            )
-        return result
-
-    def _walk(self, cell, protocol, node_id):
-        """Walk `protocol` from `node_id`, routing on outcomes. Raises FlowSignal
-        or OrchestrationError up to the caller."""
-        while node_id is not None:
-            self._checkPause()
-            check_stop()
-            if self._nextCellRequested:
-                raise AdvanceToNextCell("next cell requested")
-            action = protocol.nodes[node_id]
-            ctx = self._contextFactory(cell)
-            self.sigCurrentAction.emit(cell, action)
-            outcome = self._runAction(action, ctx)
-            self.sigActionFinished.emit(cell, action, outcome)
-            node_id = protocol.next_node(node_id, outcome)
-
     def _processCell(self, cell):
-        """Run the main protocol for one cell, dispatching exceptional states to
-        handler sub-protocols. RetryCurrentCell loops (bounded by maxRetries);
-        AdvanceToNextCell skips."""
+        """Run the protocol function for one cell. RetryCurrentCell loops in
+        place (bounded by maxRetries, restarting the same cell rather than
+        re-queuing it); AdvanceToNextCell skips."""
         retries = 0
         while True:
+            if self._nextCellRequested:
+                self.sigCellFinished.emit(cell, "skipped")
+                return
             self.sigStatus.emit("running")
+            ctx = self._contextFactory(cell)
+            self.sigCurrentCell.emit(cell)
             try:
-                self._walk(cell, self.protocol, self.protocol.entry)
+                self.protocolFile.run(ctx, **self.protocolFile.param_values())
             except AdvanceToNextCell:
                 self.sigCellFinished.emit(cell, "skipped")
                 return
@@ -170,22 +149,7 @@ class Orchestrator(Qt.QObject):
                     self.sigCellFinished.emit(cell, "retry-exhausted")
                     return
                 self.sigCellFinished.emit(cell, "retry")
-                continue
-            except OrchestrationError as exc:
-                self.sigStatus.emit("error")
-                disposition = self._handleException(exc, cell)
-                if disposition == "retry":
-                    retries += 1
-                    if retries > self.maxRetries:
-                        self.sigCellFinished.emit(cell, "retry-exhausted")
-                        return
-                    self.sigCellFinished.emit(cell, "retry")
-                    continue  # loop top re-emits "running"
-                # Handler recovered by advancing: the run is no longer in an
-                # error state, so restore "running" before finishing the cell.
-                self.sigStatus.emit("running")
-                self.sigCellFinished.emit(cell, "handled")
-                return
+                continue  # loop top re-emits "running" and restarts in place
             except FlowSignal:
                 # AdvanceToNextCell/RetryCurrentCell are handled above and never
                 # reach here; AbortExperiment (and any future FlowSignal) must
@@ -194,14 +158,28 @@ class Orchestrator(Qt.QObject):
                 raise
             except Stopped:
                 # A cooperative stop (operator-initiated, via check_stop()) is
-                # not an unexpected bug either -- action.safeAbort() has already
-                # run (in _runAction), so let it keep propagating uncaught.
+                # not an unexpected bug either -- the protocol's own try/finally
+                # has already unwound the device, so let it keep propagating
+                # uncaught.
                 raise
+            except OrchestrationError as exc:
+                # Design §5's catch-all safety net: an uncaught orchestration
+                # error halts the run rather than blazing through the remaining
+                # queued cells. Handler sub-protocols are gone; a protocol
+                # author who wants to recover from this writes their own
+                # try/except in run().
+                logger.exception("Unhandled orchestration error while processing cell %r", cell)
+                self.sigStatus.emit("error")
+                self.sigCellFinished.emit(cell, "error")
+                raise AbortExperiment(
+                    f"unhandled orchestration error while processing cell: {exc}"
+                ) from exc
             except Exception as exc:
-                # An unexpected bug (not an exceptional state routed to a
-                # handler) must fail loud rather than be silently swallowed:
-                # log it, surface it as an error to the UI, and abort the run
-                # rather than blazing through the remaining queued cells.
+                # An unexpected bug (not a flow signal, and not an
+                # OrchestrationError the protocol chose to let propagate) must
+                # fail loud rather than be silently swallowed: log it, surface
+                # it as an error to the UI, and abort the run rather than
+                # blazing through the remaining queued cells.
                 logger.exception("Unexpected exception while processing cell %r", cell)
                 self.sigStatus.emit("error")
                 self.sigCellFinished.emit(cell, "error")
@@ -211,24 +189,3 @@ class Orchestrator(Qt.QObject):
             else:
                 self.sigCellFinished.emit(cell, "done")
                 return
-
-    def _handleException(self, exc, cell) -> str:
-        """Run the matching handler sub-protocol. Returns 'retry' or 'advance';
-        raises AbortExperiment when the handler aborts or none matches."""
-        handler = self.protocol.handler_for(exc.typeName)
-        if handler is None or handler.entry is None:
-            raise AbortExperiment(f"unhandled {exc.typeName}: {exc}")
-        try:
-            self._walk(cell, handler, handler.entry)
-        except AdvanceToNextCell:
-            return "advance"
-        except RetryCurrentCell:
-            return "retry"
-        except OrchestrationError as handler_exc:
-            # A handler that itself hits an exceptional state cannot recover the
-            # cell; fail closed to a controlled abort rather than letting it escape.
-            raise AbortExperiment(
-                f"exception in handler for {exc.typeName}: "
-                f"{handler_exc.typeName}: {handler_exc}"
-            ) from handler_exc
-        return "advance"  # handler ran to completion without a flow action

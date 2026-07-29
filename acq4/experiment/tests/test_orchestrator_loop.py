@@ -5,39 +5,48 @@ import weakref
 import pytest
 
 from acq4.util.task import Stopped, Event
-from acq4.experiment.action import Action
-from acq4.experiment.registry import register_action
-from acq4.experiment.protocol import Protocol
+from acq4.experiment.protocol_file import ProtocolFile
 from acq4.experiment.orchestrator import Orchestrator
 
 
-def test_run_sync_processes_whole_queue(recording_cls):
-    recording_cls.ran.clear()
-    p = Protocol(nodes={"a": recording_cls(name="a")}, edges={}, entry="a")
-    orch = Orchestrator(p)
+def _make_pf(tmp_path, name="protocol.py"):
+    """A minimally valid ProtocolFile, loaded from a real file on disk; tests
+    overwrite pf.run afterward with whatever behavior they need to exercise."""
+    path = tmp_path / name
+    path.write_text("def run(ctx, **kwargs):\n    return None\n")
+    pf = ProtocolFile(str(path))
+    pf.load()
+    return pf
+
+
+def test_run_sync_processes_whole_queue(tmp_path):
+    pf = _make_pf(tmp_path)
+    ran = []
+    pf.run = lambda ctx, **kwargs: ran.append(ctx.cell)
+    orch = Orchestrator(pf)
     orch.enqueue("c1")
     orch.enqueue("c2")
     orch.run_sync()
-    assert recording_cls.ran == ["a", "a"]  # ran once per cell
+    assert ran == ["c1", "c2"]  # ran once per cell, in queue order
 
 
-def test_requestnextcell_skips_current(recording_cls):
-    recording_cls.ran.clear()
-    a = recording_cls(name="a")
-    p = Protocol(nodes={"a": a}, edges={}, entry="a")
-    orch = Orchestrator(p)
+def test_requestnextcell_skips_current(tmp_path):
+    pf = _make_pf(tmp_path)
+    ran = []
+    pf.run = lambda ctx, **kwargs: ran.append(ctx.cell)
+    orch = Orchestrator(pf)
     finished = []
     orch.sigCellFinished.connect(lambda cell, status: finished.append((cell, status)))
     orch.enqueue("c1")
-    orch.requestNextCell()  # before running: first boundary check skips c1
+    orch.requestNextCell()  # before running: the cell boundary check skips c1
     orch.run_sync()
-    assert recording_cls.ran == []            # action never ran
+    assert ran == []                          # run() never called
     assert finished == [("c1", "skipped")]
 
 
-def test_pause_resume_toggle_status():
-    p = Protocol()
-    orch = Orchestrator(p)
+def test_pause_resume_toggle_status(tmp_path):
+    pf = _make_pf(tmp_path)
+    orch = Orchestrator(pf)
     statuses = []
     orch.sigStatus.connect(statuses.append)
     orch.pause()
@@ -46,65 +55,60 @@ def test_pause_resume_toggle_status():
     assert orch._pauseEvent.is_set() is True
 
 
-@register_action(name="Blocking")
-class _BlockingAction(Action):
-    """Blocks on a shared Event until released, so the async loop can be stopped
-    mid-action. `gate` is set by the test; `started` signals arrival."""
+def test_stop_aborts_running_action(tmp_path, qtbot):
+    gate = Event()       # never set -> run() blocks
+    started = Event()
+    aborted = []
 
-    outcomes = ("done",)
-    gate: Event = None
-    started: Event = None
-    aborted: list = []
+    pf = _make_pf(tmp_path)
 
-    def run(self, ctx):
-        if _BlockingAction.started is not None:
-            _BlockingAction.started.set()
-        if _BlockingAction.gate is not None:
-            _BlockingAction.gate.wait()  # stop-aware; raises Stopped on stop()
-        return "done"
+    def blocking_run(ctx, **kwargs):
+        started.set()
+        try:
+            gate.wait()  # stop-aware; raises Stopped on stop()
+        finally:
+            aborted.append("a")
 
-    def safeAbort(self, ctx):
-        _BlockingAction.aborted.append(self.name)
-
-
-def test_stop_aborts_running_action(qtbot):
-    _BlockingAction.gate = Event()       # never set -> run() blocks
-    _BlockingAction.started = Event()
-    _BlockingAction.aborted = []
-    p = Protocol(nodes={"a": _BlockingAction(name="a")}, edges={}, entry="a")
-    orch = Orchestrator(p)
+    pf.run = blocking_run
+    orch = Orchestrator(pf)
     orch.enqueue("c1")
     task = orch.start()
-    _BlockingAction.started.wait()       # wait until the action is running
+    started.wait()       # wait until the protocol function is running
     orch.stop("test stop")
     with pytest.raises(Stopped):
         task.wait(timeout=5)
-    assert _BlockingAction.aborted == ["a"]  # safeAbort ran on stop
+    assert aborted == ["a"]  # the protocol's own try/finally ran on stop
 
 
-def test_finished_task_does_not_leave_qobject_cycle(qtbot):
+def test_finished_task_does_not_leave_qobject_cycle(tmp_path, qtbot):
     """Regression test for the exit-segfault root cause: Orchestrator and its
     QtFriendlyTask are both QObjects, so a permanent orch<->task reference cycle
     can only be reclaimed by Python's cyclic GC -- non-deterministically, off
     Qt's safe teardown path. Once a run has finished, plain refcounting alone
     (cyclic GC disabled) must be enough to free both.
     """
-    _BlockingAction.gate = Event()
-    _BlockingAction.started = Event()
-    _BlockingAction.aborted = []
-    p = Protocol(nodes={"a": _BlockingAction(name="a")}, edges={}, entry="a")
+    gate = Event()
+    started = Event()
+
+    pf = _make_pf(tmp_path)
+
+    def blocking_run(ctx, **kwargs):
+        started.set()
+        gate.wait()
+
+    pf.run = blocking_run
     # A plain function, not a bound method of orch, so the orchestrator's own
     # self._contextFactory attribute does not itself create a self-cycle --
     # this test is targeted at the orch<->task cycle specifically.
-    orch = Orchestrator(p, contextFactory=lambda cell: None)
+    orch = Orchestrator(pf, contextFactory=lambda cell: None)
     orch.enqueue("c1")
     task = orch.start()
-    _BlockingAction.started.wait()  # action is parked in run(), definitely not finished
+    started.wait()  # protocol function is parked in run(), definitely not finished
 
     # Connect to sigFinished BEFORE releasing the gate, so there is no race
     # between the task starting/finishing and us starting to listen.
     with qtbot.waitSignal(task.sigFinished, timeout=5000):
-        _BlockingAction.gate.set()  # let the action, and the run loop, finish
+        gate.set()  # let the protocol function, and the run loop, finish
 
     task_ref = weakref.ref(task)
     orch_ref = weakref.ref(orch)
