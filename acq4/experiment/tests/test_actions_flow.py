@@ -40,6 +40,33 @@ def test_abort_raises_abort():
         abort(ExecutionContext())
 
 
+# -- recording the signal so the orchestrator can detect a swallow ----------
+
+
+def test_next_cell_records_the_signal_on_ctx_before_raising():
+    ctx = ExecutionContext()
+    try:
+        next_cell(ctx)
+    except AdvanceToNextCell as exc:
+        assert ctx.pending_flow_signal is exc
+
+
+def test_retry_cell_records_the_signal_on_ctx_before_raising():
+    ctx = ExecutionContext()
+    try:
+        retry_cell(ctx)
+    except RetryCurrentCell as exc:
+        assert ctx.pending_flow_signal is exc
+
+
+def test_abort_records_the_signal_on_ctx_before_raising():
+    ctx = ExecutionContext()
+    try:
+        abort(ctx)
+    except AbortExperiment as exc:
+        assert ctx.pending_flow_signal is exc
+
+
 # -- prompt -----------------------------------------------------------------
 
 

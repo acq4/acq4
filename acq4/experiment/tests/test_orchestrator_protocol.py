@@ -133,6 +133,43 @@ def test_current_cell_signal_emits_cell_then_none_after_the_loop(make_pf):
     assert seen == ["cell1", None]
 
 
+def test_swallowed_flow_signal_halts_instead_of_reporting_done(make_pf):
+    """Design §5's safety net: protocol authors write their own try/except by
+    design, so `try: ... next_cell(ctx) ... except Exception: pass` is a
+    likely mistake, not a theoretical one. A FlowSignal that doesn't
+    propagate must be treated as a bug -- logged and halted -- rather than
+    quietly reported "done" with a queue that didn't actually advance."""
+    from acq4.experiment.actions.flow import next_cell
+
+    pf = make_pf()
+
+    def spy_run(ctx, **kwargs):
+        try:
+            next_cell(ctx)
+        except Exception:
+            pass  # the protocol author's own overly-broad try/except
+
+    pf.run = spy_run
+    finished = []
+    orch = Orchestrator(pf)
+    orch.sigCellFinished.connect(lambda c, s: finished.append((c, s)))
+    with pytest.raises(AbortExperiment):
+        orch.run_sync_cell("cell1")
+    assert finished == [("cell1", "error")]
+
+
+def test_unswallowed_flow_signal_still_reports_skipped(make_pf):
+    """The safety net must not fire on the ordinary case: a FlowSignal that
+    does propagate is handled exactly as before."""
+    pf = make_pf()
+    pf.run = lambda ctx, **kwargs: (_ for _ in ()).throw(AdvanceToNextCell("next"))
+    finished = []
+    orch = Orchestrator(pf)
+    orch.sigCellFinished.connect(lambda c, s: finished.append((c, s)))
+    orch.run_sync_cell("cell1")
+    assert finished == [("cell1", "skipped")]
+
+
 def test_requestnextcell_before_a_cell_skips_without_calling_run(make_pf):
     pf = make_pf()
     calls = {"n": 0}

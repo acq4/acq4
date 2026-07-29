@@ -195,5 +195,24 @@ class Orchestrator(Qt.QObject):
                     f"unexpected exception while processing cell: {exc}"
                 ) from exc
             else:
+                if ctx is not None and ctx.pending_flow_signal is not None:
+                    # Design §5's safety net: a flow action recorded a signal
+                    # on ctx right before raising it, but run() returned
+                    # normally anyway -- the protocol's own try/except caught
+                    # and swallowed it instead of letting it propagate. That
+                    # is a bug (the queue did not actually do what the
+                    # protocol thought it told it to), not a success.
+                    logger.error(
+                        "Flow signal %r was raised but swallowed by the "
+                        "protocol while processing cell %r",
+                        ctx.pending_flow_signal,
+                        cell,
+                    )
+                    self.sigStatus.emit("error")
+                    self.sigCellFinished.emit(cell, "error")
+                    raise AbortExperiment(
+                        f"flow signal raised but swallowed by the protocol: "
+                        f"{ctx.pending_flow_signal!r}"
+                    ) from ctx.pending_flow_signal
                 self.sigCellFinished.emit(cell, "done")
                 return

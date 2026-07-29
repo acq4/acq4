@@ -6,6 +6,7 @@ import contextlib
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
+from .exceptions import FlowSignal
 from .log_entry import ActionLogEntry
 
 
@@ -33,6 +34,13 @@ class ExecutionContext:
     # ExecutionContext (as built directly by tests, or a contextFactory that
     # doesn't set it) simply never requests one.
     next_cell_requested: Callable[[], bool] = field(default=_no_next_cell_requested)
+    # Set by a flow action (next_cell/retry_cell/abort, in actions/flow.py)
+    # to the FlowSignal it is about to raise, before raising it -- so the
+    # orchestrator can tell, on the success path of a protocol run(), whether
+    # a flow signal was raised and then swallowed by the protocol's own
+    # try/except rather than actually propagating. A fresh context is built
+    # per attempt, so this never needs resetting between retries.
+    pending_flow_signal: FlowSignal | None = field(default=None, repr=False)
 
     @contextlib.contextmanager
     def log_action(self, name: str):
