@@ -368,7 +368,7 @@ def test_pause_is_honored_before_refilling(make_pf, qtbot):
 
     orch = Orchestrator(pf, cellProducer=slow_producer)
     orch.pause()
-    orch.start()
+    task = orch.start()
     qtbot.wait(100)
     assert calls["n"] == 0, "producer was asked for a tile while paused"
 
@@ -376,7 +376,12 @@ def test_pause_is_honored_before_refilling(make_pf, qtbot):
     qtbot.waitUntil(lambda: calls["n"] > 0, timeout=5000)
 
     released.set()
-    orch.wait(timeout=5)
+    task.wait(timeout=5)
+    # wait() returns None on timeout rather than raising (see acq4/util/task.py),
+    # so a loop that failed to terminate would let a bare wait() pass after the
+    # 5-second stall and leak a spinning worker thread into every test that
+    # follows. Assert the run actually finished instead of trusting the wait.
+    assert task.is_done, "run loop did not finish before the wait timed out"
 
 
 def test_stop_between_tiles_ends_a_barren_survey(make_pf, qtbot):
