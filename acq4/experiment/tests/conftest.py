@@ -1,78 +1,27 @@
-"""Shared fake Actions and fixtures for acq4.experiment tests."""
+"""Shared fixtures for acq4.experiment tests."""
 import pytest
 
-from acq4.util.task import Stopped
-from acq4.experiment.action import Action
-from acq4.experiment.registry import register_action
-from acq4.experiment import exceptions as exc
-
-
-@register_action(name="Recording")
-class RecordingAction(Action):
-    """Records that it ran (by name) and returns the value of its `next` param."""
-
-    outcomes = ("done", "left", "right")
-    paramSpec = ({"name": "next", "type": "str", "default": "done"},)
-    ran: list = []
-
-    def run(self, ctx):
-        RecordingAction.ran.append(self.name)
-        return self.paramValue("next")
-
-
-@register_action(name="Raising")
-class RaisingAction(Action):
-    """Raises the OrchestrationError subclass whose typeName matches `exc`."""
-
-    outcomes = ()
-    paramSpec = ({"name": "exc", "type": "str", "default": "Exception"},)
-
-    def run(self, ctx):
-        name = self.paramValue("exc")
-        for cls in _orchestration_error_subclasses():
-            if cls.typeName == name:
-                raise cls(f"raised {name}")
-        raise exc.OrchestrationError(f"raised {name}")
-
-
-@register_action(name="Stop")
-class StopAction(Action):
-    """Simulates a cooperative stop mid-action and records the safeAbort call."""
-
-    outcomes = ("done",)
-    aborted: list = []
-
-    def run(self, ctx):
-        raise Stopped("stopped")
-
-    def safeAbort(self, ctx):
-        StopAction.aborted.append(self.name)
-
-
-def _orchestration_error_subclasses():
-    seen = [exc.OrchestrationError]
-    stack = [exc.OrchestrationError]
-    while stack:
-        for sub in stack.pop().__subclasses__():
-            if sub not in seen:
-                seen.append(sub)
-                stack.append(sub)
-    return seen
+from acq4.experiment.protocol_file import ProtocolFile
 
 
 @pytest.fixture
-def recording_cls():
-    return RecordingAction
+def make_pf(tmp_path):
+    """Factory for a minimally valid ProtocolFile, loaded from a real file on
+    disk so param_values()/param_tree behave like the genuine article. Tests
+    that need run() to do something in particular overwrite pf.run afterward
+    with a sentinel; `params` (a pyqtgraph Parameter children spec) becomes the
+    protocol's PARAMS."""
 
+    def make(params=None, name="protocol.py"):
+        path = tmp_path / name
+        path.write_text(
+            f"PARAMS = {params or []!r}\n\n\ndef run(ctx, **kwargs):\n    return None\n"
+        )
+        pf = ProtocolFile(str(path))
+        pf.load()
+        return pf
 
-@pytest.fixture
-def raising_cls():
-    return RaisingAction
-
-
-@pytest.fixture
-def stop_cls():
-    return StopAction
+    return make
 
 
 class FakeStateJob:
@@ -85,7 +34,7 @@ class FakeStateJob:
 
     def stop(self, reason=None, wait=False):
         if self._pipette is not None:
-            self._pipette.stop_calls.append((self.stateName, reason))
+            self._pipette.stop_calls.append((self.stateName, reason, wait))
 
 
 class FakePatchPipette:
@@ -95,10 +44,20 @@ class FakePatchPipette:
     polls (simulating the FSM self-driving). ``setState`` records its calls and sets the
     current state to the requested entry state. ``stop_calls`` records state-job stops
     (the Cancel-style safeAbort path).
+
+    An empty ``state_sequence`` (the default) is the deliberate "never advances"
+    shape some tests rely on: ``getState()`` then repeats whatever ``setState()``
+    last set, forever, so a mid-poll ``check_stop``/``next_cell_requested`` is
+    what has to end the drive. A *non-empty* ``state_sequence`` that runs out
+    without ``getState()`` ever reporting one of the caller's terminal states is
+    instead a broken test setup, not that shape -- with ``sleep`` commonly
+    monkeypatched to a no-op in these tests, silently repeating the last state
+    would turn it into a hanging hot loop instead of a fast, clear failure.
     """
 
     def __init__(self, state_sequence=()):
         self._seq = list(state_sequence)
+        self._had_sequence = bool(self._seq)
         self._current = "out"
         self.setState_calls = []
         self.stop_calls = []
@@ -111,6 +70,11 @@ class FakePatchPipette:
     def getState(self):
         if self._seq:
             self._current = self._seq.pop(0)
+        elif self._had_sequence:
+            raise RuntimeError(
+                f"FakePatchPipette: declared state_sequence exhausted while parked "
+                f"at {self._current!r} -- it never reached a declared terminal state"
+            )
         return FakeStateJob(self._current, self)
 
 

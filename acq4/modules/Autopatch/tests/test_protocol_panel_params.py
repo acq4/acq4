@@ -1,7 +1,7 @@
-"""Tests that ProtocolPanel renders a protocol's publicParams as an editable
-ParameterTree mirror, two-way bound onto the underlying Action params."""
-import json
-import os
+"""Tests that ProtocolPanel installs a protocol's own ProtocolFile.param_tree
+directly into its ParameterTree, with no mirror layer: editing the installed
+tree changes what ProtocolFile.param_values() returns."""
+import textwrap
 
 import pytest
 
@@ -13,40 +13,67 @@ def qapp():
     return Qt.QApplication.instance() or Qt.QApplication([])
 
 
-def _write_protocol_with_public_param(path, name):
-    data = {
-        "version": 1,
-        "entry": "n1",
-        "nodes": {"n1": {"type": "GoHome", "params": {"speed": "slow"}}},
-        "edges": [],
-        "publicParams": [{"node": "n1", "param": "speed", "public": "Approach speed"}],
-        "exceptionHandlers": {},
-    }
-    with open(os.path.join(path, name), "w") as fh:
-        json.dump(data, fh)
+def _write(dir_path, name, body):
+    path = dir_path / name
+    path.write_text(textwrap.dedent(body))
+    return str(path)
 
 
-def test_param_tree_has_one_child_per_public_param(qapp, tmp_path):
+def _write_protocol_with_params(dir_path, name):
+    _write(
+        dir_path,
+        name,
+        """
+        PARAMS = [dict(name="Approach speed", type="str", default="slow")]
+
+        def run(ctx, **params):
+            return "done"
+        """,
+    )
+
+
+def test_param_tree_installed_is_the_protocol_files_own_tree(qapp, tmp_path):
     from acq4.modules.Autopatch.protocol_panel import ProtocolPanel
 
-    _write_protocol_with_public_param(tmp_path, "demo.json")
-    panel = ProtocolPanel(protocolDir=str(tmp_path))
-    panel.fileCombo.setCurrentText("demo.json")
-    panel.loadSelected()
+    _write_protocol_with_params(tmp_path, "demo.py")
+    panel = ProtocolPanel(protocolDir=str(tmp_path))  # auto-selects/loads "demo"
+    pf = panel.protocolFile
 
-    names = [c.name() for c in panel.paramsRoot.children()]
+    names = [c.name() for c in pf.param_tree.children()]
     assert names == ["Approach speed"]
-    assert panel.paramsRoot.child("Approach speed").value() == "slow"
+    assert pf.param_tree.child("Approach speed").value() == "slow"
+
+    root = panel.paramTree.invisibleRootItem()
+    assert root.child(0).param is pf.param_tree
 
 
-def test_editing_mirror_pushes_value_to_underlying_action_param(qapp, tmp_path):
+def test_editing_installed_tree_changes_param_values(qapp, tmp_path):
+    """The whole point of dropping the mirror layer: there is no separate
+    mirror parameter to edit and no write-back wiring -- editing the tree
+    ProtocolPanel installed IS editing the ProtocolFile's own tree, so
+    param_values() (what the orchestrator passes to run()) reflects it
+    immediately."""
     from acq4.modules.Autopatch.protocol_panel import ProtocolPanel
 
-    _write_protocol_with_public_param(tmp_path, "demo.json")
+    _write_protocol_with_params(tmp_path, "demo.py")
+    panel = ProtocolPanel(protocolDir=str(tmp_path))  # auto-selects/loads "demo"
+    pf = panel.protocolFile
+
+    pf.param_tree.child("Approach speed").setValue("fast")
+
+    assert pf.param_values() == {"Approach speed": "fast"}
+
+
+def test_selecting_a_loaded_protocol_shows_its_param_tree(qapp, tmp_path):
+    from acq4.modules.Autopatch.protocol_panel import ProtocolPanel
+
+    _write_protocol_with_params(tmp_path, "demo.py")
     panel = ProtocolPanel(protocolDir=str(tmp_path))
-    panel.fileCombo.setCurrentText("demo.json")
-    panel.loadSelected()
 
-    panel.paramsRoot.child("Approach speed").setValue("fast")
+    idx = panel.fileCombo.findData("demo")
+    panel.fileCombo.setCurrentIndex(idx)
 
-    assert panel.protocol.nodes["n1"].paramValue("speed") == "fast"
+    root = panel.paramTree.invisibleRootItem()
+    assert root.childCount() == 1
+    assert root.child(0).childCount() == 1  # "Approach speed"
+    assert not panel.errorLabel.text()

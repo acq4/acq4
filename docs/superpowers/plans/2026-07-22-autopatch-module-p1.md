@@ -1,5 +1,7 @@
 # Autopatch Module — P1: Run Window
 
+> **Superseded:** the `Action`-class/`Protocol`-JSON model this plan describes (`Protocol.load_json`, `publicParams`, `sigCurrentAction`, `sigActionFinished`, `*.json` protocol files) was replaced by the plain-function protocol model. See `docs/superpowers/plans/2026-07-24-autopatch-p1-5-plain-function-migration.md`. This document is kept as a historical record and is not updated to match.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: superpowers:subagent-driven-development (recommended) or superpowers:executing-plans. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build `acq4/modules/Autopatch/` — the operator-facing run window (design doc Areas 3/4/5) that loads a JSON/coded `Protocol`, lets the operator edit its public params, drives an `Orchestrator` with Start/Stop/Pause/Next, and shows live status, a cell list, a per-cell executed-path timeline, and a cell-scoped log. No graph editor, no slice/region UI, no cell-finding — cells are seeded manually into the orchestrator's queue.

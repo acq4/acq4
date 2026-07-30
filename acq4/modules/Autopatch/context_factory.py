@@ -13,6 +13,7 @@ def make_context_factory(
     pipetteGetter: Callable[[], object],
     manager,
     log: Callable[[object, str], None] | None = None,
+    onLogAction: Callable[[object, object], None] | None = None,
 ) -> Callable[[object], ExecutionContext]:
     def _factory(cell) -> ExecutionContext:
         kwargs = dict(cell=cell, pipette=pipetteGetter(), manager=manager)
@@ -20,6 +21,11 @@ def make_context_factory(
             # ExecutionContext.log is a single-arg (message) callable; bind this
             # cell so the UI-side sink (log) knows which cell a line belongs to.
             kwargs["log"] = partial(log, cell)
+        if onLogAction is not None:
+            # ExecutionContext.on_log_action is a single-arg (entry) callable;
+            # bind this cell the same way, so the UI-side sink (onLogAction)
+            # knows which cell an ActionLogEntry belongs to.
+            kwargs["on_log_action"] = partial(onLogAction, cell)
         return ExecutionContext(**kwargs)
 
     return _factory
