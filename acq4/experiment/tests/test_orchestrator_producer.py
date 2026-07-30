@@ -284,6 +284,62 @@ def test_producer_abort_propagates_without_double_wrapping(make_pf):
     assert excinfo.value is sentinel
 
 
+def test_nextcell_request_during_refill_of_an_empty_queue_is_discarded(make_pf):
+    """A "Next cell" request that arrives while the producer is imaging a tile
+    -- itself a slow, seconds-to-minutes operation -- lands on an empty queue:
+    nothing was running and nothing was queued for it to advance past. Consuming
+    it against the first cell the producer then returns would skip a cell the
+    operator never saw, without it ever being attempted, so it must be
+    discarded instead."""
+    pf = make_pf()
+    ran = []
+    finished = []
+    calls = {"n": 0}
+
+    def producer():
+        calls["n"] += 1
+        if calls["n"] == 1:
+            orch.requestNextCell()  # arrives mid-produce, before any cell exists
+            return ["c1", "c2"]
+        return None
+
+    def run(ctx, **kwargs):
+        ran.append(ctx.cell)
+
+    pf.run = run
+    orch = Orchestrator(pf, cellProducer=producer, targetQueueDepth=1)
+    orch.sigCellFinished.connect(lambda c, s: finished.append((c, s)))
+    orch.run_sync()
+    assert ran == ["c1", "c2"]
+    assert finished == [("c1", "done"), ("c2", "done")]
+
+
+def test_nextcell_request_during_refill_of_a_nonempty_queue_is_preserved(make_pf):
+    """The same request, but with a cell already queued when the refill runs,
+    must NOT be discarded: there is a cell it could be about (c1), the same as
+    if the operator had pressed Next before Start. The fix for the empty-queue
+    case above must not over-broadly clear the flag whenever a refill happens
+    to run first."""
+    pf = make_pf()
+    ran = []
+    finished = []
+
+    def producer():
+        orch.requestNextCell()  # arrives mid-produce, c1 is already queued
+        return None  # exhausted immediately -- c1 is the only cell available
+
+    def run(ctx, **kwargs):
+        ran.append(ctx.cell)
+
+    pf.run = run
+    orch = Orchestrator(pf, cellProducer=producer, targetQueueDepth=2)
+    orch.enqueue("c1")
+    orch.sigCellFinished.connect(lambda c, s: finished.append((c, s)))
+    orch.run_sync()
+    assert ran == []
+    assert finished == [("c1", "skipped")]
+
+
 def test_pause_is_honored_before_refilling(make_pf, qtbot):
     """Pause means "start nothing new", and imaging a tile is very much
     something new -- an operator who pauses must not have the stage move to

@@ -172,7 +172,15 @@ class Orchestrator(Qt.QObject):
                 self._checkPause()
                 check_stop()
                 if self._shouldRefill():
+                    queueWasEmpty = not self._queue
                     self._refillQueue()
+                    if queueWasEmpty:
+                        # A request that arrived while the producer was working
+                        # had no cell to advance past: nothing was running and
+                        # nothing was queued. Consuming it against the first
+                        # cell the producer then returned would skip a cell the
+                        # operator never saw, without it ever being attempted.
+                        self._nextCellRequested = False
                     # Back to the top rather than falling through to a cell:
                     # re-checks the depth target (so a deep queue fills over
                     # several passes) and, more importantly, re-checks pause
