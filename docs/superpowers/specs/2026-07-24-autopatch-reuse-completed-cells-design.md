@@ -88,12 +88,12 @@ Disposition vocabulary — the complete set of statuses
 
 | Status | Site | Meaning |
 |---|---|---|
-| `"done"` | `orchestrator.py:297` | `run()` returned normally: the protocol ran to completion |
-| `"skipped"` | `orchestrator.py:187`, `:208` | a Next-cell request consumed at the cell/retry boundary, or `AdvanceToNextCell` propagating out of `run()`. **Abandoned without completing.** |
-| `"stopped"` | `orchestrator.py:233` | a cooperative `Stopped`: the operator pressed Stop while this cell was mid-run |
-| `"retry-exhausted"` | `orchestrator.py:217` | `maxRetries` blown against a persistently failing cell |
-| `"error"` | `orchestrator.py:243`, `:255`, `:289` | an uncaught `OrchestrationError`, an unexpected exception, or a flow signal the protocol raised and then swallowed |
-| `"retry"` | `orchestrator.py:219` | transient; superseded by whichever terminal status that cell eventually reaches |
+| `"done"` | `orchestrator.py:406` | `run()` returned normally: the protocol ran to completion |
+| `"skipped"` | `orchestrator.py:296`, `:317` | a Next-cell request consumed at the cell/retry boundary, or `AdvanceToNextCell` propagating out of `run()`. **Abandoned without completing.** |
+| `"stopped"` | `orchestrator.py:342` | a cooperative `Stopped`: the operator pressed Stop while this cell was mid-run |
+| `"retry-exhausted"` | `orchestrator.py:326` | `maxRetries` blown against a persistently failing cell |
+| `"error"` | `orchestrator.py:352`, `:364`, `:398` | an uncaught `OrchestrationError`, an unexpected exception, or a flow signal the protocol raised and then swallowed |
+| `"retry"` | `orchestrator.py:328` | transient; superseded by whichever terminal status that cell eventually reaches |
 
 There is no `"handled"` disposition: handler sub-protocols do not exist in the
 engine, so nothing emits one.
@@ -113,11 +113,11 @@ COMPLETED = {"done"}
   completion*. Every other terminal disposition is a manual opt-in, each for its
   own reason:
   - `"error"` signals an aborted run, possibly a bug.
-  - `"retry-exhausted"` is a *persistent* failure (`orchestrator.py:211-218`),
+  - `"retry-exhausted"` is a *persistent* failure (`orchestrator.py:320-327`),
     not a completion. The rationale for excluding `"error"` applies verbatim.
   - `"stopped"` and `"skipped"` are both abandonment — the protocol never
     reached its end. `"skipped"` in particular is what `ctx.next_cell()` reports
-    (`orchestrator.py:208`): the protocol, or the operator's Next-cell press,
+    (`orchestrator.py:317`): the protocol, or the operator's Next-cell press,
     explicitly giving up on this cell. A protocol that runs to completion
     reports `"done"`, never `"skipped"` — neither bundled example protocol ends
     in a flow-control call, and none should. **`"skipped"` therefore does not
@@ -125,7 +125,7 @@ COMPLETED = {"done"}
     up cells that never did the work as though they had. If some future protocol
     ends by abandoning its cell, the thing to fix is that protocol, not this set.
 
-The transient `"retry"` status (`orchestrator.py:219`) is not terminal and is
+The transient `"retry"` status (`orchestrator.py:328`) is not terminal and is
 never stored as a final disposition — it is superseded by the eventual terminal
 status for that cell.
 
@@ -222,9 +222,9 @@ over the freshly-queued cells.
 `StatusPanel` re-enables Start once a prior run reaches `waiting`:
 `_updateButtons` enables Start for `None`/`"waiting"` (`status_panel.py:166-167`),
 and `Orchestrator._runLoopBody`'s `finally` emits `"waiting"` on every exit path
-(`orchestrator.py:152-162`). That holds by inspection, but it hangs on emission
+(`orchestrator.py:222-242`). That holds by inspection, but it hangs on emission
 *order*, not on a final state: the failure path emits `"error"`
-(`orchestrator.py:242`) and only then `"waiting"` from the `finally`, and
+(`orchestrator.py:351`) and only then `"waiting"` from the `finally`, and
 `"error"` on its own disables Start (`status_panel.py:172-173`). So the
 implementation must assert the ordering in a test — drive a run to `error`
 through the real signal path and assert Start ends up enabled — rather than
