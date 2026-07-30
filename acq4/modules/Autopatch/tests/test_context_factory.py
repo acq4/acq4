@@ -61,3 +61,32 @@ def test_factory_binds_log_per_cell_so_lines_can_be_scoped():
     ctxB.log("from B")
 
     assert messages == [(cellA, "from A"), (cellB, "from B")]
+
+
+def test_factory_leaves_on_log_action_none_by_default():
+    from acq4.modules.Autopatch.context_factory import make_context_factory
+
+    factory = make_context_factory(pipetteGetter=lambda: None, manager=None)
+    ctx = factory(object())
+
+    assert ctx.on_log_action is None
+
+
+def test_factory_binds_on_log_action_per_cell_so_entries_can_be_scoped():
+    from acq4.modules.Autopatch.context_factory import make_context_factory
+
+    calls = []
+    factory = make_context_factory(
+        pipetteGetter=lambda: None,
+        manager=None,
+        onLogAction=lambda cell, entry: calls.append((cell, entry)),
+    )
+
+    cellA, cellB = object(), object()
+    ctxA = factory(cellA)
+    ctxB = factory(cellB)
+    entryA, entryB = object(), object()
+    ctxA.on_log_action(entryA)
+    ctxB.on_log_action(entryB)
+
+    assert calls == [(cellA, entryA), (cellB, entryB)]

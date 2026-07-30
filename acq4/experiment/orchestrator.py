@@ -1,5 +1,5 @@
-"""Orchestrator: runs a Protocol over a queue of cells, serially, routing on each
-action's outcome and converting flow signals / exceptional states into control."""
+"""Orchestrator: runs a cell queue serially, calling each cell's protocol
+function and converting its flow-signal exceptions into queue control."""
 from __future__ import annotations
 
 from collections import deque
@@ -22,36 +22,78 @@ logger = get_logger(__name__)
 
 class Orchestrator(Qt.QObject):
     sigStatus = Qt.Signal(str)                 # "running"/"waiting"/"paused"/"error"
-    sigCurrentAction = Qt.Signal(object, object)   # cell, action (None,None when idle)
+    sigCurrentCell = Qt.Signal(object)         # cell, or None when idle
     sigCellFinished = Qt.Signal(object, str)   # cell, status
-    sigActionFinished = Qt.Signal(object, object, str)  # cell, action, outcome
 
-    def __init__(self, protocol, manager=None, contextFactory=None, maxRetries=100):
+    def __init__(
+        self,
+        protocolFile,
+        manager=None,
+        contextFactory=None,
+        maxRetries=100,
+        cellProducer=None,
+    ):
         Qt.QObject.__init__(self)
-        self.protocol = protocol
+        self.protocolFile = protocolFile
         self.manager = manager
         self._queue = deque()
         self._pauseEvent = Event()
         self._pauseEvent.set()  # set == running
         self._nextCellRequested = False
         self._contextFactory = contextFactory or self._defaultContext
-        # Guard against an unbounded retry loop (a cell whose handler always
-        # retries, or a persistently-failing action). On exhaustion the cell is
-        # skipped rather than wedging the queue forever.
+        # Guard against an unbounded retry loop (a protocol that always raises
+        # RetryCurrentCell, or a persistently-failing action). On exhaustion the
+        # cell finishes as "retry-exhausted" rather than wedging the queue forever.
         self.maxRetries = maxRetries
+        self._cellProducer = cellProducer
+        # Per-run: set once the producer reports exhaustion, cleared by
+        # _runLoopBody's finally. See setCellProducer for why it is not
+        # simply "has the producer ever returned None".
+        self._producerExhausted = False
 
     # ---- queue / context ----
     def enqueue(self, cell):
         self._queue.append(cell)
+
+    def setCellProducer(self, producer):
+        """Install (or clear, with None) the callback that refills the queue.
+
+        `producer()` takes no arguments, runs on the worker thread, and returns
+        either a sequence of new cells -- possibly empty, meaning "made
+        progress, found none here, ask again" -- or None, meaning exhausted.
+
+        Installing a producer clears the exhausted flag: a caller swapping in a
+        fresh producer (a new survey region) is declaring there is more to find,
+        and would otherwise be ignored for the rest of the run.
+        """
+        self._cellProducer = producer
+        self._producerExhausted = False
 
     def _defaultContext(self, cell) -> ExecutionContext:
         return ExecutionContext(cell=cell, manager=self.manager)
 
     # ---- test / headless entry points ----
     def run_sync_cell(self, cell):
-        """Run a single cell through the protocol inline. Used by tests/headless."""
+        """Run a single cell through the protocol inline. Used by tests/headless.
+
+        The lower-level single-cell primitive: unlike run_sync()/start(), a
+        cooperative Stopped from _processCell still propagates to the caller
+        here, since there is no _runLoopBody frame around this call to end the
+        run normally instead.
+        """
         self._nextCellRequested = False
-        self._processCell(cell)
+        try:
+            self._processCell(cell)
+        finally:
+            # A request set (or left set) while processing this cell cannot
+            # outlive this call -- whether _processCell returns normally or
+            # raises (FlowSignal, Stopped, OrchestrationError, or an
+            # unexpected exception all propagate straight through this call,
+            # with no _runLoopBody frame around it to catch them on the way
+            # out). Without this, a request left set by a raising call would
+            # be silently consumed against an unrelated cell the next time
+            # run_sync()/start() runs on this instance.
+            self._nextCellRequested = False
 
     # ---- controls ----
     def start(self):
@@ -76,7 +118,14 @@ class Orchestrator(Qt.QObject):
         self._task = None
 
     def run_sync(self):
-        """Run the whole queue inline (deterministic; for tests / headless)."""
+        """Run the whole queue inline (deterministic; for tests / headless).
+
+        Same run-loop scope as start(): a cooperative Stopped (operator-
+        initiated, via check_stop()) ends this call normally rather than
+        raising -- see _runLoopBody. Contrast run_sync_cell(), the lower-level
+        single-cell primitive below, which still lets Stopped propagate to its
+        caller.
+        """
         self._runLoopBody()
 
     def pause(self):
@@ -91,101 +140,167 @@ class Orchestrator(Qt.QObject):
             task.stop(reason)
 
     def requestNextCell(self):
-        # P0 scope: the request is honored at the next action boundary (checked at
-        # the top of _walk), not mid-action. It does not interrupt or safeAbort an
-        # action that is already running -- use stop() for that. The design doc's
-        # "safeAbort the pipette and advance" semantics are a later enhancement.
+        # Honored at the next cell boundary (checked at the top of
+        # _processCell's retry loop) and, cooperatively, inside actions.fsm's
+        # poll loop (via ExecutionContext.next_cell_requested, injected below)
+        # -- a cell spends nearly all its wall-clock there. A protocol that
+        # never enters an FSM-driving action and never returns has no
+        # checkpoint for this to interrupt; use stop() for that.
         self._nextCellRequested = True
 
-    def wait(self, timeout=None):
+    def wait(self, timeout=None, updates=False):
         task = getattr(self, "_task", None)
         if task is None:
             raise RuntimeError("Orchestrator was not started; nothing to wait on")
-        return task.wait(timeout=timeout)
+        return task.wait(timeout=timeout, updates=updates)
 
     # ---- loop body ----
     def _runLoopBody(self):
         self.sigStatus.emit("running")
         try:
-            while self._queue:
+            while True:
                 self._checkPause()
                 check_stop()
+                if self._shouldRefill():
+                    self._refillQueue()
+                    # Refill only ever runs against an empty queue, so a
+                    # request that arrived while the producer was working had
+                    # no cell to advance past: nothing was running and nothing
+                    # was queued. Consuming it against the first cell the
+                    # producer then returned would skip a cell the operator
+                    # never saw, without it ever being attempted.
+                    self._nextCellRequested = False
+                    # Back to the top rather than falling through to a cell:
+                    # re-checks pause and stop between refills, and lets a
+                    # producer returning [] be asked again next pass. Imaging
+                    # a tile is slow, so an operator pressing Stop mid-survey
+                    # must not have to wait out a refill that already started.
+                    continue
+                if not self._queue:
+                    # Queue empty and nothing left to produce: the run is done.
+                    break
                 cell = self._queue.popleft()
                 self._processCell(cell)
-                self._nextCellRequested = False
+        except Stopped as exc:
+            # An operator-initiated stop is a normal way for the run loop to
+            # end, not an unhandled exception: check_stop()/_processCell's own
+            # Stopped propagation has already unwound whatever action was
+            # running (and, for an FSM-driving action, _safe_abort has already
+            # put the pipette in its declared fallback state). Returning here
+            # instead of re-raising means _onLoopFinished sees exc=None rather
+            # than logging an operator-initiated stop as a failure. A problem
+            # encountered *during* that cleanup is a different exception (not
+            # Stopped) raised from inside _safe_abort/_drive_fsm's own except
+            # clause, so it is not caught here -- it keeps propagating.
+            logger.info("Orchestrator run loop stopped: %s", str(exc) or "no reason given")
         finally:
-            self.sigCurrentAction.emit(None, None)
+            # A "Next cell" request cannot outlive the run loop it was made
+            # during -- whether that loop exits by returning (the queue
+            # drained) or by raising (FlowSignal/Stopped propagating,
+            # OrchestrationError/an unexpected exception aborting). Without
+            # this, a request left over from a cell abandoned mid-run would
+            # be silently consumed against an unrelated cell the next time
+            # the queue is started.
+            self._nextCellRequested = False
+            # Per-run, exactly like the next-cell request above: a producer
+            # that exhausted during this run must not leave the orchestrator
+            # permanently convinced there is nothing left to find. A later run
+            # -- over a new survey region, or over cells still queued after a
+            # stop -- has to ask again. Unlike the next-cell flag, this one
+            # needs no per-exit clears: it is only ever read by the refill
+            # check at the top of this method's own loop, so there is no
+            # equivalent of _processCell's inner retry loop running past the
+            # reach of this finally.
+            self._producerExhausted = False
+            self.sigCurrentCell.emit(None)
             self.sigStatus.emit("waiting")
 
-    # ---- graph walk ----
     def _checkPause(self):
         if not self._pauseEvent.is_set():
             self.sigStatus.emit("paused")
             self._pauseEvent.wait()
             self.sigStatus.emit("running")
 
-    def _runAction(self, action, ctx) -> str:
-        try:
-            result = action.run(ctx)
-        except Stopped:
-            action.safeAbort(ctx)
-            raise
-        if result not in action.outcomes:
-            raise ValueError(
-                f"{action.name} returned unknown outcome {result!r}; "
-                f"expected one of {action.outcomes}"
-            )
-        return result
+    def _shouldRefill(self) -> bool:
+        return (
+            self._cellProducer is not None
+            and not self._producerExhausted
+            and not self._queue
+        )
 
-    def _walk(self, cell, protocol, node_id):
-        """Walk `protocol` from `node_id`, routing on outcomes. Raises FlowSignal
-        or OrchestrationError up to the caller."""
-        while node_id is not None:
-            self._checkPause()
-            check_stop()
-            if self._nextCellRequested:
-                raise AdvanceToNextCell("next cell requested")
-            action = protocol.nodes[node_id]
-            ctx = self._contextFactory(cell)
-            self.sigCurrentAction.emit(cell, action)
-            outcome = self._runAction(action, ctx)
-            self.sigActionFinished.emit(cell, action, outcome)
-            node_id = protocol.next_node(node_id, outcome)
+    def _refillQueue(self):
+        """Ask the producer for more cells; record exhaustion when it has none."""
+        try:
+            cells = self._cellProducer()
+        except (Stopped, FlowSignal):
+            # Same pass-through as _processCell: a cooperative stop is a normal
+            # end to the run, and a producer that raises AbortExperiment means
+            # it -- neither is a bug to be wrapped by the clause below.
+            raise
+        except Exception as exc:
+            # An unexpected bug in the producer must fail loud rather than
+            # quietly ending the survey and letting the run look complete.
+            # There is no cell to attribute it to, so no sigCellFinished.
+            logger.exception("Cell producer raised while refilling the queue")
+            self.sigStatus.emit("error")
+            raise AbortExperiment(f"cell producer failed: {exc}") from exc
+        if cells is None:
+            self._producerExhausted = True
+            return
+        for cell in cells:
+            self.enqueue(cell)
 
     def _processCell(self, cell):
-        """Run the main protocol for one cell, dispatching exceptional states to
-        handler sub-protocols. RetryCurrentCell loops (bounded by maxRetries);
-        AdvanceToNextCell skips."""
+        """Run the protocol function for one cell. RetryCurrentCell loops in
+        place (bounded by maxRetries, restarting the same cell rather than
+        re-queuing it); AdvanceToNextCell skips."""
         retries = 0
         while True:
+            # A retry restarts the protocol from the top of this loop, not
+            # through _runLoopBody's own loop -- so Pause must be checked
+            # here too, or a protocol retrying against a persistent failure
+            # ignores Pause completely.
+            self._checkPause()
+            if self._nextCellRequested:
+                # Consumed here, against this cell, rather than left for
+                # whichever cell _runLoopBody's own while loop pops next --
+                # that next iteration is still inside this same call, past
+                # the reach of either entry point's finally.
+                self._nextCellRequested = False
+                self.sigCellFinished.emit(cell, "skipped")
+                return
             self.sigStatus.emit("running")
+            ctx = self._contextFactory(cell)
+            # Give the context a way to observe a mid-cell "Next cell" request
+            # without handing it a back-reference to the orchestrator itself --
+            # a narrow closure over the flag, injected the same way regardless
+            # of which contextFactory built ctx (mirroring how log/on_log_action
+            # are already bound onto a context by whoever builds one). Guarded
+            # since a contextFactory is free to hand back None (e.g. a test
+            # deliberately avoiding a self-cycle through a real ExecutionContext).
+            if ctx is not None:
+                ctx.next_cell_requested = lambda: self._nextCellRequested
+            self.sigCurrentCell.emit(cell)
             try:
-                self._walk(cell, self.protocol, self.protocol.entry)
+                self.protocolFile.run(ctx, **self.protocolFile.param_values())
             except AdvanceToNextCell:
+                # Same boundary as the top-of-loop check above: this cell is
+                # done, and the request that caused it must not ride along to
+                # whichever cell the queue processes next.
+                self._nextCellRequested = False
                 self.sigCellFinished.emit(cell, "skipped")
                 return
             except RetryCurrentCell:
                 retries += 1
                 if retries > self.maxRetries:
+                    # Same boundary again: retries on this cell are over, and
+                    # a request observed during them must not carry into the
+                    # next queued cell.
+                    self._nextCellRequested = False
                     self.sigCellFinished.emit(cell, "retry-exhausted")
                     return
                 self.sigCellFinished.emit(cell, "retry")
-                continue
-            except OrchestrationError as exc:
-                self.sigStatus.emit("error")
-                disposition = self._handleException(exc, cell)
-                if disposition == "retry":
-                    retries += 1
-                    if retries > self.maxRetries:
-                        self.sigCellFinished.emit(cell, "retry-exhausted")
-                        return
-                    self.sigCellFinished.emit(cell, "retry")
-                    continue  # loop top re-emits "running"
-                # Handler recovered by advancing: the run is no longer in an
-                # error state, so restore "running" before finishing the cell.
-                self.sigStatus.emit("running")
-                self.sigCellFinished.emit(cell, "handled")
-                return
+                continue  # loop top re-emits "running" and restarts in place
             except FlowSignal:
                 # AdvanceToNextCell/RetryCurrentCell are handled above and never
                 # reach here; AbortExperiment (and any future FlowSignal) must
@@ -194,14 +309,30 @@ class Orchestrator(Qt.QObject):
                 raise
             except Stopped:
                 # A cooperative stop (operator-initiated, via check_stop()) is
-                # not an unexpected bug either -- action.safeAbort() has already
-                # run (in _runAction), so let it keep propagating uncaught.
+                # not an unexpected bug either -- the protocol's own try/finally
+                # has already unwound the device, so let it keep propagating
+                # uncaught. Reported "stopped" first so the interrupted cell's
+                # row doesn't read "running" forever once the run has ended.
+                self.sigCellFinished.emit(cell, "stopped")
                 raise
+            except OrchestrationError as exc:
+                # Design §5's catch-all safety net: an uncaught orchestration
+                # error halts the run rather than blazing through the remaining
+                # queued cells. Handler sub-protocols are gone; a protocol
+                # author who wants to recover from this writes their own
+                # try/except in run().
+                logger.exception("Unhandled orchestration error while processing cell %r", cell)
+                self.sigStatus.emit("error")
+                self.sigCellFinished.emit(cell, "error")
+                raise AbortExperiment(
+                    f"unhandled orchestration error while processing cell: {exc}"
+                ) from exc
             except Exception as exc:
-                # An unexpected bug (not an exceptional state routed to a
-                # handler) must fail loud rather than be silently swallowed:
-                # log it, surface it as an error to the UI, and abort the run
-                # rather than blazing through the remaining queued cells.
+                # An unexpected bug (not a flow signal, and not an
+                # OrchestrationError the protocol chose to let propagate) must
+                # fail loud rather than be silently swallowed: log it, surface
+                # it as an error to the UI, and abort the run rather than
+                # blazing through the remaining queued cells.
                 logger.exception("Unexpected exception while processing cell %r", cell)
                 self.sigStatus.emit("error")
                 self.sigCellFinished.emit(cell, "error")
@@ -209,26 +340,42 @@ class Orchestrator(Qt.QObject):
                     f"unexpected exception while processing cell: {exc}"
                 ) from exc
             else:
+                if ctx is not None and ctx.pending_flow_signal is not None:
+                    # Design §5's safety net: a flow action recorded a signal
+                    # on ctx right before raising it, but run() returned
+                    # normally anyway -- the protocol's own try/except caught
+                    # and swallowed it instead of letting it propagate. That
+                    # is a bug (the queue did not actually do what the
+                    # protocol thought it told it to), not a success.
+                    signal = ctx.pending_flow_signal
+                    # Captured into a local and cleared on ctx before raising.
+                    # signal.__traceback__ already holds _raise_flow_signal's own
+                    # frame, whose `self` is ctx, so ctx stays reachable from the
+                    # chained exception regardless of this clear. What the clear
+                    # achieves is breaking ctx's own reference to signal, turning
+                    # ctx -> signal -> traceback -> frame -> ctx from a reference
+                    # cycle into a one-way chain -- reclaimable by plain
+                    # refcounting instead of needing the cyclic GC.
+                    ctx.pending_flow_signal = None
+                    logger.error(
+                        "Flow signal %r was raised but swallowed by the "
+                        "protocol while processing cell %r",
+                        signal,
+                        cell,
+                    )
+                    # This path always raises AbortExperiment rather than
+                    # returning, so it is caught by _runLoopBody's finally (for
+                    # the queue loop) or run_sync_cell's finally (for the
+                    # direct path) on the way out -- no separate clear needed
+                    # here.
+                    self.sigStatus.emit("error")
+                    self.sigCellFinished.emit(cell, "error")
+                    raise AbortExperiment(
+                        f"flow signal raised but swallowed by the protocol: {signal!r}"
+                    ) from signal
+                # Same boundary again: this cell finished normally, and a
+                # request the protocol set but never itself acted on must not
+                # carry into the next queued cell.
+                self._nextCellRequested = False
                 self.sigCellFinished.emit(cell, "done")
                 return
-
-    def _handleException(self, exc, cell) -> str:
-        """Run the matching handler sub-protocol. Returns 'retry' or 'advance';
-        raises AbortExperiment when the handler aborts or none matches."""
-        handler = self.protocol.handler_for(exc.typeName)
-        if handler is None or handler.entry is None:
-            raise AbortExperiment(f"unhandled {exc.typeName}: {exc}")
-        try:
-            self._walk(cell, handler, handler.entry)
-        except AdvanceToNextCell:
-            return "advance"
-        except RetryCurrentCell:
-            return "retry"
-        except OrchestrationError as handler_exc:
-            # A handler that itself hits an exceptional state cannot recover the
-            # cell; fail closed to a controlled abort rather than letting it escape.
-            raise AbortExperiment(
-                f"exception in handler for {exc.typeName}: "
-                f"{handler_exc.typeName}: {handler_exc}"
-            ) from handler_exc
-        return "advance"  # handler ran to completion without a flow action

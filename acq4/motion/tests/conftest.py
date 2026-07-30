@@ -2,6 +2,8 @@
 # Mock devices expose the position/transform APIs the planner needs without real hardware.
 from __future__ import annotations
 
+import logging
+
 import numpy as np
 import pytest
 
@@ -13,6 +15,8 @@ class MockDevice:
         self._name = name
         self._global_pos = np.asarray(global_pos, dtype=float)
         self.moves = []  # list of (pos, speed, name)
+        # Every real Device gets a .logger in Device.__init__; the planner logs through it.
+        self.logger = logging.getLogger(f"acq4.test.mockdevice.{name}")
 
     def name(self):
         return self._name

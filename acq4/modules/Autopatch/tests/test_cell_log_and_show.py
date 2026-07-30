@@ -1,7 +1,9 @@
-"""Tests for CellPanel's log view (ctx.log sink) and live show()-widget mount,
-both scoped to the currently-followed (selected) cell."""
+"""Tests for CellPanel's log view (ctx.log sink) and the live details widget
+mounted from a ctx.log_action() entry's set_details_widget(), both scoped to
+the currently-followed (selected) cell."""
 import pytest
 
+from acq4.experiment.log_entry import ActionLogEntry
 from acq4.util import Qt
 
 
@@ -11,9 +13,8 @@ def qapp():
 
 
 class _FakeOrchestrator(Qt.QObject):
-    sigCurrentAction = Qt.Signal(object, object)
+    sigCurrentCell = Qt.Signal(object)
     sigCellFinished = Qt.Signal(object, str)
-    sigActionFinished = Qt.Signal(object, object, str)
 
     def __init__(self):
         super().__init__()
@@ -37,18 +38,6 @@ class _FakeManipulator:
 
     def targetPosition(self):
         return self._target
-
-
-class _FakeAction(Qt.QObject):
-    sigStateChanged = Qt.Signal(object, str)
-
-    def __init__(self, name, widget=None):
-        super().__init__()
-        self.name = name
-        self._widget = widget
-
-    def show(self):
-        return self._widget
 
 
 def test_append_log_shows_in_log_view(qapp):
@@ -85,7 +74,7 @@ def test_log_is_scoped_to_the_selected_cell(qapp):
     assert "log line for A" not in panel.logView.toPlainText()
 
 
-def test_show_widget_mounted_for_selected_cell(qapp):
+def test_details_widget_mounted_for_selected_cell(qapp):
     from acq4.modules.Autopatch.cell_panel import CellPanel
 
     panel = CellPanel(pipetteGetter=lambda: _FakePipette((0, 0, 0)))
@@ -95,14 +84,17 @@ def test_show_widget_mounted_for_selected_cell(qapp):
     cell = orch.enqueued[0]
     panel.cellList.setCurrentRow(0)
 
+    action_entry = ActionLogEntry("Patch")
+    panel.onLogAction(cell, action_entry)
+    # Built on the GUI thread here, matching set_details_widget()'s requirement
+    # that a widget handed to the UI must not be constructed off-thread.
     liveWidget = Qt.QLabel("live plot")
-    action = _FakeAction("Patch", widget=liveWidget)
-    orch.sigCurrentAction.emit(cell, action)
+    action_entry.set_details_widget(liveWidget)
 
     assert panel.showContainer.layout().indexOf(liveWidget) != -1
 
 
-def test_show_widget_not_mounted_for_unselected_cell(qapp):
+def test_details_widget_not_mounted_for_unselected_cell(qapp):
     from acq4.modules.Autopatch.cell_panel import CellPanel
 
     panel = CellPanel(pipetteGetter=lambda: _FakePipette((0, 0, 0)))
@@ -113,14 +105,15 @@ def test_show_widget_not_mounted_for_unselected_cell(qapp):
     cellA, cellB = orch.enqueued
     panel.cellList.setCurrentRow(0)  # follow cellA
 
+    action_entry = ActionLogEntry("Patch")
+    panel.onLogAction(cellB, action_entry)  # B is running, but A is selected
     liveWidget = Qt.QLabel("live plot for B")
-    action = _FakeAction("Patch", widget=liveWidget)
-    orch.sigCurrentAction.emit(cellB, action)  # B is running, but A is selected
+    action_entry.set_details_widget(liveWidget)
 
     assert panel.showContainer.layout().indexOf(liveWidget) == -1
 
 
-def test_show_widget_cleared_when_selection_moves_away_from_running_cell(qapp):
+def test_details_widget_cleared_when_selection_moves_away_from_running_cell(qapp):
     from acq4.modules.Autopatch.cell_panel import CellPanel
 
     panel = CellPanel(pipetteGetter=lambda: _FakePipette((0, 0, 0)))
@@ -131,11 +124,63 @@ def test_show_widget_cleared_when_selection_moves_away_from_running_cell(qapp):
     cellA, cellB = orch.enqueued
     panel.cellList.setCurrentRow(0)  # follow cellA
 
+    action_entry = ActionLogEntry("Patch")
+    panel.onLogAction(cellA, action_entry)
     liveWidget = Qt.QLabel("live plot for A")
-    action = _FakeAction("Patch", widget=liveWidget)
-    orch.sigCurrentAction.emit(cellA, action)
+    action_entry.set_details_widget(liveWidget)
     assert panel.showContainer.layout().indexOf(liveWidget) != -1
 
     panel.cellList.setCurrentRow(1)  # switch away to cellB; cellA is still "running"
+
+    assert panel.showContainer.layout().count() == 0
+
+
+def test_finishing_an_entry_does_not_clear_another_entrys_still_mounted_widget(qapp):
+    """If the currently mounted details widget belongs to a different, still
+    in-flight entry than the one that just finished, finishing must not tear
+    it down. No action currently nests log_action blocks, so this only
+    happens if two entries are opened for the same cell in sequence and the
+    earlier one outlives the later one's mount -- but the guard must hold
+    regardless."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel(pipetteGetter=lambda: _FakePipette((0, 0, 0)))
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+    panel.addFromTargetBtn.click()
+    cell = orch.enqueued[0]
+    panel.cellList.setCurrentRow(0)
+
+    outerEntry = ActionLogEntry("Outer")
+    panel.onLogAction(cell, outerEntry)
+    innerEntry = ActionLogEntry("Inner")
+    panel.onLogAction(cell, innerEntry)
+
+    innerWidget = Qt.QLabel("inner widget")
+    innerEntry.set_details_widget(innerWidget)
+    assert panel.showContainer.layout().indexOf(innerWidget) != -1
+
+    outerEntry._finish(None)  # outer finishes; inner's widget is the live one
+
+    assert panel.showContainer.layout().indexOf(innerWidget) != -1
+
+
+def test_details_widget_cleared_when_the_entry_finishes(qapp):
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel(pipetteGetter=lambda: _FakePipette((0, 0, 0)))
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+    panel.addFromTargetBtn.click()
+    cell = orch.enqueued[0]
+    panel.cellList.setCurrentRow(0)
+
+    action_entry = ActionLogEntry("Patch")
+    panel.onLogAction(cell, action_entry)
+    liveWidget = Qt.QLabel("live plot")
+    action_entry.set_details_widget(liveWidget)
+    assert panel.showContainer.layout().indexOf(liveWidget) != -1
+
+    action_entry._finish(None)
 
     assert panel.showContainer.layout().count() == 0

@@ -552,7 +552,17 @@ class Manager(Qt.QObject):
 
         modclass = modules.getModuleClass(moduleClassName)
 
-        mod = modclass(self, name, config)
+        try:
+            mod = modclass(self, name, config)
+        except BaseException:
+            # Release the reservation made above. Leaving the placeholder None behind
+            # would make every later getOrLoadModule() hand out None as though the
+            # module had loaded, turning one failed load into a permanent -- and
+            # silent, for callers that swallow the AttributeError -- failure.
+            with self.moduleLock:
+                if name in self.modules and self.modules[name] is None:
+                    del self.modules[name]
+            raise
         self.modules[name] = mod
 
         self.sigModulesChanged.emit()
@@ -580,7 +590,9 @@ class Manager(Qt.QObject):
         """Return a module"""
         with self.moduleLock:
             if name not in self.modules:
-                self.loadDefinedModule(name)
+                # loadModule() renames on collision, so the module may not be filed
+                # under the name requested here; hand back what was actually loaded.
+                return self.loadDefinedModule(name)
         return self.modules[name]
 
     def getCurrentDatabase(self):
@@ -610,6 +622,7 @@ class Manager(Qt.QObject):
         if 'shortcut' in conf and win is not None:
             self.createWindowShortcut(conf['shortcut'], win)
         logger.info(f"Loaded module '{mod.name}'")
+        return mod
 
     def moduleHasQuit(self, mod):
         with self.moduleLock:

@@ -1553,7 +1553,9 @@ class Geometry:
 
         self.color = config.pop("color", None)
 
-        self._transform = load_transform(config.pop("transform", {}))
+        self._transform = load_transform(
+            config.pop("transform", {}), **self._default_transform_args()
+        )
 
         self._children = []
         for name, child_config in config.pop("children", {}).items():
@@ -1716,7 +1718,16 @@ class Geometry:
         )
 
     def _default_transform_args(self):
-        return dict(from_cs=self.name, to_cs=self.parent_name)
+        # Names are withheld until the optomech device transform chain names its own
+        # coordinate systems. coorx validates every multiply, and
+        # OptomechDeviceVisualizerAdapter.handleTransformUpdate composes
+        # ``globalPhysicalTransform() * geom.transform``; globalPhysicalTransform() is
+        # unnamed for every device, so naming this side raises TypeError there and no
+        # geometry-bearing device can be visualized. Restore the names below once the
+        # device chain is named, by restoring:
+        #     return dict(from_cs=self.name, to_cs=self.parent_name)
+        # Callers already pass these args through, so only this return needs to change.
+        return {}
 
     def make_convolved_voxels(
         self, other: Geometry, to_my_parent_from_other_parent: Transform, voxel_size: float
