@@ -1,5 +1,5 @@
-"""Tests for the Orchestrator's cell-producer refill hook: the queue-depth
-target, the empty-vs-exhausted distinction, and end-of-run conditions."""
+"""Tests for the Orchestrator's cell-producer refill hook: the empty-queue
+refill trigger, the empty-vs-exhausted distinction, and end-of-run conditions."""
 import gc
 import weakref
 
@@ -69,52 +69,6 @@ def test_empty_batch_asks_again_rather_than_ending_the_run(make_pf):
     assert producer.calls["n"] == 4  # two empty tiles, one productive, then exhausted
 
 
-def test_queue_is_filled_to_target_depth_before_the_first_cell_runs(make_pf):
-    """With a depth target above 1, the loop keeps asking until the queue
-    reaches it -- so a producer yielding one cell per tile is asked three times
-    before any cell is worked."""
-    pf = make_pf()
-    callsAtFirstRun = {}
-
-    def run(ctx, **kwargs):
-        callsAtFirstRun.setdefault("n", producer.calls["n"])
-
-    pf.run = run
-    producer = make_producer([["c1"], ["c2"], ["c3"], None])
-    orch = Orchestrator(pf, cellProducer=producer, targetQueueDepth=3)
-    orch.run_sync()
-    assert callsAtFirstRun["n"] == 3
-
-
-def test_depth_target_is_read_fresh_so_it_can_change_mid_run(make_pf):
-    """The cell-finding config owns this number and an operator may change it
-    while a run is in progress, so it must not be snapshotted at start: turning
-    it down from 2 to 1 after the first cell must actually let the queue drain
-    to 0 between the following cells, rather than being kept topped up to the
-    stale higher target. A snapshot taken once at the top of the run loop would
-    still finish all three cells in the same order with the same call count --
-    only the queue depth observed at each cell distinguishes the two."""
-    pf = make_pf()
-    ran = []
-    depths = []
-
-    def run(ctx, **kwargs):
-        depths.append(len(orch._queue))
-        ran.append(ctx.cell)
-        if ctx.cell == "c1":
-            orch.targetQueueDepth = 1  # operator turns it down after the first cell
-
-    pf.run = run
-    producer = make_producer([["c1"], ["c2"], ["c3"], None])
-    orch = Orchestrator(pf, cellProducer=producer, targetQueueDepth=2)
-    orch.run_sync()
-    assert ran == ["c1", "c2", "c3"]
-    # Before the turn-down (target=2), the queue is kept filled to 2 ahead of
-    # c1. After it (target=1), the queue must be allowed to drain to 0 between
-    # c2 and c3, not stay topped up to the stale target of 2.
-    assert depths == [1, 0, 0]
-
-
 def test_no_producer_drains_the_queue_and_ends(make_pf):
     """The unconfigured case -- every existing caller. Behaviour must be
     exactly the pre-producer queue drain, and in particular the loop must end
@@ -165,15 +119,6 @@ def test_setCellProducer_none_reverts_to_a_plain_queue_drain(make_pf):
     assert ran == ["c1"]
 
 
-def test_target_queue_depth_below_one_is_rejected(make_pf):
-    """A target of 0 would make `len(queue) < target` never true, silently
-    disabling the producer -- a misconfiguration that looks like a hung
-    survey. Fail at construction instead."""
-    pf = make_pf()
-    with pytest.raises(ValueError):
-        Orchestrator(pf, targetQueueDepth=0)
-
-
 def test_exhaustion_does_not_outlive_the_run(make_pf):
     """The scar-tissue test. A producer that exhausted during one run must not
     leave the orchestrator permanently convinced there is nothing to find: the
@@ -202,23 +147,24 @@ def test_exhaustion_cleared_when_the_run_ends_by_raising(make_pf):
     belongs in the finally, not on the return path -- the same mistake that
     left the next-cell flag set on four separate raise paths.
 
-    A target of 1 would let the first batch alone satisfy the depth check,
-    so the producer would never be asked again and never get the chance to
-    return None -- the run would raise before exhaustion ever happened,
-    proving nothing about the clear. A depth of 2 forces a second ask, which
-    is the one that returns None and actually sets the flag before the cell
-    (and its raise) is reached."""
+    Refill only ever runs against an empty queue, so the moment a producer
+    reports exhaustion there is nothing left queued and the run loop ends
+    right there -- there is no way to reach a still-queued, still-raising
+    cell by driving the producer through the normal refill path. The
+    exhausted flag is set directly instead, with a cell already queued from
+    before that point, to pin the same invariant: the finally clears it on
+    this raise path too, not only when the loop ends by returning."""
     pf = make_pf()
 
     def run(ctx, **kwargs):
         raise AttributeError("an ordinary bug, mid-cell")
 
     pf.run = run
-    producer = make_producer([["c1"], None])
-    orch = Orchestrator(pf, cellProducer=producer, targetQueueDepth=2)
+    orch = Orchestrator(pf, cellProducer=make_producer([]))
+    orch.enqueue("c1")
+    orch._producerExhausted = True
     with pytest.raises(AbortExperiment):
         orch.run_sync()
-    assert producer.calls["n"] == 2  # the batch, then the None that exhausted it
     assert orch._producerExhausted is False
 
 
@@ -227,12 +173,12 @@ def test_exhaustion_cleared_after_a_cooperative_stop(make_pf):
     remain queued, then presses Start again. The remaining cells must be
     worked, and the producer must be re-asked rather than assumed dry.
 
-    The first batch alone (two cells) already meets a target of 1, so with
-    the default depth the producer would never be asked a second time and
-    would never get to return None -- the stop would land with exhaustion
-    never having happened. A target of 3 keeps the refill loop asking past
-    that first batch, so the second call is the one that returns None and
-    sets the flag before c1's Stopped ends the run."""
+    Refill only ever runs against an empty queue, so reaching exhaustion
+    with cells still queued behind it can't be driven through the normal
+    refill path (the moment the producer reports exhaustion, the queue is
+    already empty). The exhausted flag is set directly instead, with two
+    cells already queued, so the first cell's Stopped ends the run while a
+    cell (c2) and the exhausted flag are both still there to check."""
     pf = make_pf()
     ran = []
 
@@ -242,11 +188,12 @@ def test_exhaustion_cleared_after_a_cooperative_stop(make_pf):
             raise Stopped("operator pressed stop")
 
     pf.run = run
-    producer = make_producer([["c1", "c2"], None])
-    orch = Orchestrator(pf, cellProducer=producer, targetQueueDepth=3)
+    orch = Orchestrator(pf, cellProducer=make_producer([]))
+    orch.enqueue("c1")
+    orch.enqueue("c2")
+    orch._producerExhausted = True
     orch.run_sync()  # a cooperative stop ends the run normally
     assert ran == ["c1"]
-    assert producer.calls["n"] == 2  # the batch, then the None that exhausted it
     assert orch._producerExhausted is False
     assert list(orch._queue) == ["c2"]  # a stop is not a queue drain
 
@@ -323,37 +270,11 @@ def test_nextcell_request_during_refill_of_an_empty_queue_is_discarded(make_pf):
         ran.append(ctx.cell)
 
     pf.run = run
-    orch = Orchestrator(pf, cellProducer=producer, targetQueueDepth=1)
+    orch = Orchestrator(pf, cellProducer=producer)
     orch.sigCellFinished.connect(lambda c, s: finished.append((c, s)))
     orch.run_sync()
     assert ran == ["c1", "c2"]
     assert finished == [("c1", "done"), ("c2", "done")]
-
-
-def test_nextcell_request_during_refill_of_a_nonempty_queue_is_preserved(make_pf):
-    """The same request, but with a cell already queued when the refill runs,
-    must NOT be discarded: there is a cell it could be about (c1), the same as
-    if the operator had pressed Next before Start. The fix for the empty-queue
-    case above must not over-broadly clear the flag whenever a refill happens
-    to run first."""
-    pf = make_pf()
-    ran = []
-    finished = []
-
-    def producer():
-        orch.requestNextCell()  # arrives mid-produce, c1 is already queued
-        return None  # exhausted immediately -- c1 is the only cell available
-
-    def run(ctx, **kwargs):
-        ran.append(ctx.cell)
-
-    pf.run = run
-    orch = Orchestrator(pf, cellProducer=producer, targetQueueDepth=2)
-    orch.enqueue("c1")
-    orch.sigCellFinished.connect(lambda c, s: finished.append((c, s)))
-    orch.run_sync()
-    assert ran == []
-    assert finished == [("c1", "skipped")]
 
 
 def test_pause_is_honored_before_refilling(make_pf, qtbot):
@@ -446,7 +367,7 @@ def test_producer_bound_method_cycle_is_freed_once_the_producer_is_released(
     # self._contextFactory attribute does not itself create a self-cycle --
     # this test is targeted at the orch<->panel cycle through the producer
     # specifically, same isolation as the orch<->task cycle test.
-    orch = Orchestrator(pf, contextFactory=lambda cell: None, targetQueueDepth=2)
+    orch = Orchestrator(pf, contextFactory=lambda cell: None)
     panel = FakePanel(orch)
     orch.setCellProducer(panel.produceCells)
     orch.enqueue("c1")

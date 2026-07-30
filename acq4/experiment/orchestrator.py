@@ -32,7 +32,6 @@ class Orchestrator(Qt.QObject):
         contextFactory=None,
         maxRetries=100,
         cellProducer=None,
-        targetQueueDepth=1,
     ):
         Qt.QObject.__init__(self)
         self.protocolFile = protocolFile
@@ -46,11 +45,6 @@ class Orchestrator(Qt.QObject):
         # RetryCurrentCell, or a persistently-failing action). On exhaustion the
         # cell finishes as "retry-exhausted" rather than wedging the queue forever.
         self.maxRetries = maxRetries
-        # Read fresh on every pass of the run loop rather than snapshotted, so
-        # the cell-finding config can retune it while a run is in progress.
-        # Routed through the targetQueueDepth property below so the < 1 guard
-        # applies whether it is set here or reassigned mid-run.
-        self.targetQueueDepth = targetQueueDepth
         self._cellProducer = cellProducer
         # Per-run: set once the producer reports exhaustion, cleared by
         # _runLoopBody's finally. See setCellProducer for why it is not
@@ -74,24 +68,6 @@ class Orchestrator(Qt.QObject):
         """
         self._cellProducer = producer
         self._producerExhausted = False
-
-    @property
-    def targetQueueDepth(self) -> int:
-        return self._targetQueueDepth
-
-    @targetQueueDepth.setter
-    def targetQueueDepth(self, value: int) -> None:
-        # Publicly mutable mid-run by design (the cell-finding config owns this
-        # number), so the guard belongs here rather than only at construction:
-        # otherwise `orch.targetQueueDepth = 0` would silently reproduce the
-        # exact misconfiguration the constructor raises on.
-        if value < 1:
-            raise ValueError(
-                f"targetQueueDepth must be at least 1, got {value!r}: "
-                f"a target of 0 makes the refill condition unreachable, silently "
-                f"disabling the producer"
-            )
-        self._targetQueueDepth = value
 
     def _defaultContext(self, cell) -> ExecutionContext:
         return ExecutionContext(cell=cell, manager=self.manager)
@@ -186,21 +162,19 @@ class Orchestrator(Qt.QObject):
                 self._checkPause()
                 check_stop()
                 if self._shouldRefill():
-                    queueWasEmpty = not self._queue
                     self._refillQueue()
-                    if queueWasEmpty:
-                        # A request that arrived while the producer was working
-                        # had no cell to advance past: nothing was running and
-                        # nothing was queued. Consuming it against the first
-                        # cell the producer then returned would skip a cell the
-                        # operator never saw, without it ever being attempted.
-                        self._nextCellRequested = False
+                    # Refill only ever runs against an empty queue, so a
+                    # request that arrived while the producer was working had
+                    # no cell to advance past: nothing was running and nothing
+                    # was queued. Consuming it against the first cell the
+                    # producer then returned would skip a cell the operator
+                    # never saw, without it ever being attempted.
+                    self._nextCellRequested = False
                     # Back to the top rather than falling through to a cell:
-                    # re-checks the depth target (so a deep queue fills over
-                    # several passes) and, more importantly, re-checks pause
-                    # and stop between refills. Imaging a tile is slow, so an
-                    # operator pressing Stop part-way through filling a deep
-                    # queue must not have to wait out the whole batch.
+                    # re-checks pause and stop between refills, and lets a
+                    # producer returning [] be asked again next pass. Imaging
+                    # a tile is slow, so an operator pressing Stop mid-survey
+                    # must not have to wait out a refill that already started.
                     continue
                 if not self._queue:
                     # Queue empty and nothing left to produce: the run is done.
@@ -251,7 +225,7 @@ class Orchestrator(Qt.QObject):
         return (
             self._cellProducer is not None
             and not self._producerExhausted
-            and len(self._queue) < self.targetQueueDepth
+            and not self._queue
         )
 
     def _refillQueue(self):

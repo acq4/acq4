@@ -1,5 +1,7 @@
 # Autopatch P2a — Orchestrator cell producer / queue-depth refill
 
+> **Superseded:** `targetQueueDepth` (the "keep at least N cells queued" concept this plan built) was removed by owner decision after this plan was executed -- it was conflated with an unrelated notion of z-depth below the tissue surface. Refill now triggers whenever the queue is empty, with no depth target. The code listings and test names below that reference `targetQueueDepth` are superseded by that removal. This document is kept as a historical record and is not updated to match.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Give `Orchestrator` an optional cell-producer callback and a queue-depth
