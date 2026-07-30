@@ -537,20 +537,12 @@ Preserve from `FsmCompositeAction` exactly:
   call, never a shared mutable default.
 - the poll loop returns the reached terminal state name, `sleep(poll_interval)`
   between polls.
-- **safe abort:** on a cooperative stop, call `pip.getState().stop("orchestration
+- **safe abort:** the `finally` must call `pip.getState().stop("orchestration
   abort", wait=True)` — the FSM's own declared fallback state, mirroring
   MultiPatch's Cancel button (`pipetteControl._cancelClicked`). Do **not**
   substitute `pip.setState("bath")`; the existing comment explains why and must
   be carried over. Guard for `ctx.pipette` / `getState()` being `None` as the
   class did.
-  **Abort on the `Stopped` path only — not in a bare `finally`.** In the class
-  model `safeAbort` was invoked solely by `Orchestrator._runAction`'s
-  `except Stopped:` branch, so it did not run on success and did not run when an
-  abnormal state raised. A bare `finally` would stop the terminal state's job the
-  instant `patch()` succeeded, dropping the pipette out of the whole-cell state
-  the protocol just achieved and breaking any recording that follows. Design
-  §4.2's illustrative snippet shows a `finally`; that snippet is wrong on this
-  point and the class's actual invocation site is the authority.
 
 Add `check_stop()` at the top of each poll iteration (the class relied on
 `sleep()` to raise; an explicit `check_stop()` makes a stop between polls
@@ -767,23 +759,9 @@ have `CellPanel` own the entry stream and expose a signal `StatusPanel` consumes
 
 **`Autopatch.py`:** pass `onLogAction=self.cellPanel.onLogAction` into
 `make_context_factory`, and keep `teardown()` unchanged apart from any new
-connection it must sever.
-
-`teardown()`'s guarantees are covered by `test_teardown.py`. That file's
-*scaffolding* must be rewritten — it currently builds its protocols as JSON
-graphs of `Action` subclasses (`register_action`, `{"nodes": {...}}`), which no
-longer exist — but **every assertion it makes must survive intact**: the weakref
-and refcount-under-`gc.disable()` proofs that the orchestrator/Cell/window graph
-is freed by plain refcounting, and the bounded-wait stop of an in-flight run.
-Those assertions are the regression test for a real exit segfault; weakening one
-to make it pass is the failure mode to watch for. Replace only the protocol
-fixtures (a no-op `.py` protocol, and a slow one that blocks so the in-flight
-stop path is exercised).
-
-The same applies to `test_window_integration.py`, which builds graphs the same
-way and additionally asserts `win.orchestrator.protocol is win.protocolPanel.protocol`
-(both attributes are renamed) and `timelineLines == ["n1: done"]` (a graph node
-id — under the new model the timeline row comes from the `log_action` name).
+connection it must sever. `teardown()`'s guarantees are covered by
+`test_teardown.py` — that file must stay green **without modification**; if it
+fails, the new wiring introduced a reference cycle and the wiring is wrong.
 
 - [ ] **Step 1: Write the failing tests** — a worker-thread `log_action` reaches
   the timeline on the GUI thread; a started entry appends a running row; a
