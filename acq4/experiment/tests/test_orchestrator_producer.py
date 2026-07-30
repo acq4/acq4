@@ -381,11 +381,13 @@ def test_pause_is_honored_before_refilling(make_pf, qtbot):
 
     released.set()
     task.wait(timeout=5)
-    # wait() returns None on timeout rather than raising (see acq4/util/task.py),
-    # so a loop that failed to terminate would let a bare wait() pass after the
-    # 5-second stall and leak a spinning worker thread into every test that
-    # follows. Assert the run actually finished instead of trusting the wait.
-    assert task.is_done, "run loop did not finish before the wait timed out"
+    # This wait(updates=False) does raise Timeout on expiry, so it is itself a
+    # barrier -- it is wait(updates=True) that returns None instead (the KNOWN
+    # DIVERGENCE in acq4/util/task.py). The assertion pins the loop's own
+    # completion regardless of which wait a later edit reaches for, so a run
+    # that failed to terminate cannot leak a spinning worker thread into every
+    # test that follows.
+    assert task.is_done, "run loop did not finish before the wait returned"
 
 
 def test_stop_between_tiles_ends_a_barren_survey(make_pf, qtbot):
