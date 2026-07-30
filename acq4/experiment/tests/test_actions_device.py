@@ -167,9 +167,13 @@ class FakeTaskRunnerModule:
 class FakeCell:
     def __init__(self):
         self.tracker_calls = []
+        self.tracker_kwargs = []
 
-    def initializeTracker(self, imager, use_cellpose=False):
+    def initializeTracker(self, imager, use_cellpose=False, **tracker_kwargs):
+        # Mirror Cell.initializeTracker's **tracker_kwargs passthrough so callers can
+        # forward tracker settings without this double having to know each one.
         self.tracker_calls.append((imager, use_cellpose))
+        self.tracker_kwargs.append(tracker_kwargs)
 
 
 @pytest.fixture
@@ -338,6 +342,11 @@ def test_cellfie_focuses_saves_zstack_and_initializes_tracker(ctx, pip, monkeypa
     assert call["storage_dir"] == "dir:cellfie"
     assert call["name"] == "cellfie"
     assert ctx.cell.tracker_calls == [(pip.imager, True)]
+    # Whichever call site initializes a cell's tracker fixes its deformation tolerance
+    # for that cell's lifetime, so this one has to forward it too.
+    assert ctx.cell.tracker_kwargs == [
+        {"deformation_tolerance": device_mod.DEFORMATION_TOLERANCE}
+    ]
     assert names == ["Cellfie"]
 
 
