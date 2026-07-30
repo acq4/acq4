@@ -1,8 +1,12 @@
 """Tests for the Orchestrator's cell-producer refill hook: the queue-depth
 target, the empty-vs-exhausted distinction, and end-of-run conditions."""
+import gc
+import weakref
+
 import pytest
 
 from acq4.experiment.orchestrator import Orchestrator
+from acq4.util import Qt
 from acq4.util.task import Stopped, Event, sleep
 from acq4.experiment.exceptions import AbortExperiment
 
@@ -406,3 +410,74 @@ def test_stop_between_tiles_ends_a_barren_survey(make_pf, qtbot):
     qtbot.wait(100)
     assert calls["n"] == countAtStop  # genuinely stopped asking
     assert orch._producerExhausted is False
+
+
+def test_producer_bound_method_cycle_is_freed_once_the_producer_is_released(
+    make_pf, qtbot
+):
+    """A realistic producer is a bound method of a UI panel that also holds
+    the orchestrator: orchestrator -> panel (via the bound method's __self__)
+    -> panel._orchestrator -> orchestrator, a QObject reference cycle much
+    like the orch<->task cycle test_finished_task_does_not_leave_qobject_cycle
+    (test_orchestrator_loop.py) guards against. The existing teardown
+    machinery breaks it, but nothing on this branch exercises it with a real
+    producer reference in place. This proves that once the producer is
+    released, plain refcounting -- cyclic GC disabled -- is enough to free
+    both the panel and the orchestrator.
+    """
+    gate = Event()
+    started = Event()
+
+    class FakePanel(Qt.QObject):
+        def __init__(self, orchestrator):
+            super().__init__()
+            self._orchestrator = orchestrator
+
+        def produceCells(self):
+            started.set()
+            gate.wait()
+            return None  # exhausted; nothing more to survey
+
+    pf = make_pf()
+    pf.run = lambda ctx, **kwargs: None
+    # A plain lambda, not a bound method of orch, so the orchestrator's own
+    # self._contextFactory attribute does not itself create a self-cycle --
+    # this test is targeted at the orch<->panel cycle through the producer
+    # specifically, same isolation as the orch<->task cycle test.
+    orch = Orchestrator(pf, contextFactory=lambda cell: None, targetQueueDepth=2)
+    panel = FakePanel(orch)
+    orch.setCellProducer(panel.produceCells)
+    orch.enqueue("c1")
+
+    task = orch.start()
+    started.wait()  # producer is parked mid-call, definitely not finished
+
+    # Connect to sigFinished BEFORE releasing the gate, so there is no race
+    # between the task starting/finishing and us starting to listen.
+    with qtbot.waitSignal(task.sigFinished, timeout=5000):
+        gate.set()  # let the producer, and the run loop, finish
+
+    # See test_finished_task_does_not_leave_qobject_cycle for why joining the
+    # worker thread directly -- not task.wait() -- is the correct barrier here.
+    task._thread.join(timeout=5)
+    assert not task._thread.is_alive()
+
+    # Release the producer the way real teardown must (P2b/P2c's job, not this
+    # branch's -- see the record-only finding on setCellProducer(None)). This
+    # is what breaks orch -> panel -> panel._orchestrator -> orch.
+    orch.setCellProducer(None)
+    panel._orchestrator = None
+
+    panel_ref = weakref.ref(panel)
+    orch_ref = weakref.ref(orch)
+
+    gc.disable()
+    try:
+        del panel
+        del orch
+        del task
+        assert orch_ref() is None, "Orchestrator survived refcounting alone -- a cycle remains"
+        assert panel_ref() is None, "Panel survived refcounting alone -- a cycle remains"
+    finally:
+        gc.collect()
+        gc.enable()
