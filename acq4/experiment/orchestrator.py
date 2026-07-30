@@ -46,14 +46,10 @@ class Orchestrator(Qt.QObject):
         # RetryCurrentCell, or a persistently-failing action). On exhaustion the
         # cell finishes as "retry-exhausted" rather than wedging the queue forever.
         self.maxRetries = maxRetries
-        if targetQueueDepth < 1:
-            raise ValueError(
-                f"targetQueueDepth must be at least 1, got {targetQueueDepth!r}: "
-                f"a target of 0 makes the refill condition unreachable, silently "
-                f"disabling the producer"
-            )
         # Read fresh on every pass of the run loop rather than snapshotted, so
         # the cell-finding config can retune it while a run is in progress.
+        # Routed through the targetQueueDepth property below so the < 1 guard
+        # applies whether it is set here or reassigned mid-run.
         self.targetQueueDepth = targetQueueDepth
         self._cellProducer = cellProducer
         # Per-run: set once the producer reports exhaustion, cleared by
@@ -78,6 +74,24 @@ class Orchestrator(Qt.QObject):
         """
         self._cellProducer = producer
         self._producerExhausted = False
+
+    @property
+    def targetQueueDepth(self) -> int:
+        return self._targetQueueDepth
+
+    @targetQueueDepth.setter
+    def targetQueueDepth(self, value: int) -> None:
+        # Publicly mutable mid-run by design (the cell-finding config owns this
+        # number), so the guard belongs here rather than only at construction:
+        # otherwise `orch.targetQueueDepth = 0` would silently reproduce the
+        # exact misconfiguration the constructor raises on.
+        if value < 1:
+            raise ValueError(
+                f"targetQueueDepth must be at least 1, got {value!r}: "
+                f"a target of 0 makes the refill condition unreachable, silently "
+                f"disabling the producer"
+            )
+        self._targetQueueDepth = value
 
     def _defaultContext(self, cell) -> ExecutionContext:
         return ExecutionContext(cell=cell, manager=self.manager)
