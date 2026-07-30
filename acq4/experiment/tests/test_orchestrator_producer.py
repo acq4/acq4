@@ -84,19 +84,31 @@ def test_queue_is_filled_to_target_depth_before_the_first_cell_runs(make_pf):
 
 def test_depth_target_is_read_fresh_so_it_can_change_mid_run(make_pf):
     """The cell-finding config owns this number and an operator may change it
-    while a run is in progress, so it must not be snapshotted at start."""
+    while a run is in progress, so it must not be snapshotted at start: turning
+    it down from 2 to 1 after the first cell must actually let the queue drain
+    to 0 between the following cells, rather than being kept topped up to the
+    stale higher target. A snapshot taken once at the top of the run loop would
+    still finish all three cells in the same order with the same call count --
+    only the queue depth observed at each cell distinguishes the two."""
     pf = make_pf()
     ran = []
+    depths = []
 
     def run(ctx, **kwargs):
+        depths.append(len(orch._queue))
         ran.append(ctx.cell)
-        orch.targetQueueDepth = 1  # operator turns it down after the first cell
+        if ctx.cell == "c1":
+            orch.targetQueueDepth = 1  # operator turns it down after the first cell
 
     pf.run = run
     producer = make_producer([["c1"], ["c2"], ["c3"], None])
     orch = Orchestrator(pf, cellProducer=producer, targetQueueDepth=2)
     orch.run_sync()
     assert ran == ["c1", "c2", "c3"]
+    # Before the turn-down (target=2), the queue is kept filled to 2 ahead of
+    # c1. After it (target=1), the queue must be allowed to drain to 0 between
+    # c2 and c3, not stay topped up to the stale target of 2.
+    assert depths == [1, 0, 0]
 
 
 def test_no_producer_drains_the_queue_and_ends(make_pf):
