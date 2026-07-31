@@ -195,10 +195,18 @@ class Orchestrator(Qt.QObject):
                     # a tile is slow, so an operator pressing Stop mid-survey
                     # must not have to wait out a refill that already started.
                     continue
-                if not self._queue:
-                    # Queue empty and nothing left to produce: the run is done.
+                # clearQueue() runs on the GUI thread while this loop runs on
+                # the worker thread, so the deque's emptiness cannot be
+                # checked and then acted on as two separate steps -- a clear
+                # landing in between would turn a plain empty-queue finish
+                # into an IndexError out of popleft(). Popping directly and
+                # catching that IndexError makes the check and the pop one
+                # step: an empty deque at either the check or the pop means
+                # the same thing, the run is done.
+                try:
+                    cell = self._queue.popleft()
+                except IndexError:
                     break
-                cell = self._queue.popleft()
                 self._processCell(cell)
         except Stopped as exc:
             # An operator-initiated stop is a normal way for the run loop to
