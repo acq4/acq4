@@ -1,5 +1,5 @@
 """CellProducer: the callable the orchestrator's refill hook takes, surveying one
-tile of a slice per call and returning the cells found there."""
+tile of a slice per call, filtering the cells it returns and skipping crowded tiles."""
 
 from __future__ import annotations
 

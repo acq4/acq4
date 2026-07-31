@@ -215,6 +215,18 @@ def test_a_candidate_without_a_score_passes_the_cutoff():
     assert CellProducer(s, RecordingDetector([[unscored]]))() == [unscored]
 
 
+def test_a_candidate_with_no_score_attribute_at_all_passes_the_cutoff():
+    # The real detector's candidates never carry a `score` attribute until
+    # someone assigns one after the fact, so an unscored candidate is missing
+    # the attribute entirely, not merely holding it as None. Either shape must
+    # be treated as unscored rather than raising or being rejected.
+    s = make_slice(constraints=SearchConstraints(min_health=0.9))
+    tile = s.nextTile()
+    unscored = FakeCandidate((tile[0], tile[1], -30e-6))
+    del unscored.score
+    assert CellProducer(s, RecordingDetector([[unscored]]))() == [unscored]
+
+
 def _crowding_constraints(cells_per_tile):
     """Constraints whose density cap is reached by `cells_per_tile` in one tile.
 
@@ -251,9 +263,22 @@ def test_a_tile_already_at_the_density_cap_is_skipped_without_imaging():
 
 
 def test_a_tile_below_the_density_cap_is_imaged_normally():
-    s = make_slice(constraints=_crowding_constraints(2))
+    # Two tiles so a crowd elsewhere in the slice can be told apart from a
+    # crowd in the tile under test: the cap is a per-tile locality check, not
+    # a slice-wide cell budget, and cells piling up in one tile must not make
+    # every other tile in the slice look crowded too.
+    s = make_slice(
+        constraints=_crowding_constraints(2), regions=((0, 0, 20e-6, 10e-6),)
+    )
     tile = s.nextTile()
+    other_tile = (tile[0] + 10e-6, tile[1])
     s.registerCells([FakeCandidate((tile[0], tile[1], -30e-6))])
+    s.registerCells(
+        [
+            FakeCandidate((other_tile[0], other_tile[1], -30e-6)),
+            FakeCandidate((other_tile[0] + 1e-6, other_tile[1], -30e-6)),
+        ]
+    )
     found = FakeCandidate((tile[0], tile[1], -35e-6))
     detector = RecordingDetector([[found]])
 
