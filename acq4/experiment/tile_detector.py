@@ -35,12 +35,16 @@ def make_tile_detector(
         logger.info("Surveying tile at %r", center)
         scope.setGlobalPosition(center, name="autopatch survey move").wait()
 
+        # Captured before the surface search: camera focus tracks scope focus,
+        # so a capture taken after `findSurfaceDepth` would be the tile's
+        # surface, not the depth the survey started from.
+        restore_depth = camera.getFocusDepth()
+
         check_stop()
         surface = synch(scope.findSurfaceDepth)(camera)
         start_z, stop_z = constraints.z_bounds(surface)
 
         check_stop()
-        restore_depth = camera.getFocusDepth()
         try:
             stack = _acquire(camera, start_z, stop_z, step_z)
         finally:
@@ -90,16 +94,15 @@ def _build_cells(camera, stack, results) -> list:
 
 
 def _newCell(position):
-    """A Cell at a global position.
+    """A Cell at `position`, which `_detect` already returns as a global coorx Point.
 
     Imported here, not at module scope: acq4_automation lives in an internal
     repository, and a top-level import would stop every test under
     acq4/experiment from collecting where it is absent.
     """
     from acq4_automation.feature_tracking.cell import Cell
-    from coorx import Point
 
-    return Cell(Point(position, "global"))
+    return Cell(position)
 
 
 def _acquire(camera, start_z: float, stop_z: float, step_z: float) -> list:

@@ -9,20 +9,42 @@ from acq4.util.task import Stopped
 
 
 class FakeScope:
-    def __init__(self, surface=0.0):
+    """`camera` is wired in so `findSurfaceDepth` can move the camera's focus to
+    the surface it reports, the way `Microscope.findSurfaceDepth` ends with
+    `setFocusDepth(depth, ...).wait()` on the real device. Without that, a
+    focus-depth capture taken after the surface search would look identical to
+    one taken before it, and the two are not interchangeable."""
+
+    def __init__(self, camera, surface=0.0):
+        self.camera = camera
         self.surface = surface
         self.moves = []
+        # Ordered log of "move"/"move_waited"/"surface_search" events, so tests
+        # can pin the sequence the survey performs them in, not just that each
+        # one happened.
+        self.events = []
 
     def setGlobalPosition(self, pos, speed="fast", name=None):
         self.moves.append(tuple(pos))
-        return FakeFuture()
+        self.events.append("move")
+        return FakeFuture(self.events, "move_waited")
 
     def findSurfaceDepth(self, imager):
+        self.events.append("surface_search")
+        self.camera.setFocusDepth(self.surface, name="fake surface focus")
         return self.surface
 
 
 class FakeFuture:
+    def __init__(self, log=None, label=None):
+        self.waited = False
+        self._log = log
+        self._label = label
+
     def wait(self, **kwargs):
+        self.waited = True
+        if self._log is not None:
+            self._log.append(self._label)
         return None
 
 
@@ -39,10 +61,13 @@ class FakeCamera:
 
     def setFocusDepth(self, z, speed="fast", name=None):
         self.focusSets.append(z)
+        self._focus = z
         return FakeFuture()
 
     def getPixelSize(self):
-        return (0.32e-6, 0.32e-6)
+        # Asymmetric so a test reading the wrong axis (index 1 instead of 0)
+        # cannot pass by accident.
+        return (0.32e-6, 0.5e-6)
 
 
 class FakeCell:
@@ -54,9 +79,13 @@ class FakeCell:
         self.position = position
         self.score = None
         self.trackerInits = 0
+        self.trackerStack = None
+        self.trackerUseCellpose = None
 
     def initializeTrackerFromStack(self, camera, stack, use_cellpose=False):
         self.trackerInits += 1
+        self.trackerStack = stack
+        self.trackerUseCellpose = use_cellpose
         if self.trackerFails:
             raise ValueError("cell too close to the stack edge")
 
@@ -69,7 +98,7 @@ def rig(monkeypatch):
     arguments, and the detector callable itself.
     """
     camera = FakeCamera()
-    scope = FakeScope(surface=-500e-6)
+    scope = FakeScope(camera, surface=-500e-6)
     acquireCalls = []
     detectCalls = []
 
@@ -116,10 +145,13 @@ def test_the_stack_spans_the_constrained_range_below_this_tiles_surface(rig):
 def test_the_depth_range_is_read_from_the_constraints_it_is_given(rig):
     # Not from a value captured when the detector was built: the operator may
     # edit the range between runs, and the slice hands its current constraints
-    # to every call.
+    # to every call. Two calls on the SAME detector, so a detector that cached
+    # the first call's constraints would give the second call the first call's
+    # range instead of its own.
+    rig.detect((0.0, 0.0), SearchConstraints(depth_range=(-20e-6, -60e-6)))
     rig.detect((0.0, 0.0), SearchConstraints(depth_range=(-5e-6, -15e-6)))
 
-    start_z, stop_z, _ = rig.acquireCalls[0]
+    start_z, stop_z, _ = rig.acquireCalls[1]
     assert start_z == pytest.approx(-505e-6)
     assert stop_z == pytest.approx(-515e-6)
 
@@ -129,6 +161,16 @@ def test_the_stage_moves_to_the_tile_before_the_surface_is_found(rig):
     # previous tile's tissue.
     rig.detect((3e-6, 4e-6), SearchConstraints())
     assert rig.scope.moves == [(3e-6, 4e-6)]
+    assert rig.scope.events.index("move") < rig.scope.events.index("surface_search")
+
+
+def test_the_stage_move_is_waited_on_before_the_surface_is_found(rig):
+    # A future returned but never waited on means detection could run before
+    # the stage has physically arrived at the tile.
+    rig.detect((3e-6, 4e-6), SearchConstraints())
+    assert rig.scope.events.index("move_waited") < rig.scope.events.index(
+        "surface_search"
+    )
 
 
 def test_focus_is_restored_after_a_successful_survey(rig):
@@ -153,19 +195,29 @@ def test_focus_is_restored_when_acquisition_raises(rig, monkeypatch):
     assert rig.camera.focusSets[-1] == pytest.approx(before)
 
 
-def test_a_stop_prevents_the_survey_from_imaging(rig, monkeypatch):
-    # Imaging a tile is slow, so a stop must be honoured before the stack starts,
-    # not only after it finishes.
-    def stopNow():
-        raise Stopped("stopped by operator")
+@pytest.mark.parametrize("stop_at", [1, 2, 3, 4])
+def test_a_stop_prevents_the_survey_from_imaging(rig, monkeypatch, stop_at):
+    # Each of the four check_stop() calls guards one slow step -- the move,
+    # the surface search, the stack acquisition, and detection -- in that
+    # order. Raising on only the Nth call proves that specific guard is doing
+    # its job: every step from there on must not have run, regardless of
+    # whether the guards before it fired.
+    calls = []
 
-    monkeypatch.setattr(tile_detector, "check_stop", stopNow)
+    def stopAtNth():
+        calls.append(1)
+        if len(calls) == stop_at:
+            raise Stopped("stopped by operator")
+
+    monkeypatch.setattr(tile_detector, "check_stop", stopAtNth)
 
     with pytest.raises(Stopped):
         rig.detect((0.0, 0.0), SearchConstraints())
 
-    assert rig.acquireCalls == []
-    assert rig.scope.moves == []
+    assert bool(rig.scope.moves) == (stop_at > 1)
+    assert ("surface_search" in rig.scope.events) == (stop_at > 2)
+    assert bool(rig.acquireCalls) == (stop_at > 3)
+    assert rig.detectCalls == []
 
 
 def test_detected_cells_carry_their_health_score(rig):
@@ -178,6 +230,8 @@ def test_detected_cells_carry_their_health_score(rig):
 def test_tracking_is_seeded_from_the_stack_the_cell_was_found_in(rig):
     cells = rig.detect((0.0, 0.0), SearchConstraints())
     assert cells[0].trackerInits == 1
+    assert cells[0].trackerStack == ["frame"]
+    assert cells[0].trackerUseCellpose is True
 
 
 def test_a_cell_whose_tracker_cannot_be_seeded_is_still_returned(rig, monkeypatch):
@@ -193,10 +247,16 @@ def test_a_cell_whose_tracker_cannot_be_seeded_is_still_returned(rig, monkeypatc
 
 def test_the_pixel_size_and_step_reach_detection(rig):
     rig.detect((0.0, 0.0), SearchConstraints())
-    stack, xy_scale, z_scale, _models, _min_volume, _n = rig.detectCalls[0]
+    stack, xy_scale, z_scale, models, _min_volume, _n = rig.detectCalls[0]
     assert stack == ["frame"]
     assert xy_scale == pytest.approx(0.32e-6)
     assert z_scale == pytest.approx(1e-6)
+    assert models == {
+        "segmenter": None,
+        "autoencoder": None,
+        "classifier": None,
+        "resnet_classifier": None,
+    }
 
 
 def test_min_volume_and_max_candidates_reach_detection(monkeypatch):
@@ -204,7 +264,7 @@ def test_min_volume_and_max_candidates_reach_detection(monkeypatch):
     # reach _detect unchanged, not get dropped or swapped with each other.
     # Non-default values on both sides so a hard-coded default is caught.
     camera = FakeCamera()
-    scope = FakeScope(surface=-500e-6)
+    scope = FakeScope(camera, surface=-500e-6)
     detectCalls = []
 
     def fakeAcquire(cam, start_z, stop_z, step_z):
@@ -230,6 +290,36 @@ def test_min_volume_and_max_candidates_reach_detection(monkeypatch):
     min_volume_m3, max_candidates = detectCalls[0]
     assert min_volume_m3 == pytest.approx(123e-18)
     assert max_candidates == 7
+
+
+def test_step_z_reaches_acquisition_and_detection(monkeypatch):
+    # step_z must reach both _acquire and _detect unchanged. The default is
+    # 1e-6, so a non-default value is required to catch a hard-coded 1e-6 in
+    # either call site.
+    camera = FakeCamera()
+    scope = FakeScope(camera, surface=-500e-6)
+    acquireCalls = []
+    detectCalls = []
+
+    def fakeAcquire(cam, start_z, stop_z, step_z):
+        acquireCalls.append(step_z)
+        return ["frame"]
+
+    def fakeDetect(stack, xy_scale, z_scale, models, min_volume_m3, max_candidates):
+        detectCalls.append(z_scale)
+        return []
+
+    monkeypatch.setattr(tile_detector, "_acquire", fakeAcquire)
+    monkeypatch.setattr(tile_detector, "_detect", fakeDetect)
+    monkeypatch.setattr(tile_detector, "_newCell", FakeCell)
+
+    detect = tile_detector.make_tile_detector(
+        camera=camera, scope=scope, manager=None, step_z=3e-6
+    )
+    detect((0.0, 0.0), SearchConstraints())
+
+    assert acquireCalls[0] == pytest.approx(3e-6)
+    assert detectCalls[0] == pytest.approx(3e-6)
 
 
 class FakeManager:
