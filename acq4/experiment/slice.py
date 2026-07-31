@@ -5,6 +5,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from .search_grid import count_covered, plan_grid, select_next
+
 
 @dataclass(frozen=True)
 class SearchConstraints:
@@ -57,3 +59,126 @@ class SearchConstraints:
         """Absolute (shallower, deeper) z for a tile whose surface is at `surface`."""
         near, far = self.depth_range
         return surface + max(near, far), surface + min(near, far)
+
+
+class Slice:
+    """The search state for one piece of tissue, and the source of its cell producers.
+
+    Owns the regions to survey (global-coordinate rectangles), the coverage
+    record of which field-of-view tiles have been imaged, the search
+    constraints, and -- once a producer is made from it -- the tiles and cells
+    that producer accumulates. Coverage is shared by every producer this slice
+    makes: that is what stops a second region's survey from re-imaging the
+    first's, and what gives `rescans_allowed` something to decide.
+
+    A slice, its coverage, and its producers persist across orchestrator runs.
+    They are replaced only when the operator starts a new slice. This is
+    deliberately the opposite of Orchestrator._producerExhausted, which is a
+    per-run cache: a producer that reported exhaustion is asked again next run,
+    precisely so a slice that has gained a region can be surveyed further.
+
+    Not a QObject: it holds no widgets, and staying a plain object keeps it
+    refcount-freeable rather than depending on Qt teardown ordering.
+    """
+
+    def __init__(self, fov, constraints=None, overlap=0.0, directory=None):
+        fov_w, fov_h = fov
+        if fov_w <= 0 or fov_h <= 0:
+            raise ValueError(f"fov must be positive in both axes, got {fov}")
+        self._fov = (abs(fov_w), abs(fov_h))
+        self._overlap = overlap
+        self._constraints = (
+            constraints if constraints is not None else SearchConstraints()
+        )
+        self._regions: list[tuple[float, float, float, float]] = []
+        self._covered: list[tuple[float, float]] = []
+        self._cells: list = []
+        # The acq4 slice directory (a DirHandle) this state belongs to, kept so
+        # a caller can write per-slice data alongside it. Not required for the
+        # in-memory search itself.
+        self.directory = directory
+
+    # ---- constraints ----
+    @property
+    def constraints(self) -> SearchConstraints:
+        return self._constraints
+
+    def setConstraints(self, constraints: SearchConstraints) -> None:
+        self._constraints = constraints
+
+    # ---- regions ----
+    @property
+    def regions(self) -> list[tuple[float, float, float, float]]:
+        """The search rectangles, as a copy: mutating the result changes nothing."""
+        return list(self._regions)
+
+    def addRegion(self, x0: float, y0: float, x1: float, y1: float) -> None:
+        """Add a global-coordinate rectangle to survey. Coverage is untouched."""
+        self._regions.append((x0, y0, x1, y1))
+
+    # ---- tiles and coverage ----
+    @property
+    def threshold(self) -> float:
+        """Distance below which two tile centers are the same tile."""
+        fov_w, fov_h = self._fov
+        step = min(fov_w - self._overlap, fov_h - self._overlap)
+        if step <= 0:
+            step = min(fov_w, fov_h)
+        return step / 2
+
+    def tileGrid(self) -> list[tuple[float, float]]:
+        """Every region's tile centers, concatenated in the order regions were added."""
+        grid: list[tuple[float, float]] = []
+        fov_w, fov_h = self._fov
+        for x0, y0, x1, y1 in self._regions:
+            grid.extend(plan_grid(x0, y0, x1, y1, fov_w, fov_h, self._overlap))
+        return grid
+
+    def nextTile(self) -> tuple[float, float] | None:
+        """The next tile center not yet covered, or None when all are.
+
+        Reports only: the caller marks a tile covered once it has actually
+        imaged it, so a tile abandoned by a stop is not silently skipped on the
+        next run.
+        """
+        return select_next(self.tileGrid(), self._covered, self.threshold)
+
+    def markCovered(self, center: tuple[float, float]) -> None:
+        self._covered.append(tuple(center))
+
+    def resetCoverage(self) -> None:
+        """Forget which tiles have been imaged, keeping regions and constraints."""
+        self._covered = []
+
+    @property
+    def coveredTiles(self) -> list[tuple[float, float]]:
+        return list(self._covered)
+
+    def surveyStats(self) -> tuple[int, int, float]:
+        """(total tiles, covered tiles, percent covered) across every region."""
+        grid = self.tileGrid()
+        total = len(grid)
+        covered = count_covered(grid, self._covered, self.threshold)
+        percent = 100.0 * covered / total if total else 0.0
+        return total, covered, percent
+
+    def tileVolume(self) -> float:
+        """The volume one tile searches: FOV area times the constrained depth span."""
+        fov_w, fov_h = self._fov
+        return fov_w * fov_h * self._constraints.z_span()
+
+    # ---- cells found in this tissue ----
+    def registerCells(self, cells) -> None:
+        """Record cells found in this slice, for the density cap's bookkeeping."""
+        self._cells.extend(cells)
+
+    def cellsNearTile(self, center: tuple[float, float]) -> list:
+        """Registered cells whose position falls within `center`'s tile."""
+        cx, cy = center
+        fov_w, fov_h = self._fov
+        found = []
+        for cell in self._cells:
+            pos = cell.position
+            if abs(pos[0] - cx) <= fov_w / 2 and abs(pos[1] - cy) <= fov_h / 2:
+                found.append(cell)
+        return found

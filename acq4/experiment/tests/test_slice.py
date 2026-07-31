@@ -76,3 +76,157 @@ def test_constraints_are_frozen():
     c = SearchConstraints()
     with pytest.raises(Exception):
         c.min_health = 0.9
+
+
+from acq4.experiment.slice import Slice
+
+# A 10x10 um FOV with no overlap, so a 30x30 um region is exactly a 3x3 grid of
+# tiles and tile centers land on predictable coordinates.
+FOV = (10e-6, 10e-6)
+
+
+def make_slice(**kwargs):
+    kwargs.setdefault("fov", FOV)
+    return Slice(**kwargs)
+
+
+class FakeCell:
+    """Stand-in for acq4_automation's Cell: a global position and a health score."""
+
+    def __init__(self, position, score=1.0):
+        self.position = position
+        self.score = score
+
+
+def test_a_new_slice_has_no_regions_and_nothing_to_survey():
+    s = make_slice()
+    assert s.regions == []
+    assert s.tileGrid() == []
+    assert s.nextTile() is None
+    assert s.surveyStats() == (0, 0, 0.0)
+
+
+def test_adding_a_region_produces_a_tile_grid():
+    s = make_slice()
+    s.addRegion(0, 0, 30e-6, 30e-6)
+    assert len(s.tileGrid()) == 9
+    assert s.surveyStats() == (9, 0, 0.0)
+
+
+def test_regions_is_a_copy_so_callers_cannot_mutate_slice_state():
+    s = make_slice()
+    s.addRegion(0, 0, 30e-6, 30e-6)
+    s.regions.append((1, 1, 2, 2))
+    assert len(s.regions) == 1
+
+
+def test_a_second_region_extends_the_grid_without_disturbing_the_first():
+    s = make_slice()
+    s.addRegion(0, 0, 30e-6, 30e-6)
+    first = s.tileGrid()
+    # 500e-6 keeps the region well clear of the first and, unlike 1e-3, does not
+    # land the tile count on a floating-point rounding boundary: subtracting
+    # two offsets of very different magnitude from each other can perturb an
+    # exact multiple of the FOV by less than an ULP, which is enough to push
+    # ceil() up to an extra tile.
+    s.addRegion(500e-6, 500e-6, 500e-6 + 30e-6, 500e-6 + 30e-6)
+    both = s.tileGrid()
+    assert both[: len(first)] == first
+    assert len(both) == 18
+
+
+def test_marking_a_tile_covered_advances_next_tile():
+    s = make_slice()
+    s.addRegion(0, 0, 30e-6, 30e-6)
+    first = s.nextTile()
+    assert s.nextTile() == first, "nextTile must not mark; it only reports"
+    s.markCovered(first)
+    assert s.nextTile() != first
+    assert s.surveyStats() == (9, 1, pytest.approx(100 / 9))
+
+
+def test_next_tile_is_none_once_every_tile_is_covered():
+    s = make_slice()
+    s.addRegion(0, 0, 30e-6, 30e-6)
+    for _ in range(9):
+        s.markCovered(s.nextTile())
+    assert s.nextTile() is None
+    assert s.surveyStats() == (9, 9, 100.0)
+
+
+def test_coverage_survives_a_new_region_being_added():
+    # Shared coverage is the whole point: a second region's survey must not
+    # re-image the first region's tiles.
+    s = make_slice()
+    s.addRegion(0, 0, 30e-6, 30e-6)
+    covered = s.nextTile()
+    s.markCovered(covered)
+    s.addRegion(1e-3, 1e-3, 1e-3 + 30e-6, 1e-3 + 30e-6)
+    assert covered in s.coveredTiles
+    assert s.surveyStats()[1] == 1
+
+
+def test_reset_coverage_forgets_imaged_tiles_but_keeps_regions():
+    s = make_slice()
+    s.addRegion(0, 0, 30e-6, 30e-6)
+    s.markCovered(s.nextTile())
+    s.resetCoverage()
+    assert s.coveredTiles == []
+    assert len(s.regions) == 1
+    assert s.surveyStats() == (9, 0, 0.0)
+
+
+def test_tile_volume_is_fov_area_times_the_depth_span():
+    s = make_slice(constraints=SearchConstraints(depth_range=(-20e-6, -60e-6)))
+    assert s.tileVolume() == pytest.approx(10e-6 * 10e-6 * 40e-6)
+
+
+def test_registered_cells_are_found_near_their_own_tile_only():
+    s = make_slice()
+    s.addRegion(0, 0, 30e-6, 30e-6)
+    tile = s.nextTile()
+    here = FakeCell((tile[0], tile[1], 0.0))
+    far = FakeCell((tile[0] + 1e-3, tile[1], 0.0))
+    s.registerCells([here, far])
+    near = s.cellsNearTile(tile)
+    assert here in near
+    assert far not in near
+
+
+def test_setting_constraints_replaces_them_wholesale():
+    s = make_slice()
+    replacement = SearchConstraints(min_health=0.9)
+    s.setConstraints(replacement)
+    assert s.constraints is replacement
+
+
+def test_fov_must_be_positive_in_both_axes():
+    # A non-positive FOV would make tile stepping and coverage matching
+    # meaningless, so both axes are checked independently.
+    with pytest.raises(ValueError, match="fov must be positive"):
+        Slice(fov=(0.0, 10e-6))
+    with pytest.raises(ValueError, match="fov must be positive"):
+        Slice(fov=(10e-6, -1e-6))
+
+
+def test_threshold_is_half_the_step_between_tile_centers():
+    # No overlap: the step is the smaller FOV axis, so threshold is half that.
+    s = make_slice(fov=(10e-6, 20e-6))
+    assert s.threshold == pytest.approx(5e-6)
+
+
+def test_threshold_falls_back_to_half_the_smaller_fov_when_overlap_swallows_the_step():
+    # An overlap >= the smaller FOV axis would make the step zero or negative,
+    # so threshold falls back to half the smaller FOV instead.
+    s = make_slice(fov=(10e-6, 20e-6), overlap=15e-6)
+    assert s.threshold == pytest.approx(5e-6)
+
+
+def test_overlap_produces_more_tiles_than_no_overlap_over_the_same_rectangle():
+    # Overlapping tiles step less far apart, so more of them are needed to
+    # cover the same extent.
+    plain = make_slice(overlap=0.0)
+    plain.addRegion(0, 0, 30e-6, 30e-6)
+    overlapped = make_slice(overlap=5e-6)
+    overlapped.addRegion(0, 0, 30e-6, 30e-6)
+    assert len(overlapped.tileGrid()) > len(plain.tileGrid())
