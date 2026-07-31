@@ -45,6 +45,7 @@
 | `acq4/experiment/tests/test_search_grid.py` | Grid geometry tests, moved from `AutomationDebug/tests/test_survey.py`. |
 | `acq4/experiment/tests/test_slice.py` | `SearchConstraints` validation, `Slice` regions/coverage/stats. |
 | `acq4/experiment/tests/test_cell_producer.py` | Tile walk, `[]` vs `None`, health cutoff, density cap, rescans, leak. |
+| `acq4/experiment/tests/test_tile_detector.py` | Per-tile depth arithmetic, focus restoration, stop handling, cell construction. |
 | `acq4/modules/Autopatch/search_panel.py` | Area 2 widget: the four constraints, "Add region here", survey readout. |
 | `acq4/modules/Autopatch/tests/test_search_panel.py` | Area 2 widget behaviour. |
 | `.superpowers/sdd/p2b-smoke-brief.md` | Human-run live smoke-test brief (Task 12). |
@@ -1810,18 +1811,254 @@ EOF
 
 The one function that touches devices: move the stage to a tile, find that tile's surface, acquire a stack across the constrained depth range, detect and score cells, and build `Cell` objects with their trackers seeded from that stack. Modelled on `AutomationDebug/detection.py:_detectNeuronsZStack` and `autopatch.py:_autopatchFindCell`, which are the working reference for every one of these calls.
 
-Nothing headless can test this — it needs a microscope, a camera, and `acq4_automation`'s models. It is therefore deliberately thin: all the logic worth testing was pushed into Tasks 3–5. Its verification is Task 12's live smoke test.
+The device calls themselves cannot be exercised headlessly, but the orchestration around them can, and it holds the mistakes worth catching: the sign of the depth arithmetic, restoring focus on the failure path, and honouring a stop between slow steps. So the file is deliberately split — `detect()` sequences, and `_acquire`/`_detect`/`_newCell`/`_health_models` are module-level functions a test replaces with fakes via `monkeypatch.setattr`. No production seam is added for testability beyond that split, and no test asserts a call sequence for its own sake.
 
 **Files:**
 - Create: `acq4/experiment/tile_detector.py`
+- Create: `acq4/experiment/tests/test_tile_detector.py`
 
 **Interfaces:**
 - Consumes: `SearchConstraints.z_bounds(surface)` (Task 2).
-- Produces: `make_tile_detector(camera, scope, manager, step_z=1e-6, min_volume_m3=0.0, max_candidates=5) -> Callable[[tuple[float, float], SearchConstraints], list]`. The returned callable is the `detector` seam `CellProducer` takes (Task 4), and runs on the orchestrator's worker thread.
+- Produces: `make_tile_detector(camera, scope, manager, step_z=1e-6, min_volume_m3=0.0, max_candidates=5) -> Callable[[tuple[float, float], SearchConstraints], list]`. The returned callable is the `detector` seam `CellProducer` takes (Task 4), and runs on the orchestrator's worker thread. Module-level helpers `_acquire(camera, start_z, stop_z, step_z) -> list`, `_detect(stack, xy_scale, z_scale, models, min_volume_m3, max_candidates) -> list[tuple]`, `_newCell(position) -> Cell`, `_health_models(manager) -> dict`.
 
-- [ ] **Step 1: Write the implementation**
+- [ ] **Step 1: Write the failing tests**
 
-There is no failing-test step here: this file is device glue with no headless-testable behaviour, and inventing a mock microscope to assert call order would test the mock, not the code. Create `acq4/experiment/tile_detector.py`:
+Create `acq4/experiment/tests/test_tile_detector.py`:
+
+```python
+"""Tests for the tile detector's orchestration: the depth arithmetic it derives
+from each tile's surface, focus restoration, stop handling, and cell construction."""
+
+import pytest
+
+from acq4.experiment import tile_detector
+from acq4.experiment.slice import SearchConstraints
+from acq4.util.task import Stopped
+
+
+class FakeScope:
+    def __init__(self, surface=0.0):
+        self.surface = surface
+        self.moves = []
+
+    def setGlobalPosition(self, pos, speed="fast", name=None):
+        self.moves.append(tuple(pos))
+        return FakeFuture()
+
+    def findSurfaceDepth(self, imager):
+        return self.surface
+
+
+class FakeFuture:
+    def wait(self, **kwargs):
+        return None
+
+
+class FakeCamera:
+    def __init__(self, focus=-1e-3):
+        self._focus = focus
+        self.focusSets = []
+
+    def name(self):
+        return "FakeCamera"
+
+    def getFocusDepth(self):
+        return self._focus
+
+    def setFocusDepth(self, z, speed="fast", name=None):
+        self.focusSets.append(z)
+        return FakeFuture()
+
+    def getPixelSize(self):
+        return (0.32e-6, 0.32e-6)
+
+
+class FakeCell:
+    """Stand-in for acq4_automation's Cell; `trackerFails` makes tracker init raise."""
+
+    trackerFails = False
+
+    def __init__(self, position):
+        self.position = position
+        self.score = None
+        self.trackerInits = 0
+
+    def initializeTrackerFromStack(self, camera, stack, use_cellpose=False):
+        self.trackerInits += 1
+        if self.trackerFails:
+            raise ValueError("cell too close to the stack edge")
+
+
+@pytest.fixture
+def rig(monkeypatch):
+    """A detector wired to fake devices, with the device-touching helpers replaced.
+
+    Returns a namespace carrying the camera, the scope, the recorded _acquire
+    arguments, and the detector callable itself.
+    """
+    camera = FakeCamera()
+    scope = FakeScope(surface=-500e-6)
+    acquireCalls = []
+    detectCalls = []
+
+    def fakeAcquire(cam, start_z, stop_z, step_z):
+        acquireCalls.append((start_z, stop_z, step_z))
+        return ["frame"]
+
+    def fakeDetect(stack, xy_scale, z_scale, models, min_volume_m3, max_candidates):
+        detectCalls.append(
+            (stack, xy_scale, z_scale, models, min_volume_m3, max_candidates)
+        )
+        return [((1e-6, 2e-6, -530e-6), 0.8)]
+
+    monkeypatch.setattr(tile_detector, "_acquire", fakeAcquire)
+    monkeypatch.setattr(tile_detector, "_detect", fakeDetect)
+    monkeypatch.setattr(tile_detector, "_newCell", FakeCell)
+
+    detect = tile_detector.make_tile_detector(camera=camera, scope=scope, manager=None)
+
+    class Rig:
+        pass
+
+    rig = Rig()
+    rig.camera = camera
+    rig.scope = scope
+    rig.acquireCalls = acquireCalls
+    rig.detectCalls = detectCalls
+    rig.detect = detect
+    return rig
+
+
+def test_the_stack_spans_the_constrained_range_below_this_tiles_surface(rig):
+    # The whole reason depth is expressed as offsets from the surface: the slab
+    # follows the tissue, so a tile whose surface is at -500 um must be searched
+    # 20-60 um below THAT, not below zero.
+    rig.detect((0.0, 0.0), SearchConstraints(depth_range=(-20e-6, -60e-6)))
+
+    start_z, stop_z, step_z = rig.acquireCalls[0]
+    assert start_z == pytest.approx(-520e-6)
+    assert stop_z == pytest.approx(-560e-6)
+    assert step_z == pytest.approx(1e-6)
+
+
+def test_the_depth_range_is_read_from_the_constraints_it_is_given(rig):
+    # Not from a value captured when the detector was built: the operator may
+    # edit the range between runs, and the slice hands its current constraints
+    # to every call.
+    rig.detect((0.0, 0.0), SearchConstraints(depth_range=(-5e-6, -15e-6)))
+
+    start_z, stop_z, _ = rig.acquireCalls[0]
+    assert start_z == pytest.approx(-505e-6)
+    assert stop_z == pytest.approx(-515e-6)
+
+
+def test_the_stage_moves_to_the_tile_before_the_surface_is_found(rig):
+    # Surface is per tile, so searching for it before arriving would measure the
+    # previous tile's tissue.
+    rig.detect((3e-6, 4e-6), SearchConstraints())
+    assert rig.scope.moves == [(3e-6, 4e-6)]
+
+
+def test_focus_is_restored_after_a_successful_survey(rig):
+    before = rig.camera.getFocusDepth()
+    rig.detect((0.0, 0.0), SearchConstraints())
+    assert rig.camera.focusSets[-1] == pytest.approx(before)
+
+
+def test_focus_is_restored_when_acquisition_raises(rig, monkeypatch):
+    # A survey that dies mid-stack must not leave the objective parked deep in
+    # the tissue for whatever runs next.
+    before = rig.camera.getFocusDepth()
+
+    def boom(cam, start_z, stop_z, step_z):
+        raise RuntimeError("camera died")
+
+    monkeypatch.setattr(tile_detector, "_acquire", boom)
+
+    with pytest.raises(RuntimeError, match="camera died"):
+        rig.detect((0.0, 0.0), SearchConstraints())
+
+    assert rig.camera.focusSets[-1] == pytest.approx(before)
+
+
+def test_a_stop_prevents_the_survey_from_imaging(rig, monkeypatch):
+    # Imaging a tile is slow, so a stop must be honoured before the stack starts,
+    # not only after it finishes.
+    def stopNow():
+        raise Stopped("stopped by operator")
+
+    monkeypatch.setattr(tile_detector, "check_stop", stopNow)
+
+    with pytest.raises(Stopped):
+        rig.detect((0.0, 0.0), SearchConstraints())
+
+    assert rig.acquireCalls == []
+    assert rig.scope.moves == []
+
+
+def test_detected_cells_carry_their_health_score(rig):
+    cells = rig.detect((0.0, 0.0), SearchConstraints())
+    assert len(cells) == 1
+    assert cells[0].score == pytest.approx(0.8)
+    assert cells[0].position == (1e-6, 2e-6, -530e-6)
+
+
+def test_tracking_is_seeded_from_the_stack_the_cell_was_found_in(rig):
+    cells = rig.detect((0.0, 0.0), SearchConstraints())
+    assert cells[0].trackerInits == 1
+
+
+def test_a_cell_whose_tracker_cannot_be_seeded_is_still_returned(rig, monkeypatch):
+    # A cell too close to the stack edge cannot be extracted, but it is a real
+    # detection: discarding it would silently drop cells at every tile boundary.
+    monkeypatch.setattr(FakeCell, "trackerFails", True)
+
+    cells = rig.detect((0.0, 0.0), SearchConstraints())
+
+    assert len(cells) == 1
+    assert cells[0].score == pytest.approx(0.8)
+
+
+def test_the_pixel_size_and_step_reach_detection(rig):
+    rig.detect((0.0, 0.0), SearchConstraints())
+    stack, xy_scale, z_scale, _models, _min_volume, _n = rig.detectCalls[0]
+    assert stack == ["frame"]
+    assert xy_scale == pytest.approx(0.32e-6)
+    assert z_scale == pytest.approx(1e-6)
+
+
+class FakeManager:
+    def __init__(self, misc):
+        self.config = {"misc": misc}
+
+
+def test_health_models_come_from_the_misc_config():
+    models = tile_detector._health_models(
+        FakeManager({"segmenterPath": "/seg.pt", "classifierPath": "/cls.pt"})
+    )
+    assert models["segmenter"] == "/seg.pt"
+    assert models["classifier"] == "/cls.pt"
+    assert models["autoencoder"] is None
+    assert models["resnet_classifier"] is None
+
+
+def test_health_models_without_a_manager_are_all_unset():
+    # A headless or partially-configured rig must not raise here; detect_neurons
+    # accepts None for every model.
+    assert set(tile_detector._health_models(None).values()) == {None}
+```
+
+- [ ] **Step 2: Run to verify they fail**
+
+```bash
+/home/martin/.miniforge3/envs/acq4-gl/bin/python -m pytest acq4/experiment/tests/test_tile_detector.py -v
+```
+
+Expected: `ModuleNotFoundError: No module named 'acq4.experiment.tile_detector'`.
+
+- [ ] **Step 3: Write the implementation**
+
+Create `acq4/experiment/tile_detector.py`:
 
 ```python
 """The imaging half of a cell producer: move to a tile, find its surface, acquire
@@ -1857,13 +2094,6 @@ def make_tile_detector(
     """
 
     def detect(center, constraints) -> list:
-        # Imported here, not at module scope: acq4_automation lives in an
-        # internal repository, and a top-level import would stop every test
-        # under acq4/experiment from collecting where it is absent.
-        from acq4_automation.feature_tracking.cell import Cell
-        from acq4_automation.object_detection import detect_neurons
-        from coorx import Point
-
         check_stop()
         logger.info("Surveying tile at %r", center)
         scope.setGlobalPosition(center, name="autopatch survey move").wait()
@@ -1877,51 +2107,85 @@ def make_tile_detector(
         try:
             stack = _acquire(camera, start_z, stop_z, step_z)
         finally:
+            # Restored on the failure path too: a survey that dies mid-stack
+            # must not leave the objective parked deep in the tissue for
+            # whatever runs next.
             camera.setFocusDepth(
                 restore_depth, name=f"{camera.name()} restore focus after survey stack"
             )
 
         check_stop()
-        models = _health_models(manager)
-        results = detect_neurons(
+        results = _detect(
             stack,
             xy_scale=camera.getPixelSize()[0],
             z_scale=step_z,
-            trim_edges=True,
+            models=_health_models(manager),
             min_volume_m3=min_volume_m3,
-            n=max_candidates,
-            **models,
+            max_candidates=max_candidates,
         )
         logger.info("Tile at %r yielded %d candidates", center, len(results))
-
-        cells = []
-        for position, score in results:
-            cell = Cell(Point(position, "global"))
-            cell.score = score
-            try:
-                # Seeded from the stack the cell was found in, so tracking is
-                # ready without re-acquiring a stack per cell. A cell too close
-                # to the stack edge cannot be extracted; queue it anyway rather
-                # than discarding a real detection.
-                cell.initializeTrackerFromStack(camera, stack, use_cellpose=True)
-            except Exception:
-                logger.warning(
-                    "Could not initialize tracking for the cell detected at %r",
-                    position,
-                    exc_info=True,
-                )
-            cells.append(cell)
-        return cells
+        return _build_cells(camera, stack, results)
 
     return detect
 
 
+def _build_cells(camera, stack, results) -> list:
+    """Cells for each (position, score) detection, tracking seeded from `stack`."""
+    cells = []
+    for position, score in results:
+        cell = _newCell(position)
+        cell.score = score
+        try:
+            # Seeded from the stack the cell was found in, so tracking is ready
+            # without re-acquiring a stack per cell.
+            cell.initializeTrackerFromStack(camera, stack, use_cellpose=True)
+        except Exception:
+            # A cell too close to the stack edge cannot be extracted, but it is
+            # still a real detection: queue it rather than silently dropping
+            # every cell near a tile boundary.
+            logger.warning(
+                "Could not initialize tracking for the cell detected at %r",
+                position,
+                exc_info=True,
+            )
+        cells.append(cell)
+    return cells
+
+
+def _newCell(position):
+    """A Cell at a global position.
+
+    Imported here, not at module scope: acq4_automation lives in an internal
+    repository, and a top-level import would stop every test under
+    acq4/experiment from collecting where it is absent.
+    """
+    from acq4_automation.feature_tracking.cell import Cell
+    from coorx import Point
+
+    return Cell(Point(position, "global"))
+
+
 def _acquire(camera, start_z: float, stop_z: float, step_z: float) -> list:
-    """The tile's z-stack, shallowest frame first."""
+    """The tile's z-stack."""
     from acq4.util.imaging.sequencer import acquire_z_stack
 
     return acquire_z_stack(
         camera, start_z, stop_z, step_z, slow_fallback=False, name="autopatch survey stack"
+    )
+
+
+def _detect(stack, xy_scale, z_scale, models, min_volume_m3, max_candidates) -> list:
+    """Scored (position, score) candidates in `stack`. See _newCell on the import."""
+    from acq4_automation.object_detection import detect_neurons
+
+    return detect_neurons(
+        stack,
+        xy_scale=xy_scale,
+        z_scale=z_scale,
+        trim_edges=True,
+        min_volume_m3=min_volume_m3,
+        n=max_candidates,
+        **models,
     )
 
 
@@ -1940,9 +2204,50 @@ def _health_models(manager) -> dict:
     }
 ```
 
-- [ ] **Step 2: Verify the module imports where `acq4_automation` is absent**
+- [ ] **Step 4: Run to verify they pass**
 
-This is the property that keeps `acq4/experiment/tests` collecting on a public runner, and it is the one thing about this file that *can* be checked mechanically:
+```bash
+/home/martin/.miniforge3/envs/acq4-gl/bin/python -m pytest acq4/experiment/tests/test_tile_detector.py -v
+```
+
+Expected: 12 passed.
+
+- [ ] **Step 5: Mutation-verify the three absence-shaped assertions**
+
+(a) The depth sign. `z_bounds` is the one place the sign convention is applied, and a flipped sign would drive the objective *above* the tissue. Subtract instead of add in `SearchConstraints.z_bounds`:
+
+```python
+    def z_bounds(self, surface):
+        near, far = self.depth_range
+        return surface - max(near, far), surface - min(near, far)   # DEFECT
+```
+
+Expected: `test_the_stack_spans_the_constrained_range_below_this_tiles_surface` FAILS with `-480e-6` where `-520e-6` was expected. Revert.
+
+(b) Focus restoration on the failure path. Move the restore out of the `finally`:
+
+```python
+        stack = _acquire(camera, start_z, stop_z, step_z)
+        camera.setFocusDepth(restore_depth, name=...)     # DEFECT: not restored on raise
+```
+
+Expected: `test_focus_is_restored_when_acquisition_raises` FAILS (`focusSets` is empty, raising `IndexError`, or holds no restore value). Revert.
+
+(c) A cell with a failed tracker must survive. Re-raise instead of logging:
+
+```python
+        try:
+            cell.initializeTrackerFromStack(camera, stack, use_cellpose=True)
+        except Exception:
+            logger.warning(...)
+            continue                                       # DEFECT: drops a real detection
+```
+
+Expected: `test_a_cell_whose_tracker_cannot_be_seeded_is_still_returned` FAILS on `assert len(cells) == 1`. Revert.
+
+- [ ] **Step 6: Verify the module imports where `acq4_automation` is absent**
+
+This is the property that keeps `acq4/experiment/tests` collecting on a public runner:
 
 ```bash
 /home/martin/.miniforge3/envs/acq4-gl/bin/python -c "
@@ -1955,7 +2260,7 @@ print('imports clean:', callable(td.make_tile_detector))
 
 Expected: `imports clean: True`.
 
-- [ ] **Step 3: Verify the whole engine suite still collects and passes**
+- [ ] **Step 7: Run the whole engine suite and commit**
 
 ```bash
 /home/martin/.miniforge3/envs/acq4-gl/bin/python -m pytest acq4/experiment/ -q
@@ -1963,17 +2268,17 @@ Expected: `imports clean: True`.
 
 Expected: all pass, no collection errors.
 
-- [ ] **Step 4: Commit**
-
 ```bash
-git add acq4/experiment/tile_detector.py
+git add acq4/experiment/tile_detector.py acq4/experiment/tests/test_tile_detector.py
 git commit --author="Martin Chase (claude) <outofculture@gmail.com>" -m "$(cat <<'EOF'
 feat: add the tile detector, a cell producer's imaging half
 
 Moves to a tile, finds that tile's surface, acquires a stack across the
 constrained depth range, and returns scored cells with trackers seeded from
-that stack. acq4_automation is imported lazily so the engine's tests still
-collect where it is absent.
+that stack. The device calls are module-level functions so the orchestration
+around them -- the depth arithmetic, focus restoration on the failure path,
+and stop handling -- is tested with fakes. acq4_automation is imported lazily
+so the engine's tests still collect where it is absent.
 
 🤖 Generated with [Claude Code](https://claude.ai/code)
 EOF
