@@ -1,5 +1,9 @@
 """Tests for CellPanel: a manually-seeded cell queue (via "Add from target" and
 "Scatter fake cells") kept in sync with the Orchestrator's per-cell signals."""
+import gc
+import threading
+import weakref
+
 import numpy as np
 import pytest
 
@@ -45,6 +49,25 @@ class _FakeCamera:
 
     def globalCenterPosition(self):
         return self._center
+
+
+class _FakeQObjectCell(Qt.QObject):
+    """Stands in for a real Cell (also a QObject): built on a worker thread the
+    way tile_detector.py's _newCell constructs one from
+    Orchestrator._refillQueue, so it does not live on the GUI thread
+    addCell() runs on."""
+
+
+def _buildOnAnotherThread(factory):
+    result = {}
+
+    def build():
+        result["obj"] = factory()
+
+    t = threading.Thread(target=build)
+    t.start()
+    t.join()
+    return result["obj"]
 
 
 def test_add_from_target_enqueues_and_lists(qapp):
@@ -356,3 +379,69 @@ def test_clear_cells_resets_shown_entry_id_and_clears_show_container(qapp):
 
     assert panel._shownEntryId is None
     assert panel.showContainer.layout().count() == 0
+
+
+def test_current_cell_built_on_another_thread_gets_a_row_without_a_qt_warning(qapp):
+    """A cell a survey producer finds runs through tile_detector.py's _newCell
+    on the orchestrator's worker thread, so by the time sigCurrentCell carries
+    it here (on the GUI thread), it is a QObject that does not live on this
+    thread. Qt refuses setParent() across threads -- a stderr warning, not an
+    exception -- so addCell() must recognize this case and skip the parenting
+    rather than let that warning through; self._cells is what keeps such a
+    cell alive instead, for as long as this panel exists."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+    cell = _buildOnAnotherThread(_FakeQObjectCell)
+    assert cell.thread() is not panel.thread()
+
+    messages = []
+    Qt.qInstallMessageHandler(
+        lambda msgType, context, message: messages.append(message)
+    )
+    try:
+        orch.sigCurrentCell.emit(cell)
+    finally:
+        Qt.qInstallMessageHandler(None)
+
+    assert messages == [], f"unexpected Qt warning(s): {messages}"
+    assert panel.cellList.count() == 1
+    assert panel.cellList.item(0).text() == f"cell {id(cell)} — running"
+    assert cell.parent() is None
+
+
+def test_current_cell_built_on_another_thread_is_still_freed_by_refcounting(qapp):
+    """Since a cross-thread cell is never parented (see the test above),
+    self._cells -- not Qt's ownership cascade -- must be what keeps it alive;
+    prove that reference is also what lets it go, the same way
+    tests/test_teardown.py proves for the same-thread case."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+    cell = _buildOnAnotherThread(_FakeQObjectCell)
+
+    gc.disable()
+    try:
+        orch.sigCurrentCell.emit(cell)
+        assert panel.cellList.count() == 1
+
+        panel_ref = weakref.ref(panel)
+        cell_ref = weakref.ref(cell)
+
+        panel.clearCells()
+        assert panel._cells == {}
+
+        del cell, orch
+        del panel
+        # No gc.collect() below -- pure refcounting only, since gc is disabled.
+
+        assert (
+            cell_ref() is None
+        ), "cross-thread cell should be freed by refcounting alone"
+        assert panel_ref() is None, "panel should be freed by refcounting alone"
+    finally:
+        gc.enable()

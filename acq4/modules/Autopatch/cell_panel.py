@@ -127,11 +127,14 @@ class CellPanel(Qt.QWidget):
 
         Cell is a QObject; self._cells is the only strong Python reference
         keeping a seeded-but-not-yet-garbage-collected Cell alive once its own
-        run finishes (see addCell()), and Cell instances are parented to this
-        panel (also set in addCell()) so Qt's ownership cascade destroys them
-        deterministically when the window closes. This clears the Python-side
-        bookkeeping (and any per-cell signal connections a future change might
-        add) to match -- nothing here should still reference a Cell afterward.
+        run finishes (see addCell()). Most Cell instances are also parented to
+        this panel (also set in addCell()) so Qt's ownership cascade destroys
+        them deterministically when the window closes -- except a cell built
+        on the orchestrator's worker thread, which addCell() cannot parent
+        (see its comment), and for which self._cells is the only thing keeping
+        it alive at all. This clears the Python-side bookkeeping (and any
+        per-cell signal connections a future change might add) to match --
+        nothing here should still reference a Cell afterward.
         """
         self._cells.clear()
         self._rows.clear()
@@ -178,10 +181,22 @@ class CellPanel(Qt.QWidget):
         # Cell is a QObject; parenting it to this panel (itself parented into
         # the window's widget tree) lets Qt's ownership cascade destroy it
         # deterministically when the window closes, rather than relying solely
-        # on Python holding the last reference (see self._cells below). Guarded
-        # with getattr since tests stand in a plain object() for a cell.
+        # on Python holding the last reference (see self._cells below) -- but
+        # only for a cell that already lives on this (the GUI) thread. Qt
+        # refuses setParent() across threads outright (a stderr warning, not
+        # an exception, and moveToThread() is not the fix: Qt only allows that
+        # call from the thread an object currently lives on, so calling it
+        # from here would warn just the same). A cell a survey producer builds
+        # on the orchestrator's worker thread (tile_detector.py's _newCell,
+        # called from Orchestrator._refillQueue) arrives here still on that
+        # thread, so it is never parented; the strong reference this panel
+        # keeps in self._cells below is what keeps it alive instead, for as
+        # long as this panel exists, and clearCells() is what drops that
+        # reference at window teardown. Guarded with getattr since tests stand
+        # in a plain object() for a cell.
         setParent = getattr(cell, "setParent", None)
-        if setParent is not None:
+        thread = getattr(cell, "thread", None)
+        if setParent is not None and (thread is None or thread() is self.thread()):
             setParent(self)
         item = Qt.QListWidgetItem(f"cell {id(cell)} — queued")
         item.setData(Qt.Qt.UserRole, cell)
@@ -221,8 +236,11 @@ class CellPanel(Qt.QWidget):
             # seeded it (e.g. found by a survey producer inside
             # Orchestrator._refillQueue) is already enqueued -- addCell() here
             # only creates the row and the panel-side bookkeeping addCell()
-            # always sets up (timeline/log stores, the parenting, and the
-            # strong self._cells reference); it must never also call
+            # always sets up (timeline/log stores and the strong self._cells
+            # reference; the parenting too, except such a cell was built on
+            # the orchestrator's worker thread, so addCell() leaves it
+            # unparented and self._cells is what keeps it alive instead -- see
+            # addCell()'s own comment); it must never also call
             # orchestrator.enqueue(), which would run the same cell twice.
             self.addCell(cell)
             item = self._rows[id(cell)]

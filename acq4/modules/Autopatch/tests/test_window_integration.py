@@ -110,6 +110,12 @@ class _FakeCamera:
             cx, cy, _ = self._sensor_center
         else:
             raise ValueError(f"mode must be 'sensor' or 'roi', got {mode!r}")
+        if not globalCoords:
+            # Local coordinates are pixel-space, a completely different scale
+            # than the metre-scale global bounds below -- a caller that reads
+            # this without globalCoords=True gets an obviously wrong field of
+            # view rather than one that happens to still look like metres.
+            return 0.0, 0.0, w * 1e6, h * 1e6
         return cx - w / 2, cy - h / 2, w, h
 
     def globalCenterPosition(self, mode="sensor"):
@@ -443,6 +449,14 @@ def test_new_slice_creates_a_slice_using_the_cameras_field_of_view(qapp, tmp_pat
     win.newSlice()
     assert win.slice is not None
     assert win.slice.tileGrid() == [], "a new slice has no regions to survey yet"
+
+    # The slice's field of view must be the camera's "roi" boundary, in the
+    # camera's own axis order -- not swapped, which would give the tile grid
+    # the wrong stride in each direction (the fake's roi_fov is deliberately
+    # non-square so a swap cannot pass by coincidence).
+    camera = win.cameraSelector.getSelectedObj()
+    _, _, fov_w, fov_h = camera.getBoundary(globalCoords=True, mode="roi")
+    assert win.slice._fov == pytest.approx((abs(fov_w), abs(fov_h)))
 
 
 def test_new_slice_without_a_camera_reports_rather_than_raising(qapp, tmp_path):
