@@ -404,3 +404,119 @@ def test_producer_bound_method_cycle_is_freed_once_the_producer_is_released(
     finally:
         gc.collect()
         gc.enable()
+
+
+def test_surveying_status_is_emitted_around_a_refill(make_pf):
+    orch = Orchestrator(make_pf())
+    statuses = []
+    orch.sigStatus.connect(statuses.append)
+    orch.setCellProducer(make_producer([[object()], None]))
+
+    orch.run_sync()
+
+    assert "surveying" in statuses
+    # And it must not be the last word: the run reports back to running for the
+    # cell it then works, and waiting once drained.
+    assert statuses.index("surveying") < statuses.index("waiting")
+
+
+def test_a_barren_survey_reports_surveying_without_ever_reporting_running(make_pf):
+    # The operator watching a slow, empty stretch of region must see
+    # "surveying", not a stale "running" that implies a cell is being patched.
+    orch = Orchestrator(make_pf())
+    statuses = []
+    orch.sigStatus.connect(statuses.append)
+    orch.setCellProducer(make_producer([[], [], None]))
+
+    orch.run_sync()
+
+    assert statuses.count("surveying") == 3
+
+
+def test_current_cell_is_cleared_before_the_producer_runs(make_pf):
+    # sigCurrentCell must not still name the just-finished cell while the
+    # producer images: Area 5 would attribute survey time to that cell, and it
+    # is the state that made P2a's next-cell Critical reachable.
+    pf = make_pf()
+    first = object()
+    orch = Orchestrator(pf)
+    orch.enqueue(first)
+
+    seen = []
+    orch.sigCurrentCell.connect(seen.append)
+
+    def producer():
+        # Whatever the orchestrator last announced must not be `first`.
+        assert seen[-1] is None, f"still following {seen[-1]!r} while surveying"
+        return None
+
+    orch.setCellProducer(producer)
+    orch.run_sync()
+
+    assert first in seen
+
+
+def test_clear_queue_drops_pending_cells(make_pf):
+    orch = Orchestrator(make_pf())
+    ran = []
+    orch.protocolFile.run = lambda ctx, **kw: ran.append(ctx.cell)
+    orch.enqueue(object())
+    orch.enqueue(object())
+
+    orch.clearQueue()
+    orch.run_sync()
+
+    assert ran == []
+
+
+def test_clear_queue_leaves_a_later_enqueue_working(make_pf):
+    orch = Orchestrator(make_pf())
+    ran = []
+    orch.protocolFile.run = lambda ctx, **kw: ran.append(ctx.cell)
+    orch.enqueue(object())
+    orch.clearQueue()
+    kept = object()
+    orch.enqueue(kept)
+
+    orch.run_sync()
+
+    assert ran == [kept]
+
+
+def test_clear_queue_leaves_a_running_cell_alone(make_pf):
+    """clearQueue()'s docstring promises it leaves a running cell alone: a
+    cell already in the middle of its protocol must still complete even
+    though the queue behind it is dropped out from under it."""
+    orch = Orchestrator(make_pf())
+    ran = []
+
+    def run(ctx, **kwargs):
+        orch.clearQueue()
+        ran.append(ctx.cell)
+
+    orch.protocolFile.run = run
+    queued = object()
+    orch.enqueue(queued)
+    running = object()
+
+    orch.run_sync_cell(running)
+
+    assert ran == [running]
+    assert list(orch._queue) == []
+
+
+def test_no_producer_never_reports_surveying(make_pf):
+    """A plain queue drain (no producer configured) must never emit
+    "surveying" -- an operator would misread it as the system looking for
+    more cells when it is not."""
+    pf = make_pf()
+    pf.run = lambda ctx, **kwargs: None
+    statuses = []
+    orch = Orchestrator(pf)
+    orch.sigStatus.connect(statuses.append)
+    orch.enqueue("c1")
+    orch.enqueue("c2")
+
+    orch.run_sync()
+
+    assert "surveying" not in statuses

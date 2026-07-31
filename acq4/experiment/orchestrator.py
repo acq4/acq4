@@ -21,7 +21,7 @@ logger = get_logger(__name__)
 
 
 class Orchestrator(Qt.QObject):
-    sigStatus = Qt.Signal(str)                 # "running"/"waiting"/"paused"/"error"
+    sigStatus = Qt.Signal(str)                 # "running"/"surveying"/"waiting"/"paused"/"error"
     sigCurrentCell = Qt.Signal(object)         # cell, or None when idle
     sigCellFinished = Qt.Signal(object, str)   # cell, status
 
@@ -54,6 +54,17 @@ class Orchestrator(Qt.QObject):
     # ---- queue / context ----
     def enqueue(self, cell):
         self._queue.append(cell)
+
+    def clearQueue(self) -> None:
+        """Drop every cell waiting in the queue, leaving any running cell alone.
+
+        The caller that seeded these cells is discarding them -- the operator
+        has swapped the tissue, so every queued position is a place not to
+        drive a pipette. Clearing the panel's own bookkeeping is not enough:
+        the deque is a separate strong reference and would otherwise keep
+        handing those positions to the protocol.
+        """
+        self._queue.clear()
 
     def setCellProducer(self, producer):
         """Install (or clear, with None) the callback that refills the queue.
@@ -162,6 +173,14 @@ class Orchestrator(Qt.QObject):
                 self._checkPause()
                 check_stop()
                 if self._shouldRefill():
+                    # Surveying is not patching, and the operator watching a
+                    # slow, barren stretch of region must not read a stale
+                    # "running" as "a cell is being worked". Clearing the
+                    # current cell first is the same honesty: leaving the
+                    # just-finished cell named here made Area 5 attribute
+                    # survey time to it.
+                    self.sigCurrentCell.emit(None)
+                    self.sigStatus.emit("surveying")
                     self._refillQueue()
                     # Refill only ever runs against an empty queue, so a
                     # request that arrived while the producer was working had
