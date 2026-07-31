@@ -359,9 +359,9 @@ def test_slice_and_producer_are_freed_by_refcounting_alone():
     """No cycle between a slice and the producers it makes.
 
     Both outlive individual runs and neither is a QObject, so they must be
-    reclaimable without the cyclic collector -- the failure mode that produced
-    P1.5's exit segfault was a graph only gc could break, collected
-    non-deterministically and possibly off the GUI thread.
+    reclaimable without the cyclic collector. A graph only gc can break is
+    collected non-deterministically and possibly off the GUI thread, which is
+    how this module reaches a hard crash on application exit.
     """
     import gc
     import weakref
