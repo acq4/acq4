@@ -542,23 +542,26 @@ def test_clear_queue_race_between_check_and_pop_ends_the_run_cleanly(make_pf):
     run, not a crashed one.
 
     Deterministic rather than timing-dependent: RaceyQueue's __bool__ is the
-    same truthiness check _shouldRefill() makes on this deque, and it wipes
-    the deque's own contents -- exactly as a concurrent clearQueue() would --
-    the first time it is consulted while non-empty, reproducing the clear
-    landing between that check and the pop that follows it.
+    same truthiness check the loop body makes on this deque wherever it asks
+    "is there anything left", and it wipes the deque's own contents the first
+    time it is consulted while non-empty -- exactly as a concurrent
+    clearQueue() would. It then keeps reporting that emptied state as truthy
+    for the rest of the pass, because that is what any later consult in the
+    same iteration actually observes once a clear has landed: a deque that
+    reads as empty when measured by length, but whose iteration is still
+    mid-flight on the assumption a cell is there to take.
     """
 
     class RaceyQueue(deque):
         def __init__(self, *args):
             super().__init__(*args)
-            self._consulted = False
+            self._raced = False
 
         def __bool__(self):
-            was_nonempty = len(self) > 0
-            if was_nonempty and not self._consulted:
-                self._consulted = True
+            if len(self) > 0:
+                self._raced = True
                 self.clear()
-            return was_nonempty
+            return self._raced or len(self) > 0
 
     pf = make_pf()
     pf.run = lambda ctx, **kwargs: None
@@ -572,8 +575,11 @@ def test_clear_queue_race_between_check_and_pop_ends_the_run_cleanly(make_pf):
     orch = Orchestrator(pf, cellProducer=poison_producer)
     orch._queue = RaceyQueue([object()])
 
-    orch.run_sync()  # must not raise
+    completed_without_raising = False
+    orch.run_sync()
+    completed_without_raising = True
 
+    assert completed_without_raising, "run_sync() must end the run cleanly, not raise"
     assert list(orch._queue) == []
 
 
