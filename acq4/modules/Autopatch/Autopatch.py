@@ -5,6 +5,8 @@ from __future__ import annotations
 import os
 
 from acq4.experiment.orchestrator import Orchestrator
+from acq4.experiment.slice import Slice
+from acq4.experiment.tile_detector import make_tile_detector
 from acq4.modules.Module import Module
 from acq4.util import Qt
 from acq4.util.InterfaceCombo import InterfaceCombo
@@ -13,14 +15,16 @@ from .cell_panel import CellPanel
 from .context_factory import make_context_factory
 from .example_protocols import install_example_protocols
 from .protocol_panel import ProtocolPanel
+from .search_panel import SearchPanel
 from .status_panel import StatusPanel
 
 
 class AutopatchWindow(Qt.QWidget):
     """The Autopatch run window: five labeled areas per the design doc.
 
-    Areas 1/2 stay empty placeholders in P1; Areas 3/4/5 hold the real
-    status/protocol/cell-queue content wired to a live Orchestrator.
+    Area 1 starts a slice, Area 2 configures the cell search over it, and
+    Areas 3/4/5 hold the status/protocol/cell-queue content wired to a live
+    Orchestrator.
     """
 
     def __init__(
@@ -86,6 +90,18 @@ class AutopatchWindow(Qt.QWidget):
         self.statusPanel = StatusPanel()
         self.area3Box.layout().addWidget(self.statusPanel)
 
+        # Area 1 holds only New slice: region graphics and the progress heatmap
+        # are Area 1's remaining content and are not built here.
+        self.newSliceBtn = Qt.QPushButton("New slice")
+        self.newSliceBtn.setToolTip(
+            "Discard the current slice -- its regions, coverage, and queued "
+            "cells -- and start a fresh one for newly mounted tissue."
+        )
+        self.area1Box.layout().addWidget(self.newSliceBtn)
+
+        self.searchPanel = SearchPanel()
+        self.area2Box.layout().addWidget(self.searchPanel)
+
         self.cellPanel = CellPanel(
             pipetteGetter=self.pipetteSelector.getSelectedObj,
             cameraGetter=self.cameraSelector.getSelectedObj,
@@ -96,8 +112,18 @@ class AutopatchWindow(Qt.QWidget):
         # The pipette resolved from self.pipetteSelector at the moment Start was
         # last pressed (GUI thread). The orchestrator's contextFactory reads this
         # cached value rather than the selector widget, since the factory is
-        # called from the orchestrator's worker thread -- see _resolvePipette().
+        # called from the orchestrator's worker thread -- see _onStartRun().
         self._cachedPipette = None
+        # The tissue currently under the objective, or None before the operator
+        # has started one. A Slice outlives individual runs: it holds the
+        # regions, the coverage every producer made from it shares, and the
+        # search constraints. Replaced only by newSlice().
+        self.slice = None
+        # Camera and scope resolved from cameraSelector at the moment Start was
+        # last pressed, for the same reason as _cachedPipette: the detector runs
+        # on the orchestrator's worker thread and must not read a selector.
+        self._cachedCamera = None
+        self._cachedScope = None
         self._tornDown = False
         self.protocolPanel.sigProtocolLoaded.connect(self._onProtocolLoaded)
         # Area 4 (the protocol picker/Reload) must not be usable while a
@@ -109,6 +135,21 @@ class AutopatchWindow(Qt.QWidget):
         # reference cycle -- exactly what bindOrchestrator/unbindOrchestrator
         # elsewhere are careful to avoid.
         self.statusPanel.sigInteractionLocked.connect(self.protocolPanel.setInteractionLocked)
+        self.newSliceBtn.clicked.connect(self.newSlice)
+        self.searchPanel.sigAddRegionRequested.connect(self.addRegionHere)
+        self.searchPanel.sigConstraintsChanged.connect(self._onConstraintsChanged)
+        self.statusPanel.sigInteractionLocked.connect(
+            self.searchPanel.setInteractionLocked
+        )
+        # Coverage advances on the worker thread as the producer images tiles, so
+        # the readout is refreshed off a status change rather than polled. Routed
+        # through StatusPanel, not connected to the orchestrator directly: the
+        # orchestrator is a parentless QObject and a connection from it to this
+        # window would give it a reference back, rebuilding the cycle
+        # bindOrchestrator/unbindOrchestrator exist to avoid. StatusPanel is in
+        # this window's widget tree, so this wiring is made once and never needs
+        # re-wiring per protocol load.
+        self.statusPanel.sigStatusChanged.connect(self._onRunStatus)
         # ProtocolPanel selects (and thus loads) a protocol as soon as its own
         # constructor's initial scan populates the combo -- before the
         # `sigProtocolLoaded` connection above exists, since that scan runs
@@ -121,13 +162,118 @@ class AutopatchWindow(Qt.QWidget):
         if self.protocolPanel.protocolFile is not None:
             self._onProtocolLoaded(self.protocolPanel.protocolFile)
 
-    def _resolvePipette(self) -> None:
-        """Snapshot the currently-selected pipette on the GUI thread. Called at
-        Start (before the orchestrator's worker thread starts running), so the
-        in-flight run never reads InterfaceCombo's currentIndex()/interfaceMap
-        off-thread. Re-resolved on every Start, so the selection may still
-        change between runs."""
+    def newSlice(self) -> None:
+        """Start a fresh slice, discarding the current one and everything on it.
+
+        Regions, coverage, and search constraints go with the old slice, and so
+        do the queued cells: a Cell is a coordinate in tissue, and tissue that
+        has been swapped makes every one of those coordinates a place not to
+        drive a pipette. The per-cell data already written under the old slice
+        directory is the durable record; Area 5's list is a working queue.
+        """
+        camera = self.cameraSelector.getSelectedObj()
+        if camera is None:
+            self.searchPanel.errorLabel.setText(
+                "Select a camera before starting a slice."
+            )
+            return
+        constraints = self.searchPanel.constraints()
+        if constraints is None:
+            return
+        self.slice = Slice(fov=self._cameraFov(camera), constraints=constraints)
+        self.cellPanel.clearCells()
+        if self.orchestrator is not None:
+            # clearCells() only drops the panel's own bookkeeping; the
+            # orchestrator's deque is a separate strong reference to the same
+            # cells and would keep handing them to the protocol.
+            self.orchestrator.clearQueue()
+            self.orchestrator.setCellProducer(None)
+        self._refreshSurveyStats()
+
+    def addRegionHere(self) -> None:
+        """Add a search region of roughly 3x3 fields of view around the camera center."""
+        if self.slice is None:
+            self.newSlice()
+            if self.slice is None:
+                return
+        camera = self.cameraSelector.getSelectedObj()
+        if camera is None:
+            return
+        fov_w, fov_h = self._cameraFov(camera)
+        # "roi" mode throughout: the field the camera actually images is what a
+        # tile covers, and globalCenterPosition defaults to "sensor", which is
+        # off-center for a cropped camera ROI.
+        cx, cy = camera.globalCenterPosition("roi")[:2]
+        w, h = fov_w * 3, fov_h * 3
+        self.slice.addRegion(cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2)
+        self._refreshSurveyStats()
+
+    @staticmethod
+    def _cameraFov(camera) -> tuple[float, float]:
+        """The camera's imaged field width and height, in global metres."""
+        _, _, w, h = camera.getBoundary(globalCoords=True, mode="roi")
+        return abs(w), abs(h)
+
+    def _onConstraintsChanged(self, constraints) -> None:
+        # None means the spinboxes do not currently describe a valid search
+        # (SearchPanel already shows why); leave the live slice on its last
+        # good constraints rather than tearing them down mid-edit.
+        if constraints is not None and self.slice is not None:
+            self.slice.setConstraints(constraints)
+
+    def _refreshSurveyStats(self) -> None:
+        if self.slice is None:
+            self.searchPanel.setSurveyStats(0, 0, 0.0)
+        else:
+            self.searchPanel.setSurveyStats(*self.slice.surveyStats())
+
+    def _onRunStatus(self, status: str) -> None:
+        """Refresh Area 2's survey readout when the run's status moves.
+
+        Coverage advances on the orchestrator's worker thread, but this arrives
+        via StatusPanel on the GUI thread, so re-reading the slice here is safe.
+        """
+        if status in ("surveying", "waiting"):
+            self._refreshSurveyStats()
+
+    def _onStartRun(self) -> None:
+        """Snapshot GUI-thread-only state and install the cell producer at Start.
+
+        Runs on the GUI thread before the orchestrator's worker thread starts,
+        so the in-flight run never reads InterfaceCombo's
+        currentIndex()/interfaceMap off-thread. Re-resolved on every Start, so
+        the selection and the slice may both change between runs.
+        """
         self._cachedPipette = self.pipetteSelector.getSelectedObj()
+        self._cachedCamera = self.cameraSelector.getSelectedObj()
+        self._cachedScope = None
+        if self._cachedCamera is not None:
+            self._cachedScope = self._cachedCamera.scopeDev
+        self._installCellProducer()
+
+    def _installCellProducer(self) -> None:
+        """Give the orchestrator a producer for the current slice, or none.
+
+        Cleared rather than left stale whenever a survey is not possible: no
+        slice, no region, or no camera means the run is a plain drain of the
+        cells the operator seeded by hand, and a producer left over from a
+        previous Start would otherwise keep surveying tissue that is gone.
+        """
+        if self.orchestrator is None:
+            return
+        canSurvey = (
+            self.slice is not None
+            and self.slice.regions
+            and self._cachedCamera is not None
+            and self._cachedScope is not None
+        )
+        if not canSurvey:
+            self.orchestrator.setCellProducer(None)
+            return
+        detector = make_tile_detector(
+            camera=self._cachedCamera, scope=self._cachedScope, manager=self.manager
+        )
+        self.orchestrator.setCellProducer(self.slice.makeCellProducer(detector))
 
     def _onProtocolLoaded(self, protocolFile) -> None:
         # Loading a second protocol must not abandon a still-live Orchestrator:
@@ -155,7 +301,7 @@ class AutopatchWindow(Qt.QWidget):
         # leaning solely on teardown() having already dropped every reference.
         self.orchestrator.setParent(self)
         self.statusPanel.bindOrchestrator(
-            self.orchestrator, self.cellPanel, onStart=self._resolvePipette
+            self.orchestrator, self.cellPanel, onStart=self._onStartRun
         )
         self.cellPanel.bindOrchestrator(self.orchestrator)
 
@@ -181,6 +327,11 @@ class AutopatchWindow(Qt.QWidget):
             orchestrator.wait(timeout=5.0, updates=True)
         except Exception:
             pass
+        # The producer closes over the camera and scope devices and over a
+        # Slice this window may be about to replace. Leaving it installed on an
+        # orchestrator the window has stopped managing keeps all of that
+        # reachable from an object nothing is looking after any more.
+        orchestrator.setCellProducer(None)
         # The orchestrator's context factory closes over this window (to read
         # the cached pipette) and over cellPanel (to log), so as long as the
         # orchestrator is alive it keeps both alive too -- fine on its own,

@@ -52,6 +52,80 @@ class _FakeCameraSelector(Qt.QWidget):
         return None
 
 
+class _FakeScope:
+    """Stands in for a Microscope: records survey moves and reports a surface."""
+
+    def __init__(self):
+        self.moves = []
+
+    def setGlobalPosition(self, pos, speed="fast", name=None):
+        self.moves.append(tuple(pos))
+        return _DoneFuture()
+
+    def findSurfaceDepth(self, imager):
+        return 0.0
+
+
+class _DoneFuture:
+    def wait(self, **kwargs):
+        return None
+
+
+class _FakeCamera:
+    """Stands in for a Camera: the three calls a cell producer's install needs.
+
+    getBoundary in "roi" mode gives the field a tile covers, globalCenterPosition
+    in "roi" mode gives where to seed a region, and scopeDev is the stage the
+    detector drives.
+    """
+
+    def __init__(self, fov=(10e-6, 10e-6), center=(0.0, 0.0, 0.0)):
+        self._fov = fov
+        self._center = center
+        self.scopeDev = _FakeScope()
+
+    def name(self):
+        return "FakeCamera"
+
+    def getBoundary(self, globalCoords=True, mode="sensor"):
+        w, h = self._fov
+        return self._center[0] - w / 2, self._center[1] - h / 2, w, h
+
+    def globalCenterPosition(self, mode="sensor"):
+        return self._center
+
+    def getPixelSize(self):
+        return (0.32e-6, 0.32e-6)
+
+
+class _FakeCameraWithDevice(Qt.QWidget):
+    """A camera selector that actually returns a camera, unlike _FakeCameraSelector."""
+
+    def __init__(self, camera=None):
+        super().__init__()
+        self.camera = camera if camera is not None else _FakeCamera()
+
+    def getSelectedObj(self):
+        return self.camera
+
+
+def _makeWindow(tmp_path, cameraSelector=None):
+    """An AutopatchWindow with a loaded no-op protocol, as the tests above build it."""
+    from acq4.modules.Autopatch.Autopatch import AutopatchWindow
+
+    if cameraSelector is None:
+        cameraSelector = _FakeCameraWithDevice()
+    _write_protocol(tmp_path, "demo.py", _NOOP_PROTOCOL)
+    win = AutopatchWindow(
+        module=None,
+        protocolDir=str(tmp_path),
+        pipetteSelector=_FakePipetteSelector(),
+        cameraSelector=cameraSelector,
+    )
+    win.protocolPanel.fileCombo.setCurrentText("demo")
+    return win
+
+
 _NOOP_PROTOCOL = '''"""Integration test fixture: resolves immediately without touching ctx."""
 
 
@@ -328,3 +402,203 @@ def test_area4_controls_disabled_while_running_and_reenabled_when_stopped(
     win.orchestrator.stop()
     qtbot.waitUntil(lambda: win.protocolPanel.fileCombo.isEnabled(), timeout=2000)
     assert win.protocolPanel.reloadBtn.isEnabled()
+
+
+def test_a_fresh_window_has_no_slice(qapp, tmp_path):
+    win = _makeWindow(tmp_path)
+    # A slice is a commitment to a piece of tissue under the objective; the
+    # window must not invent one before the operator says so.
+    assert win.slice is None
+
+
+def test_new_slice_creates_a_slice_using_the_cameras_field_of_view(qapp, tmp_path):
+    win = _makeWindow(tmp_path)
+    win.newSlice()
+    assert win.slice is not None
+    assert win.slice.tileGrid() == [], "a new slice has no regions to survey yet"
+
+
+def test_new_slice_without_a_camera_reports_rather_than_raising(qapp, tmp_path):
+    # _FakeCameraSelector returns None, the camera-less case.
+    win = _makeWindow(tmp_path, cameraSelector=_FakeCameraSelector())
+    win.newSlice()
+    assert win.slice is None
+    assert win.searchPanel.errorLabel.text() != ""
+
+
+def test_new_slice_with_invalid_constraints_creates_nothing_and_keeps_the_old_slice(
+    qapp, tmp_path
+):
+    # Spin box values that do not describe a valid search must not install a
+    # half-built slice over a good one, nor discard what the good one holds.
+    win = _makeWindow(tmp_path)
+    win.newSlice()
+    win.addRegionHere()
+    win.cellPanel._onScatterFakeCellsClicked()
+    first = win.slice
+    seededCells = win.cellPanel.cellList.count()
+    assert seededCells > 0
+
+    # Equal near and far depths span no thickness, so SearchConstraints rejects
+    # them and SearchPanel.constraints() reports None.
+    win.searchPanel.farDepthSpin.setValue(win.searchPanel.nearDepthSpin.value())
+    win.newSlice()
+
+    assert win.slice is first
+    assert len(win.slice.regions) == 1
+    assert win.cellPanel.cellList.count() == seededCells
+    assert win.searchPanel.errorLabel.text() != ""
+
+
+def test_add_region_here_seeds_a_multi_tile_region(qapp, tmp_path):
+    win = _makeWindow(tmp_path)
+    win.newSlice()
+    win.addRegionHere()
+    assert len(win.slice.regions) == 1
+    assert len(win.slice.tileGrid()) > 1
+
+
+def test_add_region_here_without_a_slice_starts_one(qapp, tmp_path):
+    # Seeding a region is a reasonable first action: a slice comes into
+    # existence to hold it rather than the region being dropped.
+    win = _makeWindow(tmp_path)
+    assert win.slice is None
+
+    win.addRegionHere()
+
+    assert win.slice is not None
+    assert len(win.slice.regions) == 1
+    assert len(win.slice.tileGrid()) > 1
+
+
+def test_new_slice_replaces_the_slice_and_its_coverage(qapp, tmp_path):
+    win = _makeWindow(tmp_path)
+    win.newSlice()
+    win.addRegionHere()
+    first = win.slice
+    first.markCovered(first.nextTile())
+
+    win.newSlice()
+
+    assert win.slice is not first
+    assert win.slice.regions == []
+    assert win.slice.coveredTiles == []
+
+
+def test_new_slice_clears_the_cell_list_and_the_orchestrators_queue(qapp, tmp_path):
+    # A Cell is a coordinate in tissue. Swapped tissue makes every one of those
+    # coordinates a place not to drive a pipette, so both the panel's list and
+    # the orchestrator's separate deque have to let go.
+    win = _makeWindow(tmp_path)
+    win.cellPanel._onScatterFakeCellsClicked()
+    assert win.cellPanel.cellList.count() > 0
+
+    ran = []
+    win.orchestrator.protocolFile.run = lambda ctx, **kw: ran.append(ctx.cell)
+
+    win.newSlice()
+
+    assert win.cellPanel.cellList.count() == 0
+    win.orchestrator.run_sync()
+    assert ran == [], "a cell survived New slice and was patched anyway"
+
+
+def test_start_installs_a_producer_when_a_slice_has_a_region(qapp, tmp_path):
+    win = _makeWindow(tmp_path)
+    win.newSlice()
+    win.addRegionHere()
+
+    win._onStartRun()
+
+    assert win.orchestrator._cellProducer is not None
+
+
+def test_start_installs_no_producer_without_a_slice(qapp, tmp_path):
+    # No slice means no tissue to survey: the run must be a plain queue drain
+    # of whatever the operator seeded by hand, not an error.
+    win = _makeWindow(tmp_path)
+    win._onStartRun()
+    assert win.orchestrator._cellProducer is None
+
+
+def test_start_installs_no_producer_for_a_slice_with_no_region(qapp, tmp_path):
+    # A slice with nowhere to look would have its producer report exhaustion on
+    # the first call, so installing one only adds a pointless refill round trip.
+    win = _makeWindow(tmp_path)
+    win.newSlice()
+    win._onStartRun()
+    assert win.orchestrator._cellProducer is None
+
+
+def test_start_clears_a_stale_producer_once_the_slice_is_gone(qapp, tmp_path):
+    win = _makeWindow(tmp_path)
+    win.newSlice()
+    win.addRegionHere()
+    win._onStartRun()
+    assert win.orchestrator._cellProducer is not None
+
+    win.slice = None
+    win._onStartRun()
+
+    assert win.orchestrator._cellProducer is None
+
+
+def test_teardown_clears_the_producer(qapp, tmp_path):
+    # The producer closes over the camera and scope devices; leaving it
+    # installed on a released orchestrator keeps them reachable from an object
+    # the window has stopped managing.
+    win = _makeWindow(tmp_path)
+    win.newSlice()
+    win.addRegionHere()
+    win._onStartRun()
+    orch = win.orchestrator
+
+    win.teardown()
+
+    assert orch._cellProducer is None
+
+
+def test_loading_a_second_protocol_clears_the_outgoing_producer(qapp, tmp_path):
+    win = _makeWindow(tmp_path)
+    win.newSlice()
+    win.addRegionHere()
+    win._onStartRun()
+    outgoing = win.orchestrator
+
+    _write_protocol(str(tmp_path), "second.py", _NOOP_PROTOCOL)
+    # refreshFileList is the discovery scan the picker's popup runs; it lists the
+    # newly written file without force-reloading the one already loaded.
+    win.protocolPanel.refreshFileList()
+    win.protocolPanel.fileCombo.setCurrentText("second")
+
+    assert outgoing._cellProducer is None
+    assert win.orchestrator is not outgoing
+
+
+def test_editing_the_constraints_reaches_the_live_slice(qapp, tmp_path):
+    win = _makeWindow(tmp_path)
+    win.newSlice()
+    win.searchPanel.minHealthSpin.setValue(0.85)
+    assert win.slice.constraints.min_health == pytest.approx(0.85)
+
+
+def test_invalid_constraints_leave_the_slice_alone(qapp, tmp_path):
+    win = _makeWindow(tmp_path)
+    win.newSlice()
+    before = win.slice.constraints
+    win.searchPanel.farDepthSpin.setValue(win.searchPanel.nearDepthSpin.value())
+    assert win.slice.constraints is before
+
+
+def test_the_survey_readout_follows_the_slices_coverage(qapp, tmp_path):
+    # Coverage advances on the worker thread as tiles are imaged, so the readout
+    # is refreshed off the status signal rather than polled.
+    win = _makeWindow(tmp_path)
+    win.newSlice()
+    win.addRegionHere()
+    total = len(win.slice.tileGrid())
+    win.slice.markCovered(win.slice.nextTile())
+
+    win.statusPanel.sigStatusChanged.emit("surveying")
+
+    assert f"1/{total}" in win.searchPanel.surveyLabel.text()
