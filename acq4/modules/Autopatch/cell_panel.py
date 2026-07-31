@@ -48,17 +48,20 @@ class CellPanel(Qt.QWidget):
         self._timelineItems: dict[int, Qt.QListWidgetItem] = {}
         self._logs: dict[int, list[str]] = {}
         self._cells: dict[int, object] = {}
-        # id(cell) for each cell seeded here while no orchestrator was bound,
-        # and therefore still waiting to be enqueued into whichever
-        # orchestrator is bound next. Populated only by _enqueueAndAdd(), and
-        # only in that no-orchestrator case; emptied by bindOrchestrator()'s
-        # flush. A cell this panel merely learned about from an orchestrator's
-        # announcements is already queued or already finished, so it never
-        # belongs here -- self._cells alone cannot tell the two apart, and
-        # treating every cell in it as pending is how a coordinate in discarded
-        # tissue, or an already-patched cell, gets run again. A list rather than
-        # a set so the flush enqueues them in the order the operator seeded
-        # them, which is the order they will be patched in.
+        # id(cell) for each cell that is not yet running under any
+        # orchestrator this panel is bound to, and so is still owed an
+        # enqueue. Grows from two places: _enqueueAndAdd(), when a cell is
+        # seeded with no orchestrator bound, and unbindOrchestrator(), which
+        # salvages whatever bindOrchestrator() has not yet flushed out of the
+        # outgoing orchestrator's own queue before that queue goes away with
+        # it. Emptied by bindOrchestrator()'s flush into whichever
+        # orchestrator is bound next. A cell this panel merely learned about
+        # from an orchestrator's announcements is already queued or already
+        # finished, so it never belongs here -- self._cells alone cannot tell
+        # the two apart, and treating every cell in it as pending is how a
+        # coordinate in discarded tissue, or an already-patched cell, gets run
+        # again. A list rather than a set so the flush enqueues them in the
+        # order they were queued, which is the order they will be patched in.
         self._awaitingEnqueue: list[int] = []
         # id(entry) of whichever entry's widget currently occupies
         # showContainer, or None if it's empty. No action nests log_action
@@ -107,16 +110,20 @@ class CellPanel(Qt.QWidget):
         self._orchestrator = orchestrator
         orchestrator.sigCurrentCell.connect(self._onCurrentCell)
         orchestrator.sigCellFinished.connect(self._onCellFinished)
-        # Cells seeded before a protocol was loaded (self._orchestrator was
-        # None) were held here without being enqueued; flush exactly those into
-        # the newly bound orchestrator now, exactly once each, so a freshly
-        # loaded protocol runs over any cells the operator already seeded.
-        # Deliberately not every cell in self._cells: that dict also holds cells
-        # this panel only ever learned about from an orchestrator's
-        # announcements (a survey producer's finds, and cells that have already
-        # finished), and enqueuing those here would patch a finished cell a
-        # second time -- or, after a "New slice", drive a pipette to a
-        # coordinate in tissue the operator has declared gone.
+        # _awaitingEnqueue now holds every cell still owed an enqueue: one
+        # seeded before any orchestrator was bound, or one salvaged, just
+        # above (this method's own call to unbindOrchestrator(), when this is
+        # a rebind), from the outgoing orchestrator's queue before that queue
+        # went away with it. Flush exactly those into the newly bound
+        # orchestrator now, exactly once each, so a freshly loaded protocol
+        # runs over any cell the operator already seeded, whichever of the
+        # two ways it ended up unqueued. Deliberately not every cell in
+        # self._cells: that dict also holds cells this panel only ever
+        # learned about from an orchestrator's announcements (a survey
+        # producer's finds, and cells that have already finished), and
+        # enqueuing those here would patch a finished cell a second time --
+        # or, after a "New slice", drive a pipette to a coordinate in tissue
+        # the operator has declared gone.
         pending, self._awaitingEnqueue = self._awaitingEnqueue, []
         for cellId in pending:
             orchestrator.enqueue(self._cells[cellId])
@@ -130,6 +137,23 @@ class CellPanel(Qt.QWidget):
         panel<->orchestrator signal wiring the same way -- leaving no dangling
         Qt connection either way.
 
+        Also salvages whatever is still sitting in the outgoing orchestrator's
+        queue into _awaitingEnqueue before letting go of it. Autopatch.
+        _onProtocolLoaded replaces the whole Orchestrator -- deque included --
+        when the operator switches to a different protocol, so a cell that
+        was enqueued straight into it (by _enqueueAndAdd, while it was bound,
+        or by a survey producer refilling the queue) and never popped for a
+        run would otherwise simply vanish along with it, while its row stays
+        on screen in Area 5. A cell already popped off the queue -- running,
+        finished, or skipped -- is not in pendingCells() any more, so this
+        can never resurrect one of those; that is the same distinction
+        addCell()'s other callers already rely on to keep a finished or
+        discarded cell out of this list. A pending cell this panel has not
+        seen before (a survey producer's find, still waiting its turn behind
+        whatever is running) gets its row and bookkeeping from addCell()
+        here, the same way an announced one gets it, so the id recorded below
+        always resolves against self._cells later.
+
         Note this does NOT touch onLogAction/sigActionEntry: that path is wired
         through the context factory (ExecutionContext.on_log_action, cell-bound
         per make_context_factory), not through an Orchestrator signal
@@ -137,6 +161,10 @@ class CellPanel(Qt.QWidget):
         """
         if self._orchestrator is None:
             return
+        for cell in self._orchestrator.pendingCells():
+            if id(cell) not in self._cells:
+                self.addCell(cell)
+            self._awaitingEnqueue.append(id(cell))
         Qt.disconnect(self._orchestrator.sigCurrentCell, self._onCurrentCell)
         Qt.disconnect(self._orchestrator.sigCellFinished, self._onCellFinished)
         self._orchestrator = None
@@ -197,9 +225,11 @@ class CellPanel(Qt.QWidget):
         # cell into it immediately; if not, record it as awaiting an enqueue so
         # bindOrchestrator() flushes it into whichever orchestrator it later
         # binds. Exactly one of the two happens per seeded cell, so this never
-        # double-enqueues -- and this is the only place _awaitingEnqueue grows,
-        # which is what keeps that flush to cells the operator seeded rather
-        # than every cell this panel has a row for.
+        # double-enqueues. unbindOrchestrator() is the other place
+        # _awaitingEnqueue grows, but only with cells it reads back out of an
+        # outgoing orchestrator's own queue -- never with a cell this panel
+        # merely has a row for -- so that flush still lands on cells actually
+        # owed a run rather than every cell this panel knows about.
         if self._orchestrator is not None:
             self._orchestrator.enqueue(cell)
         else:

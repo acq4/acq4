@@ -74,7 +74,18 @@ class CellProducer:
         except BaseException:
             # Marked even though imaging failed: a tile that raises must not be
             # handed out again, or a producer reused across runs wedges on the
-            # same bad tile forever.
+            # same bad tile forever. FlowSignal is deliberately not exempted
+            # alongside Stopped above: it is raised only via
+            # ExecutionContext._raise_flow_signal (next_cell/retry_cell/abort),
+            # and the detector make_tile_detector builds is handed no execution
+            # context, so no FlowSignal can reach this call today -- marking by
+            # default is what stops a tile that fails deterministically from
+            # wedging a producer forever. A detector given context access in
+            # the future would want AbortExperiment treated like Stopped
+            # instead: a slice outlives the single run that aborted, and
+            # marking a tile covered that the operator never actually saw
+            # surveyed would over-report that slice's coverage to every later
+            # run over it.
             self._slice.markCovered(tile)
             raise
         self._slice.markCovered(tile)

@@ -26,6 +26,12 @@ class _FakeOrchestrator(Qt.QObject):
     def enqueue(self, cell):
         self.enqueued.append(cell)
 
+    def pendingCells(self):
+        """Stands in for Orchestrator.pendingCells(): this fake has no run
+        loop to pop a cell off, so every cell .enqueue() has ever seen is
+        still pending as far as a test using it is concerned."""
+        return list(self.enqueued)
+
 
 class _FakePipette:
     """Stands in for a PatchPipette: exposes .pipetteDevice.targetPosition()
@@ -209,12 +215,14 @@ def test_bind_orchestrator_flushes_previously_held_cells_exactly_once(qapp):
 def test_a_cell_known_only_from_an_announcement_is_not_flushed_into_a_later_orchestrator(
     qapp,
 ):
-    """bindOrchestrator()'s flush exists for cells the operator seeded before a
-    protocol was loaded. A cell this panel only ever learned about from an
-    orchestrator's announcements was never waiting to be enqueued -- it was
-    already queued somewhere else -- so binding a second orchestrator must not
-    hand it over. Both must hold at once: the announced cell is not flushed and
-    the genuinely-pending one still is, or "flush nothing" would pass this too.
+    """A cell this panel only ever learned about from an orchestrator's
+    announcements is already queued or already finished somewhere else, so
+    binding a second orchestrator must not hand it over -- unlike a cell that
+    is genuinely still sitting unrun in the outgoing orchestrator's own queue,
+    which unbindOrchestrator() does carry over (see
+    test_a_cell_seeded_while_bound_is_flushed_into_a_replacement_orchestrator).
+    Both must hold at once, or "flush everything the first orchestrator ever
+    saw" would pass this too.
     """
     from acq4.modules.Autopatch.cell_panel import CellPanel
 
@@ -238,7 +246,9 @@ def test_a_cell_known_only_from_an_announcement_is_not_flushed_into_a_later_orch
     second = _FakeOrchestrator()
     panel.bindOrchestrator(second)
 
-    assert second.enqueued == [], "an announced cell was flushed into a rebind"
+    assert second.enqueued == [
+        seededCell
+    ], "an announced cell was flushed into a rebind"
 
 
 def test_a_finished_cell_is_not_flushed_into_a_later_orchestrator(qapp):
@@ -268,7 +278,7 @@ def test_a_finished_cell_is_not_flushed_into_a_later_orchestrator(qapp):
     assert second.enqueued == [], "a cell from discarded tissue was re-queued"
 
 
-def test_a_whole_survey_of_finished_cells_is_not_flushed_into_a_later_orchestrator(qapp):
+def test_a_finished_survey_is_not_flushed_into_a_later_orchestrator(qapp):
     """After a completed survey every produced cell has a row here. Loading a
     second protocol must enqueue none of them: they have already been patched,
     and running them again would patch each one a second time."""
@@ -292,10 +302,13 @@ def test_a_whole_survey_of_finished_cells_is_not_flushed_into_a_later_orchestrat
     assert panel.cellList.count() == len(surveyed)
 
 
-def test_a_cell_seeded_while_bound_is_not_flushed_again_on_a_rebind(qapp):
-    """A cell seeded with an orchestrator already bound was enqueued into that
-    orchestrator there and then, so it is not awaiting an enqueue either; a
-    rebind must not treat it as one."""
+def test_a_cell_seeded_while_bound_is_flushed_into_a_replacement_orchestrator(qapp):
+    """A cell seeded with an orchestrator already bound is enqueued straight
+    into that orchestrator's own queue, not into _awaitingEnqueue -- so if
+    that orchestrator is replaced (a different protocol loaded) before the
+    cell ever runs, unbindOrchestrator() must read it back out of the
+    outgoing queue itself, or the cell's row would survive in Area 5 while
+    the replacement orchestrator's queue holds nothing for it."""
     from acq4.modules.Autopatch.cell_panel import CellPanel
 
     pip = _FakePipette((1e-3, 2e-3, 3e-3))
@@ -305,11 +318,12 @@ def test_a_cell_seeded_while_bound_is_not_flushed_again_on_a_rebind(qapp):
 
     panel.addFromTargetBtn.click()
     assert len(first.enqueued) == 1
+    cell = first.enqueued[0]
 
     second = _FakeOrchestrator()
     panel.bindOrchestrator(second)
 
-    assert second.enqueued == []
+    assert second.enqueued == [cell]
 
 
 def test_clear_cells_drops_the_pending_enqueue_bookkeeping(qapp):

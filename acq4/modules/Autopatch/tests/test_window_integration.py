@@ -405,6 +405,84 @@ def test_loading_a_second_protocol_stops_and_releases_the_previous_orchestrator(
     assert firstOrchestrator.parent() is None
 
 
+def test_switching_to_a_different_protocol_carries_over_still_pending_seeded_cells(
+    qapp, tmp_path
+):
+    """A cell seeded through Area 5 while an orchestrator is bound is
+    enqueued straight into that orchestrator's own queue by
+    CellPanel._enqueueAndAdd(), and recorded in _awaitingEnqueue nowhere.
+    _onProtocolLoaded releases the whole outgoing Orchestrator -- its queue
+    included -- when the operator switches to a different protocol, so
+    without CellPanel.unbindOrchestrator() salvaging that queue first, the
+    seeded cell's row would survive in Area 5 while the freshly bound
+    orchestrator's queue held nothing for it, and pressing Start would patch
+    nothing."""
+    from acq4.modules.Autopatch.Autopatch import AutopatchWindow
+
+    _write_protocol(tmp_path, "first.py", _NOOP_PROTOCOL)
+    _write_protocol(tmp_path, "second.py", _NOOP_PROTOCOL)
+
+    win = AutopatchWindow(
+        module=None,
+        protocolDir=str(tmp_path),
+        pipetteSelector=_FakePipetteSelector(),
+        cameraSelector=_FakeCameraWithDevice(),
+    )
+    win.protocolPanel.fileCombo.setCurrentText("first")
+    firstOrchestrator = win.orchestrator
+
+    win.cellPanel._onScatterFakeCellsClicked()
+    seededCells = list(win.cellPanel._cells.values())
+    assert seededCells
+    assert firstOrchestrator.pendingCells() == seededCells
+
+    win.protocolPanel.fileCombo.setCurrentText("second")
+
+    assert win.orchestrator is not None
+    assert win.orchestrator is not firstOrchestrator
+    assert win.orchestrator.pendingCells() == seededCells
+    assert win.cellPanel.cellList.count() == len(seededCells)
+
+
+def test_a_finished_cell_seeded_while_bound_is_not_reflushed_on_protocol_switch(
+    qapp, qtbot, tmp_path
+):
+    """Complements the test above from the other direction: a cell seeded
+    while an orchestrator is bound is also enqueued straight into that
+    orchestrator's queue, but once a run actually pops and finishes it,
+    Orchestrator.pendingCells() no longer reports it. Switching to a
+    different protocol afterward must not hand that finished cell to the
+    freshly bound orchestrator for a second run -- the same pipette-safety
+    invariant the panel-level tests pin against an announced-only cell,
+    checked here against one this panel seeded itself."""
+    from acq4.modules.Autopatch.Autopatch import AutopatchWindow
+
+    _write_noop_protocol(tmp_path, "first.py")
+    _write_protocol(tmp_path, "second.py", _NOOP_PROTOCOL)
+
+    win = AutopatchWindow(
+        module=None,
+        protocolDir=str(tmp_path),
+        pipetteSelector=_FakePipetteSelector(target=(1e-3, 2e-3, 3e-3)),
+        cameraSelector=_FakeCameraSelector(),
+    )
+    win.protocolPanel.fileCombo.setCurrentText("first")
+    firstOrchestrator = win.orchestrator
+
+    win.cellPanel.addFromTargetBtn.click()
+    win.statusPanel.startBtn.click()
+    qtbot.waitUntil(
+        lambda: "done" in win.cellPanel.cellList.item(0).text(), timeout=2000
+    )
+    assert firstOrchestrator.pendingCells() == []
+
+    win.protocolPanel.fileCombo.setCurrentText("second")
+
+    assert win.orchestrator is not None
+    assert win.orchestrator is not firstOrchestrator
+    assert win.orchestrator.pendingCells() == []
+
+
 def test_area4_controls_disabled_while_running_and_reenabled_when_stopped(
     qapp, qtbot, tmp_path
 ):

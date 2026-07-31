@@ -55,6 +55,18 @@ class Orchestrator(Qt.QObject):
     def enqueue(self, cell):
         self._queue.append(cell)
 
+    def pendingCells(self) -> list:
+        """Return a snapshot of the cells still waiting in the queue, in the
+        order they will run.
+
+        A copy, not the live deque: the deque is popped from the worker
+        thread as a run proceeds, so a caller salvaging cells from an
+        orchestrator that is about to be replaced (see
+        CellPanel.unbindOrchestrator) must not be able to mutate the run's
+        own queue by holding onto it.
+        """
+        return list(self._queue)
+
     def clearQueue(self) -> None:
         """Drop every cell waiting in the queue, leaving any running cell alone.
 
