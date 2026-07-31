@@ -1,5 +1,6 @@
 """Tests for CellProducer: walking a slice's tiles, the []-versus-None
-exhaustion contract, and the search constraints it filters candidates against."""
+exhaustion contract, and the search constraints (health cutoff, density cap,
+and rescan policy) it filters candidates and tiles against."""
 
 import pytest
 
@@ -165,3 +166,165 @@ def test_a_barren_tile_also_returns_a_concrete_list():
     producer = CellProducer(s, RecordingDetector([[]]))
     result = producer()
     assert type(result) is list
+
+
+def test_candidates_below_the_health_cutoff_are_not_queued():
+    s = make_slice(constraints=SearchConstraints(min_health=0.6))
+    tile = s.nextTile()
+    good = FakeCandidate((tile[0], tile[1], -30e-6), score=0.9)
+    bad = FakeCandidate((tile[0] + 1e-6, tile[1], -30e-6), score=0.3)
+    producer = CellProducer(s, RecordingDetector([[good, bad]]))
+
+    assert producer() == [good]
+
+
+def test_a_candidate_exactly_at_the_cutoff_is_kept():
+    s = make_slice(constraints=SearchConstraints(min_health=0.6))
+    tile = s.nextTile()
+    borderline = FakeCandidate((tile[0], tile[1], -30e-6), score=0.6)
+    assert CellProducer(s, RecordingDetector([[borderline]]))() == [borderline]
+
+
+def test_a_tile_whose_every_candidate_is_rejected_returns_empty_not_none():
+    # Filtering everything out is still "made progress on a tile"; reporting it
+    # as exhaustion would end the run.
+    s = make_slice(constraints=SearchConstraints(min_health=0.9))
+    tile = s.nextTile()
+    weak = FakeCandidate((tile[0], tile[1], -30e-6), score=0.1)
+    producer = CellProducer(s, RecordingDetector([[weak]]))
+    result = producer()
+    assert result == []
+    assert result is not None
+
+
+def test_rejected_candidates_are_not_registered_with_the_slice():
+    s = make_slice(constraints=SearchConstraints(min_health=0.9))
+    tile = s.nextTile()
+    weak = FakeCandidate((tile[0], tile[1], -30e-6), score=0.1)
+    CellProducer(s, RecordingDetector([[weak]]))()
+    assert s.cellsNearTile(tile) == []
+
+
+def test_a_candidate_without_a_score_passes_the_cutoff():
+    # "Add from target" cells and any detector that does not score its output
+    # must not be silently discarded by a nonzero cutoff.
+    s = make_slice(constraints=SearchConstraints(min_health=0.9))
+    tile = s.nextTile()
+    unscored = FakeCandidate((tile[0], tile[1], -30e-6))
+    unscored.score = None
+    assert CellProducer(s, RecordingDetector([[unscored]]))() == [unscored]
+
+
+def _crowding_constraints(cells_per_tile):
+    """Constraints whose density cap is reached by `cells_per_tile` in one tile.
+
+    The volume is computed through the same `z_span()` used by
+    `Slice.tileVolume()`, rather than a literal depth span, so the cap this
+    produces lands on the same floating-point value the producer compares
+    against: a literal `40e-6` is not bit-identical to `abs(-20e-6 - -60e-6)`,
+    which would make an "exactly at the cap" test actually sit a hair above it.
+    """
+    depth_range = (-20e-6, -60e-6)
+    volume = 10e-6 * 10e-6 * SearchConstraints(depth_range=depth_range).z_span()
+    return SearchConstraints(
+        depth_range=depth_range,
+        min_health=0.0,
+        max_cell_density=cells_per_tile / volume,
+    )
+
+
+def test_a_tile_already_at_the_density_cap_is_skipped_without_imaging():
+    s = make_slice(constraints=_crowding_constraints(2))
+    tile = s.nextTile()
+    s.registerCells(
+        [
+            FakeCandidate((tile[0], tile[1], -30e-6)),
+            FakeCandidate((tile[0] + 1e-6, tile[1], -30e-6)),
+        ]
+    )
+    detector = RecordingDetector([[FakeCandidate((tile[0], tile[1], -30e-6))]])
+    producer = CellProducer(s, detector)
+
+    assert producer() == []
+    assert detector.calls == [], "a crowded tile must not be imaged at all"
+    assert tile in s.coveredTiles, "and it must not be handed out again"
+
+
+def test_a_tile_below_the_density_cap_is_imaged_normally():
+    s = make_slice(constraints=_crowding_constraints(2))
+    tile = s.nextTile()
+    s.registerCells([FakeCandidate((tile[0], tile[1], -30e-6))])
+    found = FakeCandidate((tile[0], tile[1], -35e-6))
+    detector = RecordingDetector([[found]])
+
+    assert CellProducer(s, detector)() == [found]
+    assert len(detector.calls) == 1
+
+
+def test_without_rescans_exhaustion_is_final():
+    s = make_slice(
+        regions=((0, 0, 10e-6, 10e-6),),
+        constraints=SearchConstraints(rescans_allowed=False),
+    )
+    producer = CellProducer(s, RecordingDetector())
+    producer()
+    assert producer() is None
+    assert producer() is None
+
+
+def test_rescans_allowed_grants_exactly_one_more_pass():
+    # Unlimited rescanning could never return None, which would wedge the run
+    # loop; one extra pass makes the switch mean something and keeps the
+    # contract. See CellProducer's docstring.
+    s = make_slice(
+        regions=((0, 0, 10e-6, 10e-6),),
+        constraints=SearchConstraints(rescans_allowed=True),
+    )
+    detector = RecordingDetector()
+    producer = CellProducer(s, detector)
+
+    assert producer() == []  # first pass images the only tile
+    assert producer() == []  # rescan re-images it
+    assert producer() is None  # and then it really is exhausted
+    assert len(detector.calls) == 2
+
+
+def test_a_second_producer_from_the_same_slice_gets_its_own_rescan_allowance():
+    # The allowance is per-producer, matching _producerExhausted's per-run
+    # lifetime, so a later run over the same slice may rescan again.
+    s = make_slice(
+        regions=((0, 0, 10e-6, 10e-6),),
+        constraints=SearchConstraints(rescans_allowed=True),
+    )
+    first = s.makeCellProducer(RecordingDetector())
+    first()
+    first()
+    assert first() is None
+
+    second = s.makeCellProducer(RecordingDetector())
+    assert second() == []
+    assert second() is None
+
+
+def test_rescan_pass_re_walks_every_tile_not_just_one():
+    # The single-tile rescan tests above can't tell a re-walk of the whole
+    # slice apart from a single lucky tile being handed out twice. A
+    # multi-tile region closes that gap: the rescan pass must hand out the
+    # same number of tiles as the first pass before it, too, is exhausted.
+    s = make_slice(
+        regions=((0, 0, 20e-6, 10e-6),),
+        constraints=SearchConstraints(rescans_allowed=True),
+    )
+    detector = RecordingDetector()
+    producer = CellProducer(s, detector)
+
+    assert producer() == []
+    assert producer() == []
+    assert len(detector.calls) == 2, "first pass should walk both tiles"
+
+    assert producer() == []
+    assert producer() == []
+    assert len(detector.calls) == 4, "rescan pass should walk both tiles again"
+
+    assert producer() is None
+    assert len(detector.calls) == 4
