@@ -88,7 +88,7 @@ class StatusPanel(Qt.QWidget):
         # the same as "waiting" so Start is enabled and Stop/Pause/Next are not.
         self._currentStatus = None
         self.startBtn.clicked.connect(self._onStartClicked)
-        self.stopBtn.clicked.connect(orchestrator.stop)
+        self.stopBtn.clicked.connect(self._onStopClicked)
         self.pauseBtn.clicked.connect(self._onPauseClicked)
         self.nextBtn.clicked.connect(orchestrator.requestNextCell)
         orchestrator.sigStatus.connect(self._onStatus)
@@ -108,7 +108,7 @@ class StatusPanel(Qt.QWidget):
         if self._orchestrator is None:
             return
         Qt.disconnect(self.startBtn.clicked, self._onStartClicked)
-        Qt.disconnect(self.stopBtn.clicked, self._orchestrator.stop)
+        Qt.disconnect(self.stopBtn.clicked, self._onStopClicked)
         Qt.disconnect(self.pauseBtn.clicked, self._onPauseClicked)
         Qt.disconnect(self.nextBtn.clicked, self._orchestrator.requestNextCell)
         Qt.disconnect(self._orchestrator.sigStatus, self._onStatus)
@@ -125,6 +125,13 @@ class StatusPanel(Qt.QWidget):
         if self._onStart is not None:
             self._onStart()
         self._orchestrator.start()
+
+    def _onStopClicked(self) -> None:
+        # Qt's clicked signal carries a `checked` bool; connecting it straight
+        # to orchestrator.stop would pass that bool through as `reason`, so the
+        # run log would show "stopped by operator" as `False` rather than an
+        # actual reason. This wrapper drops the bool and supplies a real one.
+        self._orchestrator.stop("stopped by operator")
 
     def _onPauseClicked(self) -> None:
         # Toggle: Pause while running, Resume while paused -- see _updateButtons()

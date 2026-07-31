@@ -8,6 +8,14 @@ import pyqtgraph as pg
 from acq4.experiment.slice import SearchConstraints
 from acq4.util import Qt
 
+# max_cell_density is stored in SI (cells per cubic metre), but a field of
+# view is on the order of a few cubic micrometres to nanolitres, not cubic
+# metres, so a raw SI density reads as an unreasoned power of ten. 1 nL is
+# 1e-12 m^3, so multiplying a cells/nL value by this factor gives cells/m^3;
+# a typical 200x200x40 um z-stack is ~1.6 nL, so a handful of cells/nL is
+# already a crowded field of view.
+_CELLS_PER_NL_TO_M3 = 1e12
+
 
 class SearchPanel(Qt.QWidget):
     """The four Area 2 search constraints, a region-seeding button, and a readout.
@@ -65,11 +73,10 @@ class SearchPanel(Qt.QWidget):
             step=0.05,
         )
         self.maxDensitySpin = self._makeSpin(
-            defaults.max_cell_density,
-            bounds=(1.0, 1e18),
-            step=1e12,
-            suffix="/m³",
-            siPrefix=True,
+            defaults.max_cell_density / _CELLS_PER_NL_TO_M3,
+            bounds=(1.0 / _CELLS_PER_NL_TO_M3, 1e18 / _CELLS_PER_NL_TO_M3),
+            step=1e12 / _CELLS_PER_NL_TO_M3,
+            suffix="cells/nL",
         )
         self.rescansCheck = Qt.QCheckBox("Rescans allowed")
         self.rescansCheck.setChecked(defaults.rescans_allowed)
@@ -113,10 +120,12 @@ class SearchPanel(Qt.QWidget):
         quantities.
 
         `siPrefix` is what makes a depth read "-20 µm" instead of
-        "-0.0000200 m" and a density "5 T/m³" instead of "5000000000000 /m³";
-        `value()` still returns plain metres and plain cells per cubic metre, so
-        the constraints built from these controls are unaffected by how they
-        render.
+        "-0.0000200 m"; `value()` still returns plain metres, so the
+        constraints built from these controls are unaffected by how they
+        render. The density spin box instead takes a plain `suffix` with no
+        `siPrefix`: its value is already a human-scaled cells/nL number, and
+        reprefixing a number like 5 would only reintroduce the unreadable
+        SI-scale display this is meant to avoid.
         """
         return pg.SpinBox(
             value=value, bounds=bounds, step=step, suffix=suffix, siPrefix=siPrefix
@@ -133,7 +142,7 @@ class SearchPanel(Qt.QWidget):
             constraints = SearchConstraints(
                 depth_range=(self.nearDepthSpin.value(), self.farDepthSpin.value()),
                 min_health=self.minHealthSpin.value(),
-                max_cell_density=self.maxDensitySpin.value(),
+                max_cell_density=self.maxDensitySpin.value() * _CELLS_PER_NL_TO_M3,
                 rescans_allowed=self.rescansCheck.isChecked(),
             )
         except ValueError as exc:

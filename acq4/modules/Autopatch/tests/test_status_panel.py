@@ -19,12 +19,14 @@ class _FakeOrchestrator(Qt.QObject):
     def __init__(self):
         super().__init__()
         self.started = self.stopped = self.paused = self.resumed = self.nexted = 0
+        self.stopReason = None
 
     def start(self):
         self.started += 1
 
     def stop(self, reason=""):
         self.stopped += 1
+        self.stopReason = reason
 
     def pause(self):
         self.paused += 1
@@ -63,6 +65,24 @@ def test_buttons_drive_the_bound_orchestrator(qapp):
     assert orch.paused == 1
     assert orch.stopped == 1
     assert orch.nexted == 1
+
+
+def test_stop_button_passes_a_real_reason_not_the_click_signal_s_bool(qapp):
+    # Qt's clicked signal carries a `checked` bool; connecting it straight to
+    # orchestrator.stop would pass that bool through as `reason`, landing a
+    # bogus `False` in the run log instead of a human-readable reason.
+    from acq4.modules.Autopatch.status_panel import StatusPanel
+
+    panel = StatusPanel()
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch, _FakeEntrySource())
+
+    orch.sigStatus.emit("running")
+    panel.stopBtn.click()
+
+    assert orch.stopped == 1
+    assert isinstance(orch.stopReason, str) and orch.stopReason != ""
+    assert orch.stopReason is not False
 
 
 def test_pause_button_toggles_to_resume_while_paused(qapp):

@@ -27,14 +27,20 @@ def test_defaults_match_the_engines_defaults(qapp):
 def test_the_physical_controls_read_in_si_units(qapp):
     # On the control that decides how deep an objective travels, "-20 µm" is the
     # readable form; "-0.0000200 m" is a value an operator has to count zeros
-    # in. Same for a density in the low terahertz-per-cubic-metre range. The
-    # µ here is U+00B5, the character pyqtgraph's SI_PREFIXES uses.
+    # in. The µ here is U+00B5, the character pyqtgraph's SI_PREFIXES uses.
     panel = makePanel()
     assert panel.nearDepthSpin.text() == "-20 µm"
     assert panel.farDepthSpin.text() == "-60 µm"
-    assert panel.maxDensitySpin.text() == "5 T/m³"
     # A probability has no unit to prefix, so it reads as itself.
     assert panel.minHealthSpin.text() == "0.5"
+
+
+def test_the_density_control_reads_in_cells_per_nanolitre(qapp):
+    # max_cell_density is stored in SI (cells/m^3), but "5 T/m³" is not a
+    # number an operator reasons about a field of view in; "5 cells/nL" is,
+    # since a typical z-stack field of view is a couple of nanolitres.
+    panel = makePanel()
+    assert panel.maxDensitySpin.text() == "5 cells/nL"
 
 
 def test_editing_the_depth_range_is_reflected_in_the_constraints(qapp):
@@ -67,8 +73,12 @@ def test_editing_the_health_cutoff_is_reflected_in_the_constraints(qapp):
 
 
 def test_editing_the_max_cell_density_is_reflected_in_the_constraints(qapp):
+    # The spin box is in cells/nL; SearchConstraints.max_cell_density is SI
+    # cells/m^3. Setting 2 cells/nL must reach the constraint as 2e12
+    # cells/m^3 (1 nL == 1e-12 m^3) -- a dropped or inverted scale factor
+    # would leave this as 2.0 or 2e-12 instead.
     panel = makePanel()
-    panel.maxDensitySpin.setValue(2e12)
+    panel.maxDensitySpin.setValue(2.0)
     assert panel.constraints().max_cell_density == pytest.approx(2e12)
 
 
@@ -97,7 +107,7 @@ def test_editing_rescans_is_reflected_in_the_constraints(qapp):
             pytest.approx(0.75),
         ),
         (
-            lambda panel: panel.maxDensitySpin.setValue(2e12),
+            lambda panel: panel.maxDensitySpin.setValue(2.0),
             "max_cell_density",
             pytest.approx(2e12),
         ),
