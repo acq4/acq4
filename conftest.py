@@ -1,9 +1,25 @@
 """Root pytest configuration for acq4.
 Excludes hardware-only diagnostic scripts, and tests needing an unpublished
-dependency, from automated test collection.
+dependency, from automated test collection, and pins the Qt binding.
 """
 
 import importlib.util
+import os
+
+# acq4 imports PyQt5 directly throughout and declares pyqt5 in pyproject.toml,
+# but pytest-qt and pyqtgraph each auto-detect a binding independently and both
+# prefer PyQt6/PySide6 whenever those merely happen to be importable. Left to
+# auto-detect, a session with several bindings installed exercises one acq4 does
+# not use, and typically dies importing QtGui.
+#
+# These are environment variables, set here because this module is imported
+# before anything can pull in Qt, rather than pytest ini options, so that they
+# also reach the subprocesses the teleprox-based tests spawn -- those get a
+# fresh interpreter, where pyqtgraph's detection runs again and pytest's own
+# configuration does not reach. setdefault, so that deliberately asking for
+# another binding still works.
+os.environ.setdefault("PYTEST_QT_API", "pyqt5")
+os.environ.setdefault("PYQTGRAPH_QT_LIB", "PyQt5")
 
 # These files have ``test_``-shaped names but are NOT unit tests. They are
 # interactive bench/diagnostic scripts, predating this repo's pytest suite, that

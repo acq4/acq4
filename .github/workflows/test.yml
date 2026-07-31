@@ -35,14 +35,5 @@ jobs:
         # plugin; without it QGuiApplication aborts while creating its platform
         # integration and pytest dies with a core dump.
         QT_QPA_PLATFORM: offscreen
-        # acq4 targets PyQt5, but pytest-qt and pyqtgraph each auto-detect a
-        # binding and both prefer PyQt6/PySide6 whenever those merely happen to
-        # be importable. Pin them so the suite always exercises the binding acq4
-        # declares, whatever else is present in the environment. These are
-        # environment variables rather than pytest ini options so they also
-        # reach the subprocesses that the teleprox-based tests spawn, which get
-        # no pytest configuration of their own.
-        PYTEST_QT_API: pyqt5
-        PYQTGRAPH_QT_LIB: PyQt5
       run: |
         python -m pytest
