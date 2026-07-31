@@ -12,15 +12,32 @@ def _axis_centers(lo: float, hi: float, fov: float, overlap: float) -> list[floa
     Step between tiles is ``fov - overlap``; the tile count is the smallest that
     spans the extent, and the tiles are centered over it so the union fully
     covers [lo, hi] (the outermost tiles may extend past the edges).
+
+    ``extent`` is computed as ``hi - lo``, and ``lo``/``hi`` may be as large as a
+    stage's absolute travel range while ``fov``/``step`` are tiny by comparison,
+    so that subtraction carries rounding error proportional to the magnitude of
+    ``lo``/``hi`` rather than of the extent itself. A tolerance scaled to the
+    largest quantity involved (divided by ``step`` to put it in the same units
+    as the tile-count ratio) absorbs that error so a ratio that is only a
+    rounding error away from an integer is treated as that integer instead of
+    being rounded up to one more tile.
     """
     extent = hi - lo
     step = fov - overlap
     if step <= 0:
         # Degrade gracefully if the overlap swallows the whole FOV.
         step = fov
-    if extent <= fov:
+    scale = max(abs(lo), abs(hi), fov, step)
+    length_tol = scale * 1e-9
+    if extent <= fov + length_tol:
         return [(lo + hi) / 2.0]
-    n = math.ceil((extent - fov) / step) + 1
+    ratio = (extent - fov) / step
+    ratio_tol = length_tol / step
+    rounded_ratio = round(ratio)
+    if abs(ratio - rounded_ratio) <= ratio_tol:
+        n = int(rounded_ratio) + 1
+    else:
+        n = math.ceil(ratio) + 1
     covered = fov + (n - 1) * step
     extra = covered - extent
     start = lo + fov / 2.0 - extra / 2.0

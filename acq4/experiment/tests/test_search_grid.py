@@ -68,6 +68,50 @@ def test_grid_centered_over_rect():
     assert math.isclose((ys[0] + ys[-1]) / 2, 65.0)
 
 
+def test_tile_count_stable_across_stage_offsets():
+    # A 30um square needs exactly 9 tiles with a 10um FOV no matter where the
+    # region sits on the stage, including at millimeter-scale offsets where
+    # `hi - lo` picks up floating-point error.
+    fov = 10e-6
+    side = 30e-6
+    for off in (0.0, 500e-6, 1e-3, 2e-3, 5e-3, 1e-2):
+        x0, y0 = off, off
+        x1, y1 = off + side, off + side
+        grid = plan_grid(x0, y0, x1, y1, fov, fov, overlap=0.0)
+        assert len(grid) == 9, off
+        assert _covers(grid, x0, y0, x1, y1, fov, fov), off
+
+
+def test_single_tile_when_rect_is_exactly_one_fov_at_stage_offset():
+    # A rect exactly one FOV wide returns a single tile at the origin and also
+    # at a millimeter-scale offset, where `hi - lo` picks up floating-point
+    # error relative to the FOV.
+    fov = 100e-6
+    for off in (0.0, 1e-3):
+        x0, y0 = off, off
+        x1, y1 = off + fov, off + fov
+        grid = plan_grid(x0, y0, x1, y1, fov, fov, overlap=0.0)
+        assert len(grid) == 1, off
+        assert grid == [((x0 + x1) / 2.0, (y0 + y1) / 2.0)]
+
+
+def test_extra_tile_kept_when_genuinely_needed():
+    # A rect a hair wider than an exact multiple of the step must still get
+    # the extra tile: the excess here (10% of a step) is far larger than any
+    # floating-point error but smaller than a full step, so it must not be
+    # absorbed by the tolerance that protects against rounding error.
+    fov, overlap = 100e-6, 20e-6
+    step = fov - overlap
+    excess = step * 0.1
+    extent = fov + 2 * step + excess
+    off = 1e-3
+    x0, y0 = off, off
+    x1, y1 = off + extent, off + extent
+    grid = plan_grid(x0, y0, x1, y1, fov, fov, overlap)
+    assert len(grid) == 16
+    assert _covers(grid, x0, y0, x1, y1, fov, fov)
+
+
 def test_is_visited_false_when_nothing_visited():
     assert _is_visited(0.0, 0.0, visited=[], threshold=1.0) is False
 

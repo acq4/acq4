@@ -124,12 +124,9 @@ def test_a_second_region_extends_the_grid_without_disturbing_the_first():
     s = make_slice()
     s.addRegion(0, 0, 30e-6, 30e-6)
     first = s.tileGrid()
-    # 500e-6 keeps the region well clear of the first and, unlike 1e-3, does not
-    # land the tile count on a floating-point rounding boundary: subtracting
-    # two offsets of very different magnitude from each other can perturb an
-    # exact multiple of the FOV by less than an ULP, which is enough to push
-    # ceil() up to an extra tile.
-    s.addRegion(500e-6, 500e-6, 500e-6 + 30e-6, 500e-6 + 30e-6)
+    # 1e-3 keeps the region well clear of the first and sits at a realistic
+    # stage coordinate.
+    s.addRegion(1e-3, 1e-3, 1e-3 + 30e-6, 1e-3 + 30e-6)
     both = s.tileGrid()
     assert both[: len(first)] == first
     assert len(both) == 18
