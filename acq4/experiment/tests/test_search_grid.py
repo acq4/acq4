@@ -1,13 +1,9 @@
-"""Tests for the survey-region grid packing used by the autopatch demo.
-
-Cover plan_grid (serpentine FOV tiling that fully covers a rectangle) and
-select_next (choosing the next un-imaged tile), the pure logic behind surveying
-a user-defined region one z-stack per tile.
-"""
+"""Tests for the search-region grid packing: serpentine FOV tiling that fully
+covers a rectangle, and choosing the next un-imaged tile."""
 
 import math
 
-from acq4.modules.AutomationDebug.survey import (
+from acq4.experiment.search_grid import (
     _is_visited,
     count_covered,
     plan_grid,
