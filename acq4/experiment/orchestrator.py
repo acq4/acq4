@@ -257,8 +257,20 @@ class Orchestrator(Qt.QObject):
 
     def _refillQueue(self):
         """Ask the producer for more cells; record exhaustion when it has none."""
+        # setCellProducer() runs on the GUI thread (a "New slice" mid-run, for
+        # instance, clearing it to None) while this loop runs on the worker
+        # thread, so "there is a producer" (_shouldRefill's check, just above)
+        # and "call the producer" cannot be treated as two separate steps -- a
+        # clear landing in between would turn a legitimate operator action
+        # into a TypeError out of calling None. Reading it into a local once
+        # makes the two one step for this call: if it is gone by the time
+        # this runs, there is simply nothing to ask -- not exhaustion, and not
+        # a bug to report.
+        producer = self._cellProducer
+        if producer is None:
+            return
         try:
-            cells = self._cellProducer()
+            cells = producer()
         except (Stopped, FlowSignal):
             # Same pass-through as _processCell: a cooperative stop is a normal
             # end to the run, and a producer that raises AbortExperiment means

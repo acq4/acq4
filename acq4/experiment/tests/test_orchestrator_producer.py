@@ -583,6 +583,42 @@ def test_clear_queue_race_between_check_and_pop_ends_the_run_cleanly(make_pf):
     assert list(orch._queue) == []
 
 
+def test_producer_cleared_between_shouldrefill_and_refill_ends_the_run_cleanly(make_pf):
+    """setCellProducer(None) runs on the GUI thread (a "New slice" mid-run,
+    say) while this loop runs on the worker thread, so "there is a producer"
+    (_shouldRefill's check) and "call the producer" (_refillQueue, a separate
+    step later) cannot be treated as one atomic check-then-act. A clear
+    landing in between must not turn a legitimate operator action into a
+    TypeError out of calling None -- the run should simply find nothing left
+    to do and end normally, the same as if no producer had ever been asked.
+
+    Deterministic rather than timing-dependent: sigStatus always emits
+    "surveying" between _shouldRefill()'s check and _refillQueue()'s call (see
+    _runLoopBody), so a slot connected to that signal clears the producer at
+    exactly that point on this same thread -- standing in for the concurrent
+    clear the same way RaceyQueue stands in for a concurrent clearQueue()
+    above."""
+    pf = make_pf()
+    pf.run = lambda ctx, **kwargs: None
+    producer = make_producer([["c1"], None])
+    orch = Orchestrator(pf, cellProducer=producer)
+    statuses = []
+    orch.sigStatus.connect(statuses.append)
+
+    def clear_producer_when_surveying_starts(status):
+        if status == "surveying":
+            orch.setCellProducer(None)
+
+    orch.sigStatus.connect(clear_producer_when_surveying_starts)
+
+    orch.run_sync()  # must not raise
+
+    assert "error" not in statuses
+    assert (
+        producer.calls["n"] == 0
+    ), "producer was called after it had already been cleared"
+
+
 def test_no_producer_never_reports_surveying(make_pf):
     """A plain queue drain (no producer configured) must never emit
     "surveying" -- an operator would misread it as the system looking for

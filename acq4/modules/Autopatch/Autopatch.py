@@ -183,11 +183,17 @@ class AutopatchWindow(Qt.QWidget):
         self.slice = Slice(fov=self._cameraFov(camera), constraints=constraints)
         self.cellPanel.clearCells()
         if self.orchestrator is not None:
+            # Detached before the queue is cleared, not after: a refill still
+            # in flight on the worker thread reads the producer and enqueues
+            # its result as two separate steps (see Orchestrator._refillQueue),
+            # so clearing the queue first leaves a window where that in-flight
+            # refill can still land one more old-slice tile in it after the
+            # operator has already declared the tissue gone.
+            self.orchestrator.setCellProducer(None)
             # clearCells() only drops the panel's own bookkeeping; the
             # orchestrator's deque is a separate strong reference to the same
             # cells and would keep handing them to the protocol.
             self.orchestrator.clearQueue()
-            self.orchestrator.setCellProducer(None)
         self._refreshSurveyStats()
 
     def addRegionHere(self) -> None:
