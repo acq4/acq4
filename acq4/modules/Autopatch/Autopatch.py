@@ -162,6 +162,33 @@ class AutopatchWindow(Qt.QWidget):
         if self.protocolPanel.protocolFile is not None:
             self._onProtocolLoaded(self.protocolPanel.protocolFile)
 
+    def _startSlice(self) -> bool:
+        """Install a fresh Slice for the tissue under the objective.
+
+        Returns whether one was created: a slice needs the camera's field of
+        view and a valid set of search constraints, and either being missing
+        leaves self.slice exactly as it was rather than installing a half-built
+        one. The camera-less case reports itself through SearchPanel; invalid
+        constraints have already reported themselves there.
+
+        Shared by newSlice() and addRegionHere(), so the construction lives in
+        one place -- but only the construction. Discarding the previous slice's
+        queued cells belongs to newSlice() alone: addRegionHere() creating the
+        slice that will hold its region must not throw away cells the operator
+        seeded by hand, which is all its button offers to do.
+        """
+        camera = self.cameraSelector.getSelectedObj()
+        if camera is None:
+            self.searchPanel.setError("Select a camera before starting a slice.")
+            return False
+        constraints = self.searchPanel.constraints()
+        if constraints is None:
+            return False
+        self.slice = Slice(fov=self._cameraFov(camera), constraints=constraints)
+        # There is a camera now, so retract the message above if it is up.
+        self.searchPanel.setError("")
+        return True
+
     def newSlice(self) -> None:
         """Start a fresh slice, discarding the current one and everything on it.
 
@@ -170,17 +197,15 @@ class AutopatchWindow(Qt.QWidget):
         has been swapped makes every one of those coordinates a place not to
         drive a pipette. The per-cell data already written under the old slice
         directory is the durable record; Area 5's list is a working queue.
+
+        What this deliberately does not do is stop the cell already in flight.
+        The queue behind it and Area 5's list are discarded, but that cell runs
+        to completion on the tissue it was found in -- it is being worked right
+        now, and yanking a pipette out mid-protocol is its own hazard. The
+        operator who has physically swapped the tissue presses Stop for that.
         """
-        camera = self.cameraSelector.getSelectedObj()
-        if camera is None:
-            self.searchPanel.errorLabel.setText(
-                "Select a camera before starting a slice."
-            )
+        if not self._startSlice():
             return
-        constraints = self.searchPanel.constraints()
-        if constraints is None:
-            return
-        self.slice = Slice(fov=self._cameraFov(camera), constraints=constraints)
         self.cellPanel.clearCells()
         if self.orchestrator is not None:
             # Detached before the queue is cleared, not after: a refill still
@@ -197,11 +222,15 @@ class AutopatchWindow(Qt.QWidget):
         self._refreshSurveyStats()
 
     def addRegionHere(self) -> None:
-        """Add a search region of roughly 3x3 fields of view around the camera center."""
-        if self.slice is None:
-            self.newSlice()
-            if self.slice is None:
-                return
+        """Add a search region of roughly 3x3 fields of view around the camera center.
+
+        A region is a reasonable first action, so a slice comes into existence
+        to hold it. Built directly rather than by way of newSlice(): that is the
+        discard-everything path, and an operator who seeded cells by hand and
+        then asked only for a region must not lose them.
+        """
+        if self.slice is None and not self._startSlice():
+            return
         camera = self.cameraSelector.getSelectedObj()
         if camera is None:
             return

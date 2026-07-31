@@ -286,8 +286,14 @@ class Orchestrator(Qt.QObject):
         if cells is None:
             self._producerExhausted = True
             return
-        for cell in cells:
-            self.enqueue(cell)
+        # One deque.extend rather than a loop of enqueue() calls: clearQueue()
+        # runs on the GUI thread while this runs on the worker thread, and a
+        # clear landing part-way through a loop would leave a partial batch of
+        # coordinates queued in tissue the operator has already declared gone.
+        # extend() is a single C-level call, so the whole batch lands either
+        # before or after such a clear, never across it. enqueue() remains the
+        # public single-cell entry point.
+        self._queue.extend(cells)
 
     def _processCell(self, cell):
         """Run the protocol function for one cell. RetryCurrentCell loops in

@@ -114,6 +114,36 @@ def test_adding_a_region_produces_a_tile_grid():
     assert s.surveyStats() == (9, 0, 0.0)
 
 
+def test_the_tile_grid_is_serpentine_within_a_region():
+    # Alternating the direction of each row is what keeps a survey's stage
+    # travel down: at the end of a row the next tile is the one directly
+    # above, not all the way back at the far edge. Sorted (or any other
+    # row-major) order costs a full row's traverse per row and would still
+    # cover the region, so nothing else in the suite would notice the
+    # difference -- hence pinning the order itself here.
+    s = make_slice()
+    s.addRegion(0, 0, 30e-6, 30e-6)
+    grid = s.tileGrid()
+    assert len(grid) == 9
+
+    rows = [grid[0:3], grid[3:6], grid[6:9]]
+    # Each row is one y, and the rows step through y in order.
+    ys = [row[0][1] for row in rows]
+    for row, y in zip(rows, ys):
+        assert [center[1] for center in row] == [pytest.approx(y)] * 3
+    assert ys == sorted(ys)
+
+    # And the x direction reverses row to row.
+    xs = [[center[0] for center in row] for row in rows]
+    assert xs[0] == sorted(xs[0])
+    assert xs[1] == sorted(xs[1], reverse=True)
+    assert xs[2] == sorted(xs[2])
+    # The step from the end of one row to the start of the next is one tile,
+    # which is the whole point; row-major order would make it two.
+    assert xs[0][-1] == pytest.approx(xs[1][0])
+    assert xs[1][-1] == pytest.approx(xs[2][0])
+
+
 def test_regions_is_a_copy_so_callers_cannot_mutate_slice_state():
     s = make_slice()
     s.addRegion(0, 0, 30e-6, 30e-6)
@@ -227,15 +257,6 @@ def test_fov_must_be_positive_in_both_axes():
         Slice(fov=(0.0, 10e-6))
     with pytest.raises(ValueError, match="fov must be positive"):
         Slice(fov=(10e-6, -1e-6))
-
-
-def test_directory_defaults_to_none_and_round_trips_through_the_constructor():
-    # `directory` is the acq4 slice directory handle this search state
-    # belongs to, kept so a caller can find where to write per-slice data
-    # alongside it; it must come back unchanged.
-    assert make_slice().directory is None
-    sentinel = object()
-    assert make_slice(directory=sentinel).directory is sentinel
 
 
 def test_threshold_is_half_the_step_between_tile_centers():

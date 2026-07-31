@@ -48,6 +48,18 @@ class CellPanel(Qt.QWidget):
         self._timelineItems: dict[int, Qt.QListWidgetItem] = {}
         self._logs: dict[int, list[str]] = {}
         self._cells: dict[int, object] = {}
+        # id(cell) for each cell seeded here while no orchestrator was bound,
+        # and therefore still waiting to be enqueued into whichever
+        # orchestrator is bound next. Populated only by _enqueueAndAdd(), and
+        # only in that no-orchestrator case; emptied by bindOrchestrator()'s
+        # flush. A cell this panel merely learned about from an orchestrator's
+        # announcements is already queued or already finished, so it never
+        # belongs here -- self._cells alone cannot tell the two apart, and
+        # treating every cell in it as pending is how a coordinate in discarded
+        # tissue, or an already-patched cell, gets run again. A list rather than
+        # a set so the flush enqueues them in the order the operator seeded
+        # them, which is the order they will be patched in.
+        self._awaitingEnqueue: list[int] = []
         # id(entry) of whichever entry's widget currently occupies
         # showContainer, or None if it's empty. No action nests log_action
         # blocks today, but if one did, this lets a "finished" phase tell
@@ -95,12 +107,19 @@ class CellPanel(Qt.QWidget):
         self._orchestrator = orchestrator
         orchestrator.sigCurrentCell.connect(self._onCurrentCell)
         orchestrator.sigCellFinished.connect(self._onCellFinished)
-        # Cells seeded before a protocol was loaded (self._orchestrator was None)
-        # were held here without being enqueued; flush them into the newly bound
-        # orchestrator now, exactly once each, so a freshly loaded protocol runs
-        # over any cells the operator already seeded.
-        for cell in self._cells.values():
-            orchestrator.enqueue(cell)
+        # Cells seeded before a protocol was loaded (self._orchestrator was
+        # None) were held here without being enqueued; flush exactly those into
+        # the newly bound orchestrator now, exactly once each, so a freshly
+        # loaded protocol runs over any cells the operator already seeded.
+        # Deliberately not every cell in self._cells: that dict also holds cells
+        # this panel only ever learned about from an orchestrator's
+        # announcements (a survey producer's finds, and cells that have already
+        # finished), and enqueuing those here would patch a finished cell a
+        # second time -- or, after a "New slice", drive a pipette to a
+        # coordinate in tissue the operator has declared gone.
+        pending, self._awaitingEnqueue = self._awaitingEnqueue, []
+        for cellId in pending:
+            orchestrator.enqueue(self._cells[cellId])
 
     def unbindOrchestrator(self) -> None:
         """Disconnect everything bindOrchestrator() connected to the currently
@@ -137,6 +156,11 @@ class CellPanel(Qt.QWidget):
         nothing here should still reference a Cell afterward.
         """
         self._cells.clear()
+        # Cleared alongside self._cells, which is what the flush resolves these
+        # ids against: an id left behind here would either raise a KeyError on
+        # the next bind or, if that memory address were reused by an unrelated
+        # cell, enqueue that cell instead.
+        self._awaitingEnqueue.clear()
         self._rows.clear()
         self._timelines.clear()
         self._entryTimelineLoc.clear()
@@ -169,15 +193,30 @@ class CellPanel(Qt.QWidget):
     def _enqueueAndAdd(self, cell) -> None:
         # self._cells (via addCell) is the authoritative source of truth for
         # seeded cells, so seeding must work even before a protocol has been
-        # loaded and bound an orchestrator. If one IS bound, also enqueue the
-        # new cell into it immediately; unbound cells are flushed into whatever
-        # orchestrator bindOrchestrator() later binds, so this never
-        # double-enqueues.
+        # loaded and bound an orchestrator. If one IS bound, enqueue the new
+        # cell into it immediately; if not, record it as awaiting an enqueue so
+        # bindOrchestrator() flushes it into whichever orchestrator it later
+        # binds. Exactly one of the two happens per seeded cell, so this never
+        # double-enqueues -- and this is the only place _awaitingEnqueue grows,
+        # which is what keeps that flush to cells the operator seeded rather
+        # than every cell this panel has a row for.
         if self._orchestrator is not None:
             self._orchestrator.enqueue(cell)
+        else:
+            self._awaitingEnqueue.append(id(cell))
         self.addCell(cell)
 
     def addCell(self, cell) -> None:
+        """Give `cell` a row and the panel-side bookkeeping that row needs.
+
+        Display and bookkeeping only: it neither enqueues the cell nor records
+        it as awaiting an enqueue. Both the seeding path (_enqueueAndAdd, which
+        does one or the other before calling here) and the announcement paths
+        (_onCurrentCell/_onCellFinished, for a cell that is already queued,
+        already running, or already finished) go through this, and the
+        announcement paths must add nothing a later bindOrchestrator() would
+        act on.
+        """
         # Cell is a QObject; parenting it to this panel (itself parented into
         # the window's widget tree) lets Qt's ownership cascade destroy it
         # deterministically when the window closes, rather than relying solely
@@ -241,7 +280,9 @@ class CellPanel(Qt.QWidget):
             # the orchestrator's worker thread, so addCell() leaves it
             # unparented and self._cells is what keeps it alive instead -- see
             # addCell()'s own comment); it must never also call
-            # orchestrator.enqueue(), which would run the same cell twice.
+            # orchestrator.enqueue(), which would run the same cell twice, nor
+            # record it in self._awaitingEnqueue, which would have a later
+            # bindOrchestrator() do the same thing one protocol load later.
             self.addCell(cell)
             item = self._rows[id(cell)]
         item.setText(f"cell {id(cell)} — running")
@@ -333,7 +374,9 @@ class CellPanel(Qt.QWidget):
         # Orchestrator._processCell) without sigCurrentCell ever having fired
         # for it, so this cannot assume _onCurrentCell already gave it a row --
         # same reasoning as _onCurrentCell above: add one via addCell() only,
-        # never re-enqueue.
+        # never re-enqueue and never mark it as awaiting one. A cell that has
+        # finished is the clearest case of all: enqueuing it again patches a
+        # cell that has already been worked.
         item = self._rows.get(id(cell))
         if item is None:
             self.addCell(cell)

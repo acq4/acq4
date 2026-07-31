@@ -4,6 +4,7 @@ tile of a slice per call, filtering the cells it returns and skipping crowded ti
 from __future__ import annotations
 
 from acq4.logging_config import get_logger
+from acq4.util.task import Stopped
 
 logger = get_logger(__name__)
 
@@ -58,11 +59,25 @@ class CellProducer:
             return []
         try:
             candidates = self._detector(tile, constraints)
-        finally:
-            # Marked whether or not imaging succeeded: a tile that raises must
-            # not be handed out again, or a producer reused across runs wedges
-            # on the same bad tile forever.
+        except Stopped:
+            # The one exit that leaves the tile uncovered, per Slice.nextTile's
+            # contract: the operator interrupted a tile that would otherwise
+            # have imaged fine, so a later producer over this same slice has to
+            # come back to it rather than report a region 100% surveyed with an
+            # unimaged tile in it. Every other way out of the detector -- an
+            # imaging failure, or a flow signal deciding the experiment's fate
+            # from an arbitrary point mid-tile -- marks the tile below, since
+            # only a cooperative stop is guaranteed to have left nothing
+            # half-done.
+            logger.info("Stopped while imaging tile %r; leaving it uncovered", tile)
+            raise
+        except BaseException:
+            # Marked even though imaging failed: a tile that raises must not be
+            # handed out again, or a producer reused across runs wedges on the
+            # same bad tile forever.
             self._slice.markCovered(tile)
+            raise
+        self._slice.markCovered(tile)
         cells = [c for c in candidates if self._isHealthy(c, constraints)]
         self._slice.registerCells(cells)
         return cells

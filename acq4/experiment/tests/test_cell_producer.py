@@ -6,6 +6,7 @@ import pytest
 
 from acq4.experiment.cell_producer import CellProducer
 from acq4.experiment.slice import SearchConstraints, Slice
+from acq4.util.task import Stopped
 
 FOV = (10e-6, 10e-6)
 
@@ -136,6 +137,69 @@ def test_a_detector_failure_marks_the_tile_covered_rather_than_retrying_it_forev
     with pytest.raises(RuntimeError, match="imaging failed"):
         producer()
     assert tile in s.coveredTiles
+
+
+def test_a_stop_mid_tile_leaves_that_tile_uncovered():
+    # Slice.nextTile's contract: the caller marks a tile covered once it has
+    # actually imaged it, so a tile the operator abandoned by pressing Stop is
+    # retried rather than silently skipped. tile_detector raises Stopped from
+    # four separate check_stop() points, every one of them before or during the
+    # imaging this tile's coverage is supposed to record.
+    s = make_slice()
+    tile = s.nextTile()
+
+    def stopping(center, constraints):
+        raise Stopped("operator pressed stop mid-tile")
+
+    producer = CellProducer(s, stopping)
+    with pytest.raises(Stopped):
+        producer()
+
+    assert s.coveredTiles == []
+    assert s.nextTile() == tile
+    assert s.surveyStats()[1] == 0
+
+
+def test_a_tile_abandoned_by_a_stop_is_re_imaged_by_a_later_producer():
+    # The slice and its coverage outlive individual runs, so the proof that
+    # matters is the next run's producer -- a fresh CellProducer over the same
+    # persistent slice -- actually returning to the abandoned tile, not merely
+    # that coverage looked right in the moment.
+    s = make_slice()
+    tile = s.nextTile()
+
+    def stopping(center, constraints):
+        raise Stopped("operator pressed stop mid-tile")
+
+    with pytest.raises(Stopped):
+        s.makeCellProducer(stopping)()
+
+    detector = RecordingDetector()
+    s.makeCellProducer(detector)()
+
+    assert detector.calls[0][0] == tile
+    assert tile in s.coveredTiles
+
+
+def test_a_stopped_tile_is_not_counted_as_surveyed():
+    # A region whose every tile but one was imaged, with that one abandoned by a
+    # stop, must not read as 100% surveyed: the readout is what tells the
+    # operator whether the tissue has actually been looked at.
+    s = make_slice(regions=((0, 0, 20e-6, 10e-6),))  # exactly two tiles
+
+    def stopAtTheSecondTile(center, constraints):
+        if len(s.coveredTiles) == 1:
+            raise Stopped("operator pressed stop mid-tile")
+        return []
+
+    producer = CellProducer(s, stopAtTheSecondTile)
+    assert producer() == []
+    with pytest.raises(Stopped):
+        producer()
+
+    total, covered, percent = s.surveyStats()
+    assert (total, covered) == (2, 1)
+    assert percent == pytest.approx(50.0)
 
 
 def test_a_populated_tile_returns_a_concrete_list_not_a_lazy_iterator():

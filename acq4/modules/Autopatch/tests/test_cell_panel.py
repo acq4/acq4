@@ -206,6 +206,131 @@ def test_bind_orchestrator_flushes_previously_held_cells_exactly_once(qapp):
     assert orch.enqueued.count(newCell) == 1
 
 
+def test_a_cell_known_only_from_an_announcement_is_not_flushed_into_a_later_orchestrator(
+    qapp,
+):
+    """bindOrchestrator()'s flush exists for cells the operator seeded before a
+    protocol was loaded. A cell this panel only ever learned about from an
+    orchestrator's announcements was never waiting to be enqueued -- it was
+    already queued somewhere else -- so binding a second orchestrator must not
+    hand it over. Both must hold at once: the announced cell is not flushed and
+    the genuinely-pending one still is, or "flush nothing" would pass this too.
+    """
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    pip = _FakePipette((1e-3, 2e-3, 3e-3))
+    panel = CellPanel(pipetteGetter=lambda: pip)
+
+    # Seeded with no orchestrator bound: this one is genuinely pending.
+    panel.addFromTargetBtn.click()
+    seededCell = list(panel._cells.values())[0]
+
+    first = _FakeOrchestrator()
+    panel.bindOrchestrator(first)
+    assert first.enqueued == [seededCell]
+
+    # And a cell the first orchestrator merely announces -- a survey producer's
+    # find, enqueued inside the orchestrator itself.
+    announced = object()
+    first.sigCurrentCell.emit(announced)
+    assert panel.cellList.count() == 2
+
+    second = _FakeOrchestrator()
+    panel.bindOrchestrator(second)
+
+    assert second.enqueued == [], "an announced cell was flushed into a rebind"
+
+
+def test_a_finished_cell_is_not_flushed_into_a_later_orchestrator(qapp):
+    """The "New slice" hazard, at panel level. newSlice() clears Area 5 and the
+    orchestrator's queue but deliberately leaves the in-flight cell running; it
+    finishes on the old tissue and is announced here. Loading a second protocol
+    must not then enqueue that coordinate into the new orchestrator -- the
+    operator has declared the tissue it names gone, and a pipette driven there
+    is driven into whatever is now under the objective.
+    """
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    first = _FakeOrchestrator()
+    panel.bindOrchestrator(first)
+    inFlight = object()
+    first.sigCurrentCell.emit(inFlight)
+
+    # The operator presses New slice: Area 5 and the queue are discarded while
+    # that cell keeps running.
+    panel.clearCells()
+    first.sigCellFinished.emit(inFlight, "done")
+
+    second = _FakeOrchestrator()
+    panel.bindOrchestrator(second)
+
+    assert second.enqueued == [], "a cell from discarded tissue was re-queued"
+
+
+def test_a_whole_survey_of_finished_cells_is_not_flushed_into_a_later_orchestrator(qapp):
+    """After a completed survey every produced cell has a row here. Loading a
+    second protocol must enqueue none of them: they have already been patched,
+    and running them again would patch each one a second time."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    first = _FakeOrchestrator()
+    panel.bindOrchestrator(first)
+
+    surveyed = [object() for _ in range(4)]
+    for cell in surveyed:
+        first.sigCurrentCell.emit(cell)
+        first.sigCellFinished.emit(cell, "done")
+    assert panel.cellList.count() == len(surveyed)
+
+    second = _FakeOrchestrator()
+    panel.bindOrchestrator(second)
+
+    assert second.enqueued == []
+    # The rows are still there -- the survey's record is not what gets dropped.
+    assert panel.cellList.count() == len(surveyed)
+
+
+def test_a_cell_seeded_while_bound_is_not_flushed_again_on_a_rebind(qapp):
+    """A cell seeded with an orchestrator already bound was enqueued into that
+    orchestrator there and then, so it is not awaiting an enqueue either; a
+    rebind must not treat it as one."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    pip = _FakePipette((1e-3, 2e-3, 3e-3))
+    panel = CellPanel(pipetteGetter=lambda: pip)
+    first = _FakeOrchestrator()
+    panel.bindOrchestrator(first)
+
+    panel.addFromTargetBtn.click()
+    assert len(first.enqueued) == 1
+
+    second = _FakeOrchestrator()
+    panel.bindOrchestrator(second)
+
+    assert second.enqueued == []
+
+
+def test_clear_cells_drops_the_pending_enqueue_bookkeeping(qapp):
+    """clearCells() is the "these coordinates are gone" path, so a cell seeded
+    before any orchestrator existed must not be flushed into one bound after
+    the clear."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    pip = _FakePipette((1e-3, 2e-3, 3e-3))
+    panel = CellPanel(pipetteGetter=lambda: pip)
+    panel.addFromTargetBtn.click()
+
+    panel.clearCells()
+    assert panel._awaitingEnqueue == []
+
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+
+    assert orch.enqueued == []
+
+
 def test_cell_finished_updates_row(qapp):
     from acq4.modules.Autopatch.cell_panel import CellPanel
 

@@ -24,6 +24,19 @@ def test_defaults_match_the_engines_defaults(qapp):
     assert makePanel().constraints() == SearchConstraints()
 
 
+def test_the_physical_controls_read_in_si_units(qapp):
+    # On the control that decides how deep an objective travels, "-20 µm" is the
+    # readable form; "-0.0000200 m" is a value an operator has to count zeros
+    # in. Same for a density in the low terahertz-per-cubic-metre range. The
+    # µ here is U+00B5, the character pyqtgraph's SI_PREFIXES uses.
+    panel = makePanel()
+    assert panel.nearDepthSpin.text() == "-20 µm"
+    assert panel.farDepthSpin.text() == "-60 µm"
+    assert panel.maxDensitySpin.text() == "5 T/m³"
+    # A probability has no unit to prefix, so it reads as itself.
+    assert panel.minHealthSpin.text() == "0.5"
+
+
 def test_editing_the_depth_range_is_reflected_in_the_constraints(qapp):
     panel = makePanel()
     panel.nearDepthSpin.setValue(-10e-6)
@@ -32,6 +45,19 @@ def test_editing_the_depth_range_is_reflected_in_the_constraints(qapp):
         pytest.approx(-10e-6),
         pytest.approx(-50e-6),
     )
+
+
+@pytest.mark.parametrize("widgetName", ["nearDepthSpin", "farDepthSpin"])
+def test_the_depth_controls_cannot_be_driven_above_the_surface(qapp, widgetName):
+    # Depths are signed offsets from the tissue surface, so a positive value
+    # would search the bath above it. SearchConstraints rejects that, but the
+    # widget's own bounds are what stop the operator getting there at all.
+    panel = makePanel()
+    spin = getattr(panel, widgetName)
+
+    spin.setValue(50e-6)
+
+    assert spin.value() == pytest.approx(0.0)
 
 
 def test_editing_the_health_cutoff_is_reflected_in_the_constraints(qapp):
@@ -123,6 +149,49 @@ def test_recovering_from_an_invalid_range_clears_the_error(qapp):
     assert panel.constraints() is None
     panel.farDepthSpin.setValue(-70e-6)
     assert panel.constraints() is not None
+    assert panel.errorLabel.text() == ""
+
+
+def test_an_externally_set_error_is_shown(qapp):
+    panel = makePanel()
+    panel.setError("Select a camera before starting a slice.")
+    assert panel.errorLabel.text() == "Select a camera before starting a slice."
+
+
+def test_an_externally_set_error_survives_a_valid_constraint_edit(qapp):
+    # The owner's message is about something editing a spin box does not fix (no
+    # camera is selected either way), and errorLabel is the operator's only
+    # feedback for it, so a constraint edit that validates cleanly must not
+    # erase it.
+    panel = makePanel()
+    panel.setError("Select a camera before starting a slice.")
+
+    panel.minHealthSpin.setValue(0.75)
+
+    assert panel.constraints() is not None
+    assert panel.errorLabel.text() == "Select a camera before starting a slice."
+
+
+def test_a_constraint_error_takes_the_line_and_gives_it_back(qapp):
+    # A constraint error describes the control being touched right now, so it
+    # wins while it lasts -- and the owner's message, still true, comes back
+    # once the values are valid again rather than being lost.
+    panel = makePanel()
+    panel.setError("Select a camera before starting a slice.")
+
+    panel.farDepthSpin.setValue(panel.nearDepthSpin.value())
+    assert panel.constraints() is None
+    assert "thickness" in panel.errorLabel.text()
+
+    panel.farDepthSpin.setValue(-70e-6)
+    assert panel.constraints() is not None
+    assert panel.errorLabel.text() == "Select a camera before starting a slice."
+
+
+def test_an_empty_message_retracts_an_externally_set_error(qapp):
+    panel = makePanel()
+    panel.setError("Select a camera before starting a slice.")
+    panel.setError("")
     assert panel.errorLabel.text() == ""
 
 

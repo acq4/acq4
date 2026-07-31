@@ -467,6 +467,35 @@ def test_new_slice_without_a_camera_reports_rather_than_raising(qapp, tmp_path):
     assert win.searchPanel.errorLabel.text() != ""
 
 
+def test_the_no_camera_message_survives_a_constraint_edit(qapp, tmp_path):
+    """The window reports "no camera" through SearchPanel.setError(), not by
+    writing into errorLabel behind the panel's back: a valid spin box edit calls
+    SearchPanel.constraints(), which rewrites that same label, and would
+    otherwise erase the operator's only feedback while no slice exists."""
+    win = _makeWindow(tmp_path, cameraSelector=_FakeCameraSelector())
+    win.newSlice()
+    message = win.searchPanel.errorLabel.text()
+    assert message != ""
+
+    win.searchPanel.minHealthSpin.setValue(0.75)
+
+    assert win.searchPanel.errorLabel.text() == message
+
+
+def test_a_started_slice_retracts_the_no_camera_message(qapp, tmp_path):
+    # There is a camera now, so the message must not linger.
+    selector = _FakeCameraWithDevice()
+    win = _makeWindow(tmp_path, cameraSelector=_FakeCameraSelector())
+    win.newSlice()
+    assert win.searchPanel.errorLabel.text() != ""
+
+    win.cameraSelector = selector
+    win.newSlice()
+
+    assert win.slice is not None
+    assert win.searchPanel.errorLabel.text() == ""
+
+
 def test_new_slice_with_invalid_constraints_creates_nothing_and_keeps_the_old_slice(
     qapp, tmp_path
 ):
@@ -525,6 +554,28 @@ def test_add_region_here_without_a_slice_starts_one(qapp, tmp_path):
     assert win.slice is not None
     assert len(win.slice.regions) == 1
     assert len(win.slice.tileGrid()) > 1
+
+
+def test_add_region_here_without_a_slice_keeps_hand_seeded_cells(qapp, tmp_path):
+    """Creating the slice that will hold the region must not go through
+    newSlice(), which is the discard-everything path: the add-region button
+    offers only to add a region, and an operator who seeded cells by hand first
+    must still have them -- both the rows and the orchestrator's queue.
+    """
+    win = _makeWindow(tmp_path)
+    assert win.slice is None
+    win.cellPanel._onScatterFakeCellsClicked()
+    seeded = win.cellPanel.cellList.count()
+    assert seeded > 0
+    queued = list(win.orchestrator._queue)
+    assert len(queued) == seeded
+
+    win.addRegionHere()
+
+    assert win.slice is not None
+    assert len(win.slice.regions) == 1
+    assert win.cellPanel.cellList.count() == seeded
+    assert list(win.orchestrator._queue) == queued
 
 
 def test_new_slice_replaces_the_slice_and_its_coverage(qapp, tmp_path):

@@ -81,7 +81,7 @@ class Slice:
     refcount-freeable rather than depending on Qt teardown ordering.
     """
 
-    def __init__(self, fov, constraints=None, overlap=0.0, directory=None):
+    def __init__(self, fov, constraints=None, overlap=0.0):
         fov_w, fov_h = fov
         if fov_w <= 0 or fov_h <= 0:
             raise ValueError(f"fov must be positive in both axes, got {fov}")
@@ -93,10 +93,6 @@ class Slice:
         self._regions: list[tuple[float, float, float, float]] = []
         self._covered: list[tuple[float, float]] = []
         self._cells: list = []
-        # The acq4 slice directory (a DirHandle) this state belongs to, kept so
-        # a caller can write per-slice data alongside it. Not required for the
-        # in-memory search itself.
-        self.directory = directory
 
     # ---- constraints ----
     @property
@@ -127,7 +123,13 @@ class Slice:
         return step / 2
 
     def tileGrid(self) -> list[tuple[float, float]]:
-        """Every region's tile centers, concatenated in the order regions were added."""
+        """Every region's tile centers, concatenated in the order regions were added.
+
+        Within a region the centers keep the serpentine order `plan_grid`
+        produces: alternating the direction of each row roughly halves the stage
+        travel a survey spends getting from one tile to the next, and `nextTile`
+        hands them out in exactly this order.
+        """
         grid: list[tuple[float, float]] = []
         fov_w, fov_h = self._fov
         for x0, y0, x1, y1 in self._regions:
