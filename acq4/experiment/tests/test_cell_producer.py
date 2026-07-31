@@ -353,3 +353,32 @@ def test_rescan_pass_re_walks_every_tile_not_just_one():
 
     assert producer() is None
     assert len(detector.calls) == 4
+
+
+def test_slice_and_producer_are_freed_by_refcounting_alone():
+    """No cycle between a slice and the producers it makes.
+
+    Both outlive individual runs and neither is a QObject, so they must be
+    reclaimable without the cyclic collector -- the failure mode that produced
+    P1.5's exit segfault was a graph only gc could break, collected
+    non-deterministically and possibly off the GUI thread.
+    """
+    import gc
+    import weakref
+
+    s = Slice(fov=FOV)
+    s.addRegion(0, 0, 30e-6, 30e-6)
+    producer = s.makeCellProducer(RecordingDetector())
+    producer()
+
+    slice_ref = weakref.ref(s)
+    producer_ref = weakref.ref(producer)
+
+    gc.disable()
+    try:
+        del producer
+        assert producer_ref() is None, "producer survived; a cycle holds it"
+        del s
+        assert slice_ref() is None, "slice survived; a cycle holds it"
+    finally:
+        gc.enable()
