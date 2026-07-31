@@ -21,9 +21,8 @@ class SearchPanel(Qt.QWidget):
     sigConstraintsChanged = Qt.Signal(object)  # SearchConstraints, or None if invalid
     sigAddRegionRequested = Qt.Signal()
 
-    def __init__(self, cameraGetter=None):
+    def __init__(self):
         super().__init__()
-        self._cameraGetter = cameraGetter or (lambda: None)
         defaults = SearchConstraints()
 
         # Depths are offsets from the tissue surface, negative being deeper, so

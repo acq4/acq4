@@ -52,15 +52,47 @@ def test_editing_rescans_is_reflected_in_the_constraints(qapp):
     assert panel.constraints().rescans_allowed is True
 
 
-def test_an_edit_emits_the_new_constraints(qapp):
+@pytest.mark.parametrize(
+    "edit, attr, expected",
+    [
+        (
+            lambda panel: panel.nearDepthSpin.setValue(-15e-6),
+            "depth_range",
+            (pytest.approx(-15e-6), pytest.approx(-60e-6)),
+        ),
+        (
+            lambda panel: panel.farDepthSpin.setValue(-70e-6),
+            "depth_range",
+            (pytest.approx(-20e-6), pytest.approx(-70e-6)),
+        ),
+        (
+            lambda panel: panel.minHealthSpin.setValue(0.75),
+            "min_health",
+            pytest.approx(0.75),
+        ),
+        (
+            lambda panel: panel.maxDensitySpin.setValue(2e12),
+            "max_cell_density",
+            pytest.approx(2e12),
+        ),
+        (lambda panel: panel.rescansCheck.setChecked(True), "rescans_allowed", True),
+    ],
+    ids=["near_depth", "far_depth", "min_health", "max_density", "rescans"],
+)
+def test_an_edit_emits_the_new_constraints(qapp, edit, attr, expected):
+    # Each control is wired to _onEdited independently; the window listens on
+    # sigConstraintsChanged to push edits into the live search, so a control
+    # missing this wiring means the operator changes a setting and nothing
+    # happens. Exercising every control here, not just constraints() directly,
+    # is what would catch a dropped connection.
     panel = makePanel()
     emitted = []
     panel.sigConstraintsChanged.connect(emitted.append)
 
-    panel.minHealthSpin.setValue(0.75)
+    edit(panel)
 
     assert emitted, "editing a constraint must announce the new search"
-    assert emitted[-1].min_health == pytest.approx(0.75)
+    assert getattr(emitted[-1], attr) == expected
 
 
 def test_an_invalid_depth_range_does_not_raise_out_of_the_widget(qapp):
@@ -117,11 +149,28 @@ def test_survey_stats_with_no_region_read_as_no_region(qapp):
     assert "no region" in panel.surveyLabel.text().lower()
 
 
-def test_locking_disables_editing_but_not_the_readout(qapp):
+@pytest.mark.parametrize(
+    "widgetName",
+    [
+        "nearDepthSpin",
+        "farDepthSpin",
+        "minHealthSpin",
+        "maxDensitySpin",
+        "rescansCheck",
+        "addRegionBtn",
+    ],
+)
+def test_locking_disables_editing_but_not_the_readout(qapp, widgetName):
+    # A run in flight parameterises a producer that is already surveying, so
+    # editing any constraint control or the add-region button mid-run would
+    # silently change the search underneath it; the lock must reach every one
+    # of them, in both directions, while leaving the readout alone.
     panel = makePanel()
+    widget = getattr(panel, widgetName)
+
     panel.setInteractionLocked(True)
-    assert not panel.minHealthSpin.isEnabled()
-    assert not panel.addRegionBtn.isEnabled()
+    assert not widget.isEnabled()
+    assert panel.surveyLabel.isEnabled()
+
     panel.setInteractionLocked(False)
-    assert panel.minHealthSpin.isEnabled()
-    assert panel.addRegionBtn.isEnabled()
+    assert widget.isEnabled()
