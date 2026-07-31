@@ -182,3 +182,16 @@ class Slice:
             if abs(pos[0] - cx) <= fov_w / 2 and abs(pos[1] - cy) <= fov_h / 2:
                 found.append(cell)
         return found
+
+    # ---- cell producers ----
+    def makeCellProducer(self, detector) -> "CellProducer":
+        """A producer that surveys this slice, one tile per call.
+
+        This slice keeps no reference to what it hands back. The producer holds
+        the slice, the orchestrator holds the producer, and that one-way chain
+        is refcount-freeable; storing producers here would close it into a cycle
+        only the cyclic GC could reclaim.
+        """
+        from .cell_producer import CellProducer
+
+        return CellProducer(self, detector)

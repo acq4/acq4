@@ -256,3 +256,13 @@ def test_overlap_produces_more_tiles_than_no_overlap_over_the_same_rectangle():
     overlapped = make_slice(overlap=5e-6)
     overlapped.addRegion(0, 0, 30e-6, 30e-6)
     assert len(overlapped.tileGrid()) > len(plain.tileGrid())
+
+
+def test_make_cell_producer_returns_a_view_the_slice_does_not_retain():
+    s = make_slice()
+    s.addRegion(0, 0, 30e-6, 30e-6)
+    producer = s.makeCellProducer(lambda center, constraints: [])
+    assert producer() == []
+    # The slice must not be reachable back to the producer, or the pair is a
+    # reference cycle. Nothing on the slice may hold it.
+    assert not any(v is producer for v in vars(s).values())
