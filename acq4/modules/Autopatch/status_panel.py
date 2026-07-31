@@ -15,6 +15,13 @@ class StatusPanel(Qt.QWidget):
     # are already careful to avoid.
     sigInteractionLocked = Qt.Signal(bool)
 
+    # The bound orchestrator's status, re-emitted for panels that need it but
+    # must not connect to the orchestrator themselves. The orchestrator is a
+    # parentless QObject, so a connection from it to the window would give it a
+    # reference back and rebuild the cycle bindOrchestrator/unbindOrchestrator
+    # exist to avoid -- the same reason sigInteractionLocked is routed this way.
+    sigStatusChanged = Qt.Signal(str)
+
     def __init__(self):
         super().__init__()
         self._orchestrator = None
@@ -132,7 +139,8 @@ class StatusPanel(Qt.QWidget):
         self.instructionLabel.setVisible(status == "error")
         self._currentStatus = status
         self._updateButtons()
-        self.sigInteractionLocked.emit(status in ("running", "paused"))
+        self.sigInteractionLocked.emit(status in ("running", "surveying", "paused"))
+        self.sigStatusChanged.emit(status)
 
     def _onCurrentCell(self, cell) -> None:
         # sigCurrentCell(None) fires once the orchestrator's queue drains (see
@@ -156,8 +164,11 @@ class StatusPanel(Qt.QWidget):
 
         No protocol bound: everything disabled. Otherwise: "waiting" (or no
         status yet, i.e. freshly bound and not yet started) enables only
-        Start; "running" enables Stop/Pause/Next; "paused" enables Stop/Pause
-        (relabeled "Resume") but not Next; "error" enables only Stop.
+        Start; "running" enables Stop/Pause/Next; "surveying" enables
+        Stop/Pause but not Next, since a next-cell request during a refill is
+        discarded (nothing is running and nothing is queued to advance past);
+        "paused" enables Stop/Pause (relabeled "Resume") but not Next;
+        "error" enables only Stop.
         """
         hasProtocol = self._orchestrator is not None
         status = self._currentStatus
@@ -167,6 +178,8 @@ class StatusPanel(Qt.QWidget):
             start, stop, pause, next_ = True, False, False, False
         elif status == "running":
             start, stop, pause, next_ = False, True, True, True
+        elif status == "surveying":
+            start, stop, pause, next_ = False, True, True, False
         elif status == "paused":
             start, stop, pause, next_ = False, True, True, False
         elif status == "error":

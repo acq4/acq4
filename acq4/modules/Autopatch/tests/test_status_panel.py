@@ -312,3 +312,81 @@ def test_unbinding_returns_to_no_protocol_gating(qapp):
     assert not panel.stopBtn.isEnabled()
     assert not panel.pauseBtn.isEnabled()
     assert not panel.nextBtn.isEnabled()
+
+
+def _boundPanel():
+    """A StatusPanel bound to a fake orchestrator, as every test here builds it."""
+    from acq4.modules.Autopatch.status_panel import StatusPanel
+
+    panel = StatusPanel()
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch, _FakeEntrySource())
+    return panel, orch
+
+
+def test_surveying_keeps_stop_and_pause_available(qapp):
+    # Imaging a tile is slow. An operator who wants out mid-survey must not
+    # have to wait for the producer to find a cell first.
+    panel, orch = _boundPanel()
+    orch.sigStatus.emit("surveying")
+
+    assert panel.stopBtn.isEnabled()
+    assert panel.pauseBtn.isEnabled()
+    assert not panel.startBtn.isEnabled()
+
+
+def test_surveying_disables_next_cell(qapp):
+    # A next-cell request during a refill is discarded by design (nothing is
+    # running and nothing is queued to advance past), so the button must not
+    # invite a press that does nothing.
+    panel, orch = _boundPanel()
+    orch.sigStatus.emit("surveying")
+
+    assert not panel.nextBtn.isEnabled()
+
+
+def test_surveying_shows_in_the_status_label(qapp):
+    panel, orch = _boundPanel()
+    orch.sigStatus.emit("surveying")
+    assert panel.statusLabel.text() == "surveying"
+
+
+def test_surveying_locks_area_4(qapp):
+    # A run is in flight, so the protocol picker must stay locked -- reloading
+    # a protocol mid-survey is the second-orchestrator hazard.
+    panel, orch = _boundPanel()
+    locked = []
+    panel.sigInteractionLocked.connect(locked.append)
+    orch.sigStatus.emit("surveying")
+    assert locked[-1] is True
+
+
+def test_surveying_keeps_pause_labeled_pause(qapp):
+    panel, orch = _boundPanel()
+    orch.sigStatus.emit("surveying")
+    assert panel.pauseBtn.text() == "Pause"
+
+
+def test_status_is_re_emitted_for_panels_that_must_not_touch_the_orchestrator(qapp):
+    # The window needs the status to refresh Area 2's survey readout, but the
+    # orchestrator is a parentless QObject and must not hold a reference back
+    # to the window. This passthrough is that indirection.
+    panel, orch = _boundPanel()
+    seen = []
+    panel.sigStatusChanged.connect(seen.append)
+
+    orch.sigStatus.emit("surveying")
+    orch.sigStatus.emit("waiting")
+
+    assert seen == ["surveying", "waiting"]
+
+
+def test_the_status_passthrough_stops_on_unbind(qapp):
+    panel, orch = _boundPanel()
+    seen = []
+    panel.sigStatusChanged.connect(seen.append)
+
+    panel.unbindOrchestrator()
+    orch.sigStatus.emit("surveying")
+
+    assert seen == []
