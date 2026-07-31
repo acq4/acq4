@@ -216,8 +216,17 @@ class CellPanel(Qt.QWidget):
         if cell is None:
             return
         item = self._rows.get(id(cell))
-        if item is not None:
-            item.setText(f"cell {id(cell)} — running")
+        if item is None:
+            # A cell the orchestrator announces without this panel ever having
+            # seeded it (e.g. found by a survey producer inside
+            # Orchestrator._refillQueue) is already enqueued -- addCell() here
+            # only creates the row and the panel-side bookkeeping addCell()
+            # always sets up (timeline/log stores, the parenting, and the
+            # strong self._cells reference); it must never also call
+            # orchestrator.enqueue(), which would run the same cell twice.
+            self.addCell(cell)
+            item = self._rows[id(cell)]
+        item.setText(f"cell {id(cell)} — running")
 
     def onLogAction(self, cell, entry) -> None:
         """ExecutionContext.on_log_action, cell-bound by the context factory
@@ -302,9 +311,16 @@ class CellPanel(Qt.QWidget):
                 child.widget().setParent(None)
 
     def _onCellFinished(self, cell, status: str) -> None:
+        # A cell can finish (e.g. the "skipped" outcome in
+        # Orchestrator._processCell) without sigCurrentCell ever having fired
+        # for it, so this cannot assume _onCurrentCell already gave it a row --
+        # same reasoning as _onCurrentCell above: add one via addCell() only,
+        # never re-enqueue.
         item = self._rows.get(id(cell))
-        if item is not None:
-            item.setText(f"cell {id(cell)} — {status}")
+        if item is None:
+            self.addCell(cell)
+            item = self._rows[id(cell)]
+        item.setText(f"cell {id(cell)} — {status}")
 
     def _onCellSelectionChanged(self, current, _previous) -> None:
         self.timelineList.clear()

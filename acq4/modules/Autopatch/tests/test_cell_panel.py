@@ -218,6 +218,120 @@ def test_rebinding_disconnects_previous_orchestrators_signals(qapp):
     assert panel.cellList.item(0).text() == f"cell {id(cell)} — queued"
 
 
+def test_current_cell_for_an_unseeded_cell_gets_exactly_one_running_row(qapp):
+    """A cell the orchestrator announces via sigCurrentCell without ever having
+    been seeded through addFromTargetBtn/scatterFakeCellsBtn (i.e. a cell a
+    survey producer found and enqueued directly inside the orchestrator) must
+    still get a row -- and that row must read "running", not "queued", since
+    sigCurrentCell only ever fires for a cell about to run."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+    cell = object()
+
+    orch.sigCurrentCell.emit(cell)
+
+    assert panel.cellList.count() == 1
+    assert panel.cellList.item(0).text() == f"cell {id(cell)} — running"
+
+
+def test_cell_finished_for_an_unseeded_cell_gets_a_row_with_its_status(qapp):
+    """A cell can finish (e.g. Orchestrator's "skipped" outcome) without
+    sigCurrentCell ever having fired for it, so _onCellFinished must add a row
+    on its own rather than assuming _onCurrentCell already did."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+    cell = object()
+
+    orch.sigCellFinished.emit(cell, "skipped")
+
+    assert panel.cellList.count() == 1
+    assert "skipped" in panel.cellList.item(0).text()
+
+
+def test_current_cell_announced_twice_produces_exactly_one_row(qapp):
+    """A retrying cell (or one simply re-announced as current) must not gain a
+    second row -- self._rows is how _onCurrentCell tells it already has one."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+    cell = object()
+
+    orch.sigCurrentCell.emit(cell)
+    orch.sigCurrentCell.emit(cell)
+
+    assert panel.cellList.count() == 1
+    assert panel.cellList.item(0).text() == f"cell {id(cell)} — running"
+
+
+def test_seeded_cell_announced_as_current_does_not_duplicate_its_row(qapp):
+    """A cell already seeded by hand (and so already holding a row from
+    addCell()) must not get a second row when the orchestrator later announces
+    it as current -- only its existing row's text should change."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    pip = _FakePipette((0, 0, 0))
+    panel = CellPanel(pipetteGetter=lambda: pip)
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+    panel.addFromTargetBtn.click()
+    cell = orch.enqueued[0]
+    assert panel.cellList.count() == 1
+
+    orch.sigCurrentCell.emit(cell)
+
+    assert panel.cellList.count() == 1
+    assert panel.cellList.item(0).text() == f"cell {id(cell)} — running"
+
+
+def test_announced_cell_is_not_enqueued_into_the_bound_orchestrator(qapp):
+    """A cell the panel only learns about via sigCurrentCell/sigCellFinished is
+    already queued or running inside the orchestrator -- adding a display row
+    for it must never also call orchestrator.enqueue(), which would patch the
+    same cell a second time."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+    cell = object()
+
+    orch.sigCurrentCell.emit(cell)
+    orch.sigCellFinished.emit(cell, "done")
+
+    assert orch.enqueued == []
+
+
+def test_announced_cell_row_is_selectable_with_a_usable_timeline_and_log(qapp):
+    """The whole point of giving an announced cell a row is that the operator
+    can select it and see its timeline/log -- prove the row is genuinely
+    usable (not just present) by selecting it and exercising the
+    setdefault-based log/timeline paths against it."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+    cell = object()
+
+    orch.sigCurrentCell.emit(cell)
+    panel.cellList.setCurrentRow(0)
+
+    assert panel.cellList.currentItem().data(Qt.Qt.UserRole) is cell
+    assert id(cell) in panel._timelines
+    assert id(cell) in panel._logs
+
+    panel.appendLog(cell, "hello from a surveyed cell")
+    assert "hello from a surveyed cell" in panel.logView.toPlainText()
+
+
 def test_clear_cells_resets_shown_entry_id_and_clears_show_container(qapp):
     """clearCells() is also CellPanel's rebind path (a freshly loaded protocol
     calls it before binding the new orchestrator, with the panel itself still
