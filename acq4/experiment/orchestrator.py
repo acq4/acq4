@@ -277,7 +277,14 @@ class Orchestrator(Qt.QObject):
         # into a TypeError out of calling None. Reading it into a local once
         # makes the two one step for this call: if it is gone by the time
         # this runs, there is simply nothing to ask -- not exhaustion, and not
-        # a bug to report.
+        # a bug to report. The same clear (or a swap to a different producer)
+        # can just as easily land while producer() is off running -- itself
+        # slow, seconds-to-minutes tile imaging -- rather than only before it
+        # starts, so the local is checked against self._cellProducer again
+        # below, right before the batch it returned is queued: a batch called
+        # for under a producer the operator has since moved on from belongs to
+        # tissue already declared gone, and must land nowhere rather than in
+        # the next protocol's queue.
         producer = self._cellProducer
         if producer is None:
             return
@@ -297,6 +304,20 @@ class Orchestrator(Qt.QObject):
             raise AbortExperiment(f"cell producer failed: {exc}") from exc
         if cells is None:
             self._producerExhausted = True
+            return
+        if self._cellProducer is not producer:
+            # The batch is neither "found nothing, ask again" nor exhaustion --
+            # it is real cells this call was in the middle of fetching when the
+            # operator cleared or replaced the producer it was fetching them
+            # for. Dropping it here, rather than setting _producerExhausted or
+            # leaving it to be asked for again, is what keeps this discard from
+            # being mistaken for either of the producer contract's two actual
+            # outcomes.
+            logger.info(
+                "Discarding a batch of %d cell(s): the producer that returned "
+                "them is no longer the installed one",
+                len(cells),
+            )
             return
         # One deque.extend rather than a loop of enqueue() calls: clearQueue()
         # runs on the GUI thread while this runs on the worker thread, and a

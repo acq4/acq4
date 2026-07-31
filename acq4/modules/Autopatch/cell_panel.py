@@ -105,6 +105,16 @@ class CellPanel(Qt.QWidget):
         self.sigActionEntry.connect(self._onActionEntry)
 
     def bindOrchestrator(self, orchestrator) -> None:
+        if orchestrator is self._orchestrator:
+            # unbindOrchestrator() salvages the outgoing orchestrator's pending
+            # cells into _awaitingEnqueue but leaves its queue exactly as it
+            # was -- there is nothing to clear it for on the replace-the-whole-
+            # Orchestrator path this normally serves. Binding to the very
+            # orchestrator already held would flush those same still-queued
+            # cells into it a second time, so there is nothing to do: it is
+            # already bound to exactly this orchestrator, with its queue
+            # exactly as it was.
+            return
         if self._orchestrator is not None:
             self.unbindOrchestrator()
         self._orchestrator = orchestrator

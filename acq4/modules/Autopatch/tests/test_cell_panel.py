@@ -380,6 +380,31 @@ def test_rebinding_disconnects_previous_orchestrators_signals(qapp):
     assert panel.cellList.item(0).text() == f"cell {id(cell)} — queued"
 
 
+def test_rebinding_the_orchestrator_already_held_does_not_double_enqueue(qapp):
+    """bindOrchestrator() called with the orchestrator it already holds is
+    unreachable today -- the window that owns this panel always constructs a
+    fresh Orchestrator when a protocol loads -- but unbindOrchestrator() now
+    salvages the outgoing orchestrator's pending cells without clearing its
+    queue, so a same-orchestrator rebind would otherwise flush those same
+    still-queued cells into it a second time."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    pip = _FakePipette((1e-3, 2e-3, 3e-3))
+    panel = CellPanel(pipetteGetter=lambda: pip)
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+
+    panel.addFromTargetBtn.click()
+    assert len(orch.enqueued) == 1
+    cell = orch.enqueued[0]
+
+    panel.bindOrchestrator(orch)
+
+    assert orch.enqueued == [
+        cell
+    ], "re-binding the orchestrator already held re-queued its pending cell"
+
+
 def test_current_cell_for_an_unseeded_cell_gets_exactly_one_running_row(qapp):
     """A cell the orchestrator announces via sigCurrentCell without ever having
     been seeded through addFromTargetBtn/scatterFakeCellsBtn (i.e. a cell a

@@ -96,6 +96,53 @@ def test_producer_supplements_cells_seeded_before_start(make_pf):
     assert ran == ["seeded", "produced"]
 
 
+def test_refill_discards_a_batch_from_a_producer_cleared_during_the_call(make_pf):
+    """The "New slice" hazard: setCellProducer(None) landing between the
+    producer being called and its batch being queued must not let that batch
+    land anyway. A producer that clears itself and then returns cells
+    reproduces the interleaving deterministically -- no thread race needed --
+    since _refillQueue reads self._cellProducer into a local before calling
+    it, and the clear this producer makes on its own way out is exactly the
+    "landed while producer() was running" case that local exists to guard
+    against on the way out too."""
+    pf = make_pf()
+    ran = []
+    pf.run = lambda ctx, **kwargs: ran.append(ctx.cell)
+    orch = Orchestrator(pf)
+
+    def clears_then_returns_cells():
+        orch.setCellProducer(None)
+        return ["c1", "c2"]
+
+    orch.setCellProducer(clears_then_returns_cells)
+    statuses = []
+    orch.sigStatus.connect(statuses.append)
+    finished = []
+    orch.sigCellFinished.connect(lambda c, s: finished.append((c, s)))
+
+    orch.run_sync()  # must end normally, not error
+
+    assert ran == [], "a cell from a batch discarded on the way out was still processed"
+    assert list(orch._queue) == [], "the discarded batch was left sitting in the queue"
+    assert finished == []
+    assert "error" not in statuses
+
+
+def test_refill_still_queues_a_batch_from_the_still_installed_producer(make_pf):
+    """The ordinary path, pinned alongside the discard above: a producer that
+    is still installed when it returns must still have its cells enqueued and
+    processed -- the new check at the far end of _refillQueue must not turn
+    into a blanket discard."""
+    pf = make_pf()
+    ran = []
+    pf.run = lambda ctx, **kwargs: ran.append(ctx.cell)
+    orch = Orchestrator(pf, cellProducer=make_producer([["c1", "c2"], None]))
+
+    orch.run_sync()
+
+    assert ran == ["c1", "c2"]
+
+
 def test_setCellProducer_installs_a_producer_after_construction(make_pf):
     """The UI builds the Orchestrator when a protocol is selected, but the
     producer depends on region/finding config chosen later, so it must be
