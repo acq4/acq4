@@ -95,11 +95,22 @@ def test_a_slice_with_no_regions_is_exhausted_immediately():
 
 
 def test_the_detector_receives_the_slices_current_constraints():
-    constraints = SearchConstraints(min_health=0.0, depth_range=(-5e-6, -25e-6))
-    s = make_slice(constraints=constraints)
+    # Constraints must be read from the slice at call time, not captured once
+    # when the producer is built: an operator editing a search constraint
+    # mid-experiment has to take effect on the very next tile, or the edit is
+    # silently ignored.
+    first = SearchConstraints(min_health=0.0, depth_range=(-5e-6, -25e-6))
+    s = make_slice(constraints=first)
     detector = RecordingDetector()
-    CellProducer(s, detector)()
-    assert detector.calls[0][1] is constraints
+    producer = CellProducer(s, detector)
+
+    producer()
+    assert detector.calls[0][1] is first
+
+    other = SearchConstraints(min_health=0.9, depth_range=(-5e-6, -25e-6))
+    s.setConstraints(other)
+    producer()
+    assert detector.calls[1][1] is other
 
 
 def test_found_cells_are_registered_with_the_slice():
@@ -130,13 +141,23 @@ def test_a_populated_tile_returns_a_concrete_list_not_a_lazy_iterator():
     # The orchestrator's error handling wraps only the producer call, not the
     # iteration of whatever it returns: a generator that raised partway through
     # iteration would escape unwrapped and crash the run in a way nothing
-    # handles. __call__ must hand back an already-realized list.
+    # handles. __call__ must hand back an already-realized list. The detector
+    # here actually returns a generator, so registering the cells with the
+    # slice and then returning them both have to work from the same run of
+    # the underlying iterator -- proof that nothing was consumed out from
+    # under the caller.
     s = make_slice()
     tile = s.nextTile()
     cell = FakeCandidate((tile[0], tile[1], -30e-6))
-    producer = CellProducer(s, RecordingDetector([[cell]]))
+
+    def detector(center, constraints):
+        return (c for c in [cell])
+
+    producer = CellProducer(s, detector)
     result = producer()
     assert type(result) is list
+    assert result == [cell]
+    assert s.cellsNearTile(tile) == [cell]
 
 
 def test_a_barren_tile_also_returns_a_concrete_list():

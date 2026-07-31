@@ -1,6 +1,9 @@
 """Tests for SearchConstraints validation and the Slice object's regions,
 coverage, and survey statistics."""
 
+import gc
+import weakref
+
 import pytest
 
 from acq4.experiment.slice import SearchConstraints, Slice
@@ -263,6 +266,15 @@ def test_make_cell_producer_returns_a_view_the_slice_does_not_retain():
     s.addRegion(0, 0, 30e-6, 30e-6)
     producer = s.makeCellProducer(lambda center, constraints: [])
     assert producer() == []
-    # The slice must not be reachable back to the producer, or the pair is a
-    # reference cycle. Nothing on the slice may hold it.
-    assert not any(v is producer for v in vars(s).values())
+
+    # A reference cycle through the slice would keep the producer alive past
+    # its last strong reference; disabling the cyclic collector first means
+    # only reference counting is at work, so a dead weakref is proof the
+    # slice holds no path back to what it handed out, however deeply nested.
+    weak = weakref.ref(producer)
+    gc.disable()
+    try:
+        del producer
+        assert weak() is None
+    finally:
+        gc.enable()
