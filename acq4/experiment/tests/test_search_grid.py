@@ -112,6 +112,22 @@ def test_extra_tile_kept_when_genuinely_needed():
     assert _covers(grid, x0, y0, x1, y1, fov, fov)
 
 
+def test_tile_count_holds_at_a_coordinate_whose_magnitude_dwarfs_the_tile_geometry():
+    # hi - lo carries rounding error proportional to the magnitude of lo/hi
+    # themselves, not to the (much smaller) tile geometry, so at a large
+    # enough coordinate that error outgrows a tolerance fixed to a bare
+    # nanometre. The tolerance must scale with the coordinate to keep
+    # absorbing it, which this offset is large enough to require.
+    fov = 1e-3
+    step = fov
+    n_tiles = 50
+    off = 4e7
+    x0, y0 = off, off
+    x1, y1 = off + fov + (n_tiles - 1) * step, off + fov
+    grid = plan_grid(x0, y0, x1, y1, fov, fov, overlap=0.0)
+    assert len(grid) == n_tiles
+
+
 def test_is_visited_false_when_nothing_visited():
     assert _is_visited(0.0, 0.0, visited=[], threshold=1.0) is False
 

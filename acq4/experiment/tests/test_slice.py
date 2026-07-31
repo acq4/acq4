@@ -3,7 +3,7 @@ coverage, and survey statistics."""
 
 import pytest
 
-from acq4.experiment.slice import SearchConstraints
+from acq4.experiment.slice import SearchConstraints, Slice
 
 
 def test_defaults_are_a_usable_search():
@@ -78,8 +78,6 @@ def test_constraints_are_frozen():
         c.min_health = 0.9
 
 
-from acq4.experiment.slice import Slice
-
 # A 10x10 um FOV with no overlap, so a 30x30 um region is exactly a 3x3 grid of
 # tiles and tile centers land on predictable coordinates.
 FOV = (10e-6, 10e-6)
@@ -151,6 +149,20 @@ def test_next_tile_is_none_once_every_tile_is_covered():
     assert s.surveyStats() == (9, 9, 100.0)
 
 
+def test_next_tile_follows_tile_grid_order():
+    # The grid is serpentine-ordered to minimize stage travel between tiles,
+    # so nextTile must hand out tileGrid()'s tiles in that same order, not
+    # merely some order that avoids repeats.
+    s = make_slice()
+    s.addRegion(0, 0, 30e-6, 30e-6)
+    grid = s.tileGrid()
+    for expected in grid:
+        tile = s.nextTile()
+        assert tile == expected
+        s.markCovered(tile)
+    assert s.nextTile() is None
+
+
 def test_coverage_survives_a_new_region_being_added():
     # Shared coverage is the whole point: a second region's survey must not
     # re-image the first region's tiles.
@@ -161,6 +173,14 @@ def test_coverage_survives_a_new_region_being_added():
     s.addRegion(1e-3, 1e-3, 1e-3 + 30e-6, 1e-3 + 30e-6)
     assert covered in s.coveredTiles
     assert s.surveyStats()[1] == 1
+
+
+def test_covered_tiles_is_a_copy_so_callers_cannot_mutate_slice_state():
+    s = make_slice()
+    s.addRegion(0, 0, 30e-6, 30e-6)
+    s.markCovered(s.nextTile())
+    s.coveredTiles.append((1, 1))
+    assert len(s.coveredTiles) == 1
 
 
 def test_reset_coverage_forgets_imaged_tiles_but_keeps_regions():
@@ -204,6 +224,15 @@ def test_fov_must_be_positive_in_both_axes():
         Slice(fov=(0.0, 10e-6))
     with pytest.raises(ValueError, match="fov must be positive"):
         Slice(fov=(10e-6, -1e-6))
+
+
+def test_directory_defaults_to_none_and_round_trips_through_the_constructor():
+    # `directory` is the acq4 slice directory handle this search state
+    # belongs to, kept so a caller can find where to write per-slice data
+    # alongside it; it must come back unchanged.
+    assert make_slice().directory is None
+    sentinel = object()
+    assert make_slice(directory=sentinel).directory is sentinel
 
 
 def test_threshold_is_half_the_step_between_tile_centers():
