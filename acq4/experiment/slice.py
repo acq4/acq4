@@ -6,6 +6,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .search_grid import count_covered, plan_grid, select_next
+from .search_region import SearchRegion
 
 
 @dataclass(frozen=True)
@@ -64,7 +65,7 @@ class SearchConstraints:
 class Slice:
     """The search state for one piece of tissue, and the source of its cell producers.
 
-    Owns the regions to survey (global-coordinate rectangles), the coverage
+    Owns the regions to survey (global-coordinate shapes), the coverage
     record of which field-of-view tiles have been imaged, the search
     constraints, and -- once a producer is made from it -- the tiles and cells
     that producer accumulates. Coverage is shared by every producer this slice
@@ -90,7 +91,7 @@ class Slice:
         self._constraints = (
             constraints if constraints is not None else SearchConstraints()
         )
-        self._regions: list[tuple[float, float, float, float]] = []
+        self._regions: list[SearchRegion] = []
         self._covered: list[tuple[float, float]] = []
         self._cells: list = []
 
@@ -104,13 +105,19 @@ class Slice:
 
     # ---- regions ----
     @property
-    def regions(self) -> list[tuple[float, float, float, float]]:
-        """The search rectangles, as a copy: mutating the result changes nothing."""
+    def regions(self) -> list[SearchRegion]:
+        """The search regions, as a copy: mutating the result changes nothing."""
         return list(self._regions)
 
-    def addRegion(self, x0: float, y0: float, x1: float, y1: float) -> None:
-        """Add a global-coordinate rectangle to survey. Coverage is untouched."""
-        self._regions.append((x0, y0, x1, y1))
+    def addRegion(self, region: SearchRegion) -> None:
+        """Add a shape to survey, in global coordinates. Coverage is untouched.
+
+        Takes a SearchRegion rather than four floats because tissue is not
+        rectangular: a slice with a damaged corner, or one cortical layer worth
+        searching, is the ordinary reason to outline a region at all. A rectangle
+        is `RectRegion(x0, y0, x1, y1)`.
+        """
+        self._regions.append(region)
 
     # ---- tiles and coverage ----
     @property
@@ -125,15 +132,29 @@ class Slice:
     def tileGrid(self) -> list[tuple[float, float]]:
         """Every region's tile centers, concatenated in the order regions were added.
 
-        Within a region the centers keep the serpentine order `plan_grid`
-        produces: alternating the direction of each row roughly halves the stage
-        travel a survey spends getting from one tile to the next, and `nextTile`
-        hands them out in exactly this order.
+        Each region's grid is planned over its **bounding box** and then filtered
+        to the tiles that overlap the region's shape. That split is what lets a
+        slice hold ellipses and polygons while `plan_grid` stays a rectangle
+        tiler. For a rectangular region the filter removes nothing, since
+        `plan_grid` centers its grid over the box and every tile it plans
+        therefore overlaps it.
+
+        Filtering is by overlap, not by whether the tile's center is inside: a
+        region narrower than one field of view contains no center at all, and a
+        tile whose center falls in the concave part of an L still images real
+        region area.
+
+        Within a region the surviving centers keep the serpentine order
+        `plan_grid` produces: alternating the direction of each row roughly halves
+        the stage travel a survey spends getting from one tile to the next, and
+        `nextTile` hands them out in exactly this order.
         """
         grid: list[tuple[float, float]] = []
         fov_w, fov_h = self._fov
-        for x0, y0, x1, y1 in self._regions:
-            grid.extend(plan_grid(x0, y0, x1, y1, fov_w, fov_h, self._overlap))
+        for region in self._regions:
+            x0, y0, x1, y1 = region.bounds()
+            planned = plan_grid(x0, y0, x1, y1, fov_w, fov_h, self._overlap)
+            grid.extend(c for c in planned if region.overlapsTile(c, self._fov))
         return grid
 
     def nextTile(self) -> tuple[float, float] | None:

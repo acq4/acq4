@@ -6,6 +6,8 @@ import weakref
 
 import pytest
 
+from acq4.experiment.search_grid import plan_grid
+from acq4.experiment.search_region import EllipseRegion, PolygonRegion, RectRegion
 from acq4.experiment.slice import SearchConstraints, Slice
 
 
@@ -109,7 +111,7 @@ def test_a_new_slice_has_no_regions_and_nothing_to_survey():
 
 def test_adding_a_region_produces_a_tile_grid():
     s = make_slice()
-    s.addRegion(0, 0, 30e-6, 30e-6)
+    s.addRegion(RectRegion(0, 0, 30e-6, 30e-6))
     assert len(s.tileGrid()) == 9
     assert s.surveyStats() == (9, 0, 0.0)
 
@@ -122,7 +124,7 @@ def test_the_tile_grid_is_serpentine_within_a_region():
     # cover the region, so nothing else in the suite would notice the
     # difference -- hence pinning the order itself here.
     s = make_slice()
-    s.addRegion(0, 0, 30e-6, 30e-6)
+    s.addRegion(RectRegion(0, 0, 30e-6, 30e-6))
     grid = s.tileGrid()
     assert len(grid) == 9
 
@@ -146,18 +148,18 @@ def test_the_tile_grid_is_serpentine_within_a_region():
 
 def test_regions_is_a_copy_so_callers_cannot_mutate_slice_state():
     s = make_slice()
-    s.addRegion(0, 0, 30e-6, 30e-6)
-    s.regions.append((1, 1, 2, 2))
+    s.addRegion(RectRegion(0, 0, 30e-6, 30e-6))
+    s.regions.append(RectRegion(1e-3, 1e-3, 2e-3, 2e-3))
     assert len(s.regions) == 1
 
 
 def test_a_second_region_extends_the_grid_without_disturbing_the_first():
     s = make_slice()
-    s.addRegion(0, 0, 30e-6, 30e-6)
+    s.addRegion(RectRegion(0, 0, 30e-6, 30e-6))
     first = s.tileGrid()
     # 1e-3 keeps the region well clear of the first and sits at a realistic
     # stage coordinate.
-    s.addRegion(1e-3, 1e-3, 1e-3 + 30e-6, 1e-3 + 30e-6)
+    s.addRegion(RectRegion(1e-3, 1e-3, 1e-3 + 30e-6, 1e-3 + 30e-6))
     both = s.tileGrid()
     assert both[: len(first)] == first
     assert len(both) == 18
@@ -165,7 +167,7 @@ def test_a_second_region_extends_the_grid_without_disturbing_the_first():
 
 def test_marking_a_tile_covered_advances_next_tile():
     s = make_slice()
-    s.addRegion(0, 0, 30e-6, 30e-6)
+    s.addRegion(RectRegion(0, 0, 30e-6, 30e-6))
     first = s.nextTile()
     assert s.nextTile() == first, "nextTile must not mark; it only reports"
     s.markCovered(first)
@@ -175,7 +177,7 @@ def test_marking_a_tile_covered_advances_next_tile():
 
 def test_next_tile_is_none_once_every_tile_is_covered():
     s = make_slice()
-    s.addRegion(0, 0, 30e-6, 30e-6)
+    s.addRegion(RectRegion(0, 0, 30e-6, 30e-6))
     for _ in range(9):
         s.markCovered(s.nextTile())
     assert s.nextTile() is None
@@ -187,7 +189,7 @@ def test_next_tile_follows_tile_grid_order():
     # so nextTile must hand out tileGrid()'s tiles in that same order, not
     # merely some order that avoids repeats.
     s = make_slice()
-    s.addRegion(0, 0, 30e-6, 30e-6)
+    s.addRegion(RectRegion(0, 0, 30e-6, 30e-6))
     grid = s.tileGrid()
     for expected in grid:
         tile = s.nextTile()
@@ -200,17 +202,17 @@ def test_coverage_survives_a_new_region_being_added():
     # Shared coverage is the whole point: a second region's survey must not
     # re-image the first region's tiles.
     s = make_slice()
-    s.addRegion(0, 0, 30e-6, 30e-6)
+    s.addRegion(RectRegion(0, 0, 30e-6, 30e-6))
     covered = s.nextTile()
     s.markCovered(covered)
-    s.addRegion(1e-3, 1e-3, 1e-3 + 30e-6, 1e-3 + 30e-6)
+    s.addRegion(RectRegion(1e-3, 1e-3, 1e-3 + 30e-6, 1e-3 + 30e-6))
     assert covered in s.coveredTiles
     assert s.surveyStats()[1] == 1
 
 
 def test_covered_tiles_is_a_copy_so_callers_cannot_mutate_slice_state():
     s = make_slice()
-    s.addRegion(0, 0, 30e-6, 30e-6)
+    s.addRegion(RectRegion(0, 0, 30e-6, 30e-6))
     s.markCovered(s.nextTile())
     s.coveredTiles.append((1, 1))
     assert len(s.coveredTiles) == 1
@@ -218,7 +220,7 @@ def test_covered_tiles_is_a_copy_so_callers_cannot_mutate_slice_state():
 
 def test_reset_coverage_forgets_imaged_tiles_but_keeps_regions():
     s = make_slice()
-    s.addRegion(0, 0, 30e-6, 30e-6)
+    s.addRegion(RectRegion(0, 0, 30e-6, 30e-6))
     s.markCovered(s.nextTile())
     s.resetCoverage()
     assert s.coveredTiles == []
@@ -233,7 +235,7 @@ def test_tile_volume_is_fov_area_times_the_depth_span():
 
 def test_registered_cells_are_found_near_their_own_tile_only():
     s = make_slice()
-    s.addRegion(0, 0, 30e-6, 30e-6)
+    s.addRegion(RectRegion(0, 0, 30e-6, 30e-6))
     tile = s.nextTile()
     here = FakeCell((tile[0], tile[1], 0.0))
     far = FakeCell((tile[0] + 1e-3, tile[1], 0.0))
@@ -276,15 +278,15 @@ def test_overlap_produces_more_tiles_than_no_overlap_over_the_same_rectangle():
     # Overlapping tiles step less far apart, so more of them are needed to
     # cover the same extent.
     plain = make_slice(overlap=0.0)
-    plain.addRegion(0, 0, 30e-6, 30e-6)
+    plain.addRegion(RectRegion(0, 0, 30e-6, 30e-6))
     overlapped = make_slice(overlap=5e-6)
-    overlapped.addRegion(0, 0, 30e-6, 30e-6)
+    overlapped.addRegion(RectRegion(0, 0, 30e-6, 30e-6))
     assert len(overlapped.tileGrid()) > len(plain.tileGrid())
 
 
 def test_make_cell_producer_returns_a_view_the_slice_does_not_retain():
     s = make_slice()
-    s.addRegion(0, 0, 30e-6, 30e-6)
+    s.addRegion(RectRegion(0, 0, 30e-6, 30e-6))
     producer = s.makeCellProducer(lambda center, constraints: [])
     assert producer() == []
 
@@ -299,3 +301,98 @@ def test_make_cell_producer_returns_a_view_the_slice_does_not_retain():
         assert weak() is None
     finally:
         gc.enable()
+
+
+def test_a_rectangular_region_plans_exactly_its_bounding_box_grid():
+    # The regression guard for the whole migration: a rectangle must behave
+    # exactly as it did when regions were 4-tuples. It provably does -- plan_grid
+    # centers its grid over the box, so every tile it plans overlaps the box --
+    # and this pins that so a future filter change cannot quietly cost tiles.
+    s = make_slice()
+    s.addRegion(RectRegion(0, 0, 30e-6, 30e-6))
+    assert s.tileGrid() == plan_grid(0, 0, 30e-6, 30e-6, FOV[0], FOV[1], 0.0)
+
+
+def test_an_elliptical_region_drops_the_corner_tiles_its_bounding_box_plans():
+    # 15x15 tiles, the resolution at which a bounding box's corners are genuinely
+    # outside the ellipse. Those 24 tiles are the imaging time shapes exist to
+    # save; at a coarser 3x3 every tile reaches the ellipse and there is nothing
+    # to drop, which is why this test is not written at 3x3.
+    side = 150e-6
+    ellipse = make_slice()
+    ellipse.addRegion(EllipseRegion(0, 0, side, side))
+    box = make_slice()
+    box.addRegion(RectRegion(0, 0, side, side))
+
+    planned = box.tileGrid()
+    kept = ellipse.tileGrid()
+    assert len(planned) == 225
+    assert len(kept) == 201
+    # What it drops are the box's corners; what it keeps includes the middle.
+    assert planned[0] not in kept
+    assert planned[14] not in kept
+    assert any(c == pytest.approx((75e-6, 75e-6)) for c in kept)
+
+
+def test_an_elliptical_regions_tiles_still_cover_the_whole_ellipse():
+    # Filtering must not leave holes *inside* the shape: every point of the
+    # ellipse has to fall inside some tile that will actually be imaged.
+    side = 150e-6
+    s = make_slice()
+    s.addRegion(EllipseRegion(0, 0, side, side))
+    grid = s.tileGrid()
+    center = side / 2
+    radius = side / 2
+    n = 40
+    for i in range(n + 1):
+        for j in range(n + 1):
+            px, py = side * i / n, side * j / n
+            if (px - center) ** 2 + (py - center) ** 2 > radius * radius:
+                continue
+            assert any(
+                abs(px - tx) <= FOV[0] / 2 + 1e-12
+                and abs(py - ty) <= FOV[1] / 2 + 1e-12
+                for tx, ty in grid
+            ), (px, py)
+
+
+def test_filtering_preserves_the_serpentine_order_within_a_region():
+    # nextTile hands out tileGrid()'s order, and that order is what keeps stage
+    # travel down. Filtering must remove tiles without reordering the survivors.
+    side = 150e-6
+    ellipse = make_slice()
+    ellipse.addRegion(EllipseRegion(0, 0, side, side))
+    box = make_slice()
+    box.addRegion(RectRegion(0, 0, side, side))
+
+    planned = box.tileGrid()
+    positions = [planned.index(c) for c in ellipse.tileGrid()]
+    assert positions == sorted(positions)
+
+
+def test_regions_of_different_shapes_share_one_slice_and_one_coverage_record():
+    # Shapes are per region, not per slice: an operator can outline one area as a
+    # rectangle and another as an ellipse, and coverage still spans both.
+    s = make_slice()
+    s.addRegion(RectRegion(0, 0, 30e-6, 30e-6))
+    s.addRegion(EllipseRegion(1e-3, 1e-3, 1e-3 + 30e-6, 1e-3 + 30e-6))
+    assert [type(r) for r in s.regions] == [RectRegion, EllipseRegion]
+    # Nine tiles each: at 3x3 every tile of the box reaches the inscribed ellipse.
+    assert len(s.tileGrid()) == 18
+
+    s.markCovered(s.nextTile())
+    assert s.surveyStats() == (18, 1, pytest.approx(100 / 18))
+
+
+def test_a_polygon_narrower_than_one_tile_still_gets_a_grid():
+    # The end-to-end version of the band case: a 2 um-wide diagonal band contains
+    # no tile center at all, so a Slice that filtered by containment would report
+    # a region with nothing to survey.
+    s = make_slice()
+    s.addRegion(
+        PolygonRegion([(0.0, 6e-6), (22e-6, 28e-6), (22e-6, 30e-6), (0.0, 8e-6)])
+    )
+    grid = s.tileGrid()
+    assert len(grid) > 0
+    assert len(grid) < len(plan_grid(0.0, 6e-6, 22e-6, 30e-6, FOV[0], FOV[1], 0.0))
+    assert s.nextTile() == grid[0]

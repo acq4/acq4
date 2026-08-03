@@ -5,6 +5,7 @@ and rescan policy) it filters candidates and tiles against."""
 import pytest
 
 from acq4.experiment.cell_producer import CellProducer
+from acq4.experiment.search_region import RectRegion
 from acq4.experiment.slice import SearchConstraints, Slice
 from acq4.util.task import Stopped
 
@@ -39,10 +40,10 @@ class RecordingDetector:
         return self._results.pop(0) if self._results else []
 
 
-def make_slice(constraints=None, regions=((0, 0, 30e-6, 30e-6),)):
+def make_slice(constraints=None, regions=(RectRegion(0, 0, 30e-6, 30e-6),)):
     s = Slice(fov=FOV, constraints=constraints)
     for r in regions:
-        s.addRegion(*r)
+        s.addRegion(r)
     return s
 
 
@@ -80,7 +81,7 @@ def test_a_barren_tile_returns_empty_not_none():
 
 
 def test_none_only_once_every_tile_is_imaged():
-    s = make_slice(regions=((0, 0, 10e-6, 10e-6),))  # exactly one tile
+    s = make_slice(regions=(RectRegion(0, 0, 10e-6, 10e-6),))  # exactly one tile
     producer = CellProducer(s, RecordingDetector())
 
     assert producer() == []
@@ -185,7 +186,7 @@ def test_a_stopped_tile_is_not_counted_as_surveyed():
     # A region whose every tile but one was imaged, with that one abandoned by a
     # stop, must not read as 100% surveyed: the readout is what tells the
     # operator whether the tissue has actually been looked at.
-    s = make_slice(regions=((0, 0, 20e-6, 10e-6),))  # exactly two tiles
+    s = make_slice(regions=(RectRegion(0, 0, 20e-6, 10e-6),))  # exactly two tiles
 
     def stopAtTheSecondTile(center, constraints):
         if len(s.coveredTiles) == 1:
@@ -332,7 +333,7 @@ def test_a_tile_below_the_density_cap_is_imaged_normally():
     # a slice-wide cell budget, and cells piling up in one tile must not make
     # every other tile in the slice look crowded too.
     s = make_slice(
-        constraints=_crowding_constraints(2), regions=((0, 0, 20e-6, 10e-6),)
+        constraints=_crowding_constraints(2), regions=(RectRegion(0, 0, 20e-6, 10e-6),)
     )
     tile = s.nextTile()
     other_tile = (tile[0] + 10e-6, tile[1])
@@ -352,7 +353,7 @@ def test_a_tile_below_the_density_cap_is_imaged_normally():
 
 def test_without_rescans_exhaustion_is_final():
     s = make_slice(
-        regions=((0, 0, 10e-6, 10e-6),),
+        regions=(RectRegion(0, 0, 10e-6, 10e-6),),
         constraints=SearchConstraints(rescans_allowed=False),
     )
     producer = CellProducer(s, RecordingDetector())
@@ -366,7 +367,7 @@ def test_rescans_allowed_grants_exactly_one_more_pass():
     # loop; one extra pass makes the switch mean something and keeps the
     # contract. See CellProducer's docstring.
     s = make_slice(
-        regions=((0, 0, 10e-6, 10e-6),),
+        regions=(RectRegion(0, 0, 10e-6, 10e-6),),
         constraints=SearchConstraints(rescans_allowed=True),
     )
     detector = RecordingDetector()
@@ -382,7 +383,7 @@ def test_a_second_producer_from_the_same_slice_gets_its_own_rescan_allowance():
     # The allowance is per-producer, matching _producerExhausted's per-run
     # lifetime, so a later run over the same slice may rescan again.
     s = make_slice(
-        regions=((0, 0, 10e-6, 10e-6),),
+        regions=(RectRegion(0, 0, 10e-6, 10e-6),),
         constraints=SearchConstraints(rescans_allowed=True),
     )
     first = s.makeCellProducer(RecordingDetector())
@@ -401,7 +402,7 @@ def test_rescan_pass_re_walks_every_tile_not_just_one():
     # multi-tile region closes that gap: the rescan pass must hand out the
     # same number of tiles as the first pass before it, too, is exhausted.
     s = make_slice(
-        regions=((0, 0, 20e-6, 10e-6),),
+        regions=(RectRegion(0, 0, 20e-6, 10e-6),),
         constraints=SearchConstraints(rescans_allowed=True),
     )
     detector = RecordingDetector()
@@ -431,7 +432,7 @@ def test_slice_and_producer_are_freed_by_refcounting_alone():
     import weakref
 
     s = Slice(fov=FOV)
-    s.addRegion(0, 0, 30e-6, 30e-6)
+    s.addRegion(RectRegion(0, 0, 30e-6, 30e-6))
     producer = s.makeCellProducer(RecordingDetector())
     producer()
 
