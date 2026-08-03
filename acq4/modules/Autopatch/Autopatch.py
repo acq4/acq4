@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 
 from acq4.experiment.orchestrator import Orchestrator
-from acq4.experiment.search_region import RectRegion
+from acq4.experiment.search_region import EllipseRegion, RectRegion
 from acq4.experiment.slice import Slice
 from acq4.experiment.tile_detector import make_tile_detector
 from acq4.modules.Module import Module
@@ -228,7 +228,8 @@ class AutopatchWindow(Qt.QWidget):
         A region is a reasonable first action, so a slice comes into existence
         to hold it. Built directly rather than by way of newSlice(): that is the
         discard-everything path, and an operator who seeded cells by hand and
-        then asked only for a region must not lose them.
+        then asked only for a region must not lose them. The shape seeded is
+        whichever one Area 2's selector currently has picked.
         """
         if self.slice is None and not self._startSlice():
             return
@@ -241,7 +242,17 @@ class AutopatchWindow(Qt.QWidget):
         # off-center for a cropped camera ROI.
         cx, cy = camera.globalCenterPosition("roi")[:2]
         w, h = fov_w * 3, fov_h * 3
-        self.slice.addRegion(RectRegion(cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2))
+        # Area 2 owns the shape; this button owns the placement. An ellipse is
+        # inscribed in the same box, so both shapes cover the same 3x3 fields and
+        # only the corners differ.
+        regionClass = (
+            EllipseRegion
+            if self.searchPanel.regionShape() == "ellipse"
+            else RectRegion
+        )
+        self.slice.addRegion(
+            regionClass(cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2)
+        )
         self._refreshSurveyStats()
 
     @staticmethod
