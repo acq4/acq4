@@ -83,3 +83,29 @@ class RectRegion(_BoxRegion):
         return (
             tx0 <= self.x1 and tx1 >= self.x0 and ty0 <= self.y1 and ty1 >= self.y0
         )
+
+
+class EllipseRegion(_BoxRegion):
+    """The ellipse inscribed in a bounding box -- the shape a `pg.EllipseROI`
+    draws, and the natural outline for a rounded piece of tissue.
+
+    Overlap is exact and needs no iteration: mapping the tile into the frame where
+    the ellipse is the unit circle at the origin turns "does this rect reach the
+    ellipse" into "is the closest point of a rect to the origin within 1". An
+    axis-aligned rect stays axis-aligned under that (per-axis) scaling, which is
+    what makes the closest point a per-axis clamp rather than a search.
+    """
+
+    def overlapsTile(self, center: tuple[float, float], fov: tuple[float, float]) -> bool:
+        cx = (self.x0 + self.x1) / 2
+        cy = (self.y0 + self.y1) / 2
+        rx = (self.x1 - self.x0) / 2
+        ry = (self.y1 - self.y0) / 2
+        tx0, ty0, tx1, ty1 = tile_rect(center, fov)
+        ax0, ax1 = (tx0 - cx) / rx, (tx1 - cx) / rx
+        ay0, ay1 = (ty0 - cy) / ry, (ty1 - cy) / ry
+        # Clamp the origin into the mapped rect: the result is the rect's closest
+        # point to the ellipse center, and zero on an axis the center falls within.
+        dx = max(ax0, min(0.0, ax1))
+        dy = max(ay0, min(0.0, ay1))
+        return dx * dx + dy * dy <= 1.0
