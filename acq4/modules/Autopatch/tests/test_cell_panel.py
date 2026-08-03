@@ -1,5 +1,9 @@
 """Tests for CellPanel: a manually-seeded cell queue (via "Add from target" and
 "Scatter fake cells") kept in sync with the Orchestrator's per-cell signals."""
+import gc
+import threading
+import weakref
+
 import numpy as np
 import pytest
 
@@ -21,6 +25,12 @@ class _FakeOrchestrator(Qt.QObject):
 
     def enqueue(self, cell):
         self.enqueued.append(cell)
+
+    def pendingCells(self):
+        """Stands in for Orchestrator.pendingCells(): this fake has no run
+        loop to pop a cell off, so every cell .enqueue() has ever seen is
+        still pending as far as a test using it is concerned."""
+        return list(self.enqueued)
 
 
 class _FakePipette:
@@ -45,6 +55,25 @@ class _FakeCamera:
 
     def globalCenterPosition(self):
         return self._center
+
+
+class _FakeQObjectCell(Qt.QObject):
+    """Stands in for a real Cell (also a QObject): built on a worker thread the
+    way tile_detector.py's _newCell constructs one from
+    Orchestrator._refillQueue, so it does not live on the GUI thread
+    addCell() runs on."""
+
+
+def _buildOnAnotherThread(factory):
+    result = {}
+
+    def build():
+        result["obj"] = factory()
+
+    t = threading.Thread(target=build)
+    t.start()
+    t.join()
+    return result["obj"]
 
 
 def test_add_from_target_enqueues_and_lists(qapp):
@@ -183,6 +212,139 @@ def test_bind_orchestrator_flushes_previously_held_cells_exactly_once(qapp):
     assert orch.enqueued.count(newCell) == 1
 
 
+def test_a_cell_known_only_from_an_announcement_is_not_flushed_into_a_later_orchestrator(
+    qapp,
+):
+    """A cell this panel only ever learned about from an orchestrator's
+    announcements is already queued or already finished somewhere else, so
+    binding a second orchestrator must not hand it over -- unlike a cell that
+    is genuinely still sitting unrun in the outgoing orchestrator's own queue,
+    which unbindOrchestrator() does carry over (see
+    test_a_cell_seeded_while_bound_is_flushed_into_a_replacement_orchestrator).
+    Both must hold at once, or "flush everything the first orchestrator ever
+    saw" would pass this too.
+    """
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    pip = _FakePipette((1e-3, 2e-3, 3e-3))
+    panel = CellPanel(pipetteGetter=lambda: pip)
+
+    # Seeded with no orchestrator bound: this one is genuinely pending.
+    panel.addFromTargetBtn.click()
+    seededCell = list(panel._cells.values())[0]
+
+    first = _FakeOrchestrator()
+    panel.bindOrchestrator(first)
+    assert first.enqueued == [seededCell]
+
+    # And a cell the first orchestrator merely announces -- a survey producer's
+    # find, enqueued inside the orchestrator itself.
+    announced = object()
+    first.sigCurrentCell.emit(announced)
+    assert panel.cellList.count() == 2
+
+    second = _FakeOrchestrator()
+    panel.bindOrchestrator(second)
+
+    assert second.enqueued == [
+        seededCell
+    ], "an announced cell was flushed into a rebind"
+
+
+def test_a_finished_cell_is_not_flushed_into_a_later_orchestrator(qapp):
+    """The "New slice" hazard, at panel level. newSlice() clears Area 5 and the
+    orchestrator's queue but deliberately leaves the in-flight cell running; it
+    finishes on the old tissue and is announced here. Loading a second protocol
+    must not then enqueue that coordinate into the new orchestrator -- the
+    operator has declared the tissue it names gone, and a pipette driven there
+    is driven into whatever is now under the objective.
+    """
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    first = _FakeOrchestrator()
+    panel.bindOrchestrator(first)
+    inFlight = object()
+    first.sigCurrentCell.emit(inFlight)
+
+    # The operator presses New slice: Area 5 and the queue are discarded while
+    # that cell keeps running.
+    panel.clearCells()
+    first.sigCellFinished.emit(inFlight, "done")
+
+    second = _FakeOrchestrator()
+    panel.bindOrchestrator(second)
+
+    assert second.enqueued == [], "a cell from discarded tissue was re-queued"
+
+
+def test_a_finished_survey_is_not_flushed_into_a_later_orchestrator(qapp):
+    """After a completed survey every produced cell has a row here. Loading a
+    second protocol must enqueue none of them: they have already been patched,
+    and running them again would patch each one a second time."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    first = _FakeOrchestrator()
+    panel.bindOrchestrator(first)
+
+    surveyed = [object() for _ in range(4)]
+    for cell in surveyed:
+        first.sigCurrentCell.emit(cell)
+        first.sigCellFinished.emit(cell, "done")
+    assert panel.cellList.count() == len(surveyed)
+
+    second = _FakeOrchestrator()
+    panel.bindOrchestrator(second)
+
+    assert second.enqueued == []
+    # The rows are still there -- the survey's record is not what gets dropped.
+    assert panel.cellList.count() == len(surveyed)
+
+
+def test_a_cell_seeded_while_bound_is_flushed_into_a_replacement_orchestrator(qapp):
+    """A cell seeded with an orchestrator already bound is enqueued straight
+    into that orchestrator's own queue, not into _awaitingEnqueue -- so if
+    that orchestrator is replaced (a different protocol loaded) before the
+    cell ever runs, unbindOrchestrator() must read it back out of the
+    outgoing queue itself, or the cell's row would survive in Area 5 while
+    the replacement orchestrator's queue holds nothing for it."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    pip = _FakePipette((1e-3, 2e-3, 3e-3))
+    panel = CellPanel(pipetteGetter=lambda: pip)
+    first = _FakeOrchestrator()
+    panel.bindOrchestrator(first)
+
+    panel.addFromTargetBtn.click()
+    assert len(first.enqueued) == 1
+    cell = first.enqueued[0]
+
+    second = _FakeOrchestrator()
+    panel.bindOrchestrator(second)
+
+    assert second.enqueued == [cell]
+
+
+def test_clear_cells_drops_the_pending_enqueue_bookkeeping(qapp):
+    """clearCells() is the "these coordinates are gone" path, so a cell seeded
+    before any orchestrator existed must not be flushed into one bound after
+    the clear."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    pip = _FakePipette((1e-3, 2e-3, 3e-3))
+    panel = CellPanel(pipetteGetter=lambda: pip)
+    panel.addFromTargetBtn.click()
+
+    panel.clearCells()
+    assert panel._awaitingEnqueue == []
+
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+
+    assert orch.enqueued == []
+
+
 def test_cell_finished_updates_row(qapp):
     from acq4.modules.Autopatch.cell_panel import CellPanel
 
@@ -218,6 +380,145 @@ def test_rebinding_disconnects_previous_orchestrators_signals(qapp):
     assert panel.cellList.item(0).text() == f"cell {id(cell)} — queued"
 
 
+def test_rebinding_the_orchestrator_already_held_does_not_double_enqueue(qapp):
+    """bindOrchestrator() called with the orchestrator it already holds is
+    unreachable today -- the window that owns this panel always constructs a
+    fresh Orchestrator when a protocol loads -- but unbindOrchestrator() now
+    salvages the outgoing orchestrator's pending cells without clearing its
+    queue, so a same-orchestrator rebind would otherwise flush those same
+    still-queued cells into it a second time."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    pip = _FakePipette((1e-3, 2e-3, 3e-3))
+    panel = CellPanel(pipetteGetter=lambda: pip)
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+
+    panel.addFromTargetBtn.click()
+    assert len(orch.enqueued) == 1
+    cell = orch.enqueued[0]
+
+    panel.bindOrchestrator(orch)
+
+    assert orch.enqueued == [
+        cell
+    ], "re-binding the orchestrator already held re-queued its pending cell"
+
+
+def test_current_cell_for_an_unseeded_cell_gets_exactly_one_running_row(qapp):
+    """A cell the orchestrator announces via sigCurrentCell without ever having
+    been seeded through addFromTargetBtn/scatterFakeCellsBtn (i.e. a cell a
+    survey producer found and enqueued directly inside the orchestrator) must
+    still get a row -- and that row must read "running", not "queued", since
+    sigCurrentCell only ever fires for a cell about to run."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+    cell = object()
+
+    orch.sigCurrentCell.emit(cell)
+
+    assert panel.cellList.count() == 1
+    assert panel.cellList.item(0).text() == f"cell {id(cell)} — running"
+
+
+def test_cell_finished_for_an_unseeded_cell_gets_a_row_with_its_status(qapp):
+    """A cell can finish (e.g. Orchestrator's "skipped" outcome) without
+    sigCurrentCell ever having fired for it, so _onCellFinished must add a row
+    on its own rather than assuming _onCurrentCell already did."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+    cell = object()
+
+    orch.sigCellFinished.emit(cell, "skipped")
+
+    assert panel.cellList.count() == 1
+    assert "skipped" in panel.cellList.item(0).text()
+
+
+def test_current_cell_announced_twice_produces_exactly_one_row(qapp):
+    """A retrying cell (or one simply re-announced as current) must not gain a
+    second row -- self._rows is how _onCurrentCell tells it already has one."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+    cell = object()
+
+    orch.sigCurrentCell.emit(cell)
+    orch.sigCurrentCell.emit(cell)
+
+    assert panel.cellList.count() == 1
+    assert panel.cellList.item(0).text() == f"cell {id(cell)} — running"
+
+
+def test_seeded_cell_announced_as_current_does_not_duplicate_its_row(qapp):
+    """A cell already seeded by hand (and so already holding a row from
+    addCell()) must not get a second row when the orchestrator later announces
+    it as current -- only its existing row's text should change."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    pip = _FakePipette((0, 0, 0))
+    panel = CellPanel(pipetteGetter=lambda: pip)
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+    panel.addFromTargetBtn.click()
+    cell = orch.enqueued[0]
+    assert panel.cellList.count() == 1
+
+    orch.sigCurrentCell.emit(cell)
+
+    assert panel.cellList.count() == 1
+    assert panel.cellList.item(0).text() == f"cell {id(cell)} — running"
+
+
+def test_announced_cell_is_not_enqueued_into_the_bound_orchestrator(qapp):
+    """A cell the panel only learns about via sigCurrentCell/sigCellFinished is
+    already queued or running inside the orchestrator -- adding a display row
+    for it must never also call orchestrator.enqueue(), which would patch the
+    same cell a second time."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+    cell = object()
+
+    orch.sigCurrentCell.emit(cell)
+    orch.sigCellFinished.emit(cell, "done")
+
+    assert orch.enqueued == []
+
+
+def test_announced_cell_row_is_selectable_with_a_usable_timeline_and_log(qapp):
+    """The whole point of giving an announced cell a row is that the operator
+    can select it and see its timeline/log -- prove the row is genuinely
+    usable (not just present) by selecting it and exercising the
+    setdefault-based log/timeline paths against it."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+    cell = object()
+
+    orch.sigCurrentCell.emit(cell)
+    panel.cellList.setCurrentRow(0)
+
+    assert panel.cellList.currentItem().data(Qt.Qt.UserRole) is cell
+    assert id(cell) in panel._timelines
+    assert id(cell) in panel._logs
+
+    panel.appendLog(cell, "hello from a surveyed cell")
+    assert "hello from a surveyed cell" in panel.logView.toPlainText()
+
+
 def test_clear_cells_resets_shown_entry_id_and_clears_show_container(qapp):
     """clearCells() is also CellPanel's rebind path (a freshly loaded protocol
     calls it before binding the new orchestrator, with the panel itself still
@@ -242,3 +543,69 @@ def test_clear_cells_resets_shown_entry_id_and_clears_show_container(qapp):
 
     assert panel._shownEntryId is None
     assert panel.showContainer.layout().count() == 0
+
+
+def test_current_cell_built_on_another_thread_gets_a_row_without_a_qt_warning(qapp):
+    """A cell a survey producer finds runs through tile_detector.py's _newCell
+    on the orchestrator's worker thread, so by the time sigCurrentCell carries
+    it here (on the GUI thread), it is a QObject that does not live on this
+    thread. Qt refuses setParent() across threads -- a stderr warning, not an
+    exception -- so addCell() must recognize this case and skip the parenting
+    rather than let that warning through; self._cells is what keeps such a
+    cell alive instead, for as long as this panel exists."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+    cell = _buildOnAnotherThread(_FakeQObjectCell)
+    assert cell.thread() is not panel.thread()
+
+    messages = []
+    Qt.qInstallMessageHandler(
+        lambda msgType, context, message: messages.append(message)
+    )
+    try:
+        orch.sigCurrentCell.emit(cell)
+    finally:
+        Qt.qInstallMessageHandler(None)
+
+    assert messages == [], f"unexpected Qt warning(s): {messages}"
+    assert panel.cellList.count() == 1
+    assert panel.cellList.item(0).text() == f"cell {id(cell)} — running"
+    assert cell.parent() is None
+
+
+def test_current_cell_built_on_another_thread_is_still_freed_by_refcounting(qapp):
+    """Since a cross-thread cell is never parented (see the test above),
+    self._cells -- not Qt's ownership cascade -- must be what keeps it alive;
+    prove that reference is also what lets it go, the same way
+    tests/test_teardown.py proves for the same-thread case."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+    cell = _buildOnAnotherThread(_FakeQObjectCell)
+
+    gc.disable()
+    try:
+        orch.sigCurrentCell.emit(cell)
+        assert panel.cellList.count() == 1
+
+        panel_ref = weakref.ref(panel)
+        cell_ref = weakref.ref(cell)
+
+        panel.clearCells()
+        assert panel._cells == {}
+
+        del cell, orch
+        del panel
+        # No gc.collect() below -- pure refcounting only, since gc is disabled.
+
+        assert (
+            cell_ref() is None
+        ), "cross-thread cell should be freed by refcounting alone"
+        assert panel_ref() is None, "panel should be freed by refcounting alone"
+    finally:
+        gc.enable()

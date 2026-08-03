@@ -177,6 +177,92 @@ def test_teardown_breaks_the_orchestrator_cell_window_cycle(qapp, tmp_path):
         gc.enable()
 
 
+def test_teardown_frees_the_slice_producer_and_cells_by_refcounting(qapp, tmp_path):
+    """The proof above cannot reach the cell-search half of the object graph:
+    its camera selector returns None, so no Slice is ever built and no producer
+    ever installed. This builds that half -- a slice, a region, a producer
+    closing over the camera and scope devices, and a cell run through the
+    protocol -- and proves the same thing about all of it: with the cyclic
+    collector disabled, plain refcounting frees the window, the slice, the
+    producer and the cells.
+
+    The producer is where the risk is: it holds the slice, the orchestrator
+    holds the producer, and the orchestrator is parented to the window, so a
+    teardown that left the producer installed would keep the slice and both
+    devices reachable from an object nothing is looking after any more.
+
+    The camera stand-in comes from test_window_integration rather than being
+    copied in here: it is the same mode-sensitive getBoundary/
+    globalCenterPosition/scopeDev fake the producer install needs, and a second
+    copy would be one more thing to keep in step with acq4's real Camera.
+    """
+    from acq4.modules.Autopatch.Autopatch import AutopatchWindow
+
+    from .test_window_integration import _FakeCameraWithDevice
+
+    _write_protocol(tmp_path, "demo.py", _NOOP_PROTOCOL)
+
+    gc.disable()
+    try:
+        win = AutopatchWindow(
+            module=None,
+            protocolDir=str(tmp_path),
+            pipetteSelector=_FakePipetteSelector(target=(1e-3, 2e-3, 3e-3)),
+            cameraSelector=_FakeCameraWithDevice(),
+        )
+        win.protocolPanel.fileCombo.setCurrentText("demo")
+
+        win.newSlice()
+        win.addRegionHere()
+        assert win.slice is not None
+        assert len(win.slice.regions) == 1
+
+        win.cellPanel.addFromTargetBtn.click()
+        assert win.cellPanel.cellList.count() == 1
+        seededCell = list(win.cellPanel._cells.values())[0]
+        # Selected before running so the run below actually populates
+        # _timelineItems, the same reason as the proof above.
+        win.cellPanel.cellList.setCurrentRow(0)
+
+        # What Start does on the GUI thread: cache the devices and install a
+        # producer built from the current slice.
+        win._onStartRun()
+        producer = win.orchestrator._cellProducer
+        assert producer is not None
+        assert producer._slice is win.slice
+
+        # And a cell's worth of protocol, inline on this thread (no gentletask
+        # ThreadTask, for the reason the first test's docstring gives), so the
+        # ctx.log_action wiring runs with the search half of the graph in place.
+        win.orchestrator.run_sync_cell(seededCell)
+        win.cellPanel.cellList.setCurrentRow(0)
+        assert win.cellPanel.timelineList.count() == 1
+
+        sliceState = win.slice
+        refs = {
+            "orchestrator": weakref.ref(win.orchestrator),
+            "producer": weakref.ref(producer),
+            "slice": weakref.ref(sliceState),
+            "seeded cell": weakref.ref(seededCell),
+            "window": weakref.ref(win),
+        }
+
+        win.teardown()
+
+        assert win.orchestrator is None
+        assert win.cellPanel._cells == {}
+
+        del producer, sliceState, seededCell
+        win.close()  # exercises the closeEvent path too; teardown() is idempotent
+        del win
+        # No gc.collect() below -- pure refcounting only, since gc is disabled.
+
+        for name, ref in refs.items():
+            assert ref() is None, f"{name} should be freed by refcounting alone"
+    finally:
+        gc.enable()
+
+
 def test_teardown_stops_an_in_flight_orchestrator_run(qapp, qtbot, tmp_path):
     """teardown() must stop a currently-running orchestrator rather than
     abandon it, and leave no panel still bound to it afterward."""

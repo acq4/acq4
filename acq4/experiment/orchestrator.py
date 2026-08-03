@@ -21,7 +21,7 @@ logger = get_logger(__name__)
 
 
 class Orchestrator(Qt.QObject):
-    sigStatus = Qt.Signal(str)                 # "running"/"waiting"/"paused"/"error"
+    sigStatus = Qt.Signal(str)                 # "running"/"surveying"/"waiting"/"paused"/"error"
     sigCurrentCell = Qt.Signal(object)         # cell, or None when idle
     sigCellFinished = Qt.Signal(object, str)   # cell, status
 
@@ -54,6 +54,29 @@ class Orchestrator(Qt.QObject):
     # ---- queue / context ----
     def enqueue(self, cell):
         self._queue.append(cell)
+
+    def pendingCells(self) -> list:
+        """Return a snapshot of the cells still waiting in the queue, in the
+        order they will run.
+
+        A copy, not the live deque: the deque is popped from the worker
+        thread as a run proceeds, so a caller salvaging cells from an
+        orchestrator that is about to be replaced (see
+        CellPanel.unbindOrchestrator) must not be able to mutate the run's
+        own queue by holding onto it.
+        """
+        return list(self._queue)
+
+    def clearQueue(self) -> None:
+        """Drop every cell waiting in the queue, leaving any running cell alone.
+
+        The caller that seeded these cells is discarding them -- the operator
+        has swapped the tissue, so every queued position is a place not to
+        drive a pipette. Clearing the panel's own bookkeeping is not enough:
+        the deque is a separate strong reference and would otherwise keep
+        handing those positions to the protocol.
+        """
+        self._queue.clear()
 
     def setCellProducer(self, producer):
         """Install (or clear, with None) the callback that refills the queue.
@@ -162,6 +185,14 @@ class Orchestrator(Qt.QObject):
                 self._checkPause()
                 check_stop()
                 if self._shouldRefill():
+                    # Surveying is not patching, and the operator watching a
+                    # slow, barren stretch of region must not read a stale
+                    # "running" as "a cell is being worked". Clearing the
+                    # current cell first is the same honesty: leaving the
+                    # just-finished cell named here made Area 5 attribute
+                    # survey time to it.
+                    self.sigCurrentCell.emit(None)
+                    self.sigStatus.emit("surveying")
                     self._refillQueue()
                     # Refill only ever runs against an empty queue, so a
                     # request that arrived while the producer was working had
@@ -176,10 +207,18 @@ class Orchestrator(Qt.QObject):
                     # a tile is slow, so an operator pressing Stop mid-survey
                     # must not have to wait out a refill that already started.
                     continue
-                if not self._queue:
-                    # Queue empty and nothing left to produce: the run is done.
+                # clearQueue() runs on the GUI thread while this loop runs on
+                # the worker thread, so the deque's emptiness cannot be
+                # checked and then acted on as two separate steps -- a clear
+                # landing in between would turn a plain empty-queue finish
+                # into an IndexError out of popleft(). Popping directly and
+                # catching that IndexError makes the check and the pop one
+                # step: an empty deque at either the check or the pop means
+                # the same thing, the run is done.
+                try:
+                    cell = self._queue.popleft()
+                except IndexError:
                     break
-                cell = self._queue.popleft()
                 self._processCell(cell)
         except Stopped as exc:
             # An operator-initiated stop is a normal way for the run loop to
@@ -230,8 +269,27 @@ class Orchestrator(Qt.QObject):
 
     def _refillQueue(self):
         """Ask the producer for more cells; record exhaustion when it has none."""
+        # setCellProducer() runs on the GUI thread (a "New slice" mid-run, for
+        # instance, clearing it to None) while this loop runs on the worker
+        # thread, so "there is a producer" (_shouldRefill's check, just above)
+        # and "call the producer" cannot be treated as two separate steps -- a
+        # clear landing in between would turn a legitimate operator action
+        # into a TypeError out of calling None. Reading it into a local once
+        # makes the two one step for this call: if it is gone by the time
+        # this runs, there is simply nothing to ask -- not exhaustion, and not
+        # a bug to report. The same clear (or a swap to a different producer)
+        # can just as easily land while producer() is off running -- itself
+        # slow, seconds-to-minutes tile imaging -- rather than only before it
+        # starts, so the local is checked against self._cellProducer again
+        # below, right before the batch it returned is queued: a batch called
+        # for under a producer the operator has since moved on from belongs to
+        # tissue already declared gone, and must land nowhere rather than in
+        # the next protocol's queue.
+        producer = self._cellProducer
+        if producer is None:
+            return
         try:
-            cells = self._cellProducer()
+            cells = producer()
         except (Stopped, FlowSignal):
             # Same pass-through as _processCell: a cooperative stop is a normal
             # end to the run, and a producer that raises AbortExperiment means
@@ -247,8 +305,28 @@ class Orchestrator(Qt.QObject):
         if cells is None:
             self._producerExhausted = True
             return
-        for cell in cells:
-            self.enqueue(cell)
+        if self._cellProducer is not producer:
+            # The batch is neither "found nothing, ask again" nor exhaustion --
+            # it is real cells this call was in the middle of fetching when the
+            # operator cleared or replaced the producer it was fetching them
+            # for. Dropping it here, rather than setting _producerExhausted or
+            # leaving it to be asked for again, is what keeps this discard from
+            # being mistaken for either of the producer contract's two actual
+            # outcomes.
+            logger.info(
+                "Discarding a batch of %d cell(s): the producer that returned "
+                "them is no longer the installed one",
+                len(cells),
+            )
+            return
+        # One deque.extend rather than a loop of enqueue() calls: clearQueue()
+        # runs on the GUI thread while this runs on the worker thread, and a
+        # clear landing part-way through a loop would leave a partial batch of
+        # coordinates queued in tissue the operator has already declared gone.
+        # extend() is a single C-level call, so the whole batch lands either
+        # before or after such a clear, never across it. enqueue() remains the
+        # public single-cell entry point.
+        self._queue.extend(cells)
 
     def _processCell(self, cell):
         """Run the protocol function for one cell. RetryCurrentCell loops in

@@ -2,6 +2,7 @@
 refill trigger, the empty-vs-exhausted distinction, and end-of-run conditions."""
 import gc
 import weakref
+from collections import deque
 
 import pytest
 
@@ -93,6 +94,53 @@ def test_producer_supplements_cells_seeded_before_start(make_pf):
     orch.enqueue("seeded")
     orch.run_sync()
     assert ran == ["seeded", "produced"]
+
+
+def test_refill_discards_a_batch_from_a_producer_cleared_during_the_call(make_pf):
+    """The "New slice" hazard: setCellProducer(None) landing between the
+    producer being called and its batch being queued must not let that batch
+    land anyway. A producer that clears itself and then returns cells
+    reproduces the interleaving deterministically -- no thread race needed --
+    since _refillQueue reads self._cellProducer into a local before calling
+    it, and the clear this producer makes on its own way out is exactly the
+    "landed while producer() was running" case that local exists to guard
+    against on the way out too."""
+    pf = make_pf()
+    ran = []
+    pf.run = lambda ctx, **kwargs: ran.append(ctx.cell)
+    orch = Orchestrator(pf)
+
+    def clears_then_returns_cells():
+        orch.setCellProducer(None)
+        return ["c1", "c2"]
+
+    orch.setCellProducer(clears_then_returns_cells)
+    statuses = []
+    orch.sigStatus.connect(statuses.append)
+    finished = []
+    orch.sigCellFinished.connect(lambda c, s: finished.append((c, s)))
+
+    orch.run_sync()  # must end normally, not error
+
+    assert ran == [], "a cell from a batch discarded on the way out was still processed"
+    assert list(orch._queue) == [], "the discarded batch was left sitting in the queue"
+    assert finished == []
+    assert "error" not in statuses
+
+
+def test_refill_still_queues_a_batch_from_the_still_installed_producer(make_pf):
+    """The ordinary path, pinned alongside the discard above: a producer that
+    is still installed when it returns must still have its cells enqueued and
+    processed -- the new check at the far end of _refillQueue must not turn
+    into a blanket discard."""
+    pf = make_pf()
+    ran = []
+    pf.run = lambda ctx, **kwargs: ran.append(ctx.cell)
+    orch = Orchestrator(pf, cellProducer=make_producer([["c1", "c2"], None]))
+
+    orch.run_sync()
+
+    assert ran == ["c1", "c2"]
 
 
 def test_setCellProducer_installs_a_producer_after_construction(make_pf):
@@ -404,3 +452,232 @@ def test_producer_bound_method_cycle_is_freed_once_the_producer_is_released(
     finally:
         gc.collect()
         gc.enable()
+
+
+def test_surveying_status_is_emitted_around_a_refill(make_pf):
+    orch = Orchestrator(make_pf())
+    statuses = []
+    orch.sigStatus.connect(statuses.append)
+    orch.setCellProducer(make_producer([[object()], None]))
+
+    orch.run_sync()
+
+    assert "surveying" in statuses
+    # And it must not be the last word: the run reports back to running for the
+    # cell it then works, and waiting once drained.
+    assert statuses.index("surveying") < statuses.index("waiting")
+
+
+def test_current_cell_is_cleared_before_surveying_is_reported(make_pf):
+    """sigCurrentCell(None) and sigStatus("surveying") are same-thread direct
+    connections, so a UI slot genuinely runs between them -- if the status
+    were reported first, that slot would briefly render the just-finished
+    cell as "surveying". Recording both signals into one shared, ordered list
+    pins that the cell is cleared first."""
+    orch = Orchestrator(make_pf())
+    events = []
+    orch.sigCurrentCell.connect(lambda cell: events.append(("cell", cell)))
+    orch.sigStatus.connect(lambda status: events.append(("status", status)))
+    orch.setCellProducer(make_producer([[object()], None]))
+
+    orch.run_sync()
+
+    cell_cleared_index = events.index(("cell", None))
+    surveying_index = events.index(("status", "surveying"))
+    assert cell_cleared_index < surveying_index
+
+
+def test_every_barren_refill_pass_reports_surveying(make_pf):
+    # The operator watching a slow, empty stretch of region must see
+    # "surveying", not a stale "running" that implies a cell is being patched.
+    orch = Orchestrator(make_pf())
+    statuses = []
+    orch.sigStatus.connect(statuses.append)
+    orch.setCellProducer(make_producer([[], [], None]))
+
+    orch.run_sync()
+
+    assert statuses.count("surveying") == 3
+
+
+def test_current_cell_is_cleared_before_the_producer_runs(make_pf):
+    # sigCurrentCell must not still name the just-finished cell while the
+    # producer images: Area 5 would attribute survey time to that cell, and a
+    # "Next cell" request arriving during the survey would appear to have a
+    # current cell to act against, when none is actually being worked.
+    pf = make_pf()
+    first = object()
+    orch = Orchestrator(pf)
+    orch.enqueue(first)
+
+    seen = []
+    orch.sigCurrentCell.connect(seen.append)
+    statuses = []
+    orch.sigStatus.connect(statuses.append)
+
+    def producer():
+        # Whatever the orchestrator last announced must not be `first`.
+        assert seen[-1] is None, f"still following {seen[-1]!r} while surveying"
+        # The status the operator sees at this same moment must already be
+        # "surveying", not "running" left over from before the refill.
+        assert (
+            statuses[-1] == "surveying"
+        ), f"status was {statuses[-1]!r} while surveying"
+        return None
+
+    orch.setCellProducer(producer)
+    orch.run_sync()
+
+    assert first in seen
+
+
+def test_clear_queue_drops_pending_cells(make_pf):
+    orch = Orchestrator(make_pf())
+    ran = []
+    orch.protocolFile.run = lambda ctx, **kw: ran.append(ctx.cell)
+    orch.enqueue(object())
+    orch.enqueue(object())
+
+    orch.clearQueue()
+    orch.run_sync()
+
+    assert ran == []
+
+
+def test_clear_queue_leaves_a_later_enqueue_working(make_pf):
+    orch = Orchestrator(make_pf())
+    ran = []
+    orch.protocolFile.run = lambda ctx, **kw: ran.append(ctx.cell)
+    orch.enqueue(object())
+    orch.clearQueue()
+    kept = object()
+    orch.enqueue(kept)
+
+    orch.run_sync()
+
+    assert ran == [kept]
+
+
+def test_clear_queue_leaves_a_running_cell_alone(make_pf):
+    """clearQueue()'s docstring promises it leaves a running cell alone: a
+    cell already in the middle of its protocol must still complete even
+    though the queue behind it is dropped out from under it."""
+    orch = Orchestrator(make_pf())
+    ran = []
+
+    def run(ctx, **kwargs):
+        orch.clearQueue()
+        assert orch._nextCellRequested is False
+        ran.append(ctx.cell)
+
+    orch.protocolFile.run = run
+    queued = object()
+    orch.enqueue(queued)
+    running = object()
+
+    orch.run_sync_cell(running)
+
+    assert ran == [running]
+    assert list(orch._queue) == []
+
+
+def test_clear_queue_race_between_check_and_pop_ends_the_run_cleanly(make_pf):
+    """clearQueue() runs on the GUI thread while _runLoopBody runs on the
+    worker thread. If clearQueue() lands between _runLoopBody deciding the
+    queue is non-empty and it actually popping a cell, that pop must not
+    raise -- an operator clearing the queue mid-run gets a cleanly finished
+    run, not a crashed one.
+
+    Deterministic rather than timing-dependent: RaceyQueue's __bool__ is the
+    same truthiness check the loop body makes on this deque wherever it asks
+    "is there anything left", and it wipes the deque's own contents the first
+    time it is consulted while non-empty -- exactly as a concurrent
+    clearQueue() would. It then keeps reporting that emptied state as truthy
+    for the rest of the pass, because that is what any later consult in the
+    same iteration actually observes once a clear has landed: a deque that
+    reads as empty when measured by length, but whose iteration is still
+    mid-flight on the assumption a cell is there to take.
+    """
+
+    class RaceyQueue(deque):
+        def __init__(self, *args):
+            super().__init__(*args)
+            self._raced = False
+
+        def __bool__(self):
+            if len(self) > 0:
+                self._raced = True
+                self.clear()
+            return self._raced or len(self) > 0
+
+    pf = make_pf()
+    pf.run = lambda ctx, **kwargs: None
+
+    def poison_producer():
+        raise AssertionError(
+            "producer asked after the race already emptied the queue -- the "
+            "run should have ended instead of trying to refill"
+        )
+
+    orch = Orchestrator(pf, cellProducer=poison_producer)
+    orch._queue = RaceyQueue([object()])
+
+    completed_without_raising = False
+    orch.run_sync()
+    completed_without_raising = True
+
+    assert completed_without_raising, "run_sync() must end the run cleanly, not raise"
+    assert list(orch._queue) == []
+
+
+def test_producer_cleared_between_shouldrefill_and_refill_ends_the_run_cleanly(make_pf):
+    """setCellProducer(None) runs on the GUI thread (a "New slice" mid-run,
+    say) while this loop runs on the worker thread, so "there is a producer"
+    (_shouldRefill's check) and "call the producer" (_refillQueue, a separate
+    step later) cannot be treated as one atomic check-then-act. A clear
+    landing in between must not turn a legitimate operator action into a
+    TypeError out of calling None -- the run should simply find nothing left
+    to do and end normally, the same as if no producer had ever been asked.
+
+    Deterministic rather than timing-dependent: sigStatus always emits
+    "surveying" between _shouldRefill()'s check and _refillQueue()'s call (see
+    _runLoopBody), so a slot connected to that signal clears the producer at
+    exactly that point on this same thread -- standing in for the concurrent
+    clear the same way RaceyQueue stands in for a concurrent clearQueue()
+    above."""
+    pf = make_pf()
+    pf.run = lambda ctx, **kwargs: None
+    producer = make_producer([["c1"], None])
+    orch = Orchestrator(pf, cellProducer=producer)
+    statuses = []
+    orch.sigStatus.connect(statuses.append)
+
+    def clear_producer_when_surveying_starts(status):
+        if status == "surveying":
+            orch.setCellProducer(None)
+
+    orch.sigStatus.connect(clear_producer_when_surveying_starts)
+
+    orch.run_sync()  # must not raise
+
+    assert "error" not in statuses
+    assert (
+        producer.calls["n"] == 0
+    ), "producer was called after it had already been cleared"
+
+
+def test_no_producer_never_reports_surveying(make_pf):
+    """A plain queue drain (no producer configured) must never emit
+    "surveying" -- an operator would misread it as the system looking for
+    more cells when it is not."""
+    pf = make_pf()
+    pf.run = lambda ctx, **kwargs: None
+    statuses = []
+    orch = Orchestrator(pf)
+    orch.sigStatus.connect(statuses.append)
+    orch.enqueue("c1")
+    orch.enqueue("c2")
+
+    orch.run_sync()
+
+    assert "surveying" not in statuses
