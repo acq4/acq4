@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 
 from acq4.experiment.orchestrator import Orchestrator
+from acq4.experiment.search_region import RectRegion
 from acq4.experiment.slice import Slice
 from acq4.experiment.tile_detector import make_tile_detector
 from acq4.modules.Module import Module
@@ -240,7 +241,7 @@ class AutopatchWindow(Qt.QWidget):
         # off-center for a cropped camera ROI.
         cx, cy = camera.globalCenterPosition("roi")[:2]
         w, h = fov_w * 3, fov_h * 3
-        self.slice.addRegion(cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2)
+        self.slice.addRegion(RectRegion(cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2))
         self._refreshSurveyStats()
 
     @staticmethod

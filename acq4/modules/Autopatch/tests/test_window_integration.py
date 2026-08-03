@@ -4,6 +4,7 @@ import os
 
 import pytest
 
+from acq4.experiment.search_region import RectRegion
 from acq4.util import Qt
 
 
@@ -614,7 +615,9 @@ def test_add_region_here_seeds_a_multi_tile_region(qapp, tmp_path):
     camera = win.cameraSelector.getSelectedObj()
     _, _, fov_w, fov_h = camera.getBoundary(globalCoords=True, mode="roi")
     cx, cy, _ = camera.globalCenterPosition("roi")
-    x0, y0, x1, y1 = win.slice.regions[0]
+    region = win.slice.regions[0]
+    assert isinstance(region, RectRegion)
+    x0, y0, x1, y1 = region.bounds()
     assert x0 == pytest.approx(cx - 3 * fov_w / 2)
     assert y0 == pytest.approx(cy - 3 * fov_h / 2)
     assert x1 == pytest.approx(cx + 3 * fov_w / 2)
