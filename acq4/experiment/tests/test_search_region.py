@@ -156,6 +156,7 @@ def test_the_ellipse_tile_pattern_excludes_the_corners_it_should():
         (200e-6, 5e-2),       # ...the same, out at a 5 cm stage coordinate
         (2e-6, 1e-3),         # a 30 um region with a 2 um field, off at 1 mm
         (1e-3, 4e7),          # absurd magnitude: pure arithmetic must not care
+        (50e-6, -3.2e-3),     # negative stage coordinates are ordinary
     ],
 )
 def test_ellipse_tile_selection_is_identical_at_every_magnitude(fov_len, off):
@@ -179,6 +180,18 @@ def test_ellipse_agrees_with_a_sampled_oracle_over_a_whole_grid_of_tiles():
             assert region.overlapsTile(center, fov) == _sampled_overlap(
                 region, center, fov
             ), (gx, gy)
+
+
+def test_the_ellipse_maps_each_axis_to_its_own_radius():
+    # A 4:1 ellipse: the only configuration in which x and y are distinguishable,
+    # and the one an operator actually gets, since "Add region here" seeds
+    # 3*fov_w x 3*fov_h and a cropped camera ROI is not square.
+    region = EllipseRegion(0.0, 0.0, 40e-6, 10e-6)
+    tiny = (1e-9, 1e-9)
+    # 7 um off-centre along the 5 um semi-minor axis: outside.
+    assert region.overlapsTile((20e-6, 12e-6), tiny) is False
+    # 14 um off-centre along the 20 um semi-major axis: inside.
+    assert region.overlapsTile((34e-6, 5e-6), tiny) is True
 
 
 def test_a_rectangle_and_an_ellipse_with_the_same_box_are_not_equal():
@@ -209,6 +222,11 @@ def _polygon_pattern(scale, off):
 def test_polygon_needs_at_least_three_vertices():
     with pytest.raises(ValueError, match="at least 3 vertices"):
         PolygonRegion([(0.0, 0.0), (30e-6, 30e-6)])
+
+
+def test_polygon_rejects_a_zero_area_polygon():
+    with pytest.raises(ValueError, match="nonzero extent"):
+        PolygonRegion([(0.0, 0.0), (1e-6, 0.0), (2e-6, 0.0)])
 
 
 def test_polygon_bounds_are_the_extremes_of_its_vertices():

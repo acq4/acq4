@@ -87,7 +87,7 @@ class SearchPanel(Qt.QWidget):
         for label, key in (("Rectangle", "rect"), ("Ellipse", "ellipse")):
             self.shapeCombo.addItem(label, key)
         self.shapeCombo.setToolTip(
-            "The shape \"Add region here\" seeds. An ellipse is inscribed in the "
+            'The shape "Add region here" seeds. An ellipse is inscribed in the '
             "same 3x3-field box as the rectangle, so it searches the rounded "
             "middle and skips the corners."
         )

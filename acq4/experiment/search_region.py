@@ -152,7 +152,8 @@ def _point_in_polygon(px: float, py: float, vertices) -> bool:
 
     Points exactly on the boundary are not guaranteed either answer, which is
     fine here: this is only consulted for tiles no edge touches, so the point is
-    strictly inside or strictly outside.
+    inside or outside, with a boundary tie resolving either way and costing at
+    most one tile of over- or under-imaging.
     """
     inside = False
     j = len(vertices) - 1
@@ -181,6 +182,12 @@ class PolygonRegion(SearchRegion):
         if len(verts) < 3:
             raise ValueError(
                 f"a polygon region needs at least 3 vertices, got {len(verts)}"
+            )
+        xs = [x for x, _ in verts]
+        ys = [y for _, y in verts]
+        if min(xs) == max(xs) or min(ys) == max(ys):
+            raise ValueError(
+                f"a region needs nonzero extent in both axes, got {verts}"
             )
         object.__setattr__(self, "vertices", verts)
 
