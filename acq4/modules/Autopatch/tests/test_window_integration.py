@@ -4,6 +4,7 @@ import os
 
 import pytest
 
+from acq4.experiment.search_region import EllipseRegion, RectRegion
 from acq4.util import Qt
 
 
@@ -614,7 +615,9 @@ def test_add_region_here_seeds_a_multi_tile_region(qapp, tmp_path):
     camera = win.cameraSelector.getSelectedObj()
     _, _, fov_w, fov_h = camera.getBoundary(globalCoords=True, mode="roi")
     cx, cy, _ = camera.globalCenterPosition("roi")
-    x0, y0, x1, y1 = win.slice.regions[0]
+    region = win.slice.regions[0]
+    assert isinstance(region, RectRegion)
+    x0, y0, x1, y1 = region.bounds()
     assert x0 == pytest.approx(cx - 3 * fov_w / 2)
     assert y0 == pytest.approx(cy - 3 * fov_h / 2)
     assert x1 == pytest.approx(cx + 3 * fov_w / 2)
@@ -631,6 +634,38 @@ def test_add_region_here_without_a_slice_starts_one(qapp, tmp_path):
 
     assert win.slice is not None
     assert len(win.slice.regions) == 1
+    assert len(win.slice.tileGrid()) > 1
+
+
+def test_add_region_here_builds_the_shape_area_2_selects(qapp, tmp_path):
+    # Until Area 1 can draw ROIs, this selector is the only way to seed a
+    # non-rectangular region, so the button has to read it rather than always
+    # building a rectangle.
+    win = _makeWindow(tmp_path)
+    win.newSlice()
+    win.searchPanel.shapeCombo.setCurrentIndex(
+        win.searchPanel.shapeCombo.findData("ellipse")
+    )
+
+    win.addRegionHere()
+
+    region = win.slice.regions[0]
+    assert isinstance(region, EllipseRegion)
+    # Inscribed in the same 3x3-field box a rectangle would have used, centered
+    # on the camera's "roi" center -- computed off the fake camera directly so a
+    # bug in _cameraFov() is caught rather than echoed back.
+    camera = win.cameraSelector.getSelectedObj()
+    _, _, fov_w, fov_h = camera.getBoundary(globalCoords=True, mode="roi")
+    cx, cy, _ = camera.globalCenterPosition("roi")
+    assert region.bounds() == pytest.approx(
+        (
+            cx - 3 * fov_w / 2,
+            cy - 3 * fov_h / 2,
+            cx + 3 * fov_w / 2,
+            cy + 3 * fov_h / 2,
+        )
+    )
+    # And it is actually surveyable, not merely recorded.
     assert len(win.slice.tileGrid()) > 1
 
 

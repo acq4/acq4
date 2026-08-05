@@ -237,6 +237,7 @@ def test_survey_stats_with_no_region_read_as_no_region(qapp):
         "maxDensitySpin",
         "rescansCheck",
         "addRegionBtn",
+        "shapeCombo",
     ],
 )
 def test_locking_disables_editing_but_not_the_readout(qapp, widgetName):
@@ -253,3 +254,18 @@ def test_locking_disables_editing_but_not_the_readout(qapp, widgetName):
 
     panel.setInteractionLocked(False)
     assert widget.isEnabled()
+
+
+def test_the_region_shape_defaults_to_a_rectangle(qapp):
+    # The shape every existing survey used, so the default must not change what
+    # pressing the button has always done.
+    panel = makePanel()
+    assert panel.regionShape() == "rect"
+
+
+def test_the_region_shape_reports_a_key_not_the_combo_label(qapp):
+    # The window maps this to a region class; keying on display text would break
+    # the first time the label is reworded.
+    panel = makePanel()
+    panel.shapeCombo.setCurrentIndex(panel.shapeCombo.findData("ellipse"))
+    assert panel.regionShape() == "ellipse"

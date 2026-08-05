@@ -5,6 +5,7 @@ fake devices, with only the three device-touching helpers replaced."""
 import pytest
 
 from acq4.experiment import tile_detector
+from acq4.experiment.search_region import RectRegion
 from acq4.experiment.slice import SearchConstraints, Slice
 
 from .test_tile_detector import FakeCamera, FakeCell, FakeScope
@@ -56,7 +57,7 @@ def seam(monkeypatch):
         if constraints is None:
             constraints = SearchConstraints(depth_range=(NEAR, FAR))
         sliceState = Slice(fov=FOV, constraints=constraints)
-        sliceState.addRegion(*REGION)
+        sliceState.addRegion(RectRegion(*REGION))
         return sliceState, sliceState.makeCellProducer(
             tile_detector.make_tile_detector(camera=camera, scope=scope, manager=None)
         )
