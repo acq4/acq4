@@ -71,17 +71,17 @@
 **Interfaces:**
 - Produces: `CellTrackingLost(ValueError)` with attribute `reason: str | None`. Importable as `from acq4_automation.feature_tracking import CellTrackingLost`. Tasks 2, 3, and 6 depend on this name and import path.
 
-- [ ] **Step 0: Resolve the branch question before touching anything**
+- [ ] **Step 0: Confirm the repo is where it should be**
 
-The repo is on `feature/smooth-vector-field-z` with a clean tracked tree (only untracked `best-segmenter` and `cellpose_grid_results.json`). The spec says the work belongs on `main`.
+Resolved with the operator: this checkout was switched to `main` and commits land directly on `main`. Their `feature/smooth-vector-field-z` work is committed and untouched on its own branch. `acq4_automation` is installed editable from this checkout, which is why a worktree was rejected — acq4's tests must see these changes.
 
-Run:
+Verify before starting:
 
 ```bash
-cd /home/martin/src/acq4/acq4-automation && git status -sb && git log --oneline -1 main
+cd /home/martin/src/acq4/acq4-automation && git status -sb | head -2
 ```
 
-**Stop and ask the operator** which they want: switch this checkout to `main`, or branch off `main` here. Do not switch branches in a repo with active feature work without being told to. Note that `acq4_automation` is installed editable from *this* checkout, so a separate worktree would not be visible to acq4's tests without a `PYTHONPATH` override.
+Expected: `## main...origin/main`, with only `best-segmenter` and `cellpose_grid_results.json` untracked. If the branch is anything other than `main`, stop and ask.
 
 - [ ] **Step 1: Write the failing test**
 
