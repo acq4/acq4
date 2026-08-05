@@ -81,6 +81,17 @@ class SearchPanel(Qt.QWidget):
         self.rescansCheck = Qt.QCheckBox("Rescans allowed")
         self.rescansCheck.setChecked(defaults.rescans_allowed)
 
+        # Item data, not display text, is what regionShape() returns: the window
+        # maps it to a region class, and a label is a label.
+        self.shapeCombo = Qt.QComboBox()
+        for label, key in (("Rectangle", "rect"), ("Ellipse", "ellipse")):
+            self.shapeCombo.addItem(label, key)
+        self.shapeCombo.setToolTip(
+            'The shape "Add region here" seeds. An ellipse is inscribed in the '
+            "same 3x3-field box as the rectangle, so it searches the rounded "
+            "middle and skips the corners."
+        )
+
         self.addRegionBtn = Qt.QPushButton("Add region here")
         self.addRegionBtn.setToolTip(
             "Add a search region covering roughly 3x3 fields of view around the "
@@ -95,6 +106,7 @@ class SearchPanel(Qt.QWidget):
         form.addRow("Depth from surface, far", self.farDepthSpin)
         form.addRow("Minimum health", self.minHealthSpin)
         form.addRow("Maximum cell density", self.maxDensitySpin)
+        form.addRow("Region shape", self.shapeCombo)
 
         layout = Qt.QVBoxLayout()
         layout.addLayout(form)
@@ -153,6 +165,10 @@ class SearchPanel(Qt.QWidget):
         self._showError()
         return constraints
 
+    def regionShape(self) -> str:
+        """The shape key for the next seeded region: "rect" or "ellipse"."""
+        return self.shapeCombo.currentData()
+
     def setError(self, message: str) -> None:
         """Show a message from this panel's owner on the panel's error line.
 
@@ -197,5 +213,6 @@ class SearchPanel(Qt.QWidget):
             self.maxDensitySpin,
             self.rescansCheck,
             self.addRegionBtn,
+            self.shapeCombo,
         ):
             w.setEnabled(not locked)

@@ -63,6 +63,7 @@ def _orchestrator(tmp_path, name="demo.py"):
 
 def _survey(tmp_path, name="demo.py"):
     """A real Orchestrator with a real CellPanel bound and a real producer installed."""
+    from acq4.experiment.search_region import RectRegion
     from acq4.experiment.slice import Slice
     from acq4.modules.Autopatch.cell_panel import CellPanel
 
@@ -70,7 +71,7 @@ def _survey(tmp_path, name="demo.py"):
     panel = CellPanel()
     panel.bindOrchestrator(orch)
     sliceState = Slice(fov=FOV)
-    sliceState.addRegion(*REGION)
+    sliceState.addRegion(RectRegion(*REGION))
     orch.setCellProducer(sliceState.makeCellProducer(_detector))
     return orch, panel, sliceState
 
