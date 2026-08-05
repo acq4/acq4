@@ -132,7 +132,9 @@ def test_menu_omits_claude_without_a_record(qapp, qtbot):
     qtbot.addWidget(viewer)
     with mock.patch.object(viewer, "_recordAtIndex", return_value=None):
         menu = viewer._buildRowContextMenu(Qt.QModelIndex())
-    assert "Debug with Claude" not in [a.text() for a in menu.actions()]
+    labels = [a.text() for a in menu.actions()]
+    assert "Copy" in labels
+    assert "Debug with Claude" not in labels
 
 
 def test_record_at_index_walks_up_to_the_top_level_row(qapp, qtbot):
