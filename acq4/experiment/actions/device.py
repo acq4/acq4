@@ -10,8 +10,6 @@ ctx.pipette is a PatchPipette; the underlying manipulator is ctx.pipette.pipette
 """
 from __future__ import annotations
 
-from acq4_automation.feature_tracking import CellTrackingLost
-
 from acq4.util.imaging.sequencer import run_image_sequence
 from acq4.util.task import run_in_gui_thread
 
@@ -140,6 +138,11 @@ def cellfie(ctx, height: float = 30e-6, step: float = 1e-6) -> None:
             storage_dir=storage,
             name="cellfie",
         ).wait()
+        # Imported here, not at module scope: acq4_automation lives in an internal
+        # repository, and a top-level import would stop every test under
+        # acq4/experiment from collecting where it is absent.
+        from acq4_automation.feature_tracking import CellTrackingLost
+
         # Initialize the tracker reference used to follow the cell during patching.
         try:
             ctx.cell.initializeTracker(imager, use_cellpose=True)
