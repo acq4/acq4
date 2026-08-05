@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import contextlib
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any, Callable, NoReturn
 
 from .exceptions import (
     AbortExperiment,
@@ -69,7 +69,7 @@ class ExecutionContext:
         """Stop the whole experiment run."""
         self._raise_flow_signal(AbortExperiment("abort experiment"))
 
-    def tissue_moved(self, reason: str) -> None:
+    def tissue_moved(self, reason: str) -> NoReturn:
         """Report that the tracker could not re-find this cell. Never returns.
 
         With a hook bound, the window prompts the operator and ends the cell,
