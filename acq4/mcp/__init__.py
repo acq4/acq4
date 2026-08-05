@@ -50,9 +50,16 @@ def ensure_teleprox_server(confirm=None):
         _teleprox_declined = True
         return None
 
-    import teleprox
+    try:
+        import teleprox
 
-    _teleprox_server = teleprox.RPCServer("tcp://127.0.0.1:*")
+        _teleprox_server = teleprox.RPCServer("tcp://127.0.0.1:*")
+    except Exception:
+        logger.exception(
+            "Failed to start teleprox server for AI-assisted debugging; continuing without live inspection."
+        )
+        return None
+
     set_teleprox_address(_teleprox_server.address)
     logger.warning(
         "Started teleprox server on %s for AI-assisted debugging. This port allows "
