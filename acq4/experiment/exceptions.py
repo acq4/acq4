@@ -29,6 +29,18 @@ class NoSolution(OrchestrationError):
     typeName = "NoSolution"
 
 
+class TrackingLost(OrchestrationError):
+    """The cell tracker could not re-find a cell against its reference stacks.
+
+    Deliberately not in ABNORMAL_STATE_EXCEPTIONS: this is not a pipette FSM
+    state, it is what a re-verify reports. Reaching the orchestrator uncaught
+    halts the run, which is the right default wherever no tissue-motion hook is
+    bound to handle it (see ExecutionContext.tissue_moved).
+    """
+
+    typeName = "TrackingLost"
+
+
 class FlowSignal(Exception):
     """Base for control-flow signals raised by flow actions."""
 

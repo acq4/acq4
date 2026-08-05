@@ -55,3 +55,12 @@ def test_raise_if_abnormal_returns_for_unmapped_internal_hop():
 def test_raise_if_abnormal_message_includes_context():
     with pytest.raises(exc.BrokenPipette, match="reseal"):
         exc.raise_if_abnormal("broken", expected=(), context="reseal")
+
+
+def test_tracking_lost_is_an_orchestration_error():
+    from acq4.experiment.exceptions import OrchestrationError, TrackingLost
+
+    # Routed by the taxonomy, not surfaced as an unexpected bug: a cell the
+    # tracker cannot re-find is a domain condition with a defined response.
+    assert issubclass(TrackingLost, OrchestrationError)
+    assert TrackingLost.typeName == "TrackingLost"
