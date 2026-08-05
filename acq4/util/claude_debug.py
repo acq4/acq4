@@ -229,7 +229,7 @@ def invokeClaude(context, command=None):
     if command is None:
         command = claudeCommand()
     fd, path = tempfile.mkstemp(prefix="acq4-debug-", suffix=".md", text=True)
-    with os.fdopen(fd, "w") as fh:
+    with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(context)
     launched = command.format(contextFile=path)
     logger.info("Launching Claude for debugging: %s", launched)
