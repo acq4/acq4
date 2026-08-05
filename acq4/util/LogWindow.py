@@ -41,6 +41,27 @@ def get_error_dialog():
     return ERROR_DIALOG
 
 
+def confirmTeleproxServer(parent=None):
+    """Ask permission to open a teleprox port so Claude can inspect this process.
+
+    Starting a teleprox server permits arbitrary code execution in this ACQ4 for the
+    rest of the session, so this is asked explicitly rather than assumed. Declining
+    still produces a text-only handoff.
+    """
+    box = Qt.QMessageBox(parent)
+    box.setIcon(Qt.QMessageBox.Warning)
+    box.setWindowTitle("Allow live debugging access?")
+    box.setText("Open a local debugging port so Claude can inspect this ACQ4?")
+    box.setInformativeText(
+        "This opens a loopback port that allows code to run inside this ACQ4 process "
+        "until it exits, which is what lets Claude read device and task state directly.\n\n"
+        "Decline and Claude still gets the log record and traceback, just not live access."
+    )
+    box.setStandardButtons(Qt.QMessageBox.Yes | Qt.QMessageBox.No)
+    box.setDefaultButton(Qt.QMessageBox.No)
+    return box.exec_() == Qt.QMessageBox.Yes
+
+
 class LogButton(FeedbackButton):
     def __init__(self, *args):
         FeedbackButton.__init__(self, *args)
@@ -60,7 +81,8 @@ class ErrorDialog(Qt.QDialog):
         self.layout = Qt.QVBoxLayout()
         self.layout.setContentsMargins(3, 3, 3, 3)
         self.setLayout(self.layout)
-        self.messages = []
+        self.records = []        # queued LogRecords not yet displayed
+        self.currentRecord = None  # the record on display, for the Claude handoff
 
         self.msgLabel = Qt.QLabel()
         self.msgLabel.setSizePolicy(Qt.QSizePolicy.Expanding, Qt.QSizePolicy.Expanding)
@@ -81,6 +103,8 @@ class ErrorDialog(Qt.QDialog):
         self.nextBtn.hide()
         self.logBtn = Qt.QPushButton("Show Log...")
         self.btnLayout.addWidget(self.logBtn)
+        self.claudeBtn = Qt.QPushButton("Debug with Claude")
+        self.btnLayout.addWidget(self.claudeBtn)
         self.btnLayoutWidget = Qt.QWidget()
         self.layout.addWidget(self.btnLayoutWidget)
         self.btnLayoutWidget.setLayout(self.btnLayout)
@@ -89,27 +113,20 @@ class ErrorDialog(Qt.QDialog):
         self.okBtn.clicked.connect(self.okClicked)
         self.nextBtn.clicked.connect(self.nextMessage)
         self.logBtn.clicked.connect(self.logClicked)
+        self.claudeBtn.clicked.connect(self.claudeClicked)
 
     def show(self, entry: LogRecord):
-        msgLines = []
-        if entry.getMessage():
-            msgLines.append(self.cleanText(entry.getMessage()))
-        if entry.exc_info:
-            msgLines.append(self.cleanText(str(entry.exc_info[1])))
-
-        msg = "<br/>".join(msgLines)
-
         if self.disableCheck.isChecked():
             return False
         if self.isVisible():
-            self.messages.append(msg)
+            self.records.append(entry)
             self.nextBtn.show()
             self.nextBtn.setEnabled(True)
-            self.nextBtn.setText("Show next error (%d more)" % len(self.messages))
+            self.nextBtn.setText("Show next error (%d more)" % len(self.records))
         else:
             w = Qt.QApplication.activeWindow()
             self.nextBtn.hide()
-            self.msgLabel.setText(msg)
+            self._displayRecord(entry)
             self.open()
             if w is not None:
                 cp = w.geometry().center()
@@ -121,6 +138,19 @@ class ErrorDialog(Qt.QDialog):
                 )
         self.raise_()
 
+    def _displayRecord(self, entry: LogRecord):
+        """Show *entry* and remember it, so the Claude button has something to send."""
+        self.currentRecord = entry
+        self.msgLabel.setText(self._renderRecord(entry))
+
+    def _renderRecord(self, entry: LogRecord):
+        msgLines = []
+        if entry.getMessage():
+            msgLines.append(self.cleanText(entry.getMessage()))
+        if entry.exc_info:
+            msgLines.append(self.cleanText(str(entry.exc_info[1])))
+        return "<br/>".join(msgLines)
+
     @staticmethod
     def cleanText(text):
         text = re.sub(r"&", "&amp;", text)
@@ -131,22 +161,31 @@ class ErrorDialog(Qt.QDialog):
 
     def closeEvent(self, ev):
         Qt.QDialog.closeEvent(self, ev)
-        self.messages = []
+        self.records = []
 
     def okClicked(self):
         self.accept()
-        self.messages = []
+        self.records = []
 
     def logClicked(self):
         self.accept()
         get_log_window().raise_window()
-        self.messages = []
+        self.records = []
 
     def nextMessage(self):
-        self.msgLabel.setText(self.messages.pop(0))
-        self.nextBtn.setText("Show next error (%d more)" % len(self.messages))
-        if len(self.messages) == 0:
+        self._displayRecord(self.records.pop(0))
+        self.nextBtn.setText("Show next error (%d more)" % len(self.records))
+        if len(self.records) == 0:
             self.nextBtn.setEnabled(False)
+
+    def claudeClicked(self):
+        if self.currentRecord is None:
+            return
+        from acq4.util import claude_debug
+
+        claude_debug.debugRecordWithClaude(
+            self.currentRecord, confirm=lambda: confirmTeleproxServer(self)
+        )
 
     def disable(self, disable):
         self.disableCheck.setChecked(disable)
