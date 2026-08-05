@@ -827,6 +827,7 @@ Append to `acq4/util/tests/test_claude_debug.py`:
 ```python
 import sys as _sys
 import textwrap
+import time
 
 
 def test_invoke_writes_context_to_a_temp_file():
@@ -845,7 +846,12 @@ def test_invoke_substitutes_the_context_path():
 
 
 def test_invoke_spawns_the_real_command(tmp_path):
-    """End-to-end for the part ACQ4 owns: a real subprocess receives the real path."""
+    """End-to-end for the part ACQ4 owns: a real subprocess receives the real path.
+
+    Popen is deliberately NOT mocked here -- this is the one test that proves a real
+    process is launched and can read what we wrote. The stub is spawned exactly once,
+    by invokeClaude itself; we wait for its receipt rather than running it again.
+    """
     stub = tmp_path / "stub.py"
     stub.write_text(textwrap.dedent("""
         import sys
@@ -858,8 +864,11 @@ def test_invoke_spawns_the_real_command(tmp_path):
 
     path = claude_debug.invokeClaude("# brief\nlive body", command=command)
 
-    import subprocess as sp
-    sp.run(command.format(contextFile=path), shell=True, check=True, timeout=30)
+    deadline = time.monotonic() + 30
+    while not receipt.exists() and time.monotonic() < deadline:
+        time.sleep(0.05)
+    assert receipt.exists(), "stub process never wrote its receipt"
+
     written = receipt.read_text()
     assert path in written
     assert "live body" in written
@@ -944,7 +953,9 @@ patch `acq4.mcp.ensure_teleprox_server` and keeping module import cheap.
 /home/martin/.miniforge3/envs/acq4-gl/bin/python -m pytest acq4/util/tests/test_claude_debug.py -v
 ```
 
-Expected: 25 passed.
+Expected: 25 passed. `test_invoke_spawns_the_real_command` genuinely spawns a
+subprocess; if it times out waiting for the receipt, `invokeClaude` is not calling
+`Popen` with the formatted command.
 
 - [ ] **Step 5: Commit**
 
