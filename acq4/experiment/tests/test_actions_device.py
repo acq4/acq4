@@ -3,7 +3,7 @@ find_surface, cellfie, run_task): fakes prove the right device calls happen in o
 import pytest
 
 from acq4.experiment.context import ExecutionContext
-from acq4.experiment.exceptions import OrchestrationError
+from acq4.experiment.exceptions import AdvanceToNextCell, OrchestrationError, TrackingLost
 from acq4.experiment.actions.device import (
     go_home,
     go_search,
@@ -167,9 +167,12 @@ class FakeTaskRunnerModule:
 class FakeCell:
     def __init__(self):
         self.tracker_calls = []
+        self.tracker_error = None
 
     def initializeTracker(self, imager, use_cellpose=False):
         self.tracker_calls.append((imager, use_cellpose))
+        if self.tracker_error is not None:
+            raise self.tracker_error
 
 
 @pytest.fixture
@@ -312,6 +315,22 @@ def test_find_surface_wraps_value_error(ctx, pip):
 # -- cellfie --------------------------------------------------------------
 
 
+def _cellfie_context(monkeypatch, tmp_path, tissue_moved_hook=None):
+    """An ExecutionContext wired for cellfie with the z-stack save stubbed out.
+
+    cellfie's imaging is real-hardware work; only its tracker-initialization
+    tail is under test here. FakePipette, FakeManager, and FakeCell already
+    cover everything cellfie touches, so this only wires them together.
+    """
+    monkeypatch.setattr(device_mod, "run_image_sequence", lambda *a, **k: _Waitable())
+    return ExecutionContext(
+        cell=FakeCell(),
+        pipette=FakePipette(),
+        manager=FakeManager(),
+        tissue_moved_hook=tissue_moved_hook,
+    )
+
+
 def test_cellfie_focuses_saves_zstack_and_initializes_tracker(ctx, pip, monkeypatch):
     names = _entry_names(ctx)
     pip.pipetteDevice.target_position = (0.0, 0.0, 100e-6)
@@ -357,6 +376,48 @@ def test_cellfie_default_height_and_step(ctx, pip, monkeypatch):
     start, end, step = calls[0]
     assert step == 1e-6
     assert end - start == pytest.approx(30e-6)
+
+
+def test_cellfie_routes_a_lost_cell_to_the_tissue_moved_hook(monkeypatch, tmp_path):
+    from acq4_automation.feature_tracking import CellTrackingLost
+
+    seen = []
+
+    def hook(ctx, reason):
+        seen.append(reason)
+        ctx.next_cell()
+
+    ctx = _cellfie_context(monkeypatch, tmp_path, tissue_moved_hook=hook)
+    ctx.cell.tracker_error = CellTrackingLost("lost", reason="no features matched")
+
+    with pytest.raises(AdvanceToNextCell):
+        cellfie(ctx)
+    assert seen == ["no features matched"]
+
+
+def test_cellfie_lets_an_unrelated_valueerror_propagate(monkeypatch, tmp_path):
+    # Only the named class is tissue motion. A bare ValueError out of the
+    # tracker stack is a bug, and classifying it as motion would trigger a
+    # destructive rescan whose prompt defaults to "Rescan".
+    called = []
+    ctx = _cellfie_context(
+        monkeypatch, tmp_path, tissue_moved_hook=lambda c, r: called.append(r)
+    )
+    ctx.cell.tracker_error = ValueError("something else entirely")
+
+    with pytest.raises(ValueError, match="something else entirely"):
+        cellfie(ctx)
+    assert called == []
+
+
+def test_cellfie_with_no_hook_raises_trackinglost(monkeypatch, tmp_path):
+    from acq4_automation.feature_tracking import CellTrackingLost
+
+    ctx = _cellfie_context(monkeypatch, tmp_path)
+    ctx.cell.tracker_error = CellTrackingLost("lost", reason="no features")
+
+    with pytest.raises(TrackingLost):
+        cellfie(ctx)
 
 
 # -- run_task -------------------------------------------------------------

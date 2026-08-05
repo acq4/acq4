@@ -10,6 +10,8 @@ ctx.pipette is a PatchPipette; the underlying manipulator is ctx.pipette.pipette
 """
 from __future__ import annotations
 
+from acq4_automation.feature_tracking import CellTrackingLost
+
 from acq4.util.imaging.sequencer import run_image_sequence
 from acq4.util.task import run_in_gui_thread
 
@@ -139,7 +141,14 @@ def cellfie(ctx, height: float = 30e-6, step: float = 1e-6) -> None:
             name="cellfie",
         ).wait()
         # Initialize the tracker reference used to follow the cell during patching.
-        ctx.cell.initializeTracker(imager, use_cellpose=True)
+        try:
+            ctx.cell.initializeTracker(imager, use_cellpose=True)
+        except CellTrackingLost as exc:
+            # The tracker could not re-find this cell against its own reference
+            # stacks, so the stacks are useless: the cell has drifted out of
+            # reach or died. That is a question about the tissue, not about this
+            # action, and the window is what can answer it. Never returns.
+            ctx.tissue_moved(exc.reason or str(exc))
 
 
 def load_preset(ctx, preset: str | None = None) -> None:
