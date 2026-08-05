@@ -396,3 +396,107 @@ def test_a_polygon_narrower_than_one_tile_still_gets_a_grid():
     assert len(grid) > 0
     assert len(grid) < len(plan_grid(0.0, 6e-6, 22e-6, 30e-6, FOV[0], FOV[1], 0.0))
     assert s.nextTile() == grid[0]
+
+
+class _PositionedCell:
+    """A stand-in for acq4_automation's Cell: a position is all Slice reads."""
+
+    def __init__(self, position):
+        self.position = position
+
+
+def _two_region_slice():
+    """A slice with two well-separated regions at realistic stage coordinates.
+
+    Deliberately not at the origin, and deliberately not square: a symmetric
+    fixture cannot test an asymmetric mapping, and origin-centred geometry
+    cannot see coordinate-magnitude float error.
+    """
+    s = Slice(fov=(20e-6, 10e-6))
+    s.addRegion(RectRegion(1e-3, 2e-3, 1e-3 + 60e-6, 2e-3 + 30e-6))
+    s.addRegion(RectRegion(5e-3, 7e-3, 5e-3 + 60e-6, 7e-3 + 30e-6))
+    return s
+
+
+def test_force_rescan_uncovers_only_the_region_holding_the_position():
+    s = _two_region_slice()
+    for tile in s.tileGrid():
+        s.markCovered(tile)
+    covered_before = len(s.coveredTiles)
+
+    uncovered = s.forceRescan((1e-3 + 30e-6, 2e-3 + 15e-6), lambda cell: False)
+
+    assert uncovered > 0
+    remaining = s.coveredTiles
+    assert len(remaining) == covered_before - uncovered
+    # Every surviving covered tile belongs to the far region.
+    far = s.regions[1]
+    assert all(far.overlapsTile(t, (20e-6, 10e-6)) for t in remaining)
+
+
+def test_force_rescan_outside_every_region_is_a_no_op():
+    # A hand-seeded cell outside every drawn region has no coverage to
+    # invalidate; hand-added cells are outside the scanner's responsibility.
+    s = _two_region_slice()
+    for tile in s.tileGrid():
+        s.markCovered(tile)
+    before = list(s.coveredTiles)
+
+    assert s.forceRescan((9e-3, 9e-3), lambda cell: False) == 0
+    assert s.coveredTiles == before
+
+
+def test_force_rescan_deregisters_only_never_attempted_cells():
+    s = _two_region_slice()
+    for tile in s.tileGrid():
+        s.markCovered(tile)
+    tile = s.tileGrid()[0]
+    attempted = _PositionedCell((tile[0], tile[1], -30e-6))
+    fresh = _PositionedCell((tile[0], tile[1], -35e-6))
+    s.registerCells([attempted, fresh])
+
+    s.forceRescan(tile, lambda cell: cell is attempted)
+
+    near = s.cellsNearTile(tile)
+    assert attempted in near
+    assert fresh not in near
+
+
+def test_force_rescan_leaves_cells_in_untouched_regions_registered():
+    s = _two_region_slice()
+    for tile in s.tileGrid():
+        s.markCovered(tile)
+    far_tile = [t for t in s.tileGrid() if t[0] > 4e-3][0]
+    far_cell = _PositionedCell((far_tile[0], far_tile[1], -30e-6))
+    s.registerCells([far_cell])
+
+    s.forceRescan((1e-3 + 30e-6, 2e-3 + 15e-6), lambda cell: False)
+
+    assert far_cell in s.cellsNearTile(far_tile)
+
+
+def test_force_rescan_does_not_touch_regions_or_constraints():
+    s = _two_region_slice()
+    for tile in s.tileGrid():
+        s.markCovered(tile)
+    regions_before = s.regions
+    constraints_before = s.constraints
+
+    s.forceRescan((1e-3 + 30e-6, 2e-3 + 15e-6), lambda cell: False)
+
+    assert s.regions == regions_before
+    assert s.constraints is constraints_before
+
+
+def test_force_rescan_uncovers_every_overlapping_region():
+    # Overlapping regions both hold the position, so both must be re-imaged.
+    s = Slice(fov=(20e-6, 10e-6))
+    s.addRegion(RectRegion(1e-3, 2e-3, 1e-3 + 60e-6, 2e-3 + 30e-6))
+    s.addRegion(RectRegion(1e-3 + 20e-6, 2e-3, 1e-3 + 80e-6, 2e-3 + 30e-6))
+    for tile in s.tileGrid():
+        s.markCovered(tile)
+
+    s.forceRescan((1e-3 + 30e-6, 2e-3 + 15e-6), lambda cell: False)
+
+    assert s.coveredTiles == []
+
