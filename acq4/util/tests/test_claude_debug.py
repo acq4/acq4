@@ -218,7 +218,7 @@ def test_invoke_spawns_the_real_command(tmp_path):
             out.write(open(sys.argv[1]).read())
     """))
     receipt = tmp_path / "receipt.txt"
-    command = f'{_sys.executable} {stub} {{contextFile}} {receipt}'
+    command = f"{_sys.executable} {stub} {{contextFile}} {receipt}"
 
     path = claude_debug.invokeClaude("# brief\nlive body", command=command)
 
@@ -234,7 +234,9 @@ def test_invoke_spawns_the_real_command(tmp_path):
 
 def test_debug_record_passes_address_into_the_context():
     record = make_record(logging.ERROR)
-    with mock.patch("acq4.mcp.ensure_teleprox_server", return_value="tcp://127.0.0.1:7777"):
+    with mock.patch(
+        "acq4.mcp.ensure_teleprox_server", return_value="tcp://127.0.0.1:7777"
+    ):
         with mock.patch.object(claude_debug, "invokeClaude") as invoke:
             claude_debug.debugRecordWithClaude(record)
     context = invoke.call_args[0][0]
