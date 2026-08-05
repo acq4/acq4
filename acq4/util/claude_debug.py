@@ -4,9 +4,12 @@ Renders a markdown brief about the record and the rig, then launches Claude prim
 """
 
 import logging
+import os
 import shutil
 import socket
+import subprocess
 import sys
+import tempfile
 import traceback
 
 logger = logging.getLogger(__name__)
@@ -175,8 +178,8 @@ def _configuredCommand():
         from acq4 import getManager
 
         return getManager().config.get("misc", {}).get("claudeCommand", None)
-    except Exception:
-        logger.debug("No ACQ4 Manager running; configured claudeCommand not consulted")
+    except Exception as exc:
+        logger.debug("configured claudeCommand not consulted: %s", exc)
         return None
 
 
@@ -214,3 +217,34 @@ def claudeCommand():
                 claudeCommand: 'wezterm start -- claude "Read {contextFile}"'
     """
     return _configuredCommand() or suggestTerminal()
+
+
+def invokeClaude(context, command=None):
+    """Write *context* to a temp markdown file and launch Claude Code on it.
+
+    Returns the path written. The file is deliberately not deleted: the spawned
+    process outlives this call and needs to read it, and keeping it lets the
+    operator re-read or re-launch. Temp cleanup is the OS's job.
+    """
+    if command is None:
+        command = claudeCommand()
+    fd, path = tempfile.mkstemp(prefix="acq4-debug-", suffix=".md", text=True)
+    with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(context)
+    launched = command.format(contextFile=path)
+    logger.info("Launching Claude for debugging: %s", launched)
+    subprocess.Popen(launched, shell=True)
+    return path
+
+
+def debugRecordWithClaude(record, log_tail=None, confirm=None):
+    """Hand *record* to a fresh Claude Code session.
+
+    Starts a teleprox server if one is not already running and *confirm* agrees, so
+    the session can inspect this live process. Without one, the brief is text-only.
+    """
+    from acq4 import mcp
+
+    address = mcp.ensure_teleprox_server(confirm=confirm)
+    context = build_debug_context(record, log_tail=log_tail, teleprox_address=address)
+    invokeClaude(context)

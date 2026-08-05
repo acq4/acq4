@@ -20,7 +20,8 @@ control_arg_parser.add_argument("--callgraph", action="store_true", help="Run th
 control_arg_parser.add_argument("--threadtrace", action="store_true", help="Run a thread tracer in the background")
 control_arg_parser.add_argument("--qt-profile", action="store_true", help="Use ProfiledQApplication to collect Qt event loop performance statistics")
 control_arg_parser.add_argument("--teleprox", type=int, nargs='?', const=0, default=None,
-                                help="Run a teleprox server in the background. If no port number is specified, a random port will be used.")
+                                help="Run a teleprox server in the background. If no port number is specified, a random port will be used. "
+                                     "A server may also be started on demand (with confirmation) by AI-assisted debugging.")
 control_arg_parser.add_argument(
     "--exception-buffer", type=int, default=0, metavar="N",
     help="Keep a ring buffer of the last N unhandled exceptions for MCP inspection. "
@@ -84,6 +85,8 @@ if args.teleprox is not None:
         addr = f'tcp://127.0.0.1:{args.teleprox}'
     teleprox_debug_server = RPCServer(addr)
     print(f"Teleprox server listening on {teleprox_debug_server.address}")
+    from acq4 import mcp as _mcp
+    _mcp.set_teleprox_address(teleprox_debug_server.address)
 
 
 ## Install a simple message handler for Qt errors:
