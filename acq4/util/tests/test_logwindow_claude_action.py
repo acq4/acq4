@@ -114,24 +114,29 @@ def _model_with_records(records):
 
 
 def test_menu_keeps_copy_and_adds_claude(qapp, qtbot):
+    """Copy comes from the base class's menu-building; this confirms it survives
+    inheritance (DocumentedLogViewer no longer rebuilds it) alongside the added action.
+    """
     from acq4.util.LogWindow import DocumentedLogViewer
 
     viewer = DocumentedLogViewer(logger="test.claude.menu")
     qtbot.addWidget(viewer)
     with mock.patch.object(viewer, "_recordAtIndex", return_value=make_record()):
-        menu = viewer._buildRowContextMenu(Qt.QModelIndex())
+        menu = viewer._build_row_context_menu(Qt.QModelIndex())
     labels = [a.text() for a in menu.actions()]
     assert "Copy" in labels
     assert "Debug with Claude" in labels
 
 
 def test_menu_omits_claude_without_a_record(qapp, qtbot):
+    """Copy comes from the base class's menu-building and is always present; this
+    confirms it survives inheritance even on the branch where Claude is omitted."""
     from acq4.util.LogWindow import DocumentedLogViewer
 
     viewer = DocumentedLogViewer(logger="test.claude.menu2")
     qtbot.addWidget(viewer)
     with mock.patch.object(viewer, "_recordAtIndex", return_value=None):
-        menu = viewer._buildRowContextMenu(Qt.QModelIndex())
+        menu = viewer._build_row_context_menu(Qt.QModelIndex())
     labels = [a.text() for a in menu.actions()]
     assert "Copy" in labels
     assert "Debug with Claude" not in labels
@@ -192,7 +197,7 @@ def test_menu_action_sends_record_and_tail(qapp, qtbot):
 
     viewer.model = model
     with mock.patch.object(viewer, "map_index_to_model", side_effect=lambda i: i):
-        menu = viewer._buildRowContextMenu(model.index(2, 0))
+        menu = viewer._build_row_context_menu(model.index(2, 0))
         action = next(a for a in menu.actions() if a.text() == "Debug with Claude")
         with mock.patch("acq4.util.claude_debug.debugRecordWithClaude") as debug:
             action.trigger()
@@ -201,3 +206,34 @@ def test_menu_action_sends_record_and_tail(qapp, qtbot):
     tail = debug.call_args.kwargs["log_tail"]
     assert [r.getMessage() for r in tail] == ["r0", "r1"]
     assert debug.call_args.kwargs["confirm"] is not None
+
+
+def test_warns_when_teleprox_lacks_the_extension_point(qapp, qtbot, caplog):
+    """Without _build_row_context_menu on the base, ACQ4's override is never called by
+    the base's row-menu popup and 'Debug with Claude' silently disappears from the
+    menu; construction must at least log a warning so the loss is diagnosable."""
+    from teleprox.log.logviewer import LogViewer
+
+    from acq4.util.LogWindow import DocumentedLogViewer
+
+    original = LogViewer._build_row_context_menu
+    del LogViewer._build_row_context_menu
+    try:
+        with caplog.at_level(logging.WARNING, logger="acq4.util.LogWindow"):
+            viewer = DocumentedLogViewer(logger="test.claude.guard.missing")
+            qtbot.addWidget(viewer)
+    finally:
+        LogViewer._build_row_context_menu = original
+
+    assert any("teleprox" in record.message for record in caplog.records)
+
+
+def test_no_warning_when_teleprox_has_the_extension_point(qapp, qtbot, caplog):
+    """The normal case (current teleprox) must stay quiet -- no false alarms."""
+    from acq4.util.LogWindow import DocumentedLogViewer
+
+    with caplog.at_level(logging.WARNING, logger="acq4.util.LogWindow"):
+        viewer = DocumentedLogViewer(logger="test.claude.guard.present")
+        qtbot.addWidget(viewer)
+
+    assert not any("teleprox" in record.message for record in caplog.records)

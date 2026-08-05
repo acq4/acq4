@@ -1,3 +1,4 @@
+import logging
 import re
 import webbrowser
 from logging import LogRecord
@@ -12,6 +13,8 @@ from teleprox.log.logviewer.log_model import LogModel
 from teleprox.log.logviewer.viewer import QtLogHandler
 
 from acq4.util import Qt
+
+logger = logging.getLogger(__name__)
 
 LOG_UI = None
 ERROR_DIALOG = None
@@ -324,6 +327,15 @@ class DocumentedLogViewer(LogViewer):
         # Connect our custom signal to open URLs in browser
         self.documentation_link_clicked.connect(self._open_documentation_link)
 
+        if not hasattr(LogViewer, '_build_row_context_menu'):
+            # NOTE: this method's own `logger` parameter (the teleprox logger name)
+            # shadows the module logger above, so it is looked up explicitly here.
+            logging.getLogger(__name__).warning(
+                "The 'Debug with Claude' row context menu action is unavailable: the "
+                "installed teleprox predates the _build_row_context_menu extension point. "
+                "Update teleprox to restore it."
+            )
+
     def raise_window(self):
         """Bring the log window to the front."""
         if self.isMinimized():
@@ -418,25 +430,9 @@ class DocumentedLogViewer(LogViewer):
                 tail.append(record)
         return tail
 
-    def _show_row_context_menu(self, position):
-        """Show the row context menu, with the Claude handoff added.
-
-        Reimplements rather than extends the base: it builds its menu as a local and
-        pops it up non-blocking, so there is nothing to append to afterwards.
-        """
-        index = self.tree.indexAt(position)
-        if not index.isValid():
-            return
-        menu = self._buildRowContextMenu(index)
-        menu.popup(self.tree.mapToGlobal(position))
-
-    def _buildRowContextMenu(self, index):
-        menu = Qt.QMenu(self)
-
-        copy_action = Qt.QAction("Copy", self)
-        copy_action.selectedIndex = index
-        copy_action.triggered.connect(self._copy_record_to_clipboard)
-        menu.addAction(copy_action)
+    def _build_row_context_menu(self, index):
+        """Override of the base's extension point: append Debug with Claude to the inherited menu."""
+        menu = super()._build_row_context_menu(index)
 
         if self._recordAtIndex(index) is not None:
             claude_action = Qt.QAction("Debug with Claude", self)
