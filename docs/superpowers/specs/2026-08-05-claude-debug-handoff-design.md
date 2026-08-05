@@ -1,8 +1,7 @@
 # Debug This With Claude — Design
 
 Date: 2026-08-05
-Status: approved design, not yet implemented
-
+Status: approved design, implemented
 ## Problem
 
 When ACQ4 raises an unhandled exception or logs something suspicious, the operator's only
