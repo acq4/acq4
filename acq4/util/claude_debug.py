@@ -175,8 +175,8 @@ def _configuredCommand():
         from acq4 import getManager
 
         return getManager().config.get("misc", {}).get("claudeCommand", None)
-    except Exception:
-        logger.debug("No ACQ4 Manager running; configured claudeCommand not consulted")
+    except Exception as exc:
+        logger.debug("configured claudeCommand not consulted: %s", exc)
         return None
 
 
