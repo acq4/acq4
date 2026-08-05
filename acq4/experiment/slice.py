@@ -204,8 +204,17 @@ class Slice:
 
         A position inside no region frees nothing: a hand-seeded cell was never
         part of the survey, so there is no coverage of it to invalidate.
+
+        `position` is an indexable global coordinate; only `[0]` and `[1]` are
+        read, so a `coorx.Point` and a plain tuple both work, and a 3-D
+        position (as a detected cell's is) works too.
         """
-        here = [r for r in self._regions if r.overlapsTile(position, self._fov)]
+        # A region is a shape in the xy plane, so only the first two
+        # coordinates of position matter here; a cell's depth is not part of
+        # the overlap question. Narrowing to a plain (x, y) tuple also lets
+        # this accept a coorx.Point, a Cell.position, or a bare tuple alike.
+        xy = (position[0], position[1])
+        here = [r for r in self._regions if r.overlapsTile(xy, self._fov)]
         if not here:
             return 0
         stale = [
@@ -221,8 +230,8 @@ class Slice:
                 if not isAttempted(cell):
                     drop.add(id(cell))
         self._cells = [c for c in self._cells if id(c) not in drop]
-        staleIds = {id(t) for t in stale}
-        self._covered = [t for t in self._covered if id(t) not in staleIds]
+        stale_ids = {id(t) for t in stale}
+        self._covered = [t for t in self._covered if id(t) not in stale_ids]
         return len(stale)
 
     @property

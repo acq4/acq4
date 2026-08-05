@@ -4,6 +4,7 @@ coverage, and survey statistics."""
 import gc
 import weakref
 
+import coorx
 import pytest
 
 from acq4.experiment.search_grid import plan_grid
@@ -486,6 +487,43 @@ def test_force_rescan_does_not_touch_regions_or_constraints():
 
     assert s.regions == regions_before
     assert s.constraints is constraints_before
+
+
+def test_force_rescan_accepts_a_3d_tuple_position():
+    # A detected cell's position carries depth as a third element (a real
+    # example: acq4_automation.feature_tracking.cell.Cell.position, built from
+    # a stack scanned in z). forceRescan must use only the xy of that position
+    # rather than fail trying to unpack three values as two.
+    s = _two_region_slice()
+    for tile in s.tileGrid():
+        s.markCovered(tile)
+    covered_before = len(s.coveredTiles)
+
+    uncovered = s.forceRescan((1e-3 + 30e-6, 2e-3 + 15e-6, -30e-6), lambda cell: False)
+
+    assert uncovered > 0
+    remaining = s.coveredTiles
+    assert len(remaining) == covered_before - uncovered
+    far = s.regions[1]
+    assert all(far.overlapsTile(t, (20e-6, 10e-6)) for t in remaining)
+
+
+def test_force_rescan_accepts_a_3d_coorx_point_position():
+    # The tile detector hands cells a global coorx.Point, not a tuple, so that
+    # shape needs the same xy narrowing a plain 3-tuple gets.
+    s = _two_region_slice()
+    for tile in s.tileGrid():
+        s.markCovered(tile)
+    covered_before = len(s.coveredTiles)
+
+    position = coorx.Point([1e-3 + 30e-6, 2e-3 + 15e-6, -30e-6])
+    uncovered = s.forceRescan(position, lambda cell: False)
+
+    assert uncovered > 0
+    remaining = s.coveredTiles
+    assert len(remaining) == covered_before - uncovered
+    far = s.regions[1]
+    assert all(far.overlapsTile(t, (20e-6, 10e-6)) for t in remaining)
 
 
 def test_force_rescan_uncovers_every_overlapping_region():
