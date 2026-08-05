@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from acq4.devices.PatchPipette import PatchPipette
@@ -363,10 +362,11 @@ class Autopatcher:
         tracker = getattr(cell, "_tracker", None)
         if tracker is None or not tracker.tracking_results:
             return
-        path = Path(cell_dir.name()) / "tracking_history.acqtrack"
         try:
-            tracker.save_history(path)
-            logger.info(f"Saved tracking history to {path}")
+            # writeFile, not a raw path write: it records the file's type in the index
+            # and emits the 'children' change that puts it in the Data Manager tree.
+            fh = cell_dir.writeFile(tracker, "tracking_history", fileType="AcqTrackFile")
+            logger.info(f"Saved tracking history to {fh.name()}")
         except Exception:
             logger.exception("Failed to save tracking history")
 

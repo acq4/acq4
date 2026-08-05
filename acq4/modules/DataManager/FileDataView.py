@@ -3,6 +3,7 @@ from typing import Optional
 
 import pyqtgraph as pg
 from MetaArray.plotting import MetaArrayPlotWidget
+from acq4.filetypes.AcqTrackFile import AcqTrackWidget
 from acq4.filetypes.MultiPatchLog import MultiPatchLogWidget
 from acq4.util import Qt
 from acq4.util.DataManager import FileHandle
@@ -46,6 +47,10 @@ class FileDataView(Qt.QSplitter):
             with pg.BusyCursor():
                 if typ == 'MultiPatchLog':
                     self.displayMultiPatchLog(fh)
+                elif typ == 'AcqTrackFile':
+                    # Ahead of the fh.read() below on purpose: reading a tracking
+                    # history deserializes every image and object stack in it.
+                    self.displayAcqTrack(fh)
                 else:
                     data = fh.read()
                     if typ == 'ImageFile':
@@ -131,6 +136,13 @@ class FileDataView(Qt.QSplitter):
         self._cursorText.setPos(pos.x() + 12, pos.y())
         pos = view.mapSceneToView(pos)
         self._cursorText.setText(f'({int(pos.x())}, {int(pos.y())})', color='y')
+
+    def displayAcqTrack(self, fh):
+        """Offer to open a cell tracking history in the tracking visualizer."""
+        self.clear()
+        w = AcqTrackWidget(fh)
+        self.addWidget(w)
+        self._widgets.append(w)
 
     def displayMultiPatchLog(self, fh):
         self.clear()
