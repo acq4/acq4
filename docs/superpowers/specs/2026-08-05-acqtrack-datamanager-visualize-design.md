@@ -131,6 +131,12 @@ following `AutomationDebug/tests`). These patch the two seams, so they run witho
   `'AcqTrackFile'`, proving `listFileTypes()` discovers the module.
 - The widget exposes a button labelled `Visualize`; clicking it passes the object
   returned by `fh.read()` to `_openVisualizer`; construction performs no read.
+- Integration, against a real `DirHandle`: `writeFile` puts the file on disk, records
+  `fileType() == 'AcqTrackFile'`, and emits a `'children'` change naming it.
+- End-to-end, against the real format: a real `CellTracker` seeded from a synthetic
+  z-stack, written through a real `DirHandle` and read back through the `FileType`,
+  with nothing faked. Guarded by `importorskip('acq4_automation')`, since the file
+  format lives in that repository.
 
 `acq4/modules/DataManager/tests/test_file_data_view_acqtrack.py`:
 
