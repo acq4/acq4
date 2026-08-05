@@ -4,7 +4,9 @@ Renders a markdown brief about the record and the rig, then launches Claude prim
 """
 
 import logging
+import shutil
 import socket
+import sys
 import traceback
 
 logger = logging.getLogger(__name__)
@@ -133,3 +135,82 @@ def build_debug_context(record, log_tail=None, teleprox_address=None):
     out += ["## Your task", "", _taskFor(record), "", GUIDANCE, ""]
 
     return "\n".join(out)
+
+
+# `claude` is a TUI, so it needs a terminal to live in. Each entry is
+# (executable to look for, command template). First one present on the system wins.
+# Every template must contain {contextFile}; see claudeCommand().
+_POINTER = 'claude "Read {contextFile} and help me debug it"'
+
+terminalCommands = {
+    "linux": [
+        ("wezterm", "wezterm start -- " + _POINTER),
+        ("kitty", "kitty " + _POINTER),
+        ("gnome-terminal", "gnome-terminal -- " + _POINTER),
+        ("konsole", "konsole -e " + _POINTER),
+        ("alacritty", "alacritty -e " + _POINTER),
+        ("xterm", "xterm -e " + _POINTER),
+    ],
+    # UNVERIFIED: no Windows rig has run Claude Code from a command line yet.
+    # Override with `misc: claudeCommand` if these are wrong.
+    "win32": [
+        ("wt", 'wt.exe new-tab --title "ACQ4 debug" ' + _POINTER),
+        ("cmd", 'start "ACQ4 debug" cmd /k ' + _POINTER),
+    ],
+    # UNVERIFIED, and lower priority than Windows.
+    "darwin": [
+        (
+            "osascript",
+            """osascript -e 'tell application "Terminal" to do script """
+            """"claude \\"Read {contextFile} and help me debug it\\""' """
+            """-e 'tell application "Terminal" to activate'""",
+        ),
+    ],
+}
+
+
+def _configuredCommand():
+    """Return the operator's configured command, or None if unset or no Manager."""
+    try:
+        from acq4 import getManager
+
+        return getManager().config.get("misc", {}).get("claudeCommand", None)
+    except Exception:
+        logger.debug("No ACQ4 Manager running; configured claudeCommand not consulted")
+        return None
+
+
+def suggestTerminal():
+    """Return a command format string using the first terminal found on this system."""
+    entries = terminalCommands.get(sys.platform)
+    if entries is None:
+        raise Exception(
+            f"Launching Claude is not yet supported on this platform ({sys.platform}). "
+            "Set `misc: claudeCommand` in the acq4 config to a command containing "
+            "{contextFile}."
+        )
+    for name, template in entries:
+        if shutil.which(name) is not None:
+            return template
+    raise Exception(
+        "No terminal emulator found to run `claude` in (looked for: "
+        + ", ".join(name for name, _ in entries)
+        + "). Set `misc: claudeCommand` in the acq4 config to a command containing "
+        "{contextFile}."
+    )
+
+
+def claudeCommand():
+    """Return a format string that generates a command to launch Claude Code.
+
+    The format string must contain a ``{contextFile}`` variable, which is replaced
+    with the path to the debugging brief.
+
+    By default this looks for a terminal emulator present on the system. The return
+    value can also be set by the acq4 configuration::
+
+        <default.cfg>:
+            misc:
+                claudeCommand: 'wezterm start -- claude "Read {contextFile}"'
+    """
+    return _configuredCommand() or suggestTerminal()
