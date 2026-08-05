@@ -130,3 +130,52 @@ def test_message_and_level_always_present():
     assert "headstage stalled" in out
     assert "ERROR" in out
     assert "acq4.devices.Pipette" in out
+
+
+from unittest import mock
+
+
+def test_config_command_returned_verbatim():
+    custom = 'myterm -e claude "Read {contextFile}"'
+    with mock.patch.object(claude_debug, "_configuredCommand", return_value=custom):
+        assert claude_debug.claudeCommand() == custom
+
+
+def test_falls_back_to_platform_default_when_unconfigured():
+    with mock.patch.object(claude_debug, "_configuredCommand", return_value=None):
+        with mock.patch.object(claude_debug, "suggestTerminal", return_value="stub"):
+            assert claude_debug.claudeCommand() == "stub"
+
+
+def test_suggest_terminal_picks_first_available():
+    with mock.patch.object(claude_debug.sys, "platform", "linux"):
+        # kitty missing, gnome-terminal present -> gnome-terminal wins over later entries
+        def which(name):
+            return "/usr/bin/" + name if name == "gnome-terminal" else None
+
+        with mock.patch("shutil.which", side_effect=which):
+            cmd = claude_debug.suggestTerminal()
+    assert cmd.startswith("gnome-terminal")
+    assert "{contextFile}" in cmd
+
+
+def test_suggest_terminal_raises_when_nothing_found():
+    with mock.patch.object(claude_debug.sys, "platform", "linux"):
+        with mock.patch("shutil.which", return_value=None):
+            with pytest.raises(Exception, match="No terminal emulator"):
+                claude_debug.suggestTerminal()
+
+
+def test_suggest_terminal_raises_on_unsupported_platform():
+    with mock.patch.object(claude_debug.sys, "platform", "sunos5"):
+        with pytest.raises(Exception, match="not yet supported"):
+            claude_debug.suggestTerminal()
+
+
+def test_every_template_carries_the_substitution():
+    for platform, entries in claude_debug.terminalCommands.items():
+        for name, template in entries:
+            assert (
+                "{contextFile}" in template
+            ), f"{platform}/{name} lacks {{contextFile}}"
+            assert "claude" in template, f"{platform}/{name} does not invoke claude"
