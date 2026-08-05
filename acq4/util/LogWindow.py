@@ -15,6 +15,7 @@ from acq4.util import Qt
 
 LOG_UI = None
 ERROR_DIALOG = None
+LOG_TAIL_COUNT = 50
 
 
 def __reload__(old):
@@ -383,3 +384,77 @@ class DocumentedLogViewer(LogViewer):
     def _open_documentation_link(self, url):
         """Open documentation link in default browser."""
         webbrowser.open(f"https://acq4.readthedocs.io/en/latest/{url}")
+
+    def _recordAtIndex(self, index):
+        """Return the LogRecord for the top-level row containing *index*, or None.
+
+        Child rows are detail items belonging to a record, so walk up to the row that
+        actually carries one (mirroring the base viewer's clipboard handler).
+        """
+        if not index.isValid():
+            return None
+        while index.parent().isValid():
+            index = index.parent()
+        source = self.map_index_to_model(index)
+        item = self.model.item(source.row(), 0)
+        if item is None:
+            return None
+        return item.data(ItemDataRole.LOG_RECORD)
+
+    def _logTailForIndex(self, index, count=LOG_TAIL_COUNT):
+        """Return up to *count* records immediately preceding the row at *index*."""
+        if not index.isValid():
+            return []
+        while index.parent().isValid():
+            index = index.parent()
+        row = self.map_index_to_model(index).row()
+        tail = []
+        for r in range(max(0, row - count), row):
+            item = self.model.item(r, 0)
+            if item is None:
+                continue
+            record = item.data(ItemDataRole.LOG_RECORD)
+            if record is not None:
+                tail.append(record)
+        return tail
+
+    def _show_row_context_menu(self, position):
+        """Show the row context menu, with the Claude handoff added.
+
+        Reimplements rather than extends the base: it builds its menu as a local and
+        pops it up non-blocking, so there is nothing to append to afterwards.
+        """
+        index = self.tree.indexAt(position)
+        if not index.isValid():
+            return
+        menu = self._buildRowContextMenu(index)
+        menu.popup(self.tree.mapToGlobal(position))
+
+    def _buildRowContextMenu(self, index):
+        menu = Qt.QMenu(self)
+
+        copy_action = Qt.QAction("Copy", self)
+        copy_action.selectedIndex = index
+        copy_action.triggered.connect(self._copy_record_to_clipboard)
+        menu.addAction(copy_action)
+
+        if self._recordAtIndex(index) is not None:
+            claude_action = Qt.QAction("Debug with Claude", self)
+            claude_action.selectedIndex = index
+            claude_action.triggered.connect(self._debugRowWithClaude)
+            menu.addAction(claude_action)
+
+        return menu
+
+    def _debugRowWithClaude(self):
+        index = self.sender().selectedIndex
+        record = self._recordAtIndex(index)
+        if record is None:
+            return
+        from acq4.util import claude_debug
+
+        claude_debug.debugRecordWithClaude(
+            record,
+            log_tail=self._logTailForIndex(index),
+            confirm=lambda: confirmTeleproxServer(self),
+        )
