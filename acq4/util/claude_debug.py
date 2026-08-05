@@ -162,7 +162,7 @@ terminalCommands = {
         (
             "osascript",
             """osascript -e 'tell application "Terminal" to do script """
-            """"claude \\\"Read {contextFile} and help me debug it\\\""' """
+            """"claude \\"Read {contextFile} and help me debug it\\""' """
             """-e 'tell application "Terminal" to activate'""",
         ),
     ],
@@ -176,7 +176,8 @@ def _configuredCommand():
 
         return getManager().config.get("misc", {}).get("claudeCommand", None)
     except Exception:
-        return None  # no Manager running (e.g. under test)
+        logger.debug("No ACQ4 Manager running; configured claudeCommand not consulted")
+        return None
 
 
 def suggestTerminal():

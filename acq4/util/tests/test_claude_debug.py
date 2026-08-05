@@ -179,3 +179,9 @@ def test_every_template_carries_the_substitution():
                 "{contextFile}" in template
             ), f"{platform}/{name} lacks {{contextFile}}"
             assert "claude" in template, f"{platform}/{name} does not invoke claude"
+
+
+def test_configured_command_returns_none_when_no_manager():
+    """_configuredCommand returns None when no Manager is running (e.g. under pytest)."""
+    result = claude_debug._configuredCommand()
+    assert result is None
