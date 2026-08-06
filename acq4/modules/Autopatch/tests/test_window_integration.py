@@ -784,14 +784,19 @@ def test_new_slice_leaves_the_in_flight_cell_unreusable(qapp, tmp_path):
         cell = _makeCell()
         win.cellPanel.addCell(cell)
         win.orchestrator.enqueue(cell)
-        # Running, not finished, when the operator swaps the tissue.
-        win.orchestrator.sigCurrentCell.emit(cell)
-        assert win.cellPanel.isAttempted(cell) is True
+        # The wipe lands from inside the cell's own protocol, which is exactly
+        # where a New slice click lands in practice: the cell is in the
+        # orchestrator's hand, and it goes on to finish on the old tissue
+        # afterward, as newSlice()'s docstring says it is allowed to. Driven
+        # inline (run_sync) rather than by emitting the signals by hand, so the
+        # real orchestrator really is holding the cell across the wipe.
+        def run(ctx, **kwargs):
+            assert win.cellPanel.isAttempted(ctx.cell) is True
+            win.newSlice()
 
-        win.newSlice()
-        # It finishes on the old tissue afterward, as newSlice()'s docstring
-        # says it is allowed to.
-        win.orchestrator.sigCellFinished.emit(cell, "done")
+        win.orchestrator.protocolFile.run = run
+
+        win.orchestrator.run_sync()
 
         assert win.cellPanel.cellList.count() == 0
         assert win.cellPanel.disposition(cell) is None
@@ -818,13 +823,17 @@ def test_two_new_slices_in_a_row_still_leave_the_in_flight_cell_unreusable(
         cell = _makeCell()
         win.cellPanel.addCell(cell)
         win.orchestrator.enqueue(cell)
-        win.orchestrator.sigCurrentCell.emit(cell)
 
-        win.newSliceBtn.click()
-        win.newSliceBtn.click()
-        # Still finishing on the first slice's tissue, as newSlice()'s docstring
-        # says it is allowed to.
-        win.orchestrator.sigCellFinished.emit(cell, "done")
+        # Both clicks land while the cell is in the orchestrator's hand, from
+        # inside its own protocol; it finishes on the first slice's tissue when
+        # that protocol returns, as newSlice()'s docstring says it is allowed to.
+        def run(ctx, **kwargs):
+            win.newSliceBtn.click()
+            win.newSliceBtn.click()
+
+        win.orchestrator.protocolFile.run = run
+
+        win.orchestrator.run_sync()
 
         assert win.cellPanel.cellList.count() == 0
         assert win.cellPanel.disposition(cell) is None

@@ -115,22 +115,6 @@ class CellPanel(Qt.QWidget):
         # that location either. Holds ids and plain strings, never cells, for
         # the same reason _attempted and _status do.
         self._preReuseStatus: dict[int, str] = {}
-        # id(cell) for the cell the orchestrator last announced as current and
-        # has not since reported a terminal disposition for, or None when it has
-        # announced no cell at all -- sigCurrentCell carries None when the
-        # orchestrator goes idle. The one cell whose announcements a wipe still
-        # has to expect, which is what clearCells() scopes self._forgotten to.
-        # "Attempted with no disposition" cannot answer that question: reuse
-        # deliberately keeps a cell attempted while popping its disposition, so
-        # that describes every reused cell, including ones merely queued behind
-        # the running one.
-        #
-        # Holds an id, never a cell, for the same reason _attempted does. Reset
-        # when that cell's pass reaches a terminal disposition, when the
-        # orchestrator reports itself idle, and when it is unbound -- so it names
-        # an address only while self._cells or self._forgotten still holds that
-        # cell, and can never come to name a recycled one.
-        self._runningCellId: int | None = None
         # id(cell) -> the cell itself, for each cell clearCells() deliberately
         # forgot while it might still be in flight -- the "New slice" path
         # (AutopatchWindow.newSlice), which discards Area 5 and the
@@ -150,8 +134,9 @@ class CellPanel(Qt.QWidget):
         # has nothing of its own left to remember and would otherwise drop the
         # cell still running from before the first one.
         #
-        # Each wipe contributes at most the one cell self._runningCellId names,
-        # so this holds at most one entry per wipe made while a cell is running.
+        # Each wipe contributes at most the one cell the orchestrator has in
+        # hand (Orchestrator.currentCell), so this holds at most one entry per
+        # wipe made while a cell is being processed.
         # An entry leaves on that cell's terminal finish, or -- for a pass that
         # reports no terminal disposition at all, which
         # Orchestrator._processCell's retry loop allows, since its _checkPause()
@@ -297,9 +282,6 @@ class CellPanel(Qt.QWidget):
         Qt.disconnect(self._orchestrator.sigCurrentCell, self._onCurrentCell)
         Qt.disconnect(self._orchestrator.sigCellFinished, self._onCellFinished)
         self._orchestrator = None
-        # Nothing is running as far as this panel can tell any more: the
-        # announcement that would have said so has nowhere left to arrive.
-        self._runningCellId = None
         self._updateReuseButton()
 
     def clearCells(self) -> None:
@@ -324,21 +306,35 @@ class CellPanel(Qt.QWidget):
         flight, while AutopatchWindow.teardown() unbinds first, so the teardown
         path retains nothing at all -- exactly what tests/test_teardown.py
         proves by refcounting alone.
+
+        That split is an ordering assumption about the callers: an unbound wipe
+        forgets nothing, because there is no orchestrator to ask what is in hand,
+        so unbind -> clearCells() -> rebind the *same* orchestrator would leave a
+        cell still being processed unremembered and reopen the hazard above. No
+        caller does that today (AutopatchWindow._onProtocolLoaded always builds a
+        fresh Orchestrator, and teardown() never rebinds), but both methods are
+        public, so a future one must not.
         """
         if self._orchestrator is None:
             self._forgotten.clear()
         else:
-            # Scoped to the one cell that could actually still be announced:
-            # the one the orchestrator has told this panel it is running (see
-            # self._runningCellId). A cell still sitting in the queue goes away
-            # with the queue this method's caller clears, so no announcement is
-            # coming for it and holding one would pin its tracker and reference
-            # stack for nothing. Added to whatever earlier wipes remembered
-            # rather than replacing it, for the reason self._forgotten's own
-            # comment gives.
-            running = self._cells.get(self._runningCellId)
+            # Scoped to the one cell that could actually still be announced: the
+            # one the orchestrator has in hand right now, which it answers
+            # directly (Orchestrator.currentCell) rather than through an
+            # announcement. sigCurrentCell is a queued connection, so this
+            # method can run before the announcement for a cell the worker
+            # thread has already taken off the queue; anything keyed off what
+            # this panel was told would miss exactly that cell, and it is the one
+            # cell running on the tissue the caller has just declared gone.
+            #
+            # A cell still sitting in the queue goes away with the queue this
+            # method's caller clears, so no announcement is coming for it and
+            # holding one would pin its tracker and reference stack for nothing.
+            # Added to whatever earlier wipes remembered rather than replacing
+            # it, for the reason self._forgotten's own comment gives.
+            running = self._orchestrator.currentCell()
             if running is not None:
-                self._forgotten[self._runningCellId] = running
+                self._forgotten[id(running)] = running
         self._cells.clear()
         # Cleared alongside self._cells, which is what the flush resolves these
         # ids against: an id left behind here would either raise a KeyError on
@@ -672,7 +668,6 @@ class CellPanel(Qt.QWidget):
             # which the loop only reaches once the cell before it has already
             # finished, so that one has nothing left to release either.
             self._forgotten.clear()
-            self._runningCellId = None
             return
         if id(cell) in self._forgotten:
             # Deliberately forgotten while it might still be in flight (see
@@ -682,7 +677,6 @@ class CellPanel(Qt.QWidget):
             # again (a retry) still has that finish to come.
             return
         self._attempted.add(id(cell))
-        self._runningCellId = id(cell)
         item = self._rows.get(id(cell))
         if item is None:
             # A cell the orchestrator announces without this panel ever having
@@ -792,13 +786,6 @@ class CellPanel(Qt.QWidget):
                 child.widget().setParent(None)
 
     def _onCellFinished(self, cell, status: str) -> None:
-        if status in TERMINAL and self._runningCellId == id(cell):
-            # This cell's pass is over, so it is not the running cell any more,
-            # and no later wipe has an announcement of its own left to expect
-            # from it. Ahead of the forgotten check below so a forgotten cell's
-            # id leaves both stores together, which is what keeps this one from
-            # ever naming a freed, recycled address.
-            self._runningCellId = None
         # A cell can finish (e.g. the "skipped" outcome in
         # Orchestrator._processCell) without sigCurrentCell ever having fired
         # for it, so this cannot assume _onCurrentCell already gave it a row --

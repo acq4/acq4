@@ -22,9 +22,38 @@ class _FakeOrchestrator(Qt.QObject):
     def __init__(self):
         super().__init__()
         self.enqueued = []
+        self._currentCell = None
 
     def enqueue(self, cell):
         self.enqueued.append(cell)
+
+    def currentCell(self):
+        """Stands in for Orchestrator.currentCell(): the cell taken off the
+        queue and being processed right now.
+
+        The real one records that cell before it builds a context or emits
+        sigCurrentCell, and drops it after the terminal sigCellFinished, so the
+        three steps are separate here too (takeCellInHand/announceCurrentCell/
+        releaseCellInHand) -- a test can land a wipe anywhere in that order,
+        including the gap between the pop and the announcement.
+        """
+        return self._currentCell
+
+    def takeCellInHand(self, cell):
+        """The pop: this cell is being processed, with nothing announced about
+        it yet."""
+        self._currentCell = cell
+
+    def announceCurrentCell(self, cell):
+        """The pop and its announcement together -- what a wipe arriving after
+        sigCurrentCell has been delivered sees."""
+        self.takeCellInHand(cell)
+        self.sigCurrentCell.emit(cell)
+
+    def releaseCellInHand(self):
+        """What Orchestrator._processCell's finally does: whatever it was
+        processing is over, however that pass ended."""
+        self._currentCell = None
 
     def pendingCells(self):
         """Stands in for Orchestrator.pendingCells(): this fake has no run
@@ -272,7 +301,7 @@ def test_a_finished_cell_is_not_flushed_into_a_later_orchestrator(qapp):
     first = _FakeOrchestrator()
     panel.bindOrchestrator(first)
     inFlight = object()
-    first.sigCurrentCell.emit(inFlight)
+    first.announceCurrentCell(inFlight)
 
     # The operator presses New slice: Area 5 and the queue are discarded while
     # that cell keeps running.
@@ -858,7 +887,7 @@ def test_clear_cells_ignores_a_later_announcement_from_a_cell_in_flight(qapp):
     orch = _FakeOrchestrator()
     panel.bindOrchestrator(orch)
     inFlight = object()
-    orch.sigCurrentCell.emit(inFlight)
+    orch.announceCurrentCell(inFlight)
 
     panel.clearCells()
     orch.sigCellFinished.emit(inFlight, "done")
@@ -880,13 +909,67 @@ def test_clear_cells_ignores_a_later_running_announcement_too(qapp):
     orch = _FakeOrchestrator()
     panel.bindOrchestrator(orch)
     inFlight = object()
-    orch.sigCurrentCell.emit(inFlight)
+    orch.announceCurrentCell(inFlight)
 
     panel.clearCells()
     orch.sigCurrentCell.emit(inFlight)
 
     assert panel.cellList.count() == 0
     assert panel.isAttempted(inFlight) is False
+
+
+def test_clear_cells_forgets_the_cell_in_hand_before_it_is_ever_announced(qapp):
+    """The race the guard closes. sigCurrentCell reaches this panel through a
+    queued connection, so the operator's New slice click can be delivered before
+    the announcement for a cell the worker thread has already taken off the queue
+    -- a window as wide as whatever the orchestrator's contextFactory does.
+    Asking the orchestrator what it has in hand (Orchestrator.currentCell) does
+    not depend on that delivery, so the cell is forgotten anyway and its later
+    traffic brings back nothing."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+    inHand = object()
+    # Popped and being processed, with its announcement not yet delivered.
+    orch.takeCellInHand(inHand)
+
+    panel.clearCells()
+    # Both announcements land after the wipe, in the order the orchestrator makes
+    # them.
+    orch.sigCurrentCell.emit(inHand)
+    orch.sigCellFinished.emit(inHand, "done")
+
+    assert list(panel._forgotten) == []  # released on the terminal finish
+    assert panel.cellList.count() == 0, "a forgotten cell was given a row again"
+    assert panel.disposition(inHand) is None
+    assert panel.isAttempted(inHand) is False
+    assert not panel.checkAllCompletedBtn.isEnabled()
+
+
+def test_clear_cells_after_a_retry_announcement_still_ignores_the_finish(qapp):
+    """The wipe can land anywhere in a cell's announcement stream, including
+    after a mid-flight "retry" -- announce, "retry", wipe, "done". The cell is in
+    hand for all of it (a retry restarts the same cell inside the same
+    _processCell call), so the wipe still finds it and the "done" that follows
+    must not resurrect a coordinate in discarded tissue."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+    inFlight = object()
+    orch.announceCurrentCell(inFlight)
+    orch.sigCellFinished.emit(inFlight, "retry")
+
+    panel.clearCells()
+    orch.sigCellFinished.emit(inFlight, "done")
+
+    assert panel.cellList.count() == 0
+    assert panel.disposition(inFlight) is None
+    assert panel.isAttempted(inFlight) is False
+    assert not panel.checkAllCompletedBtn.isEnabled()
 
 
 def test_clear_cells_remembers_only_cells_that_could_still_be_announced(qapp):
@@ -905,7 +988,7 @@ def test_clear_cells_remembers_only_cells_that_could_still_be_announced(qapp):
     for cell in (finished, queued, inFlight):
         panel.addCell(cell)
     panel._onCellFinished(finished, "done")
-    panel._onCurrentCell(inFlight)
+    orch.announceCurrentCell(inFlight)
 
     panel.clearCells()
 
@@ -922,7 +1005,7 @@ def test_a_forgotten_cell_is_released_once_its_pass_is_over(qapp):
     orch = _FakeOrchestrator()
     panel.bindOrchestrator(orch)
     inFlight = object()
-    orch.sigCurrentCell.emit(inFlight)
+    orch.announceCurrentCell(inFlight)
     panel.clearCells()
     assert list(panel._forgotten) == [id(inFlight)]
 
@@ -941,7 +1024,7 @@ def test_a_forgotten_cell_stays_forgotten_through_a_transient_retry(qapp):
     orch = _FakeOrchestrator()
     panel.bindOrchestrator(orch)
     inFlight = object()
-    orch.sigCurrentCell.emit(inFlight)
+    orch.announceCurrentCell(inFlight)
     panel.clearCells()
 
     orch.sigCellFinished.emit(inFlight, "retry")
@@ -965,7 +1048,7 @@ def test_a_second_wipe_keeps_remembering_the_first_wipes_forgotten_cell(qapp):
     orch = _FakeOrchestrator()
     panel.bindOrchestrator(orch)
     inFlight = object()
-    orch.sigCurrentCell.emit(inFlight)
+    orch.announceCurrentCell(inFlight)
 
     panel.clearCells()
     panel.clearCells()
@@ -1004,7 +1087,7 @@ def test_reuse_does_not_leave_the_still_queued_cells_remembered(qapp):
     panel.reuseCheckedCellsBtn.click()
     assert orch.enqueued == [running, queuedFirst, queuedSecond]
     # Pass 2 reaches the first of them; the other two are still queued behind it.
-    orch.sigCurrentCell.emit(running)
+    orch.announceCurrentCell(running)
     refs = [weakref.ref(queuedFirst), weakref.ref(queuedSecond)]
 
     gc.disable()
@@ -1041,11 +1124,12 @@ def test_an_idle_announcement_releases_every_forgotten_cell(qapp):
     orch = _FakeOrchestrator()
     panel.bindOrchestrator(orch)
     inFlight = object()
-    orch.sigCurrentCell.emit(inFlight)
+    orch.announceCurrentCell(inFlight)
     panel.clearCells()
     orch.sigCellFinished.emit(inFlight, "retry")
     assert list(panel._forgotten) == [id(inFlight)]
 
+    orch.releaseCellInHand()
     orch.sigCurrentCell.emit(None)
 
     assert panel._forgotten == {}
@@ -1065,22 +1149,27 @@ def test_a_forgotten_cells_log_and_action_traffic_leaves_no_panel_state(qapp):
     orch = _FakeOrchestrator()
     panel.bindOrchestrator(orch)
     inFlight = object()
-    orch.sigCurrentCell.emit(inFlight)
+    orch.announceCurrentCell(inFlight)
     panel.clearCells()
 
     panel.appendLog(inFlight, "still patching the old slice")
     entry = ActionLogEntry("Patch")
     panel.onLogAction(inFlight, entry)
     entry.set_status("seal forming")
+
+    # Asserted with the entry still open, not after it finishes:
+    # _entryTimelineLoc holds an entry only while its action is in flight, so a
+    # finished entry would have been popped from it either way -- hiding the one
+    # store an ungated forgotten cell most visibly repopulates.
+    assert panel._entryTimelineLoc == {}
+    assert panel._logs == {}
+    assert panel._timelines == {}
+
     entry._finish(None)
 
     assert panel._logs == {}
     assert panel._timelines == {}
     assert panel._entryTimelineLoc == {}
-    assert panel._timelineItems == {}
-    assert panel.cellList.count() == 0
-    assert panel.timelineList.count() == 0
-    assert panel.logView.toPlainText() == ""
 
 
 def test_clear_cells_holds_the_forgotten_cell_itself_not_just_its_id(qapp):
@@ -1096,8 +1185,12 @@ def test_clear_cells_holds_the_forgotten_cell_itself_not_just_its_id(qapp):
     # Built off-thread so addCell() leaves it unparented (see addCell()'s own
     # comment): the panel's own dicts are then the only thing keeping it alive.
     cell = _buildOnAnotherThread(_FakeQObjectCell)
-    orch.sigCurrentCell.emit(cell)
+    orch.announceCurrentCell(cell)
     panel.clearCells()
+    # The pass ends without a terminal announcement, so the orchestrator lets go
+    # of it (Orchestrator._processCell's finally) -- leaving self._forgotten as
+    # the only thing that could still be holding it.
+    orch.releaseCellInHand()
     cellRef = weakref.ref(cell)
 
     gc.disable()
@@ -1111,20 +1204,33 @@ def test_clear_cells_holds_the_forgotten_cell_itself_not_just_its_id(qapp):
         gc.enable()
 
 
-def test_clear_cells_after_unbinding_remembers_nothing(qapp):
+def test_clear_cells_after_unbinding_releases_what_an_earlier_wipe_forgot(qapp):
     """AutopatchWindow.teardown() unbinds before clearing, and the whole
     orchestrator/cell/panel graph must be freed by refcounting alone afterward
     (see tests/test_teardown.py for the segfault that proves why), so the
-    teardown path must retain no cell here at all. An unbound panel has no
+    teardown path must retain no cell here at all -- including one an earlier
+    mid-run wipe deliberately forgot, which is the only way this store is ever
+    non-empty by the time teardown reaches it. An unbound panel has no
     connection left for an announcement to arrive through, which is what makes
-    the two paths distinguishable."""
+    the two paths distinguishable.
+
+    The panel is deliberately left alive across the proof below: dropping it too
+    would free that store along with it, and the assertion would hold whether or
+    not the unbound path clears anything."""
     from acq4.modules.Autopatch.cell_panel import CellPanel
 
     panel = CellPanel()
     orch = _FakeOrchestrator()
     panel.bindOrchestrator(orch)
+    # Built off-thread so addCell() leaves it unparented (see addCell()'s own
+    # comment): the panel's own dicts are then the only thing keeping it alive.
     cell = _buildOnAnotherThread(_FakeQObjectCell)
-    orch.sigCurrentCell.emit(cell)
+    orch.announceCurrentCell(cell)
+    # A mid-run wipe, with the cell still in hand: this is what populates the
+    # store the teardown path below then has to release.
+    panel.clearCells()
+    assert list(panel._forgotten) == [id(cell)]
+    orch.releaseCellInHand()
     cellRef = weakref.ref(cell)
 
     gc.disable()
@@ -1134,11 +1240,11 @@ def test_clear_cells_after_unbinding_remembers_nothing(qapp):
         assert panel._forgotten == {}
 
         del cell, orch
-        del panel
         # No gc.collect() -- pure refcounting, since gc is disabled.
         assert cellRef() is None, "the teardown path retained a cell"
     finally:
         gc.enable()
+        del panel
 
 
 def test_discard_cells_forgets_a_discarded_cells_disposition(qapp):
