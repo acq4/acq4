@@ -17,12 +17,16 @@ from acq4_automation.cell_quality_annotation_tool import open_annotation_tool_wi
 from acq4_automation.feature_tracking.cell import Cell
 from coorx import Point
 from pyqtgraph.units import µm
+from .feature_tracking import DEFORMATION_TOLERANCE
 from .ranking_window import RankingWindow
 
 if TYPE_CHECKING:
     from .AutomationDebug import AutomationDebugWindow
 
 logger = get_logger(__name__)
+
+# How many detected cells one z-stack contributes to the queue, best first.
+MAX_DETECTION_CANDIDATES = 5
 
 
 def _health_model_config(manager) -> dict:
@@ -50,6 +54,26 @@ class CellDetector:
     def _ui(self):
         return self._window.ui
 
+    def _selectCandidates(self, detections, limit=MAX_DETECTION_CANDIDATES):
+        """The best `limit` detections that lie inside the survey region.
+
+        `detections` arrives health-ordered (best first) and untruncated. The
+        camera is free to image past the survey region -- a field of view that
+        straddles the edge is what gives the segmenter the context to find cells
+        sitting right at it -- but the region is the maximum area the demo may
+        patch in, so a cell found outside it is not a candidate.
+
+        Filtering before truncating is the point of asking for every detection
+        rather than the top few: on a tile that straddles the edge, truncating
+        first would let out-of-region cells use up the whole quota while usable
+        ones sit just below the cut. With no region set (manual detection, no
+        survey) there is nothing to be outside of, so every detection stands.
+        """
+        region = self._window._surveyRegion
+        if region.hasRegion():
+            detections = [d for d in detections if region.contains(d[0])]
+        return list(detections)[:limit]
+
     def _selectRankDir(self):
         path = Qt.QFileDialog.getExistingDirectory(
             self._window,
@@ -65,7 +89,7 @@ class CellDetector:
         cell = self._window.patchPipetteDevice.cell
         if cell is None or cell.position != target:
             cell = Cell(target)
-            cell.initializeTracker(self._window.cameraDevice, use_cellpose=True)
+            cell.initializeTracker(self._window.cameraDevice, use_cellpose=True, deformation_tolerance=DEFORMATION_TOLERANCE)
         self._window._unranked_cells.append(cell)
         cells = list(self._window._unranked_cells)
         run_in_gui_thread(self._displayBoundingBoxes, cells)
@@ -188,10 +212,17 @@ class CellDetector:
             multichannel=multichannel,  # Actual flag for detect_neurons
             trim_edges=True,
             min_volume_m3=win.ui.minVolumeSpin.value(),
-            n=5,  # Number of top candidates to return
+            # Every detection, not just the top few: _selectCandidates below drops
+            # the ones outside the survey region before taking the best of what is
+            # left, which it can only do if it is given the whole ranked list.
+            n=None,
             save_prefix=save_prefix,
         )
         logger.info(f"Neuron detection finished. Found {len(detection_results)} potential neurons.")
+        detection_results = self._selectCandidates(detection_results)
+        logger.info(
+            f"Keeping {len(detection_results)} of them: the best inside the survey region."
+        )
 
         win._current_detection_stack = detection_stack
         win._current_classification_stack = classification_stack
@@ -204,7 +235,9 @@ class CellDetector:
             # for later tracking without re-acquiring a stack per cell. Cells too
             # close to the stack edge can't be extracted; keep them queued anyway.
             try:
-                cell.initializeTrackerFromStack(win.cameraDevice, detection_stack, use_cellpose=True)
+                cell.initializeTrackerFromStack(
+                    win.cameraDevice, detection_stack, use_cellpose=True, deformation_tolerance=DEFORMATION_TOLERANCE
+                )
             except Exception:
                 logger.warning(
                     f"Could not initialize ObjectStack for detected cell at {pos}",

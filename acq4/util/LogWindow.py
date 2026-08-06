@@ -1,3 +1,4 @@
+import logging
 import re
 import webbrowser
 from logging import LogRecord
@@ -13,8 +14,11 @@ from teleprox.log.logviewer.viewer import QtLogHandler
 
 from acq4.util import Qt
 
+logger = logging.getLogger(__name__)
+
 LOG_UI = None
 ERROR_DIALOG = None
+LOG_TAIL_COUNT = 50
 
 
 def __reload__(old):
@@ -41,6 +45,27 @@ def get_error_dialog():
     return ERROR_DIALOG
 
 
+def confirmTeleproxServer(parent=None):
+    """Ask permission to open a teleprox port so Claude can inspect this process.
+
+    Starting a teleprox server permits arbitrary code execution in this ACQ4 for the
+    rest of the session, so this is asked explicitly rather than assumed. Declining
+    still produces a text-only handoff.
+    """
+    box = Qt.QMessageBox(parent)
+    box.setIcon(Qt.QMessageBox.Warning)
+    box.setWindowTitle("Allow live debugging access?")
+    box.setText("Open a local debugging port so Claude can inspect this ACQ4?")
+    box.setInformativeText(
+        "This opens a loopback port that allows code to run inside this ACQ4 process "
+        "until it exits, which is what lets Claude read device and task state directly.\n\n"
+        "Decline and Claude still gets the log record and traceback, just not live access."
+    )
+    box.setStandardButtons(Qt.QMessageBox.Yes | Qt.QMessageBox.No)
+    box.setDefaultButton(Qt.QMessageBox.No)
+    return box.exec_() == Qt.QMessageBox.Yes
+
+
 class LogButton(FeedbackButton):
     def __init__(self, *args):
         FeedbackButton.__init__(self, *args)
@@ -60,7 +85,8 @@ class ErrorDialog(Qt.QDialog):
         self.layout = Qt.QVBoxLayout()
         self.layout.setContentsMargins(3, 3, 3, 3)
         self.setLayout(self.layout)
-        self.messages = []
+        self.records = []        # queued LogRecords not yet displayed
+        self.currentRecord = None  # the record on display, for the Claude handoff
 
         self.msgLabel = Qt.QLabel()
         self.msgLabel.setSizePolicy(Qt.QSizePolicy.Expanding, Qt.QSizePolicy.Expanding)
@@ -81,6 +107,8 @@ class ErrorDialog(Qt.QDialog):
         self.nextBtn.hide()
         self.logBtn = Qt.QPushButton("Show Log...")
         self.btnLayout.addWidget(self.logBtn)
+        self.claudeBtn = Qt.QPushButton("Debug with Claude")
+        self.btnLayout.addWidget(self.claudeBtn)
         self.btnLayoutWidget = Qt.QWidget()
         self.layout.addWidget(self.btnLayoutWidget)
         self.btnLayoutWidget.setLayout(self.btnLayout)
@@ -89,27 +117,20 @@ class ErrorDialog(Qt.QDialog):
         self.okBtn.clicked.connect(self.okClicked)
         self.nextBtn.clicked.connect(self.nextMessage)
         self.logBtn.clicked.connect(self.logClicked)
+        self.claudeBtn.clicked.connect(self.claudeClicked)
 
     def show(self, entry: LogRecord):
-        msgLines = []
-        if entry.getMessage():
-            msgLines.append(self.cleanText(entry.getMessage()))
-        if entry.exc_info:
-            msgLines.append(self.cleanText(str(entry.exc_info[1])))
-
-        msg = "<br/>".join(msgLines)
-
         if self.disableCheck.isChecked():
             return False
         if self.isVisible():
-            self.messages.append(msg)
+            self.records.append(entry)
             self.nextBtn.show()
             self.nextBtn.setEnabled(True)
-            self.nextBtn.setText("Show next error (%d more)" % len(self.messages))
+            self.nextBtn.setText("Show next error (%d more)" % len(self.records))
         else:
             w = Qt.QApplication.activeWindow()
             self.nextBtn.hide()
-            self.msgLabel.setText(msg)
+            self._displayRecord(entry)
             self.open()
             if w is not None:
                 cp = w.geometry().center()
@@ -121,6 +142,19 @@ class ErrorDialog(Qt.QDialog):
                 )
         self.raise_()
 
+    def _displayRecord(self, entry: LogRecord):
+        """Show *entry* and remember it, so the Claude button has something to send."""
+        self.currentRecord = entry
+        self.msgLabel.setText(self._renderRecord(entry))
+
+    def _renderRecord(self, entry: LogRecord):
+        msgLines = []
+        if entry.getMessage():
+            msgLines.append(self.cleanText(entry.getMessage()))
+        if entry.exc_info:
+            msgLines.append(self.cleanText(str(entry.exc_info[1])))
+        return "<br/>".join(msgLines)
+
     @staticmethod
     def cleanText(text):
         text = re.sub(r"&", "&amp;", text)
@@ -131,22 +165,31 @@ class ErrorDialog(Qt.QDialog):
 
     def closeEvent(self, ev):
         Qt.QDialog.closeEvent(self, ev)
-        self.messages = []
+        self.records = []
 
     def okClicked(self):
         self.accept()
-        self.messages = []
+        self.records = []
 
     def logClicked(self):
         self.accept()
         get_log_window().raise_window()
-        self.messages = []
+        self.records = []
 
     def nextMessage(self):
-        self.msgLabel.setText(self.messages.pop(0))
-        self.nextBtn.setText("Show next error (%d more)" % len(self.messages))
-        if len(self.messages) == 0:
+        self._displayRecord(self.records.pop(0))
+        self.nextBtn.setText("Show next error (%d more)" % len(self.records))
+        if len(self.records) == 0:
             self.nextBtn.setEnabled(False)
+
+    def claudeClicked(self):
+        if self.currentRecord is None:
+            return
+        from acq4.util import claude_debug
+
+        claude_debug.debugRecordWithClaude(
+            self.currentRecord, confirm=lambda: confirmTeleproxServer(self)
+        )
 
     def disable(self, disable):
         self.disableCheck.setChecked(disable)
@@ -284,6 +327,15 @@ class DocumentedLogViewer(LogViewer):
         # Connect our custom signal to open URLs in browser
         self.documentation_link_clicked.connect(self._open_documentation_link)
 
+        if not hasattr(LogViewer, '_build_row_context_menu'):
+            # NOTE: this method's own `logger` parameter (the teleprox logger name)
+            # shadows the module logger above, so it is looked up explicitly here.
+            logging.getLogger(__name__).warning(
+                "The 'Debug with Claude' row context menu action is unavailable: the "
+                "installed teleprox predates the _build_row_context_menu extension point. "
+                "Update teleprox to restore it."
+            )
+
     def raise_window(self):
         """Bring the log window to the front."""
         if self.isMinimized():
@@ -344,3 +396,61 @@ class DocumentedLogViewer(LogViewer):
     def _open_documentation_link(self, url):
         """Open documentation link in default browser."""
         webbrowser.open(f"https://acq4.readthedocs.io/en/latest/{url}")
+
+    def _recordAtIndex(self, index):
+        """Return the LogRecord for the top-level row containing *index*, or None.
+
+        Child rows are detail items belonging to a record, so walk up to the row that
+        actually carries one (mirroring the base viewer's clipboard handler).
+        """
+        if not index.isValid():
+            return None
+        while index.parent().isValid():
+            index = index.parent()
+        source = self.map_index_to_model(index)
+        item = self.model.item(source.row(), 0)
+        if item is None:
+            return None
+        return item.data(ItemDataRole.LOG_RECORD)
+
+    def _logTailForIndex(self, index, count=LOG_TAIL_COUNT):
+        """Return up to *count* records immediately preceding the row at *index*."""
+        if not index.isValid():
+            return []
+        while index.parent().isValid():
+            index = index.parent()
+        row = self.map_index_to_model(index).row()
+        tail = []
+        for r in range(max(0, row - count), row):
+            item = self.model.item(r, 0)
+            if item is None:
+                continue
+            record = item.data(ItemDataRole.LOG_RECORD)
+            if record is not None:
+                tail.append(record)
+        return tail
+
+    def _build_row_context_menu(self, index):
+        """Override of the base's extension point: append Debug with Claude to the inherited menu."""
+        menu = super()._build_row_context_menu(index)
+
+        if self._recordAtIndex(index) is not None:
+            claude_action = Qt.QAction("Debug with Claude", self)
+            claude_action.selectedIndex = index
+            claude_action.triggered.connect(self._debugRowWithClaude)
+            menu.addAction(claude_action)
+
+        return menu
+
+    def _debugRowWithClaude(self):
+        index = self.sender().selectedIndex
+        record = self._recordAtIndex(index)
+        if record is None:
+            return
+        from acq4.util import claude_debug
+
+        claude_debug.debugRecordWithClaude(
+            record,
+            log_tail=self._logTailForIndex(index),
+            confirm=lambda: confirmTeleproxServer(self),
+        )

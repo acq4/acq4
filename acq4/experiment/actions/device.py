@@ -140,12 +140,18 @@ def cellfie(ctx, height: float = 30e-6, step: float = 1e-6) -> None:
         ).wait()
         # Imported here, not at module scope: acq4_automation lives in an internal
         # repository, and a top-level import would stop every test under
-        # acq4/experiment from collecting where it is absent.
+        # acq4/experiment from collecting where it is absent. AutomationDebug's
+        # feature_tracking reaches acq4_automation at its own module scope, so
+        # importing DEFORMATION_TOLERANCE from it carries the same cost and is
+        # deferred for the same reason.
+        from acq4.modules.AutomationDebug.feature_tracking import DEFORMATION_TOLERANCE
         from acq4_automation.feature_tracking import CellTrackingLost
 
         # Initialize the tracker reference used to follow the cell during patching.
         try:
-            ctx.cell.initializeTracker(imager, use_cellpose=True)
+            ctx.cell.initializeTracker(
+                imager, use_cellpose=True, deformation_tolerance=DEFORMATION_TOLERANCE
+            )
         except CellTrackingLost as exc:
             # The tracker could not re-find this cell against its own reference
             # stacks, so the stacks are useless: the cell has drifted out of

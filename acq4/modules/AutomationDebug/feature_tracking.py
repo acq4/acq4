@@ -15,6 +15,13 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
+# Ridge weight for the affine flow fit that picks a tracked cell's focal plane. None
+# keeps the dispersion metric and its calibrated quality thresholds. Values around
+# 0 to 1 tolerate the smooth deformation an approaching pipette causes; the useful
+# range was measured as roughly [0, 1]. See the acq4-automation design doc
+# docs/superpowers/specs/2026-07-28-smooth-vector-field-z-design.md
+DEFORMATION_TOLERANCE = None
+
 
 class FeatureTracker:
     def __init__(self, window: AutomationDebugWindow):
@@ -54,7 +61,7 @@ class FeatureTracker:
         pipette = win.pipetteDevice
         target = Point(pipette.targetPosition(), "global")
         cell = win._cell = Cell(target)
-        cell.initializeTracker(win.cameraDevice, use_cellpose=True)  # pipette=win.pipetteDevice, 
+        cell.initializeTracker(win.cameraDevice, use_cellpose=True, deformation_tolerance=DEFORMATION_TOLERANCE)  # pipette=win.pipetteDevice,
         cell.enableTracking()
         cell.sigPositionChanged.connect(self._updatePipetteTarget)
         win.sigWorking.emit(win.ui.trackFeaturesBtn)

@@ -1,6 +1,10 @@
 """Tests for the Claude debugging handoff: context rendering, command resolution, launch."""
 
 import logging
+import sys as _sys
+import textwrap
+import time
+from unittest import mock
 
 import pytest
 
@@ -130,3 +134,127 @@ def test_message_and_level_always_present():
     assert "headstage stalled" in out
     assert "ERROR" in out
     assert "acq4.devices.Pipette" in out
+
+
+def test_config_command_returned_verbatim():
+    custom = 'myterm -e claude "Read {contextFile}"'
+    with mock.patch.object(claude_debug, "_configuredCommand", return_value=custom):
+        assert claude_debug.claudeCommand() == custom
+
+
+def test_falls_back_to_platform_default_when_unconfigured():
+    with mock.patch.object(claude_debug, "_configuredCommand", return_value=None):
+        with mock.patch.object(claude_debug, "suggestTerminal", return_value="stub"):
+            assert claude_debug.claudeCommand() == "stub"
+
+
+def test_suggest_terminal_picks_first_available():
+    with mock.patch.object(claude_debug.sys, "platform", "linux"):
+        # kitty missing, gnome-terminal present -> gnome-terminal wins over later entries
+        def which(name):
+            return "/usr/bin/" + name if name == "gnome-terminal" else None
+
+        with mock.patch("shutil.which", side_effect=which):
+            cmd = claude_debug.suggestTerminal()
+    assert cmd.startswith("gnome-terminal")
+    assert "{contextFile}" in cmd
+
+
+def test_suggest_terminal_raises_when_nothing_found():
+    with mock.patch.object(claude_debug.sys, "platform", "linux"):
+        with mock.patch("shutil.which", return_value=None):
+            with pytest.raises(Exception, match="No terminal emulator"):
+                claude_debug.suggestTerminal()
+
+
+def test_suggest_terminal_raises_on_unsupported_platform():
+    with mock.patch.object(claude_debug.sys, "platform", "sunos5"):
+        with pytest.raises(Exception, match="not yet supported"):
+            claude_debug.suggestTerminal()
+
+
+def test_every_template_carries_the_substitution():
+    for platform, entries in claude_debug.terminalCommands.items():
+        for name, template in entries:
+            assert (
+                "{contextFile}" in template
+            ), f"{platform}/{name} lacks {{contextFile}}"
+            assert "claude" in template, f"{platform}/{name} does not invoke claude"
+
+
+def test_configured_command_returns_none_when_no_manager():
+    """_configuredCommand returns None when no Manager is running (e.g. under pytest)."""
+    result = claude_debug._configuredCommand()
+    assert result is None
+
+
+def test_invoke_writes_context_to_a_temp_file():
+    with mock.patch("subprocess.Popen") as popen:
+        path = claude_debug.invokeClaude("# brief\nbody", command="true {contextFile}")
+    popen.assert_called_once()
+    with open(path) as fh:
+        assert fh.read() == "# brief\nbody"
+
+
+def test_invoke_substitutes_the_context_path():
+    with mock.patch("subprocess.Popen") as popen:
+        path = claude_debug.invokeClaude("x", command="myterm claude {contextFile}")
+    launched = popen.call_args[0][0]
+    assert launched == f"myterm claude {path}"
+
+
+def test_invoke_spawns_the_real_command(tmp_path):
+    """End-to-end for the part ACQ4 owns: a real subprocess receives the real path.
+
+    Popen is deliberately NOT mocked here -- this is the one test that proves a real
+    process is launched and can read what we wrote. The stub is spawned exactly once,
+    by invokeClaude itself; we wait for its receipt rather than running it again.
+    """
+    stub = tmp_path / "stub.py"
+    stub.write_text(textwrap.dedent("""
+        import sys
+        with open(sys.argv[2], "w") as out:
+            out.write(sys.argv[1] + "\\n")
+            out.write(open(sys.argv[1]).read())
+    """))
+    receipt = tmp_path / "receipt.txt"
+    command = f"{_sys.executable} {stub} {{contextFile}} {receipt}"
+
+    path = claude_debug.invokeClaude("# brief\nlive body", command=command)
+
+    deadline = time.monotonic() + 30
+    while not receipt.exists() and time.monotonic() < deadline:
+        time.sleep(0.05)
+    assert receipt.exists(), "stub process never wrote its receipt"
+
+    written = receipt.read_text()
+    assert path in written
+    assert "live body" in written
+
+
+def test_debug_record_passes_address_into_the_context():
+    record = make_record(logging.ERROR)
+    with mock.patch(
+        "acq4.mcp.ensure_teleprox_server", return_value="tcp://127.0.0.1:7777"
+    ):
+        with mock.patch.object(claude_debug, "invokeClaude") as invoke:
+            claude_debug.debugRecordWithClaude(record)
+    context = invoke.call_args[0][0]
+    assert "connect_acq4(port=7777)" in context
+
+
+def test_debug_record_still_launches_when_teleprox_declined():
+    record = make_record(logging.ERROR)
+    with mock.patch("acq4.mcp.ensure_teleprox_server", return_value=None):
+        with mock.patch.object(claude_debug, "invokeClaude") as invoke:
+            claude_debug.debugRecordWithClaude(record)
+    context = invoke.call_args[0][0]
+    assert "Live inspection is not available" in context
+
+
+def test_debug_record_forwards_the_confirm_callable():
+    confirm = mock.Mock(return_value=True)
+    with mock.patch("acq4.mcp.ensure_teleprox_server", return_value=None) as ensure:
+        with mock.patch.object(claude_debug, "invokeClaude"):
+            claude_debug.debugRecordWithClaude(make_record(), confirm=confirm)
+    assert ensure.call_args.kwargs["confirm"] is confirm

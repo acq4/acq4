@@ -167,10 +167,16 @@ class FakeTaskRunnerModule:
 class FakeCell:
     def __init__(self):
         self.tracker_calls = []
+        self.tracker_kwargs = []
         self.tracker_error = None
 
-    def initializeTracker(self, imager, use_cellpose=False):
+    def initializeTracker(self, imager, use_cellpose=False, **tracker_kwargs):
+        # Mirror Cell.initializeTracker's **tracker_kwargs passthrough so callers can
+        # forward tracker settings without this double having to know each one.
         self.tracker_calls.append((imager, use_cellpose))
+        # Recorded before the error path, so a test asserting on a lost cell can
+        # still see what the call was made with.
+        self.tracker_kwargs.append(tracker_kwargs)
         if self.tracker_error is not None:
             raise self.tracker_error
 
@@ -357,6 +363,15 @@ def test_cellfie_focuses_saves_zstack_and_initializes_tracker(ctx, pip, monkeypa
     assert call["storage_dir"] == "dir:cellfie"
     assert call["name"] == "cellfie"
     assert ctx.cell.tracker_calls == [(pip.imager, True)]
+    # Whichever call site initializes a cell's tracker fixes its deformation tolerance
+    # for that cell's lifetime, so this one has to forward it too.
+    # Read from the constant's own module rather than through device.py: cellfie
+    # imports it inside the function body, so it is not an attribute of that module.
+    from acq4.modules.AutomationDebug.feature_tracking import DEFORMATION_TOLERANCE
+
+    assert ctx.cell.tracker_kwargs == [
+        {"deformation_tolerance": DEFORMATION_TOLERANCE}
+    ]
     assert names == ["Cellfie"]
 
 
