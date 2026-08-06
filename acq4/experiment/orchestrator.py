@@ -448,7 +448,9 @@ class Orchestrator(Qt.QObject):
                     # queued cells. Handler sub-protocols are gone; a protocol
                     # author who wants to recover from this writes their own
                     # try/except in run().
-                    logger.exception("Unhandled orchestration error while processing cell %r", cell)
+                    logger.exception(
+                        "Unhandled orchestration error while processing cell %r", cell
+                    )
                     self.sigStatus.emit("error")
                     self.sigCellFinished.emit(cell, "error")
                     raise AbortExperiment(

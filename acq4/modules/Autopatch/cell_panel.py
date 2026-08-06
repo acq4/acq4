@@ -141,8 +141,10 @@ class CellPanel(Qt.QWidget):
         # reports no terminal disposition at all, which
         # Orchestrator._processCell's retry loop allows, since its _checkPause()
         # and context construction sit outside the try that reports
-        # "stopped"/"error" -- when the orchestrator announces it has gone idle
-        # and so has nothing left to announce about any cell. A worker thread
+        # "stopped"/"error" -- on an idle announcement handled at a moment when
+        # the orchestrator has that cell no longer in hand, so it has nothing
+        # left to announce about it (see _onCurrentCell, which asks rather than
+        # taking the announcement's word for what is in hand). A worker thread
         # wedged before either announcement is the one case that leaves an entry
         # here for the rest of the panel's life.
         #
@@ -660,14 +662,38 @@ class CellPanel(Qt.QWidget):
         # onLogAction()/sigActionEntry below), which drives the timeline rows
         # and the details container directly.
         if cell is None:
-            # The orchestrator has no cell in hand. Its run loop emits this
-            # however that loop ended (Orchestrator._runLoopBody's finally), so
-            # nothing it forgot can be announced again and everything held is
-            # released -- the only release a pass that never reported a terminal
-            # disposition gets. The other emission of None precedes a survey,
-            # which the loop only reaches once the cell before it has already
-            # finished, so that one has nothing left to release either.
-            self._forgotten.clear()
+            # The orchestrator reported having no cell in hand. Its run loop
+            # emits this however that loop ended (Orchestrator._runLoopBody's
+            # finally), and again before each survey, and it is the only release
+            # a pass that never reported a terminal disposition gets (see
+            # self._forgotten) -- so the store empties here, except for whatever
+            # the orchestrator has in hand at this instant, which it is asked for
+            # directly (Orchestrator.currentCell) rather than read off this
+            # announcement.
+            #
+            # Those two can name different cells: this is a queued connection, so
+            # by the time this slot runs the worker thread may have taken a
+            # further cell in hand -- the emission before a survey is followed by
+            # exactly that, the refilled queue's first cell -- and a wipe may
+            # already have forgotten it. Every announcement that cell has to make
+            # is still to come, so releasing it here would let those give a
+            # coordinate in discarded tissue a row, an _attempted flag and a
+            # terminal disposition, which is the whole hazard self._forgotten
+            # exists to prevent. It keeps its entry, and keeps its own releases:
+            # its terminal finish in _onCellFinished, or a later idle
+            # announcement handled once it is no longer in hand.
+            #
+            # An unbound panel releases everything, for the reason clearCells()
+            # remembers nothing when unbound: with no orchestrator there is
+            # nobody left to announce anything about any cell.
+            running = (
+                None if self._orchestrator is None else self._orchestrator.currentCell()
+            )
+            self._forgotten = {
+                cellId: forgotten
+                for cellId, forgotten in self._forgotten.items()
+                if forgotten is running
+            }
             return
         if id(cell) in self._forgotten:
             # Deliberately forgotten while it might still be in flight (see

@@ -19,9 +19,19 @@ class _FakeOrchestrator(Qt.QObject):
     def __init__(self):
         super().__init__()
         self.enqueued = []
+        self._currentCell = None
 
     def enqueue(self, cell):
         self.enqueued.append(cell)
+
+    def currentCell(self):
+        """Stands in for Orchestrator.currentCell(): the cell being processed
+        right now, or None when none is.
+
+        Part of the interface CellPanel requires of whatever it is bound to --
+        clearCells() asks it which cell a wipe must remember -- so the fake
+        answers it even though no test here puts a cell in hand."""
+        return self._currentCell
 
 
 class _FakePipette:

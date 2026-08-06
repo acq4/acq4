@@ -1129,10 +1129,55 @@ def test_an_idle_announcement_releases_every_forgotten_cell(qapp):
     orch.sigCellFinished.emit(inFlight, "retry")
     assert list(panel._forgotten) == [id(inFlight)]
 
+    # Released before the announcement because that is the state the real
+    # orchestrator is in whenever it reports idle: _processCell's finally has
+    # already dropped the cell it was working, and _runLoopBody's finally emits
+    # this after that. An idle announcement handled while a cell really is in
+    # hand is a stale one, and releases nothing -- the test below.
     orch.releaseCellInHand()
     orch.sigCurrentCell.emit(None)
 
     assert panel._forgotten == {}
+
+
+def test_a_stale_idle_announcement_does_not_release_the_cell_in_hand(qapp):
+    """The orchestrator emits sigCurrentCell(None) before every survey, then
+    refills and pops the next cell -- so it can have that cell in hand while the
+    idle announcement is still undelivered, the GUI thread not having pumped
+    across a survey that images tiles for minutes.
+
+    A "New slice" landing in that window forgets the cell in hand, correctly,
+    and the stale announcement must not un-forget it: every announcement that
+    cell has to make is still to come, and recording any of it hands a
+    coordinate in discarded tissue back to "Check all completed" and from there
+    to reuse."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+    inFlight = object()
+    # Nothing in hand at the moment the idle announcement is emitted; the
+    # refilled queue's first cell is popped right after, still ahead of its
+    # delivery.
+    orch.takeCellInHand(inFlight)
+    panel.clearCells()
+    assert list(panel._forgotten) == [id(inFlight)]
+
+    orch.sigCurrentCell.emit(None)  # the stale announcement, delivered late
+
+    assert list(panel._forgotten) == [
+        id(inFlight)
+    ], "the cell in hand was un-forgotten by an announcement that predates it"
+
+    # It goes on being worked on the discarded tissue, and goes on reporting.
+    orch.announceCurrentCell(inFlight)
+    orch.sigCellFinished.emit(inFlight, "done")
+
+    assert panel.cellList.count() == 0, "a forgotten cell was given a row again"
+    assert panel.disposition(inFlight) is None
+    assert panel.isAttempted(inFlight) is False
+    assert not panel.checkAllCompletedBtn.isEnabled()
 
 
 def test_a_forgotten_cells_log_and_action_traffic_leaves_no_panel_state(qapp):

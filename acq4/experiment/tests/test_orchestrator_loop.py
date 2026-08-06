@@ -692,7 +692,9 @@ def test_run_sync_cell_releases_the_cell_in_hand_when_the_pass_raises(make_pf):
     _runLoopBody frame around it to end the run normally -- so the release
     cannot depend on that call returning."""
     pf = make_pf()
-    pf.run = lambda ctx, **kwargs: (_ for _ in ()).throw(Stopped("operator pressed stop"))
+    pf.run = lambda ctx, **kwargs: (_ for _ in ()).throw(
+        Stopped("operator pressed stop")
+    )
     orch = Orchestrator(pf)
 
     with pytest.raises(Stopped):
