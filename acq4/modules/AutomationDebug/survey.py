@@ -98,6 +98,22 @@ class SurveyRegion:
         x0, y0 = float(pos.x()), float(pos.y())
         return x0, y0, x0 + float(size.x()), y0 + float(size.y())
 
+    def contains(self, pos) -> bool:
+        """Whether a global position lies within the survey rectangle (x/y only).
+
+        False when no region is set: with nothing bounding the search there is no
+        rectangle to be inside of, so callers gate on hasRegion() first.
+        """
+        if self._roi is None:
+            return False
+        x0, y0, x1, y1 = self._bounds()
+        # An ROI dragged past its own origin reports a negative size, so the
+        # corners _bounds() returns are not necessarily min/max.
+        return (
+            min(x0, x1) <= float(pos[0]) <= max(x0, x1)
+            and min(y0, y1) <= float(pos[1]) <= max(y0, y1)
+        )
+
     def _grid_and_threshold(self):
         """Return (grid, threshold) for the current ROI, camera FOV, and overlap."""
         fov_w, fov_h = self._fov()
