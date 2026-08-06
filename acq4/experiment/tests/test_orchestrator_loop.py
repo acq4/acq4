@@ -6,7 +6,12 @@ import pytest
 
 from acq4.util.task import Stopped, Event, sleep
 from acq4.experiment.context import ExecutionContext
-from acq4.experiment.exceptions import AbortExperiment, BrokenPipette, RetryCurrentCell
+from acq4.experiment.exceptions import (
+    AbortExperiment,
+    AdvanceToNextCell,
+    BrokenPipette,
+    RetryCurrentCell,
+)
 from acq4.experiment.orchestrator import Orchestrator
 
 
@@ -516,3 +521,210 @@ def test_finished_task_does_not_leave_qobject_cycle(make_pf, qtbot):
     finally:
         gc.collect()
         gc.enable()
+
+
+def test_current_cell_names_the_popped_cell_only_while_it_is_processed(make_pf):
+    """currentCell() is the cell being processed right now: the one popped off
+    the queue, from the pop until that pass ends, and nothing before or after."""
+    pf = make_pf()
+    seen = []
+    pf.run = lambda ctx, **kwargs: seen.append(orch.currentCell())
+    orch = Orchestrator(pf)
+    orch.enqueue("c1")
+    orch.enqueue("c2")
+
+    assert orch.currentCell() is None  # queued is not in hand
+
+    orch.run_sync()
+
+    assert seen == ["c1", "c2"]  # each cell in hand while its own protocol ran
+    assert orch.currentCell() is None  # the queue drained; nothing left in hand
+
+
+def test_the_cell_is_in_hand_before_the_context_factory_runs(make_pf):
+    """The assertion that pins the race CellPanel.clearCells() closes: the cell
+    must be in hand from the moment it leaves the queue, not from whenever its
+    context is built and sigCurrentCell announced. contextFactory is
+    caller-supplied work -- a device query, an image load -- so anything that
+    keys off the announcement instead has a window as wide as whatever that
+    factory does, widening silently as it grows.
+
+    A factory that raises proves both halves at once: it observed the cell
+    already in hand with nothing yet announced, and the finally released it
+    anyway on a path that leaves _processCell without any disposition at all.
+    """
+    pf = make_pf()
+    observed = []
+    announced = []
+
+    def contextFactory(cell):
+        observed.append(orch.currentCell())
+        raise RuntimeError("context construction failed")
+
+    orch = Orchestrator(pf, contextFactory=contextFactory)
+    orch.sigCurrentCell.connect(announced.append)
+    orch.enqueue("c1")
+
+    with pytest.raises(RuntimeError):
+        orch.run_sync()
+
+    assert observed == ["c1"]  # in hand before any context existed for it
+    # sigCurrentCell(None) from _runLoopBody's finally, and never "c1": the cell
+    # was in hand strictly earlier than anything announced about it.
+    assert announced == [None]
+    assert orch.currentCell() is None
+
+
+@pytest.mark.parametrize(
+    "raised, status, escapes",
+    [
+        (None, "done", None),
+        (AdvanceToNextCell("protocol asked for the next cell"), "skipped", None),
+        (RetryCurrentCell("always fails"), "retry-exhausted", None),
+        (Stopped("operator pressed stop"), "stopped", None),
+        (BrokenPipette("pipette broke mid-cell"), "error", AbortExperiment),
+    ],
+    ids=["done", "skipped", "retry-exhausted", "stopped", "error"],
+)
+def test_the_cell_in_hand_is_released_on_every_terminal_outcome(
+    make_pf, raised, status, escapes
+):
+    """Every way a pass can end has to release the cell -- including the three
+    that leave by raising -- or the orchestrator goes on naming a cell it is not
+    working, and keeps it alive with it. The release comes after the terminal
+    disposition is reported, so a slot handling that disposition can still ask
+    what it was about."""
+    pf = make_pf()
+
+    def run(ctx, **kwargs):
+        if raised is not None:
+            raise raised
+
+    pf.run = run
+    # maxRetries=0 so the one RetryCurrentCell above exhausts immediately.
+    orch = Orchestrator(pf, maxRetries=0)
+    atFinish = []
+    orch.sigCellFinished.connect(
+        lambda cell, s: atFinish.append((s, orch.currentCell()))
+    )
+    orch.enqueue("c1")
+
+    if escapes is None:
+        orch.run_sync()
+    else:
+        with pytest.raises(escapes):
+            orch.run_sync()
+
+    assert atFinish == [(status, "c1")]  # still in hand as the disposition lands
+    assert orch.currentCell() is None
+
+
+def test_the_cell_in_hand_is_released_when_the_boundary_check_skips_it(make_pf):
+    """A "Next cell" request consumed at the top of _processCell's retry loop
+    reports "skipped" without the protocol, or even the context, ever existing --
+    the earliest a pass can end, and the cell is in hand for all of it because
+    the pop already happened."""
+    pf = make_pf()
+    ran = []
+    pf.run = lambda ctx, **kwargs: ran.append(ctx.cell)
+    orch = Orchestrator(pf)
+    atFinish = []
+    orch.sigCellFinished.connect(
+        lambda cell, s: atFinish.append((s, orch.currentCell()))
+    )
+    orch.enqueue("c1")
+    orch.requestNextCell()
+
+    orch.run_sync()
+
+    assert ran == []  # run() never called
+    assert atFinish == [("skipped", "c1")]
+    assert orch.currentCell() is None
+
+
+def test_the_cell_stays_in_hand_across_a_retry_that_loops_in_place(make_pf):
+    """A retry restarts the same cell inside the same _processCell call, so it
+    never leaves the orchestrator's hand -- releasing it on the mid-flight
+    "retry" disposition would report nothing in hand while the pipette is still
+    being driven at that cell."""
+    pf = make_pf()
+    seen = []
+    calls = {"n": 0}
+
+    def run(ctx, **kwargs):
+        seen.append(orch.currentCell())
+        calls["n"] += 1
+        if calls["n"] < 3:
+            raise RetryCurrentCell("not yet")
+
+    pf.run = run
+    orch = Orchestrator(pf, maxRetries=10)
+    atFinish = []
+    orch.sigCellFinished.connect(
+        lambda cell, s: atFinish.append((s, orch.currentCell()))
+    )
+    orch.enqueue("c1")
+
+    orch.run_sync()
+
+    assert seen == ["c1", "c1", "c1"]  # in hand for every pass at the same cell
+    assert atFinish == [("retry", "c1"), ("retry", "c1"), ("done", "c1")]
+    assert orch.currentCell() is None
+
+
+def test_run_sync_cell_takes_the_cell_in_hand_and_releases_it(make_pf):
+    """The single-cell entry point never goes through _runLoopBody's popleft, so
+    currentCell() has to be honest for it too -- headless callers and
+    Autopatch/tests/test_teardown.py both reach a cell this way."""
+    pf = make_pf()
+    seen = []
+    pf.run = lambda ctx, **kwargs: seen.append(orch.currentCell())
+    orch = Orchestrator(pf)
+
+    orch.run_sync_cell("solo-cell")
+
+    assert seen == ["solo-cell"]
+    assert orch.currentCell() is None
+
+
+def test_run_sync_cell_releases_the_cell_in_hand_when_the_pass_raises(make_pf):
+    """Stopped propagates straight out of run_sync_cell -- there is no
+    _runLoopBody frame around it to end the run normally -- so the release
+    cannot depend on that call returning."""
+    pf = make_pf()
+    pf.run = lambda ctx, **kwargs: (_ for _ in ()).throw(Stopped("operator pressed stop"))
+    orch = Orchestrator(pf)
+
+    with pytest.raises(Stopped):
+        orch.run_sync_cell("solo-cell")
+
+    assert orch.currentCell() is None
+
+
+def test_a_stopped_run_leaves_no_cell_in_hand(make_pf):
+    """A run abandoned rather than completed must leave the orchestrator holding
+    no cell: it would otherwise be a retention leak reachable from an
+    orchestrator nothing is looking after any more (see
+    Autopatch/tests/test_teardown.py for the segfault that makes that matter).
+    The cooperative stop unwinds the protocol, which unwinds _processCell, whose
+    finally is what does the release."""
+    gate = Event()  # never set -> run() blocks until the stop raises
+    started = Event()
+
+    pf = make_pf()
+
+    def blocking_run(ctx, **kwargs):
+        started.set()
+        gate.wait()  # stop-aware; raises Stopped on stop()
+
+    pf.run = blocking_run
+    orch = Orchestrator(pf)
+    orch.enqueue("c1")
+
+    task = orch.start()
+    started.wait(timeout=5)
+    assert orch.currentCell() == "c1"  # in hand while the run is in flight
+    orch.stop("test stop")
+    task.wait(timeout=5)  # a cooperative stop is a normal end to the run
+
+    assert orch.currentCell() is None
