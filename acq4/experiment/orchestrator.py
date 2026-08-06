@@ -51,6 +51,11 @@ class Orchestrator(Qt.QObject):
         # the orchestrator's own answer to "which cell is in hand" rather than
         # "which cell has been announced" -- see currentCell().
         self._currentCell = None
+        # The cell abandonCellInHand() marked as belonging to tissue that no
+        # longer exists, or None. Set on the GUI thread, read on the worker
+        # thread at each terminal emit site (see _reportFinished), and dropped
+        # by _processCell's finally alongside self._currentCell.
+        self._abandonedCell = None
         # Per-run: set once the producer reports exhaustion, cleared by
         # _runLoopBody's finally. See setCellProducer for why it is not
         # simply "has the producer ever returned None".
@@ -92,9 +97,9 @@ class Orchestrator(Qt.QObject):
         being processed right now", which is strictly earlier and more current
         than what sigCurrentCell has delivered: that signal reaches a GUI-thread
         slot through a queued connection, so a caller acting on the operator's
-        behalf (CellPanel.clearCells, wiping Area 5 for a new slice) can run
-        before the announcement for a cell the worker thread already popped.
-        Asking here does not depend on that delivery.
+        behalf can run before the announcement for a cell the worker thread
+        already popped. Asking here does not depend on that delivery, which is
+        what abandonCellInHand() -- its one consumer -- needs of it.
 
         It does not say the protocol has begun, that the cell is still
         physically being worked (a worker thread wedged inside a protocol leaves
@@ -104,6 +109,64 @@ class Orchestrator(Qt.QObject):
         half-updated answer while the worker thread assigns one.
         """
         return self._currentCell
+
+    def abandonCellInHand(self) -> None:
+        """Record that the cell being processed right now belongs to tissue that
+        no longer exists, suppressing its terminal sigCellFinished.
+
+        AutopatchWindow.newSlice() is the caller: the operator has swapped the
+        tissue, so every coordinate on the old slice is a place not to drive a
+        pipette. That path deliberately lets the cell already in flight run to
+        completion -- yanking a pipette out mid-protocol is its own hazard -- but
+        its terminal disposition would otherwise be reported to a panel that has
+        just wiped its list, giving a discarded coordinate a row, an attempted
+        flag and a disposition. A terminal disposition is what makes a cell
+        re-queueable, so that row would be offered to "Check all completed" and
+        from there to reuse.
+
+        Deliberately NOT wired into clearQueue(), whose other caller --
+        AutopatchWindow._onTissueMoved's rescan branch -- means "the tissue
+        moved", not "the tissue is gone". The cell that lost tracking there must
+        keep reporting its disposition: it stays attempted, stays in the tissue
+        density record, and its Area 5 row is the session record.
+
+        What makes this work where a panel-side filter did not: the decision is
+        made on the worker thread at emit time (_reportFinished), against a
+        single attribute this method assigns, so between deciding and acting
+        there is no interval for a wipe to land in. Two orderings are covered:
+
+        - This lands while the cell is still in hand, so the emit that follows is
+          suppressed. This is the case where the pipette is mid-protocol, which
+          is what a New slice click during a run means.
+        - The terminal emit already happened *and was already delivered*. Nothing
+          is marked (the cell is no longer in hand), but the row it created
+          exists before the wipe, so CellPanel.clearCells() removes it.
+
+        Matched by identity rather than by a flag, so a marking made when the
+        worker thread has just moved on cannot suppress the next cell's
+        disposition -- swallowing a legitimate disposition is the mirror-image
+        defect, and a worse one. With nothing in hand this records nothing at
+        all.
+
+        What it does NOT cover, stated plainly because a reader must not assume
+        otherwise: the ordering where the terminal emit has already happened but
+        its queued delivery is still pending when this runs. The cell is already
+        released, so nothing is marked, and the delivery then builds the row and
+        its disposition after the wipe -- reachable by reuse. Qt posts the emit
+        and the operator's click to the same GUI-thread queue in order, so a
+        click made after the emit is always dispatched behind it and lands in the
+        covered case above; what is left is the emit falling inside the interval
+        between the click being posted and the GUI thread dispatching it.
+        Closing that needs the orchestrator to remember an abandonment across the
+        release, which this deliberately does not do.
+
+        Also not covered, and cosmetic: sigCurrentCell and the non-terminal
+        "retry" disposition are not suppressed, so a row for an abandoned cell
+        can still appear reading "running" or "retry". Such a row carries no
+        terminal disposition, so it is not re-queueable and "Check all completed"
+        will not tick it.
+        """
+        self._abandonedCell = self.currentCell()
 
     def setCellProducer(self, producer):
         """Install (or clear, with None) the callback that refills the queue.
@@ -368,6 +431,21 @@ class Orchestrator(Qt.QObject):
         # public single-cell entry point.
         self._queue.extend(cells)
 
+    def _reportFinished(self, cell, status: str) -> None:
+        """Announce `cell`'s terminal disposition, unless it has been abandoned.
+
+        Every terminal sigCellFinished emit goes through here; the non-terminal
+        "retry" emits directly, since a retry loops in place and the pass it
+        belongs to still has a terminal disposition of its own to come.
+
+        Runs on the worker thread, so the identity test and the emit are one
+        step from the point of view of a GUI-thread abandonCellInHand() -- see
+        that method for why that is what makes the suppression sound.
+        """
+        if cell is self._abandonedCell:
+            return
+        self.sigCellFinished.emit(cell, status)
+
     def _processCell(self, cell):
         """Run the protocol function for one cell. RetryCurrentCell loops in
         place (bounded by maxRetries, restarting the same cell rather than
@@ -394,7 +472,7 @@ class Orchestrator(Qt.QObject):
                     # that next iteration is still inside this same call, past
                     # the reach of either entry point's finally.
                     self._nextCellRequested = False
-                    self.sigCellFinished.emit(cell, "skipped")
+                    self._reportFinished(cell, "skipped")
                     return
                 self.sigStatus.emit("running")
                 ctx = self._contextFactory(cell)
@@ -415,7 +493,7 @@ class Orchestrator(Qt.QObject):
                     # done, and the request that caused it must not ride along to
                     # whichever cell the queue processes next.
                     self._nextCellRequested = False
-                    self.sigCellFinished.emit(cell, "skipped")
+                    self._reportFinished(cell, "skipped")
                     return
                 except RetryCurrentCell:
                     retries += 1
@@ -424,7 +502,7 @@ class Orchestrator(Qt.QObject):
                         # a request observed during them must not carry into the
                         # next queued cell.
                         self._nextCellRequested = False
-                        self.sigCellFinished.emit(cell, "retry-exhausted")
+                        self._reportFinished(cell, "retry-exhausted")
                         return
                     self.sigCellFinished.emit(cell, "retry")
                     continue  # loop top re-emits "running" and restarts in place
@@ -440,7 +518,7 @@ class Orchestrator(Qt.QObject):
                     # has already unwound the device, so let it keep propagating
                     # uncaught. Reported "stopped" first so the interrupted cell's
                     # row doesn't read "running" forever once the run has ended.
-                    self.sigCellFinished.emit(cell, "stopped")
+                    self._reportFinished(cell, "stopped")
                     raise
                 except OrchestrationError as exc:
                     # Design §5's catch-all safety net: an uncaught orchestration
@@ -452,7 +530,7 @@ class Orchestrator(Qt.QObject):
                         "Unhandled orchestration error while processing cell %r", cell
                     )
                     self.sigStatus.emit("error")
-                    self.sigCellFinished.emit(cell, "error")
+                    self._reportFinished(cell, "error")
                     raise AbortExperiment(
                         f"unhandled orchestration error while processing cell: {exc}"
                     ) from exc
@@ -466,7 +544,7 @@ class Orchestrator(Qt.QObject):
                         "Unexpected exception while processing cell %r", cell
                     )
                     self.sigStatus.emit("error")
-                    self.sigCellFinished.emit(cell, "error")
+                    self._reportFinished(cell, "error")
                     raise AbortExperiment(
                         f"unexpected exception while processing cell: {exc}"
                     ) from exc
@@ -500,7 +578,7 @@ class Orchestrator(Qt.QObject):
                         # direct path) on the way out -- no separate clear needed
                         # here.
                         self.sigStatus.emit("error")
-                        self.sigCellFinished.emit(cell, "error")
+                        self._reportFinished(cell, "error")
                         raise AbortExperiment(
                             "flow signal raised but swallowed by the protocol: "
                             f"{signal!r}"
@@ -509,7 +587,12 @@ class Orchestrator(Qt.QObject):
                     # request the protocol set but never itself acted on must not
                     # carry into the next queued cell.
                     self._nextCellRequested = False
-                    self.sigCellFinished.emit(cell, "done")
+                    self._reportFinished(cell, "done")
                     return
         finally:
-            self._currentCell = None
+            # The abandoned marking is dropped with the cell in hand it was read
+            # from, so it never outlives it and never reaches a later pass. This
+            # is the only clear either one needs: every route into this method is
+            # covered by the comment above, and a retry loops in place inside the
+            # try, so both survive it.
+            self._currentCell = self._abandonedCell = None

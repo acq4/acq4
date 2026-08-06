@@ -542,7 +542,7 @@ def test_current_cell_names_the_popped_cell_only_while_it_is_processed(make_pf):
 
 
 def test_the_cell_is_in_hand_before_the_context_factory_runs(make_pf):
-    """The assertion that pins the race CellPanel.clearCells() closes: the cell
+    """The assertion that pins the race abandonCellInHand() closes: the cell
     must be in hand from the moment it leaves the queue, not from whenever its
     context is built and sigCurrentCell announced. contextFactory is
     caller-supplied work -- a device query, an image load -- so anything that
@@ -730,3 +730,251 @@ def test_a_stopped_run_leaves_no_cell_in_hand(make_pf):
     task.wait(timeout=5)  # a cooperative stop is a normal end to the run
 
     assert orch.currentCell() is None
+
+
+@pytest.mark.parametrize(
+    "raised, status, escapes",
+    [
+        (None, "done", None),
+        (AdvanceToNextCell("protocol asked for the next cell"), "skipped", None),
+        (RetryCurrentCell("always fails"), "retry-exhausted", None),
+        (Stopped("operator pressed stop"), "stopped", None),
+        (BrokenPipette("pipette broke mid-cell"), "error", AbortExperiment),
+    ],
+    ids=["done", "skipped", "retry-exhausted", "stopped", "error"],
+)
+def test_an_abandoned_cell_reports_no_terminal_disposition(
+    make_pf, raised, status, escapes
+):
+    """Every way a pass can terminate has to stay silent for a cell whose tissue
+    is gone -- a terminal disposition is what makes a cell re-queueable, so any
+    one of these leaking would offer a coordinate on discarded tissue back up
+    for reuse.
+
+    Each case is run twice, abandoning only the second time, so the empty list
+    is measured against the disposition the very same scenario reports without
+    the abandon rather than against a default that would hold either way.
+    """
+
+    def runScenario(abandon):
+        pf = make_pf()
+
+        def run(ctx, **kwargs):
+            if abandon:
+                orch.abandonCellInHand()
+            if raised is not None:
+                raise raised
+
+        pf.run = run
+        # maxRetries=0 so the one RetryCurrentCell above exhausts immediately.
+        orch = Orchestrator(pf, maxRetries=0)
+        finished = []
+        statuses = []
+        orch.sigCellFinished.connect(lambda cell, s: finished.append((cell, s)))
+        orch.sigStatus.connect(statuses.append)
+        orch.enqueue("c1")
+        if escapes is None:
+            orch.run_sync()
+        else:
+            with pytest.raises(escapes):
+                orch.run_sync()
+        return finished, statuses
+
+    reported, reportedStatuses = runScenario(abandon=False)
+    assert reported == [("c1", status)]
+
+    suppressed, suppressedStatuses = runScenario(abandon=True)
+    assert suppressed == []
+    # Only sigCellFinished is suppressed: the run's own status stream is what
+    # Area 3 reads, and an abandoned cell that errors is still an error.
+    assert suppressedStatuses == reportedStatuses
+
+
+def test_an_abandoned_cell_still_leaves_the_run_loop_free_to_continue(make_pf):
+    """Suppressing the disposition must not swallow the cell's release from the
+    in-hand state or wedge the loop: the cells queued behind it still run."""
+    pf = make_pf()
+    ran = []
+
+    def run(ctx, **kwargs):
+        ran.append(ctx.cell)
+        if ctx.cell == "c1":
+            orch.abandonCellInHand()
+
+    pf.run = run
+    orch = Orchestrator(pf)
+    orch.enqueue("c1")
+    orch.enqueue("c2")
+
+    orch.run_sync()
+
+    assert ran == ["c1", "c2"]
+    assert orch.currentCell() is None
+
+
+def test_the_abandoned_marking_does_not_leak_onto_a_later_cell(make_pf):
+    """The mirror-image defect, and the worse one: a marking left set would
+    silently swallow the disposition of a cell on perfectly good tissue, so its
+    row would never become reusable and the operator would lose that record."""
+    pf = make_pf()
+
+    def run(ctx, **kwargs):
+        if ctx.cell == "c1":
+            orch.abandonCellInHand()
+
+    pf.run = run
+    orch = Orchestrator(pf)
+    finished = []
+    orch.sigCellFinished.connect(lambda cell, s: finished.append((cell, s)))
+    orch.enqueue("c1")
+    orch.enqueue("c2")
+
+    orch.run_sync()
+
+    assert finished == [("c2", "done")]
+
+
+def test_abandoning_with_nothing_in_hand_marks_nothing(make_pf):
+    """A call made between passes -- a New slice click delivered while the queue
+    is draining or a survey is imaging -- has no cell to abandon, and must not
+    arm itself against whichever cell the loop reaches next."""
+    pf = make_pf()
+    orch = Orchestrator(pf)
+    finished = []
+    orch.sigCellFinished.connect(lambda cell, s: finished.append((cell, s)))
+    orch.enqueue("c1")
+
+    orch.abandonCellInHand()  # nothing in hand: the queue has not been popped
+    orch.run_sync()
+
+    assert finished == [("c1", "done")]
+
+
+def test_an_abandoned_cell_still_reports_a_retry_that_loops_in_place(make_pf):
+    """"retry" is mid-flight, not a disposition, so it is not suppressed and the
+    marking is not consumed by it: the terminal disposition the retries lead to
+    is the one that has to stay silent."""
+    pf = make_pf()
+    calls = {"n": 0}
+
+    def run(ctx, **kwargs):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            orch.abandonCellInHand()
+        if calls["n"] < 3:
+            raise RetryCurrentCell("not yet")
+
+    pf.run = run
+    orch = Orchestrator(pf, maxRetries=10)
+    finished = []
+    orch.sigCellFinished.connect(lambda cell, s: finished.append((cell, s)))
+    orch.enqueue("c1")
+
+    orch.run_sync()
+
+    assert calls["n"] == 3  # the retries really did loop in place
+    assert finished == [("c1", "retry"), ("c1", "retry")]  # and no "done"
+
+
+def test_an_abandoned_cell_skipped_at_the_boundary_check_stays_silent(make_pf):
+    """The earliest a pass can terminate: the "Next cell" request consumed at the
+    top of _processCell's retry loop, before the protocol or even the context
+    exists on that iteration. Reached here by abandoning and requesting during
+    the first pass and then retrying, so the request is waiting when the loop
+    comes back round -- the cell is in hand for all of it."""
+    pf = make_pf()
+    calls = {"n": 0}
+
+    def run(ctx, **kwargs):
+        calls["n"] += 1
+        orch.abandonCellInHand()
+        orch.requestNextCell()
+        raise RetryCurrentCell("go round once so the boundary check runs again")
+
+    pf.run = run
+    orch = Orchestrator(pf, maxRetries=10)
+    finished = []
+    orch.sigCellFinished.connect(lambda cell, s: finished.append((cell, s)))
+    orch.enqueue("c1")
+
+    orch.run_sync()
+
+    assert calls["n"] == 1  # the second pass was skipped before run() was reached
+    assert finished == [("c1", "retry")]  # and no "skipped"
+
+
+def test_an_abandoned_cells_swallowed_flow_signal_stays_silent(make_pf):
+    """The safety net for a protocol that catches its own flow signal reports
+    "error" from the else branch, a separate emit site from the except clauses --
+    it has to be suppressed too."""
+    pf = make_pf()
+
+    def run(ctx, **kwargs):
+        orch.abandonCellInHand()
+        try:
+            ctx.next_cell()
+        except AdvanceToNextCell:
+            pass  # the bug the safety net exists to catch
+
+    pf.run = run
+    orch = Orchestrator(pf, contextFactory=lambda cell: ExecutionContext(cell=cell))
+    finished = []
+    orch.sigCellFinished.connect(lambda cell, s: finished.append((cell, s)))
+    orch.enqueue("c1")
+
+    with pytest.raises(AbortExperiment):
+        orch.run_sync()
+
+    assert finished == []
+
+
+def test_run_sync_cell_honours_an_abandoned_cell_too(make_pf):
+    """The single-cell entry point never goes through _runLoopBody's popleft, so
+    the suppression has to cover it as well -- headless callers and
+    Autopatch/tests/test_teardown.py both reach a cell this way."""
+    pf = make_pf()
+
+    def run(ctx, **kwargs):
+        if ctx.cell == "solo-cell":
+            orch.abandonCellInHand()
+
+    pf.run = run
+    orch = Orchestrator(pf)
+    finished = []
+    orch.sigCellFinished.connect(lambda cell, s: finished.append((cell, s)))
+
+    orch.run_sync_cell("solo-cell")
+
+    assert finished == []
+    # Not left armed for the next call on this instance, the same way
+    # run_sync_cell's finally refuses to let a next-cell request outlive it.
+    orch.run_sync_cell("next-cell")
+    assert finished == [("next-cell", "done")]
+
+
+def test_an_abandoned_cell_is_not_retained_once_its_pass_is_over(make_pf):
+    """The marking holds the cell itself, so it must be dropped with the in-hand
+    state -- an orchestrator nothing is looking after any more must not keep a
+    Cell (and its tracker and reference image stack) reachable. See
+    Autopatch/tests/test_teardown.py for the segfault that makes retention here
+    matter."""
+
+    class _Cell:
+        pass
+
+    pf = make_pf()
+    pf.run = lambda ctx, **kwargs: orch.abandonCellInHand()
+    orch = Orchestrator(pf)
+    cell = _Cell()
+    orch.enqueue(cell)
+
+    orch.run_sync()
+    cellRef = weakref.ref(cell)
+
+    gc.disable()
+    try:
+        del cell
+        # No gc.collect() -- pure refcounting, since gc is disabled.
+        assert cellRef() is None, "the abandoned marking outlived the cell in hand"
+    finally:
+        gc.enable()

@@ -806,6 +806,41 @@ def test_new_slice_leaves_the_in_flight_cell_unreusable(qapp, tmp_path):
         win.teardown()
 
 
+def test_new_slice_after_a_cells_finish_was_delivered_leaves_it_unreusable(
+    qapp, tmp_path
+):
+    """The other ordering abandonCellInHand() covers, and the one it covers by
+    doing nothing: the cell's terminal disposition has already been delivered
+    when the wipe lands, so nothing is in hand to mark -- and the row that
+    disposition built is removed by clearCells() because it existed before the
+    wipe. Qt dispatches a posted signal ahead of a click posted after it, so this
+    is the ordering a New slice pressed once a cell has finished actually takes.
+
+    Its counterpart -- an emit whose queued delivery is still pending when the
+    wipe runs -- is not covered; see abandonCellInHand's docstring.
+    """
+    win = _makeWindow(tmp_path)
+    try:
+        cell = _makeCell()
+        win.cellPanel.addCell(cell)
+        win.orchestrator.enqueue(cell)
+
+        # Run to completion first, so the disposition is recorded and its row
+        # exists before the wipe rather than arriving after it.
+        win.orchestrator.run_sync()
+        assert win.cellPanel.disposition(cell) == "done"
+        assert win.cellPanel.checkAllCompletedBtn.isEnabled()
+
+        win.newSlice()
+
+        assert win.cellPanel.cellList.count() == 0
+        assert win.cellPanel.disposition(cell) is None
+        assert win.cellPanel.isAttempted(cell) is False
+        assert not win.cellPanel.checkAllCompletedBtn.isEnabled()
+    finally:
+        win.teardown()
+
+
 def test_two_new_slices_in_a_row_still_leave_the_in_flight_cell_unreusable(
     qapp, tmp_path
 ):
@@ -1186,6 +1221,49 @@ def test_tissue_moved_rescan_discards_the_queued_cells_rows(win, monkeypatch):
         win._onTissueMoved(cell, ctx, "no features")
 
     assert win.cellPanel.cellList.count() == 0
+
+
+def test_tissue_moved_rescan_still_reports_its_own_cells_disposition(win, monkeypatch):
+    """The rescan branch clears the same queue newSlice() clears, but it means
+    "the tissue moved", not "the tissue is gone": the cell that lost tracking has
+    to keep reporting its terminal disposition. That disposition is what puts its
+    row in Area 5 as the operator's session record and what keeps it attempted --
+    and therefore in the tissue density record, so the rescan does not re-detect
+    and re-patch it.
+
+    So Orchestrator.abandonCellInHand() must stay out of clearQueue(), where a
+    later "simplification" would naturally put it. Driven through a real run loop
+    with the cell genuinely in hand, from inside its own protocol, since that is
+    the only place the suppression could reach it.
+    """
+    monkeypatch.setattr(
+        _autopatchModule, "prompt", lambda ctx, **kw: "Rescan the slice"
+    )
+    slice_, cell, _ctx = _sliceWithCoveredTiles(win)
+    # The helper's own spare cell is dropped and the queue rebuilt here so the
+    # cell asserted on below is the one the run actually pops, with a second cell
+    # genuinely queued behind it for the rescan to discard.
+    win.orchestrator.clearQueue()
+    queued = _makeCell()
+    for c in (cell, queued):
+        win.cellPanel.addCell(c)
+        win.orchestrator.enqueue(c)
+
+    def run(ctx, **kwargs):
+        # Never returns: _onTissueMoved ends the cell via ctx.next_cell(), which
+        # _processCell reports as "skipped".
+        win._onTissueMoved(ctx.cell, ctx, "no features")
+
+    win.orchestrator.protocolFile.run = run
+
+    win.orchestrator.run_sync()
+
+    assert win.cellPanel.disposition(cell) == "skipped"
+    assert win.cellPanel.isAttempted(cell) is True
+    # The cell that lost tracking keeps its row; the one merely queued behind it
+    # is the one the operator agreed to discard.
+    assert win.cellPanel.cellList.count() == 1
+    assert win.cellPanel.disposition(queued) is None
 
 
 def test_tissue_moved_rescan_keeps_an_attempted_cells_row(win, monkeypatch):
