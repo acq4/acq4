@@ -21,6 +21,12 @@ from acq4.experiment.actions.device import (
 )
 from acq4.experiment.actions import device as device_mod
 
+# cellfie reaches acq4_automation twice at call time: for CellTrackingLost, and for
+# DEFORMATION_TOLERANCE by way of AutomationDebug.feature_tracking. That package is
+# internal and is not a declared dependency, so the tests that actually call cellfie
+# only run where it is installed. Everything else in this module runs everywhere.
+_CELLFIE_SKIP_REASON = "cellfie needs acq4_automation, an internal package"
+
 
 class _Waitable:
     """Stand-in for the Future-like object real device calls return: .wait()
@@ -338,6 +344,7 @@ def _cellfie_context(monkeypatch, tmp_path, tissue_moved_hook=None):
 
 
 def test_cellfie_focuses_saves_zstack_and_initializes_tracker(ctx, pip, monkeypatch):
+    pytest.importorskip("acq4_automation", reason=_CELLFIE_SKIP_REASON)
     names = _entry_names(ctx)
     pip.pipetteDevice.target_position = (0.0, 0.0, 100e-6)
     calls = []
@@ -376,6 +383,7 @@ def test_cellfie_focuses_saves_zstack_and_initializes_tracker(ctx, pip, monkeypa
 
 
 def test_cellfie_default_height_and_step(ctx, pip, monkeypatch):
+    pytest.importorskip("acq4_automation", reason=_CELLFIE_SKIP_REASON)
     pip.pipetteDevice.target_position = (0.0, 0.0, 100e-6)
     calls = []
     monkeypatch.setattr(
@@ -394,6 +402,7 @@ def test_cellfie_default_height_and_step(ctx, pip, monkeypatch):
 
 
 def test_cellfie_routes_a_lost_cell_to_the_tissue_moved_hook(monkeypatch, tmp_path):
+    pytest.importorskip("acq4_automation", reason=_CELLFIE_SKIP_REASON)
     from acq4_automation.feature_tracking import CellTrackingLost
 
     seen = []
@@ -411,6 +420,7 @@ def test_cellfie_routes_a_lost_cell_to_the_tissue_moved_hook(monkeypatch, tmp_pa
 
 
 def test_cellfie_lets_an_unrelated_valueerror_propagate(monkeypatch, tmp_path):
+    pytest.importorskip("acq4_automation", reason=_CELLFIE_SKIP_REASON)
     # Only the named class is tissue motion. A bare ValueError out of the
     # tracker stack is a bug, and classifying it as motion would trigger a
     # destructive rescan whose prompt defaults to "Rescan".
@@ -426,6 +436,7 @@ def test_cellfie_lets_an_unrelated_valueerror_propagate(monkeypatch, tmp_path):
 
 
 def test_cellfie_with_no_hook_raises_trackinglost(monkeypatch, tmp_path):
+    pytest.importorskip("acq4_automation", reason=_CELLFIE_SKIP_REASON)
     from acq4_automation.feature_tracking import CellTrackingLost
 
     ctx = _cellfie_context(monkeypatch, tmp_path)
