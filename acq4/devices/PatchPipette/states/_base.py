@@ -180,6 +180,7 @@ class PatchPipetteState(QtFriendlyTask):
         self._cleanupFuture = None
         self._pressureAdjustment = None
         self._pauseMovement = False
+        self._extendedTrackingDepth = 0
         # indicates state that should be transitioned to next, if any.
         # This is usually set by the return value of run(), and must be invoked by the state manager.
         self.nextState = {"state": self.config.get('fallbackState', None)}
@@ -433,7 +434,7 @@ class PatchPipetteState(QtFriendlyTask):
             )
 
         cell.enableTracking(True)
-        cell.sigTrackingMultipleFramesStart.connect(self._pausePipetteForExtendedTracking)
+        self._connectExtendedTrackingPause(cell)
         cell.sigPositionChanged.connect(self.dev.pipetteDevice.setTarget)
         cell._trackingFuture.sigFinished.connect(self._visualTargetTrackingFinished)
 
@@ -444,15 +445,31 @@ class PatchPipetteState(QtFriendlyTask):
         disconnect(self.dev.cell.sigTrackingMultipleFramesStart, self._pausePipetteForExtendedTracking)
         disconnect(self.dev.cell.sigTrackingMultipleFramesFinish, self._resumePipetteAfterExtendedTracking)
 
-    def _pausePipetteForExtendedTracking(self, cell):
-        self._pauseMovement = True
-        cell.sigTrackingMultipleFramesStart.disconnect(self._pausePipetteForExtendedTracking)
+    def _connectExtendedTrackingPause(self, cell):
+        """Hold the pipette still for as long as any multi-frame acquisition is running.
+
+        Both connections stay up for the life of the tracking run and a depth count
+        decides when to release, rather than the two handlers rewiring these signals
+        from inside each other. That latch dropped any Start arriving before the
+        matching Finish had been delivered, and the first Finish then released the
+        pipette while an acquisition was still going -- reachable whenever the
+        tracker takes a second reference stack straight after the first, since the
+        emitting tracking loop runs in its own thread.
+        """
+        self._extendedTrackingDepth = 0
+        cell.sigTrackingMultipleFramesStart.connect(self._pausePipetteForExtendedTracking)
         cell.sigTrackingMultipleFramesFinish.connect(self._resumePipetteAfterExtendedTracking)
 
+    def _pausePipetteForExtendedTracking(self, cell):
+        self._extendedTrackingDepth += 1
+        self._pauseMovement = True
+
     def _resumePipetteAfterExtendedTracking(self, cell):
-        self._pauseMovement = False
-        cell.sigTrackingMultipleFramesFinish.disconnect(self._resumePipetteAfterExtendedTracking)
-        cell.sigTrackingMultipleFramesStart.connect(self._pausePipetteForExtendedTracking)
+        # Floor at zero: a stop between the paired emissions can strand a Finish with
+        # no Start, and that must not leave the count negative and the pause stuck on.
+        self._extendedTrackingDepth = max(0, self._extendedTrackingDepth - 1)
+        if self._extendedTrackingDepth == 0:
+            self._pauseMovement = False
 
     def _waitForMoveWhileTargetChanges(self, position_fn, speed, continuous, interval=None, step=None, move_restart_threshold=3.0):
         """Wait for a move to complete while also monitoring for changes in the target position.
