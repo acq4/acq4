@@ -241,6 +241,9 @@ class AutomationDebugWindow(Qt.QWidget):
             self._feature_tracker._visualizeTracking
         )
         self.ui.visualizeTrackingBtn.setEnabled(True)
+        self.ui.saveTrackingLogBtn.clicked.connect(
+            self._feature_tracker._saveLastTrackingLog
+        )
 
         self.ui.testPipetteBtn.setOpts(
             task_producer=self._feature_tracker.doPipetteCalibrationTest,

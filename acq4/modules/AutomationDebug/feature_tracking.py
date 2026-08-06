@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+from acq4 import getManager
 from acq4.devices.Pipette.calibration import findNewPipette
 from acq4.logging_config import get_logger
 from acq4.util.task import Stopped, Task, asynch_with_qt_signals, sleep, synch
@@ -20,7 +21,30 @@ logger = get_logger(__name__)
 # 0 to 1 tolerate the smooth deformation an approaching pipette causes; the useful
 # range was measured as roughly [0, 1]. See the acq4-automation design doc
 # docs/superpowers/specs/2026-07-28-smooth-vector-field-z-design.md
-DEFORMATION_TOLERANCE = None
+DEFORMATION_TOLERANCE = 1
+
+
+def saveTrackingHistory(cell, dir_handle, autoIncrement=False) -> None:
+    """Save a cell's tracking history to an .acqtrack file in dir_handle.
+
+    Silently skips when there is nothing to save (no cell, no tracker, or no
+    recorded tracking results). Exceptions from the save are logged and swallowed
+    so a failed save never aborts the caller.
+    """
+    if cell is None:
+        return
+    tracker = getattr(cell, "_tracker", None)
+    if tracker is None or not tracker.tracking_results:
+        return
+    try:
+        # writeFile, not a raw path write: it records the file's type in the index
+        # and emits the 'children' change that puts it in the Data Manager tree.
+        fh = dir_handle.writeFile(
+            tracker, "tracking_history", fileType="AcqTrackFile", autoIncrement=autoIncrement
+        )
+        logger.info(f"Saved tracking history to {fh.name()}")
+    except Exception:
+        logger.exception("Failed to save tracking history")
 
 
 class FeatureTracker:
@@ -83,6 +107,20 @@ class FeatureTracker:
         visualizer = LiveTrackerVisualizer(cell._tracker)
         win._visualizers.append(visualizer)
         visualizer.show()
+
+    def _saveLastTrackingLog(self):
+        """Save the most recent tracker's history into the current storage directory.
+
+        Names the file with an incrementing suffix so repeated saves don't clobber
+        each other.
+        """
+        win = self._window
+        ppip = win.patchPipetteDevice
+        cell = (ppip.cell if ppip is not None else None) or win._cell
+        if cell is None:
+            logger.error("No cell tracking available to save.")
+            return
+        saveTrackingHistory(cell, getManager().getCurrentDir(), autoIncrement=True)
 
     def _updatePipetteTarget(self, pos):
         self._window.pipetteDevice.setTarget(pos)
