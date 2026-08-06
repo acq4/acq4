@@ -772,6 +772,112 @@ def test_new_slice_clears_the_cell_list_and_the_orchestrators_queue(qapp, tmp_pa
     assert ran == [], "a cell survived New slice and was patched anyway"
 
 
+def test_new_slice_leaves_the_in_flight_cell_unreusable(qapp, tmp_path):
+    """newSlice() deliberately lets the cell already in flight run to
+    completion, so its finish is announced after Area 5 has been cleared. That
+    announcement must not resurrect the cell as a reusable one: the operator
+    has declared the tissue it names gone, and "Check all completed" would
+    otherwise tick it without them singling it out at all.
+    """
+    win = _makeWindow(tmp_path)
+    try:
+        cell = _makeCell()
+        win.cellPanel.addCell(cell)
+        win.orchestrator.enqueue(cell)
+        # The wipe lands from inside the cell's own protocol, which is exactly
+        # where a New slice click lands in practice: the cell is in the
+        # orchestrator's hand, and it goes on to finish on the old tissue
+        # afterward, as newSlice()'s docstring says it is allowed to. Driven
+        # inline (run_sync) rather than by emitting the signals by hand, so the
+        # real orchestrator really is holding the cell across the wipe.
+        def run(ctx, **kwargs):
+            assert win.cellPanel.isAttempted(ctx.cell) is True
+            win.newSlice()
+
+        win.orchestrator.protocolFile.run = run
+
+        win.orchestrator.run_sync()
+
+        assert win.cellPanel.cellList.count() == 0
+        assert win.cellPanel.disposition(cell) is None
+        assert win.cellPanel.isAttempted(cell) is False
+        assert not win.cellPanel.checkAllCompletedBtn.isEnabled()
+    finally:
+        win.teardown()
+
+
+def test_new_slice_after_a_cells_finish_was_delivered_leaves_it_unreusable(
+    qapp, tmp_path
+):
+    """The other ordering abandonCellInHand() covers, and the one it covers by
+    doing nothing: the cell's terminal disposition has already been delivered
+    when the wipe lands, so nothing is in hand to mark -- and the row that
+    disposition built is removed by clearCells() because it existed before the
+    wipe. Qt dispatches a posted signal ahead of a click posted after it, so this
+    is the ordering a New slice pressed once a cell has finished actually takes.
+
+    Its counterpart -- an emit whose queued delivery is still pending when the
+    wipe runs -- is not covered; see abandonCellInHand's docstring.
+    """
+    win = _makeWindow(tmp_path)
+    try:
+        cell = _makeCell()
+        win.cellPanel.addCell(cell)
+        win.orchestrator.enqueue(cell)
+
+        # Run to completion first, so the disposition is recorded and its row
+        # exists before the wipe rather than arriving after it.
+        win.orchestrator.run_sync()
+        assert win.cellPanel.disposition(cell) == "done"
+        assert win.cellPanel.checkAllCompletedBtn.isEnabled()
+
+        win.newSlice()
+
+        assert win.cellPanel.cellList.count() == 0
+        assert win.cellPanel.disposition(cell) is None
+        assert win.cellPanel.isAttempted(cell) is False
+        assert not win.cellPanel.checkAllCompletedBtn.isEnabled()
+    finally:
+        win.teardown()
+
+
+def test_two_new_slices_in_a_row_still_leave_the_in_flight_cell_unreusable(
+    qapp, tmp_path
+):
+    """The guard above has to survive more than one wipe. Two deliberate tissue
+    swaps in a row is the ordinary case, and newSliceBtn is never disabled
+    during a run, so an accidental double-click delivers two clicked signals on
+    its own -- and either way the cell still running on the first slice's tissue
+    has yet to announce its finish when the second wipe lands.
+
+    Driven through the real button rather than newSlice() directly, since a
+    double-click is the accidental half of what this covers.
+    """
+    win = _makeWindow(tmp_path)
+    try:
+        cell = _makeCell()
+        win.cellPanel.addCell(cell)
+        win.orchestrator.enqueue(cell)
+
+        # Both clicks land while the cell is in the orchestrator's hand, from
+        # inside its own protocol; it finishes on the first slice's tissue when
+        # that protocol returns, as newSlice()'s docstring says it is allowed to.
+        def run(ctx, **kwargs):
+            win.newSliceBtn.click()
+            win.newSliceBtn.click()
+
+        win.orchestrator.protocolFile.run = run
+
+        win.orchestrator.run_sync()
+
+        assert win.cellPanel.cellList.count() == 0
+        assert win.cellPanel.disposition(cell) is None
+        assert win.cellPanel.isAttempted(cell) is False
+        assert not win.cellPanel.checkAllCompletedBtn.isEnabled()
+    finally:
+        win.teardown()
+
+
 def test_new_slice_clears_the_producer(qapp, tmp_path):
     # The producer closes over the slice it was built from; leaving it
     # installed after that slice is discarded would keep surveying tissue
@@ -1117,6 +1223,49 @@ def test_tissue_moved_rescan_discards_the_queued_cells_rows(win, monkeypatch):
     assert win.cellPanel.cellList.count() == 0
 
 
+def test_tissue_moved_rescan_still_reports_its_own_cells_disposition(win, monkeypatch):
+    """The rescan branch clears the same queue newSlice() clears, but it means
+    "the tissue moved", not "the tissue is gone": the cell that lost tracking has
+    to keep reporting its terminal disposition. That disposition is what puts its
+    row in Area 5 as the operator's session record and what keeps it attempted --
+    and therefore in the tissue density record, so the rescan does not re-detect
+    and re-patch it.
+
+    So Orchestrator.abandonCellInHand() must stay out of clearQueue(), where a
+    later "simplification" would naturally put it. Driven through a real run loop
+    with the cell genuinely in hand, from inside its own protocol, since that is
+    the only place the suppression could reach it.
+    """
+    monkeypatch.setattr(
+        _autopatchModule, "prompt", lambda ctx, **kw: "Rescan the slice"
+    )
+    slice_, cell, _ctx = _sliceWithCoveredTiles(win)
+    # The helper's own spare cell is dropped and the queue rebuilt here so the
+    # cell asserted on below is the one the run actually pops, with a second cell
+    # genuinely queued behind it for the rescan to discard.
+    win.orchestrator.clearQueue()
+    queued = _makeCell()
+    for c in (cell, queued):
+        win.cellPanel.addCell(c)
+        win.orchestrator.enqueue(c)
+
+    def run(ctx, **kwargs):
+        # Never returns: _onTissueMoved ends the cell via ctx.next_cell(), which
+        # _processCell reports as "skipped".
+        win._onTissueMoved(ctx.cell, ctx, "no features")
+
+    win.orchestrator.protocolFile.run = run
+
+    win.orchestrator.run_sync()
+
+    assert win.cellPanel.disposition(cell) == "skipped"
+    assert win.cellPanel.isAttempted(cell) is True
+    # The cell that lost tracking keeps its row; the one merely queued behind it
+    # is the one the operator agreed to discard.
+    assert win.cellPanel.cellList.count() == 1
+    assert win.cellPanel.disposition(queued) is None
+
+
 def test_tissue_moved_rescan_keeps_an_attempted_cells_row(win, monkeypatch):
     """A cell isAttempted() reports as already started keeps its row through
     a rescan even if it is still sitting in the queue (e.g. a retry) -- it is
@@ -1243,3 +1392,115 @@ def test_area_2_is_locked_until_a_slice_exists(win):
     assert not win.searchPanel.addRegionBtn.isEnabled()
     win.newSlice()
     assert win.searchPanel.addRegionBtn.isEnabled()
+
+
+def test_a_run_in_flight_locks_area_5s_reuse_button(qapp, tmp_path):
+    """The reuse gate rides StatusPanel.sigInteractionLocked, the same signal
+    Areas 2 and 4 lock on -- a permanent widget-tree connection, so no protocol
+    load or teardown can leave it wired to a stale orchestrator."""
+    win = _makeWindow(tmp_path)
+    try:
+        cell = _makeCell()
+        win.cellPanel.addCell(cell)
+        win.cellPanel._onCellFinished(cell, "done")
+        win.cellPanel._rows[id(cell)].setCheckState(Qt.Qt.Checked)
+        assert win.cellPanel.reuseCheckedCellsBtn.isEnabled()
+
+        win.orchestrator.sigStatus.emit("running")
+        assert not win.cellPanel.reuseCheckedCellsBtn.isEnabled()
+
+        win.orchestrator.sigStatus.emit("surveying")
+        assert not win.cellPanel.reuseCheckedCellsBtn.isEnabled()
+
+        win.orchestrator.sigStatus.emit("waiting")
+        assert win.cellPanel.reuseCheckedCellsBtn.isEnabled()
+    finally:
+        win.teardown()
+
+
+_RAISING_PROTOCOL = '''
+def run(ctx):
+    raise RuntimeError("protocol blew up")
+'''
+
+
+def test_start_is_enabled_again_after_a_run_that_ends_in_error(qapp, tmp_path):
+    """An operator whose run died must be able to press Start again -- e.g.
+    after reusing the cells it never got to. That works only because
+    _runLoopBody's finally emits "waiting" *after* _processCell emits "error",
+    and "error" on its own disables Start. Asserted through the real
+    orchestrator rather than a synthetic sigStatus("waiting").
+    """
+    from acq4.experiment.exceptions import AbortExperiment
+
+    _write_protocol(tmp_path, "boom.py", _RAISING_PROTOCOL)
+    win = _makeWindow(tmp_path)
+    try:
+        win.protocolPanel.fileCombo.setCurrentText("boom")
+        cell = _makeCell()
+        win.cellPanel.addCell(cell)
+        win.orchestrator.enqueue(cell)
+
+        with pytest.raises(AbortExperiment):
+            win.orchestrator.run_sync()
+
+        assert win.statusPanel.startBtn.isEnabled()
+    finally:
+        win.teardown()
+
+
+_PASS_MARKING_PROTOCOL = '''
+def run(ctx):
+    seen = getattr(ctx.cell, "passes_seen", None)
+    if seen is None:
+        seen = []
+        ctx.cell.passes_seen = seen
+    seen.append(PASS_NAME)
+'''
+
+
+def test_reused_cells_run_a_second_protocol_as_the_same_objects(qapp, tmp_path):
+    """The multi-pass workflow end to end: cellfie every cell in pass 1, load a
+    patch protocol, reuse the same cells for pass 2. Identity is the whole
+    point -- the same Cell object is what carries its tracker and reference
+    stack into pass 2 (design doc 6), which is why this asserts on `is` and on
+    state accumulated on the cell itself, not on positions.
+    """
+    _write_protocol(
+        tmp_path, "pass1.py", _PASS_MARKING_PROTOCOL.replace("PASS_NAME", '"one"')
+    )
+    _write_protocol(
+        tmp_path, "pass2.py", _PASS_MARKING_PROTOCOL.replace("PASS_NAME", '"two"')
+    )
+    win = _makeWindow(tmp_path)
+    try:
+        win.protocolPanel.fileCombo.setCurrentText("pass1")
+        cell = _makeCell()
+        win.cellPanel.addCell(cell)
+        win.orchestrator.enqueue(cell)
+
+        win.orchestrator.run_sync()
+
+        assert cell.passes_seen == ["one"]
+        assert win.cellPanel.disposition(cell) == "done"
+
+        # Loading pass 2 must not silently re-run the completed cell: the reuse
+        # button is the deliberate gate.
+        win.protocolPanel.fileCombo.setCurrentText("pass2")
+        assert win.orchestrator.pendingCells() == []
+
+        win.cellPanel.checkAllCompletedBtn.click()
+        win.cellPanel.reuseCheckedCellsBtn.click()
+
+        assert win.orchestrator.pendingCells() == [cell]
+        assert win.cellPanel._rows[id(cell)].text() == f"cell {id(cell)} — queued"
+
+        win.orchestrator.run_sync()
+
+        # Same object, so pass 1's accumulated state came along -- this is what
+        # makes pass 2 inherit pass 1's reference stack for free.
+        assert cell.passes_seen == ["one", "two"]
+        assert win.cellPanel.disposition(cell) == "done"
+        assert win.cellPanel.isAttempted(cell) is True
+    finally:
+        win.teardown()

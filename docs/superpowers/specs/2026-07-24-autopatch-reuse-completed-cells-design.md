@@ -1,5 +1,29 @@
 # Autopatch — Reuse Completed Cells (Multi-Pass) — Design
 
+> **Status (2026-08-06): implemented**, with the sections listed below
+> superseded, amended or extended by code that landed after this spec was
+> written. Plan:
+> `docs/superpowers/plans/2026-08-06-autopatch-reuse-completed-cells.md`.
+>
+> - **§1 and §5 are obsolete.** The indiscriminate flush they describe was
+>   already replaced by P2b/P2c's `_awaitingEnqueue` mechanism, which enqueues
+>   only cells still *owed* a run. Implementing §5's `TERMINAL` check would
+>   re-widen the flush to announced cells and drive a pipette into discarded
+>   tissue. `bindOrchestrator` was left untouched.
+> - **§6.3 was superseded.** Gating rides `StatusPanel.sigInteractionLocked`
+>   (a permanent widget-tree connection) rather than a third
+>   `Orchestrator.sigStatus` connection in `CellPanel`, which removes the
+>   dangling-connection hazard §6.3 reasons about.
+> - **§4's vocabulary was re-verified** against `acq4/experiment/orchestrator.py`
+>   and is unchanged; only the line numbers in its table have drifted.
+> - **§8 gained a case it was missing:** a checked cell that has *not* finished a
+>   pass is skipped by reuse rather than enqueued, since it is still in the
+>   orchestrator's queue and a second enqueue would run it twice.
+> - **Reuse does not clear `_attempted`** (a store that postdates this spec):
+>   that flag is `Slice.forceRescan`'s predicate, so clearing it would let the
+>   next rescan silently drop a reused cell's row and remove it from the
+>   density record.
+
 Design spec for a user-facing "reuse completed cells" control in the Autopatch
 module's Area 5 (`CellPanel`). It lets an operator re-queue already-run cells for
 another pass with a *different* protocol — e.g. take GFP cellfies of every cell

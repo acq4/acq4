@@ -145,6 +145,9 @@ class AutopatchWindow(Qt.QWidget):
         self.statusPanel.sigInteractionLocked.connect(
             self.searchPanel.setInteractionLocked
         )
+        self.statusPanel.sigInteractionLocked.connect(
+            self.cellPanel.setInteractionLocked
+        )
         # Coverage advances on the worker thread as the producer images tiles, so
         # the readout is refreshed off a status change rather than polled. Routed
         # through StatusPanel, not connected to the orchestrator directly: the
@@ -229,6 +232,12 @@ class AutopatchWindow(Qt.QWidget):
         now, and yanking a pipette out mid-protocol is its own hazard. The
         operator who has physically swapped the tissue presses Stop for that.
 
+        Its terminal disposition is suppressed instead, so finishing on the
+        discarded tissue does not hand its coordinate back to Area 5 as a
+        completed -- and therefore reusable -- cell. See Orchestrator.
+        abandonCellInHand for exactly which orderings that covers, and the one
+        it does not.
+
         The slice directory is created before anything is discarded. Creating it
         is the step that can fail -- an operator who has not chosen a storage
         directory is the likeliest first use of this button -- and a failure that
@@ -267,6 +276,12 @@ class AutopatchWindow(Qt.QWidget):
             # orchestrator's deque is a separate strong reference to the same
             # cells and would keep handing them to the protocol.
             self.orchestrator.clearQueue()
+            # Alongside clearQueue(), never inside it: this is the caller that
+            # means "the tissue is gone". _onTissueMoved's rescan branch clears
+            # the same queue meaning "the tissue moved", and the cell that lost
+            # tracking there has to keep reporting its disposition -- that row is
+            # the operator's session record.
+            self.orchestrator.abandonCellInHand()
         self._refreshSurveyStats()
 
     def addRegionHere(self) -> None:
