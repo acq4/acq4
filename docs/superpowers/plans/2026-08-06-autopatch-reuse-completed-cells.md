@@ -394,7 +394,7 @@ while a different set is checked.
 ### Task 3: "Check all completed" button
 
 **Files:**
-- Modify: `acq4/modules/Autopatch/cell_panel.py` (button row in `__init__`; new `_onCheckAllCompleted`, `_updateCheckAllButton`, `_hasCompletedCell`; call the refresh from `_onCellFinished`, `_onCellsDiscarded` and `clearCells` — **not** from `addCell`, since a cell with no disposition cannot change the completed set)
+- Modify: `acq4/modules/Autopatch/cell_panel.py` (button row in `__init__`; new `_onCheckAllCompleted`, `_updateCheckAllButton`, `_hasCompletedCell`; call the refresh from `_onCellFinished` and `clearCells` only — **not** from `addCell` (a cell with no disposition cannot change the completed set) and **not** from `_onCellsDiscarded` (see the note in Step 3))
 - Test: `acq4/modules/Autopatch/tests/test_cell_panel.py`
 
 **Interfaces:**
@@ -467,22 +467,22 @@ def test_check_all_completed_enables_once_a_cell_completes(qapp):
     assert panel.checkAllCompletedBtn.isEnabled()
 
 
-def test_check_all_completed_disables_again_once_the_completed_cell_is_gone(qapp):
-    """A rescan can discard the last completed cell's row; the button must not
-    stay enabled over an empty selection."""
+def test_check_all_completed_disables_again_once_the_panel_is_cleared(qapp):
+    """The button must not stay enabled over a selection that no longer exists."""
     from acq4.modules.Autopatch.cell_panel import CellPanel
 
     panel = CellPanel()
     cell = object()
     panel.addCell(cell)
-    panel._status[id(cell)] = "done"
-    panel._updateCheckAllButton()
+    panel._onCellFinished(cell, "done")
     assert panel.checkAllCompletedBtn.isEnabled()
 
-    panel.discardCells([cell])
+    panel.clearCells()
 
     assert not panel.checkAllCompletedBtn.isEnabled()
 ```
+
+**Do not add a `discardCells` variant of that test, and do not refresh this button from `_onCellsDiscarded`.** A rescan cannot change the completed set: `_onCellsDiscarded` skips any cell `isAttempted()` reports, and `_onCellFinished` marks a cell attempted *before* it can record a disposition — so no cell that owns a disposition is ever reachable by that loop. A test for it would have to prime `_status` directly, i.e. test a state production cannot produce.
 
 - [ ] **Step 2: Run the tests to verify they fail**
 
@@ -538,7 +538,7 @@ Add the handler and the refresh helper, after `disposition()`:
         return any(status in COMPLETED for status in self._status.values())
 ```
 
-Call the refresh wherever the completed set can change — three places, each as the last statement of the method: at the end of `_onCellFinished`, after the `for` loop in `_onCellsDiscarded`, and at the end of `clearCells`. The same one line in each:
+Call the refresh at the two places the completed set can change, each as the last statement of the method: the end of `_onCellFinished` and the end of `clearCells`. The same one line in each:
 
 ```python
         self._updateCheckAllButton()
@@ -948,7 +948,7 @@ In `unbindOrchestrator`, after `self._orchestrator = None`:
         self._updateReuseButton()
 ```
 
-And beside each `self._updateCheckAllButton()` call Task 3 added to `_onCellsDiscarded` and `clearCells` — removing rows changes which cells are checked, and `takeItem()` emits no `itemChanged`, so nothing else re-evaluates the gate:
+And at the end of both `_onCellsDiscarded` (after its `for` loop) and `clearCells` — removing rows changes which cells are checked, and `takeItem()` emits no `itemChanged`, so nothing else re-evaluates the gate. Unlike the check-all button, this one genuinely needs the `_onCellsDiscarded` call: an operator can tick a never-run queued row, and a rescan discards exactly those:
 
 ```python
         self._updateReuseButton()
