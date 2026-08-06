@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 
+from acq4.experiment.actions.prompt import prompt
 from acq4.experiment.orchestrator import Orchestrator
 from acq4.experiment.search_region import EllipseRegion, RectRegion
 from acq4.experiment.slice import Slice
@@ -283,6 +284,45 @@ class AutopatchWindow(Qt.QWidget):
         if status in ("surveying", "waiting"):
             self._refreshSurveyStats()
 
+    def _onTissueMoved(self, cell, ctx, reason: str) -> None:
+        """ExecutionContext.tissue_moved, cell-bound by the context factory.
+
+        Runs on the orchestrator's worker thread, mid-cell. Never returns: both
+        answers end the cell.
+
+        The operator decides, because a rescan is destructive in its own way --
+        it re-images ground already searched and can re-detect cells already
+        worked. "Rescan the slice" is offered first and is therefore what a
+        headless run picks: driving a pipette to a coordinate known to be stale
+        is a hardware risk, while patching a cell twice is a data-hygiene cost,
+        so the cheaper mistake goes first.
+        """
+        pending = len(self.orchestrator.pendingCells()) if self.orchestrator else 0
+        answer = prompt(
+            ctx,
+            message=(
+                f"Cell tracking could not re-find this cell ({reason}).\n"
+                "The tissue may have moved. Rescanning discards the "
+                f"{pending} cell(s) still queued and re-images this region; "
+                "cells already patched may be found again."
+            ),
+            title="Tissue may have moved",
+            choices=("Rescan the slice", "Skip this cell only"),
+        )
+        if answer == "Rescan the slice":
+            if self.slice is not None:
+                self.slice.forceRescan(cell.position, self.cellPanel.isAttempted)
+            if self.orchestrator is not None:
+                # After the answer, not before: a cell the operator seeds by
+                # hand while the prompt is open is a coordinate in the same
+                # moved tissue and goes with the rest.
+                self.orchestrator.clearQueue()
+                self.orchestrator.clearProducerExhausted()
+        # Area 2's survey readout is deliberately not refreshed here: this is the
+        # worker thread, and _refreshSurveyStats touches widgets. The next status
+        # change routes through _onRunStatus on the GUI thread and picks it up.
+        ctx.next_cell()
+
     def _onStartRun(self) -> None:
         """Snapshot GUI-thread-only state and install the cell producer at Start.
 
@@ -337,6 +377,7 @@ class AutopatchWindow(Qt.QWidget):
             manager=self.manager,
             log=self.cellPanel.appendLog,
             onLogAction=self.cellPanel.onLogAction,
+            tissueMoved=self._onTissueMoved,
         )
         self.orchestrator = Orchestrator(
             protocolFile, manager=self.manager, contextFactory=contextFactory

@@ -14,6 +14,7 @@ def make_context_factory(
     manager,
     log: Callable[[object, str], None] | None = None,
     onLogAction: Callable[[object, object], None] | None = None,
+    tissueMoved: Callable[[object, object, str], None] | None = None,
 ) -> Callable[[object], ExecutionContext]:
     def _factory(cell) -> ExecutionContext:
         kwargs = dict(cell=cell, pipette=pipetteGetter(), manager=manager)
@@ -26,6 +27,12 @@ def make_context_factory(
             # bind this cell the same way, so the UI-side sink (onLogAction)
             # knows which cell an ActionLogEntry belongs to.
             kwargs["on_log_action"] = partial(onLogAction, cell)
+        if tissueMoved is not None:
+            # Only the cell is bound in. ExecutionContext.tissue_moved passes
+            # itself at call time, so the context is never captured in a closure
+            # it also owns -- that would be a self-reference the cyclic GC alone
+            # could break.
+            kwargs["tissue_moved_hook"] = partial(tissueMoved, cell)
         return ExecutionContext(**kwargs)
 
     return _factory

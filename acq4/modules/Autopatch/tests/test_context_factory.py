@@ -90,3 +90,25 @@ def test_factory_binds_on_log_action_per_cell_so_entries_can_be_scoped():
     ctxB.on_log_action(entryB)
 
     assert calls == [(cellA, entryA), (cellB, entryB)]
+
+
+def test_tissue_moved_hook_is_bound_per_cell():
+    from acq4.modules.Autopatch.context_factory import make_context_factory
+
+    seen = []
+    factory = make_context_factory(
+        pipetteGetter=lambda: None,
+        manager=None,
+        tissueMoved=lambda cell, ctx, reason: seen.append((cell, reason)),
+    )
+    cell = object()
+    ctx = factory(cell)
+    ctx.tissue_moved_hook(ctx, "drifted")
+    assert seen == [(cell, "drifted")]
+
+
+def test_no_tissue_moved_hook_leaves_the_context_on_its_safe_default():
+    from acq4.modules.Autopatch.context_factory import make_context_factory
+
+    factory = make_context_factory(pipetteGetter=lambda: None, manager=None)
+    assert factory(object()).tissue_moved_hook is None

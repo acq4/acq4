@@ -1,11 +1,17 @@
 """Integration test: loading a protocol builds and binds a fresh Orchestrator
 to the window's StatusPanel/CellPanel, and a seeded cell runs end-to-end."""
+import importlib
 import os
 
 import pytest
+from coorx import Point
 
+from acq4.experiment.context import ExecutionContext
+from acq4.experiment.exceptions import AdvanceToNextCell
 from acq4.experiment.search_region import EllipseRegion, RectRegion
+from acq4.experiment.slice import Slice
 from acq4.util import Qt
+from acq4_automation.feature_tracking.cell import Cell
 
 
 @pytest.fixture(scope="module")
@@ -171,6 +177,11 @@ def run(ctx, **kwargs):
 def _write_protocol(path, name, body):
     with open(os.path.join(path, name), "w") as fh:
         fh.write(body)
+
+
+@pytest.fixture
+def win(qapp, tmp_path):
+    return _makeWindow(tmp_path)
 
 
 def test_loading_a_protocol_builds_and_binds_an_orchestrator(qapp, tmp_path):
@@ -957,3 +968,90 @@ def test_the_survey_readout_follows_the_slices_coverage(qapp, tmp_path):
     win.statusPanel.sigStatusChanged.emit("surveying")
 
     assert f"1/{total}" in win.searchPanel.surveyLabel.text()
+
+
+# acq4.modules.Autopatch's __init__.py does `from .Autopatch import Autopatch`,
+# which re-exports the Module subclass under the same name as the submodule and
+# shadows it on the package: a dotted-string monkeypatch target
+# ("acq4.modules.Autopatch.Autopatch.prompt") resolves attribute-by-attribute and
+# lands on that class rather than the submodule, so `prompt` isn't found there.
+# importlib.import_module goes through sys.modules instead and reaches the
+# actual submodule, where AutopatchWindow._onTissueMoved's module-level `prompt`
+# name lives.
+_autopatchModule = importlib.import_module("acq4.modules.Autopatch.Autopatch")
+
+
+def _sliceWithCoveredTiles(win):
+    """Install a Slice on `win` with one fully-covered region at a realistic,
+    non-square stage coordinate, seed a cell inside its first tile, enqueue a
+    second cell on the orchestrator, and return (slice, cell, ctx).
+
+    Built directly rather than through win.newSlice()/addRegionHere(): those
+    size the region off the fake camera's micrometre-scale field of view,
+    which cannot expose the millimetre-magnitude float error a real stage
+    position can. Not origin-centered and not square, for the same reason.
+    """
+    slice_ = Slice(fov=(20e-6, 10e-6))
+    slice_.addRegion(RectRegion(1e-3, 2e-3, 1e-3 + 60e-6, 2e-3 + 30e-6))
+    for tile in slice_.tileGrid():
+        slice_.markCovered(tile)
+    win.slice = slice_
+
+    tile = slice_.tileGrid()[0]
+    cell = Cell(Point([tile[0], tile[1], -30e-6], "global"))
+    secondCell = Cell(Point([tile[0] + 5e-6, tile[1], -30e-6], "global"))
+    win.orchestrator.enqueue(secondCell)
+
+    return slice_, cell, ExecutionContext(cell=cell)
+
+
+def test_tissue_moved_rescans_and_clears_the_queue_on_the_first_answer(win, monkeypatch):
+    monkeypatch.setattr(
+        _autopatchModule, "prompt", lambda ctx, **kw: "Rescan the slice"
+    )
+    slice_, cell, ctx = _sliceWithCoveredTiles(win)
+
+    with pytest.raises(AdvanceToNextCell):
+        win._onTissueMoved(cell, ctx, "no features")
+
+    assert slice_.coveredTiles == []
+    assert win.orchestrator.pendingCells() == []
+    assert win.orchestrator._producerExhausted is False
+
+
+def test_tissue_moved_leaves_everything_alone_on_the_second_answer(win, monkeypatch):
+    monkeypatch.setattr(
+        _autopatchModule, "prompt", lambda ctx, **kw: "Skip this cell only"
+    )
+    slice_, cell, ctx = _sliceWithCoveredTiles(win)
+    coveredBefore = list(slice_.coveredTiles)
+    pendingBefore = win.orchestrator.pendingCells()
+
+    with pytest.raises(AdvanceToNextCell):
+        win._onTissueMoved(cell, ctx, "no features")
+
+    assert slice_.coveredTiles == coveredBefore
+    assert win.orchestrator.pendingCells() == pendingBefore
+
+
+def test_tissue_moved_ends_the_cell_on_both_answers(win, monkeypatch):
+    for answer in ("Rescan the slice", "Skip this cell only"):
+        monkeypatch.setattr(_autopatchModule, "prompt", lambda ctx, **kw: answer)
+        _slice, cell, ctx = _sliceWithCoveredTiles(win)
+        with pytest.raises(AdvanceToNextCell):
+            win._onTissueMoved(cell, ctx, "no features")
+
+
+def test_tissue_moved_keeps_attempted_cells_in_the_density_record(win, monkeypatch):
+    monkeypatch.setattr(
+        _autopatchModule, "prompt", lambda ctx, **kw: "Rescan the slice"
+    )
+    slice_, cell, ctx = _sliceWithCoveredTiles(win)
+    tile = slice_.tileGrid()[0]
+    win.cellPanel._onCellFinished(cell, "done")
+    slice_.registerCells([cell])
+
+    with pytest.raises(AdvanceToNextCell):
+        win._onTissueMoved(cell, ctx, "no features")
+
+    assert cell in slice_.cellsNearTile(tile)
