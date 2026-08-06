@@ -7,7 +7,7 @@ from acq4.logging_config import get_logger
 from acq4.util.task import Stopped, check_stop, asynch_with_qt_signals, set_state, sleep, synch
 from acq4.util.task import run_in_gui_thread
 from acq4.util.imaging.sequencer import run_image_sequence
-from .feature_tracking import DEFORMATION_TOLERANCE
+from .feature_tracking import DEFORMATION_TOLERANCE, saveTrackingHistory
 from ..TaskRunner import TaskRunner
 from ...Manager import Manager
 from ...util.DataManager import DirHandle
@@ -393,24 +393,8 @@ class Autopatcher:
         logger.warning("Autopatch: Task runner sequence completed.")
 
     def _saveTrackingHistory(self, cell, cell_dir) -> None:
-        """Save the cell's tracking history to an .acqtrack file in cell_dir.
-
-        Silently skips when there is nothing to save (no cell, no tracker, or no
-        recorded tracking results). Exceptions from the save are logged and
-        swallowed so a failed save never aborts the demo loop.
-        """
-        if cell is None:
-            return
-        tracker = getattr(cell, "_tracker", None)
-        if tracker is None or not tracker.tracking_results:
-            return
-        try:
-            # writeFile, not a raw path write: it records the file's type in the index
-            # and emits the 'children' change that puts it in the Data Manager tree.
-            fh = cell_dir.writeFile(tracker, "tracking_history", fileType="AcqTrackFile")
-            logger.info(f"Saved tracking history to {fh.name()}")
-        except Exception:
-            logger.exception("Failed to save tracking history")
+        """Save the cell's tracking history to an .acqtrack file in cell_dir."""
+        saveTrackingHistory(cell, cell_dir)
 
     def _saveStack(self, name):
         ppip = self._window.patchPipetteDevice
