@@ -526,6 +526,17 @@ def test_force_rescan_accepts_a_3d_coorx_point_position():
     assert all(far.overlapsTile(t, (20e-6, 10e-6)) for t in remaining)
 
 
+def test_slice_holds_its_data_directory():
+    handle = object()
+    assert Slice(fov=(20e-6, 10e-6), dirHandle=handle).dirHandle is handle
+
+
+def test_slice_without_a_data_directory_is_valid():
+    # A slice created implicitly by "Add region here" was never formally started
+    # and honestly has no directory.
+    assert Slice(fov=(20e-6, 10e-6)).dirHandle is None
+
+
 def test_force_rescan_uncovers_every_overlapping_region():
     # Overlapping regions both hold the position, so both must be re-imaged.
     s = Slice(fov=(20e-6, 10e-6))

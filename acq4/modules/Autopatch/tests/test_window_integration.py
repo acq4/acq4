@@ -2,10 +2,12 @@
 to the window's StatusPanel/CellPanel, and a seeded cell runs end-to-end."""
 import importlib
 import os
+from types import SimpleNamespace
 
 import pytest
 from coorx import Point
 
+import acq4.util.DataManager as dm
 from acq4.experiment.context import ExecutionContext
 from acq4.experiment.exceptions import AdvanceToNextCell
 from acq4.experiment.search_region import EllipseRegion, RectRegion
@@ -147,23 +149,59 @@ class _FakeCameraWithDevice(Qt.QWidget):
         return self.camera
 
 
+# The one folder type newSlice() asks create_data_dir for. A real Manager's
+# config carries many more, but this window only ever creates a "Slice".
+_FOLDER_TYPES = {"Slice": {"name": "Slice_%Y%m%d_%H%M%S", "experimentalUnit": False}}
+
+
+class _FakeManager:
+    """Stands in for Manager: backed by a real DirHandle (on tmp_path) so
+    create_data_dir's mkdir/setInfo calls land on an actual directory, the way
+    they would through the real Manager AutopatchWindow otherwise gets from
+    its module."""
+
+    def __init__(self, root_dir):
+        self._current_dir = root_dir
+
+    def getCurrentDir(self):
+        return self._current_dir
+
+    def setCurrentDir(self, d):
+        self._current_dir = d
+
+    def folderTypesConfig(self):
+        return _FOLDER_TYPES
+
+
 def _makeWindow(tmp_path, cameraSelector=None):
     """An AutopatchWindow with a loaded no-op protocol and a camera-backed
     selector, for tests that don't care about protocol content but do need a
-    working camera to seed a slice or region."""
+    working camera to seed a slice or region.
+
+    Also wires up a manager backed by a real (temporary) managed directory, so
+    newSlice()'s create_data_dir call has somewhere real to write -- kept in a
+    subdirectory of tmp_path separate from the protocol files written directly
+    into tmp_path above."""
     from acq4.modules.Autopatch.Autopatch import AutopatchWindow
 
     if cameraSelector is None:
         cameraSelector = _FakeCameraWithDevice()
     _write_protocol(tmp_path, "demo.py", _NOOP_PROTOCOL)
+    storageRoot = dm.getDirHandle(str(tmp_path / "storage"), create=True)
     win = AutopatchWindow(
-        module=None,
+        module=SimpleNamespace(manager=_FakeManager(storageRoot)),
         protocolDir=str(tmp_path),
         pipetteSelector=_FakePipetteSelector(),
         cameraSelector=cameraSelector,
     )
     win.protocolPanel.fileCombo.setCurrentText("demo")
     return win
+
+
+def _makeCell():
+    """A Cell at an arbitrary global position, standing in for one a real
+    detector would have found -- only its identity matters to these tests."""
+    return Cell(Point([1e-3, 2e-3, -30e-6], "global"))
 
 
 _NOOP_PROTOCOL = '''"""Integration test fixture: resolves immediately without touching ctx."""
@@ -1058,3 +1096,62 @@ def test_tissue_moved_keeps_attempted_cells_in_the_density_record(win, monkeypat
         win._onTissueMoved(cell, ctx, "no features")
 
     assert cell in slice_.cellsNearTile(tile)
+
+
+def test_new_slice_creates_a_slice_directory_and_makes_it_current(win):
+    win.newSlice()
+    assert win.slice.dirHandle is not None
+    assert win.slice.dirHandle.info()["dirType"] == "Slice"
+    assert win.manager.getCurrentDir() is win.slice.dirHandle
+
+
+def test_new_slice_discards_nothing_when_the_directory_cannot_be_made(win):
+    """Directory creation happens before anything is thrown away, so a failed
+    attempt must leave the old slice, the seeded cell's row, and the
+    orchestrator's queue exactly as they were.
+
+    win.newSlice() is called once, successfully, before the failure is
+    injected: the state asserted unchanged below has to be genuinely populated
+    first, or "unchanged" would also describe a window that never started a
+    slice at all.
+    """
+    from acq4.util.HelpfulException import HelpfulException
+
+    win.newSlice()
+    oldSlice = win.slice
+    assert oldSlice is not None
+
+    cell = _makeCell()
+    win.cellPanel.addCell(cell)
+    win.orchestrator.enqueue(cell)
+    assert win.cellPanel.cellList.count() == 1
+
+    def boom(*a, **k):
+        raise HelpfulException("Storage directory has not been set.")
+
+    win.manager.getCurrentDir = boom
+    win.newSlice()
+
+    assert win.slice is oldSlice
+    assert win.cellPanel.cellList.count() == 1
+    assert win.cellPanel.isAttempted(cell) is False
+    assert win.orchestrator.pendingCells() == [cell]
+
+
+def test_new_slice_reports_a_missing_storage_directory_in_area_2(win):
+    from acq4.util.HelpfulException import HelpfulException
+
+    def boom(*a, **k):
+        raise HelpfulException("Storage directory has not been set.")
+
+    win.manager.getCurrentDir = boom
+    win.newSlice()
+
+    assert "Storage directory" in win.searchPanel.errorLabel.text()
+
+
+def test_add_region_here_does_not_create_a_directory(win):
+    # A button labelled "add region" must not silently repoint where every
+    # subsequent write lands.
+    win.addRegionHere()
+    assert win.slice.dirHandle is None

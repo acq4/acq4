@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 
 from acq4.experiment.actions.prompt import prompt
+from acq4.experiment.actions.storage import create_data_dir
 from acq4.experiment.orchestrator import Orchestrator
 from acq4.experiment.search_region import EllipseRegion, RectRegion
 from acq4.experiment.slice import Slice
@@ -164,7 +165,7 @@ class AutopatchWindow(Qt.QWidget):
         if self.protocolPanel.protocolFile is not None:
             self._onProtocolLoaded(self.protocolPanel.protocolFile)
 
-    def _startSlice(self) -> bool:
+    def _startSlice(self, dirHandle=None) -> bool:
         """Install a fresh Slice for the tissue under the objective.
 
         Returns whether one was created: a slice needs the camera's field of
@@ -177,7 +178,10 @@ class AutopatchWindow(Qt.QWidget):
         one place -- but only the construction. Discarding the previous slice's
         queued cells belongs to newSlice() alone: addRegionHere() creating the
         slice that will hold its region must not throw away cells the operator
-        seeded by hand, which is all its button offers to do.
+        seeded by hand, which is all its button offers to do. `dirHandle` is
+        the pass-through for that same reason: newSlice() has already created a
+        directory by the time it calls here, while addRegionHere() calls here
+        with none, which is what leaves its implicit slice's dirHandle at None.
         """
         camera = self.cameraSelector.getSelectedObj()
         if camera is None:
@@ -186,7 +190,9 @@ class AutopatchWindow(Qt.QWidget):
         constraints = self.searchPanel.constraints()
         if constraints is None:
             return False
-        self.slice = Slice(fov=self._cameraFov(camera), constraints=constraints)
+        self.slice = Slice(
+            fov=self._cameraFov(camera), constraints=constraints, dirHandle=dirHandle
+        )
         # There is a camera now, so retract the message above if it is up.
         self.searchPanel.setError("")
         return True
@@ -205,8 +211,21 @@ class AutopatchWindow(Qt.QWidget):
         to completion on the tissue it was found in -- it is being worked right
         now, and yanking a pipette out mid-protocol is its own hazard. The
         operator who has physically swapped the tissue presses Stop for that.
+
+        The slice directory is created before anything is discarded. Creating it
+        is the step that can fail -- an operator who has not chosen a storage
+        directory is the likeliest first use of this button -- and a failure that
+        has already thrown away their cells is worse than the failure itself.
         """
-        if not self._startSlice():
+        try:
+            dirHandle = create_data_dir(self.manager, level="Slice")
+        except Exception as exc:
+            # Area 3's instruction band does not exist yet, so this goes where
+            # the operator already reads "Select a camera before starting a
+            # slice".
+            self.searchPanel.setError(str(exc))
+            return
+        if not self._startSlice(dirHandle=dirHandle):
             return
         self.cellPanel.clearCells()
         if self.orchestrator is not None:

@@ -82,7 +82,7 @@ class Slice:
     refcount-freeable rather than depending on Qt teardown ordering.
     """
 
-    def __init__(self, fov, constraints=None, overlap=0.0):
+    def __init__(self, fov, constraints=None, overlap=0.0, dirHandle=None):
         fov_w, fov_h = fov
         if fov_w <= 0 or fov_h <= 0:
             raise ValueError(f"fov must be positive in both axes, got {fov}")
@@ -94,6 +94,11 @@ class Slice:
         self._regions: list[SearchRegion] = []
         self._covered: list[tuple[float, float]] = []
         self._cells: list = []
+        # The Data Manager directory this slice's data is written under, or None
+        # for a slice that came into existence to hold a region rather than by
+        # way of New slice. The handle is also what a later change would call
+        # setInfo()/info() on to persist regions and coverage.
+        self.dirHandle = dirHandle
 
     # ---- constraints ----
     @property
