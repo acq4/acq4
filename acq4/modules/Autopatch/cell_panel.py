@@ -115,45 +115,6 @@ class CellPanel(Qt.QWidget):
         # that location either. Holds ids and plain strings, never cells, for
         # the same reason _attempted and _status do.
         self._preReuseStatus: dict[int, str] = {}
-        # id(cell) -> the cell itself, for each cell clearCells() deliberately
-        # forgot while it might still be in flight -- the "New slice" path
-        # (AutopatchWindow.newSlice), which discards Area 5 and the
-        # orchestrator's queue but leaves the cell already running on the tissue
-        # the operator has just declared gone. That cell's announcements are
-        # queued connections, so they land after the wipe; ignored here (see
-        # _onCurrentCell/_onCellFinished, and _onLogMessage/_onActionEntry for
-        # the paths that write no announcement but do key state off the cell
-        # id), they cannot bring back a row, an _attempted flag, or a
-        # disposition that would offer a coordinate in discarded tissue up to
-        # "Check all completed" and from there to reuse.
-        #
-        # Accumulated across wipes rather than replaced by each one: clearCells()
-        # empties self._cells, which is where a wipe reads its own entry from, so
-        # a second wipe -- two deliberate slice swaps in a row, or one
-        # double-click on a New slice button that is never disabled mid-run --
-        # has nothing of its own left to remember and would otherwise drop the
-        # cell still running from before the first one.
-        #
-        # Each wipe contributes at most the one cell the orchestrator has in
-        # hand (Orchestrator.currentCell), so this holds at most one entry per
-        # wipe made while a cell is being processed.
-        # An entry leaves on that cell's terminal finish, or -- for a pass that
-        # reports no terminal disposition at all, which
-        # Orchestrator._processCell's retry loop allows, since its _checkPause()
-        # and context construction sit outside the try that reports
-        # "stopped"/"error" -- on an idle announcement handled at a moment when
-        # the orchestrator has that cell no longer in hand, so it has nothing
-        # left to announce about it (see _onCurrentCell, which asks rather than
-        # taking the announcement's word for what is in hand). A worker thread
-        # wedged before either announcement is the one case that leaves an entry
-        # here for the rest of the panel's life.
-        #
-        # Holds the cells themselves, unlike every other store here: an id whose
-        # cell has been freed can be recycled by an unrelated new cell, whose own
-        # announcements would then be silently dropped -- no row at all for a
-        # cell that really is running. The reference is what keeps that address
-        # from being handed out again.
-        self._forgotten: dict[int, object] = {}
         # id(entry) of whichever entry's widget currently occupies
         # showContainer, or None if it's empty. An action can nest a
         # log_action block inside another still-open one -- prompt() opens an
@@ -300,43 +261,14 @@ class CellPanel(Qt.QWidget):
         per-cell signal connections a future change might add) to match --
         nothing here should still reference a Cell afterward.
 
-        A cell that might still be announced after this wipe is remembered in
-        self._forgotten rather than merely dropped, so its later announcements
-        are ignored instead of resurrecting it. Only while an orchestrator is
-        still bound to announce it, which is what separates the two callers:
-        AutopatchWindow.newSlice() clears with one bound and a cell possibly in
-        flight, while AutopatchWindow.teardown() unbinds first, so the teardown
-        path retains nothing at all -- exactly what tests/test_teardown.py
-        proves by refcounting alone.
-
-        That split is an ordering assumption about the callers: an unbound wipe
-        forgets nothing, because there is no orchestrator to ask what is in hand,
-        so unbind -> clearCells() -> rebind the *same* orchestrator would leave a
-        cell still being processed unremembered and reopen the hazard above. No
-        caller does that today (AutopatchWindow._onProtocolLoaded always builds a
-        fresh Orchestrator, and teardown() never rebinds), but both methods are
-        public, so a future one must not.
+        A cell still in flight when this runs goes on to finish on tissue the
+        caller has declared gone. Keeping its terminal disposition -- and with it
+        its eligibility for reuse -- off this list is the orchestrator's job, not
+        this method's: AutopatchWindow.newSlice() pairs this call with
+        Orchestrator.abandonCellInHand(), which suppresses that disposition at
+        the emit, on the worker thread. See that method for why the decision
+        cannot be made from here.
         """
-        if self._orchestrator is None:
-            self._forgotten.clear()
-        else:
-            # Scoped to the one cell that could actually still be announced: the
-            # one the orchestrator has in hand right now, which it answers
-            # directly (Orchestrator.currentCell) rather than through an
-            # announcement. sigCurrentCell is a queued connection, so this
-            # method can run before the announcement for a cell the worker
-            # thread has already taken off the queue; anything keyed off what
-            # this panel was told would miss exactly that cell, and it is the one
-            # cell running on the tissue the caller has just declared gone.
-            #
-            # A cell still sitting in the queue goes away with the queue this
-            # method's caller clears, so no announcement is coming for it and
-            # holding one would pin its tracker and reference stack for nothing.
-            # Added to whatever earlier wipes remembered rather than replacing
-            # it, for the reason self._forgotten's own comment gives.
-            running = self._orchestrator.currentCell()
-            if running is not None:
-                self._forgotten[id(running)] = running
         self._cells.clear()
         # Cleared alongside self._cells, which is what the flush resolves these
         # ids against: an id left behind here would either raise a KeyError on
@@ -644,14 +576,6 @@ class CellPanel(Qt.QWidget):
         self.sigLogMessage.emit(cell, message)
 
     def _onLogMessage(self, cell, message: str) -> None:
-        if id(cell) in self._forgotten:
-            # Deliberately forgotten while it might still be in flight (see
-            # self._forgotten), and still logging against tissue the operator
-            # has declared gone. This store is keyed by cell id and would
-            # repopulate under an id with no row at all, so once that address is
-            # recycled a new cell at it would inherit the old slice's log as its
-            # own provenance.
-            return
         self._logs.setdefault(id(cell), []).append(message)
         if cell is self._currentSelectedCell():
             self.logView.appendPlainText(message)
@@ -662,45 +586,11 @@ class CellPanel(Qt.QWidget):
         # onLogAction()/sigActionEntry below), which drives the timeline rows
         # and the details container directly.
         if cell is None:
-            # The orchestrator reported having no cell in hand. Its run loop
-            # emits this however that loop ended (Orchestrator._runLoopBody's
-            # finally), and again before each survey, and it is the only release
-            # a pass that never reported a terminal disposition gets (see
-            # self._forgotten) -- so the store empties here, except for whatever
-            # the orchestrator has in hand at this instant, which it is asked for
-            # directly (Orchestrator.currentCell) rather than read off this
-            # announcement.
-            #
-            # Those two can name different cells: this is a queued connection, so
-            # by the time this slot runs the worker thread may have taken a
-            # further cell in hand -- the emission before a survey is followed by
-            # exactly that, the refilled queue's first cell -- and a wipe may
-            # already have forgotten it. Every announcement that cell has to make
-            # is still to come, so releasing it here would let those give a
-            # coordinate in discarded tissue a row, an _attempted flag and a
-            # terminal disposition, which is the whole hazard self._forgotten
-            # exists to prevent. It keeps its entry, and keeps its own releases:
-            # its terminal finish in _onCellFinished, or a later idle
-            # announcement handled once it is no longer in hand.
-            #
-            # An unbound panel releases everything, for the reason clearCells()
-            # remembers nothing when unbound: with no orchestrator there is
-            # nobody left to announce anything about any cell.
-            running = (
-                None if self._orchestrator is None else self._orchestrator.currentCell()
-            )
-            self._forgotten = {
-                cellId: forgotten
-                for cellId, forgotten in self._forgotten.items()
-                if forgotten is running
-            }
-            return
-        if id(cell) in self._forgotten:
-            # Deliberately forgotten while it might still be in flight (see
-            # self._forgotten): nothing this announcement carries may be
-            # recorded, and the cell is released on its terminal finish in
-            # _onCellFinished rather than here -- a cell announced as current
-            # again (a retry) still has that finish to come.
+            # The orchestrator reported having no cell in hand -- emitted however
+            # its run loop ended, and again before each survey. There is no cell
+            # to attribute anything to, and no row of any other cell's to change:
+            # a row already reads whatever that cell's own last announcement made
+            # it read.
             return
         self._attempted.add(id(cell))
         item = self._rows.get(id(cell))
@@ -746,14 +636,6 @@ class CellPanel(Qt.QWidget):
         self.sigActionEntry.emit(cell, entry, "started")
 
     def _onActionEntry(self, cell, entry, phase: str) -> None:
-        if id(cell) in self._forgotten:
-            # Same wipe and the same reason as _onLogMessage: a forgotten cell
-            # goes on opening action entries, and the timeline stores are keyed
-            # by cell id the same way, so a recycled address would inherit the
-            # old slice's timeline rows. Nothing of this cell's is on screen to
-            # update either -- its row is gone, so it cannot be the selected
-            # cell.
-            return
         if phase == "started":
             self._appendTimelineRow(cell, entry)
         elif phase == "finished":
@@ -819,16 +701,6 @@ class CellPanel(Qt.QWidget):
         # never re-enqueue and never mark it as awaiting one. A cell that has
         # finished is the clearest case of all: enqueuing it again patches a
         # cell that has already been worked.
-        if id(cell) in self._forgotten:
-            # Deliberately forgotten while it might still be in flight (see
-            # self._forgotten). Released once its disposition is terminal: that
-            # is the last announcement it has to make, so there is nothing left
-            # to ignore and no reason to hold it any longer. A non-terminal
-            # "retry" is mid-flight, with the real finish still to come, so it
-            # stays.
-            if status in TERMINAL:
-                del self._forgotten[id(cell)]
-            return
         self._attempted.add(id(cell))
         if status in TERMINAL:
             self._status[id(cell)] = status
