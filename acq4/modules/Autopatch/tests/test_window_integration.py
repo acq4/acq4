@@ -1267,3 +1267,34 @@ def test_a_run_in_flight_locks_area_5s_reuse_button(qapp, tmp_path):
         assert win.cellPanel.reuseCheckedCellsBtn.isEnabled()
     finally:
         win.teardown()
+
+
+_RAISING_PROTOCOL = '''
+def run(ctx):
+    raise RuntimeError("protocol blew up")
+'''
+
+
+def test_start_is_enabled_again_after_a_run_that_ends_in_error(qapp, tmp_path):
+    """An operator whose run died must be able to press Start again -- e.g.
+    after reusing the cells it never got to. That works only because
+    _runLoopBody's finally emits "waiting" *after* _processCell emits "error",
+    and "error" on its own disables Start. Asserted through the real
+    orchestrator rather than a synthetic sigStatus("waiting").
+    """
+    from acq4.experiment.exceptions import AbortExperiment
+
+    _write_protocol(tmp_path, "boom.py", _RAISING_PROTOCOL)
+    win = _makeWindow(tmp_path)
+    try:
+        win.protocolPanel.fileCombo.setCurrentText("boom")
+        cell = _makeCell()
+        win.cellPanel.addCell(cell)
+        win.orchestrator.enqueue(cell)
+
+        with pytest.raises(AbortExperiment):
+            win.orchestrator.run_sync()
+
+        assert win.statusPanel.startBtn.isEnabled()
+    finally:
+        win.teardown()
