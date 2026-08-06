@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import os
 
+from acq4.experiment.actions.prompt import prompt
+from acq4.experiment.actions.storage import create_data_dir
 from acq4.experiment.orchestrator import Orchestrator
 from acq4.experiment.search_region import EllipseRegion, RectRegion
 from acq4.experiment.slice import Slice
 from acq4.experiment.tile_detector import make_tile_detector
 from acq4.modules.Module import Module
 from acq4.util import Qt
+from acq4.util.HelpfulException import HelpfulException
 from acq4.util.InterfaceCombo import InterfaceCombo
 
 from .cell_panel import CellPanel
@@ -163,7 +166,25 @@ class AutopatchWindow(Qt.QWidget):
         if self.protocolPanel.protocolFile is not None:
             self._onProtocolLoaded(self.protocolPanel.protocolFile)
 
-    def _startSlice(self) -> bool:
+    def _canStartSlice(self) -> bool:
+        """Whether the camera and search constraints currently support
+        starting a slice, reporting the reason through SearchPanel exactly as
+        _startSlice() itself does.
+
+        Split out so newSlice() can run this check before create_data_dir()
+        commits to a new storage directory -- constructing the Slice remains
+        _startSlice()'s job alone, called only once directory creation has
+        already succeeded.
+        """
+        camera = self.cameraSelector.getSelectedObj()
+        if camera is None:
+            self.searchPanel.setError("Select a camera before starting a slice.")
+            return False
+        if self.searchPanel.constraints() is None:
+            return False
+        return True
+
+    def _startSlice(self, dirHandle=None) -> bool:
         """Install a fresh Slice for the tissue under the objective.
 
         Returns whether one was created: a slice needs the camera's field of
@@ -176,16 +197,19 @@ class AutopatchWindow(Qt.QWidget):
         one place -- but only the construction. Discarding the previous slice's
         queued cells belongs to newSlice() alone: addRegionHere() creating the
         slice that will hold its region must not throw away cells the operator
-        seeded by hand, which is all its button offers to do.
+        seeded by hand, which is all its button offers to do. `dirHandle` is
+        the pass-through for that same reason: newSlice() has already created a
+        directory by the time it calls here, while addRegionHere() calls here
+        with none, which is what leaves its implicit slice's dirHandle at None.
         """
+        if not self._canStartSlice():
+            return False
         camera = self.cameraSelector.getSelectedObj()
-        if camera is None:
-            self.searchPanel.setError("Select a camera before starting a slice.")
-            return False
         constraints = self.searchPanel.constraints()
-        if constraints is None:
-            return False
-        self.slice = Slice(fov=self._cameraFov(camera), constraints=constraints)
+        self.slice = Slice(
+            fov=self._cameraFov(camera), constraints=constraints, dirHandle=dirHandle
+        )
+        self.searchPanel.setSliceReady(True)
         # There is a camera now, so retract the message above if it is up.
         self.searchPanel.setError("")
         return True
@@ -204,8 +228,31 @@ class AutopatchWindow(Qt.QWidget):
         to completion on the tissue it was found in -- it is being worked right
         now, and yanking a pipette out mid-protocol is its own hazard. The
         operator who has physically swapped the tissue presses Stop for that.
+
+        The slice directory is created before anything is discarded. Creating it
+        is the step that can fail -- an operator who has not chosen a storage
+        directory is the likeliest first use of this button -- and a failure that
+        has already thrown away their cells is worse than the failure itself.
+
+        The camera/constraints check runs before that directory is even
+        created, though: those are the likelier first-use failure, and an
+        operator missing a camera should not have storage repointed into a
+        fresh, empty Slice directory before finding that out.
         """
-        if not self._startSlice():
+        if not self._canStartSlice():
+            return
+        try:
+            dirHandle = create_data_dir(self.manager, level="Slice")
+        except HelpfulException as exc:
+            # Area 3's instruction band does not exist yet, so this goes where
+            # the operator already reads "Select a camera before starting a
+            # slice". Narrowed to HelpfulException -- the "Storage directory
+            # has not been set." case -- so a genuine programming error (a
+            # missing manager, say) propagates instead of being reported as
+            # storage guidance.
+            self.searchPanel.setError(str(exc))
+            return
+        if not self._startSlice(dirHandle=dirHandle):
             return
         self.cellPanel.clearCells()
         if self.orchestrator is not None:
@@ -283,6 +330,53 @@ class AutopatchWindow(Qt.QWidget):
         if status in ("surveying", "waiting"):
             self._refreshSurveyStats()
 
+    def _onTissueMoved(self, cell, ctx, reason: str) -> None:
+        """ExecutionContext.tissue_moved, cell-bound by the context factory.
+
+        Runs on the orchestrator's worker thread, mid-cell. Never returns: both
+        answers end the cell.
+
+        The operator decides, because a rescan is destructive in its own way --
+        it re-images ground already searched and can re-detect cells already
+        worked. "Rescan the slice" is offered first and is therefore what a
+        headless run picks: driving a pipette to a coordinate known to be stale
+        is a hardware risk, while patching a cell twice is a data-hygiene cost,
+        so the cheaper mistake goes first.
+        """
+        pending = len(self.orchestrator.pendingCells()) if self.orchestrator else 0
+        answer = prompt(
+            ctx,
+            message=(
+                f"Cell tracking could not re-find this cell ({reason}).\n"
+                "The tissue may have moved. Rescanning discards the "
+                f"{pending} cell(s) still queued and re-images this region; "
+                "cells already patched may be found again."
+            ),
+            title="Tissue may have moved",
+            choices=("Rescan the slice", "Skip this cell only"),
+        )
+        if answer == "Rescan the slice":
+            if self.slice is not None:
+                self.slice.forceRescan(cell.position, self.cellPanel.isAttempted)
+            if self.orchestrator is not None:
+                # Captured before clearQueue(), which is the one call that
+                # makes pendingCells() report nothing at all.
+                discarded = self.orchestrator.pendingCells()
+                # After the answer, not before: a cell the operator seeds by
+                # hand while the prompt is open is a coordinate in the same
+                # moved tissue and goes with the rest.
+                self.orchestrator.clearQueue()
+                self.orchestrator.clearProducerExhausted()
+                # Area 5's rows must match what the operator just agreed to
+                # discard; an attempted cell keeps its row regardless -- it is
+                # the session record, not a stale queued entry -- which is
+                # discardCells()'s own job to enforce.
+                self.cellPanel.discardCells(discarded)
+        # Area 2's survey readout is deliberately not refreshed here: this is the
+        # worker thread, and _refreshSurveyStats touches widgets. The next status
+        # change routes through _onRunStatus on the GUI thread and picks it up.
+        ctx.next_cell()
+
     def _onStartRun(self) -> None:
         """Snapshot GUI-thread-only state and install the cell producer at Start.
 
@@ -337,6 +431,7 @@ class AutopatchWindow(Qt.QWidget):
             manager=self.manager,
             log=self.cellPanel.appendLog,
             onLogAction=self.cellPanel.onLogAction,
+            tissueMoved=self._onTissueMoved,
         )
         self.orchestrator = Orchestrator(
             protocolFile, manager=self.manager, contextFactory=contextFactory

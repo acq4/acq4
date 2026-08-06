@@ -263,3 +263,38 @@ def test_new_data_dir_folder_level_makes_untyped_new_folder(root_dir):
 
     assert new_dir.shortName().startswith("NewFolder")
     assert "dirType" not in new_dir.info()
+
+
+def test_create_data_dir_needs_no_context(root_dir):
+    # A UI button has no run and no ExecutionContext, and must not fabricate one
+    # to reach engine logic.
+    from acq4.experiment.actions.storage import create_data_dir
+
+    man = FakeManager(root_dir)
+    created = create_data_dir(man, level="Slice")
+
+    assert created.info()["dirType"] == "Slice"
+    assert man.getCurrentDir() is created
+
+
+def test_create_data_dir_can_leave_the_current_dir_alone(root_dir):
+    from acq4.experiment.actions.storage import create_data_dir
+
+    man = FakeManager(root_dir)
+    before = man.getCurrentDir()
+    created = create_data_dir(man, level="Slice", set_current=False)
+
+    assert created is not before
+    assert man.getCurrentDir() is before
+
+
+def test_new_data_dir_still_behaves_identically_through_the_wrapper(root_dir):
+    # The action keeps its log_action wrapper and its behaviour; only the body
+    # moved.
+    entries = []
+    man = FakeManager(root_dir)
+    ctx = ExecutionContext(manager=man, on_log_action=entries.append)
+    created = new_data_dir(ctx, level="Slice")
+
+    assert created.info()["dirType"] == "Slice"
+    assert [e.name for e in entries] == ["New Data Directory"]

@@ -609,3 +609,142 @@ def test_current_cell_built_on_another_thread_is_still_freed_by_refcounting(qapp
         assert panel_ref() is None, "panel should be freed by refcounting alone"
     finally:
         gc.enable()
+
+
+def test_a_queued_cell_is_not_attempted(qapp):
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    cell = object()
+    panel.addCell(cell)
+
+    assert panel.isAttempted(cell) is False
+
+
+def test_a_running_cell_is_attempted(qapp):
+    """A cell interrupted mid-run may never emit a terminal status, so
+    starting work on it -- not finishing -- is what marks it."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    cell = object()
+    panel.addCell(cell)
+
+    panel._onCurrentCell(cell)
+
+    assert panel.isAttempted(cell) is True
+
+
+def test_a_finished_cell_is_attempted(qapp):
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    cell = object()
+    panel.addCell(cell)
+
+    panel._onCellFinished(cell, "done")
+
+    assert panel.isAttempted(cell) is True
+
+
+def test_a_cell_finished_without_ever_being_current_is_attempted(qapp):
+    """Orchestrator._processCell can emit "skipped" without sigCurrentCell
+    ever firing for that cell."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    cell = object()
+
+    panel._onCellFinished(cell, "skipped")
+
+    assert panel.isAttempted(cell) is True
+
+
+def test_a_none_current_cell_does_not_crash_or_mark_anything(qapp):
+    """_onCurrentCell(None) must be a genuine no-op: no crash, no row added
+    for it, and no disturbance to a real cell already marked attempted --
+    not just a check against isAttempted(None), which is False by default for
+    any argument and so can never fail."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    cell = object()
+    panel.addCell(cell)
+    panel._onCurrentCell(cell)
+
+    panel._onCurrentCell(None)
+
+    assert panel.isAttempted(cell) is True
+    assert panel.cellList.count() == 1
+
+
+def test_discard_cells_removes_rows_for_cells_never_attempted(qapp):
+    """A rescan discards whatever is still queued when the tissue moved; their
+    rows in Area 5 must go with them, or an operator told "your N queued
+    cells are discarded" still sees them listed as queued."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    discarded = object()
+    panel.addCell(discarded)
+    kept = object()
+    panel.addCell(kept)
+
+    panel.discardCells([discarded])
+
+    assert panel.cellList.count() == 1
+    assert panel.cellList.item(0).data(Qt.Qt.UserRole) is kept
+    assert id(discarded) not in panel._cells
+    assert id(discarded) not in panel._rows
+    assert id(discarded) not in panel._timelines
+    assert id(discarded) not in panel._logs
+
+
+def test_discard_cells_never_removes_an_attempted_cells_row(qapp):
+    """An attempted cell's row is the session record. discardCells() must
+    never drop it, even when it is passed in directly -- e.g. a retried cell
+    still sitting in the queue when the tissue moved."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    attempted = object()
+    panel.addCell(attempted)
+    panel._onCurrentCell(attempted)
+
+    panel.discardCells([attempted])
+
+    assert panel.cellList.count() == 1
+    assert id(attempted) in panel._cells
+    assert panel.isAttempted(attempted) is True
+
+
+def test_discard_cells_drops_the_awaiting_enqueue_bookkeeping(qapp):
+    """A discarded cell seeded before any orchestrator was bound must not be
+    flushed into one bound afterward -- the same hazard clearCells() exists
+    to avoid."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    cell = object()
+    panel.addCell(cell)
+    panel._awaitingEnqueue.append(id(cell))
+
+    panel.discardCells([cell])
+
+    assert panel._awaitingEnqueue == []
+
+
+def test_clear_cells_forgets_the_attempted_set(qapp):
+    """Left behind, a stale id would report a brand-new cell at a reused
+    memory address as already attempted -- the same hazard _awaitingEnqueue
+    is cleared for."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    cell = object()
+    panel.addCell(cell)
+    panel._onCellFinished(cell, "done")
+
+    panel.clearCells()
+
+    assert panel.isAttempted(cell) is False

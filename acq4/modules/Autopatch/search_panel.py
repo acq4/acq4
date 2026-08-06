@@ -44,6 +44,15 @@ class SearchPanel(Qt.QWidget):
         self._constraintError = ""
         self._externalError = ""
 
+        # The two independent reasons this panel can be locked, kept apart for
+        # the same reason the two error strings are: neither writer can see the
+        # other's condition, so collapsing them into one boolean would let a run
+        # ending unlock a panel that still has no slice behind it. A panel with
+        # no slice starts locked -- New slice is what makes Area 2 usable, and
+        # the greyed-out controls are how the operator is told so.
+        self._runLocked = False
+        self._sliceReady = False
+
         # Depths are offsets from the tissue surface, negative being deeper, so
         # the spin boxes read the way the design doc writes them (-20 um to
         # -60 um) rather than as unsigned depths that get subtracted somewhere
@@ -126,6 +135,8 @@ class SearchPanel(Qt.QWidget):
         self.rescansCheck.toggled.connect(self._onEdited)
         self.addRegionBtn.clicked.connect(self.sigAddRegionRequested)
 
+        self._applyLock()
+
     @staticmethod
     def _makeSpin(value, bounds, step, suffix="", siPrefix=False):
         """A pyqtgraph SpinBox, the spin box the rest of acq4 uses for these
@@ -206,6 +217,21 @@ class SearchPanel(Qt.QWidget):
         The constraints parameterise a producer that is already surveying, so
         editing them mid-run would silently change the search under it.
         """
+        self._runLocked = locked
+        self._applyLock()
+
+    def setSliceReady(self, ready: bool) -> None:
+        """Whether a slice exists for these controls to configure.
+
+        Area 2 parameterises a search over a slice, so with no slice there is
+        nothing for these values to mean; New slice is the button that makes
+        them live.
+        """
+        self._sliceReady = ready
+        self._applyLock()
+
+    def _applyLock(self) -> None:
+        locked = self._runLocked or not self._sliceReady
         for w in (
             self.nearDepthSpin,
             self.farDepthSpin,

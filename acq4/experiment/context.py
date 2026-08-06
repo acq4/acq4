@@ -4,9 +4,15 @@ from __future__ import annotations
 
 import contextlib
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any, Callable, NoReturn
 
-from .exceptions import AbortExperiment, AdvanceToNextCell, FlowSignal, RetryCurrentCell
+from .exceptions import (
+    AbortExperiment,
+    AdvanceToNextCell,
+    FlowSignal,
+    RetryCurrentCell,
+    TrackingLost,
+)
 from .log_entry import ActionLogEntry
 
 
@@ -34,6 +40,15 @@ class ExecutionContext:
     # ExecutionContext (as built directly by tests, or a contextFactory that
     # doesn't set it) simply never requests one.
     next_cell_requested: Callable[[], bool] = field(default=_no_next_cell_requested)
+    # Supplied by the Autopatch window's context factory: the capability to
+    # react to a cell the tracker could not re-find. Called as hook(ctx, reason)
+    # -- the context is passed at call time rather than bound into the hook,
+    # because a stored closure over this object would make it reference itself,
+    # and a cycle here is only reclaimable by the cyclic GC. The engine holds no
+    # slice knowledge; this is how the window lends it some.
+    tissue_moved_hook: Callable[[Any, str], None] | None = field(
+        default=None, repr=False
+    )
     # Set by next_cell/retry_cell/abort to the FlowSignal each is about to
     # raise, before raising it -- so the orchestrator can tell, on the
     # success path of a protocol run(), whether a flow signal was raised and
@@ -53,6 +68,22 @@ class ExecutionContext:
     def abort(self) -> None:
         """Stop the whole experiment run."""
         self._raise_flow_signal(AbortExperiment("abort experiment"))
+
+    def tissue_moved(self, reason: str) -> NoReturn:
+        """Report that the tracker could not re-find this cell. Never returns.
+
+        With a hook bound, the window prompts the operator and ends the cell,
+        which leaves this call by way of a FlowSignal. With no hook -- headless,
+        or a context built directly by a test -- a re-find failure is the plain
+        TrackingLost error it is, and the orchestrator's catch-all halts the run.
+
+        The fall-through raise is not dead code: a hook that returns instead of
+        ending the cell would otherwise let the protocol carry on against a
+        coordinate we have just established is stale.
+        """
+        if self.tissue_moved_hook is not None:
+            self.tissue_moved_hook(self, reason)
+        raise TrackingLost(reason)
 
     def _raise_flow_signal(self, exc: FlowSignal) -> None:
         """Record `exc` on pending_flow_signal, then raise it.

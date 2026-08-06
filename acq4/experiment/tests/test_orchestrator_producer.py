@@ -681,3 +681,27 @@ def test_no_producer_never_reports_surveying(make_pf):
     orch.run_sync()
 
     assert "surveying" not in statuses
+
+
+def test_clear_producer_exhausted_lets_an_exhausted_producer_be_asked_again(make_pf):
+    # A producer that reported exhaustion is never asked again for the rest of
+    # the run. After a forced rescan there are uncovered tiles once more, so the
+    # flag has to be cleared or the loop ends on a queue the producer could
+    # have refilled.
+    orch = Orchestrator(make_pf())
+    orch.setCellProducer(lambda: None)
+    orch._producerExhausted = True
+
+    orch.clearProducerExhausted()
+
+    assert orch._producerExhausted is False
+    assert orch._shouldRefill() is True
+
+
+def test_set_cell_producer_still_clears_exhaustion(make_pf):
+    # The extraction must not move behaviour off setCellProducer, which existing
+    # callers rely on.
+    orch = Orchestrator(make_pf())
+    orch._producerExhausted = True
+    orch.setCellProducer(lambda: [])
+    assert orch._producerExhausted is False

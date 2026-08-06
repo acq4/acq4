@@ -82,7 +82,7 @@ class Slice:
     refcount-freeable rather than depending on Qt teardown ordering.
     """
 
-    def __init__(self, fov, constraints=None, overlap=0.0):
+    def __init__(self, fov, constraints=None, overlap=0.0, dirHandle=None):
         fov_w, fov_h = fov
         if fov_w <= 0 or fov_h <= 0:
             raise ValueError(f"fov must be positive in both axes, got {fov}")
@@ -94,6 +94,11 @@ class Slice:
         self._regions: list[SearchRegion] = []
         self._covered: list[tuple[float, float]] = []
         self._cells: list = []
+        # The Data Manager directory this slice's data is written under, or None
+        # for a slice that came into existence to hold a region rather than by
+        # way of New slice. The handle is also what a later change would call
+        # setInfo()/info() on to persist regions and coverage.
+        self.dirHandle = dirHandle
 
     # ---- constraints ----
     @property
@@ -172,6 +177,67 @@ class Slice:
     def resetCoverage(self) -> None:
         """Forget which tiles have been imaged, keeping regions and constraints."""
         self._covered = []
+
+    def forceRescan(self, position, isAttempted) -> int:
+        """Re-open the region(s) around `position` for imaging. Returns tiles freed.
+
+        The response to the tracker losing a cell: the coordinates around it are
+        no longer trustworthy, so the coverage record claiming that ground was
+        already searched has to go, and the cells found there have to be
+        rediscovered where they actually are now.
+
+        Scoped to the region(s) the position falls in, not the whole slice. An
+        operator working through their third region should not pay to re-image
+        the two they finished, and re-imaging a finished region is also a chance
+        to re-detect and re-patch cells already dealt with.
+
+        The cost of that scoping, deliberately accepted: tissue motion is global,
+        while this treats it as local. If the slice genuinely shifted, finished
+        regions are stale too and are not re-imaged here. That is the right
+        trade for settling, drift, and swelling -- motion small relative to a
+        region -- and the wrong one for a slice that was physically bumped, where
+        the tool is New slice rather than a rescan. Nothing here can tell those
+        two cases apart.
+
+        `isAttempted` decides which cells survive. Attempted cells stay
+        registered at their old positions -- near enough, since the motion is
+        small -- so they keep counting toward the density cap and the rescan is
+        less likely to resurface a cell already worked. Never-attempted cells are
+        dropped so their tiles can come back uncrowded and be found again where
+        they now are. The predicate is a parameter because attempted-ness is
+        orchestration state held by the UI, not something a slice can know.
+
+        A position inside no region frees nothing: a hand-seeded cell was never
+        part of the survey, so there is no coverage of it to invalidate.
+
+        `position` is an indexable global coordinate; only `[0]` and `[1]` are
+        read, so a `coorx.Point` and a plain tuple both work, and a 3-D
+        position (as a detected cell's is) works too.
+        """
+        # A region is a shape in the xy plane, so only the first two
+        # coordinates of position matter here; a cell's depth is not part of
+        # the overlap question. Narrowing to a plain (x, y) tuple also lets
+        # this accept a coorx.Point, a Cell.position, or a bare tuple alike.
+        xy = (position[0], position[1])
+        here = [r for r in self._regions if r.overlapsTile(xy, self._fov)]
+        if not here:
+            return 0
+        stale = [
+            t
+            for t in self._covered
+            if any(r.overlapsTile(t, self._fov) for r in here)
+        ]
+        if not stale:
+            return 0
+        drop = set()
+        for tile in stale:
+            for cell in self.cellsNearTile(tile):
+                if not isAttempted(cell):
+                    drop.add(id(cell))
+        self._cells = [c for c in self._cells if id(c) not in drop]
+        stale_ids = {id(t) for t in stale}
+        self._covered = [t for t in self._covered if id(t) not in stale_ids]
+        return len(stale)
 
     @property
     def coveredTiles(self) -> list[tuple[float, float]]:

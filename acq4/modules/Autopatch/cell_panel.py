@@ -27,6 +27,11 @@ class CellPanel(Qt.QWidget):
     # after ctx.log_action() creates the entry), "status" (entry.set_status()),
     # "widget" (entry.set_details_widget()), or "finished" (entry._finish()).
     sigActionEntry = Qt.Signal(object, object, str)
+    # Emitted by discardCells() so a rescan's row removal, arriving from the
+    # orchestrator's worker thread the same way appendLog()/onLogAction() do,
+    # is marshaled onto the GUI thread by Qt's automatic queued connection
+    # rather than touching cellList directly.
+    sigCellsDiscarded = Qt.Signal(object)
 
     def __init__(self, pipetteGetter=None, cameraGetter=None):
         super().__init__()
@@ -63,9 +68,21 @@ class CellPanel(Qt.QWidget):
         # again. A list rather than a set so the flush enqueues them in the
         # order they were queued, which is the order they will be patched in.
         self._awaitingEnqueue: list[int] = []
+        # Cells the orchestrator has started work on, by id. Recorded from both
+        # sigCurrentCell and sigCellFinished: a cell interrupted mid-run may
+        # never emit a terminal status, and "retry" is emitted mid-flight
+        # without being terminal, so "has work started" is the reliable question
+        # and does not depend on the terminal-status vocabulary.
+        #
+        # Holds ids, never cells: this panel must not be the thing keeping a
+        # Cell alive beyond self._cells, and must not add a second store to keep
+        # in sync with it on teardown.
+        self._attempted = set()
         # id(entry) of whichever entry's widget currently occupies
-        # showContainer, or None if it's empty. No action nests log_action
-        # blocks today, but if one did, this lets a "finished" phase tell
+        # showContainer, or None if it's empty. An action can nest a
+        # log_action block inside another still-open one -- prompt() opens an
+        # "Operator Prompt" entry inside cellfie's still-open entry when
+        # tracking loses the cell -- so this lets a "finished" phase tell
         # whether it actually owns what's mounted before clearing it -- an
         # inner entry finishing must not tear down an outer entry's still-live
         # widget.
@@ -103,6 +120,7 @@ class CellPanel(Qt.QWidget):
         self.cellList.currentItemChanged.connect(self._onCellSelectionChanged)
         self.sigLogMessage.connect(self._onLogMessage)
         self.sigActionEntry.connect(self._onActionEntry)
+        self.sigCellsDiscarded.connect(self._onCellsDiscarded)
 
     def bindOrchestrator(self, orchestrator) -> None:
         if orchestrator is self._orchestrator:
@@ -199,6 +217,7 @@ class CellPanel(Qt.QWidget):
         # the next bind or, if that memory address were reused by an unrelated
         # cell, enqueue that cell instead.
         self._awaitingEnqueue.clear()
+        self._attempted.clear()
         self._rows.clear()
         self._timelines.clear()
         self._entryTimelineLoc.clear()
@@ -207,6 +226,42 @@ class CellPanel(Qt.QWidget):
         self.cellList.clear()
         self._clearShowContainer()
         self._shownEntryId = None
+
+    def discardCells(self, cells) -> None:
+        """Drop the panel-side bookkeeping for `cells` -- rows, timelines,
+        logs, and the strong references that keep them alive -- the same
+        stores clearCells() drops for every cell, but scoped to this subset.
+
+        A cell isAttempted() already reports as started is never touched: its
+        row is the session record, not a stale queued entry, so it survives
+        even if it is passed in here.
+
+        Used by AutopatchWindow._onTissueMoved's rescan branch, which runs on
+        the orchestrator's worker thread, so this only ever emits
+        sigCellsDiscarded rather than touching cellList directly -- Qt's
+        automatic queued connection marshals the update onto the GUI thread,
+        the same way appendLog()/onLogAction() do above.
+        """
+        self.sigCellsDiscarded.emit(list(cells))
+
+    def _onCellsDiscarded(self, cells) -> None:
+        for cell in cells:
+            if self.isAttempted(cell):
+                continue
+            cellId = id(cell)
+            self._cells.pop(cellId, None)
+            # Cleared alongside _cells for the same reason clearCells() clears
+            # it: a stale id left behind here could be flushed into a later
+            # orchestrator by bindOrchestrator(), driving a pipette to a
+            # coordinate in tissue the operator has just declared gone.
+            if cellId in self._awaitingEnqueue:
+                self._awaitingEnqueue.remove(cellId)
+            self._attempted.discard(cellId)
+            item = self._rows.pop(cellId, None)
+            if item is not None:
+                self.cellList.takeItem(self.cellList.row(item))
+            self._timelines.pop(cellId, None)
+            self._logs.pop(cellId, None)
 
     def _onAddFromTargetClicked(self) -> None:
         pipette = self._pipetteGetter()
@@ -290,6 +345,15 @@ class CellPanel(Qt.QWidget):
         # reference here for the panel's lifetime keeps the original object alive.
         self._cells[id(cell)] = cell
 
+    def isAttempted(self, cell) -> bool:
+        """Whether the orchestrator has ever started work on `cell`.
+
+        Slice.forceRescan takes this as its predicate: attempted cells stay
+        registered in the density record through a rescan, never-attempted ones
+        are dropped so they can be found again where they now are.
+        """
+        return id(cell) in self._attempted
+
     def appendLog(self, cell, message: str) -> None:
         # May be called from the orchestrator's worker thread (ExecutionContext.log,
         # bound per-cell by the context factory); emitting rather than touching
@@ -309,6 +373,7 @@ class CellPanel(Qt.QWidget):
         # and the details container directly.
         if cell is None:
             return
+        self._attempted.add(id(cell))
         item = self._rows.get(id(cell))
         if item is None:
             # A cell the orchestrator announces without this panel ever having
@@ -417,6 +482,7 @@ class CellPanel(Qt.QWidget):
         # never re-enqueue and never mark it as awaiting one. A cell that has
         # finished is the clearest case of all: enqueuing it again patches a
         # cell that has already been worked.
+        self._attempted.add(id(cell))
         item = self._rows.get(id(cell))
         if item is None:
             self.addCell(cell)

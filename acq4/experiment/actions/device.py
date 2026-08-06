@@ -10,7 +10,6 @@ ctx.pipette is a PatchPipette; the underlying manipulator is ctx.pipette.pipette
 """
 from __future__ import annotations
 
-from acq4.modules.AutomationDebug.feature_tracking import DEFORMATION_TOLERANCE
 from acq4.util.imaging.sequencer import run_image_sequence
 from acq4.util.task import run_in_gui_thread
 
@@ -139,10 +138,26 @@ def cellfie(ctx, height: float = 30e-6, step: float = 1e-6) -> None:
             storage_dir=storage,
             name="cellfie",
         ).wait()
+        # Imported here, not at module scope: acq4_automation lives in an internal
+        # repository, and a top-level import would stop every test under
+        # acq4/experiment from collecting where it is absent. AutomationDebug's
+        # feature_tracking reaches acq4_automation at its own module scope, so
+        # importing DEFORMATION_TOLERANCE from it carries the same cost and is
+        # deferred for the same reason.
+        from acq4.modules.AutomationDebug.feature_tracking import DEFORMATION_TOLERANCE
+        from acq4_automation.feature_tracking import CellTrackingLost
+
         # Initialize the tracker reference used to follow the cell during patching.
-        ctx.cell.initializeTracker(
-            imager, use_cellpose=True, deformation_tolerance=DEFORMATION_TOLERANCE
-        )
+        try:
+            ctx.cell.initializeTracker(
+                imager, use_cellpose=True, deformation_tolerance=DEFORMATION_TOLERANCE
+            )
+        except CellTrackingLost as exc:
+            # The tracker could not re-find this cell against its own reference
+            # stacks, so the stacks are useless: the cell has drifted out of
+            # reach or died. That is a question about the tissue, not about this
+            # action, and the window is what can answer it. Never returns.
+            ctx.tissue_moved(exc.reason or str(exc))
 
 
 def load_preset(ctx, preset: str | None = None) -> None:

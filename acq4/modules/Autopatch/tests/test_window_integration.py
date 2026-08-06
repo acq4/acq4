@@ -1,11 +1,19 @@
 """Integration test: loading a protocol builds and binds a fresh Orchestrator
 to the window's StatusPanel/CellPanel, and a seeded cell runs end-to-end."""
+import importlib
 import os
+from types import SimpleNamespace
 
 import pytest
+from coorx import Point
 
+import acq4.util.DataManager as dm
+from acq4.experiment.context import ExecutionContext
+from acq4.experiment.exceptions import AdvanceToNextCell
 from acq4.experiment.search_region import EllipseRegion, RectRegion
+from acq4.experiment.slice import Slice
 from acq4.util import Qt
+from acq4_automation.feature_tracking.cell import Cell
 
 
 @pytest.fixture(scope="module")
@@ -141,23 +149,59 @@ class _FakeCameraWithDevice(Qt.QWidget):
         return self.camera
 
 
+# The one folder type newSlice() asks create_data_dir for. A real Manager's
+# config carries many more, but this window only ever creates a "Slice".
+_FOLDER_TYPES = {"Slice": {"name": "Slice_%Y%m%d_%H%M%S", "experimentalUnit": False}}
+
+
+class _FakeManager:
+    """Stands in for Manager: backed by a real DirHandle (on tmp_path) so
+    create_data_dir's mkdir/setInfo calls land on an actual directory, the way
+    they would through the real Manager AutopatchWindow otherwise gets from
+    its module."""
+
+    def __init__(self, root_dir):
+        self._current_dir = root_dir
+
+    def getCurrentDir(self):
+        return self._current_dir
+
+    def setCurrentDir(self, d):
+        self._current_dir = d
+
+    def folderTypesConfig(self):
+        return _FOLDER_TYPES
+
+
 def _makeWindow(tmp_path, cameraSelector=None):
     """An AutopatchWindow with a loaded no-op protocol and a camera-backed
     selector, for tests that don't care about protocol content but do need a
-    working camera to seed a slice or region."""
+    working camera to seed a slice or region.
+
+    Also wires up a manager backed by a real (temporary) managed directory, so
+    newSlice()'s create_data_dir call has somewhere real to write -- kept in a
+    subdirectory of tmp_path separate from the protocol files written directly
+    into tmp_path above."""
     from acq4.modules.Autopatch.Autopatch import AutopatchWindow
 
     if cameraSelector is None:
         cameraSelector = _FakeCameraWithDevice()
     _write_protocol(tmp_path, "demo.py", _NOOP_PROTOCOL)
+    storageRoot = dm.getDirHandle(str(tmp_path / "storage"), create=True)
     win = AutopatchWindow(
-        module=None,
+        module=SimpleNamespace(manager=_FakeManager(storageRoot)),
         protocolDir=str(tmp_path),
         pipetteSelector=_FakePipetteSelector(),
         cameraSelector=cameraSelector,
     )
     win.protocolPanel.fileCombo.setCurrentText("demo")
     return win
+
+
+def _makeCell():
+    """A Cell at an arbitrary global position, standing in for one a real
+    detector would have found -- only its identity matters to these tests."""
+    return Cell(Point([1e-3, 2e-3, -30e-6], "global"))
 
 
 _NOOP_PROTOCOL = '''"""Integration test fixture: resolves immediately without touching ctx."""
@@ -171,6 +215,11 @@ def run(ctx, **kwargs):
 def _write_protocol(path, name, body):
     with open(os.path.join(path, name), "w") as fh:
         fh.write(body)
+
+
+@pytest.fixture
+def win(qapp, tmp_path):
+    return _makeWindow(tmp_path)
 
 
 def test_loading_a_protocol_builds_and_binds_an_orchestrator(qapp, tmp_path):
@@ -957,3 +1006,240 @@ def test_the_survey_readout_follows_the_slices_coverage(qapp, tmp_path):
     win.statusPanel.sigStatusChanged.emit("surveying")
 
     assert f"1/{total}" in win.searchPanel.surveyLabel.text()
+
+
+# acq4.modules.Autopatch's __init__.py does `from .Autopatch import Autopatch`,
+# which re-exports the Module subclass under the same name as the submodule and
+# shadows it on the package: a dotted-string monkeypatch target
+# ("acq4.modules.Autopatch.Autopatch.prompt") resolves attribute-by-attribute and
+# lands on that class rather than the submodule, so `prompt` isn't found there.
+# importlib.import_module goes through sys.modules instead and reaches the
+# actual submodule, where AutopatchWindow._onTissueMoved's module-level `prompt`
+# name lives.
+_autopatchModule = importlib.import_module("acq4.modules.Autopatch.Autopatch")
+
+
+def _sliceWithCoveredTiles(win):
+    """Install a Slice on `win` with one fully-covered region at a realistic,
+    non-square stage coordinate, seed a cell inside its first tile, enqueue a
+    second cell on the orchestrator, and return (slice, cell, ctx).
+
+    Built directly rather than through win.newSlice()/addRegionHere(): those
+    size the region off the fake camera's micrometre-scale field of view,
+    which cannot expose the millimetre-magnitude float error a real stage
+    position can. Not origin-centered and not square, for the same reason.
+    """
+    slice_ = Slice(fov=(20e-6, 10e-6))
+    slice_.addRegion(RectRegion(1e-3, 2e-3, 1e-3 + 60e-6, 2e-3 + 30e-6))
+    for tile in slice_.tileGrid():
+        slice_.markCovered(tile)
+    win.slice = slice_
+
+    tile = slice_.tileGrid()[0]
+    cell = Cell(Point([tile[0], tile[1], -30e-6], "global"))
+    secondCell = Cell(Point([tile[0] + 5e-6, tile[1], -30e-6], "global"))
+    win.orchestrator.enqueue(secondCell)
+
+    return slice_, cell, ExecutionContext(cell=cell)
+
+
+def test_tissue_moved_rescans_and_clears_the_queue_on_the_first_answer(win, monkeypatch):
+    monkeypatch.setattr(
+        _autopatchModule, "prompt", lambda ctx, **kw: "Rescan the slice"
+    )
+    slice_, cell, ctx = _sliceWithCoveredTiles(win)
+    # Primed True so the post-call assertion below actually distinguishes
+    # "cleared by the rescan handler" from "left at its untouched default".
+    win.orchestrator._producerExhausted = True
+
+    with pytest.raises(AdvanceToNextCell):
+        win._onTissueMoved(cell, ctx, "no features")
+
+    assert slice_.coveredTiles == []
+    assert win.orchestrator.pendingCells() == []
+    assert win.orchestrator._producerExhausted is False
+
+
+def test_tissue_moved_leaves_everything_alone_on_the_second_answer(win, monkeypatch):
+    monkeypatch.setattr(
+        _autopatchModule, "prompt", lambda ctx, **kw: "Skip this cell only"
+    )
+    slice_, cell, ctx = _sliceWithCoveredTiles(win)
+    coveredBefore = list(slice_.coveredTiles)
+    pendingBefore = win.orchestrator.pendingCells()
+
+    with pytest.raises(AdvanceToNextCell):
+        win._onTissueMoved(cell, ctx, "no features")
+
+    assert slice_.coveredTiles == coveredBefore
+    assert win.orchestrator.pendingCells() == pendingBefore
+
+
+def test_tissue_moved_ends_the_cell_on_both_answers(win, monkeypatch):
+    for answer in ("Rescan the slice", "Skip this cell only"):
+        monkeypatch.setattr(_autopatchModule, "prompt", lambda ctx, **kw: answer)
+        _slice, cell, ctx = _sliceWithCoveredTiles(win)
+        with pytest.raises(AdvanceToNextCell):
+            win._onTissueMoved(cell, ctx, "no features")
+
+
+def test_tissue_moved_keeps_attempted_cells_in_the_density_record(win, monkeypatch):
+    monkeypatch.setattr(
+        _autopatchModule, "prompt", lambda ctx, **kw: "Rescan the slice"
+    )
+    slice_, cell, ctx = _sliceWithCoveredTiles(win)
+    tile = slice_.tileGrid()[0]
+    win.cellPanel._onCellFinished(cell, "done")
+    slice_.registerCells([cell])
+
+    with pytest.raises(AdvanceToNextCell):
+        win._onTissueMoved(cell, ctx, "no features")
+
+    assert cell in slice_.cellsNearTile(tile)
+
+
+def test_tissue_moved_rescan_discards_the_queued_cells_rows(win, monkeypatch):
+    """The prompt tells the operator the queued cells are discarded; their
+    rows in Area 5 must actually go, or the operator sees the opposite of
+    what they just agreed to -- cells still listed as queued."""
+    monkeypatch.setattr(
+        _autopatchModule, "prompt", lambda ctx, **kw: "Rescan the slice"
+    )
+    slice_, cell, ctx = _sliceWithCoveredTiles(win)
+    queued = _makeCell()
+    win.cellPanel.addCell(queued)
+    win.orchestrator.enqueue(queued)
+    assert win.cellPanel.cellList.count() == 1
+
+    with pytest.raises(AdvanceToNextCell):
+        win._onTissueMoved(cell, ctx, "no features")
+
+    assert win.cellPanel.cellList.count() == 0
+
+
+def test_tissue_moved_rescan_keeps_an_attempted_cells_row(win, monkeypatch):
+    """A cell isAttempted() reports as already started keeps its row through
+    a rescan even if it is still sitting in the queue (e.g. a retry) -- it is
+    the session record, not a stale queued entry, so clearCells()'s
+    discard-everything behaviour must not apply to it."""
+    monkeypatch.setattr(
+        _autopatchModule, "prompt", lambda ctx, **kw: "Rescan the slice"
+    )
+    slice_, cell, ctx = _sliceWithCoveredTiles(win)
+    attempted = _makeCell()
+    win.cellPanel.addCell(attempted)
+    win.cellPanel._onCurrentCell(attempted)
+    win.orchestrator.enqueue(attempted)
+    assert win.cellPanel.cellList.count() == 1
+
+    with pytest.raises(AdvanceToNextCell):
+        win._onTissueMoved(cell, ctx, "no features")
+
+    assert win.cellPanel.cellList.count() == 1
+    assert win.cellPanel.isAttempted(attempted) is True
+
+
+def test_new_slice_creates_a_slice_directory_and_makes_it_current(win):
+    win.newSlice()
+    assert win.slice.dirHandle is not None
+    assert win.slice.dirHandle.info()["dirType"] == "Slice"
+    assert win.manager.getCurrentDir() is win.slice.dirHandle
+
+
+def test_new_slice_discards_nothing_when_the_directory_cannot_be_made(win):
+    """Directory creation happens before anything is thrown away, so a failed
+    attempt must leave the old slice, the seeded cell's row, and the
+    orchestrator's queue exactly as they were.
+
+    win.newSlice() is called once, successfully, before the failure is
+    injected: the state asserted unchanged below has to be genuinely populated
+    first, or "unchanged" would also describe a window that never started a
+    slice at all.
+    """
+    from acq4.util.HelpfulException import HelpfulException
+
+    win.newSlice()
+    oldSlice = win.slice
+    assert oldSlice is not None
+
+    cell = _makeCell()
+    win.cellPanel.addCell(cell)
+    # Primed attempted before the failing call, so the assertion below
+    # actually discriminates: isAttempted(cell) is False by default for any
+    # cell newSlice() never touches, which would pass whether or not the
+    # failed call left this bookkeeping alone.
+    win.cellPanel._onCurrentCell(cell)
+    win.orchestrator.enqueue(cell)
+    assert win.cellPanel.cellList.count() == 1
+
+    def boom(*a, **k):
+        raise HelpfulException("Storage directory has not been set.")
+
+    win.manager.getCurrentDir = boom
+    win.newSlice()
+
+    assert win.slice is oldSlice
+    assert win.cellPanel.cellList.count() == 1
+    assert win.cellPanel.isAttempted(cell) is True
+    assert win.orchestrator.pendingCells() == [cell]
+
+
+def test_new_slice_without_a_camera_does_not_repoint_storage(qapp, tmp_path):
+    """_startSlice()'s validation must run before create_data_dir(): a failed
+    New slice (no camera selected here) must leave the current storage
+    directory exactly where it was, not have already created and switched to
+    a fresh, empty Slice directory before discovering the camera is missing.
+    """
+    win = _makeWindow(tmp_path, cameraSelector=_FakeCameraSelector())
+    before = win.manager.getCurrentDir()
+
+    win.newSlice()
+
+    assert win.slice is None
+    assert win.manager.getCurrentDir() is before
+
+
+def test_new_slice_lets_a_programming_error_propagate(qapp, tmp_path):
+    """create_data_dir raising something other than HelpfulException is a
+    programming error (here, because module=None leaves self.manager as None,
+    the constructor's documented headless/test mode) -- not storage guidance
+    for the operator -- so it must propagate rather than being swallowed into
+    Area 2's error line."""
+    from acq4.modules.Autopatch.Autopatch import AutopatchWindow
+
+    _write_protocol(tmp_path, "demo.py", _NOOP_PROTOCOL)
+    win = AutopatchWindow(
+        module=None,
+        protocolDir=str(tmp_path),
+        pipetteSelector=_FakePipetteSelector(),
+        cameraSelector=_FakeCameraWithDevice(),
+    )
+    win.protocolPanel.fileCombo.setCurrentText("demo")
+
+    with pytest.raises(AttributeError):
+        win.newSlice()
+
+
+def test_new_slice_reports_a_missing_storage_directory_in_area_2(win):
+    from acq4.util.HelpfulException import HelpfulException
+
+    def boom(*a, **k):
+        raise HelpfulException("Storage directory has not been set.")
+
+    win.manager.getCurrentDir = boom
+    win.newSlice()
+
+    assert "Storage directory" in win.searchPanel.errorLabel.text()
+
+
+def test_add_region_here_does_not_create_a_directory(win):
+    # A button labelled "add region" must not silently repoint where every
+    # subsequent write lands.
+    win.addRegionHere()
+    assert win.slice.dirHandle is None
+
+
+def test_area_2_is_locked_until_a_slice_exists(win):
+    assert not win.searchPanel.addRegionBtn.isEnabled()
+    win.newSlice()
+    assert win.searchPanel.addRegionBtn.isEnabled()
