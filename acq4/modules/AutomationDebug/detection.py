@@ -47,6 +47,24 @@ def _health_model_config(manager) -> dict:
     }
 
 
+def _mock_pixel_size(detection_stack, classification_stack):
+    """The XY pixel size of a loaded mock z-stack.
+
+    A mock stack is a file acquired elsewhere, so the live camera's pixel size says
+    nothing about it. Both channels image the same field and must agree; a mismatch
+    means one of the two loaded files is not the one it was taken to be.
+    """
+    pixel_size = detection_stack[0].info()["pixelSize"][0]
+    if classification_stack is not None:
+        classification_pixel_size = classification_stack[0].info()["pixelSize"][0]
+        if classification_pixel_size != pixel_size:
+            raise ValueError(
+                f"Mock detection stack pixel size ({pixel_size / µm:.4f} µm) does not match "
+                f"classification stack pixel size ({classification_pixel_size / µm:.4f} µm)."
+            )
+    return pixel_size
+
+
 class CellDetector:
     def __init__(self, window: AutomationDebugWindow):
         self._window = window
@@ -118,7 +136,7 @@ class CellDetector:
         win._current_detection_stack = None
         win._current_classification_stack = None
 
-        pixel_size = win.cameraDevice.getPixelSize()[0]  # Used for both real and mock
+        pixel_size = win.cameraDevice.getPixelSize()[0]  # mock overrides this from its stack
         man = win.module.manager
         models = _health_model_config(man)
         segmenter = models["segmenter"]
@@ -142,6 +160,7 @@ class CellDetector:
             detection_stack, classification_stack, step_z = win._mock_handler._mockNeuronStacks()
             if detection_stack is None:
                 raise RuntimeError("Failed to load mock detection stack.")
+            pixel_size = _mock_pixel_size(detection_stack, classification_stack)
 
         else:  # --- Real Acquisition ---
             surface = win.scopeDevice.findSurfaceDepth(win.cameraDevice)
