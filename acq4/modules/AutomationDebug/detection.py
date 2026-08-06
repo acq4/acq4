@@ -24,6 +24,9 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
+# How many detected cells one z-stack contributes to the queue, best first.
+MAX_DETECTION_CANDIDATES = 5
+
 
 def _health_model_config(manager) -> dict:
     """Health-model paths and score cutoffs from the global ``misc`` config.
@@ -49,6 +52,26 @@ class CellDetector:
 
     def _ui(self):
         return self._window.ui
+
+    def _selectCandidates(self, detections, limit=MAX_DETECTION_CANDIDATES):
+        """The best `limit` detections that lie inside the survey region.
+
+        `detections` arrives health-ordered (best first) and untruncated. The
+        camera is free to image past the survey region -- a field of view that
+        straddles the edge is what gives the segmenter the context to find cells
+        sitting right at it -- but the region is the maximum area the demo may
+        patch in, so a cell found outside it is not a candidate.
+
+        Filtering before truncating is the point of asking for every detection
+        rather than the top few: on a tile that straddles the edge, truncating
+        first would let out-of-region cells use up the whole quota while usable
+        ones sit just below the cut. With no region set (manual detection, no
+        survey) there is nothing to be outside of, so every detection stands.
+        """
+        region = self._window._surveyRegion
+        if region.hasRegion():
+            detections = [d for d in detections if region.contains(d[0])]
+        return list(detections)[:limit]
 
     def _selectRankDir(self):
         path = Qt.QFileDialog.getExistingDirectory(
@@ -188,10 +211,17 @@ class CellDetector:
             multichannel=multichannel,  # Actual flag for detect_neurons
             trim_edges=True,
             min_volume_m3=win.ui.minVolumeSpin.value(),
-            n=5,  # Number of top candidates to return
+            # Every detection, not just the top few: _selectCandidates below drops
+            # the ones outside the survey region before taking the best of what is
+            # left, which it can only do if it is given the whole ranked list.
+            n=None,
             save_prefix=save_prefix,
         )
         logger.info(f"Neuron detection finished. Found {len(detection_results)} potential neurons.")
+        detection_results = self._selectCandidates(detection_results)
+        logger.info(
+            f"Keeping {len(detection_results)} of them: the best inside the survey region."
+        )
 
         win._current_detection_stack = detection_stack
         win._current_classification_stack = classification_stack
