@@ -17,6 +17,7 @@ from acq4_automation.cell_quality_annotation_tool import open_annotation_tool_wi
 from acq4_automation.feature_tracking.cell import Cell
 from coorx import Point
 from pyqtgraph.units import µm
+from .feature_tracking import DEFORMATION_TOLERANCE
 from .ranking_window import RankingWindow
 
 if TYPE_CHECKING:
@@ -65,7 +66,7 @@ class CellDetector:
         cell = self._window.patchPipetteDevice.cell
         if cell is None or cell.position != target:
             cell = Cell(target)
-            cell.initializeTracker(self._window.cameraDevice, use_cellpose=True)
+            cell.initializeTracker(self._window.cameraDevice, use_cellpose=True, deformation_tolerance=DEFORMATION_TOLERANCE)
         self._window._unranked_cells.append(cell)
         cells = list(self._window._unranked_cells)
         run_in_gui_thread(self._displayBoundingBoxes, cells)
@@ -204,7 +205,9 @@ class CellDetector:
             # for later tracking without re-acquiring a stack per cell. Cells too
             # close to the stack edge can't be extracted; keep them queued anyway.
             try:
-                cell.initializeTrackerFromStack(win.cameraDevice, detection_stack, use_cellpose=True)
+                cell.initializeTrackerFromStack(
+                    win.cameraDevice, detection_stack, use_cellpose=True, deformation_tolerance=DEFORMATION_TOLERANCE
+                )
             except Exception:
                 logger.warning(
                     f"Could not initialize ObjectStack for detected cell at {pos}",

@@ -10,6 +10,7 @@ ctx.pipette is a PatchPipette; the underlying manipulator is ctx.pipette.pipette
 """
 from __future__ import annotations
 
+from acq4.modules.AutomationDebug.feature_tracking import DEFORMATION_TOLERANCE
 from acq4.util.imaging.sequencer import run_image_sequence
 from acq4.util.task import run_in_gui_thread
 
@@ -139,7 +140,9 @@ def cellfie(ctx, height: float = 30e-6, step: float = 1e-6) -> None:
             name="cellfie",
         ).wait()
         # Initialize the tracker reference used to follow the cell during patching.
-        ctx.cell.initializeTracker(imager, use_cellpose=True)
+        ctx.cell.initializeTracker(
+            imager, use_cellpose=True, deformation_tolerance=DEFORMATION_TOLERANCE
+        )
 
 
 def load_preset(ctx, preset: str | None = None) -> None:

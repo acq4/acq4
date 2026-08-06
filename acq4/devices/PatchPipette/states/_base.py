@@ -63,6 +63,9 @@ class PatchPipetteState(QtFriendlyTask):
         Auto bias target (Volts) to set at the start of the state (default 0 V)
     fallbackState : str
         Name of state to transition to if this state fails (default None)
+    deformationTolerance : float
+        Ridge weight for the affine flow fit used to pick a tracked cell's focal plane; only
+        takes effect if this state is the first to initialize the cell's tracker (default None)
     finishPatchRecord : bool
         If True, finish the current patch record when entering this state (default False)
     newPipette : bool
@@ -99,6 +102,7 @@ class PatchPipetteState(QtFriendlyTask):
         'initialAutoBiasEnable': {'type': 'bool', 'default': False, 'optional': True},
         'initialAutoBiasTarget': {'type': 'float', 'default': 0, 'optional': True, 'suffix': 'V'},
         'fallbackState': {'type': 'str', 'default': None, 'optional': True},
+        'deformationTolerance': {'type': 'float', 'default': None, 'optional': True},
         'finishPatchRecord': {'type': 'bool', 'default': False},
         'newPipette': {'type': 'bool', 'default': False},
         'reserveDAQ': {'default': False, 'type': 'bool'},
@@ -425,6 +429,7 @@ class PatchPipetteState(QtFriendlyTask):
                 self.dev.pipetteDevice.imagingDevice(),
                 # pipette=self.dev.pipetteDevice,
                 use_cellpose=True,
+                deformation_tolerance=self.config.get('deformationTolerance'),
             )
 
         cell.enableTracking(True)
