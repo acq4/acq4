@@ -1138,6 +1138,42 @@ def test_new_slice_discards_nothing_when_the_directory_cannot_be_made(win):
     assert win.orchestrator.pendingCells() == [cell]
 
 
+def test_new_slice_without_a_camera_does_not_repoint_storage(qapp, tmp_path):
+    """_startSlice()'s validation must run before create_data_dir(): a failed
+    New slice (no camera selected here) must leave the current storage
+    directory exactly where it was, not have already created and switched to
+    a fresh, empty Slice directory before discovering the camera is missing.
+    """
+    win = _makeWindow(tmp_path, cameraSelector=_FakeCameraSelector())
+    before = win.manager.getCurrentDir()
+
+    win.newSlice()
+
+    assert win.slice is None
+    assert win.manager.getCurrentDir() is before
+
+
+def test_new_slice_lets_a_programming_error_propagate(qapp, tmp_path):
+    """create_data_dir raising something other than HelpfulException is a
+    programming error (here, because module=None leaves self.manager as None,
+    the constructor's documented headless/test mode) -- not storage guidance
+    for the operator -- so it must propagate rather than being swallowed into
+    Area 2's error line."""
+    from acq4.modules.Autopatch.Autopatch import AutopatchWindow
+
+    _write_protocol(tmp_path, "demo.py", _NOOP_PROTOCOL)
+    win = AutopatchWindow(
+        module=None,
+        protocolDir=str(tmp_path),
+        pipetteSelector=_FakePipetteSelector(),
+        cameraSelector=_FakeCameraWithDevice(),
+    )
+    win.protocolPanel.fileCombo.setCurrentText("demo")
+
+    with pytest.raises(AttributeError):
+        win.newSlice()
+
+
 def test_new_slice_reports_a_missing_storage_directory_in_area_2(win):
     from acq4.util.HelpfulException import HelpfulException
 

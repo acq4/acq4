@@ -194,18 +194,25 @@ def test_teardown_frees_the_slice_producer_and_cells_by_refcounting(qapp, tmp_pa
     The camera stand-in comes from test_window_integration rather than being
     copied in here: it is the same mode-sensitive getBoundary/
     globalCenterPosition/scopeDev fake the producer install needs, and a second
-    copy would be one more thing to keep in step with acq4's real Camera.
+    copy would be one more thing to keep in step with acq4's real Camera. The
+    manager stand-in is the same: newSlice() needs somewhere real to create a
+    Slice directory, and test_window_integration's _FakeManager (backed by an
+    actual DirHandle) is that fixture already.
     """
+    from types import SimpleNamespace
+
+    import acq4.util.DataManager as dm
     from acq4.modules.Autopatch.Autopatch import AutopatchWindow
 
-    from .test_window_integration import _FakeCameraWithDevice
+    from .test_window_integration import _FakeCameraWithDevice, _FakeManager
 
     _write_protocol(tmp_path, "demo.py", _NOOP_PROTOCOL)
+    storageRoot = dm.getDirHandle(str(tmp_path / "storage"), create=True)
 
     gc.disable()
     try:
         win = AutopatchWindow(
-            module=None,
+            module=SimpleNamespace(manager=_FakeManager(storageRoot)),
             protocolDir=str(tmp_path),
             pipetteSelector=_FakePipetteSelector(target=(1e-3, 2e-3, 3e-3)),
             cameraSelector=_FakeCameraWithDevice(),

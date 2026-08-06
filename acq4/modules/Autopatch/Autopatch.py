@@ -12,6 +12,7 @@ from acq4.experiment.slice import Slice
 from acq4.experiment.tile_detector import make_tile_detector
 from acq4.modules.Module import Module
 from acq4.util import Qt
+from acq4.util.HelpfulException import HelpfulException
 from acq4.util.InterfaceCombo import InterfaceCombo
 
 from .cell_panel import CellPanel
@@ -165,6 +166,24 @@ class AutopatchWindow(Qt.QWidget):
         if self.protocolPanel.protocolFile is not None:
             self._onProtocolLoaded(self.protocolPanel.protocolFile)
 
+    def _canStartSlice(self) -> bool:
+        """Whether the camera and search constraints currently support
+        starting a slice, reporting the reason through SearchPanel exactly as
+        _startSlice() itself does.
+
+        Split out so newSlice() can run this check before create_data_dir()
+        commits to a new storage directory -- constructing the Slice remains
+        _startSlice()'s job alone, called only once directory creation has
+        already succeeded.
+        """
+        camera = self.cameraSelector.getSelectedObj()
+        if camera is None:
+            self.searchPanel.setError("Select a camera before starting a slice.")
+            return False
+        if self.searchPanel.constraints() is None:
+            return False
+        return True
+
     def _startSlice(self, dirHandle=None) -> bool:
         """Install a fresh Slice for the tissue under the objective.
 
@@ -183,13 +202,10 @@ class AutopatchWindow(Qt.QWidget):
         directory by the time it calls here, while addRegionHere() calls here
         with none, which is what leaves its implicit slice's dirHandle at None.
         """
+        if not self._canStartSlice():
+            return False
         camera = self.cameraSelector.getSelectedObj()
-        if camera is None:
-            self.searchPanel.setError("Select a camera before starting a slice.")
-            return False
         constraints = self.searchPanel.constraints()
-        if constraints is None:
-            return False
         self.slice = Slice(
             fov=self._cameraFov(camera), constraints=constraints, dirHandle=dirHandle
         )
@@ -217,13 +233,23 @@ class AutopatchWindow(Qt.QWidget):
         is the step that can fail -- an operator who has not chosen a storage
         directory is the likeliest first use of this button -- and a failure that
         has already thrown away their cells is worse than the failure itself.
+
+        The camera/constraints check runs before that directory is even
+        created, though: those are the likelier first-use failure, and an
+        operator missing a camera should not have storage repointed into a
+        fresh, empty Slice directory before finding that out.
         """
+        if not self._canStartSlice():
+            return
         try:
             dirHandle = create_data_dir(self.manager, level="Slice")
-        except Exception as exc:
+        except HelpfulException as exc:
             # Area 3's instruction band does not exist yet, so this goes where
             # the operator already reads "Select a camera before starting a
-            # slice".
+            # slice". Narrowed to HelpfulException -- the "Storage directory
+            # has not been set." case -- so a genuine programming error (a
+            # missing manager, say) propagates instead of being reported as
+            # storage guidance.
             self.searchPanel.setError(str(exc))
             return
         if not self._startSlice(dirHandle=dirHandle):
