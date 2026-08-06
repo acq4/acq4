@@ -48,6 +48,11 @@ class CellPanel(Qt.QWidget):
     def __init__(self, pipetteGetter=None, cameraGetter=None):
         super().__init__()
         self._orchestrator = None
+        # Whether a run is in flight, as reported by StatusPanel.
+        # sigInteractionLocked (wired in AutopatchWindow.__init__). Re-queuing a
+        # cell mid-run could hand the orchestrator a cell it is working on right
+        # now, so the reuse button is gated on this being False.
+        self._interactionLocked = False
         self._rows: dict[int, Qt.QListWidgetItem] = {}
         self._timelines: dict[int, list[str]] = {}
         # id(entry) -> (id(cell), row index in self._timelines[id(cell)]),
@@ -120,14 +125,17 @@ class CellPanel(Qt.QWidget):
         self.addFromTargetBtn = Qt.QPushButton("Add from target")
         self.scatterFakeCellsBtn = Qt.QPushButton("Scatter fake cells")
         self.checkAllCompletedBtn = Qt.QPushButton("Check all completed")
+        self.reuseCheckedCellsBtn = Qt.QPushButton("Reuse checked cells")
         self.addFromTargetBtn.clicked.connect(self._onAddFromTargetClicked)
         self.scatterFakeCellsBtn.clicked.connect(self._onScatterFakeCellsClicked)
         self.checkAllCompletedBtn.clicked.connect(self._onCheckAllCompleted)
+        self.reuseCheckedCellsBtn.clicked.connect(self._onReuseCheckedCells)
 
         btnRow = Qt.QHBoxLayout()
         btnRow.addWidget(self.addFromTargetBtn)
         btnRow.addWidget(self.scatterFakeCellsBtn)
         btnRow.addWidget(self.checkAllCompletedBtn)
+        btnRow.addWidget(self.reuseCheckedCellsBtn)
 
         listsRow = Qt.QHBoxLayout()
         listsRow.addWidget(self.cellList)
@@ -144,7 +152,11 @@ class CellPanel(Qt.QWidget):
         self.sigLogMessage.connect(self._onLogMessage)
         self.sigActionEntry.connect(self._onActionEntry)
         self.sigCellsDiscarded.connect(self._onCellsDiscarded)
+        # setCheckState() (and setText(), harmlessly) emits itemChanged, which
+        # is the only signal a QListWidget offers for "a row's checkbox moved".
+        self.cellList.itemChanged.connect(self._onItemChanged)
         self._updateCheckAllButton()
+        self._updateReuseButton()
 
     def bindOrchestrator(self, orchestrator) -> None:
         if orchestrator is self._orchestrator:
@@ -179,6 +191,7 @@ class CellPanel(Qt.QWidget):
         pending, self._awaitingEnqueue = self._awaitingEnqueue, []
         for cellId in pending:
             orchestrator.enqueue(self._cells[cellId])
+        self._updateReuseButton()
 
     def unbindOrchestrator(self) -> None:
         """Disconnect everything bindOrchestrator() connected to the currently
@@ -220,6 +233,7 @@ class CellPanel(Qt.QWidget):
         Qt.disconnect(self._orchestrator.sigCurrentCell, self._onCurrentCell)
         Qt.disconnect(self._orchestrator.sigCellFinished, self._onCellFinished)
         self._orchestrator = None
+        self._updateReuseButton()
 
     def clearCells(self) -> None:
         """Drop every seeded Cell this panel is holding, for window teardown.
@@ -252,6 +266,7 @@ class CellPanel(Qt.QWidget):
         self._clearShowContainer()
         self._shownEntryId = None
         self._updateCheckAllButton()
+        self._updateReuseButton()
 
     def discardCells(self, cells) -> None:
         """Drop the panel-side bookkeeping for `cells` -- rows, timelines,
@@ -289,6 +304,7 @@ class CellPanel(Qt.QWidget):
                 self.cellList.takeItem(self.cellList.row(item))
             self._timelines.pop(cellId, None)
             self._logs.pop(cellId, None)
+        self._updateReuseButton()
 
     def _onAddFromTargetClicked(self) -> None:
         pipette = self._pipetteGetter()
@@ -417,6 +433,82 @@ class CellPanel(Qt.QWidget):
 
     def _hasCompletedCell(self) -> bool:
         return any(status in COMPLETED for status in self._status.values())
+
+    def _onItemChanged(self, _item) -> None:
+        self._updateReuseButton()
+
+    def setInteractionLocked(self, locked: bool) -> None:
+        """Whether a run is in flight, so re-queuing must wait.
+
+        Connected to StatusPanel.sigInteractionLocked rather than reading the
+        orchestrator's sigStatus directly: that connection is made once in the
+        window's constructor and never needs re-wiring per protocol load, so it
+        cannot leave a bound orchestrator wired into a panel that has stopped
+        tracking it -- the same reasoning ProtocolPanel.setInteractionLocked and
+        SearchPanel.setInteractionLocked are wired this way for.
+        """
+        self._interactionLocked = locked
+        self._updateReuseButton()
+
+    def _updateReuseButton(self) -> None:
+        enabled = (
+            self._orchestrator is not None
+            and not self._interactionLocked
+            and any(self._checkedCells())
+        )
+        self.reuseCheckedCellsBtn.setEnabled(enabled)
+
+    def _checkedCells(self) -> list:
+        """The cells whose rows are ticked, in list order -- which is the order
+        they will be patched in once re-queued."""
+        return [
+            self.cellList.item(index).data(Qt.Qt.UserRole)
+            for index in range(self.cellList.count())
+            if self.cellList.item(index).checkState() == Qt.Qt.Checked
+        ]
+
+    def _onReuseCheckedCells(self) -> None:
+        """Re-queue the checked cells for another pass with the current protocol.
+
+        The *same* Cell objects go back into the queue, so each one's tracker
+        and reference stack carry into the next pass (design doc 6) -- which is
+        what makes "cellfie everything, then patch everything" work. Their rows
+        already exist, so this never calls addCell(), and it never records
+        anything in _awaitingEnqueue: an orchestrator is bound (the button is
+        gated on it), so the enqueue happens here and now, exactly once each.
+
+        A checked cell that has not finished a pass is skipped rather than
+        enqueued: it is still sitting in the orchestrator's queue, so a second
+        enqueue would run it twice over the same tissue.
+        """
+        inspected = self._currentSelectedCell()
+        reinspect = False
+        for cell in self._checkedCells():
+            item = self._rows[id(cell)]
+            item.setCheckState(Qt.Qt.Unchecked)
+            if self.disposition(cell) not in TERMINAL:
+                continue
+            self._orchestrator.enqueue(cell)
+            item.setText(f"cell {id(cell)} — queued")
+            # Pass 2 starts with a fresh timeline and log for this cell;
+            # earlier-pass UI history is not retained. The tracker and
+            # reference stack live on the Cell itself, not in these dicts, so
+            # the cell's physical continuity is untouched.
+            self._timelines[id(cell)] = []
+            self._logs[id(cell)] = []
+            # Queued again, so no longer holding a finished disposition. Note
+            # _attempted is deliberately NOT cleared: work has started at this
+            # coordinate at some point, which is what isAttempted() reports and
+            # what keeps a rescan from silently dropping this row.
+            self._status.pop(id(cell), None)
+            if cell is inspected:
+                reinspect = True
+        if reinspect:
+            self.timelineList.clear()
+            self._timelineItems.clear()
+            self.logView.clear()
+        self._updateCheckAllButton()
+        self._updateReuseButton()
 
     def appendLog(self, cell, message: str) -> None:
         # May be called from the orchestrator's worker thread (ExecutionContext.log,

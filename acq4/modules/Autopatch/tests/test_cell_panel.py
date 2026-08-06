@@ -981,3 +981,235 @@ def test_check_all_completed_disables_again_once_the_panel_is_cleared(qapp):
     panel.clearCells()
 
     assert not panel.checkAllCompletedBtn.isEnabled()
+
+
+def test_reuse_enqueues_the_same_cell_objects_in_list_order(qapp):
+    """Reuse re-queues the *same* Cell objects, which is what carries each
+    cell's tracker/reference stack into the next pass (design doc 6)."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    first, second, skipMe = object(), object(), object()
+    for cell in (first, skipMe, second):
+        panel.addCell(cell)
+        panel._onCellFinished(cell, "done")
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+    panel._rows[id(first)].setCheckState(Qt.Qt.Checked)
+    panel._rows[id(second)].setCheckState(Qt.Qt.Checked)
+
+    panel.reuseCheckedCellsBtn.click()
+
+    assert orch.enqueued == [first, second]
+
+
+def test_reuse_resets_the_row_to_queued_and_clears_its_history(qapp):
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    cell = object()
+    panel.addCell(cell)
+    panel._timelines[id(cell)] = ["patch — ✓ done (1.00s)"]
+    panel._logs[id(cell)] = ["pass 1 log line"]
+    panel._onCellFinished(cell, "done")
+    panel.bindOrchestrator(_FakeOrchestrator())
+    panel._rows[id(cell)].setCheckState(Qt.Qt.Checked)
+
+    panel.reuseCheckedCellsBtn.click()
+
+    assert panel._rows[id(cell)].text() == f"cell {id(cell)} — queued"
+    assert panel._timelines[id(cell)] == []
+    assert panel._logs[id(cell)] == []
+    assert panel.disposition(cell) is None
+    assert panel._rows[id(cell)].checkState() == Qt.Qt.Unchecked
+
+
+def test_reuse_keeps_the_cell_attempted(qapp):
+    """isAttempted() is Slice.forceRescan's predicate and discardCells()' skip
+    rule: it means work has started here at some point, which reuse does not
+    undo. Cleared, a reused cell would be silently dropped from Area 5 by the
+    next rescan and removed from the density record."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    cell = object()
+    panel.addCell(cell)
+    panel._onCellFinished(cell, "done")
+    panel.bindOrchestrator(_FakeOrchestrator())
+    panel._rows[id(cell)].setCheckState(Qt.Qt.Checked)
+
+    panel.reuseCheckedCellsBtn.click()
+
+    assert panel.isAttempted(cell) is True
+
+
+def test_reuse_never_re_enqueues_a_cell_that_has_not_finished_a_pass(qapp):
+    """Nothing stops an operator checking a still-queued row. That cell is
+    already in the orchestrator's queue, so enqueuing it again would run it
+    twice against the same tissue."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    queued, finished = object(), object()
+    panel.addCell(queued)
+    panel.addCell(finished)
+    panel._onCellFinished(finished, "done")
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+    panel._rows[id(queued)].setCheckState(Qt.Qt.Checked)
+    panel._rows[id(finished)].setCheckState(Qt.Qt.Checked)
+
+    panel.reuseCheckedCellsBtn.click()
+
+    assert orch.enqueued == [finished]
+    assert panel._rows[id(queued)].text() == f"cell {id(queued)} — queued"
+    assert panel._rows[id(queued)].checkState() == Qt.Qt.Unchecked
+
+
+def test_reuse_leaves_unchecked_cells_alone(qapp):
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    reused, untouched = object(), object()
+    for cell in (reused, untouched):
+        panel.addCell(cell)
+        panel._onCellFinished(cell, "done")
+    panel._logs[id(untouched)] = ["keep me"]
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+    panel._rows[id(reused)].setCheckState(Qt.Qt.Checked)
+
+    panel.reuseCheckedCellsBtn.click()
+
+    assert orch.enqueued == [reused]
+    assert panel.disposition(untouched) == "done"
+    assert panel._logs[id(untouched)] == ["keep me"]
+    assert panel._rows[id(untouched)].text() == f"cell {id(untouched)} — done"
+
+
+def test_reuse_clears_the_detail_views_of_the_inspected_cell(qapp):
+    """Spec 8: stale pass-1 timeline/log content must not linger in the pane
+    for a cell that is now queued for pass 2."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    cell = object()
+    panel.addCell(cell)
+    panel._timelines[id(cell)] = ["patch — ✓ done (1.00s)"]
+    panel._logs[id(cell)] = ["pass 1 log line"]
+    panel._onCellFinished(cell, "done")
+    panel.cellList.setCurrentItem(panel._rows[id(cell)])
+    assert panel.timelineList.count() == 1
+    panel.bindOrchestrator(_FakeOrchestrator())
+    panel._rows[id(cell)].setCheckState(Qt.Qt.Checked)
+
+    panel.reuseCheckedCellsBtn.click()
+
+    assert panel.timelineList.count() == 0
+    assert panel.logView.toPlainText() == ""
+
+
+def test_reuse_is_disabled_without_an_orchestrator(qapp):
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    cell = object()
+    panel.addCell(cell)
+    panel._onCellFinished(cell, "done")
+    panel._rows[id(cell)].setCheckState(Qt.Qt.Checked)
+
+    assert not panel.reuseCheckedCellsBtn.isEnabled()
+
+
+def test_reuse_is_disabled_with_nothing_checked(qapp):
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    cell = object()
+    panel.addCell(cell)
+    panel._onCellFinished(cell, "done")
+    panel.bindOrchestrator(_FakeOrchestrator())
+
+    assert not panel.reuseCheckedCellsBtn.isEnabled()
+
+
+def test_reuse_is_enabled_once_bound_idle_and_checked(qapp):
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    cell = object()
+    panel.addCell(cell)
+    panel._onCellFinished(cell, "done")
+    panel.bindOrchestrator(_FakeOrchestrator())
+
+    panel._rows[id(cell)].setCheckState(Qt.Qt.Checked)
+
+    assert panel.reuseCheckedCellsBtn.isEnabled()
+
+
+def test_reuse_is_disabled_while_a_run_is_in_flight(qapp):
+    """"Start nothing new" at action boundaries, and never re-queue a cell the
+    orchestrator may be working on right now."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    cell = object()
+    panel.addCell(cell)
+    panel._onCellFinished(cell, "done")
+    panel.bindOrchestrator(_FakeOrchestrator())
+    panel._rows[id(cell)].setCheckState(Qt.Qt.Checked)
+
+    panel.setInteractionLocked(True)
+
+    assert not panel.reuseCheckedCellsBtn.isEnabled()
+
+
+def test_reuse_re_enables_when_the_run_unlocks(qapp):
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    cell = object()
+    panel.addCell(cell)
+    panel._onCellFinished(cell, "done")
+    panel.bindOrchestrator(_FakeOrchestrator())
+    panel._rows[id(cell)].setCheckState(Qt.Qt.Checked)
+    panel.setInteractionLocked(True)
+
+    panel.setInteractionLocked(False)
+
+    assert panel.reuseCheckedCellsBtn.isEnabled()
+
+
+def test_reuse_is_disabled_once_the_last_checked_row_is_discarded(qapp):
+    """A rescan takes rows away with takeItem(), which emits no itemChanged --
+    so nothing else re-evaluates the gate, and the button would stay enabled
+    over a selection that no longer exists."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    cell = object()
+    panel.addCell(cell)
+    panel._status[id(cell)] = "done"
+    panel.bindOrchestrator(_FakeOrchestrator())
+    panel._rows[id(cell)].setCheckState(Qt.Qt.Checked)
+    assert panel.reuseCheckedCellsBtn.isEnabled()
+
+    panel.discardCells([cell])
+
+    assert not panel.reuseCheckedCellsBtn.isEnabled()
+
+
+def test_reuse_is_disabled_again_after_unbinding(qapp):
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    cell = object()
+    panel.addCell(cell)
+    panel._onCellFinished(cell, "done")
+    panel.bindOrchestrator(_FakeOrchestrator())
+    panel._rows[id(cell)].setCheckState(Qt.Qt.Checked)
+    assert panel.reuseCheckedCellsBtn.isEnabled()
+
+    panel.unbindOrchestrator()
+
+    assert not panel.reuseCheckedCellsBtn.isEnabled()
