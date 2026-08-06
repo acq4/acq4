@@ -1098,6 +1098,47 @@ def test_tissue_moved_keeps_attempted_cells_in_the_density_record(win, monkeypat
     assert cell in slice_.cellsNearTile(tile)
 
 
+def test_tissue_moved_rescan_discards_the_queued_cells_rows(win, monkeypatch):
+    """The prompt tells the operator the queued cells are discarded; their
+    rows in Area 5 must actually go, or the operator sees the opposite of
+    what they just agreed to -- cells still listed as queued."""
+    monkeypatch.setattr(
+        _autopatchModule, "prompt", lambda ctx, **kw: "Rescan the slice"
+    )
+    slice_, cell, ctx = _sliceWithCoveredTiles(win)
+    queued = _makeCell()
+    win.cellPanel.addCell(queued)
+    win.orchestrator.enqueue(queued)
+    assert win.cellPanel.cellList.count() == 1
+
+    with pytest.raises(AdvanceToNextCell):
+        win._onTissueMoved(cell, ctx, "no features")
+
+    assert win.cellPanel.cellList.count() == 0
+
+
+def test_tissue_moved_rescan_keeps_an_attempted_cells_row(win, monkeypatch):
+    """A cell isAttempted() reports as already started keeps its row through
+    a rescan even if it is still sitting in the queue (e.g. a retry) -- it is
+    the session record, not a stale queued entry, so clearCells()'s
+    discard-everything behaviour must not apply to it."""
+    monkeypatch.setattr(
+        _autopatchModule, "prompt", lambda ctx, **kw: "Rescan the slice"
+    )
+    slice_, cell, ctx = _sliceWithCoveredTiles(win)
+    attempted = _makeCell()
+    win.cellPanel.addCell(attempted)
+    win.cellPanel._onCurrentCell(attempted)
+    win.orchestrator.enqueue(attempted)
+    assert win.cellPanel.cellList.count() == 1
+
+    with pytest.raises(AdvanceToNextCell):
+        win._onTissueMoved(cell, ctx, "no features")
+
+    assert win.cellPanel.cellList.count() == 1
+    assert win.cellPanel.isAttempted(attempted) is True
+
+
 def test_new_slice_creates_a_slice_directory_and_makes_it_current(win):
     win.newSlice()
     assert win.slice.dirHandle is not None

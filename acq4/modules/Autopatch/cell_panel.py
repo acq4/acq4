@@ -27,6 +27,11 @@ class CellPanel(Qt.QWidget):
     # after ctx.log_action() creates the entry), "status" (entry.set_status()),
     # "widget" (entry.set_details_widget()), or "finished" (entry._finish()).
     sigActionEntry = Qt.Signal(object, object, str)
+    # Emitted by discardCells() so a rescan's row removal, arriving from the
+    # orchestrator's worker thread the same way appendLog()/onLogAction() do,
+    # is marshaled onto the GUI thread by Qt's automatic queued connection
+    # rather than touching cellList directly.
+    sigCellsDiscarded = Qt.Signal(object)
 
     def __init__(self, pipetteGetter=None, cameraGetter=None):
         super().__init__()
@@ -113,6 +118,7 @@ class CellPanel(Qt.QWidget):
         self.cellList.currentItemChanged.connect(self._onCellSelectionChanged)
         self.sigLogMessage.connect(self._onLogMessage)
         self.sigActionEntry.connect(self._onActionEntry)
+        self.sigCellsDiscarded.connect(self._onCellsDiscarded)
 
     def bindOrchestrator(self, orchestrator) -> None:
         if orchestrator is self._orchestrator:
@@ -218,6 +224,42 @@ class CellPanel(Qt.QWidget):
         self.cellList.clear()
         self._clearShowContainer()
         self._shownEntryId = None
+
+    def discardCells(self, cells) -> None:
+        """Drop the panel-side bookkeeping for `cells` -- rows, timelines,
+        logs, and the strong references that keep them alive -- the same
+        stores clearCells() drops for every cell, but scoped to this subset.
+
+        A cell isAttempted() already reports as started is never touched: its
+        row is the session record, not a stale queued entry, so it survives
+        even if it is passed in here.
+
+        Used by AutopatchWindow._onTissueMoved's rescan branch, which runs on
+        the orchestrator's worker thread, so this only ever emits
+        sigCellsDiscarded rather than touching cellList directly -- Qt's
+        automatic queued connection marshals the update onto the GUI thread,
+        the same way appendLog()/onLogAction() do above.
+        """
+        self.sigCellsDiscarded.emit(list(cells))
+
+    def _onCellsDiscarded(self, cells) -> None:
+        for cell in cells:
+            if self.isAttempted(cell):
+                continue
+            cellId = id(cell)
+            self._cells.pop(cellId, None)
+            # Cleared alongside _cells for the same reason clearCells() clears
+            # it: a stale id left behind here could be flushed into a later
+            # orchestrator by bindOrchestrator(), driving a pipette to a
+            # coordinate in tissue the operator has just declared gone.
+            if cellId in self._awaitingEnqueue:
+                self._awaitingEnqueue.remove(cellId)
+            self._attempted.discard(cellId)
+            item = self._rows.pop(cellId, None)
+            if item is not None:
+                self.cellList.takeItem(self.cellList.row(item))
+            self._timelines.pop(cellId, None)
+            self._logs.pop(cellId, None)
 
     def _onAddFromTargetClicked(self) -> None:
         pipette = self._pipetteGetter()

@@ -359,11 +359,19 @@ class AutopatchWindow(Qt.QWidget):
             if self.slice is not None:
                 self.slice.forceRescan(cell.position, self.cellPanel.isAttempted)
             if self.orchestrator is not None:
+                # Captured before clearQueue(), which is the one call that
+                # makes pendingCells() report nothing at all.
+                discarded = self.orchestrator.pendingCells()
                 # After the answer, not before: a cell the operator seeds by
                 # hand while the prompt is open is a coordinate in the same
                 # moved tissue and goes with the rest.
                 self.orchestrator.clearQueue()
                 self.orchestrator.clearProducerExhausted()
+                # Area 5's rows must match what the operator just agreed to
+                # discard; an attempted cell keeps its row regardless -- it is
+                # the session record, not a stale queued entry -- which is
+                # discardCells()'s own job to enforce.
+                self.cellPanel.discardCells(discarded)
         # Area 2's survey readout is deliberately not refreshed here: this is the
         # worker thread, and _refreshSurveyStats touches widgets. The next status
         # change routes through _onRunStatus on the GUI thread and picks it up.

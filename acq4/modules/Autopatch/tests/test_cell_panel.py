@@ -670,6 +670,62 @@ def test_a_none_current_cell_does_not_crash_or_mark_anything(qapp):
     assert panel.isAttempted(None) is False
 
 
+def test_discard_cells_removes_rows_for_cells_never_attempted(qapp):
+    """A rescan discards whatever is still queued when the tissue moved; their
+    rows in Area 5 must go with them, or an operator told "your N queued
+    cells are discarded" still sees them listed as queued."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    discarded = object()
+    panel.addCell(discarded)
+    kept = object()
+    panel.addCell(kept)
+
+    panel.discardCells([discarded])
+
+    assert panel.cellList.count() == 1
+    assert panel.cellList.item(0).data(Qt.Qt.UserRole) is kept
+    assert id(discarded) not in panel._cells
+    assert id(discarded) not in panel._rows
+    assert id(discarded) not in panel._timelines
+    assert id(discarded) not in panel._logs
+
+
+def test_discard_cells_never_removes_an_attempted_cells_row(qapp):
+    """An attempted cell's row is the session record. discardCells() must
+    never drop it, even when it is passed in directly -- e.g. a retried cell
+    still sitting in the queue when the tissue moved."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    attempted = object()
+    panel.addCell(attempted)
+    panel._onCurrentCell(attempted)
+
+    panel.discardCells([attempted])
+
+    assert panel.cellList.count() == 1
+    assert id(attempted) in panel._cells
+    assert panel.isAttempted(attempted) is True
+
+
+def test_discard_cells_drops_the_awaiting_enqueue_bookkeeping(qapp):
+    """A discarded cell seeded before any orchestrator was bound must not be
+    flushed into one bound afterward -- the same hazard clearCells() exists
+    to avoid."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    cell = object()
+    panel.addCell(cell)
+    panel._awaitingEnqueue.append(id(cell))
+
+    panel.discardCells([cell])
+
+    assert panel._awaitingEnqueue == []
+
+
 def test_clear_cells_forgets_the_attempted_set(qapp):
     """Left behind, a stale id would report a brand-new cell at a reused
     memory address as already attempted -- the same hazard _awaitingEnqueue
