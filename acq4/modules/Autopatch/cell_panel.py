@@ -48,10 +48,11 @@ class CellPanel(Qt.QWidget):
     def __init__(self, pipetteGetter=None, cameraGetter=None):
         super().__init__()
         self._orchestrator = None
-        # Whether a run is in flight, as reported by StatusPanel.
-        # sigInteractionLocked (wired in AutopatchWindow.__init__). Re-queuing a
-        # cell mid-run could hand the orchestrator a cell it is working on right
-        # now, so the reuse button is gated on this being False.
+        # Whether a run is in flight, as reported by
+        # StatusPanel.sigInteractionLocked (wired in AutopatchWindow.__init__).
+        # Re-queuing a cell mid-run could hand the orchestrator a cell it is
+        # working on right now, so the reuse button is gated on this being
+        # False.
         self._interactionLocked = False
         self._rows: dict[int, Qt.QListWidgetItem] = {}
         self._timelines: dict[int, list[str]] = {}
@@ -381,7 +382,7 @@ class CellPanel(Qt.QWidget):
         # depend on that default. setCheckState() is what actually puts a
         # checkbox on the row -- Qt only draws one once CheckStateRole holds
         # a value -- letting the operator pick a set of already-run cells for
-        # another pass (reuseCheckedCells()). Checking is independent of
+        # another pass (_onReuseCheckedCells()). Checking is independent of
         # selection, which is what drives the timeline/log views: one cell
         # can be inspected while a different set is checked.
         item.setFlags(item.flags() | Qt.Qt.ItemIsUserCheckable)
@@ -412,7 +413,7 @@ class CellPanel(Qt.QWidget):
         never finished a pass.
 
         None covers three cases the callers treat alike: never run, still
-        running, and re-queued for another pass by reuseCheckedCells().
+        running, and re-queued for another pass by _onReuseCheckedCells().
         """
         return self._status.get(id(cell))
 
@@ -451,10 +452,19 @@ class CellPanel(Qt.QWidget):
         self._updateReuseButton()
 
     def _updateReuseButton(self) -> None:
+        # A row count, not any(self._checkedCells()): the latter tests whether
+        # a checked Cell is truthy, which is only ever true today because Cell
+        # has no __len__/__bool__ of its own. This checks check state directly
+        # -- and short-circuits on the first hit -- rather than materializing
+        # the cell list, since this runs on every itemChanged.
+        hasChecked = any(
+            self.cellList.item(index).checkState() == Qt.Qt.Checked
+            for index in range(self.cellList.count())
+        )
         enabled = (
             self._orchestrator is not None
             and not self._interactionLocked
-            and any(self._checkedCells())
+            and hasChecked
         )
         self.reuseCheckedCellsBtn.setEnabled(enabled)
 
@@ -507,6 +517,16 @@ class CellPanel(Qt.QWidget):
             self.timelineList.clear()
             self._timelineItems.clear()
             self.logView.clear()
+            # Mirrors _onCellSelectionChanged's reset of the same two: a
+            # followed cell's live details widget must not linger into its
+            # next pass. Relies on the same invariant that makes the loop
+            # above skip a non-TERMINAL cell: a cell only reaches a TERMINAL
+            # disposition after ActionLogEntry.__exit__ has already emitted
+            # that entry's "finished" phase, so by the time a cell is eligible
+            # for reuse it has no entry still in flight to hold showContainer
+            # or _shownEntryId.
+            self._clearShowContainer()
+            self._shownEntryId = None
         self._updateCheckAllButton()
         self._updateReuseButton()
 

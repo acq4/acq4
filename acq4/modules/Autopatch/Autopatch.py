@@ -145,6 +145,7 @@ class AutopatchWindow(Qt.QWidget):
         self.statusPanel.sigInteractionLocked.connect(
             self.searchPanel.setInteractionLocked
         )
+        self.statusPanel.sigInteractionLocked.connect(self.cellPanel.setInteractionLocked)
         # Coverage advances on the worker thread as the producer images tiles, so
         # the readout is refreshed off a status change rather than polled. Routed
         # through StatusPanel, not connected to the orchestrator directly: the
