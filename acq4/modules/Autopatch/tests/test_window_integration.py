@@ -1298,3 +1298,60 @@ def test_start_is_enabled_again_after_a_run_that_ends_in_error(qapp, tmp_path):
         assert win.statusPanel.startBtn.isEnabled()
     finally:
         win.teardown()
+
+
+_PASS_MARKING_PROTOCOL = '''
+def run(ctx):
+    seen = getattr(ctx.cell, "passes_seen", None)
+    if seen is None:
+        seen = []
+        ctx.cell.passes_seen = seen
+    seen.append(PASS_NAME)
+'''
+
+
+def test_reused_cells_run_a_second_protocol_as_the_same_objects(qapp, tmp_path):
+    """The multi-pass workflow end to end: cellfie every cell in pass 1, load a
+    patch protocol, reuse the same cells for pass 2. Identity is the whole
+    point -- the same Cell object is what carries its tracker and reference
+    stack into pass 2 (design doc 6), which is why this asserts on `is` and on
+    state accumulated on the cell itself, not on positions.
+    """
+    _write_protocol(
+        tmp_path, "pass1.py", _PASS_MARKING_PROTOCOL.replace("PASS_NAME", '"one"')
+    )
+    _write_protocol(
+        tmp_path, "pass2.py", _PASS_MARKING_PROTOCOL.replace("PASS_NAME", '"two"')
+    )
+    win = _makeWindow(tmp_path)
+    try:
+        win.protocolPanel.fileCombo.setCurrentText("pass1")
+        cell = _makeCell()
+        win.cellPanel.addCell(cell)
+        win.orchestrator.enqueue(cell)
+
+        win.orchestrator.run_sync()
+
+        assert cell.passes_seen == ["one"]
+        assert win.cellPanel.disposition(cell) == "done"
+
+        # Loading pass 2 must not silently re-run the completed cell: the reuse
+        # button is the deliberate gate.
+        win.protocolPanel.fileCombo.setCurrentText("pass2")
+        assert win.orchestrator.pendingCells() == []
+
+        win.cellPanel.checkAllCompletedBtn.click()
+        win.cellPanel.reuseCheckedCellsBtn.click()
+
+        assert win.orchestrator.pendingCells() == [cell]
+        assert win.cellPanel._rows[id(cell)].text() == f"cell {id(cell)} — queued"
+
+        win.orchestrator.run_sync()
+
+        # Same object, so pass 1's accumulated state came along -- this is what
+        # makes pass 2 inherit pass 1's reference stack for free.
+        assert cell.passes_seen == ["one", "two"]
+        assert win.cellPanel.disposition(cell) == "done"
+        assert win.cellPanel.isAttempted(cell) is True
+    finally:
+        win.teardown()
