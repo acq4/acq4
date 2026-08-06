@@ -1010,6 +1010,9 @@ def test_tissue_moved_rescans_and_clears_the_queue_on_the_first_answer(win, monk
         _autopatchModule, "prompt", lambda ctx, **kw: "Rescan the slice"
     )
     slice_, cell, ctx = _sliceWithCoveredTiles(win)
+    # Primed True so the post-call assertion below actually distinguishes
+    # "cleared by the rescan handler" from "left at its untouched default".
+    win.orchestrator._producerExhausted = True
 
     with pytest.raises(AdvanceToNextCell):
         win._onTissueMoved(cell, ctx, "no features")
