@@ -79,8 +79,10 @@ class CellPanel(Qt.QWidget):
         # in sync with it on teardown.
         self._attempted = set()
         # id(entry) of whichever entry's widget currently occupies
-        # showContainer, or None if it's empty. No action nests log_action
-        # blocks today, but if one did, this lets a "finished" phase tell
+        # showContainer, or None if it's empty. An action can nest a
+        # log_action block inside another still-open one -- prompt() opens an
+        # "Operator Prompt" entry inside cellfie's still-open entry when
+        # tracking loses the cell -- so this lets a "finished" phase tell
         # whether it actually owns what's mounted before clearing it -- an
         # inner entry finishing must not tear down an outer entry's still-live
         # widget.

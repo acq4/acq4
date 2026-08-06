@@ -1164,6 +1164,11 @@ def test_new_slice_discards_nothing_when_the_directory_cannot_be_made(win):
 
     cell = _makeCell()
     win.cellPanel.addCell(cell)
+    # Primed attempted before the failing call, so the assertion below
+    # actually discriminates: isAttempted(cell) is False by default for any
+    # cell newSlice() never touches, which would pass whether or not the
+    # failed call left this bookkeeping alone.
+    win.cellPanel._onCurrentCell(cell)
     win.orchestrator.enqueue(cell)
     assert win.cellPanel.cellList.count() == 1
 
@@ -1175,7 +1180,7 @@ def test_new_slice_discards_nothing_when_the_directory_cannot_be_made(win):
 
     assert win.slice is oldSlice
     assert win.cellPanel.cellList.count() == 1
-    assert win.cellPanel.isAttempted(cell) is False
+    assert win.cellPanel.isAttempted(cell) is True
     assert win.orchestrator.pendingCells() == [cell]
 
 

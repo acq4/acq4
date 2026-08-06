@@ -661,13 +661,21 @@ def test_a_cell_finished_without_ever_being_current_is_attempted(qapp):
 
 
 def test_a_none_current_cell_does_not_crash_or_mark_anything(qapp):
+    """_onCurrentCell(None) must be a genuine no-op: no crash, no row added
+    for it, and no disturbance to a real cell already marked attempted --
+    not just a check against isAttempted(None), which is False by default for
+    any argument and so can never fail."""
     from acq4.modules.Autopatch.cell_panel import CellPanel
 
     panel = CellPanel()
+    cell = object()
+    panel.addCell(cell)
+    panel._onCurrentCell(cell)
 
     panel._onCurrentCell(None)
 
-    assert panel.isAttempted(None) is False
+    assert panel.isAttempted(cell) is True
+    assert panel.cellList.count() == 1
 
 
 def test_discard_cells_removes_rows_for_cells_never_attempted(qapp):
