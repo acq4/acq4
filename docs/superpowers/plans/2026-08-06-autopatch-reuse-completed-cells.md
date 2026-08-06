@@ -988,15 +988,16 @@ is skipped rather than enqueued a second time.
 
 ---
 
-### Task 5: Wire the run lock from StatusPanel to CellPanel
+### Task 5: Cover the run lock from StatusPanel to CellPanel
 
 **Files:**
-- Modify: `acq4/modules/Autopatch/Autopatch.py` (`AutopatchWindow.__init__`, beside the existing `sigInteractionLocked` connections)
-- Test: `acq4/modules/Autopatch/tests/test_window_integration.py`
+- Test only: `acq4/modules/Autopatch/tests/test_window_integration.py`
 
 **Interfaces:**
 - Consumes: `CellPanel.setInteractionLocked(locked: bool)` from Task 4; `StatusPanel.sigInteractionLocked` (already exists, emits `True` for `running`/`surveying`/`paused` and `False` on unbind).
 - Produces: nothing new.
+
+**The implementation line already landed.** Task 4's review found that shipping the reuse button without its gate wired was the exact hazard this plan bundled button-and-gate together to avoid — so the one-line `connect` was pulled forward into Task 4's fix commit `49d012e4a`. Step 3 below is therefore already done; verify it is present rather than adding it again, and expect Step 1's test to **pass** on first run. That makes Step 2's defect-injection proof the real deliverable of this task: without it, a test that passed immediately is no evidence of anything.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1027,17 +1028,17 @@ def test_a_run_in_flight_locks_area_5s_reuse_button(qapp, tmp_path):
         win.teardown()
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [ ] **Step 2: Run the test, then prove it is a real guard**
 
 ```bash
 /home/martin/.miniforge3/envs/acq4-gl/bin/python -m pytest acq4/modules/Autopatch/tests/test_window_integration.py -v -k locks_area_5
 ```
 
-Expected: FAIL on the first `assert not ...isEnabled()` — nothing routes the lock to `CellPanel` yet, so the button stays enabled through `running`.
+Expected: PASS, because the wiring landed in `49d012e4a`. A test that passes on first run proves nothing on its own, so prove it guards the wiring: **comment out** the `self.statusPanel.sigInteractionLocked.connect(self.cellPanel.setInteractionLocked)` line in `AutopatchWindow.__init__`, run the test, and observe it FAIL on the first `assert not ...isEnabled()` — with the lock unrouted the button stays enabled through `running`. Restore the line, re-run, observe PASS. Record both observed outcomes in the task report.
 
-- [ ] **Step 3: Implement**
+- [ ] **Step 3: Confirm the implementation is present**
 
-In `AutopatchWindow.__init__`, beside the existing two `sigInteractionLocked` connections:
+Verify this line exists in `AutopatchWindow.__init__` beside the other two `sigInteractionLocked` connections. Do not add a second copy:
 
 ```python
         self.statusPanel.sigInteractionLocked.connect(self.cellPanel.setInteractionLocked)
@@ -1054,12 +1055,11 @@ Expected: all PASS, including `test_teardown.py` — this is a bound-method conn
 - [ ] **Step 5: Commit**
 
 ```
-feat: lock Area 5's reuse button while a run is in flight
+test: cover the run lock reaching Area 5's reuse button
 
-Re-queuing a cell mid-run could hand the orchestrator a cell it is already
-working on. Routed through StatusPanel.sigInteractionLocked, the same signal
-Areas 2 and 4 lock on, so the connection is made once in the window's
-constructor and never needs re-wiring per protocol load.
+Drives the real chain -- orchestrator status to StatusPanel to
+sigInteractionLocked to CellPanel -- rather than calling the setter directly,
+so the window's one-line wiring cannot be dropped without a test noticing.
 
 🤖 Generated with [Claude Code](https://claude.ai/code)
 ```
