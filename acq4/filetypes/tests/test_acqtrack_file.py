@@ -1,9 +1,12 @@
 """Tests for AcqTrackFile: the .acqtrack FileType and its Data-tab Visualize widget.
 
-Cover extension matching, write/read delegation to the tracking-history seams, and
-that the widget defers every read until Visualize is clicked.
+Cover extension matching, write/read delegation to the tracking-history seams, and the
+Visualize button's contract: no read until clicked, the read runs off the GUI thread,
+and one visualizer window per file with the button reflecting its state.
 """
+import logging
 import os
+import threading
 
 import pytest
 
@@ -36,6 +39,27 @@ class _FakeFileHandle:
     def read(self):
         self.readCount += 1
         return self._data
+
+
+class _BlockingFileHandle(_FakeFileHandle):
+    """A file handle whose read parks until released, so a test can observe the widget
+    mid-load. Records the thread it was read on."""
+
+    def __init__(self, path, data=None):
+        super().__init__(path, data)
+        self.release = threading.Event()
+        self.readThread = None
+
+    def read(self):
+        self.readThread = threading.current_thread()
+        assert self.release.wait(10), "read was never released"
+        return super().read()
+
+
+class _FailingFileHandle(_FakeFileHandle):
+    def read(self):
+        super().read()
+        raise ValueError("corrupt history")
 
 
 class _FakeDirHandle:
@@ -184,6 +208,57 @@ class TestRealRoundTrip:
         assert replay.motion_estimator.current_object_stack.data.shape == original.shape
 
 
+class _FakeVisualizer:
+    """Stands in for a LiveTrackerVisualizer, with a real top-level window so the
+    close detection under test has a real close event to see."""
+
+    def __init__(self, tracker):
+        self.tracker = tracker
+        self.builtOn = threading.current_thread()
+        self.window = Qt.QMainWindow()
+
+    def show(self):
+        self.window.show()
+
+    def close(self):
+        self.window.close()
+
+
+@pytest.fixture
+def openedVisualizers(qapp, monkeypatch):
+    """Replace the real visualizer with a stand-in and yield the list of ones opened.
+
+    Teardown closes them through the real close path, which also empties the
+    module-level registry that outlives any one widget.
+    """
+    opened = []
+
+    def fakeOpen(tracker):
+        viz = _FakeVisualizer(tracker)
+        opened.append(viz)
+        viz.show()
+        return viz
+
+    monkeypatch.setattr(acqtrack, "_openVisualizer", fakeOpen)
+    yield opened
+    for viz in opened:
+        viz.close()
+    Qt.QTest.qWait(10)
+
+
+def _settle(path, timeout=10.0):
+    """Pump the GUI event loop until *path* is no longer loading.
+
+    The read runs on a worker thread and reports back through a queued signal, so the
+    loop has to keep turning for the result to land.
+    """
+    waited = 0.0
+    while acqtrack.visualizers.stateOf(path) == acqtrack.LOADING and waited < timeout:
+        Qt.QTest.qWait(10)
+        waited += 0.01
+    Qt.QTest.qWait(10)
+
+
 class TestAcqTrackWidget:
     def test_has_visualize_button(self, qapp, tmp_path):
         w = AcqTrackWidget(_FakeFileHandle(tmp_path / "tracking_history.acqtrack"))
@@ -194,14 +269,111 @@ class TestAcqTrackWidget:
         AcqTrackWidget(fh)
         assert fh.readCount == 0
 
-    def test_click_opens_visualizer_with_loaded_history(self, qapp, tmp_path, monkeypatch):
+    def test_click_opens_visualizer_with_loaded_history(self, qapp, tmp_path, openedVisualizers):
         history = object()
         fh = _FakeFileHandle(tmp_path / "tracking_history.acqtrack", data=history)
-        opened = []
-        monkeypatch.setattr(acqtrack, "_openVisualizer", opened.append)
 
         w = AcqTrackWidget(fh)
-        w.findChildren(Qt.QPushButton)[0].click()
+        w.visualizeBtn.click()
+        _settle(fh.name())
 
-        assert opened == [history]
+        assert [viz.tracker for viz in openedVisualizers] == [history]
         assert fh.readCount == 1
+
+    def test_reads_off_the_gui_thread(self, qapp, tmp_path, openedVisualizers):
+        fh = _BlockingFileHandle(tmp_path / "tracking_history.acqtrack", data=object())
+
+        w = AcqTrackWidget(fh)
+        w.visualizeBtn.click()
+        fh.release.set()
+        _settle(fh.name())
+
+        assert fh.readThread is not None
+        assert fh.readThread is not threading.main_thread()
+
+    def test_visualizer_is_built_on_the_gui_thread(self, qapp, tmp_path, openedVisualizers):
+        """The read is handed back through a queued signal precisely so the window it
+        produces is constructed where Qt allows widgets to be built."""
+        fh = _BlockingFileHandle(tmp_path / "tracking_history.acqtrack", data=object())
+
+        w = AcqTrackWidget(fh)
+        w.visualizeBtn.click()
+        fh.release.set()
+        _settle(fh.name())
+
+        assert openedVisualizers[0].builtOn is threading.main_thread()
+
+    def test_button_reports_loading_while_the_read_runs(self, qapp, tmp_path, openedVisualizers):
+        fh = _BlockingFileHandle(tmp_path / "tracking_history.acqtrack", data=object())
+        w = AcqTrackWidget(fh)
+
+        w.visualizeBtn.click()
+
+        assert w.visualizeBtn.text() == "Loading..."
+        assert not w.visualizeBtn.isEnabled()
+        fh.release.set()
+        _settle(fh.name())
+
+    def test_button_reports_open_once_the_visualizer_is_up(self, qapp, tmp_path, openedVisualizers):
+        fh = _FakeFileHandle(tmp_path / "tracking_history.acqtrack", data=object())
+        w = AcqTrackWidget(fh)
+
+        w.visualizeBtn.click()
+        _settle(fh.name())
+
+        assert w.visualizeBtn.text() == "Visualizer open"
+        assert not w.visualizeBtn.isEnabled()
+
+    def test_second_visualize_opens_no_second_window(self, qapp, tmp_path, openedVisualizers):
+        fh = _FakeFileHandle(tmp_path / "tracking_history.acqtrack", data=object())
+        w = AcqTrackWidget(fh)
+        w.visualizeBtn.click()
+        _settle(fh.name())
+
+        w.visualize()  # bypasses the disabled button, as a stray programmatic call would
+        _settle(fh.name())
+
+        assert len(openedVisualizers) == 1
+        assert fh.readCount == 1
+
+    def test_closing_the_visualizer_re_enables_the_button(self, qapp, tmp_path, openedVisualizers):
+        fh = _FakeFileHandle(tmp_path / "tracking_history.acqtrack", data=object())
+        w = AcqTrackWidget(fh)
+        w.visualizeBtn.click()
+        _settle(fh.name())
+
+        openedVisualizers[0].close()
+        Qt.QTest.qWait(10)
+
+        assert w.visualizeBtn.text() == "Visualize"
+        assert w.visualizeBtn.isEnabled()
+
+    def test_a_rebuilt_widget_sees_the_window_its_predecessor_opened(
+        self, qapp, tmp_path, openedVisualizers
+    ):
+        """FileDataView drops and rebuilds these widgets whenever the file selection
+        changes, so 'already open' cannot be remembered on the widget itself."""
+        path = tmp_path / "tracking_history.acqtrack"
+        first = AcqTrackWidget(_FakeFileHandle(path, data=object()))
+        first.visualizeBtn.click()
+        _settle(str(path))
+
+        second = AcqTrackWidget(_FakeFileHandle(path, data=object()))
+
+        assert second.visualizeBtn.text() == "Visualizer open"
+        assert not second.visualizeBtn.isEnabled()
+
+    def test_a_failed_read_reports_the_error_and_allows_a_retry(
+        self, qapp, tmp_path, openedVisualizers, caplog
+    ):
+        fh = _FailingFileHandle(tmp_path / "tracking_history.acqtrack")
+        w = AcqTrackWidget(fh)
+
+        with caplog.at_level(logging.ERROR, logger="acq4.filetypes.AcqTrackFile"):
+            w.visualizeBtn.click()
+            _settle(fh.name())
+
+        assert openedVisualizers == []
+        assert w.visualizeBtn.text() == "Load failed"
+        assert w.visualizeBtn.isEnabled()
+        assert "corrupt history" in caplog.text
