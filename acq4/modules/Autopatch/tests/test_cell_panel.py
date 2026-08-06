@@ -852,3 +852,50 @@ def test_discard_cells_forgets_a_discarded_cells_disposition(qapp):
     panel.discardCells([cell])
 
     assert panel.disposition(cell) is None
+
+
+def test_a_new_row_is_checkable_and_starts_unchecked(qapp):
+    """The checkbox is how an operator picks a reuse set; a row that starts
+    checked would offer up cells nobody selected."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    panel.addCell(object())
+
+    item = panel.cellList.item(0)
+    assert bool(item.flags() & Qt.Qt.ItemIsUserCheckable)
+    assert item.checkState() == Qt.Qt.Unchecked
+
+
+def test_checking_a_row_does_not_change_the_inspected_cell(qapp):
+    """Checking for reuse and selecting for inspection are independent
+    gestures, so an operator can read one cell's log while a different set is
+    checked (spec 6.1)."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    inspected = object()
+    other = object()
+    panel.addCell(inspected)
+    panel.addCell(other)
+    panel.cellList.setCurrentItem(panel._rows[id(inspected)])
+
+    panel._rows[id(other)].setCheckState(Qt.Qt.Checked)
+
+    assert panel.cellList.currentItem() is panel._rows[id(inspected)]
+    assert panel._rows[id(inspected)].checkState() == Qt.Qt.Unchecked
+
+
+def test_a_rows_check_state_survives_a_status_update(qapp):
+    """_onCellFinished/_onCurrentCell call setText() on the same item; that must
+    not disturb a check the operator has already made."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    cell = object()
+    panel.addCell(cell)
+    panel._rows[id(cell)].setCheckState(Qt.Qt.Checked)
+
+    panel._onCellFinished(cell, "done")
+
+    assert panel._rows[id(cell)].checkState() == Qt.Qt.Checked

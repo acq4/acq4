@@ -355,6 +355,12 @@ class CellPanel(Qt.QWidget):
         if setParent is not None and (thread is None or thread() is self.thread()):
             setParent(self)
         item = Qt.QListWidgetItem(f"cell {id(cell)} — queued")
+        # Checkable so the operator can pick a set of already-run cells for
+        # another pass (reuseCheckedCells()). Independent of selection, which
+        # is what drives the timeline/log views: one cell can be inspected
+        # while a different set is checked.
+        item.setFlags(item.flags() | Qt.Qt.ItemIsUserCheckable)
+        item.setCheckState(Qt.Qt.Unchecked)
         item.setData(Qt.Qt.UserRole, cell)
         self.cellList.addItem(item)
         self._rows[id(cell)] = item
