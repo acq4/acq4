@@ -74,19 +74,8 @@ class Autopatcher:
                 cell_dir = run_in_gui_thread(data_manager.createNewFolder, "Cell")
                 cell_to_save = None
                 try:
-                    started_clean = ppip.isTipClean()
-                    if not started_clean:
-                        set_state("Autopatch: cleaning pipette")
-                        try:
-                            ppip.setState("clean", nextState="bath").wait(timeout=600)
-                        except Exception:
-                            set_state("Clean is unsafe to undo; quitting demo")
-                            logger.exception("Error during pipette clean - quitting autopatch demo")
-                            return
-                        if not ppip.isTipClean():
-                            set_state("Pipette still not clean after clean state; quitting demo")
-                            return
-                        win.scopeDevice.moveDip().wait()
+                    if not self._cleanPipetteIfNeeded():
+                        return
 
                     cell = self._autopatchFindCell()
                     if cell is None:
@@ -218,24 +207,74 @@ class Autopatcher:
             parent = parent.parent()
         return parent.mkdir('AutopatchDemo', autoIncrement=True)
 
+    def _cleanPipetteIfNeeded(self) -> bool:
+        """Clean the pipette if its tip is fouled, and dip the objective afterwards.
+
+        Returns whether the demo may go on to work a cell: False means the clean
+        did not leave a usable tip, so the caller quits rather than driving a
+        fouled pipette at tissue.
+        """
+        win = self._window
+        ppip = win.patchPipetteDevice
+        if ppip.isTipClean():
+            return True
+        set_state("Autopatch: cleaning pipette")
+        try:
+            ppip.setState("clean", nextState="bath").wait(timeout=600)
+        except Stopped:
+            # An operator cancel is not a clean failure. Stopped is an Exception,
+            # so without this it would be caught below and turned into a normal
+            # return -- the demo would report success for a run the operator
+            # stopped, and the traceback would be logged as an error.
+            raise
+        except Exception:
+            set_state("Clean is unsafe to undo; quitting demo")
+            logger.exception("Error during pipette clean - quitting autopatch demo")
+            return False
+        if not ppip.isTipClean():
+            set_state("Pipette still not clean after clean state; quitting demo")
+            return False
+        win.scopeDevice.moveDip().wait()
+        return True
+
+    def _cancelPatchState(self):
+        """Mirror the MultiPatch "Cancel" button (pipetteControl._cancelClicked):
+        stop the FSM state job the demo put the pipette into, which switches the
+        pipette to that state's declared fallback state.
+
+        A PatchPipetteState job is a *detached* task -- it belongs to the state
+        manager, not to whoever asked for the state -- so stopping the demo does
+        not cascade into it. Without this the demo's own poll loop unwinds while
+        the pipette carries on through approach -> cell detect -> seal on its own,
+        which is not what the operator asked for when they cancelled.
+        """
+        job = self._window.patchPipetteDevice.getState()
+        if job is not None:
+            job.stop("autopatch demo cancelled", wait=True)
+
     def _autopatchCellPatch(self, cell):
         win = self._window
         ppip = win.patchPipetteDevice
         ppip.setState("approach", startANewCell=False)
         # detect_finished = False
-        while True:
-            state = ppip.getState().stateName
-            # remove? seal state already has this (and this is colliding with seal's move)
-            # if state not in ("approach", "cell detect", "contact cell", "seal", "cell attached", "break in"):
-            #     if not detect_finished:
-            #         win.cameraDevice.moveCenterToGlobal(
-            #             cell.position, "fast", name="center on cell during patching"
-            #         ).wait()
-            #         detect_finished = True
-            if state in ("whole cell", "bath", "broken", "fouled"):
-                set_state(f"Exiting patch loop - ended in state {state}")
-                break
-            sleep(0.1)
+        try:
+            while True:
+                state = ppip.getState().stateName
+                # remove? seal state already has this (and this is colliding with seal's move)
+                # if state not in ("approach", "cell detect", "contact cell", "seal", "cell attached", "break in"):
+                #     if not detect_finished:
+                #         win.cameraDevice.moveCenterToGlobal(
+                #             cell.position, "fast", name="center on cell during patching"
+                #         ).wait()
+                #         detect_finished = True
+                if state in ("whole cell", "bath", "broken", "fouled"):
+                    set_state(f"Exiting patch loop - ended in state {state}")
+                    break
+                check_stop()
+                sleep(0.1)
+        except Stopped:
+            self._cancelPatchState()
+            raise
         return state
 
     def _outOfCells(self) -> bool:
