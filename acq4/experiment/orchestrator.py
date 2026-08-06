@@ -90,6 +90,16 @@ class Orchestrator(Qt.QObject):
         and would otherwise be ignored for the rest of the run.
         """
         self._cellProducer = producer
+        self.clearProducerExhausted()
+
+    def clearProducerExhausted(self) -> None:
+        """Ask the producer again, even though it already reported exhaustion.
+
+        The flag is a per-run cache of "there is nothing left to find". Anything
+        that puts uncovered tiles back on the slice -- installing a producer, or
+        a forced rescan after the tissue moved -- invalidates it, and leaving it
+        set ends the run on a queue that could have been refilled.
+        """
         self._producerExhausted = False
 
     def _defaultContext(self, cell) -> ExecutionContext:
