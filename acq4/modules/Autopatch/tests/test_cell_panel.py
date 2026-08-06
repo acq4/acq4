@@ -905,3 +905,79 @@ def test_a_rows_check_state_survives_a_status_update(qapp):
     panel._onCellFinished(cell, "done")
 
     assert panel._rows[id(cell)].checkState() == Qt.Qt.Checked
+
+
+def test_check_all_completed_checks_only_done_rows(qapp):
+    """COMPLETED holds "done" alone. Every other terminal disposition is a
+    manual opt-in, and "skipped" most of all: its name invites being read as a
+    completion when it means the protocol abandoned the cell."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    cells = {}
+    for status in ("done", "skipped", "stopped", "retry-exhausted", "error"):
+        cell = object()
+        cells[status] = cell
+        panel.addCell(cell)
+        panel._onCellFinished(cell, status)
+    neverRun = object()
+    panel.addCell(neverRun)
+
+    panel.checkAllCompletedBtn.click()
+
+    assert panel._rows[id(cells["done"])].checkState() == Qt.Qt.Checked
+    for status in ("skipped", "stopped", "retry-exhausted", "error"):
+        assert panel._rows[id(cells[status])].checkState() == Qt.Qt.Unchecked, status
+    assert panel._rows[id(neverRun)].checkState() == Qt.Qt.Unchecked
+
+
+def test_check_all_completed_leaves_an_already_checked_row_checked(qapp):
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    cell = object()
+    panel.addCell(cell)
+    panel._onCellFinished(cell, "done")
+    panel._rows[id(cell)].setCheckState(Qt.Qt.Checked)
+
+    panel.checkAllCompletedBtn.click()
+
+    assert panel._rows[id(cell)].checkState() == Qt.Qt.Checked
+
+
+def test_check_all_completed_is_disabled_with_nothing_completed(qapp):
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    cell = object()
+    panel.addCell(cell)
+    panel._onCellFinished(cell, "error")
+
+    assert not panel.checkAllCompletedBtn.isEnabled()
+
+
+def test_check_all_completed_enables_once_a_cell_completes(qapp):
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    cell = object()
+    panel.addCell(cell)
+
+    panel._onCellFinished(cell, "done")
+
+    assert panel.checkAllCompletedBtn.isEnabled()
+
+
+def test_check_all_completed_disables_again_once_the_panel_is_cleared(qapp):
+    """The button must not stay enabled over a selection that no longer exists."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    cell = object()
+    panel.addCell(cell)
+    panel._onCellFinished(cell, "done")
+    assert panel.checkAllCompletedBtn.isEnabled()
+
+    panel.clearCells()
+
+    assert not panel.checkAllCompletedBtn.isEnabled()

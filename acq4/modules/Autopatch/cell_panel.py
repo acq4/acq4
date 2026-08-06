@@ -119,12 +119,15 @@ class CellPanel(Qt.QWidget):
 
         self.addFromTargetBtn = Qt.QPushButton("Add from target")
         self.scatterFakeCellsBtn = Qt.QPushButton("Scatter fake cells")
+        self.checkAllCompletedBtn = Qt.QPushButton("Check all completed")
         self.addFromTargetBtn.clicked.connect(self._onAddFromTargetClicked)
         self.scatterFakeCellsBtn.clicked.connect(self._onScatterFakeCellsClicked)
+        self.checkAllCompletedBtn.clicked.connect(self._onCheckAllCompleted)
 
         btnRow = Qt.QHBoxLayout()
         btnRow.addWidget(self.addFromTargetBtn)
         btnRow.addWidget(self.scatterFakeCellsBtn)
+        btnRow.addWidget(self.checkAllCompletedBtn)
 
         listsRow = Qt.QHBoxLayout()
         listsRow.addWidget(self.cellList)
@@ -141,6 +144,7 @@ class CellPanel(Qt.QWidget):
         self.sigLogMessage.connect(self._onLogMessage)
         self.sigActionEntry.connect(self._onActionEntry)
         self.sigCellsDiscarded.connect(self._onCellsDiscarded)
+        self._updateCheckAllButton()
 
     def bindOrchestrator(self, orchestrator) -> None:
         if orchestrator is self._orchestrator:
@@ -247,6 +251,7 @@ class CellPanel(Qt.QWidget):
         self.cellList.clear()
         self._clearShowContainer()
         self._shownEntryId = None
+        self._updateCheckAllButton()
 
     def discardCells(self, cells) -> None:
         """Drop the panel-side bookkeeping for `cells` -- rows, timelines,
@@ -395,6 +400,24 @@ class CellPanel(Qt.QWidget):
         """
         return self._status.get(id(cell))
 
+    def _onCheckAllCompleted(self) -> None:
+        """Tick every row whose cell ran its protocol to completion.
+
+        A convenience for the common "reuse everything that worked" case; it
+        only ever checks, never unchecks, so it composes with a selection the
+        operator has already started making by hand.
+        """
+        for index in range(self.cellList.count()):
+            item = self.cellList.item(index)
+            if self.disposition(item.data(Qt.Qt.UserRole)) in COMPLETED:
+                item.setCheckState(Qt.Qt.Checked)
+
+    def _updateCheckAllButton(self) -> None:
+        self.checkAllCompletedBtn.setEnabled(self._hasCompletedCell())
+
+    def _hasCompletedCell(self) -> bool:
+        return any(status in COMPLETED for status in self._status.values())
+
     def appendLog(self, cell, message: str) -> None:
         # May be called from the orchestrator's worker thread (ExecutionContext.log,
         # bound per-cell by the context factory); emitting rather than touching
@@ -531,6 +554,7 @@ class CellPanel(Qt.QWidget):
             self.addCell(cell)
             item = self._rows[id(cell)]
         item.setText(f"cell {id(cell)} — {status}")
+        self._updateCheckAllButton()
 
     def _onCellSelectionChanged(self, current, _previous) -> None:
         self.timelineList.clear()
