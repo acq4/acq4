@@ -193,6 +193,7 @@ class AutopatchWindow(Qt.QWidget):
         self.slice = Slice(
             fov=self._cameraFov(camera), constraints=constraints, dirHandle=dirHandle
         )
+        self.searchPanel.setSliceReady(True)
         # There is a camera now, so retract the message above if it is up.
         self.searchPanel.setError("")
         return True

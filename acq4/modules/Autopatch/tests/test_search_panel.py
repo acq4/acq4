@@ -207,6 +207,9 @@ def test_an_empty_message_retracts_an_externally_set_error(qapp):
 
 def test_add_region_button_emits_a_request(qapp):
     panel = makePanel()
+    # A disabled button does not deliver clicks; this test is about the
+    # button's wiring, not the no-slice lock, so give it a slice.
+    panel.setSliceReady(True)
     requests = []
     panel.sigAddRegionRequested.connect(lambda: requests.append(True))
 
@@ -247,6 +250,9 @@ def test_locking_disables_editing_but_not_the_readout(qapp, widgetName):
     # of them, in both directions, while leaving the readout alone.
     panel = makePanel()
     widget = getattr(panel, widgetName)
+    # A slice already exists here: this test is about the run-lock reaching
+    # every control, not about the separate no-slice lock covered elsewhere.
+    panel.setSliceReady(True)
 
     panel.setInteractionLocked(True)
     assert not widget.isEnabled()
@@ -269,3 +275,58 @@ def test_the_region_shape_reports_a_key_not_the_combo_label(qapp):
     panel = makePanel()
     panel.shapeCombo.setCurrentIndex(panel.shapeCombo.findData("ellipse"))
     assert panel.regionShape() == "ellipse"
+
+
+def _controls(panel):
+    return (
+        panel.nearDepthSpin,
+        panel.farDepthSpin,
+        panel.minHealthSpin,
+        panel.maxDensitySpin,
+        panel.rescansCheck,
+        panel.addRegionBtn,
+        panel.shapeCombo,
+    )
+
+
+def test_locked_when_no_slice_and_not_running(qapp):
+    panel = makePanel()
+    panel.setSliceReady(False)
+    panel.setInteractionLocked(False)
+    assert all(not w.isEnabled() for w in _controls(panel))
+
+
+def test_locked_when_no_slice_and_running(qapp):
+    panel = makePanel()
+    panel.setSliceReady(False)
+    panel.setInteractionLocked(True)
+    assert all(not w.isEnabled() for w in _controls(panel))
+
+
+def test_locked_when_slice_ready_but_running(qapp):
+    panel = makePanel()
+    panel.setSliceReady(True)
+    panel.setInteractionLocked(True)
+    assert all(not w.isEnabled() for w in _controls(panel))
+
+
+def test_unlocked_only_when_slice_ready_and_not_running(qapp):
+    panel = makePanel()
+    panel.setSliceReady(True)
+    panel.setInteractionLocked(False)
+    assert all(w.isEnabled() for w in _controls(panel))
+
+
+def test_a_run_ending_does_not_unlock_a_panel_with_no_slice(qapp):
+    # The two-writers bug this design exists to prevent: sigInteractionLocked
+    # firing False at the end of a run must not override slice-readiness.
+    panel = makePanel()
+    panel.setSliceReady(False)
+    panel.setInteractionLocked(True)
+    panel.setInteractionLocked(False)
+    assert all(not w.isEnabled() for w in _controls(panel))
+
+
+def test_a_panel_starts_locked_before_any_slice_exists(qapp):
+    panel = makePanel()
+    assert all(not w.isEnabled() for w in _controls(panel))

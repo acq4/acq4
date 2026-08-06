@@ -1155,3 +1155,9 @@ def test_add_region_here_does_not_create_a_directory(win):
     # subsequent write lands.
     win.addRegionHere()
     assert win.slice.dirHandle is None
+
+
+def test_area_2_is_locked_until_a_slice_exists(win):
+    assert not win.searchPanel.addRegionBtn.isEnabled()
+    win.newSlice()
+    assert win.searchPanel.addRegionBtn.isEnabled()
