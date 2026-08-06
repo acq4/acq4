@@ -801,6 +801,39 @@ def test_new_slice_leaves_the_in_flight_cell_unreusable(qapp, tmp_path):
         win.teardown()
 
 
+def test_two_new_slices_in_a_row_still_leave_the_in_flight_cell_unreusable(
+    qapp, tmp_path
+):
+    """The guard above has to survive more than one wipe. Two deliberate tissue
+    swaps in a row is the ordinary case, and newSliceBtn is never disabled
+    during a run, so an accidental double-click delivers two clicked signals on
+    its own -- and either way the cell still running on the first slice's tissue
+    has yet to announce its finish when the second wipe lands.
+
+    Driven through the real button rather than newSlice() directly, since a
+    double-click is the accidental half of what this covers.
+    """
+    win = _makeWindow(tmp_path)
+    try:
+        cell = _makeCell()
+        win.cellPanel.addCell(cell)
+        win.orchestrator.enqueue(cell)
+        win.orchestrator.sigCurrentCell.emit(cell)
+
+        win.newSliceBtn.click()
+        win.newSliceBtn.click()
+        # Still finishing on the first slice's tissue, as newSlice()'s docstring
+        # says it is allowed to.
+        win.orchestrator.sigCellFinished.emit(cell, "done")
+
+        assert win.cellPanel.cellList.count() == 0
+        assert win.cellPanel.disposition(cell) is None
+        assert win.cellPanel.isAttempted(cell) is False
+        assert not win.cellPanel.checkAllCompletedBtn.isEnabled()
+    finally:
+        win.teardown()
+
+
 def test_new_slice_clears_the_producer(qapp, tmp_path):
     # The producer closes over the slice it was built from; leaving it
     # installed after that slice is discarded would keep surveying tissue

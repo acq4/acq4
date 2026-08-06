@@ -115,15 +115,51 @@ class CellPanel(Qt.QWidget):
         # that location either. Holds ids and plain strings, never cells, for
         # the same reason _attempted and _status do.
         self._preReuseStatus: dict[int, str] = {}
+        # id(cell) for the cell the orchestrator last announced as current and
+        # has not since reported a terminal disposition for, or None when it has
+        # announced no cell at all -- sigCurrentCell carries None when the
+        # orchestrator goes idle. The one cell whose announcements a wipe still
+        # has to expect, which is what clearCells() scopes self._forgotten to.
+        # "Attempted with no disposition" cannot answer that question: reuse
+        # deliberately keeps a cell attempted while popping its disposition, so
+        # that describes every reused cell, including ones merely queued behind
+        # the running one.
+        #
+        # Holds an id, never a cell, for the same reason _attempted does. Reset
+        # when that cell's pass reaches a terminal disposition, when the
+        # orchestrator reports itself idle, and when it is unbound -- so it names
+        # an address only while self._cells or self._forgotten still holds that
+        # cell, and can never come to name a recycled one.
+        self._runningCellId: int | None = None
         # id(cell) -> the cell itself, for each cell clearCells() deliberately
         # forgot while it might still be in flight -- the "New slice" path
         # (AutopatchWindow.newSlice), which discards Area 5 and the
         # orchestrator's queue but leaves the cell already running on the tissue
         # the operator has just declared gone. That cell's announcements are
         # queued connections, so they land after the wipe; ignored here (see
-        # _onCurrentCell/_onCellFinished), they cannot bring back a row, an
-        # _attempted flag, or a disposition that would offer a coordinate in
-        # discarded tissue up to "Check all completed" and from there to reuse.
+        # _onCurrentCell/_onCellFinished, and _onLogMessage/_onActionEntry for
+        # the paths that write no announcement but do key state off the cell
+        # id), they cannot bring back a row, an _attempted flag, or a
+        # disposition that would offer a coordinate in discarded tissue up to
+        # "Check all completed" and from there to reuse.
+        #
+        # Accumulated across wipes rather than replaced by each one: clearCells()
+        # empties self._cells, which is where a wipe reads its own entry from, so
+        # a second wipe -- two deliberate slice swaps in a row, or one
+        # double-click on a New slice button that is never disabled mid-run --
+        # has nothing of its own left to remember and would otherwise drop the
+        # cell still running from before the first one.
+        #
+        # Each wipe contributes at most the one cell self._runningCellId names,
+        # so this holds at most one entry per wipe made while a cell is running.
+        # An entry leaves on that cell's terminal finish, or -- for a pass that
+        # reports no terminal disposition at all, which
+        # Orchestrator._processCell's retry loop allows, since its _checkPause()
+        # and context construction sit outside the try that reports
+        # "stopped"/"error" -- when the orchestrator announces it has gone idle
+        # and so has nothing left to announce about any cell. A worker thread
+        # wedged before either announcement is the one case that leaves an entry
+        # here for the rest of the panel's life.
         #
         # Holds the cells themselves, unlike every other store here: an id whose
         # cell has been freed can be recycled by an unrelated new cell, whose own
@@ -261,6 +297,9 @@ class CellPanel(Qt.QWidget):
         Qt.disconnect(self._orchestrator.sigCurrentCell, self._onCurrentCell)
         Qt.disconnect(self._orchestrator.sigCellFinished, self._onCellFinished)
         self._orchestrator = None
+        # Nothing is running as far as this panel can tell any more: the
+        # announcement that would have said so has nowhere left to arrive.
+        self._runningCellId = None
         self._updateReuseButton()
 
     def clearCells(self) -> None:
@@ -286,20 +325,20 @@ class CellPanel(Qt.QWidget):
         path retains nothing at all -- exactly what tests/test_teardown.py
         proves by refcounting alone.
         """
-        self._forgotten = (
-            {}
-            if self._orchestrator is None
-            else {
-                cellId: cell
-                for cellId, cell in self._cells.items()
-                # Scoped to cells that could actually still be announced: one
-                # already holding a terminal disposition never will be, and one
-                # the orchestrator never started work on goes away with the
-                # queue its caller clears. Normally that is the one cell in
-                # flight, or none.
-                if cellId in self._attempted and cellId not in self._status
-            }
-        )
+        if self._orchestrator is None:
+            self._forgotten.clear()
+        else:
+            # Scoped to the one cell that could actually still be announced:
+            # the one the orchestrator has told this panel it is running (see
+            # self._runningCellId). A cell still sitting in the queue goes away
+            # with the queue this method's caller clears, so no announcement is
+            # coming for it and holding one would pin its tracker and reference
+            # stack for nothing. Added to whatever earlier wipes remembered
+            # rather than replacing it, for the reason self._forgotten's own
+            # comment gives.
+            running = self._cells.get(self._runningCellId)
+            if running is not None:
+                self._forgotten[self._runningCellId] = running
         self._cells.clear()
         # Cleared alongside self._cells, which is what the flush resolves these
         # ids against: an id left behind here would either raise a KeyError on
@@ -607,6 +646,14 @@ class CellPanel(Qt.QWidget):
         self.sigLogMessage.emit(cell, message)
 
     def _onLogMessage(self, cell, message: str) -> None:
+        if id(cell) in self._forgotten:
+            # Deliberately forgotten while it might still be in flight (see
+            # self._forgotten), and still logging against tissue the operator
+            # has declared gone. This store is keyed by cell id and would
+            # repopulate under an id with no row at all, so once that address is
+            # recycled a new cell at it would inherit the old slice's log as its
+            # own provenance.
+            return
         self._logs.setdefault(id(cell), []).append(message)
         if cell is self._currentSelectedCell():
             self.logView.appendPlainText(message)
@@ -617,6 +664,15 @@ class CellPanel(Qt.QWidget):
         # onLogAction()/sigActionEntry below), which drives the timeline rows
         # and the details container directly.
         if cell is None:
+            # The orchestrator has no cell in hand. Its run loop emits this
+            # however that loop ended (Orchestrator._runLoopBody's finally), so
+            # nothing it forgot can be announced again and everything held is
+            # released -- the only release a pass that never reported a terminal
+            # disposition gets. The other emission of None precedes a survey,
+            # which the loop only reaches once the cell before it has already
+            # finished, so that one has nothing left to release either.
+            self._forgotten.clear()
+            self._runningCellId = None
             return
         if id(cell) in self._forgotten:
             # Deliberately forgotten while it might still be in flight (see
@@ -626,6 +682,7 @@ class CellPanel(Qt.QWidget):
             # again (a retry) still has that finish to come.
             return
         self._attempted.add(id(cell))
+        self._runningCellId = id(cell)
         item = self._rows.get(id(cell))
         if item is None:
             # A cell the orchestrator announces without this panel ever having
@@ -669,6 +726,14 @@ class CellPanel(Qt.QWidget):
         self.sigActionEntry.emit(cell, entry, "started")
 
     def _onActionEntry(self, cell, entry, phase: str) -> None:
+        if id(cell) in self._forgotten:
+            # Same wipe and the same reason as _onLogMessage: a forgotten cell
+            # goes on opening action entries, and the timeline stores are keyed
+            # by cell id the same way, so a recycled address would inherit the
+            # old slice's timeline rows. Nothing of this cell's is on screen to
+            # update either -- its row is gone, so it cannot be the selected
+            # cell.
+            return
         if phase == "started":
             self._appendTimelineRow(cell, entry)
         elif phase == "finished":
@@ -727,6 +792,13 @@ class CellPanel(Qt.QWidget):
                 child.widget().setParent(None)
 
     def _onCellFinished(self, cell, status: str) -> None:
+        if status in TERMINAL and self._runningCellId == id(cell):
+            # This cell's pass is over, so it is not the running cell any more,
+            # and no later wipe has an announcement of its own left to expect
+            # from it. Ahead of the forgotten check below so a forgotten cell's
+            # id leaves both stores together, which is what keeps this one from
+            # ever naming a freed, recycled address.
+            self._runningCellId = None
         # A cell can finish (e.g. the "skipped" outcome in
         # Orchestrator._processCell) without sigCurrentCell ever having fired
         # for it, so this cannot assume _onCurrentCell already gave it a row --

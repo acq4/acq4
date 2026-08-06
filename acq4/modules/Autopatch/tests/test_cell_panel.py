@@ -32,6 +32,13 @@ class _FakeOrchestrator(Qt.QObject):
         still pending as far as a test using it is concerned."""
         return list(self.enqueued)
 
+    def clearQueue(self):
+        """Stands in for Orchestrator.clearQueue(), which AutopatchWindow.
+        newSlice() calls alongside CellPanel.clearCells(): the deque is a
+        second strong reference to the same cells, and dropping it is what
+        guarantees a merely-queued cell is never announced again."""
+        self.enqueued.clear()
+
 
 class _FakePipette:
     """Stands in for a PatchPipette: exposes .pipetteDevice.targetPosition()
@@ -883,10 +890,12 @@ def test_clear_cells_ignores_a_later_running_announcement_too(qapp):
 
 
 def test_clear_cells_remembers_only_cells_that_could_still_be_announced(qapp):
-    """A cell that already reached a terminal disposition will never be
-    announced again, and a cell never started will not be either once the queue
-    behind it is cleared -- remembering those would grow the store with every
-    slice for no benefit, and keep cells alive that nothing is waiting on."""
+    """The store holds exactly the cell the orchestrator last announced as
+    running and has not terminally finished. A cell that already reached a
+    terminal disposition will never be announced again, and a cell never
+    started will not be either once the queue behind it is cleared --
+    remembering those would grow the store with every slice for no benefit, and
+    keep cells alive that nothing is waiting on."""
     from acq4.modules.Autopatch.cell_panel import CellPanel
 
     panel = CellPanel()
@@ -941,6 +950,137 @@ def test_a_forgotten_cell_stays_forgotten_through_a_transient_retry(qapp):
     assert list(panel._forgotten) == []
     assert panel.cellList.count() == 0
     assert panel.disposition(inFlight) is None
+
+
+def test_a_second_wipe_keeps_remembering_the_first_wipes_forgotten_cell(qapp):
+    """Two deliberate tissue swaps in a row is the ordinary case, and Area 1's
+    New slice button is never disabled during a run, so an accidental
+    double-click delivers two wipes on its own. The second wipe has no cells of
+    its own left to remember, and must not drop what the first one remembered:
+    the cell from before it is still running on the discarded tissue with its
+    finish yet to be announced, which is the whole hazard this store closes."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+    inFlight = object()
+    orch.sigCurrentCell.emit(inFlight)
+
+    panel.clearCells()
+    panel.clearCells()
+    orch.sigCellFinished.emit(inFlight, "done")
+
+    assert panel.cellList.count() == 0
+    assert panel.disposition(inFlight) is None
+    assert panel.isAttempted(inFlight) is False
+    assert not panel.checkAllCompletedBtn.isEnabled()
+
+
+def test_reuse_does_not_leave_the_still_queued_cells_remembered(qapp):
+    """Reuse keeps a cell attempted and clears its disposition, so "attempted
+    with no disposition" is true of every reused cell -- including the ones
+    still waiting their turn behind the one running. Those go away with the
+    queue the wipe's caller clears, so no terminal finish will ever arrive to
+    release them, and each one held would pin a tracker and a reference image
+    stack for the rest of the session."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+    # Built off-thread so addCell() leaves them unparented (see addCell()'s own
+    # comment): the panel's own stores are then the only thing keeping them
+    # alive, which is what gives the weakrefs below anything to prove.
+    running, queuedFirst, queuedSecond = (
+        _buildOnAnotherThread(_FakeQObjectCell) for _ in range(3)
+    )
+    for cell in (running, queuedFirst, queuedSecond):
+        panel.addCell(cell)
+        orch.sigCellFinished.emit(cell, "done")
+    # The loop variable would otherwise be a reference of its own.
+    del cell
+    panel.checkAllCompletedBtn.click()
+    panel.reuseCheckedCellsBtn.click()
+    assert orch.enqueued == [running, queuedFirst, queuedSecond]
+    # Pass 2 reaches the first of them; the other two are still queued behind it.
+    orch.sigCurrentCell.emit(running)
+    refs = [weakref.ref(queuedFirst), weakref.ref(queuedSecond)]
+
+    gc.disable()
+    try:
+        # What newSlice() does: the panel's bookkeeping and the orchestrator's
+        # separate deque both let go.
+        panel.clearCells()
+        orch.clearQueue()
+        assert list(panel._forgotten) == [id(running)]
+
+        del queuedFirst, queuedSecond
+        # No gc.collect() -- pure refcounting, since gc is disabled.
+        assert [ref() for ref in refs] == [
+            None,
+            None,
+        ], "a cell that will never be announced again was pinned"
+    finally:
+        gc.enable()
+
+
+def test_an_idle_announcement_releases_every_forgotten_cell(qapp):
+    """sigCurrentCell(None) is the orchestrator reporting it has no cell in
+    hand, which its run loop emits however that loop ended -- so nothing it
+    forgot can be announced again and the store empties.
+
+    This is the only release for a pass that ends without a terminal
+    disposition at all: Orchestrator._processCell's retry loop calls
+    _checkPause() and builds the context outside the try that reports
+    "stopped"/"error", so a stop or a raise there after a "retry" emission
+    leaves the cell with no finish left to come."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+    inFlight = object()
+    orch.sigCurrentCell.emit(inFlight)
+    panel.clearCells()
+    orch.sigCellFinished.emit(inFlight, "retry")
+    assert list(panel._forgotten) == [id(inFlight)]
+
+    orch.sigCurrentCell.emit(None)
+
+    assert panel._forgotten == {}
+
+
+def test_a_forgotten_cells_log_and_action_traffic_leaves_no_panel_state(qapp):
+    """A forgotten cell goes on running on the discarded tissue, so it goes on
+    logging and opening action entries from the worker thread. Both paths key
+    their stores off the cell id, so recording them rebuilds panel state under
+    an id with no row -- and once that cell is released and its address
+    recycled, an unrelated new cell inherits the old slice's log and timeline
+    as its own provenance."""
+    from acq4.experiment.log_entry import ActionLogEntry
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+    inFlight = object()
+    orch.sigCurrentCell.emit(inFlight)
+    panel.clearCells()
+
+    panel.appendLog(inFlight, "still patching the old slice")
+    entry = ActionLogEntry("Patch")
+    panel.onLogAction(inFlight, entry)
+    entry.set_status("seal forming")
+    entry._finish(None)
+
+    assert panel._logs == {}
+    assert panel._timelines == {}
+    assert panel._entryTimelineLoc == {}
+    assert panel._timelineItems == {}
+    assert panel.cellList.count() == 0
+    assert panel.timelineList.count() == 0
+    assert panel.logView.toPlainText() == ""
 
 
 def test_clear_cells_holds_the_forgotten_cell_itself_not_just_its_id(qapp):
