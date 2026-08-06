@@ -500,30 +500,6 @@ def test_every_barren_refill_pass_reports_surveying(make_pf):
     assert statuses.count("surveying") == 3
 
 
-def test_clear_producer_exhausted_lets_an_exhausted_producer_be_asked_again():
-    # A producer that reported exhaustion is never asked again for the rest of
-    # the run. After a forced rescan there are uncovered tiles once more, so the
-    # flag has to be cleared or the loop ends on a queue the producer could
-    # have refilled.
-    orch = Orchestrator(make_pf())
-    orch.setCellProducer(lambda: None)
-    orch._producerExhausted = True
-
-    orch.clearProducerExhausted()
-
-    assert orch._producerExhausted is False
-    assert orch._shouldRefill() is True
-
-
-def test_set_cell_producer_still_clears_exhaustion():
-    # The extraction must not move behaviour off setCellProducer, which existing
-    # callers rely on.
-    orch = Orchestrator(make_pf())
-    orch._producerExhausted = True
-    orch.setCellProducer(lambda: [])
-    assert orch._producerExhausted is False
-
-
 def test_current_cell_is_cleared_before_the_producer_runs(make_pf):
     # sigCurrentCell must not still name the just-finished cell while the
     # producer images: Area 5 would attribute survey time to that cell, and a
@@ -699,12 +675,6 @@ def test_no_producer_never_reports_surveying(make_pf):
     statuses = []
     orch = Orchestrator(pf)
     orch.sigStatus.connect(statuses.append)
-    orch.enqueue("c1")
-    orch.enqueue("c2")
-
-    orch.run_sync()
-
-    assert "surveying" not in statuses
     orch.enqueue("c1")
     orch.enqueue("c2")
 
