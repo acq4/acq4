@@ -854,16 +854,22 @@ def test_discard_cells_forgets_a_discarded_cells_disposition(qapp):
     assert panel.disposition(cell) is None
 
 
-def test_a_new_row_is_checkable_and_starts_unchecked(qapp):
+def test_a_new_row_has_a_checkbox_and_starts_unchecked(qapp):
     """The checkbox is how an operator picks a reuse set; a row that starts
-    checked would offer up cells nobody selected."""
+    checked would offer up cells nobody selected.
+
+    checkState() alone cannot prove a checkbox is drawn: Qt reports
+    Unchecked both for a row with an explicit unchecked state and for one
+    with no check state at all, and only the former gets a checkbox. Assert
+    CheckStateRole data is present -- that is what makes Qt draw the
+    checkbox -- alongside checkState() to confirm it starts unchecked."""
     from acq4.modules.Autopatch.cell_panel import CellPanel
 
     panel = CellPanel()
     panel.addCell(object())
 
     item = panel.cellList.item(0)
-    assert bool(item.flags() & Qt.Qt.ItemIsUserCheckable)
+    assert item.data(Qt.Qt.CheckStateRole) is not None
     assert item.checkState() == Qt.Qt.Unchecked
 
 
