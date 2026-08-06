@@ -837,6 +837,170 @@ def test_clear_cells_forgets_recorded_dispositions(qapp):
     assert panel.disposition(cell) is None
 
 
+def test_clear_cells_ignores_a_later_announcement_from_a_cell_in_flight(qapp):
+    """The "New slice" hazard, from the reuse side. newSlice() clears Area 5 and
+    the orchestrator's queue but deliberately leaves the in-flight cell running;
+    its sigCellFinished is a queued connection, so it lands after the wipe. A
+    row, a disposition or an attempted flag created then would offer a
+    coordinate in tissue the operator has declared gone up to "Check all
+    completed", and reuse would drive a pipette straight to it.
+    """
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+    inFlight = object()
+    orch.sigCurrentCell.emit(inFlight)
+
+    panel.clearCells()
+    orch.sigCellFinished.emit(inFlight, "done")
+
+    assert panel.cellList.count() == 0, "a forgotten cell was given a row again"
+    assert panel.disposition(inFlight) is None
+    assert panel.isAttempted(inFlight) is False
+    assert not panel.checkAllCompletedBtn.isEnabled()
+
+
+def test_clear_cells_ignores_a_later_running_announcement_too(qapp):
+    """sigCurrentCell can also land after the wipe -- a cell announced as
+    current for a retry, or one the orchestrator reaches before its own queue
+    clear takes effect -- and must be ignored on that path as well, or the row
+    reappears without any finish ever arriving."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+    inFlight = object()
+    orch.sigCurrentCell.emit(inFlight)
+
+    panel.clearCells()
+    orch.sigCurrentCell.emit(inFlight)
+
+    assert panel.cellList.count() == 0
+    assert panel.isAttempted(inFlight) is False
+
+
+def test_clear_cells_remembers_only_cells_that_could_still_be_announced(qapp):
+    """A cell that already reached a terminal disposition will never be
+    announced again, and a cell never started will not be either once the queue
+    behind it is cleared -- remembering those would grow the store with every
+    slice for no benefit, and keep cells alive that nothing is waiting on."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+    finished, queued, inFlight = object(), object(), object()
+    for cell in (finished, queued, inFlight):
+        panel.addCell(cell)
+    panel._onCellFinished(finished, "done")
+    panel._onCurrentCell(inFlight)
+
+    panel.clearCells()
+
+    assert list(panel._forgotten) == [id(inFlight)]
+
+
+def test_a_forgotten_cell_is_released_once_its_pass_is_over(qapp):
+    """The store must not grow across slices: the one announcement it exists to
+    ignore is the cell's terminal finish, after which there is nothing left to
+    ignore and nothing left to hold."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+    inFlight = object()
+    orch.sigCurrentCell.emit(inFlight)
+    panel.clearCells()
+    assert list(panel._forgotten) == [id(inFlight)]
+
+    orch.sigCellFinished.emit(inFlight, "done")
+
+    assert panel._forgotten == {}
+
+
+def test_a_forgotten_cell_stays_forgotten_through_a_transient_retry(qapp):
+    """A "retry" status is emitted mid-flight, so the cell is still to come
+    with a terminal status of its own; released on that one, the next
+    announcement would resurrect the very row this store exists to suppress."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+    inFlight = object()
+    orch.sigCurrentCell.emit(inFlight)
+    panel.clearCells()
+
+    orch.sigCellFinished.emit(inFlight, "retry")
+    orch.sigCellFinished.emit(inFlight, "done")
+
+    assert list(panel._forgotten) == []
+    assert panel.cellList.count() == 0
+    assert panel.disposition(inFlight) is None
+
+
+def test_clear_cells_holds_the_forgotten_cell_itself_not_just_its_id(qapp):
+    """An id whose cell has been freed can be recycled by an unrelated new
+    cell, whose own announcements would then be silently ignored -- no row at
+    all for a cell that really is running. Holding the object is what keeps
+    that address from being handed out again."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+    # Built off-thread so addCell() leaves it unparented (see addCell()'s own
+    # comment): the panel's own dicts are then the only thing keeping it alive.
+    cell = _buildOnAnotherThread(_FakeQObjectCell)
+    orch.sigCurrentCell.emit(cell)
+    panel.clearCells()
+    cellRef = weakref.ref(cell)
+
+    gc.disable()
+    try:
+        del cell
+        # No gc.collect() -- pure refcounting, since gc is disabled.
+        assert (
+            cellRef() is not None
+        ), "a forgotten cell's address can be recycled while it is still in flight"
+    finally:
+        gc.enable()
+
+
+def test_clear_cells_after_unbinding_remembers_nothing(qapp):
+    """AutopatchWindow.teardown() unbinds before clearing, and the whole
+    orchestrator/cell/panel graph must be freed by refcounting alone afterward
+    (see tests/test_teardown.py for the segfault that proves why), so the
+    teardown path must retain no cell here at all. An unbound panel has no
+    connection left for an announcement to arrive through, which is what makes
+    the two paths distinguishable."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+    cell = _buildOnAnotherThread(_FakeQObjectCell)
+    orch.sigCurrentCell.emit(cell)
+    cellRef = weakref.ref(cell)
+
+    gc.disable()
+    try:
+        panel.unbindOrchestrator()
+        panel.clearCells()
+        assert panel._forgotten == {}
+
+        del cell, orch
+        del panel
+        # No gc.collect() -- pure refcounting, since gc is disabled.
+        assert cellRef() is None, "the teardown path retained a cell"
+    finally:
+        gc.enable()
+
+
 def test_discard_cells_forgets_a_discarded_cells_disposition(qapp):
     """discardCells() drops the same per-cell stores clearCells() drops, scoped
     to a subset; a disposition left behind is the same stale-id hazard."""
@@ -932,17 +1096,27 @@ def test_check_all_completed_checks_only_done_rows(qapp):
 
 
 def test_check_all_completed_leaves_an_already_checked_row_checked(qapp):
+    """The button only ever checks, never unchecks, so it composes with a
+    selection the operator has already started making by hand.
+
+    The hand-checked row here is deliberately *not* a completed one: a "done"
+    row is one the button would tick anyway, so it would stay checked even
+    under an implementation that unchecked everything first -- which would wipe
+    exactly the manual selection this contract protects."""
     from acq4.modules.Autopatch.cell_panel import CellPanel
 
     panel = CellPanel()
-    cell = object()
-    panel.addCell(cell)
-    panel._onCellFinished(cell, "done")
-    panel._rows[id(cell)].setCheckState(Qt.Qt.Checked)
+    byHand, completed = object(), object()
+    panel.addCell(byHand)
+    panel.addCell(completed)
+    panel._onCellFinished(byHand, "error")
+    panel._onCellFinished(completed, "done")
+    panel._rows[id(byHand)].setCheckState(Qt.Qt.Checked)
 
     panel.checkAllCompletedBtn.click()
 
-    assert panel._rows[id(cell)].checkState() == Qt.Qt.Checked
+    assert panel._rows[id(byHand)].checkState() == Qt.Qt.Checked
+    assert panel._rows[id(completed)].checkState() == Qt.Qt.Checked
 
 
 def test_check_all_completed_is_disabled_with_nothing_completed(qapp):
@@ -1089,7 +1263,14 @@ def test_reuse_leaves_unchecked_cells_alone(qapp):
 
 def test_reuse_clears_the_detail_views_of_the_inspected_cell(qapp):
     """Spec 8: stale pass-1 timeline/log content must not linger in the pane
-    for a cell that is now queued for pass 2."""
+    for a cell that is now queued for pass 2 -- nor a details widget a pass-1
+    action mounted in the show container, and nor the _shownEntryId naming it,
+    whose stale value a recycled id(entry) in pass 2 could match and cause a
+    spurious container clear.
+
+    The mounted widget and _shownEntryId are set up after the row is selected:
+    selecting it runs _onCellSelectionChanged, which resets both, so priming
+    them earlier would prove nothing about what reuse itself does."""
     from acq4.modules.Autopatch.cell_panel import CellPanel
 
     panel = CellPanel()
@@ -1100,6 +1281,8 @@ def test_reuse_clears_the_detail_views_of_the_inspected_cell(qapp):
     panel._onCellFinished(cell, "done")
     panel.cellList.setCurrentItem(panel._rows[id(cell)])
     assert panel.timelineList.count() == 1
+    panel.showContainer.layout().addWidget(Qt.QLabel("pass 1 details widget"))
+    panel._shownEntryId = 12345
     panel.bindOrchestrator(_FakeOrchestrator())
     panel._rows[id(cell)].setCheckState(Qt.Qt.Checked)
 
@@ -1107,6 +1290,27 @@ def test_reuse_clears_the_detail_views_of_the_inspected_cell(qapp):
 
     assert panel.timelineList.count() == 0
     assert panel.logView.toPlainText() == ""
+    assert panel.showContainer.layout().count() == 0
+    assert panel._shownEntryId is None
+
+
+def test_reuse_disables_check_all_completed_once_the_last_one_is_reused(qapp):
+    """Reuse pops the disposition it re-queues on, so the button that selects on
+    those dispositions must be re-evaluated: left enabled, it would offer a
+    selection that no longer exists."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    cell = object()
+    panel.addCell(cell)
+    panel._onCellFinished(cell, "done")
+    panel.bindOrchestrator(_FakeOrchestrator())
+    panel._rows[id(cell)].setCheckState(Qt.Qt.Checked)
+    assert panel.checkAllCompletedBtn.isEnabled()
+
+    panel.reuseCheckedCellsBtn.click()
+
+    assert not panel.checkAllCompletedBtn.isEnabled()
 
 
 def test_reuse_is_disabled_without_an_orchestrator(qapp):
@@ -1213,3 +1417,99 @@ def test_reuse_is_disabled_again_after_unbinding(qapp):
     panel.unbindOrchestrator()
 
     assert not panel.reuseCheckedCellsBtn.isEnabled()
+
+
+def test_discarding_a_reused_pending_cell_restores_its_pre_reuse_disposition(qapp):
+    """A rescan discards every pending cell, reused ones included -- but reuse
+    deliberately keeps a cell attempted, so discardCells() skips its row. Left
+    as reuse wrote it, that row would read "queued" while no queue holds the
+    cell: unreachable by Start, by reuse, and by "Check all completed" alike,
+    and still in the density record so the survey cannot re-find it either.
+    Restored to the disposition it held before reuse, the row is a session
+    record again and the operator can knowingly reuse it once they trust the
+    new coordinates.
+    """
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    running, pending = object(), object()
+    for cell in (running, pending):
+        panel.addCell(cell)
+        panel._onCellFinished(cell, "done")
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+    panel._rows[id(running)].setCheckState(Qt.Qt.Checked)
+    panel._rows[id(pending)].setCheckState(Qt.Qt.Checked)
+    panel.reuseCheckedCellsBtn.click()
+    assert orch.enqueued == [running, pending]
+    # Pass 2 starts: the first cell runs, the second is still queued behind it
+    # when tracking loses the first and the operator answers "Rescan".
+    panel._onCurrentCell(running)
+    assert panel.disposition(pending) is None
+
+    panel.discardCells([pending])
+
+    assert panel.cellList.count() == 2, "a reused cell's row was dropped"
+    assert panel.disposition(pending) == "done"
+    assert panel._rows[id(pending)].text() == f"cell {id(pending)} — done"
+    assert panel.checkAllCompletedBtn.isEnabled()
+    panel.checkAllCompletedBtn.click()
+    assert panel._rows[id(pending)].checkState() == Qt.Qt.Checked
+
+
+def test_discarding_a_never_reused_attempted_cell_leaves_its_row_alone(qapp):
+    """Only a cell reuse actually took a disposition from gets one back: an
+    attempted cell that never went through reuse has nothing to restore, and
+    its row must keep saying whatever it said."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    cell = object()
+    panel.addCell(cell)
+    panel._onCurrentCell(cell)
+
+    panel.discardCells([cell])
+
+    assert panel.disposition(cell) is None
+    assert panel._rows[id(cell)].text() == f"cell {id(cell)} — running"
+
+
+def test_a_reused_cell_that_finishes_pass_2_keeps_no_pre_reuse_disposition(qapp):
+    """The remembered value must not outlive the pass it was remembered for: a
+    cell that finished pass 2 in error and is then discarded must read "error",
+    not the "done" it earned a pass ago."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    cell = object()
+    panel.addCell(cell)
+    panel._onCellFinished(cell, "done")
+    panel.bindOrchestrator(_FakeOrchestrator())
+    panel._rows[id(cell)].setCheckState(Qt.Qt.Checked)
+    panel.reuseCheckedCellsBtn.click()
+
+    panel._onCellFinished(cell, "error")
+
+    assert panel._preReuseStatus == {}
+    panel.discardCells([cell])
+    assert panel.disposition(cell) == "error"
+
+
+def test_clear_cells_forgets_a_remembered_pre_reuse_disposition(qapp):
+    """Left behind, a stale id would hand a brand-new cell at a reused memory
+    address a disposition it never earned -- the same hazard _awaitingEnqueue,
+    _attempted and _status are cleared for."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    cell = object()
+    panel.addCell(cell)
+    panel._onCellFinished(cell, "done")
+    panel.bindOrchestrator(_FakeOrchestrator())
+    panel._rows[id(cell)].setCheckState(Qt.Qt.Checked)
+    panel.reuseCheckedCellsBtn.click()
+    assert panel._preReuseStatus != {}
+
+    panel.clearCells()
+
+    assert panel._preReuseStatus == {}

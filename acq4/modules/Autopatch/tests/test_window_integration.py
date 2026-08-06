@@ -772,6 +772,35 @@ def test_new_slice_clears_the_cell_list_and_the_orchestrators_queue(qapp, tmp_pa
     assert ran == [], "a cell survived New slice and was patched anyway"
 
 
+def test_new_slice_leaves_the_in_flight_cell_unreusable(qapp, tmp_path):
+    """newSlice() deliberately lets the cell already in flight run to
+    completion, so its finish is announced after Area 5 has been cleared. That
+    announcement must not resurrect the cell as a reusable one: the operator
+    has declared the tissue it names gone, and "Check all completed" would
+    otherwise tick it without them singling it out at all.
+    """
+    win = _makeWindow(tmp_path)
+    try:
+        cell = _makeCell()
+        win.cellPanel.addCell(cell)
+        win.orchestrator.enqueue(cell)
+        # Running, not finished, when the operator swaps the tissue.
+        win.orchestrator.sigCurrentCell.emit(cell)
+        assert win.cellPanel.isAttempted(cell) is True
+
+        win.newSlice()
+        # It finishes on the old tissue afterward, as newSlice()'s docstring
+        # says it is allowed to.
+        win.orchestrator.sigCellFinished.emit(cell, "done")
+
+        assert win.cellPanel.cellList.count() == 0
+        assert win.cellPanel.disposition(cell) is None
+        assert win.cellPanel.isAttempted(cell) is False
+        assert not win.cellPanel.checkAllCompletedBtn.isEnabled()
+    finally:
+        win.teardown()
+
+
 def test_new_slice_clears_the_producer(qapp, tmp_path):
     # The producer closes over the slice it was built from; leaving it
     # installed after that slice is discarded would keep surveying tissue

@@ -104,6 +104,33 @@ class CellPanel(Qt.QWidget):
         # disposition is cleared. Holds ids and plain strings, never cells, for
         # the same reason _attempted does.
         self._status: dict[int, str] = {}
+        # id(cell) -> the disposition _onReuseCheckedCells() took out of
+        # self._status when it re-queued that cell, held only until the new pass
+        # reports a disposition of its own. _onCellsDiscarded restores it for a
+        # reused cell a rescan discards: reuse keeps a cell attempted, so that
+        # row is skipped rather than removed, and without the restore it would
+        # keep reading "queued" while no queue holds the cell any more --
+        # unreachable by Start, by reuse, and by "Check all completed" alike,
+        # and still in the density record, so the survey would never re-find
+        # that location either. Holds ids and plain strings, never cells, for
+        # the same reason _attempted and _status do.
+        self._preReuseStatus: dict[int, str] = {}
+        # id(cell) -> the cell itself, for each cell clearCells() deliberately
+        # forgot while it might still be in flight -- the "New slice" path
+        # (AutopatchWindow.newSlice), which discards Area 5 and the
+        # orchestrator's queue but leaves the cell already running on the tissue
+        # the operator has just declared gone. That cell's announcements are
+        # queued connections, so they land after the wipe; ignored here (see
+        # _onCurrentCell/_onCellFinished), they cannot bring back a row, an
+        # _attempted flag, or a disposition that would offer a coordinate in
+        # discarded tissue up to "Check all completed" and from there to reuse.
+        #
+        # Holds the cells themselves, unlike every other store here: an id whose
+        # cell has been freed can be recycled by an unrelated new cell, whose own
+        # announcements would then be silently dropped -- no row at all for a
+        # cell that really is running. The reference is what keeps that address
+        # from being handed out again.
+        self._forgotten: dict[int, object] = {}
         # id(entry) of whichever entry's widget currently occupies
         # showContainer, or None if it's empty. An action can nest a
         # log_action block inside another still-open one -- prompt() opens an
@@ -249,7 +276,30 @@ class CellPanel(Qt.QWidget):
         it alive at all. This clears the Python-side bookkeeping (and any
         per-cell signal connections a future change might add) to match --
         nothing here should still reference a Cell afterward.
+
+        A cell that might still be announced after this wipe is remembered in
+        self._forgotten rather than merely dropped, so its later announcements
+        are ignored instead of resurrecting it. Only while an orchestrator is
+        still bound to announce it, which is what separates the two callers:
+        AutopatchWindow.newSlice() clears with one bound and a cell possibly in
+        flight, while AutopatchWindow.teardown() unbinds first, so the teardown
+        path retains nothing at all -- exactly what tests/test_teardown.py
+        proves by refcounting alone.
         """
+        self._forgotten = (
+            {}
+            if self._orchestrator is None
+            else {
+                cellId: cell
+                for cellId, cell in self._cells.items()
+                # Scoped to cells that could actually still be announced: one
+                # already holding a terminal disposition never will be, and one
+                # the orchestrator never started work on goes away with the
+                # queue its caller clears. Normally that is the one cell in
+                # flight, or none.
+                if cellId in self._attempted and cellId not in self._status
+            }
+        )
         self._cells.clear()
         # Cleared alongside self._cells, which is what the flush resolves these
         # ids against: an id left behind here would either raise a KeyError on
@@ -258,6 +308,7 @@ class CellPanel(Qt.QWidget):
         self._awaitingEnqueue.clear()
         self._attempted.clear()
         self._status.clear()
+        self._preReuseStatus.clear()
         self._rows.clear()
         self._timelines.clear()
         self._entryTimelineLoc.clear()
@@ -274,9 +325,12 @@ class CellPanel(Qt.QWidget):
         logs, and the strong references that keep them alive -- the same
         stores clearCells() drops for every cell, but scoped to this subset.
 
-        A cell isAttempted() already reports as started is never touched: its
-        row is the session record, not a stale queued entry, so it survives
-        even if it is passed in here.
+        A cell isAttempted() already reports as started keeps its row: that row
+        is the session record, not a stale queued entry, so it survives even if
+        it is passed in here. A reused cell is attempted too, and its row really
+        was a live queued entry, so it goes back to the disposition reuse took
+        from it (see self._preReuseStatus) -- a session record again, which the
+        operator can knowingly reuse once they trust the new coordinates.
 
         Used by AutopatchWindow._onTissueMoved's rescan branch, which runs on
         the orchestrator's worker thread, so this only ever emits
@@ -288,9 +342,18 @@ class CellPanel(Qt.QWidget):
 
     def _onCellsDiscarded(self, cells) -> None:
         for cell in cells:
-            if self.isAttempted(cell):
-                continue
             cellId = id(cell)
+            if self.isAttempted(cell):
+                status = self._preReuseStatus.pop(cellId, None)
+                if status is not None:
+                    self._status[cellId] = status
+                    item = self._rows.get(cellId)
+                    if item is not None:
+                        # The row claims "queued" while this cell has just left
+                        # the last queue that held it; it reads as the session
+                        # record its disposition now makes it again.
+                        item.setText(f"cell {cellId} — {status}")
+                continue
             self._cells.pop(cellId, None)
             # Cleared alongside _cells for the same reason clearCells() clears
             # it: a stale id left behind here could be flushed into a later
@@ -300,11 +363,13 @@ class CellPanel(Qt.QWidget):
                 self._awaitingEnqueue.remove(cellId)
             self._attempted.discard(cellId)
             self._status.pop(cellId, None)
+            self._preReuseStatus.pop(cellId, None)
             item = self._rows.pop(cellId, None)
             if item is not None:
                 self.cellList.takeItem(self.cellList.row(item))
             self._timelines.pop(cellId, None)
             self._logs.pop(cellId, None)
+        self._updateCheckAllButton()
         self._updateReuseButton()
 
     def _onAddFromTargetClicked(self) -> None:
@@ -506,11 +571,15 @@ class CellPanel(Qt.QWidget):
             # the cell's physical continuity is untouched.
             self._timelines[id(cell)] = []
             self._logs[id(cell)] = []
-            # Queued again, so no longer holding a finished disposition. Note
-            # _attempted is deliberately NOT cleared: work has started at this
-            # coordinate at some point, which is what isAttempted() reports and
-            # what keeps a rescan from silently dropping this row.
-            self._status.pop(id(cell), None)
+            # Queued again, so no longer holding a finished disposition -- but
+            # remembered, so a rescan that discards this cell before the new
+            # pass reaches it can put that disposition back rather than leave a
+            # row claiming "queued" with no queue behind it (see
+            # self._preReuseStatus). Note _attempted is deliberately NOT
+            # cleared: work has started at this coordinate at some point, which
+            # is what isAttempted() reports and what keeps a rescan from
+            # silently dropping this row.
+            self._preReuseStatus[id(cell)] = self._status.pop(id(cell))
             if cell is inspected:
                 reinspect = True
         if reinspect:
@@ -548,6 +617,13 @@ class CellPanel(Qt.QWidget):
         # onLogAction()/sigActionEntry below), which drives the timeline rows
         # and the details container directly.
         if cell is None:
+            return
+        if id(cell) in self._forgotten:
+            # Deliberately forgotten while it might still be in flight (see
+            # self._forgotten): nothing this announcement carries may be
+            # recorded, and the cell is released on its terminal finish in
+            # _onCellFinished rather than here -- a cell announced as current
+            # again (a retry) still has that finish to come.
             return
         self._attempted.add(id(cell))
         item = self._rows.get(id(cell))
@@ -658,9 +734,23 @@ class CellPanel(Qt.QWidget):
         # never re-enqueue and never mark it as awaiting one. A cell that has
         # finished is the clearest case of all: enqueuing it again patches a
         # cell that has already been worked.
+        if id(cell) in self._forgotten:
+            # Deliberately forgotten while it might still be in flight (see
+            # self._forgotten). Released once its disposition is terminal: that
+            # is the last announcement it has to make, so there is nothing left
+            # to ignore and no reason to hold it any longer. A non-terminal
+            # "retry" is mid-flight, with the real finish still to come, so it
+            # stays.
+            if status in TERMINAL:
+                del self._forgotten[id(cell)]
+            return
         self._attempted.add(id(cell))
         if status in TERMINAL:
             self._status[id(cell)] = status
+            # The pass just finished supersedes whatever reuse remembered for
+            # the discard path; left behind, that value would restore a
+            # disposition a pass out of date.
+            self._preReuseStatus.pop(id(cell), None)
         item = self._rows.get(id(cell))
         if item is None:
             self.addCell(cell)
