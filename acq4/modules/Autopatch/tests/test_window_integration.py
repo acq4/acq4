@@ -1243,3 +1243,27 @@ def test_area_2_is_locked_until_a_slice_exists(win):
     assert not win.searchPanel.addRegionBtn.isEnabled()
     win.newSlice()
     assert win.searchPanel.addRegionBtn.isEnabled()
+
+
+def test_a_run_in_flight_locks_area_5s_reuse_button(qapp, tmp_path):
+    """The reuse gate rides StatusPanel.sigInteractionLocked, the same signal
+    Areas 2 and 4 lock on -- a permanent widget-tree connection, so no protocol
+    load or teardown can leave it wired to a stale orchestrator."""
+    win = _makeWindow(tmp_path)
+    try:
+        cell = _makeCell()
+        win.cellPanel.addCell(cell)
+        win.cellPanel._onCellFinished(cell, "done")
+        win.cellPanel._rows[id(cell)].setCheckState(Qt.Qt.Checked)
+        assert win.cellPanel.reuseCheckedCellsBtn.isEnabled()
+
+        win.orchestrator.sigStatus.emit("running")
+        assert not win.cellPanel.reuseCheckedCellsBtn.isEnabled()
+
+        win.orchestrator.sigStatus.emit("surveying")
+        assert not win.cellPanel.reuseCheckedCellsBtn.isEnabled()
+
+        win.orchestrator.sigStatus.emit("waiting")
+        assert win.cellPanel.reuseCheckedCellsBtn.isEnabled()
+    finally:
+        win.teardown()
