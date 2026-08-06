@@ -13,6 +13,18 @@ from acq4.util import Qt
 # Random scatter radius for the "Scatter fake cells" demo button (meters).
 _SCATTER_RADIUS = 40e-6
 
+# The dispositions Orchestrator.sigCellFinished reports for a cell that has
+# finished a pass, in any state. "retry" is deliberately absent: it is emitted
+# mid-flight and superseded by whichever of these the cell eventually reaches.
+# A separate string space from ActionLogEntry.outcome (see _OUTCOME_GLYPHS),
+# which describes one action rather than one cell.
+TERMINAL = frozenset({"done", "skipped", "stopped", "retry-exhausted", "error"})
+# The subset "Check all completed" ticks: only "done" means the protocol ran to
+# completion. "error" and "retry-exhausted" are failures, and "stopped" and
+# "skipped" are abandonment -- offering any of them up as a completion would
+# re-queue cells that never did the work. Each is a manual opt-in instead.
+COMPLETED = frozenset({"done"})
+
 
 class CellPanel(Qt.QWidget):
     # Emitted by appendLog() so log messages arriving from the orchestrator's
@@ -78,6 +90,14 @@ class CellPanel(Qt.QWidget):
         # Cell alive beyond self._cells, and must not add a second store to keep
         # in sync with it on teardown.
         self._attempted = set()
+        # id(cell) -> the last TERMINAL disposition sigCellFinished reported for
+        # that cell; a cell absent from this dict has never finished a pass.
+        # Distinct from self._attempted, which only answers whether work ever
+        # started: a cell interrupted mid-run is attempted with no disposition,
+        # and a cell re-queued for another pass keeps being attempted while its
+        # disposition is cleared. Holds ids and plain strings, never cells, for
+        # the same reason _attempted does.
+        self._status: dict[int, str] = {}
         # id(entry) of whichever entry's widget currently occupies
         # showContainer, or None if it's empty. An action can nest a
         # log_action block inside another still-open one -- prompt() opens an
@@ -218,6 +238,7 @@ class CellPanel(Qt.QWidget):
         # cell, enqueue that cell instead.
         self._awaitingEnqueue.clear()
         self._attempted.clear()
+        self._status.clear()
         self._rows.clear()
         self._timelines.clear()
         self._entryTimelineLoc.clear()
@@ -257,6 +278,7 @@ class CellPanel(Qt.QWidget):
             if cellId in self._awaitingEnqueue:
                 self._awaitingEnqueue.remove(cellId)
             self._attempted.discard(cellId)
+            self._status.pop(cellId, None)
             item = self._rows.pop(cellId, None)
             if item is not None:
                 self.cellList.takeItem(self.cellList.row(item))
@@ -353,6 +375,15 @@ class CellPanel(Qt.QWidget):
         are dropped so they can be found again where they now are.
         """
         return id(cell) in self._attempted
+
+    def disposition(self, cell) -> str | None:
+        """The last terminal disposition reported for `cell`, or None if it has
+        never finished a pass.
+
+        None covers three cases the callers treat alike: never run, still
+        running, and re-queued for another pass by reuseCheckedCells().
+        """
+        return self._status.get(id(cell))
 
     def appendLog(self, cell, message: str) -> None:
         # May be called from the orchestrator's worker thread (ExecutionContext.log,
@@ -483,6 +514,8 @@ class CellPanel(Qt.QWidget):
         # finished is the clearest case of all: enqueuing it again patches a
         # cell that has already been worked.
         self._attempted.add(id(cell))
+        if status in TERMINAL:
+            self._status[id(cell)] = status
         item = self._rows.get(id(cell))
         if item is None:
             self.addCell(cell)

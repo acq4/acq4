@@ -748,3 +748,107 @@ def test_clear_cells_forgets_the_attempted_set(qapp):
     panel.clearCells()
 
     assert panel.isAttempted(cell) is False
+
+
+@pytest.mark.parametrize("status", ["done", "skipped", "stopped", "retry-exhausted", "error"])
+def test_a_terminal_disposition_is_recorded(qapp, status):
+    """Every status Orchestrator.sigCellFinished reports as terminal must be
+    retrievable afterward: it is what "check all completed" and the reuse
+    operation select on."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    cell = object()
+    panel.addCell(cell)
+
+    panel._onCellFinished(cell, status)
+
+    assert panel.disposition(cell) == status
+
+
+def test_a_never_run_cell_has_no_disposition(qapp):
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    cell = object()
+    panel.addCell(cell)
+
+    assert panel.disposition(cell) is None
+
+
+def test_the_transient_retry_status_is_not_recorded_as_a_disposition(qapp):
+    """"retry" is emitted mid-flight (Orchestrator._processCell) and is
+    superseded by whatever terminal status the cell eventually reaches.
+    Recorded as a disposition it would survive an interrupted run and read as
+    though the cell had finished in a state named "retry"."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    cell = object()
+    panel.addCell(cell)
+
+    panel._onCellFinished(cell, "retry")
+
+    assert panel.disposition(cell) is None
+
+
+def test_a_retry_does_not_erase_an_earlier_terminal_disposition(qapp):
+    """A cell reused for a second pass keeps its pass-1 disposition until the
+    new pass reports its own terminal one; a transient "retry" in between must
+    not blank it."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    cell = object()
+    panel.addCell(cell)
+    panel._onCellFinished(cell, "done")
+
+    panel._onCellFinished(cell, "retry")
+
+    assert panel.disposition(cell) == "done"
+
+
+def test_a_later_terminal_disposition_replaces_an_earlier_one(qapp):
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    cell = object()
+    panel.addCell(cell)
+    panel._onCellFinished(cell, "error")
+
+    panel._onCellFinished(cell, "done")
+
+    assert panel.disposition(cell) == "done"
+
+
+def test_clear_cells_forgets_recorded_dispositions(qapp):
+    """Left behind, a stale id would report a brand-new cell at a reused memory
+    address as already completed, offering it up to "check all completed" --
+    the same hazard _awaitingEnqueue and _attempted are cleared for."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    cell = object()
+    panel.addCell(cell)
+    panel._onCellFinished(cell, "done")
+
+    panel.clearCells()
+
+    assert panel.disposition(cell) is None
+
+
+def test_discard_cells_forgets_a_discarded_cells_disposition(qapp):
+    """discardCells() drops the same per-cell stores clearCells() drops, scoped
+    to a subset; a disposition left behind is the same stale-id hazard."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    cell = object()
+    panel.addCell(cell)
+    # Recorded directly rather than through _onCellFinished: that marks the
+    # cell attempted, and discardCells() never touches an attempted cell.
+    panel._status[id(cell)] = "done"
+
+    panel.discardCells([cell])
+
+    assert panel.disposition(cell) is None
