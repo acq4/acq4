@@ -1,7 +1,8 @@
 # Autopatch — Reuse Completed Cells (Multi-Pass) — Design
 
-> **Status (2026-08-06): implemented**, with three sections superseded by code
-> that landed after this spec was written. Plan:
+> **Status (2026-08-06): implemented**, with the sections listed below
+> superseded, amended or extended by code that landed after this spec was
+> written. Plan:
 > `docs/superpowers/plans/2026-08-06-autopatch-reuse-completed-cells.md`.
 >
 > - **§1 and §5 are obsolete.** The indiscriminate flush they describe was
