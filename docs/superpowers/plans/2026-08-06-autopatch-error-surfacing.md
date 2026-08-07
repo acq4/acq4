@@ -88,20 +88,30 @@ import weakref
 from acq4.experiment.error_record import RunErrorRecord, describe_exception
 
 
+class _Boom(Exception):
+    """A pure-Python exception subclass.
+
+    Built-in exception types have no __weakref__ slot, so the retention proof
+    below cannot take a weak reference to a bare ValueError. Anything raised in
+    real use is a project-defined subclass (OrchestrationError and friends), so
+    this is also the shape the retention property actually has to hold for.
+    """
+
+
 def _raise_and_describe():
     """Raise, catch, and describe -- in a frame that has returned by the time
     the caller inspects the result, so nothing this frame held is still live."""
     try:
-        raise ValueError("boom")
-    except ValueError as exc:
+        raise _Boom("boom")
+    except _Boom as exc:
         return describe_exception(exc), weakref.ref(exc)
 
 
 def test_describe_exception_renders_type_message_and_traceback():
     (exc_type, message, tb_text), _ref = _raise_and_describe()
-    assert exc_type == "ValueError"
+    assert exc_type == "_Boom"
     assert message == "boom"
-    assert "ValueError: boom" in tb_text
+    assert "_Boom: boom" in tb_text
     assert "_raise_and_describe" in tb_text
 
 
@@ -173,6 +183,8 @@ def test_record_is_frozen():
 ```
 
 Expected: every test fails at collection with `ModuleNotFoundError: No module named 'acq4.experiment.error_record'`.
+
+The four tests that do **not** take a weakref keep bare `ValueError` deliberately: that proves `describe_exception` works on built-in exception types too, which is the shape an unexpected bug in a protocol actually takes.
 
 - [ ] **Step 3: Write the implementation**
 
