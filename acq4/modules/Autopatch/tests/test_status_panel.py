@@ -462,6 +462,29 @@ def test_band_is_hidden_with_no_error(qapp):
     assert panel.showInLogBtn.isVisibleTo(panel) is False
 
 
+def test_a_bare_error_status_with_no_run_error_record_keeps_the_band_hidden(qapp):
+    # Guards against _onStatus growing a status == "error" visibility check
+    # alongside the record-based one in _updateErrorBand: since a halting run
+    # always emits "error" then "waiting" (see
+    # test_error_band_survives_the_waiting_status_that_follows_a_halt), such a
+    # check would show the band on every error status even with no
+    # sigRunError behind it, e.g. before Orchestrator has ever emitted one.
+    from acq4.modules.Autopatch.status_panel import StatusPanel
+
+    panel = StatusPanel()
+    panel.show()
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch, _FakeEntrySource())
+
+    orch.sigStatus.emit("error")
+
+    assert panel.lastError() is None
+    assert panel.instructionLabel.isVisibleTo(panel) is False
+    assert panel.showInLogBtn.isVisibleTo(panel) is False
+    assert panel.instructionLabel.text() == ""
+    panel.hide()
+
+
 def test_starting_a_new_run_clears_the_previous_error(qapp):
     # The band is a headline for the run that is showing, not a scar.
     from acq4.modules.Autopatch.status_panel import StatusPanel
