@@ -713,7 +713,7 @@ def test_error_block_shows_headline_traceback_and_cell_token(qapp):
     assert block.headlineLabel.text() == "BrokenPipette: tip sheared off"
     assert "BrokenPipette: tip sheared off" in block.tracebackView.toPlainText()
     assert "<Cell at (1, 2, 3)>" in block.cellLabel.text()
-    assert block.cellLabel.isVisible() or not block.isVisible()
+    assert block.cellLabel.isVisibleTo(block) is True
 
 
 def test_error_block_hides_the_cell_row_when_there_is_no_cell(qapp):
@@ -1477,7 +1477,8 @@ Expected: 9 passed.
 - **A — `test_successful_action_mounts_no_error_block`.** Change the `"finished"` guard from `if entry.outcome == "error":` to `if True:`. Expected: **FAIL** (it will raise or mount a block built from `None` strings). Revert.
 - **B — `test_a_new_pass_clears_the_cells_stored_error`.** Delete the `self._cellErrors.pop(...)` block from `_onCurrentCell`. Expected: **FAIL**. Revert.
 - **C — `test_clear_cells_drops_the_error_store` and `test_discarding_a_cell_drops_its_stored_error`.** Delete `self._cellErrors.clear()` from `clearCells`, then the `pop` from `_onCellsDiscarded`. Expected: **each FAILS in turn**. Revert.
-- **D — `test_panel_keeps_no_reference_to_the_failed_entry`.** Store the entry too: `self._cellErrors[id(cell)] = (entry.exc_type, entry.exc_message, entry.traceback_text, entry)` and adjust the unpack. Expected: **FAIL** with "CellPanel is keeping the failed entry alive". Revert.
+- **D — `test_error_block_is_not_mounted_for_an_unselected_cell`.** Delete the `if cell is self._currentSelectedCell():` guard that precedes `self._showErrorBlock(cell)` in the `"finished"` branch, so any cell's failure mounts into whatever is on screen. Expected: **FAIL**. Revert.
+- **E — `test_panel_keeps_no_reference_to_the_failed_entry`.** Store the entry too: `self._cellErrors[id(cell)] = (entry.exc_type, entry.exc_message, entry.traceback_text, entry)` and adjust the unpack. Expected: **FAIL** with "CellPanel is keeping the failed entry alive". Revert.
 
 Re-run the file green after every revert.
 
