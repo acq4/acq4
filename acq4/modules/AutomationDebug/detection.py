@@ -247,9 +247,10 @@ class CellDetector:
         win._current_detection_stack = detection_stack
         win._current_classification_stack = classification_stack
         win._unranked_cells = []
-        for pos, score in detection_results:
+        for pos, score, volume in detection_results:
             cell = Cell(pos)
             cell.score = score
+            cell.volume = volume
             # Seed each detected cell's tracking reference from the z-stack it was
             # found in, so its ObjectStack is ready for the cell-queue display and
             # for later tracking without re-acquiring a stack per cell. Cells too
@@ -284,8 +285,8 @@ class CellDetector:
                 logger.info("No detection stack available, skipping annotation tool launch.")
                 return
 
-            # Extract plain positions for annotation tool (neurons may be (pos, score) tuples)
-            positions = [pos for pos, _ in neurons] if neurons and isinstance(neurons[0], tuple) else neurons
+            # Extract plain positions for annotation tool (neurons may be (pos, score, volume) tuples)
+            positions = [n[0] for n in neurons] if neurons and isinstance(neurons[0], tuple) else neurons
             stack = np.asarray([frame.data().T for frame in win._current_detection_stack])
             stack_transform = win._current_detection_stack[0].globalTransform()
             frame_to_global = stack_transform.inverse
@@ -339,7 +340,7 @@ class CellDetector:
         rois_visible = win.ui.showRoisBtn.isChecked()
         for neuron in neurons:
             if isinstance(neuron, tuple):
-                pos, score = neuron
+                pos, score = neuron[0], neuron[1]
                 pos = np.array(pos)
             elif hasattr(neuron, 'position'):
                 pos = np.array(neuron.position.coordinates)

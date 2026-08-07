@@ -476,7 +476,8 @@ class DeviceLocker(object):
                 logger = get_logger(f'acq4.devices.Device.DeviceLocker')
                 logger.warning(
                     f"Thread {threading.current_thread().name} is reserving device {list(devs_not_already_held)} "
-                    f"while already holding locks for {list(thread_locks)}. This may lead to deadlocks. "
+                    f"while already holding locks for {list(thread_locks)}. This may lead to deadlocks. ",
+                    stack_info=True,
                 )
 
         # Try locking all devices in order

@@ -393,8 +393,8 @@ class AutomationDebugWindow(Qt.QWidget):
         left = Qt.QVBoxLayout()
         split.addLayout(left, 1)
 
-        table = Qt.QTableWidget(0, 3)
-        table.setHorizontalHeaderLabels(["State", "Position (µm)", "Score"])
+        table = Qt.QTableWidget(0, 4)
+        table.setHorizontalHeaderLabels(["State", "Position (µm)", "Score", "Volume"])
         table.setEditTriggers(Qt.QAbstractItemView.NoEditTriggers)
         table.setSelectionBehavior(Qt.QAbstractItemView.SelectRows)
         table.setSelectionMode(Qt.QAbstractItemView.SingleSelection)
@@ -403,6 +403,7 @@ class AutomationDebugWindow(Qt.QWidget):
         header.setSectionResizeMode(0, Qt.QHeaderView.ResizeToContents)
         header.setSectionResizeMode(1, Qt.QHeaderView.Stretch)
         header.setSectionResizeMode(2, Qt.QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(3, Qt.QHeaderView.ResizeToContents)
         table.setMinimumHeight(160)
         table.itemSelectionChanged.connect(self._onCellSelectionChanged)
         self.ui.cellTable = table
@@ -482,7 +483,12 @@ class AutomationDebugWindow(Qt.QWidget):
             else:
                 counts["finished"] += 1
             color = self._CELL_STATE_COLORS.get(category)
-            values = (label, self._formatCellPosition(cell), self._formatCellScore(cell))
+            values = (
+                label,
+                self._formatCellPosition(cell),
+                self._formatCellScore(cell),
+                self._formatCellVolume(cell),
+            )
             for col, text in enumerate(values):
                 item = Qt.QTableWidgetItem(text)
                 if color is not None:
@@ -643,6 +649,22 @@ class AutomationDebugWindow(Qt.QWidget):
             return f"{score:.0%}"
         except (ValueError, TypeError):
             return str(score)
+
+    @staticmethod
+    def _formatCellVolume(cell) -> str:
+        """Cell volume as the min-volume filter sees it.
+
+        Formatted with the same SI-prefixed ``m³`` units as the "Min volume"
+        spin box so the two values read on the same scale. Cells added manually
+        (e.g. from a pipette target) have no detected volume and show blank.
+        """
+        volume = getattr(cell, "volume", None)
+        if volume is None:
+            return ""
+        try:
+            return pg.siFormat(float(volume), suffix="m³")
+        except (ValueError, TypeError):
+            return str(volume)
 
     def _updateMultiChannelAndMockStates(self):
         multi_channel_enabled = self.ui.multiChannelEnableCheck.isChecked()

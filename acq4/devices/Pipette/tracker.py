@@ -659,82 +659,118 @@ class CorrelationPipetteTracker(PipetteTracker):
         self.errorMapAnalysis = (imx, imy, imz, win)
 
 
-class DriftMonitor(Qt.QWidget):
-    def __init__(self, trackers):
+class DriftMonitorWidget(Qt.QWidget):
+    """Widget that continuously tracks and plots pipette tip drift over time.
+
+    Parameters
+    ----------
+    trackers : list of PipetteTracker
+    applyCorrections : bool
+        Whether to call setTipOffset on each measurement (default True).
+    """
+
+    def __init__(self, trackers, applyCorrections=True):
+        super().__init__()
         self.trackers = trackers
-        self.nextFrame = None
+        self.applyCorrections = applyCorrections
+        self._nextFrame = None
+        self._positions = []
+        self._times = []
+        self._imager = None
 
-        Qt.QWidget.__init__(self)
-        self.timer = Qt.QTimer()
-        self.timer.timeout.connect(self.update)
-
-        self.layout = Qt.QGridLayout()
-        self.setLayout(self.layout)
+        layout = Qt.QVBoxLayout()
+        self.setLayout(layout)
 
         self.gv = pg.GraphicsLayoutWidget()
-        self.gv.setObjectName("PipetteTracker_graphicsLayoutWidget")
-        self.layout.addWidget(self.gv, 0, 0)
+        layout.addWidget(self.gv)
 
-        self.plot = self.gv.addPlot(labels={"left": ("Drift distance", "m"), "bottom": ("Time", "s")})
-        self.plot.addLegend()
-        self.xplot = self.gv.addPlot(labels={"left": ("X position", "m")}, row=1, col=0)
-        self.yplot = self.gv.addPlot(labels={"left": ("Y position", "m")}, row=2, col=0)
-        self.zplot = self.gv.addPlot(labels={"left": ("Z position", "m"), "bottom": ("Time", "s")}, row=3, col=0)
+        pens = [pg.mkPen(i, len(trackers)) for i in range(len(trackers))]
+
+        self.distPlot = self.gv.addPlot(labels={"left": ("Drift distance", "m"), "bottom": ("Time", "s")})
+        self.distPlot.addLegend()
+        self.xplot = self.gv.addPlot(labels={"left": ("X", "m")}, row=1, col=0)
+        self.yplot = self.gv.addPlot(labels={"left": ("Y", "m")}, row=2, col=0)
+        self.zplot = self.gv.addPlot(labels={"left": ("Z", "m"), "bottom": ("Time", "s")}, row=3, col=0)
         for plt in [self.xplot, self.yplot, self.zplot]:
             plt.setYRange(-10e-6, 10e-6)
 
-        self.pens = [(i, len(trackers)) for i in range(len(trackers))]
-        self.lines = [self.plot.plot(pen=self.pens[i], name=trackers[i].dev.name()) for i in range(len(trackers))]
-        # self.errors = [[] for i in range(len(trackers))]
-        # self.cumulative = np.zeros((len(trackers), 3))
-        self.positions = []
-        self.times = []
+        self._distCurves = [
+            self.distPlot.plot(pen=pens[i], name=trackers[i].pipette.name())
+            for i in range(len(trackers))
+        ]
+        self._axisCurves = [
+            [plt.plot(pen=pens[i]) for i in range(len(trackers))]
+            for plt in [self.xplot, self.yplot, self.zplot]
+        ]
 
-        self.timer.start(2000)
-        trackers[0]._getImager().sigNewFrame.connect(self.newFrame)
-        self.show()
+        self._timer = Qt.QTimer()
+        self._timer.timeout.connect(self._onTimer)
 
-    def newFrame(self, frame):
-        self.nextFrame = frame
+    def start(self, interval_ms=2000):
+        if not self.trackers:
+            raise RuntimeError("DriftMonitorWidget has no trackers configured")
+        self.reset()
+        self._imager = self.trackers[0]._getImager()
+        self._imager.sigNewFrame.connect(self._onNewFrame)
+        self._timer.start(interval_ms)
 
-    def update(self):
+    def stop(self):
+        self._timer.stop()
+        if self._imager is not None:
+            try:
+                self._imager.sigNewFrame.disconnect(self._onNewFrame)
+            except RuntimeError:
+                pass
+            self._imager = None
+
+    def reset(self):
+        self._positions = []
+        self._times = []
+        self._nextFrame = None
+        for curve in self._distCurves:
+            curve.setData([], [])
+        for axCurves in self._axisCurves:
+            for curve in axCurves:
+                curve.setData([], [])
+
+    def _onNewFrame(self, frame):
+        self._nextFrame = frame
+
+    def _onTimer(self):
         try:
-            if self.nextFrame is None:
+            if self._nextFrame is None:
                 return
-            frame = self.nextFrame
-            self.nextFrame = None
+            frame = self._nextFrame
+            self._nextFrame = None
 
-            self.times.append(time.time())
-            x = np.array(self.times)
+            self._times.append(time.time())
+            x = np.array(self._times)
             x -= x[0]
 
             pos = []
-            for i, t in enumerate(self.trackers):
+            for t in self.trackers:
                 try:
-                    err = t.findTipInFrame(frame=frame, padding=50e-6)
-                    t.pipette.setTipOffset(err)
-                    # err = np.array(err)
-                    # self.cumulative[i] += err
-                    # err = (self.cumulative[i]**2).sum()**0.5
-                    pos.append(t.dev.globalPosition())
+                    found = t.findTipInFrame(frame=frame, padding=50e-6)
+                    if self.applyCorrections:
+                        t.pipette.setTipOffsetIfAcceptable(found)
+                    pos.append(found)
                 except RuntimeError:
-                    pos.append([np.nan] * 3)
-                # self.errors[i].append(err)
-            self.positions.append(pos)
-            pos = np.array(self.positions)
+                    pos.append([np.nan, np.nan, np.nan])
+
+            self._positions.append(pos)
+            pos = np.array(self._positions)
             pos -= pos[0]
-            err = (pos ** 2).sum(axis=2) ** 0.5
-            for i, t in enumerate(self.trackers):
-                self.lines[i].setData(x, err[:, i])
-            for ax, plt in enumerate([self.xplot, self.yplot, self.zplot]):
-                plt.clear()
-                for i, t in enumerate(self.trackers):
-                    plt.plot(x, pos[:, i, ax], pen=self.pens[i])
+            dist = (pos ** 2).sum(axis=2) ** 0.5
+
+            for i in range(len(self.trackers)):
+                self._distCurves[i].setData(x, dist[:, i])
+                for ax, axCurves in enumerate(self._axisCurves):
+                    axCurves[i].setData(x, pos[:, i, ax])
 
         except Exception:
-            self.timer.stop()
+            self._timer.stop()
             raise
 
     def closeEvent(self, event):
-        self.timer.stop()
-        return Qt.QWidget.closeEvent(self, event)
+        self.stop()
+        return super().closeEvent(event)

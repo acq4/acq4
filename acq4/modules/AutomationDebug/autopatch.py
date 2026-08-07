@@ -61,7 +61,7 @@ class Autopatcher:
         multipatch_win = run_in_gui_thread(man.getModule, 'MultiPatch').win
         demo_dir = self._makeValidDemoDir()
         man.setCurrentDir(demo_dir)
-        synch(win.cameraDevice.scopeDev.findSurfaceDepth)(win.cameraDevice)
+        # synch(win.cameraDevice.scopeDev.findSurfaceDepth)(win.cameraDevice)
         try:
             while True:
                 # Decide whether there's another cell to work on before creating a
