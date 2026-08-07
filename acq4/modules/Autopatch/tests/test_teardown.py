@@ -4,6 +4,7 @@ stopped) deterministically on close, rather than left for Python's
 non-deterministic cyclic GC to eventually reclaim -- which can free live
 QObjects outside Qt's safe teardown path and crash the process on exit."""
 import gc
+import logging
 import os
 import weakref
 
@@ -302,3 +303,90 @@ def test_teardown_stops_an_in_flight_orchestrator_run(qapp, qtbot, tmp_path):
     assert win.cellPanel._orchestrator is None
 
     win.close()
+
+
+_FAILING_PROTOCOL = """
+def run(ctx, **kwargs):
+    with ctx.log_action("Boom"):
+        raise RuntimeError("protocol blew up")
+"""
+
+
+def test_teardown_frees_everything_after_a_run_error(qapp, tmp_path):
+    """A halted run leaves a RunErrorRecord in StatusPanel and traceback text in
+    CellPanel. Neither may keep the orchestrator, the cell, or the window alive.
+
+    Both stores hold plain strings by construction, so this is the guard against
+    a later change that "helpfully" retains the exception or the ActionLogEntry
+    instead -- either of which would put a traceback's frames, and their locals,
+    behind a reference only the cyclic GC could reclaim.
+    """
+    from acq4.experiment.exceptions import AbortExperiment
+    from acq4.modules.Autopatch.Autopatch import AutopatchWindow
+
+    _write_protocol(tmp_path, "boom.py", _FAILING_PROTOCOL)
+
+    gc.disable()
+    try:
+        win = AutopatchWindow(
+            module=None,
+            protocolDir=str(tmp_path),
+            pipetteSelector=_FakePipetteSelector(target=(1e-3, 2e-3, 3e-3)),
+            cameraSelector=_FakeCameraSelector(),
+        )
+        win.protocolPanel.fileCombo.setCurrentText("boom")
+        win.cellPanel.addFromTargetBtn.click()
+        seededCell = list(win.cellPanel._cells.values())[0]
+        win.cellPanel.cellList.setCurrentRow(0)
+
+        orchestrator = win.orchestrator
+        assert orchestrator is not None
+
+        with pytest.raises(AbortExperiment):
+            orchestrator.run_sync_cell(seededCell)
+
+        # Both halves of the surfacing actually populated -- otherwise the
+        # refcounting proof below would be proving nothing about them.
+        assert win.statusPanel.lastError().exc_type == "RuntimeError"
+        assert win.cellPanel.errorText(seededCell)[1] == "protocol blew up"
+        # And still no per-entry bookkeeping held onto the entry itself.
+        assert win.cellPanel._entryTimelineLoc == {}
+        assert win.cellPanel._timelineItems == {}
+
+        orchestrator_ref = weakref.ref(orchestrator)
+        cell_ref = weakref.ref(seededCell)
+        window_ref = weakref.ref(win)
+        statusPanel_ref = weakref.ref(win.statusPanel)
+        cellPanel_ref = weakref.ref(win.cellPanel)
+
+        win.teardown()
+        assert win.statusPanel._orchestrator is None
+        assert win.cellPanel._orchestrator is None
+
+        del orchestrator, seededCell
+        win.close()
+        del win
+        # _processCell's logger.exception() call for this failure hands the
+        # *live* RuntimeError to every handler on the root logger -- and
+        # pytest attaches at least two of its own for the duration of a
+        # test's call phase (one backing the caplog fixture, one private to
+        # its terminal reporter, used to render the "Captured log call"
+        # section). Either one's stored LogRecord keeps exc_info's traceback
+        # alive, which keeps every frame it passed through -- and every local
+        # bound in them, including this orchestrator -- reachable. That is
+        # pytest's own bookkeeping for a report this test does not care
+        # about, not anything the window's teardown owns, so every handler's
+        # retained records are dropped here rather than left to prove
+        # something about a reference this proof is not about.
+        for handler in logging.getLogger().handlers:
+            if hasattr(handler, "records"):
+                handler.records.clear()
+        # No gc.collect() -- pure refcounting only, since gc is disabled.
+
+        assert orchestrator_ref() is None, "orchestrator should be freed by refcounting alone"
+        assert cell_ref() is None, "seeded cell should be freed by refcounting alone"
+        assert window_ref() is None, "window should be freed by refcounting alone"
+        assert statusPanel_ref() is None, "StatusPanel should be freed by refcounting alone"
+        assert cellPanel_ref() is None, "CellPanel should be freed by refcounting alone"
+    finally:
+        gc.enable()

@@ -772,6 +772,37 @@ def test_new_slice_clears_the_cell_list_and_the_orchestrators_queue(qapp, tmp_pa
     assert ran == [], "a cell survived New slice and was patched anyway"
 
 
+def test_new_slice_clears_area_3s_error_band(qapp, tmp_path):
+    """Area 3's band names a cell and a failure that happened on tissue New
+    slice has just declared gone. clearCells() drops Area 5's own error store
+    for exactly this reason (see test_new_slice_clears_the_cell_list_and_the_
+    orchestrators_queue above); the band needs the same discard, or the two
+    panels disagree about whether the halted run still means anything.
+    """
+    from acq4.experiment.exceptions import AbortExperiment
+
+    _write_protocol(tmp_path, "boom.py", _RAISING_PROTOCOL)
+    win = _makeWindow(tmp_path)
+    try:
+        win.protocolPanel.fileCombo.setCurrentText("boom")
+        cell = _makeCell()
+        win.cellPanel.addCell(cell)
+        win.orchestrator.enqueue(cell)
+
+        with pytest.raises(AbortExperiment):
+            win.orchestrator.run_sync()
+
+        assert win.statusPanel.lastError() is not None
+        assert win.statusPanel.instructionLabel.isVisibleTo(win.statusPanel)
+
+        win.newSlice()
+
+        assert win.statusPanel.lastError() is None
+        assert not win.statusPanel.instructionLabel.isVisibleTo(win.statusPanel)
+    finally:
+        win.teardown()
+
+
 def test_new_slice_leaves_the_in_flight_cell_unreusable(qapp, tmp_path):
     """newSlice() deliberately lets the cell already in flight run to
     completion, so its finish is announced after Area 5 has been cleared. That

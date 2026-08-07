@@ -7,6 +7,7 @@ from typing import Any, Callable
 
 from acq4.util.task import Stopped
 
+from .error_record import describe_exception
 from .exceptions import FlowSignal
 
 
@@ -24,6 +25,13 @@ class ActionLogEntry:
         self.status: str = ""
         self.outcome: str | None = None
         self.details_widget: Any = None
+        # Populated by _finish() for an error outcome only, and never with the
+        # exception itself -- see error_record.describe_exception. A finished
+        # entry is retained for the session in CellPanel's per-cell stores, so
+        # what it holds is what one failure costs in memory.
+        self.exc_type: str | None = None
+        self.exc_message: str | None = None
+        self.traceback_text: str | None = None
         self.on_status: Callable | None = None
         self.on_widget: Callable | None = None
         self.on_finish: Callable | None = None
@@ -61,5 +69,9 @@ class ActionLogEntry:
             self.outcome = "abandoned"
         else:
             self.outcome = "error"
+            self.exc_type, self.exc_message, self.traceback_text = describe_exception(exc)
+        # Set before on_finish, not after: the UI's "finished" slot renders the
+        # error block straight from these fields, and it is reached through this
+        # callback.
         if self.on_finish is not None:
             self.on_finish(self)

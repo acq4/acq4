@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from acq4.util import Qt
 
+from .error_display import showInLog
+
 
 class StatusPanel(Qt.QWidget):
     # Emitted whenever the bound orchestrator's status changes, True while a
@@ -30,6 +32,11 @@ class StatusPanel(Qt.QWidget):
         # None stands for "no status yet reported" -- same button gating as the
         # orchestrator's own post-run "waiting" (see _updateButtons()).
         self._currentStatus = None
+        # The RunErrorRecord for the failure that halted the last run, or None.
+        # A run-level record rather than only the failing action's log entry: a
+        # producer raising during a refill has no cell and opens no log_action,
+        # so there would be nothing to hang the band's headline on.
+        self._lastError = None
 
         self.startBtn = Qt.QPushButton("Start")
         self.stopBtn = Qt.QPushButton("Stop")
@@ -42,7 +49,9 @@ class StatusPanel(Qt.QWidget):
         self.currentActionLabel.setAlignment(Qt.Qt.AlignRight | Qt.Qt.AlignVCenter)
         self.instructionLabel = Qt.QLabel("")
         self.instructionLabel.setStyleSheet("color: red; font-weight: bold;")
-        self.instructionLabel.setVisible(False)
+        self.instructionLabel.setWordWrap(True)
+        self.showInLogBtn = Qt.QPushButton("Show in log")
+        self.showInLogBtn.clicked.connect(self._onShowInLogClicked)
 
         # First row: the big status indicator on the left, the current-action
         # message pushed to the far right by the stretch between them.
@@ -55,12 +64,18 @@ class StatusPanel(Qt.QWidget):
         for b in (self.startBtn, self.stopBtn, self.pauseBtn, self.nextBtn):
             btnRow.addWidget(b)
 
+        errorRow = Qt.QHBoxLayout()
+        errorRow.addWidget(self.instructionLabel)
+        errorRow.addWidget(self.showInLogBtn)
+        errorRow.addStretch()
+
         layout = Qt.QVBoxLayout()
         layout.addLayout(statusRow)
         layout.addLayout(btnRow)
-        layout.addWidget(self.instructionLabel)
+        layout.addLayout(errorRow)
         self.setLayout(layout)
 
+        self._updateErrorBand()
         # No protocol is bound yet, so every action button starts disabled.
         self._updateButtons()
 
@@ -87,12 +102,15 @@ class StatusPanel(Qt.QWidget):
         # A freshly bound orchestrator hasn't reported a status yet -- treat it
         # the same as "waiting" so Start is enabled and Stop/Pause/Next are not.
         self._currentStatus = None
+        self._lastError = None
+        self._updateErrorBand()
         self.startBtn.clicked.connect(self._onStartClicked)
         self.stopBtn.clicked.connect(self._onStopClicked)
         self.pauseBtn.clicked.connect(self._onPauseClicked)
         self.nextBtn.clicked.connect(orchestrator.requestNextCell)
         orchestrator.sigStatus.connect(self._onStatus)
         orchestrator.sigCurrentCell.connect(self._onCurrentCell)
+        orchestrator.sigRunError.connect(self._onRunError)
         entrySource.sigActionEntry.connect(self._onActionEntry)
         self._updateButtons()
 
@@ -113,15 +131,22 @@ class StatusPanel(Qt.QWidget):
         Qt.disconnect(self.nextBtn.clicked, self._orchestrator.requestNextCell)
         Qt.disconnect(self._orchestrator.sigStatus, self._onStatus)
         Qt.disconnect(self._orchestrator.sigCurrentCell, self._onCurrentCell)
+        Qt.disconnect(self._orchestrator.sigRunError, self._onRunError)
         Qt.disconnect(self._entrySource.sigActionEntry, self._onActionEntry)
         self._orchestrator = None
         self._entrySource = None
         self._onStart = None
         self._currentStatus = None
+        self._lastError = None
+        self._updateErrorBand()
         self._updateButtons()
         self.sigInteractionLocked.emit(False)
 
     def _onStartClicked(self) -> None:
+        # The band is a headline for the run that is showing, not a scar: a new
+        # run supersedes whatever halted the last one.
+        self._lastError = None
+        self._updateErrorBand()
         if self._onStart is not None:
             self._onStart()
         self._orchestrator.start()
@@ -141,9 +166,44 @@ class StatusPanel(Qt.QWidget):
         else:
             self._orchestrator.pause()
 
+    def _onRunError(self, record) -> None:
+        self._lastError = record
+        self._updateErrorBand()
+
+    def lastError(self):
+        """The RunErrorRecord for the failure that halted the last run, or None."""
+        return self._lastError
+
+    def clearError(self) -> None:
+        """Drop the band for the run that halted, without touching anything
+        else this panel tracks.
+
+        Callers outside this class that already have their own reason to
+        declare the last run's failure moot -- AutopatchWindow.newSlice(),
+        which is discarding the tissue that failure happened on -- rather than
+        this panel inferring it from an event it would otherwise have to
+        listen for.
+        """
+        self._lastError = None
+        self._updateErrorBand()
+
+    def _updateErrorBand(self) -> None:
+        record = self._lastError
+        self.instructionLabel.setText(
+            "" if record is None else f"{record.exc_type}: {record.exc_message}"
+        )
+        self.instructionLabel.setVisible(record is not None)
+        self.showInLogBtn.setVisible(record is not None)
+
+    def _onShowInLogClicked(self) -> None:
+        showInLog()
+
     def _onStatus(self, status: str) -> None:
         self.statusLabel.setText(status)
-        self.instructionLabel.setVisible(status == "error")
+        # The band is deliberately not gated on status == "error": a halt emits
+        # "error" and then "waiting" from the run loop's own finally, so a band
+        # keyed on the status would be shown and hidden within the same run.
+        # _onRunError drives it instead, and it clears when the next run starts.
         self._currentStatus = status
         self._updateButtons()
         self.sigInteractionLocked.emit(status in ("running", "surveying", "paused"))

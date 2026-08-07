@@ -10,6 +10,8 @@ from coorx import Point
 from acq4_automation.feature_tracking.cell import Cell
 from acq4.util import Qt
 
+from .error_display import ErrorBlock
+
 # Random scatter radius for the "Scatter fake cells" demo button (meters).
 _SCATTER_RADIUS = 40e-6
 
@@ -70,6 +72,15 @@ class CellPanel(Qt.QWidget):
         # Cleared (not just overwritten) on every selection change.
         self._timelineItems: dict[int, Qt.QListWidgetItem] = {}
         self._logs: dict[int, list[str]] = {}
+        # id(cell) -> (exc_type, exc_message, traceback_text) for the most
+        # recent action of that cell's that failed. Ids and plain strings,
+        # never the entry and never the exception: an ActionLogEntry's
+        # on_finish closes over this panel, and an exception holds its
+        # traceback's frames and their locals -- either one retained here is
+        # the reference-cycle failure this module's teardown path exists to
+        # avoid (see tests/test_teardown.py, and
+        # acq4.experiment.error_record.describe_exception).
+        self._cellErrors: dict[int, tuple[str, str, str]] = {}
         self._cells: dict[int, object] = {}
         # id(cell) for each cell that is not yet running under any
         # orchestrator this panel is bound to, and so is still owed an
@@ -283,6 +294,7 @@ class CellPanel(Qt.QWidget):
         self._entryTimelineLoc.clear()
         self._timelineItems.clear()
         self._logs.clear()
+        self._cellErrors.clear()
         self.cellList.clear()
         self._clearShowContainer()
         self._shownEntryId = None
@@ -338,6 +350,7 @@ class CellPanel(Qt.QWidget):
                 self.cellList.takeItem(self.cellList.row(item))
             self._timelines.pop(cellId, None)
             self._logs.pop(cellId, None)
+            self._cellErrors.pop(cellId, None)
         self._updateCheckAllButton()
         self._updateReuseButton()
 
@@ -451,6 +464,15 @@ class CellPanel(Qt.QWidget):
         """
         return self._status.get(id(cell))
 
+    def errorText(self, cell) -> tuple[str, str, str] | None:
+        """(exc_type, exc_message, traceback_text) for `cell`'s most recent
+        failed action, or None if it has none. Reflects the latest finished
+        action only: a later action in the same pass overwrites it, and
+        _onCurrentCell/_onReuseCheckedCells clear it once that pass is over --
+        but nothing in this pass clears it if the cell goes on to complete
+        after the failed action."""
+        return self._cellErrors.get(id(cell))
+
     def _onCheckAllCompleted(self) -> None:
         """Tick every row whose cell ran its protocol to completion.
 
@@ -540,6 +562,13 @@ class CellPanel(Qt.QWidget):
             # the cell's physical continuity is untouched.
             self._timelines[id(cell)] = []
             self._logs[id(cell)] = []
+            # A stored error describes the pass that just ended, not the one
+            # about to start. Left in place, _onCellSelectionChanged would
+            # re-mount it beside a row that now reads "queued" and a timeline
+            # that is empty -- and it would stay mounted until _onCurrentCell
+            # eventually fires for this cell, which a Stop or a queue that
+            # never reaches it can leave never happening.
+            self._cellErrors.pop(id(cell), None)
             # Queued again, so no longer holding a finished disposition -- but
             # remembered, so a rescan that discards this cell before the new
             # pass reaches it can put that disposition back rather than leave a
@@ -593,6 +622,12 @@ class CellPanel(Qt.QWidget):
             # it read.
             return
         self._attempted.add(id(cell))
+        # A new pass supersedes the last one's failure: the traceback for a
+        # cell that has just been re-queued describes a run that is over.
+        if self._cellErrors.pop(id(cell), None) is not None:
+            if cell is self._currentSelectedCell():
+                self._clearShowContainer()
+                self._shownEntryId = None
         item = self._rows.get(id(cell))
         if item is None:
             # A cell the orchestrator announces without this panel ever having
@@ -643,6 +678,14 @@ class CellPanel(Qt.QWidget):
             if cell is self._currentSelectedCell() and self._shownEntryId == id(entry):
                 self._clearShowContainer()
                 self._shownEntryId = None
+            if entry.outcome == "error":
+                self._cellErrors[id(cell)] = (
+                    entry.exc_type,
+                    entry.exc_message,
+                    entry.traceback_text,
+                )
+                if cell is self._currentSelectedCell():
+                    self._showErrorBlock(cell)
         elif phase == "widget":
             if cell is self._currentSelectedCell():
                 self._clearShowContainer()
@@ -692,6 +735,24 @@ class CellPanel(Qt.QWidget):
             child = showLayout.takeAt(0)
             if child.widget() is not None:
                 child.widget().setParent(None)
+
+    def _showErrorBlock(self, cell) -> None:
+        """Mount the stored error block for `cell` in the details container.
+
+        Built fresh from the stored text on every mount rather than kept as a
+        widget: _onCellSelectionChanged clears showContainer on every selection
+        change, so a retained widget would be reparented away and would also be
+        one more thing to drop on teardown.
+        """
+        stored = self._cellErrors.get(id(cell))
+        if stored is None:
+            return
+        exc_type, exc_message, traceback_text = stored
+        self._clearShowContainer()
+        self._shownEntryId = None
+        self.showContainer.layout().addWidget(
+            ErrorBlock(exc_type, exc_message, traceback_text, repr(cell))
+        )
 
     def _onCellFinished(self, cell, status: str) -> None:
         # A cell can finish (e.g. the "skipped" outcome in
@@ -745,6 +806,7 @@ class CellPanel(Qt.QWidget):
                 self._timelineItems[entryId] = item
         for line in self._logs.get(cellId, []):
             self.logView.appendPlainText(line)
+        self._showErrorBlock(cell)
 
     def _currentSelectedCell(self):
         item = self.cellList.currentItem()

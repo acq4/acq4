@@ -9,6 +9,7 @@ from acq4.util import Qt
 from acq4.util.task import Stopped, Event, check_stop, asynch_with_qt_signals
 
 from .context import ExecutionContext
+from .error_record import RunErrorRecord
 from .exceptions import (
     OrchestrationError,
     AdvanceToNextCell,
@@ -24,6 +25,7 @@ class Orchestrator(Qt.QObject):
     sigStatus = Qt.Signal(str)                 # "running"/"surveying"/"waiting"/"paused"/"error"
     sigCurrentCell = Qt.Signal(object)         # cell, or None when idle
     sigCellFinished = Qt.Signal(object, str)   # cell, status
+    sigRunError = Qt.Signal(object)            # RunErrorRecord for the halt
 
     def __init__(
         self,
@@ -403,7 +405,7 @@ class Orchestrator(Qt.QObject):
             # quietly ending the survey and letting the run look complete.
             # There is no cell to attribute it to, so no sigCellFinished.
             logger.exception("Cell producer raised while refilling the queue")
-            self.sigStatus.emit("error")
+            self._reportRunError(exc)
             raise AbortExperiment(f"cell producer failed: {exc}") from exc
         if cells is None:
             self._producerExhausted = True
@@ -430,6 +432,34 @@ class Orchestrator(Qt.QObject):
         # before or after such a clear, never across it. enqueue() remains the
         # public single-cell entry point.
         self._queue.extend(cells)
+
+    def _reportRunError(self, exc: BaseException, cell=None) -> None:
+        """Publish the failure that is about to halt this run, then set status.
+
+        Called at every halt site, immediately before the AbortExperiment that
+        wraps `exc`. Carries a RunErrorRecord -- plain formatted strings -- so
+        nothing downstream can retain the exception and the frames behind it
+        (see error_record.describe_exception).
+
+        `exc` is the original failure rather than the AbortExperiment wrapper:
+        the wrapper does not exist yet here, and its own frames would say only
+        that the orchestrator gave up. The chain is preserved anyway, since
+        the wrapper is raised `from exc`.
+
+        Not every failure has a cell -- a producer raising during a refill is
+        attributed to none, and there is no log entry for it either. That is why
+        this is a run-level report and not simply more fields on ActionLogEntry.
+
+        Emitted before sigStatus so a slot reacting to "error" already has the
+        record. The two emits are sequential statements in one call, and Qt
+        preserves emit order to any one receiver as long as both signals reach
+        it over the same connection type -- true of every receiver today, since
+        none mixes a direct connection to one of these two signals with a
+        queued connection to the other. A receiver that did would not get this
+        guarantee for free.
+        """
+        self.sigRunError.emit(RunErrorRecord.from_exception(exc, cell))
+        self.sigStatus.emit("error")
 
     def _reportFinished(self, cell, status: str) -> None:
         """Announce `cell`'s terminal disposition, unless it has been abandoned.
@@ -529,7 +559,7 @@ class Orchestrator(Qt.QObject):
                     logger.exception(
                         "Unhandled orchestration error while processing cell %r", cell
                     )
-                    self.sigStatus.emit("error")
+                    self._reportRunError(exc, cell)
                     self._reportFinished(cell, "error")
                     raise AbortExperiment(
                         f"unhandled orchestration error while processing cell: {exc}"
@@ -543,7 +573,7 @@ class Orchestrator(Qt.QObject):
                     logger.exception(
                         "Unexpected exception while processing cell %r", cell
                     )
-                    self.sigStatus.emit("error")
+                    self._reportRunError(exc, cell)
                     self._reportFinished(cell, "error")
                     raise AbortExperiment(
                         f"unexpected exception while processing cell: {exc}"
@@ -577,7 +607,7 @@ class Orchestrator(Qt.QObject):
                         # the queue loop) or run_sync_cell's finally (for the
                         # direct path) on the way out -- no separate clear needed
                         # here.
-                        self.sigStatus.emit("error")
+                        self._reportRunError(signal, cell)
                         self._reportFinished(cell, "error")
                         raise AbortExperiment(
                             "flow signal raised but swallowed by the protocol: "

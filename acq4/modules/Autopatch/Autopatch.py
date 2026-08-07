@@ -264,6 +264,11 @@ class AutopatchWindow(Qt.QWidget):
         if not self._startSlice(dirHandle=dirHandle):
             return
         self.cellPanel.clearCells()
+        # Area 3's band names a cell and a failure from the tissue just
+        # discarded above; left up, it would go on describing a coordinate
+        # that no longer exists once the operator has physically swapped in
+        # new tissue.
+        self.statusPanel.clearError()
         if self.orchestrator is not None:
             # Detached before the queue is cleared, not after: a refill still
             # in flight on the worker thread reads the producer and enqueues
