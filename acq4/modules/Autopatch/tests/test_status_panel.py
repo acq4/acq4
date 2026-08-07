@@ -15,6 +15,7 @@ def qapp():
 class _FakeOrchestrator(Qt.QObject):
     sigStatus = Qt.Signal(str)
     sigCurrentCell = Qt.Signal(object)
+    sigRunError = Qt.Signal(object)
 
     def __init__(self):
         super().__init__()
@@ -116,7 +117,6 @@ def test_status_signal_updates_label(qapp):
 
     orch.sigStatus.emit("error")
     assert "error" in panel.statusLabel.text().lower()
-    assert panel.instructionLabel.isVisible()
 
 
 def test_current_action_entry_updates_label_with_name_and_status(qapp):
@@ -410,3 +410,102 @@ def test_the_status_passthrough_stops_on_unbind(qapp):
     orch.sigStatus.emit("surveying")
 
     assert seen == []
+
+
+def _record(exc_type="RuntimeError", message="boom", cell_repr="'c1'"):
+    from acq4.experiment.error_record import RunErrorRecord
+
+    return RunErrorRecord(exc_type, message, "Traceback...\n", cell_repr)
+
+
+def test_error_band_shows_the_headline(qapp):
+    from acq4.modules.Autopatch.status_panel import StatusPanel
+
+    panel = StatusPanel()
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch, _FakeEntrySource())
+    orch.sigRunError.emit(_record("BrokenPipette", "tip sheared off"))
+    assert panel.instructionLabel.text() == "BrokenPipette: tip sheared off"
+    assert panel.lastError().exc_type == "BrokenPipette"
+
+
+def test_error_band_survives_the_waiting_status_that_follows_a_halt(qapp):
+    # The regression this whole area needed: Orchestrator._runLoopBody's finally
+    # emits "waiting" straight behind the "error" (pinned by
+    # test_the_error_status_does_not_stick_after_a_halt), so a band gated on the
+    # status is shown and hidden within the same run and the operator sees
+    # nothing. Visibility keys off having a record instead.
+    from acq4.modules.Autopatch.status_panel import StatusPanel
+
+    panel = StatusPanel()
+    panel.show()
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch, _FakeEntrySource())
+    orch.sigRunError.emit(_record())
+    orch.sigStatus.emit("error")
+    orch.sigStatus.emit("waiting")
+    assert panel.instructionLabel.isVisibleTo(panel) is True
+    assert panel.instructionLabel.text() == "RuntimeError: boom"
+    assert panel.showInLogBtn.isVisibleTo(panel) is True
+    panel.hide()
+
+
+def test_band_is_hidden_with_no_error(qapp):
+    from acq4.modules.Autopatch.status_panel import StatusPanel
+
+    panel = StatusPanel()
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch, _FakeEntrySource())
+    orch.sigStatus.emit("running")
+    assert panel.lastError() is None
+    assert panel.instructionLabel.isVisibleTo(panel) is False
+    assert panel.showInLogBtn.isVisibleTo(panel) is False
+
+
+def test_starting_a_new_run_clears_the_previous_error(qapp):
+    # The band is a headline for the run that is showing, not a scar.
+    from acq4.modules.Autopatch.status_panel import StatusPanel
+
+    panel = StatusPanel()
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch, _FakeEntrySource())
+    orch.sigRunError.emit(_record())
+    orch.sigStatus.emit("waiting")
+    panel.startBtn.click()
+    assert panel.lastError() is None
+    assert panel.instructionLabel.text() == ""
+    assert panel.instructionLabel.isVisibleTo(panel) is False
+    assert orch.started == 1
+
+
+def test_unbinding_clears_the_error_and_stops_listening(qapp):
+    from acq4.modules.Autopatch.status_panel import StatusPanel
+
+    panel = StatusPanel()
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch, _FakeEntrySource())
+    orch.sigRunError.emit(_record())
+    panel.unbindOrchestrator()
+    assert panel.lastError() is None
+    # The outgoing orchestrator must no longer be able to write into this panel.
+    orch.sigRunError.emit(_record("KeyError", "late arrival"))
+    assert panel.lastError() is None
+    assert panel.instructionLabel.text() == ""
+
+
+def test_show_in_log_button_raises_the_log_window(qapp, monkeypatch):
+    from acq4.modules.Autopatch.status_panel import StatusPanel
+
+    raised = []
+
+    class _FakeLogWindow:
+        def raise_window(self):
+            raised.append(True)
+
+    monkeypatch.setattr("acq4.util.LogWindow.get_log_window", lambda: _FakeLogWindow())
+    panel = StatusPanel()
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch, _FakeEntrySource())
+    orch.sigRunError.emit(_record())
+    panel.showInLogBtn.click()
+    assert raised == [True]
