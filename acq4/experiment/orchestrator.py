@@ -451,8 +451,11 @@ class Orchestrator(Qt.QObject):
         this is a run-level report and not simply more fields on ActionLogEntry.
 
         Emitted before sigStatus so a slot reacting to "error" already has the
-        record. Both are queued to the GUI thread in emit order, so a receiver
-        cannot observe the status without the record that explains it.
+        record. The two emits are sequential statements in one call, and Qt
+        preserves emit order to any one receiver whichever connection type it
+        got, so no receiver can observe the status without the record that
+        explains it -- a property of the ordering alone, needing no assumption
+        about which thread the receiver lives on.
         """
         self.sigRunError.emit(RunErrorRecord.from_exception(exc, cell))
         self.sigStatus.emit("error")
