@@ -171,14 +171,21 @@ class StatusPanel(Qt.QWidget):
         self._updateErrorBand()
 
     def lastError(self):
-        """The RunErrorRecord for the failure that halted the last run, or None.
-
-        The window's own error surfacing reads this rather than re-deriving the
-        failure: the orchestrator is a parentless QObject, and a second consumer
-        connecting to it directly would give it another reference back and
-        rebuild the cycle bindOrchestrator/unbindOrchestrator exist to avoid.
-        """
+        """The RunErrorRecord for the failure that halted the last run, or None."""
         return self._lastError
+
+    def clearError(self) -> None:
+        """Drop the band for the run that halted, without touching anything
+        else this panel tracks.
+
+        Callers outside this class that already have their own reason to
+        declare the last run's failure moot -- AutopatchWindow.newSlice(),
+        which is discarding the tissue that failure happened on -- rather than
+        this panel inferring it from an event it would otherwise have to
+        listen for.
+        """
+        self._lastError = None
+        self._updateErrorBand()
 
     def _updateErrorBand(self) -> None:
         record = self._lastError
