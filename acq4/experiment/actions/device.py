@@ -11,6 +11,7 @@ ctx.pipette is a PatchPipette; the underlying manipulator is ctx.pipette.pipette
 from __future__ import annotations
 
 from acq4.util.imaging.sequencer import run_image_sequence
+from acq4.util.model_config import segmenter_path
 from acq4.util.task import run_in_gui_thread
 
 from ..exceptions import OrchestrationError
@@ -150,7 +151,10 @@ def cellfie(ctx, height: float = 30e-6, step: float = 1e-6) -> None:
         # Initialize the tracker reference used to follow the cell during patching.
         try:
             ctx.cell.initializeTracker(
-                imager, use_cellpose=True, deformation_tolerance=DEFORMATION_TOLERANCE
+                imager,
+                use_cellpose=True,
+                deformation_tolerance=DEFORMATION_TOLERANCE,
+                segmenter=segmenter_path(),
             )
         except CellTrackingLost as exc:
             # The tracker could not re-find this cell against its own reference

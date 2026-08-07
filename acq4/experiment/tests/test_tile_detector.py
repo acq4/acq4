@@ -81,11 +81,15 @@ class FakeCell:
         self.trackerInits = 0
         self.trackerStack = None
         self.trackerUseCellpose = None
+        self.trackerKwargs = {}
 
-    def initializeTrackerFromStack(self, camera, stack, use_cellpose=False):
+    def initializeTrackerFromStack(self, camera, stack, use_cellpose=False, **tracker_kwargs):
+        # Mirror Cell.initializeTrackerFromStack's **tracker_kwargs passthrough so
+        # callers can forward tracker settings without this double knowing each one.
         self.trackerInits += 1
         self.trackerStack = stack
         self.trackerUseCellpose = use_cellpose
+        self.trackerKwargs = tracker_kwargs
         if self.trackerFails:
             raise ValueError("cell too close to the stack edge")
 
@@ -335,6 +339,29 @@ def test_health_models_come_from_the_misc_config():
     assert models["classifier"] == "/cls.pt"
     assert models["autoencoder"] is None
     assert models["resnet_classifier"] is None
+
+
+def test_the_tracker_segments_with_the_configured_model(monkeypatch):
+    """Tracking has to use the same checkpoint detection does; on stock cpsam it
+    finds no cells in a tracking crop at all."""
+    camera = FakeCamera()
+    scope = FakeScope(camera, surface=-500e-6)
+    monkeypatch.setattr(tile_detector, "_acquire", lambda *a, **k: ["frame"])
+    monkeypatch.setattr(
+        tile_detector,
+        "_detect",
+        lambda *a, **k: [((1e-6, 2e-6, -530e-6), 0.8)],
+    )
+    monkeypatch.setattr(tile_detector, "_newCell", FakeCell)
+    detect = tile_detector.make_tile_detector(
+        camera=camera,
+        scope=scope,
+        manager=FakeManager({"segmenterPath": "/models/tuned"}),
+    )
+
+    cells = detect((0.0, 0.0), SearchConstraints())
+
+    assert cells[0].trackerKwargs["segmenter"] == "/models/tuned"
 
 
 def test_health_models_without_a_manager_are_all_unset():

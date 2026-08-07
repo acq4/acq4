@@ -11,6 +11,7 @@ from acq4.modules.Camera import CameraWindow
 from acq4.util import Qt
 from acq4.util.task import Stopped, Task, asynch_with_qt_signals
 from acq4.util.imaging.sequencer import acquire_z_stack
+from acq4.util.model_config import segmenter_path
 from acq4.util.target import TargetBox
 from acq4.util.task import run_in_gui_thread
 from acq4_automation.cell_quality_annotation_tool import open_annotation_tool_with_detections
@@ -107,7 +108,7 @@ class CellDetector:
         cell = self._window.patchPipetteDevice.cell
         if cell is None or cell.position != target:
             cell = Cell(target)
-            cell.initializeTracker(self._window.cameraDevice, use_cellpose=True, deformation_tolerance=DEFORMATION_TOLERANCE)
+            cell.initializeTracker(self._window.cameraDevice, use_cellpose=True, deformation_tolerance=DEFORMATION_TOLERANCE, segmenter=segmenter_path())
         self._window._unranked_cells.append(cell)
         cells = list(self._window._unranked_cells)
         run_in_gui_thread(self._displayBoundingBoxes, cells)
@@ -255,7 +256,8 @@ class CellDetector:
             # close to the stack edge can't be extracted; keep them queued anyway.
             try:
                 cell.initializeTrackerFromStack(
-                    win.cameraDevice, detection_stack, use_cellpose=True, deformation_tolerance=DEFORMATION_TOLERANCE
+                    win.cameraDevice, detection_stack, use_cellpose=True,
+                    deformation_tolerance=DEFORMATION_TOLERANCE, segmenter=segmenter_path()
                 )
             except Exception:
                 logger.warning(

@@ -7,6 +7,7 @@ import numpy as np
 from acq4 import getManager
 from acq4.devices.Pipette.calibration import findNewPipette
 from acq4.logging_config import get_logger
+from acq4.util.model_config import segmenter_path
 from acq4.util.task import Stopped, Task, asynch_with_qt_signals, sleep, synch
 from acq4_automation.feature_tracking.cell import Cell
 from coorx import Point
@@ -85,7 +86,7 @@ class FeatureTracker:
         pipette = win.pipetteDevice
         target = Point(pipette.targetPosition(), "global")
         cell = win._cell = Cell(target)
-        cell.initializeTracker(win.cameraDevice, use_cellpose=True, deformation_tolerance=DEFORMATION_TOLERANCE)  # pipette=win.pipetteDevice,
+        cell.initializeTracker(win.cameraDevice, use_cellpose=True, deformation_tolerance=DEFORMATION_TOLERANCE, segmenter=segmenter_path())  # pipette=win.pipetteDevice,
         cell.enableTracking()
         cell.sigPositionChanged.connect(self._updatePipetteTarget)
         win.sigWorking.emit(win.ui.trackFeaturesBtn)

@@ -7,6 +7,7 @@ from acq4.logging_config import get_logger
 from acq4.util.task import Stopped, check_stop, asynch_with_qt_signals, set_state, sleep, synch
 from acq4.util.task import run_in_gui_thread
 from acq4.util.imaging.sequencer import run_image_sequence
+from acq4.util.model_config import segmenter_path
 from .feature_tracking import DEFORMATION_TOLERANCE, saveTrackingHistory
 from ..TaskRunner import TaskRunner
 from ...Manager import Manager
@@ -354,7 +355,8 @@ class Autopatcher:
             # Pass the pipette so occlusion masking is active during later visual
             # tracking; the pose is sampled fresh at each acquisition.
             cell.initializeTracker(
-                win.cameraDevice, use_cellpose=True, deformation_tolerance=DEFORMATION_TOLERANCE
+                win.cameraDevice, use_cellpose=True,
+                deformation_tolerance=DEFORMATION_TOLERANCE, segmenter=segmenter_path()
             )  #, pipette=win.pipetteDevice)
         except Stopped:
             raise

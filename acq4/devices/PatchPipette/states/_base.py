@@ -11,6 +11,7 @@ from acq4 import getManager
 from acq4.logging_config import get_logger
 from acq4.util import Qt
 from acq4.util.debug import log_and_ignore_exception
+from acq4.util.model_config import segmenter_path
 from acq4.util.task import (
     QtFriendlyTask,
     Task,
@@ -431,6 +432,7 @@ class PatchPipetteState(QtFriendlyTask):
                 # pipette=self.dev.pipetteDevice,
                 use_cellpose=True,
                 deformation_tolerance=self.config.get('deformationTolerance'),
+                segmenter=segmenter_path(),
             )
 
         cell.enableTracking(True)

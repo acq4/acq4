@@ -377,9 +377,24 @@ def test_cellfie_focuses_saves_zstack_and_initializes_tracker(ctx, pip, monkeypa
     from acq4.modules.AutomationDebug.feature_tracking import DEFORMATION_TOLERANCE
 
     assert ctx.cell.tracker_kwargs == [
-        {"deformation_tolerance": DEFORMATION_TOLERANCE}
+        {"deformation_tolerance": DEFORMATION_TOLERANCE, "segmenter": None}
     ]
     assert names == ["Cellfie"]
+
+
+def test_cellfie_tracks_with_the_configured_segmenter(ctx, pip, monkeypatch):
+    """Tracking has to segment with the same checkpoint detection uses; on stock
+    cpsam it finds no cells in a tracking crop at all."""
+    pytest.importorskip("acq4_automation", reason=_CELLFIE_SKIP_REASON)
+    pip.pipetteDevice.target_position = (0.0, 0.0, 100e-6)
+    monkeypatch.setattr(
+        device_mod, "run_image_sequence", lambda *a, **k: _Waitable()
+    )
+    monkeypatch.setattr(device_mod, "segmenter_path", lambda: "/models/tuned")
+
+    cellfie(ctx, height=30e-6, step=1e-6)
+
+    assert ctx.cell.tracker_kwargs[0]["segmenter"] == "/models/tuned"
 
 
 def test_cellfie_default_height_and_step(ctx, pip, monkeypatch):

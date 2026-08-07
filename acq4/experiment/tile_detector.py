@@ -6,6 +6,7 @@ from __future__ import annotations
 from typing import Callable
 
 from acq4.logging_config import get_logger
+from acq4.util.model_config import segmenter_path
 from acq4.util.task import check_stop, synch
 
 logger = get_logger(__name__)
@@ -65,13 +66,17 @@ def make_tile_detector(
             max_candidates=max_candidates,
         )
         logger.info("Tile at %r yielded %d candidates", center, len(results))
-        return _build_cells(camera, stack, results)
+        return _build_cells(camera, stack, results, segmenter_path(manager))
 
     return detect
 
 
-def _build_cells(camera, stack, results) -> list:
-    """Cells for each (position, score) detection, tracking seeded from `stack`."""
+def _build_cells(camera, stack, results, segmenter=None) -> list:
+    """Cells for each (position, score) detection, tracking seeded from `stack`.
+
+    *segmenter* is the cellpose checkpoint tracking should segment with, so a
+    tracked cell is found by the same model that detected it.
+    """
     cells = []
     for position, score in results:
         cell = _newCell(position)
@@ -79,7 +84,9 @@ def _build_cells(camera, stack, results) -> list:
         try:
             # Seeded from the stack the cell was found in, so tracking is ready
             # without re-acquiring a stack per cell.
-            cell.initializeTrackerFromStack(camera, stack, use_cellpose=True)
+            cell.initializeTrackerFromStack(
+                camera, stack, use_cellpose=True, segmenter=segmenter
+            )
         except Exception:
             # A cell too close to the stack edge cannot be extracted, but it is
             # still a real detection: queue it rather than silently dropping
