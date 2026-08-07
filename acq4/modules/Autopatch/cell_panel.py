@@ -466,9 +466,11 @@ class CellPanel(Qt.QWidget):
 
     def errorText(self, cell) -> tuple[str, str, str] | None:
         """(exc_type, exc_message, traceback_text) for `cell`'s most recent
-        failed action, or None if it has none. Cleared when that cell starts a
-        new pass -- a cell that failed, was reused, and then succeeded is not
-        still a failure."""
+        failed action, or None if it has none. Reflects the latest finished
+        action only: a later action in the same pass overwrites it, and
+        _onCurrentCell/_onReuseCheckedCells clear it once that pass is over --
+        but nothing in this pass clears it if the cell goes on to complete
+        after the failed action."""
         return self._cellErrors.get(id(cell))
 
     def _onCheckAllCompleted(self) -> None:
@@ -560,6 +562,13 @@ class CellPanel(Qt.QWidget):
             # the cell's physical continuity is untouched.
             self._timelines[id(cell)] = []
             self._logs[id(cell)] = []
+            # A stored error describes the pass that just ended, not the one
+            # about to start. Left in place, _onCellSelectionChanged would
+            # re-mount it beside a row that now reads "queued" and a timeline
+            # that is empty -- and it would stay mounted until _onCurrentCell
+            # eventually fires for this cell, which a Stop or a queue that
+            # never reaches it can leave never happening.
+            self._cellErrors.pop(id(cell), None)
             # Queued again, so no longer holding a finished disposition -- but
             # remembered, so a rescan that discards this cell before the new
             # pass reaches it can put that disposition back rather than leave a

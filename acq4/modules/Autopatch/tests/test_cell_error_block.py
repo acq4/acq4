@@ -23,6 +23,18 @@ def panel(qapp):
     return CellPanel()
 
 
+class _FakeOrchestrator(Qt.QObject):
+    sigCurrentCell = Qt.Signal(object)
+    sigCellFinished = Qt.Signal(object, str)
+
+    def __init__(self):
+        super().__init__()
+        self.enqueued = []
+
+    def enqueue(self, cell):
+        self.enqueued.append(cell)
+
+
 def _finish_with_error(panel, cell, name="Patch", message="tip sheared off"):
     """Drive one action for `cell` all the way to a failed finish, the way a
     real run does: the panel wires the entry's callbacks in onLogAction()."""
@@ -136,6 +148,31 @@ def test_discarding_a_cell_drops_its_stored_error(panel):
     _finish_with_error(panel, cell)
     assert panel.isAttempted(cell) is False
     panel._onCellsDiscarded([cell])
+    assert panel.errorText(cell) is None
+
+
+def test_reuse_drops_the_cells_stored_error(panel):
+    # A re-queued cell's previous traceback describes a pass that is over. Left
+    # in _cellErrors, _onCellSelectionChanged would resurrect it beside a row
+    # that now reads "queued" and a timeline that reuse has just emptied.
+    cell, other = object(), object()
+    panel.addCell(cell)
+    panel.addCell(other)
+    panel.cellList.setCurrentItem(panel._rows[id(cell)])
+    _finish_with_error(panel, cell)
+    panel._onCellFinished(cell, "error")
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+    panel._rows[id(cell)].setCheckState(Qt.Qt.Checked)
+
+    panel.reuseCheckedCellsBtn.click()
+
+    # Switch away and back -- the path _onCellSelectionChanged drives, which
+    # is what re-mounts a block from whatever _cellErrors still holds.
+    panel.cellList.setCurrentItem(panel._rows[id(other)])
+    panel.cellList.setCurrentItem(panel._rows[id(cell)])
+
+    assert _mounted_blocks(panel) == []
     assert panel.errorText(cell) is None
 
 
