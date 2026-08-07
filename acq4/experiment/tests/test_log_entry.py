@@ -105,3 +105,63 @@ def test_headless_with_no_hook_runs_and_populates_entry():
         action_entry.set_status("running")
     assert action_entry.status == "running"
     assert action_entry.outcome == "done"
+
+
+def test_error_outcome_captures_type_message_and_traceback():
+    ctx = ExecutionContext()
+    with pytest.raises(BrokenPipette):
+        with ctx.log_action("Patch") as action_entry:
+            raise BrokenPipette("tip sheared off")
+    assert action_entry.outcome == "error"
+    assert action_entry.exc_type == "BrokenPipette"
+    assert action_entry.exc_message == "tip sheared off"
+    assert "BrokenPipette: tip sheared off" in action_entry.traceback_text
+    assert "test_error_outcome_captures" in action_entry.traceback_text
+
+
+def test_successful_action_captures_nothing():
+    ctx = ExecutionContext()
+    with ctx.log_action("Patch") as action_entry:
+        pass
+    assert action_entry.exc_type is None
+    assert action_entry.exc_message is None
+    assert action_entry.traceback_text is None
+
+
+def test_stopped_captures_nothing():
+    # An operator-initiated stop is ordinary control flow; a traceback for it
+    # would fill Area 5's pane with noise.
+    ctx = ExecutionContext()
+    with pytest.raises(Stopped):
+        with ctx.log_action("Patch") as action_entry:
+            raise Stopped()
+    assert action_entry.outcome == "stopped"
+    assert action_entry.exc_type is None
+    assert action_entry.traceback_text is None
+
+
+def test_flow_signal_captures_nothing():
+    ctx = ExecutionContext()
+    with pytest.raises(AdvanceToNextCell):
+        with ctx.log_action("Patch") as action_entry:
+            raise AdvanceToNextCell("next")
+    assert action_entry.outcome == "abandoned"
+    assert action_entry.exc_type is None
+    assert action_entry.traceback_text is None
+
+
+def test_error_fields_are_populated_before_on_finish_fires():
+    # CellPanel's "finished" slot renders the error block straight from these
+    # fields, and it is reached through on_finish -- so an ordering where
+    # on_finish runs first would hand the UI an entry with nothing on it.
+    seen = {}
+    entry = ActionLogEntry("Patch")
+    entry.on_finish = lambda e: seen.update(
+        exc_type=e.exc_type, traceback_text=e.traceback_text
+    )
+    try:
+        raise BrokenPipette("tip sheared off")
+    except BrokenPipette as exc:
+        entry._finish(exc)
+    assert seen["exc_type"] == "BrokenPipette"
+    assert "tip sheared off" in seen["traceback_text"]
