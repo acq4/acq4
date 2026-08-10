@@ -42,6 +42,7 @@ class ImagingCtrl(Qt.QWidget):
     sigStopVideoClicked = Qt.Signal()
     sigAcquireFrameClicked = Qt.Signal(object)  # mode
     sigUpdateUi = Qt.Signal()
+    sigPinnedFramesChanged = Qt.Signal()  # a frame was pinned or unpinned
 
     frameDisplayClass = FrameDisplay  # let subclasses override this class
 
@@ -282,12 +283,14 @@ class ImagingCtrl(Qt.QWidget):
         view = self.frameDisplay.imageItem().getViewBox()
         if view is not None:
             view.addItem(im)
+        self.sigPinnedFramesChanged.emit()
 
     def removePinnedFrame(self, fr):
         self.pinnedFrames.remove(fr)
         if fr.scene() is not None:
             fr.scene().removeItem(fr)
         fr.sigRemoveRequested.disconnect(self.removePinnedFrame)
+        self.sigPinnedFramesChanged.emit()
 
     def clearPinnedFramesClicked(self):
         query = Qt.QMessageBox.question(
