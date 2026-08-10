@@ -164,10 +164,11 @@ def test_unbinding_disconnects_from_the_source_signal(qapp):
 
 
 def test_pinning_three_frames_preserves_their_relative_z_order(qapp):
-    # addItem()-then-setZValue() is what keeps a pinned frame's z-value
-    # intact instead of being raised to the view's own; with only one frame
-    # pinned, every previous test above would still pass even if that
-    # ordering collapsed all z-values to the same number.
+    # Pinned frames stack, and which one is on top is the operator's record of
+    # what they imaged last. A single-frame test already catches an absolute
+    # z-value being clobbered; what needs three is the relative order surviving
+    # -- a mirror that rebuilt its items in the wrong sequence would give every
+    # one of them a plausible z and still stack the mosaic wrongly.
     source = FakeImagingCtrl()
     source.pin(makeFrameItem(1.0, 1e-3, 2e-3))
     source.pin(makeFrameItem(2.0, 3e-3, 4e-3))
