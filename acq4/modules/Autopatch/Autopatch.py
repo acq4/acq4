@@ -353,13 +353,12 @@ class AutopatchWindow(Qt.QWidget):
         try:
             dirHandle = create_data_dir(self.manager, level="Slice")
         except HelpfulException as exc:
-            # Area 3's instruction band does not exist yet, so this goes where
-            # the operator already reads "Select a camera before starting a
-            # slice". Narrowed to HelpfulException -- the "Storage directory
-            # has not been set." case -- so a genuine programming error (a
+            # Guidance, not a failure report: the operator has not chosen a
+            # storage directory, and Area 3's band is where instructions go.
+            # Narrowed to HelpfulException so a genuine programming error (a
             # missing manager, say) propagates instead of being reported as
             # storage guidance.
-            self.searchPanel.setError(str(exc))
+            self.statusPanel.setInstruction(str(exc))
             return
         if not self._startSlice(dirHandle=dirHandle):
             return
@@ -369,6 +368,7 @@ class AutopatchWindow(Qt.QWidget):
         # that no longer exists once the operator has physically swapped in
         # new tissue.
         self.statusPanel.clearError()
+        self.statusPanel.clearInstruction()
         if self.orchestrator is not None:
             # Detached before the queue is cleared, not after: a refill still
             # in flight on the worker thread reads the producer and enqueues

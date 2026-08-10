@@ -37,6 +37,11 @@ class StatusPanel(Qt.QWidget):
         # producer raising during a refill has no cell and opens no log_action,
         # so there would be nothing to hang the band's headline on.
         self._lastError = None
+        # Operator guidance about a control, as opposed to a failure that halted
+        # a run. Held separately from _lastError so neither erases the other:
+        # they have different writers, and neither can see the other's
+        # condition.
+        self._instruction = ""
 
         self.startBtn = Qt.QPushButton("Start")
         self.stopBtn = Qt.QPushButton("Stop")
@@ -187,12 +192,41 @@ class StatusPanel(Qt.QWidget):
         self._lastError = None
         self._updateErrorBand()
 
+    def setInstruction(self, text: str) -> None:
+        """Show operator guidance in the band -- what to do, not what broke.
+
+        For a control that could not proceed, `AutopatchWindow.newSlice()` with
+        no storage directory chosen being the case this exists for. An
+        instruction is deliberately not a RunErrorRecord: no traceback, no Copy,
+        and no Show in log, because no run happened and there is nothing in the
+        log to show.
+        """
+        self._instruction = text
+        self._updateErrorBand()
+
+    def clearInstruction(self) -> None:
+        self._instruction = ""
+        self._updateErrorBand()
+
+    def instruction(self) -> str:
+        """The guidance currently showing, or an empty string."""
+        return self._instruction
+
     def _updateErrorBand(self) -> None:
+        """Render whichever of the two the band is carrying, the error first.
+
+        A failure that halted a run is about tissue and a pipette in it;
+        guidance about a button is not. The instruction is still held and comes
+        back once the error is cleared, since whatever it asked for has not been
+        done in the meantime.
+        """
         record = self._lastError
-        self.instructionLabel.setText(
-            "" if record is None else f"{record.exc_type}: {record.exc_message}"
-        )
-        self.instructionLabel.setVisible(record is not None)
+        if record is not None:
+            self.instructionLabel.setText(f"{record.exc_type}: {record.exc_message}")
+        else:
+            self.instructionLabel.setText(self._instruction)
+        showing = record is not None or bool(self._instruction)
+        self.instructionLabel.setVisible(showing)
         self.showInLogBtn.setVisible(record is not None)
 
     def _onShowInLogClicked(self) -> None:

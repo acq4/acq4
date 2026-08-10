@@ -1399,7 +1399,10 @@ def test_new_slice_lets_a_programming_error_propagate(qapp, tmp_path):
         win.newSlice()
 
 
-def test_new_slice_reports_a_missing_storage_directory_in_area_2(win):
+def test_new_slice_reports_a_missing_storage_directory_as_an_instruction(win):
+    # The likeliest first use of New slice is by an operator who has not chosen
+    # a storage directory. They get an instruction in Area 3, and Area 2's error
+    # line -- which is about the search constraints -- stays out of it.
     from acq4.util.HelpfulException import HelpfulException
 
     def boom(*a, **k):
@@ -1408,7 +1411,26 @@ def test_new_slice_reports_a_missing_storage_directory_in_area_2(win):
     win.manager.getCurrentDir = boom
     win.newSlice()
 
-    assert "Storage directory" in win.searchPanel.errorLabel.text()
+    assert "Storage directory" in win.statusPanel.instruction()
+    assert "Storage directory" not in win.searchPanel.errorLabel.text()
+
+
+def test_a_successful_new_slice_retracts_the_instruction(win):
+    # The instruction says what to do next; once it has been done it is a lie.
+    from acq4.util.HelpfulException import HelpfulException
+
+    def boom(*a, **k):
+        raise HelpfulException("Storage directory has not been set.")
+
+    original = win.manager.getCurrentDir
+    win.manager.getCurrentDir = boom
+    win.newSlice()
+    assert win.statusPanel.instruction() != ""
+
+    win.manager.getCurrentDir = original
+    win.newSlice()
+
+    assert win.statusPanel.instruction() == ""
 
 
 def test_add_region_here_does_not_create_a_directory(win):
