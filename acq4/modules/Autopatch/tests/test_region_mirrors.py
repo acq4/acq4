@@ -291,11 +291,11 @@ def test_a_polygon_outline_has_a_vertex_per_vertex(qapp):
 
 
 def test_the_outline_keeps_its_assigned_z_value(qapp):
-    # pg.ViewBox.addItem() raises an incoming item's z to the view's own when
-    # the item's is lower. CameraWindow.addItem() calls view.addItem() and
-    # only then applies the z it was given, so the outline's z survives that
-    # raise instead of being fixed to it -- the same hazard PinnedFrameMirror
-    # had to order around, met here from the opposite side of the call.
+    # What this pins is that CameraMirror hands its z to the window rather than
+    # setting it itself: the fake records whatever it is passed. It cannot show
+    # the z surviving pg.ViewBox.addItem()'s raise-if-lower rule, which is real
+    # but lives in CameraWindow.addItem() -- that calls view.addItem() first and
+    # applies the given z after, so the order is already right on the real path.
     from acq4.modules.Autopatch.region_mirrors import _MIRROR_Z
 
     window = FakeCameraWindow()
