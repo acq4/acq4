@@ -81,6 +81,7 @@ def test_a_frame_unpinned_disappears(qapp):
     source.pin(item)
     mirror, _view = makeMirror()
     mirror.bind(source)
+    assert len(mirror.items) == 1
 
     source.unpin(item)
 
@@ -120,6 +121,7 @@ def test_unbinding_clears_the_view_and_stops_listening(qapp):
     source.pin(makeFrameItem(1.0, 1e-3, 2e-3))
     mirror, _view = makeMirror()
     mirror.bind(source)
+    assert len(mirror.items) == 1
 
     mirror.unbind()
     source.pin(makeFrameItem(2.0, 3e-3, 4e-3))
@@ -142,3 +144,36 @@ def test_unbinding_releases_the_source(qapp):
         assert ref() is None
     finally:
         gc.enable()
+
+
+def test_unbinding_disconnects_from_the_source_signal(qapp):
+    # test_unbinding_releases_the_source only proves the last Python
+    # reference to the source is dropped, which follows from `self._source =
+    # None` alone regardless of whether the Qt connection was severed. This
+    # test instead inspects the connection itself: a long-lived source (the
+    # real Camera module's ImagingCtrl) would otherwise keep calling a
+    # torn-down mirror's refresh() forever.
+    source = FakeImagingCtrl()
+    mirror, _view = makeMirror()
+    mirror.bind(source)
+    assert source.receivers(source.sigPinnedFramesChanged) == 1
+
+    mirror.unbind()
+
+    assert source.receivers(source.sigPinnedFramesChanged) == 0
+
+
+def test_pinning_three_frames_preserves_their_relative_z_order(qapp):
+    # addItem()-then-setZValue() is what keeps a pinned frame's z-value
+    # intact instead of being raised to the view's own; with only one frame
+    # pinned, every previous test above would still pass even if that
+    # ordering collapsed all z-values to the same number.
+    source = FakeImagingCtrl()
+    source.pin(makeFrameItem(1.0, 1e-3, 2e-3))
+    source.pin(makeFrameItem(2.0, 3e-3, 4e-3))
+    source.pin(makeFrameItem(3.0, 5e-3, 6e-3))
+    mirror, _view = makeMirror()
+
+    mirror.bind(source)
+
+    assert [item.zValue() for item in mirror.items] == [-10000, -9999, -9998]

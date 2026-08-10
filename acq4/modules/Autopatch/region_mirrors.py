@@ -56,9 +56,10 @@ class PinnedFrameMirror:
         for original in self._source.pinnedFrames:
             copy = pg.ImageItem(original.image)
             copy.setTransform(original.transform())
-            # Added before setZValue: ViewBox.addItem() raises an incoming
-            # item's z-value to its own if the item's is lower, which would
-            # otherwise clobber a pinned frame's deliberately very-low z.
+            # addItem() must run before setZValue(): ViewBox.addItem() raises
+            # an incoming item's z-value to the view's own if the item's is
+            # lower, which would clobber a pinned frame's deliberately
+            # very-low z if the z-value were already set beforehand.
             self._view.addItem(copy)
             copy.setZValue(original.zValue())
             self.items.append(copy)
