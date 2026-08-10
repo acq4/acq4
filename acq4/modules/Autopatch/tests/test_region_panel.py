@@ -170,9 +170,9 @@ def test_an_roi_squashed_flat_stays_on_screen_but_is_not_reported(qapp):
 
 def test_fit_to_regions_ignores_a_squashed_roi(qapp):
     # regions() drops it, so fitToRegions must read through regions() rather
-    # than the ROI list, or it frames a bounding box it cannot compute -- and
-    # framing a zero-extent ROI is itself the unrecoverable scale the empty-set
-    # case below is careful to avoid.
+    # than the ROI list. Framing a zero-extent ROI would not wreck the scale --
+    # ViewBox.setRange keeps the current span for a range with none -- but it
+    # would re-centre the view on a shape the survey is ignoring.
     panel = makePanel()
     panel.setRegions([RECT])
     panel._rois[0].setSize((0.0, 0.0))

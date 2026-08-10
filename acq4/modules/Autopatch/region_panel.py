@@ -322,8 +322,10 @@ class RegionPanel(Qt.QWidget):
         would make the two mutually dependent for a bounding box.
 
         Region ROIs are skipped because their bounds come from `regions()`,
-        which drops an ROI squashed to no extent -- and a zero-extent rectangle
-        is exactly what would frame the view at a scale nobody can recover from.
+        which drops an ROI squashed to no extent. Framing one would re-centre
+        the view on a shape that is not a region: ViewBox.setRange keeps the
+        current span when a range has none of its own, so the scale survives,
+        but the operator is moved somewhere they did not ask to go.
         """
         rect = None
         for item in self.view.addedItems:

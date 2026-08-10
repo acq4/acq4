@@ -1904,6 +1904,37 @@ def test_teardown_releases_the_camera_mirror_after_its_wait_not_before(win):
     assert drawn == []
 
 
+def test_a_raise_while_stopping_the_orchestrator_still_releases_the_mirrors(win):
+    # The mirrors are the only part of teardown that reaches outside this
+    # window: their items live in the Camera module's window and their
+    # connection on its imaging control, both of which outlive the session. If
+    # stopping the orchestrator raises, releasing them is exactly what must
+    # still happen -- otherwise a closed session's outlines stay in a window
+    # nobody will clean up.
+    drawn = []
+    fakeCameraWindow = SimpleNamespace(
+        addItem=lambda item, **kwds: drawn.append(item),
+        removeItem=drawn.remove,
+    )
+    win._cameraMirror._cameraWindow = lambda: fakeCameraWindow
+    win.newSlice()
+    win.addRegionHere()
+    win.regionPanel.mirrorCheck.setChecked(True)
+    assert drawn, "nothing was mirrored, so teardown has nothing to release"
+    win.statusPanel.unbindOrchestrator()
+    win.cellPanel.unbindOrchestrator()
+
+    def boom(_orchestrator):
+        raise RuntimeError("stop failed")
+
+    win._stopAndReleaseOrchestrator = boom
+
+    with pytest.raises(RuntimeError, match="stop failed"):
+        win.teardown()
+
+    assert drawn == []
+
+
 def test_the_camera_window_getter_finds_a_loaded_camera_module(win):
     cameraWindow = SimpleNamespace()
     win.manager.listModules = lambda: ["Camera", "Data Manager"]

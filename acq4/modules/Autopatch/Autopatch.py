@@ -667,10 +667,16 @@ class AutopatchWindow(Qt.QWidget):
         if self._tornDown:
             return
         self._tornDown = True
-        if self.orchestrator is not None:
-            self._stopAndReleaseOrchestrator(self.orchestrator)
-        self._pinnedFrameMirror.unbind()
-        self._cameraMirror.clear()
+        try:
+            if self.orchestrator is not None:
+                self._stopAndReleaseOrchestrator(self.orchestrator)
+        finally:
+            # In a finally because these are the releases that reach *outside*
+            # this window: a raise while stopping the orchestrator would
+            # otherwise leave the Camera module holding this session's outlines
+            # and its imaging control still connected to a dead mirror.
+            self._pinnedFrameMirror.unbind()
+            self._cameraMirror.clear()
         self.statusPanel.unbindOrchestrator()
         self.cellPanel.unbindOrchestrator()
         self.cellPanel.clearCells()
