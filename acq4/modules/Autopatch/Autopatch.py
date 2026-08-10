@@ -115,11 +115,12 @@ class AutopatchWindow(Qt.QWidget):
         self.area1Box.layout().addWidget(self.regionPanel)
 
         self._pinnedFrameMirror = PinnedFrameMirror(self.regionPanel.view)
-        # The getter is closed over the manager alone, never over this window:
-        # the mirror is reachable both from here and from mirrorCheck's
-        # connection to it below, so a getter that held the window would close a
-        # reference cycle -- the kind teardown() exists to keep out of this
-        # window, and which no amount of tearing down afterwards can undo.
+        # The getter is closed over the manager alone, never over this window.
+        # A bound self._cameraModuleWindow would give mirror -> window while
+        # self._cameraMirror gives window -> mirror, and teardown() never drops
+        # that attribute, so the pair would outlive teardown and be reclaimable
+        # only by the cyclic collector -- the same shape as the exit segfault
+        # this module's deterministic teardown was written to prevent.
         self._cameraMirror = CameraMirror(
             functools.partial(self._cameraModuleWindow, self.manager)
         )
