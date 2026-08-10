@@ -98,6 +98,14 @@ class RegionPanel(Qt.QWidget):
         super().__init__()
         self._rois: list[pg.ROI] = []
 
+        # The three independent reasons editing can be off, kept apart because
+        # no writer can see another's condition: collapsing them into one
+        # boolean would let a run ending unlock a panel that still has no slice
+        # behind it. Same split SearchPanel already makes.
+        self._runLocked = False
+        self._sliceReady = False
+        self._runStatus = None
+
         self.graphicsView = pg.GraphicsView()
         self.graphicsView.setObjectName("Autopatch_regionView")
         self.view = pg.ViewBox()
@@ -151,6 +159,8 @@ class RegionPanel(Qt.QWidget):
         self.addRegionBtn.clicked.connect(self.sigAddRegionRequested)
         self.fitBtn.clicked.connect(self.fitToRegions)
 
+        self._applyLock()
+
     # ---- regions ----
     def regions(self) -> list[SearchRegion]:
         """The regions currently drawn, in the order they were added.
@@ -179,6 +189,7 @@ class RegionPanel(Qt.QWidget):
         self.view.addItem(roi)
         roi.sigRegionChangeFinished.connect(self._onRoiEdited)
         roi.sigRemoveRequested.connect(self._onRoiRemoved)
+        self._applyRoiLock(roi)
 
     def _detachRoi(self, roi: pg.ROI) -> None:
         Qt.disconnect(roi.sigRegionChangeFinished, self._onRoiEdited)
@@ -194,6 +205,66 @@ class RegionPanel(Qt.QWidget):
     def _onRoiRemoved(self, roi) -> None:
         self._detachRoi(roi)
         self.sigRegionsChanged.emit(self.regions())
+
+    # ---- editing gate ----
+    def setInteractionLocked(self, locked: bool) -> None:
+        """Disable editing while a run is in flight; the regions stay visible.
+
+        The operator watching a run must still see what is being surveyed, so
+        this is about editing, not about hiding.
+        """
+        self._runLocked = locked
+        self._applyLock()
+
+    def setSliceReady(self, ready: bool) -> None:
+        """Whether a slice exists for these regions to belong to.
+
+        New slice is what makes Area 1 usable, and the greyed-out controls are
+        how the operator is told that it is the first step.
+        """
+        self._sliceReady = ready
+        self._applyLock()
+
+    def setRunStatus(self, status: str) -> None:
+        """The bound run's last reported status.
+
+        Only "paused" matters here, and only the *emitted* status will do.
+        Orchestrator._checkPause() runs at the top of the run loop, before the
+        refill check, so a Pause clicked during a survey does not stop that
+        survey -- the producer goes on imaging tiles and reading regions for as
+        long as it takes, and the loop parks at the next iteration. But
+        sigStatus("paused") is emitted from inside _checkPause, immediately
+        before it blocks, so while that status is current the worker is parked
+        there and cannot be inside a refill. That is what makes editing safe.
+        """
+        self._runStatus = status
+        self._applyLock()
+
+    def _editable(self) -> bool:
+        if not self._sliceReady:
+            return False
+        return not self._runLocked or self._runStatus == "paused"
+
+    def _applyLock(self) -> None:
+        editable = self._editable()
+        self.addRegionBtn.setEnabled(editable)
+        self.shapeCombo.setEnabled(editable)
+        for roi in self._rois:
+            self._applyRoiLock(roi)
+
+    def _applyRoiLock(self, roi: pg.ROI) -> None:
+        """Make one ROI match the current gate.
+
+        Every affordance, not just the drag: leaving the handles live would let
+        a locked region be resized, and leaving `removable` on would let it be
+        deleted from the context menu.
+        """
+        editable = self._editable()
+        roi.translatable = editable
+        roi.resizable = editable
+        roi.removable = editable
+        for handle in roi.getHandles():
+            handle.setVisible(editable)
 
     # ---- view ----
     def regionShape(self) -> str:

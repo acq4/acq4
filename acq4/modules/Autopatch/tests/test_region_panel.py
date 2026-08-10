@@ -181,6 +181,7 @@ def test_the_shape_selector_reports_item_data_not_its_label(qapp):
 def test_the_add_region_button_asks_its_owner(qapp):
     # The panel does not know where the camera is pointing; the window does.
     panel = makePanel()
+    panel.setSliceReady(True)
     requests = []
     panel.sigAddRegionRequested.connect(lambda: requests.append(True))
 
@@ -209,3 +210,101 @@ def test_fit_to_regions_with_nothing_drawn_is_a_no_op(qapp):
     panel.fitToRegions()
 
     assert panel.view.viewRange() == before
+
+
+def test_a_panel_with_no_slice_cannot_be_drawn_on(qapp):
+    # New slice is what makes Area 1 usable, and greyed-out controls are how the
+    # operator is told so -- the same treatment Area 2 already gets.
+    panel = makePanel()
+
+    assert not panel.addRegionBtn.isEnabled()
+    assert not panel.shapeCombo.isEnabled()
+
+
+def test_a_slice_makes_the_controls_live(qapp):
+    panel = makePanel()
+    panel.setSliceReady(True)
+
+    assert panel.addRegionBtn.isEnabled()
+    assert panel.shapeCombo.isEnabled()
+
+
+def test_a_running_run_locks_editing(qapp):
+    # The regions parameterise a search already underway on the worker thread.
+    panel = makePanel()
+    panel.setSliceReady(True)
+    panel.setRegions([RECT])
+    panel.setInteractionLocked(True)
+    panel.setRunStatus("running")
+
+    assert not panel.addRegionBtn.isEnabled()
+    assert not panel._rois[0].translatable
+    assert not panel._rois[0].resizable
+    assert not panel._rois[0].removable
+
+
+def test_a_paused_run_unlocks_editing(qapp):
+    # The other side of the same invariant. A one-sided test on a two-sided
+    # invariant passes happily while the other side is broken -- which is how
+    # CellPanel's flush regressed in both directions across P2b's reviews.
+    panel = makePanel()
+    panel.setSliceReady(True)
+    panel.setRegions([RECT])
+    panel.setInteractionLocked(True)
+    panel.setRunStatus("running")
+    panel.setRunStatus("paused")
+
+    assert panel.addRegionBtn.isEnabled()
+    assert panel._rois[0].translatable
+    assert panel._rois[0].resizable
+    assert panel._rois[0].removable
+
+
+def test_surveying_locks_editing_even_though_pause_was_pressed(qapp):
+    # "surveying" is what a run reports while the producer images tiles, and a
+    # Pause pressed during one does not park the loop until that refill is done.
+    # Unlocking on anything short of the emitted "paused" would let an edit land
+    # while the producer is reading regions.
+    panel = makePanel()
+    panel.setSliceReady(True)
+    panel.setInteractionLocked(True)
+    panel.setRunStatus("surveying")
+
+    assert not panel.addRegionBtn.isEnabled()
+
+
+def test_resuming_from_paused_locks_editing_again(qapp):
+    panel = makePanel()
+    panel.setSliceReady(True)
+    panel.setRegions([RECT])
+    panel.setInteractionLocked(True)
+    panel.setRunStatus("paused")
+    panel.setRunStatus("running")
+
+    assert not panel.addRegionBtn.isEnabled()
+    assert not panel._rois[0].translatable
+
+
+def test_regions_drawn_while_locked_are_still_shown(qapp):
+    # Locking is about editing, not about hiding: the operator watching a run
+    # must still see what is being surveyed.
+    panel = makePanel()
+    panel.setSliceReady(True)
+    panel.setInteractionLocked(True)
+    panel.setRunStatus("running")
+    panel.setRegions([RECT, OTHER])
+
+    assert len(panel._rois) == 2
+    assert panel.regions() == [RECT, OTHER]
+
+
+def test_a_region_added_while_locked_is_locked_too(qapp):
+    # setRegions builds fresh ROIs, which default to editable; a gate applied
+    # only on the transition would leave them draggable mid-run.
+    panel = makePanel()
+    panel.setSliceReady(True)
+    panel.setInteractionLocked(True)
+    panel.setRunStatus("running")
+    panel.setRegions([RECT])
+
+    assert not panel._rois[0].translatable
