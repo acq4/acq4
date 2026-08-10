@@ -40,10 +40,21 @@ class PinnedFrameMirror:
         self.refresh()
 
     def unbind(self) -> None:
-        """Stop mirroring and take the copies out of the view."""
-        if self._source is not None:
-            Qt.disconnect(self._source.sigPinnedFramesChanged, self.refresh)
-            self._source = None
+        """Stop mirroring and take the copies out of the view.
+
+        Tolerant of a source Qt has already destroyed. pg.disconnect swallows
+        the RuntimeError a dead connection raises, but the signal is read off
+        the source before it can be handed to pg.disconnect at all, and that
+        read raises through a wrapper whose C++ object is gone. A raise here
+        would abandon the rest of AutopatchWindow.teardown(), leaving every
+        panel still wired to the orchestrator it had just stopped.
+        """
+        source, self._source = self._source, None
+        if source is not None:
+            try:
+                Qt.disconnect(source.sigPinnedFramesChanged, self.refresh)
+            except RuntimeError:
+                pass
         self._clearItems()
 
     def refresh(self) -> None:
@@ -59,6 +70,18 @@ class PinnedFrameMirror:
         for original in self._source.pinnedFrames:
             copy = pg.ImageItem(original.image)
             copy.setTransform(original.transform())
+            # A real pinned frame is built with its levels and lookup table
+            # spelled out (ImagingCtrl.pinCurrentFrame, Frame.imageItem), and an
+            # ImageItem given neither scales itself to its own contents. Copies
+            # left to do that would each pick their own scale, so adjacent
+            # frames in one mosaic would not match, and a 16-bit frame with a
+            # narrow range would render near-flat. Both are optional on the way
+            # in, so an absent one is left absent rather than invented.
+            levels = original.getLevels()
+            if levels is not None:
+                copy.setLevels(levels)
+            if original.lut is not None:
+                copy.setLookupTable(original.lut)
             # addItem() must run before setZValue(): ViewBox.addItem() raises
             # an incoming item's z-value to the view's own if the item's is
             # lower, which would clobber a pinned frame's deliberately

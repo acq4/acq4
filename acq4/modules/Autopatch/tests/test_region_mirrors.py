@@ -36,15 +36,21 @@ class FakeImagingCtrl(Qt.QObject):
         self.sigPinnedFramesChanged.emit()
 
 
-def makeFrameItem(value, x, y):
+def makeFrameItem(value, x, y, levels=None, lut=None):
     # Asymmetric image on purpose: a transposed copy of a square array is
     # indistinguishable from the original.
-    item = pg.ImageItem(np.full((4, 7), value, dtype=float))
+    item = pg.ImageItem(np.full((4, 7), value, dtype=float), levels=levels, lut=lut)
     transform = Qt.QTransform()
     transform.translate(x, y)
     transform.scale(1e-6, 2e-6)
     item.setTransform(transform)
     return item
+
+
+def makeLut():
+    """A lookup table like the one ImagingCtrl.pinCurrentFrame takes off the
+    contrast histogram."""
+    return np.repeat(np.arange(256, dtype=np.ubyte)[:, np.newaxis], 3, axis=1)
 
 
 def makeMirror():
@@ -91,8 +97,16 @@ def test_a_frame_unpinned_disappears(qapp):
 def test_the_mirrored_item_carries_the_same_pixels_and_placement(qapp):
     # A mirror that showed the right image in the wrong place would have the
     # operator draw regions over tissue that is somewhere else.
+    #
+    # Levels and lut are part of the placement problem, not a cosmetic
+    # preference: a real pinned frame is built with both spelled out
+    # (ImagingCtrl.pinCurrentFrame, Frame.imageItem), and an item given neither
+    # scales itself to its own contents. Every mirrored frame in a mosaic would
+    # then get its own independent auto-scale, and a 16-bit frame with a narrow
+    # range renders near-flat -- which is not a backdrop anyone can draw on.
+    lut = makeLut()
     source = FakeImagingCtrl()
-    original = makeFrameItem(3.0, 1e-3, 2e-3)
+    original = makeFrameItem(3.0, 1e-3, 2e-3, levels=(1.0, 9.0), lut=lut)
     source.pin(original)
     mirror, _view = makeMirror()
     mirror.bind(source)
@@ -101,6 +115,22 @@ def test_the_mirrored_item_carries_the_same_pixels_and_placement(qapp):
     assert np.array_equal(copy.image, original.image)
     assert copy.transform() == original.transform()
     assert copy.zValue() == original.zValue()
+    assert np.array_equal(copy.getLevels(), original.getLevels())
+    assert np.array_equal(copy.lut, lut)
+
+
+def test_a_frame_with_no_levels_or_lut_is_mirrored_anyway(qapp):
+    # Both are optional on the way in -- Frame.imageItem passes None for each
+    # when a frame carries no contrast info -- so copying them must not turn an
+    # absent one into a failure.
+    source = FakeImagingCtrl()
+    source.pin(makeFrameItem(3.0, 1e-3, 2e-3))
+    mirror, _view = makeMirror()
+
+    mirror.bind(source)
+
+    assert len(mirror.items) == 1
+    assert mirror.items[0].lut is None
 
 
 def test_the_mirrored_item_is_a_distinct_object_in_this_view(qapp):
@@ -161,6 +191,38 @@ def test_unbinding_disconnects_from_the_source_signal(qapp):
     mirror.unbind()
 
     assert source.receivers(source.sigPinnedFramesChanged) == 0
+
+
+class DeletedImagingCtrl:
+    """A source whose underlying C++ object Qt has already destroyed.
+
+    The Python wrapper outlives it and raises RuntimeError on every attribute
+    reached through it -- including the signal, which is why pg.disconnect
+    swallowing RuntimeError is not enough on its own: the signal has to be read
+    before it can be handed to pg.disconnect at all.
+
+    Written as a stand-in rather than by actually deleting a QObject so the test
+    says which behaviour it depends on, and does not depend on which Qt binding
+    acq4 was imported with.
+    """
+
+    @property
+    def sigPinnedFramesChanged(self):
+        raise RuntimeError("wrapped C/C++ object of type ImagingCtrl has been deleted")
+
+
+def test_unbinding_survives_a_source_whose_c_object_is_gone(qapp):
+    # unbind() is the first thing AutopatchWindow.teardown() reaches for, so a
+    # raise here would leave the orchestrator running and every panel still
+    # wired to it. An application shutdown that destroys the Camera module
+    # before Autopatch is an ordinary way to arrive here.
+    mirror, _view = makeMirror()
+    mirror._source = DeletedImagingCtrl()
+
+    mirror.unbind()
+
+    assert mirror._source is None
+    assert mirror.items == []
 
 
 def test_pinning_three_frames_preserves_their_relative_z_order(qapp):
