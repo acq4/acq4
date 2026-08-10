@@ -1,5 +1,5 @@
 """SearchPanel: Area 2's cell-finding config -- the search constraints that
-parameterise a cell producer, plus region seeding and a survey progress readout."""
+parameterise a cell producer, and a survey progress readout."""
 
 from __future__ import annotations
 
@@ -18,18 +18,16 @@ _CELLS_PER_NL_TO_M3 = 1e12
 
 
 class SearchPanel(Qt.QWidget):
-    """The four Area 2 search constraints, a region-seeding button, and a readout.
+    """The four Area 2 search constraints and a survey progress readout.
 
     Emits `sigConstraintsChanged` with a fresh SearchConstraints on every edit,
     or with None when the widget values do not describe a valid search (an
     operator dragging a spinbox passes through invalid intermediate values, and
-    that must not raise on the GUI thread). Region *graphics* are not this
-    panel's job: it asks its owner to seed a region and shows how much of the
-    result has been surveyed.
+    that must not raise on the GUI thread). Regions belong to Area 1; this panel
+    only reports how much of the result has been surveyed.
     """
 
     sigConstraintsChanged = Qt.Signal(object)  # SearchConstraints, or None if invalid
-    sigAddRegionRequested = Qt.Signal()
 
     def __init__(self):
         super().__init__()
@@ -90,22 +88,6 @@ class SearchPanel(Qt.QWidget):
         self.rescansCheck = Qt.QCheckBox("Rescans allowed")
         self.rescansCheck.setChecked(defaults.rescans_allowed)
 
-        # Item data, not display text, is what regionShape() returns: the window
-        # maps it to a region class, and a label is a label.
-        self.shapeCombo = Qt.QComboBox()
-        for label, key in (("Rectangle", "rect"), ("Ellipse", "ellipse")):
-            self.shapeCombo.addItem(label, key)
-        self.shapeCombo.setToolTip(
-            'The shape "Add region here" seeds. An ellipse is inscribed in the '
-            "same 3x3-field box as the rectangle, so it searches the rounded "
-            "middle and skips the corners."
-        )
-
-        self.addRegionBtn = Qt.QPushButton("Add region here")
-        self.addRegionBtn.setToolTip(
-            "Add a search region covering roughly 3x3 fields of view around the "
-            "camera's current center."
-        )
         self.surveyLabel = Qt.QLabel("no region")
         self.errorLabel = Qt.QLabel("")
         self.errorLabel.setStyleSheet("color: red;")
@@ -115,12 +97,10 @@ class SearchPanel(Qt.QWidget):
         form.addRow("Depth from surface, far", self.farDepthSpin)
         form.addRow("Minimum health", self.minHealthSpin)
         form.addRow("Maximum cell density", self.maxDensitySpin)
-        form.addRow("Region shape", self.shapeCombo)
 
         layout = Qt.QVBoxLayout()
         layout.addLayout(form)
         layout.addWidget(self.rescansCheck)
-        layout.addWidget(self.addRegionBtn)
         layout.addWidget(self.surveyLabel)
         layout.addWidget(self.errorLabel)
         self.setLayout(layout)
@@ -133,7 +113,6 @@ class SearchPanel(Qt.QWidget):
         ):
             spin.valueChanged.connect(self._onEdited)
         self.rescansCheck.toggled.connect(self._onEdited)
-        self.addRegionBtn.clicked.connect(self.sigAddRegionRequested)
 
         self._applyLock()
 
@@ -175,10 +154,6 @@ class SearchPanel(Qt.QWidget):
         self._constraintError = ""
         self._showError()
         return constraints
-
-    def regionShape(self) -> str:
-        """The shape key for the next seeded region: "rect" or "ellipse"."""
-        return self.shapeCombo.currentData()
 
     def setError(self, message: str) -> None:
         """Show a message from this panel's owner on the panel's error line.
@@ -238,7 +213,5 @@ class SearchPanel(Qt.QWidget):
             self.minHealthSpin,
             self.maxDensitySpin,
             self.rescansCheck,
-            self.addRegionBtn,
-            self.shapeCombo,
         ):
             w.setEnabled(not locked)

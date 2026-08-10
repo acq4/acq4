@@ -686,14 +686,13 @@ def test_add_region_here_without_a_slice_starts_one(qapp, tmp_path):
     assert len(win.slice.tileGrid()) > 1
 
 
-def test_add_region_here_builds_the_shape_area_2_selects(qapp, tmp_path):
-    # Until Area 1 can draw ROIs, this selector is the only way to seed a
-    # non-rectangular region, so the button has to read it rather than always
-    # building a rectangle.
+def test_add_region_here_builds_the_shape_area_1_selects(qapp, tmp_path):
+    # The button has to read the selector rather than always building a
+    # rectangle.
     win = _makeWindow(tmp_path)
     win.newSlice()
-    win.searchPanel.shapeCombo.setCurrentIndex(
-        win.searchPanel.shapeCombo.findData("ellipse")
+    win.regionPanel.shapeCombo.setCurrentIndex(
+        win.regionPanel.shapeCombo.findData("ellipse")
     )
 
     win.addRegionHere()
@@ -1420,9 +1419,9 @@ def test_add_region_here_does_not_create_a_directory(win):
 
 
 def test_area_2_is_locked_until_a_slice_exists(win):
-    assert not win.searchPanel.addRegionBtn.isEnabled()
+    assert not win.searchPanel.nearDepthSpin.isEnabled()
     win.newSlice()
-    assert win.searchPanel.addRegionBtn.isEnabled()
+    assert win.searchPanel.nearDepthSpin.isEnabled()
 
 
 def test_a_run_in_flight_locks_area_5s_reuse_button(qapp, tmp_path):
@@ -1535,3 +1534,162 @@ def test_reused_cells_run_a_second_protocol_as_the_same_objects(qapp, tmp_path):
         assert win.cellPanel.isAttempted(cell) is True
     finally:
         win.teardown()
+
+
+def test_a_new_slice_leaves_area_1_empty_and_live(win):
+    # A Slice is fresh tissue with no regions, and Area 1 has to say so: an
+    # outline left from the last slice is a coordinate the operator might trust.
+    win.addRegionHere()
+    assert win.regionPanel.regions()
+
+    win.newSlice()
+
+    assert win.regionPanel.regions() == []
+    assert win.regionPanel.addRegionBtn.isEnabled()
+
+
+def test_seeding_a_region_draws_it_in_area_1(win):
+    win.addRegionHere()
+
+    assert len(win.regionPanel.regions()) == 1
+    assert win.regionPanel.regions() == win.slice.regions
+
+
+def test_add_region_here_seeds_a_polygon_when_area_1_asks_for_one(win):
+    # PolygonRegion has had no control able to produce it since P2c-1.
+    from acq4.experiment.search_region import PolygonRegion
+
+    win.newSlice()
+    win.regionPanel.shapeCombo.setCurrentIndex(
+        win.regionPanel.shapeCombo.findData("polygon")
+    )
+
+    win.addRegionHere()
+
+    region = win.slice.regions[0]
+    assert isinstance(region, PolygonRegion)
+    # Four corners of the same 3x3-field box the other two shapes get, so the
+    # button places a region of a known size whichever shape is selected.
+    assert len(region.vertices) == 4
+    assert len(win.slice.tileGrid()) > 1
+
+
+def test_editing_a_region_in_area_1_reaches_the_slice(win):
+    win.newSlice()
+    edited = RectRegion(1.0e-3, 2.0e-3, 1.4e-3, 2.1e-3)
+
+    win.regionPanel.sigRegionsChanged.emit([edited])
+
+    assert win.slice.regions == [edited]
+
+
+def test_editing_a_region_refreshes_the_survey_readout(win):
+    # The readout counts tiles over the regions, so an edit that did not refresh
+    # it would go on reporting the survey's size for a region that is gone.
+    win.newSlice()
+    win.addRegionHere()
+    before = win.searchPanel.surveyLabel.text()
+
+    win.regionPanel.sigRegionsChanged.emit(
+        [RectRegion(1.0e-3, 2.0e-3, 1.4e-3, 2.1e-3)]
+    )
+
+    assert win.searchPanel.surveyLabel.text() != before
+
+
+def test_a_region_edit_with_no_slice_is_ignored(win):
+    # Area 1's controls are gated on a slice existing, but a signal is not a
+    # permission check, and a traceback on the GUI thread is not a second line
+    # of defence.
+    assert win.slice is None
+
+    win.regionPanel.sigRegionsChanged.emit([])
+
+    assert win.slice is None
+
+
+def test_area_1_is_locked_until_a_slice_exists(win):
+    assert not win.regionPanel.addRegionBtn.isEnabled()
+
+    win.newSlice()
+
+    assert win.regionPanel.addRegionBtn.isEnabled()
+
+
+def test_a_running_run_locks_area_1(win):
+    win.newSlice()
+
+    win.statusPanel.sigInteractionLocked.emit(True)
+    win.statusPanel.sigStatusChanged.emit("running")
+
+    assert not win.regionPanel.addRegionBtn.isEnabled()
+
+
+def test_a_paused_run_unlocks_area_1(win):
+    # The other side of the gate, wired through the same two window-level
+    # connections rather than by calling the panel directly.
+    win.newSlice()
+    win.statusPanel.sigInteractionLocked.emit(True)
+    win.statusPanel.sigStatusChanged.emit("running")
+
+    win.statusPanel.sigStatusChanged.emit("paused")
+
+    assert win.regionPanel.addRegionBtn.isEnabled()
+
+
+def test_the_mirror_checkbox_drives_the_camera_mirror(win):
+    win.newSlice()
+    win.addRegionHere()
+
+    win.regionPanel.mirrorCheck.setChecked(True)
+
+    assert win._cameraMirror._enabled
+    assert win._cameraMirror._regions == win.slice.regions
+
+
+def test_teardown_takes_the_mirrored_outlines_out_of_the_camera_window(win):
+    # A camera window has to be supplied for this to test anything: _FakeManager
+    # has no Camera module, so _cameraWindow() returns None and the mirror holds
+    # nothing whether or not teardown clears it. Asserting an empty list against
+    # a mirror that was never able to draw is asserting a default.
+    drawn = []
+    fakeCameraWindow = SimpleNamespace(
+        addItem=lambda item, **kwds: drawn.append(item),
+        removeItem=drawn.remove,
+    )
+    win._cameraMirror._cameraWindow = lambda: fakeCameraWindow
+    win.newSlice()
+    win.addRegionHere()
+    win.regionPanel.mirrorCheck.setChecked(True)
+    assert drawn, "nothing was mirrored, so teardown has nothing to prove"
+
+    win.teardown()
+
+    assert drawn == []
+
+
+def test_the_camera_window_getter_finds_a_loaded_camera_module(win):
+    cameraWindow = SimpleNamespace()
+    win.manager.listModules = lambda: ["Camera", "Data Manager"]
+    win.manager.getModule = lambda name: SimpleNamespace(window=lambda: cameraWindow)
+
+    assert win._cameraWindow() is cameraWindow
+
+
+def test_the_camera_window_getter_does_not_load_the_camera_module(win):
+    # Manager.getModule loads a module that is not already open, and this getter
+    # is called on every mirror redraw -- including from "Add region here". A
+    # button that adds a region must not also start the Camera module, and the
+    # window it would hand back is a different instance from the one any
+    # already-drawn outline belongs to.
+    loaded = []
+
+    def getModule(name):
+        loaded.append(name)
+        return SimpleNamespace(window=SimpleNamespace)
+
+    win.manager.listModules = lambda: ["Data Manager"]
+    win.manager.getModule = getModule
+
+    assert win._cameraWindow() is None
+    assert loaded == []

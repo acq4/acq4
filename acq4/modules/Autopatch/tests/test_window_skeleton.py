@@ -94,19 +94,25 @@ def test_default_pipette_selector_is_built_for_the_patchpipette_interface(qapp, 
 
 def test_areas_are_arranged_in_two_columns(qapp, tmp_path):
     """Left column (top->bottom): Area 1, Area 2. Right column (top->bottom):
-    Area 3, Area 4, Area 5."""
+    Area 3, Area 4, Area 5.
+
+    The left column is a splitter rather than a plain box layout, so that the
+    operator can give Area 1's view of the slice as much of the window as
+    drawing a region over tissue needs.
+    """
     win = _makeWindow(tmp_path)
 
     outer = win.layout()
     assert isinstance(outer, Qt.QHBoxLayout)
     assert outer.count() == 2
 
-    leftCol = outer.itemAt(0).layout()
-    rightCol = outer.itemAt(1).layout()
+    leftCol = outer.itemAt(0).widget()
+    rightCol = outer.itemAt(1).widget().layout()
 
+    assert isinstance(leftCol, Qt.QSplitter)
     assert leftCol.count() == 2
-    assert leftCol.itemAt(0).widget() is win.area1Box
-    assert leftCol.itemAt(1).widget() is win.area2Box
+    assert leftCol.widget(0) is win.area1Box
+    assert leftCol.widget(1) is win.area2Box
 
     assert rightCol.count() == 3
     assert rightCol.itemAt(0).widget() is win.area3Box

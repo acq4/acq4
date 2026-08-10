@@ -2,12 +2,13 @@
 orchestration engine (acq4/experiment/). See autopatch-orchestration-design.md."""
 from __future__ import annotations
 
+import functools
 import os
 
 from acq4.experiment.actions.prompt import prompt
 from acq4.experiment.actions.storage import create_data_dir
 from acq4.experiment.orchestrator import Orchestrator
-from acq4.experiment.search_region import EllipseRegion, RectRegion
+from acq4.experiment.search_region import EllipseRegion, PolygonRegion, RectRegion
 from acq4.experiment.slice import Slice
 from acq4.experiment.tile_detector import make_tile_detector
 from acq4.modules.Module import Module
@@ -19,6 +20,8 @@ from .cell_panel import CellPanel
 from .context_factory import make_context_factory
 from .example_protocols import install_example_protocols
 from .protocol_panel import ProtocolPanel
+from .region_mirrors import CameraMirror, PinnedFrameMirror
+from .region_panel import RegionPanel
 from .search_panel import SearchPanel
 from .status_panel import StatusPanel
 
@@ -52,18 +55,26 @@ class AutopatchWindow(Qt.QWidget):
         for box in (self.area1Box, self.area2Box, self.area3Box, self.area4Box, self.area5Box):
             box.setLayout(Qt.QVBoxLayout())
 
-        leftCol = Qt.QVBoxLayout()
+        # A splitter, not a fixed box layout: Area 1 is a view of a whole slice,
+        # and drawing a region in a strip the operator cannot enlarge is an
+        # exercise in patience.
+        leftCol = Qt.QSplitter(Qt.Qt.Vertical)
         leftCol.addWidget(self.area1Box)
         leftCol.addWidget(self.area2Box)
+        # Area 1 is the view; Area 2 is four spin boxes and a readout.
+        leftCol.setStretchFactor(0, 3)
+        leftCol.setStretchFactor(1, 1)
 
         rightCol = Qt.QVBoxLayout()
         rightCol.addWidget(self.area3Box)
         rightCol.addWidget(self.area4Box)
         rightCol.addWidget(self.area5Box)
+        rightColWidget = Qt.QWidget()
+        rightColWidget.setLayout(rightCol)
 
         outer = Qt.QHBoxLayout()
-        outer.addLayout(leftCol)
-        outer.addLayout(rightCol)
+        outer.addWidget(leftCol, 2)
+        outer.addWidget(rightColWidget, 1)
         self.setLayout(outer)
 
         if protocolDir is None:
@@ -94,14 +105,24 @@ class AutopatchWindow(Qt.QWidget):
         self.statusPanel = StatusPanel()
         self.area3Box.layout().addWidget(self.statusPanel)
 
-        # Area 1 holds only New slice: region graphics and the progress heatmap
-        # are Area 1's remaining content and are not built here.
         self.newSliceBtn = Qt.QPushButton("New slice")
         self.newSliceBtn.setToolTip(
             "Discard the current slice -- its regions, coverage, and queued "
             "cells -- and start a fresh one for newly mounted tissue."
         )
+        self.regionPanel = RegionPanel()
         self.area1Box.layout().addWidget(self.newSliceBtn)
+        self.area1Box.layout().addWidget(self.regionPanel)
+
+        self._pinnedFrameMirror = PinnedFrameMirror(self.regionPanel.view)
+        # The getter is closed over the manager alone, never over this window:
+        # the mirror is reachable both from here and from mirrorCheck's
+        # connection to it below, so a getter that held the window would close a
+        # reference cycle -- the kind teardown() exists to keep out of this
+        # window, and which no amount of tearing down afterwards can undo.
+        self._cameraMirror = CameraMirror(
+            functools.partial(self._cameraModuleWindow, self.manager)
+        )
 
         self.searchPanel = SearchPanel()
         self.area2Box.layout().addWidget(self.searchPanel)
@@ -140,11 +161,17 @@ class AutopatchWindow(Qt.QWidget):
         # elsewhere are careful to avoid.
         self.statusPanel.sigInteractionLocked.connect(self.protocolPanel.setInteractionLocked)
         self.newSliceBtn.clicked.connect(self.newSlice)
-        self.searchPanel.sigAddRegionRequested.connect(self.addRegionHere)
+        self.regionPanel.sigAddRegionRequested.connect(self.addRegionHere)
+        self.regionPanel.sigRegionsChanged.connect(self._onRegionsEdited)
+        self.regionPanel.mirrorCheck.toggled.connect(self._cameraMirror.setEnabled)
         self.searchPanel.sigConstraintsChanged.connect(self._onConstraintsChanged)
         self.statusPanel.sigInteractionLocked.connect(
             self.searchPanel.setInteractionLocked
         )
+        self.statusPanel.sigInteractionLocked.connect(
+            self.regionPanel.setInteractionLocked
+        )
+        self.statusPanel.sigStatusChanged.connect(self.regionPanel.setRunStatus)
         self.statusPanel.sigInteractionLocked.connect(
             self.cellPanel.setInteractionLocked
         )
@@ -168,6 +195,56 @@ class AutopatchWindow(Qt.QWidget):
         # window and presses Start immediately still gets a run.
         if self.protocolPanel.protocolFile is not None:
             self._onProtocolLoaded(self.protocolPanel.protocolFile)
+
+    @staticmethod
+    def _cameraModuleWindow(manager):
+        """The Camera module's window under `manager`, or None if there is none.
+
+        Not having one is ordinary -- a rig with the module unloaded, or a
+        headless test -- and both mirrors treat it as nothing to do rather than
+        as a failure.
+
+        Asked of the loaded modules rather than of Manager.getModule alone,
+        which loads a module that is not already open: this is reached from
+        every mirror redraw, including the one behind "Add region here", and a
+        button that adds a region must not also start the Camera module.
+
+        Static, taking the manager as an argument, so that the Camera mirror can
+        be handed a getter that holds no reference to this window -- see where
+        it is constructed.
+        """
+        if manager is None:
+            return None
+        try:
+            if "Camera" not in manager.listModules():
+                return None
+            return manager.getModule("Camera").window()
+        except Exception:
+            return None
+
+    def _cameraWindow(self):
+        """The Camera module's window, or None if there is not one."""
+        return self._cameraModuleWindow(self.manager)
+
+    def _onRegionsEdited(self, regions) -> None:
+        """Take Area 1's edited region list as the slice's regions.
+
+        A wholesale swap, which is what makes this safe to do while a producer
+        may be reading regions on the worker thread (see Slice.setRegions).
+
+        A signal is not a permission check: Area 1's controls are gated on a
+        slice existing, but arriving here without one must not raise on the GUI
+        thread.
+
+        Area 1 is deliberately not redrawn from here: this arrives *from* the
+        panel, and RegionPanel.setRegions() rebuilds every ROI, which would
+        discard the very handle the operator is holding.
+        """
+        if self.slice is None:
+            return
+        self.slice.setRegions(regions)
+        self._cameraMirror.setRegions(regions)
+        self._refreshSurveyStats()
 
     def _canStartSlice(self) -> bool:
         """Whether the camera and search constraints currently support
@@ -213,9 +290,31 @@ class AutopatchWindow(Qt.QWidget):
             fov=self._cameraFov(camera), constraints=constraints, dirHandle=dirHandle
         )
         self.searchPanel.setSliceReady(True)
+        self.regionPanel.setSliceReady(True)
+        # A fresh Slice has no regions, and an outline left from the last one is
+        # a coordinate on tissue that may no longer be there.
+        self.regionPanel.setRegions([])
+        self._cameraMirror.setRegions([])
+        self._bindPinnedFrames(camera)
         # There is a camera now, so retract the message above if it is up.
         self.searchPanel.setError("")
         return True
+
+    def _bindPinnedFrames(self, camera) -> None:
+        """Mirror `camera`'s pinned frames into Area 1's view.
+
+        Bound here rather than at construction because this is the first point
+        at which a camera is known to be selected, and both routes into a slice
+        pass through it.
+        """
+        window = self._cameraWindow()
+        if window is None:
+            return
+        try:
+            imagingCtrl = window.getInterfaceForDevice(camera.name()).imagingCtrl
+        except (KeyError, AttributeError):
+            return
+        self._pinnedFrameMirror.bind(imagingCtrl)
 
     def newSlice(self) -> None:
         """Start a fresh slice, discarding the current one and everything on it.
@@ -296,7 +395,7 @@ class AutopatchWindow(Qt.QWidget):
         to hold it. Built directly rather than by way of newSlice(): that is the
         discard-everything path, and an operator who seeded cells by hand and
         then asked only for a region must not lose them. The shape seeded is
-        whichever one Area 2's selector currently has picked.
+        whichever one Area 1's selector currently has picked.
         """
         if self.slice is None and not self._startSlice():
             return
@@ -309,17 +408,23 @@ class AutopatchWindow(Qt.QWidget):
         # off-center for a cropped camera ROI.
         cx, cy = camera.globalCenterPosition("roi")[:2]
         w, h = fov_w * 3, fov_h * 3
-        # Area 2 owns the shape; this button owns the placement. An ellipse is
+        # Area 1 owns the shape; this button owns the placement. An ellipse is
         # inscribed in the same box, so both shapes cover the same 3x3 fields and
         # only the corners differ.
-        regionClass = (
-            EllipseRegion
-            if self.searchPanel.regionShape() == "ellipse"
-            else RectRegion
-        )
-        self.slice.addRegion(
-            regionClass(cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2)
-        )
+        shape = self.regionPanel.regionShape()
+        x0, y0, x1, y1 = cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2
+        if shape == "polygon":
+            # The same box, as a polygon: the button places a region of a known
+            # size, and the shape selector says what kind. A four-vertex seed is
+            # also the readiest thing to reshape into the outline actually
+            # wanted, which is the point of choosing polygon at all.
+            region = PolygonRegion(((x0, y0), (x1, y0), (x1, y1), (x0, y1)))
+        else:
+            regionClass = EllipseRegion if shape == "ellipse" else RectRegion
+            region = regionClass(x0, y0, x1, y1)
+        self.slice.addRegion(region)
+        self.regionPanel.setRegions(self.slice.regions)
+        self._cameraMirror.setRegions(self.slice.regions)
         self._refreshSurveyStats()
 
     @staticmethod
@@ -516,6 +621,11 @@ class AutopatchWindow(Qt.QWidget):
         orchestrator and severs every one of those connections up front, so the
         remaining objects are plain refcounted and go away immediately.
 
+        Also releases Area 1's two mirrors, whose items and signal connection
+        live in the *Camera* module's window and imaging control -- objects that
+        outlive this window, and would otherwise be left holding graphics
+        belonging to a session that has ended.
+
         Idempotent: safe to call more than once (e.g. once explicitly from
         Autopatch.quit() and again via closeEvent() when the operator closes
         the window directly).
@@ -523,6 +633,8 @@ class AutopatchWindow(Qt.QWidget):
         if self._tornDown:
             return
         self._tornDown = True
+        self._pinnedFrameMirror.unbind()
+        self._cameraMirror.clear()
         if self.orchestrator is not None:
             self._stopAndReleaseOrchestrator(self.orchestrator)
         self.statusPanel.unbindOrchestrator()
