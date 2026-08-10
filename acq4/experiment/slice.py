@@ -114,6 +114,19 @@ class Slice:
         """The search regions, as a copy: mutating the result changes nothing."""
         return list(self._regions)
 
+    def setRegions(self, regions) -> None:
+        """Replace the regions to survey, in one step. Coverage is untouched.
+
+        Rebinding the attribute rather than mutating the list is what makes this
+        safe to call from the GUI thread while a producer is reading regions on
+        the worker thread: `tileGrid()` binds its loop to whichever list object
+        was current when it started, so a reader sees either the whole old set
+        or the whole new one and never a list changing under its own iteration.
+        The same "make it one step" discipline `Orchestrator._refillQueue`
+        applies to the producer reference.
+        """
+        self._regions = list(regions)
+
     def addRegion(self, region: SearchRegion) -> None:
         """Add a shape to survey, in global coordinates. Coverage is untouched.
 
@@ -122,7 +135,7 @@ class Slice:
         searching, is the ordinary reason to outline a region at all. A rectangle
         is `RectRegion(x0, y0, x1, y1)`.
         """
-        self._regions.append(region)
+        self.setRegions(self._regions + [region])
 
     # ---- tiles and coverage ----
     @property
@@ -156,7 +169,9 @@ class Slice:
         """
         grid: list[tuple[float, float]] = []
         fov_w, fov_h = self._fov
-        for region in self._regions:
+        # Bound once: setRegions() can land from the GUI thread while this runs.
+        regions = self._regions
+        for region in regions:
             x0, y0, x1, y1 = region.bounds()
             planned = plan_grid(x0, y0, x1, y1, fov_w, fov_h, self._overlap)
             grid.extend(c for c in planned if region.overlapsTile(c, self._fov))
@@ -219,7 +234,8 @@ class Slice:
         # the overlap question. Narrowing to a plain (x, y) tuple also lets
         # this accept a coorx.Point, a Cell.position, or a bare tuple alike.
         xy = (position[0], position[1])
-        here = [r for r in self._regions if r.overlapsTile(xy, self._fov)]
+        regions = self._regions
+        here = [r for r in regions if r.overlapsTile(xy, self._fov)]
         if not here:
             return 0
         stale = [

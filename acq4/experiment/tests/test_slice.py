@@ -8,7 +8,12 @@ import coorx
 import pytest
 
 from acq4.experiment.search_grid import plan_grid
-from acq4.experiment.search_region import EllipseRegion, PolygonRegion, RectRegion
+from acq4.experiment.search_region import (
+    EllipseRegion,
+    PolygonRegion,
+    RectRegion,
+    SearchRegion,
+)
 from acq4.experiment.slice import SearchConstraints, Slice
 
 
@@ -548,4 +553,82 @@ def test_force_rescan_uncovers_every_overlapping_region():
     s.forceRescan((1e-3 + 30e-6, 2e-3 + 15e-6), lambda cell: False)
 
     assert s.coveredTiles == []
+
+
+class _EditsTheSliceMidScan(SearchRegion):
+    """A region that replaces its slice's region list from inside the tiler's
+    own iteration -- what a GUI-thread setRegions() landing in the middle of a
+    worker-thread tileGrid() does.
+
+    Deterministic on purpose: driving this with real threads would reproduce the
+    hazard only sometimes, and a test that fails one run in fifty is not a test.
+    """
+
+    def __init__(self, slice_, replacement):
+        self._slice = slice_
+        self._replacement = replacement
+        self.calls = 0
+
+    def bounds(self):
+        return (0.0, 0.0, 400e-6, 200e-6)
+
+    def overlapsTile(self, center, fov):
+        self.calls += 1
+        if self.calls == 1:
+            self._slice.setRegions(self._replacement)
+        return True
+
+
+def test_an_edit_during_tilegrid_does_not_drop_the_regions_behind_it():
+    # The whole point of the swap. With the list mutated in place instead, the
+    # for-loop's index walks off the end of a shortened list and every region
+    # after the one being scanned is silently dropped from the survey.
+    sl = Slice(fov=(100e-6, 50e-6))
+    later = RectRegion(1e-3, 1e-3, 1.4e-3, 1.2e-3)
+    mutator = _EditsTheSliceMidScan(sl, [])
+    sl.setRegions([mutator, later])
+
+    grid = sl.tileGrid()
+
+    laterTiles = [c for c in grid if c[0] > 0.5e-3]
+    assert laterTiles, "the region after the edited one was dropped mid-scan"
+
+
+def test_the_edit_itself_takes_effect_on_the_next_call():
+    # The swap must not be a no-op in the other direction: the point of editing
+    # regions is that the next tile the producer asks for reflects the edit.
+    sl = Slice(fov=(100e-6, 50e-6))
+    mutator = _EditsTheSliceMidScan(sl, [])
+    sl.setRegions([mutator, RectRegion(1e-3, 1e-3, 1.4e-3, 1.2e-3)])
+    sl.tileGrid()
+
+    assert sl.regions == []
+    assert sl.tileGrid() == []
+
+
+def test_setregions_copies_so_the_callers_list_is_not_live():
+    # The panel hands over a list it goes on mutating as the operator draws.
+    sl = Slice(fov=(100e-6, 50e-6))
+    handed = [RectRegion(0.0, 0.0, 400e-6, 200e-6)]
+    sl.setRegions(handed)
+    handed.append(RectRegion(1e-3, 1e-3, 1.4e-3, 1.2e-3))
+
+    assert len(sl.regions) == 1
+
+
+def test_deleting_a_region_leaves_coverage_alone():
+    # Coverage records ground already imaged, not ground still wanted. Pruning
+    # it when a region goes away would make a region redrawn over surveyed
+    # tissue re-image it, and coverage is shared by every producer this slice
+    # makes -- it is not a per-region tally.
+    sl = Slice(fov=(100e-6, 50e-6))
+    sl.setRegions([RectRegion(0.0, 0.0, 400e-6, 200e-6)])
+    covered = sl.tileGrid()[0]
+    sl.markCovered(covered)
+
+    sl.setRegions([])
+
+    assert sl.tileGrid() == []
+    sl.setRegions([RectRegion(0.0, 0.0, 400e-6, 200e-6)])
+    assert sl.nextTile() != covered
 
