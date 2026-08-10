@@ -2,11 +2,15 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Give the Autopatch module an Area 1 view where the operator sees the Camera module's pinned frames, draws and edits search regions over them in three shapes, and optionally mirrors those regions into the Camera window.
+**Goal:** Give the Autopatch module an Area 1 view where the operator sees the Camera module's pinned frames, seeds and edits search regions over them in three shapes, and optionally mirrors those regions into the Camera window.
+
+**Take pyqtgraph's tools as they come.** Region creation follows the pattern acq4's own Camera module already uses (`ROIPlotter._addRectROI`/`_addEllipseROI`/`_addPolygonROI`, `CameraWindow.py:509`): a shape control seeds an ROI at a known size and position, and the operator drags, resizes, and reshapes it with pyqtgraph's stock handles. `pg.PolyLineROI` already inserts a vertex where an edge is clicked (`segmentClicked`) and removes handles individually, so outlining a cortical layer needs no code of ours. pyqtgraph offers no drag-out-a-new-ROI gesture and neither does acq4; do not build one. The single deliberate departure is documented in Task 2.
 
 **Architecture:** A new `RegionPanel` owns a `pg.GraphicsView`/`pg.ViewBox` in global metres and renders a list of `SearchRegion` objects as pyqtgraph ROIs, emitting the whole list back on any edit. `AutopatchWindow` is the only thing that knows about both the panel and the `Slice`, and pushes edits into `Slice.setRegions()` — a wholesale list swap, because the cell producer reads regions on the worker thread. Two one-way mirrors (Camera pinned frames in, region outlines out) are display-only objects with no state of their own.
 
-**Tech Stack:** Python 3.12, PyQt via `acq4.util.Qt`, pyqtgraph (local checkout at `/home/martin/src/acq4/pyqtgraph`), pytest.
+**Tech Stack:** Python 3.12, PyQt via `acq4.util.Qt`, pyqtgraph, pytest.
+
+> **Which pyqtgraph runs:** the `acq4-gl` environment imports pyqtgraph from `site-packages`, *not* from the checkout at `/home/martin/src/acq4/pyqtgraph`. Read the checkout for source if you like, but verify behaviour against the interpreter.
 
 **Spec:** `docs/superpowers/specs/2026-08-10-autopatch-area1-region-graphics-design.md`
 
@@ -27,11 +31,10 @@
 
 | path | responsibility |
 |---|---|
-| `acq4/modules/Autopatch/region_panel.py` | `RegionPanel` widget, the shape↔ROI adapters, and `_DrawingViewBox`. |
+| `acq4/modules/Autopatch/region_panel.py` | `RegionPanel` widget and the shape↔ROI adapters. |
 | `acq4/modules/Autopatch/region_mirrors.py` | `PinnedFrameMirror` (Camera→Autopatch) and `CameraMirror` (Autopatch→Camera). Display only, no region state. |
 | `acq4/modules/Autopatch/tests/test_region_adapters.py` | Shape↔ROI round-trips. |
 | `acq4/modules/Autopatch/tests/test_region_panel.py` | Panel rendering, edit signals, gating. |
-| `acq4/modules/Autopatch/tests/test_region_drawing.py` | The draw state machine. |
 | `acq4/modules/Autopatch/tests/test_region_mirrors.py` | Both mirrors, including teardown. |
 
 **Modified:**
@@ -241,11 +244,11 @@ MSG
 - Consumes: `acq4.experiment.search_region.{SearchRegion, RectRegion, EllipseRegion, PolygonRegion}`.
 - Produces:
   - `roiForRegion(region: SearchRegion) -> pg.ROI`
-  - `regionForRoi(roi: pg.ROI) -> SearchRegion`
+  - `regionForRoi(roi: pg.ROI) -> SearchRegion | None` — `None` when the ROI has been dragged into a shape that is not a region
   - `REGION_PEN` — the pen every region ROI draws with.
   - `_AxisAlignedEllipseROI(pg.EllipseROI)`
 
-**Why the ellipse subclass:** `pg.EllipseROI._addHandles` adds a **rotate** handle. `EllipseRegion` is an ellipse inscribed in an axis-aligned box, so a rotated ROI maps back to a region that silently ignores the rotation — the operator would draw one thing and survey another.
+**Why the ellipse subclass — the one place a stock tool is inadequate.** `pg.EllipseROI._addHandles` adds a **rotate** handle. `EllipseRegion` is an ellipse inscribed in an axis-aligned box, so a rotated ROI maps back to a region with the rotation silently dropped: the operator outlines one patch of tissue and the survey tiles another. `ROIPlotter._addEllipseROI` uses the stock class quite correctly, because it only reads the pixels under the ROI and a rotation changes which pixels those are. Here the ROI has to survive a round trip through a shape that cannot express rotation, so the handle has to go. Everything else — `pg.RectROI`, `pg.PolyLineROI`, their handles, their `removable=True` context menu, the `ViewBox`'s pan and zoom — is used exactly as shipped.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -329,6 +332,44 @@ def test_a_roi_dragged_past_its_own_origin_still_makes_a_region(qapp):
     assert regionForRoi(roi) == RECT
 
 
+@pytest.mark.parametrize("size", [(0.0, 0.1e-3), (0.4e-3, 0.0), (0.0, 0.0)])
+def test_an_roi_squashed_flat_reports_no_region(qapp, size):
+    # A pg.RectROI can be dragged to zero extent, and SearchRegion raises on
+    # that. Raising here would surface as a traceback on the GUI thread from
+    # inside a signal handler, mid-drag. One case per axis: a check that only
+    # looks at width passes a test that only squashes height.
+    from acq4.modules.Autopatch.region_panel import regionForRoi, roiForRegion
+
+    roi = roiForRegion(RECT)
+    roi.setSize(size)
+
+    assert regionForRoi(roi) is None
+
+
+@pytest.mark.parametrize(
+    "points",
+    [
+        # Three vertices on a line: a bounding box with no extent in one axis.
+        [[1.0e-3, 2.0e-3], [1.2e-3, 2.0e-3], [1.4e-3, 2.0e-3]],
+        # Two vertices left after the operator removes handles from a triangle.
+        [[1.0e-3, 2.0e-3], [1.4e-3, 2.02e-3]],
+    ],
+)
+def test_a_polygon_with_no_area_reports_no_region(qapp, points):
+    # The polygon equivalents of a squashed box. Built by construction rather
+    # than by calling roi.setPoints() on a triangle: setPoints() reaches
+    # clearPoints() -> removeHandle() -> removeSegment(), which calls
+    # self.scene().removeItem() and raises AttributeError on an ROI that is not
+    # in a scene. Constructing is the path with no such requirement.
+    import pyqtgraph as pg
+
+    from acq4.modules.Autopatch.region_panel import regionForRoi
+
+    roi = pg.PolyLineROI(points, closed=True)
+
+    assert regionForRoi(roi) is None
+
+
 def test_a_moved_polygon_reports_its_vertices_in_global_coordinates(qapp):
     # A PolyLineROI holds its vertices in ROI-local coordinates, so dragging the
     # body moves the shape without touching them. Reading them raw would put the
@@ -404,25 +445,35 @@ def roiForRegion(region: SearchRegion) -> pg.ROI:
     )
 
 
-def regionForRoi(roi: pg.ROI) -> SearchRegion:
-    """The region `roi` currently describes, in global metres.
+def regionForRoi(roi: pg.ROI) -> SearchRegion | None:
+    """The region `roi` currently describes, or None if it does not describe one.
+
+    An ROI can be dragged flat, and its handles can be dragged collinear;
+    SearchRegion rejects both, since a region with no extent has no tiles. This
+    is reached from a Qt signal while the operator is mid-drag, so it reports
+    the failure by returning None rather than by raising a traceback out of a
+    slot -- the same choice `SearchPanel.constraints()` makes, and for the same
+    reason.
 
     Corner normalization is left to `_BoxRegion.__post_init__`, which already
     orders its corners -- an ROI resized past its own origin reports a negative
     size, and both paths through that hazard should agree by construction rather
     than by two implementations happening to match.
     """
-    if isinstance(roi, pg.PolyLineROI):
-        vertices = []
-        for _, localPos in roi.getLocalHandlePositions():
-            globalPos = roi.mapToParent(localPos)
-            vertices.append((globalPos.x(), globalPos.y()))
-        return PolygonRegion(tuple(vertices))
-    pos = roi.pos()
-    size = roi.size()
-    x0, y0 = pos.x(), pos.y()
-    regionClass = EllipseRegion if isinstance(roi, pg.EllipseROI) else RectRegion
-    return regionClass(x0, y0, x0 + size.x(), y0 + size.y())
+    try:
+        if isinstance(roi, pg.PolyLineROI):
+            vertices = []
+            for _, localPos in roi.getLocalHandlePositions():
+                globalPos = roi.mapToParent(localPos)
+                vertices.append((globalPos.x(), globalPos.y()))
+            return PolygonRegion(tuple(vertices))
+        pos = roi.pos()
+        size = roi.size()
+        x0, y0 = pos.x(), pos.y()
+        regionClass = EllipseRegion if isinstance(roi, pg.EllipseROI) else RectRegion
+        return regionClass(x0, y0, x0 + size.x(), y0 + size.y())
+    except ValueError:
+        return None
 ```
 
 - [ ] **Step 4: Run test to verify it passes**
@@ -585,6 +636,59 @@ def test_a_removed_roi_leaves_the_view(qapp):
     assert roi.scene() is None
 
 
+def test_adding_a_polygon_vertex_reaches_the_reported_region(qapp):
+    # Reshaping a polygon is pyqtgraph's own segmentClicked inserting a handle
+    # where an edge was clicked -- the mechanism that makes outlining a cortical
+    # layer possible without any drawing code of ours. Pinned here because the
+    # panel depends on it: a handle added this way has to arrive in the region
+    # the panel reports, in global coordinates.
+    #
+    # segments[0] is the *closing* edge (last vertex back to first), not the
+    # first one, so the new vertex lands between the triangle's third and first
+    # points. Membership rather than a position is asserted for that reason --
+    # pyqtgraph's ordering is its own business as long as handle order,
+    # getState()['points'], and shape() agree, which they do.
+    triangle = PolygonRegion(
+        ((1.0e-3, 2.0e-3), (1.4e-3, 2.02e-3), (1.1e-3, 2.1e-3))
+    )
+    panel = makePanel()
+    panel.setRegions([triangle])
+    roi = panel._rois[0]
+
+    roi.segmentClicked(roi.segments[0], pos=Qt.QPointF(1.2e-3, 2.01e-3))
+
+    reported = panel.regions()[0]
+    assert len(reported.vertices) == 4
+    assert (1.2e-3, 2.01e-3) in [
+        (pytest.approx(x), pytest.approx(y)) for x, y in reported.vertices
+    ]
+
+
+def test_an_roi_squashed_flat_stays_on_screen_but_is_not_reported(qapp):
+    # Removing it would delete the operator's work mid-drag; reporting it would
+    # hand the slice a region with no tiles. It stays visible and uncounted.
+    panel = makePanel()
+    panel.setRegions([RECT, OTHER])
+
+    panel._rois[0].setSize((0.0, 0.1e-3))
+
+    assert len(panel._rois) == 2
+    assert panel.regions() == [OTHER]
+
+
+def test_fit_to_regions_ignores_a_squashed_roi(qapp):
+    # regions() drops it, so fitToRegions must read through regions() rather
+    # than the ROI list, or it frames a bounding box it cannot compute.
+    panel = makePanel()
+    panel.setRegions([RECT])
+    panel._rois[0].setSize((0.0, 0.0))
+    before = panel.view.viewRange()
+
+    panel.fitToRegions()
+
+    assert panel.view.viewRange() == before
+
+
 def test_the_shape_selector_offers_all_three_shapes(qapp):
     # PolygonRegion has been implemented and tested since P2c-1 with no control
     # able to produce one; a cortical layer is the reason regions became shapes.
@@ -688,10 +792,7 @@ class RegionPanel(Qt.QWidget):
             ("Polygon", "polygon"),
         ):
             self.shapeCombo.addItem(label, key)
-        self.shapeCombo.setToolTip(
-            "The shape drawn by dragging in the view, and the shape "
-            '"Add region here" seeds.'
-        )
+        self.shapeCombo.setToolTip('The shape "Add region here" seeds.')
 
         self.addRegionBtn = Qt.QPushButton("Add region here")
         self.addRegionBtn.setToolTip(
@@ -722,8 +823,13 @@ class RegionPanel(Qt.QWidget):
 
     # ---- regions ----
     def regions(self) -> list[SearchRegion]:
-        """The regions currently drawn, in the order they were added."""
-        return [regionForRoi(roi) for roi in self._rois]
+        """The regions currently drawn, in the order they were added.
+
+        An ROI the operator has squashed flat describes no region, and is left
+        out rather than reported or raised over: it stays on screen to be pulled
+        back into shape, and contributes no tiles until it is.
+        """
+        return [r for r in (regionForRoi(roi) for roi in self._rois) if r is not None]
 
     def setRegions(self, regions) -> None:
         """Draw `regions`, replacing whatever is drawn now.
@@ -771,9 +877,9 @@ class RegionPanel(Qt.QWidget):
         how a view ends up at a scale the operator cannot recover from, and the
         button is live before anything has been drawn.
         """
-        if not self._rois:
+        bounds = [region.bounds() for region in self.regions()]
+        if not bounds:
             return
-        bounds = [regionForRoi(roi).bounds() for roi in self._rois]
         x0 = min(b[0] for b in bounds)
         y0 = min(b[1] for b in bounds)
         x1 = max(b[2] for b in bounds)
@@ -816,364 +922,14 @@ MSG
 
 ---
 
-### Task 4: Drawing regions with the mouse
-
-**Files:**
-- Modify: `acq4/modules/Autopatch/region_panel.py`
-- Test: `acq4/modules/Autopatch/tests/test_region_drawing.py`
-
-**Interfaces:**
-- Consumes: `RegionPanel`, `regionShape()`, `_attachRoi`, `roiForRegion` from Tasks 2–3.
-- Produces:
-  - `_DrawingViewBox(pg.ViewBox)` with `sigRegionDrawn(object)` (a `SearchRegion`), `setDrawShape(shape: str | None)`, and the four plain entry points `beginDraw(pt)`, `dragDraw(pt)`, `endDraw(pt)`, `addVertex(pt)`, `closePolygon()` — all taking `(x, y)` tuples in global metres.
-  - `RegionPanel.view` becomes a `_DrawingViewBox`.
-
-**Why plain entry points:** the Qt handlers (`mouseDragEvent`, `mouseClickEvent`) do one thing — map the event's scene position into view coordinates and call one of these. All the state and all the geometry live behind methods a test can call directly with metre coordinates, so the drawing rules are covered without synthesising Qt mouse events. This is the same injected-seam split that made `tile_detector` testable.
-
-- [ ] **Step 1: Write the failing test**
-
-Create `acq4/modules/Autopatch/tests/test_region_drawing.py`:
-
-```python
-"""Tests for drawing a region with the mouse: the drag and click state machine
-behind Area 1's view, driven directly in global coordinates."""
-
-import pytest
-
-from acq4.experiment.search_region import EllipseRegion, PolygonRegion, RectRegion
-from acq4.util import Qt
-
-
-@pytest.fixture(scope="module")
-def qapp():
-    return Qt.QApplication.instance() or Qt.QApplication([])
-
-
-def makeBox(shape):
-    from acq4.modules.Autopatch.region_panel import _DrawingViewBox
-
-    box = _DrawingViewBox()
-    box.setDrawShape(shape)
-    return box
-
-
-def drawn(box):
-    seen = []
-    box.sigRegionDrawn.connect(seen.append)
-    return seen
-
-
-def test_dragging_out_a_rectangle_reports_one(qapp):
-    box = makeBox("rect")
-    seen = drawn(box)
-
-    box.beginDraw((1.0e-3, 2.0e-3))
-    box.dragDraw((1.2e-3, 2.05e-3))
-    box.endDraw((1.4e-3, 2.1e-3))
-
-    assert seen == [RectRegion(1.0e-3, 2.0e-3, 1.4e-3, 2.1e-3)]
-
-
-def test_dragging_out_an_ellipse_reports_one(qapp):
-    box = makeBox("ellipse")
-    seen = drawn(box)
-
-    box.beginDraw((1.0e-3, 2.0e-3))
-    box.endDraw((1.4e-3, 2.1e-3))
-
-    assert seen == [EllipseRegion(1.0e-3, 2.0e-3, 1.4e-3, 2.1e-3)]
-
-
-def test_a_drag_that_ends_where_it_started_reports_nothing(qapp):
-    # A region needs extent in both axes -- SearchRegion raises without it --
-    # and a stray click in the view is the ordinary way to produce this. It has
-    # to be dropped here, silently: nothing in this panel may raise on the GUI
-    # thread.
-    box = makeBox("rect")
-    seen = drawn(box)
-
-    box.beginDraw((1.0e-3, 2.0e-3))
-    box.endDraw((1.0e-3, 2.0e-3))
-
-    assert seen == []
-
-
-def test_a_drag_with_no_height_reports_nothing(qapp):
-    # Zero extent in either axis alone is still not a region. Tested per axis:
-    # a check that only looks at width passes a test that only drags a point.
-    box = makeBox("rect")
-    seen = drawn(box)
-
-    box.beginDraw((1.0e-3, 2.0e-3))
-    box.endDraw((1.4e-3, 2.0e-3))
-
-    assert seen == []
-
-
-def test_a_drag_with_no_width_reports_nothing(qapp):
-    box = makeBox("rect")
-    seen = drawn(box)
-
-    box.beginDraw((1.0e-3, 2.0e-3))
-    box.endDraw((1.0e-3, 2.1e-3))
-
-    assert seen == []
-
-
-def test_a_backwards_drag_still_reports_the_box_drawn(qapp):
-    # Dragging up and to the left is as ordinary as down and to the right.
-    box = makeBox("rect")
-    seen = drawn(box)
-
-    box.beginDraw((1.4e-3, 2.1e-3))
-    box.endDraw((1.0e-3, 2.0e-3))
-
-    assert seen == [RectRegion(1.0e-3, 2.0e-3, 1.4e-3, 2.1e-3)]
-
-
-def test_clicking_three_vertices_and_closing_reports_a_polygon(qapp):
-    box = makeBox("polygon")
-    seen = drawn(box)
-
-    box.addVertex((1.0e-3, 2.0e-3))
-    box.addVertex((1.4e-3, 2.02e-3))
-    box.addVertex((1.1e-3, 2.1e-3))
-    box.closePolygon()
-
-    assert seen == [
-        PolygonRegion(((1.0e-3, 2.0e-3), (1.4e-3, 2.02e-3), (1.1e-3, 2.1e-3)))
-    ]
-
-
-def test_closing_a_polygon_with_two_vertices_reports_nothing(qapp):
-    box = makeBox("polygon")
-    seen = drawn(box)
-
-    box.addVertex((1.0e-3, 2.0e-3))
-    box.addVertex((1.4e-3, 2.02e-3))
-    box.closePolygon()
-
-    assert seen == []
-
-
-def test_closing_a_polygon_clears_it_for_the_next_one(qapp):
-    # Vertices carried over would splice two regions the operator drew
-    # separately into one shape spanning both.
-    box = makeBox("polygon")
-    seen = drawn(box)
-
-    for pt in ((1.0e-3, 2.0e-3), (1.4e-3, 2.02e-3), (1.1e-3, 2.1e-3)):
-        box.addVertex(pt)
-    box.closePolygon()
-    for pt in ((3.0e-3, 1.0e-3), (3.6e-3, 1.02e-3), (3.2e-3, 1.2e-3)):
-        box.addVertex(pt)
-    box.closePolygon()
-
-    assert len(seen) == 2
-    assert seen[1].vertices == (
-        (3.0e-3, 1.0e-3),
-        (3.6e-3, 1.02e-3),
-        (3.2e-3, 1.2e-3),
-    )
-
-
-def test_with_no_shape_set_dragging_reports_nothing(qapp):
-    # No draw shape is the panel locked, or a slice that does not exist yet.
-    # The drag has to fall through to the ViewBox so the view still pans.
-    box = makeBox(None)
-    seen = drawn(box)
-
-    box.beginDraw((1.0e-3, 2.0e-3))
-    box.endDraw((1.4e-3, 2.1e-3))
-
-    assert seen == []
-
-
-def test_a_drawn_region_reaches_the_panel(qapp):
-    from acq4.modules.Autopatch.region_panel import RegionPanel
-
-    panel = RegionPanel()
-    panel.shapeCombo.setCurrentIndex(panel.shapeCombo.findData("rect"))
-    seen = []
-    panel.sigRegionsChanged.connect(seen.append)
-
-    panel.view.beginDraw((1.0e-3, 2.0e-3))
-    panel.view.endDraw((1.4e-3, 2.1e-3))
-
-    assert seen == [[RectRegion(1.0e-3, 2.0e-3, 1.4e-3, 2.1e-3)]]
-    assert len(panel._rois) == 1
-```
-
-- [ ] **Step 2: Run test to verify it fails**
-
-Run: `/home/martin/.miniforge3/envs/acq4-gl/bin/python -m pytest acq4/modules/Autopatch/tests/test_region_drawing.py -v`
-
-Expected: FAIL — `ImportError: cannot import name '_DrawingViewBox'`.
-
-- [ ] **Step 3: Write minimal implementation**
-
-Insert `_DrawingViewBox` into `acq4/modules/Autopatch/region_panel.py`, above `RegionPanel`:
-
-```python
-class _DrawingViewBox(pg.ViewBox):
-    """The Area 1 view box, in the two modes a region view needs.
-
-    With no draw shape set it is an ordinary ViewBox: drags pan, wheels zoom.
-    With one set, a drag lays out a rectangle or ellipse and clicks lay out a
-    polygon's vertices.
-
-    The Qt handlers do exactly one thing -- map an event's scene position into
-    view coordinates and call one of the plain entry points below. Every rule
-    about what counts as a region lives behind those methods, so the drawing
-    logic is exercised in global metres without synthesising mouse events.
-    """
-
-    sigRegionDrawn = Qt.Signal(object)  # SearchRegion
-
-    def __init__(self, *args, **kwds):
-        super().__init__(*args, **kwds)
-        self._drawShape = None
-        self._dragStart = None
-        self._vertices: list[tuple[float, float]] = []
-
-    def setDrawShape(self, shape) -> None:
-        """Draw `shape` ("rect"/"ellipse"/"polygon") on drag, or None to pan.
-
-        Switching shape abandons a polygon in progress: its half-drawn vertices
-        belong to the shape the operator was drawing, not the next one.
-        """
-        self._drawShape = shape
-        self._dragStart = None
-        self._vertices = []
-
-    # ---- entry points ----
-    def beginDraw(self, pt) -> None:
-        self._dragStart = (pt[0], pt[1])
-
-    def dragDraw(self, pt) -> None:
-        """Called for each intermediate position of a drag.
-
-        Nothing is reported mid-drag: a drag in progress is not a decision.
-        """
-
-    def endDraw(self, pt) -> None:
-        start, self._dragStart = self._dragStart, None
-        if self._drawShape not in ("rect", "ellipse") or start is None:
-            return
-        x0, y0 = start
-        x1, y1 = pt[0], pt[1]
-        if x0 == x1 or y0 == y1:
-            # A region needs extent in both axes. A stray click in the view is
-            # the ordinary way to produce this, so it is dropped rather than
-            # raised: nothing here may raise on the GUI thread.
-            return
-        regionClass = EllipseRegion if self._drawShape == "ellipse" else RectRegion
-        # The corners arrive in whatever order they were dragged; _BoxRegion
-        # orders them.
-        self.sigRegionDrawn.emit(regionClass(x0, y0, x1, y1))
-
-    def addVertex(self, pt) -> None:
-        if self._drawShape != "polygon":
-            return
-        self._vertices.append((pt[0], pt[1]))
-
-    def closePolygon(self) -> None:
-        """Close the polygon under construction and report it, if it is one.
-
-        The vertices are cleared either way: carried over, they would splice the
-        abandoned shape onto the next one the operator draws.
-        """
-        vertices, self._vertices = self._vertices, []
-        if self._drawShape != "polygon" or len(vertices) < 3:
-            return
-        xs = [x for x, _ in vertices]
-        ys = [y for _, y in vertices]
-        if min(xs) == max(xs) or min(ys) == max(ys):
-            return
-        self.sigRegionDrawn.emit(PolygonRegion(tuple(vertices)))
-
-    # ---- Qt handlers ----
-    def mouseDragEvent(self, ev, axis=None):
-        if self._drawShape not in ("rect", "ellipse"):
-            super().mouseDragEvent(ev, axis=axis)
-            return
-        ev.accept()
-        pt = self.mapSceneToView(ev.scenePos())
-        if ev.isStart():
-            self.beginDraw((pt.x(), pt.y()))
-        elif ev.isFinish():
-            self.endDraw((pt.x(), pt.y()))
-        else:
-            self.dragDraw((pt.x(), pt.y()))
-
-    def mouseClickEvent(self, ev):
-        if self._drawShape != "polygon":
-            super().mouseClickEvent(ev)
-            return
-        ev.accept()
-        pt = self.mapSceneToView(ev.scenePos())
-        if ev.double():
-            self.closePolygon()
-        else:
-            self.addVertex((pt.x(), pt.y()))
-```
-
-In `RegionPanel.__init__`, build the drawing view box and wire it:
-
-```python
-        self.view = _DrawingViewBox()
-```
-
-and, after the other connections:
-
-```python
-        self.view.sigRegionDrawn.connect(self._onRegionDrawn)
-        self.shapeCombo.currentIndexChanged.connect(self._applyDrawShape)
-        self._applyDrawShape()
-```
-
-Add the two methods to `RegionPanel`:
-
-```python
-    def _onRegionDrawn(self, region) -> None:
-        self._attachRoi(roiForRegion(region))
-        self.sigRegionsChanged.emit(self.regions())
-
-    def _applyDrawShape(self, *_args) -> None:
-        self.view.setDrawShape(self.regionShape())
-```
-
-- [ ] **Step 4: Run tests to verify they pass**
-
-Run: `/home/martin/.miniforge3/envs/acq4-gl/bin/python -m pytest acq4/modules/Autopatch/tests/ -q`
-
-Expected: PASS, no failures.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git rev-parse --show-toplevel && git branch --show-current
-git add acq4/modules/Autopatch/region_panel.py acq4/modules/Autopatch/tests/test_region_drawing.py
-git commit --author="Martin Chase (claude) <outofculture@gmail.com>" -F - <<'MSG'
-feat: draw regions with the mouse in Area 1
-
-Drag lays out a rectangle or ellipse, clicks lay out a polygon's vertices,
-and a shape with no extent in both axes is dropped rather than raised.
-
-🤖 Generated with [Claude Code](https://claude.ai/code)
-MSG
-```
-
----
-
-### Task 5: The editing gate
+### Task 4: The editing gate
 
 **Files:**
 - Modify: `acq4/modules/Autopatch/region_panel.py`
 - Test: `acq4/modules/Autopatch/tests/test_region_panel.py`
 
 **Interfaces:**
-- Consumes: `RegionPanel` from Tasks 3–4.
+- Consumes: `RegionPanel` from Task 3.
 - Produces:
   - `RegionPanel.setInteractionLocked(locked: bool)`
   - `RegionPanel.setSliceReady(ready: bool)`
@@ -1197,7 +953,6 @@ def test_a_panel_with_no_slice_cannot_be_drawn_on(qapp):
 
     assert not panel.addRegionBtn.isEnabled()
     assert not panel.shapeCombo.isEnabled()
-    assert panel.view._drawShape is None
 
 
 def test_a_slice_makes_the_controls_live(qapp):
@@ -1206,7 +961,6 @@ def test_a_slice_makes_the_controls_live(qapp):
 
     assert panel.addRegionBtn.isEnabled()
     assert panel.shapeCombo.isEnabled()
-    assert panel.view._drawShape == "rect"
 
 
 def test_a_running_run_locks_editing(qapp):
@@ -1218,7 +972,6 @@ def test_a_running_run_locks_editing(qapp):
     panel.setRunStatus("running")
 
     assert not panel.addRegionBtn.isEnabled()
-    assert panel.view._drawShape is None
     assert not panel._rois[0].translatable
     assert not panel._rois[0].resizable
     assert not panel._rois[0].removable
@@ -1236,7 +989,6 @@ def test_a_paused_run_unlocks_editing(qapp):
     panel.setRunStatus("paused")
 
     assert panel.addRegionBtn.isEnabled()
-    assert panel.view._drawShape == "rect"
     assert panel._rois[0].translatable
     assert panel._rois[0].resizable
     assert panel._rois[0].removable
@@ -1253,7 +1005,6 @@ def test_surveying_locks_editing_even_though_pause_was_pressed(qapp):
     panel.setRunStatus("surveying")
 
     assert not panel.addRegionBtn.isEnabled()
-    assert panel.view._drawShape is None
 
 
 def test_resuming_from_paused_locks_editing_again(qapp):
@@ -1313,7 +1064,7 @@ In `RegionPanel.__init__`, before the connections:
         self._runStatus = None
 ```
 
-and call `self._applyLock()` at the end of `__init__` instead of `self._applyDrawShape()`.
+and call `self._applyLock()` at the end of `__init__`, after the connections.
 
 Add to `RegionPanel`:
 
@@ -1360,7 +1111,6 @@ Add to `RegionPanel`:
         editable = self._editable()
         self.addRegionBtn.setEnabled(editable)
         self.shapeCombo.setEnabled(editable)
-        self._applyDrawShape()
         for roi in self._rois:
             self._applyRoiLock(roi)
 
@@ -1379,12 +1129,7 @@ Add to `RegionPanel`:
             handle.setVisible(editable)
 ```
 
-Change `_applyDrawShape` so a locked panel pans instead of drawing:
-
-```python
-    def _applyDrawShape(self, *_args) -> None:
-        self.view.setDrawShape(self.regionShape() if self._editable() else None)
-```
+Panning and zooming stay live in every state: the `ViewBox` is untouched by the gate, because looking at what is being surveyed is not editing it.
 
 And apply the lock to each ROI as it is attached, in `_attachRoi`, after `self.view.addItem(roi)`:
 
@@ -1396,12 +1141,7 @@ And apply the lock to each ROI as it is attached, in `_attachRoi`, after `self.v
 
 Run: `/home/martin/.miniforge3/envs/acq4-gl/bin/python -m pytest acq4/modules/Autopatch/tests/ -q`
 
-Expected: PASS, once two earlier test files are updated — a panel with no slice being inert is the intended behaviour, so the tests written before the gate existed have to declare a slice:
-
-- `test_region_panel.py`: `test_the_add_region_button_asks_its_owner` needs `panel.setSliceReady(True)` before the click.
-- `test_region_drawing.py`: `test_a_drawn_region_reaches_the_panel` needs `panel.setSliceReady(True)` before it draws, or `_drawShape` is `None` and nothing is drawn.
-
-The `_DrawingViewBox` tests in that file construct the view box directly and are unaffected.
+Expected: PASS, once one earlier test is updated — a panel with no slice being inert is the intended behaviour, so `test_the_add_region_button_asks_its_owner` (Task 3) needs `panel.setSliceReady(True)` before the click. The rest of Task 3's tests drive `setRegions()` and `_rois` directly and are unaffected, since rendering is never gated.
 
 - [ ] **Step 5: Prove both sides of the gate bite (mutation)**
 
@@ -1430,7 +1170,7 @@ MSG
 
 ---
 
-### Task 6: Pinned frames from the Camera module
+### Task 5: Pinned frames from the Camera module
 
 **Files:**
 - Modify: `acq4/util/imaging/imaging_ctrl.py` (`addPinnedFrame` ~line 274, `removePinnedFrame` ~line 286)
@@ -1718,7 +1458,7 @@ MSG
 
 ---
 
-### Task 7: Region outlines in the Camera window
+### Task 6: Region outlines in the Camera window
 
 **Files:**
 - Modify: `acq4/modules/Autopatch/region_mirrors.py`
@@ -1994,7 +1734,7 @@ MSG
 
 ---
 
-### Task 8: Mount Area 1 in the window
+### Task 7: Mount Area 1 in the window
 
 **Files:**
 - Modify: `acq4/modules/Autopatch/Autopatch.py`
@@ -2003,7 +1743,7 @@ MSG
 - Test: `acq4/modules/Autopatch/tests/test_search_panel.py`
 
 **Interfaces:**
-- Consumes: `RegionPanel` (Tasks 3–5), `PinnedFrameMirror` (Task 6), `CameraMirror` (Task 7), `Slice.setRegions` (Task 1).
+- Consumes: `RegionPanel` (Tasks 3–4), `PinnedFrameMirror` (Task 5), `CameraMirror` (Task 6), `Slice.setRegions` (Task 1).
 - Produces: `AutopatchWindow.regionPanel`, `AutopatchWindow._onRegionsEdited(regions)`, `AutopatchWindow._cameraWindow()`.
 
 **This task owns every call site of the controls it moves.** Derived from `git grep`, not from memory — a breaking API change whose signature-owning task does not own all its callers leaves a red tree at an intermediate commit, which is what happened in P2c-1.
@@ -2366,7 +2106,7 @@ MSG
 
 ---
 
-### Task 9: New slice's instruction band
+### Task 8: New slice's instruction band
 
 **Files:**
 - Modify: `acq4/modules/Autopatch/status_panel.py`
@@ -2606,4 +2346,4 @@ MSG
 /home/martin/.miniforge3/envs/acq4-gl/bin/python bin/acq4 --config /home/martin/src/acq4/acq4/config/mock/default.cfg -m Autopatch
 ```
 
-  Check: New slice enables Area 1; drag out a rectangle, an ellipse, and a polygon and confirm each is tiled by the survey readout; drag and resize one; right-click Remove; tick Mirror to Camera and confirm outlines appear in the Camera window and cannot be grabbed there; pin a frame in the Camera module and confirm it appears in Area 1; start a run and confirm Area 1 locks, pause it and confirm it unlocks; close the window and confirm exit code 0 with no segfault.
+  Check: New slice enables Area 1; seed a rectangle, an ellipse, and a polygon with "Add region here" and confirm each is tiled by the survey readout; drag and resize one; click a polygon edge to add a vertex and drag it, then confirm the survey retiles to the new outline; check that an ellipse offers no rotate handle; right-click Remove; tick Mirror to Camera and confirm outlines appear in the Camera window and cannot be grabbed there; pin a frame in the Camera module and confirm it appears in Area 1; start a run and confirm Area 1 locks, pause it and confirm it unlocks; close the window and confirm exit code 0 with no segfault.

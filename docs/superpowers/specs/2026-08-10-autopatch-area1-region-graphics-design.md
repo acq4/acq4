@@ -28,8 +28,8 @@ This phase makes regions visible, drawable, and editable.
 
 - An Area 1 view: `pg.GraphicsView` + aspect-locked `pg.ViewBox` in global metres.
 - Pinned frames from the Camera module mirrored into that view (display only).
-- Drawing, moving, resizing, and deleting regions — rectangle, ellipse, and
-  closed polygon.
+- Seeding, moving, resizing, reshaping, and deleting regions — rectangle,
+  ellipse, and closed polygon.
 - The shape selector and "Add region here", moved out of Area 2 into Area 1.
 - A **mirror to Camera** checkbox putting read-only region outlines in the
   Camera window.
@@ -60,7 +60,7 @@ Owns the view and every control that makes or changes a region:
   `"ellipse"`, `"polygon"`), not display text, following the precedent
   `SearchPanel.regionShape()` set.
 - "Add region here" — the existing one-click 3×3-field seed, unchanged in
-  behaviour, relocated.
+  behaviour, relocated, and now producing a visible ROI in all three shapes.
 - "Mirror to Camera" checkbox.
 - "Fit to regions" — autorange the view over the regions and pinned frames.
 
@@ -85,13 +85,32 @@ Pure functions in the same module, no Qt state of their own:
 
 `roiForRegion(region) -> pg.ROI` and `regionForRoi(roi) -> SearchRegion`.
 
-Two hazards the adapters own:
+The ROIs are pyqtgraph's own, used as shipped: their handles resize them, their
+`removable=True` context menu deletes them, and `PolyLineROI.segmentClicked`
+inserts a vertex where an edge is clicked while individual handles can be
+removed. Reshaping a region to follow a cortical layer therefore costs no code.
+
+Three hazards the adapters own:
 
 - **An ROI dragged past its own origin reports a negative size.**
   `AutomationDebug`'s `SurveyRegion._bounds` documents this already.
   `regionForRoi` normalises so `x0 <= x1` and `y0 <= y1` before constructing.
 - **A polygon ROI carries its vertices in local coordinates.** They are mapped
   through the ROI's transform to global metres before `PolygonRegion` sees them.
+- **An ROI can be dragged to a shape that is not a region.** `regionForRoi`
+  returns `None` there rather than letting `SearchRegion`'s validation raise; see
+  §8.
+
+### 3.2.1 The one stock tool that is not adequate
+
+`pg.EllipseROI` ships a **rotate** handle. `EllipseRegion` is the ellipse
+inscribed in an axis-aligned box, so a rotated ROI maps back to a region with
+the rotation silently dropped — the operator outlines one patch of tissue and
+the survey tiles another. The Camera module's `ROIPlotter._addEllipseROI` uses
+the stock class quite correctly, because it only reads the pixels under the ROI
+and a rotation changes which pixels those are; here the shape has to survive a
+round trip through a representation that cannot express rotation. So the handle
+is dropped, and nothing else about any ROI is modified.
 
 ### 3.3 `PinnedFrameMirror` — Camera to Autopatch
 
@@ -167,13 +186,24 @@ three lines.
 
 ## 6. Interaction
 
-**Creating.** Choose a shape, then drag in the view. Rectangle and ellipse are
-press-drag-release. Polygon is click-per-vertex, double-click to close; fewer
-than three vertices discards.
+**Creating: seed, then shape.** Choose a shape and press "Add region here"; an
+ROI of that shape appears covering roughly 3×3 fields around the camera centre,
+and the operator drags it into place. This is the pattern acq4 already uses for
+adding an ROI to a camera-style view — `ROIPlotter._addRectROI`,
+`_addEllipseROI`, and `_addPolygonROI` in `modules/Camera/CameraWindow.py` each
+seed a default-sized ROI at the view centre and leave shaping to the operator.
+
+Drag-to-draw was considered and rejected on evidence: pyqtgraph offers no
+drag-out-a-new-ROI gesture (`ViewBox.RectMode`'s rubber band is a zoom tool, and
+there is no ROI-creation helper anywhere in the package), and no other acq4
+module has one. Building it would mean custom `mouseDragEvent`/`mouseClickEvent`
+handling to invent an idiom that exists nowhere else in the application.
 
 **Editing.** Every region is a live ROI: drag the body to move, handles to
-resize or reshape, and `removable=True` for pyqtgraph's own right-click Remove.
-Any of these rebuilds the region list and hands the whole list to the window.
+resize, `PolyLineROI`'s segment click to insert a vertex and its handle menu to
+remove one, and `removable=True` for pyqtgraph's own right-click Remove. All of
+it is stock behaviour. Any of these rebuilds the region list and hands the whole
+list to the window.
 
 **Deleting leaves coverage alone.** `Slice._covered` is a flat record of tile
 centres already imaged, and it is deliberately not pruned when a region goes
@@ -186,7 +216,10 @@ progress is not a decision, and `tileGrid()` is O(tiles) per call.
 
 **Seeding.** "Add region here" behaves exactly as it does today, including
 creating a slice on demand when none exists — the path that deliberately creates
-no directory (§7 Area 1). Drawing does the same.
+no directory (§7 Area 1). With Polygon selected it seeds the four corners of the
+same box, so the button places a region of a known size whichever shape is
+chosen, and a four-vertex seed is the readiest thing to reshape into the outline
+actually wanted.
 
 **Sizing.** The Area 1 view must be usable at slice scale, which the current
 fixed two-column `QVBoxLayout` will not give it. The left column becomes a
@@ -217,8 +250,14 @@ operator drags a spin box through invalid values:
 
 - No camera: the existing SearchPanel message stands.
 - No slice: drawing controls greyed, matching Area 2's `setSliceReady`.
-- Zero-area drag, polygon under three vertices: discarded silently. The operator
-  gets no region, which is what they drew.
+- Degenerate geometry — an ROI squashed to zero extent in either axis, a polygon
+  whose handles have been dragged collinear. `SearchRegion` raises on these, and
+  an ROI can be dragged there, so `regionForRoi` returns `None` rather than
+  propagating: the ROI stays on screen for the operator to pull back out, and
+  contributes no tiles while it is degenerate. This follows
+  `SearchPanel.constraints()`, which returns `None` for the same reason — an
+  operator dragging a control through invalid intermediate values must not get a
+  traceback.
 - Camera window absent or closed while mirroring: the mirror becomes a no-op.
 
 ## 9. Testing
