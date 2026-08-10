@@ -235,28 +235,43 @@ class AutopatchWindow(Qt.QWidget):
 
         A signal is not a permission check: Area 1's controls are gated on a
         slice existing, but arriving here without one must not raise on the GUI
-        thread.
+        thread. The editing gate is read for the same reason -- RegionPanel
+        locks every editing surface it owns, and this is the second line of that
+        defence, since committing an edit while a producer may be reading the
+        regions on the worker thread is what the gate exists to prevent. A torn
+        down window refuses for a third: teardown() waits on the orchestrator
+        with the Qt event loop still pumping, so an ROI drag released during
+        that wait arrives here after the session it belongs to has ended.
 
         Area 1 is deliberately not redrawn from here: this arrives *from* the
         panel, and RegionPanel.setRegions() rebuilds every ROI, which would
         discard the very handle the operator is holding.
         """
-        if self.slice is None:
+        if self._tornDown or self.slice is None or not self.regionPanel.isEditable():
             return
         self.slice.setRegions(regions)
         self._cameraMirror.setRegions(regions)
         self._refreshSurveyStats()
 
     def _canStartSlice(self) -> bool:
-        """Whether the camera and search constraints currently support
-        starting a slice, reporting the reason through SearchPanel exactly as
-        _startSlice() itself does.
+        """Whether a slice can be started right now, reporting the reason
+        through SearchPanel exactly as _startSlice() itself does.
 
         Split out so newSlice() can run this check before create_data_dir()
         commits to a new storage directory -- constructing the Slice remains
         _startSlice()'s job alone, called only once directory creation has
         already succeeded.
+
+        A torn-down window can never start one again. teardown() waits on the
+        orchestrator with the Qt event loop still pumping (see
+        _stopAndReleaseOrchestrator), so New slice and Add region here stay
+        clickable for as long as that wait lasts, and a slice built then would
+        re-bind PinnedFrameMirror to the Camera module's long-lived ImagingCtrl
+        with nothing left to release it: _tornDown is already True, so the
+        closeEvent that follows returns early.
         """
+        if self._tornDown:
+            return False
         camera = self.cameraSelector.getSelectedObj()
         if camera is None:
             self.searchPanel.setError("Select a camera before starting a slice.")
@@ -307,7 +322,15 @@ class AutopatchWindow(Qt.QWidget):
         Bound here rather than at construction because this is the first point
         at which a camera is known to be selected, and both routes into a slice
         pass through it.
+
+        Every path unbinds first, including the two that find nothing to bind
+        to. Switching from a camera the Camera module has an interface for to
+        one it does not -- or starting a slice after the Camera module has been
+        closed -- would otherwise leave Area 1 mirroring the previous camera's
+        frames: imagery of tissue that is no longer under the objective, with
+        regions being drawn over it.
         """
+        self._pinnedFrameMirror.unbind()
         window = self._cameraWindow()
         if window is None:
             return
@@ -627,6 +650,16 @@ class AutopatchWindow(Qt.QWidget):
         outlive this window, and would otherwise be left holding graphics
         belonging to a session that has ended.
 
+        The mirrors are released *after* the orchestrator, not before, because
+        stopping it means waiting on it with the Qt event loop still pumping
+        (see _stopAndReleaseOrchestrator). The window is still up and every
+        Area 1 control still connected for the length of that wait, so anything
+        the operator clicks in it -- Mirror to Camera, the end of an ROI drag --
+        lands while teardown is in progress. Releasing last is what makes those
+        clicks harmless rather than a mirror re-armed after its own cleanup.
+        `_tornDown` above closes the other half: it is set before the wait, so
+        nothing clicked during it can start a slice or commit a region edit.
+
         Idempotent: safe to call more than once (e.g. once explicitly from
         Autopatch.quit() and again via closeEvent() when the operator closes
         the window directly).
@@ -634,10 +667,10 @@ class AutopatchWindow(Qt.QWidget):
         if self._tornDown:
             return
         self._tornDown = True
-        self._pinnedFrameMirror.unbind()
-        self._cameraMirror.clear()
         if self.orchestrator is not None:
             self._stopAndReleaseOrchestrator(self.orchestrator)
+        self._pinnedFrameMirror.unbind()
+        self._cameraMirror.clear()
         self.statusPanel.unbindOrchestrator()
         self.cellPanel.unbindOrchestrator()
         self.cellPanel.clearCells()
