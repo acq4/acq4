@@ -103,14 +103,21 @@ Three hazards the adapters own:
 
 ### 3.2.1 The one stock tool that is not adequate
 
-`pg.EllipseROI` ships a **rotate** handle. `EllipseRegion` is the ellipse
-inscribed in an axis-aligned box, so a rotated ROI maps back to a region with
-the rotation silently dropped — the operator outlines one patch of tissue and
-the survey tiles another. The Camera module's `ROIPlotter._addEllipseROI` uses
-the stock class quite correctly, because it only reads the pixels under the ROI
-and a rotation changes which pixels those are; here the shape has to survive a
-round trip through a representation that cannot express rotation. So the handle
-is dropped, and nothing else about any ROI is modified.
+No region can express a rotation: `RectRegion` and `EllipseRegion` are
+axis-aligned boxes, and `PolygonRegion`'s vertices are read back through the
+ROI's own transform. A rotated ROI therefore maps back to a region with the
+rotation silently dropped — the operator outlines one patch of tissue and the
+survey tiles another. The Camera module's `ROIPlotter._addEllipseROI` uses the
+stock class quite correctly, because it only reads the pixels under the ROI and
+a rotation changes which pixels those are; here the shape has to survive a round
+trip through a representation that cannot express rotation.
+
+So **every** ROI is built `rotatable=False`. The flag, not the handle, is what
+matters: `pg.MouseDragHandler` enters rotate mode on an Alt-modified drag of the
+ROI *body*, with no handle involved, and consults the flag alone. `pg.EllipseROI`
+additionally ships a rotate handle; that is replaced with a second scale handle,
+because a handle the operator can grab that then does nothing is a control that
+lies. Nothing else about any ROI is modified.
 
 ### 3.3 `PinnedFrameMirror` — Camera to Autopatch
 
@@ -179,6 +186,12 @@ operator having clicked Pause, and the distinction is load-bearing:
 So the status is a real guarantee where the click is not. `_processCell`'s retry
 loop calls `_checkPause()` too, and the same reasoning holds: blocked there is
 still not inside a refill.
+
+Disabling editing means every surface, not only the body drag: the seed
+controls, `translatable`/`resizable`/`removable`, the handles, and — for a
+polygon — the per-edge child items, each of which takes a left click and inserts
+a vertex there. `AutopatchWindow` also drops any region edit that reaches it
+while the gate is closed, because a signal is not a permission check.
 
 The atomic swap in §5 is not made redundant by this gate. An edit committed as
 the operator presses Resume is still concurrent, and belt-and-braces here costs
@@ -251,7 +264,10 @@ operator drags a spin box through invalid values:
 - No camera: the existing SearchPanel message stands.
 - No slice: drawing controls greyed, matching Area 2's `setSliceReady`.
 - Degenerate geometry — an ROI squashed to zero extent in either axis, a polygon
-  whose handles have been dragged collinear. `SearchRegion` raises on these, and
+  whose handles have been dragged onto a horizontal or vertical line. What
+  `SearchRegion` validates is the axis-aligned bounding box, so a polygon
+  flattened onto a *diagonal* is accepted and tiles along that line.
+  `SearchRegion` raises on the degenerate box, and
   an ROI can be dragged there, so `regionForRoi` returns `None` rather than
   propagating: the ROI stays on screen for the operator to pull back out, and
   contributes no tiles while it is degenerate. This follows

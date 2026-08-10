@@ -19,12 +19,14 @@ REGION_PEN = pg.mkPen("y", width=2)
 
 
 class _AxisAlignedEllipseROI(pg.EllipseROI):
-    """A pg.EllipseROI with no rotate handle.
+    """A pg.EllipseROI with its rotate handle replaced by a second scale handle.
 
-    EllipseRegion is the ellipse inscribed in an axis-aligned bounding box, so
-    there is no region for a rotated ROI to map back to: regionForRoi reads the
-    ROI's position and size, and a rotation would be dropped without trace --
-    the operator would draw one shape and the survey would tile another.
+    `rotatable=False` is what actually stops a rotation (see roiForRegion), and
+    it already makes pg.EllipseROI's stock rotate handle inert. Replacing the
+    handle as well is about the affordance rather than the geometry: a handle
+    the operator can grab and drag, that then does nothing at all, is a control
+    that lies. The replacement scales along the other axis, so the ellipse gains
+    the width and height handles the rectangle already has.
     """
 
     def _addHandles(self):
@@ -33,30 +35,43 @@ class _AxisAlignedEllipseROI(pg.EllipseROI):
 
 
 def roiForRegion(region: SearchRegion) -> pg.ROI:
-    """The editable ROI that draws `region`."""
+    """The editable ROI that draws `region`.
+
+    `rotatable=False` on every shape. No region can express a rotation --
+    RectRegion and EllipseRegion are axis-aligned boxes, and PolygonRegion's
+    vertices are read back through the ROI's own transform -- so a rotated ROI
+    either round-trips as an unrotated box displaced by the rotation, or as a
+    polygon somewhere else entirely. Either way the operator outlines one patch
+    of tissue and the survey tiles another. Dropping the rotate *handle* does
+    not reach this: pg.MouseDragHandler enters rotate mode on an Alt-modified
+    drag of the ROI body, with no handle involved, and consults this flag alone.
+    """
     if isinstance(region, PolygonRegion):
         return pg.PolyLineROI(
             [list(v) for v in region.vertices],
             closed=True,
             pen=REGION_PEN,
             removable=True,
+            rotatable=False,
         )
     x0, y0, x1, y1 = region.bounds()
     roiClass = _AxisAlignedEllipseROI if isinstance(region, EllipseRegion) else pg.RectROI
     return roiClass(
-        (x0, y0), (x1 - x0, y1 - y0), pen=REGION_PEN, removable=True
+        (x0, y0), (x1 - x0, y1 - y0), pen=REGION_PEN, removable=True, rotatable=False
     )
 
 
 def regionForRoi(roi: pg.ROI) -> SearchRegion | None:
     """The region `roi` currently describes, or None if it does not describe one.
 
-    An ROI can be dragged flat, and its handles can be dragged collinear;
-    SearchRegion rejects both, since a region with no extent has no tiles. This
-    is reached from a Qt signal while the operator is mid-drag, so it reports
-    the failure by returning None rather than by raising a traceback out of a
-    slot -- the same choice `SearchPanel.constraints()` makes, and for the same
-    reason.
+    An ROI can be dragged flat, and a polygon's handles can be dragged onto a
+    horizontal or vertical line; SearchRegion rejects both, since what it checks
+    is the axis-aligned bounding box and a box with no extent has no tiles. A
+    polygon flattened onto a *diagonal* is not rejected -- its bounding box
+    still has extent -- and tiles along that line. This is reached from a Qt
+    signal while the operator is mid-drag, so it reports the failure by
+    returning None rather than by raising a traceback out of a slot -- the same
+    choice `SearchPanel.constraints()` makes, and for the same reason.
 
     Corner normalization is left to `_BoxRegion.__post_init__`, which already
     orders its corners -- an ROI resized past its own origin reports a negative
@@ -197,7 +212,14 @@ class RegionPanel(Qt.QWidget):
         self._rois.remove(roi)
         self.view.removeItem(roi)
 
-    def _onRoiEdited(self, _roi) -> None:
+    def _onRoiEdited(self, roi) -> None:
+        # Re-applied first, because an edit can grow the ROI's own handle list:
+        # PolyLineROI.segmentClicked adds one, and a handle is born visible and
+        # draggable whatever the gate currently says. Keeping "an ROI that has
+        # just reported an edit matches the gate" true here makes it a local
+        # property of this panel rather than a survey of every pyqtgraph path
+        # that can add a handle.
+        self._applyRoiLock(roi)
         # On sigRegionChangeFinished, not sigRegionChanged: a drag in progress
         # is not a decision, and every emission costs the slice a full retile.
         self.sigRegionsChanged.emit(self.regions())
@@ -240,13 +262,18 @@ class RegionPanel(Qt.QWidget):
         self._runStatus = status
         self._applyLock()
 
-    def _editable(self) -> bool:
+    def isEditable(self) -> bool:
+        """Whether regions may currently be edited.
+
+        Public because the window reads it too: it drops region edits that
+        arrive while this is False, since a signal is not a permission check.
+        """
         if not self._sliceReady:
             return False
         return not self._runLocked or self._runStatus == "paused"
 
     def _applyLock(self) -> None:
-        editable = self._editable()
+        editable = self.isEditable()
         self.addRegionBtn.setEnabled(editable)
         self.shapeCombo.setEnabled(editable)
         for roi in self._rois:
@@ -258,33 +285,75 @@ class RegionPanel(Qt.QWidget):
         Every affordance, not just the drag: leaving the handles live would let
         a locked region be resized, and leaving `removable` on would let it be
         deleted from the context menu.
+
+        A polygon carries one more surface than the flags reach. Its edges are
+        separate child items, each created accepting left clicks and wired to
+        segmentClicked, which inserts a vertex where the edge was clicked. So a
+        locked polygon with live segments is one click away from a reshaped
+        region reaching the slice mid-survey.
+
+        `rotatable` is deliberately not touched: it is off from construction for
+        every shape (see roiForRegion) and is not the gate's to hand back, since
+        no region can express a rotation whether a run is in flight or not.
         """
-        editable = self._editable()
+        editable = self.isEditable()
         roi.translatable = editable
         roi.resizable = editable
         roi.removable = editable
         for handle in roi.getHandles():
             handle.setVisible(editable)
+        for segment in getattr(roi, "segments", []):
+            segment.setAcceptedMouseButtons(
+                Qt.Qt.LeftButton if editable else Qt.Qt.NoButton
+            )
 
     # ---- view ----
     def regionShape(self) -> str:
         """The shape key for the next region drawn: rect, ellipse, or polygon."""
         return self.shapeCombo.currentData()
 
-    def fitToRegions(self) -> None:
-        """Frame every drawn region.
+    def _mirroredImageryBounds(self) -> Qt.QRectF | None:
+        """The extent of everything in the view that is not a region ROI, or
+        None if there is nothing else there.
 
-        With nothing drawn this does nothing: autoranging over an empty set is
-        how a view ends up at a scale the operator cannot recover from, and the
-        button is live before anything has been drawn.
+        In practice the mirrored pinned frames. Read off the view rather than
+        from PinnedFrameMirror: the panel renders regions and knows nothing
+        about what else is put in its view, and a back-reference to the mirror
+        would make the two mutually dependent for a bounding box.
+
+        Region ROIs are skipped because their bounds come from `regions()`,
+        which drops an ROI squashed to no extent -- and a zero-extent rectangle
+        is exactly what would frame the view at a scale nobody can recover from.
         """
-        bounds = [region.bounds() for region in self.regions()]
-        if not bounds:
+        rect = None
+        for item in self.view.addedItems:
+            if item in self._rois:
+                continue
+            itemRect = item.mapRectToView(item.boundingRect()).normalized()
+            rect = itemRect if rect is None else rect.united(itemRect)
+        return rect
+
+    def fitToRegions(self) -> None:
+        """Frame every drawn region and the imagery drawn under them.
+
+        Both, because a panel with pinned frames mirrored in and no region
+        seeded yet is the ordinary first state: a fresh viewport spans about a
+        metre, which renders a field of view sub-pixel, and this button is the
+        only one-click way back.
+
+        With neither this does nothing: autoranging over an empty set is how a
+        view ends up at a scale the operator cannot recover from, and the button
+        is live before anything has been drawn.
+        """
+        rect = self._mirroredImageryBounds()
+        for region in self.regions():
+            x0, y0, x1, y1 = region.bounds()
+            regionRect = Qt.QRectF(x0, y0, x1 - x0, y1 - y0)
+            rect = regionRect if rect is None else rect.united(regionRect)
+        if rect is None:
             return
-        x0 = min(b[0] for b in bounds)
-        y0 = min(b[1] for b in bounds)
-        x1 = max(b[2] for b in bounds)
-        y1 = max(b[3] for b in bounds)
         self.view.setRange(
-            xRange=(x0, x1), yRange=(y0, y1), padding=0.1
+            xRange=(rect.left(), rect.right()),
+            yRange=(rect.top(), rect.bottom()),
+            padding=0.1,
         )

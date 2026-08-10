@@ -20,6 +20,62 @@ ELLIPSE = EllipseRegion(1.0e-3, 2.0e-3, 1.4e-3, 2.1e-3)
 TRIANGLE = PolygonRegion(((1.0e-3, 2.0e-3), (1.4e-3, 2.02e-3), (1.1e-3, 2.1e-3)))
 
 
+class _AltDragEvent:
+    """One event of the Alt-modified body drag pyqtgraph turns into a rotation.
+
+    No handle is involved: pg.MouseDragHandler.mouseDragEvent reads the modifier
+    off the event and enters rotate mode if `roi.rotatable`, so dropping the
+    rotate handle does not reach this gesture -- only the flag does.
+
+    Rotation is driven by the horizontal scene-position delta and centred on
+    `buttonDownPos`, so those are the only coordinates that have to be real; the
+    rest is the QGraphicsSceneMouseEvent surface the handler touches.
+    """
+
+    def __init__(self, roi, dx, finish=False):
+        self._finish = finish
+        self._dx = dx
+        # Grabbed at the shape's own centre, the way a body drag is. In local
+        # coordinates, which is what centerLocal wants.
+        self._downPos = roi.boundingRect().center()
+
+    def isStart(self):
+        return not self._finish
+
+    def isFinish(self):
+        return self._finish
+
+    def button(self):
+        return Qt.Qt.LeftButton
+
+    def modifiers(self):
+        return Qt.Qt.AltModifier
+
+    def buttonDownPos(self, *args):
+        return self._downPos
+
+    def pos(self):
+        return self._downPos
+
+    def buttonDownScenePos(self, *args):
+        return Qt.QPointF(0.0, 0.0)
+
+    def scenePos(self):
+        return Qt.QPointF(self._dx, 0.0)
+
+    def accept(self):
+        pass
+
+    def ignore(self):
+        pass
+
+
+def altDragRoi(roi, dx=60.0):
+    """Alt-drag `roi`'s body -- pyqtgraph's rotate gesture -- and release."""
+    roi.mouseDragEvent(_AltDragEvent(roi, dx))
+    roi.mouseDragEvent(_AltDragEvent(roi, dx, finish=True))
+
+
 @pytest.mark.parametrize("region", [RECT, ELLIPSE, TRIANGLE])
 def test_a_region_round_trips_through_its_roi(qapp, region):
     from acq4.modules.Autopatch.region_panel import regionForRoi, roiForRegion
@@ -53,14 +109,37 @@ def test_a_rect_and_an_ellipse_map_to_different_roi_types(qapp):
     assert not isinstance(roiForRegion(RECT), pg.EllipseROI)
 
 
-def test_an_ellipse_roi_cannot_be_rotated(qapp):
-    # EllipseRegion is inscribed in an axis-aligned box, so a rotate handle
-    # would let the operator draw a shape that has no region to map back to:
-    # regionForRoi reads pos and size and would drop the rotation silently.
+def test_an_ellipse_roi_has_no_rotate_handle(qapp):
+    # pg.EllipseROI ships one, and it is the only affordance on any of these
+    # ROIs that offers a rotation the region cannot express. Being inert
+    # (rotatable=False) is not enough on its own: a handle the operator can
+    # grab and that then does nothing is a control that lies.
     from acq4.modules.Autopatch.region_panel import roiForRegion
 
     handles = roiForRegion(ELLIPSE).handles
     assert not any(h["type"] == "r" for h in handles)
+
+
+@pytest.mark.parametrize("region", [RECT, ELLIPSE, TRIANGLE])
+def test_no_region_roi_can_be_rotated(qapp, region):
+    # Every region is an axis-aligned box or a list of vertices, so a rotation
+    # has nowhere to be recorded: regionForRoi reads pos and size, and a rotated
+    # box round-trips as an unrotated box somewhere else entirely -- the
+    # operator outlines one patch of tissue and the survey tiles another.
+    #
+    # Driven through the drag handler rather than through roi.setAngle(), which
+    # is the programmatic setter and honours no flag: `rotatable` gates
+    # MouseDragHandler's rotate mode and ROI.movePoint's 'r' handles, and the
+    # Alt-drag below is the one of those two that needs no handle at all.
+    from acq4.modules.Autopatch.region_panel import regionForRoi, roiForRegion
+
+    roi = roiForRegion(region)
+    before = regionForRoi(roi)
+
+    altDragRoi(roi)
+
+    assert roi.angle() == 0
+    assert regionForRoi(roi) == before
 
 
 def test_a_roi_dragged_past_its_own_origin_still_makes_a_region(qapp):
