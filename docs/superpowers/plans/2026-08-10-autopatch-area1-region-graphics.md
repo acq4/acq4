@@ -149,7 +149,7 @@ Add `SearchRegion` to the existing `search_region` import at the top of the file
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `/home/martin/.miniforge3/envs/acq4-gl/bin/python -m pytest acq4/experiment/tests/test_slice.py -k "mid_scan or takes_effect or copies_so" -v`
+Run: `/home/martin/.miniforge3/envs/acq4-gl/bin/python -m pytest acq4/experiment/tests/test_slice.py -k "does_not_drop or takes_effect or copies_so or leaves_coverage" -v`
 
 Expected: FAIL — `AttributeError: 'Slice' object has no attribute 'setRegions'`.
 
@@ -213,7 +213,9 @@ Temporarily change `setRegions` to mutate in place:
         self._regions[:] = list(regions)
 ```
 
-Run: `/home/martin/.miniforge3/envs/acq4-gl/bin/python -m pytest acq4/experiment/tests/test_slice.py -k mid_scan -v`
+Run: `/home/martin/.miniforge3/envs/acq4-gl/bin/python -m pytest acq4/experiment/tests/test_slice.py -k does_not_drop -v`
+
+(`-k mid_scan` selects nothing: "mid_scan" appears only in the helper class name, not in any test function's name.)
 
 Expected: FAIL at the `assert laterTiles` line. **Record the file and line number of the failure in your report** — a mutation that fails at a different line has proven something else. Then revert the mutation and re-run to confirm green.
 
@@ -603,12 +605,19 @@ def test_dragging_a_region_reports_the_whole_list(qapp):
     panel.sigRegionsChanged.connect(seen.append)
 
     roi = panel._rois[0]
-    roi.setPos((2.0e-3, 5.0e-3))
+    # finish=False: setPos's own default (finish=True) already emits
+    # sigRegionChangeFinished, which is what a real drag never does mid-gesture
+    # (pg.MouseDragHandler always moves with finish=False and fires the signal
+    # exactly once, from _moveFinished, on release) -- so the explicit emit
+    # below is what stands in for that release.
+    roi.setPos((2.0e-3, 5.0e-3), finish=False)
     roi.sigRegionChangeFinished.emit(roi)
 
     assert len(seen) == 1
     moved, untouched = seen[0]
-    assert moved == RectRegion(2.0e-3, 5.0e-3, 2.4e-3, 5.1e-3)
+    # approx, not ==: the ROI's corners survive a subtract-then-re-add at SI
+    # magnitudes, so 1.0e-3 + 1.4e-3 - 1.0e-3 is not bit-identical to 1.4e-3.
+    assert moved.bounds() == pytest.approx((2.0e-3, 5.0e-3, 2.4e-3, 5.1e-3))
     assert untouched == OTHER
 
 
