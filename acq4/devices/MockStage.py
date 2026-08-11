@@ -252,7 +252,11 @@ class MockStageThread(Thread):
     def quit(self):
         with self.lock:
             self._quit = True
-            
+        # Join before returning: a QThread destroyed while its thread is still
+        # running aborts the process.
+        if not self.wait(10000):
+            raise TimeoutError("Timed out waiting for MockStageThread to exit")
+
     def setTarget(self, future, target, speed):
         """Begin moving toward a target position.
         """
@@ -286,6 +290,7 @@ class MockStageThread(Thread):
                 speed = self.speed
                 velocity = self.velocity
                 pos = self.pos
+                move = self.currentMove
 
             dt = now - lastUpdate
             lastUpdate = now
@@ -298,9 +303,18 @@ class MockStageThread(Thread):
                 stepDist = speed * dt
                 if stepDist >= dist:
                     self._setPosition(target)
-                    self.stop()
-                    # race condition here if we finish the move before stopping
-                    self.currentMove.mockFinish()
+                    with self.lock:
+                        # Retire this move only if it is still the current one. A
+                        # move submitted while we were stepping must keep its
+                        # target and must not be resolved at this move's position.
+                        superseded = self.currentMove is not move
+                        if not superseded:
+                            self.target = None
+                            self.speed = None
+                            self.velocity = None
+                            self.currentMove = None
+                    if not superseded and move is not None:
+                        move.mockFinish()
                 else:
                     unit = dif / dist
                     step = unit * stepDist
