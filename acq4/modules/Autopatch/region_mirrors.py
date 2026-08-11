@@ -119,12 +119,24 @@ def _pathForRegion(region) -> Qt.QPainterPath:
             path.lineTo(x, y)
         path.closeSubpath()
         return path
-    x0, y0, x1, y1 = region.bounds()
+    # `box()`, not `bounds()`: once a region has an angle those differ, and it is
+    # the box the operator sized that gets drawn and then turned. Drawing
+    # `bounds()` would put the axis-aligned hull on screen instead of the shape.
+    x0, y0, x1, y1 = region.box()
     rect = Qt.QRectF(x0, y0, x1 - x0, y1 - y0)
     if isinstance(region, EllipseRegion):
         path.addEllipse(rect)
     else:
         path.addRect(rect)
+    if region.angle:
+        # About the (x0, y0) corner, the region's own pivot. `QTransform.rotate`
+        # is the same call `pg.ROI.setAngle` makes, so the mirrored outline and
+        # the editable ROI in Area 1 turn together by construction.
+        turn = Qt.QTransform()
+        turn.translate(x0, y0)
+        turn.rotate(region.angle)
+        turn.translate(-x0, -y0)
+        path = turn.map(path)
     return path
 
 

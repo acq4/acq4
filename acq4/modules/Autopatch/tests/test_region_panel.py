@@ -346,19 +346,20 @@ def test_a_paused_run_unlocks_editing(qapp, region):
 
 
 @pytest.mark.parametrize("region", SHAPES)
-def test_a_paused_run_does_not_hand_back_a_rotation(qapp, region):
-    # Unlocking restores every affordance the ROI shipped with -- except this
-    # one, which it never had. `rotatable` is off by construction and is not the
-    # gate's to give back: no region can express a rotation whatever the run is
-    # doing. Its own test because unlocking sets three sibling flags to True and
-    # a fourth set alongside them would look like it belonged.
+def test_a_paused_run_hands_rotation_back(qapp, region):
+    # A region can record an angle now, so rotation is an ordinary edit and the
+    # gate owes it the same treatment as dragging and resizing: off while a run
+    # is in flight (asserted above), on again once the run parks at a pause.
+    # Its own test because the locked side is the one that protects a survey,
+    # and a one-sided test on a two-sided invariant passes happily while the
+    # other side is broken.
     panel = makePanel()
     panel.setSliceReady(True)
     panel.setRegions([region])
     panel.setInteractionLocked(True)
     panel.setRunStatus("paused")
 
-    assert not panel._rois[0].rotatable
+    assert panel._rois[0].rotatable
 
 
 @pytest.mark.parametrize("region", SHAPES)

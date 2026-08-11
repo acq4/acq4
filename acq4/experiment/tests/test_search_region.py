@@ -470,8 +470,9 @@ def test_rotating_a_region_changes_which_tiles_it_selects(regionClass):
     assert turnedPattern != straightPattern
     # Named tiles, so this cannot be satisfied by an off-by-one in tile count:
     # each is selected by exactly one of the two orientations.
-    onlyTurned = [c for c, t, s in zip(centers, turnedPattern, straightPattern) if t and not s]
-    onlyStraight = [c for c, t, s in zip(centers, turnedPattern, straightPattern) if s and not t]
+    both = list(zip(centers, turnedPattern, straightPattern))
+    onlyTurned = [c for c, turnedHit, straightHit in both if turnedHit and not straightHit]
+    onlyStraight = [c for c, turnedHit, straightHit in both if straightHit and not turnedHit]
     assert onlyTurned and onlyStraight
 
 

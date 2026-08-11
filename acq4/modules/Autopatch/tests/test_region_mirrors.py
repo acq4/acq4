@@ -390,3 +390,36 @@ def test_clear_removes_everything_it_put_there(qapp):
 
     assert window.items == []
     assert mirror.items == []
+
+
+@pytest.mark.parametrize("regionClass", ["rect", "ellipse"])
+def test_a_turned_regions_outline_is_drawn_turned(qapp, regionClass):
+    # The mirror is the same region seen from the Camera window, and an outline
+    # drawn from bounds() would be the axis-aligned box around the shape rather
+    # than the shape: bigger than the tissue outlined, and at the wrong angle.
+    # The operator would be looking at two different regions in two windows.
+    import math
+
+    from acq4.experiment.search_region import EllipseRegion, RectRegion
+    from acq4.modules.Autopatch.region_mirrors import _pathForRegion
+
+    cls = EllipseRegion if regionClass == "ellipse" else RectRegion
+    box = (1.0e-3, 2.0e-3, 1.6e-3, 2.4e-3)
+    angle = 30.0
+    turnedPath = _pathForRegion(cls(*box, angle))
+    straightPath = _pathForRegion(cls(*box))
+
+    assert turnedPath != straightPath
+    # Every point of the turned outline is the matching point of the straight
+    # one, turned about the (x0, y0) corner -- the region's own pivot.
+    th = math.radians(angle)
+    assert turnedPath.elementCount() == straightPath.elementCount()
+    for i in range(straightPath.elementCount()):
+        straight = straightPath.elementAt(i)
+        dx, dy = straight.x - box[0], straight.y - box[1]
+        expected = (
+            box[0] + dx * math.cos(th) - dy * math.sin(th),
+            box[1] + dx * math.sin(th) + dy * math.cos(th),
+        )
+        turned = turnedPath.elementAt(i)
+        assert (turned.x, turned.y) == pytest.approx(expected), i

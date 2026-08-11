@@ -18,33 +18,22 @@ from acq4.util import Qt
 REGION_PEN = pg.mkPen("y", width=2)
 
 
-class _AxisAlignedEllipseROI(pg.EllipseROI):
-    """A pg.EllipseROI with its rotate handle replaced by a second scale handle.
-
-    `rotatable=False` is what actually stops a rotation (see roiForRegion), and
-    it already makes pg.EllipseROI's stock rotate handle inert. Replacing the
-    handle as well is about the affordance rather than the geometry: a handle
-    the operator can grab and drag, that then does nothing at all, is a control
-    that lies. The replacement scales along the other axis, so the ellipse gains
-    the width and height handles the rectangle already has.
-    """
-
-    def _addHandles(self):
-        self.addScaleHandle([1.0, 0.5], [0.5, 0.5])
-        self.addScaleHandle([0.5, 1.0], [0.5, 0.5])
-
-
 def roiForRegion(region: SearchRegion) -> pg.ROI:
     """The editable ROI that draws `region`.
 
-    `rotatable=False` on every shape. No region can express a rotation --
-    RectRegion and EllipseRegion are axis-aligned boxes, and PolygonRegion's
-    vertices are read back through the ROI's own transform -- so a rotated ROI
-    either round-trips as an unrotated box displaced by the rotation, or as a
-    polygon somewhere else entirely. Either way the operator outlines one patch
-    of tissue and the survey tiles another. Dropping the rotate *handle* does
-    not reach this: pg.MouseDragHandler enters rotate mode on an Alt-modified
-    drag of the ROI body, with no handle involved, and consults this flag alone.
+    Rotatable, on every shape, because every shape can now record the result: a
+    box region carries an angle, and a polygon's vertices are read back through
+    the ROI's own transform, which a rotation is part of. The stock
+    `pg.EllipseROI` is used as it ships, rotate handle and all, since that handle
+    now does what it looks like it does.
+
+    Sized from `box()` rather than `bounds()`: those differ once there is an
+    angle, and it is the box the operator sized -- not the larger axis-aligned
+    extent the tiler plans over -- that the ROI is drawn from and turned.
+
+    `setAngle` with no explicit centre turns the ROI about its local origin and
+    leaves `pos()` where it is, which is the pivot `_BoxRegion` documents. That
+    correspondence is what makes `regionForRoi` below its exact inverse.
     """
     if isinstance(region, PolygonRegion):
         return pg.PolyLineROI(
@@ -52,13 +41,16 @@ def roiForRegion(region: SearchRegion) -> pg.ROI:
             closed=True,
             pen=REGION_PEN,
             removable=True,
-            rotatable=False,
+            rotatable=True,
         )
-    x0, y0, x1, y1 = region.bounds()
-    roiClass = _AxisAlignedEllipseROI if isinstance(region, EllipseRegion) else pg.RectROI
-    return roiClass(
-        (x0, y0), (x1 - x0, y1 - y0), pen=REGION_PEN, removable=True, rotatable=False
+    x0, y0, x1, y1 = region.box()
+    roiClass = pg.EllipseROI if isinstance(region, EllipseRegion) else pg.RectROI
+    roi = roiClass(
+        (x0, y0), (x1 - x0, y1 - y0), pen=REGION_PEN, removable=True, rotatable=True
     )
+    if region.angle:
+        roi.setAngle(region.angle)
+    return roi
 
 
 def regionForRoi(roi: pg.ROI) -> SearchRegion | None:
@@ -73,10 +65,16 @@ def regionForRoi(roi: pg.ROI) -> SearchRegion | None:
     returning None rather than by raising a traceback out of a slot -- the same
     choice `SearchPanel.constraints()` makes, and for the same reason.
 
-    Corner normalization is left to `_BoxRegion.__post_init__`, which already
-    orders its corners -- an ROI resized past its own origin reports a negative
-    size, and both paths through that hazard should agree by construction rather
-    than by two implementations happening to match.
+    An ROI resized past its own origin reports a negative size, so the corner
+    `pos()` sits on is no longer the region's `(x0, y0)`. That matters more than
+    it used to: `(x0, y0)` is the pivot, so handing the region the wrong corner
+    would turn the shape about the wrong point and draw it somewhere else. The
+    box's lowest corner is found in ROI-local coordinates and mapped out through
+    the ROI's transform, which is the corner that is its own image under the turn
+    and therefore the one the region's convention wants.
+
+    A polygon needs none of this: its vertices go through `mapToParent`
+    individually, so a rotation arrives baked into the coordinates.
     """
     try:
         if isinstance(roi, pg.PolyLineROI):
@@ -85,11 +83,19 @@ def regionForRoi(roi: pg.ROI) -> SearchRegion | None:
                 globalPos = roi.mapToParent(localPos)
                 vertices.append((globalPos.x(), globalPos.y()))
             return PolygonRegion(tuple(vertices))
-        pos = roi.pos()
         size = roi.size()
-        x0, y0 = pos.x(), pos.y()
+        w, h = size.x(), size.y()
+        localX = 0.0 if w >= 0 else w
+        localY = 0.0 if h >= 0 else h
+        if localX == 0.0 and localY == 0.0:
+            # The ordinary case, read straight off `pos()` so that an unrotated
+            # region round-trips through exactly the floats it was built from.
+            corner = roi.pos()
+        else:
+            corner = roi.mapToParent(Qt.QPointF(localX, localY))
+        x0, y0 = corner.x(), corner.y()
         regionClass = EllipseRegion if isinstance(roi, pg.EllipseROI) else RectRegion
-        return regionClass(x0, y0, x0 + size.x(), y0 + size.y())
+        return regionClass(x0, y0, x0 + abs(w), y0 + abs(h), roi.angle())
     except ValueError:
         return None
 
@@ -292,13 +298,15 @@ class RegionPanel(Qt.QWidget):
         locked polygon with live segments is one click away from a reshaped
         region reaching the slice mid-survey.
 
-        `rotatable` is deliberately not touched: it is off from construction for
-        every shape (see roiForRegion) and is not the gate's to hand back, since
-        no region can express a rotation whether a run is in flight or not.
+        `rotatable` belongs in that list now that a region can record an angle:
+        it is a fourth way to change the tissue a survey is about to image, and
+        pg.MouseDragHandler enters rotate mode on an Alt-modified drag of the ROI
+        *body* -- no handle involved -- so hiding the handles does not reach it.
         """
         editable = self.isEditable()
         roi.translatable = editable
         roi.resizable = editable
+        roi.rotatable = editable
         roi.removable = editable
         for handle in roi.getHandles():
             handle.setVisible(editable)

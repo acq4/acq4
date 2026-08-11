@@ -101,23 +101,36 @@ Three hazards the adapters own:
   returns `None` there rather than letting `SearchRegion`'s validation raise; see
   §8.
 
-### 3.2.1 The one stock tool that is not adequate
+### 3.2.1 Rotation, and the pivot it turns on
 
-No region can express a rotation: `RectRegion` and `EllipseRegion` are
-axis-aligned boxes, and `PolygonRegion`'s vertices are read back through the
-ROI's own transform. A rotated ROI therefore maps back to a region with the
-rotation silently dropped — the operator outlines one patch of tissue and the
-survey tiles another. The Camera module's `ROIPlotter._addEllipseROI` uses the
-stock class quite correctly, because it only reads the pixels under the ROI and
-a rotation changes which pixels those are; here the shape has to survive a round
-trip through a representation that cannot express rotation.
+Tissue is not axis-aligned, so regions rotate. `RectRegion` and `EllipseRegion`
+carry an `angle` alongside their box; `PolygonRegion` needs no such field,
+because its vertices are read back through `roi.mapToParent`, which already
+includes the ROI's transform, so a turn arrives baked into the coordinates.
+Every ROI is built `rotatable=True` and the stock `pg.EllipseROI` is used as it
+ships, rotate handle and all.
 
-So **every** ROI is built `rotatable=False`. The flag, not the handle, is what
-matters: `pg.MouseDragHandler` enters rotate mode on an Alt-modified drag of the
-ROI *body*, with no handle involved, and consults the flag alone. `pg.EllipseROI`
-additionally ships a rotate handle; that is replaced with a second scale handle,
-because a handle the operator can grab that then does nothing is a control that
-lies. Nothing else about any ROI is modified.
+The pivot is the load-bearing detail, and it was measured rather than chosen.
+`pg.ROI.setAngle` records **degrees** and, given no explicit centre, turns the
+ROI about its **local origin** — which is exactly what `ROI.pos()` reports, and
+which it leaves untouched. So a region's angle is degrees counter-clockwise
+about its `(x0, y0)` corner, and `regionForRoi` reads `pos()` and `size()` back
+with the same arithmetic the axis-aligned case always used. That is what makes
+`regionForRoi(roiForRegion(r)) == r` exact rather than approximate.
+
+A centre pivot was tried first and rejected on measurement: recovering a corner
+from a centre costs a halving and its inverse, which over 2000 sampled regions
+failed to return the original float about half the time — including at zero
+angle, where it would have shifted regions nobody rotated. Radians were rejected
+for the same reason: `math.degrees(math.radians(30.0)) != 30.0`.
+
+Two consequences elsewhere. `bounds()` is now the axis-aligned extent of the
+*turned* shape, while the new `box()` is the unrotated box the operator sized;
+anything that draws or rebuilds a shape wants `box()`, and only the tiler wants
+`bounds()`. And the editing gate now includes `rotatable`, because rotation is a
+fourth way to change the tissue a survey is about to image — `pg.MouseDragHandler`
+enters rotate mode on an Alt-modified drag of the ROI *body*, with no handle
+involved, so hiding the handles does not reach it.
 
 ### 3.3 `PinnedFrameMirror` — Camera to Autopatch
 
