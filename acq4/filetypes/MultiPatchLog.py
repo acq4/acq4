@@ -587,7 +587,6 @@ class MultiPatchLogWidget(Qt.QWidget):
 
         # Create a depth view plot in the main graphics layout
         self._depth_plot = self._plots_widget.addPlot(
-            name="Focus Depth",
             title='Focus Depth',
             labels={'left': ('Depth', 'm')},
             row=0,
@@ -613,7 +612,6 @@ class MultiPatchLogWidget(Qt.QWidget):
         if units in self._plots_by_units:
             return self._plots_by_units[units]
         plot: pg.PlotItem = self._plots_widget.addPlot(
-            name=units,
             labels=dict(bottom=('time', 's'), left=('', units)),
             row=len(self._plots_by_units) + 2,
             col=0,
@@ -969,7 +967,6 @@ class MultiPatchLogWidget(Qt.QWidget):
             #    del(gr)
 
             self._full_test_pulse_plot = self._plots_widget.addPlot(
-                name="Test Pulse",
                 title='Test Pulse',
                 labels=dict(bottom=('time', 's'), left=('', 'V')),
                 row=1,

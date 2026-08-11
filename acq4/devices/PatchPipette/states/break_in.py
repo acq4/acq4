@@ -17,6 +17,14 @@ class BreakInSuccessful(Exception):
 class BreakInFailed(Exception):
     pass
 
+class ResistanceThresholdReached(Exception):
+    """Raised when steady-state resistance drops below ``resistanceThreshold``.
+
+    Signals that break-in pulses should pause so access resistance can be confirmed;
+    it does not by itself end the state.
+    """
+    pass
+
 
 class BreakInState(PatchPipetteState):
     """State using pressure pulses to rupture membrane for whole cell recording.
@@ -40,8 +48,17 @@ class BreakInState(PatchPipetteState):
         Capacitance (Farads) above which to transition to the 'whole cell' state
         (note that resistance threshold must also be met)
     resistanceThreshold : float
-        Resistance (Ohms) below which to transition to the 'whole cell' state if
-        capacitance threshold is met, or fail otherwise.
+        Steady-state resistance (Ohms) below which break-in pulses are paused so access
+        resistance can be confirmed. This alone does not complete break-in; access
+        resistance must also drop below ``accessResistanceThreshold``.
+    accessResistanceThreshold : float
+        Access resistance (Ohms) below which (averaged over ``accessAverageDuration``, and
+        only while ``resistanceThreshold`` is also met) break-in is considered successful and
+        the state transitions to 'whole cell'. If access resistance stays above this, break-in
+        pulses resume.
+    accessAverageDuration : float
+        Duration (seconds) over which to average access and steady-state resistance when
+        confirming break-in after ``resistanceThreshold`` is tripped.
     holdingCurrentThreshold : float
         Holding current (Amps) below which the cell is considered to be lost and the state fails.
     """
@@ -65,6 +82,8 @@ class BreakInState(PatchPipetteState):
         'pulsePressures': {'type': 'str', 'default': "[-30e3, -35e3, -40e3, -50e3, -60e3, -60e3, -60e3, -60e3, -60e3, -60e3]"},
         'pulseInterval': {'type': 'float', 'default': 2, 'suffix': 's'},
         'resistanceThreshold': {'type': 'float', 'default': 650e6, 'suffix': 'Ω'},
+        'accessResistanceThreshold': {'type': 'float', 'default': 20e6, 'suffix': 'Ω'},
+        'accessAverageDuration': {'type': 'float', 'default': 3, 'suffix': 's'},
         'capacitanceThreshold': {'type': 'float', 'default': 10e-12, 'suffix': 'F'},
         'holdingCurrentThreshold': {'type': 'float', 'default': -1e-9, 'suffix': 'A'},
     }
@@ -90,12 +109,21 @@ class BreakInState(PatchPipetteState):
                 time_until_next = (lastPulse + config['pulseInterval']) - ptime.time()
                 if time_until_next > 0:
                     sleep(time_until_next)
-                self.checkBreakIn()
-                nPulses = config['nPulses'][attempt]
-                pdur = config['pulseDurations'][attempt]
-                press = config['pulsePressures'][attempt]
-                self.setState('Break in attempt %d' % attempt)
-                self.attemptBreakIn(nPulses, pdur, press)
+                try:
+                    self.checkBreakIn()
+                    nPulses = config['nPulses'][attempt]
+                    pdur = config['pulseDurations'][attempt]
+                    press = config['pulsePressures'][attempt]
+                    self.setState('Break in attempt %d' % attempt)
+                    self.attemptBreakIn(nPulses, pdur, press)
+                except ResistanceThresholdReached:
+                    # Steady-state resistance dropped below threshold: pulses are already
+                    # paused (attemptBreakIn restores atmosphere on the way out). Confirm the
+                    # break-in by averaging access resistance before either succeeding or
+                    # resuming pulses.
+                    if self.confirmBreakIn():
+                        raise BreakInSuccessful()
+                    self.setState('resistance below threshold but access resistance too high; resuming break in')
                 attempt += 1
                 lastPulse = ptime.time()
 
@@ -136,7 +164,9 @@ class BreakInState(PatchPipetteState):
         """Check the status of the break-in attempt based on the latest test pulse.
         Also checks for stop requests.
 
-        Raises BreakInSuccessful or BreakInFailed as appropriate.
+        Raises BreakInFailed if the cell is lost, or ResistanceThresholdReached when the
+        steady-state resistance drops below ``resistanceThreshold`` (signalling that pulses
+        should pause so access resistance can be confirmed).
         Returns None if the break in is still ongoing.
         """
         start = ptime.time()
@@ -150,12 +180,48 @@ class BreakInState(PatchPipetteState):
         tp = tps[-1]
 
         analysis = tp.analysis
+        self._checkHoldingCurrent(analysis)
+
+        if self.config['resistanceThreshold'] is not None and analysis['steady_state_resistance'] < self.config['resistanceThreshold']:
+            raise ResistanceThresholdReached()
+
+    def _checkHoldingCurrent(self, analysis):
+        """Raise BreakInFailed if the holding current indicates the cell has been lost."""
         holding = analysis['baseline_current']
         if holding < self.config['holdingCurrentThreshold']:
             raise BreakInFailed(f'Holding current {holding * 1e9:.1f}nA exceeded `holdingCurrentThreshold`.')
 
-        if self.config['resistanceThreshold'] is not None and analysis['steady_state_resistance'] < self.config['resistanceThreshold']:
-            raise BreakInSuccessful()
+    def confirmBreakIn(self):
+        """Average access and steady-state resistance over ``accessAverageDuration``.
+
+        Called with pulses paused after ``resistanceThreshold`` is tripped. Returns True only
+        if *both* thresholds are met on the averaged values: mean access resistance below
+        ``accessResistanceThreshold`` and mean steady-state resistance below
+        ``resistanceThreshold``. Otherwise returns False so break-in pulses resume.
+
+        Raises BreakInFailed if the cell is lost (holding current) during the averaging window.
+        """
+        self.setState('resistance below threshold; measuring access resistance')
+        start = ptime.time()
+        accessValues = []
+        resistanceValues = []
+        while ptime.time() - start < self.config['accessAverageDuration']:
+            check_stop()
+            for tp in self.getTestPulses(timeout=0.2):
+                analysis = tp.analysis
+                self._checkHoldingCurrent(analysis)
+                accessValues.append(analysis['access_resistance'])
+                resistanceValues.append(analysis['steady_state_resistance'])
+
+        if len(accessValues) == 0:
+            return False
+
+        meanAccess = sum(accessValues) / len(accessValues)
+        meanResistance = sum(resistanceValues) / len(resistanceValues)
+        accessOk = meanAccess < self.config['accessResistanceThreshold']
+        resistanceOk = (self.config['resistanceThreshold'] is None
+                        or meanResistance < self.config['resistanceThreshold'])
+        return accessOk and resistanceOk
 
     def _cleanup(self):
         with log_and_ignore_exception(Exception, "Error resetting pressure after clean"):
