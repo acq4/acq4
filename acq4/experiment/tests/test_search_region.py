@@ -1,6 +1,8 @@
 """Tests for search-region shapes: the bounding box a survey plans its tiles over,
 and the exact rect-vs-shape overlap test that decides which of those tiles to image."""
 
+import math
+
 import pytest
 
 from acq4.experiment.search_region import EllipseRegion, PolygonRegion, RectRegion, SearchRegion, tile_rect
@@ -310,3 +312,203 @@ def test_the_polygon_tile_pattern_is_neither_everything_nor_nothing():
 )
 def test_polygon_tile_selection_is_identical_at_every_magnitude(scale, off):
     assert _polygon_pattern(scale, off) == _polygon_pattern(1.0, 0.0)
+
+
+# ---- rotation ----
+# 30 degrees, and boxes that are not square: a square fixture cannot tell an x
+# axis from a y one, and a right angle is as symmetric as a square, so either
+# would let a swapped sin/cos or a swapped rx/ry pass.
+ANGLE = 30.0
+BOX = (1.0e-3, 2.0e-3, 1.6e-3, 2.4e-3)
+
+
+def _turned(px, py, x, y, deg):
+    """`(x, y)` turned `deg` degrees counter-clockwise about `(px, py)`.
+
+    Written out here rather than imported, so the tests state the convention
+    they are pinning instead of agreeing with the implementation by sharing it.
+    """
+    th = math.radians(deg)
+    c, s = math.cos(th), math.sin(th)
+    dx, dy = x - px, y - py
+    return (px + dx * c - dy * s, py + dx * s + dy * c)
+
+
+def _turned_oracle(region, center, fov, samples=60):
+    """Independent oracle for a rotated region: densely sample the tile, turn
+    each sample point *back* about the pivot, and ask the unrotated shape.
+
+    A different method from either implementation -- point sampling against the
+    axis-aligned membership test, rather than separating axes or a distance to a
+    mapped parallelogram -- so agreement is evidence rather than a tautology.
+    """
+    x0, y0, x1, y1 = region.box()
+    cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+    rx, ry = (x1 - x0) / 2, (y1 - y0) / 2
+    isEllipse = isinstance(region, EllipseRegion)
+    tx0, ty0, tx1, ty1 = tile_rect(center, fov)
+    for i in range(samples + 1):
+        px = tx0 + (tx1 - tx0) * i / samples
+        for j in range(samples + 1):
+            py = ty0 + (ty1 - ty0) * j / samples
+            ux, uy = _turned(x0, y0, px, py, -region.angle)
+            if isEllipse:
+                if ((ux - cx) / rx) ** 2 + ((uy - cy) / ry) ** 2 <= 1.0:
+                    return True
+            elif x0 <= ux <= x1 and y0 <= uy <= y1:
+                return True
+    return False
+
+
+@pytest.mark.parametrize("regionClass", [RectRegion, EllipseRegion])
+def test_a_region_is_unrotated_unless_told_otherwise(regionClass):
+    # Four-argument construction is every existing caller, and it must keep
+    # meaning the axis-aligned shape it has always meant.
+    assert regionClass(*BOX).angle == 0.0
+    assert regionClass(*BOX) == regionClass(*BOX, 0.0)
+
+
+@pytest.mark.parametrize("regionClass", [RectRegion, EllipseRegion])
+def test_the_angle_is_part_of_the_shape(regionClass):
+    # Two regions over the same box at different angles cover different tissue,
+    # so a region list must never treat one as the other.
+    assert regionClass(*BOX, ANGLE) != regionClass(*BOX)
+
+
+@pytest.mark.parametrize("regionClass", [RectRegion, EllipseRegion])
+def test_the_pivot_is_the_first_corner(regionClass):
+    # The convention `pg.ROI.setAngle` uses by default -- rotation about the
+    # ROI's local origin, which is `pos()` -- and matching it is what lets a
+    # rotated ROI round-trip exactly.
+    #
+    # Read off the centre of `bounds()`, which is the shape's own centre for
+    # both of these: a turned ellipse's extent is symmetric about it by the
+    # closed form, and a turned rectangle's four corners hull to a box centred
+    # on it. Turning about the corner carries that centre somewhere new, which
+    # is precisely what a centre pivot would not do.
+    x0, y0, x1, y1 = BOX
+    bx0, by0, bx1, by1 = regionClass(*BOX, ANGLE).bounds()
+    boxCenter = ((x0 + x1) / 2, (y0 + y1) / 2)
+    assert ((bx0 + bx1) / 2, (by0 + by1) / 2) == pytest.approx(
+        _turned(x0, y0, *boxCenter, ANGLE)
+    )
+    assert ((bx0 + bx1) / 2, (by0 + by1) / 2) != pytest.approx(boxCenter)
+
+
+def test_a_rotated_rect_bounds_the_box_of_its_turned_corners(): 
+    region = RectRegion(*BOX, ANGLE)
+    x0, y0, x1, y1 = BOX
+    turned = [
+        _turned(x0, y0, cx, cy, ANGLE)
+        for cx, cy in ((x0, y0), (x1, y0), (x1, y1), (x0, y1))
+    ]
+    assert region.bounds() == pytest.approx(
+        (
+            min(p[0] for p in turned),
+            min(p[1] for p in turned),
+            max(p[0] for p in turned),
+            max(p[1] for p in turned),
+        )
+    )
+    # And it is genuinely wider than the box it came from, or the test above
+    # would pass on an implementation that ignored the angle.
+    assert region.bounds() != pytest.approx(BOX)
+
+
+def test_a_rotated_ellipse_bounds_by_the_closed_form_half_extents():
+    region = EllipseRegion(*BOX, ANGLE)
+    x0, y0, x1, y1 = BOX
+    rx, ry = (x1 - x0) / 2, (y1 - y0) / 2
+    th = math.radians(ANGLE)
+    hw = math.hypot(rx * math.cos(th), ry * math.sin(th))
+    hh = math.hypot(rx * math.sin(th), ry * math.cos(th))
+    cx, cy = _turned(x0, y0, (x0 + x1) / 2, (y0 + y1) / 2, ANGLE)
+    assert region.bounds() == pytest.approx((cx - hw, cy - hh, cx + hw, cy + hh))
+    # A rotated ellipse is strictly narrower than its rotated bounding *box*,
+    # which is what makes the closed form worth having rather than reusing the
+    # rectangle's four-corner hull.
+    assert hw < max(
+        abs(_turned(x0, y0, c, d, ANGLE)[0] - cx)
+        for c, d in ((x0, y0), (x1, y0), (x1, y1), (x0, y1))
+    )
+
+
+@pytest.mark.parametrize("regionClass", [RectRegion, EllipseRegion])
+def test_a_rotated_region_agrees_with_a_sampled_oracle_over_a_grid(regionClass):
+    # A whole grid rather than a handful of tiles: rotation moves the boundary
+    # past a different set of tiles on every side, and only the tiles near that
+    # boundary can tell a correct implementation from an almost-correct one.
+    fov_len = 100e-6
+    region = regionClass(*BOX, ANGLE)
+    fov = (fov_len, fov_len)
+    bx0, by0, bx1, by1 = region.bounds()
+    for gy in range(12):
+        for gx in range(12):
+            center = (bx0 + (gx + 0.5) * fov_len, by0 + (gy + 0.5) * fov_len)
+            assert region.overlapsTile(center, fov) == _turned_oracle(
+                region, center, fov
+            ), (regionClass.__name__, gx, gy)
+
+
+@pytest.mark.parametrize("regionClass", [RectRegion, EllipseRegion])
+def test_rotating_a_region_changes_which_tiles_it_selects(regionClass):
+    # The property that makes this feature worth anything: an implementation
+    # that quietly dropped the angle would tile the operator's tissue at the
+    # wrong orientation, and would pass any test that only counted tiles.
+    fov_len = 100e-6
+    fov = (fov_len, fov_len)
+    turned = regionClass(*BOX, ANGLE)
+    straight = regionClass(*BOX)
+    bx0, by0, bx1, by1 = turned.bounds()
+    centers = [
+        (bx0 + (gx + 0.5) * fov_len, by0 + (gy + 0.5) * fov_len)
+        for gy in range(12)
+        for gx in range(12)
+    ]
+    turnedPattern = tuple(turned.overlapsTile(c, fov) for c in centers)
+    straightPattern = tuple(straight.overlapsTile(c, fov) for c in centers)
+    assert turnedPattern != straightPattern
+    # Named tiles, so this cannot be satisfied by an off-by-one in tile count:
+    # each is selected by exactly one of the two orientations.
+    onlyTurned = [c for c, t, s in zip(centers, turnedPattern, straightPattern) if t and not s]
+    onlyStraight = [c for c, t, s in zip(centers, turnedPattern, straightPattern) if s and not t]
+    assert onlyTurned and onlyStraight
+
+
+@pytest.mark.parametrize("fov_len,off", [(1.0, 0.0), (1e-6, 3.0), (1e3, -2e4)])
+def test_rotated_tile_selection_is_identical_at_every_magnitude(fov_len, off):
+    # The same scale-invariance property the axis-aligned shapes are held to.
+    # The separating-axis and mapped-parallelogram tests were chosen over a
+    # Qt-based one precisely so this holds; asserting it is what keeps an
+    # absolute tolerance from creeping back in.
+    def pattern(regionClass, fov_len, off):
+        side = 9 * fov_len
+        region = regionClass(off, off, off + side, off + side * 0.6, ANGLE)
+        fov = (fov_len, fov_len)
+        bx0, by0, _, _ = region.bounds()
+        return tuple(
+            region.overlapsTile(
+                (bx0 + (gx + 0.5) * fov_len, by0 + (gy + 0.5) * fov_len), fov
+            )
+            for gy in range(12)
+            for gx in range(12)
+        )
+
+    for regionClass in (RectRegion, EllipseRegion):
+        assert pattern(regionClass, fov_len, off) == pattern(regionClass, 1.0, 0.0)
+
+
+def test_the_rotated_ellipse_still_maps_each_axis_to_its_own_radius():
+    # A 4:1 ellipse turned a quarter of the way to upright. A swapped rx/ry
+    # survived every symmetric ellipse test on this branch once already; at this
+    # angle the two radii do not exchange roles, so the swap has nowhere to hide.
+    region = EllipseRegion(0.0, 0.0, 40e-6, 10e-6, ANGLE)
+    speck = (1e-12, 1e-12)
+    cx, cy = _turned(0.0, 0.0, 20e-6, 5e-6, ANGLE)
+    # 18 um along the turned semi-major axis: inside. 7 um along the turned
+    # semi-minor axis: outside.
+    th = math.radians(ANGLE)
+    major = (cx + 18e-6 * math.cos(th), cy + 18e-6 * math.sin(th))
+    minor = (cx - 7e-6 * math.sin(th), cy + 7e-6 * math.cos(th))
+    assert region.overlapsTile(major, speck) is True
+    assert region.overlapsTile(minor, speck) is False

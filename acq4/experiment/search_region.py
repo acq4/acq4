@@ -3,6 +3,7 @@ rect-vs-shape overlap tests that decide which planned tiles are worth imaging.""
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 
 
@@ -47,13 +48,32 @@ class SearchRegion:
 @dataclass(frozen=True)
 class _BoxRegion(SearchRegion):
     """Shared base for the shapes a bounding box defines: the corner
-    normalization and validation, which are identical for both.
+    normalization and validation, which are identical for both, and the angle
+    that turns the box off the axes.
+
+    `angle` is in **degrees counter-clockwise about the `(x0, y0)` corner**, and
+    every part of that is measured rather than chosen. Degrees and that pivot are
+    what `pg.ROI` itself uses: `ROI.setAngle` records degrees and, given no
+    explicit centre, turns the ROI about its local origin -- which is exactly
+    what `ROI.pos()` reports, and which it leaves untouched. Matching it lets
+    `regionForRoi(roiForRegion(r))` read `pos()` and `size()` back with the same
+    arithmetic it used at zero angle, so the round trip is exact at every angle.
+    A centre pivot cannot be: recovering a corner from a centre costs a halving
+    and its inverse, which over 2000 measured regions failed to return the
+    original float about half the time -- including at zero angle, where it would
+    move regions nobody rotated. Counter-clockwise is the direction Qt's
+    transform turns a point in these coordinates, checked corner by corner
+    against `[[cos, -sin], [sin, cos]]`.
+
+    Angle zero is a shape's ordinary state and takes the axis-aligned path
+    throughout, returning the same floats as a region with no angle at all.
     """
 
     x0: float
     y0: float
     x1: float
     y1: float
+    angle: float = 0.0
 
     def __post_init__(self):
         lo_x, hi_x = min(self.x0, self.x1), max(self.x0, self.x1)
@@ -68,21 +88,87 @@ class _BoxRegion(SearchRegion):
         object.__setattr__(self, "x1", hi_x)
         object.__setattr__(self, "y1", hi_y)
 
-    def bounds(self) -> tuple[float, float, float, float]:
+    def box(self) -> tuple[float, float, float, float]:
+        """The unrotated (x0, y0, x1, y1) box this shape is inscribed in.
+
+        Distinct from `bounds()` as soon as there is an angle: this is the box
+        the operator sized, which an ROI is rebuilt from, while `bounds()` is the
+        axis-aligned extent of the turned shape, which the tiler plans over.
+        """
         return (self.x0, self.y0, self.x1, self.y1)
+
+    def _cosSin(self) -> tuple[float, float]:
+        th = math.radians(self.angle)
+        return (math.cos(th), math.sin(th))
+
+    def _turn(self, x: float, y: float) -> tuple[float, float]:
+        """`(x, y)` turned by this region's angle about its pivot."""
+        c, s = self._cosSin()
+        dx, dy = x - self.x0, y - self.y0
+        return (self.x0 + dx * c - dy * s, self.y0 + dx * s + dy * c)
+
+    def _boxCorners(self) -> tuple:
+        """The four corners of the turned box, counter-clockwise from the pivot."""
+        corners = (
+            (self.x0, self.y0),
+            (self.x1, self.y0),
+            (self.x1, self.y1),
+            (self.x0, self.y1),
+        )
+        if self.angle == 0.0:
+            return corners
+        return tuple(self._turn(x, y) for x, y in corners)
+
+    def _center(self) -> tuple[float, float]:
+        """The shape's centre, after the turn."""
+        cx, cy = (self.x0 + self.x1) / 2, (self.y0 + self.y1) / 2
+        return (cx, cy) if self.angle == 0.0 else self._turn(cx, cy)
+
+
+def _project(points, ax: float, ay: float) -> tuple[float, float]:
+    """The (low, high) shadow `points` cast on the direction `(ax, ay)`."""
+    dots = [px * ax + py * ay for px, py in points]
+    return (min(dots), max(dots))
 
 
 class RectRegion(_BoxRegion):
-    """A rectangular region: the shape "Add region here" seeds, and the shape for
-    which tile filtering is provably a no-op (every tile plan_grid plans over a
-    rectangle overlaps that rectangle).
+    """A rectangular region: the shape "Add region here" seeds, and -- while it
+    sits on the axes -- the shape for which tile filtering is provably a no-op
+    (every tile plan_grid plans over an axis-aligned rectangle overlaps that
+    rectangle). Turn it and that stops being true: the grid is planned over the
+    turned rectangle's larger axis-aligned bounds, whose corners stick out past
+    the shape, so the filter starts earning its place.
     """
+
+    def bounds(self) -> tuple[float, float, float, float]:
+        if self.angle == 0.0:
+            return self.box()
+        corners = self._boxCorners()
+        xs = [p[0] for p in corners]
+        ys = [p[1] for p in corners]
+        return (min(xs), min(ys), max(xs), max(ys))
 
     def overlapsTile(self, center: tuple[float, float], fov: tuple[float, float]) -> bool:
         tx0, ty0, tx1, ty1 = tile_rect(center, fov)
-        return (
-            tx0 <= self.x1 and tx1 >= self.x0 and ty0 <= self.y1 and ty1 >= self.y0
-        )
+        if self.angle == 0.0:
+            return (
+                tx0 <= self.x1 and tx1 >= self.x0 and ty0 <= self.y1 and ty1 >= self.y0
+            )
+        # Two convex boxes miss each other only if some direction separates
+        # them, and for two rectangles the only directions that can are their own
+        # edge normals: the tile's two axes and this rectangle's two. So four
+        # projections settle it exactly, with no iteration and no epsilon --
+        # every comparison is between two shadows cast on the same direction,
+        # which is the scale-freedom `_segment_touches_rect` was written for.
+        corners = self._boxCorners()
+        tileCorners = ((tx0, ty0), (tx1, ty0), (tx1, ty1), (tx0, ty1))
+        c, s = self._cosSin()
+        for ax, ay in ((1.0, 0.0), (0.0, 1.0), (c, s), (-s, c)):
+            lo, hi = _project(corners, ax, ay)
+            tlo, thi = _project(tileCorners, ax, ay)
+            if hi < tlo or thi < lo:
+                return False
+        return True
 
 
 class EllipseRegion(_BoxRegion):
@@ -91,24 +177,62 @@ class EllipseRegion(_BoxRegion):
 
     Overlap is exact and needs no iteration: mapping the tile into the frame where
     the ellipse is the unit circle at the origin turns "does this rect reach the
-    ellipse" into "is the closest point of a rect to the origin within 1". An
-    axis-aligned rect stays axis-aligned under that (per-axis) scaling, which is
-    what makes the closest point a per-axis clamp rather than a search.
+    ellipse" into "is the closest point of a rect to the origin within 1". While
+    the ellipse sits on the axes, an axis-aligned rect stays axis-aligned under
+    that (per-axis) scaling, which is what makes the closest point a per-axis
+    clamp rather than a search. Turn the ellipse and the map gains a rotation, so
+    the tile arrives as a parallelogram and the clamp gives way to the distance
+    from the origin to that quadrilateral -- still closed form, still one pass.
     """
 
+    def bounds(self) -> tuple[float, float, float, float]:
+        if self.angle == 0.0:
+            return self.box()
+        # A turned ellipse is strictly narrower than the box it was inscribed in,
+        # so hulling the four turned corners would plan a ring of tiles that can
+        # never touch it. These half-extents are the exact support of the ellipse
+        # along each axis, in closed form.
+        rx = (self.x1 - self.x0) / 2
+        ry = (self.y1 - self.y0) / 2
+        c, s = self._cosSin()
+        hw = math.hypot(rx * c, ry * s)
+        hh = math.hypot(rx * s, ry * c)
+        cx, cy = self._center()
+        return (cx - hw, cy - hh, cx + hw, cy + hh)
+
     def overlapsTile(self, center: tuple[float, float], fov: tuple[float, float]) -> bool:
-        cx = (self.x0 + self.x1) / 2
-        cy = (self.y0 + self.y1) / 2
         rx = (self.x1 - self.x0) / 2
         ry = (self.y1 - self.y0) / 2
         tx0, ty0, tx1, ty1 = tile_rect(center, fov)
-        ax0, ax1 = (tx0 - cx) / rx, (tx1 - cx) / rx
-        ay0, ay1 = (ty0 - cy) / ry, (ty1 - cy) / ry
-        # Clamp the origin into the mapped rect: the result is the rect's closest
-        # point to the ellipse center, and zero on an axis the center falls within.
-        dx = max(ax0, min(0.0, ax1))
-        dy = max(ay0, min(0.0, ay1))
-        return dx * dx + dy * dy <= 1.0
+        if self.angle == 0.0:
+            cx = (self.x0 + self.x1) / 2
+            cy = (self.y0 + self.y1) / 2
+            ax0, ax1 = (tx0 - cx) / rx, (tx1 - cx) / rx
+            ay0, ay1 = (ty0 - cy) / ry, (ty1 - cy) / ry
+            # Clamp the origin into the mapped rect: the result is the rect's
+            # closest point to the ellipse center, and zero on an axis the center
+            # falls within.
+            dx = max(ax0, min(0.0, ax1))
+            dy = max(ay0, min(0.0, ay1))
+            return dx * dx + dy * dy <= 1.0
+        cx, cy = self._center()
+        c, s = self._cosSin()
+        # Into the ellipse's own frame -- translate to its centre, turn back by
+        # the angle, then divide each axis by its radius. The map is affine, so
+        # the tile arrives as a parallelogram with its corners in the same cyclic
+        # order, and the ellipse arrives as the unit circle at the origin.
+        quad = []
+        for px, py in ((tx0, ty0), (tx1, ty0), (tx1, ty1), (tx0, ty1)):
+            dx, dy = px - cx, py - cy
+            quad.append(((dx * c + dy * s) / rx, (-dx * s + dy * c) / ry))
+        # Which leaves one question: is the origin within 1 of that quadrilateral.
+        # Zero when it is inside, and otherwise the nearest point lies on an edge.
+        if _point_in_polygon(0.0, 0.0, quad):
+            return True
+        return any(
+            _point_segment_distance_sq(0.0, 0.0, quad[i], quad[(i + 1) % 4]) <= 1.0
+            for i in range(4)
+        )
 
 
 def _segment_touches_rect(
@@ -145,6 +269,27 @@ def _segment_touches_rect(
                 return False
             t1 = min(t1, t)
     return True
+
+
+def _point_segment_distance_sq(
+    px: float, py: float, a: tuple[float, float], b: tuple[float, float]
+) -> float:
+    """The squared distance from `(px, py)` to the segment `a`->`b`.
+
+    Squared, because every caller compares it against a squared radius and the
+    square root would only cost precision on the way to the same answer.
+    """
+    ax, ay = a
+    bx, by = b
+    dx, dy = bx - ax, by - ay
+    lengthSq = dx * dx + dy * dy
+    if lengthSq == 0.0:
+        t = 0.0
+    else:
+        # Where the perpendicular foot falls along the segment, clamped to it.
+        t = min(1.0, max(0.0, ((px - ax) * dx + (py - ay) * dy) / lengthSq))
+    nx, ny = px - (ax + t * dx), py - (ay + t * dy)
+    return nx * nx + ny * ny
 
 
 def _point_in_polygon(px: float, py: float, vertices) -> bool:
