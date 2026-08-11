@@ -154,13 +154,22 @@ class _FakeCameraWithDevice(Qt.QWidget):
 _FOLDER_TYPES = {"Slice": {"name": "Slice_%Y%m%d_%H%M%S", "experimentalUnit": False}}
 
 
-class _FakeManager:
+class _FakeManager(Qt.QObject):
     """Stands in for Manager: backed by a real DirHandle (on tmp_path) so
     create_data_dir's mkdir/setInfo calls land on an actual directory, the way
     they would through the real Manager AutopatchWindow otherwise gets from
-    its module."""
+    its module.
+
+    A QObject carrying sigModulesChanged, because the real Manager is one and
+    emits that signal whenever a module is loaded or quits -- which is how
+    Area 1's two mirrors find a Camera module that was not open when they were
+    first resolved.
+    """
+
+    sigModulesChanged = Qt.Signal()
 
     def __init__(self, root_dir):
+        super().__init__()
         self._current_dir = root_dir
 
     def getCurrentDir(self):
@@ -686,14 +695,13 @@ def test_add_region_here_without_a_slice_starts_one(qapp, tmp_path):
     assert len(win.slice.tileGrid()) > 1
 
 
-def test_add_region_here_builds_the_shape_area_2_selects(qapp, tmp_path):
-    # Until Area 1 can draw ROIs, this selector is the only way to seed a
-    # non-rectangular region, so the button has to read it rather than always
-    # building a rectangle.
+def test_add_region_here_builds_the_shape_area_1_selects(qapp, tmp_path):
+    # The button has to read the selector rather than always building a
+    # rectangle.
     win = _makeWindow(tmp_path)
     win.newSlice()
-    win.searchPanel.shapeCombo.setCurrentIndex(
-        win.searchPanel.shapeCombo.findData("ellipse")
+    win.regionPanel.shapeCombo.setCurrentIndex(
+        win.regionPanel.shapeCombo.findData("ellipse")
     )
 
     win.addRegionHere()
@@ -1400,7 +1408,10 @@ def test_new_slice_lets_a_programming_error_propagate(qapp, tmp_path):
         win.newSlice()
 
 
-def test_new_slice_reports_a_missing_storage_directory_in_area_2(win):
+def test_new_slice_reports_a_missing_storage_directory_as_an_instruction(win):
+    # The likeliest first use of New slice is by an operator who has not chosen
+    # a storage directory. They get an instruction in Area 3, and Area 2's error
+    # line -- which is about the search constraints -- stays out of it.
     from acq4.util.HelpfulException import HelpfulException
 
     def boom(*a, **k):
@@ -1409,7 +1420,26 @@ def test_new_slice_reports_a_missing_storage_directory_in_area_2(win):
     win.manager.getCurrentDir = boom
     win.newSlice()
 
-    assert "Storage directory" in win.searchPanel.errorLabel.text()
+    assert "Storage directory" in win.statusPanel.instruction()
+    assert "Storage directory" not in win.searchPanel.errorLabel.text()
+
+
+def test_a_successful_new_slice_retracts_the_instruction(win):
+    # The instruction says what to do next; once it has been done it is a lie.
+    from acq4.util.HelpfulException import HelpfulException
+
+    def boom(*a, **k):
+        raise HelpfulException("Storage directory has not been set.")
+
+    original = win.manager.getCurrentDir
+    win.manager.getCurrentDir = boom
+    win.newSlice()
+    assert win.statusPanel.instruction() != ""
+
+    win.manager.getCurrentDir = original
+    win.newSlice()
+
+    assert win.statusPanel.instruction() == ""
 
 
 def test_add_region_here_does_not_create_a_directory(win):
@@ -1420,9 +1450,9 @@ def test_add_region_here_does_not_create_a_directory(win):
 
 
 def test_area_2_is_locked_until_a_slice_exists(win):
-    assert not win.searchPanel.addRegionBtn.isEnabled()
+    assert not win.searchPanel.nearDepthSpin.isEnabled()
     win.newSlice()
-    assert win.searchPanel.addRegionBtn.isEnabled()
+    assert win.searchPanel.nearDepthSpin.isEnabled()
 
 
 def test_a_run_in_flight_locks_area_5s_reuse_button(qapp, tmp_path):
@@ -1535,3 +1565,726 @@ def test_reused_cells_run_a_second_protocol_as_the_same_objects(qapp, tmp_path):
         assert win.cellPanel.isAttempted(cell) is True
     finally:
         win.teardown()
+
+
+def test_a_new_slice_leaves_area_1_empty_and_live(win):
+    # A Slice is fresh tissue with no regions, and Area 1 has to say so: an
+    # outline left from the last slice is a coordinate the operator might trust.
+    win.addRegionHere()
+    assert win.regionPanel.regions()
+
+    win.newSlice()
+
+    assert win.regionPanel.regions() == []
+    assert win.regionPanel.addRegionBtn.isEnabled()
+
+
+def test_seeding_a_region_draws_it_in_area_1(win):
+    win.addRegionHere()
+
+    assert len(win.regionPanel.regions()) == 1
+    assert win.regionPanel.regions() == win.slice.regions
+
+
+def test_add_region_here_seeds_a_polygon_when_area_1_asks_for_one(win):
+    # PolygonRegion has had no control able to produce it since P2c-1.
+    from acq4.experiment.search_region import PolygonRegion
+
+    win.newSlice()
+    win.regionPanel.shapeCombo.setCurrentIndex(
+        win.regionPanel.shapeCombo.findData("polygon")
+    )
+
+    win.addRegionHere()
+
+    region = win.slice.regions[0]
+    assert isinstance(region, PolygonRegion)
+    # Four corners of the same 3x3-field box the other two shapes get, so the
+    # button places a region of a known size whichever shape is selected.
+    assert len(region.vertices) == 4
+    assert len(win.slice.tileGrid()) > 1
+
+
+def test_editing_a_region_in_area_1_reaches_the_slice(win):
+    win.newSlice()
+    edited = RectRegion(1.0e-3, 2.0e-3, 1.4e-3, 2.1e-3)
+
+    win.regionPanel.sigRegionsChanged.emit([edited])
+
+    assert win.slice.regions == [edited]
+
+
+def test_editing_a_region_refreshes_the_survey_readout(win):
+    # The readout counts tiles over the regions, so an edit that did not refresh
+    # it would go on reporting the survey's size for a region that is gone.
+    win.newSlice()
+    win.addRegionHere()
+    before = win.searchPanel.surveyLabel.text()
+
+    win.regionPanel.sigRegionsChanged.emit(
+        [RectRegion(1.0e-3, 2.0e-3, 1.4e-3, 2.1e-3)]
+    )
+
+    assert win.searchPanel.surveyLabel.text() != before
+
+
+def test_a_region_edit_with_no_slice_is_ignored(win):
+    # Area 1's controls are gated on a slice existing, but a signal is not a
+    # permission check, and a traceback on the GUI thread is not a second line
+    # of defence.
+    assert win.slice is None
+
+    win.regionPanel.sigRegionsChanged.emit([])
+
+    assert win.slice is None
+
+
+def test_area_1_is_locked_until_a_slice_exists(win):
+    assert not win.regionPanel.addRegionBtn.isEnabled()
+
+    win.newSlice()
+
+    assert win.regionPanel.addRegionBtn.isEnabled()
+
+
+def test_a_running_run_locks_area_1(win):
+    win.newSlice()
+
+    win.statusPanel.sigInteractionLocked.emit(True)
+    win.statusPanel.sigStatusChanged.emit("running")
+
+    assert not win.regionPanel.addRegionBtn.isEnabled()
+
+
+def test_a_paused_run_unlocks_area_1(win):
+    # The other side of the gate, wired through the same two window-level
+    # connections rather than by calling the panel directly.
+    win.newSlice()
+    win.statusPanel.sigInteractionLocked.emit(True)
+    win.statusPanel.sigStatusChanged.emit("running")
+
+    win.statusPanel.sigStatusChanged.emit("paused")
+
+    assert win.regionPanel.addRegionBtn.isEnabled()
+
+
+def test_the_mirror_checkbox_drives_the_camera_mirror(win):
+    win.newSlice()
+    win.addRegionHere()
+
+    win.regionPanel.mirrorCheck.setChecked(True)
+
+    assert win._cameraMirror._enabled
+    assert win._cameraMirror._regions == win.slice.regions
+
+
+def test_teardown_takes_the_mirrored_outlines_out_of_the_camera_window(win):
+    # A camera window has to be supplied for this to test anything: _FakeManager
+    # has no Camera module, so _cameraWindow() returns None and the mirror holds
+    # nothing whether or not teardown clears it. Asserting an empty list against
+    # a mirror that was never able to draw is asserting a default.
+    drawn = []
+    fakeCameraWindow = SimpleNamespace(
+        addItem=lambda item, **kwds: drawn.append(item),
+        removeItem=drawn.remove,
+    )
+    win._cameraMirror._cameraWindow = lambda: fakeCameraWindow
+    win.newSlice()
+    win.addRegionHere()
+    win.regionPanel.mirrorCheck.setChecked(True)
+    assert drawn, "nothing was mirrored, so teardown has nothing to prove"
+
+    win.teardown()
+
+    assert drawn == []
+
+
+def test_a_region_edit_while_locked_is_dropped(win):
+    # The panel gates every editing surface it owns, but the window is where an
+    # edit becomes the slice's regions, and _onRegionsEdited's own docstring
+    # says a signal is not a permission check. This is the second line of that
+    # defence: a run is in flight, a producer may be reading the regions on the
+    # worker thread, and an edit arriving here anyway is dropped rather than
+    # committed.
+    win.newSlice()
+    win.addRegionHere()
+    seeded = list(win.slice.regions)
+    win.statusPanel.sigInteractionLocked.emit(True)
+    win.statusPanel.sigStatusChanged.emit("running")
+
+    win.regionPanel.sigRegionsChanged.emit([RectRegion(1.0e-3, 2.0e-3, 1.4e-3, 2.1e-3)])
+
+    assert win.slice.regions == seeded
+
+
+def test_a_region_edit_while_paused_still_reaches_the_slice(win):
+    # The other side: the paused exception is the whole point of the gate, and a
+    # window that dropped everything during a run would make it unreachable.
+    win.newSlice()
+    win.statusPanel.sigInteractionLocked.emit(True)
+    win.statusPanel.sigStatusChanged.emit("paused")
+    edited = RectRegion(1.0e-3, 2.0e-3, 1.4e-3, 2.1e-3)
+
+    win.regionPanel.sigRegionsChanged.emit([edited])
+
+    assert win.slice.regions == [edited]
+
+
+class _FakePinnedFrameSource(Qt.QObject):
+    """Stands in for the Camera module's ImagingCtrl: the pinned-frame list and
+    the signal Area 1 mirrors it through."""
+
+    sigPinnedFramesChanged = Qt.Signal()
+
+    def __init__(self):
+        super().__init__()
+        self.pinnedFrames = []
+
+
+def _withPinnedFrameSource(win, hasInterface=True):
+    """Point `win` at a Camera window offering one imaging control, and return
+    the control it would bind to."""
+    source = _FakePinnedFrameSource()
+
+    def getInterfaceForDevice(name):
+        if not hasInterface:
+            raise KeyError(name)
+        return SimpleNamespace(imagingCtrl=source)
+
+    win._cameraWindow = lambda: SimpleNamespace(
+        getInterfaceForDevice=getInterfaceForDevice
+    )
+    return source
+
+
+def test_starting_a_slice_mirrors_the_cameras_pinned_frames(win):
+    source = _withPinnedFrameSource(win)
+
+    win.newSlice()
+
+    assert win._pinnedFrameMirror._source is source
+    assert source.receivers(source.sigPinnedFramesChanged) == 1
+
+
+def test_teardown_stops_mirroring_the_cameras_pinned_frames(win):
+    # The riskier half of the pair CameraMirror already has a teardown test for:
+    # this connection lives on the Camera module's own ImagingCtrl, which
+    # outlives this window by design, and a live connection on it would go on
+    # calling a torn-down window's mirror -- and keep the window reachable.
+    source = _withPinnedFrameSource(win)
+    win.newSlice()
+    assert source.receivers(source.sigPinnedFramesChanged) == 1
+
+    win.teardown()
+
+    assert source.receivers(source.sigPinnedFramesChanged) == 0
+    assert win._pinnedFrameMirror._source is None
+
+
+def test_a_camera_with_no_imaging_control_stops_the_previous_mirror(win):
+    # Switching to a camera the Camera module has no interface for must not
+    # leave Area 1 showing the previous camera's frames: those are imagery of
+    # different tissue, and regions get drawn over them.
+    first = _withPinnedFrameSource(win)
+    win.newSlice()
+    assert win._pinnedFrameMirror._source is first
+
+    _withPinnedFrameSource(win, hasInterface=False)
+    win.newSlice()
+
+    assert win._pinnedFrameMirror._source is None
+    assert first.receivers(first.sigPinnedFramesChanged) == 0
+
+
+def test_a_closed_camera_window_stops_the_previous_mirror(win):
+    # The same hazard by the other route: the Camera module has been closed
+    # since the last slice was started.
+    first = _withPinnedFrameSource(win)
+    win.newSlice()
+    assert win._pinnedFrameMirror._source is first
+
+    win._cameraWindow = lambda: None
+    win.newSlice()
+
+    assert win._pinnedFrameMirror._source is None
+    assert first.receivers(first.sigPinnedFramesChanged) == 0
+
+
+class _ReentrantOrchestrator:
+    """An orchestrator whose bounded wait runs `duringWait`.
+
+    Not a contrivance: _stopAndReleaseOrchestrator waits with updates=True,
+    which deliberately pumps the Qt event loop, and teardown() calls it with the
+    window still visible and every Area 1 control still connected. Anything the
+    operator clicks in those five seconds lands exactly here.
+    """
+
+    def __init__(self, duringWait):
+        self._duringWait = duringWait
+        self.producer = "installed"
+
+    def stop(self):
+        pass
+
+    def wait(self, timeout=None, updates=False):
+        self._duringWait()
+
+    def setCellProducer(self, producer):
+        self.producer = producer
+
+    def setParent(self, parent):
+        pass
+
+
+def test_teardown_cannot_be_re_armed_by_a_click_during_its_wait(win):
+    # New slice during that window is the worst of them: it would build a fresh
+    # Slice and re-connect PinnedFrameMirror to the Camera module's long-lived
+    # ImagingCtrl, and _tornDown is already True by then, so closeEvent returns
+    # early and none of it is ever cleaned up again.
+    source = _withPinnedFrameSource(win)
+    win.statusPanel.unbindOrchestrator()
+    win.cellPanel.unbindOrchestrator()
+    win.orchestrator = _ReentrantOrchestrator(win.newSlice)
+
+    win.teardown()
+
+    assert win.slice is None
+    assert win._pinnedFrameMirror._source is None
+    assert source.receivers(source.sigPinnedFramesChanged) == 0
+
+
+def test_teardown_cannot_be_re_armed_by_add_region_here_during_its_wait(win):
+    # The same window, through the other control that can build a slice.
+    source = _withPinnedFrameSource(win)
+    win.statusPanel.unbindOrchestrator()
+    win.cellPanel.unbindOrchestrator()
+    win.orchestrator = _ReentrantOrchestrator(win.addRegionHere)
+
+    win.teardown()
+
+    assert win.slice is None
+    assert win._pinnedFrameMirror._source is None
+    assert source.receivers(source.sigPinnedFramesChanged) == 0
+
+
+def test_teardown_cannot_be_handed_a_region_edit_during_its_wait(win):
+    # An ROI drag released during that wait: the panel is still editable by its
+    # own rules -- there is a slice and no run -- so only the window's own
+    # torn-down check stops the edit being committed to a slice whose session
+    # has ended.
+    win.newSlice()
+    win.addRegionHere()
+    seeded = list(win.slice.regions)
+    win.statusPanel.unbindOrchestrator()
+    win.cellPanel.unbindOrchestrator()
+    win.orchestrator = _ReentrantOrchestrator(
+        lambda: win.regionPanel.sigRegionsChanged.emit(
+            [RectRegion(1.0e-3, 2.0e-3, 1.4e-3, 2.1e-3)]
+        )
+    )
+
+    win.teardown()
+
+    assert win.slice.regions == seeded
+
+
+def test_teardown_releases_the_camera_mirror_after_its_wait_not_before(win):
+    # Mirror to Camera is not gated on _tornDown -- it is a display preference,
+    # not a slice -- so a click on it during teardown's wait genuinely draws
+    # outlines into the Camera module's window. Releasing the mirrors after the
+    # orchestrator rather than before is what takes those back out; the other
+    # order leaves a closed session's graphics in a window that outlives it.
+    drawn = []
+    fakeCameraWindow = SimpleNamespace(
+        addItem=lambda item, **kwds: drawn.append(item),
+        removeItem=drawn.remove,
+    )
+    win._cameraMirror._cameraWindow = lambda: fakeCameraWindow
+    win.newSlice()
+    win.addRegionHere()
+    win.statusPanel.unbindOrchestrator()
+    win.cellPanel.unbindOrchestrator()
+    win.orchestrator = _ReentrantOrchestrator(
+        lambda: win.regionPanel.mirrorCheck.setChecked(True)
+    )
+
+    win.teardown()
+
+    assert drawn == []
+
+
+def test_a_raise_while_stopping_the_orchestrator_still_releases_the_mirrors(win):
+    # The mirrors are the only part of teardown that reaches outside this
+    # window: their items live in the Camera module's window and their
+    # connection on its imaging control, both of which outlive the session. If
+    # stopping the orchestrator raises, releasing them is exactly what must
+    # still happen -- otherwise a closed session's outlines stay in a window
+    # nobody will clean up.
+    drawn = []
+    fakeCameraWindow = SimpleNamespace(
+        addItem=lambda item, **kwds: drawn.append(item),
+        removeItem=drawn.remove,
+    )
+    win._cameraMirror._cameraWindow = lambda: fakeCameraWindow
+    win.newSlice()
+    win.addRegionHere()
+    win.regionPanel.mirrorCheck.setChecked(True)
+    assert drawn, "nothing was mirrored, so teardown has nothing to release"
+    win.statusPanel.unbindOrchestrator()
+    win.cellPanel.unbindOrchestrator()
+
+    def boom(_orchestrator):
+        raise RuntimeError("stop failed")
+
+    win._stopAndReleaseOrchestrator = boom
+
+    with pytest.raises(RuntimeError, match="stop failed"):
+        win.teardown()
+
+    assert drawn == []
+
+
+def test_the_camera_window_getter_finds_a_loaded_camera_module(win):
+    cameraWindow = SimpleNamespace()
+    win.manager.listModules = lambda: ["Camera", "Data Manager"]
+    win.manager.getModule = lambda name: SimpleNamespace(window=lambda: cameraWindow)
+
+    assert win._cameraWindow() is cameraWindow
+
+
+def test_the_camera_window_getter_does_not_load_the_camera_module(win):
+    # Manager.getModule loads a module that is not already open, and this getter
+    # is called on every mirror redraw -- including from "Add region here". A
+    # button that adds a region must not also start the Camera module, and the
+    # window it would hand back is a different instance from the one any
+    # already-drawn outline belongs to.
+    loaded = []
+
+    def getModule(name):
+        loaded.append(name)
+        return SimpleNamespace(window=SimpleNamespace)
+
+    win.manager.listModules = lambda: ["Data Manager"]
+    win.manager.getModule = getModule
+
+    assert win._cameraWindow() is None
+    assert loaded == []
+
+
+# 200 x 150 fields of the fake camera's 12 x 8 um ROI: 30,000 tiles, past the
+# 20,000-tile cap. Asymmetric in both axes and at a realistic stage coordinate,
+# so a guard that read one axis twice would be caught.
+_OVERSIZED_REGION = RectRegion(1e-3, 2e-3, 1e-3 + 2.4e-3, 2e-3 + 1.2e-3)
+
+
+def test_an_edit_that_would_plan_too_many_tiles_is_refused(win):
+    # The defect this exists for: an ROI dragged out to 0.687 m x 0.873 m at a
+    # 130 um field planned 35 million tiles, and _refreshSurveyStats runs on
+    # every edit -- minutes of frozen GUI per drag.
+    win.newSlice()
+    win.addRegionHere()
+    seeded = list(win.slice.regions)
+
+    win.regionPanel.sigRegionsChanged.emit([_OVERSIZED_REGION])
+
+    assert win.slice.regions == seeded
+
+
+def test_a_refused_edit_says_why_in_area_3s_band(win):
+    # Silently dropping it would leave the operator with an outline on screen
+    # that no survey will ever tile.
+    win.newSlice()
+
+    win.regionPanel.sigRegionsChanged.emit([_OVERSIZED_REGION])
+
+    message = win.statusPanel.instruction()
+    assert "30000" in message.replace(",", "")
+    assert "tile" in message
+
+
+def test_a_refused_edit_snaps_area_1_back_to_the_slices_regions(win):
+    # The ROI the operator is still holding has to go back where it was: an
+    # outline left at a size the slice refused is a lie about what will be
+    # surveyed.
+    win.newSlice()
+    win.addRegionHere()
+    seeded = list(win.slice.regions)
+
+    win.regionPanel.sigRegionsChanged.emit([_OVERSIZED_REGION])
+
+    assert win.regionPanel.regions() == seeded
+
+
+def test_a_refused_edit_does_not_reach_the_camera_mirror(win):
+    # The mirror draws what the slice holds; an outline of the refused shape in
+    # the Camera window would be the same lie in the other view.
+    win.newSlice()
+    win.addRegionHere()
+    win.regionPanel.mirrorCheck.setChecked(True)
+    seeded = list(win.slice.regions)
+
+    win.regionPanel.sigRegionsChanged.emit([_OVERSIZED_REGION])
+
+    assert win._cameraMirror._regions == seeded
+
+
+def test_the_next_good_edit_retracts_the_refusal(win):
+    # The message says what to fix; once it has been fixed it is a lie.
+    win.newSlice()
+    win.regionPanel.sigRegionsChanged.emit([_OVERSIZED_REGION])
+    assert win.statusPanel.instruction() != ""
+
+    win.regionPanel.sigRegionsChanged.emit([RectRegion(1.0e-3, 2.0e-3, 1.4e-3, 2.1e-3)])
+
+    assert win.statusPanel.instruction() == ""
+    assert len(win.slice.regions) == 1
+
+
+def test_a_refused_edit_does_not_erase_the_storage_instruction(win):
+    """Area 3's band has two Area 1 writers with different conditions, and
+    neither can see the other's. A region edit retracting its own refusal must
+    not also retract newSlice()'s "choose a storage directory", which is still
+    just as true as it was."""
+    from acq4.util.HelpfulException import HelpfulException
+
+    win.addRegionHere()  # a slice, without going through create_data_dir
+
+    def boom(*a, **k):
+        raise HelpfulException("Storage directory has not been set.")
+
+    win.manager.getCurrentDir = boom
+    win.newSlice()
+    assert "Storage directory" in win.statusPanel.instruction()
+
+    win.regionPanel.sigRegionsChanged.emit([RectRegion(1.0e-3, 2.0e-3, 1.4e-3, 2.1e-3)])
+
+    assert "Storage directory" in win.statusPanel.instruction()
+
+
+def test_add_region_here_reports_a_refusal_rather_than_raising(win):
+    """"Add region here" seeds 3x3 fields, which is nine tiles whatever the
+    field of view, so it cannot trip the cap as it stands. The refusal is
+    caught anyway because a traceback out of a button's slot is not a failure
+    mode this window should have at all -- driven here by making the slice
+    refuse, since the geometry itself will not."""
+    from acq4.experiment.slice import RegionTooLarge
+
+    win.newSlice()
+
+    def refuse(region):
+        raise RegionTooLarge("that region would plan 999999 tiles")
+
+    win.slice.addRegion = refuse
+
+    win.addRegionHere()
+
+    assert "999999" in win.statusPanel.instruction()
+    assert win.regionPanel.regions() == []
+
+
+def test_starting_a_slice_frames_area_1_on_the_camera(win):
+    """A fresh pg.ViewBox spans about a metre, and Area 1's units are global
+    metres. Left there, an operator's first click in an empty view lands a
+    polygon vertex half a metre out -- which is how a region big enough to plan
+    35 million tiles gets drawn in the first place.
+
+    Computed off the fake camera directly (its "roi" boundary and centre) so a
+    bug in _cameraFov() is caught rather than echoed back."""
+    camera = win.cameraSelector.getSelectedObj()
+    _, _, fov_w, fov_h = camera.getBoundary(globalCoords=True, mode="roi")
+    cx, cy, _ = camera.globalCenterPosition("roi")
+
+    try:
+        win.newSlice()
+
+        (vx0, vx1), (vy0, vy1) = win.regionPanel.view.viewRange()
+        assert (vx0 + vx1) / 2 == pytest.approx(cx)
+        assert (vy0 + vy1) / 2 == pytest.approx(cy)
+        # Ten fields across, so the camera's own field is a visible fraction of
+        # the view rather than sub-pixel. Aspect lock may widen one axis, so
+        # this is the floor on each, and a ceiling well short of the metre the
+        # viewport started at.
+        assert (vx1 - vx0) >= 10 * fov_w
+        assert (vy1 - vy0) >= 10 * fov_h
+        assert (vx1 - vx0) < 1e-3
+        assert (vy1 - vy0) < 1e-3
+    finally:
+        win.teardown()
+
+
+def test_add_region_here_without_a_slice_frames_area_1_too(win):
+    # The other route into a slice, and the one an operator is most likely to
+    # take first.
+    camera = win.cameraSelector.getSelectedObj()
+    cx, cy, _ = camera.globalCenterPosition("roi")
+
+    try:
+        win.addRegionHere()
+
+        (vx0, vx1), (vy0, vy1) = win.regionPanel.view.viewRange()
+        assert (vx0 + vx1) / 2 == pytest.approx(cx)
+        assert (vy0 + vy1) / 2 == pytest.approx(cy)
+    finally:
+        win.teardown()
+
+
+def _cameraModuleAppears(win, cameraWindow=None):
+    """Have `win`'s manager start reporting a loaded Camera module, and announce
+    it the way Manager.loadModule() does.
+
+    Returns the window that module hands out, and the list of items drawn into
+    it, so a caller can see what the outline mirror put there."""
+    drawn = []
+    if cameraWindow is None:
+        cameraWindow = SimpleNamespace(
+            addItem=lambda item, **kwds: drawn.append(item),
+            removeItem=drawn.remove,
+        )
+    win.manager.listModules = lambda: ["Camera"]
+    win.manager.getModule = lambda name: SimpleNamespace(window=lambda: cameraWindow)
+    win.manager.sigModulesChanged.emit()
+    return cameraWindow, drawn
+
+
+def test_outlines_appear_when_the_camera_module_is_opened_after_the_tick(win):
+    """Both mirrors resolved the Camera module once, at a moment that can
+    precede the module being open, and nothing retried. On the rig this showed
+    up as a ticked "Mirror to Camera" that drew nothing until some later region
+    edit happened to redraw it."""
+    win.newSlice()
+    win.addRegionHere()
+
+    win.regionPanel.mirrorCheck.setChecked(True)
+    _cameraWindow, drawn = _cameraModuleAppears(win)
+
+    assert len(drawn) == len(win.slice.regions) == 1
+
+
+def test_no_outlines_appear_when_the_checkbox_is_not_ticked(win):
+    # The other side: a module change is not a reason to start mirroring
+    # something the operator never asked to mirror.
+    win.newSlice()
+    win.addRegionHere()
+
+    _cameraWindow, drawn = _cameraModuleAppears(win)
+
+    assert drawn == []
+
+
+def test_pinned_frames_bind_when_the_camera_module_is_opened_after_the_slice(win):
+    """_bindPinnedFrames runs only from _startSlice, so a Camera module opened
+    afterwards was never picked up: on the rig, PinnedFrameMirror._source was
+    None with a frame already pinned and waiting."""
+    win.newSlice()
+    assert win._pinnedFrameMirror._source is None
+
+    source = _withPinnedFrameSource(win)
+    win.manager.sigModulesChanged.emit()
+
+    assert win._pinnedFrameMirror._source is source
+    assert source.receivers(source.sigPinnedFramesChanged) == 1
+
+
+def test_a_camera_module_opening_with_no_slice_binds_nothing(win):
+    # Nothing is being drawn over yet, and _startSlice binds on its own way
+    # through -- so there is nothing here to retry.
+    source = _withPinnedFrameSource(win)
+
+    win.manager.sigModulesChanged.emit()
+
+    assert win._pinnedFrameMirror._source is None
+    assert source.receivers(source.sigPinnedFramesChanged) == 0
+
+
+def test_a_camera_module_quitting_releases_the_pinned_frame_mirror(win):
+    # sigModulesChanged is also how a module going away is announced, and a
+    # mirror left bound to a dead Camera module would go on showing imagery of
+    # tissue nobody is looking at.
+    source = _withPinnedFrameSource(win)
+    win.newSlice()
+    assert win._pinnedFrameMirror._source is source
+
+    win._cameraWindow = lambda: None
+    win.manager.sigModulesChanged.emit()
+
+    assert win._pinnedFrameMirror._source is None
+    assert source.receivers(source.sigPinnedFramesChanged) == 0
+
+
+def test_teardown_stops_listening_for_module_changes(win):
+    # The manager outlives this window by a long way, so a connection left on it
+    # would go on calling a torn-down window's handler at every later module
+    # load or quit -- re-arming the mirrors teardown had just released.
+    assert win.manager.receivers(win.manager.sigModulesChanged) == 1
+
+    win.teardown()
+
+    assert win.manager.receivers(win.manager.sigModulesChanged) == 0
+
+
+def test_a_module_change_during_teardowns_wait_cannot_re_arm_the_mirrors(win):
+    # teardown() waits on the orchestrator with the Qt event loop still pumping,
+    # so a Camera module loading in those seconds is announced while teardown is
+    # in progress -- and must not bind this closing session's mirrors to it.
+    source = _withPinnedFrameSource(win)
+    win.newSlice()
+    win.regionPanel.mirrorCheck.setChecked(True)
+    win._pinnedFrameMirror.unbind()
+    win.statusPanel.unbindOrchestrator()
+    win.cellPanel.unbindOrchestrator()
+    win.orchestrator = _ReentrantOrchestrator(win.manager.sigModulesChanged.emit)
+
+    win.teardown()
+
+    assert win._pinnedFrameMirror._source is None
+    assert source.receivers(source.sigPinnedFramesChanged) == 0
+
+
+def test_a_headless_window_with_no_manager_still_starts_a_slice(qapp, tmp_path):
+    # module=None is the constructor's documented headless mode: there is no
+    # manager to listen to, and that must not be an error.
+    from acq4.modules.Autopatch.Autopatch import AutopatchWindow
+
+    _write_protocol(tmp_path, "demo.py", _NOOP_PROTOCOL)
+    win = AutopatchWindow(
+        module=None,
+        protocolDir=str(tmp_path),
+        pipetteSelector=_FakePipetteSelector(),
+        cameraSelector=_FakeCameraWithDevice(),
+    )
+    try:
+        win.protocolPanel.fileCombo.setCurrentText("demo")
+        assert win._startSlice() is True
+    finally:
+        win.teardown()
+
+
+def test_ticking_the_mirror_with_no_camera_module_open_says_so(win):
+    # Otherwise the tick is a silent no-op: the checkbox stays ticked and
+    # nothing appears anywhere, with no way to tell that from a broken mirror.
+    win.newSlice()
+
+    win.regionPanel.mirrorCheck.setChecked(True)
+
+    assert "Camera" in win.statusPanel.instruction()
+
+
+def test_the_message_goes_once_a_camera_module_is_open(win):
+    win.newSlice()
+    win.addRegionHere()
+    win.regionPanel.mirrorCheck.setChecked(True)
+    assert win.statusPanel.instruction() != ""
+
+    _cameraModuleAppears(win)
+
+    assert win.statusPanel.instruction() == ""
+
+
+def test_unticking_the_mirror_retracts_the_message(win):
+    win.newSlice()
+    win.regionPanel.mirrorCheck.setChecked(True)
+    assert win.statusPanel.instruction() != ""
+
+    win.regionPanel.mirrorCheck.setChecked(False)
+
+    assert win.statusPanel.instruction() == ""

@@ -6,12 +6,20 @@ from __future__ import annotations
 import math
 
 
-def _axis_centers(lo: float, hi: float, fov: float, overlap: float) -> list[float]:
-    """Tile centers along one axis whose union covers [lo, hi].
+def _axis_step(fov: float, overlap: float) -> float:
+    """The distance between adjacent tile centers along one axis."""
+    step = fov - overlap
+    if step <= 0:
+        # Degrade gracefully if the overlap swallows the whole FOV.
+        step = fov
+    return step
 
-    Step between tiles is ``fov - overlap``; the tile count is the smallest that
-    spans the extent, and the tiles are centered over it so the union fully
-    covers [lo, hi] (the outermost tiles may extend past the edges).
+
+def _axis_count(lo: float, hi: float, fov: float, overlap: float) -> int:
+    """How many tiles along one axis it takes to cover [lo, hi].
+
+    Step between tiles is ``fov - overlap``, and the count is the smallest that
+    spans the extent.
 
     ``extent`` is computed as ``hi - lo``, and ``lo``/``hi`` may be as large as a
     stage's absolute travel range while ``fov``/``step`` are tiny by comparison,
@@ -23,23 +31,32 @@ def _axis_centers(lo: float, hi: float, fov: float, overlap: float) -> list[floa
     being rounded up to one more tile.
     """
     extent = hi - lo
-    step = fov - overlap
-    if step <= 0:
-        # Degrade gracefully if the overlap swallows the whole FOV.
-        step = fov
+    step = _axis_step(fov, overlap)
     scale = max(abs(lo), abs(hi), fov, step)
     length_tol = scale * 1e-9
     if extent <= fov + length_tol:
-        return [(lo + hi) / 2.0]
+        return 1
     ratio = (extent - fov) / step
     ratio_tol = length_tol / step
     rounded_ratio = round(ratio)
     if abs(ratio - rounded_ratio) <= ratio_tol:
-        n = int(rounded_ratio) + 1
-    else:
-        n = math.ceil(ratio) + 1
+        return int(rounded_ratio) + 1
+    return math.ceil(ratio) + 1
+
+
+def _axis_centers(lo: float, hi: float, fov: float, overlap: float) -> list[float]:
+    """Tile centers along one axis whose union covers [lo, hi].
+
+    The tiles are centered over the extent so their union fully covers [lo, hi]
+    (the outermost tiles may extend past the edges). A single tile at the
+    midpoint covers an extent no larger than one FOV.
+    """
+    n = _axis_count(lo, hi, fov, overlap)
+    if n == 1:
+        return [(lo + hi) / 2.0]
+    step = _axis_step(fov, overlap)
     covered = fov + (n - 1) * step
-    extra = covered - extent
+    extra = covered - (hi - lo)
     start = lo + fov / 2.0 - extra / 2.0
     return [start + i * step for i in range(n)]
 
@@ -69,6 +86,30 @@ def plan_grid(
         for cx in row:
             grid.append((cx, cy))
     return grid
+
+
+def count_grid(
+    x0: float,
+    y0: float,
+    x1: float,
+    y1: float,
+    fov_w: float,
+    fov_h: float,
+    overlap: float,
+) -> int:
+    """How many tiles ``plan_grid`` would return for this rectangle.
+
+    Arithmetic, so a caller can find out how big a grid is before deciding
+    whether to build it: ``plan_grid`` materialises every center, which is
+    minutes of compute and a list to match once a rectangle is large enough
+    relative to the field of view.
+
+    Shares ``_axis_count`` with ``plan_grid`` rather than re-deriving the count,
+    so the two cannot disagree about where a tolerance-sized extent falls.
+    """
+    return _axis_count(min(x0, x1), max(x0, x1), fov_w, overlap) * _axis_count(
+        min(y0, y1), max(y0, y1), fov_h, overlap
+    )
 
 
 def _is_visited(

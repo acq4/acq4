@@ -7,9 +7,19 @@ import weakref
 import coorx
 import pytest
 
-from acq4.experiment.search_grid import plan_grid
-from acq4.experiment.search_region import EllipseRegion, PolygonRegion, RectRegion
-from acq4.experiment.slice import SearchConstraints, Slice
+from acq4.experiment.search_grid import count_grid, plan_grid
+from acq4.experiment.search_region import (
+    EllipseRegion,
+    PolygonRegion,
+    RectRegion,
+    SearchRegion,
+)
+from acq4.experiment.slice import (
+    MAX_PLANNED_TILES,
+    RegionTooLarge,
+    SearchConstraints,
+    Slice,
+)
 
 
 def test_defaults_are_a_usable_search():
@@ -549,3 +559,179 @@ def test_force_rescan_uncovers_every_overlapping_region():
 
     assert s.coveredTiles == []
 
+
+class _EditsTheSliceMidScan(SearchRegion):
+    """A region that replaces its slice's region list from inside the tiler's
+    own iteration -- what a GUI-thread setRegions() landing in the middle of a
+    worker-thread tileGrid() does.
+
+    Deterministic on purpose: driving this with real threads would reproduce the
+    hazard only sometimes, and a test that fails one run in fifty is not a test.
+    """
+
+    def __init__(self, slice_, replacement):
+        self._slice = slice_
+        self._replacement = replacement
+        self.calls = 0
+
+    def bounds(self):
+        return (0.0, 0.0, 400e-6, 200e-6)
+
+    def overlapsTile(self, center, fov):
+        self.calls += 1
+        if self.calls == 1:
+            self._slice.setRegions(self._replacement)
+        return True
+
+
+def test_an_edit_during_tilegrid_does_not_drop_the_regions_behind_it():
+    # The whole point of the swap. With the list mutated in place instead, the
+    # for-loop's index walks off the end of a shortened list and every region
+    # after the one being scanned is silently dropped from the survey.
+    sl = Slice(fov=(100e-6, 50e-6))
+    later = RectRegion(1e-3, 1e-3, 1.4e-3, 1.2e-3)
+    mutator = _EditsTheSliceMidScan(sl, [])
+    sl.setRegions([mutator, later])
+
+    grid = sl.tileGrid()
+
+    laterTiles = [c for c in grid if c[0] > 0.5e-3]
+    assert laterTiles, "the region after the edited one was dropped mid-scan"
+
+
+def test_the_edit_itself_takes_effect_on_the_next_call():
+    # The swap must not be a no-op in the other direction: the point of editing
+    # regions is that the next tile the producer asks for reflects the edit.
+    sl = Slice(fov=(100e-6, 50e-6))
+    mutator = _EditsTheSliceMidScan(sl, [])
+    sl.setRegions([mutator, RectRegion(1e-3, 1e-3, 1.4e-3, 1.2e-3)])
+    sl.tileGrid()
+
+    assert sl.regions == []
+    assert sl.tileGrid() == []
+
+
+def test_setregions_copies_so_the_callers_list_is_not_live():
+    # The panel hands over a list it goes on mutating as the operator draws.
+    sl = Slice(fov=(100e-6, 50e-6))
+    handed = [RectRegion(0.0, 0.0, 400e-6, 200e-6)]
+    sl.setRegions(handed)
+    handed.append(RectRegion(1e-3, 1e-3, 1.4e-3, 1.2e-3))
+
+    assert len(sl.regions) == 1
+
+
+def test_deleting_a_region_leaves_coverage_alone():
+    # Coverage records ground already imaged, not ground still wanted. Pruning
+    # it when a region goes away would make a region redrawn over surveyed
+    # tissue re-image it, and coverage is shared by every producer this slice
+    # makes -- it is not a per-region tally.
+    sl = Slice(fov=(100e-6, 50e-6))
+    sl.setRegions([RectRegion(0.0, 0.0, 400e-6, 200e-6)])
+    covered = sl.tileGrid()[0]
+    sl.markCovered(covered)
+
+    sl.setRegions([])
+
+    assert sl.tileGrid() == []
+    sl.setRegions([RectRegion(0.0, 0.0, 400e-6, 200e-6)])
+    assert sl.nextTile() != covered
+
+
+
+# A polygon the size of the one a mis-drag actually produced on the rig, at the
+# field of view it was drawn at: a 0.687 m x 0.873 m bounding box against a
+# 130.6 um field plans about 35 million tiles, which measured out at minutes of
+# GUI-thread compute per ROI edit. The vertices are this test's own -- only the
+# bounding box was recorded from the rig.
+_MISDRAG_FOV = (130.6e-6, 130.6e-6)
+_MISDRAG_REGION = PolygonRegion(
+    ((0.0, 0.0), (0.687, 0.021), (0.687, 0.873), (0.013, 0.851))
+)
+
+
+def test_a_mis_dragged_region_is_refused_rather_than_planned():
+    sl = Slice(fov=_MISDRAG_FOV)
+    with pytest.raises(RegionTooLarge):
+        sl.setRegions([_MISDRAG_REGION])
+
+
+def test_the_refusal_names_the_size_and_the_tile_count():
+    # The operator has to be told what they drew and why it was rejected; a bare
+    # "too large" leaves them re-dragging blind.
+    sl = Slice(fov=_MISDRAG_FOV)
+    with pytest.raises(RegionTooLarge) as excinfo:
+        sl.setRegions([_MISDRAG_REGION])
+    message = str(excinfo.value)
+    assert "0.687" in message
+    assert "0.873" in message
+    assert str(MAX_PLANNED_TILES) in message.replace(",", "")
+    # The count reported is the grid that would actually have been planned, not
+    # the cap it exceeded, and it is the tens-of-millions figure that makes the
+    # refusal worth reading.
+    planned = count_grid(*_MISDRAG_REGION.bounds(), *_MISDRAG_FOV, 0.0)
+    assert planned > 35_000_000
+    assert str(planned) in message.replace(",", "")
+
+
+def test_a_refused_region_does_not_reach_the_slice():
+    # Refusing is not the same as accepting-and-not-surveying: a slice left
+    # holding the region would plan it on the very next tileGrid() call.
+    sl = Slice(fov=_MISDRAG_FOV)
+    kept = RectRegion(1e-3, 2e-3, 1.4e-3, 2.1e-3)
+    sl.setRegions([kept])
+
+    with pytest.raises(RegionTooLarge):
+        sl.setRegions([kept, _MISDRAG_REGION])
+
+    assert sl.regions == [kept]
+
+
+def test_add_region_is_guarded_too():
+    # addRegion() is the other way in, and "Add region here" reaches the slice
+    # through it.
+    sl = Slice(fov=_MISDRAG_FOV)
+    with pytest.raises(RegionTooLarge):
+        sl.addRegion(_MISDRAG_REGION)
+    assert sl.regions == []
+
+
+def test_the_guard_counts_the_tiles_without_planning_them():
+    # The count is the whole hazard: plan_grid materialises every center before
+    # tileGrid() filters any of them, so a guard that planned first would still
+    # spend the minutes and the memory it exists to avoid. Proven by making the
+    # planner unusable rather than by timing anything.
+    import acq4.experiment.slice as slice_module
+
+    def boom(*args, **kwargs):
+        raise AssertionError("the guard planned the grid it was refusing")
+
+    original, slice_module.plan_grid = slice_module.plan_grid, boom
+    try:
+        sl = Slice(fov=_MISDRAG_FOV)
+        with pytest.raises(RegionTooLarge):
+            sl.setRegions([_MISDRAG_REGION])
+    finally:
+        slice_module.plan_grid = original
+
+
+def test_a_large_but_plausible_region_is_still_accepted():
+    # 20 mm x 4.95 mm at a 100 x 50 um field is 19,800 tiles -- larger than any
+    # real slice and still under the cap, so the cap cannot be what stops an
+    # operator outlining a whole piece of tissue. Asymmetric on both axes so a
+    # guard that counted one axis twice would be caught.
+    sl = Slice(fov=(100e-6, 50e-6))
+    sl.addRegion(RectRegion(1e-3, 2e-3, 1e-3 + 20e-3, 2e-3 + 4.95e-3))
+
+    planned = len(sl.tileGrid())
+    assert planned == 19800
+    assert planned <= MAX_PLANNED_TILES
+
+
+def test_the_cap_is_measured_against_the_grid_that_would_actually_be_planned():
+    # One more tile row past the case above crosses the cap, and the guard's
+    # arithmetic must agree with plan_grid's about exactly where that is.
+    sl = Slice(fov=(100e-6, 50e-6))
+    with pytest.raises(RegionTooLarge) as excinfo:
+        sl.addRegion(RectRegion(1e-3, 2e-3, 1e-3 + 20e-3, 2e-3 + 5.05e-3))
+    assert "20200" in str(excinfo.value).replace(",", "")

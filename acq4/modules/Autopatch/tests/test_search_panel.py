@@ -205,19 +205,6 @@ def test_an_empty_message_retracts_an_externally_set_error(qapp):
     assert panel.errorLabel.text() == ""
 
 
-def test_add_region_button_emits_a_request(qapp):
-    panel = makePanel()
-    # A disabled button does not deliver clicks; this test is about the
-    # button's wiring, not the no-slice lock, so give it a slice.
-    panel.setSliceReady(True)
-    requests = []
-    panel.sigAddRegionRequested.connect(lambda: requests.append(True))
-
-    panel.addRegionBtn.click()
-
-    assert requests == [True]
-
-
 def test_survey_stats_are_shown(qapp):
     panel = makePanel()
     panel.setSurveyStats(9, 3, 100 / 3)
@@ -239,15 +226,13 @@ def test_survey_stats_with_no_region_read_as_no_region(qapp):
         "minHealthSpin",
         "maxDensitySpin",
         "rescansCheck",
-        "addRegionBtn",
-        "shapeCombo",
     ],
 )
 def test_locking_disables_editing_but_not_the_readout(qapp, widgetName):
     # A run in flight parameterises a producer that is already surveying, so
-    # editing any constraint control or the add-region button mid-run would
-    # silently change the search underneath it; the lock must reach every one
-    # of them, in both directions, while leaving the readout alone.
+    # editing any constraint control mid-run would silently change the search
+    # underneath it; the lock must reach every one of them, in both directions,
+    # while leaving the readout alone.
     panel = makePanel()
     widget = getattr(panel, widgetName)
     # A slice already exists here: this test is about the run-lock reaching
@@ -262,21 +247,6 @@ def test_locking_disables_editing_but_not_the_readout(qapp, widgetName):
     assert widget.isEnabled()
 
 
-def test_the_region_shape_defaults_to_a_rectangle(qapp):
-    # The shape every existing survey used, so the default must not change what
-    # pressing the button has always done.
-    panel = makePanel()
-    assert panel.regionShape() == "rect"
-
-
-def test_the_region_shape_reports_a_key_not_the_combo_label(qapp):
-    # The window maps this to a region class; keying on display text would break
-    # the first time the label is reworded.
-    panel = makePanel()
-    panel.shapeCombo.setCurrentIndex(panel.shapeCombo.findData("ellipse"))
-    assert panel.regionShape() == "ellipse"
-
-
 def _controls(panel):
     return (
         panel.nearDepthSpin,
@@ -284,8 +254,6 @@ def _controls(panel):
         panel.minHealthSpin,
         panel.maxDensitySpin,
         panel.rescansCheck,
-        panel.addRegionBtn,
-        panel.shapeCombo,
     )
 
 

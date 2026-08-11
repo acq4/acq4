@@ -532,3 +532,70 @@ def test_show_in_log_button_raises_the_log_window(qapp, monkeypatch):
     orch.sigRunError.emit(_record())
     panel.showInLogBtn.click()
     assert raised == [True]
+
+
+def test_an_instruction_shows_in_the_band(qapp):
+    from acq4.modules.Autopatch.status_panel import StatusPanel
+
+    panel = StatusPanel()
+
+    panel.setInstruction("Storage directory has not been set.")
+
+    assert panel.instructionLabel.isVisibleTo(panel)
+    assert panel.instructionLabel.text() == "Storage directory has not been set."
+
+
+def test_an_instruction_offers_no_log_link(qapp):
+    # Show in log narrows the log to a run's records. An instruction is
+    # guidance about a click that never started a run, so there is nothing
+    # there to show and a button that led nowhere would be worse than none.
+    from acq4.modules.Autopatch.status_panel import StatusPanel
+
+    panel = StatusPanel()
+
+    panel.setInstruction("Storage directory has not been set.")
+
+    assert not panel.showInLogBtn.isVisibleTo(panel)
+
+
+def test_clearing_an_instruction_empties_the_band(qapp):
+    from acq4.modules.Autopatch.status_panel import StatusPanel
+
+    panel = StatusPanel()
+    panel.setInstruction("Storage directory has not been set.")
+
+    panel.clearInstruction()
+
+    assert panel.instruction() == ""
+    assert not panel.instructionLabel.isVisibleTo(panel)
+
+
+def test_a_run_error_still_wins_the_band(qapp):
+    # A failure that halted a run is about tissue and a pipette in it; guidance
+    # about a button is not. The error is the more urgent of the two and must
+    # not be displaced by a stale instruction.
+    from acq4.modules.Autopatch.status_panel import StatusPanel
+
+    panel = StatusPanel()
+    record = _record()
+    panel.setInstruction("Storage directory has not been set.")
+
+    panel._onRunError(record)
+
+    assert record.exc_message in panel.instructionLabel.text()
+    assert panel.showInLogBtn.isVisibleTo(panel)
+
+
+def test_the_instruction_comes_back_once_the_error_clears(qapp):
+    # The band holds two independent things. Whatever the instruction asked for
+    # has not been done in the meantime, so it is held rather than overwritten.
+    from acq4.modules.Autopatch.status_panel import StatusPanel
+
+    panel = StatusPanel()
+    panel.setInstruction("Storage directory has not been set.")
+    panel._onRunError(_record())
+
+    panel.clearError()
+
+    assert panel.instructionLabel.text() == "Storage directory has not been set."
+    assert not panel.showInLogBtn.isVisibleTo(panel)
