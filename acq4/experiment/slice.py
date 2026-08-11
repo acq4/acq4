@@ -5,8 +5,25 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .search_grid import count_covered, plan_grid, select_next
+from .search_grid import count_covered, count_grid, plan_grid, select_next
 from .search_region import SearchRegion
+
+# The most tiles one region's bounding box may plan. At a 130 um field a
+# generous 10 mm slice is about 77x77 = 5,900 tiles, so this is roughly an
+# 18 mm square: past any tissue that fits on a rig, and still three orders of
+# magnitude short of what one mis-drag plans -- the 0.687 m x 0.873 m polygon
+# that prompted this cap planned 35,208,476 tiles at a 130.6 um field, minutes
+# of compute per ROI edit and a list of that length to hold.
+MAX_PLANNED_TILES = 20_000
+
+
+class RegionTooLarge(ValueError):
+    """A region whose bounding box would plan more than MAX_PLANNED_TILES tiles.
+
+    A ValueError because it is a rejected argument, not an orchestration state:
+    nothing routes it to an exception handler, and the only caller that catches
+    it is the UI seam that refuses the operator's edit.
+    """
 
 
 @dataclass(frozen=True)
@@ -124,8 +141,35 @@ class Slice:
         or the whole new one and never a list changing under its own iteration.
         The same "make it one step" discipline `Orchestrator._refillQueue`
         applies to the producer reference.
+
+        Raises RegionTooLarge, leaving the current regions in place, if any of
+        `regions` would plan more tiles than a survey can sensibly hold. Every
+        region reaches a slice through here, which is why the check lives here
+        rather than in the UI: the count is checked before the swap, so a
+        refused list changes nothing at all.
         """
-        self._regions = list(regions)
+        regions = list(regions)
+        for region in regions:
+            self._checkPlannedTiles(region)
+        self._regions = regions
+
+    def _checkPlannedTiles(self, region: SearchRegion) -> None:
+        """Raise RegionTooLarge if `region` would plan more than the cap allows.
+
+        Counted arithmetically rather than by planning, because the count is the
+        hazard: `tileGrid()` has `plan_grid` build the whole bounding-box grid
+        before any of it is filtered against the shape, so a check that planned
+        first would spend exactly the time and memory it exists to prevent.
+        """
+        x0, y0, x1, y1 = region.bounds()
+        fov_w, fov_h = self._fov
+        planned = count_grid(x0, y0, x1, y1, fov_w, fov_h, self._overlap)
+        if planned > MAX_PLANNED_TILES:
+            raise RegionTooLarge(
+                f"a region of {abs(x1 - x0):.3g} m x {abs(y1 - y0):.3g} m would "
+                f"plan {planned} tiles at this field of view, over the "
+                f"{MAX_PLANNED_TILES} tile limit"
+            )
 
     def addRegion(self, region: SearchRegion) -> None:
         """Add a shape to survey, in global coordinates. Coverage is untouched.
@@ -134,6 +178,9 @@ class Slice:
         rectangular: a slice with a damaged corner, or one cortical layer worth
         searching, is the ordinary reason to outline a region at all. A rectangle
         is `RectRegion(x0, y0, x1, y1)`.
+
+        Raises RegionTooLarge, adding nothing, for a region past the tile cap --
+        this goes through setRegions(), which is where that check lives.
         """
         self.setRegions(self._regions + [region])
 

@@ -9,7 +9,7 @@ from acq4.experiment.actions.prompt import prompt
 from acq4.experiment.actions.storage import create_data_dir
 from acq4.experiment.orchestrator import Orchestrator
 from acq4.experiment.search_region import EllipseRegion, PolygonRegion, RectRegion
-from acq4.experiment.slice import Slice
+from acq4.experiment.slice import RegionTooLarge, Slice
 from acq4.experiment.tile_detector import make_tile_detector
 from acq4.modules.Module import Module
 from acq4.util import Qt
@@ -150,6 +150,9 @@ class AutopatchWindow(Qt.QWidget):
         # on the orchestrator's worker thread and must not read a selector.
         self._cachedCamera = None
         self._cachedScope = None
+        # Whether Area 3's instruction band is currently carrying a message this
+        # window's Area 1 handlers put there -- see _setRegionInstruction().
+        self._regionInstruction = False
         self._tornDown = False
         self.protocolPanel.sigProtocolLoaded.connect(self._onProtocolLoaded)
         # Area 4 (the protocol picker/Reload) must not be usable while a
@@ -243,15 +246,44 @@ class AutopatchWindow(Qt.QWidget):
         with the Qt event loop still pumping, so an ROI drag released during
         that wait arrives here after the session it belongs to has ended.
 
-        Area 1 is deliberately not redrawn from here: this arrives *from* the
-        panel, and RegionPanel.setRegions() rebuilds every ROI, which would
-        discard the very handle the operator is holding.
+        Area 1 is deliberately not redrawn from here on the accepted path: this
+        arrives *from* the panel, and RegionPanel.setRegions() rebuilds every
+        ROI, which would discard the very handle the operator is holding. A
+        refused edit is the exception, and rebuilding is the point there: the
+        ROI has to go back to the size the slice still holds.
         """
         if self._tornDown or self.slice is None or not self.regionPanel.isEditable():
             return
-        self.slice.setRegions(regions)
+        try:
+            self.slice.setRegions(regions)
+        except RegionTooLarge as exc:
+            # Refuse the whole edit rather than dropping the one region: a
+            # survey that quietly ignores outlined tissue is the failure mode
+            # this module keeps ruling out. Area 3's band takes the message --
+            # it is guidance about a control, with no traceback to show.
+            self._setRegionInstruction(str(exc))
+            self.regionPanel.setRegions(self.slice.regions)
+            return
+        self._setRegionInstruction("")
         self._cameraMirror.setRegions(regions)
         self._refreshSurveyStats()
+
+    def _setRegionInstruction(self, text: str) -> None:
+        """Put Area 1's guidance in Area 3's band, or retract what it last put
+        there.
+
+        Area 1 has one guidance slot: a later message replaces an earlier one.
+        Whether this window is currently using that slot is tracked rather than
+        written straight through, because newSlice() writes into the same band
+        for its own reason -- an unchosen storage directory -- and clearing
+        Area 1's message must not erase guidance whose condition still holds.
+        """
+        if text:
+            self._regionInstruction = True
+            self.statusPanel.setInstruction(text)
+        elif self._regionInstruction:
+            self._regionInstruction = False
+            self.statusPanel.clearInstruction()
 
     def _canStartSlice(self) -> bool:
         """Whether a slice can be started right now, reporting the reason
@@ -381,6 +413,11 @@ class AutopatchWindow(Qt.QWidget):
             # Narrowed to HelpfulException so a genuine programming error (a
             # missing manager, say) propagates instead of being reported as
             # storage guidance.
+            #
+            # The band is this handler's now, not Area 1's, so a later region
+            # edit must not treat retracting its own message as licence to
+            # retract this one (see _setRegionInstruction).
+            self._regionInstruction = False
             self.statusPanel.setInstruction(str(exc))
             return
         if not self._startSlice(dirHandle=dirHandle):
@@ -391,6 +428,9 @@ class AutopatchWindow(Qt.QWidget):
         # that no longer exists once the operator has physically swapped in
         # new tissue.
         self.statusPanel.clearError()
+        # Whichever handler filled the band, what it was about went with the
+        # tissue just discarded.
+        self._regionInstruction = False
         self.statusPanel.clearInstruction()
         if self.orchestrator is not None:
             # Detached before the queue is cleared, not after: a refill still
@@ -446,7 +486,15 @@ class AutopatchWindow(Qt.QWidget):
         else:
             regionClass = EllipseRegion if shape == "ellipse" else RectRegion
             region = regionClass(x0, y0, x1, y1)
-        self.slice.addRegion(region)
+        try:
+            self.slice.addRegion(region)
+        except RegionTooLarge as exc:
+            # 3x3 fields is nine tiles whatever the field of view, so this
+            # button cannot trip the slice's tile cap as it stands. Caught
+            # anyway because a traceback raised out of a button's slot is not a
+            # failure mode this window should have at all.
+            self._setRegionInstruction(str(exc))
+            return
         self.regionPanel.setRegions(self.slice.regions)
         self._cameraMirror.setRegions(self.slice.regions)
         self._refreshSurveyStats()

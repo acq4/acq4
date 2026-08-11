@@ -1960,3 +1960,114 @@ def test_the_camera_window_getter_does_not_load_the_camera_module(win):
 
     assert win._cameraWindow() is None
     assert loaded == []
+
+
+# 200 x 150 fields of the fake camera's 12 x 8 um ROI: 30,000 tiles, past the
+# 20,000-tile cap. Asymmetric in both axes and at a realistic stage coordinate,
+# so a guard that read one axis twice would be caught.
+_OVERSIZED_REGION = RectRegion(1e-3, 2e-3, 1e-3 + 2.4e-3, 2e-3 + 1.2e-3)
+
+
+def test_an_edit_that_would_plan_too_many_tiles_is_refused(win):
+    # The defect this exists for: an ROI dragged out to 0.687 m x 0.873 m at a
+    # 130 um field planned 35 million tiles, and _refreshSurveyStats runs on
+    # every edit -- minutes of frozen GUI per drag.
+    win.newSlice()
+    win.addRegionHere()
+    seeded = list(win.slice.regions)
+
+    win.regionPanel.sigRegionsChanged.emit([_OVERSIZED_REGION])
+
+    assert win.slice.regions == seeded
+
+
+def test_a_refused_edit_says_why_in_area_3s_band(win):
+    # Silently dropping it would leave the operator with an outline on screen
+    # that no survey will ever tile.
+    win.newSlice()
+
+    win.regionPanel.sigRegionsChanged.emit([_OVERSIZED_REGION])
+
+    message = win.statusPanel.instruction()
+    assert "30000" in message.replace(",", "")
+    assert "tile" in message
+
+
+def test_a_refused_edit_snaps_area_1_back_to_the_slices_regions(win):
+    # The ROI the operator is still holding has to go back where it was: an
+    # outline left at a size the slice refused is a lie about what will be
+    # surveyed.
+    win.newSlice()
+    win.addRegionHere()
+    seeded = list(win.slice.regions)
+
+    win.regionPanel.sigRegionsChanged.emit([_OVERSIZED_REGION])
+
+    assert win.regionPanel.regions() == seeded
+
+
+def test_a_refused_edit_does_not_reach_the_camera_mirror(win):
+    # The mirror draws what the slice holds; an outline of the refused shape in
+    # the Camera window would be the same lie in the other view.
+    win.newSlice()
+    win.addRegionHere()
+    win.regionPanel.mirrorCheck.setChecked(True)
+    seeded = list(win.slice.regions)
+
+    win.regionPanel.sigRegionsChanged.emit([_OVERSIZED_REGION])
+
+    assert win._cameraMirror._regions == seeded
+
+
+def test_the_next_good_edit_retracts_the_refusal(win):
+    # The message says what to fix; once it has been fixed it is a lie.
+    win.newSlice()
+    win.regionPanel.sigRegionsChanged.emit([_OVERSIZED_REGION])
+    assert win.statusPanel.instruction() != ""
+
+    win.regionPanel.sigRegionsChanged.emit([RectRegion(1.0e-3, 2.0e-3, 1.4e-3, 2.1e-3)])
+
+    assert win.statusPanel.instruction() == ""
+    assert len(win.slice.regions) == 1
+
+
+def test_a_refused_edit_does_not_erase_the_storage_instruction(win):
+    """Area 3's band has two Area 1 writers with different conditions, and
+    neither can see the other's. A region edit retracting its own refusal must
+    not also retract newSlice()'s "choose a storage directory", which is still
+    just as true as it was."""
+    from acq4.util.HelpfulException import HelpfulException
+
+    win.addRegionHere()  # a slice, without going through create_data_dir
+
+    def boom(*a, **k):
+        raise HelpfulException("Storage directory has not been set.")
+
+    win.manager.getCurrentDir = boom
+    win.newSlice()
+    assert "Storage directory" in win.statusPanel.instruction()
+
+    win.regionPanel.sigRegionsChanged.emit([RectRegion(1.0e-3, 2.0e-3, 1.4e-3, 2.1e-3)])
+
+    assert "Storage directory" in win.statusPanel.instruction()
+
+
+def test_add_region_here_reports_a_refusal_rather_than_raising(win):
+    """"Add region here" seeds 3x3 fields, which is nine tiles whatever the
+    field of view, so it cannot trip the cap as it stands. The refusal is
+    caught anyway because a traceback out of a button's slot is not a failure
+    mode this window should have at all -- driven here by making the slice
+    refuse, since the geometry itself will not."""
+    from acq4.experiment.slice import RegionTooLarge
+
+    win.newSlice()
+
+    def refuse(region):
+        raise RegionTooLarge("that region would plan 999999 tiles")
+
+    win.slice.addRegion = refuse
+
+    win.addRegionHere()
+
+    assert "999999" in win.statusPanel.instruction()
+    assert win.regionPanel.regions() == []

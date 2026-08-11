@@ -3,9 +3,12 @@ covers a rectangle, and choosing the next un-imaged tile."""
 
 import math
 
+import pytest
+
 from acq4.experiment.search_grid import (
     _is_visited,
     count_covered,
+    count_grid,
     plan_grid,
     select_next,
 )
@@ -126,6 +129,40 @@ def test_tile_count_holds_at_a_coordinate_whose_magnitude_dwarfs_the_tile_geomet
     x1, y1 = off + fov + (n_tiles - 1) * step, off + fov
     grid = plan_grid(x0, y0, x1, y1, fov, fov, overlap=0.0)
     assert len(grid) == n_tiles
+
+
+# Rectangles that between them exercise every branch of the axis tile count:
+# smaller than one FOV, an exact multiple, a ragged remainder, an extent that is
+# one FOV only to within float error at a realistic stage coordinate, and one
+# large enough that building the tile list is the thing worth avoiding.
+_COUNT_CASES = [
+    (10.0, 10.0, 60.0, 60.0, 100.0, 100.0, 20.0),
+    (0.0, 0.0, 200.0, 200.0, 100.0, 100.0, 20.0),
+    (0.0, 0.0, 250.0, 130.0, 100.0, 100.0, 20.0),
+    (1e-3, 2e-3, 1e-3 + 100e-6, 2e-3 + 50e-6, 100e-6, 50e-6, 0.0),
+    (1.5e-3, -2.5e-3, 1.5e-3 + 3.1e-3, -2.5e-3 + 2.7e-3, 130.6e-6, 130.6e-6, 0.0),
+]
+
+
+@pytest.mark.parametrize("x0,y0,x1,y1,fov_w,fov_h,overlap", _COUNT_CASES)
+def test_count_grid_matches_what_plan_grid_actually_produces(
+    x0, y0, x1, y1, fov_w, fov_h, overlap
+):
+    # count_grid() exists so a caller can find out how big a grid would be
+    # without building it, and it is worth nothing unless it is the same number.
+    # Checked against plan_grid itself rather than against hand-computed counts,
+    # which could drift from it.
+    assert count_grid(x0, y0, x1, y1, fov_w, fov_h, overlap) == len(
+        plan_grid(x0, y0, x1, y1, fov_w, fov_h, overlap)
+    )
+
+
+def test_count_grid_normalizes_its_corners_the_way_plan_grid_does():
+    # An ROI resized past its own origin reports a negative size, so the corners
+    # can arrive either way round.
+    assert count_grid(200, 200, 0, 0, 100, 100, 20) == count_grid(
+        0, 0, 200, 200, 100, 100, 20
+    )
 
 
 def test_is_visited_false_when_nothing_visited():
