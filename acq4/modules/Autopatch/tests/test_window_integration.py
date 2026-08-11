@@ -2071,3 +2071,49 @@ def test_add_region_here_reports_a_refusal_rather_than_raising(win):
 
     assert "999999" in win.statusPanel.instruction()
     assert win.regionPanel.regions() == []
+
+
+def test_starting_a_slice_frames_area_1_on_the_camera(win):
+    """A fresh pg.ViewBox spans about a metre, and Area 1's units are global
+    metres. Left there, an operator's first click in an empty view lands a
+    polygon vertex half a metre out -- which is how a region big enough to plan
+    35 million tiles gets drawn in the first place.
+
+    Computed off the fake camera directly (its "roi" boundary and centre) so a
+    bug in _cameraFov() is caught rather than echoed back."""
+    camera = win.cameraSelector.getSelectedObj()
+    _, _, fov_w, fov_h = camera.getBoundary(globalCoords=True, mode="roi")
+    cx, cy, _ = camera.globalCenterPosition("roi")
+
+    try:
+        win.newSlice()
+
+        (vx0, vx1), (vy0, vy1) = win.regionPanel.view.viewRange()
+        assert (vx0 + vx1) / 2 == pytest.approx(cx)
+        assert (vy0 + vy1) / 2 == pytest.approx(cy)
+        # Ten fields across, so the camera's own field is a visible fraction of
+        # the view rather than sub-pixel. Aspect lock may widen one axis, so
+        # this is the floor on each, and a ceiling well short of the metre the
+        # viewport started at.
+        assert (vx1 - vx0) >= 10 * fov_w
+        assert (vy1 - vy0) >= 10 * fov_h
+        assert (vx1 - vx0) < 1e-3
+        assert (vy1 - vy0) < 1e-3
+    finally:
+        win.teardown()
+
+
+def test_add_region_here_without_a_slice_frames_area_1_too(win):
+    # The other route into a slice, and the one an operator is most likely to
+    # take first.
+    camera = win.cameraSelector.getSelectedObj()
+    cx, cy, _ = camera.globalCenterPosition("roi")
+
+    try:
+        win.addRegionHere()
+
+        (vx0, vx1), (vy0, vy1) = win.regionPanel.view.viewRange()
+        assert (vx0 + vx1) / 2 == pytest.approx(cx)
+        assert (vy0 + vy1) / 2 == pytest.approx(cy)
+    finally:
+        win.teardown()

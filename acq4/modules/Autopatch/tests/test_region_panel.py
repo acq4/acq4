@@ -517,3 +517,42 @@ def test_a_region_added_while_locked_is_locked_too(qapp, region):
         segment.acceptedMouseButtons() == Qt.Qt.NoButton
         for segment in getattr(roi, "segments", [])
     )
+
+
+def test_a_fresh_viewport_spans_about_a_metre(qapp):
+    # The reason setViewport() exists, pinned so it cannot quietly stop being
+    # true: pg.ViewBox's default range is in this view's own units, which are
+    # global metres. A click in an empty Area 1 therefore lands a polygon vertex
+    # half a metre out, and a "small" drag is hundreds of millimetres.
+    panel = makePanel()
+
+    (vx0, vx1), (vy0, vy1) = panel.view.viewRange()
+
+    assert (vx1 - vx0) > 0.1
+    assert (vy1 - vy0) > 0.1
+
+
+def test_set_viewport_centres_the_view_where_it_is_told(qapp):
+    panel = makePanel()
+
+    panel.setViewport((1.5e-3, -2.5e-3), (200e-6, 120e-6))
+
+    (vx0, vx1), (vy0, vy1) = panel.view.viewRange()
+    assert (vx0 + vx1) / 2 == pytest.approx(1.5e-3)
+    assert (vy0 + vy1) / 2 == pytest.approx(-2.5e-3)
+
+
+def test_set_viewport_frames_the_span_it_is_given(qapp):
+    # The span is what makes a field of view visible rather than sub-pixel. The
+    # view is aspect-locked, so one axis may be widened to fit the widget; both
+    # must at least contain what was asked for, and neither may still be at the
+    # metre scale a fresh viewport starts at.
+    panel = makePanel()
+
+    panel.setViewport((1.5e-3, -2.5e-3), (200e-6, 120e-6))
+
+    (vx0, vx1), (vy0, vy1) = panel.view.viewRange()
+    assert (vx1 - vx0) >= 200e-6
+    assert (vy1 - vy0) >= 120e-6
+    assert (vx1 - vx0) < 10e-3
+    assert (vy1 - vy0) < 10e-3

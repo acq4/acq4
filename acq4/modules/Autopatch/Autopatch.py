@@ -334,15 +334,22 @@ class AutopatchWindow(Qt.QWidget):
             return False
         camera = self.cameraSelector.getSelectedObj()
         constraints = self.searchPanel.constraints()
-        self.slice = Slice(
-            fov=self._cameraFov(camera), constraints=constraints, dirHandle=dirHandle
-        )
+        fov = self._cameraFov(camera)
+        self.slice = Slice(fov=fov, constraints=constraints, dirHandle=dirHandle)
         self.searchPanel.setSliceReady(True)
         self.regionPanel.setSliceReady(True)
         # A fresh Slice has no regions, and an outline left from the last one is
         # a coordinate on tissue that may no longer be there.
         self.regionPanel.setRegions([])
         self._cameraMirror.setRegions([])
+        # A fresh pg.ViewBox spans about a metre, and Area 1's units are global
+        # metres, so an operator clicking in an empty view lands a vertex half a
+        # metre out. Ten fields around where the camera is looking puts the
+        # first click on tissue-sized coordinates; "roi" mode throughout, for
+        # the same reason addRegionHere() uses it.
+        self.regionPanel.setViewport(
+            camera.globalCenterPosition("roi")[:2], (fov[0] * 10, fov[1] * 10)
+        )
         self._bindPinnedFrames(camera)
         # There is a camera now, so retract the message above if it is up.
         self.searchPanel.setError("")

@@ -335,6 +335,30 @@ class RegionPanel(Qt.QWidget):
             rect = itemRect if rect is None else rect.united(itemRect)
         return rect
 
+    def setViewport(self, center, span) -> None:
+        """Frame the view on `center` across `span`, both in global metres.
+
+        A fresh pg.ViewBox reports a range of about [[-0.167, 1.167], [0, 1]],
+        and this view's units are global metres, so an operator clicking in an
+        empty Area 1 lands a polygon vertex half a metre out and a small drag is
+        hundreds of millimetres. The window calls this when a slice starts, so
+        the first click lands on tissue-sized coordinates.
+
+        Takes a coordinate and a span rather than a camera: this panel renders a
+        region list and holds no devices. The view is aspect-locked, so the
+        axis that does not match the widget's shape is widened past `span`.
+
+        `fitToRegions` is the later re-framing, once there is something drawn to
+        frame; this is the one that has to work with nothing drawn at all.
+        """
+        cx, cy = center
+        w, h = span
+        self.view.setRange(
+            xRange=(cx - w / 2, cx + w / 2),
+            yRange=(cy - h / 2, cy + h / 2),
+            padding=0,
+        )
+
     def fitToRegions(self) -> None:
         """Frame every drawn region and the imagery drawn under them.
 
