@@ -167,7 +167,16 @@ class AutopatchWindow(Qt.QWidget):
         self.newSliceBtn.clicked.connect(self.newSlice)
         self.regionPanel.sigAddRegionRequested.connect(self.addRegionHere)
         self.regionPanel.sigRegionsChanged.connect(self._onRegionsEdited)
-        self.regionPanel.mirrorCheck.toggled.connect(self._cameraMirror.setEnabled)
+        self.regionPanel.mirrorCheck.toggled.connect(self._onMirrorToggled)
+        if self.manager is not None:
+            # Both Area 1 mirrors resolve the Camera module through
+            # _cameraModuleWindow, which reports None while that module is not
+            # open -- so a mirror armed before the operator opens it binds to
+            # nothing. Manager announces every module load and quit here, which
+            # is the one event that can change that answer. Disconnected in
+            # teardown(); a window built with no module (the headless/test mode)
+            # has no manager to listen to.
+            self.manager.sigModulesChanged.connect(self._onModulesChanged)
         self.searchPanel.sigConstraintsChanged.connect(self._onConstraintsChanged)
         self.statusPanel.sigInteractionLocked.connect(
             self.searchPanel.setInteractionLocked
@@ -229,6 +238,47 @@ class AutopatchWindow(Qt.QWidget):
     def _cameraWindow(self):
         """The Camera module's window, or None if there is not one."""
         return self._cameraModuleWindow(self.manager)
+
+    def _onMirrorToggled(self, enabled: bool) -> None:
+        """Turn the outline mirror on or off, saying so if there is nowhere to
+        draw.
+
+        A tick with no Camera module open is otherwise a silent no-op: the
+        checkbox stays ticked, nothing appears anywhere, and nothing
+        distinguishes that from a mirror that is broken. The message is
+        accurate about what happens next -- _onModulesChanged() re-runs this
+        handler when a module is opened, so the outlines really do appear then.
+        """
+        self._cameraMirror.setEnabled(enabled)
+        if enabled and self._cameraWindow() is None:
+            self._setRegionInstruction(
+                "Mirror to Camera: no Camera module is open. The outlines will "
+                "appear if one is opened."
+            )
+        else:
+            self._setRegionInstruction("")
+
+    def _onModulesChanged(self) -> None:
+        """Re-resolve Area 1's two mirrors against the modules now loaded.
+
+        Both of them find the Camera module once and keep the answer: the
+        outline mirror at the moment the checkbox is ticked, the pinned-frame
+        mirror at the moment a slice starts. Either can happen before the
+        Camera module is open, and Manager emits this whenever that changes.
+
+        Refuses once the window is torn down. teardown() waits on the
+        orchestrator with the Qt event loop still pumping, so a module loaded in
+        those seconds is announced while teardown is in progress, and re-binding
+        then would leave the Camera module holding a closed session's graphics.
+        """
+        if self._tornDown:
+            return
+        # Re-runs the checkbox's own handler, which redraws the outlines against
+        # whatever window there is now and raises or retracts its message.
+        self._onMirrorToggled(self.regionPanel.mirrorCheck.isChecked())
+        camera = self.cameraSelector.getSelectedObj()
+        if self.slice is not None and camera is not None:
+            self._bindPinnedFrames(camera)
 
     def _onRegionsEdited(self, regions) -> None:
         """Take Area 1's edited region list as the slice's regions.
@@ -730,6 +780,16 @@ class AutopatchWindow(Qt.QWidget):
             # this window: a raise while stopping the orchestrator would
             # otherwise leave the Camera module holding this session's outlines
             # and its imaging control still connected to a dead mirror.
+            #
+            # The manager goes first, and for the same reason the mirrors go
+            # last: the manager outlives this window, so a connection left on it
+            # would go on calling this window's handler at every later module
+            # load or quit, re-arming the mirrors the next two lines release.
+            # Dropping it here closes that off for good; anything announced
+            # during the wait above was already refused by _onModulesChanged's
+            # own torn-down check.
+            if self.manager is not None:
+                Qt.disconnect(self.manager.sigModulesChanged, self._onModulesChanged)
             self._pinnedFrameMirror.unbind()
             self._cameraMirror.clear()
         self.statusPanel.unbindOrchestrator()

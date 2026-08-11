@@ -154,13 +154,22 @@ class _FakeCameraWithDevice(Qt.QWidget):
 _FOLDER_TYPES = {"Slice": {"name": "Slice_%Y%m%d_%H%M%S", "experimentalUnit": False}}
 
 
-class _FakeManager:
+class _FakeManager(Qt.QObject):
     """Stands in for Manager: backed by a real DirHandle (on tmp_path) so
     create_data_dir's mkdir/setInfo calls land on an actual directory, the way
     they would through the real Manager AutopatchWindow otherwise gets from
-    its module."""
+    its module.
+
+    A QObject carrying sigModulesChanged, because the real Manager is one and
+    emits that signal whenever a module is loaded or quits -- which is how
+    Area 1's two mirrors find a Camera module that was not open when they were
+    first resolved.
+    """
+
+    sigModulesChanged = Qt.Signal()
 
     def __init__(self, root_dir):
+        super().__init__()
         self._current_dir = root_dir
 
     def getCurrentDir(self):
@@ -2117,3 +2126,165 @@ def test_add_region_here_without_a_slice_frames_area_1_too(win):
         assert (vy0 + vy1) / 2 == pytest.approx(cy)
     finally:
         win.teardown()
+
+
+def _cameraModuleAppears(win, cameraWindow=None):
+    """Have `win`'s manager start reporting a loaded Camera module, and announce
+    it the way Manager.loadModule() does.
+
+    Returns the window that module hands out, and the list of items drawn into
+    it, so a caller can see what the outline mirror put there."""
+    drawn = []
+    if cameraWindow is None:
+        cameraWindow = SimpleNamespace(
+            addItem=lambda item, **kwds: drawn.append(item),
+            removeItem=drawn.remove,
+        )
+    win.manager.listModules = lambda: ["Camera"]
+    win.manager.getModule = lambda name: SimpleNamespace(window=lambda: cameraWindow)
+    win.manager.sigModulesChanged.emit()
+    return cameraWindow, drawn
+
+
+def test_outlines_appear_when_the_camera_module_is_opened_after_the_tick(win):
+    """Both mirrors resolved the Camera module once, at a moment that can
+    precede the module being open, and nothing retried. On the rig this showed
+    up as a ticked "Mirror to Camera" that drew nothing until some later region
+    edit happened to redraw it."""
+    win.newSlice()
+    win.addRegionHere()
+
+    win.regionPanel.mirrorCheck.setChecked(True)
+    _cameraWindow, drawn = _cameraModuleAppears(win)
+
+    assert len(drawn) == len(win.slice.regions) == 1
+
+
+def test_no_outlines_appear_when_the_checkbox_is_not_ticked(win):
+    # The other side: a module change is not a reason to start mirroring
+    # something the operator never asked to mirror.
+    win.newSlice()
+    win.addRegionHere()
+
+    _cameraWindow, drawn = _cameraModuleAppears(win)
+
+    assert drawn == []
+
+
+def test_pinned_frames_bind_when_the_camera_module_is_opened_after_the_slice(win):
+    """_bindPinnedFrames runs only from _startSlice, so a Camera module opened
+    afterwards was never picked up: on the rig, PinnedFrameMirror._source was
+    None with a frame already pinned and waiting."""
+    win.newSlice()
+    assert win._pinnedFrameMirror._source is None
+
+    source = _withPinnedFrameSource(win)
+    win.manager.sigModulesChanged.emit()
+
+    assert win._pinnedFrameMirror._source is source
+    assert source.receivers(source.sigPinnedFramesChanged) == 1
+
+
+def test_a_camera_module_opening_with_no_slice_binds_nothing(win):
+    # Nothing is being drawn over yet, and _startSlice binds on its own way
+    # through -- so there is nothing here to retry.
+    source = _withPinnedFrameSource(win)
+
+    win.manager.sigModulesChanged.emit()
+
+    assert win._pinnedFrameMirror._source is None
+    assert source.receivers(source.sigPinnedFramesChanged) == 0
+
+
+def test_a_camera_module_quitting_releases_the_pinned_frame_mirror(win):
+    # sigModulesChanged is also how a module going away is announced, and a
+    # mirror left bound to a dead Camera module would go on showing imagery of
+    # tissue nobody is looking at.
+    source = _withPinnedFrameSource(win)
+    win.newSlice()
+    assert win._pinnedFrameMirror._source is source
+
+    win._cameraWindow = lambda: None
+    win.manager.sigModulesChanged.emit()
+
+    assert win._pinnedFrameMirror._source is None
+    assert source.receivers(source.sigPinnedFramesChanged) == 0
+
+
+def test_teardown_stops_listening_for_module_changes(win):
+    # The manager outlives this window by a long way, so a connection left on it
+    # would go on calling a torn-down window's handler at every later module
+    # load or quit -- re-arming the mirrors teardown had just released.
+    assert win.manager.receivers(win.manager.sigModulesChanged) == 1
+
+    win.teardown()
+
+    assert win.manager.receivers(win.manager.sigModulesChanged) == 0
+
+
+def test_a_module_change_during_teardowns_wait_cannot_re_arm_the_mirrors(win):
+    # teardown() waits on the orchestrator with the Qt event loop still pumping,
+    # so a Camera module loading in those seconds is announced while teardown is
+    # in progress -- and must not bind this closing session's mirrors to it.
+    source = _withPinnedFrameSource(win)
+    win.newSlice()
+    win.regionPanel.mirrorCheck.setChecked(True)
+    win._pinnedFrameMirror.unbind()
+    win.statusPanel.unbindOrchestrator()
+    win.cellPanel.unbindOrchestrator()
+    win.orchestrator = _ReentrantOrchestrator(win.manager.sigModulesChanged.emit)
+
+    win.teardown()
+
+    assert win._pinnedFrameMirror._source is None
+    assert source.receivers(source.sigPinnedFramesChanged) == 0
+
+
+def test_a_headless_window_with_no_manager_still_starts_a_slice(qapp, tmp_path):
+    # module=None is the constructor's documented headless mode: there is no
+    # manager to listen to, and that must not be an error.
+    from acq4.modules.Autopatch.Autopatch import AutopatchWindow
+
+    _write_protocol(tmp_path, "demo.py", _NOOP_PROTOCOL)
+    win = AutopatchWindow(
+        module=None,
+        protocolDir=str(tmp_path),
+        pipetteSelector=_FakePipetteSelector(),
+        cameraSelector=_FakeCameraWithDevice(),
+    )
+    try:
+        win.protocolPanel.fileCombo.setCurrentText("demo")
+        assert win._startSlice() is True
+    finally:
+        win.teardown()
+
+
+def test_ticking_the_mirror_with_no_camera_module_open_says_so(win):
+    # Otherwise the tick is a silent no-op: the checkbox stays ticked and
+    # nothing appears anywhere, with no way to tell that from a broken mirror.
+    win.newSlice()
+
+    win.regionPanel.mirrorCheck.setChecked(True)
+
+    assert "Camera" in win.statusPanel.instruction()
+
+
+def test_the_message_goes_once_a_camera_module_is_open(win):
+    win.newSlice()
+    win.addRegionHere()
+    win.regionPanel.mirrorCheck.setChecked(True)
+    assert win.statusPanel.instruction() != ""
+
+    _cameraModuleAppears(win)
+
+    assert win.statusPanel.instruction() == ""
+
+
+def test_unticking_the_mirror_retracts_the_message(win):
+    win.newSlice()
+    win.regionPanel.mirrorCheck.setChecked(True)
+    assert win.statusPanel.instruction() != ""
+
+    win.regionPanel.mirrorCheck.setChecked(False)
+
+    assert win.statusPanel.instruction() == ""
