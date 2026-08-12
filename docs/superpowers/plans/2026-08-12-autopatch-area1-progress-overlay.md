@@ -965,7 +965,7 @@ git commit -m "feat: colour progress markers by detection health"
 - Consumes: `ColorContext`, `COLOR_SOURCES`, `_LEGENDS`.
 - Produces: `densityBrushes(ctx) -> dict[int, object]`; a third `COLOR_SOURCES` entry `("Local density", "density", densityBrushes)`.
 
-**Match the engine exactly.** `CellProducer._tileIsCrowded` (`cell_producer.py:123`) computes `len(slice.cellsNearTile(tile)) / slice.tileVolume() >= constraints.max_cell_density`, and `Slice.cellsNearTile` counts cells within `±fov/2` in **x and y only** (`slice.py:333`). So this source counts neighbours in the same XY window, divides by the same `tileVolume`, and normalises by the same cap — which is what stops the display and the engine disagreeing about "crowded". It reads `ctx.positions`, **never** `Slice.cellsNearTile()`, which calls the thread-unsafe `cell.position`.
+**Match the engine exactly.** `CellProducer._isCrowded` (`cell_producer.py:123`) computes `len(slice.cellsNearTile(tile)) / slice.tileVolume() >= constraints.max_cell_density`, and `Slice.cellsNearTile` counts cells within `±fov/2` in **x and y only** (`slice.py:333`). So this source counts neighbours in the same XY window, divides by the same `tileVolume`, and normalises by the same cap — which is what stops the display and the engine disagreeing about "crowded". It reads `ctx.positions`, **never** `Slice.cellsNearTile()`, which calls the thread-unsafe `cell.position`.
 
 - [ ] **Step 1: Write the failing test**
 
