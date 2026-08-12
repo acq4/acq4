@@ -390,3 +390,32 @@ def test_teardown_frees_everything_after_a_run_error(qapp, tmp_path):
         assert cellPanel_ref() is None, "CellPanel should be freed by refcounting alone"
     finally:
         gc.enable()
+
+
+def test_teardown_disconnects_every_cell_position_connection(qapp, tmp_path):
+    """Qt's own receivers() count, not merely that an object was collectable:
+    P2c-3a found a mandated mutation that did not fail because a nearby
+    `= None` had already broken the cycle refcounting could see."""
+    from acq4.modules.Autopatch.Autopatch import AutopatchWindow
+
+    from .test_window_integration import _makeCellAt
+
+    _write_protocol(tmp_path, "demo.py", _NOOP_PROTOCOL)
+
+    win = AutopatchWindow(
+        module=None,
+        protocolDir=str(tmp_path),
+        pipetteSelector=_FakePipetteSelector(target=(1e-3, 2e-3, 3e-3)),
+        cameraSelector=_FakeCameraSelector(),
+    )
+    win.protocolPanel.fileCombo.setCurrentText("demo")
+
+    cell = _makeCellAt(1.0e-3, 2.0e-3, -30e-6)
+    win.cellPanel.addCell(cell)
+    assert cell.receivers(cell.sigPositionChanged) == 1
+
+    win.teardown()
+
+    assert cell.receivers(cell.sigPositionChanged) == 0
+
+    win.close()

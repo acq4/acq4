@@ -135,6 +135,11 @@ class AutopatchWindow(Qt.QWidget):
         # RuntimeError. Ids and plain tuples, never cells, for the same reason
         # every dict in cell_panel.py holds ids.
         self._cellPositions: dict[int, tuple] = {}
+        # id(cell) -> the cell, for the sigPositionChanged connections this
+        # window made and must sever. A strong reference is unavoidable to
+        # disconnect, and is safe: CellPanel._cells already holds every one of
+        # these for the panel's life, so this adds no lifetime, only a handle.
+        self._positionConnected: dict[int, object] = {}
 
         self.searchPanel = SearchPanel()
         self.area2Box.layout().addWidget(self.searchPanel)
@@ -601,10 +606,15 @@ class AutopatchWindow(Qt.QWidget):
         self._refreshProgress()
 
     def _syncCellPositions(self) -> None:
-        """Seed a position for every cell that has none, and drop the departed.
+        """Seed a position for every cell that has none, connect to every
+        cell's live position updates, and drop the departed from both.
 
         Reads cell.initialPosition, which __init__ assigns once and nothing
-        mutates. Live updates arrive through sigPositionChanged instead.
+        mutates, to seed. Live updates arrive through sigPositionChanged
+        instead -- see _onCellMoved. A departed cell (discarded from
+        CellPanel) is disconnected here too: CellPanel emits sigCellStateChanged
+        from _onCellsDiscarded after removing the cell from its own registry,
+        so by the time this runs, cells() no longer reports it.
         """
         known = set()
         for cell in self.cellPanel.cells():
@@ -614,8 +624,41 @@ class AutopatchWindow(Qt.QWidget):
                 position = getattr(cell, "initialPosition", None)
                 if position is not None:
                     self._cellPositions[cellId] = (position[0], position[1])
+            signal = getattr(cell, "sigPositionChanged", None)
+            if signal is not None and cellId not in self._positionConnected:
+                signal.connect(self._onCellMoved)
+                self._positionConnected[cellId] = cell
         for departed in set(self._cellPositions) - known:
             del self._cellPositions[departed]
+        for departed in set(self._positionConnected) - known:
+            self._disconnectCellPosition(departed)
+
+    def _onCellMoved(self, position) -> None:
+        """Record a tracked cell's new position and redraw its marker.
+
+        The payload carries the position, so nothing here reads
+        Cell.position or the _positions dict behind it. Qt routes this from
+        the tracking worker onto the GUI thread by queued connection.
+        """
+        if self._tornDown:
+            return
+        cell = self.sender()
+        if cell is None:
+            return
+        self._cellPositions[id(cell)] = (position[0], position[1])
+        self._refreshProgress()
+
+    def _disconnectCellPosition(self, cellId) -> None:
+        cell = self._positionConnected.pop(cellId, None)
+        if cell is None:
+            return
+        Qt.disconnect(cell.sigPositionChanged, self._onCellMoved)
+
+    def _releaseCellPositionConnections(self) -> None:
+        """Sever every sigPositionChanged connection this window made."""
+        for cellId in list(self._positionConnected):
+            self._disconnectCellPosition(cellId)
+        self._cellPositions.clear()
 
     def _colorContext(self) -> ColorContext:
         """Everything the colour sources may read, gathered in one pass.
@@ -664,7 +707,9 @@ class AutopatchWindow(Qt.QWidget):
 
     def _refreshCoverage(self) -> None:
         """Shade the tiles still to be surveyed."""
-        if self._tornDown or self.slice is None:
+        if self._tornDown:
+            return
+        if self.slice is None:
             self._progressOverlay.setCoverage([], (0.0, 0.0))
             return
         covered = set(self.slice.coveredTiles)
@@ -890,6 +935,7 @@ class AutopatchWindow(Qt.QWidget):
                 Qt.disconnect(self.manager.sigModulesChanged, self._onModulesChanged)
             self._pinnedFrameMirror.unbind()
             self._cameraMirror.clear()
+            self._releaseCellPositionConnections()
         self.statusPanel.unbindOrchestrator()
         self.cellPanel.unbindOrchestrator()
         self.cellPanel.clearCells()

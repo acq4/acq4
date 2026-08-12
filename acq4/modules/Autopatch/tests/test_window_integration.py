@@ -2411,3 +2411,66 @@ def test_coverage_draws_the_todo_tiles_not_the_covered_ones(qapp, win):
     for (ax, ay), (ex, ey) in zip(actualCentres, expectedCentres):
         assert ax == pytest.approx(ex)
         assert ay == pytest.approx(ey)
+
+
+def test_a_tracked_cell_marker_follows_its_position_signal(qapp, win):
+    cell = _makeCellAt(1.0e-3, 2.0e-3, -30e-6)
+    win.cellPanel.addCell(cell)
+
+    cell.sigPositionChanged.emit(Point([1.4e-3, 2.1e-3, -30e-6], "global"))
+
+    x, y = win._progressOverlay.scatter.getData()
+    assert x[0] == pytest.approx(1.4e-3)
+    assert y[0] == pytest.approx(2.1e-3)
+
+
+def test_refresh_never_iterates_the_tracked_positions_dict(qapp, win):
+    """Cell.position does max(self._positions) while the tracking worker
+    inserts into it. This proves the overlay path does not go near it: a
+    _positions that raises on iteration must not break a refresh.
+    """
+    cell = _makeCellAt(1.0e-3, 2.0e-3, -30e-6)
+    win.cellPanel.addCell(cell)
+
+    class Exploding(dict):
+        def __iter__(self):
+            raise RuntimeError("dictionary changed size during iteration")
+
+        def keys(self):
+            raise RuntimeError("dictionary changed size during iteration")
+
+    cell._positions = Exploding(cell._positions)
+
+    win._refreshProgress()
+
+    assert len(win._progressOverlay.scatter.getData()[0]) == 1
+
+
+def test_discarding_a_cell_disconnects_it(qapp, win):
+    cell = _makeCellAt(1.0e-3, 2.0e-3, -30e-6)
+    win.cellPanel.addCell(cell)
+
+    win.cellPanel.discardCells([cell])
+
+    assert cell.receivers(cell.sigPositionChanged) == 0
+
+
+def test_refresh_coverage_after_teardown_does_not_touch_the_overlay(win):
+    """A torn-down window must return before it ever calls into the overlay.
+
+    Seeds real coverage items first: the unfixed code's torn-down branch
+    still calls setCoverage([], ...), which clears them -- a mutation this
+    test would miss if it only checked that no exception was raised. Against
+    the unfixed `if self._tornDown or self.slice is None:` this fails because
+    the pre-existing items are wiped; a torn-down window with no slice, and
+    one with a slice, must both leave the overlay alone.
+    """
+    _sliceWithTodoTiles(win)
+    win._onRunStatus("waiting")
+    before = win._progressOverlay.coverageItems()
+    assert before
+
+    win.teardown()
+    win._refreshCoverage()
+
+    assert win._progressOverlay.coverageItems() == before
