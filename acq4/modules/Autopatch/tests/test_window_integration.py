@@ -12,7 +12,7 @@ from acq4.experiment.context import ExecutionContext
 from acq4.experiment.exceptions import AdvanceToNextCell
 from acq4.experiment.search_region import EllipseRegion, RectRegion
 from acq4.experiment.slice import Slice
-from acq4.modules.Autopatch.progress_colors import COLOR_SOURCES
+from acq4.modules.Autopatch.progress_colors import COLOR_SOURCES, healthBrushes, successBrushes
 from acq4.util import Qt
 from acq4_automation.feature_tracking.cell import Cell
 
@@ -2337,6 +2337,9 @@ def test_marker_position_comes_from_initial_position_not_position(qapp, win):
 
 
 def test_a_finished_cell_is_recoloured(qapp, win):
+    """Also kills the mutant that always paints with densityBrushes regardless
+    of the selected source: that mutant changes the colour too, but not to the
+    success source's "done" colour, which is checked here by name."""
     cell = _makeCellAt(1.0e-3, 2.0e-3, -30e-6)
     win.cellPanel.addCell(cell)
     before = win._progressOverlay.scatter.points()[0].brush().color().name()
@@ -2345,9 +2348,15 @@ def test_a_finished_cell_is_recoloured(qapp, win):
 
     after = win._progressOverlay.scatter.points()[0].brush().color().name()
     assert after != before
+    expected = successBrushes(win._colorContext())[id(cell)].color().name()
+    assert after == expected
 
 
 def test_changing_the_colour_source_recolours_without_a_run(qapp, win):
+    """Also kills the mutant that refreshes with some other source, or ignores
+    the selection entirely: either would still change the colour, but not to
+    the health source's colour for this cell's score, which is checked here by
+    name."""
     cell = _makeCellAt(1.0e-3, 2.0e-3, -30e-6)
     cell.score = 0.9
     win.cellPanel.addCell(cell)
@@ -2358,6 +2367,8 @@ def test_changing_the_colour_source_recolours_without_a_run(qapp, win):
 
     after = win._progressOverlay.scatter.points()[0].brush().color().name()
     assert after != before
+    expected = healthBrushes(win._colorContext())[id(cell)].color().name()
+    assert after == expected
 
 
 def test_the_legend_follows_the_colour_source(qapp, win):
@@ -2373,10 +2384,30 @@ def test_the_legend_follows_the_colour_source(qapp, win):
 
 
 def test_coverage_draws_the_todo_tiles_not_the_covered_ones(qapp, win):
+    """Also kills the mutant that unconditionally drops a fixed index (e.g.
+    grid[0]) instead of filtering on what is actually covered: covering a
+    tile that is deliberately not grid[0] leaves that mutant's count still
+    matching, but its rectangles centred on the wrong tiles."""
     _sliceWithTodoTiles(win)
     grid = win.slice.tileGrid()
-    win.slice.markCovered(grid[0])
+    coveredIndex = len(grid) // 2
+    covered = grid[coveredIndex]
+    win.slice.markCovered(covered)
 
     win._onRunStatus("waiting")
 
-    assert len(win._progressOverlay.coverageItems()) == len(grid) - 1
+    items = win._progressOverlay.coverageItems()
+    assert len(items) == len(grid) - 1
+    # setCoverage's rects are built from (cx - fovW/2, cy - fovH/2, fovW, fovH)
+    # in the view's own coordinates, so a rect's centre recovers the tile it
+    # was drawn for.
+    actualCentres = sorted(
+        (item.rect().center().x(), item.rect().center().y()) for item in items
+    )
+    expectedCentres = sorted(
+        tuple(tile) for i, tile in enumerate(grid) if i != coveredIndex
+    )
+    assert len(actualCentres) == len(expectedCentres)
+    for (ax, ay), (ex, ey) in zip(actualCentres, expectedCentres):
+        assert ax == pytest.approx(ex)
+        assert ay == pytest.approx(ey)
