@@ -238,7 +238,16 @@ def _write_protocol(path, name, body):
 
 @pytest.fixture
 def win(qapp, tmp_path):
-    return _makeWindow(tmp_path)
+    w = _makeWindow(tmp_path)
+    yield w
+    # Without this, every one of the many tests parametrized on this fixture
+    # leaves behind a fully-built AutopatchWindow (Orchestrator, panels,
+    # ParameterTree) that only Python's cyclic GC can reclaim, since teardown()
+    # is what breaks the Orchestrator/Cell/window reference cycle -- see its
+    # docstring. Left to the collector, that reclaim happens at an arbitrary
+    # later point (possibly in an unrelated test module), where it can delete a
+    # live QObject while a Qt event is still queued for it.
+    w.teardown()
 
 
 def test_loading_a_protocol_builds_and_binds_an_orchestrator(qapp, tmp_path):
