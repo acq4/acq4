@@ -182,8 +182,15 @@ prediction in `[0, 1]`, set once at detection, immutable afterwards, and `None`
 for a cell that was never scored.
 
 That is the whole change. It declares what `tile_detector.py:83` already sets
-and `cell_producer.py:118` already reads. It lands first, so acq4 can then read
-`cell.score` plainly rather than defensively.
+and `cell_producer.py:118` already reads.
+
+**It does not, however, let acq4 read `cell.score` plainly**, which an earlier
+draft of this section claimed. `CellPanel` is duck-typed — its own tests seed
+plain `object()` rows, and nothing constrains a row's payload to be a `Cell` —
+so `_colorContext` reads `getattr(c, "score", None)`. The declaration's value is
+discoverability for anyone reading `Cell`, not a stronger guarantee at the call
+site. Nor does the ordering matter: no acq4 code path depends on the attribute
+existing, so the two repositories' changes can land in either order.
 
 ### 5.2 `CellPanel`'s new surface
 
@@ -203,11 +210,26 @@ one.
   navigation. The panel connects `cellList.currentItemChanged` internally today
   and emits nothing outward.
 
-- **`sigCellStateChanged`** — emitted wherever `_status`/`_rows` change:
-  `addCell`, `_onCellFinished`, `_onReuseCheckedCells`, `_onCellsDiscarded`. It
-  carries nothing; it is a "re-read me" nudge, following the existing
-  `_refreshSurveyStats()` pull rather than pushing state the panel would then
-  hold two copies of.
+- **`sigCellStateChanged`** — emitted wherever `_status`, `_rows`, or
+  `_attempted` change: `addCell`, `_onCurrentCell`, `_onCellFinished`,
+  `_onReuseCheckedCells`, `_onCellsDiscarded`. It carries nothing; it is a
+  "re-read me" nudge, following the existing `_refreshSurveyStats()` pull rather
+  than pushing state the panel would then hold two copies of.
+
+  **`_onCurrentCell` is the fifth site and was originally missed**, which made
+  one of §4.2's five colours unreachable. It sets `_attempted` — the only state
+  the in-flight blue keys on — but emitted only through its internal `addCell`
+  call, which fires just for a cell that has no row yet. For the ordinary case,
+  an already-seeded cell, the orchestrator's announcement changed `_attempted`
+  and told nobody, so the marker for the cell being patched right now stayed
+  grey ("to do") until some unrelated refresh happened to fire — and often until
+  the cell finished and recoloured green, red, or amber. A colour the design
+  promises must have a path that reaches the screen; the emit sites are that
+  path, so any writer of state a colour reads belongs in this list.
+
+  The resulting double emit on the no-row path is accepted rather than guarded:
+  the signal is a payload-free nudge, so a duplicate costs one redundant redraw
+  and `_onCellFinished` already has the same shape.
 
 ## 6. Refresh, threading, and the position read
 
@@ -274,11 +296,36 @@ to call `selectCell(cell)`.
 
 Adding the scatter to the view enrolls the markers in `fitToRegions()`
 automatically, because `_mirroredImageryBounds` frames everything in the view
-that is not a region ROI. That is correct and needs no new API: cell positions
-come from tiles in `tileGrid()`, which only yields tiles inside regions, so
-every cell sits within the regions plus half a field of overhang — well inside
-the 10% padding `fitToRegions` already applies. The union is unchanged in
-practice.
+that is not a region ROI. **The scatter must therefore be excluded from that
+union, and the reasoning that said otherwise was wrong.**
+
+The argument that failed: cell positions come from tiles in `tileGrid()`, which
+only yields tiles inside regions, so every cell sits within the regions plus
+half a field of overhang — well inside the 10% padding `fitToRegions` applies.
+That is true of a marker's *position* and irrelevant to its *bounding rect*.
+With `pxMode=True` the markers keep a constant pixel size, so
+`ScatterPlotItem.boundingRect()` carries a pixel halo converted into view units
+**at the current zoom** — and the fresh viewport this button exists to recover
+from spans about a metre. Measured on a 300 × 200 µm region 1 mm from the
+origin: fitting with no markers gives 360 × 270 µm, and fitting with a single
+marker gives **27 m × 20 m**, centred near global (0, 0). It converges over
+three or four presses, so the inflation is worst in exactly the state
+`fitToRegions`' own docstring describes as its reason for existing.
+
+A second failure has the same root: with nothing else in the view, an *empty*
+scatter makes `_mirroredImageryBounds` return a **null** `QRectF` rather than
+`None`, so `fitToRegions`' `if rect is None: return` guard stops firing and
+pressing Fit on an empty Area 1 recentres the view on global (0, 0) instead of
+doing nothing.
+
+So the panel does need a way to be told which items frame and which do not —
+the `excludeFromFraming` registration this section originally rejected — plus a
+null-rect check. The panel still learns nothing about *what* the excluded item
+is, which is what keeps §4.1's ignorance intact.
+
+Every pre-existing fit test builds a bare `RegionPanel`, which has no overlay,
+so none of them can observe either defect; the window-level test §10 mandates
+is the only thing that can.
 
 ## 9. Errors and degenerate input
 
