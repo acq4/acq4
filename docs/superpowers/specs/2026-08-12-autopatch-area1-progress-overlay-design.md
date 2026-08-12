@@ -161,7 +161,7 @@ concurrency hazard described there.
 ### 4.3 Coverage
 
 The **to-do** tiles are painted, not the covered ones: `tileGrid()` minus
-`coveredTiles()`. An empty overlay then reads correctly as "fully surveyed",
+`coveredTiles`. An empty overlay then reads correctly as "fully surveyed",
 and what is drawn is the set the operator can act on.
 
 Recomputed only on the coverage triggers in §6, because `tileGrid()` is

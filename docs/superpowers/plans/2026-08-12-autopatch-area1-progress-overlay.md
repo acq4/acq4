@@ -1769,7 +1769,7 @@ Add the methods beside `_refreshSurveyStats`:
         if self._tornDown or self.slice is None:
             self._progressOverlay.setCoverage([], (0.0, 0.0))
             return
-        covered = set(self.slice.coveredTiles())
+        covered = set(self.slice.coveredTiles)
         todo = [tile for tile in self.slice.tileGrid() if tile not in covered]
         self._progressOverlay.setCoverage(todo, self.slice.fov)
 ```
