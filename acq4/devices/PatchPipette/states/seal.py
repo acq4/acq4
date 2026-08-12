@@ -152,13 +152,11 @@ class SealAnalysis(SteadyStateAnalysisBase):
                     dt, self._last_measurement['resistance_avg_for_hold'], resistance, self._hold_tau)
                 resistance_avg_for_failure, _ = exponential_decay_avg(
                     dt, self._last_measurement['resistance_avg_for_failure'], resistance, self._failure_tau)
-                # Averaged in place rather than via exponential_decay_avg: an intact seal holds
-                # this series at zero for minutes at a time, and that helper's ratio term
-                # divides by the previous average.
-                alpha = 1 - np.exp(-dt / self._break_in_tau)
-                capacitance_avg_for_break_in = (
-                    self._last_measurement['capacitance_avg_for_break_in'] * (1 - alpha)
-                    + capacitance_for_avg * alpha
+                capacitance_avg_for_break_in, _ = exponential_decay_avg(
+                    dt,
+                    self._last_measurement['capacitance_avg_for_break_in'],
+                    capacitance_for_avg,
+                    self._break_in_tau,
                 )
                 dRdt = (resistance - self._last_measurement['steady_state_resistance']) / dt
                 dRdt_for_failure, _ = exponential_decay_avg(

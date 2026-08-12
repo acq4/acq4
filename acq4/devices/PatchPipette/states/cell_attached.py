@@ -100,14 +100,8 @@ class CellAttachedState(PatchPipetteState):
             # break-in detection for the rest of the state, leaving a cell that ruptured on its
             # own to be mistaken for one that detached.
             cap_for_avg = 0.0 if np.isnan(cap) else cap
-            if cap_avg is None:
-                cap_avg = cap_for_avg
-            else:
-                # Averaged in place rather than via exponential_decay_avg: an intact seal holds
-                # this series at zero for minutes at a time, and that helper's ratio term
-                # divides by the previous average.
-                alpha = 1 - np.exp(-dt / config['breakInMonitorTau'])
-                cap_avg = cap_avg * (1 - alpha) + cap_for_avg * alpha
+            cap_avg, _ = exponential_decay_avg(
+                dt, cap_avg, cap_for_avg, config['breakInMonitorTau'])
             ssr = tp.analysis['steady_state_resistance']
             ssr_avg, _ = exponential_decay_avg(dt, ssr_avg, ssr, resistance_tau)
             if cap_avg > config['capacitanceThreshold'] and ssr_avg < config['minimumBreakInResistance']:
