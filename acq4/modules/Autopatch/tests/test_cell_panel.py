@@ -1511,14 +1511,20 @@ def test_reusing_a_checked_cell_announces_a_state_change(qapp):
 
 
 def test_select_cell_makes_that_row_current(qapp):
+    """selectCell must follow its argument and not just select the last row."""
     panel = makePanel()
-    first, second = object(), object()
+    first, second, third = object(), object(), object()
     panel.addCell(first)
     panel.addCell(second)
+    panel.addCell(third)
 
-    panel.selectCell(second)
+    # Make third the current row first (it's also the last-added)
+    panel.selectCell(third)
 
-    assert panel.cellList.currentItem().data(Qt.Qt.UserRole) is second
+    # Now select first, which is neither last-added nor currently-selected
+    panel.selectCell(first)
+
+    assert panel.cellList.currentItem().data(Qt.Qt.UserRole) is first
 
 
 def test_select_cell_ignores_a_cell_with_no_row(qapp):
