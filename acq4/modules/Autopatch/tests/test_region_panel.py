@@ -557,3 +557,55 @@ def test_set_viewport_frames_the_span_it_is_given(qapp):
     assert (vy1 - vy0) >= 120e-6
     assert (vx1 - vx0) < 10e-3
     assert (vy1 - vy0) < 10e-3
+
+
+def test_colour_source_combo_carries_keys_as_item_data(qapp):
+    """Item data, not display text, for the same reason regionShape() does:
+    the window maps a key to a colour function, and a label is a label."""
+    from acq4.modules.Autopatch.progress_colors import COLOR_SOURCES
+
+    panel = makePanel()
+
+    keys = [
+        panel.colorCombo.itemData(i) for i in range(panel.colorCombo.count())
+    ]
+    assert keys == [key for _label, key, _func in COLOR_SOURCES]
+
+
+def test_colour_source_reports_the_selection(qapp):
+    panel = makePanel()
+
+    panel.colorCombo.setCurrentIndex(1)
+
+    assert panel.colorSource() == panel.colorCombo.itemData(1)
+
+
+def test_changing_the_colour_source_announces_the_new_key(qapp):
+    panel = makePanel()
+    seen = []
+    panel.sigColorSourceChanged.connect(seen.append)
+
+    panel.colorCombo.setCurrentIndex(1)
+
+    assert seen == [panel.colorCombo.itemData(1)]
+
+
+def test_legend_renders_one_entry_per_pair(qapp):
+    import pyqtgraph as pg
+
+    panel = makePanel()
+
+    panel.setLegend([("Patched", pg.mkBrush(0, 170, 60)), ("Failed", pg.mkBrush(215, 45, 45))])
+
+    assert panel.legendLabels() == ["Patched", "Failed"]
+
+
+def test_setting_a_legend_replaces_the_last_one(qapp):
+    import pyqtgraph as pg
+
+    panel = makePanel()
+    panel.setLegend([("Patched", pg.mkBrush(0, 170, 60))])
+
+    panel.setLegend([("Sparse", pg.mkBrush(70, 110, 200))])
+
+    assert panel.legendLabels() == ["Sparse"]

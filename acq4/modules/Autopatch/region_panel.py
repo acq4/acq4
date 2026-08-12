@@ -13,6 +13,8 @@ from acq4.experiment.search_region import (
 )
 from acq4.util import Qt
 
+from .progress_colors import COLOR_SOURCES
+
 # Yellow at 2px, matching the survey ROI the AutomationDebug bench already
 # draws, so the same shape reads the same way in either module.
 REGION_PEN = pg.mkPen("y", width=2)
@@ -114,6 +116,7 @@ class RegionPanel(Qt.QWidget):
     # The complete region list after an edit that originated here.
     sigRegionsChanged = Qt.Signal(object)
     sigAddRegionRequested = Qt.Signal()
+    sigColorSourceChanged = Qt.Signal(object)
 
     def __init__(self):
         super().__init__()
@@ -165,20 +168,33 @@ class RegionPanel(Qt.QWidget):
             "editable only here."
         )
 
+        # Item data, not display text, the same contract regionShape() keeps.
+        self.colorCombo = Qt.QComboBox()
+        for label, key, _func in COLOR_SOURCES:
+            self.colorCombo.addItem(label, key)
+        self.colorCombo.setToolTip("What the cell markers are coloured by.")
+
+        # A row of swatch+label pairs rebuilt whenever the source changes. The
+        # panel renders pairs it is handed and never computes a colour itself.
+        self.legendRow = Qt.QHBoxLayout()
+
         controls = Qt.QHBoxLayout()
         controls.addWidget(self.shapeCombo)
         controls.addWidget(self.addRegionBtn)
         controls.addWidget(self.fitBtn)
         controls.addWidget(self.mirrorCheck)
+        controls.addWidget(self.colorCombo)
         controls.addStretch()
 
         layout = Qt.QVBoxLayout()
         layout.addLayout(controls)
+        layout.addLayout(self.legendRow)
         layout.addWidget(self.graphicsView)
         self.setLayout(layout)
 
         self.addRegionBtn.clicked.connect(self.sigAddRegionRequested)
         self.fitBtn.clicked.connect(self.fitToRegions)
+        self.colorCombo.currentIndexChanged.connect(self._onColorSourceChanged)
 
         self._applyLock()
 
@@ -319,6 +335,41 @@ class RegionPanel(Qt.QWidget):
     def regionShape(self) -> str:
         """The shape key for the next region drawn: rect, ellipse, or polygon."""
         return self.shapeCombo.currentData()
+
+    def colorSource(self) -> str:
+        """The key of the selected colour source."""
+        return self.colorCombo.currentData()
+
+    def _onColorSourceChanged(self, _index) -> None:
+        self.sigColorSourceChanged.emit(self.colorSource())
+
+    def setLegend(self, entries) -> None:
+        """Show one swatch and label per (label, brush) pair, replacing the last set."""
+        while self.legendRow.count():
+            item = self.legendRow.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.setParent(None)
+        for label, brush in entries:
+            swatch = Qt.QLabel()
+            swatch.setFixedSize(12, 12)
+            swatch.setAutoFillBackground(True)
+            palette = swatch.palette()
+            palette.setColor(swatch.backgroundRole(), brush.color())
+            swatch.setPalette(palette)
+            self.legendRow.addWidget(swatch)
+            self.legendRow.addWidget(Qt.QLabel(label))
+        self.legendRow.addStretch()
+
+    def legendLabels(self) -> list:
+        """The legend's text labels, in order. For tests and for the operator's
+        own sanity check that the swatches say what they mean."""
+        labels = []
+        for i in range(self.legendRow.count()):
+            widget = self.legendRow.itemAt(i).widget()
+            if isinstance(widget, Qt.QLabel) and widget.text():
+                labels.append(widget.text())
+        return labels
 
     def _mirroredImageryBounds(self) -> Qt.QRectF | None:
         """The extent of everything in the view that is not a region ROI, or
