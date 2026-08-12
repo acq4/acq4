@@ -936,6 +936,7 @@ class AutopatchWindow(Qt.QWidget):
             self._pinnedFrameMirror.unbind()
             self._cameraMirror.clear()
             self._releaseCellPositionConnections()
+            self._progressOverlay.release()
         self.statusPanel.unbindOrchestrator()
         self.cellPanel.unbindOrchestrator()
         self.cellPanel.clearCells()

@@ -2425,12 +2425,24 @@ def test_a_tracked_cell_marker_follows_its_position_signal(qapp, win):
 
 
 def test_refresh_never_iterates_the_tracked_positions_dict(qapp, win):
-    """Cell.position does max(self._positions) while the tracking worker
-    inserts into it. This proves the overlay path does not go near it: a
-    _positions that raises on iteration must not break a refresh.
+    """_syncCellPositions must seed a cell's marker from cell.initialPosition,
+    never from cell.position: Cell.position evaluates max(self._positions),
+    which iterates a dict the tracking worker thread writes to, so a
+    GUI-thread read racing an insert raises RuntimeError: dictionary changed
+    size during iteration.
+
+    The trap -- a _positions dict that raises on both __iter__ and keys() --
+    must be armed *before* the cell is ever added to the panel: addCell()
+    synchronously drives _onCellStateChanged -> _syncCellPositions, which is
+    the only place a never-before-seen cell's position is read. Arming it
+    afterward would let that one read land on the still-healthy dict, seed
+    the cache, and never happen again -- so a mutation to cell.position would
+    pass unnoticed, which is exactly what happened before this rewrite.
+    Arming first forces the sync to obtain a position from a cell whose
+    _positions dict already explodes, so only the correct initialPosition
+    read can survive.
     """
     cell = _makeCellAt(1.0e-3, 2.0e-3, -30e-6)
-    win.cellPanel.addCell(cell)
 
     class Exploding(dict):
         def __iter__(self):
@@ -2441,9 +2453,12 @@ def test_refresh_never_iterates_the_tracked_positions_dict(qapp, win):
 
     cell._positions = Exploding(cell._positions)
 
-    win._refreshProgress()
+    win.cellPanel.addCell(cell)
 
-    assert len(win._progressOverlay.scatter.getData()[0]) == 1
+    xs, ys = win._progressOverlay.scatter.getData()
+    assert len(xs) == 1
+    assert xs[0] == pytest.approx(cell.initialPosition[0])
+    assert ys[0] == pytest.approx(cell.initialPosition[1])
 
 
 def test_discarding_a_cell_disconnects_it(qapp, win):
@@ -2456,21 +2471,24 @@ def test_discarding_a_cell_disconnects_it(qapp, win):
 
 
 def test_refresh_coverage_after_teardown_does_not_touch_the_overlay(win):
-    """A torn-down window must return before it ever calls into the overlay.
+    """A torn-down window must return before it ever calls into the overlay
+    again.
 
-    Seeds real coverage items first: the unfixed code's torn-down branch
-    still calls setCoverage([], ...), which clears them -- a mutation this
-    test would miss if it only checked that no exception was raised. Against
-    the unfixed `if self._tornDown or self.slice is None:` this fails because
-    the pre-existing items are wiped; a torn-down window with no slice, and
-    one with a slice, must both leave the overlay alone.
+    Seeds real coverage items first, then tears the window down: teardown()
+    itself now empties the overlay (ProgressOverlay.release() takes every
+    item back out of the view, among the rest of its cleanup), so what is
+    left to prove is that _refreshCoverage(), called explicitly afterward,
+    does not undo that by reaching into the overlay a second time. Against an
+    unguarded `if self.slice is None:` (missing the `self._tornDown or`) this
+    fails because the still-installed slice's to-do tiles get redrawn -- a
+    torn-down window with no slice, and one with a slice, must both leave the
+    released overlay empty.
     """
     _sliceWithTodoTiles(win)
     win._onRunStatus("waiting")
-    before = win._progressOverlay.coverageItems()
-    assert before
+    assert win._progressOverlay.coverageItems()
 
     win.teardown()
     win._refreshCoverage()
 
-    assert win._progressOverlay.coverageItems() == before
+    assert win._progressOverlay.coverageItems() == []
