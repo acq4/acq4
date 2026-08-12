@@ -297,6 +297,47 @@ def test_density_counts_neighbours_in_the_same_xy_window_as_the_engine():
     assert withInside[1].color() != withOutside[1].color()
 
 
+def test_density_binds_the_y_window_to_the_field_height():
+    """Kills a mutant that swaps `fovH / 2` for `fovW / 2` in
+    `_neighbourCount`'s y-axis comparison.
+
+    The sibling test `test_density_counts_neighbours_in_the_same_xy_window_as_the_engine`
+    holds y constant across its `inside`/`outside` fixtures, so
+    `abs(there[1] - here[1])` is always 0 there and clears either threshold --
+    it cannot distinguish `fovH / 2` from `fovW / 2` in the y term. This test
+    varies only y instead, mirroring the sibling's structure along the other
+    axis.
+    """
+    from acq4.modules.Autopatch.progress_colors import densityBrushes
+
+    fov = (220e-6, 170e-6)
+    # Just inside the correct fovH-based window in y, and just outside it --
+    # but still inside what a fovW-based window would wrongly allow.
+    inside = (1.0e-3, 2.0e-3 + fov[1] / 2 * 0.9)
+    outside = (1.0e-3, 2.0e-3 + 100e-6)
+
+    withInside = densityBrushes(
+        makeContext(
+            cellIds=[1, 2],
+            positions={1: (1.0e-3, 2.0e-3), 2: inside},
+            fov=fov,
+            tileVolume=fov[0] * fov[1] * 40e-6,
+            maxCellDensity=5e12,
+        )
+    )
+    withOutside = densityBrushes(
+        makeContext(
+            cellIds=[1, 2],
+            positions={1: (1.0e-3, 2.0e-3), 2: outside},
+            fov=fov,
+            tileVolume=fov[0] * fov[1] * 40e-6,
+            maxCellDensity=5e12,
+        )
+    )
+
+    assert withInside[1].color() != withOutside[1].color()
+
+
 def test_density_falls_back_to_a_raw_count_with_no_slice():
     """No slice means no tileVolume and no cap to normalise against.
 
