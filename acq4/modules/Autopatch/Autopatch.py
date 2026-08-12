@@ -128,6 +128,12 @@ class AutopatchWindow(Qt.QWidget):
         )
 
         self._progressOverlay = ProgressOverlay(self.regionPanel.view)
+        # The scatter is pxMode (a constant screen size), so its own
+        # boundingRect() reports that pixel halo converted into view units at
+        # whatever scale the view currently has -- unioning it into "fit to
+        # regions" would frame the current zoom rather than what is actually
+        # drawn. See RegionPanel._mirroredImageryBounds() for the full story.
+        self.regionPanel.excludeFromFraming(self._progressOverlay.scatter)
         # id(cell) -> the last (x, y) global position known for it. Seeded from
         # cell.initialPosition and updated from sigPositionChanged payloads:
         # cell.position evaluates max(self._positions), which iterates a dict
@@ -231,6 +237,12 @@ class AutopatchWindow(Qt.QWidget):
         # window and presses Start immediately still gets a run.
         if self.protocolPanel.protocolFile is not None:
             self._onProtocolLoaded(self.protocolPanel.protocolFile)
+        # Every panel this touches (cellPanel, regionPanel, the progress
+        # overlay) is built by this point, so this is what puts a meaningful
+        # legend under Area 1 before the operator has done anything at all,
+        # rather than leaving it empty until the first cell or colour-source
+        # change calls _refreshProgress() on its own.
+        self._refreshProgress()
 
     @staticmethod
     def _cameraModuleWindow(manager):
@@ -531,6 +543,16 @@ class AutopatchWindow(Qt.QWidget):
             # the operator's session record.
             self.orchestrator.abandonCellInHand()
         self._refreshSurveyStats()
+        # Area 1's markers and to-do shading describe the cells and coverage
+        # just discarded above; left drawn, the operator would see dots and
+        # shading for tissue they just declared gone -- in the one view whose
+        # whole job is spatial trust. The per-cell position connections this
+        # window made are released alongside: cellPanel.clearCells() has
+        # already dropped CellPanel's own strong reference to each cell, so
+        # _positionConnected's parallel one is now all that would keep a
+        # discarded Cell alive, and its sigPositionChanged connection live.
+        self._progressOverlay.clear()
+        self._releaseCellPositionConnections()
 
     def addRegionHere(self) -> None:
         """Add a search region of roughly 3x3 fields of view around the camera center.

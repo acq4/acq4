@@ -364,6 +364,55 @@ def test_density_falls_back_to_a_raw_count_with_no_slice():
     assert brushes[1].color() != brushes[9].color()
 
 
+def test_density_saturates_exactly_at_the_engines_cap():
+    """Pins the display's crowded threshold to the same ratio
+    CellProducer._isCrowded uses to skip a tile
+    (len(cellsNearTile(tile)) / tileVolume() >= max_cell_density), not merely
+    "crowded reads differently from lonely" -- which the raw, unnormalised
+    fallback scale (count / _RAW_DENSITY_FULL_SCALE) also satisfies, and which
+    is all `test_a_crowded_neighbourhood_differs_from_a_lonely_one` above
+    checks.
+
+    Arithmetic: four cells at the same position put _neighbourCount at 4 for
+    each of them (every one of the four counts itself and its three
+    neighbours, all at zero distance). tileVolume=1.0 and maxCellDensity=4.0
+    make (4 / 1.0) / 4.0 == 1.0 -- exactly the cap, so the brush must be the
+    ramp's saturated colour. Two cells at the same position, against the same
+    maxCellDensity=4.0, put _neighbourCount at 2, so (2 / 1.0) / 4.0 == 0.5 --
+    half the cap, and a strictly different point on the ramp.
+
+    Setting `normalised = False` in densityBrushes (removing tileVolume and
+    max_cell_density from the computation entirely) must make this fail: with
+    the raw fallback, the four-cell case maps to 4 / _RAW_DENSITY_FULL_SCALE
+    (10.0) == 0.4, not 1.0.
+    """
+    from acq4.modules.Autopatch.progress_colors import _DENSITY_CMAP, densityBrushes
+
+    fov = (220e-6, 170e-6)
+    atCap = densityBrushes(
+        makeContext(
+            cellIds=[1, 2, 3, 4],
+            positions={cellId: (1.0e-3, 2.0e-3) for cellId in (1, 2, 3, 4)},
+            fov=fov,
+            tileVolume=1.0,
+            maxCellDensity=4.0,
+        )
+    )
+    halfCap = densityBrushes(
+        makeContext(
+            cellIds=[1, 2],
+            positions={1: (1.0e-3, 2.0e-3), 2: (1.0e-3, 2.0e-3)},
+            fov=fov,
+            tileVolume=1.0,
+            maxCellDensity=4.0,
+        )
+    )
+
+    assert atCap[1].color() == _DENSITY_CMAP.map(1.0, mode="qcolor")
+    assert halfCap[1].color() == _DENSITY_CMAP.map(0.5, mode="qcolor")
+    assert halfCap[1].color() != atCap[1].color()
+
+
 def test_density_legend_says_when_it_is_unnormalised():
     from acq4.modules.Autopatch.progress_colors import legendFor
 

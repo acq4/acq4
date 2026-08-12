@@ -395,7 +395,13 @@ def test_teardown_frees_everything_after_a_run_error(qapp, tmp_path):
 def test_teardown_disconnects_every_cell_position_connection(qapp, tmp_path):
     """Qt's own receivers() count, not merely that an object was collectable:
     P2c-3a found a mandated mutation that did not fail because a nearby
-    `= None` had already broken the cycle refcounting could see."""
+    `= None` had already broken the cycle refcounting could see.
+
+    Two cells, not one: a single connected cell cannot distinguish
+    "disconnects every connection" from "disconnects at least one" -- a
+    mutation that severed only the first cell it iterated over would still
+    pass a one-cell version of this test.
+    """
     from acq4.modules.Autopatch.Autopatch import AutopatchWindow
 
     from .test_window_integration import _makeCellAt
@@ -410,13 +416,19 @@ def test_teardown_disconnects_every_cell_position_connection(qapp, tmp_path):
     )
     win.protocolPanel.fileCombo.setCurrentText("demo")
 
-    cell = _makeCellAt(1.0e-3, 2.0e-3, -30e-6)
-    win.cellPanel.addCell(cell)
-    assert cell.receivers(cell.sigPositionChanged) == 1
+    first = _makeCellAt(1.0e-3, 2.0e-3, -30e-6)
+    second = _makeCellAt(1.4e-3, 2.1e-3, -30e-6)
+    win.cellPanel.addCell(first)
+    win.cellPanel.addCell(second)
+    assert first.receivers(first.sigPositionChanged) == 1
+    assert second.receivers(second.sigPositionChanged) == 1
 
     win.teardown()
 
-    assert cell.receivers(cell.sigPositionChanged) == 0
+    assert first.receivers(first.sigPositionChanged) == 0
+    assert second.receivers(second.sigPositionChanged) == 0
+    assert win._positionConnected == {}
+    assert win._cellPositions == {}
 
     win.close()
 
