@@ -1541,3 +1541,26 @@ def test_select_cell_ignores_a_cell_with_no_row(qapp):
     panel.selectCell(object())
 
     assert panel.cellList.currentItem().data(Qt.Qt.UserRole) is known
+
+
+def test_zoom_button_requests_the_selected_cell(qapp):
+    panel = makePanel()
+    cell = object()
+    panel.addCell(cell)
+    panel.selectCell(cell)
+    seen = []
+    panel.sigZoomToCellRequested.connect(seen.append)
+
+    panel.zoomToCellBtn.click()
+
+    assert seen == [cell]
+
+
+def test_zoom_button_does_nothing_with_no_selection(qapp):
+    panel = makePanel()
+    seen = []
+    panel.sigZoomToCellRequested.connect(seen.append)
+
+    panel.zoomToCellBtn.click()
+
+    assert seen == []

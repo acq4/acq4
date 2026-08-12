@@ -51,6 +51,9 @@ class CellPanel(Qt.QWidget):
     # nothing on purpose: pushing the state would give that view a second copy
     # to keep in sync, and this panel's whole discipline is having exactly one.
     sigCellStateChanged = Qt.Signal()
+    # Carries the selected cell, for Area 1 to frame its view on. The panel
+    # knows nothing about views or spans; the window owns that.
+    sigZoomToCellRequested = Qt.Signal(object)
 
     def __init__(self, pipetteGetter=None, cameraGetter=None):
         super().__init__()
@@ -154,16 +157,22 @@ class CellPanel(Qt.QWidget):
         self.scatterFakeCellsBtn = Qt.QPushButton("Scatter fake cells")
         self.checkAllCompletedBtn = Qt.QPushButton("Check all completed")
         self.reuseCheckedCellsBtn = Qt.QPushButton("Reuse checked cells")
+        self.zoomToCellBtn = Qt.QPushButton("Zoom to cell")
+        self.zoomToCellBtn.setToolTip(
+            "Frame Area 1's view on the selected cell's position."
+        )
         self.addFromTargetBtn.clicked.connect(self._onAddFromTargetClicked)
         self.scatterFakeCellsBtn.clicked.connect(self._onScatterFakeCellsClicked)
         self.checkAllCompletedBtn.clicked.connect(self._onCheckAllCompleted)
         self.reuseCheckedCellsBtn.clicked.connect(self._onReuseCheckedCells)
+        self.zoomToCellBtn.clicked.connect(self._onZoomToCellClicked)
 
         btnRow = Qt.QHBoxLayout()
         btnRow.addWidget(self.addFromTargetBtn)
         btnRow.addWidget(self.scatterFakeCellsBtn)
         btnRow.addWidget(self.checkAllCompletedBtn)
         btnRow.addWidget(self.reuseCheckedCellsBtn)
+        btnRow.addWidget(self.zoomToCellBtn)
 
         listsRow = Qt.QHBoxLayout()
         listsRow.addWidget(self.cellList)
@@ -841,3 +850,12 @@ class CellPanel(Qt.QWidget):
     def _currentSelectedCell(self):
         item = self.cellList.currentItem()
         return None if item is None else item.data(Qt.Qt.UserRole)
+
+    def _onZoomToCellClicked(self) -> None:
+        item = self.cellList.currentItem()
+        if item is None:
+            return
+        cell = item.data(Qt.Qt.UserRole)
+        if cell is None:
+            return
+        self.sigZoomToCellRequested.emit(cell)

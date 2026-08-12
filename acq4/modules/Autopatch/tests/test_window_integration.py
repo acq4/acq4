@@ -2492,3 +2492,44 @@ def test_refresh_coverage_after_teardown_does_not_touch_the_overlay(win):
     win._refreshCoverage()
 
     assert win._progressOverlay.coverageItems() == []
+
+
+def test_clicking_a_marker_selects_that_cell_in_area_5(qapp, win):
+    first = _makeCellAt(1.0e-3, 2.0e-3, -30e-6)
+    second = _makeCellAt(1.4e-3, 2.1e-3, -30e-6)
+    win.cellPanel.addCell(first)
+    win.cellPanel.addCell(second)
+
+    win._progressOverlay.sigMarkerClicked.emit(id(second))
+
+    assert win.cellPanel.cellList.currentItem().data(Qt.Qt.UserRole) is second
+
+
+def test_a_stale_marker_click_is_ignored(qapp, win):
+    """A rescan can discard a cell between the draw and the click.
+
+    Seeds and selects a real cell first: asserting `currentItem() is None` on an
+    empty list would be trivially true and would pass for an implementation that
+    cleared the selection, or one that raised and was swallowed. The invariant is
+    that a stale id neither raises nor moves the operator off the row they chose.
+    """
+    known = _makeCellAt(1.0e-3, 2.0e-3)
+    win.cellPanel.addCell(known)
+    win.cellPanel.selectCell(known)
+
+    win._progressOverlay.sigMarkerClicked.emit(123456)
+
+    assert win.cellPanel.cellList.currentItem().data(Qt.Qt.UserRole) is known
+
+
+def test_zoom_to_cell_frames_area_1_on_it(qapp, win):
+    _sliceWithTodoTiles(win)
+    cell = _makeCellAt(1.4e-3, 2.1e-3, -30e-6)
+    win.cellPanel.addCell(cell)
+    win.cellPanel.selectCell(cell)
+
+    win.cellPanel.zoomToCellBtn.click()
+
+    xRange, yRange = win.regionPanel.view.viewRange()
+    assert sum(xRange) / 2 == pytest.approx(1.4e-3, rel=1e-6)
+    assert sum(yRange) / 2 == pytest.approx(2.1e-3, rel=1e-6)

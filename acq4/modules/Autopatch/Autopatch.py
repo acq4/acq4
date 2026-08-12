@@ -205,6 +205,8 @@ class AutopatchWindow(Qt.QWidget):
             self.cellPanel.setInteractionLocked
         )
         self.cellPanel.sigCellStateChanged.connect(self._onCellStateChanged)
+        self._progressOverlay.sigMarkerClicked.connect(self._onMarkerClicked)
+        self.cellPanel.sigZoomToCellRequested.connect(self._onZoomToCell)
         # A bound method, not a lambda: a lambda connected to a signal in this
         # module's panels reproducibly segfaults its test file about 40 tests
         # after the connect (see RegionPanel's own colour-source wiring).
@@ -705,6 +707,31 @@ class AutopatchWindow(Qt.QWidget):
         ])
         self.regionPanel.setLegend(legendFor(key, ctx))
 
+    def _onMarkerClicked(self, cellId) -> None:
+        """Select the clicked marker's cell in Area 5.
+
+        Resolves the id through the cell panel rather than holding cells here:
+        a marker drawn before a rescan can be clicked after it, and the panel
+        is the only thing that knows whether that cell still has a row.
+        """
+        if self._tornDown:
+            return
+        for cell in self.cellPanel.cells():
+            if id(cell) == cellId:
+                self.cellPanel.selectCell(cell)
+                return
+
+    def _onZoomToCell(self, cell) -> None:
+        """Frame Area 1 on `cell`, across the same 3x3 fields "Add region
+        here" seeds, so the two controls agree on what "around here" means."""
+        if self._tornDown:
+            return
+        position = self._cellPositions.get(id(cell))
+        if position is None or self.slice is None:
+            return
+        fovW, fovH = self.slice.fov
+        self.regionPanel.setViewport(position, (3 * fovW, 3 * fovH))
+
     def _refreshCoverage(self) -> None:
         """Shade the tiles still to be surveyed."""
         if self._tornDown:
@@ -896,7 +923,9 @@ class AutopatchWindow(Qt.QWidget):
         Also releases Area 1's two mirrors, whose items and signal connection
         live in the *Camera* module's window and imaging control -- objects that
         outlive this window, and would otherwise be left holding graphics
-        belonging to a session that has ended.
+        belonging to a session that has ended. The same `finally` block also
+        severs the per-cell position connections this window made and releases
+        the progress overlay's own items and click connection.
 
         The mirrors are released *after* the orchestrator, not before, because
         stopping it means waiting on it with the Qt event loop still pumping
