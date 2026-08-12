@@ -323,17 +323,25 @@ def test_clear_removes_markers_and_coverage(qapp):
 
 
 def test_release_takes_every_item_out_of_the_view(qapp):
-    """The view outlives the overlay, so release must leave nothing behind."""
+    """The view outlives the overlay, so release must leave nothing behind.
+
+    The coverage items are captured *before* release, because release empties
+    the list they are read from: iterating the emptied list afterwards proves
+    nothing, and would pass for an implementation that dropped its references
+    without ever taking the items out of the view.
+    """
     from acq4.modules.Autopatch.progress_overlay import Marker
 
     overlay, view = makeOverlay()
     overlay.setMarkers([Marker(POS_A[0], POS_A[1], pg.mkBrush(0, 180, 0), 111)])
     overlay.setCoverage([POS_A], FOV)
+    coverage = overlay.coverageItems()
+    assert coverage, "fixture must actually put coverage items in the view"
 
     overlay.release()
 
     assert overlay.scatter not in view.addedItems
-    assert not any(item in view.addedItems for item in overlay.coverageItems())
+    assert not any(item in view.addedItems for item in coverage)
 
 
 def test_clicking_a_marker_reports_its_cell_id(qapp):
@@ -825,14 +833,20 @@ def test_the_cutoff_score_sits_at_the_bottom_of_the_ramp():
 
 
 def test_health_falls_back_to_a_zero_to_one_ramp_with_no_slice():
-    """No slice means no constraints, and so no cutoff to anchor to."""
+    """No slice means no constraints, and so no cutoff to anchor to.
+
+    Asserts the fallback ramp's *shape*, not merely that a brush came back:
+    across [0, 1], scores of 0.0 and 0.5 are half the range apart and must
+    differ. Under a 0.5-anchored ramp both clamp to the bottom and collapse to
+    the same colour, so this is the assertion that tells the two ramps apart.
+    """
     from acq4.modules.Autopatch.progress_colors import healthBrushes
 
     brushes = healthBrushes(
-        makeContext(cellIds=[1], scores={1: 0.0}, minHealth=None)
+        makeContext(cellIds=[1, 2], scores={1: 0.0, 2: 0.5}, minHealth=None)
     )
 
-    assert brushes[1] is not None
+    assert brushes[1].color() != brushes[2].color()
 
 
 def test_a_score_outside_the_ramp_is_clamped_not_raised():
@@ -1014,19 +1028,29 @@ def test_density_counts_neighbours_in_the_same_xy_window_as_the_engine():
 
 
 def test_density_falls_back_to_a_raw_count_with_no_slice():
-    """No slice means no tileVolume and no cap to normalise against."""
+    """No slice means no tileVolume and no cap to normalise against.
+
+    Asserts the raw scale still *ranks*, rather than merely that every cell got
+    a brush: two neighbours must colour differently from a lonely cell. A
+    fallback that returned one flat colour would satisfy a keys-only assertion
+    while telling the operator nothing.
+    """
     from acq4.modules.Autopatch.progress_colors import densityBrushes
 
     ctx = makeContext(
-        cellIds=[1, 2],
-        positions={1: (1.0e-3, 2.0e-3), 2: (1.00002e-3, 2.00002e-3)},
+        cellIds=[1, 2, 9],
+        positions={
+            1: (1.0e-3, 2.0e-3),
+            2: (1.00002e-3, 2.00002e-3),
+            9: (5.0e-3, 4.0e-3),
+        },
         tileVolume=None,
         maxCellDensity=None,
     )
 
     brushes = densityBrushes(ctx)
 
-    assert set(brushes) == {1, 2}
+    assert brushes[1].color() != brushes[9].color()
 
 
 def test_density_legend_says_when_it_is_unnormalised():
