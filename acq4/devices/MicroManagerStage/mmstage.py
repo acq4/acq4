@@ -311,13 +311,17 @@ class MicroManagerMoveFuture(MoveFuture):
         # Advance this move toward completion. Called by the device MonitorThread
         # each tick while the move is in flight: resolve on arrival, fail on a
         # missed target. Idempotent and race-safe (guards + atomic completion).
-        if self.is_stopped or self.is_done:
-            return
-        status = self._getStatus()
-        if status == 1:
-            self.resolve(None)
-        elif status == -1:
-            self.fail(RuntimeError(self._errorMsg or "Move did not complete."))
+        # Runs under this move's throughline: the lifetime monitor thread has no
+        # context of its own, so without it the move's completion (and any finish
+        # callback it fires) would be orphaned from the requesting operation.
+        with self.throughlineContext():
+            if self.is_stopped or self.is_done:
+                return
+            status = self._getStatus()
+            if status == 1:
+                self.resolve(None)
+            elif status == -1:
+                self.fail(RuntimeError(self._errorMsg or "Move did not complete."))
 
     def _getStatus(self):
         # check status of move unless we already know it is complete.

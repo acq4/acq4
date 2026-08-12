@@ -332,13 +332,17 @@ class MPC200MoveFuture(MoveFuture):
         # Advance this move toward completion. Called by the shared MonitorThread
         # each tick while the move is in flight: resolve on arrival, fail on a
         # move error. Idempotent and race-safe (guards + atomic completion).
-        if self.is_stopped or self.is_done:
-            return
-        start, status = self._getStatus()
-        if isinstance(status, Exception):
-            self.fail(status)
-        elif status is True:
-            self.resolve(None)
+        # Runs under this move's throughline: the shared monitor thread has no
+        # context of its own, so completion would otherwise be orphaned from the
+        # requesting operation.
+        with self.throughlineContext():
+            if self.is_stopped or self.is_done:
+                return
+            start, status = self._getStatus()
+            if isinstance(status, Exception):
+                self.fail(status)
+            elif status is True:
+                self.resolve(None)
 
     def percentDone(self):
         """Return an estimate of the percent of move completed based on the

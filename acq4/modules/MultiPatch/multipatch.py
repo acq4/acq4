@@ -16,7 +16,7 @@ from neuroanalysis.test_pulse_stack import H5BackedTestPulseStack
 from .mockPatch import MockPatch
 from .pipetteControl import PipetteControl
 from ...devices.PatchPipette.statemanager import PatchPipetteStateManager
-from ...util.task import MultiFuture, asynch, raise_errors, run_in_gui_thread
+from ...util.task import MultiFuture, asynch, raise_errors, run_in_gui_thread, throughline
 from ...util.json_encoder import ACQ4JSONEncoder
 
 Ui_MultiPatch = Qt.importTemplate('.multipatchTemplate')
@@ -257,14 +257,18 @@ class MultiPatchWindow(Qt.QWidget):
         ], name=f"Set pipettes state to {state}")
 
     def _moveHome(self):
-        futures = []
-        for pip in self.selectedPipettes():
-            speed = self.selectedSpeed(default='fast')
-            if isinstance(pip, PatchPipette):
-                pip.setState('out')
-                pip = pip.pipetteDevice
-            futures.append(pip.goHome(speed))
-        return MultiFuture(futures, name="Move pipettes home")
+        # This runs on the GUI thread, which carries no throughline of its own; the
+        # frame is what tells the log that these moves came from a button press, and
+        # each move's task nests under it.
+        with throughline(name="Move pipettes home"):
+            futures = []
+            for pip in self.selectedPipettes():
+                speed = self.selectedSpeed(default='fast')
+                if isinstance(pip, PatchPipette):
+                    pip.setState('out')
+                    pip = pip.pipetteDevice
+                futures.append(pip.goHome(speed))
+            return MultiFuture(futures, name="Move pipettes home")
 
     def _nucleusHome(self):
         return self._setAllSelectedPipettesToState('home with nucleus')
@@ -323,13 +327,14 @@ class MultiPatchWindow(Qt.QWidget):
         return self._setAllSelectedPipettesToState('refill')
 
     def _approach(self):
-        futures = []
-        for pip in self.selectedPipettes():
-            if isinstance(pip, PatchPipette):
-                futures.append(pip.setState('approach'))
-            else:
-                futures.append(pip.goApproach(self.selectedSpeed(default='fast')))
-        return MultiFuture(futures, name="Move pipettes to approach")
+        with throughline(name="Move pipettes to approach"):
+            futures = []
+            for pip in self.selectedPipettes():
+                if isinstance(pip, PatchPipette):
+                    futures.append(pip.setState('approach'))
+                else:
+                    futures.append(pip.goApproach(self.selectedSpeed(default='fast')))
+            return MultiFuture(futures, name="Move pipettes to approach")
 
     def _clean(self):
         return self._setAllSelectedPipettesToState('clean')
@@ -349,14 +354,15 @@ class MultiPatchWindow(Qt.QWidget):
         return default
 
     def moveSearch(self, distance):
-        speed = self.selectedSpeed(default='fast')
-        futures = []
-        for pip in self.selectedPipettes():
-            if isinstance(pip, PatchPipette):
-                pip.setState('bath')
-                pip = pip.pipetteDevice
-            futures.append(pip.goSearch(speed, distance=distance))
-        return MultiFuture(futures, name="Move pipettes to search")
+        with throughline(name="Move pipettes to search"):
+            speed = self.selectedSpeed(default='fast')
+            futures = []
+            for pip in self.selectedPipettes():
+                if isinstance(pip, PatchPipette):
+                    pip.setState('bath')
+                    pip = pip.pipetteDevice
+                futures.append(pip.goSearch(speed, distance=distance))
+            return MultiFuture(futures, name="Move pipettes to search")
 
     def setTipToggled(self, b):
         cammod = getManager().getModule('Camera')

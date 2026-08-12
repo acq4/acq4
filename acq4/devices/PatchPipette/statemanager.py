@@ -1,3 +1,4 @@
+import contextlib
 import inspect
 from collections import OrderedDict
 from typing import Optional
@@ -7,12 +8,26 @@ from docstring_parser import parse
 from acq4 import getManager
 from acq4.logging_config import get_logger
 from acq4.util import Qt
-from acq4.util.task import Stopped
+from acq4.util.task import Stopped, throughline
 from pyqtgraph import disconnect
 from pyqtgraph.parametertree import Parameter
 from . import states
 
 logger = get_logger(__name__)
+
+
+@contextlib.contextmanager
+def stateJobContext():
+    """Build a state job as a top-level operation, outside any current throughline.
+
+    A state transition creates the next state's job from within the outgoing state's
+    finish handling, and a task captures its context at construction. Without this,
+    each state's throughline nests inside its predecessor's and the chain grows by one
+    name per transition, forever. States are siblings, not children -- the same reason
+    their jobs are created with detach=True.
+    """
+    with throughline.restore(()):
+        yield
 
 
 class PatchPipetteStateManager(Qt.QObject):
@@ -187,6 +202,10 @@ class PatchPipetteStateManager(Qt.QObject):
         return self.configureState(state, configOverride=config)
 
     def configureState(self, state, allowReset=True, configOverride=None):
+        with throughline(name=f"{self.dev.name()} -> state {state!r}"):
+            return self._configureState(state, allowReset=allowReset, configOverride=configOverride)
+
+    def _configureState(self, state, allowReset=True, configOverride=None):
         oldJob = self.currentJob
         fallback = None
         if oldJob is not None:
@@ -200,7 +219,8 @@ class PatchPipetteStateManager(Qt.QObject):
                 config.update(configOverride)
 
             self.logger.debug(f"Configuring next state {state} with config: {config}")
-            job = stateHandler(self.dev, config)
+            with stateJobContext():
+                job = stateHandler(self.dev, config)
         except Exception:
             raise
         else:

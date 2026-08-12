@@ -14,6 +14,21 @@ log_server: LogServer | None = None
 log_handlers = []
 log_file_handler: logging.FileHandler | None = None
 
+# Tags every record with the gentletask throughline (the task-name chain) so the log
+# viewer, console, and file show what operation each line belongs to. Filters must be
+# attached to handlers rather than a logger: a filter on a logger only runs for records
+# logged directly to it, so records from child loggers (acq4.device.*, gentletask, ...)
+# would go untagged. One shared instance means every handler tags identically, and
+# add_throughline_filter() is the single place that puts it on a handler.
+throughline_filter = ThroughlineNameFilter()
+
+
+def add_throughline_filter(handler: logging.Handler) -> None:
+    """Attach the shared throughline filter to *handler*, at most once."""
+    if throughline_filter not in handler.filters:
+        handler.addFilter(throughline_filter)
+
+
 def __reload__(old):
     global log_server, log_handlers
     log_server = old.get('log_server', None)
@@ -149,15 +164,12 @@ def setup_logging(
         root_logger.addHandler(error_dialog.handler)
         log_handlers.append(error_dialog.handler)
 
-    # Tag every record with the gentletask throughline (the task-name chain) so the
-    # log viewer, console, and file show what operation each line belongs to.
-    # Attaching to the handlers (rather than a logger) ensures propagated
-    # child-logger records are tagged too; the filter mutates the record in place,
-    # and teleprox's LogSender copies the record __dict__ on to the viewer.
-    throughline_filter = ThroughlineNameFilter()
+    # Tag every record with the gentletask throughline (see add_throughline_filter).
+    # The filter mutates the record in place, and teleprox's LogSender copies the
+    # record __dict__ on to the viewer.
     for _logger in (root_logger, acq4_logger):
         for _handler in _logger.handlers:
-            _handler.addFilter(throughline_filter)
+            add_throughline_filter(_handler)
 
 
 def set_log_file(log_file: str | None, is_temp_file: bool = False) -> None:
@@ -199,6 +211,10 @@ def set_log_file(log_file: str | None, is_temp_file: bool = False) -> None:
         exc_info_as_array=True,
     )
     log_file_handler.setFormatter(json_formatter)
+    # This handler is rebuilt every time the log file changes, long after
+    # setup_logging ran, so it tags records itself instead of depending on an
+    # earlier handler in the chain having done it.
+    add_throughline_filter(log_file_handler)
     root_logger.addHandler(log_file_handler)
 
 

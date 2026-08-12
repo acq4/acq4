@@ -288,11 +288,13 @@ class ScientificaMoveFuture(MoveFuture):
 
         if speed < dev.minimumSpeed:
             # device _can't_ move this slow; we need to break the move into steps
-            self.stepwiseThread = threading.Thread(target=self._stepwiseMove, daemon=True, name=name)
             self.doStepwise = True
             currentPos = dev.getPosition()
             targetPos = [currentPos[i] if pos[i] is None else pos[i] for i in range(len(pos))]
             super().__init__(dev, targetPos, speed, name=name)
+            # Built after super().__init__, which is what captures the requesting
+            # throughline that producerThread restores on the monitor thread.
+            self.stepwiseThread = self.producerThread(self._stepwiseMove, name=name)
             self.stepwiseThread.start()
         else:
             self._moveReq = dev.driver.moveTo(np.array(pos), speed / 1e-6, name=name, **kwds)
