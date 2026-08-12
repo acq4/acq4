@@ -1508,3 +1508,30 @@ def test_reusing_a_checked_cell_announces_a_state_change(qapp):
     panel.reuseCheckedCellsBtn.click()
 
     assert dispositions == [None]
+
+
+def test_select_cell_makes_that_row_current(qapp):
+    panel = makePanel()
+    first, second = object(), object()
+    panel.addCell(first)
+    panel.addCell(second)
+
+    panel.selectCell(second)
+
+    assert panel.cellList.currentItem().data(Qt.Qt.UserRole) is second
+
+
+def test_select_cell_ignores_a_cell_with_no_row(qapp):
+    """Area 1 can report a click for a cell the panel has already discarded.
+
+    Two halves, both required: a stale click must not raise out of a Qt slot,
+    and it must not silently move the operator's current selection either.
+    """
+    panel = makePanel()
+    known = object()
+    panel.addCell(known)
+    panel.selectCell(known)
+
+    panel.selectCell(object())
+
+    assert panel.cellList.currentItem().data(Qt.Qt.UserRole) is known

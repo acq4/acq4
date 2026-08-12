@@ -794,6 +794,18 @@ class CellPanel(Qt.QWidget):
         self._updateCheckAllButton()
         self.sigCellStateChanged.emit()
 
+    def selectCell(self, cell) -> None:
+        """Make `cell`'s row current, so Area 5 shows its timeline and log.
+
+        A no-op for a cell with no row. Area 1's overlay can report a click for
+        a cell a rescan has since discarded, and raising out of a Qt slot over
+        a stale selection is not an option.
+        """
+        item = self._rows.get(id(cell))
+        if item is None:
+            return
+        self.cellList.setCurrentItem(item)
+
     def _onCellSelectionChanged(self, current, _previous) -> None:
         self.timelineList.clear()
         self._timelineItems.clear()
