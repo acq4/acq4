@@ -71,7 +71,7 @@ def _successLegend(_ctx) -> list:
 
 
 # (label, key, brush function). Key is what the combo carries as item data and
-# what legendFor takes, following SearchPanel.regionShape()'s precedent of
+# what legendFor takes, following RegionPanel.regionShape()'s precedent of
 # keying on data rather than display text.
 COLOR_SOURCES = [
     ("Survey outcome", "success", successBrushes),
@@ -92,4 +92,6 @@ def brushesFor(key, ctx) -> dict:
 
 def legendFor(key, ctx) -> list:
     """(label, brush) pairs naming what colour source `key` can draw."""
+    if key not in _LEGENDS:
+        raise KeyError(f"no such colour source: {key!r}")
     return _LEGENDS[key](ctx)

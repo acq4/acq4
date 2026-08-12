@@ -78,16 +78,30 @@ def test_every_terminal_disposition_is_mapped():
     from acq4.modules.Autopatch.cell_panel import TERMINAL
     from acq4.modules.Autopatch.progress_colors import successBrushes
 
-    ids = list(range(len(TERMINAL)))
-    ctx = makeContext(
-        cellIds=ids,
-        dispositions=dict(zip(ids, sorted(TERMINAL))),
-        attempted=set(ids),
-    )
+    dispositions = {
+        1: "done",
+        2: "error",
+        3: "retry-exhausted",
+        4: "stopped",
+        5: "skipped",
+    }
+    assert set(dispositions.values()) == set(TERMINAL)
+    # id 6 carries no disposition at all: it is attempted but still in flight,
+    # the witness that abandonment's colour is its own bucket rather than a
+    # coincidental match with "attempted, no verdict yet".
+    ids = list(dispositions) + [6]
+    ctx = makeContext(cellIds=ids, dispositions=dispositions, attempted=set(ids))
 
     brushes = successBrushes(ctx)
 
     assert set(brushes) == set(ids)
+    doneColor = brushes[1].color()
+    for cellId in (2, 3, 4, 5, 6):
+        assert brushes[cellId].color() != doneColor
+    assert brushes[2].color() == brushes[3].color()
+    assert brushes[4].color() == brushes[5].color()
+    assert brushes[2].color() != brushes[4].color()
+    assert brushes[4].color() != brushes[6].color()
 
 
 def test_success_legend_names_every_colour_it_can_draw():
@@ -96,3 +110,34 @@ def test_success_legend_names_every_colour_it_can_draw():
     labels = [label for label, _brush in legendFor("success", makeContext())]
 
     assert labels == ["Patched", "Failed", "Abandoned", "In flight", "To do"]
+
+
+def test_brushes_for_success_matches_success_brushes_directly():
+    from acq4.modules.Autopatch.progress_colors import brushesFor, successBrushes
+
+    ctx = makeContext(
+        cellIds=[1, 2],
+        dispositions={1: "done", 2: "error"},
+        attempted={1, 2},
+    )
+
+    brushes = brushesFor("success", ctx)
+    direct = successBrushes(ctx)
+
+    assert {cellId: brush.color() for cellId, brush in brushes.items()} == {
+        cellId: brush.color() for cellId, brush in direct.items()
+    }
+
+
+def test_brushes_for_unknown_key_raises_key_error():
+    from acq4.modules.Autopatch.progress_colors import brushesFor
+
+    with pytest.raises(KeyError):
+        brushesFor("no-such-source", makeContext())
+
+
+def test_legend_for_unknown_key_raises_key_error():
+    from acq4.modules.Autopatch.progress_colors import legendFor
+
+    with pytest.raises(KeyError):
+        legendFor("no-such-source", makeContext())
