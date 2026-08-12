@@ -12,14 +12,15 @@
 
 ## Global Constraints
 
-- **Two repositories, in order.** Task 1 lands in **acq4-automation** and must merge before Task 4 (the `health` colour source) can read `cell.score` plainly. Every other task is in **acq4**.
+- **Two repositories.** Task 1 lands in **acq4-automation**; every other task is in **acq4**. Task 1 goes first so `score` is a documented contract before three acq4 tasks read it, but **no acq4 task depends on it at runtime** — Tasks 3-5's colour tests pass plain `scores={}` dicts and never construct a `Cell`, and Task 9 sets `cell.score` dynamically, which works declared or not. Do not wait on a merge.
+- **Import paths are asymmetric, and neither worktree sees the other's.** Run from the acq4 worktree, `acq4` resolves there but `acq4_automation` resolves to `/home/martin/src/acq4/acq4-automation` (the **main** checkout). So Task 1's change is invisible to every acq4 test, and is verified only by its own test in acq4-automation. Do not try to assert `Cell.score` from an acq4 test.
 - **acq4-automation worktree:** `/home/martin/src/acq4/acq4-automation/.claude/worktrees/autopatch-ui-work-23ed2f`
 - **acq4 worktree:** `/home/martin/src/acq4/acq4/.claude/worktrees/area1-progress-overlay`, branch `claude/area1-progress-overlay`. Do **not** work in `/home/martin/src/acq4/acq4` directly — another session shares that checkout and has already committed onto a branch there mid-task.
 - **Python:** `/home/martin/.miniforge3/envs/acq4-gl/bin/python` (the `acq4-gl` conda env; `acq4-torch` lacks dependencies this package needs).
 - **Never call `Cell.position` on the GUI thread.** It evaluates `max(self._positions)`, iterating a dict the tracking worker writes (`cell.py:239`). Use `cell.initialPosition` for first placement and `sigPositionChanged` payloads for updates.
 - **Never store a `Cell` outside `CellPanel._cells`.** Scatter point data and every cache key holds `id(cell)`. Reference cycles are this module's most-repeated defect; `tests/test_teardown.py` guards it.
 - **Test output must be pristine.** No stray warnings or prints.
-- **Every task ends with a mutation proof:** break the line the test targets, record the failing line number in the commit body, restore it. A mutation that does *not* fail means the test proves nothing — fix the test, not the record.
+- **Every task ends with a mutation proof:** break the line the test targets, record the failing line number in the commit body, restore it. A mutation that does *not* fail means no delivered test proves that line: record the non-failure, then identify a test that *does* kill it — either written in this task, or in a specifically named later task — before treating the line as proven. Task 9 Step 5 is the one deliberate cross-task case; a non-failure with no named killing test anywhere is a broken test to fix, not a result to record.
 - **Asymmetric fixtures at real SI magnitudes.** A swapped-axis mutant survived 324 tests because every fixture was square. Never use equal width and height, and use metres (`1.4e-3`), not `1.0`.
 
 ## Test Scaffolding (read before Task 6)
@@ -195,7 +196,7 @@ git add acq4_automation/feature_tracking/cell.py acq4_automation/feature_trackin
 git commit -m "feat: declare the detector's health score on Cell"
 ```
 
-**This must merge before Task 4.**
+**This is its own PR in acq4-automation, and blocks nothing here.** See Global Constraints: no acq4 task reads `Cell.score` at runtime, and acq4's tests import `acq4_automation` from the main checkout, so this change is invisible to them either way.
 
 ---
 
@@ -1298,15 +1299,19 @@ def test_select_cell_makes_that_row_current(qapp):
 
 
 def test_select_cell_ignores_a_cell_with_no_row(qapp):
-    """Area 1 can report a click for a cell the panel has already discarded;
-    a stale click must not raise out of a Qt slot.
+    """Area 1 can report a click for a cell the panel has already discarded.
+
+    Two halves, both required: a stale click must not raise out of a Qt slot,
+    and it must not silently move the operator's current selection either.
     """
     panel = makePanel()
-    panel.addCell(object())
+    known = object()
+    panel.addCell(known)
+    panel.selectCell(known)
 
     panel.selectCell(object())
 
-    assert panel.cellList.currentItem() is None or True
+    assert panel.cellList.currentItem().data(Qt.Qt.UserRole) is known
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
