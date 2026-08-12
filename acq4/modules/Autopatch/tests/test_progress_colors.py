@@ -141,3 +141,76 @@ def test_legend_for_unknown_key_raises_key_error():
 
     with pytest.raises(KeyError):
         legendFor("no-such-source", makeContext())
+
+
+def test_unscored_cells_are_visibly_distinct_from_scored_ones():
+    """score is None means "nobody scored this", not "scored badly". Every
+    hand-added cell is unscored, since only _build_cells scores.
+    """
+    from acq4.modules.Autopatch.progress_colors import healthBrushes
+
+    ctx = makeContext(cellIds=[1, 2], scores={1: None, 2: 0.5}, minHealth=0.5)
+
+    brushes = healthBrushes(ctx)
+
+    assert brushes[1].color() != brushes[2].color()
+
+
+def test_health_ramp_is_anchored_at_the_cutoff_not_at_zero():
+    """Two cells scoring 0.6 and 0.9 against a 0.5 cutoff must look different.
+
+    This is the test that kills a [0, 1] ramp, and the mutant a reader would
+    not suspect: both values are perfectly legal [0, 1] scores, and a [0, 1]
+    ramp renders them nearly identical because it spends half its range below
+    the cutoff on scores that cannot occur.
+    """
+    from acq4.modules.Autopatch.progress_colors import healthBrushes
+
+    anchored = healthBrushes(
+        makeContext(cellIds=[1, 2], scores={1: 0.6, 2: 0.9}, minHealth=0.5)
+    )
+    full = healthBrushes(
+        makeContext(cellIds=[1, 2], scores={1: 0.6, 2: 0.9}, minHealth=None)
+    )
+
+    anchoredGap = abs(anchored[1].color().green() - anchored[2].color().green())
+    fullGap = abs(full[1].color().green() - full[2].color().green())
+    assert anchoredGap > fullGap
+
+
+def test_the_cutoff_score_sits_at_the_bottom_of_the_ramp():
+    from acq4.modules.Autopatch.progress_colors import healthBrushes
+
+    ctx = makeContext(cellIds=[1, 2], scores={1: 0.5, 2: 1.0}, minHealth=0.5)
+
+    brushes = healthBrushes(ctx)
+
+    assert brushes[1].color() != brushes[2].color()
+
+
+def test_health_falls_back_to_a_zero_to_one_ramp_with_no_slice():
+    """No slice means no constraints, and so no cutoff to anchor to.
+
+    Asserts the fallback ramp's *shape*, not merely that a brush came back:
+    across [0, 1], scores of 0.0 and 0.5 are half the range apart and must
+    differ. Under a 0.5-anchored ramp both clamp to the bottom and collapse to
+    the same colour, so this is the assertion that tells the two ramps apart.
+    """
+    from acq4.modules.Autopatch.progress_colors import healthBrushes
+
+    brushes = healthBrushes(
+        makeContext(cellIds=[1, 2], scores={1: 0.0, 2: 0.5}, minHealth=None)
+    )
+
+    assert brushes[1].color() != brushes[2].color()
+
+
+def test_a_score_outside_the_ramp_is_clamped_not_raised():
+    """Nothing queued can produce one; this guards a future detector."""
+    from acq4.modules.Autopatch.progress_colors import healthBrushes
+
+    ctx = makeContext(cellIds=[1, 2], scores={1: -0.5, 2: 1.5}, minHealth=0.5)
+
+    brushes = healthBrushes(ctx)
+
+    assert brushes[1].color() != brushes[2].color()

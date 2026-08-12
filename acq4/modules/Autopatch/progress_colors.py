@@ -70,15 +70,58 @@ def _successLegend(_ctx) -> list:
     ]
 
 
+# Hollow, so "never scored" reads as absence rather than as a low score.
+_UNSCORED_BRUSH = pg.mkBrush(0, 0, 0, 0)
+
+# Dim violet to bright green across the scored range. Endpoints differ in every
+# channel so no single-channel comparison can mistake one end for the other.
+_HEALTH_CMAP = pg.ColorMap([0.0, 1.0], [(90, 50, 140, 255), (60, 225, 120, 255)])
+
+
+def healthBrushes(ctx) -> dict:
+    """One brush per cell, by the detector's health score.
+
+    The ramp spans [min_health, 1], not [0, 1]: CellProducer._isHealthy drops
+    every candidate below the cutoff before it becomes a cell, so a [0, 1] ramp
+    would spend half its range on scores that cannot occur and render the
+    cells that do occur nearly identical. With no slice there is no cutoff, so
+    it falls back to [0, 1].
+    """
+    low = 0.0 if ctx.minHealth is None else float(ctx.minHealth)
+    # A cutoff of exactly 1.0 would leave the ramp no width at all.
+    span = 1.0 - low
+    brushes = {}
+    for cellId in ctx.cellIds:
+        score = ctx.scores.get(cellId)
+        if score is None:
+            brushes[cellId] = _UNSCORED_BRUSH
+            continue
+        fraction = 0.0 if span <= 0 else (float(score) - low) / span
+        fraction = min(1.0, max(0.0, fraction))
+        brushes[cellId] = pg.mkBrush(_HEALTH_CMAP.map(fraction, mode="qcolor"))
+    return brushes
+
+
+def _healthLegend(ctx) -> list:
+    low = 0.0 if ctx.minHealth is None else float(ctx.minHealth)
+    return [
+        (f"{low:.2f} (cutoff)", pg.mkBrush(_HEALTH_CMAP.map(0.0, mode="qcolor"))),
+        ("1.00", pg.mkBrush(_HEALTH_CMAP.map(1.0, mode="qcolor"))),
+        ("Unscored", _UNSCORED_BRUSH),
+    ]
+
+
 # (label, key, brush function). Key is what the combo carries as item data and
 # what legendFor takes, following RegionPanel.regionShape()'s precedent of
 # keying on data rather than display text.
 COLOR_SOURCES = [
     ("Survey outcome", "success", successBrushes),
+    ("Detection health", "health", healthBrushes),
 ]
 
 _LEGENDS = {
     "success": _successLegend,
+    "health": _healthLegend,
 }
 
 
