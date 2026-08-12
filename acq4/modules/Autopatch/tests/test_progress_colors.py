@@ -179,13 +179,39 @@ def test_health_ramp_is_anchored_at_the_cutoff_not_at_zero():
 
 
 def test_the_cutoff_score_sits_at_the_bottom_of_the_ramp():
-    from acq4.modules.Autopatch.progress_colors import healthBrushes
+    """The legend labels its first swatch "<cutoff> (cutoff)" and draws it at
+    fraction 0.0 on _HEALTH_CMAP, promising that a cell scoring exactly the
+    cutoff is drawn in the ramp's floor colour. This kills a mutant that
+    compresses or offsets the fraction after the clamp (e.g.
+    `fraction = fraction * 0.9 + 0.05`), which would still make 0.5 and 1.0
+    differ but would no longer put the cutoff at the ramp's floor -- a
+    user-visible disagreement between the legend swatch and the cells it
+    claims to describe.
+    """
+    from acq4.modules.Autopatch.progress_colors import _HEALTH_CMAP, healthBrushes
 
     ctx = makeContext(cellIds=[1, 2], scores={1: 0.5, 2: 1.0}, minHealth=0.5)
 
     brushes = healthBrushes(ctx)
 
     assert brushes[1].color() != brushes[2].color()
+    assert brushes[1].color() == _HEALTH_CMAP.map(0.0, mode="qcolor")
+    assert brushes[2].color() == _HEALTH_CMAP.map(1.0, mode="qcolor")
+
+
+def test_a_cutoff_of_one_does_not_divide_by_zero():
+    """SearchConstraints constrains min_health to [0, 1], so a cutoff of
+    exactly 1.0 is a legal input that leaves the ramp no width at all. The
+    guard sets fraction = 0.0 in that case, so the cell must land on the
+    ramp's floor rather than merely avoiding an exception.
+    """
+    from acq4.modules.Autopatch.progress_colors import _HEALTH_CMAP, healthBrushes
+
+    ctx = makeContext(cellIds=[1], scores={1: 1.0}, minHealth=1.0)
+
+    brushes = healthBrushes(ctx)
+
+    assert brushes[1].color() == _HEALTH_CMAP.map(0.0, mode="qcolor")
 
 
 def test_health_falls_back_to_a_zero_to_one_ramp_with_no_slice():
