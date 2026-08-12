@@ -240,3 +240,95 @@ def test_a_score_outside_the_ramp_is_clamped_not_raised():
     brushes = healthBrushes(ctx)
 
     assert brushes[1].color() != brushes[2].color()
+
+
+def test_a_crowded_neighbourhood_differs_from_a_lonely_one():
+    from acq4.modules.Autopatch.progress_colors import densityBrushes
+
+    # Three cells within one field of each other, and one far away.
+    ctx = makeContext(
+        cellIds=[1, 2, 3, 9],
+        positions={
+            1: (1.0e-3, 2.0e-3),
+            2: (1.00002e-3, 2.00002e-3),
+            3: (1.00004e-3, 2.00004e-3),
+            9: (5.0e-3, 4.0e-3),
+        },
+        tileVolume=220e-6 * 170e-6 * 40e-6,
+        maxCellDensity=5e12,
+    )
+
+    brushes = densityBrushes(ctx)
+
+    assert brushes[1].color() != brushes[9].color()
+
+
+def test_density_counts_neighbours_in_the_same_xy_window_as_the_engine():
+    """Slice.cellsNearTile uses a +/- fov/2 box in x and y and ignores z, and
+    the producer divides that count by tileVolume. Matching it is what keeps
+    the display and the density cap from disagreeing about "crowded".
+    """
+    from acq4.modules.Autopatch.progress_colors import densityBrushes
+
+    fov = (220e-6, 170e-6)
+    # Just inside the window in x, and just outside it.
+    inside = (1.0e-3 + fov[0] / 2 * 0.9, 2.0e-3)
+    outside = (1.0e-3 + fov[0] / 2 * 1.1, 2.0e-3)
+
+    withInside = densityBrushes(
+        makeContext(
+            cellIds=[1, 2],
+            positions={1: (1.0e-3, 2.0e-3), 2: inside},
+            fov=fov,
+            tileVolume=fov[0] * fov[1] * 40e-6,
+            maxCellDensity=5e12,
+        )
+    )
+    withOutside = densityBrushes(
+        makeContext(
+            cellIds=[1, 2],
+            positions={1: (1.0e-3, 2.0e-3), 2: outside},
+            fov=fov,
+            tileVolume=fov[0] * fov[1] * 40e-6,
+            maxCellDensity=5e12,
+        )
+    )
+
+    assert withInside[1].color() != withOutside[1].color()
+
+
+def test_density_falls_back_to_a_raw_count_with_no_slice():
+    """No slice means no tileVolume and no cap to normalise against.
+
+    Asserts the raw scale still *ranks*, rather than merely that every cell got
+    a brush: two neighbours must colour differently from a lonely cell. A
+    fallback that returned one flat colour would satisfy a keys-only assertion
+    while telling the operator nothing.
+    """
+    from acq4.modules.Autopatch.progress_colors import densityBrushes
+
+    ctx = makeContext(
+        cellIds=[1, 2, 9],
+        positions={
+            1: (1.0e-3, 2.0e-3),
+            2: (1.00002e-3, 2.00002e-3),
+            9: (5.0e-3, 4.0e-3),
+        },
+        tileVolume=None,
+        maxCellDensity=None,
+    )
+
+    brushes = densityBrushes(ctx)
+
+    assert brushes[1].color() != brushes[9].color()
+
+
+def test_density_legend_says_when_it_is_unnormalised():
+    from acq4.modules.Autopatch.progress_colors import legendFor
+
+    normalised = legendFor(
+        "density", makeContext(tileVolume=1.0e-12, maxCellDensity=5e12)
+    )
+    raw = legendFor("density", makeContext(tileVolume=None, maxCellDensity=None))
+
+    assert [label for label, _b in normalised] != [label for label, _b in raw]

@@ -111,17 +111,79 @@ def _healthLegend(ctx) -> list:
     ]
 
 
+# Sparse to crowded. Deliberately not the success source's red: switching
+# sources must not make a crowded neighbourhood read as a failed cell.
+_DENSITY_CMAP = pg.ColorMap([0.0, 1.0], [(70, 110, 200, 255), (240, 140, 20, 255)])
+
+# The count a raw, unnormalised scale saturates at, used only when there is no
+# slice to supply tileVolume and the density cap. Ten cells inside one field is
+# already crowded tissue by the default cap's standard.
+_RAW_DENSITY_FULL_SCALE = 10.0
+
+
+def _neighbourCount(cellId, ctx) -> int:
+    """Cells inside `cellId`'s own field-sized xy window, including itself.
+
+    The same window Slice.cellsNearTile uses -- +/- fov/2 in x and y, with no z
+    term -- so this count is the one the density cap is expressed in.
+    """
+    here = ctx.positions.get(cellId)
+    if here is None or ctx.fov is None:
+        return 0
+    fovW, fovH = ctx.fov
+    count = 0
+    for otherId in ctx.cellIds:
+        there = ctx.positions.get(otherId)
+        if there is None:
+            continue
+        if abs(there[0] - here[0]) <= fovW / 2 and abs(there[1] - here[1]) <= fovH / 2:
+            count += 1
+    return count
+
+
+def densityBrushes(ctx) -> dict:
+    """One brush per cell, by how crowded its own neighbourhood is.
+
+    Normalised against constraints.max_cell_density so the colour means "how
+    close is this neighbourhood to the cap the producer would skip a tile
+    for". Reads ctx.positions rather than Slice.cellsNearTile(), which calls
+    the thread-unsafe Cell.position.
+    """
+    normalised = ctx.tileVolume not in (None, 0) and ctx.maxCellDensity not in (None, 0)
+    brushes = {}
+    for cellId in ctx.cellIds:
+        count = _neighbourCount(cellId, ctx)
+        if normalised:
+            fraction = (count / ctx.tileVolume) / ctx.maxCellDensity
+        else:
+            fraction = count / _RAW_DENSITY_FULL_SCALE
+        fraction = min(1.0, max(0.0, fraction))
+        brushes[cellId] = pg.mkBrush(_DENSITY_CMAP.map(fraction, mode="qcolor"))
+    return brushes
+
+
+def _densityLegend(ctx) -> list:
+    normalised = ctx.tileVolume not in (None, 0) and ctx.maxCellDensity not in (None, 0)
+    top = "At the density cap" if normalised else f"{int(_RAW_DENSITY_FULL_SCALE)}+ per field"
+    return [
+        ("Sparse", pg.mkBrush(_DENSITY_CMAP.map(0.0, mode="qcolor"))),
+        (top, pg.mkBrush(_DENSITY_CMAP.map(1.0, mode="qcolor"))),
+    ]
+
+
 # (label, key, brush function). Key is what the combo carries as item data and
 # what legendFor takes, following RegionPanel.regionShape()'s precedent of
 # keying on data rather than display text.
 COLOR_SOURCES = [
     ("Survey outcome", "success", successBrushes),
     ("Detection health", "health", healthBrushes),
+    ("Local density", "density", densityBrushes),
 ]
 
 _LEGENDS = {
     "success": _successLegend,
     "health": _healthLegend,
+    "density": _densityLegend,
 }
 
 
