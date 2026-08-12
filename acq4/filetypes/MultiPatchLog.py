@@ -848,6 +848,7 @@ class MultiPatchLogWidget(Qt.QWidget):
             SealAnalysis,
             self._sealAnalysisItems,
             state,
+            fields=('steady_state_resistance', 'capacitance'),
             success_tau=config['successMonitorTau'],
             success_at=config['sealThreshold'],
             hold_tau=config['holdMonitorTau'],
@@ -855,6 +856,9 @@ class MultiPatchLogWidget(Qt.QWidget):
             failure_tau=config['failureTau'],
             failure_resistance_threshold=config['failureResistanceThreshold'],
             failure_dRdt_threshold=config['failureDRDTThreshold'],
+            break_in_tau=config['breakInMonitorTau'],
+            break_in_capacitance_threshold=config['breakInThreshold'],
+            break_in_resistance_ceiling=config['sealThreshold'],
         )
 
     def _toggleResealAnalysis(self, state: bool):
