@@ -15,6 +15,12 @@ def qapp():
     return Qt.QApplication.instance() or Qt.QApplication([])
 
 
+def makePanel(**kwargs):
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    return CellPanel(**kwargs)
+
+
 class _FakeOrchestrator(Qt.QObject):
     sigCurrentCell = Qt.Signal(object)
     sigCellFinished = Qt.Signal(object, str)
@@ -1406,3 +1412,48 @@ def test_clear_cells_forgets_a_remembered_pre_reuse_disposition(qapp):
     panel.clearCells()
 
     assert panel._preReuseStatus == {}
+
+
+def test_cells_reports_every_cell_the_panel_knows(qapp):
+    panel = makePanel()
+    first, second = object(), object()
+
+    panel.addCell(first)
+    panel.addCell(second)
+
+    assert panel.cells() == [first, second]
+
+
+def test_cells_includes_a_hand_added_cell_absent_from_any_slice(qapp):
+    """The overlay reads this, not Slice._cells, because registerCells() has
+    one production caller and hand-added cells never reach it. Reading the
+    slice instead would silently omit every "Add from target" cell.
+    """
+    panel = makePanel()
+    handAdded = object()
+
+    panel.addCell(handAdded)
+
+    assert handAdded in panel.cells()
+
+
+def test_adding_a_cell_announces_a_state_change(qapp):
+    panel = makePanel()
+    seen = []
+    panel.sigCellStateChanged.connect(lambda: seen.append(True))
+
+    panel.addCell(object())
+
+    assert seen == [True]
+
+
+def test_a_finished_cell_announces_a_state_change(qapp):
+    panel = makePanel()
+    cell = object()
+    panel.addCell(cell)
+    seen = []
+    panel.sigCellStateChanged.connect(lambda: seen.append(True))
+
+    panel._onCellFinished(cell, "done")
+
+    assert seen == [True]

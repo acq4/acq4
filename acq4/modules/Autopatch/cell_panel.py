@@ -46,6 +46,11 @@ class CellPanel(Qt.QWidget):
     # is marshaled onto the GUI thread by Qt's automatic queued connection
     # rather than touching cellList directly.
     sigCellsDiscarded = Qt.Signal(object)
+    # Emitted whenever a cell's row or disposition changes, so a view over this
+    # panel's state -- Area 1's progress overlay -- knows to re-read it. Carries
+    # nothing on purpose: pushing the state would give that view a second copy
+    # to keep in sync, and this panel's whole discipline is having exactly one.
+    sigCellStateChanged = Qt.Signal()
 
     def __init__(self, pipetteGetter=None, cameraGetter=None):
         super().__init__()
@@ -353,6 +358,7 @@ class CellPanel(Qt.QWidget):
             self._cellErrors.pop(cellId, None)
         self._updateCheckAllButton()
         self._updateReuseButton()
+        self.sigCellStateChanged.emit()
 
     def _onAddFromTargetClicked(self) -> None:
         pipette = self._pipetteGetter()
@@ -445,6 +451,7 @@ class CellPanel(Qt.QWidget):
         # item.data() comes back re-wrapped as a bare, dangling QObject. Holding a
         # reference here for the panel's lifetime keeps the original object alive.
         self._cells[id(cell)] = cell
+        self.sigCellStateChanged.emit()
 
     def isAttempted(self, cell) -> bool:
         """Whether the orchestrator has ever started work on `cell`.
@@ -454,6 +461,15 @@ class CellPanel(Qt.QWidget):
         are dropped so they can be found again where they now are.
         """
         return id(cell) in self._attempted
+
+    def cells(self) -> list:
+        """Every cell this panel knows about, in the order they were added.
+
+        This panel is the complete registry: Slice.registerCells() is reached
+        only from CellProducer, so cells seeded by hand ("Add from target",
+        "Scatter fake cells") live here and nowhere else.
+        """
+        return list(self._cells.values())
 
     def disposition(self, cell) -> str | None:
         """The last terminal disposition reported for `cell`, or None if it has
@@ -596,6 +612,7 @@ class CellPanel(Qt.QWidget):
             self._shownEntryId = None
         self._updateCheckAllButton()
         self._updateReuseButton()
+        self.sigCellStateChanged.emit()
 
     def appendLog(self, cell, message: str) -> None:
         # May be called from the orchestrator's worker thread (ExecutionContext.log,
@@ -775,6 +792,7 @@ class CellPanel(Qt.QWidget):
             item = self._rows[id(cell)]
         item.setText(f"cell {id(cell)} — {status}")
         self._updateCheckAllButton()
+        self.sigCellStateChanged.emit()
 
     def _onCellSelectionChanged(self, current, _previous) -> None:
         self.timelineList.clear()
