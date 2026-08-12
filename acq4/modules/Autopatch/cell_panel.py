@@ -671,6 +671,13 @@ class CellPanel(Qt.QWidget):
             self.addCell(cell)
             item = self._rows[id(cell)]
         item.setText(f"cell {id(cell)} — running")
+        # self._attempted already holds this cell (set above), so Area 1's
+        # progress overlay -- the view sigCellStateChanged exists for -- can
+        # redraw it blue. Unconditional, like _onCellFinished's own emit just
+        # below: a cell with no row yet gets one from addCell(), which emits
+        # on its own, so this is a second, harmless emit for that path (an
+        # extra redraw, not a wrong one) rather than a special case to dodge it.
+        self.sigCellStateChanged.emit()
 
     def onLogAction(self, cell, entry) -> None:
         """ExecutionContext.on_log_action, cell-bound by the context factory

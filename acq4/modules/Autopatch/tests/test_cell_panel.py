@@ -496,6 +496,34 @@ def test_seeded_cell_announced_as_current_does_not_duplicate_its_row(qapp):
     assert panel.cellList.item(0).text() == f"cell {id(cell)} — running"
 
 
+def test_current_cell_for_an_already_seeded_cell_announces_a_state_change(qapp):
+    """The ordinary case -- a cell that already has a row, whether seeded by
+    hand or announced once before -- must still tell Area 1's progress
+    overlay to redraw when the orchestrator starts work on it. addCell()'s
+    own emit (inside _onCurrentCell's "no row yet" branch, exercised by the
+    test above) only ever fires for a cell with no row, so it cannot be what
+    this case relies on; _onCurrentCell must emit sigCellStateChanged itself.
+
+    panel.isAttempted(cell) must already read True by the time the signal
+    fires: a consumer (AutopatchWindow._onCellStateChanged) re-reads it from
+    inside its slot, the same ordering contract the sigCellStateChanged tests
+    near the bottom of this file pin for addCell()/_onCellFinished()/
+    _onCellsDiscarded()/_onReuseCheckedCells()."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    cell = object()
+    panel.addCell(cell)
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+    attemptedAtEmit = []
+    panel.sigCellStateChanged.connect(lambda: attemptedAtEmit.append(panel.isAttempted(cell)))
+
+    orch.sigCurrentCell.emit(cell)
+
+    assert attemptedAtEmit == [True]
+
+
 def test_announced_cell_is_not_enqueued_into_the_bound_orchestrator(qapp):
     """A cell the panel only learns about via sigCurrentCell/sigCellFinished is
     already queued or running inside the orchestrator -- adding a display row

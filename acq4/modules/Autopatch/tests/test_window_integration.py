@@ -2431,6 +2431,43 @@ def test_a_cell_the_orchestrator_has_started_draws_in_the_in_flight_colour(qapp,
     assert after == expected
 
 
+def test_the_in_flight_colour_appears_without_any_other_refresh(qapp, win):
+    """The test above calls win._refreshProgress() itself, so it cannot tell
+    whether anything in the window actually asks for that redraw on its own --
+    it would pass identically if nothing ever did. This test never calls
+    _refreshProgress() (nor _onRunStatus(), nor anything else that redraws
+    Area 1): the only thing that happens between seeding the cell and reading
+    its marker is the orchestrator's own sigCurrentCell announcement, which is
+    exactly what a real run does the instant it takes a cell off the queue.
+
+    If the marker is still grey afterward, the operator's one load-bearing cue
+    -- the blue dot that says "the orchestrator is working on this cell right
+    now" -- never appears during a run, since nothing else redraws Area 1
+    between "surveying"/"waiting" statuses either.
+    """
+    cell = _makeCellAt(1.0e-3, 2.0e-3, -30e-6)
+    win.cellPanel.addCell(cell)
+    before = win._progressOverlay.scatter.points()[0].brush().color().name()
+
+    win.orchestrator.sigCurrentCell.emit(cell)
+
+    after = win._progressOverlay.scatter.points()[0].brush().color().name()
+    independent = ColorContext(
+        cellIds=[id(cell)],
+        positions={},
+        dispositions={},
+        attempted={id(cell)},
+        scores={},
+        fov=None,
+        tileVolume=None,
+        maxCellDensity=None,
+        minHealth=None,
+    )
+    expected = successBrushes(independent)[id(cell)].color().name()
+    assert after != before
+    assert after == expected
+
+
 def test_the_legend_follows_the_colour_source(qapp, win):
     # A slice is required here: _densityLegend only reports "At the density
     # cap" once tileVolume and maxCellDensity are both known (_colorContext
