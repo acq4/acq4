@@ -97,17 +97,25 @@ def test_clear_removes_markers_and_coverage(qapp):
 
 
 def test_release_takes_every_item_out_of_the_view(qapp):
-    """The view outlives the overlay, so release must leave nothing behind."""
+    """The view outlives the overlay, so release must leave nothing behind.
+
+    The coverage items are captured *before* release, because release empties
+    the list they are read from: iterating the emptied list afterwards proves
+    nothing, and would pass for an implementation that dropped its references
+    without ever taking the items out of the view.
+    """
     from acq4.modules.Autopatch.progress_overlay import Marker
 
     overlay, view = makeOverlay()
     overlay.setMarkers([Marker(POS_A[0], POS_A[1], pg.mkBrush(0, 180, 0), 111)])
     overlay.setCoverage([POS_A], FOV)
+    coverage = overlay.coverageItems()
+    assert coverage, "fixture must actually put coverage items in the view"
 
     overlay.release()
 
     assert overlay.scatter not in view.addedItems
-    assert not any(item in view.addedItems for item in overlay.coverageItems())
+    assert not any(item in view.addedItems for item in coverage)
 
 
 def test_clicking_a_marker_reports_its_cell_id(qapp):
