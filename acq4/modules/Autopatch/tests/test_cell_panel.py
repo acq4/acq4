@@ -1438,22 +1438,73 @@ def test_cells_includes_a_hand_added_cell_absent_from_any_slice(qapp):
 
 
 def test_adding_a_cell_announces_a_state_change(qapp):
+    """A consumer reacting to sigCellStateChanged re-reads panel.cells() from
+    inside its slot, so the cell must already be in that list by emit time.
+    Kills a mutation that moves addCell()'s emit to the very start of the
+    method, before the cell is recorded in self._cells."""
     panel = makePanel()
-    seen = []
-    panel.sigCellStateChanged.connect(lambda: seen.append(True))
+    cell = object()
+    snapshots = []
+    panel.sigCellStateChanged.connect(lambda: snapshots.append(panel.cells()))
 
-    panel.addCell(object())
+    panel.addCell(cell)
 
-    assert seen == [True]
+    assert cell in snapshots[0]
 
 
 def test_a_finished_cell_announces_a_state_change(qapp):
+    """A consumer reacting to sigCellStateChanged re-reads
+    panel.disposition(cell) from inside its slot, so the disposition must
+    already be terminal by emit time. Kills a mutation that moves
+    _onCellFinished()'s emit before self._status[id(cell)] is set."""
     panel = makePanel()
     cell = object()
     panel.addCell(cell)
-    seen = []
-    panel.sigCellStateChanged.connect(lambda: seen.append(True))
+    dispositions = []
+    panel.sigCellStateChanged.connect(lambda: dispositions.append(panel.disposition(cell)))
 
     panel._onCellFinished(cell, "done")
 
-    assert seen == [True]
+    assert dispositions == ["done"]
+
+
+def test_discarding_a_cell_announces_it_after_the_row_is_gone(qapp):
+    """Pins the ordering a later consumer depends on: by the time
+    sigCellStateChanged fires for a discard, panel.cells() must already
+    exclude the discarded cell (while still including any other cell), or a
+    consumer reconciling from inside its slot would report a cell that is no
+    longer here. Kills a mutation that moves _onCellsDiscarded()'s emit
+    before the rows are removed."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    discarded, kept = object(), object()
+    panel.addCell(discarded)
+    panel.addCell(kept)
+    snapshots = []
+    panel.sigCellStateChanged.connect(lambda: snapshots.append(panel.cells()))
+
+    panel.discardCells([discarded])
+
+    assert snapshots == [[kept]]
+
+
+def test_reusing_a_checked_cell_announces_a_state_change(qapp):
+    """A consumer reacting to sigCellStateChanged re-reads
+    panel.disposition(cell) from inside its slot, so a reused cell's
+    disposition must already read as re-queued (None), not its old terminal
+    value, by emit time."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    cell = object()
+    panel.addCell(cell)
+    panel._onCellFinished(cell, "done")
+    panel.bindOrchestrator(_FakeOrchestrator())
+    panel._rows[id(cell)].setCheckState(Qt.Qt.Checked)
+    dispositions = []
+    panel.sigCellStateChanged.connect(lambda: dispositions.append(panel.disposition(cell)))
+
+    panel.reuseCheckedCellsBtn.click()
+
+    assert dispositions == [None]
