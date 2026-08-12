@@ -131,14 +131,16 @@ class MinirigV1MotionPlanner(DefaultMotionPlanner):
         if pip_name not in self._scope_context:
             return None
         scope, forward_path, _pip, _site = self._scope_context.pop(pip_name)
-        # forward_path = [original, up, park]; the return path is a full reversal, so park is
-        # re-commanded first.  This makes the unwind independent of where the scope actually is:
-        # if something moved it away from park, going to park (at park height) before descending
-        # keeps it clear of the objective, whereas heading straight for `up` would cut a diagonal
-        # from an unknown position.
-        return_waypoints = list(reversed(forward_path))
+        original_pos, up_pos, park_pos = forward_path
+        # The return path is a full reversal, so park is re-commanded first.  This makes the
+        # unwind independent of where the scope actually is: if something moved it away from
+        # park, going to park (at park height) before descending keeps it clear of the
+        # objective, whereas heading straight for `up` would cut a diagonal from an unknown
+        # position.
         scope_steps = [
-            AtomicMove(scope, wp, "fast", "scope return") for wp in return_waypoints
+            AtomicMove(scope, park_pos, "fast", "scope back to park position"),
+            AtomicMove(scope, up_pos, "fast", "scope lateral over original position"),
+            AtomicMove(scope, original_pos, "fast", "scope down to original position"),
         ]
         return SequentialGroup(scope_steps, "scope unwind")
 
