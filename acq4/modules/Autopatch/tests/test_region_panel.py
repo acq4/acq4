@@ -573,21 +573,33 @@ def test_colour_source_combo_carries_keys_as_item_data(qapp):
 
 
 def test_colour_source_reports_the_selection(qapp):
+    """Asserts the literal key rather than itemData(1), so a combo carrying no
+    item data at all (itemData returning None on both sides) or a colorSource()
+    that read display text instead of data can no longer pass unnoticed."""
+    from acq4.modules.Autopatch.progress_colors import COLOR_SOURCES
+
+    assert COLOR_SOURCES[1][1] == "health"
     panel = makePanel()
 
     panel.colorCombo.setCurrentIndex(1)
 
-    assert panel.colorSource() == panel.colorCombo.itemData(1)
+    assert panel.colorSource() == "health"
 
 
 def test_changing_the_colour_source_announces_the_new_key(qapp):
+    """Asserts the literal key rather than itemData(1), so a combo carrying no
+    item data at all (itemData returning None on both sides) or a colorSource()
+    that read display text instead of data can no longer pass unnoticed."""
+    from acq4.modules.Autopatch.progress_colors import COLOR_SOURCES
+
+    assert COLOR_SOURCES[1][1] == "health"
     panel = makePanel()
     seen = []
     panel.sigColorSourceChanged.connect(seen.append)
 
     panel.colorCombo.setCurrentIndex(1)
 
-    assert seen == [panel.colorCombo.itemData(1)]
+    assert seen == ["health"]
 
 
 def test_legend_renders_one_entry_per_pair(qapp):
@@ -609,3 +621,30 @@ def test_setting_a_legend_replaces_the_last_one(qapp):
     panel.setLegend([("Sparse", pg.mkBrush(70, 110, 200))])
 
     assert panel.legendLabels() == ["Sparse"]
+
+
+def test_legend_swatch_shows_the_brush_colour(qapp):
+    # A legend with correct labels and wrong colours lies to the operator about
+    # what they are looking at, which is worse than no legend at all. Painting
+    # every swatch a fixed colour, ignoring the brush entirely, still passes
+    # the two tests above, since neither reads a swatch's colour.
+    import pyqtgraph as pg
+
+    panel = makePanel()
+    firstBrush = pg.mkBrush(70, 110, 200)
+    secondBrush = pg.mkBrush(240, 140, 20)
+
+    panel.setLegend([("Sparse", firstBrush), ("Crowded", secondBrush)])
+
+    # legendLabels() picks out labels by their non-empty text; swatches are the
+    # complementary QLabels in the row, the ones with no text at all.
+    swatches = [
+        panel.legendRow.itemAt(i).widget()
+        for i in range(panel.legendRow.count())
+        if isinstance(panel.legendRow.itemAt(i).widget(), Qt.QLabel)
+        and not panel.legendRow.itemAt(i).widget().text()
+    ]
+
+    assert len(swatches) == 2
+    assert swatches[0].palette().color(swatches[0].backgroundRole()) == firstBrush.color()
+    assert swatches[1].palette().color(swatches[1].backgroundRole()) == secondBrush.color()
