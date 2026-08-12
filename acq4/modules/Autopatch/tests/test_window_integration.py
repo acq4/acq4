@@ -2523,6 +2523,9 @@ def test_a_stale_marker_click_is_ignored(qapp, win):
 
 
 def test_zoom_to_cell_frames_area_1_on_it(qapp, win):
+    """Also pins the 3x span itself, not just the centre: a centre-only
+    assertion cannot tell a correctly-sized viewport from one seeded with the
+    wrong multiplier (or a span that ignores the field of view entirely)."""
     _sliceWithTodoTiles(win)
     cell = _makeCellAt(1.4e-3, 2.1e-3, -30e-6)
     win.cellPanel.addCell(cell)
@@ -2530,6 +2533,12 @@ def test_zoom_to_cell_frames_area_1_on_it(qapp, win):
 
     win.cellPanel.zoomToCellBtn.click()
 
+    fovW, fovH = win.slice.fov
     xRange, yRange = win.regionPanel.view.viewRange()
     assert sum(xRange) / 2 == pytest.approx(1.4e-3, rel=1e-6)
     assert sum(yRange) / 2 == pytest.approx(2.1e-3, rel=1e-6)
+    # x is the axis the aspect lock leaves alone in this fixture, so it comes
+    # out exactly 3x the field of view; y is the one the lock widens to match
+    # the widget's shape, so it can only be bounded below.
+    assert xRange[1] - xRange[0] == pytest.approx(3 * fovW, rel=1e-6)
+    assert yRange[1] - yRange[0] >= 3 * fovH
