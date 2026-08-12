@@ -82,9 +82,15 @@ def test_path_move_steps_nest_under_the_path_throughline(stage):
         )
 
     chains = []
-    fut.add_finish_callback(lambda result, exc: chains.append(task_chain()))
-    fut.wait(timeout=10)
+    fired = threading.Event()
 
+    def record(result, exc):
+        chains.append(task_chain())
+        fired.set()
+
+    fut.add_finish_callback(record)
+
+    assert fired.wait(timeout=10)
     assert chains == [("clean state", "clean path")]
 
 
@@ -95,10 +101,20 @@ def test_move_is_completed_under_the_move_throughline(stage):
     monitor thread was running under when it resolved the move.
     """
     chains = []
+    fired = threading.Event()
+
+    def record(result, exc):
+        chains.append(task_chain())
+        fired.set()
+
     with throughline(name="clean state"):
         fut = stage._move([1e-3, 0, 0], 1e-3, False, name="move to clean well")
-    fut.add_finish_callback(lambda result, exc: chains.append(task_chain()))
+        # Registered inside the context and immediately after the move starts: a
+        # callback added after completion would fire inline on this thread instead of
+        # on the thread that completed the move.
+        fut.add_finish_callback(record)
 
-    fut.wait(timeout=10)
-
+    # Wait on the callback, not on the future: _finish wakes waiters before it runs
+    # finish callbacks, so wait() can return before `record` has been called.
+    assert fired.wait(timeout=10)
     assert chains == [("clean state", "move to clean well")]
