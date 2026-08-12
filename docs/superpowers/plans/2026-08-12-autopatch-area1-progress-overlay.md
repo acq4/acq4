@@ -2041,10 +2041,20 @@ def test_clicking_a_marker_selects_that_cell_in_area_5(qapp, win):
 
 
 def test_a_stale_marker_click_is_ignored(qapp, win):
-    """A rescan can discard a cell between the draw and the click."""
+    """A rescan can discard a cell between the draw and the click.
+
+    Seeds and selects a real cell first: asserting `currentItem() is None` on an
+    empty list would be trivially true and would pass for an implementation that
+    cleared the selection, or one that raised and was swallowed. The invariant is
+    that a stale id neither raises nor moves the operator off the row they chose.
+    """
+    known = _makeCellAt(1.0e-3, 2.0e-3)
+    win.cellPanel.addCell(known)
+    win.cellPanel.selectCell(known)
+
     win._progressOverlay.sigMarkerClicked.emit(123456)
 
-    assert win.cellPanel.cellList.currentItem() is None
+    assert win.cellPanel.cellList.currentItem().data(Qt.Qt.UserRole) is known
 
 
 def test_zoom_to_cell_frames_area_1_on_it(qapp, win):
