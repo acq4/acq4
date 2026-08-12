@@ -125,6 +125,11 @@ class Slice:
     def setConstraints(self, constraints: SearchConstraints) -> None:
         self._constraints = constraints
 
+    @property
+    def fov(self) -> tuple[float, float]:
+        """The imaged field's (width, height) in global metres."""
+        return self._fov
+
     # ---- regions ----
     @property
     def regions(self) -> list[SearchRegion]:

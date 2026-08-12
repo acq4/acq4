@@ -12,6 +12,7 @@ from acq4.experiment.context import ExecutionContext
 from acq4.experiment.exceptions import AdvanceToNextCell
 from acq4.experiment.search_region import EllipseRegion, RectRegion
 from acq4.experiment.slice import Slice
+from acq4.modules.Autopatch.progress_colors import COLOR_SOURCES
 from acq4.util import Qt
 from acq4_automation.feature_tracking.cell import Cell
 
@@ -211,6 +212,15 @@ def _makeCell():
     """A Cell at an arbitrary global position, standing in for one a real
     detector would have found -- only its identity matters to these tests."""
     return Cell(Point([1e-3, 2e-3, -30e-6], "global"))
+
+
+def _makeCellAt(x, y, z=-30e-6):
+    """A Cell at a chosen global position, for tests that care where it is.
+
+    _makeCell()'s fixed position is enough when only identity matters; density
+    and navigation need cells that differ in both x and y.
+    """
+    return Cell(Point([x, y, z], "global"))
 
 
 _NOOP_PROTOCOL = '''"""Integration test fixture: resolves immediately without touching ctx."""
@@ -1186,6 +1196,20 @@ def _sliceWithCoveredTiles(win):
     win.orchestrator.enqueue(secondCell)
 
     return slice_, cell, ExecutionContext(cell=cell)
+
+
+def _sliceWithTodoTiles(win):
+    """Install a Slice on `win` with one region and nothing yet covered.
+
+    Built directly rather than through win.newSlice()/addRegionHere(), the same
+    reason _sliceWithCoveredTiles gives: those size the region off the fake
+    camera's micrometre field of view, which cannot expose millimetre-magnitude
+    float error. Asymmetric fov and a non-origin position for the same reason.
+    """
+    slice_ = Slice(fov=(20e-6, 10e-6))
+    slice_.addRegion(RectRegion(1e-3, 2e-3, 1e-3 + 60e-6, 2e-3 + 30e-6))
+    win.slice = slice_
+    return slice_
 
 
 def test_tissue_moved_rescans_and_clears_the_queue_on_the_first_answer(win, monkeypatch):
@@ -2288,3 +2312,71 @@ def test_unticking_the_mirror_retracts_the_message(win):
     win.regionPanel.mirrorCheck.setChecked(False)
 
     assert win.statusPanel.instruction() == ""
+
+
+def test_a_seeded_cell_gets_a_marker(qapp, win):
+    cell = _makeCellAt(1.0e-3, 2.0e-3, -30e-6)
+
+    win.cellPanel.addCell(cell)
+
+    assert len(win._progressOverlay.scatter.getData()[0]) == 1
+
+
+def test_marker_position_comes_from_initial_position_not_position(qapp, win):
+    """cell.position evaluates max(self._positions), iterating a dict the
+    tracking worker writes. initialPosition is assigned once and never
+    mutated, so it is the only safe read on the GUI thread.
+    """
+    cell = _makeCellAt(1.0e-3, 2.0e-3, -30e-6)
+
+    win.cellPanel.addCell(cell)
+
+    x, y = win._progressOverlay.scatter.getData()
+    assert x[0] == pytest.approx(1.0e-3)
+    assert y[0] == pytest.approx(2.0e-3)
+
+
+def test_a_finished_cell_is_recoloured(qapp, win):
+    cell = _makeCellAt(1.0e-3, 2.0e-3, -30e-6)
+    win.cellPanel.addCell(cell)
+    before = win._progressOverlay.scatter.points()[0].brush().color().name()
+
+    win.cellPanel._onCellFinished(cell, "done")
+
+    after = win._progressOverlay.scatter.points()[0].brush().color().name()
+    assert after != before
+
+
+def test_changing_the_colour_source_recolours_without_a_run(qapp, win):
+    cell = _makeCellAt(1.0e-3, 2.0e-3, -30e-6)
+    cell.score = 0.9
+    win.cellPanel.addCell(cell)
+    before = win._progressOverlay.scatter.points()[0].brush().color().name()
+
+    index = [k for _l, k, _f in COLOR_SOURCES].index("health")
+    win.regionPanel.colorCombo.setCurrentIndex(index)
+
+    after = win._progressOverlay.scatter.points()[0].brush().color().name()
+    assert after != before
+
+
+def test_the_legend_follows_the_colour_source(qapp, win):
+    # A slice is required here: _densityLegend only reports "At the density
+    # cap" once tileVolume and maxCellDensity are both known (_colorContext
+    # leaves them None with no slice), and without one it falls back to the
+    # raw "10+ per field" label instead.
+    _sliceWithTodoTiles(win)
+    index = [k for _l, k, _f in COLOR_SOURCES].index("density")
+    win.regionPanel.colorCombo.setCurrentIndex(index)
+
+    assert win.regionPanel.legendLabels() == ["Sparse", "At the density cap"]
+
+
+def test_coverage_draws_the_todo_tiles_not_the_covered_ones(qapp, win):
+    _sliceWithTodoTiles(win)
+    grid = win.slice.tileGrid()
+    win.slice.markCovered(grid[0])
+
+    win._onRunStatus("waiting")
+
+    assert len(win._progressOverlay.coverageItems()) == len(grid) - 1

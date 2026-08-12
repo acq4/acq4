@@ -19,6 +19,8 @@ from acq4.util.InterfaceCombo import InterfaceCombo
 from .cell_panel import CellPanel
 from .context_factory import make_context_factory
 from .example_protocols import install_example_protocols
+from .progress_colors import ColorContext, brushesFor, legendFor
+from .progress_overlay import Marker, ProgressOverlay
 from .protocol_panel import ProtocolPanel
 from .region_mirrors import CameraMirror, PinnedFrameMirror
 from .region_panel import RegionPanel
@@ -125,6 +127,15 @@ class AutopatchWindow(Qt.QWidget):
             functools.partial(self._cameraModuleWindow, self.manager)
         )
 
+        self._progressOverlay = ProgressOverlay(self.regionPanel.view)
+        # id(cell) -> the last (x, y) global position known for it. Seeded from
+        # cell.initialPosition and updated from sigPositionChanged payloads:
+        # cell.position evaluates max(self._positions), which iterates a dict
+        # the tracking worker writes, so reading it here is an intermittent
+        # RuntimeError. Ids and plain tuples, never cells, for the same reason
+        # every dict in cell_panel.py holds ids.
+        self._cellPositions: dict[int, tuple] = {}
+
         self.searchPanel = SearchPanel()
         self.area2Box.layout().addWidget(self.searchPanel)
 
@@ -188,6 +199,11 @@ class AutopatchWindow(Qt.QWidget):
         self.statusPanel.sigInteractionLocked.connect(
             self.cellPanel.setInteractionLocked
         )
+        self.cellPanel.sigCellStateChanged.connect(self._onCellStateChanged)
+        # A bound method, not a lambda: a lambda connected to a signal in this
+        # module's panels reproducibly segfaults its test file about 40 tests
+        # after the connect (see RegionPanel's own colour-source wiring).
+        self.regionPanel.sigColorSourceChanged.connect(self._onColorSourceChanged)
         # Coverage advances on the worker thread as the producer images tiles, so
         # the readout is refreshed off a status change rather than polled. Routed
         # through StatusPanel, not connected to the orchestrator directly: the
@@ -575,6 +591,86 @@ class AutopatchWindow(Qt.QWidget):
         else:
             self.searchPanel.setSurveyStats(*self.slice.surveyStats())
 
+    def _onCellStateChanged(self) -> None:
+        """Re-read the cell panel after a row or disposition changed."""
+        self._syncCellPositions()
+        self._refreshProgress()
+
+    def _onColorSourceChanged(self, _key: str) -> None:
+        """Redraw Area 1's markers and legend under the newly chosen source."""
+        self._refreshProgress()
+
+    def _syncCellPositions(self) -> None:
+        """Seed a position for every cell that has none, and drop the departed.
+
+        Reads cell.initialPosition, which __init__ assigns once and nothing
+        mutates. Live updates arrive through sigPositionChanged instead.
+        """
+        known = set()
+        for cell in self.cellPanel.cells():
+            cellId = id(cell)
+            known.add(cellId)
+            if cellId not in self._cellPositions:
+                position = getattr(cell, "initialPosition", None)
+                if position is not None:
+                    self._cellPositions[cellId] = (position[0], position[1])
+        for departed in set(self._cellPositions) - known:
+            del self._cellPositions[departed]
+
+    def _colorContext(self) -> ColorContext:
+        """Everything the colour sources may read, gathered in one pass.
+
+        The slice-derived fields are None when there is no slice, which is
+        ordinary: cells can be seeded by hand before one exists.
+        """
+        cells = self.cellPanel.cells()
+        constraints = None if self.slice is None else self.slice.constraints
+        return ColorContext(
+            cellIds=[id(c) for c in cells],
+            positions=dict(self._cellPositions),
+            dispositions={id(c): self.cellPanel.disposition(c) for c in cells},
+            attempted={id(c) for c in cells if self.cellPanel.isAttempted(c)},
+            # getattr, not c.score, despite Task 1 declaring the attribute:
+            # CellPanel accepts anything as a cell -- its own tests seed plain
+            # object() rows -- so this window cannot assume every row's payload
+            # is a Cell. This is a deliberate departure from the spec's §5.1
+            # wording ("read cell.score plainly"), which was written about the
+            # cross-repo dependency rather than about the panel's stub-tolerance.
+            scores={id(c): getattr(c, "score", None) for c in cells},
+            fov=None if self.slice is None else self.slice.fov,
+            tileVolume=None if self.slice is None else self.slice.tileVolume(),
+            maxCellDensity=None if constraints is None else constraints.max_cell_density,
+            minHealth=None if constraints is None else constraints.min_health,
+        )
+
+    def _refreshProgress(self) -> None:
+        """Redraw Area 1's markers and legend from current state."""
+        if self._tornDown:
+            return
+        ctx = self._colorContext()
+        key = self.regionPanel.colorSource()
+        brushes = brushesFor(key, ctx)
+        self._progressOverlay.setMarkers([
+            Marker(
+                self._cellPositions[cellId][0],
+                self._cellPositions[cellId][1],
+                brushes[cellId],
+                cellId,
+            )
+            for cellId in ctx.cellIds
+            if cellId in self._cellPositions
+        ])
+        self.regionPanel.setLegend(legendFor(key, ctx))
+
+    def _refreshCoverage(self) -> None:
+        """Shade the tiles still to be surveyed."""
+        if self._tornDown or self.slice is None:
+            self._progressOverlay.setCoverage([], (0.0, 0.0))
+            return
+        covered = set(self.slice.coveredTiles)
+        todo = [tile for tile in self.slice.tileGrid() if tile not in covered]
+        self._progressOverlay.setCoverage(todo, self.slice.fov)
+
     def _onRunStatus(self, status: str) -> None:
         """Refresh Area 2's survey readout when the run's status moves.
 
@@ -583,6 +679,8 @@ class AutopatchWindow(Qt.QWidget):
         """
         if status in ("surveying", "waiting"):
             self._refreshSurveyStats()
+            self._refreshCoverage()
+            self._refreshProgress()
 
     def _onTissueMoved(self, cell, ctx, reason: str) -> None:
         """ExecutionContext.tissue_moved, cell-bound by the context factory.
