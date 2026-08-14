@@ -203,12 +203,29 @@ The "no Camera module is open" message and the whole `sigModulesChanged` apparat
 - Consumes: Task 1's `_FakeManager`.
 - Produces: `AutopatchWindow._setRegionInstruction(text: str) -> None`, now writing straight through with no ownership flag. `AutopatchWindow._onModulesChanged` no longer exists.
 
-- [ ] **Step 1: Delete the warning's tests and rewrite the third**
+- [ ] **Step 1: Delete the tests of the deleted features, and rewrite the two that survive**
 
-Delete both of these from `acq4/modules/Autopatch/tests/test_window_integration.py` outright — they test a message this task removes:
+Delete these four from `acq4/modules/Autopatch/tests/test_window_integration.py` outright — each tests a feature this task removes. The first two cover the warning; the second two cover `_onModulesChanged` re-resolving a Camera module that arrives late, which cannot happen once the Autopatch module opens one at startup:
 
-- `test_ticking_the_mirror_with_no_camera_module_open_says_so` (~line 2299)
-- `test_the_message_goes_once_a_camera_module_is_open` (~line 2309)
+- `test_ticking_the_mirror_with_no_camera_module_open_says_so` (~line 2340)
+- `test_the_message_goes_once_a_camera_module_is_open` (~line 2348)
+- `test_outlines_appear_when_the_camera_module_is_opened_after_the_tick` (~line 2217)
+- `test_pinned_frames_bind_when_the_camera_module_is_opened_after_the_slice` (~line 2245)
+
+Then delete the `_cameraModuleAppears` helper (~line 2200) — with those two tests gone its remaining caller is `test_no_outlines_appear_when_the_checkbox_is_not_ticked`, which this step rewrites to stop using it. Confirm with `grep -n "_cameraModuleAppears" acq4/modules/Autopatch/tests/test_window_integration.py` returning nothing when you are done.
+
+Rewrite `test_no_outlines_appear_when_the_checkbox_is_not_ticked`, whose point survives — an unticked box mirrors nothing — but whose mechanism (announcing a module) does not:
+
+```python
+def test_no_outlines_appear_when_the_checkbox_is_not_ticked(win):
+    # A region is not a reason to start mirroring something the operator never
+    # asked to mirror.
+    win.newSlice()
+
+    win.addRegionHere()
+
+    assert win.manager.drawn == []
+```
 
 **Do not replace them with a test asserting the message is gone.** `instruction() == ""` is the band's state before anything ever wrote to it, so such a test passes against code that never had the feature — the "asserting a default is asserting nothing" trap in the Global Constraints. Deleting a feature does not require a test that it stays deleted.
 
