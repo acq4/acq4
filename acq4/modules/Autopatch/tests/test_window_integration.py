@@ -156,7 +156,8 @@ class _FakeCameraWithDevice(Qt.QWidget):
 
 
 class _FakePinnedFrameSource(Qt.QObject):
-    """Stands in for the Camera module's ImagingCtrl."""
+    """Stands in for the Camera module's ImagingCtrl: the pinned-frame list and
+    the signal Area 1 mirrors it through."""
 
     sigPinnedFramesChanged = Qt.Signal()
 
@@ -1748,10 +1749,10 @@ def test_the_mirror_checkbox_drives_the_camera_mirror(win):
 
 
 def test_teardown_takes_the_mirrored_outlines_out_of_the_camera_window(win):
-    # A camera window has to be supplied for this to test anything: _FakeManager
-    # has no Camera module, so _cameraWindow() returns None and the mirror holds
-    # nothing whether or not teardown clears it. Asserting an empty list against
-    # a mirror that was never able to draw is asserting a default.
+    # Patches _cameraMirror._cameraWindow directly instead of going through
+    # _FakeManager's own Camera window, so `drawn` is a recorder scoped to
+    # this test alone -- the same idiom the neighboring teardown/release
+    # tests use for the same reason.
     drawn = []
     fakeCameraWindow = SimpleNamespace(
         addItem=lambda item, **kwds: drawn.append(item),
