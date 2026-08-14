@@ -181,10 +181,9 @@ class _FakeManager(Qt.QObject):
     at startup and everything in Area 1 is written to assume it. A fake that
     reported none would stand for a state production rules out.
 
-    A QObject carrying sigModulesChanged, because the real Manager is one and
-    emits that signal whenever a module is loaded or quits -- which is how
-    Area 1's two mirrors find a Camera module that was not open when they were
-    first resolved.
+    A QObject carrying sigModulesChanged, because the real Manager is one.
+    Nothing in Autopatch listens to that signal, so the fake's implementation
+    is inert; it exists to match the interface of the thing it stands in for.
     """
 
     sigModulesChanged = Qt.Signal()
