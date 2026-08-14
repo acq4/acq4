@@ -241,18 +241,22 @@ class MFC1MoveFuture(MoveFuture):
         # Advance this move toward completion. Called by the device MonitorThread
         # each tick while the move is in flight: resolve on arrival, fail on a
         # missed target. Idempotent and race-safe (guards + atomic completion).
-        if self.is_stopped or self.is_done:
-            return
-        stat = self._getStatus()['status']
-        if stat == 'interrupted':
-            # The driver only marks a move 'interrupted' when dev.stop() was
-            # called, which also completes this promise with Stopped via
-            # stop(); just let that path own completion.
-            return
-        elif stat == 'failed':
-            self.fail(RuntimeError(self.errorMessage()))
-        elif stat == 'done':
-            self.resolve(None)
+        # Runs under this move's throughline: the monitor thread has no context of
+        # its own, so completion would otherwise be orphaned from the requesting
+        # operation.
+        with self.throughlineContext():
+            if self.is_stopped or self.is_done:
+                return
+            stat = self._getStatus()['status']
+            if stat == 'interrupted':
+                # The driver only marks a move 'interrupted' when dev.stop() was
+                # called, which also completes this promise with Stopped via
+                # stop(); just let that path own completion.
+                return
+            elif stat == 'failed':
+                self.fail(RuntimeError(self.errorMessage()))
+            elif stat == 'done':
+                self.resolve(None)
 
     def percentDone(self):
         """Return an estimate of the percent of move completed based on the

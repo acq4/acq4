@@ -1,8 +1,11 @@
-"""Tests for set_log_file migration behavior in acq4.logging_config."""
+"""Tests for set_log_file migration and throughline tagging in acq4.logging_config."""
+import contextlib
+import json
 import logging
 import os
 
 import pytest
+from gentletask import throughline
 
 import acq4.logging_config as lc
 
@@ -40,6 +43,41 @@ def test_temp_log_deleted_after_migration(tmp_path, clean_log_handler):
     assert not temp_log.exists()
     assert new_log.exists()
     assert b"hello from temp" in new_log.read_bytes()
+
+
+@contextlib.contextmanager
+def _at_level(logger, level):
+    """Temporarily force *logger* to *level* so DEBUG records are emitted."""
+    saved = logger.level
+    logger.setLevel(level)
+    try:
+        yield
+    finally:
+        logger.setLevel(saved)
+
+
+def _records_in(log_file):
+    return [json.loads(line) for line in log_file.read_text().splitlines() if line.strip()]
+
+
+def test_log_file_records_carry_the_throughline(tmp_path, clean_log_handler):
+    """Records written to a freshly-set log file are tagged with the active throughline.
+
+    The file handler is rebuilt whenever the log file changes (e.g. when Manager
+    switches from the temp log to the session's log.json), so it must carry the
+    throughline filter itself rather than relying on another handler to have
+    tagged the record on the way past.
+    """
+    log_file = tmp_path / "log.json"
+    lc.set_log_file(str(log_file))
+
+    logger = logging.getLogger("acq4")
+    with _at_level(logger, logging.DEBUG), throughline(name="cleaning pipette"):
+        logger.debug("scrubbing")
+
+    records = [r for r in _records_in(log_file) if r["message"] == "scrubbing"]
+    assert len(records) == 1
+    assert records[0]["throughline"] == ["cleaning pipette"]
 
 
 def test_non_temp_log_not_deleted(tmp_path, clean_log_handler):

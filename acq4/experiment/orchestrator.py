@@ -224,7 +224,7 @@ class Orchestrator(Qt.QObject):
     def start(self):
         """Launch the queue loop asynchronously; returns the launched task."""
         self._task = asynch_with_qt_signals(
-            self._runLoopBody, on_finish=self._onLoopFinished
+            self._runLoopBody, name="autopatch queue loop", on_finish=self._onLoopFinished
         )()
         return self._task
 

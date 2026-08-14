@@ -87,5 +87,8 @@ class NucleusCollectState(PatchPipetteState):
         with log_and_ignore_exception(Exception, "Error resetting pipette position after collection"):
             if self.startPos is not None:
                 pip = self.dev.pipetteDevice
-                pip.dm.move(MoveSpec(pip, self.startPos, speed='fast')).wait(timeout=60)
+                pip.dm.move(
+                    MoveSpec(pip, self.startPos, speed='fast'),
+                    name=f"return {pip.name()} to pre-collection position",
+                ).wait(timeout=60)
         super()._cleanup()

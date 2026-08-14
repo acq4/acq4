@@ -205,16 +205,21 @@ class MockMoveFuture(MoveFuture):
         self.dev.stageThread.setTarget(self, pos, speed)
 
     def mockFinish(self):
-        if not self.is_done:
-            self.resolve(None)
+        # Completed from the stage's lifetime monitor thread, which has no context of
+        # its own; run under this move's throughline so finish callbacks and anything
+        # logged on the way out stay attached to the requesting operation.
+        with self.throughlineContext():
+            if not self.is_done:
+                self.resolve(None)
 
     def mockInterrupt(self):
         # A cooperative stop is completed with Stopped by stop(); don't overwrite
         # that with a RuntimeError, or callers suppressing Stopped see a spurious
         # error. Only a non-stop interruption (e.g. a superseding move) fails.
-        if self.is_stopped:
-            return
-        self.fail(RuntimeError('Move interrupted'))
+        with self.throughlineContext():
+            if self.is_stopped:
+                return
+            self.fail(RuntimeError('Move interrupted'))
 
 
 class MockStageThread(Thread):
