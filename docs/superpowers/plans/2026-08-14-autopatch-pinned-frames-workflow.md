@@ -203,25 +203,16 @@ The "no Camera module is open" message and the whole `sigModulesChanged` apparat
 - Consumes: Task 1's `_FakeManager`.
 - Produces: `AutopatchWindow._setRegionInstruction(text: str) -> None`, now writing straight through with no ownership flag. `AutopatchWindow._onModulesChanged` no longer exists.
 
-- [ ] **Step 1: Write the failing test**
+- [ ] **Step 1: Delete the warning's tests and rewrite the third**
 
-Add to `acq4/modules/Autopatch/tests/test_window_integration.py`, replacing `test_ticking_the_mirror_with_no_camera_module_open_says_so` (~line 2299) in place:
+Delete both of these from `acq4/modules/Autopatch/tests/test_window_integration.py` outright — they test a message this task removes:
 
-```python
-def test_ticking_the_mirror_says_nothing(win):
-    # The Camera module is a precondition of the Autopatch module, not a
-    # possibility to warn about: it is opened at startup, and a closed one
-    # raises rather than degrading into a message.
-    win.newSlice()
+- `test_ticking_the_mirror_with_no_camera_module_open_says_so` (~line 2299)
+- `test_the_message_goes_once_a_camera_module_is_open` (~line 2309)
 
-    win.regionPanel.mirrorCheck.setChecked(True)
+**Do not replace them with a test asserting the message is gone.** `instruction() == ""` is the band's state before anything ever wrote to it, so such a test passes against code that never had the feature — the "asserting a default is asserting nothing" trap in the Global Constraints. Deleting a feature does not require a test that it stays deleted.
 
-    assert win.statusPanel.instruction() == ""
-```
-
-Delete `test_the_message_goes_once_a_camera_module_is_open` (~line 2309) outright — it asserts the retraction of a message that no longer exists.
-
-Keep `test_unticking_the_mirror_retracts_the_message` but rewrite it, since there is no longer a message to retract:
+Keep `test_unticking_the_mirror_retracts_the_message` but rewrite it, since there is no longer a message to retract — it now asserts something that can actually fail:
 
 ```python
 def test_unticking_the_mirror_takes_the_outlines_down(win):
@@ -235,13 +226,15 @@ def test_unticking_the_mirror_takes_the_outlines_down(win):
     assert win.manager.drawn == []
 ```
 
-- [ ] **Step 2: Run them and watch the first fail**
+- [ ] **Step 2: Run the rewritten test and watch it pass**
 
 ```bash
-/home/martin/.miniforge3/envs/acq4-gl/bin/python -m pytest acq4/modules/Autopatch/tests/test_window_integration.py -k "ticking_the_mirror or unticking_the_mirror" -v
+/home/martin/.miniforge3/envs/acq4-gl/bin/python -m pytest acq4/modules/Autopatch/tests/test_window_integration.py -k "unticking_the_mirror" -v
 ```
 
-Expected: `test_ticking_the_mirror_says_nothing` FAILS — with Task 1's fake the getter returns a window, so no message appears and it may already pass. **If it passes, that is expected and not a defect**: Task 1's fake removed the condition. Confirm the old behaviour is genuinely gone by temporarily pointing `win._cameraWindow = lambda: None` inside the test, watching it fail, and removing that line again. Record what you saw.
+Expected: PASS. It asserts outlines appear and then go, which Task 1's fake Camera window already makes reachable — this rewrite is not driving new behaviour, it is replacing an assertion about a deleted message with one about the mirror's actual job.
+
+Prove it can fail before moving on: temporarily comment out `self._cameraMirror.setEnabled(enabled)` in `_onMirrorToggled`, run it, **record the failing line number**, and restore.
 
 - [ ] **Step 3: Strip `_onMirrorToggled` to its job**
 
@@ -1255,22 +1248,56 @@ In `teardown()`'s `finally`, beside the other outward-reaching releases:
             self._cameraMirror.clear()
 ```
 
-- [ ] **Step 7: Run them and watch them pass**
+- [ ] **Step 7: Update the two tests this task changes the answer for**
+
+This task makes every successful `newSlice()` put `PIN_FRAMES_INSTRUCTION` in the band, because the default fake pins no frames. Two landed tests assert the band is *empty* after one, and they are this task's to own — the plan's rule is that the task changing a behaviour owns every site that reads it.
+
+Both become stronger, not weaker. `storage` and `region` both outrank `imagery`, so seeing the imagery text is proof the higher slot is empty — a better assertion than `== ""`, which could not tell an empty slot from an empty band.
+
+In `test_the_storage_message_goes_once_a_directory_is_chosen` (~line 1480), replace the final assertion:
+
+```python
+    win.manager.getCurrentDir = original
+    win.newSlice()
+
+    # storage outranks imagery, so the imagery instruction showing is proof the
+    # storage slot is empty -- not merely that the band is.
+    assert win.statusPanel.instruction() == PIN_FRAMES_INSTRUCTION
+```
+
+In `test_the_next_good_edit_retracts_the_refusal` (~line 2077), replace the first of the two final assertions the same way:
+
+```python
+    win.regionPanel.sigRegionsChanged.emit([RectRegion(1.0e-3, 2.0e-3, 1.4e-3, 2.1e-3)])
+
+    # region outranks imagery: the imagery instruction showing proves the
+    # refusal was retracted.
+    assert win.statusPanel.instruction() == PIN_FRAMES_INSTRUCTION
+    assert len(win.slice.regions) == 1
+```
+
+Add the import at the top of the test file:
+
+```python
+from acq4.modules.Autopatch.reference_imagery import PIN_FRAMES_INSTRUCTION
+```
+
+- [ ] **Step 8: Run them and watch them pass**
 
 ```bash
 /home/martin/.miniforge3/envs/acq4-gl/bin/python -m pytest acq4/modules/Autopatch/ -q
 ```
 
-Expected: all PASS.
+Expected: all PASS. If any *other* test asserts an empty band after `newSlice()`, it is the same case — fix it the same way and name it in the commit message. If more than these two turn up, stop and report; the plan expected exactly two.
 
-- [ ] **Step 8: Mutation proofs**
+- [ ] **Step 9: Mutation proofs**
 
 Two, restored between:
 
 1. Move `self._referenceImagery.beginSlice()` from the end of `newSlice()` to immediately after `if not self._startSlice(dirHandle=dirHandle): return`. Run the full Autopatch suite. **Record whether anything fails.** If nothing does, that is the finding to report: the ordering is a reasoned safeguard with no test able to distinguish it, and it should be recorded as such in the PR rather than presented as covered.
 2. Delete `self._referenceImagery.release()` from `teardown()`. Run `test_teardown_releases_the_reference_imagery`. Expected FAIL at the `receivers(...) == 0` assertion. **Record the line.**
 
-- [ ] **Step 9: Commit**
+- [ ] **Step 10: Commit**
 
 ```bash
 git rev-parse --show-toplevel && git branch --show-current
@@ -1342,6 +1369,8 @@ Base `_reviewed` on `origin/acq4`. The body must state plainly:
 
 **Type consistency.** `setInstruction(source, text)` is defined in Task 4 and called with `"region"`/`"storage"` there and `"imagery"` in Task 6. `INSTRUCTION_SOURCES` is the same tuple in both. `ReferenceImagery(imagingCtrlGetter, prompt=None)` is constructed in Task 6 exactly as defined in Task 5, with `_imagingCtrl` matching the `getter()` signature. `PIN_FRAMES_INSTRUCTION` is imported by name in Tasks 5 and 6. `_FakeManager.pinnedFrameSource` is produced in Task 1 and consumed in Task 6.
 
-**Two gaps this review found and fixed.** (1) Task 4 originally left `newSlice()`'s success path clearing only `storage`, stranding a `region` message from before the tissue was discarded — it now clears both. (2) Task 1's Step 7 originally said "fix any failing test"; it now names the three tests that must be left failing, because a task that deletes a test whose feature still exists cannot be reviewed on its own.
+**Gaps this review found and fixed.** (1) Task 4 originally left `newSlice()`'s success path clearing only `storage`, stranding a `region` message from before the tissue was discarded — it now clears both. (2) Task 1's Step 7 originally said "fix any failing test"; it now names the three tests that must be left failing, because a task that deletes a test whose feature still exists cannot be reviewed on its own.
+
+**Two more found in the pre-flight scan, after the plan was first committed.** (3) Task 6 changes what `instruction()` returns after every successful `newSlice()`, breaking two landed tests the plan never mentioned; Task 6 Step 7 now owns them, and the replacement assertions are stronger than the ones they replace — `storage` and `region` both outrank `imagery`, so the imagery text showing proves the higher slot is empty. (4) Task 2 originally mandated a test asserting `instruction() == ""`, which is the band's state before any feature existed; it is deleted rather than replaced.
 
 **One risk the plan cannot remove.** Task 6's prompt-last ordering may have no test that can distinguish it — its mutation step is written to treat that as a finding to report rather than a step to pass.
