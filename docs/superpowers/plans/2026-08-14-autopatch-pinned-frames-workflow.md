@@ -694,7 +694,41 @@ and the success path (~line 526), whose blanket `clearInstruction()` becomes a s
         self.statusPanel.setInstruction("region", "")
 ```
 
-- [ ] **Step 7: Mutation proof**
+- [ ] **Step 7: Restore the test Task 2 had to delete**
+
+Task 2 removed the `_regionInstruction` ownership bool, which broke `test_a_refused_edit_does_not_erase_the_storage_instruction` — a landed test covering exactly the property this task's slots restore. Task 2 deleted it rather than patch around a collision it was told not to fix. **Put it back verbatim**, in `acq4/modules/Autopatch/tests/test_window_integration.py`, next to the other refused-edit tests:
+
+```python
+def test_a_refused_edit_does_not_erase_the_storage_instruction(win):
+    """Area 3's band has two Area 1 writers with different conditions, and
+    neither can see the other's. A region edit retracting its own refusal must
+    not also retract newSlice()'s "choose a storage directory", which is still
+    just as true as it was."""
+    from acq4.util.HelpfulException import HelpfulException
+
+    win.addRegionHere()  # a slice, without going through create_data_dir
+
+    def boom(*a, **k):
+        raise HelpfulException("Storage directory has not been set.")
+
+    win.manager.getCurrentDir = boom
+    win.newSlice()
+    assert "Storage directory" in win.statusPanel.instruction()
+
+    win.regionPanel.sigRegionsChanged.emit([RectRegion(1.0e-3, 2.0e-3, 1.4e-3, 2.1e-3)])
+
+    assert "Storage directory" in win.statusPanel.instruction()
+```
+
+Run it:
+
+```bash
+/home/martin/.miniforge3/envs/acq4-gl/bin/python -m pytest acq4/modules/Autopatch/tests/test_window_integration.py::test_a_refused_edit_does_not_erase_the_storage_instruction -v
+```
+
+Expected: PASS, because `storage` outranks `region` and clearing the `region` slot no longer touches the `storage` one. If it fails, the slots are wrong — this test is the reason they exist.
+
+- [ ] **Step 8: Mutation proof**
 
 In `setInstruction`, replace `self._instructions[source] = text` with `self._instructions = {s: "" for s in INSTRUCTION_SOURCES}; self._instructions[source] = text` — the single-slot behaviour this task replaces. Run:
 
@@ -704,12 +738,12 @@ In `setInstruction`, replace `self._instructions[source] = text` with `self._ins
 
 Expected: FAIL. **Record the failing line number** and confirm it is the final `assert`. Restore.
 
-- [ ] **Step 8: Run the suite and commit**
+- [ ] **Step 9: Run the suite and commit**
 
 ```bash
 /home/martin/.miniforge3/envs/acq4-gl/bin/python -m pytest acq4/modules/Autopatch/ -q
 git rev-parse --show-toplevel && git branch --show-current
-git add acq4/modules/Autopatch/status_panel.py acq4/modules/Autopatch/Autopatch.py acq4/modules/Autopatch/tests/test_status_panel.py
+git add acq4/modules/Autopatch/status_panel.py acq4/modules/Autopatch/Autopatch.py acq4/modules/Autopatch/tests/
 git -c user.email=outofculture@gmail.com commit --author="Martin Chase (claude) <outofculture@gmail.com>" -F - <<'EOF'
 refactor(autopatch): give Area 3's band named instruction slots
 
