@@ -13,6 +13,8 @@ from acq4.experiment.search_region import (
 )
 from acq4.util import Qt
 
+from .progress_colors import COLOR_SOURCES
+
 # Yellow at 2px, matching the survey ROI the AutomationDebug bench already
 # draws, so the same shape reads the same way in either module.
 REGION_PEN = pg.mkPen("y", width=2)
@@ -114,10 +116,15 @@ class RegionPanel(Qt.QWidget):
     # The complete region list after an edit that originated here.
     sigRegionsChanged = Qt.Signal(object)
     sigAddRegionRequested = Qt.Signal()
+    sigColorSourceChanged = Qt.Signal(object)
 
     def __init__(self):
         super().__init__()
         self._rois: list[pg.ROI] = []
+        # Items some other owner has put in this view that are not mirrored
+        # imagery and must never be framed -- see excludeFromFraming() and
+        # _mirroredImageryBounds().
+        self._framingExclusions: list = []
 
         # The three independent reasons editing can be off, kept apart because
         # no writer can see another's condition: collapsing them into one
@@ -165,20 +172,33 @@ class RegionPanel(Qt.QWidget):
             "editable only here."
         )
 
+        # Item data, not display text, the same contract regionShape() keeps.
+        self.colorCombo = Qt.QComboBox()
+        for label, key, _func in COLOR_SOURCES:
+            self.colorCombo.addItem(label, key)
+        self.colorCombo.setToolTip("What the cell markers are coloured by.")
+
+        # A row of swatch+label pairs rebuilt whenever the source changes. The
+        # panel renders pairs it is handed and never computes a colour itself.
+        self.legendRow = Qt.QHBoxLayout()
+
         controls = Qt.QHBoxLayout()
         controls.addWidget(self.shapeCombo)
         controls.addWidget(self.addRegionBtn)
         controls.addWidget(self.fitBtn)
         controls.addWidget(self.mirrorCheck)
+        controls.addWidget(self.colorCombo)
         controls.addStretch()
 
         layout = Qt.QVBoxLayout()
         layout.addLayout(controls)
+        layout.addLayout(self.legendRow)
         layout.addWidget(self.graphicsView)
         self.setLayout(layout)
 
         self.addRegionBtn.clicked.connect(self.sigAddRegionRequested)
         self.fitBtn.clicked.connect(self.fitToRegions)
+        self.colorCombo.currentIndexChanged.connect(self._onColorSourceChanged)
 
         self._applyLock()
 
@@ -320,6 +340,58 @@ class RegionPanel(Qt.QWidget):
         """The shape key for the next region drawn: rect, ellipse, or polygon."""
         return self.shapeCombo.currentData()
 
+    def colorSource(self) -> str:
+        """The key of the selected colour source."""
+        return self.colorCombo.currentData()
+
+    def _onColorSourceChanged(self, _index) -> None:
+        self.sigColorSourceChanged.emit(self.colorSource())
+
+    def setLegend(self, entries) -> None:
+        """Show one swatch and label per (label, brush) pair, replacing the last set."""
+        while self.legendRow.count():
+            item = self.legendRow.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.setParent(None)
+        for label, brush in entries:
+            swatch = Qt.QLabel()
+            swatch.setFixedSize(12, 12)
+            swatch.setAutoFillBackground(True)
+            palette = swatch.palette()
+            palette.setColor(swatch.backgroundRole(), brush.color())
+            swatch.setPalette(palette)
+            self.legendRow.addWidget(swatch)
+            self.legendRow.addWidget(Qt.QLabel(label))
+        self.legendRow.addStretch()
+
+    def legendLabels(self) -> list:
+        """The legend's text labels, in order. For tests and for the operator's
+        own sanity check that the swatches say what they mean."""
+        labels = []
+        for i in range(self.legendRow.count()):
+            widget = self.legendRow.itemAt(i).widget()
+            if isinstance(widget, Qt.QLabel) and widget.text():
+                labels.append(widget.text())
+        return labels
+
+    def excludeFromFraming(self, item) -> None:
+        """Register `item` as never part of _mirroredImageryBounds()'s union.
+
+        For an item some other owner has put in this view that is not
+        mirrored imagery -- Area 1's progress overlay marker scatter, the
+        one caller today -- and whose own bounding rect must not distort
+        "frame everything drawn here". A registration method rather than a
+        type check on the item is deliberate: this panel renders regions and
+        is not supposed to know what a progress overlay, or anything else a
+        future caller adds to its view, actually is.
+
+        Takes no ownership and does nothing to un-register an item later
+        removed from the view -- an item this panel no longer draws costs
+        nothing extra to keep skipping.
+        """
+        self._framingExclusions.append(item)
+
     def _mirroredImageryBounds(self) -> Qt.QRectF | None:
         """The extent of everything in the view that is not a region ROI, or
         None if there is nothing else there.
@@ -334,12 +406,29 @@ class RegionPanel(Qt.QWidget):
         the view on a shape that is not a region: ViewBox.setRange keeps the
         current span when a range has none of its own, so the scale survives,
         but the operator is moved somewhere they did not ask to go.
+
+        Items excludeFromFraming() was given are skipped next, for the same
+        reason: the progress overlay's marker scatter is pxMode (a constant
+        *screen* size), so its own boundingRect() includes that pixel halo
+        converted into view units at whatever the view's current scale is --
+        at a scale far from 1:1 that conversion inflates the scatter's rect
+        by orders of magnitude, and unioning it would swamp the fit with a
+        shape that describes the current zoom rather than anything drawn.
+
+        Finally, an item's mapped rect that comes back null or empty (a
+        pinned frame not yet given any content, or the progress overlay's
+        scatter before excludeFromFraming() reached it, previously) is treated
+        as nothing rather than unioned: a null QRectF united into `rect` would
+        make this return something other than None, which would silently
+        defeat fitToRegions()'s own "nothing to frame" guard.
         """
         rect = None
         for item in self.view.addedItems:
-            if item in self._rois:
+            if item in self._rois or item in self._framingExclusions:
                 continue
             itemRect = item.mapRectToView(item.boundingRect()).normalized()
+            if itemRect.isEmpty():
+                continue
             rect = itemRect if rect is None else rect.united(itemRect)
         return rect
 

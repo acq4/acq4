@@ -12,6 +12,12 @@ from acq4.experiment.context import ExecutionContext
 from acq4.experiment.exceptions import AdvanceToNextCell
 from acq4.experiment.search_region import EllipseRegion, RectRegion
 from acq4.experiment.slice import Slice
+from acq4.modules.Autopatch.progress_colors import (
+    COLOR_SOURCES,
+    ColorContext,
+    healthBrushes,
+    successBrushes,
+)
 from acq4.util import Qt
 from acq4_automation.feature_tracking.cell import Cell
 
@@ -213,6 +219,15 @@ def _makeCell():
     return Cell(Point([1e-3, 2e-3, -30e-6], "global"))
 
 
+def _makeCellAt(x, y, z=-30e-6):
+    """A Cell at a chosen global position, for tests that care where it is.
+
+    _makeCell()'s fixed position is enough when only identity matters; density
+    and navigation need cells that differ in both x and y.
+    """
+    return Cell(Point([x, y, z], "global"))
+
+
 _NOOP_PROTOCOL = '''"""Integration test fixture: resolves immediately without touching ctx."""
 
 
@@ -228,7 +243,16 @@ def _write_protocol(path, name, body):
 
 @pytest.fixture
 def win(qapp, tmp_path):
-    return _makeWindow(tmp_path)
+    w = _makeWindow(tmp_path)
+    yield w
+    # Without this, every one of the many tests parametrized on this fixture
+    # leaves behind a fully-built AutopatchWindow (Orchestrator, panels,
+    # ParameterTree) that only Python's cyclic GC can reclaim, since teardown()
+    # is what breaks the Orchestrator/Cell/window reference cycle -- see its
+    # docstring. Left to the collector, that reclaim happens at an arbitrary
+    # later point (possibly in an unrelated test module), where it can delete a
+    # live QObject while a Qt event is still queued for it.
+    w.teardown()
 
 
 def test_loading_a_protocol_builds_and_binds_an_orchestrator(qapp, tmp_path):
@@ -1186,6 +1210,20 @@ def _sliceWithCoveredTiles(win):
     win.orchestrator.enqueue(secondCell)
 
     return slice_, cell, ExecutionContext(cell=cell)
+
+
+def _sliceWithTodoTiles(win):
+    """Install a Slice on `win` with one region and nothing yet covered.
+
+    Built directly rather than through win.newSlice()/addRegionHere(), the same
+    reason _sliceWithCoveredTiles gives: those size the region off the fake
+    camera's micrometre field of view, which cannot expose millimetre-magnitude
+    float error. Asymmetric fov and a non-origin position for the same reason.
+    """
+    slice_ = Slice(fov=(20e-6, 10e-6))
+    slice_.addRegion(RectRegion(1e-3, 2e-3, 1e-3 + 60e-6, 2e-3 + 30e-6))
+    win.slice = slice_
+    return slice_
 
 
 def test_tissue_moved_rescans_and_clears_the_queue_on_the_first_answer(win, monkeypatch):
@@ -2288,3 +2326,415 @@ def test_unticking_the_mirror_retracts_the_message(win):
     win.regionPanel.mirrorCheck.setChecked(False)
 
     assert win.statusPanel.instruction() == ""
+
+
+def test_a_seeded_cell_gets_a_marker(qapp, win):
+    cell = _makeCellAt(1.0e-3, 2.0e-3, -30e-6)
+
+    win.cellPanel.addCell(cell)
+
+    assert len(win._progressOverlay.scatter.getData()[0]) == 1
+
+
+def test_marker_position_comes_from_initial_position_not_position(qapp, win):
+    """cell.position evaluates max(self._positions), iterating a dict the
+    tracking worker writes. initialPosition is assigned once and never
+    mutated, so it is the only safe read on the GUI thread.
+    """
+    cell = _makeCellAt(1.0e-3, 2.0e-3, -30e-6)
+
+    win.cellPanel.addCell(cell)
+
+    x, y = win._progressOverlay.scatter.getData()
+    assert x[0] == pytest.approx(1.0e-3)
+    assert y[0] == pytest.approx(2.0e-3)
+
+
+def test_a_finished_cell_is_recoloured(qapp, win):
+    """Also kills the mutant that always paints with densityBrushes regardless
+    of the selected source: that mutant changes the colour too, but not to the
+    success source's "done" colour, which is checked here by name."""
+    cell = _makeCellAt(1.0e-3, 2.0e-3, -30e-6)
+    win.cellPanel.addCell(cell)
+    before = win._progressOverlay.scatter.points()[0].brush().color().name()
+
+    win.cellPanel._onCellFinished(cell, "done")
+
+    after = win._progressOverlay.scatter.points()[0].brush().color().name()
+    assert after != before
+    expected = successBrushes(win._colorContext())[id(cell)].color().name()
+    assert after == expected
+
+
+def test_changing_the_colour_source_recolours_without_a_run(qapp, win):
+    """Also kills the mutant that refreshes with some other source, or ignores
+    the selection entirely: either would still change the colour, but not to
+    the health source's colour for this cell's score, which is checked here by
+    name."""
+    cell = _makeCellAt(1.0e-3, 2.0e-3, -30e-6)
+    cell.score = 0.9
+    win.cellPanel.addCell(cell)
+    before = win._progressOverlay.scatter.points()[0].brush().color().name()
+
+    index = [k for _l, k, _f in COLOR_SOURCES].index("health")
+    win.regionPanel.colorCombo.setCurrentIndex(index)
+
+    after = win._progressOverlay.scatter.points()[0].brush().color().name()
+    assert after != before
+    expected = healthBrushes(win._colorContext())[id(cell)].color().name()
+    assert after == expected
+
+
+def test_a_cell_the_orchestrator_has_started_draws_in_the_in_flight_colour(qapp, win):
+    """The two colour tests above both compute `expected` from
+    win._colorContext() itself, so a defect inside the join between
+    CellPanel.isAttempted() and _colorContext()'s own `attempted` set is
+    invisible to them by construction -- setting `attempted=set()` in
+    _colorContext() still passes both, since their "expected" brush is drawn
+    from that same broken set.
+
+    "Attempted" is driven the way production drives it: the orchestrator's own
+    sigCurrentCell signal, which CellPanel._onCurrentCell answers by adding the
+    cell to its _attempted set -- not by writing into that private set
+    directly. win.orchestrator is a real, bound Orchestrator (see the `win`
+    fixture), so this is the identical signal a real run emits just before
+    handing the protocol its context; emitting it here only skips the worker
+    thread, not the announcement path.
+
+    _refreshProgress() is called explicitly rather than waited for: nothing
+    in this window currently re-draws Area 1 at the moment a cell's run
+    starts (StatusPanel's own sigStatusChanged("running") is not among the
+    statuses _onRunStatus() redraws on), which is a gap in when the operator
+    sees blue, not in what blue means once drawn -- the seam this test pins.
+    """
+    cell = _makeCellAt(1.0e-3, 2.0e-3, -30e-6)
+    win.cellPanel.addCell(cell)
+    before = win._progressOverlay.scatter.points()[0].brush().color().name()
+
+    win.orchestrator.sigCurrentCell.emit(cell)
+    win._refreshProgress()
+
+    after = win._progressOverlay.scatter.points()[0].brush().color().name()
+    independent = ColorContext(
+        cellIds=[id(cell)],
+        positions={},
+        dispositions={},
+        attempted={id(cell)},
+        scores={},
+        fov=None,
+        tileVolume=None,
+        maxCellDensity=None,
+        minHealth=None,
+    )
+    expected = successBrushes(independent)[id(cell)].color().name()
+    assert after != before
+    assert after == expected
+
+
+def test_the_in_flight_colour_appears_without_any_other_refresh(qapp, win):
+    """The test above calls win._refreshProgress() itself, so it cannot tell
+    whether anything in the window actually asks for that redraw on its own --
+    it would pass identically if nothing ever did. This test never calls
+    _refreshProgress() (nor _onRunStatus(), nor anything else that redraws
+    Area 1): the only thing that happens between seeding the cell and reading
+    its marker is the orchestrator's own sigCurrentCell announcement, which is
+    exactly what a real run does the instant it takes a cell off the queue.
+
+    If the marker is still grey afterward, the operator's one load-bearing cue
+    -- the blue dot that says "the orchestrator is working on this cell right
+    now" -- never appears during a run, since nothing else redraws Area 1
+    between "surveying"/"waiting" statuses either.
+    """
+    cell = _makeCellAt(1.0e-3, 2.0e-3, -30e-6)
+    win.cellPanel.addCell(cell)
+    before = win._progressOverlay.scatter.points()[0].brush().color().name()
+
+    win.orchestrator.sigCurrentCell.emit(cell)
+
+    after = win._progressOverlay.scatter.points()[0].brush().color().name()
+    independent = ColorContext(
+        cellIds=[id(cell)],
+        positions={},
+        dispositions={},
+        attempted={id(cell)},
+        scores={},
+        fov=None,
+        tileVolume=None,
+        maxCellDensity=None,
+        minHealth=None,
+    )
+    expected = successBrushes(independent)[id(cell)].color().name()
+    assert after != before
+    assert after == expected
+
+
+def test_the_legend_follows_the_colour_source(qapp, win):
+    # A slice is required here: _densityLegend only reports "At the density
+    # cap" once tileVolume and maxCellDensity are both known (_colorContext
+    # leaves them None with no slice), and without one it falls back to the
+    # raw "10+ per field" label instead.
+    _sliceWithTodoTiles(win)
+    index = [k for _l, k, _f in COLOR_SOURCES].index("density")
+    win.regionPanel.colorCombo.setCurrentIndex(index)
+
+    assert win.regionPanel.legendLabels() == ["Sparse", "At the density cap"]
+
+
+def test_coverage_draws_the_todo_tiles_not_the_covered_ones(qapp, win):
+    """Also kills the mutant that unconditionally drops a fixed index (e.g.
+    grid[0]) instead of filtering on what is actually covered: covering a
+    tile that is deliberately not grid[0] leaves that mutant's count still
+    matching, but its rectangles centred on the wrong tiles."""
+    _sliceWithTodoTiles(win)
+    grid = win.slice.tileGrid()
+    coveredIndex = len(grid) // 2
+    covered = grid[coveredIndex]
+    win.slice.markCovered(covered)
+
+    win._onRunStatus("waiting")
+
+    items = win._progressOverlay.coverageItems()
+    assert len(items) == len(grid) - 1
+    # setCoverage's rects are built from (cx - fovW/2, cy - fovH/2, fovW, fovH)
+    # in the view's own coordinates, so a rect's centre recovers the tile it
+    # was drawn for.
+    actualCentres = sorted(
+        (item.rect().center().x(), item.rect().center().y()) for item in items
+    )
+    expectedCentres = sorted(
+        tuple(tile) for i, tile in enumerate(grid) if i != coveredIndex
+    )
+    assert len(actualCentres) == len(expectedCentres)
+    for (ax, ay), (ex, ey) in zip(actualCentres, expectedCentres):
+        assert ax == pytest.approx(ex)
+        assert ay == pytest.approx(ey)
+
+
+def test_a_tracked_cell_marker_follows_its_position_signal(qapp, win):
+    cell = _makeCellAt(1.0e-3, 2.0e-3, -30e-6)
+    win.cellPanel.addCell(cell)
+
+    cell.sigPositionChanged.emit(Point([1.4e-3, 2.1e-3, -30e-6], "global"))
+
+    x, y = win._progressOverlay.scatter.getData()
+    assert x[0] == pytest.approx(1.4e-3)
+    assert y[0] == pytest.approx(2.1e-3)
+
+
+def test_refresh_never_iterates_the_tracked_positions_dict(qapp, win):
+    """_syncCellPositions must seed a cell's marker from cell.initialPosition,
+    never from cell.position: Cell.position evaluates max(self._positions),
+    which iterates a dict the tracking worker thread writes to, so a
+    GUI-thread read racing an insert raises RuntimeError: dictionary changed
+    size during iteration.
+
+    The trap -- a _positions dict that raises on both __iter__ and keys() --
+    must be armed *before* the cell is ever added to the panel: addCell()
+    synchronously drives _onCellStateChanged -> _syncCellPositions, which is
+    the only place a never-before-seen cell's position is read. Arming it
+    afterward would let that one read land on the still-healthy dict, seed
+    the cache, and never happen again -- so a mutation to cell.position would
+    pass unnoticed, which is exactly what happened before this rewrite.
+    Arming first forces the sync to obtain a position from a cell whose
+    _positions dict already explodes, so only the correct initialPosition
+    read can survive.
+    """
+    cell = _makeCellAt(1.0e-3, 2.0e-3, -30e-6)
+
+    class Exploding(dict):
+        def __iter__(self):
+            raise RuntimeError("dictionary changed size during iteration")
+
+        def keys(self):
+            raise RuntimeError("dictionary changed size during iteration")
+
+    cell._positions = Exploding(cell._positions)
+
+    win.cellPanel.addCell(cell)
+
+    xs, ys = win._progressOverlay.scatter.getData()
+    assert len(xs) == 1
+    assert xs[0] == pytest.approx(cell.initialPosition[0])
+    assert ys[0] == pytest.approx(cell.initialPosition[1])
+
+
+def test_discarding_a_cell_disconnects_it(qapp, win):
+    cell = _makeCellAt(1.0e-3, 2.0e-3, -30e-6)
+    win.cellPanel.addCell(cell)
+
+    win.cellPanel.discardCells([cell])
+
+    assert cell.receivers(cell.sigPositionChanged) == 0
+
+
+def test_refresh_coverage_after_teardown_does_not_touch_the_overlay(win):
+    """A torn-down window must return before it ever calls into the overlay
+    again.
+
+    Seeds real coverage items first, then tears the window down: teardown()
+    itself now empties the overlay (ProgressOverlay.release() takes every
+    item back out of the view, among the rest of its cleanup), so what is
+    left to prove is that _refreshCoverage(), called explicitly afterward,
+    does not undo that by reaching into the overlay a second time. Against an
+    unguarded `if self.slice is None:` (missing the `self._tornDown or`) this
+    fails because the still-installed slice's to-do tiles get redrawn -- a
+    torn-down window with no slice, and one with a slice, must both leave the
+    released overlay empty.
+    """
+    _sliceWithTodoTiles(win)
+    win._onRunStatus("waiting")
+    assert win._progressOverlay.coverageItems()
+
+    win.teardown()
+    win._refreshCoverage()
+
+    assert win._progressOverlay.coverageItems() == []
+
+
+def test_clicking_a_marker_selects_that_cell_in_area_5(qapp, win):
+    first = _makeCellAt(1.0e-3, 2.0e-3, -30e-6)
+    second = _makeCellAt(1.4e-3, 2.1e-3, -30e-6)
+    win.cellPanel.addCell(first)
+    win.cellPanel.addCell(second)
+
+    win._progressOverlay.sigMarkerClicked.emit(id(second))
+
+    assert win.cellPanel.cellList.currentItem().data(Qt.Qt.UserRole) is second
+
+
+def test_a_stale_marker_click_is_ignored(qapp, win):
+    """A rescan can discard a cell between the draw and the click.
+
+    Seeds and selects a real cell first: asserting `currentItem() is None` on an
+    empty list would be trivially true and would pass for an implementation that
+    cleared the selection, or one that raised and was swallowed. The invariant is
+    that a stale id neither raises nor moves the operator off the row they chose.
+    """
+    known = _makeCellAt(1.0e-3, 2.0e-3)
+    win.cellPanel.addCell(known)
+    win.cellPanel.selectCell(known)
+
+    win._progressOverlay.sigMarkerClicked.emit(123456)
+
+    assert win.cellPanel.cellList.currentItem().data(Qt.Qt.UserRole) is known
+
+
+def test_zoom_to_cell_frames_area_1_on_it(qapp, win):
+    """Also pins the 3x span itself, not just the centre: a centre-only
+    assertion cannot tell a correctly-sized viewport from one seeded with the
+    wrong multiplier (or a span that ignores the field of view entirely)."""
+    _sliceWithTodoTiles(win)
+    cell = _makeCellAt(1.4e-3, 2.1e-3, -30e-6)
+    win.cellPanel.addCell(cell)
+    win.cellPanel.selectCell(cell)
+
+    win.cellPanel.zoomToCellBtn.click()
+
+    fovW, fovH = win.slice.fov
+    xRange, yRange = win.regionPanel.view.viewRange()
+    assert sum(xRange) / 2 == pytest.approx(1.4e-3, rel=1e-6)
+    assert sum(yRange) / 2 == pytest.approx(2.1e-3, rel=1e-6)
+    # x is the axis the aspect lock leaves alone in this fixture, so it comes
+    # out exactly 3x the field of view; y is the one the lock widens to match
+    # the widget's shape, so it can only be bounded below.
+    assert xRange[1] - xRange[0] == pytest.approx(3 * fovW, rel=1e-6)
+    assert yRange[1] - yRange[0] >= 3 * fovH
+
+
+def test_fit_to_regions_is_unaffected_by_a_progress_marker(qapp, win):
+    """Measured in a real window: fitting a 300x200um region at 1mm from
+    origin gave 360x270um with no markers drawn and 27m x 20m, centred near
+    global (0, 0), with one. The cause is the progress overlay's
+    ScatterPlotItem: pxMode=True keeps its markers a constant *screen* size,
+    so its own boundingRect() reports that pixel halo converted into view
+    units at whatever scale the view has when it is asked -- and at the
+    region's own scale here that conversion is enormous.
+
+    Every fitToRegions() test in test_region_panel.py builds a bare
+    RegionPanel with no overlay in its view at all, so none of them can catch
+    this; this one needs the real ProgressOverlay a real AutopatchWindow
+    attaches, which is why it lives here instead.
+
+    Compared with pytest.approx at a tight relative tolerance rather than
+    exact equality: both calls re-run the identical computation over the
+    identical region bounds (the marker plays no part in either, once
+    correctly excluded), so they are expected to be bit-for-bit identical --
+    the tolerance only guards against incidental float non-determinism, not
+    against a real difference. Reverting the exclusion in
+    RegionPanel._mirroredImageryBounds() reproduces the measured blowup (many
+    orders of magnitude), which this tolerance does not come close to
+    absorbing.
+    """
+    win.newSlice()
+    win.addRegionHere()
+    win.regionPanel.fitToRegions()
+    before = win.regionPanel.view.viewRange()
+
+    win.cellPanel.addCell(_makeCellAt(1.0e-3, 2.0e-3, -30e-6))
+    win.regionPanel.fitToRegions()
+
+    after = win.regionPanel.view.viewRange()
+    (bx0, bx1), (by0, by1) = before
+    (ax0, ax1), (ay0, ay1) = after
+    assert ax0 == pytest.approx(bx0, rel=1e-9)
+    assert ax1 == pytest.approx(bx1, rel=1e-9)
+    assert ay0 == pytest.approx(by0, rel=1e-9)
+    assert ay1 == pytest.approx(by1, rel=1e-9)
+
+
+def test_fit_on_an_empty_area_1_leaves_the_view_untouched(qapp, win):
+    """Before this branch, an empty progress overlay's scatter made
+    RegionPanel._mirroredImageryBounds() return a null QRectF rather than
+    None (a scatter with no points still has *a* boundingRect, just an empty
+    one), so fitToRegions()'s `if rect is None: return` guard never fired and
+    pressing Fit on an empty Area 1 recentred the view on global (0, 0)."""
+    before = win.regionPanel.view.viewRange()
+
+    win.regionPanel.fitToRegions()
+
+    assert win.regionPanel.view.viewRange() == before
+
+
+def test_new_slice_clears_progress_markers_coverage_and_position_connections(win):
+    """Measured after newSlice() with one cell and to-do tiles: markers=1,
+    coverage=9, _positionConnected=1, _cellPositions=1 -- while
+    cellPanel.cells() is already empty -- and the discarded cell still
+    reported receivers(sigPositionChanged) == 1: the connection this window
+    made kept a Cell CellPanel had already dropped alive, and its connection
+    live, contrary to _positionConnected's own comment that it "adds no
+    lifetime, only a handle".
+
+    The receivers() assertion is the one that actually exercises the fix: an
+    earlier round of this same module found a mandated mutation that a
+    dict-emptiness assertion alone did not catch, because a nearby `= None`
+    had already broken the reference cycle before this method got a chance
+    to (see test_teardown_disconnects_every_cell_position_connection for the
+    same reasoning applied to teardown()).
+    """
+    win.newSlice()
+    win.addRegionHere()
+    cell = _makeCellAt(1.0e-3, 2.0e-3, -30e-6)
+    win.cellPanel.addCell(cell)
+    win._refreshCoverage()
+
+    assert len(win._progressOverlay.scatter.getData()[0]) == 1
+    assert win._progressOverlay.coverageItems()
+    assert id(cell) in win._cellPositions
+    assert id(cell) in win._positionConnected
+    assert cell.receivers(cell.sigPositionChanged) == 1
+
+    win.newSlice()
+
+    assert len(win._progressOverlay.scatter.getData()[0]) == 0
+    assert win._progressOverlay.coverageItems() == []
+    assert win._cellPositions == {}
+    assert win._positionConnected == {}
+    assert cell.receivers(cell.sigPositionChanged) == 0
+
+
+def test_a_freshly_built_window_shows_a_meaningful_legend(win):
+    """The spec wants an empty plot with a meaningful legend, not a blank
+    one: before this branch, _refreshProgress() was never called during
+    AutopatchWindow.__init__, so legendLabels() == [] until the first cell or
+    colour-source change."""
+    assert win.regionPanel.legendLabels() != []

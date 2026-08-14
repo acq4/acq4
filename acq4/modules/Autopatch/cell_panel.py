@@ -46,6 +46,14 @@ class CellPanel(Qt.QWidget):
     # is marshaled onto the GUI thread by Qt's automatic queued connection
     # rather than touching cellList directly.
     sigCellsDiscarded = Qt.Signal(object)
+    # Emitted whenever a cell's row or disposition changes, so a view over this
+    # panel's state -- Area 1's progress overlay -- knows to re-read it. Carries
+    # nothing on purpose: pushing the state would give that view a second copy
+    # to keep in sync, and this panel's whole discipline is having exactly one.
+    sigCellStateChanged = Qt.Signal()
+    # Carries the selected cell, for Area 1 to frame its view on. The panel
+    # knows nothing about views or spans; the window owns that.
+    sigZoomToCellRequested = Qt.Signal(object)
 
     def __init__(self, pipetteGetter=None, cameraGetter=None):
         super().__init__()
@@ -149,16 +157,22 @@ class CellPanel(Qt.QWidget):
         self.scatterFakeCellsBtn = Qt.QPushButton("Scatter fake cells")
         self.checkAllCompletedBtn = Qt.QPushButton("Check all completed")
         self.reuseCheckedCellsBtn = Qt.QPushButton("Reuse checked cells")
+        self.zoomToCellBtn = Qt.QPushButton("Zoom to cell")
+        self.zoomToCellBtn.setToolTip(
+            "Frame Area 1's view on the selected cell's position."
+        )
         self.addFromTargetBtn.clicked.connect(self._onAddFromTargetClicked)
         self.scatterFakeCellsBtn.clicked.connect(self._onScatterFakeCellsClicked)
         self.checkAllCompletedBtn.clicked.connect(self._onCheckAllCompleted)
         self.reuseCheckedCellsBtn.clicked.connect(self._onReuseCheckedCells)
+        self.zoomToCellBtn.clicked.connect(self._onZoomToCellClicked)
 
         btnRow = Qt.QHBoxLayout()
         btnRow.addWidget(self.addFromTargetBtn)
         btnRow.addWidget(self.scatterFakeCellsBtn)
         btnRow.addWidget(self.checkAllCompletedBtn)
         btnRow.addWidget(self.reuseCheckedCellsBtn)
+        btnRow.addWidget(self.zoomToCellBtn)
 
         listsRow = Qt.QHBoxLayout()
         listsRow.addWidget(self.cellList)
@@ -353,6 +367,7 @@ class CellPanel(Qt.QWidget):
             self._cellErrors.pop(cellId, None)
         self._updateCheckAllButton()
         self._updateReuseButton()
+        self.sigCellStateChanged.emit()
 
     def _onAddFromTargetClicked(self) -> None:
         pipette = self._pipetteGetter()
@@ -445,6 +460,7 @@ class CellPanel(Qt.QWidget):
         # item.data() comes back re-wrapped as a bare, dangling QObject. Holding a
         # reference here for the panel's lifetime keeps the original object alive.
         self._cells[id(cell)] = cell
+        self.sigCellStateChanged.emit()
 
     def isAttempted(self, cell) -> bool:
         """Whether the orchestrator has ever started work on `cell`.
@@ -454,6 +470,15 @@ class CellPanel(Qt.QWidget):
         are dropped so they can be found again where they now are.
         """
         return id(cell) in self._attempted
+
+    def cells(self) -> list:
+        """Every cell this panel knows about, in the order they were added.
+
+        This panel is the complete registry: Slice.registerCells() is reached
+        only from CellProducer, so cells seeded by hand ("Add from target",
+        "Scatter fake cells") live here and nowhere else.
+        """
+        return list(self._cells.values())
 
     def disposition(self, cell) -> str | None:
         """The last terminal disposition reported for `cell`, or None if it has
@@ -596,6 +621,7 @@ class CellPanel(Qt.QWidget):
             self._shownEntryId = None
         self._updateCheckAllButton()
         self._updateReuseButton()
+        self.sigCellStateChanged.emit()
 
     def appendLog(self, cell, message: str) -> None:
         # May be called from the orchestrator's worker thread (ExecutionContext.log,
@@ -645,6 +671,13 @@ class CellPanel(Qt.QWidget):
             self.addCell(cell)
             item = self._rows[id(cell)]
         item.setText(f"cell {id(cell)} — running")
+        # self._attempted already holds this cell (set above), so Area 1's
+        # progress overlay -- the view sigCellStateChanged exists for -- can
+        # redraw it blue. Unconditional, like _onCellFinished's own emit just
+        # below: a cell with no row yet gets one from addCell(), which emits
+        # on its own, so this is a second, harmless emit for that path (an
+        # extra redraw, not a wrong one) rather than a special case to dodge it.
+        self.sigCellStateChanged.emit()
 
     def onLogAction(self, cell, entry) -> None:
         """ExecutionContext.on_log_action, cell-bound by the context factory
@@ -775,6 +808,19 @@ class CellPanel(Qt.QWidget):
             item = self._rows[id(cell)]
         item.setText(f"cell {id(cell)} — {status}")
         self._updateCheckAllButton()
+        self.sigCellStateChanged.emit()
+
+    def selectCell(self, cell) -> None:
+        """Make `cell`'s row current, so Area 5 shows its timeline and log.
+
+        A no-op for a cell with no row. Area 1's overlay can report a click for
+        a cell a rescan has since discarded, and raising out of a Qt slot over
+        a stale selection is not an option.
+        """
+        item = self._rows.get(id(cell))
+        if item is None:
+            return
+        self.cellList.setCurrentItem(item)
 
     def _onCellSelectionChanged(self, current, _previous) -> None:
         self.timelineList.clear()
@@ -811,3 +857,12 @@ class CellPanel(Qt.QWidget):
     def _currentSelectedCell(self):
         item = self.cellList.currentItem()
         return None if item is None else item.data(Qt.Qt.UserRole)
+
+    def _onZoomToCellClicked(self) -> None:
+        item = self.cellList.currentItem()
+        if item is None:
+            return
+        cell = item.data(Qt.Qt.UserRole)
+        if cell is None:
+            return
+        self.sigZoomToCellRequested.emit(cell)

@@ -19,6 +19,8 @@ from acq4.util.InterfaceCombo import InterfaceCombo
 from .cell_panel import CellPanel
 from .context_factory import make_context_factory
 from .example_protocols import install_example_protocols
+from .progress_colors import ColorContext, brushesFor, legendFor
+from .progress_overlay import Marker, ProgressOverlay
 from .protocol_panel import ProtocolPanel
 from .region_mirrors import CameraMirror, PinnedFrameMirror
 from .region_panel import RegionPanel
@@ -125,6 +127,26 @@ class AutopatchWindow(Qt.QWidget):
             functools.partial(self._cameraModuleWindow, self.manager)
         )
 
+        self._progressOverlay = ProgressOverlay(self.regionPanel.view)
+        # The scatter is pxMode (a constant screen size), so its own
+        # boundingRect() reports that pixel halo converted into view units at
+        # whatever scale the view currently has -- unioning it into "fit to
+        # regions" would frame the current zoom rather than what is actually
+        # drawn. See RegionPanel._mirroredImageryBounds() for the full story.
+        self.regionPanel.excludeFromFraming(self._progressOverlay.scatter)
+        # id(cell) -> the last (x, y) global position known for it. Seeded from
+        # cell.initialPosition and updated from sigPositionChanged payloads:
+        # cell.position evaluates max(self._positions), which iterates a dict
+        # the tracking worker writes, so reading it here is an intermittent
+        # RuntimeError. Ids and plain tuples, never cells, for the same reason
+        # every dict in cell_panel.py holds ids.
+        self._cellPositions: dict[int, tuple] = {}
+        # id(cell) -> the cell, for the sigPositionChanged connections this
+        # window made and must sever. A strong reference is unavoidable to
+        # disconnect, and is safe: CellPanel._cells already holds every one of
+        # these for the panel's life, so this adds no lifetime, only a handle.
+        self._positionConnected: dict[int, object] = {}
+
         self.searchPanel = SearchPanel()
         self.area2Box.layout().addWidget(self.searchPanel)
 
@@ -188,6 +210,13 @@ class AutopatchWindow(Qt.QWidget):
         self.statusPanel.sigInteractionLocked.connect(
             self.cellPanel.setInteractionLocked
         )
+        self.cellPanel.sigCellStateChanged.connect(self._onCellStateChanged)
+        self._progressOverlay.sigMarkerClicked.connect(self._onMarkerClicked)
+        self.cellPanel.sigZoomToCellRequested.connect(self._onZoomToCell)
+        # A bound method, not a lambda: a lambda connected to a signal in this
+        # module's panels reproducibly segfaults its test file about 40 tests
+        # after the connect (see RegionPanel's own colour-source wiring).
+        self.regionPanel.sigColorSourceChanged.connect(self._onColorSourceChanged)
         # Coverage advances on the worker thread as the producer images tiles, so
         # the readout is refreshed off a status change rather than polled. Routed
         # through StatusPanel, not connected to the orchestrator directly: the
@@ -208,6 +237,12 @@ class AutopatchWindow(Qt.QWidget):
         # window and presses Start immediately still gets a run.
         if self.protocolPanel.protocolFile is not None:
             self._onProtocolLoaded(self.protocolPanel.protocolFile)
+        # Every panel this touches (cellPanel, regionPanel, the progress
+        # overlay) is built by this point, so this is what puts a meaningful
+        # legend under Area 1 before the operator has done anything at all,
+        # rather than leaving it empty until the first cell or colour-source
+        # change calls _refreshProgress() on its own.
+        self._refreshProgress()
 
     @staticmethod
     def _cameraModuleWindow(manager):
@@ -508,6 +543,16 @@ class AutopatchWindow(Qt.QWidget):
             # the operator's session record.
             self.orchestrator.abandonCellInHand()
         self._refreshSurveyStats()
+        # Area 1's markers and to-do shading describe the cells and coverage
+        # just discarded above; left drawn, the operator would see dots and
+        # shading for tissue they just declared gone -- in the one view whose
+        # whole job is spatial trust. The per-cell position connections this
+        # window made are released alongside: cellPanel.clearCells() has
+        # already dropped CellPanel's own strong reference to each cell, so
+        # _positionConnected's parallel one is now all that would keep a
+        # discarded Cell alive, and its sigPositionChanged connection live.
+        self._progressOverlay.clear()
+        self._releaseCellPositionConnections()
 
     def addRegionHere(self) -> None:
         """Add a search region of roughly 3x3 fields of view around the camera center.
@@ -575,6 +620,151 @@ class AutopatchWindow(Qt.QWidget):
         else:
             self.searchPanel.setSurveyStats(*self.slice.surveyStats())
 
+    def _onCellStateChanged(self) -> None:
+        """Re-read the cell panel after a row or disposition changed."""
+        self._syncCellPositions()
+        self._refreshProgress()
+
+    def _onColorSourceChanged(self, _key: str) -> None:
+        """Redraw Area 1's markers and legend under the newly chosen source."""
+        self._refreshProgress()
+
+    def _syncCellPositions(self) -> None:
+        """Seed a position for every cell that has none, connect to every
+        cell's live position updates, and drop the departed from both.
+
+        Reads cell.initialPosition, which __init__ assigns once and nothing
+        mutates, to seed. Live updates arrive through sigPositionChanged
+        instead -- see _onCellMoved. A departed cell (discarded from
+        CellPanel) is disconnected here too: CellPanel emits sigCellStateChanged
+        from _onCellsDiscarded after removing the cell from its own registry,
+        so by the time this runs, cells() no longer reports it.
+        """
+        known = set()
+        for cell in self.cellPanel.cells():
+            cellId = id(cell)
+            known.add(cellId)
+            if cellId not in self._cellPositions:
+                position = getattr(cell, "initialPosition", None)
+                if position is not None:
+                    self._cellPositions[cellId] = (position[0], position[1])
+            signal = getattr(cell, "sigPositionChanged", None)
+            if signal is not None and cellId not in self._positionConnected:
+                signal.connect(self._onCellMoved)
+                self._positionConnected[cellId] = cell
+        for departed in set(self._cellPositions) - known:
+            del self._cellPositions[departed]
+        for departed in set(self._positionConnected) - known:
+            self._disconnectCellPosition(departed)
+
+    def _onCellMoved(self, position) -> None:
+        """Record a tracked cell's new position and redraw its marker.
+
+        The payload carries the position, so nothing here reads
+        Cell.position or the _positions dict behind it. Qt routes this from
+        the tracking worker onto the GUI thread by queued connection.
+        """
+        if self._tornDown:
+            return
+        cell = self.sender()
+        if cell is None:
+            return
+        self._cellPositions[id(cell)] = (position[0], position[1])
+        self._refreshProgress()
+
+    def _disconnectCellPosition(self, cellId) -> None:
+        cell = self._positionConnected.pop(cellId, None)
+        if cell is None:
+            return
+        Qt.disconnect(cell.sigPositionChanged, self._onCellMoved)
+
+    def _releaseCellPositionConnections(self) -> None:
+        """Sever every sigPositionChanged connection this window made."""
+        for cellId in list(self._positionConnected):
+            self._disconnectCellPosition(cellId)
+        self._cellPositions.clear()
+
+    def _colorContext(self) -> ColorContext:
+        """Everything the colour sources may read, gathered in one pass.
+
+        The slice-derived fields are None when there is no slice, which is
+        ordinary: cells can be seeded by hand before one exists.
+        """
+        cells = self.cellPanel.cells()
+        constraints = None if self.slice is None else self.slice.constraints
+        return ColorContext(
+            cellIds=[id(c) for c in cells],
+            positions=dict(self._cellPositions),
+            dispositions={id(c): self.cellPanel.disposition(c) for c in cells},
+            attempted={id(c) for c in cells if self.cellPanel.isAttempted(c)},
+            # getattr, not c.score, despite Task 1 declaring the attribute:
+            # CellPanel accepts anything as a cell -- its own tests seed plain
+            # object() rows -- so this window cannot assume every row's payload
+            # is a Cell. This is a deliberate departure from the spec's §5.1
+            # wording ("read cell.score plainly"), which was written about the
+            # cross-repo dependency rather than about the panel's stub-tolerance.
+            scores={id(c): getattr(c, "score", None) for c in cells},
+            fov=None if self.slice is None else self.slice.fov,
+            tileVolume=None if self.slice is None else self.slice.tileVolume(),
+            maxCellDensity=None if constraints is None else constraints.max_cell_density,
+            minHealth=None if constraints is None else constraints.min_health,
+        )
+
+    def _refreshProgress(self) -> None:
+        """Redraw Area 1's markers and legend from current state."""
+        if self._tornDown:
+            return
+        ctx = self._colorContext()
+        key = self.regionPanel.colorSource()
+        brushes = brushesFor(key, ctx)
+        self._progressOverlay.setMarkers([
+            Marker(
+                self._cellPositions[cellId][0],
+                self._cellPositions[cellId][1],
+                brushes[cellId],
+                cellId,
+            )
+            for cellId in ctx.cellIds
+            if cellId in self._cellPositions
+        ])
+        self.regionPanel.setLegend(legendFor(key, ctx))
+
+    def _onMarkerClicked(self, cellId) -> None:
+        """Select the clicked marker's cell in Area 5.
+
+        Resolves the id through the cell panel rather than holding cells here:
+        a marker drawn before a rescan can be clicked after it, and the panel
+        is the only thing that knows whether that cell still has a row.
+        """
+        if self._tornDown:
+            return
+        for cell in self.cellPanel.cells():
+            if id(cell) == cellId:
+                self.cellPanel.selectCell(cell)
+                return
+
+    def _onZoomToCell(self, cell) -> None:
+        """Frame Area 1 on `cell`, across the same 3x3 fields "Add region
+        here" seeds, so the two controls agree on what "around here" means."""
+        if self._tornDown:
+            return
+        position = self._cellPositions.get(id(cell))
+        if position is None or self.slice is None:
+            return
+        fovW, fovH = self.slice.fov
+        self.regionPanel.setViewport(position, (3 * fovW, 3 * fovH))
+
+    def _refreshCoverage(self) -> None:
+        """Shade the tiles still to be surveyed."""
+        if self._tornDown:
+            return
+        if self.slice is None:
+            self._progressOverlay.setCoverage([], (0.0, 0.0))
+            return
+        covered = set(self.slice.coveredTiles)
+        todo = [tile for tile in self.slice.tileGrid() if tile not in covered]
+        self._progressOverlay.setCoverage(todo, self.slice.fov)
+
     def _onRunStatus(self, status: str) -> None:
         """Refresh Area 2's survey readout when the run's status moves.
 
@@ -583,6 +773,8 @@ class AutopatchWindow(Qt.QWidget):
         """
         if status in ("surveying", "waiting"):
             self._refreshSurveyStats()
+            self._refreshCoverage()
+            self._refreshProgress()
 
     def _onTissueMoved(self, cell, ctx, reason: str) -> None:
         """ExecutionContext.tissue_moved, cell-bound by the context factory.
@@ -753,7 +945,9 @@ class AutopatchWindow(Qt.QWidget):
         Also releases Area 1's two mirrors, whose items and signal connection
         live in the *Camera* module's window and imaging control -- objects that
         outlive this window, and would otherwise be left holding graphics
-        belonging to a session that has ended.
+        belonging to a session that has ended. The same `finally` block also
+        severs the per-cell position connections this window made and releases
+        the progress overlay's own items and click connection.
 
         The mirrors are released *after* the orchestrator, not before, because
         stopping it means waiting on it with the Qt event loop still pumping
@@ -792,6 +986,8 @@ class AutopatchWindow(Qt.QWidget):
                 Qt.disconnect(self.manager.sigModulesChanged, self._onModulesChanged)
             self._pinnedFrameMirror.unbind()
             self._cameraMirror.clear()
+            self._releaseCellPositionConnections()
+            self._progressOverlay.release()
         self.statusPanel.unbindOrchestrator()
         self.cellPanel.unbindOrchestrator()
         self.cellPanel.clearCells()

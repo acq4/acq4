@@ -15,6 +15,12 @@ def qapp():
     return Qt.QApplication.instance() or Qt.QApplication([])
 
 
+def makePanel(**kwargs):
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    return CellPanel(**kwargs)
+
+
 class _FakeOrchestrator(Qt.QObject):
     sigCurrentCell = Qt.Signal(object)
     sigCellFinished = Qt.Signal(object, str)
@@ -488,6 +494,34 @@ def test_seeded_cell_announced_as_current_does_not_duplicate_its_row(qapp):
 
     assert panel.cellList.count() == 1
     assert panel.cellList.item(0).text() == f"cell {id(cell)} — running"
+
+
+def test_current_cell_for_an_already_seeded_cell_announces_a_state_change(qapp):
+    """The ordinary case -- a cell that already has a row, whether seeded by
+    hand or announced once before -- must still tell Area 1's progress
+    overlay to redraw when the orchestrator starts work on it. addCell()'s
+    own emit (inside _onCurrentCell's "no row yet" branch, exercised by the
+    test above) only ever fires for a cell with no row, so it cannot be what
+    this case relies on; _onCurrentCell must emit sigCellStateChanged itself.
+
+    panel.isAttempted(cell) must already read True by the time the signal
+    fires: a consumer (AutopatchWindow._onCellStateChanged) re-reads it from
+    inside its slot, the same ordering contract the sigCellStateChanged tests
+    near the bottom of this file pin for addCell()/_onCellFinished()/
+    _onCellsDiscarded()/_onReuseCheckedCells()."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    cell = object()
+    panel.addCell(cell)
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+    attemptedAtEmit = []
+    panel.sigCellStateChanged.connect(lambda: attemptedAtEmit.append(panel.isAttempted(cell)))
+
+    orch.sigCurrentCell.emit(cell)
+
+    assert attemptedAtEmit == [True]
 
 
 def test_announced_cell_is_not_enqueued_into_the_bound_orchestrator(qapp):
@@ -1406,3 +1440,155 @@ def test_clear_cells_forgets_a_remembered_pre_reuse_disposition(qapp):
     panel.clearCells()
 
     assert panel._preReuseStatus == {}
+
+
+def test_cells_reports_every_cell_the_panel_knows(qapp):
+    panel = makePanel()
+    first, second = object(), object()
+
+    panel.addCell(first)
+    panel.addCell(second)
+
+    assert panel.cells() == [first, second]
+
+
+def test_cells_includes_a_hand_added_cell_absent_from_any_slice(qapp):
+    """The overlay reads this, not Slice._cells, because registerCells() has
+    one production caller and hand-added cells never reach it. Reading the
+    slice instead would silently omit every "Add from target" cell.
+    """
+    panel = makePanel()
+    handAdded = object()
+
+    panel.addCell(handAdded)
+
+    assert handAdded in panel.cells()
+
+
+def test_adding_a_cell_announces_a_state_change(qapp):
+    """A consumer reacting to sigCellStateChanged re-reads panel.cells() from
+    inside its slot, so the cell must already be in that list by emit time.
+    Kills a mutation that moves addCell()'s emit to the very start of the
+    method, before the cell is recorded in self._cells."""
+    panel = makePanel()
+    cell = object()
+    snapshots = []
+    panel.sigCellStateChanged.connect(lambda: snapshots.append(panel.cells()))
+
+    panel.addCell(cell)
+
+    assert cell in snapshots[0]
+
+
+def test_a_finished_cell_announces_a_state_change(qapp):
+    """A consumer reacting to sigCellStateChanged re-reads
+    panel.disposition(cell) from inside its slot, so the disposition must
+    already be terminal by emit time. Kills a mutation that moves
+    _onCellFinished()'s emit before self._status[id(cell)] is set."""
+    panel = makePanel()
+    cell = object()
+    panel.addCell(cell)
+    dispositions = []
+    panel.sigCellStateChanged.connect(lambda: dispositions.append(panel.disposition(cell)))
+
+    panel._onCellFinished(cell, "done")
+
+    assert dispositions == ["done"]
+
+
+def test_discarding_a_cell_announces_it_after_the_row_is_gone(qapp):
+    """Pins the ordering a later consumer depends on: by the time
+    sigCellStateChanged fires for a discard, panel.cells() must already
+    exclude the discarded cell (while still including any other cell), or a
+    consumer reconciling from inside its slot would report a cell that is no
+    longer here. Kills a mutation that moves _onCellsDiscarded()'s emit
+    before the rows are removed."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    discarded, kept = object(), object()
+    panel.addCell(discarded)
+    panel.addCell(kept)
+    snapshots = []
+    panel.sigCellStateChanged.connect(lambda: snapshots.append(panel.cells()))
+
+    panel.discardCells([discarded])
+
+    assert snapshots == [[kept]]
+
+
+def test_reusing_a_checked_cell_announces_a_state_change(qapp):
+    """A consumer reacting to sigCellStateChanged re-reads
+    panel.disposition(cell) from inside its slot, so a reused cell's
+    disposition must already read as re-queued (None), not its old terminal
+    value, by emit time."""
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    cell = object()
+    panel.addCell(cell)
+    panel._onCellFinished(cell, "done")
+    panel.bindOrchestrator(_FakeOrchestrator())
+    panel._rows[id(cell)].setCheckState(Qt.Qt.Checked)
+    dispositions = []
+    panel.sigCellStateChanged.connect(lambda: dispositions.append(panel.disposition(cell)))
+
+    panel.reuseCheckedCellsBtn.click()
+
+    assert dispositions == [None]
+
+
+def test_select_cell_makes_that_row_current(qapp):
+    """selectCell must follow its argument and not just select the last row."""
+    panel = makePanel()
+    first, second, third = object(), object(), object()
+    panel.addCell(first)
+    panel.addCell(second)
+    panel.addCell(third)
+
+    # Make third the current row first (it's also the last-added)
+    panel.selectCell(third)
+
+    # Now select first, which is neither last-added nor currently-selected
+    panel.selectCell(first)
+
+    assert panel.cellList.currentItem().data(Qt.Qt.UserRole) is first
+
+
+def test_select_cell_ignores_a_cell_with_no_row(qapp):
+    """Area 1 can report a click for a cell the panel has already discarded.
+
+    Two halves, both required: a stale click must not raise out of a Qt slot,
+    and it must not silently move the operator's current selection either.
+    """
+    panel = makePanel()
+    known = object()
+    panel.addCell(known)
+    panel.selectCell(known)
+
+    panel.selectCell(object())
+
+    assert panel.cellList.currentItem().data(Qt.Qt.UserRole) is known
+
+
+def test_zoom_button_requests_the_selected_cell(qapp):
+    panel = makePanel()
+    cell = object()
+    panel.addCell(cell)
+    panel.selectCell(cell)
+    seen = []
+    panel.sigZoomToCellRequested.connect(seen.append)
+
+    panel.zoomToCellBtn.click()
+
+    assert seen == [cell]
+
+
+def test_zoom_button_does_nothing_with_no_selection(qapp):
+    panel = makePanel()
+    seen = []
+    panel.sigZoomToCellRequested.connect(seen.append)
+
+    panel.zoomToCellBtn.click()
+
+    assert seen == []

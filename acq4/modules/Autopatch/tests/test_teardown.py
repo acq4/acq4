@@ -390,3 +390,76 @@ def test_teardown_frees_everything_after_a_run_error(qapp, tmp_path):
         assert cellPanel_ref() is None, "CellPanel should be freed by refcounting alone"
     finally:
         gc.enable()
+
+
+def test_teardown_disconnects_every_cell_position_connection(qapp, tmp_path):
+    """Qt's own receivers() count, not merely that an object was collectable:
+    P2c-3a found a mandated mutation that did not fail because a nearby
+    `= None` had already broken the cycle refcounting could see.
+
+    Two cells, not one: a single connected cell cannot distinguish
+    "disconnects every connection" from "disconnects at least one" -- a
+    mutation that severed only the first cell it iterated over would still
+    pass a one-cell version of this test.
+    """
+    from acq4.modules.Autopatch.Autopatch import AutopatchWindow
+
+    from .test_window_integration import _makeCellAt
+
+    _write_protocol(tmp_path, "demo.py", _NOOP_PROTOCOL)
+
+    win = AutopatchWindow(
+        module=None,
+        protocolDir=str(tmp_path),
+        pipetteSelector=_FakePipetteSelector(target=(1e-3, 2e-3, 3e-3)),
+        cameraSelector=_FakeCameraSelector(),
+    )
+    win.protocolPanel.fileCombo.setCurrentText("demo")
+
+    first = _makeCellAt(1.0e-3, 2.0e-3, -30e-6)
+    second = _makeCellAt(1.4e-3, 2.1e-3, -30e-6)
+    win.cellPanel.addCell(first)
+    win.cellPanel.addCell(second)
+    assert first.receivers(first.sigPositionChanged) == 1
+    assert second.receivers(second.sigPositionChanged) == 1
+
+    win.teardown()
+
+    assert first.receivers(first.sigPositionChanged) == 0
+    assert second.receivers(second.sigPositionChanged) == 0
+    assert win._positionConnected == {}
+    assert win._cellPositions == {}
+
+    win.close()
+
+
+def test_teardown_releases_the_progress_overlay(qapp, tmp_path):
+    """Qt's own receivers() count, not merely that an object was collectable:
+    P2c-3a found a mandated mutation that did not fail because a nearby
+    `= None` had already broken the cycle refcounting could see (see the
+    cell-position test above). ProgressOverlay.release() disconnects
+    scatter.sigClicked from the overlay's own _onScatterClicked -- a
+    self-connection that is exactly that kind of reference cycle -- and takes
+    the scatter back out of Area 1's view."""
+    from acq4.modules.Autopatch.Autopatch import AutopatchWindow
+
+    _write_protocol(tmp_path, "demo.py", _NOOP_PROTOCOL)
+
+    win = AutopatchWindow(
+        module=None,
+        protocolDir=str(tmp_path),
+        pipetteSelector=_FakePipetteSelector(target=(1e-3, 2e-3, 3e-3)),
+        cameraSelector=_FakeCameraSelector(),
+    )
+    win.protocolPanel.fileCombo.setCurrentText("demo")
+
+    scatter = win._progressOverlay.scatter
+    assert scatter.receivers(scatter.sigClicked) == 1
+    assert scatter in win.regionPanel.view.addedItems
+
+    win.teardown()
+
+    assert scatter.receivers(scatter.sigClicked) == 0
+    assert scatter not in win.regionPanel.view.addedItems
+
+    win.close()
