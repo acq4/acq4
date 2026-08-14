@@ -128,15 +128,18 @@ class DoverMoveFuture(MoveFuture):
 
     def _future_finished(self, req_fut):
         # External producer: the driver request's completion callback completes
-        # this promise. Honor a stop already requested on this future.
-        if self.is_stopped:
-            return
-        error = req_fut.error._get_value()
-        if error is not None:
-            excInfo = req_fut.exc_info._get_value()
-            if excInfo is not None and excInfo[1] is not None:
-                self.fail(excInfo[1])
+        # this promise. Honor a stop already requested on this future. The callback
+        # fires on a driver thread with no context of its own, so run under this
+        # move's throughline to keep completion attached to the requesting operation.
+        with self.throughlineContext():
+            if self.is_stopped:
+                return
+            error = req_fut.error._get_value()
+            if error is not None:
+                excInfo = req_fut.exc_info._get_value()
+                if excInfo is not None and excInfo[1] is not None:
+                    self.fail(excInfo[1])
+                else:
+                    self.fail(RuntimeError(str(error)))
             else:
-                self.fail(RuntimeError(str(error)))
-        else:
-            self.resolve(None)
+                self.resolve(None)

@@ -134,7 +134,10 @@ class MotionPlanner:
 def _move_device(device, position, speed, name, kwargs):
     """Call the appropriate movement primitive on a device."""
     if hasattr(device, "moveToGlobalNoPlanning"):
-        with throughline(name=f"moving {device} to '{name}'"):
+        # Name the device only. The plan step's own name reaches the throughline via the
+        # MoveFuture this creates, so repeating it here would say it twice; and when a
+        # step has no explanation, "moving X to ''" said nothing at all.
+        with throughline(name=f"moving {device.name()}"):
             device.logger.debug(f"Starting move to {position}")
             return device.moveToGlobalNoPlanning(position, speed, name=name, **kwargs)
     raise RuntimeError(f"Device {device!r} has no moveToGlobalNoPlanning method")

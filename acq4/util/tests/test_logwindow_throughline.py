@@ -37,3 +37,31 @@ def test_task_column_falls_back_to_taskname(qapp):
     rec = _record(throughline=(), taskName="legacy-task")
     text = model._get_column_text(rec, LogColumns.TASK)
     assert text == "legacy-task"
+
+
+def test_qt_log_handler_applies_its_filters(qapp):
+    """The Qt handler feeding the log window runs its filters before delivering a record.
+
+    The Task column reads record.throughline, which the throughline filter attaches.
+    A handler that skips filters shows a blank Task column for every record it is the
+    first (or only) handler to see.
+    """
+    import logging
+
+    from gentletask import throughline
+    from teleprox.log.logviewer.viewer import QtLogHandler
+
+    from acq4.logging_config import add_throughline_filter
+
+    handler = QtLogHandler()
+    add_throughline_filter(handler)
+
+    delivered = []
+    handler.new_record.connect(delivered.append)
+
+    record = logging.LogRecord("acq4.probe", logging.DEBUG, __file__, 1, "hi", None, None)
+    with throughline(name="cleaning pipette"):
+        handler.handle(record)
+
+    assert len(delivered) == 1
+    assert delivered[0].throughline == ("cleaning pipette",)

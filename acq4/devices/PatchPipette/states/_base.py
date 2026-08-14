@@ -572,10 +572,15 @@ class SteadyStateAnalysisBase(object):
 
 
 def exponential_decay_avg(dt, prev_avg, value, tau):
-    """Compute exponential decay average and ratio of new average to previous average."""
+    """Compute exponential decay average and ratio of new average to previous average.
+
+    The ratio is reported as 0 when there is nothing to compare against: either no previous
+    average yet, or a previous average of zero, from which any change is unbounded. Series that
+    legitimately rest at zero (membrane capacitance while a seal is intact) rely on this.
+    """
     if prev_avg is None:
         return value, 0
     alpha = 1 - np.exp(-dt / tau)
     avg = prev_avg * (1 - alpha) + value * alpha
-    ratio = avg / prev_avg
+    ratio = 0 if prev_avg == 0 else avg / prev_avg
     return avg, ratio

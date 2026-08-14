@@ -24,7 +24,7 @@ from ...util.geometry import (
     load_transform,
     minimum_displacement_inverse_kinematics,
 )
-from ...util.task import ManualQtFriendlyTask, Stopped, FutureButton
+from ...util.task import ManualQtFriendlyTask, Stopped, FutureButton, throughline
 
 
 class Stage(Device, OptomechDevice):
@@ -645,7 +645,7 @@ class Stage(Device, OptomechDevice):
         homePos = self.homePosition()
         if homePos is None:
             raise RuntimeError(f"No home position set for {self.name()}")
-        return self.dm.move(MoveSpec(self, homePos, speed=speed))
+        return self.dm.move(MoveSpec(self, homePos, speed=speed), name=f"move {self.name()} to home")
 
     def setHomePosition(self):
         """Set the home position in global coordinates."""
@@ -723,12 +723,42 @@ class MoveFuture(ManualQtFriendlyTask):
         if name is None:
             name = f"{dev.name()} move"
         ManualQtFriendlyTask.__init__(self, name=name)
+        # A ManualTask has no body, so it never enters task_context and never puts its
+        # own name on the throughline; and the producer threads that drive it are raw
+        # threads, which start with an empty context. Capture the requesting context
+        # here (plus this move's name) so producers can re-establish it via
+        # throughlineContext() and everything logged during the move stays attached to
+        # the operation that asked for it.
+        self._throughlineFrames = throughline.frames() + ({"name": name},)
         self.startTime = ptime.time()
         self.dev = dev
         self.speed = speed
         self.targetPos = np.asarray(pos)
         self.startPos = np.asarray(dev.getPosition())
         self._isStopCallable = CallOnce()
+
+    def throughlineContext(self):
+        """Re-establish the throughline this move was requested under.
+
+        Producer threads (a per-move monitor, or a stage's lifetime monitor thread
+        handling this move) wrap the work that drives this move in this, so their log
+        records carry the requesting operation's chain and this move's name.
+        """
+        return throughline.restore(self._throughlineFrames)
+
+    def producerThread(self, target, name) -> threading.Thread:
+        """Return an unstarted daemon thread running *target* under this move's throughline.
+
+        The preferred way for a device subclass to spawn a per-move monitor thread:
+        a raw thread would start with an empty context and orphan everything it logs
+        from the operation that requested the move.
+        """
+
+        def run():
+            with self.throughlineContext():
+                target()
+
+        return threading.Thread(target=run, daemon=True, name=name)
 
     def percentDone(self):
         """Return the percent of the move that has completed.
@@ -803,7 +833,7 @@ class MovePathFuture(MoveFuture):
                     f"Cannot move {dev.name()} to path step {i}/{len(self.path)}: {step}"
                 ) from exc
 
-        self._moveThread = threading.Thread(target=self._movePath, name=f'{dev.name()} : {name}')
+        self._moveThread = self.producerThread(self._movePath, name=f'{dev.name()} : {name}')
         self._moveThread.start()
 
     def percentDone(self):
@@ -828,13 +858,15 @@ class MovePathFuture(MoveFuture):
     def _movePath(self):
         # Producer thread for this externally-completed promise. It is a raw
         # thread (not a gentletask task), so it honors our stop by polling
-        # self.is_stopped rather than using check_stop().
+        # self.is_stopped rather than using check_stop(). It runs under this path's
+        # throughline (see producerThread), which also puts each step's move under
+        # this path, since the step futures are constructed on this thread.
         try:
             for i, step in enumerate(self.path):
                 step = step.copy()
                 explanation = step.pop('explanation', 'unnamed')
                 fut = self.dev.move(
-                    **step, name=f'{self.name} step {i+1}/{len(self.path)}: {explanation}'
+                    **step, name=f'{self._name} step {i+1}/{len(self.path)}: {explanation}'
                 )
                 fut._pathStep = i
                 self._currentFuture = fut
@@ -878,7 +910,7 @@ class MovePathFuture(MoveFuture):
             step['position'] = fwdPath[i]['position']
             step['explanation'] = f"undo {step.get('explanation')}"
             revPath.append(step)
-        return self.dev.movePath(revPath, name=f"undo {self.name}")
+        return self.dev.movePath(revPath, name=f"undo {self._name}")
 
 
 class StageInterface(Qt.QWidget):

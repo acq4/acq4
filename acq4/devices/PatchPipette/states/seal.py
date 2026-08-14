@@ -28,6 +28,9 @@ class SealAnalysis(SteadyStateAnalysisBase):
         failure_tau,
         failure_resistance_threshold,
         failure_dRdt_threshold,
+        break_in_tau,
+        break_in_capacitance_threshold,
+        break_in_resistance_ceiling,
     ):
         return {'Ω': [
             pg.InfiniteLine(movable=False, pos=success_at, angle=0, pen=pg.mkPen('g')),
@@ -65,6 +68,13 @@ class SealAnalysis(SteadyStateAnalysisBase):
                 pen=pg.mkPen('r'),
                 name=None if labels else 'Seal Failure',
             ))
+            plots[''].append(dict(
+                x=analysis["time"],
+                y=plottable_booleans(analysis["break_in"]),
+                symbol='t',
+                pen=pg.mkPen('y'),
+                name=None if labels else 'Spontaneous Break-in',
+            ))
             labels = True
         return plots
 
@@ -77,6 +87,9 @@ class SealAnalysis(SteadyStateAnalysisBase):
         failure_tau,
         failure_resistance_threshold,
         failure_dRdt_threshold,
+        break_in_tau,
+        break_in_capacitance_threshold,
+        break_in_resistance_ceiling,
     ):
         super().__init__()
         self._success_tau = success_tau
@@ -86,25 +99,49 @@ class SealAnalysis(SteadyStateAnalysisBase):
         self._failure_tau = failure_tau
         self._failure_resistance_threshold = failure_resistance_threshold
         self._failure_dRdt_threshold = failure_dRdt_threshold
+        self._break_in_tau = break_in_tau
+        self._break_in_capacitance_threshold = break_in_capacitance_threshold
+        self._break_in_resistance_ceiling = break_in_resistance_ceiling
+
+    def process_test_pulses(self, tps) -> np.ndarray:
+        # The base implementation reads resistance only; break-in detection also needs the
+        # membrane capacitance, so the measurement rows carry a third column here.
+        return self.process_measurements(np.array([
+            (
+                tp.recording.start_time,
+                tp.analysis['steady_state_resistance'],
+                tp.analysis['capacitance'],
+            )
+            for tp in tps
+        ]))
 
     def process_measurements(self, measurements: np.ndarray) -> np.ndarray:
         ret_array = np.zeros(measurements.shape[0], dtype=[
             ('time', float),
             ('steady_state_resistance', float),
+            ('capacitance', float),
             ('resistance_avg_for_success', float),
             ('resistance_avg_for_hold', float),
             ('resistance_avg_for_failure', float),
+            ('capacitance_avg_for_break_in', float),
             ('dRdt_for_failure', float),
             ('success', bool),
             ('failure', bool),
             ('hold', bool),
+            ('break_in', bool),
         ])
         for i, m in enumerate(measurements):
-            t, resistance = m
+            t, resistance, capacitance = m
+            # A test pulse with no membrane transient to fit reports NaN rather than zero. That
+            # is the normal reading for an intact seal, so it counts as "no capacitance" here;
+            # letting it into the average would poison it permanently and silently disable
+            # break-in detection for the rest of the state.
+            capacitance_for_avg = 0.0 if np.isnan(capacitance) else capacitance
             if self._last_measurement is None:
                 resistance_avg_for_success = resistance
                 resistance_avg_for_hold = resistance
                 resistance_avg_for_failure = resistance
+                capacitance_avg_for_break_in = capacitance_for_avg
                 # give it a while to settle
                 dRdt_for_failure = self._failure_dRdt_threshold * 10 * self._failure_tau
             else:
@@ -115,6 +152,12 @@ class SealAnalysis(SteadyStateAnalysisBase):
                     dt, self._last_measurement['resistance_avg_for_hold'], resistance, self._hold_tau)
                 resistance_avg_for_failure, _ = exponential_decay_avg(
                     dt, self._last_measurement['resistance_avg_for_failure'], resistance, self._failure_tau)
+                capacitance_avg_for_break_in, _ = exponential_decay_avg(
+                    dt,
+                    self._last_measurement['capacitance_avg_for_break_in'],
+                    capacitance_for_avg,
+                    self._break_in_tau,
+                )
                 dRdt = (resistance - self._last_measurement['steady_state_resistance']) / dt
                 dRdt_for_failure, _ = exponential_decay_avg(
                     dt, self._last_measurement['dRdt_for_failure'], dRdt, self._failure_tau)
@@ -124,16 +167,26 @@ class SealAnalysis(SteadyStateAnalysisBase):
                 resistance_avg_for_failure < self._failure_resistance_threshold
                 and dRdt_for_failure < self._failure_dRdt_threshold
             )
+            # Membrane capacitance sustained while the resistance sits below a sealed pipette's
+            # means the cell ruptured into whole-cell on its own. Above the ceiling the pipette
+            # is sealed rather than broken in, and *success* is the right answer instead.
+            break_in = (
+                capacitance_avg_for_break_in > self._break_in_capacitance_threshold
+                and resistance < self._break_in_resistance_ceiling
+            )
             ret_array[i] = (
                 t,
                 resistance,
+                capacitance,
                 resistance_avg_for_success,
                 resistance_avg_for_hold,
                 resistance_avg_for_failure,
+                capacitance_avg_for_break_in,
                 dRdt_for_failure,
                 success,
                 failure,
                 hold,
+                break_in,
             )
             self._last_measurement = ret_array[i]
 
@@ -147,6 +200,9 @@ class SealAnalysis(SteadyStateAnalysisBase):
 
     def hold(self):
         return self._last_measurement and self._last_measurement['hold']
+
+    def break_in(self):
+        return self._last_measurement is not None and self._last_measurement['break_in']
 
 
 def find_optimal_pressure(pressures, resistances) -> float:
@@ -198,8 +254,19 @@ class SealState(PatchPipetteState):
         transitions to the 'cell attached' state.  Default 1e9
     breakInThreshold : float
         Capacitance (Farads) above which the pipette is considered to be whole-cell and
-        transitions to the 'break in' state (in case of partial break-in, we don't want to transition
-        directly to 'whole cell' state).
+        transitions to *spontaneousBreakInState* (in case of partial break-in, we don't want to
+        transition directly to 'whole cell' state). Only applies while the resistance is below
+        *sealThreshold*; above that the pipette is sealed rather than broken in. Default 10pF.
+    breakInMonitorTau : float
+        Time constant (seconds) for exponential averaging of capacitance measurements when
+        determining whether the cell has spontaneously broken in. Test pulses report NaN
+        capacitance when there is no membrane transient to fit, which is counted as zero here, so
+        this constant sets how long a real capacitance must persist before it is believed.
+        Default 3s.
+    spontaneousBreakInState : str
+        Name of state to transition to when the membrane breaks in spontaneously during sealing.
+        Default is 'break in' so that partial break-ins will be completed. Consider 'whole cell'
+        to avoid the break-in protocol.
     failureResistanceThreshold : float
         If the resistance hangs out for too long (*failureTau*) below this value (Ωs) without growing faster than
         *failureDRDTThreshold*, the seal is considered a failure. Default 100MΩ.
@@ -258,6 +325,8 @@ class SealState(PatchPipetteState):
         'successMonitorTau': {'type': 'float', 'default': 1, 'suffix': 's'},
         'holdMonitorTau': {'type': 'float', 'default': 0.1, 'suffix': 's'},
         'failureTau': {'type': 'float', 'default': 10, 'suffix': 's'},
+        'breakInMonitorTau': {'type': 'float', 'default': 3.0, 'suffix': 's'},
+        'spontaneousBreakInState': {'type': 'str', 'default': 'break in'},
         'delayBeforePressure': {'type': 'float', 'default': 0.0, 'suffix': 's'},
         'delayAfterSeal': {'type': 'float', 'default': 5.0, 'suffix': 's'},
         'afterSealPressure': {'type': 'float', 'default': -1e3, 'suffix': 'Pa'},
@@ -269,6 +338,8 @@ class SealState(PatchPipetteState):
 
     def __init__(self, dev, config):
         super().__init__(dev, config)
+        # self.config, not the argument: the base class merged the argument over the defaults.
+        config = self.config
         self._analysis = SealAnalysis(
             success_tau=config['successMonitorTau'],
             success_at=config['sealThreshold'],
@@ -277,6 +348,9 @@ class SealState(PatchPipetteState):
             failure_tau=config['failureTau'],
             failure_resistance_threshold=config['failureResistanceThreshold'],
             failure_dRdt_threshold=config['failureDRDTThreshold'],
+            break_in_tau=config['breakInMonitorTau'],
+            break_in_capacitance_threshold=config['breakInThreshold'],
+            break_in_resistance_ceiling=config['sealThreshold'],
         )
         self._initialized = False
         self._patchrec = dev.patchRecord()
@@ -337,6 +411,15 @@ class SealState(PatchPipetteState):
                 self.setState(f'enable holding potential {config["holdingPotential"] * 1000:0.1f} mV')
                 dev.clampDevice.setHolding(mode="VC", value=config['holdingPotential'])
                 holdingSet = True
+
+            # Checked before success and outside the pressure-mode branch: a cell that ruptured
+            # on its own will never reach the seal threshold, and in 'user' mode there is no
+            # timeout to fall back on, so missing this leaves suction on a whole-cell.
+            if self._analysis.break_in():
+                self.setState('spontaneous break-in detected during seal')
+                self._patchrec['spontaneousBreakin'] = True
+                self._patchrec['sealSuccessful'] = True
+                return {"state": config['spontaneousBreakInState']}
 
             if self._analysis.success():
                 break

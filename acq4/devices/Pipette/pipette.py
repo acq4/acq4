@@ -222,7 +222,10 @@ class Pipette(Device, OptomechDevice):
             saved_pos = self.loadPosition(position)
             if saved_pos is None:
                 raise ValueError(f"Unknown pipette move position {position!r}")
-            future = self.dm.move(MoveSpec(self, np.asarray(saved_pos, dtype=float), speed=speed))
+            future = self.dm.move(
+                MoveSpec(self, np.asarray(saved_pos, dtype=float), speed=speed),
+                name=f"move {self.name()} to {position}",
+            )
 
         if raiseErrors is not False:
             raise_errors(
@@ -534,7 +537,10 @@ class Pipette(Device, OptomechDevice):
         Always routes through the global motion planner so that any
         post-interaction cleanup steps are included when needed.
         """
-        return self.dm.move(MoveSpec(self, self.homePosition(), speed=speed))
+        return self.dm.move(
+            MoveSpec(self, self.homePosition(), speed=speed),
+            name=f"move {self.name()} to home",
+        )
 
     def homePosition(self) -> ndarray[Any, dtype[Any]]:
         manipulator = self.parentDevice()
@@ -566,16 +572,23 @@ class Pipette(Device, OptomechDevice):
         return self.dm.move(
             MoveSpec(scope, scope_pos, speed=speed),
             MoveSpec(self, target, speed=speed),
+            name=f"move {self.name()} to search",
         )
 
     def goApproach(self, speed, **kwds):
         """Move the tip to approach depth above the target, aligned along the pipette axis."""
         approach_pos = self.positionAtDepth(self.approachDepth(), start=self.targetPosition())
-        return self.dm.move(MoveSpec(self, approach_pos, speed=speed))
+        return self.dm.move(
+            MoveSpec(self, approach_pos, speed=speed),
+            name=f"move {self.name()} to approach",
+        )
 
     def goTarget(self, speed, **kwds):
         """Move the tip to the current target position."""
-        return self.dm.move(MoveSpec(self, self.targetPosition(), speed=speed))
+        return self.dm.move(
+            MoveSpec(self, self.targetPosition(), speed=speed),
+            name=f"move {self.name()} to target",
+        )
 
     @asynch
     def goAboveTarget(self, speed, **kwds):
@@ -596,8 +609,12 @@ class Pipette(Device, OptomechDevice):
         self.dm.move(
             MoveSpec(self, hysteresis_wp, speed=speed),
             MoveSpec(scope, above_target, speed=speed),
+            name=f"move {self.name()} to hysteresis waypoint above target",
         ).wait()
-        self.dm.move(MoveSpec(self, above_target, speed=speed)).wait()
+        self.dm.move(
+            MoveSpec(self, above_target, speed=speed),
+            name=f"move {self.name()} to above target",
+        ).wait()
 
     def _movePath(self, path, name=None) -> MovePathFuture:
         """

@@ -286,20 +286,20 @@ class SensapexMoveFuture(MoveFuture):
         if self.speed >= 1e-6:
             if self.dev.nAxes == 4:
                 # we have to break up the movement because D is always separate from Z
-                self._monitorThread = threading.Thread(
-                    target=self._4AxisMove, daemon=True, name=f"{name} sensapex 4-axis move"
+                self._monitorThread = self.producerThread(
+                    self._4AxisMove, name=f"{name} sensapex 4-axis move"
                 )
             else:
                 self._moveReq = self.dev.dev.goto_pos(
                     pos, self.speed * 1e6, simultaneous=linear, linear=linear, max_attempts=self.max_attempts
                 )
-                self._monitorThread = threading.Thread(
-                    target=self._watchForFinish, daemon=True, name=f"{name} sensapex monitor"
+                self._monitorThread = self.producerThread(
+                    self._watchForFinish, name=f"{name} sensapex monitor"
                 )
         else:
             # uMp has trouble with very slow speeds, so we do this manually by looping over small steps
-            self._monitorThread = threading.Thread(
-                target=self._stepwiseMove, daemon=True, name=f"{name} sensapex stepwise move"
+            self._monitorThread = self.producerThread(
+                self._stepwiseMove, name=f"{name} sensapex stepwise move"
             )
         self._monitorThread.start()
 

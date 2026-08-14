@@ -140,15 +140,19 @@ class NewScaleMoveFuture(MoveFuture):
         # per axis via isMoving(); resolve once no axis is still moving (mirrors
         # the driver's own wait(), but checks all three axes). Previously this
         # future was never completed.
-        if self.is_stopped or self.is_done:
-            return
-        with self.dev.lock:
-            moving = False
-            for ax in ('x', 'y', 'z'):
-                self.dev.dev.selectAxis(ax)
-                if self.dev.dev.isMoving():
-                    moving = True
-                    break
-        if not moving:
-            self.resolve(None)
+        # Runs under this move's throughline: the monitor thread has no context of
+        # its own, so completion would otherwise be orphaned from the requesting
+        # operation.
+        with self.throughlineContext():
+            if self.is_stopped or self.is_done:
+                return
+            with self.dev.lock:
+                moving = False
+                for ax in ('x', 'y', 'z'):
+                    self.dev.dev.selectAxis(ax)
+                    if self.dev.dev.isMoving():
+                        moving = True
+                        break
+            if not moving:
+                self.resolve(None)
 

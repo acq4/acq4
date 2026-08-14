@@ -233,7 +233,10 @@ def findNewPipette(pipette: Pipette, imager: Camera, scopeDevice, searchSpeed=0.
         pipY /= np.linalg.norm(pipY)
         searchPos1 = center + pipVector * 1e-3 + pipY * 1e-3
         searchPos2 = center + pipVector * 1e-3 - pipY * 1e-3
-        getManager().move(MoveSpec(pipette, searchPos1, speed='fast')).wait()
+        getManager().move(
+            MoveSpec(pipette, searchPos1, speed='fast'),
+            name=f"move {pipette.name()} to tip-detection search position",
+        ).wait()
 
         # collect background images, analyze noise
         with imager.ensureRunning():
