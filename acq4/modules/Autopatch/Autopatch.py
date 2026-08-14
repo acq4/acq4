@@ -172,9 +172,6 @@ class AutopatchWindow(Qt.QWidget):
         # on the orchestrator's worker thread and must not read a selector.
         self._cachedCamera = None
         self._cachedScope = None
-        # Whether Area 3's instruction band is currently carrying a message this
-        # window's Area 1 handlers put there -- see _setRegionInstruction().
-        self._regionInstruction = False
         self._tornDown = False
         self.protocolPanel.sigProtocolLoaded.connect(self._onProtocolLoaded)
         # Area 4 (the protocol picker/Reload) must not be usable while a
@@ -190,15 +187,6 @@ class AutopatchWindow(Qt.QWidget):
         self.regionPanel.sigAddRegionRequested.connect(self.addRegionHere)
         self.regionPanel.sigRegionsChanged.connect(self._onRegionsEdited)
         self.regionPanel.mirrorCheck.toggled.connect(self._onMirrorToggled)
-        if self.manager is not None:
-            # Both Area 1 mirrors resolve the Camera module through
-            # _cameraModuleWindow, which reports None while that module is not
-            # open -- so a mirror armed before the operator opens it binds to
-            # nothing. Manager announces every module load and quit here, which
-            # is the one event that can change that answer. Disconnected in
-            # teardown(); a window built with no module (the headless/test mode)
-            # has no manager to listen to.
-            self.manager.sigModulesChanged.connect(self._onModulesChanged)
         self.searchPanel.sigConstraintsChanged.connect(self._onConstraintsChanged)
         self.statusPanel.sigInteractionLocked.connect(
             self.searchPanel.setInteractionLocked
@@ -275,45 +263,8 @@ class AutopatchWindow(Qt.QWidget):
         return self._cameraModuleWindow(self.manager)
 
     def _onMirrorToggled(self, enabled: bool) -> None:
-        """Turn the outline mirror on or off, saying so if there is nowhere to
-        draw.
-
-        A tick with no Camera module open is otherwise a silent no-op: the
-        checkbox stays ticked, nothing appears anywhere, and nothing
-        distinguishes that from a mirror that is broken. The message is
-        accurate about what happens next -- _onModulesChanged() re-runs this
-        handler when a module is opened, so the outlines really do appear then.
-        """
+        """Turn the outline mirror on or off."""
         self._cameraMirror.setEnabled(enabled)
-        if enabled and self._cameraWindow() is None:
-            self._setRegionInstruction(
-                "Mirror to Camera: no Camera module is open. The outlines will "
-                "appear if one is opened."
-            )
-        else:
-            self._setRegionInstruction("")
-
-    def _onModulesChanged(self) -> None:
-        """Re-resolve Area 1's two mirrors against the modules now loaded.
-
-        Both of them find the Camera module once and keep the answer: the
-        outline mirror at the moment the checkbox is ticked, the pinned-frame
-        mirror at the moment a slice starts. Either can happen before the
-        Camera module is open, and Manager emits this whenever that changes.
-
-        Refuses once the window is torn down. teardown() waits on the
-        orchestrator with the Qt event loop still pumping, so a module loaded in
-        those seconds is announced while teardown is in progress, and re-binding
-        then would leave the Camera module holding a closed session's graphics.
-        """
-        if self._tornDown:
-            return
-        # Re-runs the checkbox's own handler, which redraws the outlines against
-        # whatever window there is now and raises or retracts its message.
-        self._onMirrorToggled(self.regionPanel.mirrorCheck.isChecked())
-        camera = self.cameraSelector.getSelectedObj()
-        if self.slice is not None and camera is not None:
-            self._bindPinnedFrames(camera)
 
     def _onRegionsEdited(self, regions) -> None:
         """Take Area 1's edited region list as the slice's regions.
@@ -354,21 +305,11 @@ class AutopatchWindow(Qt.QWidget):
         self._refreshSurveyStats()
 
     def _setRegionInstruction(self, text: str) -> None:
-        """Put Area 1's guidance in Area 3's band, or retract what it last put
-        there.
+        """Put Area 1's guidance in Area 3's band, or retract it.
 
         Area 1 has one guidance slot: a later message replaces an earlier one.
-        Whether this window is currently using that slot is tracked rather than
-        written straight through, because newSlice() writes into the same band
-        for its own reason -- an unchosen storage directory -- and clearing
-        Area 1's message must not erase guidance whose condition still holds.
         """
-        if text:
-            self._regionInstruction = True
-            self.statusPanel.setInstruction(text)
-        elif self._regionInstruction:
-            self._regionInstruction = False
-            self.statusPanel.clearInstruction()
+        self.statusPanel.setInstruction(text)
 
     def _canStartSlice(self) -> bool:
         """Whether a slice can be started right now, reporting the reason
@@ -505,11 +446,6 @@ class AutopatchWindow(Qt.QWidget):
             # Narrowed to HelpfulException so a genuine programming error (a
             # missing manager, say) propagates instead of being reported as
             # storage guidance.
-            #
-            # The band is this handler's now, not Area 1's, so a later region
-            # edit must not treat retracting its own message as licence to
-            # retract this one (see _setRegionInstruction).
-            self._regionInstruction = False
             self.statusPanel.setInstruction(str(exc))
             return
         if not self._startSlice(dirHandle=dirHandle):
@@ -522,7 +458,6 @@ class AutopatchWindow(Qt.QWidget):
         self.statusPanel.clearError()
         # Whichever handler filled the band, what it was about went with the
         # tissue just discarded.
-        self._regionInstruction = False
         self.statusPanel.clearInstruction()
         if self.orchestrator is not None:
             # Detached before the queue is cleared, not after: a refill still
@@ -974,16 +909,6 @@ class AutopatchWindow(Qt.QWidget):
             # this window: a raise while stopping the orchestrator would
             # otherwise leave the Camera module holding this session's outlines
             # and its imaging control still connected to a dead mirror.
-            #
-            # The manager goes first, and for the same reason the mirrors go
-            # last: the manager outlives this window, so a connection left on it
-            # would go on calling this window's handler at every later module
-            # load or quit, re-arming the mirrors the next two lines release.
-            # Dropping it here closes that off for good; anything announced
-            # during the wait above was already refused by _onModulesChanged's
-            # own torn-down check.
-            if self.manager is not None:
-                Qt.disconnect(self.manager.sigModulesChanged, self._onModulesChanged)
             self._pinnedFrameMirror.unbind()
             self._cameraMirror.clear()
             self._releaseCellPositionConnections()
