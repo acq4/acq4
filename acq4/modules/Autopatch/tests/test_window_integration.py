@@ -155,6 +155,16 @@ class _FakeCameraWithDevice(Qt.QWidget):
         return self.camera
 
 
+class _FakePinnedFrameSource(Qt.QObject):
+    """Stands in for the Camera module's ImagingCtrl."""
+
+    sigPinnedFramesChanged = Qt.Signal()
+
+    def __init__(self):
+        super().__init__()
+        self.pinnedFrames = []
+
+
 # The one folder type newSlice() asks create_data_dir for. A real Manager's
 # config carries many more, but this window only ever creates a "Slice".
 _FOLDER_TYPES = {"Slice": {"name": "Slice_%Y%m%d_%H%M%S", "experimentalUnit": False}}
@@ -165,6 +175,10 @@ class _FakeManager(Qt.QObject):
     create_data_dir's mkdir/setInfo calls land on an actual directory, the way
     they would through the real Manager AutopatchWindow otherwise gets from
     its module.
+
+    Offers a Camera module by default, because the Autopatch module opens one
+    at startup and everything in Area 1 is written to assume it. A fake that
+    reported none would stand for a state production rules out.
 
     A QObject carrying sigModulesChanged, because the real Manager is one and
     emits that signal whenever a module is loaded or quits -- which is how
@@ -177,6 +191,23 @@ class _FakeManager(Qt.QObject):
     def __init__(self, root_dir):
         super().__init__()
         self._current_dir = root_dir
+        self.drawn = []
+        self.pinnedFrameSource = _FakePinnedFrameSource()
+        self.cameraWindow = SimpleNamespace(
+            getInterfaceForDevice=lambda name: SimpleNamespace(
+                imagingCtrl=self.pinnedFrameSource
+            ),
+            addItem=lambda item, **kwds: self.drawn.append(item),
+            removeItem=self.drawn.remove,
+        )
+
+    def listModules(self):
+        return ["Camera", "Data Manager"]
+
+    def getModule(self, name):
+        if name != "Camera":
+            raise KeyError(name)
+        return SimpleNamespace(window=lambda: self.cameraWindow)
 
     def getCurrentDir(self):
         return self._current_dir
@@ -1768,17 +1799,6 @@ def test_a_region_edit_while_paused_still_reaches_the_slice(win):
     assert win.slice.regions == [edited]
 
 
-class _FakePinnedFrameSource(Qt.QObject):
-    """Stands in for the Camera module's ImagingCtrl: the pinned-frame list and
-    the signal Area 1 mirrors it through."""
-
-    sigPinnedFramesChanged = Qt.Signal()
-
-    def __init__(self):
-        super().__init__()
-        self.pinnedFrames = []
-
-
 def _withPinnedFrameSource(win, hasInterface=True):
     """Point `win` at a Camera window offering one imaging control, and return
     the control it would bind to."""
@@ -2009,6 +2029,16 @@ def test_the_camera_window_getter_does_not_load_the_camera_module(win):
     assert loaded == []
 
 
+def test_the_default_fake_manager_offers_a_camera_module(win):
+    # Production guarantees a Camera module: the Autopatch module opens one at
+    # startup. A fake that reports none does not reproduce production, and the
+    # None-returning path it stands for is deleted in this branch.
+    window = win._cameraWindow()
+
+    assert window is not None
+    assert window.getInterfaceForDevice("cam").imagingCtrl is not None
+
+
 # 200 x 150 fields of the fake camera's 12 x 8 um ROI: 30,000 tiles, past the
 # 20,000-tile cap. Asymmetric in both axes and at a realistic stage coordinate,
 # so a guard that read one axis twice would be caught.
@@ -2189,6 +2219,9 @@ def test_outlines_appear_when_the_camera_module_is_opened_after_the_tick(win):
     precede the module being open, and nothing retried. On the rig this showed
     up as a ticked "Mirror to Camera" that drew nothing until some later region
     edit happened to redraw it."""
+    # No Camera module open yet, so the tick below resolves against nothing --
+    # the condition this test is about, distinct from the default fake's.
+    win.manager.listModules = lambda: ["Data Manager"]
     win.newSlice()
     win.addRegionHere()
 
@@ -2213,6 +2246,9 @@ def test_pinned_frames_bind_when_the_camera_module_is_opened_after_the_slice(win
     """_bindPinnedFrames runs only from _startSlice, so a Camera module opened
     afterwards was never picked up: on the rig, PinnedFrameMirror._source was
     None with a frame already pinned and waiting."""
+    # No Camera module open yet, so newSlice() below has nothing to bind to --
+    # the condition this test is about, distinct from the default fake's.
+    win.manager.listModules = lambda: ["Data Manager"]
     win.newSlice()
     assert win._pinnedFrameMirror._source is None
 
@@ -2319,6 +2355,10 @@ def test_the_message_goes_once_a_camera_module_is_open(win):
 
 
 def test_unticking_the_mirror_retracts_the_message(win):
+    # No Camera module open yet, so the tick below raises the message this
+    # test is about unticking -- the condition this test is about, distinct
+    # from the default fake's.
+    win.manager.listModules = lambda: ["Data Manager"]
     win.newSlice()
     win.regionPanel.mirrorCheck.setChecked(True)
     assert win.statusPanel.instruction() != ""
