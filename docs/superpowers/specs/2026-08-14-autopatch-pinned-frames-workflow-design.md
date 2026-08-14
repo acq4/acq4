@@ -17,8 +17,11 @@ P2c-3a built the display half — `PinnedFrameMirror` shows those frames in Area
 
 - **Clearing** the previous slice's frames, behind a confirmation prompt.
 - **Instructing** the operator to pin a fresh set, in Area 3's band.
-- **Opening** the Camera module if it is not already open, so there is
-  somewhere to pin them.
+
+And one simplification of landed code that this depends on:
+
+- **The Camera module is opened at startup**, by the `Autopatch` module itself,
+  and is thereafter assumed to exist.
 
 **The "wait" is advisory.** No control is disabled and no run is blocked.
 Nothing gates on reference imagery existing; the band says what to do and the
@@ -29,12 +32,45 @@ Out of scope: slice disk persistence via `DirHandle.setInfo()`, the progress
 heatmap's remaining cross-repo work, and the live GUI smoke test — all still
 open, none of them this.
 
+## 1b. The Camera module is a precondition, not a possibility
+
+Everything in Area 1 that touches imagery — both mirrors and now the reference
+workflow — was written to treat a closed Camera module as ordinary: resolve to
+`None`, do nothing, and in the mirror's case put a message in the band about it.
+That was three code paths and one operator-facing warning serving a state the
+rig is never meant to be in.
+
+**Instead: `Autopatch.__init__` opens the Camera module** — in the `Module`
+class, before `AutopatchWindow(self)` is constructed, so the window can assume
+it. A Camera module closed after startup is an error, not a state to degrade
+into, and `_cameraWindow()` raises `HelpfulException` when asked for a window
+that is not there. `HelpfulException` rather than `RuntimeError` because it is
+acq4's operator-facing error type — the same one `create_data_dir` raises for an
+unset storage directory — and it surfaces through acq4's existing error dialog
+rather than reading as a crash.
+
+Three things are deleted outright:
+
+- The **"Mirror to Camera: no Camera module is open"** instruction, and with it
+  `_setRegionInstruction` and the `_regionInstruction` bool.
+- **`_onModulesChanged`**, its `sigModulesChanged` connection and its teardown
+  disconnect. Its entire job was re-binding the mirrors when a Camera module
+  appeared later, which can no longer happen. It also carried a `_tornDown`
+  guard for a race it can no longer lose.
+- The `except Exception: return None` fallback in `_cameraModuleWindow`.
+
+**Verify before relying on it:** `manager.getModule("Camera")` called from
+inside another module's `__init__` re-enters `Manager`'s module loading. This is
+assumed to work and must be confirmed against a running app, not reasoned about.
+If it does not, the fallback is opening it from `AutopatchWindow`'s first
+`showEvent` instead.
+
 ## 2. `ReferenceImagery`
 
 New file `acq4/modules/Autopatch/reference_imagery.py`.
 
 ```python
-ReferenceImagery(imagingCtrlGetter, moduleOpener, prompt=None)
+ReferenceImagery(imagingCtrlGetter, prompt=None)
 ```
 
 A `QObject`, unlike the plain `PinnedFrameMirror`/`CameraMirror` classes beside
@@ -45,30 +81,33 @@ set changes. `ProgressOverlay` is a `QObject` for the same reason.
 
 | Member | Meaning |
 | --- | --- |
-| `beginSlice()` | New slice's entry point: open the module, resolve, prompt-and-clear, recompute. |
+| `beginSlice()` | New slice's entry point: resolve, prompt-and-clear, recompute. |
 | `rebind()` | Re-resolve the source, swap the subscription, recompute. |
 | `instruction() -> str` | The guidance this component wants shown; `""` for none. |
 | `sigInstructionChanged` | Emitted **only when `instruction()` changes value**. |
 | `release()` | Disconnect and forget the source. Teardown's call. |
 
-### The three injected seams
+### The two injected seams
 
 Injection is what makes this headless-testable, the same choice P2b made for
 the tile detector.
 
-- **`imagingCtrlGetter() -> imagingCtrl | None`** resolves the Camera module's
-  `ImagingCtrl` for the selected camera, exactly as `_bindPinnedFrames` does
-  today (`window.getInterfaceForDevice(camera.name()).imagingCtrl`, with
-  `KeyError`/`AttributeError` meaning "none").
-- **`moduleOpener() -> None`** opens the Camera module. This is a deliberate
-  `manager.getModule("Camera")` — a *load*, not a lookup. It must **not** go
-  through `_cameraModuleWindow`, whose `listModules()` guard exists precisely so
-  that a mirror redraw (including the one behind "Add region here") cannot start
-  a module as a side effect. Two callers wanting opposite behaviour is why they
-  stay two code paths.
+- **`imagingCtrlGetter() -> imagingCtrl`** resolves the Camera module's
+  `ImagingCtrl` for the selected camera, as `_bindPinnedFrames` does today
+  (`window.getInterfaceForDevice(camera.name()).imagingCtrl`). It no longer has
+  a "none" answer: a missing Camera window raises `HelpfulException` from
+  `_cameraWindow()`, and a Camera module with no interface for the selected
+  camera raises one too, naming the camera.
 - **`prompt(text) -> bool`** defaults to a `QMessageBox.question`, mirroring
   `ImagingCtrl.clearPinnedFramesClicked`'s own confirmation. Injected so no
   headless test can open a modal.
+
+**Nothing catches these raises.** `beginSlice()` lets them propagate out of
+`newSlice()` to acq4's error dialog, which is the agreed handling for a Camera
+module closed after startup. Note this is a different decision from the
+`storage` slot beside it, which *is* caught and rendered as guidance: an unset
+storage directory is a thing the operator has not done yet, while a closed
+Camera module is a thing that should not have happened.
 
 ### Why not extend `PinnedFrameMirror`
 
@@ -88,22 +127,23 @@ the orchestrator detach/`clearQueue()`/`abandonCellInHand()`, and after
 `_refreshSurveyStats()`.
 
 **This ordering is load-bearing.** The prompt is modal; a modal dialog re-enters
-the Qt event loop; every queued slot dispatches inside it. That includes
-`_onModulesChanged` announcing the module we just opened, and any
-`sigCellFinished` queued from the cell still in flight on the discarded tissue.
-Running the prompt last means no half-completed New slice is ever observable
-from inside a nested event loop. This project has been bitten repeatedly by a
-queued signal landing mid-transaction; opening a nested loop in the middle of
-one invites the same class of defect.
+the Qt event loop; every queued slot dispatches inside it — most consequentially
+the `sigCellFinished` queued from the cell still in flight on the tissue this
+click just discarded, whose whole suppression dance
+(`abandonCellInHand`, and the six review rounds behind it) assumes it lands
+outside a half-completed New slice. Running the prompt last means no
+intermediate state of `newSlice()` is ever observable from inside a nested
+event loop. This project has been bitten repeatedly by a queued signal landing
+mid-transaction; opening a nested loop in the middle of one invites the same
+class of defect.
 
 Inside `beginSlice()`, in order:
 
-1. `moduleOpener()`.
-2. `rebind()` — resolve the `ImagingCtrl`, subscribe to
+1. `rebind()` — resolve the `ImagingCtrl`, subscribe to
    `sigPinnedFramesChanged`.
-3. If the source resolved and its `pinnedFrames` is non-empty, `prompt(...)`;
-   on a Yes, `source.clearPinnedFrames()`.
-4. Recompute the instruction and emit if it changed.
+2. If `pinnedFrames` is non-empty, `prompt(...)`; on a Yes,
+   `source.clearPinnedFrames()`.
+3. Recompute the instruction and emit if it changed.
 
 **Declining does not abort New slice.** The slice is already built by the time
 this runs; the prompt is about frames alone. **Zero pinned frames means no
@@ -115,10 +155,15 @@ prompt at all** — there is nothing to confirm.
 ## 4. The instruction, and named slots in `StatusPanel`
 
 Area 3's band currently holds one instruction string, with a `_regionInstruction`
-bool on the window answering "may I retract what is up?". A third writer makes
-that a three-way ownership problem — the "state outliving what it belongs to"
-shape that has cost this project five review rounds elsewhere. Replace it with
-slots.
+bool on the window answering "may I retract what is up?". Replace it with slots.
+
+**Slots are still needed even though §1b deletes one of the writers.** With the
+mirror message gone the band has two: `storage` and `imagery`. They are not
+mutually exclusive. `newSlice()` can fail at `create_data_dir` **with the
+previous slice still installed** — so the storage message goes up while a slice
+exists whose frames may all have been unpinned, which is exactly when the
+imagery message wants the band too. A single string plus an ownership bool
+cannot hold both, and which one wins would depend on click order.
 
 ```python
 StatusPanel.setInstruction(source: str, text: str)   # "" clears that slot only
@@ -131,7 +176,6 @@ Priority is a module-level constant; the first non-empty slot renders:
 | --- | --- | --- | --- |
 | 1 | `storage` | `str(HelpfulException)` — "Storage directory has not been set." | New slice could not complete at all. |
 | 2 | `imagery` | "Pin reference frames of this slice in the Camera module." | The slice exists but has no reference imagery. |
-| 3 | `mirror` | "Mirror to Camera: no Camera module is open. The outlines will appear if one is opened." | A display preference. |
 
 A `RunErrorRecord` still outranks all three, unchanged: a failure that halted a
 run is about tissue and a pipette in it, and guidance about a button is not.
@@ -145,10 +189,9 @@ I retract this?", which slots answer structurally.
 **One deliberate behaviour change falls out of this.** `newSlice()`'s success
 path today calls `clearInstruction()`, wiping whatever the band held. Under
 slots it clears the `storage` slot alone — the one whose condition New slice
-has just resolved. The `mirror` slot survives, correctly: New slice does not
-change whether a Camera module is open, so retracting that message would have
-been a lie. In practice the message goes anyway, because `beginSlice()` opens
-the Camera module and `_onModulesChanged` re-runs the mirror handler.
+has just resolved — and leaves `imagery` to `ReferenceImagery`, which
+recomputes it from state moments later in `beginSlice()`. A blanket wipe would
+have raced that recompute for no reason.
 
 ### What `imagery` says, and when
 
@@ -157,13 +200,11 @@ current state, recomputed on every `sigPinnedFramesChanged` and on every
 `rebind()`:
 
 - No slice → `""`.
-- Slice, source resolved, zero frames pinned → the pin-frames instruction.
-- Slice, source resolved, one or more frames pinned → `""`.
-- Slice, **no source resolved** → "Open the Camera module to pin reference
-  frames for this slice." Now the exception rather than the norm, since
-  `beginSlice()` opens it; this covers a rig with no Camera module configured,
-  a selected camera the Camera module has no interface for, and a `getModule`
-  that raised.
+- Slice, zero frames pinned → the pin-frames instruction.
+- Slice, one or more frames pinned → `""`.
+
+There is no "no source" case: per §1b the Camera module is a precondition, and
+failing to resolve one raises rather than producing a third message.
 
 Retracting on the first pin and returning if the operator unpins everything
 both fall out of this for free. Deriving the text from state rather than from
@@ -185,9 +226,10 @@ hazard `PinnedFrameMirror.unbind()` documents. A raise here would abandon the
 rest of `teardown()`, leaving every other panel wired to an orchestrator that
 has just been stopped.
 
-The window also calls `rebind()` wherever it already calls `_bindPinnedFrames`:
-`_startSlice()` and `_onModulesChanged()`. The latter is what makes the
-"no Camera module" instruction retract by itself when one is opened.
+The window calls `rebind()` from `_startSlice()`, beside `_bindPinnedFrames` —
+the only remaining caller, now that `_onModulesChanged` is deleted. Both need
+re-resolving for the same reason: the operator may have changed the selected
+camera between slices.
 
 ## 6. Testing
 
@@ -200,25 +242,41 @@ and `_FakeCamera` defects both survived because the fake agreed with the code
 and neither matched the device. A `clearPinnedFrames()` that does not emit
 would hide a missing recompute.
 
-Fake opener records its calls; prompt stub is parameterised True/False.
+Prompt stub is parameterised True/False.
 
-Cases: opener called on `beginSlice`; no prompt when nothing is pinned; prompt
-then clear on Yes; prompt then **frames still pinned** on No; instruction
-appears at zero frames and retracts on the first pin; instruction returns when
-the last frame is unpinned; the no-source text; `sigInstructionChanged` emitted
-only on an actual change; `release()` disconnects.
+Cases: no prompt when nothing is pinned; prompt then clear on Yes; prompt then
+**frames still pinned** on No; instruction appears at zero frames and retracts
+on the first pin; instruction returns when the last frame is unpinned;
+`sigInstructionChanged` emitted only on an actual change; a getter that raises
+`HelpfulException` propagates out of `beginSlice()`; `release()` disconnects.
 
 ### `StatusPanel` slots
 
-Priority order across all three sources, and — the property the change exists
-for — that setting or clearing one source does not disturb another's message.
-Errors still outrank instructions.
+Priority order across both sources, and — the property the change exists for —
+that setting or clearing one source does not disturb another's message. The
+case that motivates it gets its own test: `storage` set while `imagery` is
+also non-empty, which is reachable because `create_data_dir` can fail with the
+previous slice still installed. Errors still outrank instructions.
 
 ### Window integration
 
-New slice opens the Camera module, prompts, and clears; declining leaves the
-frames; the instruction appears and retracts as frames are pinned and unpinned;
-`teardown()` releases.
+New slice prompts and clears; declining leaves the frames; the instruction
+appears and retracts as frames are pinned and unpinned; `teardown()` releases.
+
+**`_FakeManager` has to change, and this is the largest test cost of §1b.** It
+carries no `listModules`/`getModule` today — tests that need a Camera window
+monkeypatch them in, and everything else relies on `_cameraModuleWindow`'s
+`except Exception: return None`. With that fallback deleted, the default fake
+must supply a Camera module with a working `getInterfaceForDevice`. That is the
+more honest fake regardless: production now guarantees a Camera module, and a
+fake that reports none does not reproduce production — the same defect class as
+P2b's `restore_depth` and `_FakeCamera`.
+
+Its `sigModulesChanged` signal stays (harmless, and the real `Manager` has one)
+but nothing in Autopatch listens to it any more. The two tests asserting the
+"no Camera module is open" mirror warning are deleted with the warning; the
+test that asserts `_cameraModuleWindow` does **not** load an unopened module is
+deleted with the guard, and replaced by one asserting the raise.
 
 The release test asserts Qt's own `receivers(signal)` rather than a weakref.
 Twice now a mandated "remove the disconnect" mutation has passed because a
@@ -239,9 +297,10 @@ and one not failing at all, and only reading the failure output caught either.
   `DirHandle.setInfo()`, and the progress heatmap's cross-repo
   `acq4_automation.Cell` expansion.
 - **The live GUI smoke test still needs a human at a screen** — the prompt's
-  wording, the band's legibility, and whether opening the Camera module from
-  New slice feels helpful or intrusive on a real rig. P2c-3a and the progress
-  overlay both shipped unverified against the rig and this will too.
+  wording, the band's legibility, and above all whether `getModule("Camera")`
+  from inside `Autopatch.__init__` actually works (§1b). P2c-3a and the
+  progress overlay both shipped unverified against the rig and this will too,
+  but that one assumption is worth a deliberate check.
 - **"Fresh" is enforced only by the clear.** An operator who declines the
   prompt keeps frames of the previous slice, and the instruction stays retracted
   because frames are pinned. Nothing tracks which slice a frame was taken on.
@@ -250,4 +309,6 @@ and one not failing at all, and only reading the failure output caught either.
   explicitly opted into.
 - **`"Camera"` stays hard-coded** as the module name, matching
   `_cameraModuleWindow`. A rig that names its Camera module something else
-  already does not get the outline mirror either.
+  already does not get the outline mirror either — though under §1b that rig
+  now gets a `HelpfulException` where it previously got a blank Area 1, which
+  is arguably the better outcome and definitely the louder one.
