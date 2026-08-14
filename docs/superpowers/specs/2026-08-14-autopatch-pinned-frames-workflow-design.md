@@ -52,7 +52,9 @@ rather than reading as a crash.
 Three things are deleted outright:
 
 - The **"Mirror to Camera: no Camera module is open"** instruction, and with it
-  `_setRegionInstruction` and the `_regionInstruction` bool.
+  the `_regionInstruction` bool. `_setRegionInstruction` itself survives its
+  other caller — `_onRegionsEdited` puts a `RegionTooLarge` message in the same
+  band — and becomes a plain write to the `region` slot (§4).
 - **`_onModulesChanged`**, its `sigModulesChanged` connection and its teardown
   disconnect. Its entire job was re-binding the mirrors when a Camera module
   appeared later, which can no longer happen. It also carried a `_tornDown`
@@ -157,13 +159,17 @@ prompt at all** — there is nothing to confirm.
 Area 3's band currently holds one instruction string, with a `_regionInstruction`
 bool on the window answering "may I retract what is up?". Replace it with slots.
 
-**Slots are still needed even though §1b deletes one of the writers.** With the
-mirror message gone the band has two: `storage` and `imagery`. They are not
-mutually exclusive. `newSlice()` can fail at `create_data_dir` **with the
-previous slice still installed** — so the storage message goes up while a slice
-exists whose frames may all have been unpinned, which is exactly when the
-imagery message wants the band too. A single string plus an ownership bool
-cannot hold both, and which one wins would depend on click order.
+**Deleting the mirror warning does not drop the band to two writers.**
+`_setRegionInstruction` has a second caller: `_onRegionsEdited` puts a
+`RegionTooLarge` refusal in the same band. So after §1b the writers are
+`storage`, `region` and `imagery` — still three.
+
+They are not mutually exclusive, which is what makes a single string plus an
+ownership bool wrong. `newSlice()` can fail at `create_data_dir` **with the
+previous slice still installed**, so the storage message goes up while a slice
+exists whose frames may all have been unpinned — exactly when the imagery
+message wants the band too. A region refused for being too large is
+independent of both. Which message survives would depend on click order.
 
 ```python
 StatusPanel.setInstruction(source: str, text: str)   # "" clears that slot only
@@ -175,7 +181,12 @@ Priority is a module-level constant; the first non-empty slot renders:
 | Rank | Source | Message | Why here |
 | --- | --- | --- | --- |
 | 1 | `storage` | `str(HelpfulException)` — "Storage directory has not been set." | New slice could not complete at all. |
-| 2 | `imagery` | "Pin reference frames of this slice in the Camera module." | The slice exists but has no reference imagery. |
+| 2 | `region` | `str(RegionTooLarge)` | An edit the operator just made was refused outright. |
+| 3 | `imagery` | "Pin reference frames of this slice in the Camera module." | The slice exists but has no reference imagery. |
+
+`region` outranks `imagery` because a refused edit is a response to something
+the operator did a moment ago, while the imagery instruction is a standing
+condition that will still be true once they have read the refusal.
 
 A `RunErrorRecord` still outranks all three, unchanged: a failure that halted a
 run is about tissue and a pipette in it, and guidance about a button is not.
@@ -252,9 +263,9 @@ on the first pin; instruction returns when the last frame is unpinned;
 
 ### `StatusPanel` slots
 
-Priority order across both sources, and — the property the change exists for —
-that setting or clearing one source does not disturb another's message. The
-case that motivates it gets its own test: `storage` set while `imagery` is
+Priority order across all three sources, and — the property the change exists
+for — that setting or clearing one source does not disturb another's message.
+The case that motivates it gets its own test: `storage` set while `imagery` is
 also non-empty, which is reachable because `create_data_dir` can fail with the
 previous slice still installed. Errors still outrank instructions.
 
