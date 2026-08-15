@@ -689,6 +689,32 @@ def test_a_started_slice_retracts_the_no_camera_message(qapp, tmp_path):
     assert win.searchPanel.errorLabel.text() == ""
 
 
+def test_new_slice_reports_rather_than_raising_when_the_camera_module_is_closed(
+    qapp, tmp_path
+):
+    # The owner's second precondition, alongside "clear() swallows,
+    # _redraw() propagates": Autopatch.__init__ opens the Camera module at
+    # startup, so a manager present with it missing or windowless means it
+    # closed underneath a running session, and _cameraModuleWindow raises
+    # rather than answering None (see its docstring). _canStartSlice()'s
+    # try/except around that call is what keeps this raise from escaping into
+    # New slice's click handler -- reporting it through SearchPanel exactly
+    # as it already does for "no camera selected" -- and deleting that
+    # try/except is one of the two mutations the reviewer found the whole
+    # suite stayed green under.
+    win = _makeWindow(tmp_path)
+
+    def boom():
+        raise HelpfulException("The Camera module is not open.")
+
+    win._cameraWindow = boom
+
+    win.newSlice()
+
+    assert win.slice is None
+    assert "Camera module" in win.searchPanel.errorLabel.text()
+
+
 def test_new_slice_with_invalid_constraints_creates_nothing_and_keeps_the_old_slice(
     qapp, tmp_path
 ):
@@ -1698,6 +1724,33 @@ def test_editing_a_region_refreshes_the_survey_readout(win):
     assert win.searchPanel.surveyLabel.text() != before
 
 
+def test_a_region_edit_refreshes_survey_stats_even_when_the_mirror_raises(win):
+    # self.slice.setRegions() inside _onRegionsEdited has already committed the
+    # edit by the time _cameraMirror.setRegions() runs; a Camera module closed
+    # underneath a running session makes that mirror call raise
+    # (CameraMirror._redraw() propagates it rather than swallowing it). If the
+    # survey refresh ran after the mirror call instead of before, this raise
+    # would skip it, and Area 2 would go on advertising the previous edit's
+    # tile count -- the operator's only feasibility readout -- for a region
+    # that has already changed underneath it, with nothing but a log entry to
+    # say so.
+    win.newSlice()
+    win.addRegionHere()
+    before = win.searchPanel.surveyLabel.text()
+
+    def boom(_regions):
+        raise HelpfulException("The Camera module is not open.")
+
+    win._cameraMirror.setRegions = boom
+    edited = RectRegion(1.0e-3, 2.0e-3, 1.4e-3, 2.1e-3)
+
+    with pytest.raises(HelpfulException):
+        win._onRegionsEdited([edited])
+
+    assert win.slice.regions == [edited]
+    assert win.searchPanel.surveyLabel.text() != before
+
+
 def test_a_region_edit_with_no_slice_is_ignored(win):
     # Area 1's controls are gated on a slice existing, but a signal is not a
     # permission check, and a traceback on the GUI thread is not a second line
@@ -1856,8 +1909,14 @@ def test_a_camera_with_no_imaging_control_stops_the_previous_mirror(win):
 
 
 def test_a_closed_camera_window_stops_the_previous_mirror(win):
-    # The same hazard by the other route: the Camera module has been closed
-    # since the last slice was started.
+    # The same hazard by the other route: forcing the getter itself to answer
+    # None, standing in for the manager-less (headless) case
+    # _cameraModuleWindow documents -- not a closed Camera module, which now
+    # raises instead and never reaches here, because _canStartSlice() refuses
+    # the slice before _startSlice() calls _bindPinnedFrames() at all. What
+    # this still proves: _bindPinnedFrames() unbinds the previous source
+    # unconditionally, even when the getter it calls next answers None rather
+    # than a window.
     first = _withPinnedFrameSource(win)
     win.newSlice()
     assert win._pinnedFrameMirror._source is first
@@ -2140,6 +2199,29 @@ def test_add_region_here_reports_a_refusal_rather_than_raising(win):
 
     assert "999999" in win.statusPanel.instruction()
     assert win.regionPanel.regions() == []
+
+
+def test_add_region_here_refreshes_survey_stats_even_when_the_mirror_raises(win):
+    # slice.addRegion() and regionPanel.setRegions() above have already
+    # committed the seeded region by the time _cameraMirror.setRegions() runs;
+    # a Camera module closed underneath a running session makes that mirror
+    # call raise (CameraMirror._redraw() propagates it rather than swallowing
+    # it). If the survey refresh ran after the mirror call instead of before,
+    # this raise would skip it, and Area 2 would go on reporting "no region"
+    # for a slice that this button just gave nine tiles -- the operator's only
+    # feasibility readout, silently stale until the next successful edit.
+    win.newSlice()
+
+    def boom(_regions):
+        raise HelpfulException("The Camera module is not open.")
+
+    win._cameraMirror.setRegions = boom
+
+    with pytest.raises(HelpfulException):
+        win.addRegionHere()
+
+    assert len(win.slice.regions) == 1
+    assert win.searchPanel.surveyLabel.text() != "no region"
 
 
 def test_starting_a_slice_frames_area_1_on_the_camera(win):

@@ -236,15 +236,18 @@ class AutopatchWindow(Qt.QWidget):
     def _cameraModuleWindow(manager):
         """The Camera module's window under `manager`, or None with no manager.
 
-        None only for the manager-less case: headless (module=None) is a
-        documented mode of this window (see AutopatchWindow.__init__ and
-        test_a_headless_window_with_no_manager_still_starts_a_slice), not a
-        degraded state for this getter to paper over. With a manager present,
-        there is no such case left: the Autopatch module opens the Camera
-        module at startup (see Autopatch.__init__), so seeing it missing or
-        windowless here means it was closed underneath a running session, and
-        raising is what surfaces that to the operator instead of leaving
-        Area 1 blank while regions keep getting drawn over nothing.
+        None only for the manager-less case: headless (module=None) is a mode
+        this window's constructor supports by design -- `module` defaults to
+        None, and the manager-is-None branch there only requires an explicit
+        `protocolDir` in its place (see AutopatchWindow.__init__) -- and
+        test_a_headless_window_with_no_manager_still_starts_a_slice asserts it
+        keeps working, not a degraded state for this getter to paper over.
+        With a manager present, there is no such case left: the Autopatch
+        module opens the Camera module at startup (see Autopatch.__init__), so
+        seeing it missing or windowless here means it was closed underneath a
+        running session, and raising is what surfaces that to the operator
+        instead of leaving Area 1 blank while regions keep getting drawn over
+        nothing.
 
         HelpfulException rather than RuntimeError because this is acq4's
         operator-facing error type -- the same one create_data_dir raises for
@@ -310,8 +313,15 @@ class AutopatchWindow(Qt.QWidget):
             self.regionPanel.setRegions(self.slice.regions)
             return
         self._setRegionInstruction("")
-        self._cameraMirror.setRegions(regions)
+        # Survey stats refreshed before the mirror is touched: the mirror's
+        # setRegions() can raise out of a closed Camera module (see
+        # CameraMirror._redraw()), and by this point self.slice.setRegions()
+        # above has already committed the edit. Area 2's readout must reflect
+        # that committed edit even if the raise below skips everything after
+        # it -- an operator judging feasibility from a stale tile count is the
+        # failure mode this ordering rules out.
         self._refreshSurveyStats()
+        self._cameraMirror.setRegions(regions)
 
     def _setRegionInstruction(self, text: str) -> None:
         """Put Area 1's guidance in Area 3's band, or retract it.
@@ -567,8 +577,15 @@ class AutopatchWindow(Qt.QWidget):
             self._setRegionInstruction(str(exc))
             return
         self.regionPanel.setRegions(self.slice.regions)
-        self._cameraMirror.setRegions(self.slice.regions)
+        # Survey stats refreshed before the mirror is touched: the mirror's
+        # setRegions() can raise out of a closed Camera module (see
+        # CameraMirror._redraw()), and by this point slice.addRegion() and
+        # regionPanel.setRegions() above have already committed the edit.
+        # Area 2's readout must reflect that committed edit even if the raise
+        # below skips everything after it -- an operator judging feasibility
+        # from a stale tile count is the failure mode this ordering rules out.
         self._refreshSurveyStats()
+        self._cameraMirror.setRegions(self.slice.regions)
 
     @staticmethod
     def _cameraFov(camera) -> tuple[float, float]:
