@@ -494,7 +494,11 @@ def test_teardown_releases_the_reference_imagery(qapp, tmp_path):
 
     win.newSlice()
     source = win.manager.pinnedFrameSource
-    assert source.receivers(source.sigPinnedFramesChanged) > 0
+    # Two, not merely nonzero: PinnedFrameMirror and ReferenceImagery both
+    # subscribe to this signal, so pinning the precondition to just one of
+    # them (> 0) would still be satisfied by PinnedFrameMirror alone even if
+    # ReferenceImagery.rebind() never subscribed at all.
+    assert source.receivers(source.sigPinnedFramesChanged) == 2
 
     win.teardown()
 

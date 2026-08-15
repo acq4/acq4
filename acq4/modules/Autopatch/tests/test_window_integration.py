@@ -904,8 +904,10 @@ def test_new_slice_clears_area_3s_error_band(qapp, tmp_path):
         assert win.statusPanel.lastError() is None
         # The band is not empty -- the default fake pins no frames, so
         # newSlice() leaves the imagery instruction showing -- but that text
-        # is proof the error slot itself is empty, not merely that the whole
-        # band is.
+        # is proof the storage and region slots are both empty, not the error
+        # slot: instruction() only ever reads _instructions, never _lastError,
+        # so it cannot speak to the error slot either way. The assertion just
+        # above (lastError() is None) is what proves that one.
         assert win.statusPanel.instructionLabel.isVisibleTo(win.statusPanel)
         assert win.statusPanel.instruction() == PIN_FRAMES_INSTRUCTION
     finally:
@@ -2001,11 +2003,38 @@ def test_a_slice_with_no_imagery_asks_for_frames(win, monkeypatch):
 def test_pinning_a_frame_clears_the_band(win, monkeypatch):
     monkeypatch.setattr(win._referenceImagery, "_prompt", lambda text: True)
     win.newSlice()
+    assert win.statusPanel.instruction() == PIN_FRAMES_INSTRUCTION
 
     win.manager.pinnedFrameSource.pinnedFrames.append(_makePinnedFrame())
     win.manager.pinnedFrameSource.sigPinnedFramesChanged.emit()
 
     assert win.statusPanel.instruction() == ""
+
+
+def test_the_clear_prompt_opens_only_after_the_wipe(win, monkeypatch):
+    """beginSlice() runs last in newSlice(), after the cell queue and Area 5's
+    list are wiped, because its prompt is modal: a modal dialog re-enters the
+    Qt event loop, and every queued slot dispatches inside it. By the time
+    anything modal can open, the wipe must already be complete -- so whatever
+    dispatches inside that re-entered loop sees a finished transaction rather
+    than a half-done one, instead of observing the previous slice's queued
+    cell still sitting in Area 5's list.
+    """
+    win.newSlice()
+    cell = _makeCell()
+    win.cellPanel.addCell(cell)
+    win.orchestrator.enqueue(cell)
+    win.manager.pinnedFrameSource.pinnedFrames = [_makePinnedFrame()]
+    seen = {}
+
+    def prompt(text):
+        seen["rows"] = win.cellPanel.cellList.count()
+        return True
+
+    monkeypatch.setattr(win._referenceImagery, "_prompt", prompt)
+    win.newSlice()
+
+    assert seen == {"rows": 0}
 
 
 def test_a_storage_failure_outranks_the_imagery_instruction(win, monkeypatch):

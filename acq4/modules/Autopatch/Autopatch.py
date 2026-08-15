@@ -121,8 +121,8 @@ class AutopatchWindow(Qt.QWidget):
         # parent=self so the clear prompt is owned by this window: a parentless
         # QMessageBox centres on the primary screen rather than over Autopatch
         # and can sit behind it with no taskbar entry of its own, which reads as
-        # a hung UI at the start of every slice. Every other QMessageBox in acq4
-        # passes a real widget.
+        # a hung UI at the start of every slice. Every other QMessageBox.question/
+        # warning/critical call in acq4 passes a real widget as parent, too.
         self._referenceImagery = ReferenceImagery(self._imagingCtrl, parent=self)
         self._referenceImagery.sigInstructionChanged.connect(
             self._onImageryInstruction
@@ -1017,12 +1017,18 @@ class AutopatchWindow(Qt.QWidget):
         self.cellPanel.unbindOrchestrator()
         self.cellPanel.clearCells()
         self.orchestrator = None
-        # Dropped for the same reason self.orchestrator is: _referenceImagery's
-        # getter is a bound method of this window and its sigInstructionChanged
-        # is connected to one of this window's own methods, so leaving the
-        # attribute in place would give window -> _referenceImagery -> window,
-        # a cycle only Python's cyclic GC could reclaim -- release() above only
-        # stops it listening to the pinned-frame source, not this half.
+        # Dropped for the same reason self.orchestrator is: _referenceImagery
+        # holds two references back to this window -- self._getter (the bound
+        # method self._imagingCtrl) and self._parent (this window, from
+        # parent=self above, also closed over by the default _prompt's
+        # functools.partial) -- so leaving the attribute in place would give
+        # window -> _referenceImagery -> window, a cycle only Python's cyclic
+        # GC could reclaim. sigInstructionChanged being connected to one of
+        # this window's own methods contributes nothing to that cycle: PyQt
+        # holds only a weak reference to a QObject receiver's bound method, so
+        # that connection alone cannot keep either object alive. release()
+        # above only stops it listening to the pinned-frame source, not this
+        # half.
         self._referenceImagery = None
 
     def closeEvent(self, event) -> None:
