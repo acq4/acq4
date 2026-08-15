@@ -6,6 +6,18 @@ from acq4.util import Qt
 
 from .error_display import showInLog
 
+# Area 3's band carries one instruction at a time, but three independent
+# writers can each have something to say: an unchosen storage directory, a
+# region edit refused for being too large, and a slice with no reference
+# imagery pinned. They are not mutually exclusive -- newSlice() can fail at
+# create_data_dir with the previous slice still installed -- so each holds its
+# own slot and the first non-empty one in this order renders.
+#
+# storage first: New slice could not complete at all. region next: a refused
+# edit answers something the operator did a moment ago. imagery last: a
+# standing condition that will still hold once they have read the other two.
+INSTRUCTION_SOURCES = ("storage", "region", "imagery")
+
 
 class StatusPanel(Qt.QWidget):
     # Emitted whenever the bound orchestrator's status changes, True while a
@@ -41,7 +53,7 @@ class StatusPanel(Qt.QWidget):
         # a run. Held separately from _lastError so neither erases the other:
         # they have different writers, and neither can see the other's
         # condition.
-        self._instruction = ""
+        self._instructions = {source: "" for source in INSTRUCTION_SOURCES}
 
         self.startBtn = Qt.QPushButton("Start")
         self.stopBtn = Qt.QPushButton("Stop")
@@ -192,25 +204,31 @@ class StatusPanel(Qt.QWidget):
         self._lastError = None
         self._updateErrorBand()
 
-    def setInstruction(self, text: str) -> None:
+    def setInstruction(self, source: str, text: str) -> None:
         """Show operator guidance in the band -- what to do, not what broke.
 
-        For a control that could not proceed, `AutopatchWindow.newSlice()` with
-        no storage directory chosen being the case this exists for. An
-        instruction is deliberately not a RunErrorRecord: no traceback, no Copy,
-        and no Show in log, because no run happened and there is nothing in the
-        log to show.
-        """
-        self._instruction = text
-        self._updateErrorBand()
+        `text` of "" retracts this source's message and only this source's:
+        the writers cannot see each other's conditions, so one deciding the
+        band is now empty would be speaking for the other two.
 
-    def clearInstruction(self) -> None:
-        self._instruction = ""
+        An instruction is deliberately not a RunErrorRecord: no traceback, no
+        Copy, and no Show in log, because no run happened and there is nothing
+        in the log to show.
+        """
+        if source not in self._instructions:
+            raise ValueError(
+                f"{source!r} is not an instruction source; "
+                f"expected one of {INSTRUCTION_SOURCES}"
+            )
+        self._instructions[source] = text
         self._updateErrorBand()
 
     def instruction(self) -> str:
         """The guidance currently showing, or an empty string."""
-        return self._instruction
+        for source in INSTRUCTION_SOURCES:
+            if self._instructions[source]:
+                return self._instructions[source]
+        return ""
 
     def _updateErrorBand(self) -> None:
         """Render whichever of the two the band is carrying, the error first.
@@ -221,12 +239,12 @@ class StatusPanel(Qt.QWidget):
         done in the meantime.
         """
         record = self._lastError
+        showing = self.instruction()
         if record is not None:
             self.instructionLabel.setText(f"{record.exc_type}: {record.exc_message}")
         else:
-            self.instructionLabel.setText(self._instruction)
-        showing = record is not None or bool(self._instruction)
-        self.instructionLabel.setVisible(showing)
+            self.instructionLabel.setText(showing)
+        self.instructionLabel.setVisible(record is not None or bool(showing))
         self.showInLogBtn.setVisible(record is not None)
 
     def _onShowInLogClicked(self) -> None:

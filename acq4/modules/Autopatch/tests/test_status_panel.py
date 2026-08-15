@@ -539,7 +539,7 @@ def test_an_instruction_shows_in_the_band(qapp):
 
     panel = StatusPanel()
 
-    panel.setInstruction("Storage directory has not been set.")
+    panel.setInstruction("storage", "Storage directory has not been set.")
 
     assert panel.instructionLabel.isVisibleTo(panel)
     assert panel.instructionLabel.text() == "Storage directory has not been set."
@@ -553,7 +553,7 @@ def test_an_instruction_offers_no_log_link(qapp):
 
     panel = StatusPanel()
 
-    panel.setInstruction("Storage directory has not been set.")
+    panel.setInstruction("storage", "Storage directory has not been set.")
 
     assert not panel.showInLogBtn.isVisibleTo(panel)
 
@@ -562,9 +562,9 @@ def test_clearing_an_instruction_empties_the_band(qapp):
     from acq4.modules.Autopatch.status_panel import StatusPanel
 
     panel = StatusPanel()
-    panel.setInstruction("Storage directory has not been set.")
+    panel.setInstruction("storage", "Storage directory has not been set.")
 
-    panel.clearInstruction()
+    panel.setInstruction("storage", "")
 
     assert panel.instruction() == ""
     assert not panel.instructionLabel.isVisibleTo(panel)
@@ -578,7 +578,7 @@ def test_a_run_error_still_wins_the_band(qapp):
 
     panel = StatusPanel()
     record = _record()
-    panel.setInstruction("Storage directory has not been set.")
+    panel.setInstruction("storage", "Storage directory has not been set.")
 
     panel._onRunError(record)
 
@@ -592,10 +592,59 @@ def test_the_instruction_comes_back_once_the_error_clears(qapp):
     from acq4.modules.Autopatch.status_panel import StatusPanel
 
     panel = StatusPanel()
-    panel.setInstruction("Storage directory has not been set.")
+    panel.setInstruction("storage", "Storage directory has not been set.")
     panel._onRunError(_record())
 
     panel.clearError()
 
     assert panel.instructionLabel.text() == "Storage directory has not been set."
     assert not panel.showInLogBtn.isVisibleTo(panel)
+
+
+def test_a_higher_priority_source_wins_the_band(qapp):
+    from acq4.modules.Autopatch.status_panel import StatusPanel
+
+    panel = StatusPanel()
+
+    panel.setInstruction("imagery", "Pin reference frames.")
+    panel.setInstruction("storage", "Storage directory has not been set.")
+
+    assert panel.instruction() == "Storage directory has not been set."
+
+
+def test_clearing_one_source_does_not_erase_another(qapp):
+    # The property the whole change exists for. newSlice() can fail at
+    # create_data_dir with the previous slice still installed, so the storage
+    # message and the imagery instruction can want the band at the same time,
+    # and whichever cleared last must not take the other down with it.
+    from acq4.modules.Autopatch.status_panel import StatusPanel
+
+    panel = StatusPanel()
+    panel.setInstruction("imagery", "Pin reference frames.")
+    panel.setInstruction("storage", "Storage directory has not been set.")
+
+    panel.setInstruction("storage", "")
+
+    assert panel.instruction() == "Pin reference frames."
+
+
+def test_a_lower_priority_source_does_not_displace_a_higher_one(qapp):
+    from acq4.modules.Autopatch.status_panel import StatusPanel
+
+    panel = StatusPanel()
+    panel.setInstruction("storage", "Storage directory has not been set.")
+
+    panel.setInstruction("imagery", "Pin reference frames.")
+
+    assert panel.instruction() == "Storage directory has not been set."
+
+
+def test_an_unknown_source_is_a_programming_error(qapp):
+    # A typo'd source would otherwise write into a slot nothing ever renders,
+    # failing silently and looking exactly like a band that was not updated.
+    from acq4.modules.Autopatch.status_panel import StatusPanel
+
+    panel = StatusPanel()
+
+    with pytest.raises(ValueError, match="pinned"):
+        panel.setInstruction("pinned", "Pin reference frames.")

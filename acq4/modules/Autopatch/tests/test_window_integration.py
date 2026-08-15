@@ -2180,6 +2180,27 @@ def test_the_next_good_edit_retracts_the_refusal(win):
     assert len(win.slice.regions) == 1
 
 
+def test_a_refused_edit_does_not_erase_the_storage_instruction(win):
+    """Area 3's band has two Area 1 writers with different conditions, and
+    neither can see the other's. A region edit retracting its own refusal must
+    not also retract newSlice()'s "choose a storage directory", which is still
+    just as true as it was."""
+    from acq4.util.HelpfulException import HelpfulException
+
+    win.addRegionHere()  # a slice, without going through create_data_dir
+
+    def boom(*a, **k):
+        raise HelpfulException("Storage directory has not been set.")
+
+    win.manager.getCurrentDir = boom
+    win.newSlice()
+    assert "Storage directory" in win.statusPanel.instruction()
+
+    win.regionPanel.sigRegionsChanged.emit([RectRegion(1.0e-3, 2.0e-3, 1.4e-3, 2.1e-3)])
+
+    assert "Storage directory" in win.statusPanel.instruction()
+
+
 def test_add_region_here_reports_a_refusal_rather_than_raising(win):
     """"Add region here" seeds 3x3 fields, which is nine tiles whatever the
     field of view, so it cannot trip the cap as it stands. The refusal is

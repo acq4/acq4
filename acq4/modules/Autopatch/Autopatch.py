@@ -328,7 +328,7 @@ class AutopatchWindow(Qt.QWidget):
 
         Area 1 has one guidance slot: a later message replaces an earlier one.
         """
-        self.statusPanel.setInstruction(text)
+        self.statusPanel.setInstruction("region", text)
 
     def _canStartSlice(self) -> bool:
         """Whether a slice can be started right now, reporting the reason
@@ -490,7 +490,7 @@ class AutopatchWindow(Qt.QWidget):
             # Narrowed to HelpfulException so a genuine programming error (a
             # missing manager, say) propagates instead of being reported as
             # storage guidance.
-            self.statusPanel.setInstruction(str(exc))
+            self.statusPanel.setInstruction("storage", str(exc))
             return
         if not self._startSlice(dirHandle=dirHandle):
             return
@@ -501,8 +501,11 @@ class AutopatchWindow(Qt.QWidget):
         # new tissue.
         self.statusPanel.clearError()
         # Whichever handler filled the band, what it was about went with the
-        # tissue just discarded.
-        self.statusPanel.clearInstruction()
+        # tissue just discarded. The storage slot alone: this is the condition
+        # New slice has just resolved, and the imagery slot is recomputed from
+        # state moments later by ReferenceImagery.
+        self.statusPanel.setInstruction("storage", "")
+        self.statusPanel.setInstruction("region", "")
         if self.orchestrator is not None:
             # Detached before the queue is cleared, not after: a refill still
             # in flight on the worker thread reads the producer and enqueues
