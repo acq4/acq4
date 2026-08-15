@@ -22,6 +22,7 @@ from .example_protocols import install_example_protocols
 from .progress_colors import ColorContext, brushesFor, legendFor
 from .progress_overlay import Marker, ProgressOverlay
 from .protocol_panel import ProtocolPanel
+from .reference_imagery import ReferenceImagery
 from .region_mirrors import CameraMirror, PinnedFrameMirror
 from .region_panel import RegionPanel
 from .search_panel import SearchPanel
@@ -117,6 +118,15 @@ class AutopatchWindow(Qt.QWidget):
         self.area1Box.layout().addWidget(self.regionPanel)
 
         self._pinnedFrameMirror = PinnedFrameMirror(self.regionPanel.view)
+        # parent=self so the clear prompt is owned by this window: a parentless
+        # QMessageBox centres on the primary screen rather than over Autopatch
+        # and can sit behind it with no taskbar entry of its own, which reads as
+        # a hung UI at the start of every slice. Every other QMessageBox in acq4
+        # passes a real widget.
+        self._referenceImagery = ReferenceImagery(self._imagingCtrl, parent=self)
+        self._referenceImagery.sigInstructionChanged.connect(
+            self._onImageryInstruction
+        )
         # The getter is closed over the manager alone, never over this window.
         # A bound self._cameraModuleWindow would give mirror -> window while
         # self._cameraMirror gives window -> mirror, and teardown() never drops
@@ -412,6 +422,9 @@ class AutopatchWindow(Qt.QWidget):
             camera.globalCenterPosition("roi")[:2], (fov[0] * 10, fov[1] * 10)
         )
         self._bindPinnedFrames(camera)
+        # Re-resolved per slice for the same reason the mirror is: the operator
+        # may have changed the selected camera since the last one.
+        self._referenceImagery.rebind()
         # There is a camera now, so retract the message above if it is up.
         self.searchPanel.setError("")
         return True
@@ -448,6 +461,30 @@ class AutopatchWindow(Qt.QWidget):
         except (KeyError, AttributeError):
             return
         self._pinnedFrameMirror.bind(imagingCtrl)
+
+    def _imagingCtrl(self):
+        """The selected camera's imaging control in the Camera module, or None.
+
+        Mirrors _bindPinnedFrames's own tolerance rather than raising for
+        either of its two ordinary cases: a manager-less (headless) window,
+        where _cameraWindow() itself already answers None, and a camera the
+        Camera module has no interface for, which is the same "switching
+        cameras" state _bindPinnedFrames's own KeyError/AttributeError catch
+        exists for. A manager present with no Camera window behind it is not
+        among these -- _cameraWindow() raises rather than answering that with
+        silence, and that raise is deliberately left to propagate here too.
+        """
+        window = self._cameraWindow()
+        if window is None:
+            return None
+        camera = self.cameraSelector.getSelectedObj()
+        try:
+            return window.getInterfaceForDevice(camera.name()).imagingCtrl
+        except (KeyError, AttributeError):
+            return None
+
+    def _onImageryInstruction(self, text: str) -> None:
+        self.statusPanel.setInstruction("imagery", text)
 
     def newSlice(self) -> None:
         """Start a fresh slice, discarding the current one and everything on it.
@@ -537,6 +574,12 @@ class AutopatchWindow(Qt.QWidget):
         # discarded Cell alive, and its sigPositionChanged connection live.
         self._progressOverlay.clear()
         self._releaseCellPositionConnections()
+        # Last, and deliberately: the prompt inside is modal, a modal dialog
+        # re-enters the Qt event loop, and every queued slot dispatches inside
+        # it -- including the sigCellFinished from the cell still in flight on
+        # the tissue this click just discarded, whose suppression assumes it
+        # lands outside a half-completed New slice.
+        self._referenceImagery.beginSlice()
 
     def addRegionHere(self) -> None:
         """Add a search region of roughly 3x3 fields of view around the camera center.
@@ -966,6 +1009,7 @@ class AutopatchWindow(Qt.QWidget):
             # otherwise leave the Camera module holding this session's outlines
             # and its imaging control still connected to a dead mirror.
             self._pinnedFrameMirror.unbind()
+            self._referenceImagery.release()
             self._cameraMirror.clear()
             self._releaseCellPositionConnections()
             self._progressOverlay.release()
@@ -973,6 +1017,13 @@ class AutopatchWindow(Qt.QWidget):
         self.cellPanel.unbindOrchestrator()
         self.cellPanel.clearCells()
         self.orchestrator = None
+        # Dropped for the same reason self.orchestrator is: _referenceImagery's
+        # getter is a bound method of this window and its sigInstructionChanged
+        # is connected to one of this window's own methods, so leaving the
+        # attribute in place would give window -> _referenceImagery -> window,
+        # a cycle only Python's cyclic GC could reclaim -- release() above only
+        # stops it listening to the pinned-frame source, not this half.
+        self._referenceImagery = None
 
     def closeEvent(self, event) -> None:
         self.teardown()

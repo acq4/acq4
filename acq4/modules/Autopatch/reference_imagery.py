@@ -2,6 +2,8 @@
 previous slice's frames, then ask the operator to pin a fresh set."""
 from __future__ import annotations
 
+import functools
+
 from acq4.util import Qt
 
 PIN_FRAMES_INSTRUCTION = (
@@ -56,7 +58,13 @@ class ReferenceImagery(Qt.QObject):
         if prompt is not None:
             self._prompt = prompt
         else:
-            self._prompt = lambda text: _askToClear(text, self._parent)
+            # functools.partial closing over the `parent` argument, not
+            # `self._parent`: a lambda reading self._parent would close over
+            # self, making a QObject that references itself -- a cycle
+            # reclaimable only by the cyclic collector, exactly the shape
+            # AutopatchWindow.teardown() exists to avoid for everything else
+            # it owns.
+            self._prompt = functools.partial(_askToClear, parent=parent)
         self._source = None
         self._instruction = ""
         # No slice yet, and the instruction is about a slice that has none of
@@ -71,11 +79,22 @@ class ReferenceImagery(Qt.QObject):
         to degrade into. `_sliceActive` is only set once `rebind()` has
         returned successfully, so a raised getter leaves this component as if
         no slice had begun rather than stuck active with no source.
+
+        A getter answering None outright (rather than raising) is not that
+        case, though, and is not a slice to skip either: a headless window or
+        a camera the Camera module has no interface for are both ordinary --
+        see _imagingCtrl's own docstring -- so the offer to clear is simply
+        skipped rather than raised through, exactly as _refresh() already
+        treats a None source as "nothing to show" rather than an error.
         """
         self.rebind()
         self._sliceActive = True
         self._refresh()
-        if self._source.pinnedFrames and self._prompt(_CLEAR_PROMPT):
+        if (
+            self._source is not None
+            and self._source.pinnedFrames
+            and self._prompt(_CLEAR_PROMPT)
+        ):
             # Emits sigPinnedFramesChanged, so the recompute below is
             # belt-and-braces rather than the only path.
             self._source.clearPinnedFrames()
@@ -86,10 +105,17 @@ class ReferenceImagery(Qt.QObject):
 
         Re-resolved per slice because the operator may have changed the
         selected camera since the last one.
+
+        Tolerant of the getter answering None: a headless window and a
+        camera the Camera module has no interface for are both ordinary
+        (see _imagingCtrl's own docstring), and there is nothing to
+        subscribe to in either case -- exactly the state _refresh() and
+        _disconnect() already treat a None source as, not an error.
         """
         self._disconnect()
         self._source = self._getter()
-        self._source.sigPinnedFramesChanged.connect(self._refresh)
+        if self._source is not None:
+            self._source.sigPinnedFramesChanged.connect(self._refresh)
         self._refresh()
 
     def instruction(self) -> str:

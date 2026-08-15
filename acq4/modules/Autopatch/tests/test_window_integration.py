@@ -4,6 +4,8 @@ import importlib
 import os
 from types import SimpleNamespace
 
+import numpy as np
+import pyqtgraph as pg
 import pytest
 from coorx import Point
 
@@ -18,6 +20,7 @@ from acq4.modules.Autopatch.progress_colors import (
     healthBrushes,
     successBrushes,
 )
+from acq4.modules.Autopatch.reference_imagery import PIN_FRAMES_INSTRUCTION
 from acq4.util import Qt
 from acq4.util.HelpfulException import HelpfulException
 from acq4_automation.feature_tracking.cell import Cell
@@ -158,13 +161,24 @@ class _FakeCameraWithDevice(Qt.QWidget):
 
 class _FakePinnedFrameSource(Qt.QObject):
     """Stands in for the Camera module's ImagingCtrl: the pinned-frame list and
-    the signal Area 1 mirrors it through."""
+    the signal Area 1 mirrors it through.
+
+    clearPinnedFrames() genuinely empties the list and emits, because the real
+    one does (via removePinnedFrame) -- ReferenceImagery.beginSlice() calls it
+    when the operator agrees to clear a previous slice's frames, and a fake
+    that only recorded the call rather than emptying the list would hide a
+    missing recompute in the code under test.
+    """
 
     sigPinnedFramesChanged = Qt.Signal()
 
     def __init__(self):
         super().__init__()
         self.pinnedFrames = []
+
+    def clearPinnedFrames(self):
+        self.pinnedFrames = []
+        self.sigPinnedFramesChanged.emit()
 
 
 # The one folder type newSlice() asks create_data_dir for. A real Manager's
@@ -888,7 +902,12 @@ def test_new_slice_clears_area_3s_error_band(qapp, tmp_path):
         win.newSlice()
 
         assert win.statusPanel.lastError() is None
-        assert not win.statusPanel.instructionLabel.isVisibleTo(win.statusPanel)
+        # The band is not empty -- the default fake pins no frames, so
+        # newSlice() leaves the imagery instruction showing -- but that text
+        # is proof the error slot itself is empty, not merely that the whole
+        # band is.
+        assert win.statusPanel.instructionLabel.isVisibleTo(win.statusPanel)
+        assert win.statusPanel.instruction() == PIN_FRAMES_INSTRUCTION
     finally:
         win.teardown()
 
@@ -1535,7 +1554,9 @@ def test_a_successful_new_slice_retracts_the_instruction(win):
     win.manager.getCurrentDir = original
     win.newSlice()
 
-    assert win.statusPanel.instruction() == ""
+    # storage outranks imagery, so the imagery instruction showing is proof the
+    # storage slot is empty -- not merely that the band is.
+    assert win.statusPanel.instruction() == PIN_FRAMES_INSTRUCTION
 
 
 def test_add_region_here_does_not_create_a_directory(win):
@@ -1869,13 +1890,29 @@ def _withPinnedFrameSource(win, hasInterface=True):
     return source
 
 
+def _makePinnedFrame():
+    """A minimal stand-in for a real pinned frame.
+
+    win's own PinnedFrameMirror is bound to the same fake pinned-frame source
+    these tests mutate, so a "pinned frame" has to be something
+    PinnedFrameMirror.refresh() can actually mirror (pg.ImageItem.image/
+    transform()/getLevels()/lut/zValue()) -- a plain string satisfies
+    ReferenceImagery's own tests (test_reference_imagery.py), which have no
+    such mirror in the loop, but raises AttributeError here.
+    """
+    return pg.ImageItem(np.zeros((2, 2)))
+
+
 def test_starting_a_slice_mirrors_the_cameras_pinned_frames(win):
     source = _withPinnedFrameSource(win)
 
     win.newSlice()
 
     assert win._pinnedFrameMirror._source is source
-    assert source.receivers(source.sigPinnedFramesChanged) == 1
+    # Two, not one: ReferenceImagery.rebind() subscribes to the same signal
+    # PinnedFrameMirror does, so a slice with a working camera leaves both
+    # listening on the one source.
+    assert source.receivers(source.sigPinnedFramesChanged) == 2
 
 
 def test_teardown_stops_mirroring_the_cameras_pinned_frames(win):
@@ -1885,7 +1922,8 @@ def test_teardown_stops_mirroring_the_cameras_pinned_frames(win):
     # calling a torn-down window's mirror -- and keep the window reachable.
     source = _withPinnedFrameSource(win)
     win.newSlice()
-    assert source.receivers(source.sigPinnedFramesChanged) == 1
+    # Two: PinnedFrameMirror and ReferenceImagery both subscribed.
+    assert source.receivers(source.sigPinnedFramesChanged) == 2
 
     win.teardown()
 
@@ -1926,6 +1964,72 @@ def test_a_closed_camera_window_stops_the_previous_mirror(win):
 
     assert win._pinnedFrameMirror._source is None
     assert first.receivers(first.sigPinnedFramesChanged) == 0
+
+
+def test_new_slice_offers_to_clear_the_pinned_frames(win, monkeypatch):
+    old = _makePinnedFrame()
+    win.manager.pinnedFrameSource.pinnedFrames = [old]
+    asked = []
+    monkeypatch.setattr(
+        win._referenceImagery, "_prompt", lambda text: asked.append(text) or True
+    )
+
+    win.newSlice()
+
+    assert len(asked) == 1
+    assert win.manager.pinnedFrameSource.pinnedFrames == []
+
+
+def test_declining_leaves_the_pinned_frames(win, monkeypatch):
+    old = _makePinnedFrame()
+    win.manager.pinnedFrameSource.pinnedFrames = [old]
+    monkeypatch.setattr(win._referenceImagery, "_prompt", lambda text: False)
+
+    win.newSlice()
+
+    assert win.manager.pinnedFrameSource.pinnedFrames == [old]
+
+
+def test_a_slice_with_no_imagery_asks_for_frames(win, monkeypatch):
+    monkeypatch.setattr(win._referenceImagery, "_prompt", lambda text: True)
+
+    win.newSlice()
+
+    assert win.statusPanel.instruction() == PIN_FRAMES_INSTRUCTION
+
+
+def test_pinning_a_frame_clears_the_band(win, monkeypatch):
+    monkeypatch.setattr(win._referenceImagery, "_prompt", lambda text: True)
+    win.newSlice()
+
+    win.manager.pinnedFrameSource.pinnedFrames.append(_makePinnedFrame())
+    win.manager.pinnedFrameSource.sigPinnedFramesChanged.emit()
+
+    assert win.statusPanel.instruction() == ""
+
+
+def test_a_storage_failure_outranks_the_imagery_instruction(win, monkeypatch):
+    # Both slots filled at once, which is reachable because create_data_dir can
+    # fail with the previous slice still installed.
+    monkeypatch.setattr(win._referenceImagery, "_prompt", lambda text: True)
+    win.newSlice()
+    assert win.statusPanel.instruction() == PIN_FRAMES_INSTRUCTION
+
+    def boom(*a, **k):
+        raise HelpfulException("Storage directory has not been set.")
+
+    # Not a monkeypatch.setattr("acq4.modules.Autopatch.Autopatch.create_data_dir", ...)
+    # string patch: acq4/modules/Autopatch/__init__.py does
+    # `from .Autopatch import Autopatch`, so that dotted path resolves to the
+    # re-exported Module subclass rather than the Autopatch.py module, and
+    # pytest's import-path resolution fails looking for create_data_dir as a
+    # class attribute. Failing manager.getCurrentDir() is what create_data_dir
+    # itself calls unguarded, and is the same route the other storage-failure
+    # tests in this file use.
+    monkeypatch.setattr(win.manager, "getCurrentDir", boom)
+    win.newSlice()
+
+    assert "Storage directory" in win.statusPanel.instruction()
 
 
 class _ReentrantOrchestrator:
@@ -2176,7 +2280,9 @@ def test_the_next_good_edit_retracts_the_refusal(win):
 
     win.regionPanel.sigRegionsChanged.emit([RectRegion(1.0e-3, 2.0e-3, 1.4e-3, 2.1e-3)])
 
-    assert win.statusPanel.instruction() == ""
+    # region outranks imagery: the imagery instruction showing proves the
+    # refusal was retracted.
+    assert win.statusPanel.instruction() == PIN_FRAMES_INSTRUCTION
     assert len(win.slice.regions) == 1
 
 
