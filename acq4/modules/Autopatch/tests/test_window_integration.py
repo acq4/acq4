@@ -2281,8 +2281,10 @@ def test_no_outlines_appear_when_the_checkbox_is_not_ticked(win):
 
 
 def test_a_headless_window_with_no_manager_still_starts_a_slice(qapp, tmp_path):
-    # module=None is the constructor's documented headless mode: there is no
-    # manager to listen to, and that must not be an error.
+    # module=None is a mode the constructor supports by design -- the parameter
+    # defaults to None (see AutopatchWindow.__init__'s signature; it carries no
+    # docstring saying so) -- and with no manager there is nothing to listen to,
+    # which must not be an error.
     from acq4.modules.Autopatch.Autopatch import AutopatchWindow
 
     _write_protocol(tmp_path, "demo.py", _NOOP_PROTOCOL)
