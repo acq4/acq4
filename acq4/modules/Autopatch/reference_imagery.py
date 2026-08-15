@@ -15,11 +15,16 @@ _CLEAR_PROMPT = (
 )
 
 
-def _askToClear(text: str) -> bool:
-    """Default prompt: the same confirmation ImagingCtrl uses for its own
-    Clear button, so clearing frames asks the same way wherever it starts."""
+def _askToClear(text: str, parent=None) -> bool:
+    """Default prompt: a Yes/Cancel dialog asking to clear the pinned frames.
+
+    Its title and two-paragraph body are specific to a slice starting, not a
+    copy of ImagingCtrl's own Clear button confirmation -- only the button set
+    (Ok/Cancel) matches. `parent` places the dialog over the calling window
+    instead of centring it on the primary screen with no owner.
+    """
     answer = Qt.QMessageBox.question(
-        None, "Clear pinned frames?", text,
+        parent, "Clear pinned frames?", text,
         Qt.QMessageBox.Ok | Qt.QMessageBox.Cancel,
     )
     return answer == Qt.QMessageBox.Ok
@@ -40,10 +45,18 @@ class ReferenceImagery(Qt.QObject):
     # listener need not call back to ask.
     sigInstructionChanged = Qt.Signal(str)
 
-    def __init__(self, imagingCtrlGetter, prompt=None):
+    def __init__(self, imagingCtrlGetter, prompt=None, parent=None):
         super().__init__()
         self._getter = imagingCtrlGetter
-        self._prompt = prompt if prompt is not None else _askToClear
+        # Owner window for the default clear-prompt dialog, so it stays over
+        # the calling window on a multi-monitor rig instead of centring on
+        # the primary screen with no taskbar entry of its own. Unused when a
+        # caller supplies its own `prompt`.
+        self._parent = parent
+        if prompt is not None:
+            self._prompt = prompt
+        else:
+            self._prompt = lambda text: _askToClear(text, self._parent)
         self._source = None
         self._instruction = ""
         # No slice yet, and the instruction is about a slice that has none of
@@ -53,14 +66,15 @@ class ReferenceImagery(Qt.QObject):
     def beginSlice(self) -> None:
         """New slice's entry point: bind, offer to clear, then recompute.
 
-        Whatever the getter raises propagates. A Camera module closed after
-        startup is an error rather than a state to degrade into, and the
-        operator sees acq4's error dialog -- deliberately unlike the storage
-        slot beside it in the band, which is caught and rendered as guidance
-        because an unset storage directory is a thing not yet done.
+        Whatever the getter raises propagates rather than being caught here.
+        A Camera module closed after startup is an error rather than a state
+        to degrade into. `_sliceActive` is only set once `rebind()` has
+        returned successfully, so a raised getter leaves this component as if
+        no slice had begun rather than stuck active with no source.
         """
-        self._sliceActive = True
         self.rebind()
+        self._sliceActive = True
+        self._refresh()
         if self._source.pinnedFrames and self._prompt(_CLEAR_PROMPT):
             # Emits sigPinnedFramesChanged, so the recompute below is
             # belt-and-braces rather than the only path.
@@ -92,8 +106,9 @@ class ReferenceImagery(Qt.QObject):
         whose C++ object is gone. A raise here would abandon the rest of
         AutopatchWindow.teardown().
         """
-        self._disconnect()
         self._sliceActive = False
+        self._disconnect()
+        self._refresh()
 
     def _disconnect(self) -> None:
         source, self._source = self._source, None

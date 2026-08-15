@@ -13,6 +13,14 @@ class _FakeImagingCtrl(Qt.QObject):
     clearPinnedFrames() genuinely empties the list and emits, because the real
     one does (via removePinnedFrame): a fake that skipped either would hide a
     missing recompute in the code under test.
+
+    Two things it does not reproduce from the real removePinnedFrame-based
+    clearPinnedFrames (acq4/util/imaging/imaging_ctrl.py): it emits
+    sigPinnedFramesChanged once for the whole clear rather than once per
+    removed frame, and it rebinds self.pinnedFrames to a new empty list
+    rather than mutating the existing list in place with .remove(). Nothing
+    in ReferenceImagery depends on emission count or on the list identity
+    surviving a clear, so neither divergence is exercised by these tests.
     """
 
     sigPinnedFramesChanged = Qt.Signal()
@@ -87,8 +95,45 @@ def test_an_empty_slice_asks_for_frames(qapp):
 
 
 def test_there_is_no_instruction_before_a_slice(qapp):
+    # Bound to a source with nothing pinned -- if a slice were considered
+    # active here, this would show PIN_FRAMES_INSTRUCTION. rebind() alone
+    # does not begin a slice, so no instruction should appear.
     source = _FakeImagingCtrl()
     imagery, _ = _imagery(source)
+
+    imagery.rebind()
+
+    assert imagery.instruction() == ""
+
+
+def test_release_ends_the_slice(qapp):
+    # A later bare rebind() (a camera-change handler, say) must not publish
+    # the pin-frames instruction as though a new slice had begun.
+    from acq4.modules.Autopatch.reference_imagery import PIN_FRAMES_INSTRUCTION
+
+    source = _FakeImagingCtrl()
+    imagery, _ = _imagery(source)
+    imagery.beginSlice()
+    assert imagery.instruction() == PIN_FRAMES_INSTRUCTION
+
+    imagery.release()
+    imagery.rebind()
+
+    assert imagery.instruction() == ""
+
+
+def test_rebind_recomputes_for_the_new_source(qapp):
+    from acq4.modules.Autopatch.reference_imagery import PIN_FRAMES_INSTRUCTION, ReferenceImagery
+
+    sources = {"current": _FakeImagingCtrl()}
+    imagery = ReferenceImagery(lambda: sources["current"], prompt=lambda text: True)
+    imagery.beginSlice()
+    assert imagery.instruction() == PIN_FRAMES_INSTRUCTION
+
+    # The operator switches the selected camera mid-slice; the new one
+    # already has frames pinned.
+    sources["current"] = _FakeImagingCtrl(["a"])
+    imagery.rebind()
 
     assert imagery.instruction() == ""
 
