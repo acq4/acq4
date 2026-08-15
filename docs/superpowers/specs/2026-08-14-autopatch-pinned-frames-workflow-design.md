@@ -72,7 +72,7 @@ If it does not, the fallback is opening it from `AutopatchWindow`'s first
 New file `acq4/modules/Autopatch/reference_imagery.py`.
 
 ```python
-ReferenceImagery(imagingCtrlGetter, prompt=None)
+ReferenceImagery(imagingCtrlGetter, prompt=None, parent=None)
 ```
 
 A `QObject`, unlike the plain `PinnedFrameMirror`/`CameraMirror` classes beside
@@ -89,27 +89,45 @@ set changes. `ProgressOverlay` is a `QObject` for the same reason.
 | `sigInstructionChanged` | Emitted **only when `instruction()` changes value**. |
 | `release()` | Disconnect and forget the source. Teardown's call. |
 
-### The two injected seams
+### The injected seams
 
 Injection is what makes this headless-testable, the same choice P2b made for
 the tile detector.
 
-- **`imagingCtrlGetter() -> imagingCtrl`** resolves the Camera module's
-  `ImagingCtrl` for the selected camera, as `_bindPinnedFrames` does today
-  (`window.getInterfaceForDevice(camera.name()).imagingCtrl`). It no longer has
-  a "none" answer: a missing Camera window raises `HelpfulException` from
-  `_cameraWindow()`, and a Camera module with no interface for the selected
-  camera raises one too, naming the camera.
-- **`prompt(text) -> bool`** defaults to a `QMessageBox.question`, mirroring
-  `ImagingCtrl.clearPinnedFramesClicked`'s own confirmation. Injected so no
-  headless test can open a modal.
+- **`imagingCtrlGetter() -> imagingCtrl | None`** resolves the Camera module's
+  `ImagingCtrl` for the selected camera, as `_bindPinnedFrames` does
+  (`window.getInterfaceForDevice(camera.name()).imagingCtrl`).
+- **`prompt(text, parent) -> bool`** defaults to a `QMessageBox.question`.
+  Injected so no headless test can open a modal. **`parent` matters:** a
+  parentless `QMessageBox` centres on the primary screen rather than over the
+  Autopatch window and can sit behind it with no taskbar entry of its own,
+  which reads as a hung UI at the start of every slice. The window passes
+  itself.
 
-**Nothing catches these raises.** `beginSlice()` lets them propagate out of
-`newSlice()` to acq4's error dialog, which is the agreed handling for a Camera
-module closed after startup. Note this is a different decision from the
-`storage` slot beside it, which *is* caught and rendered as guidance: an unset
-storage directory is a thing the operator has not done yet, while a closed
-Camera module is a thing that should not have happened.
+**Three states, not two — corrected 2026-08-14 during implementation.** This
+section originally said the getter "no longer has a `None` answer" and that
+every failure raises. That was wrong, and building it that way reintroduced
+the very conflation §1b exists to remove: the first implementation reported a
+**headless** window as a missing-Camera-module error. The distinction that
+actually holds:
+
+| State | Answer | Why |
+| --- | --- | --- |
+| No Manager (headless) | `None` | A documented first-class mode, not a rig fault. |
+| Camera module open, no interface for the selected camera | `None` | The "switching cameras" state `_bindPinnedFrames` already tolerates. |
+| Manager present, Camera module absent | **raises** `HelpfulException` | §1b's precondition, violated. |
+
+Only the third raises, and `beginSlice()` lets it propagate out of `newSlice()`
+to acq4's error dialog. That is a different decision from the `storage` slot
+beside it, which *is* caught and rendered as guidance: an unset storage
+directory is a thing the operator has not done yet, while a closed Camera
+module is a thing that should not have happened.
+
+`ReferenceImagery` treats a `None` source as "nothing to show" throughout —
+`rebind()` subscribes to nothing, `beginSlice()` skips the offer to clear, and
+`_refresh()` computes an empty instruction. **Known gap:** an operator whose
+selected camera has no interface in the Camera module therefore gets silence
+rather than guidance. Nothing covers that combination today.
 
 ### Why not extend `PinnedFrameMirror`
 
