@@ -717,16 +717,22 @@ def test_new_slice_reports_rather_than_raising_when_the_camera_module_is_closed(
     # try/except is one of the two mutations the reviewer found the whole
     # suite stayed green under.
     win = _makeWindow(tmp_path)
+    try:
+        win.newSlice()
+        first = win.slice
+        assert first is not None
 
-    def boom():
-        raise HelpfulException("The Camera module is not open.")
+        def boom():
+            raise HelpfulException("The Camera module is not open.")
 
-    win._cameraWindow = boom
+        win._cameraWindow = boom
 
-    win.newSlice()
+        win.newSlice()
 
-    assert win.slice is None
-    assert "Camera module" in win.searchPanel.errorLabel.text()
+        assert win.slice is first
+        assert "Camera module" in win.searchPanel.errorLabel.text()
+    finally:
+        win.teardown()
 
 
 def test_new_slice_with_invalid_constraints_creates_nothing_and_keeps_the_old_slice(

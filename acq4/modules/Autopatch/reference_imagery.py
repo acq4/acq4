@@ -90,14 +90,15 @@ class ReferenceImagery(Qt.QObject):
         self.rebind()
         self._sliceActive = True
         self._refresh()
-        if (
-            self._source is not None
-            and self._source.pinnedFrames
-            and self._prompt(_CLEAR_PROMPT)
-        ):
+        # Bound to a local before the prompt: the prompt is modal and re-enters
+        # the Qt event loop, and release() (teardown, dispatched from inside
+        # that loop) sets self._source to None. Reading self._source again
+        # after the prompt would risk calling clearPinnedFrames() on None.
+        source = self._source
+        if source is not None and source.pinnedFrames and self._prompt(_CLEAR_PROMPT):
             # Emits sigPinnedFramesChanged, so the recompute below is
             # belt-and-braces rather than the only path.
-            self._source.clearPinnedFrames()
+            source.clearPinnedFrames()
         self._refresh()
 
     def rebind(self) -> None:

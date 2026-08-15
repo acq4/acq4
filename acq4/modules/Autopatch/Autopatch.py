@@ -422,9 +422,6 @@ class AutopatchWindow(Qt.QWidget):
             camera.globalCenterPosition("roi")[:2], (fov[0] * 10, fov[1] * 10)
         )
         self._bindPinnedFrames(camera)
-        # Re-resolved per slice for the same reason the mirror is: the operator
-        # may have changed the selected camera since the last one.
-        self._referenceImagery.rebind()
         # There is a camera now, so retract the message above if it is up.
         self.searchPanel.setError("")
         return True
@@ -473,6 +470,12 @@ class AutopatchWindow(Qt.QWidget):
         exists for. A manager present with no Camera window behind it is not
         among these -- _cameraWindow() raises rather than answering that with
         silence, and that raise is deliberately left to propagate here too.
+
+        The `window is None` check below is not what makes the headless case
+        quiet, though: `None.getInterfaceForDevice(...)` would raise
+        AttributeError, which the except clause converts to None regardless.
+        It is kept only because spelling the headless case out here is
+        clearer than leaving it to fall through that catch.
         """
         window = self._cameraWindow()
         if window is None:
