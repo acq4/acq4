@@ -1229,7 +1229,12 @@ Expected: FAIL with `AttributeError: 'AutopatchWindow' object has no attribute '
 In `AutopatchWindow.__init__`, immediately after `self._pinnedFrameMirror = PinnedFrameMirror(self.regionPanel.view)` (~line 119):
 
 ```python
-        self._referenceImagery = ReferenceImagery(self._imagingCtrl)
+        # parent=self so the clear prompt is owned by this window: a parentless
+        # QMessageBox centres on the primary screen rather than over Autopatch
+        # and can sit behind it with no taskbar entry of its own, which reads as
+        # a hung UI at the start of every slice. Every other QMessageBox in acq4
+        # passes a real widget.
+        self._referenceImagery = ReferenceImagery(self._imagingCtrl, parent=self)
         self._referenceImagery.sigInstructionChanged.connect(
             self._onImageryInstruction
         )

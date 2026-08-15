@@ -16,7 +16,7 @@ _CLEAR_PROMPT = (
 
 
 def _askToClear(text: str, parent=None) -> bool:
-    """Default prompt: a Yes/Cancel dialog asking to clear the pinned frames.
+    """Default prompt: an Ok/Cancel dialog asking to clear the pinned frames.
 
     Its title and two-paragraph body are specific to a slice starting, not a
     copy of ImagingCtrl's own Clear button confirmation -- only the button set
