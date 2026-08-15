@@ -19,6 +19,7 @@ from acq4.modules.Autopatch.progress_colors import (
     successBrushes,
 )
 from acq4.util import Qt
+from acq4.util.HelpfulException import HelpfulException
 from acq4_automation.feature_tracking.cell import Cell
 
 
@@ -2010,23 +2011,21 @@ def test_the_camera_window_getter_finds_a_loaded_camera_module(win):
     assert win._cameraWindow() is cameraWindow
 
 
-def test_the_camera_window_getter_does_not_load_the_camera_module(win):
-    # Manager.getModule loads a module that is not already open, and this getter
-    # is called on every mirror redraw -- including from "Add region here". A
-    # button that adds a region must not also start the Camera module, and the
-    # window it would hand back is a different instance from the one any
-    # already-drawn outline belongs to.
-    loaded = []
-
-    def getModule(name):
-        loaded.append(name)
-        return SimpleNamespace(window=SimpleNamespace)
-
+def test_the_camera_window_getter_raises_when_the_module_is_closed(win):
+    # The Autopatch module opens the Camera module at startup. One closed
+    # afterwards is an error, not a state to degrade into -- a blank Area 1
+    # with regions being drawn over nothing is worse than a raise.
     win.manager.listModules = lambda: ["Data Manager"]
-    win.manager.getModule = getModule
 
-    assert win._cameraWindow() is None
-    assert loaded == []
+    with pytest.raises(HelpfulException, match="Camera"):
+        win._cameraWindow()
+
+
+def test_the_camera_window_getter_raises_when_the_module_has_no_window(win):
+    win.manager.getModule = lambda name: SimpleNamespace(window=lambda: None)
+
+    with pytest.raises(HelpfulException, match="Camera"):
+        win._cameraWindow()
 
 
 def test_the_default_fake_manager_offers_a_camera_module(win):

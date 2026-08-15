@@ -7,6 +7,7 @@ import pyqtgraph as pg
 
 from acq4.experiment.search_region import EllipseRegion, PolygonRegion
 from acq4.util import Qt
+from acq4.util.HelpfulException import HelpfulException
 
 from .region_panel import REGION_PEN
 
@@ -172,7 +173,7 @@ class CameraMirror:
         Separate from setEnabled(False) because teardown has to remove them
         without changing what the operator asked for.
         """
-        window = self._cameraWindow()
+        window = self._windowOrNone()
         for item in self.items:
             if window is not None:
                 window.removeItem(item)
@@ -182,7 +183,7 @@ class CameraMirror:
         self.clear()
         if not self._enabled:
             return
-        window = self._cameraWindow()
+        window = self._windowOrNone()
         if window is None:
             return
         for region in self._regions:
@@ -191,3 +192,20 @@ class CameraMirror:
             item.setAcceptedMouseButtons(Qt.Qt.NoButton)
             window.addItem(item, z=_MIRROR_Z)
             self.items.append(item)
+
+    def _windowOrNone(self):
+        """The Camera window, or None if there is not one.
+
+        The getter (AutopatchWindow._cameraModuleWindow) raises rather than
+        answering None everywhere else, since a missing Camera module is an
+        operator-facing error there. Here it stays what the class docstring
+        above says it always was: no manager (a headless window), no Camera
+        module, or one closed since this window opened are all ordinary --
+        this mirror is a display preference, not a dependency -- so any of
+        those is folded back into the None this class already knows how to do
+        nothing with.
+        """
+        try:
+            return self._cameraWindow()
+        except HelpfulException:
+            return None

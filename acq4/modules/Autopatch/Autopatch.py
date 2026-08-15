@@ -234,32 +234,39 @@ class AutopatchWindow(Qt.QWidget):
 
     @staticmethod
     def _cameraModuleWindow(manager):
-        """The Camera module's window under `manager`, or None if there is none.
+        """The Camera module's window under `manager`.
 
-        Not having one is ordinary -- a rig with the module unloaded, or a
-        headless test -- and both mirrors treat it as nothing to do rather than
-        as a failure.
+        Raises rather than answering None: the Autopatch module opens the
+        Camera module at startup (see Autopatch.__init__), so a missing one
+        means it was closed underneath a running session. Degrading quietly
+        would leave Area 1 blank while the operator went on drawing regions
+        over nothing and the survey went on imaging tiles they could not see.
 
-        Asked of the loaded modules rather than of Manager.getModule alone,
-        which loads a module that is not already open: this is reached from
-        every mirror redraw, including the one behind "Add region here", and a
-        button that adds a region must not also start the Camera module.
+        HelpfulException rather than RuntimeError because this is acq4's
+        operator-facing error type -- the same one create_data_dir raises for
+        an unset storage directory -- and it reaches the error dialog reading
+        as an instruction rather than as a crash.
 
-        Static, taking the manager as an argument, so that the Camera mirror can
-        be handed a getter that holds no reference to this window -- see where
-        it is constructed.
+        Static, taking the manager as an argument, so that the Camera mirror
+        can be handed a getter that holds no reference to this window -- see
+        where it is constructed.
         """
         if manager is None:
-            return None
-        try:
-            if "Camera" not in manager.listModules():
-                return None
-            return manager.getModule("Camera").window()
-        except Exception:
-            return None
+            raise HelpfulException(
+                "Autopatch needs a Manager to find the Camera module."
+            )
+        if "Camera" not in manager.listModules():
+            raise HelpfulException(
+                "The Camera module is not open. Autopatch opens it at startup "
+                "and needs it for reference imagery; reopen it and try again."
+            )
+        window = manager.getModule("Camera").window()
+        if window is None:
+            raise HelpfulException("The Camera module has no window.")
+        return window
 
     def _cameraWindow(self):
-        """The Camera module's window, or None if there is not one."""
+        """The Camera module's window."""
         return self._cameraModuleWindow(self.manager)
 
     def _onMirrorToggled(self, enabled: bool) -> None:
@@ -388,17 +395,25 @@ class AutopatchWindow(Qt.QWidget):
         at which a camera is known to be selected, and both routes into a slice
         pass through it.
 
-        Every path unbinds first, including the two that find nothing to bind
-        to. Switching from a camera the Camera module has an interface for to
-        one it does not -- or starting a slice after the Camera module has been
-        closed -- would otherwise leave Area 1 mirroring the previous camera's
-        frames: imagery of tissue that is no longer under the objective, with
-        regions being drawn over it.
+        Unbinds first regardless of what follows, including the headless case
+        below that finds nothing to bind to: switching from a camera the
+        Camera module has an interface for to one it does not would otherwise
+        leave Area 1 mirroring the previous camera's frames -- imagery of
+        tissue that is no longer under the objective, with regions being
+        drawn over it.
+
+        A manager-less window (module=None -- headless, or a test with no
+        Manager to stand in for) has nothing to bind to, and that is
+        ordinary. With a manager, though, there is no such case left to
+        return quietly out of: the Camera module is this module's own
+        precondition, so a manager present with no Camera window behind it
+        reaches here only because it closed underneath a running session,
+        and _cameraWindow() raises rather than answering that with silence.
         """
         self._pinnedFrameMirror.unbind()
-        window = self._cameraWindow()
-        if window is None:
+        if self.manager is None:
             return
+        window = self._cameraWindow()
         try:
             imagingCtrl = window.getInterfaceForDevice(camera.name()).imagingCtrl
         except (KeyError, AttributeError):
@@ -936,6 +951,12 @@ class Autopatch(Module):
             Qt.QTimer.singleShot(0, self.quit)
             return
         Autopatch._instance = self
+        # Before the window, which assumes it: Area 1 mirrors the Camera
+        # module's pinned frames and puts region outlines back into its view,
+        # and getModule() loads a module that is not already open. Making it
+        # this module's responsibility is what lets every consumer downstream
+        # treat a missing Camera module as an error rather than a case.
+        manager.getModule("Camera")
         self.ui = AutopatchWindow(self)
         manager.declareInterface(name, ["autopatchModule"], self)
         self.ui.show()
