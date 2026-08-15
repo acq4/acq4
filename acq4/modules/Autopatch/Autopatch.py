@@ -500,10 +500,12 @@ class AutopatchWindow(Qt.QWidget):
         # that no longer exists once the operator has physically swapped in
         # new tissue.
         self.statusPanel.clearError()
-        # Whichever handler filled the band, what it was about went with the
-        # tissue just discarded. The storage slot alone: this is the condition
-        # New slice has just resolved, and the imagery slot is recomputed from
-        # state moments later by ReferenceImagery.
+        # Storage and region both, because what each was about went with the
+        # tissue just discarded: storage names a condition this click has now
+        # resolved, and region refused an edit to an outline that no longer
+        # exists. Imagery is deliberately left alone -- ReferenceImagery
+        # recomputes it from state moments later, and clearing it here would
+        # only race that.
         self.statusPanel.setInstruction("storage", "")
         self.statusPanel.setInstruction("region", "")
         if self.orchestrator is not None:
