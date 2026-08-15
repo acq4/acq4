@@ -2336,6 +2336,23 @@ def test_a_refused_edit_does_not_erase_the_storage_instruction(win):
     assert "Storage directory" in win.statusPanel.instruction()
 
 
+def test_a_new_slice_retracts_a_refused_edits_message(win):
+    """The opposite direction from test_a_refused_edit_does_not_erase_the_
+    storage_instruction: a region refusal names an outline on tissue that
+    newSlice() is about to discard, so newSlice() must retract it -- unlike
+    the storage instruction above, which survives a region edit because it
+    is still true."""
+    win.newSlice()
+    win.regionPanel.sigRegionsChanged.emit([_OVERSIZED_REGION])
+    assert win.statusPanel.instruction() != ""
+
+    win.newSlice()
+
+    # region outranks imagery: the imagery instruction showing proves the
+    # refusal was retracted, not merely outranked.
+    assert win.statusPanel.instruction() == PIN_FRAMES_INSTRUCTION
+
+
 def test_add_region_here_reports_a_refusal_rather_than_raising(win):
     """"Add region here" seeds 3x3 fields, which is nine tiles whatever the
     field of view, so it cannot trip the cap as it stands. The refusal is

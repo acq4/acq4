@@ -576,9 +576,12 @@ class AutopatchWindow(Qt.QWidget):
         self._releaseCellPositionConnections()
         # Last, and deliberately: the prompt inside is modal, a modal dialog
         # re-enters the Qt event loop, and every queued slot dispatches inside
-        # it -- including the sigCellFinished from the cell still in flight on
-        # the tissue this click just discarded, whose suppression assumes it
-        # lands outside a half-completed New slice.
+        # it. No intermediate state of this method -- a half-cleared band, a
+        # detached producer, cells already gone from Area 5 but still in the
+        # orchestrator's queue -- may ever be observable from that nested
+        # loop, so everything above has to be finished before this call opens
+        # it. test_the_clear_prompt_opens_only_after_the_wipe pins exactly
+        # that.
         self._referenceImagery.beginSlice()
 
     def addRegionHere(self) -> None:

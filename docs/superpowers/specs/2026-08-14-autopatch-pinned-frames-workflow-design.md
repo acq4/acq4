@@ -129,15 +129,14 @@ the orchestrator detach/`clearQueue()`/`abandonCellInHand()`, and after
 `_refreshSurveyStats()`.
 
 **This ordering is load-bearing.** The prompt is modal; a modal dialog re-enters
-the Qt event loop; every queued slot dispatches inside it — most consequentially
-the `sigCellFinished` queued from the cell still in flight on the tissue this
-click just discarded, whose whole suppression dance
-(`abandonCellInHand`, and the six review rounds behind it) assumes it lands
-outside a half-completed New slice. Running the prompt last means no
-intermediate state of `newSlice()` is ever observable from inside a nested
-event loop. This project has been bitten repeatedly by a queued signal landing
-mid-transaction; opening a nested loop in the middle of one invites the same
-class of defect.
+the Qt event loop; every queued slot dispatches inside it. Running the prompt
+last means no intermediate state of `newSlice()` -- a half-cleared band, a
+detached producer, cells already gone from Area 5 but still in the
+orchestrator's queue -- is ever observable from inside that nested loop.
+`test_the_clear_prompt_opens_only_after_the_wipe` pins exactly this: the wipe
+is complete before the prompt can open at all. This project has been bitten
+repeatedly by a queued signal landing mid-transaction; opening a nested loop
+in the middle of one invites the same class of defect.
 
 Inside `beginSlice()`, in order:
 
@@ -199,10 +198,11 @@ I retract this?", which slots answer structurally.
 
 **One deliberate behaviour change falls out of this.** `newSlice()`'s success
 path today calls `clearInstruction()`, wiping whatever the band held. Under
-slots it clears the `storage` slot alone — the one whose condition New slice
-has just resolved — and leaves `imagery` to `ReferenceImagery`, which
-recomputes it from state moments later in `beginSlice()`. A blanket wipe would
-have raced that recompute for no reason.
+slots it clears the `storage` and `region` slots — storage because New slice
+has just resolved that condition, region because a refusal it might be showing
+named an outline on tissue that is now gone — and leaves `imagery` to
+`ReferenceImagery`, which recomputes it from state moments later in
+`beginSlice()`. A blanket wipe would have raced that recompute for no reason.
 
 ### What `imagery` says, and when
 
