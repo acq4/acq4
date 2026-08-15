@@ -2011,18 +2011,32 @@ def test_the_camera_window_getter_finds_a_loaded_camera_module(win):
     assert win._cameraWindow() is cameraWindow
 
 
-def test_the_camera_window_getter_raises_when_the_module_is_closed(win):
-    # The Autopatch module opens the Camera module at startup. One closed
-    # afterwards is an error, not a state to degrade into -- a blank Area 1
-    # with regions being drawn over nothing is worse than a raise.
-    win.manager.listModules = lambda: ["Data Manager"]
+def test_the_camera_window_getter_raises_when_the_module_is_closed(win, monkeypatch):
+    # The Autopatch module opens the Camera module at startup. A module
+    # closed afterwards is an error, not a state to degrade into -- a blank
+    # Area 1 with regions being drawn over nothing is worse than a raise.
+    loaded = []
+
+    def getModule(name):
+        loaded.append(name)
+        return SimpleNamespace(window=SimpleNamespace)
+
+    monkeypatch.setattr(win.manager, "listModules", lambda: ["Data Manager"])
+    monkeypatch.setattr(win.manager, "getModule", getModule)
 
     with pytest.raises(HelpfulException, match="Camera"):
         win._cameraWindow()
 
+    # Manager.getModule loads a module that is not already open, and this
+    # getter is called on every mirror redraw -- including from "Add region
+    # here". A button that adds a region must not also start the Camera
+    # module: listModules() is checked first, so a module reported closed is
+    # never handed to getModule() at all.
+    assert loaded == []
 
-def test_the_camera_window_getter_raises_when_the_module_has_no_window(win):
-    win.manager.getModule = lambda name: SimpleNamespace(window=lambda: None)
+
+def test_the_camera_window_getter_raises_when_the_module_has_no_window(win, monkeypatch):
+    monkeypatch.setattr(win.manager, "getModule", lambda name: SimpleNamespace(window=lambda: None))
 
     with pytest.raises(HelpfulException, match="Camera"):
         win._cameraWindow()
