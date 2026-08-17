@@ -476,7 +476,9 @@ def test_image_stack_builder_tolerates_a_none_center_index(qapp):
         "image_stack", {"stack": np.zeros((4, 4)), "center_index": None, "title": ""}
     )
 
-    assert wrapper.findChild(pg.ImageView) is not None or isinstance(wrapper, pg.ImageView)
+    # An empty title means captioned() returns the view itself, unwrapped.
+    assert isinstance(wrapper, pg.ImageView)
+    assert wrapper.currentIndex == 0
 
 
 def test_task_results_builder_plots_one_curve_per_sweep(qapp):
@@ -662,6 +664,8 @@ EOF
 **Interfaces:**
 - Consumes: `ActionLogEntry.on_details` (Task 1).
 - Produces: `CellPanel._details: dict[tuple[int, int], tuple[str, Any]]`; `CellPanel.detailsFor(cell, rowIndex) -> tuple[str, Any] | None`; `CellPanel._dropDetailsFor(cellId) -> None`. The `"details"` phase string on `sigActionEntry`.
+
+This task retains payloads and nothing more — no widget is mounted from one until Task 5. Retention is independently testable (`detailsFor` is the seam), and splitting it this way keeps this diff free of any half-built mounting path.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -884,25 +888,12 @@ In `_onActionEntry`, add a branch before the trailing `"status"` comment:
 
 ```python
         elif phase == "details":
+            # Stored only; mounting it is Task 5's job, once rows are
+            # individually selectable and there is a notion of "the selected
+            # row" to mount into.
             loc = self._entryTimelineLoc.get(id(entry))
             if loc is not None:
                 self._details[loc] = (entry.details_kind, entry.details_payload)
-                if self._isSelectedRow(loc):
-                    self._mountSelectedRow()
-```
-
-Add the two helpers used above, after `_clearShowContainer`:
-
-```python
-    def _isSelectedRow(self, loc) -> bool:
-        """Whether (cellId, rowIndex) is the row the operator is looking at."""
-        cellId, index = loc
-        cell = self._currentSelectedCell()
-        return cell is not None and id(cell) == cellId and self.timelineList.currentRow() == index
-
-    def _mountSelectedRow(self) -> None:
-        """Placeholder until Task 5 gives rows their own mounting."""
-        return None
 ```
 
 - [ ] **Step 5: Drop payloads wherever rows are dropped**
@@ -1086,6 +1077,31 @@ Run: `/home/martin/.miniforge3/envs/acq4-gl/bin/python -m pytest acq4/modules/Au
 
 Expected: FAIL — `_mounted(panel)` is `[]` where a payload was expected, since `_mountSelectedRow` is still the Task 4 placeholder and `timelineList` has no selection handler.
 
+Task 5 also adds `_isSelectedRow`, used by the `"details"` branch Task 4 left storage-only and by Task 7's status line:
+
+```python
+    def _isSelectedRow(self, loc) -> bool:
+        """Whether (cellId, rowIndex) is the row the operator is looking at."""
+        cellId, index = loc
+        cell = self._currentSelectedCell()
+        return (
+            cell is not None
+            and id(cell) == cellId
+            and self.timelineList.currentRow() == index
+        )
+```
+
+and extends Task 4's `"details"` branch to mount a payload that arrives for the row already being watched:
+
+```python
+        elif phase == "details":
+            loc = self._entryTimelineLoc.get(id(entry))
+            if loc is not None:
+                self._details[loc] = (entry.details_kind, entry.details_payload)
+                if self._isSelectedRow(loc):
+                    self._mountSelectedRow()
+```
+
 - [ ] **Step 3: Add the live-widget store**
 
 In `acq4/modules/Autopatch/cell_panel.py`, in `__init__` immediately after the `self._timelineItems` block:
@@ -1104,9 +1120,9 @@ In `acq4/modules/Autopatch/cell_panel.py`, in `__init__` immediately after the `
         self._liveWidgets: dict[int, object] = {}
 ```
 
-- [ ] **Step 4: Replace the placeholder `_mountSelectedRow` and connect the selection**
+- [ ] **Step 4: Add `_mountSelectedRow` and connect the selection**
 
-Replace the Task 4 placeholder `_mountSelectedRow` with:
+Add after `_clearShowContainer`:
 
 ```python
     def _mountSelectedRow(self) -> None:
@@ -2628,7 +2644,7 @@ Expected: PASS with no failures, no errors, and no new warnings. Test output mus
 
 - [ ] **Step 2: Confirm nothing outside this phase's scope changed**
 
-Run: `git diff --stat cc291fe8e..HEAD -- acq4/ tools/`
+Run: `git diff --stat <phase-1-base>..HEAD -- acq4/ tools/`, where `<phase-1-base>` is the commit recorded in `.superpowers/sdd/progress.md` as this phase's starting point — not `cc291fe8e`, which predates the spec and plan commits.
 
 Expected: changes confined to `acq4/experiment/log_entry.py`, `acq4/experiment/actions/{device,prompt,storage}.py`, `acq4/experiment/tests/`, `acq4/modules/Autopatch/{cell_panel,details_renderers}.py`, `acq4/modules/Autopatch/tests/`, and the two added lines in `acq4/modules/TaskRunner/TaskRunner.py`. Nothing under `acq4/devices/`, `acq4/modules/MultiPatch/`, `acq4/filetypes/`, or `tools/`.
 
