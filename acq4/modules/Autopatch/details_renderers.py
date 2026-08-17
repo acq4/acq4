@@ -2,6 +2,9 @@
 turning an action's retained plain-data payload into a widget to mount."""
 from __future__ import annotations
 
+import numpy as np
+import pyqtgraph as pg
+
 from acq4.util import Qt
 
 from .error_display import ErrorBlock
@@ -47,12 +50,64 @@ def buildError(payload) -> Qt.QWidget:
     )
 
 
+def buildImageStack(payload) -> Qt.QWidget:
+    """A z-stack in a pg.ImageView, opened at the frame the cell was found on.
+
+    setImage jumps to frame 0, which for a cellfie is the top of the stack and
+    shows nothing; center_index is the plane the cell actually sits on.
+    """
+    view = pg.ImageView()
+    stack = np.asarray(payload["stack"])
+    # Provide frame indices as xvals so setCurrentIndex works. Explicitly set
+    # axes for 3D arrays so the first dimension (z-stack) is treated as time,
+    # not as color (which would be the default guess for small last dimensions).
+    axes_dict = None
+    if stack.ndim == 3:
+        axes_dict = {'t': 0, 'x': 1, 'y': 2}
+        n_frames = stack.shape[0]
+        xvals = np.arange(n_frames, dtype=float)
+    else:
+        xvals = None
+    view.setImage(stack, autoRange=True, autoLevels=True, xvals=xvals, axes=axes_dict)
+    centerIndex = payload.get("center_index")
+    if centerIndex is not None:
+        view.setCurrentIndex(centerIndex)
+    title = payload.get("title") or ""
+    return captioned(view, [title] if title else [])
+
+
+def buildTaskResults(payload) -> Qt.QWidget:
+    """One TaskRunner sequence's sweeps, coloured over sequence index so the
+    order they ran in is readable at a glance."""
+    plot = pg.PlotWidget()
+    plot.setLabels(left=("primary", payload.get("units") or ""), bottom=("time", "s"))
+    traces = list(payload.get("traces", ()))
+    for index, (times, values) in enumerate(traces):
+        plot.plot(
+            np.asarray(times),
+            np.asarray(values),
+            pen=pg.intColor(index, hues=max(len(traces), 1)),
+        )
+    lines = [
+        f"{payload.get('sweep_count', len(traces))} sweeps"
+        f" — saved to {payload.get('sequence_dir') or 'nowhere'}"
+    ]
+    decimation = payload.get("decimation", 1)
+    if decimation > 1:
+        # Never silent: the pane says what it is not showing, and the
+        # undecimated data is in the saved sequence directory named above.
+        lines.append(f"plotted decimated {decimation}x; full data on disk")
+    return captioned(plot, lines)
+
+
 # kind -> builder, keyed by the string an action passes to set_details(). A
 # builder takes only the payload and returns a widget: it never sees a Cell, an
 # ActionLogEntry, or the panel, so nothing it builds can retain any of them.
 BUILDERS = {
     "text": buildText,
     "error": buildError,
+    "image_stack": buildImageStack,
+    "task_results": buildTaskResults,
 }
 
 

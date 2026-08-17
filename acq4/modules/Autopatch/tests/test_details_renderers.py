@@ -97,3 +97,126 @@ def test_captioned_with_no_lines_returns_the_widget_itself(qapp):
     inner = Qt.QLabel("inner")
 
     assert captioned(inner, []) is inner
+
+
+def test_image_stack_builder_opens_at_the_center_index(qapp):
+    import numpy as np
+    import pyqtgraph as pg
+    from acq4.modules.Autopatch.details_renderers import buildDetailsWidget
+
+    stack = np.arange(5 * 4 * 3, dtype=float).reshape(5, 4, 3)
+    wrapper = buildDetailsWidget(
+        "image_stack", {"stack": stack, "center_index": 2, "title": "Cellfie"}
+    )
+
+    view = wrapper.findChild(pg.ImageView)
+    assert view is not None
+    assert view.currentIndex == 2
+
+
+def test_image_stack_builder_shows_the_title_as_its_caption(qapp):
+    import numpy as np
+    from acq4.modules.Autopatch.details_renderers import buildDetailsWidget
+
+    wrapper = buildDetailsWidget(
+        "image_stack",
+        {"stack": np.zeros((3, 4, 4)), "center_index": 1, "title": "Cellfie"},
+    )
+
+    caption = wrapper.layout().itemAt(0).widget()
+    assert "Cellfie" in caption.text()
+
+
+def test_image_stack_builder_tolerates_a_none_center_index(qapp):
+    # A 2D image or a single-frame stack has no meaningful center frame.
+    import numpy as np
+    import pyqtgraph as pg
+    from acq4.modules.Autopatch.details_renderers import buildDetailsWidget
+
+    wrapper = buildDetailsWidget(
+        "image_stack", {"stack": np.zeros((4, 4)), "center_index": None, "title": ""}
+    )
+
+    # An empty title means captioned() returns the view itself, unwrapped.
+    assert isinstance(wrapper, pg.ImageView)
+    assert wrapper.currentIndex == 0
+
+
+def test_task_results_builder_plots_one_curve_per_sweep(qapp):
+    import numpy as np
+    import pyqtgraph as pg
+    from acq4.modules.Autopatch.details_renderers import buildDetailsWidget
+
+    t = np.linspace(0, 1, 10)
+    payload = {
+        "traces": [(t, t * 1.0), (t, t * 2.0), (t, t * 3.0)],
+        "sequence_dir": "protocol_000",
+        "sweep_count": 3,
+        "decimation": 1,
+        "units": "A",
+    }
+
+    wrapper = buildDetailsWidget("task_results", payload)
+
+    plot = wrapper.findChild(pg.PlotWidget)
+    assert plot is not None
+    assert len(plot.plotItem.listDataItems()) == 3
+
+
+def test_task_results_caption_reports_sweeps_directory_and_decimation(qapp):
+    import numpy as np
+    from acq4.modules.Autopatch.details_renderers import buildDetailsWidget
+
+    t = np.linspace(0, 1, 10)
+    wrapper = buildDetailsWidget(
+        "task_results",
+        {
+            "traces": [(t, t)],
+            "sequence_dir": "protocol_007",
+            "sweep_count": 1,
+            "decimation": 25,
+            "units": "A",
+        },
+    )
+
+    text = wrapper.layout().itemAt(0).widget().text()
+    assert "1" in text
+    assert "protocol_007" in text
+    assert "25" in text
+
+
+def test_task_results_caption_omits_decimation_when_undecimated(qapp):
+    import numpy as np
+    from acq4.modules.Autopatch.details_renderers import buildDetailsWidget
+
+    t = np.linspace(0, 1, 10)
+    wrapper = buildDetailsWidget(
+        "task_results",
+        {
+            "traces": [(t, t)],
+            "sequence_dir": "protocol_000",
+            "sweep_count": 1,
+            "decimation": 1,
+            "units": "A",
+        },
+    )
+
+    assert "decimated" not in wrapper.layout().itemAt(0).widget().text()
+
+
+def test_task_results_builder_tolerates_no_traces(qapp):
+    # A sequence stopped before its first sweep completed.
+    from acq4.modules.Autopatch.details_renderers import buildDetailsWidget
+
+    wrapper = buildDetailsWidget(
+        "task_results",
+        {
+            "traces": [],
+            "sequence_dir": "protocol_000",
+            "sweep_count": 0,
+            "decimation": 1,
+            "units": "A",
+        },
+    )
+
+    assert wrapper is not None
