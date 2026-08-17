@@ -165,3 +165,63 @@ def test_error_fields_are_populated_before_on_finish_fires():
         entry._finish(exc)
     assert seen["exc_type"] == "BrokenPipette"
     assert "tip sheared off" in seen["traceback_text"]
+
+
+def test_details_default_to_none():
+    action_entry = ActionLogEntry("Patch")
+    assert action_entry.details_kind is None
+    assert action_entry.details_payload is None
+
+
+def test_set_details_stores_kind_and_payload():
+    action_entry = ActionLogEntry("Patch")
+    action_entry.set_details("text", {"lines": ["hello"]})
+    assert action_entry.details_kind == "text"
+    assert action_entry.details_payload == {"lines": ["hello"]}
+
+
+def test_on_details_hook_receives_entry_kind_and_payload():
+    ctx = ExecutionContext()
+    calls = []
+
+    def hook(action_entry):
+        action_entry.on_details = lambda e, kind, payload: calls.append((e, kind, payload))
+
+    ctx.on_log_action = hook
+    with ctx.log_action("Patch") as action_entry:
+        action_entry.set_details("text", {"lines": ["a"]})
+    assert calls == [(action_entry, "text", {"lines": ["a"]})]
+
+
+def test_details_set_in_a_finally_arrive_before_finish():
+    # CellPanel resolves an entry to its timeline row through bookkeeping that
+    # the entry's finish tears down, so a payload set afterwards has no row to
+    # attach to. An action's try/finally inside the `with` is what orders them.
+    ctx = ExecutionContext()
+    order = []
+
+    def hook(action_entry):
+        action_entry.on_details = lambda e, k, p: order.append("details")
+        action_entry.on_finish = lambda e: order.append("finish")
+
+    ctx.on_log_action = hook
+    with ctx.log_action("Patch") as action_entry:
+        try:
+            pass
+        finally:
+            action_entry.set_details("text", {"lines": []})
+    assert order == ["details", "finish"]
+
+
+def test_details_survive_an_error_outcome():
+    # An action that gathered data and then failed keeps the data: it is more
+    # informative than the traceback, which the row's outcome also carries.
+    ctx = ExecutionContext()
+    with pytest.raises(BrokenPipette):
+        with ctx.log_action("Patch") as action_entry:
+            try:
+                raise BrokenPipette("tip sheared off")
+            finally:
+                action_entry.set_details("text", {"lines": ["got this far"]})
+    assert action_entry.outcome == "error"
+    assert action_entry.details_payload == {"lines": ["got this far"]}
