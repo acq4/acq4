@@ -463,3 +463,45 @@ def test_teardown_releases_the_progress_overlay(qapp, tmp_path):
     assert scatter not in win.regionPanel.view.addedItems
 
     win.close()
+
+
+def test_teardown_releases_the_reference_imagery(qapp, tmp_path):
+    """ReferenceImagery.rebind() subscribes to the Camera module's
+    ImagingCtrl, same as PinnedFrameMirror does -- a live connection there
+    would go on recomputing Area 3's imagery instruction for a torn-down
+    window. The manager and camera stand-ins come from test_window_integration
+    for the same reason test_teardown_frees_the_slice_producer_and_cells_by_
+    refcounting above borrows them: newSlice() needs a real camera and a real
+    pinned-frame source to reach ReferenceImagery.beginSlice() at all.
+    """
+    from types import SimpleNamespace
+
+    import acq4.util.DataManager as dm
+    from acq4.modules.Autopatch.Autopatch import AutopatchWindow
+
+    from .test_window_integration import _FakeCameraWithDevice, _FakeManager
+
+    _write_protocol(tmp_path, "demo.py", _NOOP_PROTOCOL)
+    storageRoot = dm.getDirHandle(str(tmp_path / "storage"), create=True)
+
+    win = AutopatchWindow(
+        module=SimpleNamespace(manager=_FakeManager(storageRoot)),
+        protocolDir=str(tmp_path),
+        pipetteSelector=_FakePipetteSelector(target=(1e-3, 2e-3, 3e-3)),
+        cameraSelector=_FakeCameraWithDevice(),
+    )
+    win.protocolPanel.fileCombo.setCurrentText("demo")
+
+    win.newSlice()
+    source = win.manager.pinnedFrameSource
+    # Two, not merely nonzero: PinnedFrameMirror and ReferenceImagery both
+    # subscribe to this signal, so pinning the precondition to just one of
+    # them (> 0) would still be satisfied by PinnedFrameMirror alone even if
+    # ReferenceImagery.rebind() never subscribed at all.
+    assert source.receivers(source.sigPinnedFramesChanged) == 2
+
+    win.teardown()
+
+    assert source.receivers(source.sigPinnedFramesChanged) == 0
+
+    win.close()

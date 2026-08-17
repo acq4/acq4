@@ -148,8 +148,11 @@ class CameraMirror:
     no second copy of a region's state to reconcile. Autopatch stays the only
     place a region is edited.
 
-    Holds no region state of its own -- it is told what to draw. A Camera module
-    that is not loaded is ordinary, not an error: this is a display preference.
+    Holds no region state of its own -- it is told what to draw. A missing
+    Camera module is ordinary only for clear(), which teardown() depends on
+    never raising (see _windowOrNone()); redrawing what the operator asked
+    to see mirrored is not, and propagates the getter's raise instead of
+    silently doing nothing.
     """
 
     def __init__(self, cameraWindowGetter):
@@ -172,7 +175,7 @@ class CameraMirror:
         Separate from setEnabled(False) because teardown has to remove them
         without changing what the operator asked for.
         """
-        window = self._cameraWindow()
+        window = self._windowOrNone()
         for item in self.items:
             if window is not None:
                 window.removeItem(item)
@@ -182,6 +185,10 @@ class CameraMirror:
         self.clear()
         if not self._enabled:
             return
+        # Not _windowOrNone(): a ticked "Mirror to Camera" that silently does
+        # nothing because the Camera module closed is worse than the raise
+        # reaching the operator. clear() above already took the stale items
+        # out regardless, so a raise here does not leave outlines stranded.
         window = self._cameraWindow()
         if window is None:
             return
@@ -191,3 +198,27 @@ class CameraMirror:
             item.setAcceptedMouseButtons(Qt.Qt.NoButton)
             window.addItem(item, z=_MIRROR_Z)
             self.items.append(item)
+
+    def _windowOrNone(self):
+        """The Camera window, or None if there is not one.
+
+        Used by clear() only -- not by _redraw(), which calls the getter
+        directly and lets a raise propagate. clear() cannot afford to raise:
+        it runs inside AutopatchWindow.teardown()'s `finally` block, ahead of
+        _releaseCellPositionConnections() and _progressOverlay.release() (see
+        that docstring), and a raise there would skip both -- the same
+        exit-crash hazard PinnedFrameMirror.unbind's own docstring exists to
+        prevent.
+
+        Catches bare Exception, not just HelpfulException: Manager.loadModule
+        reserves a module's name in `self.modules` (so listModules() already
+        reports it) before the module class is constructed, leaving a None
+        placeholder there until construction finishes (see Manager.py). A
+        getModule() call landing in that window hands back that None, and
+        `.window()` on it raises AttributeError, not HelpfulException -- which
+        must not escape teardown's `finally` either.
+        """
+        try:
+            return self._cameraWindow()
+        except Exception:
+            return None

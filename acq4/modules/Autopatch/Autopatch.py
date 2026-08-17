@@ -22,6 +22,7 @@ from .example_protocols import install_example_protocols
 from .progress_colors import ColorContext, brushesFor, legendFor
 from .progress_overlay import Marker, ProgressOverlay
 from .protocol_panel import ProtocolPanel
+from .reference_imagery import ReferenceImagery
 from .region_mirrors import CameraMirror, PinnedFrameMirror
 from .region_panel import RegionPanel
 from .search_panel import SearchPanel
@@ -117,6 +118,15 @@ class AutopatchWindow(Qt.QWidget):
         self.area1Box.layout().addWidget(self.regionPanel)
 
         self._pinnedFrameMirror = PinnedFrameMirror(self.regionPanel.view)
+        # parent=self so the clear prompt is owned by this window: a parentless
+        # QMessageBox centres on the primary screen rather than over Autopatch
+        # and can sit behind it with no taskbar entry of its own, which reads as
+        # a hung UI at the start of every slice. Every other QMessageBox.question/
+        # warning/critical call in acq4 passes a real widget as parent, too.
+        self._referenceImagery = ReferenceImagery(self._imagingCtrl, parent=self)
+        self._referenceImagery.sigInstructionChanged.connect(
+            self._onImageryInstruction
+        )
         # The getter is closed over the manager alone, never over this window.
         # A bound self._cameraModuleWindow would give mirror -> window while
         # self._cameraMirror gives window -> mirror, and teardown() never drops
@@ -172,9 +182,6 @@ class AutopatchWindow(Qt.QWidget):
         # on the orchestrator's worker thread and must not read a selector.
         self._cachedCamera = None
         self._cachedScope = None
-        # Whether Area 3's instruction band is currently carrying a message this
-        # window's Area 1 handlers put there -- see _setRegionInstruction().
-        self._regionInstruction = False
         self._tornDown = False
         self.protocolPanel.sigProtocolLoaded.connect(self._onProtocolLoaded)
         # Area 4 (the protocol picker/Reload) must not be usable while a
@@ -190,15 +197,6 @@ class AutopatchWindow(Qt.QWidget):
         self.regionPanel.sigAddRegionRequested.connect(self.addRegionHere)
         self.regionPanel.sigRegionsChanged.connect(self._onRegionsEdited)
         self.regionPanel.mirrorCheck.toggled.connect(self._onMirrorToggled)
-        if self.manager is not None:
-            # Both Area 1 mirrors resolve the Camera module through
-            # _cameraModuleWindow, which reports None while that module is not
-            # open -- so a mirror armed before the operator opens it binds to
-            # nothing. Manager announces every module load and quit here, which
-            # is the one event that can change that answer. Disconnected in
-            # teardown(); a window built with no module (the headless/test mode)
-            # has no manager to listen to.
-            self.manager.sigModulesChanged.connect(self._onModulesChanged)
         self.searchPanel.sigConstraintsChanged.connect(self._onConstraintsChanged)
         self.statusPanel.sigInteractionLocked.connect(
             self.searchPanel.setInteractionLocked
@@ -246,74 +244,49 @@ class AutopatchWindow(Qt.QWidget):
 
     @staticmethod
     def _cameraModuleWindow(manager):
-        """The Camera module's window under `manager`, or None if there is none.
+        """The Camera module's window under `manager`, or None with no manager.
 
-        Not having one is ordinary -- a rig with the module unloaded, or a
-        headless test -- and both mirrors treat it as nothing to do rather than
-        as a failure.
+        None only for the manager-less case: headless (module=None) is a mode
+        this window's constructor supports by design -- `module` defaults to
+        None, and the manager-is-None branch there only requires an explicit
+        `protocolDir` in its place (see AutopatchWindow.__init__) -- and
+        test_a_headless_window_with_no_manager_still_starts_a_slice asserts it
+        keeps working, not a degraded state for this getter to paper over.
+        With a manager present, there is no such case left: the Autopatch
+        module opens the Camera module at startup (see Autopatch.__init__), so
+        seeing it missing or windowless here means it was closed underneath a
+        running session, and raising is what surfaces that to the operator
+        instead of leaving Area 1 blank while regions keep getting drawn over
+        nothing.
 
-        Asked of the loaded modules rather than of Manager.getModule alone,
-        which loads a module that is not already open: this is reached from
-        every mirror redraw, including the one behind "Add region here", and a
-        button that adds a region must not also start the Camera module.
+        HelpfulException rather than RuntimeError because this is acq4's
+        operator-facing error type -- the same one create_data_dir raises for
+        an unset storage directory -- and it reaches the error dialog reading
+        as an instruction rather than as a crash.
 
-        Static, taking the manager as an argument, so that the Camera mirror can
-        be handed a getter that holds no reference to this window -- see where
-        it is constructed.
+        Static, taking the manager as an argument, so that the Camera mirror
+        can be handed a getter that holds no reference to this window -- see
+        where it is constructed.
         """
         if manager is None:
             return None
-        try:
-            if "Camera" not in manager.listModules():
-                return None
-            return manager.getModule("Camera").window()
-        except Exception:
-            return None
+        if "Camera" not in manager.listModules():
+            raise HelpfulException(
+                "The Camera module is not open. Autopatch opens it at startup "
+                "and needs it for reference imagery; reopen it and try again."
+            )
+        window = manager.getModule("Camera").window()
+        if window is None:
+            raise HelpfulException("The Camera module has no window.")
+        return window
 
     def _cameraWindow(self):
-        """The Camera module's window, or None if there is not one."""
+        """The Camera module's window, or None with no manager (headless)."""
         return self._cameraModuleWindow(self.manager)
 
     def _onMirrorToggled(self, enabled: bool) -> None:
-        """Turn the outline mirror on or off, saying so if there is nowhere to
-        draw.
-
-        A tick with no Camera module open is otherwise a silent no-op: the
-        checkbox stays ticked, nothing appears anywhere, and nothing
-        distinguishes that from a mirror that is broken. The message is
-        accurate about what happens next -- _onModulesChanged() re-runs this
-        handler when a module is opened, so the outlines really do appear then.
-        """
+        """Turn the outline mirror on or off."""
         self._cameraMirror.setEnabled(enabled)
-        if enabled and self._cameraWindow() is None:
-            self._setRegionInstruction(
-                "Mirror to Camera: no Camera module is open. The outlines will "
-                "appear if one is opened."
-            )
-        else:
-            self._setRegionInstruction("")
-
-    def _onModulesChanged(self) -> None:
-        """Re-resolve Area 1's two mirrors against the modules now loaded.
-
-        Both of them find the Camera module once and keep the answer: the
-        outline mirror at the moment the checkbox is ticked, the pinned-frame
-        mirror at the moment a slice starts. Either can happen before the
-        Camera module is open, and Manager emits this whenever that changes.
-
-        Refuses once the window is torn down. teardown() waits on the
-        orchestrator with the Qt event loop still pumping, so a module loaded in
-        those seconds is announced while teardown is in progress, and re-binding
-        then would leave the Camera module holding a closed session's graphics.
-        """
-        if self._tornDown:
-            return
-        # Re-runs the checkbox's own handler, which redraws the outlines against
-        # whatever window there is now and raises or retracts its message.
-        self._onMirrorToggled(self.regionPanel.mirrorCheck.isChecked())
-        camera = self.cameraSelector.getSelectedObj()
-        if self.slice is not None and camera is not None:
-            self._bindPinnedFrames(camera)
 
     def _onRegionsEdited(self, regions) -> None:
         """Take Area 1's edited region list as the slice's regions.
@@ -350,25 +323,22 @@ class AutopatchWindow(Qt.QWidget):
             self.regionPanel.setRegions(self.slice.regions)
             return
         self._setRegionInstruction("")
-        self._cameraMirror.setRegions(regions)
+        # Survey stats refreshed before the mirror is touched: the mirror's
+        # setRegions() can raise out of a closed Camera module (see
+        # CameraMirror._redraw()), and by this point self.slice.setRegions()
+        # above has already committed the edit. Area 2's readout must reflect
+        # that committed edit even if the raise below skips everything after
+        # it -- an operator judging feasibility from a stale tile count is the
+        # failure mode this ordering rules out.
         self._refreshSurveyStats()
+        self._cameraMirror.setRegions(regions)
 
     def _setRegionInstruction(self, text: str) -> None:
-        """Put Area 1's guidance in Area 3's band, or retract what it last put
-        there.
+        """Put Area 1's guidance in Area 3's band, or retract it.
 
         Area 1 has one guidance slot: a later message replaces an earlier one.
-        Whether this window is currently using that slot is tracked rather than
-        written straight through, because newSlice() writes into the same band
-        for its own reason -- an unchosen storage directory -- and clearing
-        Area 1's message must not erase guidance whose condition still holds.
         """
-        if text:
-            self._regionInstruction = True
-            self.statusPanel.setInstruction(text)
-        elif self._regionInstruction:
-            self._regionInstruction = False
-            self.statusPanel.clearInstruction()
+        self.statusPanel.setInstruction("region", text)
 
     def _canStartSlice(self) -> bool:
         """Whether a slice can be started right now, reporting the reason
@@ -378,6 +348,17 @@ class AutopatchWindow(Qt.QWidget):
         commits to a new storage directory -- constructing the Slice remains
         _startSlice()'s job alone, called only once directory creation has
         already succeeded.
+
+        The Camera module precondition is checked here too, rather than left
+        for _bindPinnedFrames() to discover partway through _startSlice():
+        by then self.slice is already replaced and, via newSlice(), a Slice
+        data directory has already been created and made current -- see that
+        method's own docstring on why the camera/constraints check runs
+        before create_data_dir() at all. An operator missing the Camera
+        module gets the same treatment as one with no camera selected: a
+        message on SearchPanel's error line, reported before anything is
+        committed, rather than a raise discovered once it is too late to
+        back out of.
 
         A torn-down window can never start one again. teardown() waits on the
         orchestrator with the Qt event loop still pumping (see
@@ -392,6 +373,11 @@ class AutopatchWindow(Qt.QWidget):
         camera = self.cameraSelector.getSelectedObj()
         if camera is None:
             self.searchPanel.setError("Select a camera before starting a slice.")
+            return False
+        try:
+            self._cameraWindow()
+        except HelpfulException as exc:
+            self.searchPanel.setError(str(exc))
             return False
         if self.searchPanel.constraints() is None:
             return False
@@ -447,12 +433,21 @@ class AutopatchWindow(Qt.QWidget):
         at which a camera is known to be selected, and both routes into a slice
         pass through it.
 
-        Every path unbinds first, including the two that find nothing to bind
-        to. Switching from a camera the Camera module has an interface for to
-        one it does not -- or starting a slice after the Camera module has been
-        closed -- would otherwise leave Area 1 mirroring the previous camera's
-        frames: imagery of tissue that is no longer under the objective, with
-        regions being drawn over it.
+        Unbinds first regardless of what follows, including the headless case
+        below that finds nothing to bind to: switching from a camera the
+        Camera module has an interface for to one it does not would otherwise
+        leave Area 1 mirroring the previous camera's frames -- imagery of
+        tissue that is no longer under the objective, with regions being
+        drawn over it.
+
+        A manager-less window (module=None -- headless, or a test with no
+        Manager to stand in for) is the only case _cameraWindow() answers
+        with None; there is nothing to bind to there, and that is ordinary.
+        With a manager, though, there is no such case left to return quietly
+        out of: the Camera module is this module's own precondition, so a
+        manager present with no Camera window behind it reaches here only
+        because it closed underneath a running session, and _cameraWindow()
+        raises rather than answering that with silence.
         """
         self._pinnedFrameMirror.unbind()
         window = self._cameraWindow()
@@ -463,6 +458,36 @@ class AutopatchWindow(Qt.QWidget):
         except (KeyError, AttributeError):
             return
         self._pinnedFrameMirror.bind(imagingCtrl)
+
+    def _imagingCtrl(self):
+        """The selected camera's imaging control in the Camera module, or None.
+
+        Mirrors _bindPinnedFrames's own tolerance rather than raising for
+        either of its two ordinary cases: a manager-less (headless) window,
+        where _cameraWindow() itself already answers None, and a camera the
+        Camera module has no interface for, which is the same "switching
+        cameras" state _bindPinnedFrames's own KeyError/AttributeError catch
+        exists for. A manager present with no Camera window behind it is not
+        among these -- _cameraWindow() raises rather than answering that with
+        silence, and that raise is deliberately left to propagate here too.
+
+        The `window is None` check below is not what makes the headless case
+        quiet, though: `None.getInterfaceForDevice(...)` would raise
+        AttributeError, which the except clause converts to None regardless.
+        It is kept only because spelling the headless case out here is
+        clearer than leaving it to fall through that catch.
+        """
+        window = self._cameraWindow()
+        if window is None:
+            return None
+        camera = self.cameraSelector.getSelectedObj()
+        try:
+            return window.getInterfaceForDevice(camera.name()).imagingCtrl
+        except (KeyError, AttributeError):
+            return None
+
+    def _onImageryInstruction(self, text: str) -> None:
+        self.statusPanel.setInstruction("imagery", text)
 
     def newSlice(self) -> None:
         """Start a fresh slice, discarding the current one and everything on it.
@@ -505,12 +530,7 @@ class AutopatchWindow(Qt.QWidget):
             # Narrowed to HelpfulException so a genuine programming error (a
             # missing manager, say) propagates instead of being reported as
             # storage guidance.
-            #
-            # The band is this handler's now, not Area 1's, so a later region
-            # edit must not treat retracting its own message as licence to
-            # retract this one (see _setRegionInstruction).
-            self._regionInstruction = False
-            self.statusPanel.setInstruction(str(exc))
+            self.statusPanel.setInstruction("storage", str(exc))
             return
         if not self._startSlice(dirHandle=dirHandle):
             return
@@ -520,10 +540,14 @@ class AutopatchWindow(Qt.QWidget):
         # that no longer exists once the operator has physically swapped in
         # new tissue.
         self.statusPanel.clearError()
-        # Whichever handler filled the band, what it was about went with the
-        # tissue just discarded.
-        self._regionInstruction = False
-        self.statusPanel.clearInstruction()
+        # Storage and region both, because what each was about went with the
+        # tissue just discarded: storage names a condition this click has now
+        # resolved, and region refused an edit to an outline that no longer
+        # exists. Imagery is deliberately left alone -- ReferenceImagery
+        # recomputes it from state moments later, and clearing it here would
+        # only race that.
+        self.statusPanel.setInstruction("storage", "")
+        self.statusPanel.setInstruction("region", "")
         if self.orchestrator is not None:
             # Detached before the queue is cleared, not after: a refill still
             # in flight on the worker thread reads the producer and enqueues
@@ -553,6 +577,15 @@ class AutopatchWindow(Qt.QWidget):
         # discarded Cell alive, and its sigPositionChanged connection live.
         self._progressOverlay.clear()
         self._releaseCellPositionConnections()
+        # Last, and deliberately: the prompt inside is modal, a modal dialog
+        # re-enters the Qt event loop, and every queued slot dispatches inside
+        # it. No intermediate state of this method -- a half-cleared band, a
+        # detached producer, cells already gone from Area 5 but still in the
+        # orchestrator's queue -- may ever be observable from that nested
+        # loop, so everything above has to be finished before this call opens
+        # it. test_the_clear_prompt_opens_only_after_the_wipe pins exactly
+        # that.
+        self._referenceImagery.beginSlice()
 
     def addRegionHere(self) -> None:
         """Add a search region of roughly 3x3 fields of view around the camera center.
@@ -598,8 +631,15 @@ class AutopatchWindow(Qt.QWidget):
             self._setRegionInstruction(str(exc))
             return
         self.regionPanel.setRegions(self.slice.regions)
-        self._cameraMirror.setRegions(self.slice.regions)
+        # Survey stats refreshed before the mirror is touched: the mirror's
+        # setRegions() can raise out of a closed Camera module (see
+        # CameraMirror._redraw()), and by this point slice.addRegion() and
+        # regionPanel.setRegions() above have already committed the edit.
+        # Area 2's readout must reflect that committed edit even if the raise
+        # below skips everything after it -- an operator judging feasibility
+        # from a stale tile count is the failure mode this ordering rules out.
         self._refreshSurveyStats()
+        self._cameraMirror.setRegions(self.slice.regions)
 
     @staticmethod
     def _cameraFov(camera) -> tuple[float, float]:
@@ -974,17 +1014,8 @@ class AutopatchWindow(Qt.QWidget):
             # this window: a raise while stopping the orchestrator would
             # otherwise leave the Camera module holding this session's outlines
             # and its imaging control still connected to a dead mirror.
-            #
-            # The manager goes first, and for the same reason the mirrors go
-            # last: the manager outlives this window, so a connection left on it
-            # would go on calling this window's handler at every later module
-            # load or quit, re-arming the mirrors the next two lines release.
-            # Dropping it here closes that off for good; anything announced
-            # during the wait above was already refused by _onModulesChanged's
-            # own torn-down check.
-            if self.manager is not None:
-                Qt.disconnect(self.manager.sigModulesChanged, self._onModulesChanged)
             self._pinnedFrameMirror.unbind()
+            self._referenceImagery.release()
             self._cameraMirror.clear()
             self._releaseCellPositionConnections()
             self._progressOverlay.release()
@@ -992,6 +1023,19 @@ class AutopatchWindow(Qt.QWidget):
         self.cellPanel.unbindOrchestrator()
         self.cellPanel.clearCells()
         self.orchestrator = None
+        # Dropped for the same reason self.orchestrator is: _referenceImagery
+        # holds two references back to this window -- self._getter (the bound
+        # method self._imagingCtrl) and self._parent (this window, from
+        # parent=self above, also closed over by the default _prompt's
+        # functools.partial) -- so leaving the attribute in place would give
+        # window -> _referenceImagery -> window, a cycle only Python's cyclic
+        # GC could reclaim. sigInstructionChanged being connected to one of
+        # this window's own methods contributes nothing to that cycle: PyQt
+        # holds only a weak reference to a QObject receiver's bound method, so
+        # that connection alone cannot keep either object alive. release()
+        # above only stops it listening to the pinned-frame source, not this
+        # half.
+        self._referenceImagery = None
 
     def closeEvent(self, event) -> None:
         self.teardown()
@@ -1010,6 +1054,26 @@ class Autopatch(Module):
             Autopatch._instance.ui.activateWindow()
             Qt.QTimer.singleShot(0, self.quit)
             return
+        # Before the window, which assumes it: Area 1 mirrors the Camera
+        # module's pinned frames and puts region outlines back into its view.
+        # getModule() loads a module that is not already open, but
+        # Manager.loadDefinedModule only logs an error and returns None when
+        # "Camera" is not in this rig's configuration at all -- proceeding
+        # past that silently would open this window anyway and leave the
+        # operator to find out much later, from a message telling them to
+        # reopen a module that was never openable to begin with.
+        cameraModule = manager.getModule("Camera")
+        if cameraModule is None:
+            raise HelpfulException(
+                "Autopatch requires a Camera module, but none is configured "
+                "for this rig. Add one to the configuration and try again."
+            )
+        # Set only once Camera is confirmed, not before: a raise out of
+        # getModule() above (Camera's own constructor failing) must not
+        # leave this pointing at a module with no `.ui` -- every later
+        # attempt to open Autopatch would hit
+        # Autopatch._instance.ui.raise_() -> AttributeError, permanently,
+        # for the life of the app.
         Autopatch._instance = self
         self.ui = AutopatchWindow(self)
         manager.declareInterface(name, ["autopatchModule"], self)

@@ -369,8 +369,11 @@ def test_the_outline_keeps_its_assigned_z_value(qapp):
 
 
 def test_no_camera_window_is_not_an_error(qapp):
-    # A rig with the Camera module unloaded is ordinary; the checkbox is a
-    # display preference, not a requirement.
+    # CameraMirror(lambda: None) stands for the headless (manager-less) case
+    # only: that is the one case _cameraModuleWindow answers with None rather
+    # than raising (see Autopatch._cameraModuleWindow). An actually unloaded
+    # or closed Camera module raises instead, and _redraw() lets that
+    # propagate rather than swallowing it here.
     from acq4.modules.Autopatch.region_mirrors import CameraMirror
 
     mirror = CameraMirror(lambda: None)
@@ -389,6 +392,51 @@ def test_clear_removes_everything_it_put_there(qapp):
     mirror.clear()
 
     assert window.items == []
+    assert mirror.items == []
+
+
+def test_redraw_propagates_a_raising_getter(qapp):
+    # The owner's decision: a ticked "Mirror to Camera" that silently does
+    # nothing because the Camera module closed is worse than the raise
+    # reaching the operator (see CameraMirror._redraw()). Reverting _redraw()
+    # to call _windowOrNone() instead of the getter directly (region_mirrors.py,
+    # in _redraw()) is one of the two mutations the reviewer found the whole
+    # suite stayed green under.
+    from acq4.modules.Autopatch.region_mirrors import CameraMirror
+    from acq4.util.HelpfulException import HelpfulException
+
+    def boom():
+        raise HelpfulException("The Camera module is not open.")
+
+    mirror = CameraMirror(boom)
+
+    with pytest.raises(HelpfulException):
+        mirror.setEnabled(True)
+
+
+def test_clear_swallows_a_raising_getter(qapp):
+    # The other half of the same decision: clear() runs inside
+    # AutopatchWindow.teardown()'s `finally` block, ahead of
+    # _releaseCellPositionConnections() and _progressOverlay.release() -- a
+    # raise here would skip both. Reverting clear() to call the getter
+    # directly instead of _windowOrNone() (region_mirrors.py, in clear()) is
+    # the other of the two mutations the reviewer found the whole suite
+    # stayed green under.
+    from acq4.util.HelpfulException import HelpfulException
+
+    window = FakeCameraWindow()
+    mirror = makeCameraMirror(window)
+    mirror.setEnabled(True)
+    mirror.setRegions([RECT])
+    assert mirror.items, "nothing was drawn, so clear() has nothing to prove"
+
+    def boom():
+        raise HelpfulException("The Camera module is not open.")
+
+    mirror._cameraWindow = boom
+
+    mirror.clear()  # must not raise
+
     assert mirror.items == []
 
 
