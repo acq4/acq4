@@ -80,6 +80,14 @@ class CellPanel(Qt.QWidget):
         # Cleared (not just overwritten) on every selection change.
         self._timelineItems: dict[int, Qt.QListWidgetItem] = {}
         self._logs: dict[int, list[str]] = {}
+        # (id(cell), timeline row index) -> (kind, payload) from that action's
+        # ActionLogEntry.set_details(). Keyed by row rather than by entry
+        # because the row key is what outlives the entry, which is the whole
+        # point of retaining anything; it is also the key self._timelines
+        # already uses. Holds only plain data -- never an entry, a cell, or a
+        # widget -- so nothing here can form the reference cycle
+        # tests/test_teardown.py exists to prevent (see set_details' docstring).
+        self._details: dict[tuple[int, int], tuple[str, object]] = {}
         # id(cell) -> (exc_type, exc_message, traceback_text) for the most
         # recent action of that cell's that failed. Ids and plain strings,
         # never the entry and never the exception: an ActionLogEntry's
@@ -308,6 +316,7 @@ class CellPanel(Qt.QWidget):
         self._entryTimelineLoc.clear()
         self._timelineItems.clear()
         self._logs.clear()
+        self._details.clear()
         self._cellErrors.clear()
         self.cellList.clear()
         self._clearShowContainer()
@@ -365,6 +374,7 @@ class CellPanel(Qt.QWidget):
             self._timelines.pop(cellId, None)
             self._logs.pop(cellId, None)
             self._cellErrors.pop(cellId, None)
+            self._dropDetailsFor(cellId)
         self._updateCheckAllButton()
         self._updateReuseButton()
         self.sigCellStateChanged.emit()
@@ -498,6 +508,21 @@ class CellPanel(Qt.QWidget):
         after the failed action."""
         return self._cellErrors.get(id(cell))
 
+    def detailsFor(self, cell, rowIndex: int):
+        """The (kind, payload) an action retained for `cell`'s row `rowIndex`,
+        or None if that row's action retained nothing."""
+        return self._details.get((id(cell), rowIndex))
+
+    def _dropDetailsFor(self, cellId: int) -> None:
+        """Forget every retained payload belonging to `cellId`.
+
+        Scans rather than indexing by cell: the keys are (cell, row) pairs, and
+        a per-cell index would be a second store to keep in sync with this one
+        on all three of the paths that drop rows.
+        """
+        for key in [k for k in self._details if k[0] == cellId]:
+            del self._details[key]
+
     def _onCheckAllCompleted(self) -> None:
         """Tick every row whose cell ran its protocol to completion.
 
@@ -587,6 +612,9 @@ class CellPanel(Qt.QWidget):
             # the cell's physical continuity is untouched.
             self._timelines[id(cell)] = []
             self._logs[id(cell)] = []
+            # Earlier-pass details are that pass's UI history, cleared with the
+            # timeline and log for the same reason (design doc §7).
+            self._dropDetailsFor(id(cell))
             # A stored error describes the pass that just ended, not the one
             # about to start. Left in place, _onCellSelectionChanged would
             # re-mount it beside a row that now reads "queued" and a timeline
@@ -696,11 +724,18 @@ class CellPanel(Qt.QWidget):
         entry itself, and this panel never stores the entry object anywhere
         (see self._entryTimelineLoc's docstring) -- so an entry's lifetime is
         whatever the action function that created it gives it, and no
-        panel<->entry reference cycle is created.
+        panel<->entry reference cycle is created. on_details is assigned here
+        for the same reason and marshaled the same way; like the others it
+        closes over `self` and `cell` only, and the payload is read back off
+        the entry in the slot rather than carried through the signal, so
+        sigActionEntry's signature is unchanged.
         """
         entry.on_status = lambda e: self.sigActionEntry.emit(cell, e, "status")
         entry.on_widget = lambda e, w: self.sigActionEntry.emit(cell, e, "widget")
         entry.on_finish = lambda e: self.sigActionEntry.emit(cell, e, "finished")
+        entry.on_details = lambda e, kind, payload: self.sigActionEntry.emit(
+            cell, e, "details"
+        )
         self.sigActionEntry.emit(cell, entry, "started")
 
     def _onActionEntry(self, cell, entry, phase: str) -> None:
@@ -727,6 +762,13 @@ class CellPanel(Qt.QWidget):
                 if widget is not None:
                     self.showContainer.layout().addWidget(widget)
                     self._shownEntryId = id(entry)
+        elif phase == "details":
+            # Stored only; mounting it is Task 5's job, once rows are
+            # individually selectable and there is a notion of "the selected
+            # row" to mount into.
+            loc = self._entryTimelineLoc.get(id(entry))
+            if loc is not None:
+                self._details[loc] = (entry.details_kind, entry.details_payload)
         # "status" intentionally leaves the timeline row and details container
         # alone: Area 5's timeline only ever shows "running" then the finished
         # outcome, never each intermediate ctx.log_action status message (see
