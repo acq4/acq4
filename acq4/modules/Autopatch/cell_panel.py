@@ -39,7 +39,8 @@ class CellPanel(Qt.QWidget):
     # marshaled onto the GUI thread the same way -- cell, the ActionLogEntry,
     # and which phase of its life this is: "started" (onLogAction itself, right
     # after ctx.log_action() creates the entry), "status" (entry.set_status()),
-    # "widget" (entry.set_details_widget()), or "finished" (entry._finish()).
+    # "widget" (entry.set_details_widget()), "details" (entry.set_details()),
+    # or "finished" (entry._finish()).
     sigActionEntry = Qt.Signal(object, object, str)
     # Emitted by discardCells() so a rescan's row removal, arriving from the
     # orchestrator's worker thread the same way appendLog()/onLogAction() do,
