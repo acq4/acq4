@@ -441,7 +441,37 @@ class PlotWidget(Qt.QWidget):
         self.modeCombo.hide()
         # self.closeBtn.hide()
 
-    def newTestPulse(self, tp: PatchClampTestPulse, history):
+    # Modes that need the PatchClampTestPulse recording itself, rather than just
+    # the analysis history. Unavailable to a caller plotting a retained history.
+    _LIVE_ONLY_MODES = ('test pulse', 'tp analysis')
+
+    def setFrozen(self, frozen: bool) -> None:
+        """Restrict the mode combo to what a retained history can serve.
+
+        Autopatch's frozen plots keep the combo visible -- re-reading a finished
+        attempt through a different field is what it is for -- but must not offer
+        the two modes that need a recording nobody retained.
+        """
+        if not frozen:
+            return
+        with pg.SignalBlock(self.modeCombo.currentIndexChanged, self.modeComboChanged):
+            current = self.mode
+            for mode in self._LIVE_ONLY_MODES:
+                index = self.modeCombo.findText(mode)
+                if index >= 0:
+                    self.modeCombo.removeItem(index)
+            self.modeCombo.setText(current)
+
+    def newTestPulse(self, tp: PatchClampTestPulse | None, history):
+        """Update the plot from the latest test pulse and the history behind it.
+
+        `tp` may be None, which is how Autopatch's Area 5 reuses this widget for
+        a finished action: its retained payload holds the history but no
+        PatchClampTestPulse, since a recording is not plain data (see
+        ActionLogEntry.set_details). With no `tp` the analysis modes plot the
+        history and leave the current-value label blank, and the two modes that
+        need the recording itself clear instead.
+        """
         if self._analysisLabel is not None:
             self.plot.plotItem.vb.removeItem(self._analysisLabel)
             self._analysisLabel = None
@@ -451,8 +481,9 @@ class PlotWidget(Qt.QWidget):
                 self._plotTestPulse(tp)
         elif self.mode == 'tp analysis':
             self.plot.clear()
-            tp.plot(self.plot, label=False)
-            self._analysisLabel = tp.label_for_plot(self.plot.plotItem)
+            if tp is not None:
+                tp.plot(self.plot, label=False)
+                self._analysisLabel = tp.label_for_plot(self.plot.plotItem)
         else:
             analysis_by_mode = {
                 'ss resistance': ('steady_state_resistance', u'Ω'),
@@ -465,10 +496,14 @@ class PlotWidget(Qt.QWidget):
             key, units = analysis_by_mode[self.mode]
             if len(history['event_time']) > 0:
                 self.plot.plot(history['event_time'] - history['event_time'][0], history[key], clear=True)
-            val = tp.analysis[key]
-            if val is None:
-                val = np.nan
-            self.tpLabel.setPlainText(pg.siFormat(val, suffix=units))
+            if tp is None:
+                # No live value to report; the plot is the whole story.
+                self.tpLabel.setPlainText("")
+            else:
+                val = tp.analysis[key]
+                if val is None:
+                    val = np.nan
+                self.tpLabel.setPlainText(pg.siFormat(val, suffix=units))
 
     def _plotTestPulse(self, tp):
         pri: TSeries = tp.recording['primary']
