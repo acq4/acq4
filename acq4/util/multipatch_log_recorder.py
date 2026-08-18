@@ -162,13 +162,25 @@ class MultiPatchLogRecorder(Qt.QObject):
             pip.releaseFullTestPulseData(self)
 
     def _onPipetteEvent(self, _pipette, event) -> None:
-        if event.get("event") == "test_pulse":
+        # Guarded the same way record() guards itself: sigNewEvent is a queued
+        # connection, so a test_pulse event already in flight when stop() runs
+        # can still reach this slot afterward. Without this check that event
+        # would add a row here even though record() below silently drops it,
+        # leaving testPulseAnalysis() disagreeing with what was actually
+        # logged.
+        if not self._stopped and event.get("event") == "test_pulse":
             self._testPulseRows.append(
                 tuple(_nanIfNone(event.get(field)) for field in _TEST_PULSE_FIELDS)
             )
         self.record(event)
 
     def _onSurfaceDepthChanged(self, depth) -> None:
+        # Guarded for the same reason as _onPipetteEvent above: this is a
+        # queued connection, and stop() sets self._microscope to None, so a
+        # surface-depth signal already in flight when stop() runs would
+        # otherwise dereference None here.
+        if self._stopped:
+            return
         self.record(
             {
                 "device": self._microscope.name(),
@@ -186,6 +198,11 @@ class MultiPatchLogRecorder(Qt.QObject):
         action's span: the device's is reset mid-patch by the approach state, so
         slicing it by the action's start and end times loses whatever preceded
         the reset.
+
+        Meaningful only when this recorder watches a single pipette: rows carry
+        no device field, so a recorder watching several pipettes interleaves
+        their rows in event order with no way to tell which device any row came
+        from. Attributing rows to a device would need a dtype that carries one.
         """
         return np.array(self._testPulseRows, dtype=TEST_PULSE_NUMPY_DTYPE)
 

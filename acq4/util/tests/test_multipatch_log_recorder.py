@@ -698,3 +698,142 @@ def test_the_recorder_holds_no_reference_to_a_stopped_pipette(qapp, directory):
     recorder.stop()
 
     assert recorder._pipettes == []
+
+
+class _FakeClampDevice:
+    """Stands in for a PatchClamp for the one thing these tests need: a
+    testPulseHistory() a caller can empty out from under the recorder, the way
+    approach.py's mid-patch reset empties the real one."""
+
+    def __init__(self):
+        self._history = []
+
+    def testPulseHistory(self):
+        return list(self._history)
+
+    def resetTestPulseHistory(self):
+        self._history = []
+
+
+def test_test_pulse_analysis_is_unaffected_by_a_device_history_reset(qapp, directory):
+    # approach.py resets the clamp's own test-pulse history mid-patch, which is
+    # exactly why the recorder accumulates its own rather than reading
+    # clampDevice.testPulseHistory(). Exercise that directly: reset the fake
+    # clamp's history partway through and confirm the recorder's own
+    # accumulation still holds every row regardless.
+    import numpy as np
+    from acq4.util.multipatch_log_recorder import MultiPatchLogRecorder
+
+    pip = _FakePipette()
+    pip.clampDevice = _FakeClampDevice()
+    recorder = MultiPatchLogRecorder(
+        directory, pipettes=(pip,), record_full_test_pulses=False
+    )
+    try:
+        pip.emit(
+            {
+                "device": "Clamp1",
+                "event_time": 1.0,
+                "event": "test_pulse",
+                "steady_state_resistance": 0.0,
+            }
+        )
+        pip.clampDevice._history.append("whatever the device tracked")
+        pip.clampDevice.resetTestPulseHistory()
+        assert pip.clampDevice.testPulseHistory() == []
+
+        pip.emit(
+            {
+                "device": "Clamp1",
+                "event_time": 2.0,
+                "event": "test_pulse",
+                "steady_state_resistance": 1.0e9,
+            }
+        )
+        pip.emit(
+            {
+                "device": "Clamp1",
+                "event_time": 3.0,
+                "event": "test_pulse",
+                "steady_state_resistance": 2.0e9,
+            }
+        )
+        history = recorder.testPulseAnalysis()
+    finally:
+        recorder.stop()
+
+    assert np.array_equal(history["event_time"], [1.0, 2.0, 3.0])
+
+
+def test_onPipetteEvent_after_stop_does_not_add_a_test_pulse_row(qapp, directory):
+    # sigNewEvent is a queued connection: disconnecting it in stop() does not
+    # cancel a test_pulse event already posted to the event queue, so this
+    # slot can still run once after stop() tears the recorder down. Call it
+    # directly rather than going through the Qt event loop so the test does
+    # not depend on when Qt happens to deliver the queued call.
+    from acq4.util.multipatch_log_recorder import MultiPatchLogRecorder
+
+    pip = _FakePipette()
+    recorder = MultiPatchLogRecorder(
+        directory, pipettes=(pip,), record_full_test_pulses=False
+    )
+    recorder.stop()
+
+    recorder._onPipetteEvent(
+        pip, {"device": "Clamp1", "event_time": 1.0, "event": "test_pulse"}
+    )
+
+    assert recorder._testPulseRows == []
+    assert len(recorder.testPulseAnalysis()) == 0
+
+
+def test_onSurfaceDepthChanged_after_stop_does_not_raise(qapp, directory):
+    # Same late-queued-delivery hazard as above: stop() sets self._microscope
+    # to None, and a surface-depth signal already in flight when stop() runs
+    # would otherwise dereference it. Call the slot directly, as above.
+    from acq4.util.multipatch_log_recorder import MultiPatchLogRecorder
+
+    scope = _FakeMicroscope()
+    recorder = MultiPatchLogRecorder(
+        directory, microscope=scope, record_full_test_pulses=False
+    )
+    recorder.stop()
+
+    recorder._onSurfaceDepthChanged(-1.5e-3)  # must not raise
+
+    assert _lines(recorder.logFileName()) == []
+
+
+def test_construction_failure_releases_the_pipettes_subscriptions(qapp, directory):
+    # Same failure as test_unserializable_initial_record_closes_the_file_before_raising,
+    # but with a live pipette and microscope subscribed, so it exercises the
+    # rest of what the __init__ try/except's stop() call has to release: not
+    # just the file, but every token and signal connection picked up before
+    # the raise. The caller never gets a reference of its own, so find the
+    # partially-constructed self via the traceback, as that test does.
+    from acq4.util.multipatch_log_recorder import MultiPatchLogRecorder
+
+    pip = _FakePipette()
+    scope = _FakeMicroscope()
+    history = [{"device": "Clamp1", "event_time": 0.5, "bad": {1, 2, 3}}]
+
+    with pytest.raises(TypeError) as excinfo:
+        MultiPatchLogRecorder(
+            directory,
+            pipettes=(pip,),
+            microscope=scope,
+            initial_records=history,
+        )
+
+    partial_self = None
+    tb = excinfo.value.__traceback__
+    while tb is not None:
+        candidate = tb.tb_frame.f_locals.get("self")
+        if isinstance(candidate, MultiPatchLogRecorder):
+            partial_self = candidate
+        tb = tb.tb_next
+
+    assert partial_self is not None
+    assert pip.released == [partial_self]
+    assert pip.receivers(pip.sigNewEvent) == 0
+    assert scope.receivers(scope.sigSurfaceDepthChanged) == 0
