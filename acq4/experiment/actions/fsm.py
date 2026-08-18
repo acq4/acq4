@@ -97,8 +97,12 @@ def _openLivePlot(ctx, action_entry) -> object | None:
     is forming, so it is what Area 5 shows while the FSM drives (design doc
     §4.5). Reuses MultiPatch's PlotWidget rather than reimplementing it.
 
-    Built through run_in_gui_thread because this runs on the orchestrator's
-    worker thread and a widget must not be constructed off the GUI thread.
+    Built and connected through run_in_gui_thread because this runs on the
+    orchestrator's worker thread: a widget must not be constructed off the GUI
+    thread, and PyQt gives a plain callable slot the affinity of the thread that
+    called connect(). Connecting from the worker thread -- which is a gentletask
+    ThreadTask with no Qt event loop -- would queue every test pulse to a thread
+    that never pumps events, so the plot would mount and never update.
     """
     clamp = getattr(ctx.pipette, "clampDevice", None)
     if clamp is None:
@@ -113,30 +117,38 @@ def _openLivePlot(ctx, action_entry) -> object | None:
         # Autopatch picks the mode; the operator does not need the combo while
         # an action is driving (design doc §4.5). The frozen plot shows it.
         widget.hideHeader()
-        return widget
 
-    widget = run_in_gui_thread(build)
+        def onTestPulse(_device, testPulse):
+            # Deliberately clamp.testPulseHistory(), not the recorder's: a live
+            # view of "now" should show the device's own current history. The
+            # frozen payload below reads the recorder instead, because the
+            # device's history is reset mid-patch (approach.py:251) and would
+            # silently lose whatever preceded the reset -- see _setFsmDetails.
+            widget.newTestPulse(testPulse, clamp.testPulseHistory())
 
-    def onTestPulse(_device, testPulse):
-        # Deliberately clamp.testPulseHistory(), not the recorder's: a live view
-        # of "now" should show the device's own current history. The frozen
-        # payload below reads the recorder instead, because the device's history
-        # is reset mid-patch (approach.py:251) and would silently lose whatever
-        # preceded the reset -- see _setFsmDetails.
-        widget.newTestPulse(testPulse, clamp.testPulseHistory())
+        # Default (queued) connection deliberately: PatchPipetteState connects
+        # to this same signal with an explicit DirectConnection, which is
+        # correct for a state machine and wrong for a widget -- it would mutate
+        # the plot from the clamp's thread.
+        clamp.sigTestPulseFinished.connect(onTestPulse)
+        return widget, onTestPulse
 
-    # Default (queued) connection deliberately: PatchPipetteState connects to
-    # this same signal with an explicit DirectConnection, which is correct for a
-    # state machine and wrong for a widget -- it would mutate the plot from the
-    # clamp's thread.
-    clamp.sigTestPulseFinished.connect(onTestPulse)
-    action_entry.set_details_widget(widget)
+    widget, onTestPulse = run_in_gui_thread(build)
 
     def teardown():
         # A live connection from a device signal into a widget the panel has
         # moved on from is the cross-module reference neither Autopatch's widget
         # -tree teardown nor unbindOrchestrator reaches (design doc §4.5).
         Qt.disconnect(clamp.sigTestPulseFinished, onTestPulse)
+
+    try:
+        action_entry.set_details_widget(widget)
+    except Exception:
+        # The connection is live but the caller never receives the teardown that
+        # would drop it, so nothing else would ever disconnect the clamp from
+        # this now-ownerless widget. Drop it here before the failure propagates.
+        teardown()
+        raise
 
     return teardown
 
@@ -230,17 +242,34 @@ def _drive_fsm(
             # ActionLogEntry.set_details). And in a finally, so a stopped,
             # abandoned, or failed attempt retains its plot too, which is
             # exactly when an operator wants to read one.
+            #
+            # Each guarded independently, and none allowed to raise: this runs
+            # on every attempt, in a finally. A raise from the plot teardown
+            # would otherwise skip the recorder's stop() -- leaking a file
+            # handle and an HDF5 file per attempt -- and the payload with it,
+            # and a raise from any of the three would replace whatever
+            # exception is propagating (a Stopped or an AdvanceToNextCell, i.e.
+            # an orderly operator stop) with an unrelated failure.
             if teardownPlot is not None:
-                teardownPlot()
+                try:
+                    teardownPlot()
+                except Exception as exc:
+                    ctx.log(f"could not tear down live plot: {exc}")
             if recorder is not None:
-                recorder.stop()
+                try:
+                    recorder.stop()
+                except Exception as exc:
+                    ctx.log(f"could not stop event recording: {exc}")
             if record:
                 # recorder.stop() above must run first: the payload below names
                 # the log file, and the file has to be flushed and closed before
                 # anything is told where to find it.
-                _setFsmDetails(
-                    action_entry, entry_state, reached, transitions, recorder
-                )
+                try:
+                    _setFsmDetails(
+                        action_entry, entry_state, reached, transitions, recorder
+                    )
+                except Exception as exc:
+                    ctx.log(f"could not retain test-pulse details: {exc}")
 
 
 def patch(ctx, record_events: bool = True, record_full_test_pulses: bool = True, **entry_config) -> str:

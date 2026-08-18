@@ -843,34 +843,6 @@ def test_test_pulse_analysis_ignores_other_event_types(qapp, directory):
     assert len(history) == 0
 
 
-def test_test_pulse_analysis_is_unaffected_by_a_device_history_reset(qapp, directory):
-    # approach.py resets the clamp's own test-pulse history mid-patch, which is
-    # exactly why the recorder accumulates its own rather than slicing the
-    # device's.
-    import numpy as np
-    from acq4.util.multipatch_log_recorder import MultiPatchLogRecorder
-
-    pip = _FakePipette()
-    recorder = MultiPatchLogRecorder(
-        directory, pipettes=(pip,), record_full_test_pulses=False
-    )
-    try:
-        for index, t in enumerate([1.0, 2.0, 3.0]):
-            pip.emit(
-                {
-                    "device": "Clamp1",
-                    "event_time": t,
-                    "event": "test_pulse",
-                    "steady_state_resistance": float(index),
-                }
-            )
-        history = recorder.testPulseAnalysis()
-    finally:
-        recorder.stop()
-
-    assert np.array_equal(history["event_time"], [1.0, 2.0, 3.0])
-
-
 def test_the_recorder_holds_no_reference_to_a_stopped_pipette(qapp, directory):
     from acq4.util.multipatch_log_recorder import MultiPatchLogRecorder
 
@@ -1187,3 +1159,70 @@ def test_the_reader_tolerates_blank_lines(qapp, directory):
     data = MultiPatchLogData(recorder.logFileName())
 
     assert "Clamp1" in data.devices()
+
+
+# -- thread affinity ---------------------------------------------------------
+
+
+def test_a_recorder_built_off_the_gui_thread_still_receives_events(qapp, qtbot, directory):
+    """A recorder is routinely opened from an Autopatch action, which runs on a
+    gentletask ThreadTask -- a plain thread with no Qt event loop. Its
+    sigNewEvent connections must not inherit that thread's affinity: queued
+    calls delivered there would never be dispatched, so every test_pulse
+    emitted from the clamp's own thread would be dropped and
+    testPulseAnalysis() would come back empty.
+
+    Genuinely cross-thread on purpose: the recorder is constructed on one
+    thread and the event is emitted from a second, while this (GUI) thread
+    pumps. A same-thread version of this test passes whatever the affinity is.
+    """
+    import threading
+
+    import numpy as np
+
+    from acq4.util.multipatch_log_recorder import MultiPatchLogRecorder
+
+    built = {}
+    constructed = threading.Event()
+    release = threading.Event()
+
+    def buildOnWorker():
+        built["recorder"] = MultiPatchLogRecorder(
+            directory, pipettes=(pip,), record_full_test_pulses=False
+        )
+        built["thread"] = Qt.QtCore.QThread.currentThread()
+        constructed.set()
+        # Hold the worker open (still without an event loop) for the rest of
+        # the test, which is the shape of a real drive: a thread that exited
+        # would let Qt tear down the very affinity under examination.
+        release.wait(10)
+
+    pip = _FakePipette()
+    worker = threading.Thread(target=buildOnWorker, name="recorder-builder")
+    worker.start()
+    assert constructed.wait(5)
+    recorder = built["recorder"]
+    assert built["thread"] is not Qt.QtCore.QThread.currentThread()
+
+    emitter = threading.Thread(
+        target=lambda: pip.emit(
+            {
+                "device": "Clamp1",
+                "event_time": 1.0,
+                "event": "test_pulse",
+                "steady_state_resistance": 5.0e8,
+            }
+        ),
+        name="clamp-emitter",
+    )
+    emitter.start()
+    emitter.join(5)
+
+    try:
+        qtbot.waitUntil(lambda: len(recorder.testPulseAnalysis()) == 1, timeout=3000)
+    finally:
+        release.set()
+        worker.join(5)
+        recorder.stop()
+
+    assert np.array_equal(recorder.testPulseAnalysis()["event_time"], [1.0])

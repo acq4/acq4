@@ -866,3 +866,59 @@ def test_find_surface_retains_nothing_when_detection_fails(ctx, pip):
         find_surface(ctx)
 
     assert details == []
+
+
+# -- run_task: thread affinity ----------------------------------------------
+
+
+def test_run_task_collects_sweeps_when_driven_from_a_worker_thread(qapp, qtbot, pip):
+    """run_task runs on the orchestrator's worker thread -- a gentletask
+    ThreadTask with no Qt event loop -- while TaskRunner.sigNewFrame is emitted
+    on the GUI thread. PyQt gives a plain callable slot the affinity of the
+    thread that called connect(), so the subscription has to be established on
+    the GUI thread; made from the worker, every frame would be queued to a loop
+    that never runs and the payload would report no sweeps at all.
+
+    Genuinely cross-thread on purpose: driven from a worker while this (GUI)
+    thread pumps and emits. run_in_gui_thread is deliberately left unpatched.
+    """
+    import threading
+
+    import numpy as np
+
+    clampName = pip.clampDevice.name()
+    module = FakeTaskRunnerModule({clampName: object()})
+    ctx = ExecutionContext(pipette=pip, manager=FakeManager(), cell=FakeCell())
+    ctx.manager.modules["TaskRunner"] = module
+    details = []
+    ctx.on_log_action = lambda e: setattr(
+        e, "on_details", lambda entry, kind, payload: details.append((kind, payload))
+    )
+    t = np.linspace(0, 1, 10)
+    module.frames = [
+        _sequence_frame(clampName, t, t * 1.0),
+        _sequence_frame(clampName, t, t * 2.0),
+    ]
+    done = threading.Event()
+    ranOn = {}
+
+    def runOnWorker():
+        try:
+            ranOn["thread"] = Qt.QtCore.QThread.currentThread()
+            run_task(ctx, store=False)
+        finally:
+            done.set()
+
+    worker = threading.Thread(target=runOnWorker, name="run-task-driver")
+    worker.start()
+    # This thread has to keep pumping: run_task marshals both its subscription
+    # and runSequence itself here through run_in_gui_thread.
+    qtbot.waitUntil(done.is_set, timeout=5000)
+    worker.join(5)
+
+    assert ranOn["thread"] is not Qt.QtCore.QThread.currentThread()
+    assert len(details) == 1
+    kind, payload = details[0]
+    assert kind == "task_results"
+    assert payload["sweep_count"] == 2
+    assert np.array_equal(payload["traces"][1][1], t * 2.0)

@@ -58,17 +58,19 @@ def buildImageStack(payload) -> Qt.QWidget:
     """
     view = pg.ImageView()
     stack = np.asarray(payload["stack"])
-    # Provide frame indices as xvals so setCurrentIndex works. Explicitly set
-    # axes for 3D arrays so the first dimension (z-stack) is treated as time,
-    # not as color (which would be the default guess for small last dimensions).
-    axes_dict = None
+    # The axes override is what makes a 3D stack navigable at all: without it
+    # pg.ImageView guesses, and a small last dimension is read as color rather
+    # than the first dimension as time, leaving no frame axis for
+    # setCurrentIndex to move along. xvals then labels those frames by index,
+    # since the payload carries no real z coordinates.
+    axesDict = None
     if stack.ndim == 3:
-        axes_dict = {'t': 0, 'x': 1, 'y': 2}
-        n_frames = stack.shape[0]
-        xvals = np.arange(n_frames, dtype=float)
+        axesDict = {"t": 0, "x": 1, "y": 2}
+        nFrames = stack.shape[0]
+        xvals = np.arange(nFrames, dtype=float)
     else:
         xvals = None
-    view.setImage(stack, autoRange=True, autoLevels=True, xvals=xvals, axes=axes_dict)
+    view.setImage(stack, autoRange=True, autoLevels=True, xvals=xvals, axes=axesDict)
     centerIndex = payload.get("center_index")
     if centerIndex is not None:
         view.setCurrentIndex(centerIndex)

@@ -327,9 +327,12 @@ def run_task(ctx, store: bool = True, timeout: float = 0.0):
             traces.append((times, values))
             decimation = max(decimation, factor)
 
-        # Queued by default, so sweeps arriving on the task thread do not touch
-        # this action's collection from there.
-        taskrunner.sigNewFrame.connect(onNewFrame)
+        # Connected on the GUI thread, where sigNewFrame is emitted: PyQt gives
+        # a plain callable slot the affinity of the thread that called
+        # connect(), and this action runs on a gentletask ThreadTask with no Qt
+        # event loop -- connecting from here directly would queue every frame to
+        # a thread that never pumps events, so no sweep would ever be collected.
+        run_in_gui_thread(taskrunner.sigNewFrame.connect, onNewFrame)
         action_entry.set_status("running task runner sequence")
         try:
             run_in_gui_thread(taskrunner.runSequence, store=store).wait(timeout=timeout)

@@ -2,6 +2,7 @@
 PatchPipette FSM to a declared terminal state via the shared fake pipette."""
 import pytest
 
+from acq4.util import Qt
 from acq4.util.task import Stopped
 from acq4.experiment.context import ExecutionContext
 from acq4.experiment.exceptions import AdvanceToNextCell, BrokenPipette, Fouled
@@ -719,3 +720,203 @@ def test_a_recorder_already_opened_is_stopped_even_if_the_live_plot_fails(
 
     assert fake_recorder.instances[0].stopped is True
     assert any("no display available" in message for message in logged)
+
+
+# -- the live plot's thread affinity ------------------------------------------
+
+
+class _FakeClamp(Qt.QObject):
+    """Stands in for a PatchClamp for the live plot's two needs: the
+    sigTestPulseFinished stream and the history behind it."""
+
+    sigTestPulseFinished = Qt.Signal(object, object)  # self, PatchClampTestPulse
+
+    def __init__(self, history):
+        super().__init__()
+        self._history = history
+
+    def testPulseHistory(self):
+        return self._history
+
+
+class _FakeTestPulse:
+    """A test pulse for the analysis modes, which read only .analysis."""
+
+    def __init__(self, resistance):
+        self.analysis = {"steady_state_resistance": resistance}
+
+
+class _FakeClampedPipette:
+    def __init__(self, clamp):
+        self.clampDevice = clamp
+
+
+class _RecordingEntry:
+    """Stands in for an ActionLogEntry for the one call _openLivePlot makes."""
+
+    def __init__(self, error=None):
+        self.widgets = []
+        self.error = error
+
+    def set_details_widget(self, widget):
+        self.widgets.append(widget)
+        if self.error is not None:
+            raise self.error
+
+
+def _tpHistory(count=4):
+    import numpy as np
+
+    from acq4.filetypes.MultiPatchLog import TEST_PULSE_NUMPY_DTYPE
+
+    history = np.zeros(count, dtype=TEST_PULSE_NUMPY_DTYPE)
+    history["event_time"] = np.arange(count, dtype=float)
+    history["steady_state_resistance"] = np.linspace(1e6, 1e9, count)
+    return history
+
+
+def test_the_live_plot_updates_from_a_test_pulse_emitted_on_another_thread(qapp, qtbot):
+    """_openLivePlot runs on the orchestrator's worker thread -- a gentletask
+    ThreadTask with no Qt event loop -- while sigTestPulseFinished is emitted
+    from the clamp's test-pulse thread. PyQt gives a plain callable slot the
+    affinity of the thread that called connect(), so the connection has to be
+    made on the GUI thread or every test pulse is queued to a loop that never
+    runs and the plot mounts but never updates.
+
+    Genuinely cross-thread on purpose: opened on one thread, emitted from a
+    second, pumped on this one. A same-thread version passes either way.
+    """
+    import threading
+
+    clamp = _FakeClamp(_tpHistory())
+    ctx = _ctx(_FakeClampedPipette(clamp))
+    entry = _RecordingEntry()
+    opened = {}
+    ready = threading.Event()
+    release = threading.Event()
+
+    def openOnWorker():
+        opened["teardown"] = fsm_mod._openLivePlot(ctx, entry)
+        opened["thread"] = Qt.QtCore.QThread.currentThread()
+        ready.set()
+        # Held open without an event loop for the rest of the test, the shape
+        # of a real drive.
+        release.wait(10)
+
+    worker = threading.Thread(target=openOnWorker, name="live-plot-opener")
+    worker.start()
+    # This thread has to keep pumping: _openLivePlot builds its widget through
+    # run_in_gui_thread, which blocks the worker until this loop runs it.
+    qtbot.waitUntil(ready.is_set, timeout=5000)
+    assert opened["thread"] is not Qt.QtCore.QThread.currentThread()
+    widget = entry.widgets[0]
+    assert widget.plot.plotItem.listDataItems() == []
+
+    emitter = threading.Thread(
+        target=lambda: clamp.sigTestPulseFinished.emit(clamp, _FakeTestPulse(1e9)),
+        name="clamp-emitter",
+    )
+    emitter.start()
+    emitter.join(5)
+
+    try:
+        qtbot.waitUntil(
+            lambda: len(widget.plot.plotItem.listDataItems()) == 1, timeout=3000
+        )
+    finally:
+        release.set()
+        worker.join(5)
+        opened["teardown"]()
+
+
+def test_the_live_plot_disconnects_when_mounting_the_widget_fails(qapp):
+    # The connect is live before set_details_widget is called; if that raises,
+    # the caller never receives the teardown, so nothing else would ever drop
+    # the clamp's reference into a widget nobody owns.
+    clamp = _FakeClamp(_tpHistory())
+    ctx = _ctx(_FakeClampedPipette(clamp))
+    entry = _RecordingEntry(error=RuntimeError("no pane to mount into"))
+
+    with pytest.raises(RuntimeError, match="no pane to mount into"):
+        fsm_mod._openLivePlot(ctx, entry)
+
+    widget = entry.widgets[0]
+    clamp.sigTestPulseFinished.emit(clamp, _FakeTestPulse(1e9))
+
+    assert widget.plot.plotItem.listDataItems() == []
+
+
+# -- the finally is guarded ---------------------------------------------------
+
+
+def test_a_failing_plot_teardown_still_stops_the_recorder_and_retains_details(
+    fake_pip_factory, monkeypatch, fake_recorder
+):
+    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
+
+    def openPlot(ctx, entry):
+        def teardown():
+            raise RuntimeError("plot teardown exploded")
+
+        return teardown
+
+    monkeypatch.setattr(fsm_mod, "_openLivePlot", openPlot)
+    pip = fake_pip_factory(["whole cell"])
+    ctx = _ctx(pip, manager=_FakeManagerWithDir())
+    logged = []
+    ctx.log = logged.append
+    seen = _details(ctx)
+
+    assert patch(ctx) == "whole cell"
+
+    assert fake_recorder.instances[0].stopped is True
+    assert len(seen) == 1
+    assert any("plot teardown exploded" in message for message in logged)
+
+
+def test_a_failing_recorder_stop_still_retains_details(
+    fake_pip_factory, monkeypatch, fake_recorder
+):
+    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
+
+    def boom(self):
+        raise OSError("disk full on close")
+
+    monkeypatch.setattr(_FakeRecorder, "stop", boom)
+    pip = fake_pip_factory(["whole cell"])
+    ctx = _ctx(pip, manager=_FakeManagerWithDir())
+    logged = []
+    ctx.log = logged.append
+    seen = _details(ctx)
+
+    assert patch(ctx) == "whole cell"
+
+    assert len(seen) == 1
+    assert any("disk full on close" in message for message in logged)
+
+
+def test_a_failing_details_payload_does_not_replace_a_stop(
+    fake_pip_factory, monkeypatch, fake_recorder
+):
+    # An orderly operator stop must surface as Stopped, not as whatever the
+    # payload builder happened to trip over on the way out.
+    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
+
+    def boom(*a, **k):
+        raise ValueError("payload exploded")
+
+    monkeypatch.setattr(fsm_mod, "_setFsmDetails", boom)
+    pip = fake_pip_factory([])
+    ctx = _ctx(pip, manager=_FakeManagerWithDir())
+    logged = []
+    ctx.log = logged.append
+    monkeypatch.setattr(fsm_mod, "check_stop", _raiseStopped)
+
+    with pytest.raises(Stopped):
+        patch(ctx)
+
+    assert any("payload exploded" in message for message in logged)
+
+
+def _raiseStopped():
+    raise Stopped("operator stop")

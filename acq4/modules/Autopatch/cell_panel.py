@@ -648,11 +648,12 @@ class CellPanel(Qt.QWidget):
             # timeline and log for the same reason (design doc §7).
             self._dropDetailsFor(id(cell))
             # A stored error describes the pass that just ended, not the one
-            # about to start. Left in place, _onCellSelectionChanged would
-            # re-mount it beside a row that now reads "queued" and a timeline
-            # that is empty -- and it would stay mounted until _onCurrentCell
-            # eventually fires for this cell, which a Stop or a queue that
-            # never reaches it can leave never happening.
+            # about to start. errorText() reports it to anything that asks --
+            # including a caller reading it after this row already reads
+            # "queued" beside an empty timeline -- so it is dropped here with
+            # the rest of that pass's UI history rather than left to
+            # _onCurrentCell, which a Stop or a queue that never reaches this
+            # cell can leave never firing.
             self._cellErrors.pop(id(cell), None)
             # Queued again, so no longer holding a finished disposition -- but
             # remembered, so a rescan that discards this cell before the new

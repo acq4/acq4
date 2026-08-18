@@ -50,7 +50,9 @@ class MultiPatchLogRecorder(Qt.QObject):
 
     A QObject on the GUI thread: events are emitted from clamp and state-machine
     threads, and the default (queued) connections are what marshal them here
-    before anything is written.
+    before anything is written. __init__ pins that affinity itself rather than
+    trusting the constructing thread, so a recorder opened from a worker thread
+    with no Qt event loop still receives its events.
 
     Parameters
     ----------
@@ -93,6 +95,19 @@ class MultiPatchLogRecorder(Qt.QObject):
         initial_records=(),
     ):
         super().__init__()
+        # Pin signal affinity to the GUI thread when there is one, before any
+        # connect below. A recorder is routinely constructed from a worker
+        # thread (an Autopatch action runs on a gentletask ThreadTask, which has
+        # no Qt event loop); without this the queued sigNewEvent connections
+        # would target that loop-less thread and the slots would silently never
+        # fire, so test_pulse events emitted from the clamp's own thread would
+        # never be recorded. moveToThread is legal from the constructing thread
+        # because this object is parentless. Headless contexts have no
+        # QApplication; there the QObject stays on its creating thread and
+        # events still arrive via direct connection.
+        app = Qt.QApplication.instance()
+        if app is not None:
+            self.moveToThread(app.thread())
         self._directory = directory
         self._pipettes = list(pipettes)
         self._fullTestPulsePipettes = (

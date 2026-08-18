@@ -413,6 +413,10 @@ class PlotWidget(Qt.QWidget):
         Qt.QWidget.__init__(self)
         self.mode = None
         self._analysisLabel = None
+        self._frozen = False
+        # The history behind the most recent newTestPulse(), retained so a
+        # frozen plot can re-read it when its mode changes.
+        self._history = None
         self.layout = Qt.QGridLayout()
         self.layout.setContentsMargins(0, 0, 0, 0)
         self.layout.setSpacing(0)
@@ -452,9 +456,13 @@ class PlotWidget(Qt.QWidget):
         attempt through a different field is what it is for -- but must not offer
         the two modes that need a recording nobody retained. Passing False leaves
         the combo and the current mode untouched.
+
+        A frozen plot also re-plots its retained history whenever the combo
+        changes, since no further test pulse will arrive to do it (see replot).
         """
         if not frozen:
             return
+        self._frozen = True
         current = self.mode
         removing_current = current in self._LIVE_ONLY_MODES
         with pg.SignalBlock(self.modeCombo.currentIndexChanged, self.modeComboChanged):
@@ -480,6 +488,7 @@ class PlotWidget(Qt.QWidget):
         history and leave the current-value label blank, and the two modes that
         need the recording itself clear instead.
         """
+        self._history = history
         if self._analysisLabel is not None:
             self.plot.plotItem.vb.removeItem(self._analysisLabel)
             self._analysisLabel = None
@@ -553,9 +562,25 @@ class PlotWidget(Qt.QWidget):
             self.plot.setYRange(0, 100e-12)
             self.plot.setLabels(left=('Capacitance', u'F'))
 
+    def replot(self):
+        """Re-draw the retained history under the current mode.
+
+        setMode only adjusts the axis label, log mode and Y range; the curve
+        itself is drawn by newTestPulse. A live plot redraws on its next test
+        pulse, so nothing else is needed there. A frozen plot never gets
+        another, so without this a mode change would leave the previous field's
+        curve on screen beneath the new field's axis -- wrong data under a label
+        that says otherwise.
+        """
+        if self._history is None:
+            return
+        self.newTestPulse(None, self._history)
+
     def modeComboChanged(self):
         mode = self.modeCombo.currentText()
         self.setMode(mode)
+        if self._frozen:
+            self.replot()
         self.sigModeChanged.emit(self, mode)
 
     def closeClicked(self):

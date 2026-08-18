@@ -348,3 +348,58 @@ def test_test_pulse_history_tolerates_no_transitions(qapp):
     widget = buildDetailsWidget("test_pulse_history", _tpPayload(transitions=[]))
 
     assert widget.findChild(Qt.QListWidget).count() == 0
+
+
+def _curveData(plot):
+    """The (x, y) a PlotWidget's single curve was given.
+
+    The underlying data, not getData()'s display copy: the display copy is
+    log-transformed with the mode's log setting, so it moves whenever the mode
+    does, whether or not anything re-plotted.
+    """
+    items = plot.plot.plotItem.listDataItems()
+    assert len(items) == 1
+    return items[0].xData, items[0].yData
+
+
+def test_switching_a_frozen_plots_mode_replots_the_new_field(qapp):
+    # setMode only moves the axis label, the log mode and the Y range. A live
+    # plot redraws on its next test pulse; a frozen one never gets another, so
+    # without a re-plot the resistance curve would sit under a "Capacitance / F"
+    # axis -- wrong scientific data in front of an operator judging an attempt.
+    import numpy as np
+
+    from acq4.modules.MultiPatch.pipetteControl import PlotWidget
+    from acq4.modules.Autopatch.details_renderers import buildDetailsWidget
+
+    history = _tpHistory()
+    history["capacitance"] = np.linspace(1e-12, 50e-12, len(history))
+    widget = buildDetailsWidget("test_pulse_history", _tpPayload(history=history))
+    plot = widget.findChild(PlotWidget)
+    before = _curveData(plot)
+
+    plot.modeCombo.setText("capacitance")
+
+    assert plot.mode == "capacitance"
+    after = _curveData(plot)
+    assert not np.array_equal(after[1], before[1])
+    assert np.allclose(after[1], history["capacitance"])
+
+
+def test_a_live_plot_does_not_replot_on_a_mode_change(qapp):
+    # The live path is unchanged: its next test pulse is what redraws it, and a
+    # mode change must not re-read a history that is about to be superseded.
+    import numpy as np
+
+    from acq4.modules.MultiPatch.pipetteControl import PlotWidget
+
+    history = _tpHistory()
+    history["capacitance"] = np.linspace(1e-12, 50e-12, len(history))
+    plot = PlotWidget(mode="ss resistance")
+    plot.newTestPulse(None, history)
+    before = _curveData(plot)
+
+    plot.modeCombo.setText("capacitance")
+
+    assert plot.mode == "capacitance"
+    assert np.array_equal(_curveData(plot)[1], before[1])
