@@ -10,6 +10,7 @@ from coorx import Point
 from acq4_automation.feature_tracking.cell import Cell
 from acq4.util import Qt
 
+from .details_renderers import buildDetailsWidget
 from .error_display import ErrorBlock
 
 # Random scatter radius for the "Scatter fake cells" demo button (meters).
@@ -80,6 +81,20 @@ class CellPanel(Qt.QWidget):
         # cell's row, so a later "finished" phase can update it in place.
         # Cleared (not just overwritten) on every selection change.
         self._timelineItems: dict[int, Qt.QListWidgetItem] = {}
+        # id(entry) -> the live widget that entry handed over via
+        # set_details_widget(), held only while that entry's action is in
+        # flight: dropped the moment it finishes, or earlier still if it hands
+        # over a retained payload first (set_details() is documented to be
+        # called before finishing, and once it has, that payload is this
+        # entry's final word -- see the "details" phase below).
+        #
+        # Required for row navigation rather than merely convenient: selecting
+        # another row clears showContainer, which reparents the live widget out
+        # of the GUI tree, and without a reference here Python would collect it
+        # before the operator could select its row again. Dropping it by the
+        # time the entry finishes is what keeps the module's "no widget
+        # outlives its action" invariant (see tests/test_teardown.py).
+        self._liveWidgets: dict[int, object] = {}
         self._logs: dict[int, list[str]] = {}
         # (id(cell), timeline row index) -> (kind, payload) from that action's
         # ActionLogEntry.set_details(). Keyed by row rather than by entry
@@ -195,6 +210,7 @@ class CellPanel(Qt.QWidget):
         self.setLayout(layout)
 
         self.cellList.currentItemChanged.connect(self._onCellSelectionChanged)
+        self.timelineList.currentItemChanged.connect(self._onTimelineSelectionChanged)
         self.sigLogMessage.connect(self._onLogMessage)
         self.sigActionEntry.connect(self._onActionEntry)
         self.sigCellsDiscarded.connect(self._onCellsDiscarded)
@@ -743,6 +759,7 @@ class CellPanel(Qt.QWidget):
         if phase == "started":
             self._appendTimelineRow(cell, entry)
         elif phase == "finished":
+            self._liveWidgets.pop(id(entry), None)
             self._finishTimelineRow(cell, entry)
             if cell is self._currentSelectedCell() and self._shownEntryId == id(entry):
                 self._clearShowContainer()
@@ -756,20 +773,28 @@ class CellPanel(Qt.QWidget):
                 if cell is self._currentSelectedCell():
                     self._showErrorBlock(cell)
         elif phase == "widget":
-            if cell is self._currentSelectedCell():
-                self._clearShowContainer()
-                self._shownEntryId = None
-                widget = entry.details_widget
-                if widget is not None:
-                    self.showContainer.layout().addWidget(widget)
-                    self._shownEntryId = id(entry)
+            widget = entry.details_widget
+            if widget is None:
+                self._liveWidgets.pop(id(entry), None)
+            else:
+                self._liveWidgets[id(entry)] = widget
+            loc = self._entryTimelineLoc.get(id(entry))
+            if loc is not None and self._isSelectedRow(loc):
+                self._mountSelectedRow()
         elif phase == "details":
-            # Stored only; mounting it is Task 5's job, once rows are
-            # individually selectable and there is a notion of "the selected
-            # row" to mount into.
             loc = self._entryTimelineLoc.get(id(entry))
             if loc is not None:
                 self._details[loc] = (entry.details_kind, entry.details_payload)
+                # A payload is this action's final word for its row (see
+                # set_details' docstring: it must be called before the entry
+                # finishes), so it supersedes that same entry's live widget from
+                # here on -- even though the entry has not reached "finished"
+                # yet and _liveWidgets would otherwise still hold it. Without
+                # this, _mountSelectedRow's live-widget-first preference would
+                # keep showing a plot the action itself has just moved past.
+                self._liveWidgets.pop(id(entry), None)
+                if self._isSelectedRow(loc):
+                    self._mountSelectedRow()
         # "status" intentionally leaves the timeline row and details container
         # alone: Area 5's timeline only ever shows "running" then the finished
         # outcome, never each intermediate ctx.log_action status message (see
@@ -782,9 +807,12 @@ class CellPanel(Qt.QWidget):
         rows.append(text)
         self._entryTimelineLoc[id(entry)] = (id(cell), index)
         if cell is self._currentSelectedCell():
+            following = self._isFollowingLastRow()
             item = Qt.QListWidgetItem(text)
             self.timelineList.addItem(item)
             self._timelineItems[id(entry)] = item
+            if following:
+                self.timelineList.setCurrentItem(item)
 
     # Glyph shown in a finished timeline row for each ActionLogEntry.outcome
     # value (see ActionLogEntry._finish); an outcome this doesn't recognize
@@ -811,6 +839,86 @@ class CellPanel(Qt.QWidget):
             child = showLayout.takeAt(0)
             if child.widget() is not None:
                 child.widget().setParent(None)
+
+    def _isSelectedRow(self, loc) -> bool:
+        """Whether (cellId, rowIndex) is the row the operator is looking at."""
+        cellId, index = loc
+        cell = self._currentSelectedCell()
+        return (
+            cell is not None
+            and id(cell) == cellId
+            and self.timelineList.currentRow() == index
+        )
+
+    def _mountSelectedRow(self) -> None:
+        """Show whatever the currently selected timeline row has to show.
+
+        Preference order: that row's live widget if its action is still in
+        flight, else its retained payload, else nothing. A live action's widget
+        wins because it is still being updated; the payload only exists once the
+        action has something final to say.
+        """
+        self._clearShowContainer()
+        self._shownEntryId = None
+        cell = self._currentSelectedCell()
+        index = self.timelineList.currentRow()
+        if cell is None or index < 0:
+            return
+        loc = (id(cell), index)
+        for entryId, entryLoc in self._entryTimelineLoc.items():
+            if entryLoc == loc and entryId in self._liveWidgets:
+                self.showContainer.layout().addWidget(self._liveWidgets[entryId])
+                self._shownEntryId = entryId
+                return
+        stored = self._details.get(loc)
+        if stored is None:
+            return
+        kind, payload = stored
+        self.showContainer.layout().addWidget(buildDetailsWidget(kind, payload))
+
+    def _onTimelineSelectionChanged(self, _current, _previous) -> None:
+        self._mountSelectedRow()
+
+    def _isFollowingLastRow(self) -> bool:
+        """Whether the operator is watching the newest row rather than reading
+        back through earlier ones.
+
+        The auto-scroll rule: while the last row is selected, a new action's row
+        takes the selection with it; once the operator selects an earlier row,
+        it does not, until they return to the last row. A timeline with no
+        selection at all counts as following, so the first row of a freshly
+        followed cell is shown rather than requiring a click.
+        """
+        count = self.timelineList.count()
+        return count == 0 or self.timelineList.currentRow() in (-1, count - 1)
+
+    def _autoSelectRow(self, cellId: int) -> None:
+        """Select the row worth looking at for the cell just selected: the
+        action still running, else the most recent one that failed, else the
+        last one.
+
+        Without this, switching to a cell would leave the pane blank until the
+        operator clicked a row -- and, for a failed cell, would lose the
+        traceback that used to mount on cell selection alone.
+        """
+        count = self.timelineList.count()
+        if count == 0:
+            self.timelineList.setCurrentRow(-1)
+            return
+        running = {
+            index
+            for entryId, (locCellId, index) in self._entryTimelineLoc.items()
+            if locCellId == cellId
+        }
+        if running:
+            self.timelineList.setCurrentRow(max(running))
+            return
+        failed = [
+            index
+            for (storeCellId, index), (kind, _payload) in self._details.items()
+            if storeCellId == cellId and kind == "error"
+        ]
+        self.timelineList.setCurrentRow(max(failed) if failed else count - 1)
 
     def _showErrorBlock(self, cell) -> None:
         """Mount the stored error block for `cell` in the details container.
@@ -895,7 +1003,7 @@ class CellPanel(Qt.QWidget):
                 self._timelineItems[entryId] = item
         for line in self._logs.get(cellId, []):
             self.logView.appendPlainText(line)
-        self._showErrorBlock(cell)
+        self._autoSelectRow(cellId)
 
     def _currentSelectedCell(self):
         item = self.cellList.currentItem()

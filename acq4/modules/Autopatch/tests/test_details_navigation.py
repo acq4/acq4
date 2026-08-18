@@ -149,3 +149,222 @@ def test_reuse_clears_the_cells_payloads(panel):
     panel.reuseCheckedCellsBtn.click()
 
     assert panel.detailsFor(cell, 0) is None
+
+
+def _mounted(panel):
+    layout = panel.showContainer.layout()
+    return [layout.itemAt(i).widget() for i in range(layout.count())]
+
+
+def test_selecting_a_finished_row_mounts_its_payload(panel):
+    (cell,) = _seed(panel)
+    panel.cellList.setCurrentRow(0)
+    entry = ActionLogEntry("Cellfie")
+    panel.onLogAction(cell, entry)
+    entry.set_details("text", {"lines": ["the cellfie stack"]})
+    entry._finish(None)
+
+    panel.timelineList.setCurrentRow(0)
+
+    assert len(_mounted(panel)) == 1
+    assert "the cellfie stack" in _mounted(panel)[0].toPlainText()
+
+
+def test_selecting_a_different_row_swaps_the_mounted_payload(panel):
+    (cell,) = _seed(panel)
+    panel.cellList.setCurrentRow(0)
+    first = ActionLogEntry("First")
+    panel.onLogAction(cell, first)
+    first.set_details("text", {"lines": ["one"]})
+    first._finish(None)
+    second = ActionLogEntry("Second")
+    panel.onLogAction(cell, second)
+    second.set_details("text", {"lines": ["two"]})
+    second._finish(None)
+
+    panel.timelineList.setCurrentRow(0)
+    assert "one" in _mounted(panel)[0].toPlainText()
+
+    panel.timelineList.setCurrentRow(1)
+    assert "two" in _mounted(panel)[0].toPlainText()
+
+
+def test_selecting_a_row_with_no_payload_leaves_the_pane_empty(panel):
+    (cell,) = _seed(panel)
+    panel.cellList.setCurrentRow(0)
+    entry = ActionLogEntry("Pipette To Home")
+    panel.onLogAction(cell, entry)
+    entry._finish(None)
+
+    panel.timelineList.setCurrentRow(0)
+
+    assert _mounted(panel) == []
+
+
+def test_a_live_widget_is_remounted_when_its_row_is_reselected(panel):
+    # Navigating away clears the container, which reparents the live widget out.
+    # Coming back must put the same widget back, not a dead one.
+    (cell,) = _seed(panel)
+    panel.cellList.setCurrentRow(0)
+    finished = ActionLogEntry("Earlier")
+    panel.onLogAction(cell, finished)
+    finished._finish(None)
+
+    live = ActionLogEntry("Patch")
+    panel.onLogAction(cell, live)
+    liveWidget = Qt.QLabel("live plot")
+    live.set_details_widget(liveWidget)
+    assert liveWidget in _mounted(panel)
+
+    panel.timelineList.setCurrentRow(0)
+    assert liveWidget not in _mounted(panel)
+
+    panel.timelineList.setCurrentRow(1)
+    assert liveWidget in _mounted(panel)
+
+
+def test_a_finished_entrys_live_widget_is_forgotten(panel):
+    (cell,) = _seed(panel)
+    panel.cellList.setCurrentRow(0)
+    entry = ActionLogEntry("Patch")
+    panel.onLogAction(cell, entry)
+    entry.set_details_widget(Qt.QLabel("live plot"))
+    entry._finish(None)
+
+    assert panel._liveWidgets == {}
+
+
+def test_a_payload_arriving_for_the_selected_row_mounts_immediately(panel):
+    (cell,) = _seed(panel)
+    panel.cellList.setCurrentRow(0)
+    entry = ActionLogEntry("Cellfie")
+    panel.onLogAction(cell, entry)
+    panel.timelineList.setCurrentRow(0)
+
+    entry.set_details("text", {"lines": ["just arrived"]})
+
+    assert "just arrived" in _mounted(panel)[0].toPlainText()
+
+
+def test_a_payload_replaces_the_live_widget_on_the_same_row(panel):
+    # patch()'s finally sets its payload while its live plot is still mounted.
+    (cell,) = _seed(panel)
+    panel.cellList.setCurrentRow(0)
+    entry = ActionLogEntry("Patch")
+    panel.onLogAction(cell, entry)
+    liveWidget = Qt.QLabel("live plot")
+    entry.set_details_widget(liveWidget)
+    panel.timelineList.setCurrentRow(0)
+    assert liveWidget in _mounted(panel)
+
+    entry.set_details("text", {"lines": ["frozen"]})
+
+    assert liveWidget not in _mounted(panel)
+    assert "frozen" in _mounted(panel)[0].toPlainText()
+
+
+def test_a_new_row_is_followed_while_the_last_row_is_selected(panel):
+    (cell,) = _seed(panel)
+    panel.cellList.setCurrentRow(0)
+    first = ActionLogEntry("First")
+    panel.onLogAction(cell, first)
+    first._finish(None)
+    assert panel.timelineList.currentRow() == 0
+
+    second = ActionLogEntry("Second")
+    panel.onLogAction(cell, second)
+
+    assert panel.timelineList.currentRow() == 1
+
+
+def test_selecting_an_earlier_row_stops_following(panel):
+    (cell,) = _seed(panel)
+    panel.cellList.setCurrentRow(0)
+    for name in ("First", "Second"):
+        entry = ActionLogEntry(name)
+        panel.onLogAction(cell, entry)
+        entry._finish(None)
+
+    panel.timelineList.setCurrentRow(0)  # operator navigates back
+
+    third = ActionLogEntry("Third")
+    panel.onLogAction(cell, third)
+
+    assert panel.timelineList.currentRow() == 0
+
+
+def test_returning_to_the_last_row_resumes_following(panel):
+    (cell,) = _seed(panel)
+    panel.cellList.setCurrentRow(0)
+    for name in ("First", "Second"):
+        entry = ActionLogEntry(name)
+        panel.onLogAction(cell, entry)
+        entry._finish(None)
+    panel.timelineList.setCurrentRow(0)
+    third = ActionLogEntry("Third")
+    panel.onLogAction(cell, third)
+    third._finish(None)
+    assert panel.timelineList.currentRow() == 0
+
+    panel.timelineList.setCurrentRow(panel.timelineList.count() - 1)
+
+    fourth = ActionLogEntry("Fourth")
+    panel.onLogAction(cell, fourth)
+
+    assert panel.timelineList.currentRow() == panel.timelineList.count() - 1
+
+
+def test_selecting_a_cell_auto_selects_its_running_row(panel):
+    cellA, cellB = _seed(panel, 2)
+    panel.cellList.setCurrentRow(1)  # look at B so A's rows build unrendered
+    done = ActionLogEntry("Done")
+    panel.onLogAction(cellA, done)
+    done._finish(None)
+    running = ActionLogEntry("Running")
+    panel.onLogAction(cellA, running)
+
+    panel.cellList.setCurrentRow(0)
+
+    assert panel.timelineList.currentRow() == 1
+    assert "running" in panel.timelineList.item(1).text()
+
+
+def test_selecting_a_cell_auto_selects_its_failed_row(panel):
+    cellA, cellB = _seed(panel, 2)
+    panel.cellList.setCurrentRow(1)
+    failed = ActionLogEntry("Patch")
+    panel.onLogAction(cellA, failed)
+    failed._finish(RuntimeError("boom"))
+    later = ActionLogEntry("Pipette To Home")
+    panel.onLogAction(cellA, later)
+    later._finish(None)
+
+    panel.cellList.setCurrentRow(0)
+
+    assert panel.timelineList.currentRow() == 0
+
+
+def test_selecting_a_cell_auto_selects_the_last_row_when_nothing_stands_out(panel):
+    cellA, cellB = _seed(panel, 2)
+    panel.cellList.setCurrentRow(1)
+    for name in ("First", "Second"):
+        entry = ActionLogEntry(name)
+        panel.onLogAction(cellA, entry)
+        entry._finish(None)
+
+    panel.cellList.setCurrentRow(0)
+
+    assert panel.timelineList.currentRow() == 1
+
+
+def test_selecting_a_cell_with_no_rows_selects_nothing(panel):
+    cellA, cellB = _seed(panel, 2)
+    entry = ActionLogEntry("First")
+    panel.onLogAction(cellA, entry)
+    entry._finish(None)
+    panel.cellList.setCurrentRow(0)
+
+    panel.cellList.setCurrentRow(1)
+
+    assert panel.timelineList.currentRow() == -1
+    assert _mounted(panel) == []
