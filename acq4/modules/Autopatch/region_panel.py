@@ -147,7 +147,14 @@ class RegionPanel(Qt.QWidget):
         self.graphicsView.setSizePolicy(
             Qt.QSizePolicy.Expanding, Qt.QSizePolicy.Expanding
         )
-        self.graphicsView.setMinimumSize(300, 300)
+        # A floor, not a working size: how much room this view gets is the
+        # operator's decision, made by dragging the splitter handles around the
+        # area it sits in, and a floor of the size one actually draws at would
+        # take that decision away -- the area would scroll a viewport over the
+        # view instead of handing it the smaller rectangle it was given. Kept
+        # above zero only so that squeezing the area does not leave the controls
+        # above with a sliver of view underneath.
+        self.graphicsView.setMinimumSize(120, 120)
 
         # Item data, not display text, is what regionShape() returns: the window
         # maps it to a region class, and a label is a label.

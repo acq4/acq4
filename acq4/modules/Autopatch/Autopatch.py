@@ -11,6 +11,7 @@ from acq4.experiment.orchestrator import Orchestrator
 from acq4.experiment.search_region import EllipseRegion, PolygonRegion, RectRegion
 from acq4.experiment.slice import RegionTooLarge, Slice
 from acq4.experiment.tile_detector import make_tile_detector
+from acq4.logging_config import get_logger
 from acq4.modules.Module import Module
 from acq4.util import Qt
 from acq4.util.HelpfulException import HelpfulException
@@ -28,13 +29,56 @@ from .region_panel import RegionPanel
 from .search_panel import SearchPanel
 from .status_panel import StatusPanel
 
+logger = get_logger(__name__)
+
+
+class _AreaViewport(Qt.QScrollArea):
+    """The scrolling viewport one of the window's areas holds its content in:
+    it asks for whatever its content asks for, and insists on nothing.
+
+    Both hints are reported from the content rather than left to
+    QAbstractScrollArea's own answers, which are wrong here in opposite
+    directions.
+
+    The minimum is a floor of roughly 68 pixels square -- Qt's guess at the
+    smallest viewport still worth scrolling -- and inside a QSplitter that guess
+    is what an operator's drag stops against. Insisting on nothing instead is
+    what makes the split theirs: an area can be squeezed down to its title, and
+    its content scrolls in whatever is left.
+
+    The preferred size is computed from the widget the scroll area was handed
+    and then cached until the next setWidget(), and this window hands its
+    viewports over empty and fills them afterwards -- so that cache is the empty
+    hint, forever. Left to it, every area opens at its title bar and the whole
+    window a couple of hundred pixels across, every panel scrolled before the
+    operator has touched a handle. Reading the content's current hint is also
+    the more honest answer as the session goes on: Area 5 mounts a details
+    widget per action, so what its content wants genuinely changes.
+    """
+
+    def minimumSizeHint(self):
+        return Qt.QSize(0, 0)
+
+    def sizeHint(self):
+        # No frame is drawn (see AutopatchWindow._makeArea -- the group box
+        # already borders exactly this rectangle), so the content's own hint is
+        # the whole of it.
+        content = self.widget()
+        return super().sizeHint() if content is None else content.sizeHint()
+
 
 class AutopatchWindow(Qt.QWidget):
     """The Autopatch run window: five labeled areas per the design doc.
 
     Area 1 starts a slice, Area 2 configures the cell search over it, and
     Areas 3/4/5 hold the status/protocol/cell-queue content wired to a live
-    Orchestrator.
+    Orchestrator. The numbers are how this module and that doc refer to them
+    among themselves; the titles the operator reads name their content.
+
+    How the window is divided between them is the operator's, not this
+    constructor's: every boundary is a splitter handle, each area's content fits
+    whatever size it is dragged to (see _makeArea and _AreaViewport), and the
+    division is kept between sessions (see _saveLayout).
     """
 
     def __init__(
@@ -48,36 +92,67 @@ class AutopatchWindow(Qt.QWidget):
         self.module = module
         self.manager = module.manager if module is not None else None
         self.setWindowTitle("Autopatch")
+        # Where this window's layout is kept between sessions, named for the
+        # module so that two Autopatch modules on one rig keep their own -- the
+        # same file name and the same place as every other module's window
+        # state (see CameraWindow, and the Manager and Console modules). None
+        # for a manager-less window: there is no config directory to write into,
+        # and module=None is a mode this window supports by design.
+        self._stateFile = (
+            None if module is None else os.path.join("modules", f"{module.name}_ui.cfg")
+        )
 
-        self.area1Box = Qt.QGroupBox("Area 1 — Slice && region")
-        self.area2Box = Qt.QGroupBox("Area 2 — Cell finding")
-        self.area3Box = Qt.QGroupBox("Area 3 — Status && actions")
-        self.area4Box = Qt.QGroupBox("Area 4 — Protocol && params")
-        self.area5Box = Qt.QGroupBox("Area 5 — Current cell")
+        # Every area's scrolling viewport, in creation order, for the one pass
+        # over them _settleAreaSizes() makes once their content is in.
+        self._areaViewports: list[_AreaViewport] = []
+        # Titles name what is in the box, not which area of the design doc it
+        # is: "Area 3" is how this module's code and that doc refer to the
+        # status/actions box among themselves, and tells an operator nothing.
+        self.area1Box, self.area1Layout = self._makeArea("Slice && region")
+        self.area2Box, self.area2Layout = self._makeArea("Cell finding")
+        self.area3Box, self.area3Layout = self._makeArea("Status && actions")
+        self.area4Box, self.area4Layout = self._makeArea("Protocol && params")
+        self.area5Box, self.area5Layout = self._makeArea("Current cell")
 
-        for box in (self.area1Box, self.area2Box, self.area3Box, self.area4Box, self.area5Box):
-            box.setLayout(Qt.QVBoxLayout())
-
-        # A splitter, not a fixed box layout: Area 1 is a view of a whole slice,
-        # and drawing a region in a strip the operator cannot enlarge is an
-        # exercise in patience.
-        leftCol = Qt.QSplitter(Qt.Qt.Vertical)
-        leftCol.addWidget(self.area1Box)
-        leftCol.addWidget(self.area2Box)
+        # Splitters all the way down, so every boundary in this window is a
+        # handle the operator can drag: the one between the two columns, and the
+        # ones between the areas stacked inside each. Which area deserves the
+        # room depends on what is being done at the time -- drawing a region
+        # over a whole slice, then watching one cell's timeline -- and that is
+        # not a judgement this constructor can make for the whole session. The
+        # stretch factors below decide only which area grows as the *window*
+        # does; where the handles start is _seedOpeningSplit's, where they end up
+        # is the operator's, and a QSplitter holds explicit sizes once dragged.
+        self.leftColumn = Qt.QSplitter(Qt.Qt.Vertical)
+        self.leftColumn.addWidget(self.area1Box)
+        self.leftColumn.addWidget(self.area2Box)
         # Area 1 is the view; Area 2 is four spin boxes and a readout.
-        leftCol.setStretchFactor(0, 3)
-        leftCol.setStretchFactor(1, 1)
+        self.leftColumn.setStretchFactor(0, 3)
+        self.leftColumn.setStretchFactor(1, 1)
 
-        rightCol = Qt.QVBoxLayout()
-        rightCol.addWidget(self.area3Box)
-        rightCol.addWidget(self.area4Box)
-        rightCol.addWidget(self.area5Box)
-        rightColWidget = Qt.QWidget()
-        rightColWidget.setLayout(rightCol)
+        self.rightColumn = Qt.QSplitter(Qt.Qt.Vertical)
+        self.rightColumn.addWidget(self.area3Box)
+        self.rightColumn.addWidget(self.area4Box)
+        self.rightColumn.addWidget(self.area5Box)
+        # Areas 3 and 4 are rows of controls; Area 5 grows a timeline, a log and
+        # a details widget as a cell runs, so the slack starts there.
+        self.rightColumn.setStretchFactor(2, 1)
+
+        self.columnSplitter = Qt.QSplitter(Qt.Qt.Horizontal)
+        self.columnSplitter.addWidget(self.leftColumn)
+        self.columnSplitter.addWidget(self.rightColumn)
+        self.columnSplitter.setStretchFactor(0, 2)
+        self.columnSplitter.setStretchFactor(1, 1)
+
+        for splitter in (self.leftColumn, self.rightColumn, self.columnSplitter):
+            # A little wider than the style's default, because these handles are
+            # the whole point of the layout and the default is a few pixels of
+            # gap between two group box frames -- easy to miss and easy to miss
+            # with the mouse.
+            splitter.setHandleWidth(8)
 
         outer = Qt.QHBoxLayout()
-        outer.addWidget(leftCol, 2)
-        outer.addWidget(rightColWidget, 1)
+        outer.addWidget(self.columnSplitter)
         self.setLayout(outer)
 
         if protocolDir is None:
@@ -92,7 +167,7 @@ class AutopatchWindow(Qt.QWidget):
         # picker below lists its contents.
         install_example_protocols(protocolDir)
         self.protocolPanel = ProtocolPanel(protocolDir=protocolDir)
-        self.area4Box.layout().addWidget(self.protocolPanel)
+        self.area4Layout.addWidget(self.protocolPanel)
 
         self.pipetteSelector = (
             pipetteSelector
@@ -102,11 +177,11 @@ class AutopatchWindow(Qt.QWidget):
         self.cameraSelector = (
             cameraSelector if cameraSelector is not None else InterfaceCombo(types=["camera"])
         )
-        self.area4Box.layout().addWidget(self.pipetteSelector)
-        self.area4Box.layout().addWidget(self.cameraSelector)
+        self.area4Layout.addWidget(self.pipetteSelector)
+        self.area4Layout.addWidget(self.cameraSelector)
 
         self.statusPanel = StatusPanel()
-        self.area3Box.layout().addWidget(self.statusPanel)
+        self.area3Layout.addWidget(self.statusPanel)
 
         self.newSliceBtn = Qt.QPushButton("New slice")
         self.newSliceBtn.setToolTip(
@@ -114,8 +189,8 @@ class AutopatchWindow(Qt.QWidget):
             "cells -- and start a fresh one for newly mounted tissue."
         )
         self.regionPanel = RegionPanel()
-        self.area1Box.layout().addWidget(self.newSliceBtn)
-        self.area1Box.layout().addWidget(self.regionPanel)
+        self.area1Layout.addWidget(self.newSliceBtn)
+        self.area1Layout.addWidget(self.regionPanel)
 
         self._pinnedFrameMirror = PinnedFrameMirror(self.regionPanel.view)
         # parent=self so the clear prompt is owned by this window: a parentless
@@ -158,13 +233,13 @@ class AutopatchWindow(Qt.QWidget):
         self._positionConnected: dict[int, object] = {}
 
         self.searchPanel = SearchPanel()
-        self.area2Box.layout().addWidget(self.searchPanel)
+        self.area2Layout.addWidget(self.searchPanel)
 
         self.cellPanel = CellPanel(
             pipetteGetter=self.pipetteSelector.getSelectedObj,
             cameraGetter=self.cameraSelector.getSelectedObj,
         )
-        self.area5Box.layout().addWidget(self.cellPanel)
+        self.area5Layout.addWidget(self.cellPanel)
 
         self.orchestrator = None
         # The pipette resolved from self.pipetteSelector at the moment Start was
@@ -241,6 +316,157 @@ class AutopatchWindow(Qt.QWidget):
         # rather than leaving it empty until the first cell or colour-source
         # change calls _refreshProgress() on its own.
         self._refreshProgress()
+        # Last, once every panel above is built and filled: what the areas ask
+        # for is read off their content, and this is the point at which that
+        # content is all there.
+        self._settleAreaSizes()
+        self._seedOpeningSplit()
+        # And then, if the operator left one behind, their own division of the
+        # window over the opening arrangement just seeded.
+        self._restoreLayout()
+
+    def _makeArea(self, title: str) -> tuple[Qt.QGroupBox, Qt.QVBoxLayout]:
+        """A titled area, and the layout its content goes into.
+
+        The content is put inside a scrolling viewport rather than into the
+        group box directly, which is what makes the split the operator drags the
+        split they get. A QSplitter refuses to shrink a child below its
+        minimumSizeHint, and a group box holding a panel directly takes on that
+        panel's: Area 1's slice view alone asks for a few hundred pixels square,
+        and Area 5's button row plus two lists plus a log plus a details widget
+        for a good deal more. Those hints would clamp the handle, so the areas
+        would spring back to what their contents preferred. With a viewport in
+        between -- one that insists on no minimum of its own, see _AreaViewport
+        -- the handle moves anywhere, and content that genuinely cannot fit
+        scrolls instead of refusing.
+
+        `widgetResizable`, so the content tracks the viewport and only scrolls
+        once it truly has no room, rather than sitting at its sizeHint with
+        scrollbars up from the start. `NoFrame`, because the group box already
+        draws a border around exactly this rectangle.
+        """
+        content = Qt.QWidget()
+        contentLayout = Qt.QVBoxLayout()
+        # No margins of its own: the group box and the viewport each already
+        # inset what they hold, and a third inset inside an area the operator
+        # may have deliberately squeezed is room taken from the content they
+        # chose to keep.
+        contentLayout.setContentsMargins(0, 0, 0, 0)
+        content.setLayout(contentLayout)
+
+        scroll = _AreaViewport()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(Qt.QFrame.NoFrame)
+        scroll.setWidget(content)
+
+        box = Qt.QGroupBox(title)
+        # The group box's own layout keeps its default margins: its top margin
+        # is what keeps the content clear of the title drawn into its frame.
+        box.setLayout(Qt.QVBoxLayout())
+        box.layout().addWidget(scroll)
+        self._areaViewports.append(scroll)
+        return box, contentLayout
+
+    def _settleAreaSizes(self) -> None:
+        """Let the size the areas ask for catch up with the content now in them.
+
+        Filling a viewport's content widget invalidates the layouts *inside* that
+        widget; the group box layout holding the viewport is outside it and never
+        hears, so it goes on offering the splitters the hint it computed while
+        every area was still empty -- which opens the window a couple of hundred
+        pixels across with all five panels already scrolled. updateGeometry() is
+        what invalidates that outer chain.
+
+        Once, at the end of construction, rather than on every later change to a
+        panel's content: from here on the areas are sized by the splitters, which
+        hold explicit sizes and consult a hint only for their opening
+        arrangement.
+        """
+        for viewport in self._areaViewports:
+            viewport.updateGeometry()
+
+    def _seedOpeningSplit(self) -> None:
+        """Divide each splitter in proportion to what the areas in it ask for.
+
+        The stretch factors alone are not that: they describe how room *beyond*
+        what the content wants is shared as the window grows, and applied to a
+        window only just big enough for its content they hand one area room
+        another needed. A bare 2:1 between the columns is what puts Area 5's
+        button row behind a horizontal scrollbar at the size the window first
+        opens, while the slice view sits on space it was not asking for.
+
+        An opening arrangement only, in both senses: a saved layout is restored
+        straight over it (see _restoreLayout), and from the operator's first drag
+        onwards the splitter's own explicit sizes are what count. QSplitter
+        scales what it is handed to whatever room it actually has, so these are
+        read as proportions rather than as pixels.
+        """
+        for splitter in self._splitters().values():
+            horizontal = splitter.orientation() == Qt.Qt.Horizontal
+            hints = [splitter.widget(i).sizeHint() for i in range(splitter.count())]
+            splitter.setSizes([h.width() if horizontal else h.height() for h in hints])
+
+    def _splitters(self) -> dict:
+        """The window's splitters, by the name their state is saved under."""
+        return {
+            "columns": self.columnSplitter,
+            "leftColumn": self.leftColumn,
+            "rightColumn": self.rightColumn,
+        }
+
+    def _saveLayout(self) -> None:
+        """Write the operator's division of the window to the module's state file.
+
+        Every handle in the window, and the window's own geometry: what they
+        dragged the areas to is a working preference like any other, and having
+        to rebuild it at the start of each session is what makes an adjustable
+        layout not worth adjusting.
+
+        Percent-encoded QSplitter blobs and geometry as four plain numbers, so
+        this file stays readable text through configfile -- the same shape the
+        Camera, Manager and Console modules already keep their window state in.
+        """
+        if self._stateFile is None or self.manager is None:
+            return
+        geometry = self.geometry()
+        self.manager.writeConfigFile(
+            {
+                "geometry": [
+                    geometry.x(),
+                    geometry.y(),
+                    geometry.width(),
+                    geometry.height(),
+                ],
+                "splitters": {
+                    name: bytes(splitter.saveState().toPercentEncoding()).decode()
+                    for name, splitter in self._splitters().items()
+                },
+            },
+            self._stateFile,
+        )
+
+    def _restoreLayout(self) -> None:
+        """Put the window back the way the operator last left it.
+
+        Anything the saved state does not describe is left at the arrangement
+        __init__ just built, and a blob Qt refuses is dropped for the same
+        reason: a state file written by an older version of this window, or one
+        that has been hand-edited, must cost the operator their layout at worst
+        -- never the window itself. `restoreState` reports that refusal by
+        returning False rather than by raising, and a state naming a splitter
+        this window no longer has is simply not looked up.
+        """
+        if self._stateFile is None or self.manager is None:
+            return
+        state = self.manager.readConfigFile(self._stateFile)
+        geometry = state.get("geometry")
+        if geometry is not None:
+            self.setGeometry(Qt.QRect(*geometry))
+        splitters = self._splitters()
+        for name, blob in state.get("splitters", {}).items():
+            splitter = splitters.get(name)
+            if splitter is not None:
+                splitter.restoreState(Qt.QByteArray.fromPercentEncoding(blob.encode()))
 
     @staticmethod
     def _cameraModuleWindow(manager):
@@ -1001,11 +1227,25 @@ class AutopatchWindow(Qt.QWidget):
 
         Idempotent: safe to call more than once (e.g. once explicitly from
         Autopatch.quit() and again via closeEvent() when the operator closes
-        the window directly).
+        the window directly). Saving the layout rides on that: both routes out
+        of the window pass through here, and only the first one saves, so what
+        gets written is the window as the operator last had it rather than
+        whatever a second pass would read off a window already coming apart.
         """
         if self._tornDown:
             return
         self._tornDown = True
+        try:
+            # First, while the window is still up and its geometry is still
+            # what the operator left it at.
+            self._saveLayout()
+        except Exception:
+            # A layout is a convenience; everything below is not. A config
+            # directory that cannot be written must not cost this window its
+            # deterministic teardown -- see above for what is at stake when
+            # that is skipped -- so this is reported and stepped over rather
+            # than allowed to propagate.
+            logger.exception("Could not save the Autopatch window layout")
         try:
             if self.orchestrator is not None:
                 self._stopAndReleaseOrchestrator(self.orchestrator)

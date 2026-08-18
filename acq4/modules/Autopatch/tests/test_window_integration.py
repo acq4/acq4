@@ -199,6 +199,11 @@ class _FakeManager(Qt.QObject):
     A QObject carrying sigModulesChanged, because the real Manager is one.
     Nothing in Autopatch listens to that signal, so the fake's implementation
     is inert; it exists to match the interface of the thing it stands in for.
+
+    The config-file pair is backed by a dict rather than by files under a config
+    directory: the window saves its layout through it when it is torn down, and
+    a test must not write into the real rig's configuration to do that. See
+    test_layout_persistence for the tests that are actually about this pair.
     """
 
     sigModulesChanged = Qt.Signal()
@@ -206,6 +211,7 @@ class _FakeManager(Qt.QObject):
     def __init__(self, root_dir):
         super().__init__()
         self._current_dir = root_dir
+        self.configFiles = {}
         self.drawn = []
         self.pinnedFrameSource = _FakePinnedFrameSource()
         self.cameraWindow = SimpleNamespace(
@@ -233,6 +239,14 @@ class _FakeManager(Qt.QObject):
     def folderTypesConfig(self):
         return _FOLDER_TYPES
 
+    def readConfigFile(self, fileName, missingOk=True):
+        if fileName not in self.configFiles and not missingOk:
+            raise FileNotFoundError(fileName)
+        return self.configFiles.get(fileName, {})
+
+    def writeConfigFile(self, data, fileName):
+        self.configFiles[fileName] = data
+
 
 def _makeWindow(tmp_path, cameraSelector=None):
     """An AutopatchWindow with a loaded no-op protocol and a camera-backed
@@ -250,7 +264,7 @@ def _makeWindow(tmp_path, cameraSelector=None):
     _write_protocol(tmp_path, "demo.py", _NOOP_PROTOCOL)
     storageRoot = dm.getDirHandle(str(tmp_path / "storage"), create=True)
     win = AutopatchWindow(
-        module=SimpleNamespace(manager=_FakeManager(storageRoot)),
+        module=SimpleNamespace(manager=_FakeManager(storageRoot), name="Autopatch"),
         protocolDir=str(tmp_path),
         pipetteSelector=_FakePipetteSelector(),
         cameraSelector=cameraSelector,

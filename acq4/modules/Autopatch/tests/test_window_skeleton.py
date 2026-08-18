@@ -1,5 +1,5 @@
 """Tests that AutopatchWindow constructs and exposes the five design-doc areas
-as labeled placeholder group boxes."""
+as labeled group boxes the operator can resize freely against each other."""
 import pytest
 
 from acq4.util import Qt
@@ -50,6 +50,18 @@ def test_area_titles_name_their_design_doc_role(qapp, tmp_path):
     assert "cell" in win.area5Box.title().lower()
 
 
+def test_area_titles_name_their_content_not_their_internal_number(qapp, tmp_path):
+    """"Area 3" is how this module's code and design doc refer to the
+    status/actions box; it tells an operator nothing about what is in it. The
+    titles they read name the content alone."""
+    win = _makeWindow(tmp_path)
+
+    for box in (win.area1Box, win.area2Box, win.area3Box, win.area4Box, win.area5Box):
+        title = box.title()
+        assert "area" not in title.lower(), title
+        assert not any(ch.isdigit() for ch in title), title
+
+
 def test_window_has_a_title(qapp, tmp_path):
     win = _makeWindow(tmp_path)
     assert win.windowTitle() == "Autopatch"
@@ -92,29 +104,144 @@ def test_default_pipette_selector_is_built_for_the_patchpipette_interface(qapp, 
     assert captured["types"] == ["patchpipette"]
 
 
-def test_areas_are_arranged_in_two_columns(qapp, tmp_path):
+def test_areas_are_arranged_in_two_columns_of_splitters(qapp, tmp_path):
     """Left column (top->bottom): Area 1, Area 2. Right column (top->bottom):
     Area 3, Area 4, Area 5.
 
-    The left column is a splitter rather than a plain box layout, so that the
-    operator can give Area 1's view of the slice as much of the window as
-    drawing a region over tissue needs.
+    Every boundary between areas is a splitter handle -- the one between the
+    columns and the ones between the areas stacked inside each column -- so the
+    operator, not this constructor, decides how the window is divided.
     """
     win = _makeWindow(tmp_path)
 
     outer = win.layout()
     assert isinstance(outer, Qt.QHBoxLayout)
-    assert outer.count() == 2
+    assert outer.count() == 1
 
-    leftCol = outer.itemAt(0).widget()
-    rightCol = outer.itemAt(1).widget().layout()
+    columns = outer.itemAt(0).widget()
+    assert isinstance(columns, Qt.QSplitter)
+    assert columns.orientation() == Qt.Qt.Horizontal
+    assert columns.count() == 2
 
+    leftCol, rightCol = columns.widget(0), columns.widget(1)
     assert isinstance(leftCol, Qt.QSplitter)
-    assert leftCol.count() == 2
-    assert leftCol.widget(0) is win.area1Box
-    assert leftCol.widget(1) is win.area2Box
+    assert isinstance(rightCol, Qt.QSplitter)
+    assert leftCol.orientation() == Qt.Qt.Vertical
+    assert rightCol.orientation() == Qt.Qt.Vertical
 
-    assert rightCol.count() == 3
-    assert rightCol.itemAt(0).widget() is win.area3Box
-    assert rightCol.itemAt(1).widget() is win.area4Box
-    assert rightCol.itemAt(2).widget() is win.area5Box
+    assert [leftCol.widget(i) for i in range(leftCol.count())] == [
+        win.area1Box,
+        win.area2Box,
+    ]
+    assert [rightCol.widget(i) for i in range(rightCol.count())] == [
+        win.area3Box,
+        win.area4Box,
+        win.area5Box,
+    ]
+
+
+def test_each_area_holds_its_content_in_a_scroll_area(qapp, tmp_path):
+    """The panels live inside scrolling viewports, which is what lets an area be
+    given less room than its content wants: the content scrolls instead of
+    refusing to shrink."""
+    win = _makeWindow(tmp_path)
+
+    for box, panel in (
+        (win.area1Box, win.regionPanel),
+        (win.area2Box, win.searchPanel),
+        (win.area3Box, win.statusPanel),
+        (win.area4Box, win.protocolPanel),
+        (win.area5Box, win.cellPanel),
+    ):
+        scrolls = box.findChildren(Qt.QScrollArea)
+        assert len(scrolls) == 1, (box.title(), scrolls)
+        scroll = scrolls[0]
+        assert scroll.widgetResizable(), box.title()
+        assert scroll.isAncestorOf(panel), box.title()
+
+
+def test_an_area_can_be_squeezed_below_what_its_content_asks_for(qapp, tmp_path):
+    """A QSplitter will not drag a child below its minimumSizeHint, so an area
+    that inherits its panel's hint -- Area 1's slice view alone asks for a
+    square of a few hundred pixels, Area 5's button row plus two lists plus a
+    log for far more -- would refuse the size the operator chose. Wrapped, each
+    area's hint is a viewport's, and the handle keeps moving."""
+    win = _makeWindow(tmp_path)
+
+    for box in (win.area1Box, win.area2Box, win.area3Box, win.area4Box, win.area5Box):
+        hint = box.minimumSizeHint()
+        assert hint.height() <= 100, (box.title(), hint.height())
+        assert hint.width() <= 250, (box.title(), hint.width())
+
+
+def test_the_operator_chosen_split_is_what_the_areas_actually_get(qapp, tmp_path):
+    """The end-to-end version of the check above, driven through the splitters
+    the operator drags: sizes asked for are sizes honoured, not clamped back up
+    to what the content inside would prefer."""
+    win = _makeWindow(tmp_path)
+    win.resize(900, 700)
+    win.show()
+    try:
+        qapp.processEvents()
+        columns = win.layout().itemAt(0).widget()
+        leftCol, rightCol = columns.widget(0), columns.widget(1)
+
+        # A narrow left column and a right column dominated by one area: both
+        # squeeze several panels well under their natural size.
+        columns.setSizes([200, 700])
+        leftCol.setSizes([500, 100])
+        rightCol.setSizes([60, 60, 500])
+        qapp.processEvents()
+
+        assert win.area1Box.width() <= 220
+        assert win.area2Box.height() <= 150
+        assert win.area3Box.height() <= 110
+        assert win.area4Box.height() <= 110
+    finally:
+        win.close()
+
+
+def test_an_area_asks_for_room_enough_for_the_content_it_holds(qapp, tmp_path):
+    """The other half of squeezing: the wrapping must not shrink what an area
+    asks for before the operator has touched a handle.
+
+    QScrollArea computes its sizeHint from the widget it was handed and then
+    caches it forever -- a cache only setWidget() clears -- and this window hands
+    those widgets over empty and fills them afterwards. Left to that cache every
+    area's hint is the empty one, which opens the whole window a couple of
+    hundred pixels across with all five areas already scrolled.
+    """
+    win = _makeWindow(tmp_path)
+
+    for box, panel in (
+        (win.area1Box, win.regionPanel),
+        (win.area2Box, win.searchPanel),
+        (win.area3Box, win.statusPanel),
+        (win.area4Box, win.protocolPanel),
+        (win.area5Box, win.cellPanel),
+    ):
+        hint, wanted = box.sizeHint(), panel.sizeHint()
+        assert hint.width() >= wanted.width(), (box.title(), hint, wanted)
+        assert hint.height() >= wanted.height(), (box.title(), hint, wanted)
+
+
+def test_the_window_opens_with_each_column_wide_enough_for_its_content(qapp, tmp_path):
+    """The opening arrangement is seeded from what the areas ask for, not from
+    the stretch factors alone: those describe how *extra* room is shared as the
+    window grows, and a bare 2:1 of a window that is only just big enough hands
+    the left column room the right column needed -- so an operator's first sight
+    of the window is Area 5's buttons behind a horizontal scrollbar, with the
+    slice view sitting on space it was not asking for.
+    """
+    win = _makeWindow(tmp_path)
+    wanted = [win.leftColumn.sizeHint().width(), win.rightColumn.sizeHint().width()]
+    # Comfortably more than both columns together, so nothing here is about what
+    # gives when there genuinely is not enough room.
+    win.resize(sum(wanted) + 200, 800)
+    win.show()
+    try:
+        qapp.processEvents()
+        for got, asked in zip(win.columnSplitter.sizes(), wanted):
+            assert got >= asked, (win.columnSplitter.sizes(), wanted)
+    finally:
+        win.close()
