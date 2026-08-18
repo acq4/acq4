@@ -88,7 +88,13 @@ class PatchPipette(Device):
         self.waitingForSwap = False
         self._accessWarning = (False, "")
         self._lastPos = None
-        self._emitTestPulseData = False
+        # Tokens held by whoever currently wants test_pulse events to carry the
+        # full PatchClampTestPulse object, not just its analysis. A set rather
+        # than a bool because independent recorders subscribe independently:
+        # with a bool, whichever one stopped last would silence the others.
+        # Holds tokens, never the subscribers themselves, so nothing here keeps
+        # a recorder alive.
+        self._fullTestPulseSubscribers = set()
         self.cell = None
         self.previousCells = []
 
@@ -425,12 +431,26 @@ class PatchPipette(Device):
     def _autoBiasChanged(self, clamp, enabled, target):
         self.emitNewEvent('auto_bias_change', {'enabled': enabled, 'target': target})
 
-    def emitFullTestPulseData(self, emit: bool):
-        self._emitTestPulseData = emit
+    def requestFullTestPulseData(self, token) -> None:
+        """Ask that test_pulse events carry the full PatchClampTestPulse object.
+
+        `token` identifies the subscriber and is what releaseFullTestPulseData()
+        takes back; any hashable will do. Idempotent per token.
+        """
+        self._fullTestPulseSubscribers.add(token)
+
+    def releaseFullTestPulseData(self, token) -> None:
+        """Withdraw `token`'s request. Full data keeps flowing while any other
+        subscriber holds one. Releasing an unknown token is a no-op, so a
+        recorder's idempotent stop() can call it freely."""
+        self._fullTestPulseSubscribers.discard(token)
+
+    def emitsFullTestPulseData(self) -> bool:
+        return bool(self._fullTestPulseSubscribers)
 
     def _testPulseFinished(self, clamp, result: PatchClampTestPulse):
         data = result.analysis
-        if self._emitTestPulseData:
+        if self._fullTestPulseSubscribers:
             data = {'full_test_pulse': result, **data}  # copy it so we don't modify the original
         self.emitNewEvent('test_pulse', data)
 

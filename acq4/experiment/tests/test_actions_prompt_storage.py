@@ -298,3 +298,83 @@ def test_new_data_dir_still_behaves_identically_through_the_wrapper(root_dir):
 
     assert created.info()["dirType"] == "Slice"
     assert [e.name for e in entries] == ["New Data Directory"]
+
+
+def test_prompt_retains_the_message_and_the_clicked_label(monkeypatch):
+    monkeypatch.setattr(prompt_mod, "_is_headless", lambda: False)
+    monkeypatch.setattr(prompt_mod, "prompt_user", lambda title, message, labels: "Retry")
+    ctx = ExecutionContext()
+    details = []
+    ctx.on_log_action = lambda e: setattr(
+        e, "on_details", lambda entry, kind, payload: details.append((kind, payload))
+    )
+
+    assert prompt(ctx, message="Replace the pipette", choices=("Retry", "Skip")) == "Retry"
+
+    assert details == [
+        ("text", {"lines": ["Replace the pipette", "operator chose: Retry"]})
+    ]
+
+
+def test_prompt_retains_the_default_choice_when_headless(monkeypatch):
+    monkeypatch.setattr(prompt_mod, "_is_headless", lambda: True)
+    ctx = ExecutionContext()
+    details = []
+    ctx.on_log_action = lambda e: setattr(
+        e, "on_details", lambda entry, kind, payload: details.append((kind, payload))
+    )
+
+    prompt(ctx, message="carry on", choices=("OK", "Cancel"))
+
+    assert details[0][1]["lines"][1] == "operator chose: OK"
+
+
+def test_new_data_dir_retains_the_directory_it_created():
+    from acq4.experiment.actions.storage import new_data_dir
+    from acq4.experiment.context import ExecutionContext
+
+    class _Dir:
+        def __init__(self, name):
+            self._name = name
+
+        def name(self):
+            return self._name
+
+        def isManaged(self):
+            return True
+
+        def info(self):
+            return {"dirType": "Slice"}
+
+        def mkdir(self, name, autoIncrement=False, info=None):
+            return _Dir(f"/data/{name}")
+
+        def parent(self):
+            return self
+
+        def setInfo(self, info):
+            return None
+
+    class _Manager:
+        def __init__(self):
+            self.current = _Dir("/data/slice_000")
+            self.set_calls = []
+
+        def getCurrentDir(self):
+            return self.current
+
+        def folderTypesConfig(self):
+            return {"Cell": {"name": "cell_000"}}
+
+        def setCurrentDir(self, d):
+            self.set_calls.append(d)
+
+    ctx = ExecutionContext(manager=_Manager())
+    details = []
+    ctx.on_log_action = lambda e: setattr(
+        e, "on_details", lambda entry, kind, payload: details.append((kind, payload))
+    )
+
+    created = new_data_dir(ctx, level="Cell")
+
+    assert details == [("text", {"lines": [f"created {created.name()}"]})]

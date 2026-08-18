@@ -10,11 +10,21 @@ ctx.pipette is a PatchPipette; the underlying manipulator is ctx.pipette.pipette
 """
 from __future__ import annotations
 
+import numpy as np
+import pyqtgraph as pg
+
+from acq4.util import Qt
 from acq4.util.imaging.sequencer import run_image_sequence
 from acq4.util.model_config import segmenter_path
 from acq4.util.task import run_in_gui_thread
 
 from ..exceptions import OrchestrationError
+
+# Retained trace length per sweep. More than a plot's pixel width, and small
+# enough that a 20-sweep sequence costs the pane well under a megabyte per cell
+# rather than the 16 MB the undecimated sweeps would. The full data is in the
+# saved ProtocolSequence directory either way.
+_MAX_TRACE_POINTS = 4000
 
 
 def _move(ctx, name: str, position: str, speed: str) -> None:
@@ -113,7 +123,34 @@ def find_surface(ctx):
             depth = scope.findSurfaceDepth(imager)
         except ValueError as e:
             raise OrchestrationError(f"{action_entry.name}: {e}") from e
+        action_entry.set_details(
+            "text", {"lines": [f"surface detected at {pg.siFormat(depth, suffix='m')}"]}
+        )
         return depth
+
+
+def _trackerStack(cell):
+    """The 3D stack a cell's tracker holds, oriented for display, or None.
+
+    Reads the same attribute chain AutomationDebug's cell stack view does, and
+    swaps rows/cols the same way so the stack displays in the same orientation
+    as the Camera module. Returns None rather than raising for a cell whose
+    tracker never exposed one: this feeds a display payload, and an action must
+    not fail on the orchestrator's worker thread over what the pane can show.
+    """
+    tracker = getattr(cell, "_tracker", None)
+    if tracker is None:
+        return None
+    try:
+        stack = tracker.motion_estimator.original_object_stack.data
+        if stack is None:
+            return None
+        stack = np.asarray(stack)
+        if stack.ndim >= 2:
+            stack = np.swapaxes(stack, -2, -1)
+        return stack
+    except Exception:
+        return None
 
 
 def cellfie(ctx, height: float = 30e-6, step: float = 1e-6) -> None:
@@ -122,6 +159,8 @@ def cellfie(ctx, height: float = 30e-6, step: float = 1e-6) -> None:
 
     The z-stack save mirrors ApproachState._maybeTakeACellfie; preset switching
     (e.g. GFP/brightfield) is protocol-specific and left to the caller.
+
+    Retains the tracker's cropped object stack as this action's Area 5 details.
     """
     with ctx.log_action("Cellfie") as action_entry:
         pip = ctx.pipette
@@ -160,8 +199,26 @@ def cellfie(ctx, height: float = 30e-6, step: float = 1e-6) -> None:
             # The tracker could not re-find this cell against its own reference
             # stacks, so the stacks are useless: the cell has drifted out of
             # reach or died. That is a question about the tissue, not about this
-            # action, and the window is what can answer it. Never returns.
+            # action, and the window is what can answer it. Never returns, so
+            # there is no stack to retain for the pane.
             ctx.tissue_moved(exc.reason or str(exc))
+        # Retained for Area 5: the cube around the cell, which is what an
+        # operator reads to judge a cellfie. The full acquired z-stack stays on
+        # disk in the cellfie/ directory saved above.
+        stack = _trackerStack(ctx.cell)
+        if stack is not None:
+            action_entry.set_details(
+                "image_stack",
+                {
+                    "stack": stack,
+                    "center_index": (
+                        stack.shape[0] // 2
+                        if stack.ndim >= 3 and stack.shape[0] > 1
+                        else None
+                    ),
+                    "title": "Cellfie",
+                },
+            )
 
 
 def load_preset(ctx, preset: str | None = None) -> None:
@@ -184,12 +241,36 @@ def load_preset(ctx, preset: str | None = None) -> None:
             ) from e
 
 
+def _decimate(times, values, maxPoints: int = _MAX_TRACE_POINTS):
+    """(times, values, factor) reduced to at most `maxPoints` samples.
+
+    A factor of 1 means nothing was dropped. The factor is returned rather than
+    swallowed so the pane can say what it is not showing.
+    """
+    times = np.asarray(times)
+    values = np.asarray(values)
+    if len(values) <= maxPoints:
+        return times, values, 1
+    factor = int(np.ceil(len(values) / maxPoints))
+    return times[::factor], values[::factor], factor
+
+
+def _sequenceDirName(taskrunner) -> str:
+    """The short name of the directory the sequence saved into, or "" if it did
+    not save one (store=False, or a run that never got that far)."""
+    sequenceDir = getattr(taskrunner, "lastSequenceDir", None)
+    return "" if sequenceDir is None else sequenceDir.shortName()
+
+
 def run_task(ctx, store: bool = True, timeout: float = 0.0):
     """Run the sequence already loaded into an open TaskRunner module.
 
     Finds the TaskRunner module whose docks include this pipette's clamp device
     and runs its loaded sequence to completion (mirroring
-    AutomationDebug.autopatch.Autopatcher._autopatchRunTaskRunner).
+    AutomationDebug.autopatch.Autopatcher._autopatchRunTaskRunner). Each sweep's
+    primary trace is collected, decimated to a plottable size, and retained --
+    together with the saved sequence directory -- as a "task_results" details
+    payload.
 
     TODO: opening the TaskRunner module and loading a specified protocol file are
     still the operator's responsibility; taking that over is deferred.
@@ -197,6 +278,15 @@ def run_task(ctx, store: bool = True, timeout: float = 0.0):
     with ctx.log_action("Task Runner Sequence") as action_entry:
         man = ctx.manager
         clampName = ctx.pipette.clampDevice.name()
+        try:
+            # 'primary' is a current recording only in voltage clamp; in IC or
+            # I=0 it is a membrane potential. Mirrors neuroanalysis
+            # TestPulse.plot_units, adjusted for getMode()'s upper-case values.
+            units = "A" if ctx.pipette.clampDevice.getMode() == "VC" else "V"
+        except Exception:
+            # This is a display label, not the sequence itself -- a clamp that
+            # cannot report its mode must not fail the action over it.
+            units = "A"
         taskrunner = None
         for modName in man.listInterfaces("taskRunnerModule"):
             mod = man.getModule(modName)
@@ -210,5 +300,60 @@ def run_task(ctx, store: bool = True, timeout: float = 0.0):
         info = taskrunner.sequenceInfo
         expected_duration = info["period"] * info["totalParams"]
         timeout = timeout or max(30, expected_duration * 20)
+        traces = []
+        decimation = 1
+        failed_frames = 0
+
+        def onNewFrame(frame):
+            """Collect one sweep's clamp trace. Reads the result the way
+            MultiClamp's own task GUI does: result['primary'] against
+            result.xvals('Time')."""
+            nonlocal decimation, failed_frames
+            result = frame.get("result", {}).get(clampName)
+            if result is None:
+                return
+            try:
+                times, values, factor = _decimate(
+                    result.xvals("Time"), result["primary"]
+                )
+            except Exception:
+                # A device whose result is not shaped like a clamp recording is
+                # not a reason to fail the sequence; the data is saved on disk
+                # regardless of whether the pane can plot it. Counted rather
+                # than logged here so that a sequence of many failing sweeps
+                # produces one summary line, not one per frame.
+                failed_frames += 1
+                return
+            traces.append((times, values))
+            decimation = max(decimation, factor)
+
+        # Connected on the GUI thread, where sigNewFrame is emitted: PyQt gives
+        # a plain callable slot the affinity of the thread that called
+        # connect(), and this action runs on a gentletask ThreadTask with no Qt
+        # event loop -- connecting from here directly would queue every frame to
+        # a thread that never pumps events, so no sweep would ever be collected.
+        run_in_gui_thread(taskrunner.sigNewFrame.connect, onNewFrame)
         action_entry.set_status("running task runner sequence")
-        run_in_gui_thread(taskrunner.runSequence, store=store).wait(timeout=timeout)
+        try:
+            run_in_gui_thread(taskrunner.runSequence, store=store).wait(timeout=timeout)
+        finally:
+            Qt.disconnect(taskrunner.sigNewFrame, onNewFrame)
+            if decimation > 1:
+                ctx.log(
+                    f"{action_entry.name}: plotting sweeps decimated {decimation}x; "
+                    f"full data saved on disk"
+                )
+            if failed_frames:
+                ctx.log(
+                    f"{action_entry.name}: {failed_frames} sweep(s) could not be "
+                    f"read for plotting; full data saved on disk"
+                )
+            action_entry.set_details(
+                "task_results",
+                {
+                    "traces": traces,
+                    "sequence_dir": _sequenceDirName(taskrunner),
+                    "decimation": decimation,
+                    "units": units,
+                },
+            )

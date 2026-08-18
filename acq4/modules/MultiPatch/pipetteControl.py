@@ -413,6 +413,10 @@ class PlotWidget(Qt.QWidget):
         Qt.QWidget.__init__(self)
         self.mode = None
         self._analysisLabel = None
+        self._frozen = False
+        # The history behind the most recent newTestPulse(), retained so a
+        # frozen plot can re-read it when its mode changes.
+        self._history = None
         self.layout = Qt.QGridLayout()
         self.layout.setContentsMargins(0, 0, 0, 0)
         self.layout.setSpacing(0)
@@ -441,7 +445,50 @@ class PlotWidget(Qt.QWidget):
         self.modeCombo.hide()
         # self.closeBtn.hide()
 
-    def newTestPulse(self, tp: PatchClampTestPulse, history):
+    # Modes that need the PatchClampTestPulse recording itself, rather than just
+    # the analysis history. Unavailable to a caller plotting a retained history.
+    _LIVE_ONLY_MODES = ('test pulse', 'tp analysis')
+
+    def setFrozen(self, frozen: bool) -> None:
+        """Restrict the mode combo to what a retained history can serve.
+
+        Autopatch's frozen plots keep the combo visible -- re-reading a finished
+        attempt through a different field is what it is for -- but must not offer
+        the two modes that need a recording nobody retained. Passing False leaves
+        the combo and the current mode untouched.
+
+        A frozen plot also re-plots its retained history whenever the combo
+        changes, since no further test pulse will arrive to do it (see replot).
+        """
+        if not frozen:
+            return
+        self._frozen = True
+        current = self.mode
+        removing_current = current in self._LIVE_ONLY_MODES
+        with pg.SignalBlock(self.modeCombo.currentIndexChanged, self.modeComboChanged):
+            for mode in self._LIVE_ONLY_MODES:
+                index = self.modeCombo.findText(mode)
+                if index >= 0:
+                    self.modeCombo.removeItem(index)
+            if not removing_current:
+                self.modeCombo.setText(current)
+        if removing_current:
+            # The removed mode can no longer be restored; adopt whatever
+            # retained mode Qt landed the combo's selection on, routing
+            # through setMode so self.mode and the combo stay in agreement.
+            self.setMode(self.modeCombo.currentText())
+
+    def newTestPulse(self, tp: PatchClampTestPulse | None, history):
+        """Update the plot from the latest test pulse and the history behind it.
+
+        `tp` may be None, which is how Autopatch's Area 5 reuses this widget for
+        a finished action: its retained payload holds the history but no
+        PatchClampTestPulse, since a recording is not plain data (see
+        ActionLogEntry.set_details). With no `tp` the analysis modes plot the
+        history and leave the current-value label blank, and the two modes that
+        need the recording itself clear instead.
+        """
+        self._history = history
         if self._analysisLabel is not None:
             self.plot.plotItem.vb.removeItem(self._analysisLabel)
             self._analysisLabel = None
@@ -451,8 +498,9 @@ class PlotWidget(Qt.QWidget):
                 self._plotTestPulse(tp)
         elif self.mode == 'tp analysis':
             self.plot.clear()
-            tp.plot(self.plot, label=False)
-            self._analysisLabel = tp.label_for_plot(self.plot.plotItem)
+            if tp is not None:
+                tp.plot(self.plot, label=False)
+                self._analysisLabel = tp.label_for_plot(self.plot.plotItem)
         else:
             analysis_by_mode = {
                 'ss resistance': ('steady_state_resistance', u'Ω'),
@@ -465,10 +513,14 @@ class PlotWidget(Qt.QWidget):
             key, units = analysis_by_mode[self.mode]
             if len(history['event_time']) > 0:
                 self.plot.plot(history['event_time'] - history['event_time'][0], history[key], clear=True)
-            val = tp.analysis[key]
-            if val is None:
-                val = np.nan
-            self.tpLabel.setPlainText(pg.siFormat(val, suffix=units))
+            if tp is None:
+                # No live value to report; the plot is the whole story.
+                self.tpLabel.setPlainText("")
+            else:
+                val = tp.analysis[key]
+                if val is None:
+                    val = np.nan
+                self.tpLabel.setPlainText(pg.siFormat(val, suffix=units))
 
     def _plotTestPulse(self, tp):
         pri: TSeries = tp.recording['primary']
@@ -510,9 +562,25 @@ class PlotWidget(Qt.QWidget):
             self.plot.setYRange(0, 100e-12)
             self.plot.setLabels(left=('Capacitance', u'F'))
 
+    def replot(self):
+        """Re-draw the retained history under the current mode.
+
+        setMode only adjusts the axis label, log mode and Y range; the curve
+        itself is drawn by newTestPulse. A live plot redraws on its next test
+        pulse, so nothing else is needed there. A frozen plot never gets
+        another, so without this a mode change would leave the previous field's
+        curve on screen beneath the new field's axis -- wrong data under a label
+        that says otherwise.
+        """
+        if self._history is None:
+            return
+        self.newTestPulse(None, self._history)
+
     def modeComboChanged(self):
         mode = self.modeCombo.currentText()
         self.setMode(mode)
+        if self._frozen:
+            self.replot()
         self.sigModeChanged.emit(self, mode)
 
     def closeClicked(self):
