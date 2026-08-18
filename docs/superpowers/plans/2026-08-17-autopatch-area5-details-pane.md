@@ -1193,7 +1193,11 @@ In the `"finished"` branch, add the live-widget drop as its first statement, bef
 
 Run: `/home/martin/.miniforge3/envs/acq4-gl/bin/python -m pytest acq4/modules/Autopatch/tests -v`
 
-Expected: PASS. `test_cell_log_and_show.py`'s existing tests must all still pass — they rely on a followed cell's newly appended row being the selected one, which Task 6 makes explicit but which already holds here because `timelineList`'s first appended item becomes current automatically.
+Expected: **NOT green on its own.** This task and Task 6 must land as a single commit.
+
+The original plan asserted that `timelineList`'s first appended item becomes current automatically, so `test_cell_log_and_show.py` would keep passing. That is false — `QListWidget` does not auto-select a newly-appended row. Without Task 6's follow/auto-select rule, this task leaves five tests red: four in `test_cell_log_and_show.py` (which assert on exactly the mount/clear behavior changed here) and `test_a_live_widget_is_remounted_when_its_row_is_reselected` from this task's own set.
+
+So: implement Task 6 before committing, and commit both together. The two are one unit — the auto-select rule is what makes row-driven mounting observable at all.
 
 - [ ] **Step 7: Commit**
 
@@ -1220,6 +1224,8 @@ EOF
 ---
 
 ### Task 6: Auto-select a row, and follow the running action
+
+> **Lands with Task 5, in one commit.** See Task 5's Step 6 for why: without the follow/auto-select rule below, Task 5's diff leaves five tests red, so neither task is independently reviewable.
 
 **Files:**
 - Modify: `acq4/modules/Autopatch/cell_panel.py`
