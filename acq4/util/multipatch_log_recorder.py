@@ -6,9 +6,11 @@ import json
 import os
 
 import h5py
+import numpy as np
 from neuroanalysis.test_pulse_stack import H5BackedTestPulseStack
 
-from acq4.util import Qt
+from acq4.filetypes.MultiPatchLog import TEST_PULSE_NUMPY_DTYPE
+from acq4.util import Qt, ptime
 from acq4.util.json_encoder import ACQ4JSONEncoder
 
 # Base name of the log file, matched case-insensitively by
@@ -20,6 +22,17 @@ LOG_FILE_NAME = "MultiPatch.log"
 # lives at inside it. MultiPatchLogData reads exactly `test_pulses/{device}`.
 TEST_PULSE_FILE_NAME = "TestPulses.hdf5"
 TEST_PULSE_GROUP = "test_pulses"
+
+# The analysis field names a test_pulse event can carry, taken from the dtype
+# the readers and PatchClamp's own history both use, so an accumulated array is
+# interchangeable with clampDevice.testPulseHistory()'s.
+_TEST_PULSE_FIELDS = tuple(name for name, _type in TEST_PULSE_NUMPY_DTYPE)
+
+
+def _nanIfNone(value):
+    """NaN for a missing or None analysis field, matching how PatchClamp's own
+    test-pulse history records one."""
+    return np.nan if value is None else value
 
 
 class MultiPatchLogRecorder(Qt.QObject):
@@ -83,17 +96,30 @@ class MultiPatchLogRecorder(Qt.QObject):
         # recorder that never sees a full test pulse writes no sidecar at all.
         self._testPulseStacks = {}
         self._testPulseContainer = None
+        # One row per test_pulse event this recorder saw, in order. Accumulated
+        # here rather than read from clampDevice.testPulseHistory() because the
+        # device's history is reset mid-patch -- approach.py:251 does it on every
+        # attempt -- so slicing that by time silently loses data.
+        self._testPulseRows: list[tuple] = []
         try:
+            for pip in self._pipettes:
+                pip.sigNewEvent.connect(self._onPipetteEvent)
+            if microscope is not None:
+                microscope.sigSurfaceDepthChanged.connect(self._onSurfaceDepthChanged)
+            if self._recordFullTestPulses:
+                self._requestFullTestPulseData()
             for record in initial_records:
                 self.record(record)
         except Exception:
-            # A record that ACQ4JSONEncoder cannot serialize raises out of
-            # this loop before the caller ever gets an instance back to call
-            # stop() on. Without this, the open file handle would be
-            # reachable only through a partially-constructed self, leaving
-            # its release to refcounting -- and a traceback holding this
-            # frame's locals can keep it open well past the raise. stop() is
-            # idempotent, so it is safe to call even if nothing was opened.
+            # A record that ACQ4JSONEncoder cannot serialize, or any failure
+            # in the subscription setup above, raises out of this block
+            # before the caller ever gets an instance back to call stop() on.
+            # Without this, the open file handle and any subscriptions/tokens
+            # would be reachable only through a partially-constructed self,
+            # leaving their release to refcounting -- and a traceback holding
+            # this frame's locals can keep them alive well past the raise.
+            # stop() is idempotent, so it is safe to call even if nothing was
+            # opened or subscribed yet.
             self.stop()
             raise
 
@@ -118,7 +144,50 @@ class MultiPatchLogRecorder(Qt.QObject):
         """Turn full-test-pulse capture on or off for the rest of this
         recorder's life. Existing stacks are kept: turning capture back on
         appends to the same sidecar rather than starting a second one."""
-        self._recordFullTestPulses = bool(record)
+        record = bool(record)
+        if record == self._recordFullTestPulses:
+            return
+        self._recordFullTestPulses = record
+        if record:
+            self._requestFullTestPulseData()
+        else:
+            self._releaseFullTestPulseData()
+
+    def _requestFullTestPulseData(self) -> None:
+        for pip in self._pipettes:
+            pip.requestFullTestPulseData(self)
+
+    def _releaseFullTestPulseData(self) -> None:
+        for pip in self._pipettes:
+            pip.releaseFullTestPulseData(self)
+
+    def _onPipetteEvent(self, _pipette, event) -> None:
+        if event.get("event") == "test_pulse":
+            self._testPulseRows.append(
+                tuple(_nanIfNone(event.get(field)) for field in _TEST_PULSE_FIELDS)
+            )
+        self.record(event)
+
+    def _onSurfaceDepthChanged(self, depth) -> None:
+        self.record(
+            {
+                "device": self._microscope.name(),
+                "event_time": ptime.time(),
+                "event": "surface_depth_changed",
+                "surface_depth": depth,
+            }
+        )
+
+    def testPulseAnalysis(self) -> np.ndarray:
+        """Every test_pulse event this recorder saw, as a structured array with
+        the same dtype as clampDevice.testPulseHistory().
+
+        This -- not the device's own history -- is what a UI should plot for one
+        action's span: the device's is reset mid-patch by the approach state, so
+        slicing it by the action's start and end times loses whatever preceded
+        the reset.
+        """
+        return np.array(self._testPulseRows, dtype=TEST_PULSE_NUMPY_DTYPE)
 
     def _makeTestPulseStack(self, deviceName: str):
         """The HDF5 stack for one device, creating the sidecar on first use."""
@@ -174,6 +243,17 @@ class MultiPatchLogRecorder(Qt.QObject):
         if self._stopped:
             return
         self._stopped = True
+        self._releaseFullTestPulseData()
+        for pip in self._pipettes:
+            Qt.disconnect(pip.sigNewEvent, self._onPipetteEvent)
+        # Dropped so a stopped recorder is not what keeps a device object
+        # alive, and so a second stop() has nothing left to disconnect.
+        self._pipettes = []
+        if self._microscope is not None:
+            Qt.disconnect(
+                self._microscope.sigSurfaceDepthChanged, self._onSurfaceDepthChanged
+            )
+            self._microscope = None
         try:
             # All of self._testPulseStacks share one h5py.File --
             # self._testPulseContainer, opened once in _makeTestPulseStack --

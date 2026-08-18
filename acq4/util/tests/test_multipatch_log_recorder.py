@@ -462,3 +462,239 @@ def test_second_stop_after_two_real_devices_is_still_a_no_op(qapp, directory):
     recorder.stop()
     recorder.stop()  # must not raise on an already-closed shared file
     assert recorder.isRecording() is False
+
+
+class _FakePipette(Qt.QObject):
+    sigNewEvent = Qt.Signal(object, object)
+
+    def __init__(self, name="Clamp1"):
+        super().__init__()
+        self._name = name
+        self.requested = []
+        self.released = []
+
+    def name(self):
+        return self._name
+
+    def requestFullTestPulseData(self, token):
+        self.requested.append(token)
+
+    def releaseFullTestPulseData(self, token):
+        self.released.append(token)
+
+    def emit(self, event):
+        self.sigNewEvent.emit(self, event)
+
+
+class _FakeMicroscope(Qt.QObject):
+    sigSurfaceDepthChanged = Qt.Signal(object)
+
+    def name(self):
+        return "Microscope"
+
+
+def test_pipette_events_are_recorded(qapp, directory):
+    from acq4.util.multipatch_log_recorder import MultiPatchLogRecorder
+
+    pip = _FakePipette()
+    recorder = MultiPatchLogRecorder(
+        directory, pipettes=(pip,), record_full_test_pulses=False
+    )
+    try:
+        pip.emit({"device": "Clamp1", "event_time": 1.0, "event": "state_change"})
+    finally:
+        recorder.stop()
+
+    assert json.loads(_lines(recorder.logFileName())[0])["event"] == "state_change"
+
+
+def test_events_after_stop_are_not_recorded(qapp, directory):
+    from acq4.util.multipatch_log_recorder import MultiPatchLogRecorder
+
+    pip = _FakePipette()
+    recorder = MultiPatchLogRecorder(
+        directory, pipettes=(pip,), record_full_test_pulses=False
+    )
+    recorder.stop()
+
+    pip.emit({"device": "Clamp1", "event_time": 1.0, "event": "state_change"})
+
+    assert _lines(recorder.logFileName()) == []
+
+
+def test_full_test_pulse_data_is_requested_and_released(qapp, directory):
+    from acq4.util.multipatch_log_recorder import MultiPatchLogRecorder
+
+    pip = _FakePipette()
+    recorder = MultiPatchLogRecorder(
+        directory, pipettes=(pip,), record_full_test_pulses=True
+    )
+    assert pip.requested == [recorder]
+    assert pip.released == []
+
+    recorder.stop()
+
+    assert pip.released == [recorder]
+
+
+def test_no_full_test_pulse_request_when_not_recording_them(qapp, directory):
+    from acq4.util.multipatch_log_recorder import MultiPatchLogRecorder
+
+    pip = _FakePipette()
+    recorder = MultiPatchLogRecorder(
+        directory, pipettes=(pip,), record_full_test_pulses=False
+    )
+    try:
+        assert pip.requested == []
+    finally:
+        recorder.stop()
+
+
+def test_toggling_full_test_pulses_requests_and_releases(qapp, directory):
+    from acq4.util.multipatch_log_recorder import MultiPatchLogRecorder
+
+    pip = _FakePipette()
+    recorder = MultiPatchLogRecorder(
+        directory, pipettes=(pip,), record_full_test_pulses=False
+    )
+    try:
+        recorder.setRecordFullTestPulses(True)
+        assert pip.requested == [recorder]
+        recorder.setRecordFullTestPulses(False)
+        assert pip.released == [recorder]
+    finally:
+        recorder.stop()
+
+
+def test_microscope_surface_depth_changes_are_recorded(qapp, directory):
+    from acq4.util.multipatch_log_recorder import MultiPatchLogRecorder
+
+    scope = _FakeMicroscope()
+    recorder = MultiPatchLogRecorder(
+        directory, microscope=scope, record_full_test_pulses=False
+    )
+    try:
+        scope.sigSurfaceDepthChanged.emit(-1.5e-3)
+    finally:
+        recorder.stop()
+
+    written = json.loads(_lines(recorder.logFileName())[0])
+    assert written["event"] == "surface_depth_changed"
+    assert written["surface_depth"] == -1.5e-3
+    assert written["device"] == "Microscope"
+
+
+def test_test_pulse_analysis_accumulates_the_events_seen(qapp, directory):
+    import numpy as np
+    from acq4.util.multipatch_log_recorder import MultiPatchLogRecorder
+
+    pip = _FakePipette()
+    recorder = MultiPatchLogRecorder(
+        directory, pipettes=(pip,), record_full_test_pulses=False
+    )
+    try:
+        pip.emit(
+            {
+                "device": "Clamp1",
+                "event_time": 1.0,
+                "event": "test_pulse",
+                "steady_state_resistance": 1.0e9,
+                "capacitance": 5e-12,
+            }
+        )
+        pip.emit(
+            {
+                "device": "Clamp1",
+                "event_time": 2.0,
+                "event": "test_pulse",
+                "steady_state_resistance": 2.0e9,
+                "capacitance": 6e-12,
+            }
+        )
+        history = recorder.testPulseAnalysis()
+    finally:
+        recorder.stop()
+
+    assert len(history) == 2
+    assert np.array_equal(history["event_time"], [1.0, 2.0])
+    assert np.array_equal(history["steady_state_resistance"], [1.0e9, 2.0e9])
+
+
+def test_test_pulse_analysis_records_missing_fields_as_nan(qapp, directory):
+    import numpy as np
+    from acq4.util.multipatch_log_recorder import MultiPatchLogRecorder
+
+    pip = _FakePipette()
+    recorder = MultiPatchLogRecorder(
+        directory, pipettes=(pip,), record_full_test_pulses=False
+    )
+    try:
+        pip.emit(
+            {
+                "device": "Clamp1",
+                "event_time": 1.0,
+                "event": "test_pulse",
+                "steady_state_resistance": None,
+            }
+        )
+        history = recorder.testPulseAnalysis()
+    finally:
+        recorder.stop()
+
+    assert np.isnan(history["steady_state_resistance"][0])
+
+
+def test_test_pulse_analysis_ignores_other_event_types(qapp, directory):
+    from acq4.util.multipatch_log_recorder import MultiPatchLogRecorder
+
+    pip = _FakePipette()
+    recorder = MultiPatchLogRecorder(
+        directory, pipettes=(pip,), record_full_test_pulses=False
+    )
+    try:
+        pip.emit({"device": "Clamp1", "event_time": 1.0, "event": "state_change"})
+        history = recorder.testPulseAnalysis()
+    finally:
+        recorder.stop()
+
+    assert len(history) == 0
+
+
+def test_test_pulse_analysis_is_unaffected_by_a_device_history_reset(qapp, directory):
+    # approach.py resets the clamp's own test-pulse history mid-patch, which is
+    # exactly why the recorder accumulates its own rather than slicing the
+    # device's.
+    import numpy as np
+    from acq4.util.multipatch_log_recorder import MultiPatchLogRecorder
+
+    pip = _FakePipette()
+    recorder = MultiPatchLogRecorder(
+        directory, pipettes=(pip,), record_full_test_pulses=False
+    )
+    try:
+        for index, t in enumerate([1.0, 2.0, 3.0]):
+            pip.emit(
+                {
+                    "device": "Clamp1",
+                    "event_time": t,
+                    "event": "test_pulse",
+                    "steady_state_resistance": float(index),
+                }
+            )
+        history = recorder.testPulseAnalysis()
+    finally:
+        recorder.stop()
+
+    assert np.array_equal(history["event_time"], [1.0, 2.0, 3.0])
+
+
+def test_the_recorder_holds_no_reference_to_a_stopped_pipette(qapp, directory):
+    from acq4.util.multipatch_log_recorder import MultiPatchLogRecorder
+
+    pip = _FakePipette()
+    recorder = MultiPatchLogRecorder(
+        directory, pipettes=(pip,), record_full_test_pulses=False
+    )
+    recorder.stop()
+
+    assert recorder._pipettes == []
