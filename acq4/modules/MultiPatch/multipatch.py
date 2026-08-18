@@ -623,26 +623,40 @@ class MultiPatchWindow(Qt.QWidget):
 
         The buttons are independent -- test-pulse capture works with the event
         log off -- so a recorder exists while *either* is on, with each button
-        mapped to one of its options. Switching a button that does not need a
-        different recorder adjusts the live one in place, so toggling test
-        pulses mid-session does not start a second log file.
+        mapped to one of its options. Either button switching while the other
+        keeps a recorder alive adjusts that live recorder in place, so one
+        session produces one log file and one test-pulse sidecar however the
+        two buttons are worked. A recorder is only ever built when none is
+        running, and only ever stopped when both buttons are off.
+
+        Events are recorded from every pipette, but whole test-pulse recordings
+        only from the selected ones, which is the far more expensive half. That
+        selection is handed to the recorder once, so changing which pipettes are
+        selected mid-recording does not re-scope capture.
         """
         if not writeEvents and not recordTestPulses:
             if self._recorder is not None:
                 self._recorder.stop()
                 self._recorder = None
             return
-        if self._recorder is not None and self._recorder.write_events == writeEvents:
-            self._recorder.setRecordFullTestPulses(recordTestPulses)
-            return
         if self._recorder is not None:
-            self._recorder.stop()
+            wasWritingEvents = self._recorder.writesEvents()
+            self._recorder.setRecordFullTestPulses(recordTestPulses)
+            self._recorder.setWriteEvents(writeEvents)
+            if replayHistory and writeEvents and not wasWritingEvents:
+                # The log has just opened on a recorder that was capturing test
+                # pulses only, so what came before it still has to be replayed
+                # in -- the same thing initial_records does for a fresh one.
+                for record in list(self.eventHistory):
+                    self._recorder.record(record)
+            return
         self._recorder = MultiPatchLogRecorder(
             getManager().getCurrentDir(),
             pipettes=[p for p in self.pips if isinstance(p, PatchPipette)],
             microscope=self.microscope,
             record_full_test_pulses=recordTestPulses,
             write_events=writeEvents,
+            full_test_pulse_pipettes=self.selectedPipettes(),
             initial_records=list(self.eventHistory) if replayHistory else (),
         )
 

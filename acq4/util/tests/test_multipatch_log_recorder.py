@@ -138,6 +138,125 @@ def test_write_events_false_creates_no_log_file(qapp, directory):
         recorder.stop()
 
 
+def test_writes_events_reflects_the_log_state(qapp, directory):
+    from acq4.util.multipatch_log_recorder import MultiPatchLogRecorder
+
+    recorder = MultiPatchLogRecorder(directory, record_full_test_pulses=False)
+    try:
+        assert recorder.writesEvents() is True
+        recorder.setWriteEvents(False)
+        assert recorder.writesEvents() is False
+        recorder.setWriteEvents(True)
+        assert recorder.writesEvents() is True
+    finally:
+        recorder.stop()
+
+
+def test_turning_the_event_log_off_and_on_keeps_one_log_file(qapp, directory):
+    # One recorder writes one log: reopening appends rather than starting
+    # MultiPatch_001.log alongside it.
+    from acq4.util.multipatch_log_recorder import MultiPatchLogRecorder
+
+    recorder = MultiPatchLogRecorder(directory, record_full_test_pulses=False)
+    try:
+        recorder.record({"device": "Clamp1", "event_time": 1.0, "event": "state_change"})
+        name = recorder.logFileName()
+
+        recorder.setWriteEvents(False)
+        recorder.record({"device": "Clamp1", "event_time": 2.0, "event": "state_change"})
+
+        recorder.setWriteEvents(True)
+        recorder.record({"device": "Clamp1", "event_time": 3.0, "event": "state_change"})
+    finally:
+        recorder.stop()
+
+    assert recorder.logFileName() == name
+    assert len(directory.created) == 1
+    assert [json.loads(line)["event_time"] for line in _lines(name)] == [1.0, 3.0]
+
+
+def test_turning_the_event_log_on_opens_a_log_for_a_pulses_only_recorder(qapp, directory):
+    from acq4.util.multipatch_log_recorder import MultiPatchLogRecorder
+
+    recorder = MultiPatchLogRecorder(
+        directory, record_full_test_pulses=False, write_events=False
+    )
+    try:
+        assert recorder.logFileName() is None
+
+        recorder.setWriteEvents(True)
+        recorder.record({"device": "Clamp1", "event_time": 1.0, "event": "state_change"})
+    finally:
+        recorder.stop()
+
+    assert [json.loads(line)["event"] for line in _lines(recorder.logFileName())] == [
+        "state_change"
+    ]
+
+
+def test_turning_the_event_log_off_keeps_the_open_sidecar(qapp, directory):
+    # The whole point of adjusting the live recorder: one session's full test
+    # pulses stay in one TestPulses.hdf5 however the event-log button moves.
+    from acq4.util.multipatch_log_recorder import MultiPatchLogRecorder
+
+    recorder = MultiPatchLogRecorder(directory, record_full_test_pulses=True)
+    try:
+        recorder.record(
+            {
+                "device": "Clamp1",
+                "event_time": 1.0,
+                "event": "test_pulse",
+                "full_test_pulse": _make_real_test_pulse(1000.0),
+            }
+        )
+        container = recorder._testPulseContainer
+
+        recorder.setWriteEvents(False)
+
+        assert recorder._testPulseContainer is container
+        assert bool(container)  # still open
+        assert recorder.recordsFullTestPulses() is True
+    finally:
+        recorder.stop()
+
+
+def test_stop_after_turning_the_event_log_off_closes_the_sidecar(qapp, directory):
+    from acq4.util.multipatch_log_recorder import MultiPatchLogRecorder
+
+    recorder = MultiPatchLogRecorder(directory, record_full_test_pulses=True)
+    recorder.record(
+        {
+            "device": "Clamp1",
+            "event_time": 1.0,
+            "event": "test_pulse",
+            "full_test_pulse": _make_real_test_pulse(1000.0),
+        }
+    )
+    logFile = recorder._logFile
+    recorder.setWriteEvents(False)
+    container = recorder._testPulseContainer
+
+    recorder.stop()  # must not raise with no log file left to close
+
+    assert logFile.closed
+    assert not bool(container)
+    assert recorder.isRecording() is False
+
+
+def test_setting_write_events_on_a_stopped_recorder_reopens_nothing(qapp, directory):
+    from acq4.util.multipatch_log_recorder import MultiPatchLogRecorder
+
+    recorder = MultiPatchLogRecorder(
+        directory, record_full_test_pulses=False, write_events=False
+    )
+    recorder.stop()
+
+    recorder.setWriteEvents(True)
+
+    assert recorder._logFile is None
+    assert directory.created == []
+
+
 def test_is_recording_reflects_the_lifecycle(qapp, directory):
     from acq4.util.multipatch_log_recorder import MultiPatchLogRecorder
 
@@ -562,6 +681,70 @@ def test_toggling_full_test_pulses_requests_and_releases(qapp, directory):
         assert pip.requested == [recorder]
         recorder.setRecordFullTestPulses(False)
         assert pip.released == [recorder]
+    finally:
+        recorder.stop()
+
+
+def test_full_test_pulses_are_captured_only_for_the_named_subset(qapp, directory):
+    from acq4.util.multipatch_log_recorder import MultiPatchLogRecorder
+
+    watched = _FakePipette("Clamp1")
+    unwatched = _FakePipette("Clamp2")
+    recorder = MultiPatchLogRecorder(
+        directory,
+        pipettes=(watched, unwatched),
+        full_test_pulse_pipettes=(watched,),
+        record_full_test_pulses=True,
+    )
+    try:
+        assert watched.requested == [recorder]
+        assert unwatched.requested == []
+
+        # Events, unlike full test pulses, come from every pipette in `pipettes`.
+        watched.emit({"device": "Clamp1", "event_time": 1.0, "event": "state_change"})
+        unwatched.emit({"device": "Clamp2", "event_time": 2.0, "event": "state_change"})
+        logFileName = recorder.logFileName()
+    finally:
+        recorder.stop()
+
+    assert watched.released == [recorder]
+    assert unwatched.released == []
+    assert [json.loads(line)["device"] for line in _lines(logFileName)] == ["Clamp1", "Clamp2"]
+
+
+def test_toggling_full_test_pulses_uses_only_the_named_subset(qapp, directory):
+    from acq4.util.multipatch_log_recorder import MultiPatchLogRecorder
+
+    watched = _FakePipette("Clamp1")
+    unwatched = _FakePipette("Clamp2")
+    recorder = MultiPatchLogRecorder(
+        directory,
+        pipettes=(watched, unwatched),
+        full_test_pulse_pipettes=(watched,),
+        record_full_test_pulses=False,
+    )
+    try:
+        recorder.setRecordFullTestPulses(True)
+        assert watched.requested == [recorder]
+        assert unwatched.requested == []
+        recorder.setRecordFullTestPulses(False)
+        assert watched.released == [recorder]
+        assert unwatched.released == []
+    finally:
+        recorder.stop()
+
+
+def test_full_test_pulse_pipettes_defaults_to_every_pipette(qapp, directory):
+    from acq4.util.multipatch_log_recorder import MultiPatchLogRecorder
+
+    first = _FakePipette("Clamp1")
+    second = _FakePipette("Clamp2")
+    recorder = MultiPatchLogRecorder(
+        directory, pipettes=(first, second), record_full_test_pulses=True
+    )
+    try:
+        assert first.requested == [recorder]
+        assert second.requested == [recorder]
     finally:
         recorder.stop()
 

@@ -1,4 +1,7 @@
+import json
+
 import numpy as np
+import pytest
 
 from acq4.filetypes.MultiPatchLog import IrregularTimeSeries
 
@@ -69,16 +72,9 @@ def test_timeseries_index():
                     assert ts[t] == lookup(t, ts)
     
 
-"""Also: the record-button toggles map onto one MultiPatchLogRecorder, whose
-options are what the two independent buttons switch."""
-import pytest
-
-from acq4.util import Qt
-
-
-@pytest.fixture(scope="module")
-def qapp():
-    return Qt.QApplication.instance() or Qt.QApplication([])
+# The rest of this module covers the other half of the file's subject: the two
+# record-button toggles map onto one MultiPatchLogRecorder, whose options are
+# what the buttons switch.
 
 
 class _RecorderSpy:
@@ -88,12 +84,16 @@ class _RecorderSpy:
     instances = []
 
     def __init__(self, directory, pipettes=(), microscope=None,
-                 record_full_test_pulses=True, write_events=True, initial_records=()):
+                 record_full_test_pulses=True, write_events=True,
+                 full_test_pulse_pipettes=None, initial_records=()):
         self.directory = directory
         self.pipettes = list(pipettes)
         self.microscope = microscope
         self.record_full_test_pulses = record_full_test_pulses
         self.write_events = write_events
+        self.full_test_pulse_pipettes = (
+            None if full_test_pulse_pipettes is None else list(full_test_pulse_pipettes)
+        )
         self.initial_records = list(initial_records)
         self.records = []
         self.stopped = False
@@ -107,6 +107,12 @@ class _RecorderSpy:
 
     def recordsFullTestPulses(self):
         return self.record_full_test_pulses
+
+    def writesEvents(self):
+        return self.write_events
+
+    def setWriteEvents(self, write):
+        self.write_events = bool(write)
 
     def stop(self):
         self.stopped = True
@@ -175,10 +181,16 @@ class _StandInWindow:
     def __init__(self, directory, recording=False, recordingTestPulses=False):
         self.ui = _StandInUi(recording, recordingTestPulses)
         self.pips = []
+        self.selected = []
         self.microscope = None
         self.eventHistory = []
         self._recorder = None
         self.resetCount = 0
+
+    def selectedPipettes(self):
+        """The real one reads the per-pipette controls, and returns a single
+        pipette in solo mode."""
+        return list(self.selected)
 
     def resetHistory(self):
         """The real one also resets clamp test-pulse history and clears the
@@ -188,6 +200,15 @@ class _StandInWindow:
 
     def _syncRecorder(self, *args, **kwargs):
         return self._call("_syncRecorder", *args, **kwargs)
+
+    def recordToggled(self, *args, **kwargs):
+        return self._call("recordToggled", *args, **kwargs)
+
+    def recordTestPulsesToggled(self, *args, **kwargs):
+        return self._call("recordTestPulsesToggled", *args, **kwargs)
+
+    def patchProfilesChanged(self, *args, **kwargs):
+        return self._call("patchProfilesChanged", *args, **kwargs)
 
     def recordEvent(self, *args, **kwargs):
         return self._call("recordEvent", *args, **kwargs)
@@ -301,16 +322,36 @@ def test_turning_both_buttons_off_stops_the_recorder(spy, storageDir):
 
 
 def test_turning_the_event_log_off_leaves_test_pulses_recording(spy, storageDir):
+    # In place, not replaced: a second instance here would close TestPulses.hdf5
+    # and open TestPulses_001.hdf5 for the rest of the same session.
     win = _StandInWindow(storageDir, recording=True, recordingTestPulses=True)
     win._syncRecorder(writeEvents=True, recordTestPulses=True, replayHistory=True)
     first = win._recorder
 
     win._syncRecorder(writeEvents=False, recordTestPulses=True, replayHistory=False)
 
-    assert first.stopped is True
-    assert win._recorder is not first
-    assert win._recorder.write_events is False
-    assert win._recorder.record_full_test_pulses is True
+    assert win._recorder is first
+    assert len(spy.instances) == 1
+    assert first.stopped is False
+    assert first.write_events is False
+    assert first.record_full_test_pulses is True
+
+
+def test_turning_the_event_log_back_on_keeps_the_same_recorder(spy, storageDir):
+    win = _StandInWindow(storageDir, recording=True, recordingTestPulses=True)
+    win._syncRecorder(writeEvents=True, recordTestPulses=True, replayHistory=True)
+    first = win._recorder
+    win._syncRecorder(writeEvents=False, recordTestPulses=True, replayHistory=False)
+    win.eventHistory = [{"event": "state_change", "device": "Pipette1"}]
+
+    win._syncRecorder(writeEvents=True, recordTestPulses=True, replayHistory=True)
+
+    assert win._recorder is first
+    assert len(spy.instances) == 1
+    assert first.write_events is True
+    # Whatever happened while the log was shut has to reach the reopened log,
+    # exactly as initial_records does for a freshly built recorder.
+    assert first.records == win.eventHistory
 
 
 def test_starting_the_event_log_replays_the_in_memory_history(spy, storageDir):
@@ -407,3 +448,152 @@ def test_events_arriving_with_no_recorder_still_reach_the_history(spy, storageDi
 
     assert win._recorder is None
     assert len(win.eventHistory) == 2
+
+
+class _StandInPipette:
+    """_syncRecorder filters self.pips by isinstance(p, PatchPipette), and a
+    real one needs a Manager and a hardware config."""
+
+    def __init__(self, name):
+        self._name = name
+
+    def name(self):
+        return self._name
+
+
+@pytest.fixture
+def pipetteClass(monkeypatch):
+    import acq4.modules.MultiPatch.multipatch as mp
+
+    monkeypatch.setattr(mp, "PatchPipette", _StandInPipette)
+    return _StandInPipette
+
+
+@pytest.fixture
+def profiles(monkeypatch):
+    """The patch profiles recordToggled snapshots into a freshly opened log. The
+    real ones come off the Manager's configuration."""
+    import acq4.modules.MultiPatch.multipatch as mp
+
+    values = {"default": {"bath": {"testPulseEnabled": True}}}
+
+    class _Parameters:
+        def getValues(self):
+            return values
+
+    class _StandInStateManager:
+        @staticmethod
+        def buildPatchProfilesParameters():
+            return _Parameters()
+
+    monkeypatch.setattr(mp, "PatchPipetteStateManager", _StandInStateManager)
+    return values
+
+
+def test_full_test_pulses_are_captured_for_the_selected_pipettes_only(
+    spy, storageDir, pipetteClass
+):
+    # Every pipette's events are logged, but a whole test-pulse recording costs
+    # orders of magnitude more disk, so only the selected ones are captured.
+    win = _StandInWindow(storageDir, recordingTestPulses=True)
+    win.pips = [_StandInPipette("Pipette1"), _StandInPipette("Pipette2")]
+    win.selected = win.pips[:1]
+
+    win.recordTestPulsesToggled(True)
+
+    assert win._recorder.pipettes == win.pips
+    assert win._recorder.full_test_pulse_pipettes == win.pips[:1]
+
+
+def test_the_record_button_replays_the_history_then_records_the_profile(
+    spy, storageDir, profiles
+):
+    win = _StandInWindow(storageDir)
+    history = [{"event": "state_change", "device": "Pipette1"}]
+    win.eventHistory = list(history)
+    win.ui.recordBtn.setChecked(True)
+
+    win.recordToggled(True)
+
+    recorder = win._recorder
+    assert recorder.write_events is True
+    assert recorder.record_full_test_pulses is False
+    # The history goes in as the fresh file's first records...
+    assert recorder.initial_records == history
+    # ...and the profile snapshot lands after it, as a live record.
+    assert [e["event"] for e in recorder.records] == ["global patch profiles changed"]
+    assert json.loads(recorder.records[0]["profile"]) == profiles
+
+
+def test_the_record_button_off_resets_the_history_and_stops_the_recorder(
+    spy, storageDir, profiles
+):
+    win = _StandInWindow(storageDir, recording=True)
+    win.recordToggled(True)
+    recorder = win._recorder
+    resetsBefore = win.resetCount
+
+    win.ui.recordBtn.setChecked(False)
+    win.recordToggled(False)
+
+    assert win.resetCount == resetsBefore + 1
+    assert win.eventHistory == []
+    assert win._recorder is None
+    assert recorder.stopped is True
+
+
+def test_the_record_button_off_with_test_pulses_on_keeps_the_live_recorder(
+    spy, storageDir, profiles
+):
+    # Both buttons on, then the event log alone off: replacing the recorder here
+    # would close TestPulses.hdf5 mid-session and open TestPulses_001.hdf5.
+    win = _StandInWindow(storageDir, recording=True, recordingTestPulses=True)
+    win.recordToggled(True)
+    recorder = win._recorder
+
+    win.ui.recordBtn.setChecked(False)
+    win.recordToggled(False)
+
+    assert win._recorder is recorder
+    assert len(spy.instances) == 1
+    assert recorder.stopped is False
+    assert recorder.write_events is False
+    assert recorder.record_full_test_pulses is True
+
+
+def test_the_test_pulse_button_reads_the_event_log_button_not_its_own(spy, storageDir):
+    # recordTestPulsesToggled maps the *other* button onto write_events. Reading
+    # its own would open an event log nobody asked for.
+    win = _StandInWindow(storageDir, recording=False, recordingTestPulses=True)
+
+    win.recordTestPulsesToggled(True)
+
+    assert win._recorder.write_events is False
+    assert win._recorder.record_full_test_pulses is True
+    # And it never replays: with the event log off, these events have been
+    # written nowhere, so replaying them would record them for the first time
+    # out of order with the live stream.
+    assert win._recorder.initial_records == []
+
+
+def test_the_test_pulse_button_leaves_a_running_event_log_alone(
+    spy, storageDir, profiles
+):
+    win = _StandInWindow(storageDir, recording=True)
+    win.recordToggled(True)
+    recorder = win._recorder
+
+    win.ui.recordTestPulsesBtn.setChecked(True)
+    win.recordTestPulsesToggled(True)
+
+    assert win._recorder is recorder
+    assert recorder.write_events is True
+    assert recorder.record_full_test_pulses is True
+
+    win.ui.recordTestPulsesBtn.setChecked(False)
+    win.recordTestPulsesToggled(False)
+
+    assert win._recorder is recorder
+    assert len(spy.instances) == 1
+    assert recorder.write_events is True
+    assert recorder.record_full_test_pulses is False

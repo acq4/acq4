@@ -68,6 +68,15 @@ class MultiPatchLogRecorder(Qt.QObject):
         Whether to write the log file at all. False records full test pulses
         without an event log, which is a combination MultiPatch's two
         independent record buttons allow.
+    full_test_pulse_pipettes : iterable of PatchPipette or None
+        The narrower set whose *whole* test-pulse recordings go into the
+        sidecar; None means every pipette in `pipettes`. The two scopes differ
+        because a full recording costs orders of magnitude more disk than the
+        analysis fields in an event, so MultiPatch logs events from every
+        pipette while capturing waveforms only from the selected ones. This set
+        is fixed when the recorder is built: changing which pipettes are
+        selected while recording does not re-scope capture, and only stopping
+        and restarting the recorder will.
     initial_records : iterable of dict
         Records replayed into the fresh file before any live event, for a caller
         that has been accumulating events before recording started.
@@ -80,21 +89,27 @@ class MultiPatchLogRecorder(Qt.QObject):
         microscope=None,
         record_full_test_pulses: bool = True,
         write_events: bool = True,
+        full_test_pulse_pipettes=None,
         initial_records=(),
     ):
         super().__init__()
         self._directory = directory
         self._pipettes = list(pipettes)
+        self._fullTestPulsePipettes = (
+            list(self._pipettes)
+            if full_test_pulse_pipettes is None
+            else list(full_test_pulse_pipettes)
+        )
         self._microscope = microscope
         self._stopped = False
-        # Public because a caller driving one recorder from several independent
-        # switches needs to know whether the live recorder already writes an
-        # event log, to choose between adjusting it and replacing it.
-        self.write_events = bool(write_events)
+        self._writeEvents = bool(write_events)
+        # Kept separately from the file object so it survives the file being
+        # closed and reopened by setWriteEvents, which is what keeps one
+        # recorder's records pointing at one log.
+        self._logFileName = None
         self._logFile = None
-        if self.write_events:
-            handle = directory.createFile(LOG_FILE_NAME, autoIncrement=True)
-            self._logFile = open(handle.name(), "ab")
+        if self._writeEvents:
+            self._openLogFile()
         self._recordFullTestPulses = record_full_test_pulses
         # device name -> its H5BackedTestPulseStack, created on first use so a
         # recorder that never sees a full test pulse writes no sidecar at all.
@@ -128,10 +143,41 @@ class MultiPatchLogRecorder(Qt.QObject):
             raise
 
     def logFileName(self) -> str | None:
-        return None if self._logFile is None else self._logFile.name
+        """This recorder's log file, or None if it has never opened one. Still
+        the name after setWriteEvents(False) closed it, since that is the file
+        every record written by this recorder is in."""
+        return self._logFileName
 
     def isRecording(self) -> bool:
         return not self._stopped
+
+    def writesEvents(self) -> bool:
+        return self._writeEvents
+
+    def setWriteEvents(self, write: bool) -> None:
+        """Open or close the event log for the rest of this recorder's life.
+
+        Touches nothing else: subscriptions, full-test-pulse tokens and the HDF5
+        sidecar all carry on across the switch, so a caller whose event log and
+        test-pulse capture are separate switches can adjust a live recorder
+        instead of replacing it -- and one session keeps one sidecar. Reopening
+        appends to the same log file rather than starting a second one.
+        """
+        write = bool(write)
+        if self._stopped or write == self._writeEvents:
+            return
+        self._writeEvents = write
+        if write:
+            self._openLogFile()
+        else:
+            self._logFile.close()
+            self._logFile = None
+
+    def _openLogFile(self) -> None:
+        if self._logFileName is None:
+            handle = self._directory.createFile(LOG_FILE_NAME, autoIncrement=True)
+            self._logFileName = handle.name()
+        self._logFile = open(self._logFileName, "ab")
 
     def record(self, event) -> None:
         """Write one record. Ignored once stopped, so a late queued event
@@ -158,11 +204,11 @@ class MultiPatchLogRecorder(Qt.QObject):
             self._releaseFullTestPulseData()
 
     def _requestFullTestPulseData(self) -> None:
-        for pip in self._pipettes:
+        for pip in self._fullTestPulsePipettes:
             pip.requestFullTestPulseData(self)
 
     def _releaseFullTestPulseData(self) -> None:
-        for pip in self._pipettes:
+        for pip in self._fullTestPulsePipettes:
             pip.releaseFullTestPulseData(self)
 
     def _onPipetteEvent(self, _pipette, event) -> None:
@@ -238,8 +284,8 @@ class MultiPatchLogRecorder(Qt.QObject):
         if stack is None:
             stack = self._testPulseStacks[deviceName] = self._makeTestPulseStack(deviceName)
         filename, h5path = stack.append(testPulse)
-        if self._logFile is not None:
-            filename = os.path.relpath(filename, os.path.dirname(self._logFile.name))
+        if self._logFileName is not None:
+            filename = os.path.relpath(filename, os.path.dirname(self._logFileName))
         record["full_test_pulse"] = f"{filename}:{h5path}"
         return record
 
@@ -270,6 +316,7 @@ class MultiPatchLogRecorder(Qt.QObject):
         # Dropped so a stopped recorder is not what keeps a device object
         # alive, and so a second stop() has nothing left to disconnect.
         self._pipettes = []
+        self._fullTestPulsePipettes = []
         if self._microscope is not None:
             Qt.disconnect(
                 self._microscope.sigSurfaceDepthChanged, self._onSurfaceDepthChanged
