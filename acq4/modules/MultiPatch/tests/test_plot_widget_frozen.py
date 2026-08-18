@@ -53,6 +53,7 @@ def test_the_current_value_label_is_blank_with_no_test_pulse(qapp):
     from acq4.modules.MultiPatch.pipetteControl import PlotWidget
 
     widget = PlotWidget(mode="ss resistance")
+    widget.tpLabel.setPlainText("1.0 MOhm")
 
     widget.newTestPulse(None, _history())
 
@@ -103,3 +104,19 @@ def test_set_frozen_keeps_the_current_mode_selected(qapp):
 
     assert widget.modeCombo.currentText() == "capacitance"
     assert widget.mode == "capacitance"
+
+
+@pytest.mark.parametrize("mode", ["test pulse", "tp analysis"])
+def test_set_frozen_on_a_live_only_mode_lands_on_a_retained_mode(qapp, mode):
+    # Freezing while one of the two removed modes is selected must not raise,
+    # and must leave self.mode and the combo's displayed text agreeing on
+    # whatever mode the combo landed on.
+    from acq4.modules.MultiPatch.pipetteControl import PlotWidget
+
+    widget = PlotWidget(mode=mode)
+
+    widget.setFrozen(True)
+
+    items = [widget.modeCombo.itemText(i) for i in range(widget.modeCombo.count())]
+    assert widget.modeCombo.currentText() in items
+    assert widget.mode == widget.modeCombo.currentText()

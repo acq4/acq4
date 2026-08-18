@@ -450,17 +450,25 @@ class PlotWidget(Qt.QWidget):
 
         Autopatch's frozen plots keep the combo visible -- re-reading a finished
         attempt through a different field is what it is for -- but must not offer
-        the two modes that need a recording nobody retained.
+        the two modes that need a recording nobody retained. Passing False leaves
+        the combo and the current mode untouched.
         """
         if not frozen:
             return
+        current = self.mode
+        removing_current = current in self._LIVE_ONLY_MODES
         with pg.SignalBlock(self.modeCombo.currentIndexChanged, self.modeComboChanged):
-            current = self.mode
             for mode in self._LIVE_ONLY_MODES:
                 index = self.modeCombo.findText(mode)
                 if index >= 0:
                     self.modeCombo.removeItem(index)
-            self.modeCombo.setText(current)
+            if not removing_current:
+                self.modeCombo.setText(current)
+        if removing_current:
+            # The removed mode can no longer be restored; adopt whatever
+            # retained mode Qt landed the combo's selection on, routing
+            # through setMode so self.mode and the combo stay in agreement.
+            self.setMode(self.modeCombo.currentText())
 
     def newTestPulse(self, tp: PatchClampTestPulse | None, history):
         """Update the plot from the latest test pulse and the history behind it.
