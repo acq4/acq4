@@ -151,7 +151,6 @@ def test_task_results_builder_plots_one_curve_per_sweep(qapp):
     payload = {
         "traces": [(t, t * 1.0), (t, t * 2.0), (t, t * 3.0)],
         "sequence_dir": "protocol_000",
-        "sweep_count": 3,
         "decimation": 1,
         "units": "A",
     }
@@ -173,7 +172,6 @@ def test_task_results_caption_reports_sweeps_directory_and_decimation(qapp):
         {
             "traces": [(t, t)],
             "sequence_dir": "protocol_007",
-            "sweep_count": 1,
             "decimation": 25,
             "units": "A",
         },
@@ -195,7 +193,6 @@ def test_task_results_caption_omits_decimation_when_undecimated(qapp):
         {
             "traces": [(t, t)],
             "sequence_dir": "protocol_000",
-            "sweep_count": 1,
             "decimation": 1,
             "units": "A",
         },
@@ -213,7 +210,6 @@ def test_task_results_builder_tolerates_no_traces(qapp):
         {
             "traces": [],
             "sequence_dir": "protocol_000",
-            "sweep_count": 0,
             "decimation": 1,
             "units": "A",
         },

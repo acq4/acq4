@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 
 import h5py
 import numpy as np
@@ -53,6 +54,15 @@ class MultiPatchLogRecorder(Qt.QObject):
     before anything is written. __init__ pins that affinity itself rather than
     trusting the constructing thread, so a recorder opened from a worker thread
     with no Qt event loop still receives its events.
+
+    stop(), though, is called directly -- not through a queued connection --
+    typically from the orchestrator's worker thread while the GUI thread is
+    off writing a queued event. self._lock is what keeps those two from
+    interleaving on the log file handle: both the write path and stop()'s
+    close of it run under the same lock, so a write already past record()'s
+    _stopped check either finishes before stop() closes the handle or sees
+    _stopped turn true inside the lock and skips the write instead of raising
+    on a closed file.
 
     Parameters
     ----------
@@ -117,6 +127,12 @@ class MultiPatchLogRecorder(Qt.QObject):
         )
         self._microscope = microscope
         self._stopped = False
+        # Guards the write path (_writeRecords) and stop()'s close of the log
+        # file against each other -- see the class docstring. RLock rather
+        # than Lock so a guarded call that ends up re-entering (directly or
+        # through a signal handler further down the call stack) blocks
+        # nowhere it does not already, instead of deadlocking the recorder.
+        self._lock = threading.RLock()
         self._writeEvents = bool(write_events)
         # Kept separately from the file object so it survives the file being
         # closed and reopened by setWriteEvents, which is what keeps one
@@ -308,15 +324,23 @@ class MultiPatchLogRecorder(Qt.QObject):
         for record in records:
             if "full_test_pulse" in record:
                 record = self._divertFullTestPulse(record)
-            if self._logFile is not None:
+            # Locked so this can never land between stop()'s _stopped flip and
+            # its close of self._logFile: that close does not clear the
+            # attribute (see logFileName()), so checking "is not None" alone
+            # would still pass on a closed handle. Re-checking _stopped here,
+            # under the same lock stop() sets it under, is what actually
+            # excludes a write that arrives after record()'s own check but
+            # loses the race to stop().
+            with self._lock:
+                if self._stopped or self._logFile is None:
+                    continue
                 # One JSON object per line, with no trailing comma. Both readers
                 # strip b",\r\n" as a character set rather than as a suffix, so
                 # they parse this and the historical comma-terminated form alike.
                 self._logFile.write(
                     json.dumps(record, cls=ACQ4JSONEncoder).encode("utf8") + b"\n"
                 )
-        if self._logFile is not None:
-            self._logFile.flush()
+                self._logFile.flush()
         for stack in self._testPulseStacks.values():
             stack.flush()
 
@@ -324,7 +348,13 @@ class MultiPatchLogRecorder(Qt.QObject):
         """Release everything this recorder holds. Idempotent."""
         if self._stopped:
             return
-        self._stopped = True
+        with self._lock:
+            # Re-checked under the lock: a second stop() call racing this one
+            # would otherwise both see _stopped False from the unlocked check
+            # above and both try to tear down the same subscriptions.
+            if self._stopped:
+                return
+            self._stopped = True
         self._releaseFullTestPulseData()
         for pip in self._pipettes:
             Qt.disconnect(pip.sigNewEvent, self._onPipetteEvent)
@@ -353,6 +383,10 @@ class MultiPatchLogRecorder(Qt.QObject):
             # However the sidecar teardown above turns out, the event log
             # must still be closed and flushed -- a raise here must never
             # leave it open for the rest of the process, since _stopped is
-            # already set and every later stop() call is now a no-op.
-            if self._logFile is not None:
-                self._logFile.close()
+            # already set and every later stop() call is now a no-op. Under
+            # the same lock _writeRecords writes under, so this close can
+            # never land in the middle of a write already past that method's
+            # own _stopped check.
+            with self._lock:
+                if self._logFile is not None:
+                    self._logFile.close()

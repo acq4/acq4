@@ -1200,29 +1200,105 @@ def test_a_recorder_built_off_the_gui_thread_still_receives_events(qapp, qtbot, 
     pip = _FakePipette()
     worker = threading.Thread(target=buildOnWorker, name="recorder-builder")
     worker.start()
-    assert constructed.wait(5)
-    recorder = built["recorder"]
-    assert built["thread"] is not Qt.QtCore.QThread.currentThread()
-
-    emitter = threading.Thread(
-        target=lambda: pip.emit(
-            {
-                "device": "Clamp1",
-                "event_time": 1.0,
-                "event": "test_pulse",
-                "steady_state_resistance": 5.0e8,
-            }
-        ),
-        name="clamp-emitter",
-    )
-    emitter.start()
-    emitter.join(5)
-
+    # From here down, everything runs under try/finally: worker sits in
+    # release.wait(10) until release.set() below, so a failed assertion above
+    # a bare `assert constructed.wait(5)` would otherwise leave that non-daemon
+    # thread parked for up to 10s past this test's own failure.
     try:
+        assert constructed.wait(5)
+        recorder = built["recorder"]
+        assert built["thread"] is not Qt.QtCore.QThread.currentThread()
+
+        emitter = threading.Thread(
+            target=lambda: pip.emit(
+                {
+                    "device": "Clamp1",
+                    "event_time": 1.0,
+                    "event": "test_pulse",
+                    "steady_state_resistance": 5.0e8,
+                }
+            ),
+            name="clamp-emitter",
+        )
+        emitter.start()
+        emitter.join(5)
+
         qtbot.waitUntil(lambda: len(recorder.testPulseAnalysis()) == 1, timeout=3000)
     finally:
         release.set()
         worker.join(5)
-        recorder.stop()
+        if "recorder" in built:
+            built["recorder"].stop()
 
     assert np.array_equal(recorder.testPulseAnalysis()["event_time"], [1.0])
+
+
+def test_stop_waits_for_a_write_already_in_progress(qapp, directory):
+    """The recorder is pinned to the GUI thread, so _onPipetteEvent ->
+    record() -> _writeRecords runs there, while stop() is typically called
+    directly from the orchestrator's worker thread. Without the recorder's
+    lock, a write already past record()'s _stopped check can still be
+    sitting inside _writeRecords when stop() closes self._logFile -- closing
+    does not clear that attribute (see logFileName()), so the write's own
+    "is not None" check does not catch it, and the write raises ValueError on
+    a closed file.
+
+    Forces the interleaving deterministically: a wrapped file.write() pauses
+    mid-call on the writer thread, holding the recorder's lock, while a second
+    thread calls stop(). stop() has to block on that same lock, so it cannot
+    reach the point of closing the handle until the write finishes -- which is
+    exactly the property the lock exists for.
+    """
+    import threading
+
+    from acq4.util.multipatch_log_recorder import MultiPatchLogRecorder
+
+    recorder = MultiPatchLogRecorder(directory, record_full_test_pulses=False)
+    entered_write = threading.Event()
+    release_write = threading.Event()
+    real_write = recorder._logFile.write
+
+    def blocking_write(data):
+        entered_write.set()
+        release_write.wait(5)
+        return real_write(data)
+
+    recorder._logFile.write = blocking_write
+
+    write_errors = []
+
+    def do_write():
+        try:
+            recorder.record({"device": "Clamp1", "event_time": 1.0, "event": "state_change"})
+        except Exception as exc:
+            write_errors.append(exc)
+
+    writer = threading.Thread(target=do_write, name="log-writer")
+    writer.start()
+    assert entered_write.wait(5)
+
+    stop_errors = []
+
+    def do_stop():
+        try:
+            recorder.stop()
+        except Exception as exc:
+            stop_errors.append(exc)
+
+    stopper = threading.Thread(target=do_stop, name="log-stopper")
+    stopper.start()
+    # The writer is holding the lock inside blocking_write; stop() has to wait
+    # for it. If this fires while the writer is still blocked, the lock is not
+    # doing its job.
+    stopper.join(0.2)
+    assert stopper.is_alive()
+
+    release_write.set()
+    writer.join(5)
+    stopper.join(5)
+
+    assert write_errors == []
+    assert stop_errors == []
+    assert not stopper.is_alive()
+    assert recorder.isRecording() is False
+    assert recorder._logFile.closed

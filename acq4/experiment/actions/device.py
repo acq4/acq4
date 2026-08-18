@@ -353,7 +353,6 @@ def run_task(ctx, store: bool = True, timeout: float = 0.0):
                 {
                     "traces": traces,
                     "sequence_dir": _sequenceDirName(taskrunner),
-                    "sweep_count": len(traces),
                     "decimation": decimation,
                     "units": units,
                 },

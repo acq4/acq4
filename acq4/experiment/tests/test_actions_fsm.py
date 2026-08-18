@@ -805,28 +805,34 @@ def test_the_live_plot_updates_from_a_test_pulse_emitted_on_another_thread(qapp,
 
     worker = threading.Thread(target=openOnWorker, name="live-plot-opener")
     worker.start()
-    # This thread has to keep pumping: _openLivePlot builds its widget through
-    # run_in_gui_thread, which blocks the worker until this loop runs it.
-    qtbot.waitUntil(ready.is_set, timeout=5000)
-    assert opened["thread"] is not Qt.QtCore.QThread.currentThread()
-    widget = entry.widgets[0]
-    assert widget.plot.plotItem.listDataItems() == []
-
-    emitter = threading.Thread(
-        target=lambda: clamp.sigTestPulseFinished.emit(clamp, _FakeTestPulse(1e9)),
-        name="clamp-emitter",
-    )
-    emitter.start()
-    emitter.join(5)
-
+    # From here down, everything runs under try/finally: worker sits in
+    # release.wait(10) until release.set() below, so a failed assertion above
+    # a bare `qtbot.waitUntil(ready.is_set, ...)` would otherwise leave that
+    # non-daemon thread parked for up to 10s past this test's own failure.
     try:
+        # This thread has to keep pumping: _openLivePlot builds its widget
+        # through run_in_gui_thread, which blocks the worker until this loop
+        # runs it.
+        qtbot.waitUntil(ready.is_set, timeout=5000)
+        assert opened["thread"] is not Qt.QtCore.QThread.currentThread()
+        widget = entry.widgets[0]
+        assert widget.plot.plotItem.listDataItems() == []
+
+        emitter = threading.Thread(
+            target=lambda: clamp.sigTestPulseFinished.emit(clamp, _FakeTestPulse(1e9)),
+            name="clamp-emitter",
+        )
+        emitter.start()
+        emitter.join(5)
+
         qtbot.waitUntil(
             lambda: len(widget.plot.plotItem.listDataItems()) == 1, timeout=3000
         )
     finally:
         release.set()
         worker.join(5)
-        opened["teardown"]()
+        if "teardown" in opened:
+            opened["teardown"]()
 
 
 def test_the_live_plot_disconnects_when_mounting_the_widget_fails(qapp):

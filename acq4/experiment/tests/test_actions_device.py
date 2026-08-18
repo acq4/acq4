@@ -753,7 +753,6 @@ def test_run_task_retains_each_sweep_as_a_task_results_payload(ctx, pip, monkeyp
     assert len(details) == 1
     kind, payload = details[0]
     assert kind == "task_results"
-    assert payload["sweep_count"] == 2
     assert len(payload["traces"]) == 2
     assert payload["decimation"] == 1
     assert np.array_equal(payload["traces"][1][1], t * 2.0)
@@ -789,7 +788,6 @@ def test_run_task_retains_nothing_but_still_reports_when_no_sweeps_arrive(ctx, p
 
     run_task(ctx)
 
-    assert details[0][1]["sweep_count"] == 0
     assert details[0][1]["traces"] == []
 
 
@@ -811,7 +809,7 @@ def test_run_task_retains_its_sweeps_even_when_the_sequence_raises(ctx, pip, mon
     with pytest.raises(RuntimeError):
         run_task(ctx)
 
-    assert details[0][1]["sweep_count"] == 1
+    assert len(details[0][1]["traces"]) == 1
 
 
 def test_run_task_decimation_reports_the_largest_factor_across_sweeps(ctx, pip, monkeypatch):
@@ -835,7 +833,6 @@ def test_run_task_decimation_reports_the_largest_factor_across_sweeps(ctx, pip, 
     run_task(ctx)
 
     assert details[0][1]["decimation"] == 10
-    assert details[0][1]["sweep_count"] == 2
     assert len(details[0][1]["traces"]) == 2
 
 
@@ -920,5 +917,5 @@ def test_run_task_collects_sweeps_when_driven_from_a_worker_thread(qapp, qtbot, 
     assert len(details) == 1
     kind, payload = details[0]
     assert kind == "task_results"
-    assert payload["sweep_count"] == 2
+    assert len(payload["traces"]) == 2
     assert np.array_equal(payload["traces"][1][1], t * 2.0)

@@ -91,7 +91,7 @@ def buildTaskResults(payload) -> Qt.QWidget:
             pen=pg.intColor(index, hues=max(len(traces), 1)),
         )
     lines = [
-        f"{payload.get('sweep_count', len(traces))} sweeps"
+        f"{len(traces)} sweeps"
         f" — saved to {payload.get('sequence_dir') or 'nowhere'}"
     ]
     decimation = payload.get("decimation", 1)
