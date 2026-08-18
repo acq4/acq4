@@ -364,3 +364,157 @@ def test_fake_pipette_with_no_declared_sequence_repeats_forever(fake_pip_factory
     pip = fake_pip_factory([])
     for _ in range(5):
         assert pip.getState().stateName == "out"
+
+
+# -- details payloads -------------------------------------------------------
+
+
+def _details(ctx):
+    """Collect (kind, payload) from every entry this context opens."""
+    seen = []
+
+    def hook(action_entry):
+        action_entry.on_details = lambda e, kind, payload: seen.append((kind, payload))
+
+    ctx.on_log_action = hook
+    return seen
+
+
+def test_patch_retains_a_test_pulse_history_payload(fake_pip_factory, monkeypatch):
+    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
+    pip = fake_pip_factory(["cell detect", "seal", "whole cell"])
+    ctx = _ctx(pip)
+    seen = _details(ctx)
+
+    patch(ctx)
+
+    assert len(seen) == 1
+    kind, payload = seen[0]
+    assert kind == "test_pulse_history"
+    assert payload["entry_state"] == "approach"
+    assert payload["reached"] == "whole cell"
+
+
+def test_the_payload_lists_every_state_the_fsm_walked(fake_pip_factory, monkeypatch):
+    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
+    pip = fake_pip_factory(["cell detect", "seal", "cell attached", "break in", "whole cell"])
+    ctx = _ctx(pip)
+    seen = _details(ctx)
+
+    patch(ctx)
+
+    states = [state for _when, state in seen[0][1]["transitions"]]
+    # The entry state first, then each change the poll loop observed --
+    # including the internal hops the drive continues through.
+    assert states == [
+        "approach",
+        "cell detect",
+        "seal",
+        "cell attached",
+        "break in",
+        "whole cell",
+    ]
+
+
+def test_transitions_carry_a_timestamp(fake_pip_factory, monkeypatch):
+    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
+    pip = fake_pip_factory(["seal", "whole cell"])
+    ctx = _ctx(pip)
+    seen = _details(ctx)
+
+    patch(ctx)
+
+    times = [when for when, _state in seen[0][1]["transitions"]]
+    assert times == sorted(times)
+    assert all(isinstance(t, float) for t in times)
+
+
+def test_the_payload_arrives_before_the_entry_finishes(fake_pip_factory, monkeypatch):
+    # CellPanel resolves the payload to a timeline row through bookkeeping the
+    # entry's finish tears down.
+    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
+    pip = fake_pip_factory(["whole cell"])
+    ctx = _ctx(pip)
+    order = []
+
+    def hook(action_entry):
+        action_entry.on_details = lambda e, k, p: order.append("details")
+        action_entry.on_finish = lambda e: order.append("finish")
+
+    ctx.on_log_action = hook
+
+    patch(ctx)
+
+    assert order == ["details", "finish"]
+
+
+def test_a_stopped_patch_still_retains_its_payload(fake_pip_factory, monkeypatch):
+    # An interrupted attempt is exactly when an operator wants the plot.
+    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
+    monkeypatch.setattr(
+        fsm_mod, "check_stop", lambda *a, **k: (_ for _ in ()).throw(Stopped("stop"))
+    )
+    pip = fake_pip_factory([])
+    ctx = _ctx(pip)
+    seen = _details(ctx)
+
+    with pytest.raises(Stopped):
+        patch(ctx)
+
+    assert len(seen) == 1
+    assert seen[0][1]["reached"] is None
+
+
+def test_a_failed_patch_still_retains_its_payload(fake_pip_factory, monkeypatch):
+    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
+    pip = fake_pip_factory(["cell detect", "broken"])
+    ctx = _ctx(pip)
+    seen = _details(ctx)
+
+    with pytest.raises(BrokenPipette):
+        reseal(ctx)
+
+    assert len(seen) == 1
+    assert seen[0][1]["reached"] is None
+    assert "broken" in [state for _when, state in seen[0][1]["transitions"]]
+
+
+def test_clean_retains_nothing(fake_pip_factory, monkeypatch):
+    # There is nothing an operator reads off a clean (design doc §4.5).
+    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
+    pip = fake_pip_factory(["out"])
+    ctx = _ctx(pip)
+    seen = _details(ctx)
+
+    clean(ctx)
+
+    assert seen == []
+
+
+def test_record_events_false_still_retains_the_payload(fake_pip_factory, monkeypatch):
+    # Switching off the disk log is not a reason to lose the pane's plot.
+    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
+    pip = fake_pip_factory(["whole cell"])
+    ctx = _ctx(pip)
+    seen = _details(ctx)
+
+    patch(ctx, record_events=False)
+
+    assert len(seen) == 1
+
+
+def test_record_kwargs_do_not_reach_set_state(fake_pip_factory, monkeypatch):
+    # entry_config is forwarded to pip.setState; these two are this action's own
+    # options and must not be.
+    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
+    pip = fake_pip_factory(["whole cell"])
+
+    patch(
+        _ctx(pip),
+        record_events=False,
+        record_full_test_pulses=False,
+        autoBreakInDelay=2.0,
+    )
+
+    _state, config = pip.setState_calls[0]
+    assert config == {"autoBreakInDelay": 2.0}
