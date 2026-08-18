@@ -6,7 +6,17 @@ running this protocol. Any other outcome prompts the operator to intervene.
 `cellfie_preset` and `patch_preset` name configured microscope imaging
 presets (e.g. "GFP", "brightfield") to load before the cellfie and before the
 patch attempt, respectively; leave either empty to skip it."""
-from acq4.experiment.actions import cellfie, go_approach, load_preset, patch, prompt, run_task
+
+from acq4.experiment.actions import (
+    cellfie,
+    go_approach,
+    load_preset,
+    patch,
+    prompt,
+    run_task,
+    go_above_target,
+    find_tip,
+)
 
 PARAMS = [
     {
@@ -31,6 +41,8 @@ def run(ctx, cellfie_preset="", patch_preset=""):
     load_preset(ctx, cellfie_preset)
     cellfie(ctx)
     load_preset(ctx, patch_preset)
+    go_above_target(ctx)
+    find_tip(ctx)
     go_approach(ctx)
     # Stuck here with the status showing "now in 'cell attached'"? Check the
     # patch profile: "cell attached" only advances on a configured transition
