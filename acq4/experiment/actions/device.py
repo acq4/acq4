@@ -263,7 +263,10 @@ def run_task(ctx, store: bool = True, timeout: float = 0.0):
 
     Finds the TaskRunner module whose docks include this pipette's clamp device
     and runs its loaded sequence to completion (mirroring
-    AutomationDebug.autopatch.Autopatcher._autopatchRunTaskRunner).
+    AutomationDebug.autopatch.Autopatcher._autopatchRunTaskRunner). Each sweep's
+    primary trace is collected, decimated to a plottable size, and retained --
+    together with the saved sequence directory -- as a "task_results" details
+    payload.
 
     TODO: opening the TaskRunner module and loading a specified protocol file are
     still the operator's responsibility; taking that over is deferred.
@@ -271,6 +274,15 @@ def run_task(ctx, store: bool = True, timeout: float = 0.0):
     with ctx.log_action("Task Runner Sequence") as action_entry:
         man = ctx.manager
         clampName = ctx.pipette.clampDevice.name()
+        try:
+            # 'primary' is a current recording only in voltage clamp; in IC or
+            # I=0 it is a membrane potential. Mirrors neuroanalysis
+            # TestPulse.plot_units, adjusted for getMode()'s upper-case values.
+            units = "A" if ctx.pipette.clampDevice.getMode() == "VC" else "V"
+        except Exception:
+            # This is a display label, not the sequence itself -- a clamp that
+            # cannot report its mode must not fail the action over it.
+            units = "A"
         taskrunner = None
         for modName in man.listInterfaces("taskRunnerModule"):
             mod = man.getModule(modName)
@@ -284,15 +296,15 @@ def run_task(ctx, store: bool = True, timeout: float = 0.0):
         info = taskrunner.sequenceInfo
         expected_duration = info["period"] * info["totalParams"]
         timeout = timeout or max(30, expected_duration * 20)
-        clampName = ctx.pipette.clampDevice.name()
         traces = []
         decimation = 1
+        failed_frames = 0
 
         def onNewFrame(frame):
             """Collect one sweep's clamp trace. Reads the result the way
             MultiClamp's own task GUI does: result['primary'] against
             result.xvals('Time')."""
-            nonlocal decimation
+            nonlocal decimation, failed_frames
             result = frame.get("result", {}).get(clampName)
             if result is None:
                 return
@@ -303,7 +315,10 @@ def run_task(ctx, store: bool = True, timeout: float = 0.0):
             except Exception:
                 # A device whose result is not shaped like a clamp recording is
                 # not a reason to fail the sequence; the data is saved on disk
-                # regardless of whether the pane can plot it.
+                # regardless of whether the pane can plot it. Counted rather
+                # than logged here so that a sequence of many failing sweeps
+                # produces one summary line, not one per frame.
+                failed_frames += 1
                 return
             traces.append((times, values))
             decimation = max(decimation, factor)
@@ -321,6 +336,11 @@ def run_task(ctx, store: bool = True, timeout: float = 0.0):
                     f"{action_entry.name}: plotting sweeps decimated {decimation}x; "
                     f"full data saved on disk"
                 )
+            if failed_frames:
+                ctx.log(
+                    f"{action_entry.name}: {failed_frames} sweep(s) could not be "
+                    f"read for plotting; full data saved on disk"
+                )
             action_entry.set_details(
                 "task_results",
                 {
@@ -328,6 +348,6 @@ def run_task(ctx, store: bool = True, timeout: float = 0.0):
                     "sequence_dir": _sequenceDirName(taskrunner),
                     "sweep_count": len(traces),
                     "decimation": decimation,
-                    "units": "A",
+                    "units": units,
                 },
             )

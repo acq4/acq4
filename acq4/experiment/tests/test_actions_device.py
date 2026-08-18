@@ -812,3 +812,28 @@ def test_run_task_retains_its_sweeps_even_when_the_sequence_raises(ctx, pip, mon
         run_task(ctx)
 
     assert details[0][1]["sweep_count"] == 1
+
+
+def test_run_task_decimation_reports_the_largest_factor_across_sweeps(ctx, pip, monkeypatch):
+    import numpy as np
+
+    clampName = pip.clampDevice.name()
+    module = FakeTaskRunnerModule({clampName: object()})
+    ctx.manager.modules["TaskRunner"] = module
+    monkeypatch.setattr(device_mod, "run_in_gui_thread", lambda fn, *a, **k: fn(*a, **k))
+    details = []
+    ctx.on_log_action = lambda e: setattr(
+        e, "on_details", lambda entry, kind, payload: details.append((kind, payload))
+    )
+    short = np.linspace(0, 1, 100)
+    long = np.linspace(0, 1, 40000)
+    module.frames = [
+        _sequence_frame(clampName, short, short),
+        _sequence_frame(clampName, long, long),
+    ]
+
+    run_task(ctx)
+
+    assert details[0][1]["decimation"] == 10
+    assert details[0][1]["sweep_count"] == 2
+    assert len(details[0][1]["traces"]) == 2
