@@ -648,3 +648,17 @@ def test_legend_swatch_shows_the_brush_colour(qapp):
     assert len(swatches) == 2
     assert swatches[0].palette().color(swatches[0].backgroundRole()) == firstBrush.color()
     assert swatches[1].palette().color(swatches[1].backgroundRole()) == secondBrush.color()
+
+
+def test_the_slice_view_shrinks_with_the_panel_rather_than_holding_a_floor(qapp):
+    """The window puts this panel in an area whose size the operator sets, and
+    the view is what should give when they make it small: a slice view that
+    refuses to go under a few hundred pixels square gets scrolled inside that
+    area instead, which is a viewport dragged over a picture rather than a
+    smaller picture. Small enough to still be a view, and no larger.
+    """
+    panel = makePanel()
+
+    minimum = panel.graphicsView.minimumSize()
+    assert minimum.width() <= 150, minimum.width()
+    assert minimum.height() <= 150, minimum.height()

@@ -111,14 +111,17 @@ def test_a_rect_and_an_ellipse_map_to_different_roi_types(qapp):
     assert not isinstance(roiForRegion(RECT), pg.EllipseROI)
 
 
-def test_an_ellipse_roi_has_a_rotate_handle(qapp):
-    # pg.EllipseROI ships one, and now that a region can record an angle it
-    # tells the truth: grabbing it turns the ellipse and the turn reaches the
-    # slice. The rectangle offers the same gesture through an Alt-drag of its
-    # body, which needs no handle.
+@pytest.mark.parametrize("region", [RECT, ELLIPSE])
+def test_a_box_roi_has_a_rotate_handle(qapp, region):
+    # Both box shapes, and in the same place on each: a region records an angle,
+    # so the turn is an ordinary edit, and an affordance the operator can see is
+    # how they find out. pg.EllipseROI ships one; pg.RectROI ships a scale handle
+    # alone, so the rectangle's is added where the ellipse has it. The Alt-drag
+    # of the ROI body turns either shape too, but a modifier-plus-drag on a
+    # region with no handle to suggest it is not a discoverable gesture.
     from acq4.modules.Autopatch.region_panel import roiForRegion
 
-    handles = roiForRegion(ELLIPSE).handles
+    handles = roiForRegion(region).handles
     assert any(h["type"] == "r" for h in handles)
 
 
@@ -274,6 +277,50 @@ def test_the_rotated_roi_is_drawn_where_the_region_says(qapp, region):
         for cx, cy in ((x0, y0), (x1, y0), (x1, y1), (x0, y1))
     )
     assert roiCorners(roiForRegion(region)) == pytest.approx(expected)
+
+
+def dragRotateHandle(roi, deg):
+    """Turn `roi` by `deg` the way the operator does: by its rotate handle.
+
+    The path a real drag takes, minus the mouse: pg's Handle.mouseDragEvent hands
+    the handle's new position to ROI.movePoint, and that is what reads the "r"
+    type and turns the shape. Driving movePoint directly is what keeps this about
+    the handle rather than about setAngle.
+    """
+    handle = next(h for h in roi.handles if h["type"] == "r")
+    size = roi.size()
+    local = Qt.QPointF(handle["pos"][0] * size.x(), handle["pos"][1] * size.y())
+    start = roi.mapToParent(local)
+    centre = roi.mapToParent(Qt.QPointF(size.x() / 2, size.y() / 2))
+    x, y = turned(centre.x(), centre.y(), start.x(), start.y(), deg)
+    roi.movePoint(handle["item"], Qt.QPointF(x, y), coords="parent")
+
+
+@pytest.mark.parametrize("region", [RECT, ELLIPSE])
+def test_a_turn_by_the_rotate_handle_reaches_the_region(qapp, region):
+    # The handle turns about the centre of the box while the region's own pivot
+    # is its (x0, y0) corner, so this is where those two conventions meet: the
+    # region has to come back describing the shape now on screen, in its own
+    # terms, with the box the operator sized left alone.
+    from acq4.modules.Autopatch.region_panel import regionForRoi, roiForRegion
+
+    roi = roiForRegion(region)
+    before = region.box()
+
+    dragRotateHandle(roi, 30.0)
+    turnedRegion = regionForRoi(roi)
+
+    assert turnedRegion.angle == pytest.approx(30.0)
+    # A turn, not a resize: same box, somewhere else, at an angle.
+    x0, y0, x1, y1 = turnedRegion.box()
+    assert (x1 - x0, y1 - y0) == pytest.approx(
+        (before[2] - before[0], before[3] - before[1])
+    )
+    # And what the region describes is what is drawn: rebuilt from it, the ROI
+    # lands on the same four corners the handle just put it on.
+    assert sorted(roiCorners(roiForRegion(turnedRegion))) == pytest.approx(
+        sorted(roiCorners(roi))
+    )
 
 
 def test_a_rotated_roi_dragged_past_its_own_origin_still_describes_its_shape(qapp):
