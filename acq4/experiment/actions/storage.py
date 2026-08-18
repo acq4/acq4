@@ -55,5 +55,7 @@ def new_data_dir(ctx, level: str = "Cell", set_current: bool = True):
     The protocol-facing wrapper around create_data_dir: same behaviour, plus the
     log_action entry that puts it in Area 5's timeline.
     """
-    with ctx.log_action("New Data Directory"):
-        return create_data_dir(ctx.manager, level=level, set_current=set_current)
+    with ctx.log_action("New Data Directory") as action_entry:
+        new_dir = create_data_dir(ctx.manager, level=level, set_current=set_current)
+        action_entry.set_details("text", {"lines": [f"created {new_dir.name()}"]})
+        return new_dir

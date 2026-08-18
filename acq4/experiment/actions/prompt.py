@@ -27,6 +27,11 @@ def prompt(ctx, message: str = "", title: str = "Prompt", choices=("OK",)) -> st
     with ctx.log_action("Operator Prompt") as action_entry:
         action_entry.set_status(message)
         ctx.log(message)
-        if _is_headless():
-            return labels[0]
-        return prompt_user(title, message, labels)
+        # Bound to a local rather than returned directly, so the choice can be
+        # retained for Area 5 before this entry finishes -- a payload set after
+        # the block exits has no timeline row to attach to (see set_details).
+        chosen = labels[0] if _is_headless() else prompt_user(title, message, labels)
+        action_entry.set_details(
+            "text", {"lines": [message, f"operator chose: {chosen}"]}
+        )
+        return chosen

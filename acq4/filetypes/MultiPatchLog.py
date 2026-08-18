@@ -231,7 +231,11 @@ class MultiPatchLogData(object):
             return uses
 
         with open(filename, 'rb') as fh:
-            events: list[dict[str, Any]] = [json.loads(line.rstrip(b',\r\n')) for line in fh]
+            events: list[dict[str, Any]] = [
+                json.loads(stripped)
+                for stripped in (line.rstrip(b',\r\n') for line in fh)
+                if stripped.strip()
+            ]
 
             events_by_dev_and_use = {}
             bool_fields = ('clean', 'broken', 'active', 'enabled')

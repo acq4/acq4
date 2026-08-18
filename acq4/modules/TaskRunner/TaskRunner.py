@@ -130,6 +130,11 @@ class TaskRunner(Module):
 
         self.currentTask = None  ## pointer to current task object
 
+        # The directory the most recent stored sequence saved into, so a caller
+        # driving runSequence() can report where the data went. None until a
+        # sequence runs with store=True.
+        self.lastSequenceDir = None
+
         for m in analysisModules.MODULES:
             item = Qt.QListWidgetItem(m, self.ui.analysisList)
             item.setFlags(Qt.Qt.ItemIsSelectable | Qt.Qt.ItemIsEnabled | Qt.Qt.ItemIsUserCheckable)
@@ -646,8 +651,10 @@ class TaskRunner(Module):
                 info = self.taskInfo(params)
                 info['dirType'] = 'ProtocolSequence'
                 dh = storeDirHandle.mkdir(name, autoIncrement=True, info=info)
+                self.lastSequenceDir = dh
             else:
                 dh = None
+                self.lastSequenceDir = None
 
             ## Tell devices to prepare for task start.
             for d in self.currentTask.devices:

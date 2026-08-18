@@ -20,6 +20,7 @@ from acq4.experiment.actions.device import (
     load_preset,
 )
 from acq4.experiment.actions import device as device_mod
+from acq4.util import Qt
 
 # cellfie reaches acq4_automation twice at call time: for CellTrackingLost, and for
 # DEFORMATION_TOLERANCE by way of AutomationDebug.feature_tracking. That package is
@@ -159,15 +160,52 @@ class FakeManager:
         return self.modules[name]
 
 
-class FakeTaskRunnerModule:
+class FakeTaskRunnerModule(Qt.QObject):
+    sigNewFrame = Qt.Signal(object)
+
     def __init__(self, docks, period=1.0, totalParams=5):
+        super().__init__()
         self.docks = docks
         self.sequenceInfo = {"period": period, "totalParams": totalParams}
         self.run_calls = []
+        self.run_error = None
+        # Frames the run emits, standing in for the real module's per-sweep
+        # sigNewFrame; and the directory handle run_task reads the saved
+        # sequence's name off, mirroring TaskRunner.lastSequenceDir.
+        self.frames = []
+        self.lastSequenceDir = _FakeSequenceDir("protocol_000")
 
     def runSequence(self, store=True):
         self.run_calls.append(store)
-        return _Waitable()
+        for frame in self.frames:
+            self.sigNewFrame.emit(frame)
+        return _Waitable(self.run_error)
+
+
+class _FakeSequenceDir:
+    def __init__(self, name):
+        self._name = name
+
+    def shortName(self):
+        return self._name
+
+
+class _FakeObjectStack:
+    def __init__(self, data):
+        self.data = data
+
+
+class _FakeMotionEstimator:
+    def __init__(self, data):
+        self.original_object_stack = _FakeObjectStack(data)
+
+
+class _FakeTracker:
+    """Stands in for the acq4_automation tracker cellfie initializes: exposes
+    the one attribute chain the details payload reads."""
+
+    def __init__(self, data):
+        self.motion_estimator = _FakeMotionEstimator(data)
 
 
 class FakeCell:
@@ -175,6 +213,7 @@ class FakeCell:
         self.tracker_calls = []
         self.tracker_kwargs = []
         self.tracker_error = None
+        self.tracker_stack = None
 
     def initializeTracker(self, imager, use_cellpose=False, **tracker_kwargs):
         # Mirror Cell.initializeTracker's **tracker_kwargs passthrough so callers can
@@ -185,6 +224,8 @@ class FakeCell:
         self.tracker_kwargs.append(tracker_kwargs)
         if self.tracker_error is not None:
             raise self.tracker_error
+        if self.tracker_stack is not None:
+            self._tracker = _FakeTracker(self.tracker_stack)
 
 
 @pytest.fixture
@@ -566,3 +607,315 @@ def test_load_preset_unknown_name_with_no_presets_configured_reads_sensibly(ctx,
     # No dangling "(available: )" -- say plainly that nothing is configured.
     assert "available:" not in message
     assert "no presets are configured" in message
+
+
+def test_cellfie_retains_the_trackers_stack_as_an_image_stack_payload(ctx, pip, monkeypatch):
+    pytest.importorskip("acq4_automation", reason=_CELLFIE_SKIP_REASON)
+    import numpy as np
+
+    monkeypatch.setattr(device_mod, "run_image_sequence", lambda *a, **k: _Waitable())
+    ctx.cell.tracker_stack = np.arange(5 * 4 * 3, dtype=float).reshape(5, 4, 3)
+    details = []
+    ctx.on_log_action = lambda e: setattr(
+        e, "on_details", lambda entry, kind, payload: details.append((kind, payload))
+    )
+
+    cellfie(ctx)
+
+    assert len(details) == 1
+    kind, payload = details[0]
+    assert kind == "image_stack"
+    # Rows/cols swapped so it displays in the same orientation as the Camera
+    # module, matching AutomationDebug's own cell stack view.
+    assert payload["stack"].shape == (5, 3, 4)
+    assert payload["center_index"] == 2
+    assert payload["title"] == "Cellfie"
+
+
+def test_cellfie_center_index_is_none_for_a_single_frame_stack(ctx, pip, monkeypatch):
+    pytest.importorskip("acq4_automation", reason=_CELLFIE_SKIP_REASON)
+    import numpy as np
+
+    monkeypatch.setattr(device_mod, "run_image_sequence", lambda *a, **k: _Waitable())
+    ctx.cell.tracker_stack = np.zeros((1, 4, 3))
+    details = []
+    ctx.on_log_action = lambda e: setattr(
+        e, "on_details", lambda entry, kind, payload: details.append((kind, payload))
+    )
+
+    cellfie(ctx)
+
+    assert details[0][1]["center_index"] is None
+
+
+def test_cellfie_sets_no_payload_when_the_tracker_exposes_no_stack(ctx, pip, monkeypatch):
+    # A cell whose tracker did not expose a stack must not make cellfie raise
+    # out of the orchestrator's worker thread over a display concern.
+    pytest.importorskip("acq4_automation", reason=_CELLFIE_SKIP_REASON)
+    monkeypatch.setattr(device_mod, "run_image_sequence", lambda *a, **k: _Waitable())
+    ctx.cell.tracker_stack = None
+    details = []
+    ctx.on_log_action = lambda e: setattr(
+        e, "on_details", lambda entry, kind, payload: details.append((kind, payload))
+    )
+
+    cellfie(ctx)
+
+    assert details == []
+
+
+def test_cellfie_sets_no_payload_when_the_cell_is_lost(monkeypatch, tmp_path):
+    # tissue_moved never returns, so there is nothing to retain -- the accepted
+    # gap in the spec's §8.
+    pytest.importorskip("acq4_automation", reason=_CELLFIE_SKIP_REASON)
+    from acq4_automation.feature_tracking import CellTrackingLost
+
+    def hook(c, reason):
+        raise AdvanceToNextCell(reason)
+
+    ctx = _cellfie_context(monkeypatch, tmp_path, tissue_moved_hook=hook)
+    ctx.cell.tracker_error = CellTrackingLost("gone")
+    details = []
+    ctx.on_log_action = lambda e: setattr(
+        e, "on_details", lambda entry, kind, payload: details.append((kind, payload))
+    )
+
+    with pytest.raises(AdvanceToNextCell):
+        cellfie(ctx)
+
+    assert details == []
+
+
+# -- run_task: sweep retention -------------------------------------------
+
+
+class _FakeMetaArray:
+    """Stands in for a clamp device's task result: indexable by channel name,
+    with an xvals('Time') axis, the shape MultiClamp's task GUI reads."""
+
+    def __init__(self, times, primary):
+        self._times = times
+        self._primary = primary
+
+    def __getitem__(self, key):
+        assert key == "primary"
+        return self._primary
+
+    def xvals(self, axis):
+        assert axis == "Time"
+        return self._times
+
+
+def _sequence_frame(clampName, times, primary, params=None):
+    return {"result": {clampName: _FakeMetaArray(times, primary)}, "params": params or {}}
+
+
+def test_decimate_leaves_a_short_trace_alone():
+    import numpy as np
+
+    t = np.linspace(0, 1, 100)
+    times, values, factor = device_mod._decimate(t, t * 2.0, maxPoints=4000)
+
+    assert factor == 1
+    assert len(times) == 100
+    assert np.array_equal(values, t * 2.0)
+
+
+def test_decimate_reduces_a_long_trace_and_reports_the_factor():
+    import numpy as np
+
+    t = np.linspace(0, 1, 40000)
+    times, values, factor = device_mod._decimate(t, t, maxPoints=4000)
+
+    assert factor == 10
+    assert len(times) == len(values) == 4000
+
+
+def test_run_task_retains_each_sweep_as_a_task_results_payload(ctx, pip, monkeypatch):
+    import numpy as np
+
+    clampName = pip.clampDevice.name()
+    module = FakeTaskRunnerModule({clampName: object()})
+    ctx.manager.modules["TaskRunner"] = module
+    monkeypatch.setattr(device_mod, "run_in_gui_thread", lambda fn, *a, **k: fn(*a, **k))
+    details = []
+    ctx.on_log_action = lambda e: setattr(
+        e, "on_details", lambda entry, kind, payload: details.append((kind, payload))
+    )
+    t = np.linspace(0, 1, 10)
+    module.frames = [
+        _sequence_frame(clampName, t, t * 1.0),
+        _sequence_frame(clampName, t, t * 2.0),
+    ]
+
+    run_task(ctx)
+
+    assert len(details) == 1
+    kind, payload = details[0]
+    assert kind == "task_results"
+    assert len(payload["traces"]) == 2
+    assert payload["decimation"] == 1
+    assert np.array_equal(payload["traces"][1][1], t * 2.0)
+
+
+def test_run_task_payload_names_the_sequence_directory(ctx, pip, monkeypatch):
+    clampName = pip.clampDevice.name()
+    module = FakeTaskRunnerModule({clampName: object()})
+    module.lastSequenceDir = _FakeSequenceDir("protocol_003")
+    ctx.manager.modules["TaskRunner"] = module
+    monkeypatch.setattr(device_mod, "run_in_gui_thread", lambda fn, *a, **k: fn(*a, **k))
+    details = []
+    ctx.on_log_action = lambda e: setattr(
+        e, "on_details", lambda entry, kind, payload: details.append((kind, payload))
+    )
+    module.frames = []
+
+    run_task(ctx)
+
+    assert details[0][1]["sequence_dir"] == "protocol_003"
+
+
+def test_run_task_retains_nothing_but_still_reports_when_no_sweeps_arrive(ctx, pip, monkeypatch):
+    clampName = pip.clampDevice.name()
+    module = FakeTaskRunnerModule({clampName: object()})
+    ctx.manager.modules["TaskRunner"] = module
+    monkeypatch.setattr(device_mod, "run_in_gui_thread", lambda fn, *a, **k: fn(*a, **k))
+    details = []
+    ctx.on_log_action = lambda e: setattr(
+        e, "on_details", lambda entry, kind, payload: details.append((kind, payload))
+    )
+    module.frames = []
+
+    run_task(ctx)
+
+    assert details[0][1]["traces"] == []
+
+
+def test_run_task_retains_its_sweeps_even_when_the_sequence_raises(ctx, pip, monkeypatch):
+    import numpy as np
+
+    clampName = pip.clampDevice.name()
+    module = FakeTaskRunnerModule({clampName: object()})
+    module.run_error = RuntimeError("amplifier fell over")
+    ctx.manager.modules["TaskRunner"] = module
+    monkeypatch.setattr(device_mod, "run_in_gui_thread", lambda fn, *a, **k: fn(*a, **k))
+    details = []
+    ctx.on_log_action = lambda e: setattr(
+        e, "on_details", lambda entry, kind, payload: details.append((kind, payload))
+    )
+    t = np.linspace(0, 1, 10)
+    module.frames = [_sequence_frame(clampName, t, t)]
+
+    with pytest.raises(RuntimeError):
+        run_task(ctx)
+
+    assert len(details[0][1]["traces"]) == 1
+
+
+def test_run_task_decimation_reports_the_largest_factor_across_sweeps(ctx, pip, monkeypatch):
+    import numpy as np
+
+    clampName = pip.clampDevice.name()
+    module = FakeTaskRunnerModule({clampName: object()})
+    ctx.manager.modules["TaskRunner"] = module
+    monkeypatch.setattr(device_mod, "run_in_gui_thread", lambda fn, *a, **k: fn(*a, **k))
+    details = []
+    ctx.on_log_action = lambda e: setattr(
+        e, "on_details", lambda entry, kind, payload: details.append((kind, payload))
+    )
+    short = np.linspace(0, 1, 100)
+    long = np.linspace(0, 1, 40000)
+    module.frames = [
+        _sequence_frame(clampName, short, short),
+        _sequence_frame(clampName, long, long),
+    ]
+
+    run_task(ctx)
+
+    assert details[0][1]["decimation"] == 10
+    assert len(details[0][1]["traces"]) == 2
+
+
+def test_find_surface_retains_the_detected_depth(ctx, pip):
+    pip.scope.depth = -1.2e-3
+    details = []
+    ctx.on_log_action = lambda e: setattr(
+        e, "on_details", lambda entry, kind, payload: details.append((kind, payload))
+    )
+
+    depth = find_surface(ctx)
+
+    assert depth == -1.2e-3
+    kind, payload = details[0]
+    assert kind == "text"
+    assert "surface" in payload["lines"][0]
+    assert "1.2 mm" in payload["lines"][0]
+
+
+def test_find_surface_retains_nothing_when_detection_fails(ctx, pip):
+    pip.scope.error = ValueError("no surface found")
+    details = []
+    ctx.on_log_action = lambda e: setattr(
+        e, "on_details", lambda entry, kind, payload: details.append((kind, payload))
+    )
+
+    with pytest.raises(OrchestrationError):
+        find_surface(ctx)
+
+    assert details == []
+
+
+# -- run_task: thread affinity ----------------------------------------------
+
+
+def test_run_task_collects_sweeps_when_driven_from_a_worker_thread(qapp, qtbot, pip):
+    """run_task runs on the orchestrator's worker thread -- a gentletask
+    ThreadTask with no Qt event loop -- while TaskRunner.sigNewFrame is emitted
+    on the GUI thread. PyQt gives a plain callable slot the affinity of the
+    thread that called connect(), so the subscription has to be established on
+    the GUI thread; made from the worker, every frame would be queued to a loop
+    that never runs and the payload would report no sweeps at all.
+
+    Genuinely cross-thread on purpose: driven from a worker while this (GUI)
+    thread pumps and emits. run_in_gui_thread is deliberately left unpatched.
+    """
+    import threading
+
+    import numpy as np
+
+    clampName = pip.clampDevice.name()
+    module = FakeTaskRunnerModule({clampName: object()})
+    ctx = ExecutionContext(pipette=pip, manager=FakeManager(), cell=FakeCell())
+    ctx.manager.modules["TaskRunner"] = module
+    details = []
+    ctx.on_log_action = lambda e: setattr(
+        e, "on_details", lambda entry, kind, payload: details.append((kind, payload))
+    )
+    t = np.linspace(0, 1, 10)
+    module.frames = [
+        _sequence_frame(clampName, t, t * 1.0),
+        _sequence_frame(clampName, t, t * 2.0),
+    ]
+    done = threading.Event()
+    ranOn = {}
+
+    def runOnWorker():
+        try:
+            ranOn["thread"] = Qt.QtCore.QThread.currentThread()
+            run_task(ctx, store=False)
+        finally:
+            done.set()
+
+    worker = threading.Thread(target=runOnWorker, name="run-task-driver")
+    worker.start()
+    # This thread has to keep pumping: run_task marshals both its subscription
+    # and runSequence itself here through run_in_gui_thread.
+    qtbot.waitUntil(done.is_set, timeout=5000)
+    worker.join(5)
+
+    assert ranOn["thread"] is not Qt.QtCore.QThread.currentThread()
+    assert len(details) == 1
+    kind, payload = details[0]
+    assert kind == "task_results"
+    assert len(payload["traces"]) == 2
+    assert np.array_equal(payload["traces"][1][1], t * 2.0)
