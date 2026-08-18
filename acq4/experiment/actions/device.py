@@ -11,6 +11,7 @@ ctx.pipette is a PatchPipette; the underlying manipulator is ctx.pipette.pipette
 from __future__ import annotations
 
 import numpy as np
+import pyqtgraph as pg
 
 from acq4.util import Qt
 from acq4.util.imaging.sequencer import run_image_sequence
@@ -122,6 +123,9 @@ def find_surface(ctx):
             depth = scope.findSurfaceDepth(imager)
         except ValueError as e:
             raise OrchestrationError(f"{action_entry.name}: {e}") from e
+        action_entry.set_details(
+            "text", {"lines": [f"surface detected at {pg.siFormat(depth, suffix='m')}"]}
+        )
         return depth
 
 

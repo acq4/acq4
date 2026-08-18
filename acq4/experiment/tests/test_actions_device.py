@@ -837,3 +837,32 @@ def test_run_task_decimation_reports_the_largest_factor_across_sweeps(ctx, pip, 
     assert details[0][1]["decimation"] == 10
     assert details[0][1]["sweep_count"] == 2
     assert len(details[0][1]["traces"]) == 2
+
+
+def test_find_surface_retains_the_detected_depth(ctx, pip):
+    pip.scope.depth = -1.2e-3
+    details = []
+    ctx.on_log_action = lambda e: setattr(
+        e, "on_details", lambda entry, kind, payload: details.append((kind, payload))
+    )
+
+    depth = find_surface(ctx)
+
+    assert depth == -1.2e-3
+    kind, payload = details[0]
+    assert kind == "text"
+    assert "surface" in payload["lines"][0]
+    assert "1.2 mm" in payload["lines"][0]
+
+
+def test_find_surface_retains_nothing_when_detection_fails(ctx, pip):
+    pip.scope.error = ValueError("no surface found")
+    details = []
+    ctx.on_log_action = lambda e: setattr(
+        e, "on_details", lambda entry, kind, payload: details.append((kind, payload))
+    )
+
+    with pytest.raises(OrchestrationError):
+        find_surface(ctx)
+
+    assert details == []
