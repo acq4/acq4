@@ -170,11 +170,30 @@ class FakeTaskRunnerModule:
         return _Waitable()
 
 
+class _FakeObjectStack:
+    def __init__(self, data):
+        self.data = data
+
+
+class _FakeMotionEstimator:
+    def __init__(self, data):
+        self.original_object_stack = _FakeObjectStack(data)
+
+
+class _FakeTracker:
+    """Stands in for the acq4_automation tracker cellfie initializes: exposes
+    the one attribute chain the details payload reads."""
+
+    def __init__(self, data):
+        self.motion_estimator = _FakeMotionEstimator(data)
+
+
 class FakeCell:
     def __init__(self):
         self.tracker_calls = []
         self.tracker_kwargs = []
         self.tracker_error = None
+        self.tracker_stack = None
 
     def initializeTracker(self, imager, use_cellpose=False, **tracker_kwargs):
         # Mirror Cell.initializeTracker's **tracker_kwargs passthrough so callers can
@@ -185,6 +204,8 @@ class FakeCell:
         self.tracker_kwargs.append(tracker_kwargs)
         if self.tracker_error is not None:
             raise self.tracker_error
+        if self.tracker_stack is not None:
+            self._tracker = _FakeTracker(self.tracker_stack)
 
 
 @pytest.fixture
@@ -566,3 +587,86 @@ def test_load_preset_unknown_name_with_no_presets_configured_reads_sensibly(ctx,
     # No dangling "(available: )" -- say plainly that nothing is configured.
     assert "available:" not in message
     assert "no presets are configured" in message
+
+
+def test_cellfie_retains_the_trackers_stack_as_an_image_stack_payload(ctx, pip, monkeypatch):
+    pytest.importorskip("acq4_automation", reason=_CELLFIE_SKIP_REASON)
+    import numpy as np
+
+    monkeypatch.setattr(device_mod, "run_image_sequence", lambda *a, **k: _Waitable())
+    ctx.cell.tracker_stack = np.arange(5 * 4 * 3, dtype=float).reshape(5, 4, 3)
+    details = []
+    ctx.on_log_action = lambda e: setattr(
+        e, "on_details", lambda entry, kind, payload: details.append((kind, payload))
+    )
+
+    cellfie(ctx)
+
+    assert len(details) == 1
+    kind, payload = details[0]
+    assert kind == "image_stack"
+    # Rows/cols swapped so it displays in the same orientation as the Camera
+    # module, matching AutomationDebug's own cell stack view.
+    assert payload["stack"].shape == (5, 3, 4)
+    assert payload["center_index"] == 2
+    assert payload["title"] == "Cellfie"
+
+
+def test_cellfie_center_index_is_none_for_a_single_frame_stack(ctx, pip, monkeypatch):
+    pytest.importorskip("acq4_automation", reason=_CELLFIE_SKIP_REASON)
+    import numpy as np
+
+    monkeypatch.setattr(device_mod, "run_image_sequence", lambda *a, **k: _Waitable())
+    ctx.cell.tracker_stack = np.zeros((1, 4, 3))
+    details = []
+    ctx.on_log_action = lambda e: setattr(
+        e, "on_details", lambda entry, kind, payload: details.append((kind, payload))
+    )
+
+    cellfie(ctx)
+
+    assert details[0][1]["center_index"] is None
+
+
+def test_cellfie_sets_no_payload_when_the_tracker_exposes_no_stack(ctx, pip, monkeypatch):
+    # A cell whose tracker did not expose a stack must not make cellfie raise
+    # out of the orchestrator's worker thread over a display concern.
+    pytest.importorskip("acq4_automation", reason=_CELLFIE_SKIP_REASON)
+    monkeypatch.setattr(device_mod, "run_image_sequence", lambda *a, **k: _Waitable())
+    ctx.cell.tracker_stack = None
+    details = []
+    ctx.on_log_action = lambda e: setattr(
+        e, "on_details", lambda entry, kind, payload: details.append((kind, payload))
+    )
+
+    cellfie(ctx)
+
+    assert details == []
+
+
+def test_cellfie_sets_no_payload_when_the_cell_is_lost(monkeypatch, tmp_path):
+    # tissue_moved never returns, so there is nothing to retain -- the accepted
+    # gap in the spec's §8.
+    pytest.importorskip("acq4_automation", reason=_CELLFIE_SKIP_REASON)
+    from acq4_automation.feature_tracking import CellTrackingLost
+
+    monkeypatch.setattr(device_mod, "run_image_sequence", lambda *a, **k: _Waitable())
+    cell = FakeCell()
+    cell.tracker_error = CellTrackingLost("gone")
+    details = []
+
+    def hook(action_entry):
+        action_entry.on_details = lambda e, kind, payload: details.append(kind)
+
+    ctx = ExecutionContext(
+        cell=cell,
+        pipette=FakePipette(),
+        manager=FakeManager(),
+        tissue_moved_hook=lambda c, reason: (_ for _ in ()).throw(AdvanceToNextCell(reason)),
+    )
+    ctx.on_log_action = hook
+
+    with pytest.raises(AdvanceToNextCell):
+        cellfie(ctx)
+
+    assert details == []

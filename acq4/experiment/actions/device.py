@@ -10,6 +10,8 @@ ctx.pipette is a PatchPipette; the underlying manipulator is ctx.pipette.pipette
 """
 from __future__ import annotations
 
+import numpy as np
+
 from acq4.util.imaging.sequencer import run_image_sequence
 from acq4.util.model_config import segmenter_path
 from acq4.util.task import run_in_gui_thread
@@ -116,12 +118,38 @@ def find_surface(ctx):
         return depth
 
 
+def _trackerStack(cell):
+    """The 3D stack a cell's tracker holds, oriented for display, or None.
+
+    Reads the same attribute chain AutomationDebug's cell stack view does, and
+    swaps rows/cols the same way so the stack displays in the same orientation
+    as the Camera module. Returns None rather than raising for a cell whose
+    tracker never exposed one: this feeds a display payload, and an action must
+    not fail on the orchestrator's worker thread over what the pane can show.
+    """
+    tracker = getattr(cell, "_tracker", None)
+    if tracker is None:
+        return None
+    try:
+        stack = tracker.motion_estimator.original_object_stack.data
+    except Exception:
+        return None
+    if stack is None:
+        return None
+    stack = np.asarray(stack)
+    if stack.ndim >= 2:
+        stack = np.swapaxes(stack, -2, -1)
+    return stack
+
+
 def cellfie(ctx, height: float = 30e-6, step: float = 1e-6) -> None:
     """Capture the cell "cellfie": focus on the target, save a z-stack into the
     current storage directory, and initialize the cell tracker's reference.
 
     The z-stack save mirrors ApproachState._maybeTakeACellfie; preset switching
     (e.g. GFP/brightfield) is protocol-specific and left to the caller.
+
+    Retains the tracker's cropped object stack as this action's Area 5 details.
     """
     with ctx.log_action("Cellfie") as action_entry:
         pip = ctx.pipette
@@ -160,8 +188,26 @@ def cellfie(ctx, height: float = 30e-6, step: float = 1e-6) -> None:
             # The tracker could not re-find this cell against its own reference
             # stacks, so the stacks are useless: the cell has drifted out of
             # reach or died. That is a question about the tissue, not about this
-            # action, and the window is what can answer it. Never returns.
+            # action, and the window is what can answer it. Never returns, so
+            # there is no stack to retain for the pane.
             ctx.tissue_moved(exc.reason or str(exc))
+        # Retained for Area 5: the cube around the cell, which is what an
+        # operator reads to judge a cellfie. The full acquired z-stack stays on
+        # disk in the cellfie/ directory saved above.
+        stack = _trackerStack(ctx.cell)
+        if stack is not None:
+            action_entry.set_details(
+                "image_stack",
+                {
+                    "stack": stack,
+                    "center_index": (
+                        stack.shape[0] // 2
+                        if stack.ndim >= 3 and stack.shape[0] > 1
+                        else None
+                    ),
+                    "title": "Cellfie",
+                },
+            )
 
 
 def load_preset(ctx, preset: str | None = None) -> None:
