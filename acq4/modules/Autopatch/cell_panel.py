@@ -103,6 +103,11 @@ class CellPanel(Qt.QWidget):
         # widget -- so nothing here can form the reference cycle
         # tests/test_teardown.py exists to prevent (see set_details' docstring).
         self._details: dict[tuple[int, int], tuple[str, object]] = {}
+        # (id(cell), timeline row index) -> that action's most recent
+        # set_status() text. Retained alongside the payload so a finished row
+        # still says what it was doing when it ended; a row absent from here
+        # never reported a status.
+        self._statuses: dict[tuple[int, int], str] = {}
         # id(cell) -> (exc_type, exc_message, traceback_text) for the most
         # recent action of that cell's that failed. Ids and plain strings,
         # never the entry and never the exception: an ActionLogEntry's
@@ -175,6 +180,12 @@ class CellPanel(Qt.QWidget):
         self.logView.setReadOnly(True)
         self.showContainer = Qt.QWidget()
         self.showContainer.setLayout(Qt.QVBoxLayout())
+        # Header above the mounted details widget, carrying the selected
+        # action's set_status() text -- which nothing displayed before this,
+        # so every FSM state-transition message was thrown away. The timeline
+        # rows deliberately do not show it (design doc §7).
+        self.statusLabel = Qt.QLabel()
+        self.statusLabel.setWordWrap(True)
 
         self.addFromTargetBtn = Qt.QPushButton("Add from target")
         self.scatterFakeCellsBtn = Qt.QPushButton("Scatter fake cells")
@@ -204,6 +215,7 @@ class CellPanel(Qt.QWidget):
         layout = Qt.QVBoxLayout()
         layout.addLayout(btnRow)
         layout.addLayout(listsRow)
+        layout.addWidget(self.statusLabel)
         layout.addWidget(self.showContainer)
         layout.addWidget(self.logView)
         self.setLayout(layout)
@@ -333,6 +345,8 @@ class CellPanel(Qt.QWidget):
         self._timelineItems.clear()
         self._logs.clear()
         self._details.clear()
+        self._statuses.clear()
+        self.statusLabel.setText("")
         self._cellErrors.clear()
         self.cellList.clear()
         self._clearShowContainer()
@@ -530,14 +544,16 @@ class CellPanel(Qt.QWidget):
         return self._details.get((id(cell), rowIndex))
 
     def _dropDetailsFor(self, cellId: int) -> None:
-        """Forget every retained payload belonging to `cellId`.
+        """Forget every retained payload and status belonging to `cellId`.
 
         Scans rather than indexing by cell: the keys are (cell, row) pairs, and
-        a per-cell index would be a second store to keep in sync with this one
+        a per-cell index would be a second store to keep in sync with these two
         on all three of the paths that drop rows.
         """
         for key in [k for k in self._details if k[0] == cellId]:
             del self._details[key]
+        for key in [k for k in self._statuses if k[0] == cellId]:
+            del self._statuses[key]
 
     def _onCheckAllCompleted(self) -> None:
         """Tick every row whose cell ran its protocol to completion.
@@ -807,10 +823,15 @@ class CellPanel(Qt.QWidget):
                 self._liveWidgets.pop(id(entry), None)
                 if self._isSelectedRow(loc):
                     self._mountSelectedRow()
-        # "status" intentionally leaves the timeline row and details container
-        # alone: Area 5's timeline only ever shows "running" then the finished
-        # outcome, never each intermediate ctx.log_action status message (see
-        # module docstring / design doc §7).
+        elif phase == "status":
+            # Recorded and shown in the pane's header, but deliberately NOT in
+            # the timeline row: rows show "running" then the outcome and
+            # nothing else (design doc §7).
+            loc = self._entryTimelineLoc.get(id(entry))
+            if loc is not None:
+                self._statuses[loc] = entry.status
+                if self._isSelectedRow(loc):
+                    self.statusLabel.setText(entry.status)
 
     def _appendTimelineRow(self, cell, entry) -> None:
         text = f"{entry.name} — ⏳ running"
@@ -875,8 +896,10 @@ class CellPanel(Qt.QWidget):
         cell = self._currentSelectedCell()
         index = self.timelineList.currentRow()
         if cell is None or index < 0:
+            self.statusLabel.setText("")
             return
         loc = (id(cell), index)
+        self.statusLabel.setText(self._statuses.get(loc, ""))
         for entryId, entryLoc in self._entryTimelineLoc.items():
             if entryLoc == loc and entryId in self._liveWidgets:
                 self.showContainer.layout().addWidget(self._liveWidgets[entryId])

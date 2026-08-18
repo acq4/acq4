@@ -434,4 +434,87 @@ def test_a_successful_action_records_no_error_payload(panel):
     panel.onLogAction(cell, entry)
     entry._finish(None)
 
+
+def test_status_shows_for_the_selected_row(panel):
+    (cell,) = _seed(panel)
+    panel.cellList.setCurrentRow(0)
+    entry = ActionLogEntry("Patch")
+    panel.onLogAction(cell, entry)
+
+    entry.set_status("driving FSM from 'approach'")
+
+    assert "driving FSM from 'approach'" in panel.statusLabel.text()
+
+
+def test_status_updates_in_place_as_the_action_progresses(panel):
+    (cell,) = _seed(panel)
+    panel.cellList.setCurrentRow(0)
+    entry = ActionLogEntry("Patch")
+    panel.onLogAction(cell, entry)
+
+    entry.set_status("now in 'seal'")
+    entry.set_status("reached 'whole cell'")
+
+    assert "reached 'whole cell'" in panel.statusLabel.text()
+    assert "now in 'seal'" not in panel.statusLabel.text()
+
+
+def test_status_is_not_shown_for_an_unselected_row(panel):
+    (cell,) = _seed(panel)
+    panel.cellList.setCurrentRow(0)
+    earlier = ActionLogEntry("Earlier")
+    panel.onLogAction(cell, earlier)
+    earlier.set_status("earlier status")
+    earlier._finish(None)
+    later = ActionLogEntry("Later")
+    panel.onLogAction(cell, later)
+    later.set_status("later status")
+
+    panel.timelineList.setCurrentRow(0)
+
+    assert "earlier status" in panel.statusLabel.text()
+    assert "later status" not in panel.statusLabel.text()
+
+
+def test_last_status_is_retained_after_the_action_finishes(panel):
+    (cell,) = _seed(panel)
+    panel.cellList.setCurrentRow(0)
+    entry = ActionLogEntry("Cellfie")
+    panel.onLogAction(cell, entry)
+    entry.set_status("saving cellfie z-stack")
+    entry._finish(None)
+
+    panel.timelineList.setCurrentRow(0)
+
+    assert "saving cellfie z-stack" in panel.statusLabel.text()
+
+
+def test_status_clears_for_a_row_that_never_reported_one(panel):
+    (cell,) = _seed(panel)
+    panel.cellList.setCurrentRow(0)
+    withStatus = ActionLogEntry("With")
+    panel.onLogAction(cell, withStatus)
+    withStatus.set_status("something")
+    withStatus._finish(None)
+    withoutStatus = ActionLogEntry("Without")
+    panel.onLogAction(cell, withoutStatus)
+    withoutStatus._finish(None)
+
+    panel.timelineList.setCurrentRow(1)
+
+    assert panel.statusLabel.text() == ""
+
+
+def test_clear_cells_drops_retained_statuses(panel):
+    (cell,) = _seed(panel)
+    panel.cellList.setCurrentRow(0)
+    entry = ActionLogEntry("Patch")
+    panel.onLogAction(cell, entry)
+    entry.set_status("something")
+
+    panel.clearCells()
+
+    assert panel._statuses == {}
+    assert panel.statusLabel.text() == ""
+
     assert panel.detailsFor(cell, 0) is None
