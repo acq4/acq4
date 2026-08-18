@@ -12,11 +12,18 @@ from __future__ import annotations
 
 import numpy as np
 
+from acq4.util import Qt
 from acq4.util.imaging.sequencer import run_image_sequence
 from acq4.util.model_config import segmenter_path
 from acq4.util.task import run_in_gui_thread
 
 from ..exceptions import OrchestrationError
+
+# Retained trace length per sweep. More than a plot's pixel width, and small
+# enough that a 20-sweep sequence costs the pane well under a megabyte per cell
+# rather than the 16 MB the undecimated sweeps would. The full data is in the
+# saved ProtocolSequence directory either way.
+_MAX_TRACE_POINTS = 4000
 
 
 def _move(ctx, name: str, position: str, speed: str) -> None:
@@ -230,6 +237,27 @@ def load_preset(ctx, preset: str | None = None) -> None:
             ) from e
 
 
+def _decimate(times, values, maxPoints: int = _MAX_TRACE_POINTS):
+    """(times, values, factor) reduced to at most `maxPoints` samples.
+
+    A factor of 1 means nothing was dropped. The factor is returned rather than
+    swallowed so the pane can say what it is not showing.
+    """
+    times = np.asarray(times)
+    values = np.asarray(values)
+    if len(values) <= maxPoints:
+        return times, values, 1
+    factor = int(np.ceil(len(values) / maxPoints))
+    return times[::factor], values[::factor], factor
+
+
+def _sequenceDirName(taskrunner) -> str:
+    """The short name of the directory the sequence saved into, or "" if it did
+    not save one (store=False, or a run that never got that far)."""
+    sequenceDir = getattr(taskrunner, "lastSequenceDir", None)
+    return "" if sequenceDir is None else sequenceDir.shortName()
+
+
 def run_task(ctx, store: bool = True, timeout: float = 0.0):
     """Run the sequence already loaded into an open TaskRunner module.
 
@@ -256,5 +284,50 @@ def run_task(ctx, store: bool = True, timeout: float = 0.0):
         info = taskrunner.sequenceInfo
         expected_duration = info["period"] * info["totalParams"]
         timeout = timeout or max(30, expected_duration * 20)
+        clampName = ctx.pipette.clampDevice.name()
+        traces = []
+        decimation = 1
+
+        def onNewFrame(frame):
+            """Collect one sweep's clamp trace. Reads the result the way
+            MultiClamp's own task GUI does: result['primary'] against
+            result.xvals('Time')."""
+            nonlocal decimation
+            result = frame.get("result", {}).get(clampName)
+            if result is None:
+                return
+            try:
+                times, values, factor = _decimate(
+                    result.xvals("Time"), result["primary"]
+                )
+            except Exception:
+                # A device whose result is not shaped like a clamp recording is
+                # not a reason to fail the sequence; the data is saved on disk
+                # regardless of whether the pane can plot it.
+                return
+            traces.append((times, values))
+            decimation = max(decimation, factor)
+
+        # Queued by default, so sweeps arriving on the task thread do not touch
+        # this action's collection from there.
+        taskrunner.sigNewFrame.connect(onNewFrame)
         action_entry.set_status("running task runner sequence")
-        run_in_gui_thread(taskrunner.runSequence, store=store).wait(timeout=timeout)
+        try:
+            run_in_gui_thread(taskrunner.runSequence, store=store).wait(timeout=timeout)
+        finally:
+            Qt.disconnect(taskrunner.sigNewFrame, onNewFrame)
+            if decimation > 1:
+                ctx.log(
+                    f"{action_entry.name}: plotting sweeps decimated {decimation}x; "
+                    f"full data saved on disk"
+                )
+            action_entry.set_details(
+                "task_results",
+                {
+                    "traces": traces,
+                    "sequence_dir": _sequenceDirName(taskrunner),
+                    "sweep_count": len(traces),
+                    "decimation": decimation,
+                    "units": "A",
+                },
+            )
