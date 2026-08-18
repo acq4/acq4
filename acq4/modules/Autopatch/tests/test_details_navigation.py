@@ -434,6 +434,8 @@ def test_a_successful_action_records_no_error_payload(panel):
     panel.onLogAction(cell, entry)
     entry._finish(None)
 
+    assert panel.detailsFor(cell, 0) is None
+
 
 def test_status_shows_for_the_selected_row(panel):
     (cell,) = _seed(panel)
@@ -516,5 +518,3 @@ def test_clear_cells_drops_retained_statuses(panel):
 
     assert panel._statuses == {}
     assert panel.statusLabel.text() == ""
-
-    assert panel.detailsFor(cell, 0) is None
