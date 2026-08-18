@@ -158,8 +158,9 @@ def _drive_fsm(
     With `record` true, this action retains a "test_pulse_history" details
     payload for Area 5 -- the test-pulse analysis observed during the drive, and
     the pipette states it walked -- and mounts the live Rss plot. `clean` passes
-    false for both: there is nothing an operator reads off a clean (design doc
-    §4.5).
+    `record=False`, which short-circuits both regardless of record_events (clean
+    has no record_events parameter): there is nothing an operator reads off a
+    clean (design doc §4.5).
 
     With `record` and `record_events` both true, this action also opens a
     MultiPatchLogRecorder that writes the drive's events to disk; `record_events`
@@ -169,11 +170,12 @@ def _drive_fsm(
     with ctx.log_action(name) as action_entry:
         pip = ctx.pipette
         action_entry.set_status(f"driving FSM from {entry_state!r}")
-        # record_events gates the disk recorder alone -- record gates the whole
-        # Area 5 payload (and the live plot that shares its life), which is why
-        # `clean` (record=False) opens neither regardless of record_events.
-        recorder = _openRecorder(ctx, record_full_test_pulses) if record and record_events else None
-        teardownPlot = _openLivePlot(ctx, action_entry) if record else None
+        # Both initialised before the try so that if one opener succeeds and
+        # the other raises, the finally below still sees whichever one opened
+        # and tears it down -- otherwise a raise from the second opener would
+        # leak whatever the first one already opened.
+        recorder = None
+        teardownPlot = None
         last_state = entry_state
         # (timestamp, state) for the entry state and every change the poll loop
         # observes. Reading a failed patch is mostly "where did it stall", and
@@ -181,6 +183,21 @@ def _drive_fsm(
         transitions = [(time.time(), entry_state)]
         reached = None
         try:
+            # record_events gates the disk recorder alone -- record gates the
+            # whole Area 5 payload (and the live plot that shares its life),
+            # which is why `clean` (record=False) opens neither regardless of
+            # record_events.
+            recorder = _openRecorder(ctx, record_full_test_pulses) if record and record_events else None
+            if record:
+                try:
+                    teardownPlot = _openLivePlot(ctx, action_entry)
+                except Exception as exc:
+                    # A live plot is a display convenience layered on top of the
+                    # drive, not the drive itself -- mirrors _openRecorder's own
+                    # never-raises contract so a widget-construction failure
+                    # cannot fail a patch attempt. The recorder opened above, if
+                    # any, is still torn down by the finally below.
+                    ctx.log(f"could not start live plot: {exc}")
             # Fresh dict per call so no caller shares a mutable default.
             pip.setState(entry_state, **dict(entry_config or {}))
             while True:

@@ -694,3 +694,28 @@ def test_a_recorder_that_will_not_open_does_not_fail_the_patch(fake_pip_factory,
     assert any("no current directory" in message for message in logged)
     assert len(seen) == 1  # still retains the transitions, with an empty history
     assert len(seen[0][1]["history"]) == 0
+
+
+def test_a_recorder_already_opened_is_stopped_even_if_the_live_plot_fails(
+    fake_pip_factory, monkeypatch, fake_recorder
+):
+    # If _openLivePlot raises after _openRecorder has already succeeded, the
+    # recorder must still be torn down -- an unclosed log file handle per
+    # failed plot mount is a leak, not a nuisance. A widget-construction
+    # failure is a display problem, not a reason to fail the patch attempt
+    # itself, so it is logged and the drive continues with no plot.
+    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
+
+    def boom(ctx, entry):
+        raise RuntimeError("no display available")
+
+    monkeypatch.setattr(fsm_mod, "_openLivePlot", boom)
+    pip = fake_pip_factory(["whole cell"])
+    ctx = _ctx(pip, manager=_FakeManagerWithDir())
+    logged = []
+    ctx.log = logged.append
+
+    assert patch(ctx) == "whole cell"
+
+    assert fake_recorder.instances[0].stopped is True
+    assert any("no display available" in message for message in logged)
