@@ -366,3 +366,99 @@ def test_set_record_full_test_pulses_toggles_at_runtime(qapp, directory, stubbed
         assert recorder.recordsFullTestPulses() is False
     finally:
         recorder.stop()
+
+
+def _make_real_test_pulse(start_time, amplitude=-10e-3):
+    """A genuine PatchClampTestPulse -- real PatchClampRecording and TSeries
+    objects wrapping a single square pulse on the command channel -- built
+    without NEURON so it stays cheap to construct in a unit test. Used to
+    exercise the real H5BackedTestPulseStack rather than the monkeypatched
+    stack every other sidecar test in this file uses.
+    """
+    import numpy as np
+    from neuroanalysis.data import PatchClampRecording, TSeries
+    from neuroanalysis.test_pulse import PatchClampTestPulse
+
+    dt = 1e-4
+    n = 100
+    command = np.zeros(n)
+    command[20:80] = amplitude
+    primary = np.zeros(n)
+    primary[20:80] = amplitude * (1 - np.exp(-np.arange(60) / 5.0))
+    rec = PatchClampRecording(
+        channels={"primary": TSeries(primary, dt=dt), "command": TSeries(command, dt=dt)},
+        dt=dt,
+        t0=0,
+        start_time=start_time,
+        clamp_mode="vc",
+        bridge_balance=0,
+        lpf_cutoff=None,
+        pipette_offset=0,
+        holding_current=None,
+        holding_potential=0.0,
+    )
+    return PatchClampTestPulse(rec)
+
+
+def test_stop_closes_the_shared_sidecar_file_with_two_real_devices(qapp, directory):
+    # Regression test for a Critical bug: H5BackedTestPulseStack.close()
+    # closes the *file* its groups belong to, and every device's stack in
+    # one recorder shares the same file (opened once in
+    # _makeTestPulseStack). Closing each stack in turn used to close the
+    # file out from under the next device's stack, raising ValueError on
+    # the second close and skipping the log file's own close() -- and since
+    # every other sidecar test here stubs out _makeTestPulseStack with a
+    # single device, none of them could have caught it. This one uses the
+    # real stack with two devices.
+    from acq4.util.multipatch_log_recorder import MultiPatchLogRecorder
+
+    recorder = MultiPatchLogRecorder(directory, record_full_test_pulses=True)
+    recorder.record(
+        {
+            "device": "Clamp1",
+            "event_time": 1.0,
+            "event": "test_pulse",
+            "full_test_pulse": _make_real_test_pulse(1000.0),
+        }
+    )
+    recorder.record(
+        {
+            "device": "Clamp2",
+            "event_time": 2.0,
+            "event": "test_pulse",
+            "full_test_pulse": _make_real_test_pulse(2000.0),
+        }
+    )
+
+    container = recorder._testPulseContainer
+    log_file = recorder._logFile
+    recorder.stop()  # must not raise
+
+    assert not bool(container)  # the shared h5py.File is actually closed
+    assert log_file.closed
+    assert recorder.isRecording() is False
+
+
+def test_second_stop_after_two_real_devices_is_still_a_no_op(qapp, directory):
+    from acq4.util.multipatch_log_recorder import MultiPatchLogRecorder
+
+    recorder = MultiPatchLogRecorder(directory, record_full_test_pulses=True)
+    recorder.record(
+        {
+            "device": "Clamp1",
+            "event_time": 1.0,
+            "event": "test_pulse",
+            "full_test_pulse": _make_real_test_pulse(1000.0),
+        }
+    )
+    recorder.record(
+        {
+            "device": "Clamp2",
+            "event_time": 2.0,
+            "event": "test_pulse",
+            "full_test_pulse": _make_real_test_pulse(2000.0),
+        }
+    )
+    recorder.stop()
+    recorder.stop()  # must not raise on an already-closed shared file
+    assert recorder.isRecording() is False

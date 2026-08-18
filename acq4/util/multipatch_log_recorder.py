@@ -174,11 +174,22 @@ class MultiPatchLogRecorder(Qt.QObject):
         if self._stopped:
             return
         self._stopped = True
-        for stack in self._testPulseStacks.values():
-            stack.close()
-        self._testPulseStacks = {}
-        if self._testPulseContainer is not None:
-            self._testPulseContainer.close()
-            self._testPulseContainer = None
-        if self._logFile is not None:
-            self._logFile.close()
+        try:
+            # All of self._testPulseStacks share one h5py.File --
+            # self._testPulseContainer, opened once in _makeTestPulseStack --
+            # so closing it here is sufficient for every stack. Do not also
+            # call stack.close() per stack: H5BackedTestPulseStack.close()
+            # closes the *file* its groups belong to, so the first call would
+            # close the file out from under every other device's stack and
+            # the next call would raise trying to close it again.
+            self._testPulseStacks = {}
+            if self._testPulseContainer is not None:
+                self._testPulseContainer.close()
+                self._testPulseContainer = None
+        finally:
+            # However the sidecar teardown above turns out, the event log
+            # must still be closed and flushed -- a raise here must never
+            # leave it open for the rest of the process, since _stopped is
+            # already set and every later stop() call is now a no-op.
+            if self._logFile is not None:
+                self._logFile.close()
