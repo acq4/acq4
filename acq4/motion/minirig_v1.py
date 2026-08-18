@@ -1,6 +1,8 @@
 # MinirigV1MotionPlanner: extends DefaultMotionPlanner with microscope parking for cleaning wells.
 from __future__ import annotations
 
+import threading
+
 import numpy as np
 
 from .default_planner import DefaultMotionPlanner
@@ -38,6 +40,29 @@ class MinirigV1MotionPlanner(DefaultMotionPlanner):
         # forward_path is in forward order; pip and site identify what must be unwound/extracted
         # when the site's stage (or a child of it) later moves.
         self._scope_context: dict[str, tuple] = {}
+        # Per-instance thread-local storage for the context snapshot taken at the start of
+        # plan().  Each execute() call runs on its own thread, so this is safe against
+        # concurrent calls on the same planner instance.
+        self._plan_context_tls = threading.local()
+
+    # ------------------------------------------------------------------
+    # Snapshot scope context before planning so it can be restored on lock failure
+    # ------------------------------------------------------------------
+
+    def plan(self, specs, name=""):
+        # Snapshot before any pops so _on_lock_failure can restore if we never get the lock.
+        self._plan_context_tls.snapshot = dict(self._scope_context)
+        return super().plan(specs, name=name)
+
+    def _on_lock_failure(self, plan) -> None:
+        # _scope_unwind_group pops _scope_context during plan(), before device locks are
+        # acquired.  If reserveDevices() times out the unwind never runs, but the context
+        # is already gone — so the scope stays parked with no record.  The next approach
+        # then captures the parked position as original_pos, and future unwinds return the
+        # scope to the park position instead of home.  Restoring here breaks that cycle.
+        snapshot = getattr(self._plan_context_tls, 'snapshot', {})
+        for pip_name, ctx_val in snapshot.items():
+            self._scope_context.setdefault(pip_name, ctx_val)
 
     # ------------------------------------------------------------------
     # Override: full approach sequence with scope park

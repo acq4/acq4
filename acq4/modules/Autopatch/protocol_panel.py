@@ -3,13 +3,13 @@ directory (via ProtocolDirectory) and loads the selected one as a ProtocolFile."
 from __future__ import annotations
 
 import os
-import subprocess
 
 from pyqtgraph.parametertree import ParameterTree
 
 from acq4.experiment.protocol_directory import ProtocolDirectory
 from acq4.experiment.protocol_file import ProtocolFile
 from acq4.util import Qt
+from acq4.util.codeEditor import invokeCodeEditor
 
 
 class _RescanningComboBox(Qt.QComboBox):
@@ -152,5 +152,4 @@ class ProtocolPanel(Qt.QWidget):
         if name is None:
             return
         protocol = self.directory.protocols[name]
-        editor = os.environ.get("EDITOR") or "xdg-open"
-        subprocess.Popen([editor, protocol.path])
+        invokeCodeEditor(protocol.path, 1)

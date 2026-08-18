@@ -55,10 +55,25 @@ class MotionPlanner:
         self._validate_plan(specs, plan)
         devices = self.collect_devices(plan)
         man = getManager()
-        with man.reserveDevices(list(devices), reserver=type(self).__name__):
-            ctx = throughline(name=name) if name else contextlib.nullcontext()
-            with ctx:
-                _execute_plan(plan)
+        execution_started = False
+        try:
+            with man.reserveDevices(list(devices), reserver=type(self).__name__):
+                execution_started = True
+                ctx = throughline(name=name) if name else contextlib.nullcontext()
+                with ctx:
+                    _execute_plan(plan)
+        except Exception:
+            if not execution_started:
+                self._on_lock_failure(plan)
+            raise
+
+    def _on_lock_failure(self, plan: MovePlanStep) -> None:
+        """Called when planning succeeded but device-lock acquisition failed.
+
+        Override in subclasses to roll back any state mutated during plan() that
+        should only take effect when execution actually runs.
+        """
+        pass
 
     @staticmethod
     def _is_interaction_site(device) -> bool:
