@@ -1,5 +1,7 @@
-"""Orchestrator: runs a cell queue serially, calling each cell's protocol
-function and converting its flow-signal exceptions into queue control."""
+"""Orchestrator: runs a cell queue serially, setting each cell up (pipette
+target, data directory) and closing it out (tracking history) around its
+protocol function, and converting the flow-signal exceptions that come back
+into queue control."""
 from __future__ import annotations
 
 from collections import deque
@@ -8,6 +10,7 @@ from acq4.logging_config import get_logger
 from acq4.util import Qt
 from acq4.util.task import Stopped, Event, check_stop, asynch_with_qt_signals
 
+from .actions.storage import new_data_dir
 from .context import ExecutionContext
 from .error_record import RunErrorRecord
 from .exceptions import (
@@ -476,6 +479,140 @@ class Orchestrator(Qt.QObject):
             return
         self.sigCellFinished.emit(cell, status)
 
+    @staticmethod
+    def _makeCellDataDir(ctx, cell):
+        """Create the managed "Cell" directory this cell's data is saved into,
+        and make it the current one.
+
+        Everything a run writes -- the cellfie stack, the patch log, a
+        TaskRunner sequence -- lands under the manager's current directory, so
+        without this every cell in a run would save into whichever directory the
+        operator last set: one Cell directory holding an unseparable pile of
+        every cell's data, with each cellfie overwriting the last. Done here for
+        the same reason the target is (see _giveCellToPipette): a protocol that
+        omitted the call would still run, and the loss would only be discovered
+        in the data.
+
+        Before the target rather than after, so an operator who has not chosen a
+        storage directory finds out before the pipette has been pointed anywhere.
+
+        Nothing to create it under is not a failure -- a headless run has no
+        manager -- but a manager that cannot make the directory halts the run:
+        the alternative is patching cell after cell into a directory that names
+        another cell.
+
+        Returns the directory (None when there was no manager to make one), which
+        _closeCellDataDir needs: by the time the pass ends the protocol may have
+        moved the current directory elsewhere.
+        """
+        manager = getattr(ctx, "manager", None) if ctx is not None else None
+        if manager is None:
+            return None
+        try:
+            # Through the protocol-facing action rather than create_data_dir, for
+            # its log_action entry: the operator has to be able to find a cell's
+            # data, and Area 5's timeline is where this run says where it went.
+            return new_data_dir(ctx, level="Cell")
+        except (Stopped, FlowSignal):
+            # Same pass-through as _giveCellToPipette below.
+            raise
+        except Exception as exc:
+            raise OrchestrationError(
+                f"could not create a data directory for cell {cell!r}: {exc}"
+            ) from exc
+
+    @staticmethod
+    def _giveCellToPipette(ctx, cell) -> None:
+        """Hand `cell` to the pipette bound on `ctx`, which sets its target.
+
+        The protocol's moves are all named positions -- "approach", "target",
+        "aboveTarget" -- and every one of them is derived from the pipette's
+        target. Nothing in a protocol establishes that target, so without this
+        every cell after the first would be approached at the previous cell's
+        coordinate: a pipette driven into tissue nowhere near the cell whose row
+        the operator is watching. Done here rather than left to the protocol
+        because a protocol that forgot the call would not fail, it would patch
+        the wrong place.
+
+        setCell() rather than pipetteDevice.setTarget(): the patch FSM reads the
+        cell off the pipette (to follow it while approaching, and to stop when
+        tracking is lost), so a target set without the cell behind it would have
+        the FSM tracking whatever the last run left there.
+
+        Nothing to hand the cell to is not a failure: the engine's own default
+        context carries no pipette, which is what a headless run or a test that
+        only exercises the queue looks like.
+
+        A pipette that cannot take the cell halts the run (the caller's
+        OrchestrationError handler reports it and aborts) rather than letting the
+        protocol move against a stale target -- the precise failure this exists
+        to prevent, and one the protocol has no way to notice.
+        """
+        pipette = getattr(ctx, "pipette", None) if ctx is not None else None
+        if pipette is None or cell is None:
+            return
+        try:
+            pipette.setCell(cell)
+        except (Stopped, FlowSignal):
+            # Same pass-through as every other call site in this file: a
+            # cooperative stop and a flow signal are decisions, not failures to
+            # be re-labelled as an inability to target the cell.
+            raise
+        except Exception as exc:
+            raise OrchestrationError(
+                f"could not set the pipette target for cell {cell!r}: {exc}"
+            ) from exc
+
+    @staticmethod
+    def _closeCellDataDir(ctx, cell, cellDir) -> None:
+        """Save `cell`'s tracking history into `cellDir` and step the manager's
+        current directory back out of it.
+
+        Runs however the pass ended -- done, skipped, retry-exhausted, error,
+        stopped, abandoned -- because a cell whose protocol failed is exactly the
+        one whose tracking history an operator wants: it is the record of what
+        the tracker saw before things went wrong. An abandoned cell keeps its
+        file too; what abandonCellInHand suppresses is a panel row, not the data
+        already on disk.
+
+        Written into `cellDir` rather than the manager's current directory: a
+        protocol is free to move that (a TaskRunner sequence does), and the
+        history belongs to the cell, not to wherever the run left off.
+
+        Stepping the current directory back out is what keeps the *next* thing
+        the run does from landing inside a finished cell -- the survey imaging a
+        tile between cells, most of all. Creating the next cell's directory would
+        not nest (create_data_dir walks up), but a tile stack saved in the
+        meantime would.
+
+        Nothing is raised out of here. This runs from _processCell's finally, so
+        an exception would replace whatever actually ended the pass -- the halt
+        the operator needs to see -- with a bookkeeping failure. saveTrackingHistory
+        already logs and swallows its own; this covers the rest.
+        """
+        if cellDir is None:
+            return
+        try:
+            # Imported here, not at module scope: feature_tracking reaches
+            # acq4_automation (an internal repository) at its own module scope, so
+            # a top-level import would stop every test under acq4/experiment from
+            # collecting where it is absent -- the same reason tile_detector and
+            # actions.device defer theirs. It is also a module, not the engine, so
+            # importing it here keeps that dependency at the one call site that
+            # has it.
+            from acq4.modules.AutomationDebug.feature_tracking import (
+                saveTrackingHistory,
+            )
+
+            saveTrackingHistory(cell, cellDir)
+            manager = getattr(ctx, "manager", None) if ctx is not None else None
+            if manager is not None:
+                manager.setCurrentDir(cellDir.parent())
+        except Exception:
+            logger.exception(
+                "Failed to close out the data directory for cell %r", cell
+            )
+
     def _processCell(self, cell):
         """Run the protocol function for one cell. RetryCurrentCell loops in
         place (bounded by maxRetries, restarting the same cell rather than
@@ -488,6 +625,11 @@ class Orchestrator(Qt.QObject):
         # one pair is what makes currentCell() honest for all of them. A retry
         # loops in place inside the try, so the cell stays in hand across it.
         self._currentCell = cell
+        # Pre-bound so the finally below can reach both however this pass ends,
+        # including the routes that leave before the first attempt has built a
+        # context (a "Next cell" request observed at the top of the loop).
+        ctx = None
+        cellDir = None
         try:
             retries = 0
             while True:
@@ -517,6 +659,22 @@ class Orchestrator(Qt.QObject):
                     ctx.next_cell_requested = lambda: self._nextCellRequested
                 self.sigCurrentCell.emit(cell)
                 try:
+                    if retries == 0:
+                        # Set up once per cell, not once per attempt: a retry
+                        # restarts the protocol in place for a cell that is
+                        # already set up.
+                        #
+                        # Its data belongs with the first attempt's rather than
+                        # in a second directory that reads as another cell; and
+                        # handing the cell to the pipette again would close the
+                        # one it is holding (dropping the tracking the first
+                        # attempt established) only to hand back the same cell.
+                        # The pipette also has the better of the two targets by
+                        # then -- tracking moves it as the cell drifts, so
+                        # re-setting it from the queued coordinate would throw
+                        # that away.
+                        cellDir = self._makeCellDataDir(ctx, cell)
+                        self._giveCellToPipette(ctx, cell)
                     self.protocolFile.run(ctx, **self.protocolFile.param_values())
                 except AdvanceToNextCell:
                     # Same boundary as the top-of-loop check above: this cell is
@@ -620,6 +778,7 @@ class Orchestrator(Qt.QObject):
                     self._reportFinished(cell, "done")
                     return
         finally:
+            self._closeCellDataDir(ctx, cell, cellDir)
             # The abandoned marking is dropped with the cell in hand it was read
             # from, so it never outlives it and never reaches a later pass. This
             # is the only clear either one needs: every route into this method is

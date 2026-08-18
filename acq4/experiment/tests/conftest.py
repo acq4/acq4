@@ -61,6 +61,15 @@ class FakePatchPipette:
         self._current = "out"
         self.setState_calls = []
         self.stop_calls = []
+        self.cell = None
+        self.setCell_calls = []
+
+    def setCell(self, cell, target=True):
+        # The orchestrator hands each cell to its pipette before running the
+        # protocol; recorded rather than acted on, since these tests' "cells"
+        # are sentinels with no position to target.
+        self.setCell_calls.append((cell, target))
+        self.cell = cell
 
     def setState(self, state, **config):
         self.setState_calls.append((state, config))
