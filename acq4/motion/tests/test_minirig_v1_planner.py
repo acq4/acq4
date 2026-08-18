@@ -398,3 +398,87 @@ def test_generic_move_without_context_is_a_plain_move(stage):
     plan = planner.plan([MoveSpec(stage, np.array([1e-3, 0.0, 0.0]))])
     moves = _flat_moves(plan)
     assert len(moves) == 1 and moves[0].device is stage
+
+
+# ---------------------------------------------------------------------------
+# Lock-failure recovery: _on_lock_failure restores scope context
+# ---------------------------------------------------------------------------
+# These tests exercise the fix for the bug where _scope_context.pop() happens
+# inside plan() (before reserveDevices()), so a failed lock acquisition leaves
+# the scope permanently parked with no context record.  The tests call plan()
+# and _on_lock_failure() directly, bypassing execute() / Qt / hardware.
+
+
+def test_on_lock_failure_restores_popped_context(pip):
+    """After a lock failure, _scope_context is restored to its pre-plan state."""
+    planner = make_planner()
+    scope, original_pos, up_pos, park_pos = _seed_scope_context(planner, pip)
+
+    plan = planner.plan([MoveSpec(pip, np.array([0.0, 0.0, 5e-3]))])
+    assert pip.name() not in planner._scope_context, "plan() should pop the context"
+
+    planner._on_lock_failure(plan)
+
+    assert pip.name() in planner._scope_context, "context must be restored after lock failure"
+    restored = planner._scope_context[pip.name()]
+    np.testing.assert_array_almost_equal(restored[1][0], original_pos)
+    np.testing.assert_array_almost_equal(restored[1][1], up_pos)
+    np.testing.assert_array_almost_equal(restored[1][2], park_pos)
+
+
+def test_on_lock_failure_does_not_overwrite_updated_context(pip):
+    """If another thread already wrote a new context for the pip, don't clobber it."""
+    planner = make_planner()
+    _seed_scope_context(planner, pip)
+
+    plan = planner.plan([MoveSpec(pip, np.array([0.0, 0.0, 5e-3]))])
+
+    # Simulate another call having already restored / re-seeded the context
+    new_ctx = (pip.scopeDevice(), [np.ones(3), np.ones(3), np.ones(3)], pip, None)
+    planner._scope_context[pip.name()] = new_ctx
+
+    planner._on_lock_failure(plan)
+
+    # The new context must not be overwritten (setdefault semantics)
+    assert planner._scope_context[pip.name()] is new_ctx
+
+
+def test_on_lock_failure_only_restores_consumed_entries(pip):
+    """Contexts for pipettes not involved in the plan are left untouched."""
+    pip2 = MockPipette("pip2", global_pos=(0.0, 0.0, 0.0))
+    planner = make_planner()
+    _seed_scope_context(planner, pip)
+
+    pip2_ctx = (pip.scopeDevice(), [np.zeros(3), np.zeros(3), np.zeros(3)], pip2, None)
+    planner._scope_context["pip2"] = pip2_ctx
+
+    plan = planner.plan([MoveSpec(pip, np.array([0.0, 0.0, 5e-3]))])
+    # pip's context was popped; pip2's was not
+    assert pip.name() not in planner._scope_context
+    assert planner._scope_context["pip2"] is pip2_ctx
+
+    planner._on_lock_failure(plan)
+
+    assert pip.name() in planner._scope_context
+    assert planner._scope_context["pip2"] is pip2_ctx  # untouched
+
+
+def test_on_lock_failure_without_prior_plan_is_safe(pip):
+    """Calling _on_lock_failure before any plan() call must not raise."""
+    planner = make_planner()
+    planner._on_lock_failure(None)  # no snapshot yet — should be a no-op
+
+
+def test_repeated_lock_failure_does_not_accumulate_context(pip):
+    """Two consecutive plan()+_on_lock_failure() cycles restore once, not twice."""
+    planner = make_planner()
+    scope, original_pos, up_pos, park_pos = _seed_scope_context(planner, pip)
+
+    for _ in range(2):
+        plan = planner.plan([MoveSpec(pip, np.array([0.0, 0.0, 5e-3]))])
+        planner._on_lock_failure(plan)
+
+    # Context should be present exactly once with the original values
+    assert pip.name() in planner._scope_context
+    restored = planner._scope_context[pip.name()]
+    np.testing.assert_array_almost_equal(restored[1][0], original_pos)
