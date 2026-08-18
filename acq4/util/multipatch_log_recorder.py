@@ -87,8 +87,12 @@ class MultiPatchLogRecorder(Qt.QObject):
         self._pipettes = list(pipettes)
         self._microscope = microscope
         self._stopped = False
+        # Public because a caller driving one recorder from several independent
+        # switches needs to know whether the live recorder already writes an
+        # event log, to choose between adjusting it and replacing it.
+        self.write_events = bool(write_events)
         self._logFile = None
-        if write_events:
+        if self.write_events:
             handle = directory.createFile(LOG_FILE_NAME, autoIncrement=True)
             self._logFile = open(handle.name(), "ab")
         self._recordFullTestPulses = record_full_test_pulses

@@ -5,14 +5,12 @@ import re
 from collections import OrderedDict
 from typing import List
 
-import h5py
-
 import pyqtgraph as pg
 from acq4 import getManager
 from acq4.devices.PatchPipette import PatchPipette
 from acq4.modules.Module import Module
 from acq4.util import Qt, ptime
-from neuroanalysis.test_pulse_stack import H5BackedTestPulseStack
+from acq4.util.multipatch_log_recorder import MultiPatchLogRecorder
 from .mockPatch import MockPatch
 from .pipetteControl import PipetteControl
 from ...devices.PatchPipette.statemanager import PatchPipetteStateManager
@@ -47,8 +45,11 @@ class MultiPatch(Module):
 
 class MultiPatchWindow(Qt.QWidget):
     def __init__(self, module):
-        self._eventStorageFile = None
-        self._testPulseStacks = {}
+        # The single recorder this window's two record buttons drive, or None
+        # while both are off. One instance covering every pipette, the
+        # microscope, and this window's own profile records -- the same
+        # single-file behavior the two buttons have always produced.
+        self._recorder = None
         self.eventHistory = []
         self._pipsToSetTips = []
         self._setTargetPips = []
@@ -587,7 +588,7 @@ class MultiPatchWindow(Qt.QWidget):
         self.updateXKeysBacklight()
 
     def pipetteEvent(self, pip, ev):
-        self.recordEvent(ev)
+        self._rememberEvent(ev)
 
     def surfaceDepthChanged(self, depth):
         event = OrderedDict([
@@ -596,50 +597,85 @@ class MultiPatchWindow(Qt.QWidget):
             ("event", "surface_depth_changed"),
             ("surface_depth", depth),
         ])
-        self.recordEvent(event)
+        self._rememberEvent(event)
 
     def recordToggled(self, rec):
-        if self._eventStorageFile is not None:
-            self._eventStorageFile.close()
-            self._eventStorageFile = None
+        if not rec:
             self.resetHistory()
-        if rec is True:
-            man = getManager()
-            sdir = man.getCurrentDir()
-            self._eventStorageFile = open(sdir.createFile('MultiPatch.log', autoIncrement=True).name(), 'ab')
-            self.writeRecords(self.eventHistory)
+        self._syncRecorder(
+            writeEvents=rec,
+            recordTestPulses=self.ui.recordTestPulsesBtn.isChecked(),
+            replayHistory=rec,
+        )
+        if rec:
             profile_data = PatchPipetteStateManager.buildPatchProfilesParameters().getValues()
             self.patchProfilesChanged(profile_data)
 
     def recordTestPulsesToggled(self, rec):
-        files = set()
-        for stack in self._testPulseStacks.values():
-            files.update(stack.files)
-        self._testPulseStacks = {}
-        for f in files:
-            f.close()
-        if rec is True:
-            man = getManager()
-            sdir = man.getCurrentDir()
-            name = sdir.createFile('TestPulses.hdf5', autoIncrement=True).name()
-            container = h5py.File(name, 'a')
-            group = container.create_group('test_pulses')
-            for dev in self.pips:
-                dev_gr = group.create_group(dev.name())
-                dev_gr.attrs['device'] = dev.name()
-                self._testPulseStacks[dev.name()] = H5BackedTestPulseStack(dev_gr)
-        for pip in self.selectedPipettes():
-            if rec:
-                pip.requestFullTestPulseData(self)
-            else:
-                pip.releaseFullTestPulseData(self)
+        self._syncRecorder(
+            writeEvents=self.ui.recordBtn.isChecked(),
+            recordTestPulses=rec,
+            replayHistory=False,
+        )
+
+    def _syncRecorder(self, writeEvents: bool, recordTestPulses: bool, replayHistory: bool):
+        """Bring self._recorder in line with the two record buttons.
+
+        The buttons are independent -- test-pulse capture works with the event
+        log off -- so a recorder exists while *either* is on, with each button
+        mapped to one of its options. Switching a button that does not need a
+        different recorder adjusts the live one in place, so toggling test
+        pulses mid-session does not start a second log file.
+        """
+        if not writeEvents and not recordTestPulses:
+            if self._recorder is not None:
+                self._recorder.stop()
+                self._recorder = None
+            return
+        if self._recorder is not None and self._recorder.write_events == writeEvents:
+            self._recorder.setRecordFullTestPulses(recordTestPulses)
+            return
+        if self._recorder is not None:
+            self._recorder.stop()
+        self._recorder = MultiPatchLogRecorder(
+            getManager().getCurrentDir(),
+            pipettes=[p for p in self.pips if isinstance(p, PatchPipette)],
+            microscope=self.microscope,
+            record_full_test_pulses=recordTestPulses,
+            write_events=writeEvents,
+            initial_records=list(self.eventHistory) if replayHistory else (),
+        )
 
     def recordEvent(self, event):
+        """Record one event this window originates: a patch-profile change.
+
+        Pipette events and microscope surface-depth changes are NOT routed
+        through here. The recorder subscribes to each pipette's sigNewEvent and
+        to the microscope's sigSurfaceDepthChanged directly, so passing those
+        along as well would write every one of them twice; they go through
+        _rememberEvent instead.
+        """
         if not self.eventHistory:
             self.resetHistory()
-        self.writeRecords([event])
+        if self._recorder is not None:
+            self._recorder.record(event)
         event = {k: v for k, v in event.items() if k != 'full_test_pulse'}
         self.eventHistory.append(event)
+
+    def _rememberEvent(self, event):
+        """Keep an event in this window's in-memory history without recording it.
+
+        For the events the recorder subscribes to itself, this is the whole of
+        the window's job. The history is still needed: it is what replays into a
+        freshly opened log, so that a log started mid-session begins with what
+        came before it.
+
+        The full test pulse is dropped: it belongs in the recorder's HDF5
+        sidecar, and a replay of this history is JSON.
+        """
+        if not self.eventHistory:
+            self.resetHistory()
+        self.eventHistory.append({k: v for k, v in event.items() if k != 'full_test_pulse'})
 
     def resetHistory(self):
         self.eventHistory = []
@@ -648,21 +684,3 @@ class MultiPatchWindow(Qt.QWidget):
                 pip.clampDevice.resetTestPulseHistory()
         for ctrl in self.pipCtrls:
             ctrl.clearEventLog()
-
-    def writeRecords(self, recs):
-        for rec in recs:
-            if 'full_test_pulse' in rec:
-                if self._testPulseStacks.get(rec['device'], None) is not None:
-                    filename, path = self._testPulseStacks[rec['device']].append(rec['full_test_pulse'])
-                    if self._eventStorageFile:
-                        filename = os.path.relpath(filename, os.path.dirname(self._eventStorageFile.name))
-                    rec = {k: v for k, v in rec.items() if k != 'full_test_pulse'}
-                    rec['full_test_pulse'] = f"{filename}:{path}"
-                else:
-                    rec = {k: v for k, v in rec.items() if k != 'full_test_pulse'}
-            if self._eventStorageFile:
-                self._eventStorageFile.write(json.dumps(rec, cls=ACQ4JSONEncoder).encode("utf8") + b",\n")
-        if self._eventStorageFile:
-            self._eventStorageFile.flush()
-        for stack in self._testPulseStacks.values():
-            stack.flush()
