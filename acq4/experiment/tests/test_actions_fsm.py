@@ -518,3 +518,179 @@ def test_record_kwargs_do_not_reach_set_state(fake_pip_factory, monkeypatch):
 
     _state, config = pip.setState_calls[0]
     assert config == {"autoBreakInDelay": 2.0}
+
+
+def test_advance_to_next_cell_still_retains_its_payload(fake_pip_factory, monkeypatch):
+    # AdvanceToNextCell shares _drive_fsm's finally with Stopped -- covered
+    # separately here since a shared code path can still silently regress on
+    # only one of its callers.
+    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
+    pip = fake_pip_factory([])
+    ctx = _ctx(pip, next_cell_requested=lambda: True)
+    seen = _details(ctx)
+
+    with pytest.raises(AdvanceToNextCell):
+        patch(ctx)
+
+    assert len(seen) == 1
+    assert seen[0][1]["reached"] is None
+
+
+# -- the recorder and the live plot -----------------------------------------
+
+
+class _FakeRecorder:
+    instances = []
+
+    def __init__(self, directory, pipettes=(), record_full_test_pulses=True):
+        import numpy as np
+        from acq4.filetypes.MultiPatchLog import TEST_PULSE_NUMPY_DTYPE
+
+        self.directory = directory
+        self.pipettes = list(pipettes)
+        self.record_full_test_pulses = record_full_test_pulses
+        self.stopped = False
+        self._history = np.zeros(3, dtype=TEST_PULSE_NUMPY_DTYPE)
+        self._history["steady_state_resistance"] = [1e6, 1e8, 1e9]
+        _FakeRecorder.instances.append(self)
+
+    def testPulseAnalysis(self):
+        return self._history
+
+    def logFileName(self):
+        return "/data/cell_000/MultiPatch_004.log"
+
+    def stop(self):
+        self.stopped = True
+
+
+class _FakeDir:
+    pass
+
+
+class _FakeManagerWithDir:
+    def __init__(self):
+        self.dir = _FakeDir()
+
+    def getCurrentDir(self):
+        return self.dir
+
+
+@pytest.fixture
+def fake_recorder(monkeypatch):
+    _FakeRecorder.instances = []
+    monkeypatch.setattr(fsm_mod, "MultiPatchLogRecorder", _FakeRecorder)
+    # The live plot needs a real Qt widget and a real clamp device; those are
+    # live-tested, so this suite stubs the plot out entirely.
+    monkeypatch.setattr(fsm_mod, "_openLivePlot", lambda ctx, entry: None)
+    return _FakeRecorder
+
+
+def test_patch_opens_a_recorder_in_the_current_directory(fake_pip_factory, monkeypatch, fake_recorder):
+    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
+    pip = fake_pip_factory(["whole cell"])
+    manager = _FakeManagerWithDir()
+
+    patch(_ctx(pip, manager=manager))
+
+    assert len(fake_recorder.instances) == 1
+    recorder = fake_recorder.instances[0]
+    assert recorder.directory is manager.dir
+    assert recorder.pipettes == [pip]
+    assert recorder.record_full_test_pulses is True
+
+
+def test_the_recorder_is_stopped_when_the_drive_ends(fake_pip_factory, monkeypatch, fake_recorder):
+    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
+    pip = fake_pip_factory(["whole cell"])
+
+    patch(_ctx(pip, manager=_FakeManagerWithDir()))
+
+    assert fake_recorder.instances[0].stopped is True
+
+
+def test_the_recorder_is_stopped_even_when_the_drive_raises(fake_pip_factory, monkeypatch, fake_recorder):
+    # An unclosed file handle per failed patch attempt is a leak, not a nuisance.
+    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
+    pip = fake_pip_factory(["broken"])
+
+    with pytest.raises(BrokenPipette):
+        reseal(_ctx(pip, manager=_FakeManagerWithDir()))
+
+    assert fake_recorder.instances[0].stopped is True
+
+
+def test_the_payload_carries_the_recorders_history(fake_pip_factory, monkeypatch, fake_recorder):
+    import numpy as np
+
+    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
+    pip = fake_pip_factory(["whole cell"])
+    ctx = _ctx(pip, manager=_FakeManagerWithDir())
+    seen = _details(ctx)
+
+    patch(ctx)
+
+    history = seen[0][1]["history"]
+    assert len(history) == 3
+    assert np.array_equal(history["steady_state_resistance"], [1e6, 1e8, 1e9])
+
+
+def test_the_payload_names_the_log_file_without_its_path(fake_pip_factory, monkeypatch, fake_recorder):
+    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
+    pip = fake_pip_factory(["whole cell"])
+    ctx = _ctx(pip, manager=_FakeManagerWithDir())
+    seen = _details(ctx)
+
+    patch(ctx)
+
+    assert seen[0][1]["log_file"] == "MultiPatch_004.log"
+
+
+def test_record_full_test_pulses_is_forwarded(fake_pip_factory, monkeypatch, fake_recorder):
+    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
+    pip = fake_pip_factory(["whole cell"])
+
+    patch(_ctx(pip, manager=_FakeManagerWithDir()), record_full_test_pulses=False)
+
+    assert fake_recorder.instances[0].record_full_test_pulses is False
+
+
+def test_record_events_false_opens_no_recorder(fake_pip_factory, monkeypatch, fake_recorder):
+    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
+    pip = fake_pip_factory(["whole cell"])
+
+    patch(_ctx(pip, manager=_FakeManagerWithDir()), record_events=False)
+
+    assert fake_recorder.instances == []
+
+
+def test_clean_opens_no_recorder(fake_pip_factory, monkeypatch, fake_recorder):
+    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
+    pip = fake_pip_factory(["out"])
+
+    clean(_ctx(pip, manager=_FakeManagerWithDir()))
+
+    assert fake_recorder.instances == []
+
+
+def test_a_recorder_that_will_not_open_does_not_fail_the_patch(fake_pip_factory, monkeypatch):
+    # An unset storage directory must not stop the pipette from patching; the
+    # attempt is the experiment, and the log is a record of it.
+    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
+    monkeypatch.setattr(fsm_mod, "_openLivePlot", lambda ctx, entry: None)
+
+    def boom(*a, **k):
+        raise OSError("no current directory")
+
+    monkeypatch.setattr(fsm_mod, "MultiPatchLogRecorder", boom)
+    pip = fake_pip_factory(["whole cell"])
+    ctx = _ctx(pip, manager=_FakeManagerWithDir())
+    logged = []
+    ctx.log = logged.append
+    seen = _details(ctx)
+
+    assert patch(ctx) == "whole cell"
+
+    assert any("no current directory" in message for message in logged)
+    assert len(seen) == 1  # still retains the transitions, with an empty history
+    assert len(seen[0][1]["history"]) == 0

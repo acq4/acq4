@@ -9,7 +9,9 @@ import time
 
 import numpy as np
 
-from acq4.util.task import Stopped, check_stop, sleep
+from acq4.util import Qt
+from acq4.util.multipatch_log_recorder import MultiPatchLogRecorder
+from acq4.util.task import Stopped, check_stop, run_in_gui_thread, sleep
 
 from ..exceptions import AdvanceToNextCell, raise_if_abnormal
 
@@ -33,12 +35,24 @@ def _setFsmDetails(action_entry, entry_state, reached, transitions, recorder=Non
     An empty history rather than None when there is no recorder, so the renderer
     has one payload shape to handle rather than two.
     """
+    # Deferred rather than joining the top-of-file imports: importing anything
+    # from acq4.filetypes runs that package's __init__, which eagerly imports
+    # and registers every sibling FileType module (acq4/filetypes/filetypes.py's
+    # module-level listFileTypes() call). Keeping it here means that cost is
+    # paid only when a payload is actually being built, not by every import of
+    # this module.
     from acq4.filetypes.MultiPatchLog import TEST_PULSE_NUMPY_DTYPE
 
     if recorder is None:
         history = np.empty(0, dtype=TEST_PULSE_NUMPY_DTYPE)
         log_file = None
     else:
+        # The recorder's own accumulated rows, not clampDevice.testPulseHistory():
+        # the device's history is reset mid-patch (approach.py:251), so slicing
+        # it by this drive's time window would silently lose whatever preceded
+        # the reset. The live plot in _openLivePlot reads the device instead,
+        # deliberately, because a live view of "now" should show its own
+        # current history.
         history = recorder.testPulseAnalysis()
         log_file = recorder.logFileName()
         if log_file is not None:
@@ -55,6 +69,78 @@ def _setFsmDetails(action_entry, entry_state, reached, transitions, recorder=Non
     )
 
 
+def _openRecorder(ctx, record_full_test_pulses: bool):
+    """A recorder writing this drive's events into the current storage
+    directory, or None if one could not be opened.
+
+    Never raises: the patch attempt is the experiment and the log is a record of
+    it, so an unset storage directory or a full disk must not stop a pipette
+    from patching. The reason goes to the cell's log instead.
+    """
+    try:
+        return MultiPatchLogRecorder(
+            ctx.manager.getCurrentDir(),
+            pipettes=(ctx.pipette,),
+            record_full_test_pulses=record_full_test_pulses,
+        )
+    except Exception as exc:
+        ctx.log(f"could not start event recording: {exc}")
+        return None
+
+
+def _openLivePlot(ctx, action_entry) -> object | None:
+    """Mount a live steady-state resistance plot for this drive, returning a
+    zero-argument teardown to call when it ends, or None if there is no clamp to
+    plot from.
+
+    Rss over time is the measurement an operator watches to judge whether a seal
+    is forming, so it is what Area 5 shows while the FSM drives (design doc
+    §4.5). Reuses MultiPatch's PlotWidget rather than reimplementing it.
+
+    Built through run_in_gui_thread because this runs on the orchestrator's
+    worker thread and a widget must not be constructed off the GUI thread.
+    """
+    clamp = getattr(ctx.pipette, "clampDevice", None)
+    if clamp is None:
+        return None
+
+    def build():
+        # Imported here: pipetteControl pulls in the MultiPatch module's device
+        # imports, and acq4.experiment must stay importable without them.
+        from acq4.modules.MultiPatch.pipetteControl import PlotWidget
+
+        widget = PlotWidget(mode="ss resistance")
+        # Autopatch picks the mode; the operator does not need the combo while
+        # an action is driving (design doc §4.5). The frozen plot shows it.
+        widget.hideHeader()
+        return widget
+
+    widget = run_in_gui_thread(build)
+
+    def onTestPulse(_device, testPulse):
+        # Deliberately clamp.testPulseHistory(), not the recorder's: a live view
+        # of "now" should show the device's own current history. The frozen
+        # payload below reads the recorder instead, because the device's history
+        # is reset mid-patch (approach.py:251) and would silently lose whatever
+        # preceded the reset -- see _setFsmDetails.
+        widget.newTestPulse(testPulse, clamp.testPulseHistory())
+
+    # Default (queued) connection deliberately: PatchPipetteState connects to
+    # this same signal with an explicit DirectConnection, which is correct for a
+    # state machine and wrong for a widget -- it would mutate the plot from the
+    # clamp's thread.
+    clamp.sigTestPulseFinished.connect(onTestPulse)
+    action_entry.set_details_widget(widget)
+
+    def teardown():
+        # A live connection from a device signal into a widget the panel has
+        # moved on from is the cross-module reference neither Autopatch's widget
+        # -tree teardown nor unbindOrchestrator reaches (design doc §4.5).
+        Qt.disconnect(clamp.sigTestPulseFinished, onTestPulse)
+
+    return teardown
+
+
 def _drive_fsm(
     ctx,
     name,
@@ -63,19 +149,31 @@ def _drive_fsm(
     entry_config=None,
     poll_interval=0.1,
     record=True,
+    record_events=True,
     record_full_test_pulses=True,
 ) -> str:
     """Drive the PatchPipette FSM from entry_state and return the terminal state
     it reaches. Abnormal states not in `terminals` raise (see raise_if_abnormal).
 
-    With `record` true, this action also retains a "test_pulse_history" details
+    With `record` true, this action retains a "test_pulse_history" details
     payload for Area 5 -- the test-pulse analysis observed during the drive, and
-    the pipette states it walked. `clean` passes false: there is nothing an
-    operator reads off a clean (design doc §4.5).
+    the pipette states it walked -- and mounts the live Rss plot. `clean` passes
+    false for both: there is nothing an operator reads off a clean (design doc
+    §4.5).
+
+    With `record` and `record_events` both true, this action also opens a
+    MultiPatchLogRecorder that writes the drive's events to disk; `record_events`
+    is the disk-side switch alone, so turning it off still leaves the Area 5
+    payload (and its plot) intact, just with an empty history.
     """
     with ctx.log_action(name) as action_entry:
         pip = ctx.pipette
         action_entry.set_status(f"driving FSM from {entry_state!r}")
+        # record_events gates the disk recorder alone -- record gates the whole
+        # Area 5 payload (and the live plot that shares its life), which is why
+        # `clean` (record=False) opens neither regardless of record_events.
+        recorder = _openRecorder(ctx, record_full_test_pulses) if record and record_events else None
+        teardownPlot = _openLivePlot(ctx, action_entry) if record else None
         last_state = entry_state
         # (timestamp, state) for the entry state and every change the poll loop
         # observes. Reading a failed patch is mostly "where did it stall", and
@@ -115,8 +213,17 @@ def _drive_fsm(
             # ActionLogEntry.set_details). And in a finally, so a stopped,
             # abandoned, or failed attempt retains its plot too, which is
             # exactly when an operator wants to read one.
+            if teardownPlot is not None:
+                teardownPlot()
+            if recorder is not None:
+                recorder.stop()
             if record:
-                _setFsmDetails(action_entry, entry_state, reached, transitions)
+                # recorder.stop() above must run first: the payload below names
+                # the log file, and the file has to be flushed and closed before
+                # anything is told where to find it.
+                _setFsmDetails(
+                    action_entry, entry_state, reached, transitions, recorder
+                )
 
 
 def patch(ctx, record_events: bool = True, record_full_test_pulses: bool = True, **entry_config) -> str:
@@ -125,9 +232,13 @@ def patch(ctx, record_events: bool = True, record_full_test_pulses: bool = True,
 
     `record_events` and `record_full_test_pulses` are this action's own options,
     consumed here and never forwarded to pip.setState; a protocol may expose
-    them to its author. See _drive_fsm for what they control. Neither disables
-    the Area 5 payload -- turning off the disk-side recording they will govern
-    is not a reason to lose the pane's plot; only `clean` opts out of that.
+    them to its author. `record_events=False` opens no MultiPatchLogRecorder for
+    this drive, so nothing is written to disk; `record_full_test_pulses=False`
+    forwards to the recorder that does open, so it captures test-pulse analysis
+    without the full waveform sidecar. Neither disables the Area 5 payload or its
+    live plot -- turning off the disk-side recording they will draw from is not
+    a reason to lose the pane; with no recorder the payload's history is simply
+    empty. Only `clean` opts out of the payload and plot entirely.
     """
     return _drive_fsm(
         ctx,
@@ -142,19 +253,32 @@ def patch(ctx, record_events: bool = True, record_full_test_pulses: bool = True,
         # profiles.
         {"whole cell", "bath", "broken", "fouled"},
         entry_config,
+        record_events=record_events,
         record_full_test_pulses=record_full_test_pulses,
     )
 
 
 def reseal(ctx, record_events: bool = True, record_full_test_pulses: bool = True, **entry_config) -> str:
     """Reseal from whole-cell toward an outside-out patch, else fall back to
-    whole cell."""
+    whole cell.
+
+    `record_events` and `record_full_test_pulses` are this action's own options,
+    consumed here and never forwarded to pip.setState; a protocol may expose
+    them to its author. `record_events=False` opens no MultiPatchLogRecorder for
+    this drive, so nothing is written to disk; `record_full_test_pulses=False`
+    forwards to the recorder that does open, so it captures test-pulse analysis
+    without the full waveform sidecar. Neither disables the Area 5 payload or its
+    live plot -- turning off the disk-side recording they will draw from is not
+    a reason to lose the pane; with no recorder the payload's history is simply
+    empty.
+    """
     return _drive_fsm(
         ctx,
         "Reseal",
         "reseal",
         {"outside out", "whole cell"},
         entry_config,
+        record_events=record_events,
         record_full_test_pulses=record_full_test_pulses,
     )
 
