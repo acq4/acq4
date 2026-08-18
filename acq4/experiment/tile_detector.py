@@ -72,15 +72,16 @@ def make_tile_detector(
 
 
 def _build_cells(camera, stack, results, segmenter=None) -> list:
-    """Cells for each (position, score) detection, tracking seeded from `stack`.
+    """Cells for each (position, score, volume) detection, tracking seeded from `stack`.
 
     *segmenter* is the cellpose checkpoint tracking should segment with, so a
     tracked cell is found by the same model that detected it.
     """
     cells = []
-    for position, score in results:
+    for position, score, volume in results:
         cell = _newCell(position)
         cell.score = score
+        cell.volume = volume
         try:
             # Seeded from the stack the cell was found in, so tracking is ready
             # without re-acquiring a stack per cell.

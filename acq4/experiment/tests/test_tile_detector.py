@@ -114,7 +114,7 @@ def rig(monkeypatch):
         detectCalls.append(
             (stack, xy_scale, z_scale, models, min_volume_m3, max_candidates)
         )
-        return [((1e-6, 2e-6, -530e-6), 0.8)]
+        return [((1e-6, 2e-6, -530e-6), 0.8, 1.5e-16)]
 
     monkeypatch.setattr(tile_detector, "_acquire", fakeAcquire)
     monkeypatch.setattr(tile_detector, "_detect", fakeDetect)
@@ -350,7 +350,7 @@ def test_the_tracker_segments_with_the_configured_model(monkeypatch):
     monkeypatch.setattr(
         tile_detector,
         "_detect",
-        lambda *a, **k: [((1e-6, 2e-6, -530e-6), 0.8)],
+        lambda *a, **k: [((1e-6, 2e-6, -530e-6), 0.8, 1.5e-16)],
     )
     monkeypatch.setattr(tile_detector, "_newCell", FakeCell)
     detect = tile_detector.make_tile_detector(
