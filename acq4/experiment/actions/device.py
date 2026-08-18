@@ -132,14 +132,14 @@ def _trackerStack(cell):
         return None
     try:
         stack = tracker.motion_estimator.original_object_stack.data
+        if stack is None:
+            return None
+        stack = np.asarray(stack)
+        if stack.ndim >= 2:
+            stack = np.swapaxes(stack, -2, -1)
+        return stack
     except Exception:
         return None
-    if stack is None:
-        return None
-    stack = np.asarray(stack)
-    if stack.ndim >= 2:
-        stack = np.swapaxes(stack, -2, -1)
-    return stack
 
 
 def cellfie(ctx, height: float = 30e-6, step: float = 1e-6) -> None:

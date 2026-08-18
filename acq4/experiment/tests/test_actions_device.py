@@ -650,21 +650,15 @@ def test_cellfie_sets_no_payload_when_the_cell_is_lost(monkeypatch, tmp_path):
     pytest.importorskip("acq4_automation", reason=_CELLFIE_SKIP_REASON)
     from acq4_automation.feature_tracking import CellTrackingLost
 
-    monkeypatch.setattr(device_mod, "run_image_sequence", lambda *a, **k: _Waitable())
-    cell = FakeCell()
-    cell.tracker_error = CellTrackingLost("gone")
+    def hook(c, reason):
+        raise AdvanceToNextCell(reason)
+
+    ctx = _cellfie_context(monkeypatch, tmp_path, tissue_moved_hook=hook)
+    ctx.cell.tracker_error = CellTrackingLost("gone")
     details = []
-
-    def hook(action_entry):
-        action_entry.on_details = lambda e, kind, payload: details.append(kind)
-
-    ctx = ExecutionContext(
-        cell=cell,
-        pipette=FakePipette(),
-        manager=FakeManager(),
-        tissue_moved_hook=lambda c, reason: (_ for _ in ()).throw(AdvanceToNextCell(reason)),
+    ctx.on_log_action = lambda e: setattr(
+        e, "on_details", lambda entry, kind, payload: details.append((kind, payload))
     )
-    ctx.on_log_action = hook
 
     with pytest.raises(AdvanceToNextCell):
         cellfie(ctx)
