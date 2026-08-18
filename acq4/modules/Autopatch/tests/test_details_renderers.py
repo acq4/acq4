@@ -220,3 +220,131 @@ def test_task_results_builder_tolerates_no_traces(qapp):
     )
 
     assert wrapper is not None
+
+
+def _tpHistory(count=5):
+    import numpy as np
+    from acq4.filetypes.MultiPatchLog import TEST_PULSE_NUMPY_DTYPE
+
+    history = np.zeros(count, dtype=TEST_PULSE_NUMPY_DTYPE)
+    history["event_time"] = np.arange(count, dtype=float)
+    history["steady_state_resistance"] = np.linspace(1e6, 1e9, count)
+    return history
+
+
+def _tpPayload(**overrides):
+    payload = {
+        "history": _tpHistory(),
+        "transitions": [(0.0, "approach"), (1.5, "seal"), (3.0, "whole cell")],
+        "entry_state": "approach",
+        "reached": "whole cell",
+        "log_file": "MultiPatch_004.log",
+    }
+    payload.update(overrides)
+    return payload
+
+
+def test_test_pulse_history_plots_the_retained_history(qapp):
+    from acq4.modules.MultiPatch.pipetteControl import PlotWidget
+    from acq4.modules.Autopatch.details_renderers import buildDetailsWidget
+
+    widget = buildDetailsWidget("test_pulse_history", _tpPayload())
+
+    plot = widget.findChild(PlotWidget)
+    assert plot is not None
+    assert len(plot.plot.plotItem.listDataItems()) == 1
+
+
+def test_test_pulse_history_keeps_the_mode_combo_visible(qapp):
+    # Re-reading a finished attempt through a different field is what the
+    # dropdown is for; only the live plot hides it.
+    from acq4.modules.MultiPatch.pipetteControl import PlotWidget
+    from acq4.modules.Autopatch.details_renderers import buildDetailsWidget
+
+    widget = buildDetailsWidget("test_pulse_history", _tpPayload())
+
+    plot = widget.findChild(PlotWidget)
+    assert not plot.modeCombo.isHidden()
+
+
+def test_test_pulse_history_offers_no_live_only_modes(qapp):
+    from acq4.modules.MultiPatch.pipetteControl import PlotWidget
+    from acq4.modules.Autopatch.details_renderers import buildDetailsWidget
+
+    widget = buildDetailsWidget("test_pulse_history", _tpPayload())
+
+    plot = widget.findChild(PlotWidget)
+    items = [plot.modeCombo.itemText(i) for i in range(plot.modeCombo.count())]
+    assert "test pulse" not in items
+    assert "tp analysis" not in items
+
+
+def test_test_pulse_history_lists_the_state_transitions(qapp):
+    from acq4.modules.Autopatch.details_renderers import buildDetailsWidget
+
+    widget = buildDetailsWidget("test_pulse_history", _tpPayload())
+
+    transitions = widget.findChild(Qt.QListWidget)
+    assert transitions is not None
+    rows = [transitions.item(i).text() for i in range(transitions.count())]
+    assert len(rows) == 3
+    assert "approach" in rows[0]
+    assert "seal" in rows[1]
+    assert "whole cell" in rows[2]
+
+
+def test_transition_rows_show_the_elapsed_time_from_the_first(qapp):
+    # Absolute epoch timestamps are unreadable; what matters is how long the
+    # FSM sat in each state.
+    from acq4.modules.Autopatch.details_renderers import buildDetailsWidget
+
+    widget = buildDetailsWidget(
+        "test_pulse_history",
+        _tpPayload(transitions=[(1000.0, "approach"), (1002.5, "seal")]),
+    )
+
+    transitions = widget.findChild(Qt.QListWidget)
+    assert "0.00" in transitions.item(0).text()
+    assert "2.50" in transitions.item(1).text()
+
+
+def test_test_pulse_history_caption_reports_the_terminal_state_and_log(qapp):
+    from acq4.modules.Autopatch.details_renderers import buildDetailsWidget
+
+    widget = buildDetailsWidget("test_pulse_history", _tpPayload())
+
+    caption = widget.layout().itemAt(0).widget().text()
+    assert "approach" in caption
+    assert "whole cell" in caption
+    assert "MultiPatch_004.log" in caption
+
+
+def test_test_pulse_history_caption_handles_never_reaching_a_terminal(qapp):
+    from acq4.modules.Autopatch.details_renderers import buildDetailsWidget
+
+    widget = buildDetailsWidget(
+        "test_pulse_history", _tpPayload(reached=None, log_file=None)
+    )
+
+    caption = widget.layout().itemAt(0).widget().text()
+    assert "approach" in caption
+    assert "no terminal state" in caption
+
+
+def test_test_pulse_history_tolerates_an_empty_history(qapp):
+    # A patch stopped before its first test pulse landed.
+    from acq4.modules.Autopatch.details_renderers import buildDetailsWidget
+
+    widget = buildDetailsWidget(
+        "test_pulse_history", _tpPayload(history=_tpHistory(count=0), transitions=[])
+    )
+
+    assert widget is not None
+
+
+def test_test_pulse_history_tolerates_no_transitions(qapp):
+    from acq4.modules.Autopatch.details_renderers import buildDetailsWidget
+
+    widget = buildDetailsWidget("test_pulse_history", _tpPayload(transitions=[]))
+
+    assert widget.findChild(Qt.QListWidget).count() == 0

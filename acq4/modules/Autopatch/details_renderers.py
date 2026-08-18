@@ -100,6 +100,51 @@ def buildTaskResults(payload) -> Qt.QWidget:
     return captioned(plot, lines)
 
 
+def buildTestPulseHistory(payload) -> Qt.QWidget:
+    """One FSM action's steady-state resistance plot beside the pipette states it
+    walked.
+
+    Reuses MultiPatch's PlotWidget rather than reimplementing the plot. The
+    mode combo stays visible, unlike the live plot's: because the whole
+    analysis array is retained, re-reading the same attempt through
+    capacitance or holding current costs nothing. setFrozen drops the two modes
+    that would need the recording itself.
+    """
+    # Imported here, not at module scope: pipetteControl pulls in PatchPipette
+    # and the rest of the MultiPatch module's device imports, and this module is
+    # imported by cell_panel at Autopatch startup.
+    from acq4.modules.MultiPatch.pipetteControl import PlotWidget
+
+    plot = PlotWidget(mode="ss resistance")
+    plot.setFrozen(True)
+    plot.newTestPulse(None, payload["history"])
+
+    transitions = Qt.QListWidget()
+    rows = list(payload.get("transitions", ()))
+    firstTime = rows[0][0] if rows else 0.0
+    for when, state in rows:
+        # Elapsed rather than absolute: an epoch timestamp says nothing, and how
+        # long the FSM sat in each state is what reading a failed patch needs.
+        transitions.addItem(f"{when - firstTime:8.2f}s  {state}")
+
+    split = Qt.QWidget()
+    splitLayout = Qt.QHBoxLayout()
+    splitLayout.setContentsMargins(0, 0, 0, 0)
+    splitLayout.addWidget(plot, 2)
+    splitLayout.addWidget(transitions, 1)
+    split.setLayout(splitLayout)
+
+    reached = payload.get("reached")
+    caption = [
+        f"entered at {payload.get('entry_state')!r}, "
+        + (f"reached {reached!r}" if reached else "no terminal state reached")
+    ]
+    logFile = payload.get("log_file")
+    if logFile:
+        caption.append(f"events logged to {logFile}")
+    return captioned(split, caption)
+
+
 # kind -> builder, keyed by the string an action passes to set_details(). A
 # builder takes only the payload and returns a widget: it never sees a Cell, an
 # ActionLogEntry, or the panel, so nothing it builds can retain any of them.
@@ -108,6 +153,7 @@ BUILDERS = {
     "error": buildError,
     "image_stack": buildImageStack,
     "task_results": buildTaskResults,
+    "test_pulse_history": buildTestPulseHistory,
 }
 
 
