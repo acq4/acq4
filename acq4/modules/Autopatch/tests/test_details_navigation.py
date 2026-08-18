@@ -368,3 +368,70 @@ def test_selecting_a_cell_with_no_rows_selects_nothing(panel):
 
     assert panel.timelineList.currentRow() == -1
     assert _mounted(panel) == []
+
+
+def test_a_failed_action_records_an_error_payload_on_its_row(panel):
+    (cell,) = _seed(panel)
+    panel.cellList.setCurrentRow(0)
+    entry = ActionLogEntry("Patch")
+    panel.onLogAction(cell, entry)
+    entry._finish(RuntimeError("boom"))
+
+    kind, payload = panel.detailsFor(cell, 0)
+    assert kind == "error"
+    assert payload["exc_type"] == "RuntimeError"
+    assert payload["exc_message"] == "boom"
+    assert "RuntimeError: boom" in payload["traceback_text"]
+    assert payload["cell_repr"] == repr(cell)
+
+
+def test_a_failed_actions_row_mounts_an_error_block(panel):
+    from acq4.modules.Autopatch.error_display import ErrorBlock
+
+    (cell,) = _seed(panel)
+    panel.cellList.setCurrentRow(0)
+    entry = ActionLogEntry("Patch")
+    panel.onLogAction(cell, entry)
+    entry._finish(RuntimeError("boom"))
+
+    panel.timelineList.setCurrentRow(0)
+
+    assert isinstance(_mounted(panel)[0], ErrorBlock)
+
+
+def test_a_failed_action_that_set_a_payload_keeps_the_payload(panel):
+    # The data it gathered before dying beats the traceback, which the log and
+    # the row's outcome glyph both still carry.
+    (cell,) = _seed(panel)
+    panel.cellList.setCurrentRow(0)
+    entry = ActionLogEntry("Patch")
+    panel.onLogAction(cell, entry)
+    entry.set_details("text", {"lines": ["got this far"]})
+    entry._finish(RuntimeError("boom"))
+
+    kind, payload = panel.detailsFor(cell, 0)
+    assert kind == "text"
+    assert payload == {"lines": ["got this far"]}
+
+
+def test_error_text_still_answers_which_cell_failed(panel):
+    # _cellErrors and errorText() are a different question from "what did this
+    # row do", and tests/test_teardown.py asserts against errorText.
+    (cell,) = _seed(panel)
+    panel.cellList.setCurrentRow(0)
+    entry = ActionLogEntry("Patch")
+    panel.onLogAction(cell, entry)
+    entry._finish(RuntimeError("boom"))
+
+    assert panel.errorText(cell)[0] == "RuntimeError"
+    assert panel.errorText(cell)[1] == "boom"
+
+
+def test_a_successful_action_records_no_error_payload(panel):
+    (cell,) = _seed(panel)
+    panel.cellList.setCurrentRow(0)
+    entry = ActionLogEntry("Patch")
+    panel.onLogAction(cell, entry)
+    entry._finish(None)
+
+    assert panel.detailsFor(cell, 0) is None

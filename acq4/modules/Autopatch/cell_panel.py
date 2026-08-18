@@ -11,7 +11,6 @@ from acq4_automation.feature_tracking.cell import Cell
 from acq4.util import Qt
 
 from .details_renderers import buildDetailsWidget
-from .error_display import ErrorBlock
 
 # Random scatter radius for the "Scatter fake cells" demo button (meters).
 _SCATTER_RADIUS = 40e-6
@@ -760,18 +759,31 @@ class CellPanel(Qt.QWidget):
             self._appendTimelineRow(cell, entry)
         elif phase == "finished":
             self._liveWidgets.pop(id(entry), None)
+            # Read before _finishTimelineRow: that method pops this entry's
+            # location, and the error payload below needs the row it names.
+            loc = self._entryTimelineLoc.get(id(entry))
             self._finishTimelineRow(cell, entry)
-            if cell is self._currentSelectedCell() and self._shownEntryId == id(entry):
-                self._clearShowContainer()
-                self._shownEntryId = None
             if entry.outcome == "error":
                 self._cellErrors[id(cell)] = (
                     entry.exc_type,
                     entry.exc_message,
                     entry.traceback_text,
                 )
-                if cell is self._currentSelectedCell():
-                    self._showErrorBlock(cell)
+                # An action that gathered data before failing keeps that data:
+                # it says more than the traceback, which the log and this row's
+                # own outcome glyph both still carry.
+                if loc is not None and loc not in self._details:
+                    self._details[loc] = (
+                        "error",
+                        {
+                            "exc_type": entry.exc_type,
+                            "exc_message": entry.exc_message,
+                            "traceback_text": entry.traceback_text,
+                            "cell_repr": repr(cell),
+                        },
+                    )
+            if cell is self._currentSelectedCell():
+                self._mountSelectedRow()
         elif phase == "widget":
             widget = entry.details_widget
             if widget is None:
@@ -919,24 +931,6 @@ class CellPanel(Qt.QWidget):
             if storeCellId == cellId and kind == "error"
         ]
         self.timelineList.setCurrentRow(max(failed) if failed else count - 1)
-
-    def _showErrorBlock(self, cell) -> None:
-        """Mount the stored error block for `cell` in the details container.
-
-        Built fresh from the stored text on every mount rather than kept as a
-        widget: _onCellSelectionChanged clears showContainer on every selection
-        change, so a retained widget would be reparented away and would also be
-        one more thing to drop on teardown.
-        """
-        stored = self._cellErrors.get(id(cell))
-        if stored is None:
-            return
-        exc_type, exc_message, traceback_text = stored
-        self._clearShowContainer()
-        self._shownEntryId = None
-        self.showContainer.layout().addWidget(
-            ErrorBlock(exc_type, exc_message, traceback_text, repr(cell))
-        )
 
     def _onCellFinished(self, cell, status: str) -> None:
         # A cell can finish (e.g. the "skipped" outcome in
