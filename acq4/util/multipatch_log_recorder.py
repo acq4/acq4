@@ -69,8 +69,19 @@ class MultiPatchLogRecorder(Qt.QObject):
         if write_events:
             handle = directory.createFile(LOG_FILE_NAME, autoIncrement=True)
             self._logFile = open(handle.name(), "ab")
-        for record in initial_records:
-            self.record(record)
+        try:
+            for record in initial_records:
+                self.record(record)
+        except Exception:
+            # A record that ACQ4JSONEncoder cannot serialize raises out of
+            # this loop before the caller ever gets an instance back to call
+            # stop() on. Without this, the open file handle would be
+            # reachable only through a partially-constructed self, leaving
+            # its release to refcounting -- and a traceback holding this
+            # frame's locals can keep it open well past the raise. stop() is
+            # idempotent, so it is safe to call even if nothing was opened.
+            self.stop()
+            raise
 
     def logFileName(self) -> str | None:
         return None if self._logFile is None else self._logFile.name

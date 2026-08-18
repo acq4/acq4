@@ -186,3 +186,29 @@ def test_encodes_values_the_plain_json_encoder_cannot(qapp, directory):
         recorder.stop()
 
     assert json.loads(_lines(recorder.logFileName())[0])["steady_state_resistance"] == 1.5e9
+
+
+def test_unserializable_initial_record_closes_the_file_before_raising(qapp, directory):
+    # A record ACQ4JSONEncoder can't handle raises out of __init__ before the
+    # caller ever receives an instance to call stop() on. The file opened for
+    # write_events must not depend on refcounting to get closed in that case;
+    # find the partially-constructed self via the traceback and check it
+    # directly, since the caller never gets a reference of its own.
+    from acq4.util.multipatch_log_recorder import MultiPatchLogRecorder
+
+    history = [{"device": "Clamp1", "event_time": 0.5, "bad": {1, 2, 3}}]
+
+    with pytest.raises(TypeError) as excinfo:
+        MultiPatchLogRecorder(directory, record_full_test_pulses=False, initial_records=history)
+
+    partial_self = None
+    tb = excinfo.value.__traceback__
+    while tb is not None:
+        candidate = tb.tb_frame.f_locals.get("self")
+        if isinstance(candidate, MultiPatchLogRecorder):
+            partial_self = candidate
+        tb = tb.tb_next
+
+    assert partial_self is not None
+    assert partial_self._logFile is not None
+    assert partial_self._logFile.closed
