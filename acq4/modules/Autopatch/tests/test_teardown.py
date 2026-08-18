@@ -38,6 +38,15 @@ class _FakePipette:
 
     def __init__(self, target):
         self.pipetteDevice = _FakeManipulator(target)
+        self.cell = None
+
+    def setCell(self, cell, target=True):
+        """Mirrors PatchPipette.setCell: takes the cell and points the
+        manipulator's target at it, which is how a run's later moves ("approach",
+        "target") find the cell the orchestrator is working."""
+        self.cell = cell
+        if target:
+            self.pipetteDevice.setTarget(cell.position.mapped_to("global").coordinates)
 
 
 class _FakeManipulator:
@@ -47,6 +56,8 @@ class _FakeManipulator:
     def targetPosition(self):
         return self._target
 
+    def setTarget(self, target):
+        self._target = tuple(target)
 
 class _FakeCameraSelector(Qt.QWidget):
     def getSelectedObj(self):
@@ -244,7 +255,9 @@ def test_teardown_frees_the_slice_producer_and_cells_by_refcounting(qapp, tmp_pa
         # ctx.log_action wiring runs with the search half of the graph in place.
         win.orchestrator.run_sync_cell(seededCell)
         win.cellPanel.cellList.setCurrentRow(0)
-        assert win.cellPanel.timelineList.count() == 1
+        # Two rows: the run's own per-cell data directory, then the protocol's
+        # one action.
+        assert win.cellPanel.timelineList.count() == 2
 
         sliceState = win.slice
         refs = {

@@ -53,10 +53,18 @@ class _FakePipette:
 
     def __init__(self, target):
         self.pipetteDevice = _FakeManipulator(target)
+        self.cell = None
 
     def targetPosition(self):
         return self.pipetteDevice.targetPosition()
 
+    def setCell(self, cell, target=True):
+        """Mirrors PatchPipette.setCell: takes the cell and points the
+        manipulator's target at it, which is how a run's later moves ("approach",
+        "target") find the cell the orchestrator is working."""
+        self.cell = cell
+        if target:
+            self.pipetteDevice.setTarget(cell.position.mapped_to("global").coordinates)
 
 class _FakeManipulator:
     def __init__(self, target):
@@ -65,6 +73,8 @@ class _FakeManipulator:
     def targetPosition(self):
         return self._target
 
+    def setTarget(self, target):
+        self._target = tuple(target)
 
 class _FakeCameraSelector(Qt.QWidget):
     def getSelectedObj(self):
@@ -181,9 +191,16 @@ class _FakePinnedFrameSource(Qt.QObject):
         self.sigPinnedFramesChanged.emit()
 
 
-# The one folder type newSlice() asks create_data_dir for. A real Manager's
-# config carries many more, but this window only ever creates a "Slice".
-_FOLDER_TYPES = {"Slice": {"name": "Slice_%Y%m%d_%H%M%S", "experimentalUnit": False}}
+# The two folder types this window's paths ask create_data_dir for: "Slice" for
+# newSlice(), and "Cell" for the directory a run makes per cell. A real Manager's
+# config carries many more. "Cell" is named the way the real config names it
+# (config/example/folderTypes.cfg) -- a fixed "cell", not a timestamp -- so two
+# cells in one run have to be told apart by mkdir's autoIncrement, as they are on
+# a rig.
+_FOLDER_TYPES = {
+    "Slice": {"name": "Slice_%Y%m%d_%H%M%S", "experimentalUnit": False},
+    "Cell": {"name": "cell", "experimentalUnit": False},
+}
 
 
 class _FakeManager(Qt.QObject):
@@ -414,6 +431,87 @@ def test_full_flow_seeds_a_cell_starts_and_updates_status_timeline_log(qapp, qtb
     assert timelineLines[0].startswith("Noop — ✓ done")
 
     assert "ran on" in win.cellPanel.logView.toPlainText()
+
+
+_TARGET_CAPTURE_PROTOCOL = '''"""Integration test fixture: records the pipette target as the protocol sees
+it onto the cell being worked, so a test can prove each cell was targeted
+before its own run rather than inheriting the previous cell's target."""
+
+
+def run(ctx, **kwargs):
+    ctx.cell._targetWhenRun = tuple(ctx.pipette.pipetteDevice.targetPosition())
+'''
+
+
+def test_each_queued_cell_retargets_the_pipette_before_its_protocol_runs(
+    qapp, qtbot, tmp_path
+):
+    """Two cells through one run: the pipette's target must be the cell whose
+    protocol is running, not the one before it.
+
+    The whole point of the second cell -- with one, a pipette left pointing at
+    the previous run's coordinate passes, and every move the protocol makes
+    ("approach", "target") is derived from that target, so the failure this
+    guards against is a pipette driven into tissue nowhere near the cell whose
+    row the operator is watching.
+    """
+    from acq4.modules.Autopatch.Autopatch import AutopatchWindow
+
+    _write_protocol(tmp_path, "demo.py", _TARGET_CAPTURE_PROTOCOL)
+
+    win = AutopatchWindow(
+        module=None,
+        protocolDir=str(tmp_path),
+        pipetteSelector=_FakePipetteSelector(target=(1e-3, 2e-3, 3e-3)),
+        cameraSelector=_FakeCameraSelector(),
+    )
+    win.protocolPanel.fileCombo.setCurrentText("demo")
+
+    first = _makeCellAt(1.0e-3, 2.0e-3, -30e-6)
+    second = _makeCellAt(1.4e-3, 2.1e-3, -30e-6)
+    for cell in (first, second):
+        win.cellPanel.addCell(cell)
+        win.orchestrator.enqueue(cell)
+
+    win.statusPanel.startBtn.click()
+    qtbot.waitUntil(lambda: hasattr(second, "_targetWhenRun"), timeout=2000)
+
+    for cell in (first, second):
+        assert cell._targetWhenRun == pytest.approx(
+            tuple(cell.position.mapped_to("global").coordinates)
+        )
+
+
+def test_a_run_puts_each_cells_data_directory_inside_the_slices(qapp, tmp_path):
+    """Through the real window's manager: a run gives every cell its own managed
+    Cell directory under the slice's, and leaves the current directory back at
+    the slice when the cell is done.
+
+    Two cells, because one cannot tell "a directory per cell" apart from "a
+    directory per run"; and the nesting matters because everything a cell's
+    protocol saves -- the cellfie, the patch log, a TaskRunner sequence -- goes
+    to whatever is current while it runs.
+    """
+    win = _makeWindow(tmp_path)
+    win.newSlice()
+    sliceDir = win.manager.getCurrentDir()
+    assert sliceDir.info().get("dirType") == "Slice"
+
+    first, second = _makeCellAt(1.0e-3, 2.0e-3), _makeCellAt(1.4e-3, 2.1e-3)
+    for cell in (first, second):
+        win.cellPanel.addCell(cell)
+        win.orchestrator.enqueue(cell)
+    win.orchestrator.run_sync()
+
+    cellDirs = [
+        name
+        for name in sliceDir.ls()
+        if sliceDir.getDir(name).info().get("dirType") == "Cell"
+    ]
+    assert len(cellDirs) == 2
+    # Stepped back out, so the next thing the run does -- surveying the next
+    # tile, most of all -- does not land inside the cell that just finished.
+    assert win.manager.getCurrentDir().name() == sliceDir.name()
 
 
 class _CountingPipetteSelector(Qt.QWidget):
