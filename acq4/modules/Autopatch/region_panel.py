@@ -27,7 +27,9 @@ def roiForRegion(region: SearchRegion) -> pg.ROI:
     box region carries an angle, and a polygon's vertices are read back through
     the ROI's own transform, which a rotation is part of. The stock
     `pg.EllipseROI` is used as it ships, rotate handle and all, since that handle
-    now does what it looks like it does.
+    now does what it looks like it does. `pg.RectROI` ships a scale handle alone,
+    so a rotate handle is added to it below -- both box shapes turn, and the
+    handle is what tells the operator so.
 
     Sized from `box()` rather than `bounds()`: those differ once there is an
     angle, and it is the box the operator sized -- not the larger axis-aligned
@@ -50,6 +52,16 @@ def roiForRegion(region: SearchRegion) -> pg.ROI:
     roi = roiClass(
         (x0, y0), (x1 - x0, y1 - y0), pen=REGION_PEN, removable=True, rotatable=True
     )
+    if not isinstance(roi, pg.EllipseROI):
+        # Where pg.EllipseROI puts its own (see EllipseROI._addHandles): the
+        # middle of the right edge, turning about the centre of the box. Same
+        # place on both shapes, so switching the shape selector does not move the
+        # controls; clear of pg.RectROI's scale handle on the corner; and turning
+        # about the centre keeps the tissue under the region while it is aimed.
+        # The centre is only the *gesture's* pivot -- the region reads its angle
+        # and its corner back off the finished transform (see regionForRoi), so
+        # this choice does not touch what a rotated region means.
+        roi.addRotateHandle([1.0, 0.5], [0.5, 0.5])
     if region.angle:
         roi.setAngle(region.angle)
     return roi
