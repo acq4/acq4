@@ -837,3 +837,170 @@ def test_construction_failure_releases_the_pipettes_subscriptions(qapp, director
     assert pip.released == [partial_self]
     assert pip.receivers(pip.sigNewEvent) == 0
     assert scope.receivers(scope.sigSurfaceDepthChanged) == 0
+
+
+# -- golden output vs. the implementation being replaced ----------------------
+
+
+def _referenceWriteRecords(records, logPath):
+    """The pre-refactor MultiPatchWindow.writeRecords, verbatim apart from the
+    test-pulse-stack branch, held here as the reference the recorder's output is
+    checked against. Deliberately duplicated rather than imported: its whole
+    job is to keep saying what the old code said after the old code is gone."""
+    from acq4.util.json_encoder import ACQ4JSONEncoder
+
+    with open(logPath, "ab") as fh:
+        for rec in records:
+            rec = {k: v for k, v in rec.items() if k != "full_test_pulse"}
+            fh.write(json.dumps(rec, cls=ACQ4JSONEncoder).encode("utf8") + b",\n")
+        fh.flush()
+
+
+_GOLDEN_EVENTS = [
+    {"device": "Clamp1", "event_time": 1.0, "event": "state_change", "state": "bath"},
+    {"device": "Clamp1", "event_time": 1.5, "event": "move_stop", "position": [1.0, 2.0, 3.0]},
+    {
+        "device": "Clamp1",
+        "event_time": 2.0,
+        "event": "test_pulse",
+        "start_time": 2.0,
+        "baseline_potential": -0.07,
+        "baseline_current": 5e-13,
+        "input_resistance": 1.4e9,
+        "access_resistance": 1e8,
+        "steady_state_resistance": 1.5e9,
+        "fit_amplitude": -7e-10,
+        "time_constant": 0.001,
+        "fit_yoffset": -1e-11,
+        "fit_xoffset": 0.005,
+        "capacitance": None,
+    },
+    {
+        "device": "Clamp1",
+        "event_time": 2.5,
+        "event": "pressure_changed",
+        "pressure": 0.0,
+        "source": "user",
+    },
+    {"device": None, "event_time": 3.0, "event": "global patch profiles changed", "profile": "{}"},
+]
+
+
+def test_recorder_output_matches_the_reference_apart_from_the_comma(qapp, directory, tmp_path):
+    from acq4.util.multipatch_log_recorder import MultiPatchLogRecorder
+
+    recorder = MultiPatchLogRecorder(directory, record_full_test_pulses=False)
+    try:
+        for event in _GOLDEN_EVENTS:
+            recorder.record(event)
+    finally:
+        recorder.stop()
+
+    referencePath = tmp_path / "reference.log"
+    _referenceWriteRecords(_GOLDEN_EVENTS, referencePath)
+
+    ours = _lines(recorder.logFileName())
+    theirs = _lines(referencePath)
+    assert len(ours) == len(theirs)
+    for ourLine, theirLine in zip(ours, theirs):
+        # Byte-for-byte the same record; only the trailing comma differs.
+        assert ourLine.rstrip(b"\r\n") == theirLine.rstrip(b"\r\n").rstrip(b",")
+
+
+def test_recorder_output_parses_identically_to_the_reference(qapp, directory, tmp_path):
+    from acq4.util.multipatch_log_recorder import MultiPatchLogRecorder
+
+    recorder = MultiPatchLogRecorder(directory, record_full_test_pulses=False)
+    try:
+        for event in _GOLDEN_EVENTS:
+            recorder.record(event)
+    finally:
+        recorder.stop()
+    referencePath = tmp_path / "reference.log"
+    _referenceWriteRecords(_GOLDEN_EVENTS, referencePath)
+
+    def parse(path):
+        return [json.loads(line.rstrip(b",\r\n")) for line in _lines(path)]
+
+    assert parse(recorder.logFileName()) == parse(referencePath)
+
+
+# -- reader round-trips ------------------------------------------------------
+
+
+def test_the_multipatch_log_reader_parses_a_recorder_file(qapp, directory):
+    from acq4.filetypes.MultiPatchLog import MultiPatchLogData
+    from acq4.util.multipatch_log_recorder import MultiPatchLogRecorder
+
+    recorder = MultiPatchLogRecorder(directory, record_full_test_pulses=False)
+    try:
+        for event in _GOLDEN_EVENTS:
+            if event["device"] is not None:
+                recorder.record(event)
+    finally:
+        recorder.stop()
+
+    data = MultiPatchLogData(recorder.logFileName())
+
+    assert "Clamp1" in data.devices()
+    assert data.firstTime() == 1.0
+    assert data.lastTime() == 2.5
+
+
+def test_the_analysis_tool_parses_a_recorder_file(qapp, directory):
+    import sys
+    from pathlib import Path
+
+    toolsPath = str(Path(__file__).resolve().parents[3] / "tools" / "autopatch_analysis")
+    if toolsPath not in sys.path:
+        sys.path.insert(0, toolsPath)
+    import autopatch_log
+
+    from acq4.util.multipatch_log_recorder import MultiPatchLogRecorder
+
+    recorder = MultiPatchLogRecorder(directory, record_full_test_pulses=False)
+    try:
+        recorder.record(
+            {
+                "device": "Clamp1",
+                "event_time": 1.0,
+                "event": "state_change",
+                "state": "bath",
+                "old_state": "out",
+            }
+        )
+        recorder.record(
+            {
+                "device": "Clamp1",
+                "event_time": 2.0,
+                "event": "state_change",
+                "state": "approach",
+                "old_state": "bath",
+            }
+        )
+    finally:
+        recorder.stop()
+
+    events = autopatch_log.parse_log_events(recorder.logFileName())
+
+    assert [e["state"] for e in events] == ["bath", "approach"]
+
+
+def test_the_reader_tolerates_blank_lines(qapp, directory):
+    # Parity with tools/autopatch_analysis, which has always skipped them.
+    from acq4.filetypes.MultiPatchLog import MultiPatchLogData
+    from acq4.util.multipatch_log_recorder import MultiPatchLogRecorder
+
+    recorder = MultiPatchLogRecorder(directory, record_full_test_pulses=False)
+    try:
+        recorder.record(
+            {"device": "Clamp1", "event_time": 1.0, "event": "state_change", "state": "bath"}
+        )
+    finally:
+        recorder.stop()
+    with open(recorder.logFileName(), "ab") as fh:
+        fh.write(b"\n")
+
+    data = MultiPatchLogData(recorder.logFileName())
+
+    assert "Clamp1" in data.devices()

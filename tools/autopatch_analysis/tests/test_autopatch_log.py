@@ -12,11 +12,13 @@ import pytest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import autopatch_log as al  # noqa: E402
+from autopatch_log import parse_log_events  # noqa: E402
 
 
-def _write(tmp_path, lines, name="MultiPatch_000.log"):
+def _write(tmp_path, lines, name="MultiPatch_000.log", terminator=",\n"):
     p = tmp_path / name
-    p.write_text("".join(line + ",\n" for line in lines))
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text("".join(line + terminator for line in lines))
     return str(p)
 
 
@@ -302,3 +304,15 @@ def test_load_run_tags_source(tmp_path):
     attempts = al.load_run([str(tmp_path)])
     assert len(attempts) == 1
     assert attempts[0].source == path
+
+
+def test_comma_free_and_legacy_lines_parse_identically(tmp_path):
+    """The writer emits clean JSONL; historical files end every line with a
+    comma. rstrip(b",\\r\\n") is a character-set strip, not a suffix strip, so
+    both forms must yield the same records -- pinned here rather than left to
+    luck."""
+    events = [_state(0.0, "bath", "out"), _state(5.0, "out", "bath")]
+    legacy = _write(tmp_path / "legacy", events)
+    modern = _write(tmp_path / "modern", events, terminator="\n")
+
+    assert parse_log_events(str(legacy)) == parse_log_events(str(modern))
