@@ -212,3 +212,157 @@ def test_unserializable_initial_record_closes_the_file_before_raising(qapp, dire
     assert partial_self is not None
     assert partial_self._logFile is not None
     assert partial_self._logFile.closed
+
+
+class _FakeTestPulse:
+    """Stands in for a PatchClampTestPulse. H5BackedTestPulseStack.append is
+    monkeypatched in these tests, so this only has to be identifiable."""
+
+    def __init__(self, tag):
+        self.tag = tag
+
+
+@pytest.fixture
+def stubbed_stack(monkeypatch):
+    """Replace the HDF5 stack with a recorder of appends, returning the
+    (filename, h5path) pair the real one returns."""
+    import acq4.util.multipatch_log_recorder as mod
+
+    appended = []
+
+    class _Stack:
+        def __init__(self, group):
+            self.group = group
+            self.files = []
+
+        def append(self, test_pulse, retain_data=False):
+            appended.append(test_pulse)
+            return (self.group["filename"], f"{self.group['path']}/{len(appended) - 1}")
+
+        def flush(self):
+            return None
+
+        def close(self):
+            return None
+
+    created = []
+
+    def fakeMakeStack(self, deviceName):
+        stack = _Stack(
+            {
+                "filename": str(self._directory.root / "TestPulses_000.hdf5"),
+                "path": f"test_pulses/{deviceName}",
+            }
+        )
+        created.append((deviceName, stack))
+        return stack
+
+    monkeypatch.setattr(mod.MultiPatchLogRecorder, "_makeTestPulseStack", fakeMakeStack)
+    return appended, created
+
+
+def test_full_test_pulse_is_diverted_into_the_sidecar(qapp, directory, stubbed_stack):
+    from acq4.util.multipatch_log_recorder import MultiPatchLogRecorder
+
+    appended, _created = stubbed_stack
+    recorder = MultiPatchLogRecorder(
+        directory, pipettes=(), record_full_test_pulses=True
+    )
+    tp = _FakeTestPulse("tp-1")
+    try:
+        recorder.record(
+            {
+                "device": "Clamp1",
+                "event_time": 1.0,
+                "event": "test_pulse",
+                "full_test_pulse": tp,
+            }
+        )
+    finally:
+        recorder.stop()
+
+    assert appended == [tp]
+    written = json.loads(_lines(recorder.logFileName())[0])
+    assert written["full_test_pulse"] == "TestPulses_000.hdf5:test_pulses/Clamp1/0"
+
+
+def test_the_sidecar_path_is_relative_to_the_log_file(qapp, directory, stubbed_stack):
+    # The reader resolves it with os.path.join(os.path.dirname(logfile), ...),
+    # so an absolute path here would break every viewer that moves the data.
+    from acq4.util.multipatch_log_recorder import MultiPatchLogRecorder
+
+    recorder = MultiPatchLogRecorder(directory, record_full_test_pulses=True)
+    try:
+        recorder.record(
+            {
+                "device": "Clamp1",
+                "event_time": 1.0,
+                "event": "test_pulse",
+                "full_test_pulse": _FakeTestPulse("tp"),
+            }
+        )
+    finally:
+        recorder.stop()
+
+    location = json.loads(_lines(recorder.logFileName())[0])["full_test_pulse"]
+    assert not location.startswith("/")
+
+
+def test_the_test_pulse_object_never_reaches_the_json(qapp, directory, stubbed_stack):
+    from acq4.util.multipatch_log_recorder import MultiPatchLogRecorder
+
+    recorder = MultiPatchLogRecorder(directory, record_full_test_pulses=True)
+    try:
+        recorder.record(
+            {
+                "device": "Clamp1",
+                "event_time": 1.0,
+                "event": "test_pulse",
+                "full_test_pulse": _FakeTestPulse("tp"),
+                "steady_state_resistance": 1.5e9,
+            }
+        )
+    finally:
+        recorder.stop()
+
+    written = json.loads(_lines(recorder.logFileName())[0])
+    assert isinstance(written["full_test_pulse"], str)
+    assert written["steady_state_resistance"] == 1.5e9
+
+
+def test_full_test_pulse_is_stripped_when_not_recording_them(qapp, directory):
+    # No sidecar to divert into, so the object must be dropped rather than
+    # handed to the JSON encoder.
+    from acq4.util.multipatch_log_recorder import MultiPatchLogRecorder
+
+    recorder = MultiPatchLogRecorder(directory, record_full_test_pulses=False)
+    try:
+        recorder.record(
+            {
+                "device": "Clamp1",
+                "event_time": 1.0,
+                "event": "test_pulse",
+                "full_test_pulse": _FakeTestPulse("tp"),
+                "steady_state_resistance": 1.5e9,
+            }
+        )
+    finally:
+        recorder.stop()
+
+    written = json.loads(_lines(recorder.logFileName())[0])
+    assert "full_test_pulse" not in written
+    assert written["steady_state_resistance"] == 1.5e9
+
+
+def test_set_record_full_test_pulses_toggles_at_runtime(qapp, directory, stubbed_stack):
+    from acq4.util.multipatch_log_recorder import MultiPatchLogRecorder
+
+    recorder = MultiPatchLogRecorder(directory, record_full_test_pulses=False)
+    try:
+        assert recorder.recordsFullTestPulses() is False
+        recorder.setRecordFullTestPulses(True)
+        assert recorder.recordsFullTestPulses() is True
+        recorder.setRecordFullTestPulses(False)
+        assert recorder.recordsFullTestPulses() is False
+    finally:
+        recorder.stop()
