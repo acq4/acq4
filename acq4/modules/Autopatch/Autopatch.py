@@ -557,6 +557,13 @@ class AutopatchWindow(Qt.QWidget):
         # it -- an operator judging feasibility from a stale tile count is the
         # failure mode this ordering rules out.
         self._refreshSurveyStats()
+        # Written before the mirror is touched, for the same reason the stats
+        # are: the mirror can raise out of a closed Camera module, and the edit
+        # is already committed by here. The regions are the least reproducible
+        # thing in the experiment -- an operator drew them by hand around this
+        # particular tissue -- so the record of them must not be what a
+        # display failure skips.
+        self.slice.saveState()
         self._cameraMirror.setRegions(regions)
 
     def _setRegionInstruction(self, text: str) -> None:
@@ -758,6 +765,13 @@ class AutopatchWindow(Qt.QWidget):
             # storage guidance.
             self.statusPanel.setInstruction("storage", str(exc))
             return
+        # Captured before _startSlice replaces self.slice: the outgoing slice's
+        # own record is written now, while it is still reachable, and its
+        # directory is what its pinned frames are archived into further down.
+        outgoing = self.slice
+        outgoingDir = outgoing.dirHandle if outgoing is not None else None
+        if outgoing is not None:
+            outgoing.saveState()
         if not self._startSlice(dirHandle=dirHandle):
             return
         self.cellPanel.clearCells()
@@ -811,7 +825,7 @@ class AutopatchWindow(Qt.QWidget):
         # loop, so everything above has to be finished before this call opens
         # it. test_the_clear_prompt_opens_only_after_the_wipe pins exactly
         # that.
-        self._referenceImagery.beginSlice()
+        self._referenceImagery.beginSlice(archiveDir=outgoingDir)
 
     def addRegionHere(self) -> None:
         """Add a search region of roughly 3x3 fields of view around the camera center.
@@ -865,6 +879,9 @@ class AutopatchWindow(Qt.QWidget):
         # below skips everything after it -- an operator judging feasibility
         # from a stale tile count is the failure mode this ordering rules out.
         self._refreshSurveyStats()
+        # Before the mirror, as in _onRegionsEdited: a raise out of a closed
+        # Camera module must not be what loses the region just added.
+        self.slice.saveState()
         self._cameraMirror.setRegions(self.slice.regions)
 
     @staticmethod
@@ -879,6 +896,10 @@ class AutopatchWindow(Qt.QWidget):
         # good constraints rather than tearing them down mid-edit.
         if constraints is not None and self.slice is not None:
             self.slice.setConstraints(constraints)
+            # The constraints are half of what makes a survey reproducible --
+            # the depth slab, the health cutoff, the density cap -- and they
+            # are edited far more often than the regions are.
+            self.slice.saveState()
 
     def _refreshSurveyStats(self) -> None:
         if self.slice is None:
@@ -1041,6 +1062,13 @@ class AutopatchWindow(Qt.QWidget):
             self._refreshSurveyStats()
             self._refreshCoverage()
             self._refreshProgress()
+            # The one point where coverage accumulated on the worker thread is
+            # observed from the GUI thread, so it is where the record of it can
+            # be written without reading the slice off-thread. A survey
+            # interrupted between two of these has lost at most the tiles since
+            # the last one.
+            if self.slice is not None:
+                self.slice.saveState()
 
     def _onTissueMoved(self, cell, ctx, reason: str) -> None:
         """ExecutionContext.tissue_moved, cell-bound by the context factory.
