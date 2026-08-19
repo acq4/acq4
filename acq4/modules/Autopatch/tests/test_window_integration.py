@@ -2913,6 +2913,133 @@ def test_coverage_draws_the_todo_tiles_not_the_covered_ones(qapp, win):
         assert ay == pytest.approx(ey)
 
 
+class _CountingDirHandle:
+    """Stands in for a slice's data directory, recording every write that
+    reaches it without touching disk.
+
+    Distinct from slice.py's own persistence tests, which use a real managed
+    directory because what they prove is the record on disk; what a throttle
+    test needs is only a count of how many times saveState() actually wrote,
+    which is what the real directory's full-index rewrite (the cost this
+    throttle exists to bound) would otherwise make these tests slow.
+    """
+
+    def __init__(self):
+        self.writes = []
+
+    def writeFile(self, obj, fileName, **kwargs):
+        self.writes.append((fileName, obj))
+
+    def setInfo(self, **kwargs):
+        self.writes.append(("setInfo", kwargs))
+
+
+def _sliceWithCountingDir(win):
+    """Install a Slice on `win` backed by a _CountingDirHandle, so a test can
+    assert on how many times saveState() actually wrote."""
+    handle = _CountingDirHandle()
+    slice_ = Slice(fov=(20e-6, 10e-6), dirHandle=handle)
+    slice_.addRegion(RectRegion(1e-3, 2e-3, 1e-3 + 60e-6, 2e-3 + 30e-6))
+    win.slice = slice_
+    return slice_, handle
+
+
+def _searchStateSaves(handle):
+    """The search_state.yaml writes recorded on `handle`, one per completed
+    saveState() call (each call also writes regions.yaml and setInfo, but
+    search_state.yaml alone is enough to count saves and read back the
+    covered list)."""
+    return [w for w in handle.writes if w[0] == "search_state.yaml"]
+
+
+def test_repeated_surveying_statuses_throttle_the_slice_save(win):
+    """An interleaved survey+patch run reports "surveying" once per queue
+    refill -- effectively once per cell -- and each one used to trigger a
+    full rewrite of the slice's directory index. A fixed fake clock stands in
+    for several such refills arriving faster than the throttle interval,
+    since driving this with a real sleep would make the test slow without
+    proving anything a fake clock doesn't."""
+    slice_, handle = _sliceWithCountingDir(win)
+    win._sliceSaveClock = lambda: 100.0
+
+    for _ in range(5):
+        win._onRunStatus("surveying")
+
+    assert len(_searchStateSaves(handle)) == 1
+
+
+def test_a_run_ending_forces_a_flush_even_when_throttled(win):
+    """"waiting" fires once, at the very end of a run. If the last periodic
+    save landed inside the throttle window, the tiles covered since then must
+    still reach disk right here -- otherwise a run that finishes between two
+    throttle windows silently loses its tail."""
+    slice_, handle = _sliceWithCountingDir(win)
+    win._sliceSaveClock = lambda: 100.0
+
+    win._onRunStatus("surveying")
+    win._onRunStatus("surveying")  # throttled: same fake instant
+    win._onRunStatus("waiting")  # must force, even though the clock hasn't moved
+
+    assert len(_searchStateSaves(handle)) == 2
+
+
+def test_the_forced_flush_writes_the_latest_coverage_not_a_stale_snapshot(win):
+    """A throttled call must never cache the state it declined to write and
+    play it back later: the eventual write -- forced or not -- has to read
+    whatever the slice holds at that moment, not a snapshot from whenever the
+    throttle last let a save through."""
+    slice_, handle = _sliceWithCountingDir(win)
+    win._sliceSaveClock = lambda: 100.0
+    tileA, tileB = slice_.tileGrid()[:2]
+    slice_.markCovered(tileA)
+
+    win._onRunStatus("surveying")  # writes with only tileA covered
+    slice_.markCovered(tileB)
+    win._onRunStatus("surveying")  # throttled: tileB not yet on disk
+    win._onRunStatus("waiting")  # forced: must catch tileB up
+
+    saves = _searchStateSaves(handle)
+    assert len(saves) == 2
+    latestCovered = {tuple(c) for c in saves[-1][1]["covered"]}
+    assert latestCovered == {tuple(tileA), tuple(tileB)}
+
+
+def test_slice_saves_resume_once_the_throttle_interval_elapses(win):
+    """The throttle bounds loss to a window of time, not forever: once that
+    window has passed, the next "surveying" status writes again on its own,
+    without waiting for the run to end."""
+    slice_, handle = _sliceWithCountingDir(win)
+    now = [100.0]
+    win._sliceSaveClock = lambda: now[0]
+
+    win._onRunStatus("surveying")
+    now[0] += win._SLICE_SAVE_MIN_INTERVAL + 0.001
+    win._onRunStatus("surveying")
+
+    assert len(_searchStateSaves(handle)) == 2
+
+
+def test_teardown_flushes_slice_state_even_without_a_waiting_status(win):
+    """The operator can close the window mid-survey, before a run ever
+    reaches "waiting". Closing the window must not itself become a way to
+    lose whatever a pending throttled save hasn't written yet."""
+    slice_, handle = _sliceWithCountingDir(win)
+    win._sliceSaveClock = lambda: 100.0
+    win._onRunStatus("surveying")
+    slice_.markCovered(slice_.tileGrid()[1])
+    win._onRunStatus("surveying")  # throttled: the new tile isn't on disk yet
+    # Confirms the second status really was throttled away, so the count after
+    # teardown below can only grow because teardown() itself forced a flush --
+    # not because the throttle never engaged in the first place.
+    assert len(_searchStateSaves(handle)) == 1
+
+    win.teardown()
+
+    saves = _searchStateSaves(handle)
+    assert len(saves) == 2
+    assert {tuple(c) for c in saves[-1][1]["covered"]} == set(slice_.coveredTiles)
+
+
 def test_a_tracked_cell_marker_follows_its_position_signal(qapp, win):
     cell = _makeCellAt(1.0e-3, 2.0e-3, -30e-6)
     win.cellPanel.addCell(cell)

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import functools
 import os
+import time
 
 from acq4.experiment.actions.prompt import prompt
 from acq4.experiment.actions.storage import create_data_dir
@@ -80,6 +81,11 @@ class AutopatchWindow(Qt.QWidget):
     whatever size it is dragged to (see _makeArea and _AreaViewport), and the
     division is kept between sessions (see _saveLayout).
     """
+
+    # Minimum spacing between periodic slice-state saves driven by a run's
+    # "surveying" status; see _flushSliceState for the durability tradeoff
+    # this bounds.
+    _SLICE_SAVE_MIN_INTERVAL = 2.0
 
     def __init__(
         self,
@@ -257,6 +263,13 @@ class AutopatchWindow(Qt.QWidget):
         # on the orchestrator's worker thread and must not read a selector.
         self._cachedCamera = None
         self._cachedScope = None
+        # Wall-clock source for _flushSliceState's throttle. An attribute
+        # rather than a bare time.monotonic() call so a test can swap in a
+        # fake clock instead of driving the throttle with real sleeps.
+        self._sliceSaveClock = time.monotonic
+        # Clock reading at the last periodic slice-state save, or None before
+        # the first one; see _flushSliceState.
+        self._lastSliceSaveTime = None
         self._tornDown = False
         self.protocolPanel.sigProtocolLoaded.connect(self._onProtocolLoaded)
         # Area 4 (the protocol picker/Reload) must not be usable while a
@@ -1064,11 +1077,40 @@ class AutopatchWindow(Qt.QWidget):
             self._refreshProgress()
             # The one point where coverage accumulated on the worker thread is
             # observed from the GUI thread, so it is where the record of it can
-            # be written without reading the slice off-thread. A survey
-            # interrupted between two of these has lost at most the tiles since
-            # the last one.
+            # be written without reading the slice off-thread. "surveying" fires
+            # once per queue refill -- in an interleaved survey+patch run that
+            # is effectively once per cell -- so the save itself is throttled;
+            # "waiting" fires once, at the run's end, and always forces a write.
             if self.slice is not None:
-                self.slice.saveState()
+                self._flushSliceState(force=(status == "waiting"))
+
+    def _flushSliceState(self, *, force: bool) -> None:
+        """Write self.slice's search state to disk, throttled unless `force`.
+
+        Durability contract: while a run is in progress, at most the coverage
+        gained in the last _SLICE_SAVE_MIN_INTERVAL seconds can be lost to a
+        crash or power loss -- the same tolerance wiring saveState() to the
+        "surveying" status was built to accept ("a survey interrupted between
+        two of these has lost at most the tiles since the last one"), now
+        bounded by wall-clock time rather than by how often the orchestrator
+        happens to refill its queue. That bound holds because every caller
+        that can end a run's ability to keep saving -- the run reaching
+        "waiting", a slice being replaced, and the window closing -- calls
+        this with force=True, which always writes regardless of the timer.
+
+        Never reads a state captured earlier: a throttled call writes nothing
+        and caches nothing, so the next write, forced or not, reads whatever
+        self.slice holds at that later moment -- never a stale snapshot from
+        whenever the throttle last let a save through.
+        """
+        if self.slice is None:
+            return
+        now = self._sliceSaveClock()
+        if not force and self._lastSliceSaveTime is not None:
+            if now - self._lastSliceSaveTime < self._SLICE_SAVE_MIN_INTERVAL:
+                return
+        self.slice.saveState()
+        self._lastSliceSaveTime = now
 
     def _onTissueMoved(self, cell, ctx, reason: str) -> None:
         """ExecutionContext.tissue_moved, cell-bound by the context factory.
@@ -1328,6 +1370,15 @@ class AutopatchWindow(Qt.QWidget):
             if self.orchestrator is not None:
                 self._stopAndReleaseOrchestrator(self.orchestrator)
         finally:
+            # Forced, in the finally, before anything else: the operator can
+            # close this window mid-survey, before a run ever reaches
+            # "waiting", and closing it must not itself become a way to lose
+            # whatever a throttled _flushSliceState call hasn't written yet
+            # (see that method's durability contract). Ahead of the releases
+            # below for the same reason they are in this finally at all -- a
+            # raise stopping the orchestrator must not cost the run's record.
+            if self.slice is not None:
+                self._flushSliceState(force=True)
             # In a finally because these are the releases that reach *outside*
             # this window: a raise while stopping the orchestrator would
             # otherwise leave the Camera module holding this session's outlines
