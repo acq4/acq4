@@ -974,6 +974,51 @@ def test_save_state_overwrites_the_previous_save(slice_dir):
     assert slice_dir.info()["n_regions"] == 1
 
 
+def test_snapshot_state_then_write_snapshot_writes_the_same_record_as_save_state(
+    slice_dir,
+):
+    # saveState() is snapshotState() immediately followed by writeSnapshot():
+    # a caller that must not read this Slice off the GUI thread (see
+    # AutopatchWindow._flushSliceState) captures the snapshot where saveState()
+    # would, and hands it to writeSnapshot() to do the actual writing --
+    # possibly later, possibly on another thread. Splitting them must not
+    # change what ends up on disk.
+    s = _saved_slice(slice_dir)
+
+    snapshot = s.snapshotState()
+    Slice.writeSnapshot(snapshot)
+
+    assert slice_dir["regions.yaml"].read() == [r.to_dict() for r in s.regions]
+    state = slice_dir["search_state.yaml"].read()
+    assert [tuple(t) for t in state["covered"]] == s.coveredTiles
+    assert slice_dir.info()["n_regions"] == 3
+
+
+def test_snapshot_state_is_plain_data_not_a_reference_into_the_slice(slice_dir):
+    # The whole point of splitting the snapshot out of saveState() is that a
+    # worker thread writing it later must never touch this Slice's own
+    # mutable state -- only regions.to_dict()'d already, coordinates already
+    # float()'d, nothing that setRegions()/markCovered() could still mutate
+    # out from under a write in progress.
+    s = _saved_slice(slice_dir)
+
+    snapshot = s.snapshotState()
+
+    assert all(isinstance(d, dict) for d in snapshot["regions"])
+    s.setRegions([RectRegion(0.0, 0.0, 1e-3, 1e-3)])
+    s.markCovered((999.0, 999.0))
+    # The snapshot already taken must be untouched by the mutation above.
+    assert len(snapshot["regions"]) == 3
+    assert (999.0, 999.0) not in [tuple(c) for c in snapshot["state"]["covered"]]
+
+
+def test_snapshot_state_returns_none_without_a_directory():
+    s = make_slice()
+    s.addRegion(RectRegion(0.0, 0.0, 30e-6, 30e-6))
+
+    assert s.snapshotState() is None
+
+
 class _RefusesToWrite:
     """A DirHandle whose every write fails -- a full disk, a storage directory
     that went away with a network mount, a permission that changed under a

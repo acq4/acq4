@@ -2,6 +2,8 @@
 to the window's StatusPanel/CellPanel, and a seeded cell runs end-to-end."""
 import importlib
 import os
+import threading
+import time
 from types import SimpleNamespace
 
 import numpy as np
@@ -2952,6 +2954,22 @@ def _searchStateSaves(handle):
     return [w for w in handle.writes if w[0] == "search_state.yaml"]
 
 
+def _waitForSliceWrite(win, timeout=2.0):
+    """Block until the slice-save worker's most recently dispatched write has
+    finished.
+
+    A save the window dispatches without forcing (an ordinary "surveying"
+    status) runs on a worker thread and returns to the caller immediately, so
+    a test that inspects the fake directory right after must synchronize on
+    it explicitly -- otherwise it is racing the worker thread, not testing
+    it. A forced flush (`_flushSliceState(force=True)`) already waits
+    internally and needs no help from this.
+    """
+    task = win._sliceWriteTask
+    if task is not None:
+        task.wait(timeout=timeout)
+
+
 def test_repeated_surveying_statuses_throttle_the_slice_save(win):
     """An interleaved survey+patch run reports "surveying" once per queue
     refill -- effectively once per cell -- and each one used to trigger a
@@ -2964,6 +2982,7 @@ def test_repeated_surveying_statuses_throttle_the_slice_save(win):
 
     for _ in range(5):
         win._onRunStatus("surveying")
+    _waitForSliceWrite(win)
 
     assert len(_searchStateSaves(handle)) == 1
 
@@ -3013,8 +3032,10 @@ def test_slice_saves_resume_once_the_throttle_interval_elapses(win):
     win._sliceSaveClock = lambda: now[0]
 
     win._onRunStatus("surveying")
+    _waitForSliceWrite(win)
     now[0] += win._SLICE_SAVE_MIN_INTERVAL + 0.001
     win._onRunStatus("surveying")
+    _waitForSliceWrite(win)
 
     assert len(_searchStateSaves(handle)) == 2
 
@@ -3026,8 +3047,10 @@ def test_teardown_flushes_slice_state_even_without_a_waiting_status(win):
     slice_, handle = _sliceWithCountingDir(win)
     win._sliceSaveClock = lambda: 100.0
     win._onRunStatus("surveying")
+    _waitForSliceWrite(win)
     slice_.markCovered(slice_.tileGrid()[1])
     win._onRunStatus("surveying")  # throttled: the new tile isn't on disk yet
+    _waitForSliceWrite(win)
     # Confirms the second status really was throttled away, so the count after
     # teardown below can only grow because teardown() itself forced a flush --
     # not because the throttle never engaged in the first place.
@@ -3038,6 +3061,154 @@ def test_teardown_flushes_slice_state_even_without_a_waiting_status(win):
     saves = _searchStateSaves(handle)
     assert len(saves) == 2
     assert {tuple(c) for c in saves[-1][1]["covered"]} == set(slice_.coveredTiles)
+
+
+def test_a_dispatched_save_does_not_write_on_the_calling_thread(win, monkeypatch):
+    """The whole point of moving this off the GUI thread: the write itself
+    -- the two writeFile()s and the setInfo(), each of which drives a
+    synchronous full-directory .index rewrite under DirHandle's own mutex --
+    must happen somewhere other than the thread _onRunStatus was called on."""
+    slice_, handle = _sliceWithCountingDir(win)
+    win._sliceSaveClock = lambda: 100.0
+    callingThread = threading.current_thread()
+    writerThreads = []
+    original = Slice.writeSnapshot
+
+    def _spy(snapshot):
+        writerThreads.append(threading.current_thread())
+        original(snapshot)
+
+    monkeypatch.setattr(Slice, "writeSnapshot", staticmethod(_spy))
+
+    win._onRunStatus("surveying")
+    _waitForSliceWrite(win)
+
+    assert writerThreads
+    assert writerThreads[0] is not callingThread
+
+
+class _BlockingDirHandle(_CountingDirHandle):
+    """A _CountingDirHandle whose search_state.yaml write blocks until the
+    test releases it -- what a coalescing test needs to force a write to
+    still be in flight when the next snapshot is dispatched, deterministically
+    rather than by racing real thread scheduling."""
+
+    def __init__(self):
+        super().__init__()
+        self.writeStarted = threading.Event()
+        self.releaseWrite = threading.Event()
+
+    def writeFile(self, obj, fileName, **kwargs):
+        if fileName == "search_state.yaml":
+            self.writeStarted.set()
+            self.releaseWrite.wait(timeout=2.0)
+        super().writeFile(obj, fileName, **kwargs)
+
+
+def _sliceWithBlockingDir(win):
+    handle = _BlockingDirHandle()
+    slice_ = Slice(fov=(20e-6, 10e-6), dirHandle=handle)
+    slice_.addRegion(RectRegion(1e-3, 2e-3, 1e-3 + 60e-6, 2e-3 + 30e-6))
+    win.slice = slice_
+    return slice_, handle
+
+
+def test_two_saves_dispatched_while_a_write_is_in_flight_coalesce_to_the_latest(win):
+    """Coalescing is what makes a single worker thread the right shape here:
+    if a second and third snapshot are dispatched while the worker is still
+    busy writing the first, the middle one must never reach disk at all --
+    only the latest state does, and it does so in one write, not two."""
+    slice_, handle = _sliceWithBlockingDir(win)
+    now = [100.0]
+    win._sliceSaveClock = lambda: now[0]
+
+    win._onRunStatus("surveying")  # dispatch A (covered=[]); worker blocks writing it
+    assert handle.writeStarted.wait(timeout=2.0)
+    handle.writeStarted.clear()
+
+    # Both land while A is still blocked mid-write, so the worker's drain
+    # loop has not yet had a chance to look for pending work.
+    now[0] += win._SLICE_SAVE_MIN_INTERVAL + 1
+    slice_.markCovered(slice_.tileGrid()[0])
+    win._onRunStatus("surveying")  # dispatch B: coalesced behind the in-flight write
+    now[0] += win._SLICE_SAVE_MIN_INTERVAL + 1
+    slice_.markCovered(slice_.tileGrid()[1])
+    win._onRunStatus("surveying")  # dispatch C: replaces B before it is ever written
+
+    handle.releaseWrite.set()  # let A's write complete
+    _waitForSliceWrite(win)  # wait for the drain loop to finish writing C
+
+    saves = _searchStateSaves(handle)
+    # A (already committed before B/C existed) and C (the last state
+    # standing once the worker looks again) -- B never appears.
+    assert len(saves) == 2
+    assert saves[0][1]["covered"] == []
+    latestCovered = {tuple(c) for c in saves[-1][1]["covered"]}
+    assert latestCovered == set(slice_.coveredTiles)
+
+
+class _SlowDirHandle(_CountingDirHandle):
+    """A _CountingDirHandle whose search_state.yaml write takes a small but
+    real amount of time -- long enough that a forced flush returning
+    immediately (rather than waiting on the write) would reliably be caught
+    checking the handle before the write lands."""
+
+    def __init__(self, delay=0.05):
+        super().__init__()
+        self._delay = delay
+
+    def writeFile(self, obj, fileName, **kwargs):
+        if fileName == "search_state.yaml":
+            time.sleep(self._delay)
+        super().writeFile(obj, fileName, **kwargs)
+
+
+def _sliceWithSlowDir(win):
+    handle = _SlowDirHandle()
+    slice_ = Slice(fov=(20e-6, 10e-6), dirHandle=handle)
+    slice_.addRegion(RectRegion(1e-3, 2e-3, 1e-3 + 60e-6, 2e-3 + 30e-6))
+    win.slice = slice_
+    return slice_, handle
+
+
+def test_a_forced_flush_waits_for_the_write_to_land_before_returning(win):
+    """"waiting" (run end) and teardown() both force a flush and both must be
+    able to promise the operator the state is actually on disk once they
+    return -- not merely that a write was started."""
+    slice_, handle = _sliceWithSlowDir(win)
+    win._sliceSaveClock = lambda: 100.0
+
+    win._onRunStatus("waiting")  # forced
+
+    assert len(_searchStateSaves(handle)) == 1
+
+
+def test_teardown_with_a_write_in_flight_still_lands_the_final_state(win):
+    """Closing the window while a periodic (non-forced) save is still running
+    on the worker thread must not race past it: teardown()'s own forced flush
+    has to join whatever is already in flight and end with the latest state
+    on disk, not whatever was there when the write started."""
+    slice_, handle = _sliceWithSlowDir(win)
+    win._sliceSaveClock = lambda: 100.0
+
+    win._onRunStatus("surveying")  # dispatched; the slow write is likely still running
+    win.teardown()  # must wait for it rather than returning past it
+
+    saves = _searchStateSaves(handle)
+    assert len(saves) == 1
+    assert {tuple(c) for c in saves[-1][1]["covered"]} == set(slice_.coveredTiles)
+
+
+def test_a_status_after_teardown_does_not_raise(win):
+    """teardown() stops the slice-save worker once its own forced flush has
+    landed. A status change delivered afterward -- a queued Qt signal from an
+    orchestrator that had already emitted before the window closed, say --
+    must find nothing left to write to rather than raising out of a slot."""
+    _sliceWithCountingDir(win)
+    win._sliceSaveClock = lambda: 100.0
+    win.teardown()
+
+    win._onRunStatus("surveying")  # must not raise
 
 
 def test_a_tracked_cell_marker_follows_its_position_signal(qapp, win):

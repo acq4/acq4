@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import functools
 import os
+import threading
 import time
 
 from acq4.experiment.actions.prompt import prompt
@@ -17,6 +18,7 @@ from acq4.modules.Module import Module
 from acq4.util import Qt
 from acq4.util.HelpfulException import HelpfulException
 from acq4.util.InterfaceCombo import InterfaceCombo
+from acq4.util.task import WorkerThread
 
 from .cell_panel import CellPanel
 from .context_factory import make_context_factory
@@ -86,6 +88,10 @@ class AutopatchWindow(Qt.QWidget):
     # "surveying" status; see _flushSliceState for the durability tradeoff
     # this bounds.
     _SLICE_SAVE_MIN_INTERVAL = 2.0
+    # How long a forced flush (run end, slice replaced, window closing) waits
+    # for its write to land before giving up and logging instead of hanging;
+    # see _flushSliceState.
+    _SLICE_SAVE_FLUSH_TIMEOUT = 10.0
 
     def __init__(
         self,
@@ -270,6 +276,22 @@ class AutopatchWindow(Qt.QWidget):
         # Clock reading at the last periodic slice-state save, or None before
         # the first one; see _flushSliceState.
         self._lastSliceSaveTime = None
+        # Serialises this window's slice-state writes onto one dedicated
+        # thread, off the GUI thread the writes used to block -- see
+        # _flushSliceState/_dispatchSliceSave/_drainSliceWrites. One worker
+        # per window, stopped in teardown().
+        self._sliceSaveWorker = WorkerThread(name="Autopatch slice save")
+        # Guards the three attributes below, which the GUI thread (dispatching
+        # writes) and the slice-save worker thread (draining them) both touch.
+        self._sliceWriteLock = threading.Lock()
+        # The most recently dispatched snapshot not yet picked up by the
+        # worker's drain loop, or None. Replaced rather than queued when a
+        # write is already in flight -- see _dispatchSliceSave.
+        self._pendingSliceSnapshot = None
+        self._sliceWriteInFlight = False
+        # The task for whichever write is currently running (or about to
+        # run) on the worker; a forced flush waits on this.
+        self._sliceWriteTask = None
         self._tornDown = False
         self.protocolPanel.sigProtocolLoaded.connect(self._onProtocolLoaded)
         # Area 4 (the protocol picker/Reload) must not be usable while a
@@ -781,10 +803,16 @@ class AutopatchWindow(Qt.QWidget):
         # Captured before _startSlice replaces self.slice: the outgoing slice's
         # own record is written now, while it is still reachable, and its
         # directory is what its pinned frames are archived into further down.
+        # Forced (not a plain saveState()) so this waits for the write to
+        # actually land before self.slice is replaced below: a run may have
+        # left a periodic save still in flight on the slice-save worker for
+        # this very slice, and starting a fresh synchronous write on top of it
+        # would race that worker over the same directory with no guarantee
+        # which one lands last.
         outgoing = self.slice
         outgoingDir = outgoing.dirHandle if outgoing is not None else None
         if outgoing is not None:
-            outgoing.saveState()
+            self._flushSliceState(force=True)
         if not self._startSlice(dirHandle=dirHandle):
             return
         self.cellPanel.clearCells()
@@ -1085,7 +1113,8 @@ class AutopatchWindow(Qt.QWidget):
                 self._flushSliceState(force=(status == "waiting"))
 
     def _flushSliceState(self, *, force: bool) -> None:
-        """Write self.slice's search state to disk, throttled unless `force`.
+        """Dispatch self.slice's search state to be written, throttled unless
+        `force`, off the GUI thread.
 
         Durability contract: while a run is in progress, at most the coverage
         gained in the last _SLICE_SAVE_MIN_INTERVAL seconds can be lost to a
@@ -1093,15 +1122,25 @@ class AutopatchWindow(Qt.QWidget):
         "surveying" status was built to accept ("a survey interrupted between
         two of these has lost at most the tiles since the last one"), now
         bounded by wall-clock time rather than by how often the orchestrator
-        happens to refill its queue. That bound holds because every caller
-        that can end a run's ability to keep saving -- the run reaching
-        "waiting", a slice being replaced, and the window closing -- calls
-        this with force=True, which always writes regardless of the timer.
+        happens to refill its queue. `force=True` waits for the dispatched
+        write to actually land (up to _SLICE_SAVE_FLUSH_TIMEOUT) before
+        returning, rather than merely starting it: that is what lets the run
+        reaching "waiting", a slice being replaced, and the window closing
+        each promise nothing beyond the bound above is silently lost, instead
+        of "we started a write and hoped".
 
-        Never reads a state captured earlier: a throttled call writes nothing
-        and caches nothing, so the next write, forced or not, reads whatever
-        self.slice holds at that later moment -- never a stale snapshot from
-        whenever the throttle last let a save through.
+        The write itself never happens on the GUI thread, which is the actual
+        fix for the reported stall: two writeFile()s and a setInfo() each
+        drive DirHandle's synchronous, mutex-guarded full-directory .index
+        rewrite (see _dispatchSliceSave/_drainSliceWrites), and that cost used
+        to land on the thread painting the window. The snapshot handed to the
+        worker is captured right here, on the GUI thread, from self.slice's
+        live state -- never read by the worker itself, so a setRegions() or
+        markCovered() landing on the GUI thread after this returns can never
+        race the write. When a write is already running and a newer one is
+        dispatched before it finishes, the newer snapshot simply replaces
+        whatever was queued behind it (see _dispatchSliceSave): the LATEST
+        dispatched snapshot is what lands on disk, not every one dispatched.
         """
         if self.slice is None:
             return
@@ -1109,8 +1148,72 @@ class AutopatchWindow(Qt.QWidget):
         if not force and self._lastSliceSaveTime is not None:
             if now - self._lastSliceSaveTime < self._SLICE_SAVE_MIN_INTERVAL:
                 return
-        self.slice.saveState()
         self._lastSliceSaveTime = now
+        snapshot = self.slice.snapshotState()
+        if snapshot is None:
+            return
+        task = self._dispatchSliceSave(snapshot)
+        if force and task is not None:
+            try:
+                task.wait(timeout=self._SLICE_SAVE_FLUSH_TIMEOUT)
+            except Exception:
+                logger.exception(
+                    "Timed out waiting for this slice's search state to be written"
+                )
+
+    def _dispatchSliceSave(self, snapshot: dict):
+        """Queue `snapshot` for the slice-save worker thread to write,
+        coalescing with a write already in flight.
+
+        If nothing is currently running, this starts the worker on `snapshot`
+        directly. If a write is already running, `snapshot` replaces whatever
+        was waiting behind it instead of queuing a second job: a burst of
+        saves costs one write of the latest state once the worker gets to it,
+        not one write per save. Returns the task for the write that is now
+        running (or about to run), which is what `_flushSliceState`'s forced
+        path waits on -- or None if the worker has already been stopped (see
+        below), which a forced caller must not wait on.
+        """
+        with self._sliceWriteLock:
+            self._pendingSliceSnapshot = snapshot
+            if self._sliceWriteInFlight:
+                return self._sliceWriteTask
+            self._sliceWriteInFlight = True
+            try:
+                self._sliceWriteTask = self._sliceSaveWorker.submit(
+                    self._drainSliceWrites, name="Autopatch slice save"
+                )
+            except RuntimeError:
+                # teardown() already forced a flush and stopped the worker; a
+                # status change arriving after that (e.g. a Qt signal already
+                # queued when the window closed) has nothing left to write
+                # to. Not a raise this caller should see, for the same reason
+                # saveState() never raised: whatever asked for this save has
+                # already moved on.
+                self._sliceWriteInFlight = False
+                self._pendingSliceSnapshot = None
+                return None
+            return self._sliceWriteTask
+
+    def _drainSliceWrites(self) -> None:
+        """Worker-thread body: write the latest pending snapshot, then look
+        again in case a newer one was dispatched while writing, until none is
+        left.
+
+        Runs on the slice-save worker thread, never the GUI thread. Touches
+        only the lock and whatever snapshot it is handed -- plain data
+        _flushSliceState already captured from self.slice on the GUI thread
+        -- so this never reads the live Slice itself, which stays the GUI
+        thread's alone to mutate.
+        """
+        while True:
+            with self._sliceWriteLock:
+                snapshot = self._pendingSliceSnapshot
+                self._pendingSliceSnapshot = None
+                if snapshot is None:
+                    self._sliceWriteInFlight = False
+                    return
+            Slice.writeSnapshot(snapshot)
 
     def _onTissueMoved(self, cell, ctx, reason: str) -> None:
         """ExecutionContext.tissue_moved, cell-bound by the context factory.
@@ -1379,6 +1482,10 @@ class AutopatchWindow(Qt.QWidget):
             # raise stopping the orchestrator must not cost the run's record.
             if self.slice is not None:
                 self._flushSliceState(force=True)
+            # Stopped only after the forced flush above has returned, so the
+            # worker is never told to shut down while that flush is still
+            # waiting on it.
+            self._sliceSaveWorker.stop()
             # In a finally because these are the releases that reach *outside*
             # this window: a raise while stopping the orchestrator would
             # otherwise leave the Camera module holding this session's outlines
