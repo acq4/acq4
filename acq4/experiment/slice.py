@@ -55,6 +55,13 @@ class SearchConstraints:
     metre, above which a tile counts as already crowded and is skipped rather
     than having more targets packed into it. `rescans_allowed` permits
     re-imaging tiles that have already been covered.
+
+    `min_volume_m3` and `step_z` parameterise the tile detector rather than
+    the search itself: a volume floor below which a detected blob is not a
+    cell, and the z step its detection stack is acquired at. They live here
+    (rather than as a separate, unpersisted rig setting) so an operator's
+    choice for one slice is exactly as reproducible as the health cutoff or
+    the density cap.
     """
 
     depth_range: tuple[float, float] = (-20e-6, -60e-6)
@@ -63,6 +70,8 @@ class SearchConstraints:
     # default cap only rejects genuinely crowded tissue.
     max_cell_density: float = 5e12
     rescans_allowed: bool = False
+    min_volume_m3: float = 0.0
+    step_z: float = 1e-6
 
     def __post_init__(self):
         near, far = self.depth_range
@@ -81,6 +90,12 @@ class SearchConstraints:
         if self.max_cell_density <= 0:
             raise ValueError(
                 f"max_cell_density must be positive, got {self.max_cell_density}"
+            )
+        if self.step_z <= 0:
+            raise ValueError(f"step_z must be positive, got {self.step_z}")
+        if self.min_volume_m3 < 0:
+            raise ValueError(
+                f"min_volume_m3 must be non-negative, got {self.min_volume_m3}"
             )
 
     def z_span(self) -> float:
@@ -448,6 +463,8 @@ class Slice:
                     "min_health": float(constraints.min_health),
                     "max_cell_density": float(constraints.max_cell_density),
                     "rescans_allowed": bool(constraints.rescans_allowed),
+                    "min_volume_m3": float(constraints.min_volume_m3),
+                    "step_z": float(constraints.step_z),
                 },
                 "covered": [[float(x), float(y)] for x, y in covered],
                 "survey": {
@@ -573,6 +590,12 @@ class Slice:
                 min_health=constraints["min_health"],
                 max_cell_density=constraints["max_cell_density"],
                 rescans_allowed=constraints["rescans_allowed"],
+                # .get() with the library defaults, not a migration: a record
+                # written before these existed simply lacks the keys, and a
+                # slice loaded from one gets the same defaults it would have
+                # gotten unconfigured.
+                min_volume_m3=constraints.get("min_volume_m3", 0.0),
+                step_z=constraints.get("step_z", 1e-6),
             )
             # Rebound rather than mutated, and as tuples, so the restored
             # coverage is indistinguishable from coverage markCovered() built.
