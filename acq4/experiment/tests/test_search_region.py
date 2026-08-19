@@ -1,11 +1,19 @@
 """Tests for search-region shapes: the bounding box a survey plans its tiles over,
-and the exact rect-vs-shape overlap test that decides which of those tiles to image."""
+the exact rect-vs-shape overlap test that decides which of those tiles to image, and
+the point test that decides which of the cells found in them may be patched."""
 
 import math
 
 import pytest
 
-from acq4.experiment.search_region import EllipseRegion, PolygonRegion, RectRegion, SearchRegion, tile_rect
+from acq4.experiment.search_region import (
+    EllipseRegion,
+    PolygonRegion,
+    RectRegion,
+    SearchRegion,
+    region_from_dict,
+    tile_rect,
+)
 
 # A 10 um tile, the size used throughout these tests.
 TILE = (10e-6, 10e-6)
@@ -20,13 +28,16 @@ def test_tile_rect_is_centered_on_the_tile_center():
 
 def test_the_base_class_refuses_to_answer_for_itself():
     # SearchRegion is the contract, not a usable shape: a subclass that forgets
-    # to implement one of the two methods must fail loudly rather than silently
-    # surveying nothing.
+    # to implement one of the three methods must fail loudly rather than
+    # silently surveying nothing -- or, for contains(), silently admitting every
+    # cell the segmenter found outside the tissue the operator outlined.
     region = SearchRegion()
     with pytest.raises(NotImplementedError):
         region.bounds()
     with pytest.raises(NotImplementedError):
         region.overlapsTile((0.0, 0.0), TILE)
+    with pytest.raises(NotImplementedError):
+        region.contains((0.0, 0.0))
 
 
 def test_rect_bounds_are_normalized_whichever_corners_are_given():
@@ -513,3 +524,325 @@ def test_the_rotated_ellipse_still_maps_each_axis_to_its_own_radius():
     minor = (cx - 7e-6 * math.sin(th), cy + 7e-6 * math.cos(th))
     assert region.overlapsTile(major, speck) is True
     assert region.overlapsTile(minor, speck) is False
+
+
+# ---- containment ----
+# A separate question from overlap, and deliberately the opposite trade. A tile
+# is an area and is imaged if it touches the region at all; a detected cell is a
+# location and is patched only if it is genuinely inside. The camera images past
+# the outline on purpose -- a field straddling the edge is what gives the
+# segmenter the context to find cells sitting right at it -- so every survey run
+# turns up detections outside the tissue the operator drew.
+
+
+def _contains_oracle(region, x, y):
+    """Independent membership oracle for the box-derived shapes: turn the point
+    back about the pivot and ask the axis-aligned shape it came from.
+
+    Written from `box()` and `angle` rather than sharing the implementation's
+    arithmetic, so agreement is evidence rather than a restatement.
+    """
+    x0, y0, x1, y1 = region.box()
+    ux, uy = _turned(x0, y0, x, y, -region.angle)
+    if isinstance(region, EllipseRegion):
+        cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+        rx, ry = (x1 - x0) / 2, (y1 - y0) / 2
+        return ((ux - cx) / rx) ** 2 + ((uy - cy) / ry) ** 2 <= 1.0
+    return x0 <= ux <= x1 and y0 <= uy <= y1
+
+
+def _containment_pattern(regionClass, scale, off):
+    """Which of a 15x15 grid of points `regionClass` contains, as a tuple of bools.
+
+    The same relative geometry at any magnitude, for the same reason
+    `_selected_pattern` is built that way: a pattern that changes with absolute
+    coordinate size is an implementation whose accuracy depends on where the
+    stage happens to be.
+    """
+    side = 12 * scale
+    region = regionClass(off + scale, off + scale, off + scale + side, off + scale + side)
+    return tuple(
+        region.contains((off + (gx + 0.5) * scale, off + (gy + 0.5) * scale))
+        for gy in range(15)
+        for gx in range(15)
+    )
+
+
+def test_a_rect_contains_the_points_inside_its_box_and_no_others():
+    region = RectRegion(0.0, 0.0, 30e-6, 20e-6)
+    assert region.contains((15e-6, 10e-6)) is True
+    assert region.contains((0.0, 0.0)) is True
+    assert region.contains((31e-6, 10e-6)) is False
+    assert region.contains((15e-6, -1e-9)) is False
+
+
+def test_containment_is_a_stricter_question_than_tile_overlap():
+    # The reason this method exists. A tile centred just outside the region
+    # still overlaps it -- that overhang is deliberate, and is what the survey
+    # images -- but a cell detected out there is outside the tissue the operator
+    # asked for and must not be queued.
+    region = RectRegion(0.0, 0.0, 30e-6, 30e-6)
+    justOutside = (-3e-6, 15e-6)
+    assert region.overlapsTile(justOutside, TILE) is True
+    assert region.contains(justOutside) is False
+
+
+def test_contains_reads_only_the_first_two_coordinates():
+    # A detected cell's position is a 3-vector and arrives as a coorx Point; a
+    # region is a shape in the xy plane, so depth is not part of the question.
+    # Anything indexable works, the same latitude Slice.forceRescan allows.
+    region = RectRegion(0.0, 0.0, 30e-6, 30e-6)
+    assert region.contains([15e-6, 15e-6, -40e-6]) is True
+    assert region.contains((15e-6, 15e-6, 1.0)) is True
+    assert region.contains([100e-6, 15e-6, -40e-6]) is False
+
+
+def test_an_ellipse_contains_its_centre_but_not_its_box_corners():
+    region = EllipseRegion(0.0, 0.0, 30e-6, 30e-6)
+    assert region.contains((15e-6, 15e-6)) is True
+    # Inside the bounding box, outside the inscribed circle: 21 um from the
+    # centre, which has a radius of 15 um.
+    assert region.contains((0.0, 0.0)) is False
+
+
+def test_ellipse_containment_maps_each_axis_to_its_own_radius():
+    # A 4:1 ellipse: the only configuration in which a swapped rx/ry is visible.
+    region = EllipseRegion(0.0, 0.0, 40e-6, 10e-6)
+    assert region.contains((34e-6, 5e-6)) is True    # 14 um along the 20 um axis
+    assert region.contains((20e-6, 12e-6)) is False  # 7 um along the 5 um axis
+
+
+def test_a_polygon_contains_points_in_its_arms_but_not_in_its_notch():
+    # The same L the tile-overlap tests use: the bounding box would admit cells
+    # from a quadrant of tissue the operator explicitly cut out.
+    region = PolygonRegion(
+        [
+            (0.0, 0.0),
+            (30e-6, 0.0),
+            (30e-6, 12e-6),
+            (12e-6, 12e-6),
+            (12e-6, 30e-6),
+            (0.0, 30e-6),
+        ]
+    )
+    assert region.contains((6e-6, 25e-6)) is True
+    assert region.contains((25e-6, 6e-6)) is True
+    assert region.contains((25e-6, 25e-6)) is False
+    assert region.contains((40e-6, 6e-6)) is False
+
+
+@pytest.mark.parametrize("regionClass", [RectRegion, EllipseRegion])
+def test_rotated_containment_agrees_with_a_turned_oracle_over_a_grid(regionClass):
+    # A whole grid rather than a handful of points: an angle dropped, negated,
+    # or applied about the wrong pivot moves the boundary past a different set
+    # of points on every side, and only points near that boundary can tell the
+    # difference.
+    region = regionClass(*BOX, ANGLE)
+    bx0, by0, bx1, by1 = region.bounds()
+    step = 60e-6
+    for gy in range(14):
+        for gx in range(14):
+            p = (bx0 + gx * step, by0 + gy * step)
+            assert region.contains(p) == _contains_oracle(region, *p), (
+                regionClass.__name__,
+                gx,
+                gy,
+            )
+
+
+@pytest.mark.parametrize("regionClass", [RectRegion, EllipseRegion])
+def test_rotating_a_region_changes_which_points_it_contains(regionClass):
+    # An implementation that quietly ignored the angle would admit cells from
+    # one corner of the operator's tissue and refuse them from another, and
+    # would pass any test that only counted contained points.
+    turned = regionClass(*BOX, ANGLE)
+    straight = regionClass(*BOX)
+    bx0, by0, _, _ = turned.bounds()
+    step = 60e-6
+    points = [
+        (bx0 + gx * step, by0 + gy * step) for gy in range(14) for gx in range(14)
+    ]
+    onlyTurned = [p for p in points if turned.contains(p) and not straight.contains(p)]
+    onlyStraight = [p for p in points if straight.contains(p) and not turned.contains(p)]
+    assert onlyTurned and onlyStraight
+
+
+@pytest.mark.parametrize(
+    "regionClass", [RectRegion, EllipseRegion]
+)
+@pytest.mark.parametrize(
+    "scale,off",
+    [
+        (200e-6, 0.0),
+        (200e-6, 5e-2),
+        (2e-6, 1e-3),
+        (1e-3, 4e7),
+        (50e-6, -3.2e-3),
+    ],
+)
+def test_containment_is_identical_at_every_magnitude(regionClass, scale, off):
+    # The scale-freedom the whole module is written for: pure arithmetic on
+    # quantities of the same magnitude, with no absolute tolerance to be wrong
+    # about at either 1e-6 or 1e7.
+    assert _containment_pattern(regionClass, scale, off) == _containment_pattern(
+        regionClass, 1.0, 0.0
+    )
+
+
+def test_the_containment_pattern_is_neither_everything_nor_nothing():
+    # Pins the references the invariance test compares against, so it cannot
+    # pass vacuously against an all-True or all-False implementation.
+    assert sum(_containment_pattern(RectRegion, 1.0, 0.0)) == 144
+    assert sum(_containment_pattern(EllipseRegion, 1.0, 0.0)) == 112
+
+
+@pytest.mark.parametrize(
+    "region",
+    [
+        RectRegion(*BOX, ANGLE),
+        EllipseRegion(*BOX, ANGLE),
+        PolygonRegion([(1.0e-3, 2.0e-3), (1.6e-3, 2.1e-3), (1.2e-3, 2.4e-3)]),
+    ],
+)
+def test_a_contained_point_always_sits_in_a_tile_the_survey_images(region):
+    # The two questions must not contradict each other: a cell inside the region
+    # has to have been findable, which means the tile around it was one the
+    # survey imaged. Containment stricter than overlap is the point; containment
+    # admitting a point from a tile the survey skips would be a bug.
+    bx0, by0, bx1, by1 = region.bounds()
+    fov = ((bx1 - bx0) / 8, (by1 - by0) / 8)
+    step = (bx1 - bx0) / 13
+    for gy in range(14):
+        for gx in range(14):
+            p = (bx0 + gx * step, by0 + gy * step)
+            if region.contains(p):
+                assert region.overlapsTile(p, fov) is True, (gx, gy)
+
+
+# ---- persistence: to_dict / from_dict / region_from_dict ----
+
+# The angles a round-trip test has to survive. Zero is in the list on purpose:
+# it is a shape's ordinary state and the one an implementation that stored a
+# centre and a half-extent would be likeliest to move (see _BoxRegion's own
+# docstring on why the pivot is a corner). The rest sample every quadrant,
+# including the axis-aligned quarter turns where a cos or sin lands exactly on
+# 0 or 1, and one angle past a full turn.
+ROUND_TRIP_ANGLES = [
+    0.0, 0.5, 7.3, 30.0, 45.0, 90.0, 123.456, 180.0, 217.9, 270.0, 359.5, 412.75, -37.25,
+]
+
+
+@pytest.mark.parametrize("regionClass", [RectRegion, EllipseRegion])
+@pytest.mark.parametrize("angle", ROUND_TRIP_ANGLES)
+def test_a_box_region_round_trips_exactly_at_every_angle(regionClass, angle):
+    # Exactly, not approximately: a region is what the operator drew by hand,
+    # and a saved slice reopened with its outlines a float off the tissue they
+    # were traced onto is a record that quietly lies about where it looked.
+    # This is the same exactness `_BoxRegion` chose a corner pivot to get, so
+    # the persistence format stores what that pivot is measured from -- the
+    # `box()` the operator sized and the angle -- rather than anything derived.
+    region = regionClass(*BOX, angle)
+    restored = regionClass.from_dict(region.to_dict())
+    assert restored == region
+    assert restored.box() == region.box()
+    assert restored.angle == region.angle
+
+
+def test_a_polygon_round_trips_exactly():
+    region = PolygonRegion(
+        [(1.0e-3, 2.0e-3), (1.6e-3, 2.1e-3), (1.2e-3, 2.4e-3), (0.9e-3, 2.2e-3)]
+    )
+    restored = PolygonRegion.from_dict(region.to_dict())
+    assert restored == region
+    assert restored.vertices == region.vertices
+
+
+@pytest.mark.parametrize(
+    "region,shape",
+    [
+        (RectRegion(*BOX), "rect"),
+        (EllipseRegion(*BOX), "ellipse"),
+        (PolygonRegion([(0.0, 0.0), (1.0, 0.0), (0.0, 1.0)]), "polygon"),
+    ],
+)
+def test_a_serialized_region_names_its_shape(region, shape):
+    # The shape tag is what lets a saved list rebuild without the caller
+    # switching on type, and it is also the only part of the record a human
+    # reading the file can use to tell a rect from the ellipse inscribed in
+    # the identical box.
+    assert region.to_dict()["shape"] == shape
+
+
+@pytest.mark.parametrize(
+    "region",
+    [
+        RectRegion(*BOX, ANGLE),
+        EllipseRegion(*BOX, ANGLE),
+        PolygonRegion([(1.0e-3, 2.0e-3), (1.6e-3, 2.1e-3), (1.2e-3, 2.4e-3)]),
+    ],
+)
+def test_the_dispatcher_rebuilds_the_shape_that_was_saved(region):
+    restored = region_from_dict(region.to_dict())
+    assert type(restored) is type(region)
+    assert restored == region
+
+
+def test_the_dispatcher_refuses_a_shape_it_does_not_know():
+    # A file written by a later version, or hand-edited: rebuilding the wrong
+    # shape from it would put a survey over tissue nobody outlined, so it
+    # fails loudly instead.
+    with pytest.raises(ValueError, match="unknown region shape"):
+        region_from_dict({"shape": "trapezoid", "box": [0.0, 0.0, 1.0, 1.0]})
+
+
+@pytest.mark.parametrize(
+    "region",
+    [
+        RectRegion(*BOX, ANGLE),
+        EllipseRegion(*BOX, ANGLE),
+        PolygonRegion([(1.0e-3, 2.0e-3), (1.6e-3, 2.1e-3), (1.2e-3, 2.4e-3)]),
+    ],
+)
+def test_a_serialized_region_is_plain_data(region):
+    # The whole reason these methods exist: the regions are frozen dataclasses,
+    # and both places a slice's state lands -- a YAML file and the directory
+    # index, which is written with repr() and read back with eval() in a
+    # namespace that has never heard of RectRegion -- can carry only dicts,
+    # lists, strings, and numbers.
+    d = region.to_dict()
+
+    def plain(value):
+        if isinstance(value, dict):
+            return all(isinstance(k, str) and plain(v) for k, v in value.items())
+        if isinstance(value, list):
+            return all(plain(v) for v in value)
+        return isinstance(value, (str, float, int, bool)) or value is None
+
+    assert plain(d), d
+    assert eval(repr(d)) == d
+
+
+def test_a_serialized_region_survives_yaml():
+    # The format Slice.saveState() writes it in. yaml round-trips a float
+    # through repr(), so this is exact rather than merely close, and a tuple
+    # left in the payload would come back tagged rather than as a list.
+    yaml = pytest.importorskip("yaml")
+    region = EllipseRegion(*BOX, 123.456)
+    restored = region_from_dict(yaml.safe_load(yaml.safe_dump(region.to_dict())))
+    assert restored == region
+
+
+def test_a_box_region_without_an_angle_reads_as_unturned():
+    # A hand-written or older record that names only the box: a missing angle
+    # is the ordinary unturned shape, not a reason to refuse the region.
+    assert RectRegion.from_dict({"shape": "rect", "box": [0.0, 0.0, 1.0, 2.0]}) == (
+        RectRegion(0.0, 0.0, 1.0, 2.0)
+    )
+
+
+def test_the_base_class_refuses_to_serialize_itself():
+    # to_dict() is the fourth question a shape has to answer, and a subclass
+    # that forgot it must fail loudly rather than have its geometry silently
+    # dropped from the slice record.
+    with pytest.raises(NotImplementedError):
+        SearchRegion().to_dict()
