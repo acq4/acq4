@@ -415,10 +415,28 @@ class RegionPanel(Qt.QWidget):
         """The extent of everything in the view that is not a region ROI, or
         None if there is nothing else there.
 
-        In practice the mirrored pinned frames. Read off the view rather than
-        from PinnedFrameMirror: the panel renders regions and knows nothing
-        about what else is put in its view, and a back-reference to the mirror
-        would make the two mutually dependent for a bounding box.
+        In practice the mirrored pinned frames and the survey's coverage
+        shading. Read off the view rather than from PinnedFrameMirror: the
+        panel renders regions and knows nothing about what else is put in its
+        view, and a back-reference to the mirror would make the two mutually
+        dependent for a bounding box.
+
+        Read off the view means exactly that, and nothing here may assume the
+        items found there are pyqtgraph's. ProgressOverlay draws its coverage
+        tiles as plain Qt.QGraphicsRectItems, which carry none of the
+        pyqtgraph GraphicsItem mixin's conveniences -- `mapRectToView` among
+        them -- so bounds are mapped with Qt's own `mapRectToItem` into the
+        ViewBox's child group. That is the general form of the pyqtgraph call
+        rather than an approximation of it: `GraphicsItem.mapRectToView` maps
+        through `itemTransform(view.innerSceneItem())`, `innerSceneItem()` is
+        that child group, and the child group is also the parent
+        `ViewBox.addItem` reparents every item it accepts onto -- so an item
+        in `addedItems` is always somewhere below it.
+
+        The coverage shading is framed rather than skipped because it is drawn
+        content the operator can see, and because a tile is a whole field of
+        view: a region smaller than one field is surveyed well past its own
+        edges, and where the survey will actually image is worth framing.
 
         Region ROIs are skipped because their bounds come from `regions()`,
         which drops an ROI squashed to no extent. Framing one would re-centre
@@ -442,10 +460,11 @@ class RegionPanel(Qt.QWidget):
         defeat fitToRegions()'s own "nothing to frame" guard.
         """
         rect = None
+        childGroup = self.view.innerSceneItem()
         for item in self.view.addedItems:
             if item in self._rois or item in self._framingExclusions:
                 continue
-            itemRect = item.mapRectToView(item.boundingRect()).normalized()
+            itemRect = item.mapRectToItem(childGroup, item.boundingRect()).normalized()
             if itemRect.isEmpty():
                 continue
             rect = itemRect if rect is None else rect.united(itemRect)

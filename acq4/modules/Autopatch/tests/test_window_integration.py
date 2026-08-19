@@ -3085,6 +3085,34 @@ def test_fit_to_regions_is_unaffected_by_a_progress_marker(qapp, win):
     assert ay1 == pytest.approx(by1, rel=1e-9)
 
 
+def test_fit_to_regions_survives_the_survey_coverage_shading(qapp, win):
+    """Reported from a rig, on a slice with a region drawn and tiles still to
+    survey: "Fit to regions" raised AttributeError out of its own slot,
+    because RegionPanel._mirroredImageryBounds() mapped every item in the
+    view with pyqtgraph's mapRectToView() and the coverage shading this
+    window puts there is plain Qt.QGraphicsRectItems (see
+    ProgressOverlay.setCoverage).
+
+    Here rather than in test_region_panel.py's own coverage test because this
+    is the half that test cannot make: that this window really does draw that
+    shading into the region panel's view, over the same regions Fit reads.
+    _refreshCoverage() is called directly for the same reason the tests
+    around this one do -- a survey run is what calls it in anger, and none of
+    that is what is under test.
+    """
+    win.newSlice()
+    win.addRegionHere()
+    win._refreshCoverage()
+    assert win._progressOverlay.coverageItems()
+
+    win.regionPanel.fitToRegions()
+
+    x0, y0, x1, y1 = win.slice.regions[0].bounds()
+    (vx0, vx1), (vy0, vy1) = win.regionPanel.view.viewRange()
+    assert vx0 <= x0 and vx1 >= x1
+    assert vy0 <= y0 and vy1 >= y1
+
+
 def test_fit_on_an_empty_area_1_leaves_the_view_untouched(qapp, win):
     """Before this branch, an empty progress overlay's scatter made
     RegionPanel._mirroredImageryBounds() return a null QRectF rather than
