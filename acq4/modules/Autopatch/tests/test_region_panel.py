@@ -284,11 +284,11 @@ def test_fit_to_regions_frames_the_regions_and_the_pinned_frames_together(qapp):
     assert vy0 <= 1.0e-3 and vy1 >= 2.1e-3
 
 
-# A region smaller than one field of view, and the single tile that surveys it.
-# Chosen that way so the shading reaches a long way past the region it came
-# from: fitToRegions() pads by a tenth of what it frames, and an overhang
-# smaller than that padding would land inside the padding either way and so
-# would not say which of the two was framed.
+# A region smaller than one field of view, and the single tile that surveys
+# it, sized so the tile reaches well past the region on every side:
+# fitToRegions() pads by a tenth of what it frames, and an overhang smaller
+# than that padding would land inside the padding either way, leaving "the
+# tile was framed" indistinguishable from "only the region was".
 SMALL = RectRegion(1.0e-3, 2.0e-3, 1.06e-3, 2.03e-3)
 COVERAGE_FOV = (200e-6, 100e-6)
 COVERAGE_TILE = (1.03e-3, 2.015e-3)
@@ -308,22 +308,14 @@ def makeOverlay(panel):
     return overlay
 
 
-def test_fit_to_regions_frames_the_survey_coverage_shading(qapp):
-    """Measured on a rig: pressing Fit on a slice with a region and tiles still
-    to survey raised AttributeError out of the button's slot, because the
-    shading ProgressOverlay.setCoverage() draws is plain Qt.QGraphicsRectItems
-    -- the only things put in this view that are not pyqtgraph items, and so
-    the only ones with no mapRectToView() to map their bounds through.
-
-    The shading is framed rather than skipped, which is what the overhang
-    asserted below pins down: a tile is a whole field of view, so a region
-    smaller than one is surveyed well past its own edges, and what the survey
-    will image is worth seeing.
-
-    x is the axis to assert an overhang on. The view is aspect-locked, so
-    whichever axis does not match the widget's shape is widened past what was
-    asked for -- the union here is twice as wide as it is tall, so y is the
-    widened one and only x reports the range this actually chose.
+def test_fit_to_regions_excludes_the_survey_coverage_shading(qapp):
+    """Fit shows what the camera window would also show -- the mirrored
+    pinned frames and the region ROIs -- not where the survey has yet to
+    look. A region smaller than one field of view, with a to-do tile drawn
+    well past it on every side (see SMALL/COVERAGE_FOV/COVERAGE_TILE above),
+    must fit tight to the region: the tile pulling the view out to a whole
+    field of view's own size would be this same panel answering a different
+    question than the one the button is for.
     """
     panel = makePanel()
     overlay = makeOverlay(panel)
@@ -334,9 +326,29 @@ def test_fit_to_regions_frames_the_survey_coverage_shading(qapp):
 
     (vx0, vx1), (vy0, vy1) = panel.view.viewRange()
     fovW, fovH = COVERAGE_FOV
-    cx, cy = COVERAGE_TILE
-    assert vx0 <= cx - fovW / 2 and vx1 >= cx + fovW / 2
-    assert vy0 <= cy - fovH / 2 and vy1 >= cy + fovH / 2
+    assert (vx1 - vx0) < fovW
+    assert (vy1 - vy0) < fovH
+    x0, y0, x1, y1 = SMALL.bounds()
+    assert vx0 <= x0 and vx1 >= x1
+    assert vy0 <= y0 and vy1 >= y1
+
+
+def test_fit_to_regions_does_not_crash_on_a_plain_qgraphicsrectitem(qapp):
+    """A plain Qt.QGraphicsRectItem -- what ProgressOverlay draws its coverage
+    shading with -- carries none of pyqtgraph's GraphicsItem mixin, and so has
+    no mapRectToView() of its own. Excluding such an item from the framed
+    union must not mean choking on it first: Fit has to run to completion
+    whether or not it is a ProgressOverlay that put one in this view.
+    """
+    panel = makePanel()
+    panel.setRegions([RECT])
+    panel.view.addItem(Qt.QGraphicsRectItem(0, 0, 1.0e-3, 1.0e-3))
+
+    panel.fitToRegions()
+
+    (vx0, vx1), (vy0, vy1) = panel.view.viewRange()
+    assert vx0 <= 1.0e-3 and vx1 >= 1.4e-3
+    assert vy0 <= 2.0e-3 and vy1 >= 2.1e-3
 
 
 def test_a_panel_with_no_slice_cannot_be_drawn_on(qapp):
