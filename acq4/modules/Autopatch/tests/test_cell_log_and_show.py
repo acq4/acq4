@@ -15,6 +15,7 @@ def qapp():
 class _FakeOrchestrator(Qt.QObject):
     sigCurrentCell = Qt.Signal(object)
     sigCellFinished = Qt.Signal(object, str)
+    sigCellsQueued = Qt.Signal(object)
 
     def __init__(self):
         super().__init__()

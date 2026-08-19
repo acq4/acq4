@@ -156,3 +156,26 @@ def test_a_cell_seeded_before_any_orchestrator_still_reaches_a_later_one(
     assert list(orch._queue) == [seeded]
     orch.run_sync()
     assert ran == [seeded]
+
+
+def test_the_cells_a_refill_finds_get_rows_before_the_run_reaches_them(qapp, tmp_path):
+    """The other half of the seam, at the point the operator actually watches:
+    the refill that a survey does mid-run announces what it queued, so Area 5
+    fills in with the found cells rather than staying empty until one of them
+    starts running. Driven through the real _refillQueue rather than a bare
+    emit, since it is that method's decision about what to announce (and what
+    not to) that this depends on.
+    """
+    orch, panel, _sliceState = _survey(tmp_path)
+
+    orch._refillQueue()
+
+    queued = list(orch._queue)
+    assert queued, "the producer found nothing to announce"
+    assert panel.cellList.count() == len(queued)
+    for index, cell in enumerate(queued):
+        assert panel.cellList.item(index).text() == f"cell {id(cell)} — queued"
+    # Rows only: these cells are in the deque above already, and anything that
+    # recorded them as still owed an enqueue would hand them to the next
+    # orchestrator a protocol load later and patch them a second time.
+    assert panel._awaitingEnqueue == []

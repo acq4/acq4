@@ -24,6 +24,7 @@ def makePanel(**kwargs):
 class _FakeOrchestrator(Qt.QObject):
     sigCurrentCell = Qt.Signal(object)
     sigCellFinished = Qt.Signal(object, str)
+    sigCellsQueued = Qt.Signal(object)
 
     def __init__(self):
         super().__init__()
@@ -31,6 +32,13 @@ class _FakeOrchestrator(Qt.QObject):
 
     def enqueue(self, cell):
         self.enqueued.append(cell)
+
+    def announceQueued(self, cells):
+        """Stands in for the real orchestrator announcing the batch a survey
+        producer just added to its queue -- which _refillQueue does *instead of*
+        going through enqueue(), so nothing here records these as enqueued
+        either."""
+        self.sigCellsQueued.emit(list(cells))
 
     def announceCurrentCell(self, cell):
         """Stands in for the real orchestrator announcing the cell it has taken
@@ -1592,3 +1600,374 @@ def test_zoom_button_does_nothing_with_no_selection(qapp):
     panel.zoomToCellBtn.click()
 
     assert seen == []
+
+
+# ---- the whole discovered queue, not just the cell in hand ----
+#
+# A survey finds a queue's worth of cells at a time, on the orchestrator's
+# worker thread, with nothing in this panel having seeded any of them. Before
+# sigCellsQueued the only thing that ever said so was one of them starting to
+# run, so the operator watched an empty list while cellpose worked through a
+# tile and then saw a single "running" row appear with no sign of the rest.
+
+
+def test_a_queued_batch_gets_rows_before_any_of_it_runs(qapp):
+    panel = makePanel()
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+    cells = [object(), object()]
+
+    orch.announceQueued(cells)
+
+    assert panel.cellList.count() == 2
+    for index, cell in enumerate(cells):
+        assert panel.cellList.item(index).text() == f"cell {id(cell)} — queued"
+
+
+def test_a_queued_batch_is_neither_enqueued_nor_left_awaiting_one(qapp):
+    """These cells are already in the orchestrator's own deque -- that is what
+    the announcement means. Enqueuing them here would run each twice, and
+    recording them as awaiting an enqueue would have the next bindOrchestrator()
+    do the same thing one protocol load later."""
+    panel = makePanel()
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+
+    orch.announceQueued([object(), object()])
+
+    assert orch.enqueued == []
+    assert panel._awaitingEnqueue == []
+    later = _FakeOrchestrator()
+    panel.bindOrchestrator(later)
+    assert later.enqueued == []
+
+
+def test_a_queued_cell_that_then_runs_keeps_its_one_row(qapp):
+    """The same cell is announced twice -- once when the survey queues it and
+    again when the orchestrator takes it in hand -- and must end with one row
+    that has moved on from "queued", not a second row."""
+    panel = makePanel()
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+    cell = object()
+
+    orch.announceQueued([cell])
+    orch.announceCurrentCell(cell)
+
+    assert panel.cellList.count() == 1
+    assert panel.cellList.item(0).text() == f"cell {id(cell)} — running"
+
+
+def test_a_cell_that_already_has_a_row_is_not_reset_by_a_queue_announcement(qapp):
+    """A cell can reach this panel by some other route first -- seeded by hand,
+    or added by unbindOrchestrator() salvaging the outgoing orchestrator's
+    pending queue -- and a later batch naming it must leave that row alone
+    rather than giving it a second one or walking its text back to "queued"."""
+    panel = makePanel()
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+    cell = object()
+    orch.announceCurrentCell(cell)
+
+    orch.announceQueued([cell])
+
+    assert panel.cellList.count() == 1
+    assert panel.cellList.item(0).text() == f"cell {id(cell)} — running"
+
+
+def test_a_queued_batch_from_the_worker_thread_is_marshaled_onto_the_gui_thread(qapp):
+    """The real emit comes from Orchestrator._refillQueue, on the worker thread,
+    and a QListWidget must only ever be touched from the GUI thread. The
+    connection this panel makes is signal-to-slot between two QObjects, so Qt's
+    automatic connection is what marshals it -- which is only true if the rows
+    appear when this thread pumps its event loop, and not one moment earlier."""
+    panel = makePanel()
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+    cells = [object(), object()]
+
+    thread = threading.Thread(target=lambda: orch.announceQueued(cells))
+    thread.start()
+    thread.join()
+
+    assert panel.cellList.count() == 0, "the rows were added on the worker thread"
+    qapp.processEvents()
+    assert panel.cellList.count() == 2
+
+
+def test_unbinding_stops_a_queue_announcement_from_reaching_the_list(qapp):
+    """unbindOrchestrator() must disconnect sigCellsQueued along with the other
+    two, or an orchestrator this panel has stopped tracking goes on filling
+    Area 5 with cells from a run it is no longer showing."""
+    panel = makePanel()
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+    panel.unbindOrchestrator()
+
+    orch.announceQueued([object()])
+
+    assert panel.cellList.count() == 0
+
+
+# ---- following the cell the run is working on ----
+#
+# The cell-level counterpart of the timeline's auto-scroll rule (see
+# _isFollowingLastRow): without it, a run announces its first cell and Area 5
+# sits there with nothing selected -- no timeline, no log, an empty details
+# pane -- until the operator clicks the one row on the list.
+
+
+def test_the_announced_cell_takes_the_selection(qapp):
+    panel = makePanel()
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+    cell = object()
+
+    orch.announceCurrentCell(cell)
+
+    assert panel.cellList.currentItem() is panel._rows[id(cell)]
+
+
+def test_each_announced_cell_takes_the_selection_from_the_last(qapp):
+    panel = makePanel()
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+    first, second = object(), object()
+
+    orch.announceCurrentCell(first)
+    orch.announceCurrentCell(second)
+
+    assert panel.cellList.currentItem() is panel._rows[id(second)]
+
+
+def test_a_cell_the_operator_selected_keeps_the_selection(qapp):
+    """Once the operator goes back to read through a cell that is not the one
+    running, the run stops taking the selection away from them."""
+    panel = makePanel()
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+    first, second, third = object(), object(), object()
+    orch.announceCurrentCell(first)
+    orch.announceCurrentCell(second)
+
+    panel.selectCell(first)
+    orch.announceCurrentCell(third)
+
+    assert panel.cellList.currentItem() is panel._rows[id(first)]
+
+
+def test_selecting_the_running_cell_again_resumes_following(qapp):
+    """The way back: selecting whichever cell the run is on now is what says
+    "carry on showing me the run", exactly as selecting the last timeline row
+    resumes the auto-scroll one level down."""
+    panel = makePanel()
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+    first, second, third = object(), object(), object()
+    orch.announceCurrentCell(first)
+    # A queued cell of the operator's choosing, read back through while the run
+    # carries on without them.
+    panel.addCell(second)
+    panel.selectCell(second)
+    orch.announceCurrentCell(third)
+    assert panel.cellList.currentItem() is panel._rows[id(second)]
+
+    panel.selectCell(third)
+    fourth = object()
+    orch.announceCurrentCell(fourth)
+
+    assert panel.cellList.currentItem() is panel._rows[id(fourth)]
+
+
+def test_a_row_selected_before_the_run_started_is_not_taken_away(qapp):
+    """A selection the operator made by hand with nothing announced yet is still
+    a deliberate one: the first cell the run announces must not steal it."""
+    pip = _FakePipette((0, 0, 0))
+    panel = makePanel(pipetteGetter=lambda: pip)
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+    panel.addFromTargetBtn.click()
+    panel.addFromTargetBtn.click()
+    seeded, other = orch.enqueued
+    panel.selectCell(seeded)
+
+    orch.announceCurrentCell(other)
+
+    assert panel.cellList.currentItem() is panel._rows[id(seeded)]
+
+
+def test_the_followed_cells_timeline_and_log_are_really_populated(qapp):
+    """setCurrentItem, not a shortcut around it: the selection change is what
+    fills the timeline and the log from this cell's stores, so a cell announced
+    after it has already logged something shows that history without a click."""
+    panel = makePanel()
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+    cell = object()
+    panel.addCell(cell)
+    panel.appendLog(cell, "before it was announced")
+    qapp.processEvents()
+
+    orch.announceCurrentCell(cell)
+
+    assert "before it was announced" in panel.logView.toPlainText()
+
+
+def test_clear_cells_forgets_which_cell_was_being_followed(qapp):
+    """Ids are recycled: a cleared panel that still remembers the id of a cell
+    it no longer holds could read a brand new cell's row as "where the panel
+    last put the selection" purely because the two share an address."""
+    panel = makePanel()
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+    orch.announceCurrentCell(object())
+
+    panel.clearCells()
+
+    assert panel._announcedCellId is None
+
+
+# ---- how small the panel is willing to get ----
+#
+# Area 5 is a scrolling viewport over this panel (see AutopatchWindow._makeArea),
+# so what the operator gets when they drag its handle up is decided here: a panel
+# that insists on a tall minimum is a panel that goes behind scrollbars the
+# moment the area is squeezed, taking the queue, the timeline and the buttons
+# with it. Everything scrollable in here -- the two lists, the log, the details
+# pane -- can show a few rows and scroll the rest instead, which is what these
+# check.
+
+
+def _rowsHigh(widget, rows):
+    """The height `rows` rows of that widget's own text occupy."""
+    return rows * widget.fontMetrics().height()
+
+
+def _panelFloor(panel):
+    """What this panel may insist on: a button row, and a dozen rows of text
+    shared between the two lists, the status line, the details pane and the log.
+
+    Rows of the panel's own font rather than a pixel count, so this says the
+    same thing on a rig whose font is not this one's.
+    """
+    return panel.addFromTargetBtn.sizeHint().height() + _rowsHigh(panel, 12)
+
+
+def test_the_panel_minimum_is_a_button_row_and_a_few_rows_of_text(qapp):
+    panel = makePanel()
+
+    assert panel.minimumSizeHint().height() <= _panelFloor(panel), (
+        panel.minimumSizeHint().height(),
+        _panelFloor(panel),
+    )
+
+
+def test_the_panel_still_asks_for_a_working_size(qapp):
+    """The other half: a smaller minimum, not a smaller preference.
+
+    AutopatchWindow._seedOpeningSplit divides each splitter in proportion to
+    what the areas ask for, so a panel whose sizeHint collapsed onto its
+    minimum would open the window with Area 5 as a sliver.
+    """
+    panel = makePanel()
+
+    assert panel.sizeHint().height() >= 2 * panel.minimumSizeHint().height()
+
+
+def test_a_mounted_details_widget_does_not_raise_the_panel_minimum(qapp):
+    """A details widget is whatever the action that produced it wants to be --
+    an ImageView, a test-pulse plot -- and several of them ask for a few hundred
+    pixels. Mounting one must not hand that demand to the whole panel, or
+    selecting a row with a figure in it would push the cell queue off screen.
+    """
+    panel = makePanel()
+    insistent = Qt.QWidget()
+    insistent.setMinimumSize(400, 400)
+
+    panel.showContainer.layout().addWidget(insistent)
+    qapp.processEvents()
+
+    assert panel.minimumSizeHint().height() <= _panelFloor(panel), (
+        panel.minimumSizeHint().height(),
+        _panelFloor(panel),
+    )
+
+
+def test_a_long_status_does_not_stop_the_panel_narrowing(qapp):
+    """statusLabel wraps, and a wrapping label ordinarily answers "how tall are
+    you?" with "how wide are you making me?": the narrower the panel, the taller
+    that one label. Worse, Qt has no minimum height-for-width across a widget
+    boundary -- QWidgetItem answers minimumHeightForWidth() with plain
+    heightForWidth() -- so one such label is enough to make this whole panel's
+    minimum height equal its preferred height, and an area holding it can only
+    scroll it. Driven the way an area does it: through a resizable viewport, at
+    a width and a height that are both a squeeze.
+    """
+    panel = makePanel()
+    panel.statusLabel.setText("waiting for the pipette to reach the cell " * 12)
+    viewport = Qt.QScrollArea()
+    viewport.setWidgetResizable(True)
+    viewport.setWidget(panel)
+    viewport.resize(260, _panelFloor(panel) + 20)
+    viewport.show()
+    try:
+        for _ in range(3):
+            qapp.processEvents()
+
+        assert panel.height() <= viewport.viewport().height(), (
+            panel.height(),
+            viewport.viewport().height(),
+        )
+        assert not viewport.verticalScrollBar().isVisible()
+        assert panel.statusLabel.height() <= _rowsHigh(panel.statusLabel, 3)
+    finally:
+        viewport.close()
+
+
+def test_the_lists_still_show_rows_when_the_panel_is_at_its_minimum(qapp):
+    """Small enough to be squeezed, big enough to be worth reading: at the
+    panel's own minimum the queue and the timeline are still showing rows, and
+    scrolling within themselves rather than pushing the panel taller.
+    """
+    panel = makePanel()
+    for i in range(40):
+        panel.addCell(object())
+    panel.resize(panel.sizeHint().width(), panel.minimumSizeHint().height())
+    panel.layout().activate()
+
+    for listWidget in (panel.cellList, panel.timelineList):
+        assert listWidget.height() >= _rowsHigh(listWidget, 3), listWidget.height()
+        assert listWidget.height() <= _rowsHigh(listWidget, 5), listWidget.height()
+
+
+def test_a_mounted_details_widget_is_given_room_to_show(qapp):
+    """The other side of the details pane insisting on nothing: what it does
+    ask for has to keep up with what is mounted in it.
+
+    A QWidget caches the size it last reported to the layout above it, and
+    filling a scroll area's content invalidates the layouts inside that content
+    only -- so a pane left to that cache goes on offering the hint it computed
+    while it was empty, and every figure an action produces is mounted into a
+    strip a few pixels tall with its own scrollbars.
+    """
+    panel = makePanel()
+    panel.resize(600, 700)
+    panel.show()
+    try:
+        qapp.processEvents()
+        figure = Qt.QLabel("a details figure")
+        figure.setMinimumSize(400, 400)
+
+        panel.showContainer.layout().addWidget(figure)
+        # Two passes of the loop, because it takes two: the container's layout
+        # request reaches the pane in the first, and the panel's own re-layout
+        # is what the pane posts from there.
+        qapp.processEvents()
+        qapp.processEvents()
+
+        assert panel.showViewport.height() >= 300, panel.showViewport.height()
+        # And still the panel's own minimum, not the figure's: the pane grew
+        # into room the panel had, and would give it back again.
+        assert panel.minimumSizeHint().height() <= _panelFloor(panel)
+    finally:
+        panel.close()
