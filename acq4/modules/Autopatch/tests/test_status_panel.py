@@ -104,6 +104,86 @@ def test_pause_button_toggles_to_resume_while_paused(qapp):
     assert orch.resumed == 1
 
 
+def test_clicking_pause_while_running_shows_pending_and_requests_pause(qapp):
+    # A paused status can be a long time coming -- the orchestrator only
+    # checks for it between cells or retries. The operator needs to see the
+    # click landed well before that, so the button must not just sit there
+    # still saying "Pause".
+    panel, orch = _boundPanel()
+    orch.sigStatus.emit("running")
+
+    panel.pauseBtn.click()
+
+    assert orch.paused == 1
+    assert orch.resumed == 0
+    assert panel.pauseBtn.text() == "Pausing at next break..."
+    assert panel.pauseBtn.isEnabled()
+
+
+def test_clicking_pause_again_while_pending_cancels_the_request(qapp):
+    # A second click before the pause has actually landed reads as "never
+    # mind" -- it should withdraw the request (by re-arming the orchestrator's
+    # pause event) rather than compound into some other state.
+    panel, orch = _boundPanel()
+    orch.sigStatus.emit("running")
+    panel.pauseBtn.click()
+
+    panel.pauseBtn.click()
+
+    assert orch.resumed == 1
+    assert panel.pauseBtn.text() == "Pause"
+    assert panel.pauseBtn.isEnabled()
+
+
+def test_sigstatus_paused_while_pending_shows_resume(qapp):
+    panel, orch = _boundPanel()
+    orch.sigStatus.emit("running")
+    panel.pauseBtn.click()
+
+    orch.sigStatus.emit("paused")
+
+    assert panel.pauseBtn.text() == "Resume"
+
+
+def test_sigstatus_running_while_pending_clears_pending_and_shows_pause(qapp):
+    # A pause request can be superseded without ever becoming an actual pause
+    # -- resumed from elsewhere, or the run loop simply reports "running"
+    # again on its own. Either way the pending label must not linger once the
+    # orchestrator itself says it is running.
+    panel, orch = _boundPanel()
+    orch.sigStatus.emit("running")
+    panel.pauseBtn.click()
+    assert panel.pauseBtn.text() == "Pausing at next break..."
+
+    orch.sigStatus.emit("running")
+
+    assert panel.pauseBtn.text() == "Pause"
+    # Clicking now must request a fresh pause, not cancel a stale one.
+    panel.pauseBtn.click()
+    assert orch.paused == 2
+    assert orch.resumed == 0
+
+
+def test_pending_does_not_survive_the_run_finishing(qapp):
+    panel, orch = _boundPanel()
+    orch.sigStatus.emit("running")
+    panel.pauseBtn.click()
+
+    orch.sigStatus.emit("waiting")  # the run loop's finally, run over
+
+    assert panel.pauseBtn.text() == "Pause"
+
+
+def test_pending_does_not_survive_an_error(qapp):
+    panel, orch = _boundPanel()
+    orch.sigStatus.emit("running")
+    panel.pauseBtn.click()
+
+    orch.sigStatus.emit("error")
+
+    assert panel.pauseBtn.text() == "Pause"
+
+
 def test_status_signal_updates_label(qapp):
     from acq4.modules.Autopatch.status_panel import StatusPanel
 
