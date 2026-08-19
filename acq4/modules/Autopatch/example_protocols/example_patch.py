@@ -83,6 +83,7 @@ def run(ctx, cellfie_preset="", patch_preset="", force_clean=False):
     outcome = patch(ctx)
     ctx.log(f"patch outcome: {outcome}")
     if outcome != "whole cell":
-        prompt(ctx, message=f"Patch ended in {outcome!r} — intervene if needed")
+        if outcome not in ("bath", "fouled"):
+            prompt(ctx, message=f"Patch ended in {outcome!r} — intervene if needed")
         return
     run_task(ctx)
