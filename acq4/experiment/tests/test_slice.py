@@ -1,5 +1,5 @@
 """Tests for SearchConstraints validation and the Slice object's regions,
-coverage, and survey statistics."""
+coverage, survey statistics, and the record it writes into its data directory."""
 
 import gc
 import weakref
@@ -7,12 +7,15 @@ import weakref
 import coorx
 import pytest
 
+import acq4.util.DataManager as dm
+
 from acq4.experiment.search_grid import count_grid, plan_grid
 from acq4.experiment.search_region import (
     EllipseRegion,
     PolygonRegion,
     RectRegion,
     SearchRegion,
+    region_from_dict,
 )
 from acq4.experiment.slice import (
     MAX_PLANNED_TILES,
@@ -127,34 +130,38 @@ def test_adding_a_region_produces_a_tile_grid():
     assert s.surveyStats() == (9, 0, 0.0)
 
 
-def test_the_tile_grid_is_serpentine_within_a_region():
-    # Alternating the direction of each row is what keeps a survey's stage
-    # travel down: at the end of a row the next tile is the one directly
-    # above, not all the way back at the far edge. Sorted (or any other
-    # row-major) order costs a full row's traverse per row and would still
-    # cover the region, so nothing else in the suite would notice the
-    # difference -- hence pinning the order itself here.
+def test_the_tile_grid_starts_in_the_middle_and_spirals_out():
+    # A survey ordered by rows starts at a corner, which is the worst ground on
+    # a slice: the edges are where the tissue is damaged. Starting at the most
+    # interior tile puts the best tissue first, and an operator who stops the
+    # run early has surveyed a compact area around the middle rather than a band
+    # along one side. Any order at all would still cover the region, so nothing
+    # else in the suite would notice the difference -- hence pinning it here.
     s = make_slice()
     s.addRegion(RectRegion(0, 0, 30e-6, 30e-6))
     grid = s.tileGrid()
     assert len(grid) == 9
 
-    rows = [grid[0:3], grid[3:6], grid[6:9]]
-    # Each row is one y, and the rows step through y in order.
-    ys = [row[0][1] for row in rows]
-    for row, y in zip(rows, ys):
-        assert [center[1] for center in row] == [pytest.approx(y)] * 3
-    assert ys == sorted(ys)
+    assert grid[0] == pytest.approx((15e-6, 15e-6))
+    # And then the eight tiles around it, each next to the last.
+    steps = [
+        max(abs(bx - ax), abs(by - ay))
+        for (ax, ay), (bx, by) in zip(grid, grid[1:])
+    ]
+    assert steps == [pytest.approx(10e-6)] * 8
 
-    # And the x direction reverses row to row.
-    xs = [[center[0] for center in row] for row in rows]
-    assert xs[0] == sorted(xs[0])
-    assert xs[1] == sorted(xs[1], reverse=True)
-    assert xs[2] == sorted(xs[2])
-    # The step from the end of one row to the start of the next is one tile,
-    # which is the whole point; row-major order would make it two.
-    assert xs[0][-1] == pytest.approx(xs[1][0])
-    assert xs[1][-1] == pytest.approx(xs[2][0])
+
+def test_each_region_spirals_out_from_its_own_middle():
+    # Ordering is per region, not across the slice: two regions are two pieces
+    # of tissue with a stage move between them, so the second one starts over at
+    # its own middle rather than continuing rings drawn around the first.
+    s = make_slice()
+    s.addRegion(RectRegion(0, 0, 30e-6, 30e-6))
+    s.addRegion(RectRegion(1e-3, 1e-3, 1e-3 + 30e-6, 1e-3 + 30e-6))
+    grid = s.tileGrid()
+    assert len(grid) == 18
+    assert grid[0] == pytest.approx((15e-6, 15e-6))
+    assert grid[9] == pytest.approx((1e-3 + 15e-6, 1e-3 + 15e-6))
 
 
 def test_regions_is_a_copy_so_callers_cannot_mutate_slice_state():
@@ -196,9 +203,9 @@ def test_next_tile_is_none_once_every_tile_is_covered():
 
 
 def test_next_tile_follows_tile_grid_order():
-    # The grid is serpentine-ordered to minimize stage travel between tiles,
-    # so nextTile must hand out tileGrid()'s tiles in that same order, not
-    # merely some order that avoids repeats.
+    # The grid is ordered outward from the middle of each region, so nextTile
+    # must hand out tileGrid()'s tiles in that same order, not merely some order
+    # that avoids repeats.
     s = make_slice()
     s.addRegion(RectRegion(0, 0, 30e-6, 30e-6))
     grid = s.tileGrid()
@@ -315,13 +322,17 @@ def test_make_cell_producer_returns_a_view_the_slice_does_not_retain():
 
 
 def test_a_rectangular_region_plans_exactly_its_bounding_box_grid():
-    # The regression guard for the whole migration: a rectangle must behave
-    # exactly as it did when regions were 4-tuples. It provably does -- plan_grid
+    # The regression guard for the whole migration: a rectangle must be tiled
+    # exactly as it was when regions were 4-tuples. It provably is -- plan_grid
     # centers its grid over the box, so every tile it plans overlaps the box --
     # and this pins that so a future filter change cannot quietly cost tiles.
+    # Compared as sets, because only the *order* the tiles are handed out in has
+    # moved on from plan_grid's rows.
     s = make_slice()
     s.addRegion(RectRegion(0, 0, 30e-6, 30e-6))
-    assert s.tileGrid() == plan_grid(0, 0, 30e-6, 30e-6, FOV[0], FOV[1], 0.0)
+    assert sorted(s.tileGrid()) == sorted(
+        plan_grid(0, 0, 30e-6, 30e-6, FOV[0], FOV[1], 0.0)
+    )
 
 
 def test_an_elliptical_region_drops_the_corner_tiles_its_bounding_box_plans():
@@ -340,8 +351,16 @@ def test_an_elliptical_region_drops_the_corner_tiles_its_bounding_box_plans():
     assert len(planned) == 225
     assert len(kept) == 201
     # What it drops are the box's corners; what it keeps includes the middle.
-    assert planned[0] not in kept
-    assert planned[14] not in kept
+    # Named by position rather than by index into `planned`, since the two are
+    # ordered outward from their own middles and share no index.
+    corners = [
+        c
+        for c in planned
+        if c[0] in (pytest.approx(5e-6), pytest.approx(145e-6))
+        and c[1] in (pytest.approx(5e-6), pytest.approx(145e-6))
+    ]
+    assert len(corners) == 4
+    assert not any(c in kept for c in corners)
     assert any(c == pytest.approx((75e-6, 75e-6)) for c in kept)
 
 
@@ -367,18 +386,28 @@ def test_an_elliptical_regions_tiles_still_cover_the_whole_ellipse():
             ), (px, py)
 
 
-def test_filtering_preserves_the_serpentine_order_within_a_region():
-    # nextTile hands out tileGrid()'s order, and that order is what keeps stage
-    # travel down. Filtering must remove tiles without reordering the survivors.
+def test_the_shape_filter_runs_before_the_order_is_chosen():
+    # Not merely an implementation detail: which tile is most interior is a
+    # property of the tiles that survive the shape. A filter applied afterwards
+    # would spiral out from the middle of the bounding box -- for an L or a
+    # crescent, ground the operator explicitly excluded -- and would leave holes
+    # in the middle of the order where it had removed tiles.
     side = 150e-6
     ellipse = make_slice()
     ellipse.addRegion(EllipseRegion(0, 0, side, side))
-    box = make_slice()
-    box.addRegion(RectRegion(0, 0, side, side))
+    grid = ellipse.tileGrid()
 
-    planned = box.tileGrid()
-    positions = [planned.index(c) for c in ellipse.tileGrid()]
-    assert positions == sorted(positions)
+    assert grid[0] == pytest.approx((75e-6, 75e-6))
+    # Every ring around that seed is complete before the next one starts, which
+    # is only true if the corners the ellipse dropped were never in the lattice
+    # the rings were counted over.
+    # Rounded, because a ring is a count of tiles and these centers are floats
+    # a few ulps either side of an exact multiple of the field.
+    rings = [
+        round(max(abs(cx - 75e-6), abs(cy - 75e-6)) / 10e-6) for cx, cy in grid
+    ]
+    assert rings == sorted(rings)
+    assert rings.count(1) == 8
 
 
 def test_regions_of_different_shapes_share_one_slice_and_one_coverage_record():
@@ -697,8 +726,8 @@ def test_add_region_is_guarded_too():
 
 
 def test_the_guard_counts_the_tiles_without_planning_them():
-    # The count is the whole hazard: plan_grid materialises every center before
-    # tileGrid() filters any of them, so a guard that planned first would still
+    # The count is the whole hazard: the planner materialises every center
+    # before any of them is filtered, so a guard that planned first would still
     # spend the minutes and the memory it exists to avoid. Proven by making the
     # planner unusable rather than by timing anything.
     import acq4.experiment.slice as slice_module
@@ -706,13 +735,13 @@ def test_the_guard_counts_the_tiles_without_planning_them():
     def boom(*args, **kwargs):
         raise AssertionError("the guard planned the grid it was refusing")
 
-    original, slice_module.plan_grid = slice_module.plan_grid, boom
+    original, slice_module.plan_center_out = slice_module.plan_center_out, boom
     try:
         sl = Slice(fov=_MISDRAG_FOV)
         with pytest.raises(RegionTooLarge):
             sl.setRegions([_MISDRAG_REGION])
     finally:
-        slice_module.plan_grid = original
+        slice_module.plan_center_out = original
 
 
 def test_a_large_but_plausible_region_is_still_accepted():
@@ -735,3 +764,344 @@ def test_the_cap_is_measured_against_the_grid_that_would_actually_be_planned():
     with pytest.raises(RegionTooLarge) as excinfo:
         sl.addRegion(RectRegion(1e-3, 2e-3, 1e-3 + 20e-3, 2e-3 + 5.05e-3))
     assert "20200" in str(excinfo.value).replace(",", "")
+
+
+# ---- containment ----
+
+
+def test_a_slice_with_no_regions_contains_everything():
+    # "No region drawn" means there is nothing to be outside of, not that the
+    # slice is empty. A hand-seeded run has no regions at all, and a producer
+    # that filtered cells against an empty region list would drop every one of
+    # them and patch nothing.
+    s = make_slice()
+    assert s.containsPoint((0.0, 0.0)) is True
+    assert s.containsPoint((1e3, -4e2)) is True
+
+
+def test_a_slice_contains_a_point_inside_any_one_of_its_regions():
+    # Regions are alternatives, not an intersection: an operator outlining two
+    # separate pieces of tissue means either is worth patching in.
+    s = make_slice()
+    s.addRegion(RectRegion(0, 0, 30e-6, 30e-6))
+    s.addRegion(EllipseRegion(1e-3, 1e-3, 1e-3 + 30e-6, 1e-3 + 30e-6))
+    assert s.containsPoint((15e-6, 15e-6)) is True
+    assert s.containsPoint((1e-3 + 15e-6, 1e-3 + 15e-6)) is True
+
+
+def test_a_point_outside_every_region_is_not_contained():
+    s = make_slice()
+    s.addRegion(RectRegion(0, 0, 30e-6, 30e-6))
+    s.addRegion(EllipseRegion(1e-3, 1e-3, 1e-3 + 30e-6, 1e-3 + 30e-6))
+    assert s.containsPoint((500e-6, 500e-6)) is False
+    # In the second region's bounding box but outside the inscribed ellipse:
+    # the shape has to be consulted, not just the box.
+    assert s.containsPoint((1e-3, 1e-3)) is False
+
+
+def test_containment_is_stricter_than_the_ground_the_survey_images():
+    # The asymmetry the whole filter exists for: the tile at the region's edge
+    # is imaged (its overhang is deliberate), so the segmenter sees this point
+    # and may well find a cell there -- and it still is not in the region.
+    # A region whose extent is not a whole number of fields, which is what makes
+    # the grid overhang it: plan_grid centres 3 tiles over 25 um of region, so
+    # the outermost tiles reach 2.5 um past each edge.
+    s = make_slice()
+    s.addRegion(RectRegion(0, 0, 25e-6, 25e-6))
+    justOutside = (-2e-6, 12.5e-6)
+    assert any(
+        abs(justOutside[0] - tx) <= FOV[0] / 2 and abs(justOutside[1] - ty) <= FOV[1] / 2
+        for tx, ty in s.tileGrid()
+    ), "premise: this point falls inside a tile the survey images"
+    assert s.containsPoint(justOutside) is False
+
+
+def test_contains_point_reads_only_x_and_y():
+    # Detected cells carry a 3-D global coorx.Point; depth is no part of a
+    # region's question.
+    s = make_slice()
+    s.addRegion(RectRegion(0, 0, 30e-6, 30e-6))
+    assert s.containsPoint(coorx.Point([15e-6, 15e-6, -30e-6])) is True
+    assert s.containsPoint([15e-6, 15e-6, -30e-6]) is True
+    assert s.containsPoint(coorx.Point([150e-6, 15e-6, -30e-6])) is False
+
+
+# ---- persistence ----
+
+
+@pytest.fixture
+def slice_dir(tmp_path):
+    """A real managed directory, because what is being tested is the record on
+    disk: a fake DirHandle would prove only that saveState() called the methods
+    the test author expected it to, not that a `.index` and a YAML file come
+    back out saying what went in."""
+    return dm.getDirHandle(str(tmp_path), create=True)
+
+
+def _saved_slice(dirHandle, **kwargs):
+    kwargs.setdefault("fov", (100e-6, 50e-6))
+    kwargs.setdefault("overlap", 7e-6)
+    kwargs.setdefault(
+        "constraints",
+        SearchConstraints(
+            depth_range=(-15e-6, -75e-6),
+            min_health=0.62,
+            max_cell_density=3e12,
+            rescans_allowed=True,
+        ),
+    )
+    s = Slice(dirHandle=dirHandle, **kwargs)
+    s.setRegions(
+        [
+            RectRegion(1e-3, 2e-3, 1.4e-3, 2.2e-3, 31.5),
+            EllipseRegion(3e-3, 2e-3, 3.4e-3, 2.2e-3),
+            PolygonRegion(((5e-3, 2e-3), (5.4e-3, 2e-3), (5.2e-3, 2.3e-3))),
+        ]
+    )
+    for tile in s.tileGrid()[:5]:
+        s.markCovered(tile)
+    return s
+
+
+def test_a_slice_with_no_directory_saves_nothing(tmp_path):
+    # The "Add region here" slice: it came into existence to hold a region and
+    # honestly has nowhere to write. Saving must be a no-op rather than a
+    # raise, because every caller of saveState() is a GUI slot that has
+    # already committed the operator's edit by the time it asks.
+    s = make_slice()
+    s.addRegion(RectRegion(0.0, 0.0, 30e-6, 30e-6))
+
+    s.saveState()
+
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_save_state_writes_the_regions_the_operator_drew(slice_dir):
+    s = _saved_slice(slice_dir)
+
+    s.saveState()
+
+    written = slice_dir["regions.yaml"].read()
+    assert [region_from_dict(d) for d in written] == s.regions
+
+
+def test_saved_regions_keep_their_angle_and_their_order(slice_dir):
+    # Order matters as much as geometry: tileGrid() concatenates region by
+    # region and a survey works them in that order, so a record that reordered
+    # them would restore a slice that images the same tissue in a different
+    # sequence -- and the angle is the part a naive format loses.
+    s = _saved_slice(slice_dir)
+
+    s.saveState()
+
+    written = slice_dir["regions.yaml"].read()
+    assert [d["shape"] for d in written] == ["rect", "ellipse", "polygon"]
+    assert written[0]["angle"] == 31.5
+
+
+def test_save_state_writes_the_search_parameters(slice_dir):
+    s = _saved_slice(slice_dir)
+
+    s.saveState()
+
+    state = slice_dir["search_state.yaml"].read()
+    assert state["fov"] == [100e-6, 50e-6]
+    assert state["overlap"] == 7e-6
+    assert state["constraints"] == {
+        "depth_range": [-15e-6, -75e-6],
+        "min_health": 0.62,
+        "max_cell_density": 3e12,
+        "rescans_allowed": True,
+    }
+
+
+def test_save_state_writes_the_coverage_and_the_survey_it_implies(slice_dir):
+    s = _saved_slice(slice_dir)
+    total, covered, percent = s.surveyStats()
+
+    s.saveState()
+
+    state = slice_dir["search_state.yaml"].read()
+    assert [tuple(t) for t in state["covered"]] == s.coveredTiles
+    assert state["survey"] == {
+        "total_tiles": total,
+        "covered_tiles": covered,
+        "percent_covered": percent,
+    }
+
+
+def test_save_state_mirrors_a_summary_onto_the_directory_index(slice_dir):
+    # The scalars a Data Manager browser can sort a night's slices by without
+    # opening any of them.
+    s = _saved_slice(slice_dir)
+
+    s.saveState()
+
+    info = slice_dir.info()
+    assert info["n_regions"] == 3
+    assert info["percent_covered"] == s.surveyStats()[2]
+    assert info["min_health"] == 0.62
+    assert info["depth_range"] == [-15e-6, -75e-6]
+
+
+def test_the_index_summary_survives_being_read_back_off_disk(slice_dir):
+    # The `.index` is written with repr() and read back with eval() in a
+    # namespace that knows nothing about this module, so a frozen dataclass or
+    # a big array put there would be written and never read. Only plain scalars
+    # may go in, and this is what proves it.
+    s = _saved_slice(slice_dir)
+    s.saveState()
+
+    reopened = dm.getDirHandle(slice_dir.name())
+    reopened._index = None  # force a genuine re-read rather than the cache
+    info = reopened.info()
+
+    assert info["n_regions"] == 3
+    assert info["depth_range"] == [-15e-6, -75e-6]
+
+
+def test_save_state_overwrites_the_previous_save(slice_dir):
+    # Called on every region edit, so the record is the slice as it stands and
+    # not an accumulating pile of near-identical files.
+    s = _saved_slice(slice_dir)
+    s.saveState()
+
+    s.setRegions([RectRegion(1e-3, 2e-3, 1.4e-3, 2.2e-3)])
+    s.saveState()
+
+    written = slice_dir["regions.yaml"].read()
+    assert len(written) == 1
+    assert slice_dir.info()["n_regions"] == 1
+
+
+class _RefusesToWrite:
+    """A DirHandle whose every write fails -- a full disk, a storage directory
+    that went away with a network mount, a permission that changed under a
+    running session."""
+
+    def __init__(self):
+        self.attempts = 0
+
+    def writeFile(self, *args, **kwargs):
+        self.attempts += 1
+        raise OSError("no space left on device")
+
+    def setInfo(self, *args, **kwargs):
+        raise OSError("no space left on device")
+
+
+def test_save_state_never_raises(slice_dir):
+    # Losing the record must not take down whatever asked for the save. Every
+    # caller is either a GUI slot that has already committed the operator's
+    # edit or newSlice() partway through discarding a slice, and a raise in
+    # either place costs far more than the file it failed to write.
+    s = _saved_slice(_RefusesToWrite())
+
+    s.saveState()
+
+
+def test_a_failed_write_still_tries_the_rest(slice_dir):
+    # The regions are the irreplaceable half -- an operator traced them by hand
+    # -- so they are written first; but one file failing must not silently drop
+    # the others, since the reason it failed may well be specific to it.
+    handle = _RefusesToWrite()
+    s = _saved_slice(handle)
+
+    s.saveState()
+
+    assert handle.attempts == 2
+
+
+class _SwapsRegionsWhileBeingSaved(SearchRegion):
+    """A region that replaces its slice's region list the moment it is asked to
+    serialize itself -- a GUI-thread setRegions() landing in the middle of a
+    save.
+
+    Deterministic on purpose, for the reason _EditsTheSliceMidScan gives:
+    driving this with real threads would reproduce the hazard only sometimes.
+    """
+
+    def __init__(self, slice_, replacement):
+        self._slice = slice_
+        self._replacement = replacement
+
+    def bounds(self):
+        return (0.0, 0.0, 400e-6, 200e-6)
+
+    def overlapsTile(self, center, fov):
+        return True
+
+    def to_dict(self):
+        self._slice.setRegions(self._replacement)
+        return {"shape": "rect", "box": [0.0, 0.0, 400e-6, 200e-6], "angle": 0.0}
+
+
+def test_a_save_records_one_whole_set_of_regions(slice_dir):
+    # The same discipline setRegions() and tileGrid() keep: bind the list once,
+    # so a reader sees either the whole old set or the whole new one. A save
+    # that re-read the attribute for its statistics would write a file whose
+    # regions and whose tile counts describe two different slices.
+    s = Slice(fov=(100e-6, 50e-6), dirHandle=slice_dir)
+    later = RectRegion(1e-3, 1e-3, 1.4e-3, 1.2e-3)
+    s.setRegions([_SwapsRegionsWhileBeingSaved(s, []), later])
+
+    s.saveState()
+
+    written = slice_dir["regions.yaml"].read()
+    state = slice_dir["search_state.yaml"].read()
+    assert len(written) == 2, "the region after the edited one was dropped mid-save"
+    assert state["survey"]["total_tiles"] > 0, (
+        "the statistics were computed from a different region list than the one saved"
+    )
+
+
+# ---- loading back ----
+
+
+def test_load_state_restores_what_save_state_wrote(slice_dir):
+    saved = _saved_slice(slice_dir)
+    saved.saveState()
+
+    restored = Slice(fov=(100e-6, 50e-6), dirHandle=slice_dir)
+    assert restored.loadState() is True
+
+    assert restored.regions == saved.regions
+    assert restored.constraints == saved.constraints
+    assert restored.coveredTiles == saved.coveredTiles
+    assert restored.surveyStats() == saved.surveyStats()
+
+
+def test_load_state_restores_the_overlap_the_tiles_were_planned_at(slice_dir):
+    # Coverage is a list of tile centres, and which centres a grid has depends
+    # on the overlap. Restoring the tiles without it would leave the record
+    # claiming ground was imaged at coordinates this slice never plans.
+    saved = _saved_slice(slice_dir)
+    saved.saveState()
+
+    restored = Slice(fov=(100e-6, 50e-6), dirHandle=slice_dir)
+    restored.loadState()
+
+    assert restored.tileGrid() == saved.tileGrid()
+
+
+def test_load_state_leaves_the_field_of_view_alone(slice_dir):
+    # The field of view belongs to the camera that is mounted now, not to the
+    # one that was mounted when the record was written. It is saved for the
+    # record and deliberately not applied.
+    saved = _saved_slice(slice_dir)
+    saved.saveState()
+
+    restored = Slice(fov=(200e-6, 200e-6), dirHandle=slice_dir)
+    restored.loadState()
+
+    assert restored.fov == (200e-6, 200e-6)
+
+
+def test_load_state_finds_nothing_in_a_directory_with_no_record(slice_dir):
+    s = Slice(fov=(100e-6, 50e-6), dirHandle=slice_dir)
+    assert s.loadState() is False
+    assert s.regions == []
+
+
+def test_load_state_without_a_directory_finds_nothing():
+    assert Slice(fov=(100e-6, 50e-6)).loadState() is False

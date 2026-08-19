@@ -329,11 +329,71 @@ def reseal(ctx, record_events: bool = True, record_full_test_pulses: bool = True
     )
 
 
-def clean(ctx, **entry_config) -> str:
+def _tipReportsClean(ctx) -> bool:
+    """Whether the pipette says its own tip is still clean.
+
+    "Clean" here is the PatchPipette's own bookkeeping flag (isTipClean), not a
+    measurement of anything. It starts True on a freshly constructed device and
+    on newPipette(); the clean state's success path sets it back to True
+    alongside bumping cleanCount and starting a fresh patch attempt; and it is
+    set False by the two states that dirty a tip against tissue -- `seal`, once
+    it has actually sealed onto a cell, and `fouled`. An operator can also set
+    it by hand from MultiPatch's "fouled" checkbox. So a tip reads dirty
+    exactly when this pipette has been onto a cell since its last clean, which
+    is the question a start-of-run clean wants answered.
+
+    No pipette to ask reads as *not* clean rather than as clean: this flag is
+    the only thing that can authorize skipping a cleaning cycle, and a context
+    carrying no pipette has nothing to authorize it with. That leaves a
+    pipette-less clean() failing exactly the way it always has -- in _drive_fsm,
+    on the pipette it does not have -- rather than letting a mis-built context
+    turn into a step that silently did nothing.
+    """
+    pip = getattr(ctx, "pipette", None)
+    if pip is None:
+        return False
+    return bool(pip.isTipClean())
+
+
+def clean(ctx, only_if_needed: bool = False, **entry_config) -> str:
     """Run the pipette-cleaning cycle and return once it settles at its resting
     state (``out``).
+
+    `only_if_needed` is this action's own option, consumed here and never
+    forwarded to pip.setState -- the same convention `patch`/`reseal` follow for
+    their recording options. Set, it asks the pipette whether its tip is still
+    clean (see _tipReportsClean) and skips the cycle when the answer is yes;
+    unset, it cleans whatever the pipette reports, which is what forcing a clean
+    looks like.
+
+    It defaults to False -- unconditional -- even though the start of a run
+    wants the conditional form. `clean()` has always cleaned when called, and a
+    default that silently skipped would change what every existing protocol's
+    existing clean() call does without that protocol being touched, on a rig
+    where the cost of a wrongly skipped clean is a fouled tip driven at tissue.
+    A protocol that wants the check therefore asks for it at its own call site,
+    where an operator reading the protocol can see that it is being asked.
+
+    A skipped cycle still opens the same "Clean Pipette" entry and finishes it
+    saying it was skipped. Area 5 is the operator's account of what the run
+    actually did, and an action that produced no row at all reads as one that
+    never ran rather than one that was not needed. The skip returns the same
+    ``out`` the drive returns, so a protocol reading the result has one string
+    to compare against either way; that string names this action's declared
+    terminal state, not a claim about where the pipette is now -- a skipped
+    clean moves nothing.
 
     Records nothing: there is nothing an operator reads off a clean (design doc
     §4.5), so it gets neither a details payload nor an event log.
     """
-    return _drive_fsm(ctx, "Clean Pipette", "clean", {"out"}, entry_config, record=False)
+    name = "Clean Pipette"
+    if only_if_needed and _tipReportsClean(ctx):
+        # The skip opens its own entry here, rather than the check living inside
+        # _drive_fsm: _drive_fsm opens (and finishes) the only other entry this
+        # action can produce, and the two paths are mutually exclusive, so one
+        # clean is one row whichever way it goes. A check wrapped *around* the
+        # drive would report two.
+        with ctx.log_action(name) as action_entry:
+            action_entry.set_status("skipped: pipette reports a clean tip")
+        return "out"
+    return _drive_fsm(ctx, name, "clean", {"out"}, entry_config, record=False)

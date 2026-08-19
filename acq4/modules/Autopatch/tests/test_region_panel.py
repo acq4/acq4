@@ -283,6 +283,61 @@ def test_fit_to_regions_frames_the_regions_and_the_pinned_frames_together(qapp):
     assert vy0 <= 1.0e-3 and vy1 >= 2.1e-3
 
 
+# A region smaller than one field of view, and the single tile that surveys it.
+# Chosen that way so the shading reaches a long way past the region it came
+# from: fitToRegions() pads by a tenth of what it frames, and an overhang
+# smaller than that padding would land inside the padding either way and so
+# would not say which of the two was framed.
+SMALL = RectRegion(1.0e-3, 2.0e-3, 1.06e-3, 2.03e-3)
+COVERAGE_FOV = (200e-6, 100e-6)
+COVERAGE_TILE = (1.03e-3, 2.015e-3)
+
+
+def makeOverlay(panel):
+    """Attach a real ProgressOverlay to `panel` the way AutopatchWindow does.
+
+    The window's own two steps in its own order: construct against the view,
+    then hand the marker scatter to excludeFromFraming(). A test that left the
+    second step out would be asserting about a panel no operator ever has.
+    """
+    from acq4.modules.Autopatch.progress_overlay import ProgressOverlay
+
+    overlay = ProgressOverlay(panel.view)
+    panel.excludeFromFraming(overlay.scatter)
+    return overlay
+
+
+def test_fit_to_regions_frames_the_survey_coverage_shading(qapp):
+    """Measured on a rig: pressing Fit on a slice with a region and tiles still
+    to survey raised AttributeError out of the button's slot, because the
+    shading ProgressOverlay.setCoverage() draws is plain Qt.QGraphicsRectItems
+    -- the only things put in this view that are not pyqtgraph items, and so
+    the only ones with no mapRectToView() to map their bounds through.
+
+    The shading is framed rather than skipped, which is what the overhang
+    asserted below pins down: a tile is a whole field of view, so a region
+    smaller than one is surveyed well past its own edges, and what the survey
+    will image is worth seeing.
+
+    x is the axis to assert an overhang on. The view is aspect-locked, so
+    whichever axis does not match the widget's shape is widened past what was
+    asked for -- the union here is twice as wide as it is tall, so y is the
+    widened one and only x reports the range this actually chose.
+    """
+    panel = makePanel()
+    overlay = makeOverlay(panel)
+    panel.setRegions([SMALL])
+
+    overlay.setCoverage([COVERAGE_TILE], COVERAGE_FOV)
+    panel.fitToRegions()
+
+    (vx0, vx1), (vy0, vy1) = panel.view.viewRange()
+    fovW, fovH = COVERAGE_FOV
+    cx, cy = COVERAGE_TILE
+    assert vx0 <= cx - fovW / 2 and vx1 >= cx + fovW / 2
+    assert vy0 <= cy - fovH / 2 and vy1 >= cy + fovH / 2
+
+
 def test_a_panel_with_no_slice_cannot_be_drawn_on(qapp):
     # New slice is what makes Area 1 usable, and greyed-out controls are how the
     # operator is told so -- the same treatment Area 2 already gets.

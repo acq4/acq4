@@ -14,6 +14,7 @@ def qapp():
 class _FakeOrchestrator(Qt.QObject):
     sigCurrentCell = Qt.Signal(object)
     sigCellFinished = Qt.Signal(object, str)
+    sigCellsQueued = Qt.Signal(object)
 
     def __init__(self):
         super().__init__()
@@ -518,3 +519,75 @@ def test_clear_cells_drops_retained_statuses(panel):
 
     assert panel._statuses == {}
     assert panel.statusLabel.text() == ""
+
+
+# ---- what the operator sees on startup, before they touch anything ----
+#
+# No setCurrentRow, no click, nothing selected by hand anywhere below: the run
+# announces a cell and the panel has to arrive at the row worth looking at on
+# its own, or Area 5 opens blank and stays blank until someone clicks it.
+
+
+def test_the_first_action_of_the_first_cell_shows_without_a_click(panel):
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+    cell = object()
+
+    orch.sigCurrentCell.emit(cell)
+    entry = ActionLogEntry("Cellfie")
+    panel.onLogAction(cell, entry)
+    entry.set_status("acquiring the cellfie stack")
+    entry.set_details("text", {"lines": ["the cellfie stack"]})
+
+    assert panel.cellList.currentItem() is not None
+    assert panel.timelineList.currentRow() == 0
+    assert panel.statusLabel.text() == "acquiring the cellfie stack"
+    assert len(_mounted(panel)) == 1
+    assert "the cellfie stack" in _mounted(panel)[0].toPlainText()
+
+
+def test_the_pane_follows_each_action_of_the_followed_cell(panel):
+    """_autoSelectRow picks the row worth looking at when a cell is selected;
+    from there it is the timeline's own auto-scroll rule that keeps the pane on
+    whichever action is running now, without either one being clicked."""
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+    cell = object()
+    orch.sigCurrentCell.emit(cell)
+
+    first = ActionLogEntry("Cellfie")
+    panel.onLogAction(cell, first)
+    first.set_details("text", {"lines": ["one"]})
+    first._finish(None)
+    second = ActionLogEntry("Patch")
+    panel.onLogAction(cell, second)
+    second.set_details("text", {"lines": ["two"]})
+
+    assert panel.timelineList.currentRow() == 1
+    assert "two" in _mounted(panel)[0].toPlainText()
+
+
+def test_returning_to_the_working_cell_shows_the_action_it_is_on(panel):
+    """The other way into _autoSelectRow's "the action still running" branch,
+    and the one the operator reaches by hand: they wander off to another cell
+    while the run works, then come back, and the pane lands on the action in
+    flight rather than on the last one that finished."""
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+    watched, working = object(), object()
+    panel.addCell(working)
+    panel.addCell(watched)
+    panel.selectCell(watched)
+
+    finished = ActionLogEntry("Cellfie")
+    panel.onLogAction(working, finished)
+    finished.set_details("text", {"lines": ["done with this"]})
+    finished._finish(None)
+    running = ActionLogEntry("Patch")
+    panel.onLogAction(working, running)
+    running.set_details("text", {"lines": ["still going"]})
+
+    panel.selectCell(working)
+
+    assert panel.timelineList.currentRow() == 1
+    assert "still going" in _mounted(panel)[0].toPlainText()

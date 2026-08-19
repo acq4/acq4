@@ -23,12 +23,329 @@ from .exceptions import (
 
 logger = get_logger(__name__)
 
+# What a Cell directory is named by, beyond the tracking history: the detector's
+# own description of the cell, the reference cube it was seeded with, and the
+# positions it was seen at. Spelled with their extensions so the names read the
+# same here as they do in the directory -- YamlFile's own default extension is
+# ".yml", and a mix of the two spellings across the tree would be a nuisance to
+# glob for.
+CELL_METADATA_FILE = "cell_metadata.yaml"
+REFERENCE_STACK_FILE = "reference_stack.ma"
+POSITION_HISTORY_FILE = "position_history.yaml"
+
+
+def _trackingResultCount(cell) -> int:
+    """How many tracking results `cell`'s tracker has recorded; 0 for a cell
+    that was never tracked.
+
+    The measure of "is there anything new on this tracker since the last time it
+    was written to disk" -- see _saveOutgoingCellTracking, the one caller that
+    has to ask. Reads through getattr rather than the Cell API because the cells
+    a run works are only ever duck-typed here: the engine has no import of
+    acq4_automation's Cell, and a queue of bare sentinels is what most of the
+    tests hand it.
+    """
+    tracker = getattr(cell, "_tracker", None)
+    if tracker is None:
+        return 0
+    results = getattr(tracker, "tracking_results", None)
+    return 0 if results is None else len(results)
+
+
+def _saveTrackingHistory(cell, dirHandle, autoIncrement=False) -> None:
+    """Write `cell`'s .acqtrack tracking history into `dirHandle`.
+
+    Nothing is raised out of here, at any call site: every one of them is on a
+    path that is closing a cell out or handing the pipette a new one, where a
+    bookkeeping failure must not replace the thing that actually ended the pass
+    (nor halt a run over a file that could not be written). Both the deferred
+    import -- which reaches an internal repository that need not be installed --
+    and the save itself are covered.
+
+    Nowhere to write is not a failure either: a headless run has no manager, so
+    no directory, and there is genuinely nothing this can do. It is the one
+    silent path.
+    """
+    if dirHandle is None:
+        return
+    try:
+        # Imported here, not at module scope: feature_tracking reaches
+        # acq4_automation (an internal repository) at its own module scope, so a
+        # top-level import would stop every test under acq4/experiment from
+        # collecting where it is absent -- the same reason tile_detector and
+        # actions.device defer theirs. It is also a module, not the engine, so
+        # importing it here keeps that dependency at the one place that has it.
+        from acq4.modules.AutomationDebug.feature_tracking import saveTrackingHistory
+
+        saveTrackingHistory(cell, dirHandle, autoIncrement=autoIncrement)
+    except Exception:
+        logger.exception("Failed to save the tracking history for cell %r", cell)
+
+
+def _plainFloat(value):
+    """`value` as a builtin float, or None if it is not a number.
+
+    Everything written from here goes into a YAML file or a repr/eval index
+    file, and neither has any representation for a numpy scalar: a detector's
+    score arrives as a numpy float, and yaml.dump refuses it outright. The
+    conversion has to be total rather than best-effort, because a single
+    unconvertible value costs the whole file.
+    """
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _plainString(value):
+    """`value` as a builtin string, or None. A path may arrive as a pathlib
+    Path, which yaml.dump has no representation for either."""
+    return None if value is None else str(value)
+
+
+def _plainBool(value):
+    """`value` as a builtin bool, or None if there was no value at all -- which
+    is a third answer, not a false one: a cell with no tracker has no policy."""
+    return None if value is None else bool(value)
+
+
+def _plainPoint(position):
+    """`position` as a list of builtin floats, or None.
+
+    coorx Points, numpy arrays and plain tuples all arrive here -- a cell's
+    positions are coorx Points, a tile centre is a pair of floats -- and neither
+    of the first two survives yaml.dump. Iterating and coercing covers all three
+    without this having to know which it was handed.
+    """
+    if position is None:
+        return None
+    try:
+        return [float(v) for v in position]
+    except (TypeError, ValueError):
+        return None
+
+
+def _detectionTime(cell):
+    """When `cell` came into existence, in ptime seconds, or None.
+
+    A Cell records its construction time as the first key of its position
+    history, and for a detected cell construction *is* detection: tile_detector
+    builds one per candidate the instant the detector returns. Nothing else
+    records it -- the .acqtrack's own `saved_at` is when the file was written,
+    which for a cell that sat in the queue and was then abandoned can be a long
+    time later.
+    """
+    positions = getattr(cell, "_positions", None)
+    if not positions:
+        return None
+    try:
+        return float(min(positions))
+    except (TypeError, ValueError):
+        return None
+
+
+def _referenceStack(cell):
+    """The `(data, transform)` of the first reference cube on `cell`'s tracker,
+    or `(None, None)`.
+
+    The same attribute chain actions.device._trackerStack reads for Area 5's
+    image pane, and with the same tolerance: a cell with no tracker, a tracker
+    whose estimator holds no reference yet, and a cell that is a bare sentinel
+    all answer None rather than raising. Read through getattr and a broad except
+    for the reason _trackingResultCount gives -- the cells a run works are only
+    ever duck-typed in this engine.
+
+    The array is left in the orientation the tracker holds it in, rather than
+    swapped for display the way the Area 5 payload is. The transform saved
+    alongside maps that array's own indices to global coordinates, so swapping
+    the axes would quietly invalidate the one thing that says where the cube is.
+    """
+    tracker = getattr(cell, "_tracker", None)
+    if tracker is None:
+        return None, None
+    try:
+        objstack = tracker.motion_estimator.original_object_stack
+        data = objstack.data
+        if data is None:
+            return None, None
+        return data, getattr(objstack, "transform", None)
+    except Exception:
+        return None, None
+
+
+def _cellMetadata(cell) -> dict:
+    """The plain-data description of `cell`: what found it, where, and with what.
+
+    Every read goes through getattr with a default, and not merely out of
+    caution. `volume` and the three provenance fields tile_detector attaches are
+    genuinely not declared on Cell, so a cell the operator seeded by hand raises
+    AttributeError on the attribute rather than answering None. The cells a run
+    works are duck-typed throughout the engine besides, so a queue of bare
+    sentinels has to produce a dict here rather than an exception.
+
+    The four model paths are in here for the reason that is easiest to overlook:
+    `score` is a raw model output, and what it means depends entirely on which
+    checkpoint produced it. A score recorded without that checkpoint cannot be
+    compared against a score from any other run, so the two belong in one file.
+
+    `use_cellpose` is derived from the tracker's class rather than recorded at
+    detection, so that it has an answer for every cell however it arrived -- a
+    cell seeded by hand and tracked from the patch FSM included. The class
+    *name* rather than an isinstance test because this module deliberately has
+    no import of acq4_automation (see _saveTrackingHistory); acquiring one for a
+    boolean would put an internal repository on the engine's import path.
+    """
+    tracker = getattr(cell, "_tracker", None)
+    trackerClass = None if tracker is None else type(tracker).__name__
+    return {
+        "score": _plainFloat(getattr(cell, "score", None)),
+        "volume": _plainFloat(getattr(cell, "volume", None)),
+        "initial_position": _plainPoint(getattr(cell, "initialPosition", None)),
+        "detected_at": _detectionTime(cell),
+        "tile_center": _plainPoint(getattr(cell, "tile_center", None)),
+        "detection_prefix": _plainString(getattr(cell, "detection_prefix", None)),
+        "detection_models": {
+            name: _plainString(path)
+            for name, path in (getattr(cell, "detection_models", None) or {}).items()
+        },
+        "tracker_class": trackerClass,
+        "segmenter": _plainString(getattr(tracker, "_segmenter", None)),
+        "use_cellpose": (
+            None if trackerClass is None else trackerClass == "CellposeCellTracker"
+        ),
+        "allow_refresh_reference": _plainBool(
+            getattr(cell, "allow_refresh_reference", None)
+        ),
+    }
+
+
+def _cellDirInfo(metadata) -> dict:
+    """The handful of metadata fields worth putting on the Cell directory's own
+    index, where the Data Manager shows them beside the operator's notes.
+
+    `location` is a field folderTypes.cfg already declares for a Cell, and a
+    detected cell's location is a coordinate rather than a description, so it is
+    written as one -- in micrometres, which is the scale an operator reads
+    positions in. `score` and `volume` are not in that schema; they are extra
+    keys in the same index, where `dirType` and `expUnit` already sit.
+
+    Deliberately a subset, and deliberately scalars. The .index is a repr/eval
+    config file, so what goes into it has to survive a round trip through repr,
+    and the nested model-path dict would only duplicate the YAML file in a form
+    that is harder to read. The schema's `depth` field is left for the operator:
+    it means depth into the tissue, and what a run knows is a stage coordinate,
+    which is a different number.
+    """
+    info = {}
+    position = metadata.get("initial_position")
+    if position is not None:
+        info["location"] = "(%s) um" % ", ".join(f"{v * 1e6:.1f}" for v in position)
+    for key in ("score", "volume"):
+        if metadata.get(key) is not None:
+            info[key] = metadata[key]
+    return info
+
+
+def _saveCellMetadata(cell, dirHandle) -> None:
+    """Write what is known about `cell` into `dirHandle` as cell_metadata.yaml,
+    and mirror its headline numbers onto the directory's index.
+
+    Called the moment the directory exists -- before the protocol has run,
+    before the pipette has been pointed anywhere -- because this is the one save
+    that has to survive a pass that dies. Everything it records is already
+    settled by then: it describes what the detector found, not what the run made
+    of it.
+
+    YAML rather than the index alone because the index is a repr/eval config
+    file and this is a nested structure a human should be able to read; and
+    `fileType` is passed explicitly because YamlFile and PyQTGraphConfigFile
+    both claim `dict` at the same priority, so leaving the choice to
+    suggestWriteType picks arbitrarily between them.
+
+    Nothing is raised out of here. It is bookkeeping done on the way into a
+    cell's protocol, and a cell whose metadata file could not be written is
+    still a cell worth patching.
+    """
+    if dirHandle is None:
+        return
+    try:
+        metadata = _cellMetadata(cell)
+        dirHandle.writeFile(metadata, CELL_METADATA_FILE, fileType="YamlFile")
+        dirHandle.setInfo(_cellDirInfo(metadata))
+    except Exception:
+        logger.exception("Failed to save the metadata for cell %r", cell)
+
+
+def _saveReferenceStack(cell, dirHandle) -> None:
+    """Write the reference cube `cell`'s tracker cut out of the stack it was
+    found in into `dirHandle`, as a MetaArray.
+
+    Unconditional -- not gated on the cell having been tracked -- because this
+    cube is what the detector actually saw, and a cell that was queued and then
+    abandoned before a single tracking frame is precisely the one an operator
+    wants to look at. It is also the only imagery specific to this cell: the
+    tile stack it was cut from covers a whole field of view and lives under the
+    slice's tiles/ directory, shared with every other cell in that tile.
+
+    The array also rides inside the .acqtrack's object_stacks group, and the
+    duplication is deliberate. That file is a tracking recording, opened by the
+    replay visualizer through acq4_automation's own loader; this is one array
+    the Data Manager can open on its own. A megabyte against a tile stack of
+    tens is not the cost worth optimising here.
+
+    The transform goes onto the file's index rather than into the array, where
+    the index's serializer already knows how to write a coorx Transform. Without
+    it the cube is a picture of nowhere in particular.
+    """
+    if dirHandle is None:
+        return
+    data, transform = _referenceStack(cell)
+    if data is None:
+        return
+    try:
+        info = {} if transform is None else {"transform": transform}
+        dirHandle.writeFile(
+            data, REFERENCE_STACK_FILE, info=info, fileType="MetaArray"
+        )
+    except Exception:
+        logger.exception("Failed to save the reference stack for cell %r", cell)
+
+
+def _savePositionHistory(cell, dirHandle) -> None:
+    """Write `cell`'s position time-series into `dirHandle` as YAML: a list of
+    `[timestamp, [x, y, z]]` pairs in time order.
+
+    The .acqtrack carries a position on each tracking result, but only for the
+    frames that produced one, and never the detection position the cell was
+    created at -- the first entry here is that position, and for an untracked
+    cell it is the only entry there is. A cell with no .acqtrack at all has
+    nowhere else this appears.
+
+    Nothing is raised out of here, for the same reason as every other save on
+    the close-out path.
+    """
+    if dirHandle is None:
+        return
+    positions = getattr(cell, "_positions", None)
+    if not positions:
+        return
+    try:
+        history = [
+            [float(when), _plainPoint(positions[when])] for when in sorted(positions)
+        ]
+        dirHandle.writeFile(history, POSITION_HISTORY_FILE, fileType="YamlFile")
+    except Exception:
+        logger.exception("Failed to save the position history for cell %r", cell)
+
 
 class Orchestrator(Qt.QObject):
     sigStatus = Qt.Signal(str)                 # "running"/"surveying"/"waiting"/"paused"/"error"
     sigCurrentCell = Qt.Signal(object)         # cell, or None when idle
     sigCellFinished = Qt.Signal(object, str)   # cell, status
     sigRunError = Qt.Signal(object)            # RunErrorRecord for the halt
+    sigCellsQueued = Qt.Signal(object)         # list of cells just queued (worker thread)
 
     def __init__(
         self,
@@ -65,9 +382,34 @@ class Orchestrator(Qt.QObject):
         # _runLoopBody's finally. See setCellProducer for why it is not
         # simply "has the producer ever returned None".
         self._producerExhausted = False
+        # What the last tracking-history save wrote: (cell, directory, number of
+        # tracking results the cell's tracker held at the time), or
+        # (None, None, 0) before the first one. Written by _closeCellDataDir as
+        # each pass ends and read at the next cell's handover, which is where a
+        # tracker that kept recording after its cell was closed out gets one
+        # last chance to reach disk -- see _saveOutgoingCellTracking. One slot
+        # rather than a per-cell map: only one cell is ever in hand, and only
+        # the most recently closed-out one can still be on the pipette.
+        #
+        # It holds that one cell (and its directory) until the next cell is
+        # closed out, including past the end of a run: the record has to outlive
+        # the run loop, since the pipette is still holding that cell when the
+        # next run's first handover displaces it. A pipette keeps every cell it
+        # has ever been given (PatchPipette.previousCells) for the life of the
+        # session, so one more reference here retains nothing that was going to
+        # be freed anyway.
+        self._savedTracking = (None, None, 0)
 
     # ---- queue / context ----
     def enqueue(self, cell):
+        # Deliberately does not emit sigCellsQueued, where _refillQueue does.
+        # This is the hand-seeded path: it runs on the GUI thread, called by
+        # something that knows exactly which cell it is adding and adds that
+        # cell's row itself as it calls (CellPanel._enqueueAndAdd). Announcing
+        # here too would give that cell a second row, or push the panel into
+        # de-duplicating rows it created a moment earlier. The signal exists for
+        # the cells that appear with nobody watching -- the ones the survey
+        # producer discovers on the worker thread, mid-run.
         self._queue.append(cell)
 
     def pendingCells(self) -> list:
@@ -435,6 +777,22 @@ class Orchestrator(Qt.QObject):
         # before or after such a clear, never across it. enqueue() remains the
         # public single-cell entry point.
         self._queue.extend(cells)
+        if cells:
+            # Announced only once the batch is actually queued, and only for a
+            # batch that was: without this the only thing that ever says a
+            # survey found cells is one of them starting to run, so the operator
+            # watches an empty list while a queue's worth of found cells sits
+            # behind it. Neither of the two paths above reaches here -- a
+            # discarded batch belongs to tissue the operator has declared gone,
+            # and exhaustion queued nothing -- and an empty batch is skipped for
+            # the same reason as exhaustion: a barren tile queued no cells, so
+            # there is nothing to put in front of anyone.
+            #
+            # A copy of the batch rather than the producer's own list: this is
+            # emitted from the worker thread, so a GUI-thread receiver reads it
+            # through a queued connection, well after this call has returned and
+            # the producer is free to reuse or mutate what it handed over.
+            self.sigCellsQueued.emit(list(cells))
 
     def _reportRunError(self, exc: BaseException, cell=None) -> None:
         """Publish the failure that is about to halt this run, then set status.
@@ -501,6 +859,12 @@ class Orchestrator(Qt.QObject):
         the alternative is patching cell after cell into a directory that names
         another cell.
 
+        The cell's metadata is written into it as soon as it exists, rather than
+        alongside the tracking history at close-out. Everything in that file is
+        already settled by now -- it is what the detector found -- and writing
+        it here is what makes it survive a protocol that dies on its first move,
+        which is the pass whose inputs an operator most wants to read.
+
         Returns the directory (None when there was no manager to make one), which
         _closeCellDataDir needs: by the time the pass ends the protocol may have
         moved the current directory elsewhere.
@@ -512,7 +876,7 @@ class Orchestrator(Qt.QObject):
             # Through the protocol-facing action rather than create_data_dir, for
             # its log_action entry: the operator has to be able to find a cell's
             # data, and Area 5's timeline is where this run says where it went.
-            return new_data_dir(ctx, level="Cell")
+            cellDir = new_data_dir(ctx, level="Cell")
         except (Stopped, FlowSignal):
             # Same pass-through as _giveCellToPipette below.
             raise
@@ -520,6 +884,11 @@ class Orchestrator(Qt.QObject):
             raise OrchestrationError(
                 f"could not create a data directory for cell {cell!r}: {exc}"
             ) from exc
+        # Deliberately not inside the try above: a directory that could not be
+        # made halts the run, and a metadata file that could not be written must
+        # not be mistaken for one. _saveCellMetadata swallows its own.
+        _saveCellMetadata(cell, cellDir)
+        return cellDir
 
     @staticmethod
     def _giveCellToPipette(ctx, cell) -> None:
@@ -563,8 +932,7 @@ class Orchestrator(Qt.QObject):
                 f"could not set the pipette target for cell {cell!r}: {exc}"
             ) from exc
 
-    @staticmethod
-    def _closeCellDataDir(ctx, cell, cellDir) -> None:
+    def _closeCellDataDir(self, ctx, cell, cellDir) -> None:
         """Save `cell`'s tracking history into `cellDir` and step the manager's
         current directory back out of it.
 
@@ -579,6 +947,18 @@ class Orchestrator(Qt.QObject):
         protocol is free to move that (a TaskRunner sequence does), and the
         history belongs to the cell, not to wherever the run left off.
 
+        A pass that ended without a directory of its own still gets its history
+        written, into whatever current directory there is. There are two ways to
+        arrive here that way and both carry a tracked cell: the manager could
+        not make the Cell directory (a storage failure, which halts the run), and
+        the context was built without a manager at all while the orchestrator has
+        one. Either way the cell can already be carrying results -- the survey
+        tracked it into existence, and a re-queued cell arrives with its earlier
+        attempt's -- and losing them because the directory that names the cell is
+        missing is the loss this exists to prevent. Auto-incremented there,
+        because that directory is shared by every cell that lands in it: the
+        second cell's history must not be written over the first's.
+
         Stepping the current directory back out is what keeps the *next* thing
         the run does from landing inside a finished cell -- the survey imaging a
         tile between cells, most of all. Creating the next cell's directory would
@@ -587,30 +967,119 @@ class Orchestrator(Qt.QObject):
 
         Nothing is raised out of here. This runs from _processCell's finally, so
         an exception would replace whatever actually ended the pass -- the halt
-        the operator needs to see -- with a bookkeeping failure. saveTrackingHistory
+        the operator needs to see -- with a bookkeeping failure. _saveTrackingHistory
         already logs and swallows its own; this covers the rest.
         """
-        if cellDir is None:
-            return
         try:
-            # Imported here, not at module scope: feature_tracking reaches
-            # acq4_automation (an internal repository) at its own module scope, so
-            # a top-level import would stop every test under acq4/experiment from
-            # collecting where it is absent -- the same reason tile_detector and
-            # actions.device defer theirs. It is also a module, not the engine, so
-            # importing it here keeps that dependency at the one call site that
-            # has it.
-            from acq4.modules.AutomationDebug.feature_tracking import (
-                saveTrackingHistory,
-            )
-
-            saveTrackingHistory(cell, cellDir)
             manager = getattr(ctx, "manager", None) if ctx is not None else None
+            if manager is None:
+                # The orchestrator's own manager, which is what the engine's
+                # default context would have carried: a context built without one
+                # is a thin context, not a run with nowhere to save.
+                manager = self.manager
+            if cellDir is None:
+                if _trackingResultCount(cell) == 0:
+                    # A cell that was never tracked has nothing to place, so
+                    # there is no reason to go looking for somewhere to put it.
+                    # Asking is not free: a manager raises outright when the
+                    # operator has not chosen a storage directory, which would
+                    # log a failure for every untracked cell of such a run.
+                    return
+                fallback = manager.getCurrentDir() if manager is not None else None
+                self._writeTrackingHistory(cell, fallback, autoIncrement=True)
+                return
+            self._writeTrackingHistory(cell, cellDir)
+            # The reference cube and the position series go in whatever the
+            # tracking history amounted to, including nothing at all. A cell
+            # that was detected, seeded from its tile's stack and then abandoned
+            # has no tracking results and no .acqtrack worth speaking of, and
+            # these two are the whole of what is left to say about it.
+            _saveReferenceStack(cell, cellDir)
+            _savePositionHistory(cell, cellDir)
             if manager is not None:
                 manager.setCurrentDir(cellDir.parent())
         except Exception:
             logger.exception(
                 "Failed to close out the data directory for cell %r", cell
+            )
+
+    def _writeTrackingHistory(self, cell, dirHandle, autoIncrement=False) -> None:
+        """Write `cell`'s tracking history into `dirHandle`, and record what was
+        written.
+
+        The record -- which cell, into which directory, and how much history it
+        had at the time -- is what lets the next handover tell a tracker that has
+        kept recording since from one that is already fully on disk, and lets it
+        put the difference in the same directory as the rest of that cell's
+        history rather than in the next cell's. See _saveOutgoingCellTracking.
+
+        Nothing is recorded when there was nowhere to write: a run with no
+        manager wrote no file, and claiming otherwise would have a later save
+        aim at a directory that was never used.
+        """
+        if dirHandle is None:
+            return
+        _saveTrackingHistory(cell, dirHandle, autoIncrement=autoIncrement)
+        self._savedTracking = (cell, dirHandle, _trackingResultCount(cell))
+
+    def _saveOutgoingCellTracking(self, ctx, cell) -> None:
+        """Save the tracking history of whatever cell the pipette is still
+        holding, before `cell` displaces it.
+
+        PatchPipette.setCell() closes the cell it is holding: tracking is turned
+        off and the cell is pushed onto previousCells, out of reach of anything
+        that would save it. For a cell this orchestrator worked that is usually
+        harmless -- _closeCellDataDir wrote its history as its pass ended -- but
+        "usually" is doing real work there. A pipette's FSM state job is detached
+        from the protocol that asked for it, so it can still be tracking, and
+        still appending to that cell's tracker, after the pass was closed out;
+        and the pipette may be holding a cell this orchestrator never processed
+        at all, one AutomationDebug or a manual newCell() left there, whose
+        history nothing else is going to write.
+
+        The tracker is saved whole, so the file written here is a superset of the
+        one the close-out wrote rather than only the results that came after it.
+        Auto-incremented so it lands beside that earlier file instead of over it,
+        and written into the same directory, so a cell's history stays in the
+        directory that names the cell. A cell this orchestrator has no record of
+        goes to the manager's current directory instead -- called before the next
+        cell's own directory is made, so "current" is still the storage directory
+        the run is working in rather than a directory named after another cell.
+
+        Skipped when the tracker has gained nothing since it was last written,
+        which is the ordinary cell-to-cell handover: a duplicate file in every
+        cell directory of every run is noise an operator has to read past.
+
+        Nothing is raised out of here, for the same reason as _closeCellDataDir:
+        this is bookkeeping done on the way into a cell's protocol, and a run
+        must not be halted by it. Asking a manager for its current directory is
+        itself one of the ways that can fail -- it raises outright when the
+        operator has not chosen a storage directory.
+        """
+        pipette = getattr(ctx, "pipette", None) if ctx is not None else None
+        if pipette is None:
+            return
+        outgoing = getattr(pipette, "cell", None)
+        if outgoing is None or outgoing is cell:
+            return
+        try:
+            savedCell, savedDir, savedCount = self._savedTracking
+            if outgoing is savedCell:
+                if _trackingResultCount(outgoing) <= savedCount:
+                    return
+                dirHandle = savedDir
+            else:
+                manager = getattr(ctx, "manager", None) if ctx is not None else None
+                if manager is None:
+                    manager = self.manager
+                dirHandle = manager.getCurrentDir() if manager is not None else None
+            self._writeTrackingHistory(outgoing, dirHandle, autoIncrement=True)
+        except Exception:
+            logger.exception(
+                "Failed to save the tracking history of cell %r before handing "
+                "the pipette cell %r",
+                outgoing,
+                cell,
             )
 
     def _processCell(self, cell):
@@ -673,6 +1142,13 @@ class Orchestrator(Qt.QObject):
                         # then -- tracking moves it as the cell drifts, so
                         # re-setting it from the queued coordinate would throw
                         # that away.
+                        #
+                        # The outgoing cell is saved before the directory is
+                        # made, not as part of the handover that displaces it,
+                        # so a cell this orchestrator has no record of does not
+                        # have its history filed inside a directory named after
+                        # the cell that displaced it.
+                        self._saveOutgoingCellTracking(ctx, cell)
                         cellDir = self._makeCellDataDir(ctx, cell)
                         self._giveCellToPipette(ctx, cell)
                     self.protocolFile.run(ctx, **self.protocolFile.param_values())
