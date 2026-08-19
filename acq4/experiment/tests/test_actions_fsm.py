@@ -926,3 +926,128 @@ def test_a_failing_details_payload_does_not_replace_a_stop(
 
 def _raiseStopped():
     raise Stopped("operator stop")
+
+
+# -- the conditional clean ----------------------------------------------------
+#
+# A PatchPipette carries its own "is this tip still clean" flag: True from
+# construction and from the clean state's own success path, False once `seal`
+# has sealed onto a cell or `fouled` has been entered. `clean(only_if_needed=
+# True)` reads that flag and skips the cycle when it says the tip is clean.
+# The shared FakePatchPipette has no such flag (nothing else in this suite
+# asks about one), so these tests give the fake the one method the check
+# calls, which is also the whole seam under test.
+
+
+def _tipClean(pip, clean):
+    pip.isTipClean = lambda: clean
+    return pip
+
+
+def _outcomes(ctx):
+    """Collect every entry this context opens, so a test can read what the UI
+    would have been shown."""
+    entries = []
+    ctx.on_log_action = entries.append
+    return entries
+
+
+def test_a_conditional_clean_runs_the_cycle_when_the_tip_reports_dirty(fake_pip_factory):
+    pip = _tipClean(fake_pip_factory(["out"]), False)
+
+    assert clean(_ctx(pip), only_if_needed=True) == "out"
+
+    assert pip.setState_calls[0][0] == "clean"
+
+
+def test_a_conditional_clean_skips_the_cycle_when_the_tip_reports_clean(fake_pip_factory):
+    pip = _tipClean(fake_pip_factory(["out"]), True)
+
+    assert clean(_ctx(pip), only_if_needed=True) == "out"
+
+    # Nothing was driven: the FSM was never entered at all, which is the whole
+    # point of the skip -- the cycle costs minutes at the wells.
+    assert pip.setState_calls == []
+
+
+def test_the_default_clean_still_cleans_a_pipette_that_reports_itself_clean(fake_pip_factory):
+    # The default is unconditional, so an existing protocol's bare clean() call
+    # does what it always did regardless of what the tip flag says.
+    pip = _tipClean(fake_pip_factory(["out"]), True)
+
+    assert clean(_ctx(pip)) == "out"
+
+    assert pip.setState_calls[0][0] == "clean"
+
+
+def test_forcing_cleans_a_pipette_that_reports_itself_clean(fake_pip_factory):
+    pip = _tipClean(fake_pip_factory(["out"]), True)
+
+    assert clean(_ctx(pip), only_if_needed=False) == "out"
+
+    assert pip.setState_calls[0][0] == "clean"
+
+
+def test_only_if_needed_does_not_reach_set_state(fake_pip_factory):
+    # entry_config is forwarded to pip.setState; this is the action's own
+    # option and must not be, the same as patch()'s recording options.
+    pip = _tipClean(fake_pip_factory(["out"]), False)
+
+    clean(_ctx(pip), only_if_needed=True, nextState="bath")
+
+    _state, config = pip.setState_calls[0]
+    assert config == {"nextState": "bath"}
+
+
+def test_a_skipped_clean_still_puts_one_finished_row_in_the_timeline(fake_pip_factory):
+    # An action that produced no row at all reads to the operator as one that
+    # never ran, rather than one that was not needed.
+    pip = _tipClean(fake_pip_factory(["out"]), True)
+    ctx = _ctx(pip)
+    entries = _outcomes(ctx)
+
+    clean(ctx, only_if_needed=True)
+
+    assert [entry.name for entry in entries] == ["Clean Pipette"]
+    assert entries[0].outcome == "done"
+    assert "skip" in entries[0].status
+
+
+def test_a_clean_that_runs_puts_exactly_one_row_in_the_timeline(fake_pip_factory):
+    # The guard against the obvious way to get this wrong: a skip-checking
+    # wrapper that opens its own entry *around* the drive's would report two
+    # rows for one clean.
+    pip = _tipClean(fake_pip_factory(["out"]), False)
+    ctx = _ctx(pip)
+    entries = _outcomes(ctx)
+
+    clean(ctx, only_if_needed=True)
+
+    assert [entry.name for entry in entries] == ["Clean Pipette"]
+
+
+def test_a_skipped_clean_retains_nothing(fake_pip_factory):
+    # A clean records nothing whether it runs or not (design doc §4.5), so the
+    # skip must not grow a payload the driving path doesn't have.
+    pip = _tipClean(fake_pip_factory(["out"]), True)
+    ctx = _ctx(pip)
+    seen = _details(ctx)
+
+    clean(ctx, only_if_needed=True)
+
+    assert seen == []
+
+
+def test_a_conditional_clean_with_no_pipette_fails_like_an_unconditional_one():
+    """There is no flag to read off a context with no pipette, and the flag is
+    the only thing that can authorize skipping the cycle -- so a missing
+    pipette must not read as "already clean". It stays the same failure a bare
+    clean() has always had on such a context, rather than becoming a silently
+    skipped step that hides a mis-built context."""
+    with pytest.raises(AttributeError) as unconditional:
+        clean(_ctx(None))
+
+    with pytest.raises(AttributeError) as conditional:
+        clean(_ctx(None), only_if_needed=True)
+
+    assert conditional.value.args == unconditional.value.args

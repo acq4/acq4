@@ -65,7 +65,14 @@ def test_example_patch_exposes_preset_params_with_empty_defaults():
     pf.load()
     # Empty defaults mean both load_preset() calls are no-ops out of the box,
     # so the bundled example runs on config/mock, which defines no presets.
-    assert pf.param_values() == {"cellfie_preset": "", "patch_preset": ""}
+    # force_clean defaults off for the same out-of-the-box reason: the opening
+    # clean asks the pipette first and skips the cycle on a tip that has not
+    # been onto a cell since its last clean.
+    assert pf.param_values() == {
+        "cellfie_preset": "",
+        "patch_preset": "",
+        "force_clean": False,
+    }
 
 
 def test_example_prompt_description_is_populated_from_its_module_docstring():
@@ -91,7 +98,10 @@ def test_example_patch_description_is_populated_from_its_module_docstring():
         "\n"
         "`cellfie_preset` and `patch_preset` name configured microscope imaging\n"
         "presets (e.g. \"GFP\", \"brightfield\") to load before the cellfie and before the\n"
-        "patch attempt, respectively; leave either empty to skip it."
+        "patch attempt, respectively; leave either empty to skip it.\n"
+        "\n"
+        "The run opens with a pipette clean, which is skipped when the pipette reports\n"
+        "its tip is still clean; `force_clean` runs the cycle regardless."
     )
 
 
