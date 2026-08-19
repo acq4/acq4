@@ -112,7 +112,7 @@ class AutopatchWindow(Qt.QWidget):
         self.area2Box, self.area2Layout = self._makeArea("Cell finding")
         self.area3Box, self.area3Layout = self._makeArea("Status && actions")
         self.area4Box, self.area4Layout = self._makeArea("Protocol && params")
-        self.area5Box, self.area5Layout = self._makeArea("Current cell")
+        self.area5Box, self.area5Layout = self._makeArea("Cells && actions")
 
         # Splitters all the way down, so every boundary in this window is a
         # handle the operator can drag: the one between the two columns, and the
@@ -1124,9 +1124,59 @@ class AutopatchWindow(Qt.QWidget):
             self.orchestrator.setCellProducer(None)
             return
         detector = make_tile_detector(
-            camera=self._cachedCamera, scope=self._cachedScope, manager=self.manager
+            camera=self._cachedCamera,
+            scope=self._cachedScope,
+            manager=self.manager,
+            # The manipulator, not the PatchPipette the selector reports: the
+            # detector sends the tip home before each tile, and goHome is the
+            # manipulator's -- the same delegation CellPanel's "Add from target"
+            # reads a target position through. Resolved here on the GUI thread
+            # alongside the camera and scope, for the same reason they are.
+            #
+            # None when no pipette is selected: the survey checks above
+            # deliberately do not require one, since a run with no pipette on
+            # the rig has nothing to move out of the objective's way and must
+            # still be able to image tiles.
+            pipette=(None if self._cachedPipette is None else self._cachedPipette.pipetteDevice),
+            # Where each tile's detection z-stack and cellpose label mask are
+            # written, under a tiles/ subdirectory the detector makes for
+            # itself. The slice's own directory, so a tile's imagery sits beside
+            # the Cell directories that tile produced rather than in the
+            # unmanaged cell_annotations/ tree the AutomationDebug workflow
+            # uses. None for a slice that has none -- addRegionHere() creates
+            # one implicitly, without a directory -- which surveys exactly as
+            # before and simply keeps no imagery.
+            slice_dir=self.slice.dirHandle,
+            **self._surveyDetectionSettings(),
         )
         self.orchestrator.setCellProducer(self.slice.makeCellProducer(detector))
+
+    def _surveyDetectionSettings(self) -> dict:
+        """The two detection settings the survey does not get from Area 2.
+
+        AutomationDebug reads both off its own window: a minimum-volume spin box
+        beside its depth controls, and a z step its mock stacks can override.
+        Area 2 has neither control, so a survey that passed neither used the
+        library defaults -- no volume floor at all, and 1 um steps -- with no way
+        for a rig to say otherwise. Until Area 2 grows the controls, the rig's
+        own `misc` configuration is that way; the defaults here are exactly the
+        values the survey used when they were not settable, so a rig that
+        configures neither surveys precisely as it did before.
+
+        Read here on the GUI thread alongside the camera and the scope, for the
+        same reason those are: the detector this feeds runs on the
+        orchestrator's worker thread.
+
+        Through getattr because a manager-less window (headless, or a test
+        standing in for the Manager) has no configuration to read, and a survey
+        is not the place to discover that.
+        """
+        config = getattr(self.manager, "config", None) or {}
+        misc = config.get("misc") or {}
+        return {
+            "min_volume_m3": float(misc.get("minCellVolume", 0.0)),
+            "step_z": float(misc.get("detectionStepZ", 1e-6)),
+        }
 
     def _onProtocolLoaded(self, protocolFile) -> None:
         # Loading a second protocol must not abandon a still-live Orchestrator:
