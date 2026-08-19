@@ -5,6 +5,7 @@ from __future__ import annotations
 from acq4.util import Qt
 
 from .error_display import showInLog
+from .sizing import CompactLabel
 
 # Area 3's band carries one instruction at a time, but three independent
 # writers can each have something to say: an unchosen storage directory, a
@@ -64,9 +65,15 @@ class StatusPanel(Qt.QWidget):
         self.statusLabel.setStyleSheet("font-size: 20pt; font-weight: bold;")
         self.currentActionLabel = Qt.QLabel("")
         self.currentActionLabel.setAlignment(Qt.Qt.AlignRight | Qt.Qt.AlignVCenter)
-        self.instructionLabel = Qt.QLabel("")
+        # Wrapped, because what the band carries is a sentence of guidance or an
+        # exception's own message, and either unwrapped would decide how wide
+        # Area 3 has to be for as long as it shows. Compact, because a wrapping
+        # label pays for that width in height, and the narrower the area is
+        # squeezed the more of the panel this one label would take (see
+        # sizing.CompactLabel); the whole message stays in the tooltip, and the
+        # log has all of it either way -- that is what Show in log is for.
+        self.instructionLabel = CompactLabel("")
         self.instructionLabel.setStyleSheet("color: red; font-weight: bold;")
-        self.instructionLabel.setWordWrap(True)
         self.showInLogBtn = Qt.QPushButton("Show in log")
         self.showInLogBtn.clicked.connect(self._onShowInLogClicked)
 
@@ -90,6 +97,12 @@ class StatusPanel(Qt.QWidget):
         layout.addLayout(statusRow)
         layout.addLayout(btnRow)
         layout.addLayout(errorRow)
+        # Three rows of controls, none of which reads any better for being
+        # taller: room beyond them collects here instead of spreading the
+        # indicator, the buttons and the band apart down a tall Area 3 -- and,
+        # in the other direction, a row that never grew is a row with no slack
+        # to be taken off it when the area is squeezed.
+        layout.addStretch()
         self.setLayout(layout)
 
         self._updateErrorBand()

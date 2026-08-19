@@ -8,6 +8,8 @@ import pyqtgraph as pg
 from acq4.experiment.slice import SearchConstraints
 from acq4.util import Qt
 
+from .sizing import CompactLabel
+
 # max_cell_density is stored in SI (cells per cubic metre), but a field of
 # view is on the order of a few cubic micrometres to nanolitres, not cubic
 # metres, so a raw SI density reads as an unreasoned power of ten. 1 nL is
@@ -89,7 +91,13 @@ class SearchPanel(Qt.QWidget):
         self.rescansCheck.setChecked(defaults.rescans_allowed)
 
         self.surveyLabel = Qt.QLabel("no region")
-        self.errorLabel = Qt.QLabel("")
+        # A constraint error is a sentence ("depth_range must be ordered from
+        # the surface downwards", and the like), and an unwrapped sentence is a
+        # panel as wide as that sentence -- which in Area 2 means everything
+        # else behind a horizontal scrollbar for as long as the message shows.
+        # CompactLabel wraps it without letting the wrapping cost this panel
+        # unbounded height in exchange.
+        self.errorLabel = CompactLabel("")
         self.errorLabel.setStyleSheet("color: red;")
 
         form = Qt.QFormLayout()
@@ -103,6 +111,12 @@ class SearchPanel(Qt.QWidget):
         layout.addWidget(self.rescansCheck)
         layout.addWidget(self.surveyLabel)
         layout.addWidget(self.errorLabel)
+        # Nothing above grows usefully -- four spin boxes, a checkbox and two
+        # readouts are each one row of controls at any size -- so room beyond
+        # what they need goes here rather than being shared out among them as
+        # padding. Which matters in both directions: a widget allowed to grow is
+        # a widget whose share of a squeeze comes off something else.
+        layout.addStretch()
         self.setLayout(layout)
 
         for spin in (

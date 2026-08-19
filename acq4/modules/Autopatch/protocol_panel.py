@@ -11,6 +11,37 @@ from acq4.experiment.protocol_file import ProtocolFile
 from acq4.util import Qt
 from acq4.util.codeEditor import invokeCodeEditor
 
+from .sizing import CompactLabel, rowsHigh
+
+
+class _CompactParamTree(ParameterTree):
+    """The loaded protocol's parameters, in a tree that gives way rather than
+    insists.
+
+    A ParameterTree's own minimum is QAbstractScrollArea's -- some seventy
+    pixels, its guess at the smallest viewport still worth scrolling, and
+    nothing to do with what is in the tree. Area 4 is a scrolling viewport over
+    this whole panel (see AutopatchWindow._makeArea), so that guess is height
+    the panel refuses to give up: squeezing the area past it scrolls the picker
+    and Reload off the top of the area instead of shortening the tree. Three
+    parameter rows and then scroll within itself is what an operator squeezing
+    Area 4 is asking for.
+
+    The preferred height is floored at four rows for the case ParameterTree
+    itself has no answer to: its sizeHint is the sum of the rows it holds, which
+    is nothing at all until a protocol is loaded, and the window's opening
+    division of the right-hand column is seeded from exactly these hints (see
+    AutopatchWindow._seedOpeningSplit). A smaller minimum is the point of this
+    class; a smaller preference would only open Area 4 as a sliver.
+    """
+
+    def minimumSizeHint(self):
+        return Qt.QSize(0, rowsHigh(self, 3))
+
+    def sizeHint(self):
+        hint = super().sizeHint()
+        return Qt.QSize(hint.width(), max(hint.height(), rowsHigh(self, 4)))
+
 
 class _RescanningComboBox(Qt.QComboBox):
     """A QComboBox that rescans the protocol directory just before its popup
@@ -52,13 +83,20 @@ class ProtocolPanel(Qt.QWidget):
         row.addWidget(self.reloadBtn)
         row.addWidget(self.editorBtn)
 
-        self.paramTree = ParameterTree(showHeader=False)
-        self.errorLabel = Qt.QLabel()
-        self.errorLabel.setWordWrap(True)
+        self.paramTree = _CompactParamTree(showHeader=False)
+        # A load error is one long line of Python -- a traceback's last line, or
+        # an import failure naming a path -- and unwrapped it would decide how
+        # wide this panel has to be, which in Area 4 means a horizontal
+        # scrollbar under everything else. CompactLabel wraps it without letting
+        # the wrapping cost unbounded height in return.
+        self.errorLabel = CompactLabel()
 
         outer = Qt.QVBoxLayout()
         outer.addLayout(row)
-        outer.addWidget(self.paramTree)
+        # The tree is the only thing here that can use more room, and the only
+        # thing that can do without it; the picker row and the error line are
+        # each one row of controls either way.
+        outer.addWidget(self.paramTree, 1)
         outer.addWidget(self.errorLabel)
         self.setLayout(outer)
 
