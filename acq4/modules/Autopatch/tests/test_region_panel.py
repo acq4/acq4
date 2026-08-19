@@ -3,6 +3,7 @@ operator edits a region, and what it lets them touch."""
 
 import pytest
 
+import pyqtgraph as pg
 from acq4.experiment.search_region import EllipseRegion, PolygonRegion, RectRegion
 from acq4.util import Qt
 
@@ -703,6 +704,65 @@ def test_legend_swatch_shows_the_brush_colour(qapp):
     assert len(swatches) == 2
     assert swatches[0].palette().color(swatches[0].backgroundRole()) == firstBrush.color()
     assert swatches[1].palette().color(swatches[1].backgroundRole()) == secondBrush.color()
+
+
+def test_a_marker_inside_an_editable_region_still_wins_its_click(qapp):
+    """A cell marker drawn inside a region's interior has to win the click
+    over the region ROI stacked there too: pg.ROI's hoverEvent claims every
+    left-button click across its whole translatable body as soon as it is
+    hovered (see HoverEvent.acceptClicks in pyqtgraph's GraphicsScene), and
+    once claimed, the scene never offers that click to anything else -- a
+    marker included. Driven through real QMouseEvents rather than by calling
+    ProgressOverlay._onScatterClicked or roi.hoverEvent directly, because the
+    bug lives in which of the two ever gets asked, not in what either one
+    does once asked.
+    """
+    from acq4.modules.Autopatch.progress_overlay import Marker, ProgressOverlay
+
+    panel = makePanel()
+    panel.resize(400, 400)
+    panel.show()
+    Qt.QApplication.processEvents()
+    panel.setSliceReady(True)
+    panel.setRegions([RECT])
+    panel.view.setRange(xRange=(0.9e-3, 1.5e-3), yRange=(1.9e-3, 2.2e-3), padding=0)
+    Qt.QApplication.processEvents()
+    roi = panel._rois[0]
+
+    overlay = ProgressOverlay(panel.view)
+    markerPos = (1.2e-3, 2.05e-3)  # inside RECT's box
+    overlay.setMarkers([Marker(markerPos[0], markerPos[1], pg.mkBrush(0, 180, 0), 111)])
+    seen = []
+    overlay.sigMarkerClicked.connect(seen.append)
+
+    scenePos = panel.view.mapViewToScene(Qt.QPointF(*markerPos))
+    viewport = panel.graphicsView.viewport()
+    localPos = Qt.QPointF(panel.graphicsView.mapFromScene(scenePos))
+    globalPos = Qt.QPointF(viewport.mapToGlobal(localPos.toPoint()))
+
+    def send(kind, button, buttons):
+        ev = Qt.QMouseEvent(kind, localPos, globalPos, button, buttons, Qt.Qt.NoModifier)
+        Qt.QCoreApplication.sendEvent(viewport, ev)
+
+    # Hover the marker first, the way an operator's cursor always does before
+    # a click actually lands -- sendClickEvent() below reads this scene's
+    # lastHoverEvent, not anything freshly computed at click time.
+    send(Qt.QEvent.MouseMove, Qt.Qt.NoButton, Qt.Qt.NoButton)
+    Qt.QApplication.processEvents()
+    hover = panel.graphicsView.scene().lastHoverEvent
+    assert hover.clickItems().get(Qt.Qt.LeftButton) is overlay.scatter
+    # The ROI must still be the one dragging would move: acceptClicks and
+    # acceptDrags are separate claims, so a marker winning the click must not
+    # cost the region its own drag.
+    assert hover.dragItems().get(Qt.Qt.LeftButton) is roi
+
+    send(Qt.QEvent.MouseButtonPress, Qt.Qt.LeftButton, Qt.Qt.LeftButton)
+    Qt.QApplication.processEvents()
+    send(Qt.QEvent.MouseButtonRelease, Qt.Qt.LeftButton, Qt.Qt.NoButton)
+    Qt.QApplication.processEvents()
+
+    panel.close()
+    assert seen == [111]
 
 
 def test_the_slice_view_shrinks_with_the_panel_rather_than_holding_a_floor(qapp):

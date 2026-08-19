@@ -19,6 +19,22 @@ from .progress_colors import COLOR_SOURCES
 # draws, so the same shape reads the same way in either module.
 REGION_PEN = pg.mkPen("y", width=2)
 
+# A half-step below Area 1's marker layer (ProgressOverlay._MARKER_Z = -40 in
+# progress_overlay.py), rather than pg.ROI's own default of 10: this module
+# renders regions and does not import from a sibling overlay it does not know
+# exists, but the two constants still have to sit either side of the same
+# line for a marker's own click to ever reach it. pg.ROI's hoverEvent claims
+# every left-button click across its whole translatable body as soon as it is
+# hovered (see HoverEvent.acceptClicks in pyqtgraph's GraphicsScene), and once
+# claimed, the scene never offers that click to anything drawn underneath --
+# a marker included -- so the ROI's own body has to sit below the marker
+# layer for a marker's click to survive it. The half-step, rather than a
+# whole one, is what puts the handles back above: pg.ROI reparents every
+# handle to z+1 whenever setZValue() runs (see ROI.setZValue), so this same
+# gap lands the handles just above the marker layer again, and a marker still
+# never hides one.
+_REGION_ROI_Z = -40.5
+
 
 def roiForRegion(region: SearchRegion) -> pg.ROI:
     """The editable ROI that draws `region`.
@@ -247,6 +263,10 @@ class RegionPanel(Qt.QWidget):
     def _attachRoi(self, roi: pg.ROI) -> None:
         self._rois.append(roi)
         self.view.addItem(roi)
+        # addItem() before setZValue(): ViewBox.addItem() raises an item's z
+        # to view.zValue()+1 when it is lower, so setting z first collapses
+        # it. The same ordering ProgressOverlay.__init__ documents.
+        roi.setZValue(_REGION_ROI_Z)
         roi.sigRegionChangeFinished.connect(self._onRoiEdited)
         roi.sigRemoveRequested.connect(self._onRoiRemoved)
         self._applyRoiLock(roi)
