@@ -126,6 +126,12 @@ DEPENDENCY_METADATA: Dict[str, Dict[str, Any]] = {
         "display_path": "Hardware support for data acquisition",
         "default": False,
     },
+    "webcam": {
+        "title": "Webcams / USB Cameras",
+        "description": "Dependencies for generic webcams and USB video devices.",
+        "display_path": "Hardware support for data acquisition",
+        "default": False,
+    },
     "analysis": {
         "title": "Data Analysis",
         "description": "Packages for data analysis and visualization.",
