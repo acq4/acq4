@@ -1,4 +1,6 @@
+import time
 import traceback
+from collections import OrderedDict
 from typing import Optional
 
 import pyqtgraph as pg
@@ -11,6 +13,32 @@ from acq4.util.DictView import DictView
 from acq4.logging_config import get_logger
 
 logger = get_logger(__name__)
+
+
+def _orderedCopy(data):
+    """Rebuild nested containers with OrderedDict so keys stay in document order.
+
+    pyqtgraph's DataTreeWidget sorts the keys of a plain dict; a yaml document
+    reads better in the order it was written.
+    """
+    if isinstance(data, dict):
+        return OrderedDict((k, _orderedCopy(v)) for k, v in data.items())
+    if isinstance(data, (list, tuple)):
+        return type(data)(_orderedCopy(v) for v in data)
+    return data
+
+
+class YamlTreeWidget(pg.DataTreeWidget):
+    """DataTreeWidget that reads yaml documents: plain mappings and dated timestamps."""
+
+    def parse(self, data):
+        typeStr, desc, childs, widget = super().parse(data)
+        if isinstance(data, OrderedDict):
+            # only ordered because we made it so; the document just has a mapping here
+            typeStr = 'dict'
+        if isinstance(data, (int, float)) and not isinstance(data, bool) and 1e9 < data < 2e9:
+            desc = f"{desc}   ({time.strftime('%Y.%m.%d %H:%M:%S', time.localtime(data))})"
+        return typeStr, desc, childs, widget
 
 
 class FileDataView(Qt.QSplitter):
@@ -64,6 +92,8 @@ class FileDataView(Qt.QSplitter):
                         else:
                             self.displayDataAsPlot(data)
                         self.displayMetaInfoForData(data)
+                    elif typ == 'YamlFile':
+                        self.displayYaml(data)
                     else:
                         self.displayMessage(f"No data view available for file type {typ!r}.")
         except Exception:
@@ -136,6 +166,16 @@ class FileDataView(Qt.QSplitter):
         self._cursorText.setPos(pos.x() + 12, pos.y())
         pos = view.mapSceneToView(pos)
         self._cursorText.setText(f'({int(pos.x())}, {int(pos.y())})', color='y')
+
+    def displayYaml(self, data):
+        """Show a parsed yaml document as a browsable tree of mappings, lists and values."""
+        self.clear()
+        w = YamlTreeWidget(self)
+        # A mapping or list at the top level has nothing useful to say about itself,
+        # so drop that row and show its contents directly.
+        w.setData(_orderedCopy(data), hideRoot=isinstance(data, (dict, list, tuple)))
+        self.addWidget(w)
+        self._widgets.append(w)
 
     def displayAcqTrack(self, fh):
         """Offer to open a cell tracking history in the tracking visualizer."""
