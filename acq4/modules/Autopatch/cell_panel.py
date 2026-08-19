@@ -8,6 +8,7 @@ import numpy as np
 from coorx import Point
 
 from acq4_automation.feature_tracking.cell import Cell
+from acq4.experiment.actions.device import _trackerStack
 from acq4.util import Qt
 
 from .details_renderers import buildDetailsWidget
@@ -35,6 +36,39 @@ COMPLETED = frozenset({"done"})
 # answer their question a few rows at a time, scrolling within themselves for
 # the rest.
 _VIEW_ROWS = 3
+
+# Row text for the synthetic timeline row _seedReferenceStackRow inserts at
+# index 0 for a cell whose tracker is already initialized when its (empty)
+# timeline is seeded. Plain and constant, unlike the "running"/outcome rows
+# _appendTimelineRow and _finishTimelineRow compose: nothing backs this row
+# with an ActionLogEntry to report a status or an outcome for.
+_REFERENCE_STACK_ROW_TEXT = "Tracker initialized"
+
+
+def _liveReferenceStackDetails(cell):
+    """("image_stack", payload) read directly off `cell`'s tracker, or None
+    if it has no reference stack to show.
+
+    Reads the same attribute chain acq4.experiment.actions.device._trackerStack
+    does (cell._tracker.motion_estimator.original_object_stack.data), and
+    shapes the payload the same way device._attachStackDetails does, so this
+    renders identically to a real Cellfie action's own image_stack details.
+    Callers, not this function, are responsible for only calling it where
+    that read is safe -- see _seedReferenceStackRow's docstring.
+    """
+    stack = _trackerStack(cell)
+    if stack is None:
+        return None
+    return (
+        "image_stack",
+        {
+            "stack": stack,
+            "center_index": (
+                stack.shape[0] // 2 if stack.ndim >= 3 and stack.shape[0] > 1 else None
+            ),
+            "title": _REFERENCE_STACK_ROW_TEXT,
+        },
+    )
 
 
 class _DetailsViewport(Qt.QScrollArea):
@@ -163,6 +197,18 @@ class CellPanel(Qt.QWidget):
         # still says what it was doing when it ended; a row absent from here
         # never reported a status.
         self._statuses: dict[tuple[int, int], str] = {}
+        # id(cell) -> the first ("image_stack", payload) pair any action ever
+        # retained for that cell, cached by _onActionEntry's "details" phase
+        # and reseeded into the synthetic "Tracker initialized" row (see
+        # _seedReferenceStackRow) whenever that cell's timeline starts empty.
+        # Deliberately NOT cleared by _dropDetailsFor: self._details is that
+        # pass's UI history and reuse's whole point is discarding it, but the
+        # reference stack this backs is the same cube across every pass (the
+        # tracker it lives on is the one thing reuse intentionally carries
+        # forward) -- so this is the one retained-payload store a reuse pass
+        # must not wipe. Holds only plain data, never a cell or a widget, for
+        # the same reference-cycle reasons self._details does.
+        self._referenceStacks: dict[int, tuple[str, object]] = {}
         # id(cell) -> (exc_type, exc_message, traceback_text) for the most
         # recent action of that cell's that failed. Ids and plain strings,
         # never the entry and never the exception: an ActionLogEntry's
@@ -446,6 +492,7 @@ class CellPanel(Qt.QWidget):
         self._logs.clear()
         self._details.clear()
         self._statuses.clear()
+        self._referenceStacks.clear()
         self.statusLabel.setText("")
         self._cellErrors.clear()
         self.cellList.clear()
@@ -505,6 +552,13 @@ class CellPanel(Qt.QWidget):
             self._logs.pop(cellId, None)
             self._cellErrors.pop(cellId, None)
             self._dropDetailsFor(cellId)
+            # Unlike _dropDetailsFor's targets, this cell is gone for good
+            # here (the reuse-and-restore branch above never reaches this
+            # line), so nothing is left to reseed a synthetic row from later
+            # -- and a stale id left behind could hand a future, unrelated
+            # cell at a reused memory address a reference stack that was
+            # never its own.
+            self._referenceStacks.pop(cellId, None)
         self._updateCheckAllButton()
         self._updateReuseButton()
         self.sigCellStateChanged.emit()
@@ -593,6 +647,7 @@ class CellPanel(Qt.QWidget):
         self.cellList.addItem(item)
         self._rows[id(cell)] = item
         self._timelines[id(cell)] = []
+        self._seedReferenceStackRow(cell)
         self._logs[id(cell)] = []
         # QListWidgetItem.setData() does not keep a strong Python reference to a
         # QObject-derived value (Cell is one): once the orchestrator's queue/worker
@@ -747,6 +802,10 @@ class CellPanel(Qt.QWidget):
             # Earlier-pass details are that pass's UI history, cleared with the
             # timeline and log for the same reason (design doc §7).
             self._dropDetailsFor(id(cell))
+            # After, not before: this seeds row 0 of the timeline just
+            # emptied above by writing into self._details itself, and
+            # _dropDetailsFor must not turn around and wipe that seed.
+            self._seedReferenceStackRow(cell)
             # A stored error describes the pass that just ended, not the one
             # about to start. errorText() reports it to anything that asks --
             # including a caller reading it after this row already reads
@@ -979,6 +1038,17 @@ class CellPanel(Qt.QWidget):
             loc = self._entryTimelineLoc.get(id(entry))
             if loc is not None:
                 self._details[loc] = (entry.details_kind, entry.details_payload)
+                if entry.details_kind == "image_stack":
+                    # The first reference stack any action retains for this
+                    # cell becomes the synthetic row's permanent backing (see
+                    # _seedReferenceStackRow) -- cached here, rather than read
+                    # back off the tracker later, because this payload just
+                    # arrived over sigActionEntry and so is already safely on
+                    # the GUI thread, the same way every other entry in
+                    # self._details is.
+                    self._referenceStacks.setdefault(
+                        id(cell), (entry.details_kind, entry.details_payload)
+                    )
                 # A payload is this action's final word for its row (see
                 # set_details' docstring: it must be called before the entry
                 # finishes), so it supersedes that same entry's live widget from
@@ -998,6 +1068,53 @@ class CellPanel(Qt.QWidget):
                 self._statuses[loc] = entry.status
                 if self._isSelectedRow(loc):
                     self.statusLabel.setText(entry.status)
+
+    def _seedReferenceStackRow(self, cell) -> None:
+        """Insert the synthetic "Tracker initialized" row at index 0 of
+        `cell`'s just-emptied timeline, if there is a reference stack to show
+        for it. A cell whose tracker was never initialized (Cell.isInitialized
+        False) gets no row at all, not an empty placeholder.
+
+        Callers must call this immediately after setting
+        self._timelines[id(cell)] = [] -- addCell() and _onReuseCheckedCells()
+        are the only two places a cell's timeline starts empty, and doing
+        this there means the synthetic row lands at index 0 with no other row
+        ever needing to move: every subsequent _appendTimelineRow call
+        computes its own index as len(rows), which already counts this one.
+
+        THREAD SAFETY: cell._tracker's reference stack is worker-thread-owned
+        data -- the same chain acq4.experiment.actions.device._trackerStack
+        reads, but from inside a running action, i.e. from that same worker
+        thread. Reading it directly here, on the GUI thread, is only safe for
+        a cell nothing has started running yet: a survey producer seeds a
+        freshly discovered cell's tracker with its reference cube once, on
+        its own worker thread, before ever announcing the cell, and nothing
+        touches that tracker again until the orchestrator marks the cell
+        attempted and starts running actions against it (_onCurrentCell and
+        _onCellFinished both record attempted before either could ever reach
+        this method for that cell, via their own addCell() fallback). Past
+        that point, a direct read races a worker thread that may still be
+        appending to the same tracker -- confirmed for exactly this situation
+        by 2794be759's finding that a detached FSM job can still be appending
+        to a cell's tracker after its pass is already closed out -- so once a
+        cell isAttempted(), this method reads only a payload already cached
+        in self._referenceStacks from an earlier action's set_details() call,
+        which arrived here over sigActionEntry and so was already safely on
+        the GUI thread; it is never read fresh off the tracker again.
+        """
+        if not getattr(cell, "isInitialized", False):
+            return
+        cellId = id(cell)
+        cached = self._referenceStacks.get(cellId)
+        if cached is None and not self.isAttempted(cell):
+            cached = _liveReferenceStackDetails(cell)
+            if cached is not None:
+                self._referenceStacks[cellId] = cached
+        if cached is None:
+            return
+        rows = self._timelines[cellId]
+        self._details[(cellId, len(rows))] = cached
+        rows.append(_REFERENCE_STACK_ROW_TEXT)
 
     def _appendTimelineRow(self, cell, entry) -> None:
         text = f"{entry.name} — ⏳ running"
