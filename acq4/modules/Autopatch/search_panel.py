@@ -20,7 +20,7 @@ _CELLS_PER_NL_TO_M3 = 1e12
 
 
 class SearchPanel(Qt.QWidget):
-    """The four Area 2 search constraints and a survey progress readout.
+    """The six Area 2 search constraints and a survey progress readout.
 
     Emits `sigConstraintsChanged` with a fresh SearchConstraints on every edit,
     or with None when the widget values do not describe a valid search (an
@@ -31,9 +31,17 @@ class SearchPanel(Qt.QWidget):
 
     sigConstraintsChanged = Qt.Signal(object)  # SearchConstraints, or None if invalid
 
-    def __init__(self):
+    def __init__(self, min_volume_m3: float = 0.0, step_z: float = 1e-6):
+        """`min_volume_m3` and `step_z` seed the two detection controls.
+
+        The owner (AutopatchWindow) is the one that can see the rig's `misc`
+        configuration; this panel takes the resulting numbers as plain floats
+        rather than reading that configuration itself, so a manager-less panel
+        (a test, a headless window) still has a sensible starting point --
+        the engine's own defaults, which is what leaving these unset gives.
+        """
         super().__init__()
-        defaults = SearchConstraints()
+        defaults = SearchConstraints(min_volume_m3=min_volume_m3, step_z=step_z)
         # The two independent things errorLabel can be showing, kept apart so
         # neither silently erases the other. The constraint message describes
         # the spin box values themselves and is rewritten (or cleared) by every
@@ -90,6 +98,28 @@ class SearchPanel(Qt.QWidget):
         self.rescansCheck = Qt.QCheckBox("Rescans allowed")
         self.rescansCheck.setChecked(defaults.rescans_allowed)
 
+        # A volume floor below which a detected blob is not a cell -- the same
+        # unit and step AutomationDebug's own minimum-volume spin box uses
+        # (acq4/modules/AutomationDebug/AutomationDebug.py).
+        self.minVolumeSpin = self._makeSpin(
+            defaults.min_volume_m3,
+            bounds=(0.0, None),
+            step=100e-18,
+            suffix="m³",
+            siPrefix=True,
+        )
+        # The z increment the detection stack is acquired at -- a distance,
+        # like the depth controls, so it takes the same units. Bounded above
+        # zero rather than at zero: a zero or negative step is not a smaller
+        # search, it is not a step at all, and SearchConstraints rejects it.
+        self.stepZSpin = self._makeSpin(
+            defaults.step_z,
+            bounds=(1e-9, None),
+            step=1e-7,
+            suffix="m",
+            siPrefix=True,
+        )
+
         self.surveyLabel = Qt.QLabel("no region")
         # A constraint error is a sentence ("depth_range must be ordered from
         # the surface downwards", and the like), and an unwrapped sentence is a
@@ -105,13 +135,15 @@ class SearchPanel(Qt.QWidget):
         form.addRow("Depth from surface, far", self.farDepthSpin)
         form.addRow("Minimum health", self.minHealthSpin)
         form.addRow("Maximum cell density", self.maxDensitySpin)
+        form.addRow("Minimum cell volume", self.minVolumeSpin)
+        form.addRow("Detection step, z", self.stepZSpin)
 
         layout = Qt.QVBoxLayout()
         layout.addLayout(form)
         layout.addWidget(self.rescansCheck)
         layout.addWidget(self.surveyLabel)
         layout.addWidget(self.errorLabel)
-        # Nothing above grows usefully -- four spin boxes, a checkbox and two
+        # Nothing above grows usefully -- six spin boxes, a checkbox and two
         # readouts are each one row of controls at any size -- so room beyond
         # what they need goes here rather than being shared out among them as
         # padding. Which matters in both directions: a widget allowed to grow is
@@ -124,6 +156,8 @@ class SearchPanel(Qt.QWidget):
             self.farDepthSpin,
             self.minHealthSpin,
             self.maxDensitySpin,
+            self.minVolumeSpin,
+            self.stepZSpin,
         ):
             spin.valueChanged.connect(self._onEdited)
         self.rescansCheck.toggled.connect(self._onEdited)
@@ -160,6 +194,8 @@ class SearchPanel(Qt.QWidget):
                 min_health=self.minHealthSpin.value(),
                 max_cell_density=self.maxDensitySpin.value() * _CELLS_PER_NL_TO_M3,
                 rescans_allowed=self.rescansCheck.isChecked(),
+                min_volume_m3=self.minVolumeSpin.value(),
+                step_z=self.stepZSpin.value(),
             )
         except ValueError as exc:
             self._constraintError = str(exc)
@@ -227,5 +263,7 @@ class SearchPanel(Qt.QWidget):
             self.minHealthSpin,
             self.maxDensitySpin,
             self.rescansCheck,
+            self.minVolumeSpin,
+            self.stepZSpin,
         ):
             w.setEnabled(not locked)

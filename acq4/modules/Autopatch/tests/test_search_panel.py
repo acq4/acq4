@@ -12,10 +12,10 @@ def qapp():
     return Qt.QApplication.instance() or Qt.QApplication([])
 
 
-def makePanel():
+def makePanel(**kwargs):
     from acq4.modules.Autopatch.search_panel import SearchPanel
 
-    return SearchPanel()
+    return SearchPanel(**kwargs)
 
 
 def test_defaults_match_the_engines_defaults(qapp):
@@ -41,6 +41,38 @@ def test_the_density_control_reads_in_cells_per_nanolitre(qapp):
     # since a typical z-stack field of view is a couple of nanolitres.
     panel = makePanel()
     assert panel.maxDensitySpin.text() == "5 cells/nL"
+
+
+def test_the_detection_step_reads_in_si_units(qapp):
+    # step_z is a z distance, the same unit family as the depth controls, so
+    # it reads the same way: "2 µm" rather than "0.0000020 m".
+    panel = makePanel(step_z=2e-6)
+    assert panel.stepZSpin.text() == "2 µm"
+
+
+def test_the_min_volume_control_reads_in_si_cubic_metres(qapp):
+    # Mirrors AutomationDebug's own minimum-volume spin box (m³, SI-prefixed):
+    # a volume floor is small enough that a raw m^3 number is unreadable
+    # without prefixing.
+    panel = makePanel(min_volume_m3=5e-17)
+    assert panel.minVolumeSpin.text() == "50 am³"
+
+
+def test_the_detection_controls_are_seeded_from_the_constructor_defaults(qapp):
+    # Area 2 has no idea what a rig's `misc` config says; its owner reads
+    # that and passes it in here, so an operator opening Area 2 for the first
+    # time sees the rig's own starting point, not a hard-coded one.
+    panel = makePanel(min_volume_m3=5e-17, step_z=2e-6)
+    assert panel.minVolumeSpin.value() == pytest.approx(5e-17)
+    assert panel.stepZSpin.value() == pytest.approx(2e-6)
+
+
+def test_the_detection_controls_default_to_the_engines_defaults(qapp):
+    # An owner that passes nothing (a manager-less window, say) must not end
+    # up with a search Area 2 itself disagrees with.
+    panel = makePanel()
+    assert panel.minVolumeSpin.value() == pytest.approx(SearchConstraints().min_volume_m3)
+    assert panel.stepZSpin.value() == pytest.approx(SearchConstraints().step_z)
 
 
 def test_editing_the_depth_range_is_reflected_in_the_constraints(qapp):
@@ -82,6 +114,28 @@ def test_editing_the_max_cell_density_is_reflected_in_the_constraints(qapp):
     assert panel.constraints().max_cell_density == pytest.approx(2e12)
 
 
+def test_editing_the_min_volume_is_reflected_in_the_constraints(qapp):
+    panel = makePanel()
+    panel.minVolumeSpin.setValue(5e-17)
+    assert panel.constraints().min_volume_m3 == pytest.approx(5e-17)
+
+
+def test_editing_the_detection_step_is_reflected_in_the_constraints(qapp):
+    panel = makePanel()
+    panel.stepZSpin.setValue(2e-6)
+    assert panel.constraints().step_z == pytest.approx(2e-6)
+
+
+def test_the_detection_step_cannot_be_driven_to_zero_or_below(qapp):
+    # step_z is a z increment for a detection stack; SearchConstraints rejects
+    # a non-positive one, but the widget's own lower bound is what stops the
+    # operator getting there at all, the same discipline the depth controls
+    # use for their own single-field bound.
+    panel = makePanel()
+    panel.stepZSpin.setValue(-1e-6)
+    assert panel.stepZSpin.value() > 0.0
+
+
 def test_editing_rescans_is_reflected_in_the_constraints(qapp):
     panel = makePanel()
     panel.rescansCheck.setChecked(True)
@@ -112,8 +166,26 @@ def test_editing_rescans_is_reflected_in_the_constraints(qapp):
             pytest.approx(2e12),
         ),
         (lambda panel: panel.rescansCheck.setChecked(True), "rescans_allowed", True),
+        (
+            lambda panel: panel.minVolumeSpin.setValue(5e-17),
+            "min_volume_m3",
+            pytest.approx(5e-17),
+        ),
+        (
+            lambda panel: panel.stepZSpin.setValue(2e-6),
+            "step_z",
+            pytest.approx(2e-6),
+        ),
     ],
-    ids=["near_depth", "far_depth", "min_health", "max_density", "rescans"],
+    ids=[
+        "near_depth",
+        "far_depth",
+        "min_health",
+        "max_density",
+        "rescans",
+        "min_volume",
+        "step_z",
+    ],
 )
 def test_an_edit_emits_the_new_constraints(qapp, edit, attr, expected):
     # Each control is wired to _onEdited independently; the window listens on
@@ -160,6 +232,26 @@ def test_recovering_from_an_invalid_range_clears_the_error(qapp):
     panel.farDepthSpin.setValue(-70e-6)
     assert panel.constraints() is not None
     assert panel.errorLabel.text() == ""
+
+
+def test_the_min_volume_cannot_be_driven_negative(qapp):
+    # min_volume_m3 must be non-negative; the widget's own lower bound is what
+    # stops the operator getting there, so constraints() never sees a
+    # negative value to raise over.
+    panel = makePanel()
+    panel.minVolumeSpin.setValue(-5e-17)
+    assert panel.minVolumeSpin.value() >= 0.0
+    assert panel.constraints() is not None
+
+
+def test_dragging_the_detection_step_through_its_lower_bound_does_not_raise(qapp):
+    # An operator dragging stepZSpin down passes through values pyqtgraph
+    # clamps at the widget's own bound; that must never reach constraints()
+    # as a raw ValueError out of the GUI thread.
+    panel = makePanel()
+    for value in (5e-6, 1e-6, 1e-9, -1e-6, 0.0):
+        panel.stepZSpin.setValue(value)
+        assert panel.constraints() is not None
 
 
 def test_an_externally_set_error_is_shown(qapp):
@@ -226,6 +318,8 @@ def test_survey_stats_with_no_region_read_as_no_region(qapp):
         "minHealthSpin",
         "maxDensitySpin",
         "rescansCheck",
+        "minVolumeSpin",
+        "stepZSpin",
     ],
 )
 def test_locking_disables_editing_but_not_the_readout(qapp, widgetName):
@@ -254,6 +348,8 @@ def _controls(panel):
         panel.minHealthSpin,
         panel.maxDensitySpin,
         panel.rescansCheck,
+        panel.minVolumeSpin,
+        panel.stepZSpin,
     )
 
 

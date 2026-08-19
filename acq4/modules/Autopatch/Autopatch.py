@@ -244,7 +244,18 @@ class AutopatchWindow(Qt.QWidget):
         # these for the panel's life, so this adds no lifetime, only a handle.
         self._positionConnected: dict[int, object] = {}
 
-        self.searchPanel = SearchPanel()
+        # The rig's own `misc` configuration seeds Area 2's two detection
+        # controls with a starting point for a fresh slice; once the operator
+        # edits them, or a saved slice is loaded, their own values take over,
+        # the same as every other Area 2 control. Through getattr because a
+        # manager-less window (headless, or a test standing in for the
+        # Manager) has no configuration to read.
+        config = getattr(self.manager, "config", None) or {}
+        misc = config.get("misc") or {}
+        self.searchPanel = SearchPanel(
+            min_volume_m3=float(misc.get("minCellVolume", 0.0)),
+            step_z=float(misc.get("detectionStepZ", 1e-6)),
+        )
         self.area2Layout.addWidget(self.searchPanel)
 
         self.cellPanel = CellPanel(
@@ -1320,36 +1331,15 @@ class AutopatchWindow(Qt.QWidget):
             # one implicitly, without a directory -- which surveys exactly as
             # before and simply keeps no imagery.
             slice_dir=self.slice.dirHandle,
-            **self._surveyDetectionSettings(),
+            # The volume floor and z step Area 2's own controls set, same as
+            # every other SearchConstraints field: read here on the GUI thread
+            # alongside the camera and the scope, for the same reason those
+            # are -- the detector this feeds runs on the orchestrator's
+            # worker thread.
+            min_volume_m3=self.slice.constraints.min_volume_m3,
+            step_z=self.slice.constraints.step_z,
         )
         self.orchestrator.setCellProducer(self.slice.makeCellProducer(detector))
-
-    def _surveyDetectionSettings(self) -> dict:
-        """The two detection settings the survey does not get from Area 2.
-
-        AutomationDebug reads both off its own window: a minimum-volume spin box
-        beside its depth controls, and a z step its mock stacks can override.
-        Area 2 has neither control, so a survey that passed neither used the
-        library defaults -- no volume floor at all, and 1 um steps -- with no way
-        for a rig to say otherwise. Until Area 2 grows the controls, the rig's
-        own `misc` configuration is that way; the defaults here are exactly the
-        values the survey used when they were not settable, so a rig that
-        configures neither surveys precisely as it did before.
-
-        Read here on the GUI thread alongside the camera and the scope, for the
-        same reason those are: the detector this feeds runs on the
-        orchestrator's worker thread.
-
-        Through getattr because a manager-less window (headless, or a test
-        standing in for the Manager) has no configuration to read, and a survey
-        is not the place to discover that.
-        """
-        config = getattr(self.manager, "config", None) or {}
-        misc = config.get("misc") or {}
-        return {
-            "min_volume_m3": float(misc.get("minCellVolume", 0.0)),
-            "step_z": float(misc.get("detectionStepZ", 1e-6)),
-        }
 
     def _onProtocolLoaded(self, protocolFile) -> None:
         # Loading a second protocol must not abandon a still-live Orchestrator:

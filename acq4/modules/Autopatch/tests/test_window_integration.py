@@ -227,14 +227,15 @@ class _FakeManager(Qt.QObject):
 
     sigModulesChanged = Qt.Signal()
 
-    def __init__(self, root_dir):
+    def __init__(self, root_dir, config=None):
         super().__init__()
         self._current_dir = root_dir
         self.configFiles = {}
-        # The rig's own configuration, which is where the survey reads the two
-        # detection settings Area 2 has no control for. Empty by default, so
-        # every other test sees the defaults a stock rig would.
-        self.config = {}
+        # The rig's own configuration. `misc.minCellVolume`/`misc.detectionStepZ`
+        # seed Area 2's detection controls with a starting point for a fresh
+        # slice. Empty by default, so every other test sees the engine's own
+        # defaults, the way an unconfigured rig would.
+        self.config = config if config is not None else {}
         self.drawn = []
         self.pinnedFrameSource = _FakePinnedFrameSource()
         self.cameraWindow = SimpleNamespace(
@@ -271,7 +272,7 @@ class _FakeManager(Qt.QObject):
         self.configFiles[fileName] = data
 
 
-def _makeWindow(tmp_path, cameraSelector=None, pipetteSelector=None):
+def _makeWindow(tmp_path, cameraSelector=None, pipetteSelector=None, managerConfig=None):
     """An AutopatchWindow with a loaded no-op protocol and a camera-backed
     selector, for tests that don't care about protocol content but do need a
     working camera to seed a slice or region.
@@ -282,7 +283,12 @@ def _makeWindow(tmp_path, cameraSelector=None, pipetteSelector=None):
     Also wires up a manager backed by a real (temporary) managed directory, so
     newSlice()'s create_data_dir call has somewhere real to write -- kept in a
     subdirectory of tmp_path separate from the protocol files written directly
-    into tmp_path above."""
+    into tmp_path above.
+
+    `managerConfig`, when given, becomes the manager's `.config` before the
+    window (and thus SearchPanel) is constructed -- SearchPanel reads Area 2's
+    detection defaults from it once, at construction, so a test about that
+    seeding has to set it before the window exists rather than on the fly."""
     from acq4.modules.Autopatch.Autopatch import AutopatchWindow
 
     if cameraSelector is None:
@@ -292,7 +298,9 @@ def _makeWindow(tmp_path, cameraSelector=None, pipetteSelector=None):
     _write_protocol(tmp_path, "demo.py", _NOOP_PROTOCOL)
     storageRoot = dm.getDirHandle(str(tmp_path / "storage"), create=True)
     win = AutopatchWindow(
-        module=SimpleNamespace(manager=_FakeManager(storageRoot), name="Autopatch"),
+        module=SimpleNamespace(
+            manager=_FakeManager(storageRoot, config=managerConfig), name="Autopatch"
+        ),
         protocolDir=str(tmp_path),
         pipetteSelector=pipetteSelector,
         cameraSelector=cameraSelector,
@@ -1393,28 +1401,32 @@ def test_a_slice_with_no_directory_hands_the_survey_nowhere_to_save(
     assert win.orchestrator._cellProducer is not None
 
 
-def test_the_detection_settings_come_from_the_rigs_configuration(
+def test_the_detection_settings_reach_the_survey_from_the_slices_constraints(
     qapp, tmp_path, monkeypatch
 ):
-    """AutomationDebug reads a minimum volume off a spin box on its own window
-    and a step from its acquisition; the survey has neither, so until Area 2
-    grows the controls the rig's `misc` configuration is where they can be set.
+    """min_volume_m3 and step_z are SearchConstraints fields now, so the survey
+    reads them off the live slice, the same path the health cutoff and the
+    density cap already take -- not a separate rig-configuration read.
     Non-default values, so a hard-coded 0.0 or 1 um is caught."""
     calls = _captureDetectorArgs(monkeypatch)
     win = _makeWindow(tmp_path)
-    win.manager.config = {"misc": {"minCellVolume": 5e-17, "detectionStepZ": 2e-6}}
     win.newSlice()
     win.addRegionHere()
+    win.searchPanel.minVolumeSpin.setValue(5e-17)
+    win.searchPanel.stepZSpin.setValue(2e-6)
 
     win._onStartRun()
 
     assert calls[0]["min_volume_m3"] == pytest.approx(5e-17)
     assert calls[0]["step_z"] == pytest.approx(2e-6)
+    assert win.slice.constraints.min_volume_m3 == pytest.approx(5e-17)
+    assert win.slice.constraints.step_z == pytest.approx(2e-6)
 
 
 def test_an_unconfigured_rig_surveys_the_way_it_always_did(qapp, tmp_path, monkeypatch):
-    # The defaults are the values the survey used when neither was settable at
-    # all, so configuring nothing changes nothing.
+    # The library defaults are the values the survey used before these were
+    # settable at all, so an operator who touches neither Area 2 control nor
+    # a rig's `misc` config gets the same search.
     calls = _captureDetectorArgs(monkeypatch)
     win = _makeWindow(tmp_path)
     win.newSlice()
@@ -1424,6 +1436,48 @@ def test_an_unconfigured_rig_surveys_the_way_it_always_did(qapp, tmp_path, monke
 
     assert calls[0]["min_volume_m3"] == pytest.approx(0.0)
     assert calls[0]["step_z"] == pytest.approx(1e-6)
+
+
+def test_the_rigs_misc_config_seeds_area_2s_detection_defaults(qapp, tmp_path, monkeypatch):
+    """A rig that sets `misc.minCellVolume`/`misc.detectionStepZ` gets those as
+    Area 2's starting point for a fresh slice, without the operator typing
+    them in -- the panel's own hard-coded defaults are only for a rig that
+    configures neither."""
+    calls = _captureDetectorArgs(monkeypatch)
+    win = _makeWindow(
+        tmp_path,
+        managerConfig={"misc": {"minCellVolume": 5e-17, "detectionStepZ": 2e-6}},
+    )
+    assert win.searchPanel.minVolumeSpin.value() == pytest.approx(5e-17)
+    assert win.searchPanel.stepZSpin.value() == pytest.approx(2e-6)
+
+    win.newSlice()
+    win.addRegionHere()
+    win._onStartRun()
+
+    assert calls[0]["min_volume_m3"] == pytest.approx(5e-17)
+    assert calls[0]["step_z"] == pytest.approx(2e-6)
+
+
+def test_editing_detection_settings_after_the_config_seeded_them_overrides_them(
+    qapp, tmp_path, monkeypatch
+):
+    # Once a slice exists, an operator's own edit is the persisted value --
+    # the rig's `misc` config is only ever the starting point.
+    calls = _captureDetectorArgs(monkeypatch)
+    win = _makeWindow(
+        tmp_path,
+        managerConfig={"misc": {"minCellVolume": 5e-17, "detectionStepZ": 2e-6}},
+    )
+    win.newSlice()
+    win.addRegionHere()
+    win.searchPanel.minVolumeSpin.setValue(9e-17)
+    win.searchPanel.stepZSpin.setValue(4e-6)
+
+    win._onStartRun()
+
+    assert calls[0]["min_volume_m3"] == pytest.approx(9e-17)
+    assert calls[0]["step_z"] == pytest.approx(4e-6)
 
 
 def test_clicking_start_installs_a_producer(qapp, tmp_path):
@@ -1480,6 +1534,15 @@ def test_editing_the_constraints_reaches_the_live_slice(qapp, tmp_path):
     win.newSlice()
     win.searchPanel.minHealthSpin.setValue(0.85)
     assert win.slice.constraints.min_health == pytest.approx(0.85)
+
+
+def test_editing_the_detection_settings_reaches_the_live_slice(qapp, tmp_path):
+    win = _makeWindow(tmp_path)
+    win.newSlice()
+    win.searchPanel.minVolumeSpin.setValue(5e-17)
+    win.searchPanel.stepZSpin.setValue(2e-6)
+    assert win.slice.constraints.min_volume_m3 == pytest.approx(5e-17)
+    assert win.slice.constraints.step_z == pytest.approx(2e-6)
 
 
 def test_invalid_constraints_leave_the_slice_alone(qapp, tmp_path):
