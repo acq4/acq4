@@ -11,6 +11,7 @@ from acq4_automation.feature_tracking.cell import Cell
 from acq4.util import Qt
 
 from .details_renderers import buildDetailsWidget
+from .sizing import CompactLabel, floorAtRows
 
 # Random scatter radius for the "Scatter fake cells" demo button (meters).
 _SCATTER_RADIUS = 40e-6
@@ -26,6 +27,60 @@ TERMINAL = frozenset({"done", "skipped", "stopped", "retry-exhausted", "error"})
 # "skipped" are abandonment -- offering any of them up as a completion would
 # re-queue cells that never did the work. Each is a manual opt-in instead.
 COMPLETED = frozenset({"done"})
+
+# How few rows of a scrolling view in this panel are still worth reading. Area 5
+# is a scrolling viewport over the whole panel (see AutopatchWindow._makeArea),
+# so every pixel a view in here insists on is a pixel the panel refuses to give
+# up when that area is squeezed -- and the queue, the timeline and the log all
+# answer their question a few rows at a time, scrolling within themselves for
+# the rest.
+_VIEW_ROWS = 3
+
+
+class _DetailsViewport(Qt.QScrollArea):
+    """The scrolling viewport the selected action's details widget is mounted in.
+
+    A details widget is whatever the action that produced it asked for -- a
+    z-stack in a pg.ImageView, a test-pulse plot beside its state transitions --
+    and several of those insist on a few hundred pixels. Mounted straight into
+    the panel, that demand becomes the panel's own minimum: selecting a row with
+    a figure in it would push the cell queue and the log off the bottom of a
+    squeezed Area 5, and the operator would get scrollbars over a panel they had
+    deliberately made small. Insisting on nothing here leaves the demand where
+    it belongs -- the pane takes whatever room the panel has to spare, and
+    scrolls the figure within itself when that is not enough.
+
+    The preferred size is read back from the mounted container rather than left
+    to QAbstractScrollArea, for the same reason _AreaViewport reads its own from
+    its content (see Autopatch.py): that hint is computed once per setWidget()
+    and cached ever after, and this viewport is handed its container empty and
+    filled again on every selection.
+
+    Reading it is only half of keeping up, though. A widget also caches the size
+    it last reported *upwards*, and mounting a figure invalidates the layouts
+    inside the container without that news ever reaching the panel's layout --
+    which would go on offering the hint computed while the pane was empty, and
+    mount every figure into a strip a few pixels tall with scrollbars of its
+    own. Listening for the container's own layout requests is what closes that
+    gap, and it closes it for every path that mounts or clears a widget rather
+    than for the ones that remembered to say so.
+    """
+
+    def setWidget(self, widget):
+        super().setWidget(widget)
+        widget.installEventFilter(self)
+
+    def eventFilter(self, watched, event):
+        if watched is self.widget() and event.type() == Qt.QEvent.LayoutRequest:
+            self.updateGeometry()
+        return super().eventFilter(watched, event)
+
+    def minimumSizeHint(self):
+        return Qt.QSize(0, 0)
+
+    def sizeHint(self):
+        content = self.widget()
+        return super().sizeHint() if content is None else content.sizeHint()
 
 
 class CellPanel(Qt.QWidget):
@@ -171,6 +226,13 @@ class CellPanel(Qt.QWidget):
         # inner entry finishing must not tear down an outer entry's still-live
         # widget.
         self._shownEntryId: int | None = None
+        # id(cell) of the cell the orchestrator most recently announced as
+        # current, or None before it has announced any. What "is the operator
+        # still watching the run" is measured against (see
+        # _isFollowingCurrentCell); an id rather than the cell for the same
+        # reason _attempted holds ids -- this panel must not be what keeps a
+        # Cell alive beyond self._cells.
+        self._announcedCellId: int | None = None
         self._pipetteGetter = pipetteGetter or (lambda: None)
         self._cameraGetter = cameraGetter or (lambda: None)
 
@@ -178,14 +240,23 @@ class CellPanel(Qt.QWidget):
         self.timelineList = Qt.QListWidget()
         self.logView = Qt.QPlainTextEdit()
         self.logView.setReadOnly(True)
+        for view in (self.cellList, self.timelineList, self.logView):
+            floorAtRows(view, _VIEW_ROWS)
         self.showContainer = Qt.QWidget()
         self.showContainer.setLayout(Qt.QVBoxLayout())
+        # The container is what details widgets mount into and are cleared out
+        # of, and stays the panel's own; the viewport around it is nothing but a
+        # matter of size (see _DetailsViewport), and only the layout below
+        # refers to it.
+        self.showViewport = _DetailsViewport()
+        self.showViewport.setWidgetResizable(True)
+        self.showViewport.setFrameShape(Qt.QFrame.NoFrame)
+        self.showViewport.setWidget(self.showContainer)
         # Header above the mounted details widget, carrying the selected
         # action's set_status() text -- which nothing displayed before this,
         # so every FSM state-transition message was thrown away. The timeline
         # rows deliberately do not show it (design doc §7).
-        self.statusLabel = Qt.QLabel()
-        self.statusLabel.setWordWrap(True)
+        self.statusLabel = CompactLabel()
 
         self.addFromTargetBtn = Qt.QPushButton("Add from target")
         self.scatterFakeCellsBtn = Qt.QPushButton("Scatter fake cells")
@@ -214,10 +285,17 @@ class CellPanel(Qt.QWidget):
 
         layout = Qt.QVBoxLayout()
         layout.addLayout(btnRow)
-        layout.addLayout(listsRow)
+        # Stretch factors, so that room beyond what this panel needs -- and the
+        # shortfall when there is less than that -- is shared out rather than
+        # landing wherever the layout happens to reach first: the lists are what
+        # the operator works in, the log is a running commentary alongside. The
+        # details pane deliberately takes no factor, so it asks for exactly what
+        # the widget mounted in it asks for and an empty one stays a thin strip
+        # rather than a large empty box the lists paid for.
+        layout.addLayout(listsRow, 3)
         layout.addWidget(self.statusLabel)
-        layout.addWidget(self.showContainer)
-        layout.addWidget(self.logView)
+        layout.addWidget(self.showViewport)
+        layout.addWidget(self.logView, 2)
         self.setLayout(layout)
 
         self.cellList.currentItemChanged.connect(self._onCellSelectionChanged)
@@ -247,6 +325,21 @@ class CellPanel(Qt.QWidget):
         self._orchestrator = orchestrator
         orchestrator.sigCurrentCell.connect(self._onCurrentCell)
         orchestrator.sigCellFinished.connect(self._onCellFinished)
+        # Emitted from the orchestrator's worker thread, and _onCellsQueued adds
+        # rows to a QListWidget -- yet it is connected here plainly, without the
+        # panel-owned re-emit hop sigLogMessage/sigActionEntry/sigCellsDiscarded
+        # go through. Those three exist because the worker thread reaches this
+        # panel by *calling a method on it*: appendLog/onLogAction are bound into
+        # the context factory and discardCells is called from
+        # AutopatchWindow._onTissueMoved, all of them plain Python calls with no
+        # Qt connection anywhere in the path to marshal them, so the panel has to
+        # emit its own signal to get onto its own thread. This one already is a
+        # signal on one QObject connected to a slot on another, and an automatic
+        # connection settles direct-vs-queued at each emit by comparing the
+        # emitting thread with the receiving object's: the orchestrator emits
+        # from the worker thread, this panel lives on the GUI thread, so delivery
+        # is queued and the slot runs here with the rows it adds.
+        orchestrator.sigCellsQueued.connect(self._onCellsQueued)
         # _awaitingEnqueue now holds every cell still owed an enqueue: one
         # seeded before any orchestrator was bound, or one salvaged, just
         # above (this method's own call to unbindOrchestrator(), when this is
@@ -305,6 +398,7 @@ class CellPanel(Qt.QWidget):
             self._awaitingEnqueue.append(id(cell))
         Qt.disconnect(self._orchestrator.sigCurrentCell, self._onCurrentCell)
         Qt.disconnect(self._orchestrator.sigCellFinished, self._onCellFinished)
+        Qt.disconnect(self._orchestrator.sigCellsQueued, self._onCellsQueued)
         self._orchestrator = None
         self._updateReuseButton()
 
@@ -337,6 +431,12 @@ class CellPanel(Qt.QWidget):
         # cell, enqueue that cell instead.
         self._awaitingEnqueue.clear()
         self._attempted.clear()
+        # Cleared for the same reason the id-keyed stores above are: an id left
+        # behind here names a cell this panel no longer holds, and CPython
+        # reuses the addresses of collected objects -- an unrelated cell seeded
+        # afterwards could land on it and have its row read as the one the run
+        # is on, taking the selection the operator gave it.
+        self._announcedCellId = None
         self._status.clear()
         self._preReuseStatus.clear()
         self._rows.clear()
@@ -696,6 +796,56 @@ class CellPanel(Qt.QWidget):
         if cell is self._currentSelectedCell():
             self.logView.appendPlainText(message)
 
+    def _onCellsQueued(self, cells) -> None:
+        """The batch a survey producer has just added to the orchestrator's
+        queue (Orchestrator.sigCellsQueued, emitted from its worker thread).
+
+        Rows only. These cells are already sitting in the orchestrator's own
+        deque -- that is the whole content of the announcement -- so this must
+        never enqueue them, which would run each of them twice, and must never
+        record them in self._awaitingEnqueue, which would have the next
+        bindOrchestrator() do the same thing one protocol load later. addCell()
+        is exactly the call that adds neither, and is what _onCurrentCell and
+        _onCellFinished announce their way in through for the same reason.
+
+        A cell that already has a row is left entirely alone, text included: it
+        can reach this panel by another route first, either because
+        unbindOrchestrator() salvaged it out of an outgoing orchestrator's
+        pending queue or because the run has already moved on to it by the time
+        this arrives (the announcement crosses threads, so sigCurrentCell for
+        the first cell of a batch can be delivered before the batch itself).
+        Its row says something more current than "queued" in both cases.
+        """
+        for cell in cells:
+            if id(cell) in self._rows:
+                continue
+            self.addCell(cell)
+
+    def _isFollowingCurrentCell(self) -> bool:
+        """Whether the operator is watching whichever cell the orchestrator is
+        working on rather than reading back through a different one.
+
+        The cell-level counterpart of _isFollowingLastRow's auto-scroll rule:
+        while the selection is on the cell the run announced, the next cell it
+        announces takes the selection with it; once the operator selects a
+        different one, it does not, until they select the running cell again. A
+        list with nothing selected at all counts as following, so the first cell
+        of a run is shown without requiring a click.
+
+        "The operator deliberately selected another cell" is answered by
+        comparing the selection against the last cell announced -- not by
+        remembering which rows this panel selected itself. The two agree while
+        nobody interferes, since the only selection this panel ever makes is
+        onto the cell it has just announced, but they differ in the case that
+        matters: a record of this panel's own writes would name whichever cell
+        was current when the operator wandered off, and the run has moved on
+        since, so clicking the row that is running now -- the one obvious way
+        back to following, and the exact analogue of selecting the last timeline
+        row -- would never be recognized as such.
+        """
+        selected = self._currentSelectedCell()
+        return selected is None or id(selected) == self._announcedCellId
+
     def _onCurrentCell(self, cell) -> None:
         # sigCurrentCell carries only the cell, not an action identity -- that
         # flows through the log-action entry stream instead (see
@@ -732,6 +882,21 @@ class CellPanel(Qt.QWidget):
             self.addCell(cell)
             item = self._rows[id(cell)]
         item.setText(f"cell {id(cell)} — running")
+        # Asked before this cell becomes the announced one, since the question
+        # is whether the operator was still following the cell announced
+        # *before* it.
+        following = self._isFollowingCurrentCell()
+        self._announcedCellId = id(cell)
+        if following:
+            # setCurrentItem rather than anything that reaches past it:
+            # _onCellSelectionChanged is what fills the timeline and the log
+            # from this cell's stores and picks the row worth looking at
+            # (_autoSelectRow), and this path wants all of that. A cell being
+            # announced has an empty timeline of its own, so what that leaves is
+            # a blank pane -- until its first action opens a row, which
+            # _appendTimelineRow's own following rule then selects, again
+            # without a click. A no-op when this row is already current.
+            self.cellList.setCurrentItem(item)
         # self._attempted already holds this cell (set above), so Area 1's
         # progress overlay -- the view sigCellStateChanged exists for -- can
         # redraw it blue. Unconditional, like _onCellFinished's own emit just

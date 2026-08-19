@@ -382,6 +382,100 @@ def test_switching_a_frozen_plots_mode_replots_the_new_field(qapp):
     assert np.allclose(after[1], history["capacitance"])
 
 
+def _viewRange(plot):
+    """The plot's (xRange, yRange), with any pending auto-range applied.
+
+    pyqtgraph defers an enabled auto-range until the view is next painted.
+    Nothing paints in a headless test, so ask the view for the same
+    recomputation a paint would trigger before reading its range.
+    """
+    vb = plot.plot.plotItem.vb
+    vb.prepareForPaint()
+    return vb.viewRange()
+
+
+def test_test_pulse_history_opens_fitted_to_its_data(qapp):
+    # 'ss resistance' opens on MultiPatch's fixed 1 MΩ - 10 GΩ window, which
+    # suits a live plot whose scale must hold still while numbers stream in. A
+    # finished attempt is the opposite case: the whole history is already there
+    # and the operator should not have to fit it by hand to read it.
+    import numpy as np
+
+    from acq4.modules.MultiPatch.pipetteControl import PlotWidget
+    from acq4.modules.Autopatch.details_renderers import buildDetailsWidget
+
+    history = _tpHistory(count=6)
+    history["steady_state_resistance"] = np.linspace(2e8, 8e10, 6)
+    widget = buildDetailsWidget("test_pulse_history", _tpPayload(history=history))
+    plot = widget.findChild(PlotWidget)
+
+    (xLo, xHi), (yLo, yHi) = _viewRange(plot)
+    # This mode is log-y, so the view range is in decades, not ohms.
+    dataLo, dataHi = np.log10(2e8), np.log10(8e10)
+    assert yLo <= dataLo and yHi >= dataHi
+    # Covering the data is not enough: a window far wider than the data covers
+    # it too. The fit has to be snug, modulo pyqtgraph's own padding.
+    assert (yHi - yLo) < (dataHi - dataLo) * 1.5
+    assert xLo <= 0 and xHi >= 5
+    assert (xHi - xLo) < 5 * 1.5
+
+
+def test_switching_a_frozen_plots_mode_refits_the_new_field(qapp):
+    # Each mode carries its own fixed Y range, so re-reading the attempt as
+    # capacitance would otherwise drop a 500-900 pF curve into a 0-100 pF
+    # window and show the operator an empty plot.
+    import numpy as np
+
+    from acq4.modules.MultiPatch.pipetteControl import PlotWidget
+    from acq4.modules.Autopatch.details_renderers import buildDetailsWidget
+
+    history = _tpHistory(count=6)
+    history["capacitance"] = np.linspace(5e-10, 9e-10, 6)
+    widget = buildDetailsWidget("test_pulse_history", _tpPayload(history=history))
+    plot = widget.findChild(PlotWidget)
+
+    plot.modeCombo.setText("capacitance")
+
+    _, (yLo, yHi) = _viewRange(plot)
+    assert yLo <= 5e-10 and yHi >= 9e-10
+    assert (yHi - yLo) < (9e-10 - 5e-10) * 1.5
+
+
+def test_a_hand_zoom_is_not_fought_back_by_the_fit(qapp):
+    # pyqtgraph turns auto-range off the moment a range is set by hand, which is
+    # exactly the wanted division of labour: fit until the operator takes over.
+    from acq4.modules.MultiPatch.pipetteControl import PlotWidget
+    from acq4.modules.Autopatch.details_renderers import buildDetailsWidget
+
+    widget = buildDetailsWidget("test_pulse_history", _tpPayload())
+    plot = widget.findChild(PlotWidget)
+    vb = plot.plot.plotItem.vb
+    _viewRange(plot)
+
+    vb.scaleBy((0.5, 0.5))  # what a scroll wheel over the plot does
+
+    assert vb.autoRangeEnabled() == [False, False]
+    zoomed = vb.viewRange()
+    vb.prepareForPaint()
+    assert vb.viewRange() == zoomed
+
+
+def test_an_empty_history_leaves_the_fit_harmless(qapp):
+    # Nothing was plotted, so there is nothing to fit to; asking anyway must not
+    # raise or leave the axes on a degenerate range.
+    from acq4.modules.MultiPatch.pipetteControl import PlotWidget
+    from acq4.modules.Autopatch.details_renderers import buildDetailsWidget
+
+    widget = buildDetailsWidget(
+        "test_pulse_history", _tpPayload(history=_tpHistory(count=0), transitions=[])
+    )
+    plot = widget.findChild(PlotWidget)
+
+    (xLo, xHi), (yLo, yHi) = _viewRange(plot)
+    assert xHi > xLo
+    assert yHi > yLo
+
+
 def test_a_live_plot_does_not_replot_on_a_mode_change(qapp):
     # The live path is unchanged: its next test pulse is what redraws it, and a
     # mode change must not re-read a history that is about to be superseded.

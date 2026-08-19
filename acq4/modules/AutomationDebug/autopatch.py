@@ -359,6 +359,7 @@ class Autopatcher:
                 deformation_tolerance=DEFORMATION_TOLERANCE, segmenter=segmenter_path()
             )  #, pipette=win.pipetteDevice)
         except Stopped:
+            self._saveCellWeGiveUpOn(cell)
             raise
         except ValueError as e:
             if win._mockDemo:
@@ -366,6 +367,7 @@ class Autopatcher:
                 return cell
             logger.info(f"Cell moved too much? {e}\nRetrying")
             win.setCellStatus(cell, "skipped — tracker lost cell", "bad")
+            self._saveCellWeGiveUpOn(cell)
             return self._autopatchFindCell()
         logger.info(f"Autopatch: Cell found at {cell.position}")
         return cell
@@ -394,9 +396,36 @@ class Autopatcher:
         )
         logger.warning("Autopatch: Task runner sequence completed.")
 
-    def _saveTrackingHistory(self, cell, cell_dir) -> None:
+    def _saveTrackingHistory(self, cell, cell_dir, autoIncrement=False) -> None:
         """Save the cell's tracking history to an .acqtrack file in cell_dir."""
-        saveTrackingHistory(cell, cell_dir)
+        saveTrackingHistory(cell, cell_dir, autoIncrement=autoIncrement)
+
+    def _saveCellWeGiveUpOn(self, cell) -> None:
+        """Save the tracking history of a cell _autopatchFindCell selected and
+        then abandoned.
+
+        Selecting a cell re-verifies its tracker, which records a tracking result
+        whether the re-verify finds the cell or loses it -- and a lost cell is
+        exactly the record worth keeping, since it says what the tracker saw
+        where the cell used to be. The demo's own save (the loop's finally) can't
+        cover this: it only learns a cell's name once _autopatchFindCell returns,
+        so a cell abandoned inside there is never named to it, and the next
+        setCell() closes the cell out of reach unsaved.
+
+        Into the manager's current directory, which is the Cell directory this
+        pass created, and auto-incremented so it lands beside the history of the
+        cell the demo goes on to work rather than over it.
+        """
+        try:
+            self._saveTrackingHistory(
+                cell, self._window.module.manager.getCurrentDir(), autoIncrement=True
+            )
+        except Exception:
+            # Never at the cost of whatever is already ending this pass -- an
+            # operator's stop, most of all. Asking a manager for its current
+            # directory is itself one of the ways this can fail: it raises
+            # outright when no storage directory has been chosen.
+            logger.exception("Failed to save the tracking history for cell %r", cell)
 
     def _saveStack(self, name):
         ppip = self._window.patchPipetteDevice

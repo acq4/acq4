@@ -41,13 +41,13 @@ def seam(monkeypatch):
         acquireCalls.append((start_z, stop_z, step_z))
         return ["frame"]
 
-    def fakeDetect(stack, xy_scale, z_scale, models, min_volume_m3, max_candidates):
+    def fakeDetect(stack, xy_scale, z_scale, models, min_volume_m3, save_prefix):
         # One candidate per tile, positioned in the tile the stage is parked
         # over. A real detection is a position inside the field just imaged, and
         # the density cap is a per-tile locality check, so a candidate has to
         # land in its own tile for the chain to behave as it does on a rig.
         cx, cy = scope.moves[-1]
-        return [((cx, cy, SURFACE + (NEAR + FAR) / 2), 0.8)]
+        return [((cx, cy, SURFACE + (NEAR + FAR) / 2), 0.8, 1.5e-16)]
 
     monkeypatch.setattr(tile_detector, "_acquire", fakeAcquire)
     monkeypatch.setattr(tile_detector, "_detect", fakeDetect)

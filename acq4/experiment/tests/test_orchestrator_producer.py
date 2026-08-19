@@ -705,3 +705,127 @@ def test_set_cell_producer_still_clears_exhaustion(make_pf):
     orch._producerExhausted = True
     orch.setCellProducer(lambda: [])
     assert orch._producerExhausted is False
+
+
+# -- announcing the cells the producer found ------------------------------
+
+
+def test_a_produced_batch_is_announced_once_with_the_cells_it_queued(make_pf):
+    """Until the batch is announced, the only thing that says a survey found
+    anything is a cell starting to run: the operator watching Area 5 sees an
+    empty list while a queue's worth of cells sits behind it."""
+    pf = make_pf()
+    pf.run = lambda ctx, **kwargs: None
+    batches = []
+    orch = Orchestrator(pf, cellProducer=make_producer([["c1", "c2"], ["c3"], None]))
+    orch.sigCellsQueued.connect(batches.append)
+
+    orch.run_sync()
+
+    # One emission per batch the producer returned, each carrying that batch's
+    # cells in the order they will run -- not one emission per cell, and not
+    # the whole queue re-announced.
+    assert batches == [["c1", "c2"], ["c3"]]
+
+
+def test_a_batch_is_announced_before_any_of_its_cells_runs(make_pf):
+    """The point of announcing is that the operator sees the queue ahead of the
+    work, so the announcement has to land before the first of those cells is
+    taken off the queue."""
+    pf = make_pf()
+    events = []
+    pf.run = lambda ctx, **kwargs: events.append(("run", ctx.cell))
+    orch = Orchestrator(pf, cellProducer=make_producer([["c1", "c2"], None]))
+    orch.sigCellsQueued.connect(lambda cells: events.append(("queued", list(cells))))
+
+    orch.run_sync()
+
+    assert events == [
+        ("queued", ["c1", "c2"]),
+        ("run", "c1"),
+        ("run", "c2"),
+    ]
+
+
+def test_a_discarded_batch_is_not_announced(make_pf):
+    """The "New slice" hazard again: a batch fetched for a producer the
+    operator has since swapped out lands nowhere, so announcing it would put
+    rows for tissue that no longer exists in front of the operator -- rows that
+    no cell will ever run against."""
+    pf = make_pf()
+    pf.run = lambda ctx, **kwargs: None
+    orch = Orchestrator(pf)
+
+    def clears_then_returns_cells():
+        orch.setCellProducer(None)
+        return ["c1", "c2"]
+
+    orch.setCellProducer(clears_then_returns_cells)
+    batches = []
+    orch.sigCellsQueued.connect(batches.append)
+
+    orch.run_sync()
+
+    assert batches == []
+
+
+def test_exhaustion_announces_nothing(make_pf):
+    # None is "there is nothing left to find", not a batch of no cells.
+    pf = make_pf()
+    pf.run = lambda ctx, **kwargs: None
+    orch = Orchestrator(pf, cellProducer=make_producer([None]))
+    batches = []
+    orch.sigCellsQueued.connect(batches.append)
+
+    orch.run_sync()
+
+    assert batches == []
+
+
+def test_a_barren_tile_announces_nothing(make_pf):
+    # An imaged tile with no cells in it queued nothing, so there is nothing to
+    # put in front of the operator. A survey crossing a barren stretch would
+    # otherwise emit an empty batch per tile.
+    pf = make_pf()
+    pf.run = lambda ctx, **kwargs: None
+    orch = Orchestrator(pf, cellProducer=make_producer([[], [], None]))
+    batches = []
+    orch.sigCellsQueued.connect(batches.append)
+
+    orch.run_sync()
+
+    assert batches == []
+
+
+def test_enqueue_announces_nothing(make_pf):
+    # The hand-seeded path is deliberately silent: its caller adds the cell's
+    # row itself as it enqueues (CellPanel._enqueueAndAdd), so an announcement
+    # here would be a second row for a cell that already has one.
+    pf = make_pf()
+    pf.run = lambda ctx, **kwargs: None
+    orch = Orchestrator(pf)
+    batches = []
+    orch.sigCellsQueued.connect(batches.append)
+
+    orch.enqueue("c1")
+    orch.run_sync()
+
+    assert batches == []
+
+
+def test_the_announced_batch_is_not_the_queue_itself(make_pf):
+    """A receiver on the GUI thread gets the batch through a queued connection,
+    so it reads the list well after the worker thread has moved on. Handing it
+    the producer's own list would let a producer that reuses its list (or a
+    receiver that mutates what it is given) reach into a run in progress."""
+    pf = make_pf()
+    pf.run = lambda ctx, **kwargs: None
+    produced = ["c1", "c2"]
+    orch = Orchestrator(pf, cellProducer=make_producer([produced, None]))
+    batches = []
+    orch.sigCellsQueued.connect(batches.append)
+
+    orch.run_sync()
+
+    assert batches == [["c1", "c2"]]
+    assert batches[0] is not produced

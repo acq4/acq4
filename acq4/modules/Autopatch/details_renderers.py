@@ -102,6 +102,26 @@ def buildTaskResults(payload) -> Qt.QWidget:
     return captioned(plot, lines)
 
 
+def _fitToData(plot, *_) -> None:
+    """Let one of MultiPatch's PlotWidgets range over whatever it is showing.
+
+    Every analysis mode picks its own Y range as it is selected, and most of
+    those are fixed: steady-state resistance opens on 1 MΩ to 10 GΩ, capacitance
+    on 0 to 100 pF. A live plot wants that -- a scale that holds still while
+    numbers stream in is what makes a drifting seal legible. A finished attempt
+    is the opposite case: the whole history is already in hand, and an operator
+    reading it should not have to fit the axes by hand to find the curve.
+
+    enableAutoRange rather than a one-shot fit, because pyqtgraph turns
+    auto-range off as soon as a range is set by hand. The fit therefore lasts
+    exactly until the operator zooms or pans, and then gets out of the way.
+
+    Takes the plot first and ignores the rest so this can serve as
+    sigModeChanged's slot, which emits the plot and its new mode.
+    """
+    plot.plot.enableAutoRange(x=True, y=True)
+
+
 def buildTestPulseHistory(payload) -> Qt.QWidget:
     """One FSM action's steady-state resistance plot beside the pipette states it
     walked.
@@ -120,6 +140,11 @@ def buildTestPulseHistory(payload) -> Qt.QWidget:
     plot = PlotWidget(mode="ss resistance")
     plot.setFrozen(True)
     plot.newTestPulse(None, payload["history"])
+    _fitToData(plot)
+    # Selecting a mode re-imposes that mode's own Y range and re-plots a
+    # different field, so the fit has to be redone for the field now on screen.
+    # sigModeChanged is emitted after both, once there is something to fit to.
+    plot.sigModeChanged.connect(_fitToData)
 
     transitions = Qt.QListWidget()
     rows = list(payload.get("transitions", ()))

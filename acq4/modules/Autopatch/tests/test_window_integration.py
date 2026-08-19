@@ -229,6 +229,10 @@ class _FakeManager(Qt.QObject):
         super().__init__()
         self._current_dir = root_dir
         self.configFiles = {}
+        # The rig's own configuration, which is where the survey reads the two
+        # detection settings Area 2 has no control for. Empty by default, so
+        # every other test sees the defaults a stock rig would.
+        self.config = {}
         self.drawn = []
         self.pinnedFrameSource = _FakePinnedFrameSource()
         self.cameraWindow = SimpleNamespace(
@@ -265,10 +269,13 @@ class _FakeManager(Qt.QObject):
         self.configFiles[fileName] = data
 
 
-def _makeWindow(tmp_path, cameraSelector=None):
+def _makeWindow(tmp_path, cameraSelector=None, pipetteSelector=None):
     """An AutopatchWindow with a loaded no-op protocol and a camera-backed
     selector, for tests that don't care about protocol content but do need a
     working camera to seed a slice or region.
+
+    The default pipette selector reports no pipette, which is the case most of
+    these tests want; a test about what the run does with one passes its own.
 
     Also wires up a manager backed by a real (temporary) managed directory, so
     newSlice()'s create_data_dir call has somewhere real to write -- kept in a
@@ -278,12 +285,14 @@ def _makeWindow(tmp_path, cameraSelector=None):
 
     if cameraSelector is None:
         cameraSelector = _FakeCameraWithDevice()
+    if pipetteSelector is None:
+        pipetteSelector = _FakePipetteSelector()
     _write_protocol(tmp_path, "demo.py", _NOOP_PROTOCOL)
     storageRoot = dm.getDirHandle(str(tmp_path / "storage"), create=True)
     win = AutopatchWindow(
         module=SimpleNamespace(manager=_FakeManager(storageRoot), name="Autopatch"),
         protocolDir=str(tmp_path),
-        pipetteSelector=_FakePipetteSelector(),
+        pipetteSelector=pipetteSelector,
         cameraSelector=cameraSelector,
     )
     win.protocolPanel.fileCombo.setCurrentText("demo")
@@ -1294,6 +1303,125 @@ def test_start_installs_a_producer_for_the_current_slice_not_a_stale_one(
     producer = win.orchestrator._cellProducer
     assert producer is not None
     assert producer._slice is secondSlice
+
+
+def _captureDetectorArgs(monkeypatch):
+    """Record what _installCellProducer builds its detector with.
+
+    Patched in the window module's own namespace, which is where the name it
+    calls lives, and the stand-in returns a detector that finds nothing: these
+    tests are about what the survey is handed, not what it images. Reached
+    through importlib because the package exports the module's `Autopatch`
+    *class* under that same name.
+    """
+    autopatchModule = importlib.import_module("acq4.modules.Autopatch.Autopatch")
+
+    calls = []
+
+    def fakeMakeTileDetector(**kwargs):
+        calls.append(kwargs)
+        return lambda center, constraints: []
+
+    monkeypatch.setattr(autopatchModule, "make_tile_detector", fakeMakeTileDetector)
+    return calls
+
+
+def test_the_survey_detector_is_given_the_selected_pipettes_manipulator(
+    qapp, tmp_path, monkeypatch
+):
+    """The detector sends the tip home before each tile, and home is something
+    the manipulator knows -- not the PatchPipette the selector reports. Resolved
+    at Start on the GUI thread, alongside the camera and scope, because the
+    detector itself runs on the orchestrator's worker thread."""
+    calls = _captureDetectorArgs(monkeypatch)
+    win = _makeWindow(tmp_path, pipetteSelector=_FakePipetteSelector((1e-3, 2e-3, 3e-3)))
+    win.newSlice()
+    win.addRegionHere()
+
+    win._onStartRun()
+
+    assert win._cachedPipette is not None
+    assert calls[0]["pipette"] is win._cachedPipette.pipetteDevice
+
+
+def test_a_survey_is_still_installed_with_no_pipette_selected(qapp, tmp_path, monkeypatch):
+    """A run with no pipette on the rig has nothing to move out of the way, and
+    must still survey rather than failing to build a detector at all."""
+    calls = _captureDetectorArgs(monkeypatch)
+    win = _makeWindow(tmp_path)
+    win.newSlice()
+    win.addRegionHere()
+
+    win._onStartRun()
+
+    assert calls[0]["pipette"] is None
+    assert win.orchestrator._cellProducer is not None
+
+
+def test_the_survey_saves_its_tile_imagery_under_the_slice_directory(
+    qapp, tmp_path, monkeypatch
+):
+    """Each tile's detection z-stack and cellpose mask are written under the
+    slice's own directory, beside the Cell directories that tile produced.
+    Without somewhere to put them the survey discards tens to hundreds of
+    megabytes per tile the moment its cells have been built."""
+    calls = _captureDetectorArgs(monkeypatch)
+    win = _makeWindow(tmp_path)
+    win.newSlice()
+    win.addRegionHere()
+
+    win._onStartRun()
+
+    assert calls[0]["slice_dir"] is win.slice.dirHandle
+    assert calls[0]["slice_dir"] is not None
+
+
+def test_a_slice_with_no_directory_hands_the_survey_nowhere_to_save(
+    qapp, tmp_path, monkeypatch
+):
+    """addRegionHere() creates a slice implicitly, without a directory. That
+    run surveys exactly as well and simply keeps no tile imagery."""
+    calls = _captureDetectorArgs(monkeypatch)
+    win = _makeWindow(tmp_path)
+    win.addRegionHere()
+
+    win._onStartRun()
+
+    assert calls[0]["slice_dir"] is None
+    assert win.orchestrator._cellProducer is not None
+
+
+def test_the_detection_settings_come_from_the_rigs_configuration(
+    qapp, tmp_path, monkeypatch
+):
+    """AutomationDebug reads a minimum volume off a spin box on its own window
+    and a step from its acquisition; the survey has neither, so until Area 2
+    grows the controls the rig's `misc` configuration is where they can be set.
+    Non-default values, so a hard-coded 0.0 or 1 um is caught."""
+    calls = _captureDetectorArgs(monkeypatch)
+    win = _makeWindow(tmp_path)
+    win.manager.config = {"misc": {"minCellVolume": 5e-17, "detectionStepZ": 2e-6}}
+    win.newSlice()
+    win.addRegionHere()
+
+    win._onStartRun()
+
+    assert calls[0]["min_volume_m3"] == pytest.approx(5e-17)
+    assert calls[0]["step_z"] == pytest.approx(2e-6)
+
+
+def test_an_unconfigured_rig_surveys_the_way_it_always_did(qapp, tmp_path, monkeypatch):
+    # The defaults are the values the survey used when neither was settable at
+    # all, so configuring nothing changes nothing.
+    calls = _captureDetectorArgs(monkeypatch)
+    win = _makeWindow(tmp_path)
+    win.newSlice()
+    win.addRegionHere()
+
+    win._onStartRun()
+
+    assert calls[0]["min_volume_m3"] == pytest.approx(0.0)
+    assert calls[0]["step_z"] == pytest.approx(1e-6)
 
 
 def test_clicking_start_installs_a_producer(qapp, tmp_path):
@@ -2955,6 +3083,34 @@ def test_fit_to_regions_is_unaffected_by_a_progress_marker(qapp, win):
     assert ax1 == pytest.approx(bx1, rel=1e-9)
     assert ay0 == pytest.approx(by0, rel=1e-9)
     assert ay1 == pytest.approx(by1, rel=1e-9)
+
+
+def test_fit_to_regions_survives_the_survey_coverage_shading(qapp, win):
+    """Reported from a rig, on a slice with a region drawn and tiles still to
+    survey: "Fit to regions" raised AttributeError out of its own slot,
+    because RegionPanel._mirroredImageryBounds() mapped every item in the
+    view with pyqtgraph's mapRectToView() and the coverage shading this
+    window puts there is plain Qt.QGraphicsRectItems (see
+    ProgressOverlay.setCoverage).
+
+    Here rather than in test_region_panel.py's own coverage test because this
+    is the half that test cannot make: that this window really does draw that
+    shading into the region panel's view, over the same regions Fit reads.
+    _refreshCoverage() is called directly for the same reason the tests
+    around this one do -- a survey run is what calls it in anger, and none of
+    that is what is under test.
+    """
+    win.newSlice()
+    win.addRegionHere()
+    win._refreshCoverage()
+    assert win._progressOverlay.coverageItems()
+
+    win.regionPanel.fitToRegions()
+
+    x0, y0, x1, y1 = win.slice.regions[0].bounds()
+    (vx0, vx1), (vy0, vy1) = win.regionPanel.view.viewRange()
+    assert vx0 <= x0 and vx1 >= x1
+    assert vy0 <= y0 and vy1 >= y1
 
 
 def test_fit_on_an_empty_area_1_leaves_the_view_untouched(qapp, win):

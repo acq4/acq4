@@ -8,6 +8,12 @@ from acq4.util.task import Stopped
 
 logger = get_logger(__name__)
 
+# How many of one tile's cells a survey queues, best first. A tile is a field of
+# tissue tens of cells deep, and patching every one of them before moving on
+# would spend the whole run in one field; the cap is what keeps a survey
+# spreading over the region the operator drew.
+MAX_TILE_CANDIDATES = 5
+
 
 class CellProducer:
     """Images one tile of a slice per call and returns the cells found in it.
@@ -34,11 +40,19 @@ class CellProducer:
     `rescans_allowed` grants exactly one extra pass over the slice's tiles, not
     unlimited rescanning: a producer that could always find another tile would
     never return None, and the orchestrator's refill loop would never end.
+
+    `max_candidates` is how many of one tile's cells reach the queue. It is a
+    property of the producer rather than of the detector because it caps what
+    gets **queued**, and only the producer knows what qualifies: the detector
+    scores cells but has never heard of the slice's regions or its health
+    cutoff, so a cap applied out there would be spent on cells this producer is
+    about to discard.
     """
 
-    def __init__(self, slice_, detector):
+    def __init__(self, slice_, detector, max_candidates=MAX_TILE_CANDIDATES):
         self._slice = slice_
         self._detector = detector
+        self._maxCandidates = max_candidates
         # Whether this producer has already spent its one rescan pass. Per
         # producer, not per slice: the allowance mirrors the orchestrator's
         # per-run _producerExhausted, so a later run over the same slice may
@@ -89,7 +103,21 @@ class CellProducer:
             self._slice.markCovered(tile)
             raise
         self._slice.markCovered(tile)
-        cells = [c for c in candidates if self._isHealthy(c, constraints)]
+        # Filter first, cap second, and the order is the whole point. Detections
+        # arrive best-first and untruncated, and a tile at the edge of a region
+        # is where both filters bite hardest -- the field of view straddles the
+        # outline on purpose, so the cells outside it are real detections the
+        # segmenter was given the context to find. Capping first would let those
+        # fill the quota while usable cells sat just below the cut, and the tile
+        # would come back empty from ground that had cells in it.
+        cells = [
+            c
+            for c in candidates
+            if self._isHealthy(c, constraints) and self._isInRegion(c)
+        ][: self._maxCandidates]
+        # Only what is queued is registered: a cell the filters or the cap
+        # dropped is not a target, and counting it toward the density cap would
+        # spend that budget closing off tiles nothing will be patched in.
         self._slice.registerCells(cells)
         return cells
 
@@ -117,6 +145,15 @@ class CellProducer:
         """
         score = getattr(candidate, "score", None)
         return score is None or score >= constraints.min_health
+
+    def _isInRegion(self, candidate) -> bool:
+        """Whether `candidate` lies inside the tissue the operator outlined.
+
+        Delegated to the slice, which answers True for every point when no
+        region has been drawn -- the hand-seeded run, where there is nothing to
+        be outside of.
+        """
+        return self._slice.containsPoint(candidate.position)
 
     def _isCrowded(self, tile, constraints) -> bool:
         """Whether `tile` already holds cells at or above the density cap."""

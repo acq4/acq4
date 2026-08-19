@@ -5,10 +5,14 @@ running this protocol. Any other outcome prompts the operator to intervene.
 
 `cellfie_preset` and `patch_preset` name configured microscope imaging
 presets (e.g. "GFP", "brightfield") to load before the cellfie and before the
-patch attempt, respectively; leave either empty to skip it."""
+patch attempt, respectively; leave either empty to skip it.
+
+The run opens with a pipette clean, which is skipped when the pipette reports
+its tip is still clean; `force_clean` runs the cycle regardless."""
 
 from acq4.experiment.actions import (
     cellfie,
+    clean,
     go_approach,
     load_preset,
     patch,
@@ -34,10 +38,31 @@ PARAMS = [
         "to load before the patch attempt. Leave empty to skip loading a "
         "preset.",
     },
+    {
+        "name": "force_clean",
+        "type": "bool",
+        "default": False,
+        "tip": "Run the cleaning cycle at the start of the run even when the "
+        "pipette reports its tip is already clean. Off by default: a tip only "
+        "reads dirty once it has been onto a cell since its last clean, so an "
+        "untouched pipette skips the several minutes the cycle costs.",
+    },
 ]
 
 
-def run(ctx, cellfie_preset="", patch_preset=""):
+def run(ctx, cellfie_preset="", patch_preset="", force_clean=False):
+    # First, ahead of everything else, and in particular ahead of find_tip and
+    # go_approach: the cleaning cycle finishes by parking the pipette at home
+    # and calling newPatchAttempt(), which clears the test-pulse history and
+    # starts a fresh patch record. Calibration and positioning done before it --
+    # find_tip's pipette-offset and tip-find, and the approach move -- would be
+    # thrown away by the one and undone by the other.
+    #
+    # Nothing about the pipette forces it ahead of the cellfie as well; that is
+    # about the tissue. The cycle takes minutes over at the clean and rinse
+    # wells, and a z-stack captured before it has all of that time to go stale
+    # against tissue that drifts. Imaging and patching want to be back to back.
+    clean(ctx, only_if_needed=not force_clean)
     load_preset(ctx, cellfie_preset)
     cellfie(ctx)
     load_preset(ctx, patch_preset)

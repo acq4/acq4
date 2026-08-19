@@ -4,7 +4,7 @@ and rescan policy) it filters candidates and tiles against."""
 
 import pytest
 
-from acq4.experiment.cell_producer import CellProducer
+from acq4.experiment.cell_producer import MAX_TILE_CANDIDATES, CellProducer
 from acq4.experiment.search_region import RectRegion
 from acq4.experiment.slice import SearchConstraints, Slice
 from acq4.util.task import Stopped
@@ -447,3 +447,121 @@ def test_slice_and_producer_are_freed_by_refcounting_alone():
         assert slice_ref() is None, "slice survived; a cycle holds it"
     finally:
         gc.enable()
+
+
+# ---- the region filter and the candidate cap ----
+
+
+def test_candidates_outside_the_slices_regions_are_not_queued():
+    # The camera images past the outline deliberately -- a field straddling the
+    # edge is what gives the segmenter the context to find cells sitting right
+    # at it -- so a border tile routinely detects cells in tissue the operator
+    # did not outline. Patching those is patching outside the drawn region.
+    s = make_slice(regions=(RectRegion(0, 0, 25e-6, 25e-6),))
+    tile = s.nextTile()
+    inside = FakeCandidate((tile[0], tile[1], -30e-6))
+    outside = FakeCandidate((-2e-6, 12.5e-6, -30e-6))
+    assert s.containsPoint(outside.position) is False, "premise: this one is outside"
+
+    producer = CellProducer(s, RecordingDetector([[inside, outside]]))
+    assert producer() == [inside]
+
+
+def test_an_out_of_region_candidate_is_not_registered_for_the_density_cap():
+    # A cell that is never queued was never a target, so counting it toward the
+    # crowding of the tile it was found near would spend the density budget on
+    # tissue the survey will not patch.
+    s = make_slice(regions=(RectRegion(0, 0, 25e-6, 25e-6),))
+    tile = s.nextTile()
+    outside = FakeCandidate((-2e-6, 12.5e-6, -30e-6))
+    CellProducer(s, RecordingDetector([[outside]]))()
+    assert s.cellsNearTile(tile) == []
+
+
+def test_the_region_filter_follows_the_slices_current_regions():
+    # Regions are read per tile rather than captured when the producer is built,
+    # for the same reason the constraints are: an operator who redraws the
+    # outline mid-experiment has to have that take effect on the very next tile.
+    # (A slice with no regions at all cannot reach this filter -- it has no
+    # tiles, so the producer reports exhaustion first. That case is the
+    # hand-seeded run, and it is pinned on Slice.containsPoint itself.)
+    s = make_slice(regions=(RectRegion(0, 0, 25e-6, 25e-6),))
+    cell = FakeCandidate((12.5e-6, 12.5e-6, -30e-6))
+    producer = CellProducer(s, RecordingDetector([[cell], [cell]]))
+
+    assert producer() == [cell]
+
+    s.setRegions([RectRegion(1e-3, 1e-3, 1e-3 + 25e-6, 1e-3 + 25e-6)])
+    assert producer() == []
+
+
+def test_out_of_region_candidates_do_not_eat_the_candidate_quota():
+    # The reason the cap is applied here rather than inside the detector.
+    # Detections arrive best-first and untruncated; truncating first would let a
+    # border tile fill the whole quota with cells outside the region while
+    # usable ones sat just below the cut, and the tile would come back empty.
+    s = make_slice(regions=(RectRegion(0, 0, 25e-6, 25e-6),))
+    tile = s.nextTile()
+    outside = [
+        FakeCandidate((-2e-6, 12.5e-6 + i * 1e-9, -30e-6))
+        for i in range(MAX_TILE_CANDIDATES)
+    ]
+    inside = [
+        FakeCandidate((tile[0] + i * 1e-9, tile[1], -30e-6)) for i in range(3)
+    ]
+    producer = CellProducer(s, RecordingDetector([outside + inside]))
+    assert producer() == inside
+
+
+def test_unhealthy_candidates_do_not_eat_the_candidate_quota_either():
+    # The health cutoff is the same shape of filter as the region test and has
+    # to happen on the same side of the cap.
+    s = make_slice(constraints=SearchConstraints(min_health=0.6))
+    tile = s.nextTile()
+    sick = [
+        FakeCandidate((tile[0], tile[1] + i * 1e-9, -30e-6), score=0.1)
+        for i in range(MAX_TILE_CANDIDATES)
+    ]
+    healthy = [
+        FakeCandidate((tile[0] + i * 1e-9, tile[1], -30e-6), score=0.9)
+        for i in range(2)
+    ]
+    producer = CellProducer(s, RecordingDetector([sick + healthy]))
+    assert producer() == healthy
+
+
+def test_only_the_best_few_surviving_candidates_are_queued_from_one_tile():
+    # The cap is still a cap: a tile densely packed with good cells contributes
+    # a handful of targets, not all of them, so the survey keeps moving.
+    # Detections arrive best-first, so the survivors kept are the leading ones.
+    s = make_slice()
+    tile = s.nextTile()
+    many = [
+        FakeCandidate((tile[0] + i * 1e-9, tile[1], -30e-6))
+        for i in range(MAX_TILE_CANDIDATES + 4)
+    ]
+    producer = CellProducer(s, RecordingDetector([many]))
+    assert producer() == many[:MAX_TILE_CANDIDATES]
+
+
+def test_the_candidate_cap_is_adjustable_per_producer():
+    s = make_slice()
+    tile = s.nextTile()
+    many = [
+        FakeCandidate((tile[0] + i * 1e-9, tile[1], -30e-6)) for i in range(6)
+    ]
+    producer = CellProducer(s, RecordingDetector([many]), max_candidates=2)
+    assert producer() == many[:2]
+
+
+def test_only_the_queued_cells_are_registered_for_the_density_cap():
+    # Cells cut by the cap are not targets, and counting them would let one
+    # crowded tile's discards close its neighbours off.
+    s = make_slice()
+    tile = s.nextTile()
+    many = [
+        FakeCandidate((tile[0] + i * 1e-9, tile[1], -30e-6))
+        for i in range(MAX_TILE_CANDIDATES + 4)
+    ]
+    CellProducer(s, RecordingDetector([many]))()
+    assert s.cellsNearTile(tile) == many[:MAX_TILE_CANDIDATES]

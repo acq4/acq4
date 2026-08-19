@@ -1,12 +1,27 @@
 """Slice: the search state for one piece of tissue -- the regions to survey, the
-tiles already imaged, the search constraints, and the cell producers it hands out."""
+tiles already imaged, the search constraints, the cell producers it hands out, and
+the record of all of that it writes into its data directory."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .search_grid import count_covered, count_grid, plan_grid, select_next
-from .search_region import SearchRegion
+from acq4.logging_config import get_logger
+
+from .search_grid import count_covered, count_grid, plan_center_out, select_next
+from .search_region import SearchRegion, region_from_dict
+
+logger = get_logger(__name__)
+
+# The two files a slice's state is written to, inside its own data directory.
+# Two rather than one because they answer different questions and are edited at
+# different rates: the regions are what the operator traced by hand and are the
+# irreplaceable half, while the search parameters and coverage are reproducible
+# from a rerun. Splitting them also means a reader that only wants the outlines
+# -- to redraw last night's slice, say -- does not have to parse a tile list of
+# up to MAX_PLANNED_TILES entries to get them.
+REGIONS_FILE = "regions.yaml"
+SEARCH_STATE_FILE = "search_state.yaml"
 
 # The most tiles one region's bounding box may plan. At a 130 um field a
 # generous 10 mm slice is about 77x77 = 5,900 tiles, so this is roughly an
@@ -162,7 +177,7 @@ class Slice:
         """Raise RegionTooLarge if `region` would plan more than the cap allows.
 
         Counted arithmetically rather than by planning, because the count is the
-        hazard: `tileGrid()` has `plan_grid` build the whole bounding-box grid
+        hazard: `tileGrid()` has the planner build the whole bounding-box grid
         before any of it is filtered against the shape, so a check that planned
         first would spend exactly the time and memory it exists to prevent.
         """
@@ -204,9 +219,9 @@ class Slice:
 
         Each region's grid is planned over its **bounding box** and then filtered
         to the tiles that overlap the region's shape. That split is what lets a
-        slice hold ellipses and polygons while `plan_grid` stays a rectangle
-        tiler. For a rectangular region the filter removes nothing, since
-        `plan_grid` centers its grid over the box and every tile it plans
+        slice hold ellipses and polygons while `plan_center_out` stays a
+        rectangle tiler. For a rectangular region the filter removes nothing,
+        since the planner centers its grid over the box and every tile it plans
         therefore overlaps it.
 
         Filtering is by overlap, not by whether the tile's center is inside: a
@@ -214,20 +229,78 @@ class Slice:
         tile whose center falls in the concave part of an L still images real
         region area.
 
-        Within a region the surviving centers keep the serpentine order
-        `plan_grid` produces: alternating the direction of each row roughly halves
-        the stage travel a survey spends getting from one tile to the next, and
-        `nextTile` hands them out in exactly this order.
+        Within a region the centers are ordered outward from its most interior
+        tile, and `nextTile` hands them out in exactly that order. A survey then
+        starts on the best tissue a region has -- its middle, farthest from the
+        damaged edges -- and each tile it moves to is next to ground it has
+        already imaged, so an operator who stops the run early is left with a
+        compact surveyed area rather than a band along one side.
+
+        Ordering is per region, and regions keep the order they were added in.
+        Two regions are two pieces of tissue with a stage move between them;
+        interleaving their tiles would pay that move over and over, and "outward
+        from the middle" has no meaning across a gap.
+        """
+        # Bound once: setRegions() can land from the GUI thread while this runs.
+        return self._tileGridFor(self._regions)
+
+    def _tileGridFor(self, regions) -> list[tuple[float, float]]:
+        """tileGrid()'s body, over a region list the caller has already bound.
+
+        Split out so that a caller which has to derive several things from one
+        set of regions -- saveState(), which writes the outlines and the tile
+        counts they imply into the same record -- can do so from a single
+        binding. Re-reading self._regions per derivation would leave that
+        record describing two different slices.
         """
         grid: list[tuple[float, float]] = []
         fov_w, fov_h = self._fov
-        # Bound once: setRegions() can land from the GUI thread while this runs.
-        regions = self._regions
         for region in regions:
             x0, y0, x1, y1 = region.bounds()
-            planned = plan_grid(x0, y0, x1, y1, fov_w, fov_h, self._overlap)
-            grid.extend(c for c in planned if region.overlapsTile(c, self._fov))
+            # The shape filter is handed to the planner rather than applied to
+            # its output, because the order depends on which tiles survive it:
+            # the most interior tile of an L is not the most interior tile of
+            # the box around it.
+            grid.extend(
+                plan_center_out(
+                    x0,
+                    y0,
+                    x1,
+                    y1,
+                    fov_w,
+                    fov_h,
+                    self._overlap,
+                    keep=lambda c, region=region: region.overlapsTile(c, self._fov),
+                )
+            )
         return grid
+
+    def containsPoint(self, position) -> bool:
+        """Whether `position` falls inside any of this slice's regions.
+
+        The gate on what a survey is allowed to patch. The tiles it images
+        deliberately overhang the outline -- a field of view straddling the edge
+        is what gives the segmenter the context to find cells sitting right at
+        it -- so a detection landing outside the drawn region is the ordinary
+        case at every border tile, not a rare one.
+
+        A slice with no regions contains everything. "No region drawn" means
+        there is nothing to be outside of, which is exactly the hand-seeded run:
+        the operator picked the cells themselves and no outline was ever
+        involved, so a filter that dropped them all would leave that run with
+        nothing to patch.
+
+        `position` is any indexable global coordinate, the same latitude
+        `forceRescan` allows; only its first two coordinates are read.
+        """
+        # Bound once, for the reason setRegions() documents: the GUI thread can
+        # swap the whole list while a producer is asking this on the worker
+        # thread, and one binding sees either the whole old set or the whole new
+        # one rather than a list changing under its own iteration.
+        regions = self._regions
+        if not regions:
+            return True
+        return any(r.contains(position) for r in regions)
 
     def nextTile(self) -> tuple[float, float] | None:
         """The next tile center not yet covered, or None when all are.
@@ -313,16 +386,161 @@ class Slice:
 
     def surveyStats(self) -> tuple[int, int, float]:
         """(total tiles, covered tiles, percent covered) across every region."""
-        grid = self.tileGrid()
+        return self._surveyStatsFor(self._regions, self._covered)
+
+    def _surveyStatsFor(self, regions, covered) -> tuple[int, int, float]:
+        """surveyStats()'s body, over a region list and coverage the caller has
+        already bound -- see _tileGridFor for why that split exists."""
+        grid = self._tileGridFor(regions)
         total = len(grid)
-        covered = count_covered(grid, self._covered, self.threshold)
-        percent = 100.0 * covered / total if total else 0.0
-        return total, covered, percent
+        n = count_covered(grid, covered, self.threshold)
+        percent = 100.0 * n / total if total else 0.0
+        return total, n, percent
 
     def tileVolume(self) -> float:
         """The volume one tile searches: FOV area times the constrained depth span."""
         fov_w, fov_h = self._fov
         return fov_w * fov_h * self._constraints.z_span()
+
+    # ---- the record on disk ----
+    def saveState(self) -> None:
+        """Write this slice's search state into its own data directory.
+
+        What goes down is everything a slice knows that nothing else records:
+        the regions the operator traced by hand, the field of view and overlap
+        the tiles were planned at, the search constraints, which tiles have
+        been imaged, and the survey those imply. The per-cell directories
+        underneath already hold what was found; this is the shape of the search
+        that found it, and until now it existed only in RAM and died with the
+        next New slice.
+
+        A slice with no directory writes nothing and says nothing about it.
+        That is the "Add region here" slice, which came into existence to hold
+        a region rather than by way of New slice (see `dirHandle`), and it
+        honestly has nowhere to write.
+
+        Nothing raises out of here. Every caller is either a GUI slot that has
+        already committed the operator's edit by the time it asks for a save,
+        or New slice partway through discarding the slice being saved -- and in
+        both, a raise costs far more than the file it failed to write. The two
+        halves are guarded separately so that a failure specific to one does
+        not take the other with it, and the regions go first because they are
+        the irreplaceable half: coverage and constraints can be re-derived from
+        a rerun, while an outline traced around a piece of tissue cannot.
+
+        The summary put on the directory index rides with the search state
+        rather than being guarded on its own, because it is the same numbers
+        said twice: small scalars only, since the index is written with repr()
+        and read back with eval() (a region or an array put there would be
+        written and never read).
+        """
+        dirHandle = self.dirHandle
+        if dirHandle is None:
+            return
+        # Bound once each, and everything below derived from these bindings:
+        # the GUI thread can swap the whole region list while the worker thread
+        # is covering tiles, and a record whose outlines and whose tile counts
+        # came from two different readings describes a slice that never
+        # existed. The same discipline setRegions() and tileGrid() keep.
+        regions = self._regions
+        covered = list(self._covered)
+        constraints = self._constraints
+        try:
+            dirHandle.writeFile(
+                [region.to_dict() for region in regions],
+                REGIONS_FILE,
+                fileType="YamlFile",
+            )
+        except Exception:
+            logger.exception("Could not write this slice's search regions")
+        try:
+            total, nCovered, percent = self._surveyStatsFor(regions, covered)
+            # float()/bool() throughout, because these coordinates arrive from
+            # a camera's boundary and a numpy-backed tiler, and a numpy scalar
+            # left in the payload is written as a tagged Python object that no
+            # plain YAML reader can load back. The conversion is exact.
+            dirHandle.writeFile(
+                {
+                    "fov": [float(v) for v in self._fov],
+                    "overlap": float(self._overlap),
+                    "constraints": {
+                        "depth_range": [float(v) for v in constraints.depth_range],
+                        "min_health": float(constraints.min_health),
+                        "max_cell_density": float(constraints.max_cell_density),
+                        "rescans_allowed": bool(constraints.rescans_allowed),
+                    },
+                    "covered": [[float(x), float(y)] for x, y in covered],
+                    "survey": {
+                        "total_tiles": int(total),
+                        "covered_tiles": int(nCovered),
+                        "percent_covered": float(percent),
+                    },
+                },
+                SEARCH_STATE_FILE,
+                fileType="YamlFile",
+            )
+            dirHandle.setInfo(
+                n_regions=len(regions),
+                percent_covered=float(percent),
+                min_health=float(constraints.min_health),
+                depth_range=[float(v) for v in constraints.depth_range],
+            )
+        except Exception:
+            logger.exception("Could not write this slice's search state")
+
+    def loadState(self) -> bool:
+        """Restore the search state saved into this slice's data directory.
+
+        Reports whether there was a record to read at all, so a caller can tell
+        a slice directory written before this existed -- or one whose save
+        failed -- from a slice that genuinely had no regions.
+
+        The one thing deliberately not restored is the field of view. That
+        belongs to the camera mounted now, not to whichever one was mounted
+        when the record was written, and a slice built for a 130 um field must
+        not silently start planning a 200 um one because a file said so. It is
+        written down all the same: a coverage list is a set of tile centres,
+        and knowing the field they were planned at is what makes them
+        interpretable at all.
+
+        Unlike saveState(), this does raise. A save is a side benefit of doing
+        something else and must not take that something else down with it,
+        while a load is the operator asking for these regions specifically, and
+        quietly handing back a slice with the wrong outlines -- or none -- is
+        exactly the failure the whole record exists to prevent. In particular
+        setRegions()'s tile cap is checked against the *current* field of view,
+        so a record saved at a wider field can legitimately be refused here;
+        the partial state applied before that point is left in place, since a
+        refused region list is precisely the state the operator has to see.
+        """
+        dirHandle = self.dirHandle
+        if dirHandle is None:
+            return False
+        found = False
+        # Search parameters before regions, because setRegions() checks its
+        # tile cap against the overlap: reading them in the other order would
+        # measure a saved region against a fresh slice's overlap rather than
+        # the one it was planned at.
+        if dirHandle.exists(SEARCH_STATE_FILE):
+            found = True
+            state = dirHandle[SEARCH_STATE_FILE].read()
+            self._overlap = state["overlap"]
+            constraints = state["constraints"]
+            self._constraints = SearchConstraints(
+                depth_range=tuple(constraints["depth_range"]),
+                min_health=constraints["min_health"],
+                max_cell_density=constraints["max_cell_density"],
+                rescans_allowed=constraints["rescans_allowed"],
+            )
+            # Rebound rather than mutated, and as tuples, so the restored
+            # coverage is indistinguishable from coverage markCovered() built.
+            self._covered = [tuple(tile) for tile in state["covered"]]
+        if dirHandle.exists(REGIONS_FILE):
+            found = True
+            self.setRegions(
+                [region_from_dict(d) for d in dirHandle[REGIONS_FILE].read()]
+            )
+        return found
 
     # ---- cells found in this tissue ----
     def registerCells(self, cells) -> None:

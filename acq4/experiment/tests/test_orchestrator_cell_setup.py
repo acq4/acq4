@@ -10,18 +10,26 @@ import acq4.util.DataManager as dm
 from acq4.experiment.exceptions import AbortExperiment, RetryCurrentCell
 from acq4.experiment.context import ExecutionContext
 from acq4.experiment.orchestrator import Orchestrator
+from acq4.util.task import Stopped
 
 from .test_actions_prompt_storage import FakeManager
 
 
 class FakePatchPipette:
     """Records setCell() calls; optionally raises, standing in for a pipette that
-    cannot take the cell (an unmappable position, say)."""
+    cannot take the cell (an unmappable position, say).
 
-    def __init__(self, error=None, on_call=None):
+    Keeps the cell it was last given, the way PatchPipette does. That holding is
+    what makes the handover a place a tracking history can be lost: the real
+    setCell() closes the cell it is holding -- tracking off, pushed onto
+    previousCells -- before taking the new one.
+    """
+
+    def __init__(self, error=None, on_call=None, cell=None):
         self.setCell_calls = []
         self.error = error
         self.on_call = on_call
+        self.cell = cell
 
     def setCell(self, cell, target=True):
         self.setCell_calls.append((cell, target))
@@ -29,6 +37,7 @@ class FakePatchPipette:
             self.on_call(cell)
         if self.error is not None:
             raise self.error
+        self.cell = cell
 
 
 def _orch(pf, pipette):
@@ -117,6 +126,14 @@ def _dir_orch(pf, manager, entries=None):
     )
 
 
+class _NoCellLevelManager(FakeManager):
+    """A manager that cannot make a Cell directory, so a cell's pass ends
+    without one -- the storage failure that halts a run."""
+
+    def folderTypesConfig(self):
+        return {}
+
+
 def test_each_cell_gets_its_own_managed_cell_directory(make_pf, root_dir):
     man = FakeManager(root_dir)
     pf = make_pf()
@@ -178,10 +195,6 @@ def test_a_context_without_a_manager_makes_no_directory(make_pf):
 def test_a_storage_failure_halts_the_run(make_pf, root_dir):
     # Nowhere to save is not a cell to run: without this the run would patch
     # cell after cell into the previous cell's directory (or none at all).
-    class _NoCellLevelManager(FakeManager):
-        def folderTypesConfig(self):
-            return {}
-
     pf = make_pf()
     ran = []
     pf.run = lambda ctx, **kwargs: ran.append(ctx.cell)
@@ -306,3 +319,240 @@ def test_an_untracked_cell_leaves_no_history_behind(make_pf, root_dir):
     pf.run = lambda ctx, **kwargs: seen.append(ctx.manager.getCurrentDir())
     _dir_orch(pf, man).run_sync_cell("c1")
     assert _acqtrack_files(seen[0]) == []
+
+
+# -- no cell directory to save into --------------------------------------
+
+
+def test_the_history_is_saved_when_no_cell_directory_could_be_made(make_pf, root_dir):
+    # The storage failure halts the run before the protocol runs, but the cell
+    # in hand can already be carrying a history -- the survey tracked it into
+    # existence, and a re-queued cell arrives with its earlier attempt's
+    # results. Somewhere is the requirement; the manager's current directory is
+    # the somewhere, with the name auto-incremented since it is shared.
+    man = _NoCellLevelManager(root_dir)
+    pf = make_pf()
+    cell = FakeTrackedCell("c1")
+    with pytest.raises(AbortExperiment):
+        _dir_orch(pf, man).run_sync_cell(cell)
+    assert _acqtrack_files(root_dir) == ["tracking_history_000.acqtrack"]
+
+
+def test_the_history_is_saved_when_the_context_carries_no_manager(make_pf, root_dir):
+    # A contextFactory is free to build a context without a manager, which
+    # leaves the cell with no directory of its own. The orchestrator's own
+    # manager is still a place to write, and writing there beats losing the
+    # history over a context that was built thin.
+    man = FakeManager(root_dir)
+    pf = make_pf()
+    orch = Orchestrator(
+        pf, manager=man, contextFactory=lambda cell: ExecutionContext(cell=cell)
+    )
+    orch.run_sync_cell(FakeTrackedCell("c1"))
+    assert _acqtrack_files(root_dir) == ["tracking_history_000.acqtrack"]
+
+
+def test_cells_sharing_the_fallback_directory_do_not_overwrite_each_other(
+    make_pf, root_dir
+):
+    # The fallback directory is shared by every cell that lands in it, so the
+    # second cell's history must not be written over the first's.
+    man = FakeManager(root_dir)
+    pf = make_pf()
+    orch = Orchestrator(
+        pf, manager=man, contextFactory=lambda cell: ExecutionContext(cell=cell)
+    )
+    orch.enqueue(FakeTrackedCell("c1"))
+    orch.enqueue(FakeTrackedCell("c2"))
+    orch.run_sync()
+    assert _acqtrack_files(root_dir) == [
+        "tracking_history_000.acqtrack",
+        "tracking_history_001.acqtrack",
+    ]
+
+
+def test_a_run_with_nowhere_to_write_loses_the_history_quietly(make_pf):
+    # The one silent path: a headless run has no manager at all, so there is no
+    # directory to fall back to. Nothing to write into is not a reason to fail
+    # the pass.
+    pf = make_pf()
+    finished = []
+    cell = FakeTrackedCell("c1")
+    orch = Orchestrator(pf)
+    orch.sigCellFinished.connect(lambda c, s: finished.append((c, s)))
+    orch.run_sync_cell(cell)
+    assert finished == [(cell, "done")]
+    assert cell._tracker.saved_to == []
+
+
+# -- however the pass ended ----------------------------------------------
+
+
+def test_the_tracking_history_is_saved_when_the_operator_stops_the_run(
+    make_pf, root_dir
+):
+    # A stop lands mid-approach as often as anywhere, and what the tracker saw
+    # up to that point is exactly the record of why the operator stopped.
+    man = FakeManager(root_dir)
+    pf = make_pf()
+    seen = []
+
+    def stopping_run(ctx, **kwargs):
+        seen.append(ctx.manager.getCurrentDir())
+        raise Stopped("operator pressed stop")
+
+    pf.run = stopping_run
+    with pytest.raises(Stopped):
+        _dir_orch(pf, man).run_sync_cell(FakeTrackedCell("c1"))
+    assert _acqtrack_files(seen[0]) == ["tracking_history.acqtrack"]
+
+
+def test_the_tracking_history_is_saved_when_the_protocol_aborts_the_experiment(
+    make_pf, root_dir
+):
+    # AbortExperiment leaves _processCell by propagating, past every return the
+    # ordinary paths take; the save is in the finally so that route is covered
+    # too.
+    man = FakeManager(root_dir)
+    pf = make_pf()
+    seen = []
+
+    def aborting_run(ctx, **kwargs):
+        seen.append(ctx.manager.getCurrentDir())
+        raise AbortExperiment("the region is unusable")
+
+    pf.run = aborting_run
+    with pytest.raises(AbortExperiment):
+        _dir_orch(pf, man).run_sync_cell(FakeTrackedCell("c1"))
+    assert _acqtrack_files(seen[0]) == ["tracking_history.acqtrack"]
+
+
+# -- the handover to the pipette -----------------------------------------
+
+
+def _pip_dir_orch(pf, manager, pipette):
+    return Orchestrator(
+        pf,
+        manager=manager,
+        contextFactory=lambda cell: ExecutionContext(
+            cell=cell, manager=manager, pipette=pipette
+        ),
+    )
+
+
+def test_a_cell_the_pipette_still_holds_is_saved_before_it_is_handed_a_new_one(
+    make_pf, root_dir
+):
+    # setCell() closes the cell the pipette is holding -- tracking off, pushed
+    # onto previousCells -- so a cell put there by anything other than this
+    # orchestrator (AutomationDebug, a manual newCell) would go out of reach
+    # with its history unwritten.
+    man = FakeManager(root_dir)
+    pf = make_pf()
+    stranger = FakeTrackedCell("stranger")
+    atHandover = []
+    pip = FakePatchPipette(
+        cell=stranger, on_call=lambda cell: atHandover.append(_acqtrack_files(root_dir))
+    )
+    _pip_dir_orch(pf, man, pip).run_sync_cell(FakeTrackedCell("c1"))
+    # Written before the handover, not after it: by the time setCell() runs the
+    # file is already on disk.
+    assert atHandover == [["tracking_history_000.acqtrack"]]
+    assert stranger._tracker.saved_to == [
+        os.path.join(root_dir.name(), "tracking_history_000.acqtrack")
+    ]
+
+
+def test_tracking_recorded_after_a_cell_closed_out_is_saved_at_the_next_handover(
+    make_pf, root_dir
+):
+    # A pipette's FSM state job is detached from the protocol that asked for it,
+    # so it can still be tracking -- and still appending to that cell's tracker
+    # -- after the cell's pass was closed out and its history written. Those
+    # late results reach disk at the handover that drops the cell, or not at all.
+    man = FakeManager(root_dir)
+    pf = make_pf()
+    seen = []
+    pf.run = lambda ctx, **kwargs: seen.append(ctx.manager.getCurrentDir())
+    first, second = FakeTrackedCell("c1"), FakeTrackedCell("c2")
+    pip = FakePatchPipette()
+
+    def contextFactory(cell):
+        if cell is second:
+            # Stands in for that still-running state job, deterministically, at
+            # the one moment that matters: after c1's close-out, before the
+            # handover that closes c1 on the pipette.
+            first._tracker.tracking_results.append(object())
+        return ExecutionContext(cell=cell, manager=man, pipette=pip)
+
+    orch = Orchestrator(pf, manager=man, contextFactory=contextFactory)
+    orch.enqueue(first)
+    orch.enqueue(second)
+    orch.run_sync()
+
+    # Beside the close-out's file in c1's own directory, not over it and not in
+    # the directory of the cell that displaced it.
+    assert _acqtrack_files(seen[0]) == [
+        "tracking_history.acqtrack",
+        "tracking_history_000.acqtrack",
+    ]
+    assert _acqtrack_files(seen[1]) == ["tracking_history.acqtrack"]
+
+
+def test_the_ordinary_handover_writes_no_second_copy(make_pf, root_dir):
+    # The common case: a cell whose tracker gained nothing after its close-out
+    # is already fully saved, and a duplicate file in every cell directory of
+    # every run is noise an operator has to read past.
+    man = FakeManager(root_dir)
+    pf = make_pf()
+    seen = []
+    pf.run = lambda ctx, **kwargs: seen.append(ctx.manager.getCurrentDir())
+    pip = FakePatchPipette()
+    orch = _pip_dir_orch(pf, man, pip)
+    orch.enqueue(FakeTrackedCell("c1"))
+    orch.enqueue(FakeTrackedCell("c2"))
+    orch.run_sync()
+    assert [_acqtrack_files(d) for d in seen] == [["tracking_history.acqtrack"]] * 2
+    assert _acqtrack_files(root_dir) == []
+
+
+class _NoStorageDirManager(FakeManager):
+    """A manager the operator never chose a storage directory for: asking it for
+    the current directory raises, exactly as Manager.getCurrentDir does."""
+
+    def __init__(self):
+        FakeManager.__init__(self, None)
+        self.asked = 0
+
+    def getCurrentDir(self):
+        self.asked += 1
+        raise RuntimeError("Storage directory has not been set.")
+
+
+def test_an_untracked_cell_goes_looking_for_no_fallback_directory(make_pf):
+    # Asking is not free -- a manager with no storage directory raises -- so a
+    # cell with no history to place must not ask. Otherwise every untracked cell
+    # of such a run logs a failure to save a file that was never going to exist.
+    man = _NoStorageDirManager()
+    pf = make_pf()
+    orch = Orchestrator(
+        pf, manager=man, contextFactory=lambda cell: ExecutionContext(cell=cell)
+    )
+    orch.run_sync_cell("c1")
+    assert man.asked == 0
+
+
+def test_a_manager_that_cannot_say_where_to_write_does_not_fail_the_pass(make_pf):
+    # And when there *is* something to place, the ask can still fail. The cell's
+    # pass is already over; a bookkeeping failure must not become its outcome.
+    man = _NoStorageDirManager()
+    pf = make_pf()
+    finished = []
+    cell = FakeTrackedCell("c1")
+    orch = Orchestrator(
+        pf, manager=man, contextFactory=lambda cell: ExecutionContext(cell=cell)
+    )
+    orch.sigCellFinished.connect(lambda c, s: finished.append((c, s)))
+    orch.run_sync_cell(cell)
+    assert man.asked == 1
+    assert finished == [(cell, "done")]
