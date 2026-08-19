@@ -25,17 +25,50 @@ logger = get_logger(__name__)
 DEFORMATION_TOLERANCE = 1
 
 
+def _hasHistoryWorthSaving(tracker) -> bool:
+    """Whether `tracker` holds anything save_history would actually write.
+
+    It writes two things: the list of tracking results, and every reference
+    ObjectStack the motion estimator has taken. Either alone is a history worth
+    keeping, so both are asked about here.
+
+    Read through getattr because this is reached with test doubles and, in
+    principle, with trackers from other implementations; an attribute this
+    cannot find is one save_history would not have found either.
+    """
+    if getattr(tracker, "tracking_results", None):
+        return True
+    estimator = getattr(tracker, "motion_estimator", None)
+    return bool(getattr(estimator, "object_stacks", None))
+
+
 def saveTrackingHistory(cell, dir_handle, autoIncrement=False) -> None:
     """Save a cell's tracking history to an .acqtrack file in dir_handle.
 
-    Silently skips when there is nothing to save (no cell, no tracker, or no
-    recorded tracking results). Exceptions from the save are logged and swallowed
-    so a failed save never aborts the caller.
+    Written whenever the tracker holds anything worth reading: tracking results,
+    or reference stacks on its motion estimator, or both. The second of those is
+    the case that used to be dropped. A cell detected in a tile, seeded with a
+    reference cube cut from that tile's stack, queued, and then abandoned before
+    a single tracking frame has no results at all -- so no file was written, and
+    the ~1 MB cube that shows what the detector actually saw went with it.
+    save_history is perfectly happy to write a history of zero results: it
+    records n_results = 0 and its loop over the results simply does not run. The
+    file that comes out opens in the replay visualizer showing the reference
+    stack and nothing else, which is precisely the truth about that cell.
+
+    A tracker holding neither is still skipped, and that is a different case
+    rather than a smaller one. It is a tracker that was constructed and never
+    initialized -- tracking genuinely never happened -- and the file recording
+    it would be an empty container in every cell directory of every run, saying
+    nothing that an absent file does not say more clearly.
+
+    Silently skips when there is no cell or no tracker at all. Exceptions from
+    the save are logged and swallowed so a failed save never aborts the caller.
     """
     if cell is None:
         return
     tracker = getattr(cell, "_tracker", None)
-    if tracker is None or not tracker.tracking_results:
+    if tracker is None or not _hasHistoryWorthSaving(tracker):
         return
     try:
         # writeFile, not a raw path write: it records the file's type in the index
