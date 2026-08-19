@@ -530,6 +530,11 @@ class PlotWidget(Qt.QWidget):
     def setMode(self, mode):
         if self.mode == mode:
             return
+        # Only the very first setMode() (self.mode still None, from __init__)
+        # counts as construction; a later switch into a resistance mode via the
+        # combo box should not re-seed the initial window, or every switch back
+        # into this mode would clobber whatever range autorange has since found.
+        firstMode = self.mode is None
         self.mode = mode
         with pg.SignalBlock(self.modeCombo.currentIndexChanged, self.modeComboChanged):
             self.modeCombo.setText(mode)
@@ -540,8 +545,13 @@ class PlotWidget(Qt.QWidget):
             self.tpLabel.setVisible(False)
         elif mode in ['ss resistance', 'peak resistance']:
             self.plot.setLogMode(y=True, x=False)
-            self.plot.enableAutoRange(True, False)
-            self.plot.setYRange(6, 10)
+            if firstMode:
+                # Sane pre-data window (1 MOhm..10 GOhm, log10 ohms) so the plot
+                # isn't a jarring default range before the first test pulse
+                # arrives. enableAutoRange below takes over from here, so this
+                # only ever runs once per widget.
+                self.plot.setYRange(6, 10)
+            self.plot.enableAutoRange(True, True)
             self.plot.setLabels(left=('Rss', u'Ω'))
         elif mode == 'holding current':
             self.plot.setLogMode(y=False, x=False)
